@@ -338,7 +338,7 @@ pub(in crate::typer) fn texpr<M: Mapping + ?Sized>(m: &M, e: &mut TExpr) {
                 CastOp::Check(test, erased) => CastOp::Check(m.test(test), m.ty(erased)),
                 CastOp::Unbox(test, erased) => CastOp::Unbox(m.test(test), m.ty(erased)),
                 CastOp::Adapt(test, erased) => CastOp::Adapt(m.test(test), m.ty(erased)),
-                CastOp::Written | CastOp::Nothing => op,
+                CastOp::Written | CastOp::Nothing | CastOp::Erased => op,
             },
             m.ty(t),
         ),
@@ -465,6 +465,9 @@ pub(in crate::typer) fn tclass<M: Mapping + ?Sized>(m: &M, tc: &mut TClass) {
         for (s, e) in &mut l.constants {
             *s = m.sym(*s);
             *e = m.expr(*e);
+        }
+        for f in &mut l.mirror_members {
+            *f = m.fun(*f);
         }
     }
 }

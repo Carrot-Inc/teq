@@ -24,12 +24,21 @@ object Mirror:
   trait Product extends Mirror:
     def fromProduct(p: scala.Product): MirroredMonoType
 
-  // scalac's `Singleton` fixes `MirroredMonoType = this.type`, since a case object is its own
-  // mirror there; here the mirror is an object of its own, and the compiler's refinement says
-  // what it mirrors.
+  // A case object and an enum's singleton case are their own mirrors, as scala-library's.
   trait Singleton extends Product:
+    type MirroredMonoType = this.type
+    type MirroredType = this.type
     type MirroredElemTypes = EmptyTuple
     type MirroredElemLabels = EmptyTuple
+    def fromProduct(p: scala.Product): MirroredMonoType = this
+
+  /** A proxy for Scala 2 singletons, which do not inherit `Singleton` directly. */
+  class SingletonProxy(val value: AnyRef) extends Product:
+    type MirroredMonoType = value.type
+    type MirroredType = value.type
+    type MirroredElemTypes = EmptyTuple
+    type MirroredElemLabels = EmptyTuple
+    def fromProduct(p: scala.Product): MirroredMonoType = value
 
   type Of[T] = Mirror { type MirroredType = T; type MirroredMonoType = T; type MirroredElemTypes <: Tuple }
   type ProductOf[T] = Mirror.Product { type MirroredType = T; type MirroredMonoType = T; type MirroredElemTypes <: Tuple }

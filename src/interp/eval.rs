@@ -2134,7 +2134,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// message.
     pub(super) fn cast(&mut self, v: Value, op: CastOp, fr: &Rc<Frame>, cx: &Ctx) -> R {
         let test = match op {
-            CastOp::Written => return Ok(v),
+            CastOp::Written | CastOp::Erased => return Ok(v),
             CastOp::Nothing => return self.throw_named("ClassCastException", "Cannot cast to scala.Nothing"),
             CastOp::Check(test, _) | CastOp::Unbox(test, _) | CastOp::Adapt(test, _) => test,
         };

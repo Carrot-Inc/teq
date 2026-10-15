@@ -712,7 +712,7 @@ impl<'a> Worker<'a> {
                             }
                         }
                     }
-                    let funs: Vec<FunId> = tc.methods.iter().chain(tc.ctors.iter()).copied().collect();
+                    let funs: Vec<FunId> = tc.methods.iter().chain(tc.ctors.iter()).chain(tc.mirror_members()).copied().collect();
                     work.extend(funs.iter().map(|f| Node::Fun(f.0)));
                     for &(a, b) in tc.bridges.iter().chain(tc.deferred_givens.iter()) {
                         work.push(Node::Sym(a.0));

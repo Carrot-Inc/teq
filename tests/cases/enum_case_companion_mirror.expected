@@ -1,0 +1,11 @@
+Email(None,true)
+true
+(true,L(3))
+Email(Some(s),false)
+List(Store(None), Email(None,true))
+Email
+Email(None,false)
+t true
+(true,A(4))
+A(5)
+(true,P(7),P)

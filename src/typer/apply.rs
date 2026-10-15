@@ -7979,14 +7979,17 @@ impl<'a> Worker<'a> {
             let is_module = info.kind == ClassKind::Object || info.local_module.is_some() || info.inner_object.is_some();
             let inner = info.inner_object;
             if let (true, Some(companion)) = (is_module, info.companion) {
-                if self.syms.class(companion).kind == ClassKind::Class {
+                // A case class's companion, or an enum's class case's (`enter_enum_case_companion`).
+                if matches!(self.syms.class(companion).kind, ClassKind::Class | ClassKind::EnumCase) {
                     if let (Some(ta), true) = (targs, lists.is_empty()) {
                         // `G[Int]` of a case class's companion: its `apply` with the type
                         // arguments, expanded as a method that needs arguments is, as the
                         // constructor's proxy is (`Callee::Ctor`).
                         // A written companion's is a summoner's (`summon_type_application`).
                         let cmods = self.syms.class(companion).mods;
-                        let case = cmods & crate::ast::mods::CASE != 0 && cmods & crate::ast::mods::ABSTRACT == 0 && self.syms.class(c).made_companion;
+                        // The companion `Desugar.classDef` made: the namer's or the parser's.
+                        let made = self.syms.class(c).made_companion || self.syms.class(c).synthetic_companion;
+                        let case = cmods & crate::ast::mods::CASE != 0 && cmods & crate::ast::mods::ABSTRACT == 0 && made;
                         if case && inner.is_none() && Self::required_arity(&self.syms.class(companion).ctor).is_some() {
                             return Ok(self.apply_companion_apply(companion, targs, Vec::new(), span, expected));
                         }
@@ -8033,7 +8036,14 @@ impl<'a> Worker<'a> {
                             self.error(span, msg);
                         }
                         let outer_prefixed = std::mem::replace(&mut self.new_prefixed, true);
-                        let receiver_class = self.prog.type_of(outer).and_then(|t| self.class_of(t));
+                        // The receiver's class, which the class's members are seen from (a private
+                        // alias of a base is none of a subclass's): the companion's prefix's (`d` of
+                        // `d.Cmd(..)`), its node typed or its type's prefix.
+                        let outer_ty = self.prog.type_of(outer).or(match self.types.get(recv_ty) {
+                            Type::Nested(p, _) => Some(p),
+                            _ => None,
+                        });
+                        let receiver_class = outer_ty.and_then(|t| self.class_of(t));
                         let outer_creator = std::mem::replace(&mut self.creator_receiver, receiver_class.map(|r| (companion, r)));
                         // The constructor seen from the companion's prefix (`g.I(7, "a")` of a
                         // `g: O[Int]` takes an `Int`), as a creation through it is.
@@ -8049,8 +8059,15 @@ impl<'a> Worker<'a> {
                         self.new_prefixed = outer_prefixed;
                         self.pass_outer_applied(r.0, outer);
                         // The instance's type is the class through the companion's prefix
-                        // (`o.C`), its `apply`'s result seen from `o.C.type`.
+                        // (`o.C`), its `apply`'s result seen from `o.C.type`; an enum's class
+                        // case widened to its enum, the enum's base type of that (`o.E` of
+                        // `o.E.K(1)`, the case's companion through the enum's).
                         let ty = match (self.types.get(recv_ty), self.types.get(r.1)) {
+                            (Type::Nested(p, _), Type::Class(k, _)) if k != companion && self.syms.class(companion).kind == ClassKind::EnumCase => {
+                                let case_ty = self.prog.type_of(r.0).filter(|&t| self.class_of(t) == Some(companion)).unwrap_or_else(|| self.types.class(companion, &[]));
+                                let precise = self.nested_type(p, case_ty);
+                                self.base_type(precise, k).unwrap_or(r.1)
+                            }
                             (Type::Nested(p, _), Type::Class(..)) => self.nested_type(p, r.1),
                             _ => r.1,
                         };
@@ -9387,7 +9404,8 @@ impl<'a> Worker<'a> {
             let o = self.class_of(recv_ty)?;
             let c = match self.companion_class(o) {
                 Some(c) => c,
-                None => self.syms.class(o).companion.filter(|&k| self.syms.class(k).kind == ClassKind::Trait).unwrap_or(o),
+                // A trait's, and an enum's class case's (`enter_enum_case_companion`).
+                None => self.syms.class(o).companion.filter(|&k| matches!(self.syms.class(k).kind, ClassKind::Trait | ClassKind::EnumCase)).unwrap_or(o),
             };
             return Some((DefaultOf::Ctor(c), i, self.ctor_param_default(c, n)?, false));
         }

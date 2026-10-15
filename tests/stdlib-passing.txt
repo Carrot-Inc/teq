@@ -694,6 +694,7 @@ inline_summon_body_givens
 inline_summon_from_guards
 inline_this_receiver
 inline_tuples
+inline_unused_effectful_argument
 inline_val_expansion_check
 inline_val_pure_path
 inner_class_creators
@@ -815,6 +816,7 @@ macro_default_getters
 macro_derivation
 macro_enum_case_type_ref
 macro_environment
+macro_file_module_identity
 macro_fresh_names
 macro_fresh_nested_site
 macro_heal_types
@@ -904,6 +906,8 @@ mirror_declared_type
 mirror_derives
 mirror_from_tuple_extension
 mirror_from_tuple_refined
+mirror_nested_companion_path
+mirror_parent_after_typer
 mirror_private_ctor
 mirror_refined_alias
 mirror_unchecked_members
@@ -924,6 +928,7 @@ named_tuples
 nan_comparisons
 negative_literal_space
 nested_accessor_temps
+nested_case_companion_value
 nested_case_object_identity
 nested_class_inherited
 nested_class_prefix
@@ -1517,3 +1522,19 @@ wildcard_param_bound
 wildcard_param_bound_generic
 wildcard_pattern_binders
 yield_left_of_for
+case_companion_value
+companion_mirror_order
+enum_value_singleton_test
+mirror_singleton_identity
+mirror_written_from_product
+case_companion_written_or_not
+eta_nested_companion_apply
+given_enum_value_singleton_head
+local_case_companion
+macro_file_module_class
+mirror_mono_abstract
+mirror_mono_inherited
+mirror_mono_written
+mirror_within_companion
+enum_case_companion_mirror
+local_object_case_companion

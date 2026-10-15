@@ -1022,7 +1022,22 @@ impl<'a> Worker<'a> {
             }
         }
         match self.pkg_type(pkg, name) {
-            Some(r) => self.type_ref_to_type(r, crate::source::Span::default(), false),
+            Some(r) => {
+                // A library class the std stands for under another name: the name the pickle
+                // gave, which the member's signature keeps (`declared_names`).
+                if let (Some(_), TypeRef::Class(c)) = (&self.sig_bound_names, &r) {
+                    let c = *c;
+                    let info = self.syms.class(c);
+                    // Bound under another name, or the class another name binds to, which the
+                    // writer's inverse would name otherwise (`immutable.SortedSet`, the binding of
+                    // `collection.SortedSet`).
+                    let renamed = info.owner != Owner::Package(pkg) || info.name != name;
+                    if renamed || self.is_std_binding_target(pkg, name) {
+                        self.sig_bound_names.as_mut().unwrap().push((c, pkg, name));
+                    }
+                }
+                self.type_ref_to_type(r, crate::source::Span::default(), false)
+            }
             None => match self.placeholder_class(pkg, name, cx.applied_to.unwrap_or(0)) {
                 Some(c) => self.class_ref(c),
                 None => self.blocked(cx, Shape::Unknown, t),

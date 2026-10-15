@@ -55,6 +55,7 @@ impl<'a> Worker<'a> {
         for &d in &ast.top_level {
             self.enter_def(file, Owner::Package(pkg), d);
         }
+        self.enter_file_modules(file);
         if self.forked {
             self.file_pkgs.publish(file.0 as usize);
             self.file_opaques.publish(file.0 as usize);
@@ -873,6 +874,7 @@ impl<'a> Worker<'a> {
                 if let Some(class) = self.existing_class(owner, def.name) {
                     self.syms.class_mut(class).companion = Some(cid);
                     self.syms.class_mut(cid).companion = Some(class);
+                    self.enter_desugared_to_string(cid);
                 }
                 self.enter_body(file, cid, &cls.body);
             }
@@ -903,7 +905,7 @@ impl<'a> Worker<'a> {
                 if let Some(obj) = self.existing_object(owner, def.name) {
                     self.syms.class_mut(cid).companion = Some(obj);
                     self.syms.class_mut(obj).companion = Some(cid);
-                } else if kind == ClassKind::Class && def.mods & mods::CASE != 0 && matches!(owner, Owner::Class(_)) {
+                } else if kind == ClassKind::Class && def.mods & mods::CASE != 0 && matches!(owner, Owner::Class(o) if !self.body_defines_method(o, def.name) && !self.body_holds_made_companion(o, def.name)) {
                     // A case class's companion is an object whether or not the source writes one
                     // (`Desugar.classDef`'s `companionDefs`): one of a class or an object made here
                     // without a definition, as an enum's is, an object of its file of the name
@@ -953,8 +955,16 @@ impl<'a> Worker<'a> {
         self.syms.class_mut(cid).has_exports = !cls.exports.is_empty();
         self.record_self_alias(cid);
         self.enter_class_annots(file, def, cid);
+        // The companion `Desugar.classDef` makes for a case class is a synthetic module, whose val
+        // in a class is eager (`LazyVals.transformSyntheticModule`), lazy in a trait.
+        let synthetic = self.ast(file).synthetic_companions.binary_search(&id).is_ok();
+        let in_trait = matches!(owner, Owner::Class(o) if self.syms.class(o).kind == ClassKind::Trait);
+        if synthetic {
+            self.syms.class_mut(cid).synthetic_companion = true;
+        }
+        let lazy = if synthetic && !in_trait { 0 } else { mods::LAZY };
         let ty = self.types.class(cid, &[]);
-        let m = def.mods & (mods::PRIVATE | mods::PROTECTED | mods::IMPLICIT | mods::QUALIFIED | mods::DEPRECATED) | mods::FINAL | mods::LAZY;
+        let m = def.mods & (mods::PRIVATE | mods::PROTECTED | mods::IMPLICIT | mods::QUALIFIED | mods::DEPRECATED) | mods::FINAL | lazy;
         let sym = self.syms.new_sym(def.name, SymKind::Val, m, owner, file, None, def.span);
         {
             let mut s = self.syms.sym_mut(sym);
@@ -970,11 +980,24 @@ impl<'a> Worker<'a> {
         if let Some(class) = self.existing_class(owner, def.name) {
             self.syms.class_mut(class).companion = Some(cid);
             self.syms.class_mut(cid).companion = Some(class);
-            if self.derives_companion(cid) {
-                self.made_companion_to_string(cid);
-            }
+            self.enter_desugared_to_string(cid);
         }
         self.enter_body(file, cid, &cls.body);
+    }
+
+    /// The `toString` `Desugar.classDef` gives the companion it makes for a case class
+    /// (`companionDefs`' `toStringMeth`), entered with the companion as the template that holds it
+    /// is: where a worker would enter it as it checks the companion, it takes the loader's lock,
+    /// once per case class (`case_companion_to_string`).
+    fn enter_desugared_to_string(&mut self, o: ClassId) {
+        if !self.syms.class(o).synthetic_companion && !self.derives_companion(o) {
+            return;
+        }
+        let Some(k) = self.syms.class(o).companion else { return };
+        let ki = self.syms.class(k);
+        if matches!(ki.kind, ClassKind::Class | ClassKind::EnumCase) && ki.mods & mods::CASE != 0 {
+            self.made_companion_to_string(o);
+        }
     }
 
     /// The companion of an enum nested in a class or trait, made for it: an object nested there
@@ -1003,6 +1026,82 @@ impl<'a> Worker<'a> {
         self.syms.class_mut(cid).inner_object = Some(sym);
         self.register_term(owner, sym);
         cid
+    }
+
+    /// The module classes `Desugar.packageDef` makes of the file's top-level definitions that are
+    /// no class, one per package they stand in: `<file>$package`, its val the module, members of
+    /// their package but entered in no scope (no source names them), at the first of those
+    /// definitions; reflection, the writer and the reader take them from here (`file_module`).
+    fn enter_file_modules(&mut self, file: FileId) {
+        for (pkg, defs) in crate::tasty::write::file_module_packages(self, file) {
+            if self.file_modules.get(&(file.0, pkg.0)).is_some() {
+                continue;
+            }
+            let ast = self.ast(file);
+            let start = defs.iter().map(|&d| ast.def(d).span.start).min().unwrap_or(0);
+            let span = crate::source::Span { start, end: start };
+            let name = self.interner.intern(&format!("{}$package", self.file_module_stem(file)));
+            let c = self.syms.new_class(name, ClassKind::Object, mods::FINAL, Owner::Package(pkg), file, None, span);
+            let ty = self.types.class(c, &[]);
+            let sym = self.syms.new_sym(name, SymKind::Object(c), 0, Owner::Package(pkg), file, None, span);
+            {
+                let mut s = self.syms.sym_mut(sym);
+                s.sig = Some(Arc::new(MethodSig::value(ty)));
+                s.state().set(Completion::Done);
+            }
+            let mut info = self.syms.class_mut(c);
+            info.module_sym = Some(sym);
+            info.base_types.push((c, ty));
+            info.state().set(Completion::Done);
+            self.file_modules.insert((file.0, pkg.0), c);
+        }
+    }
+
+    /// The module class of `file`'s top-level definitions in the package `pkg`
+    /// (`enter_file_modules`; another module's products' the object the loader read).
+    pub(crate) fn file_module(&self, file: FileId, pkg: PkgId) -> Option<ClassId> {
+        self.file_modules.get(&(file.0, pkg.0)).copied()
+    }
+
+    /// The name of that module class, `<file>$package`.
+    pub(crate) fn file_module_name(&self, file: FileId, pkg: PkgId) -> String {
+        match self.file_module(file, pkg) {
+            Some(c) => self.interner.get(self.syms.class(c).name).to_string(),
+            None => format!("{}$package", self.file_module_stem(file)),
+        }
+    }
+
+    /// The stem of the module class's name: the file's, scala-library's for the lean std's
+    /// `iarray.scala` (`IArray$package`).
+    pub(crate) fn file_module_stem(&self, file: FileId) -> String {
+        let source = &self.files.as_slice()[file.0 as usize];
+        let stem = crate::tasty::write::file_stem(&source.path);
+        match stem.as_str() {
+            "iarray" if source.is_std && !self.in_jar(file) => "IArray".to_string(),
+            _ => stem,
+        }
+    }
+
+    /// Whether the body of the class `o` defines a method of the name: teq's namer holds no module
+    /// in an overload set, which scalac does, so a case class beside it keeps its constructor
+    /// proxy (the parser's rule for the companions it makes, `add_derived_givens`).
+    fn body_defines_method(&self, o: ClassId, name: crate::intern::Name) -> bool {
+        let info = self.syms.class(o);
+        let Some(d) = info.def else { return false };
+        let ast = self.ast(info.file);
+        let DefKind::Class(cls) = &ast.def(d).kind else { return false };
+        cls.body.iter().any(|s| matches!(s, ast::Stmt::Def(x) if ast.def(*x).name == name && matches!(ast.def(*x).kind, DefKind::Fun(_))))
+    }
+
+    /// Whether the body of the class `o` holds the companion the parser made for its case class of
+    /// the name (`add_derived_givens`), `Desugar.classDef`'s, which is entered as the synthetic
+    /// module it is (`enter_inner_object`, `new_object`).
+    fn body_holds_made_companion(&self, o: ClassId, name: crate::intern::Name) -> bool {
+        let info = self.syms.class(o);
+        let Some(d) = info.def else { return false };
+        let ast = self.ast(info.file);
+        let DefKind::Class(cls) = &ast.def(d).kind else { return false };
+        cls.body.iter().any(|s| matches!(s, ast::Stmt::Def(x) if ast.def(*x).name == name && ast.synthetic_companions.binary_search(x).is_ok()))
     }
 
     /// The companion the namer made for a case class, which an object the file writes takes the
@@ -1059,6 +1158,9 @@ impl<'a> Worker<'a> {
         span: crate::source::Span,
     ) -> ClassId {
         let cid = self.syms.new_class(name, ClassKind::Object, m | mods::FINAL, owner, file, def, span);
+        if def.is_some_and(|d| self.ast(file).synthetic_companions.binary_search(&d).is_ok()) {
+            self.syms.class_mut(cid).synthetic_companion = true;
+        }
         self.record_self_alias(cid);
         let sym = self.syms.new_sym(name, SymKind::Object(cid), m, owner, file, None, span);
         self.note_scoped_private(file, sym);
@@ -1073,6 +1175,38 @@ impl<'a> Worker<'a> {
             self.shadowed_object = Some(cid);
         }
         cid
+    }
+
+    /// The companion `Desugar.classDef` gives an enum's class case as it gives a case class's
+    /// (`companionDefs`, the case being a case class of the enum's companion after
+    /// `DesugarEnums`): an object of the enum's companion beside the case, made here without a
+    /// definition as a case class's of a body is, its val per instance where that companion is
+    /// one, eager as `LazyVals.transformSyntheticModule` makes a synthetic module's (lazy in a
+    /// trait) and as a pickle's is read; lazy in a block's enum, whose bodies a build over the
+    /// products types again as the whole build does, as a case class's made companion of a body
+    /// is. It is the case's `Mirror.Product` (`useCompanionAsProductMirror`).
+    fn enter_enum_case_companion(&mut self, file: FileId, companion: ClassId, case_cid: ClassId) {
+        let (name, span) = {
+            let info = self.syms.class(case_cid);
+            (info.name, info.span)
+        };
+        let owner = Owner::Class(companion);
+        // A term of the name there already (a second enum of the name sharing the companion, whose
+        // definition is reported): the case keeps its constructor, as on master.
+        if self.syms.class(companion).members.contains_key(&name) {
+            return;
+        }
+        let c = if self.syms.class(companion).kind != ClassKind::Object {
+            self.new_inner_companion_of(file, owner, name, span, self.syms.class(companion).local_module.is_some())
+        } else {
+            self.new_object(file, owner, name, 0, None, span)
+        };
+        self.syms.class_mut(case_cid).companion = Some(c);
+        self.syms.class_mut(c).companion = Some(case_cid);
+        self.syms.class_mut(c).made_companion = true;
+        // Completed as an enum's made companion is, with the mirror's parent
+        // (`complete_class_inner`).
+        self.made_companion_to_string(c);
     }
 
     fn enter_enum_body(&mut self, file: FileId, owner: Owner, enum_cid: ClassId, id: DefId) {
@@ -1156,6 +1290,7 @@ impl<'a> Worker<'a> {
                 self.reserve_case_members(case_cid, &case_cls.clauses, case_cls.body.len());
                 self.enter_ctor_params(file, case_cid, &case_cls.clauses);
                 self.enter_selectors(file, case_cid);
+                self.enter_enum_case_companion(file, companion, case_cid);
             }
         }
     }

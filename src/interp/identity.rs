@@ -561,7 +561,6 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Ctor(c) => mix(3, self.class_key(c)),
             SymRef::Default(c, i) => mix(mix(4, self.class_key(c)), i as u64),
             SymRef::Pkg(p) | SymRef::PkgClass(p) => mix(5, self.package_key(p)),
-            SymRef::FilePackage(f) => mix(6, self.file_key(f)),
             SymRef::TParam(t) => mix(7, bytes_digest(self.name(self.syms().tparam(t).name).as_bytes())),
             SymRef::Alias(a) => mix(8, bytes_digest(self.name(self.syms().alias(a).name).as_bytes())),
             SymRef::Lambda(e) => mix(9, self.span_key(self.prog().span_of(e))),

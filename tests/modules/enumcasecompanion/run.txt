@@ -1,0 +1,5 @@
+(true,true,Email(Some(a),true))
+Email
+List(Store(None), Email(Some(s),false))
+s false
+(true,A(4),A(5))

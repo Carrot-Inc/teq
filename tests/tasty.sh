@@ -276,9 +276,17 @@ rm -rf "$products_tmp"
 # the bodies' census of both (TEQ_BODIES_CENSUS, every producer and every reason a body is
 # withheld, summed) has to be tests/tasty/expected/bodies.census: a body that the writer starts or
 # stops withholding there shows.
+# A probe's `// jars:` line puts those jars on the check's class path and on scalac's read of its pickles.
+declare -A probe_cp
 for src in tests/tasty/probes/*.scala; do
   name=$(basename "$src" .scala)
-  if TEQ_BODIES_CENSUS=$extra/bodies.census timeout 60 "$teq" compiler check --products "$extra/probe-$name" "$src" > "$extra/probe-$name.log" 2>&1; then
+  jars_of "$src"
+  if [ -n "$JARS_MISSING" ]; then
+    echo "skip probe $name: not in the coursier cache:$JARS_MISSING"
+    continue
+  fi
+  probe_cp[probe-$name]=$JARS_CP
+  if TEQ_BODIES_CENSUS=$extra/bodies.census timeout 60 "$teq" compiler check --products "$extra/probe-$name" "$src" ${JARS_CP:+--classpath "$JARS_CP"} > "$extra/probe-$name.log" 2>&1; then
     extra_units+=("probe-$name")
   else
     fail=$((fail + 1))
@@ -513,7 +521,7 @@ if [ "$1" != "--update" ]; then
     done
     # The capture's programs and the probes, Scala.js modules' check builds.
     for name in "${extra_units[@]}"; do
-      printf 'readjs\t%s\t%s\t%s\n' "$name" "$extra/$name:$sjs" "$(find "$extra/$name" -name '*.tasty' | LC_ALL=C sort | tr '\n' '\t' | sed 's/\t$//')" >> "$twin/fromtasty.jobs"
+      printf 'readjs\t%s\t%s\t%s\n' "$name" "$extra/$name:$sjs${probe_cp[$name]:+:${probe_cp[$name]}}" "$(find "$extra/$name" -name '*.tasty' | LC_ALL=C sort | tr '\n' '\t' | sed 's/\t$//')" >> "$twin/fromtasty.jobs"
     done
     # The inspector's shape, its jar on the class path.
     insp_units=()

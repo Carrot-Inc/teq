@@ -669,6 +669,10 @@ pub fn run(opts: &Options) -> ! {
             t.inline.es_modules = matches!(target, Target::Js(_));
             t.inline.outlines = js && !opts.no_outline;
             t.choose_entry = js;
+            // A resident check reports and emits nothing, as a check does (`main`): what only the
+            // backends read, the selectors' bodies and a companion's mirror members, waits for a
+            // first use, a macro's.
+            t.emits_bodies = !matches!(target, Target::Check) || opts.analysis_version.is_some();
             if opts.jvm {
                 t.set_jvm();
             }

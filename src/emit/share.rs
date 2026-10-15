@@ -1260,6 +1260,7 @@ impl<'a> Enc<'a> {
                 match op {
                     CastOp::Written => self.tok(0),
                     CastOp::Nothing => self.tok(1),
+                    CastOp::Erased => self.tok(4),
                     CastOp::Check(t, _) => {
                         self.tok(2);
                         self.test(t);

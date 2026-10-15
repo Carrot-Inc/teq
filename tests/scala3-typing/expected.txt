@@ -1106,7 +1106,7 @@ neg/i4382.scala	accepts
 neg/i4385.scala	same	
 neg/i4453.scala	syntax	expected {}, found {}
 neg/i4470a.scala	different	type {} is already defined
-neg/i4470b.scala	different	type {} is already defined
+neg/i4470b.scala	different	{} is already defined
 neg/i4470c.scala	different	type {} is already defined
 neg/i4496b.scala	same	
 neg/i4520.scala	same	
@@ -2605,7 +2605,7 @@ pos/i11713.scala	accepts
 pos/i11725.scala	accepts	
 pos/i11729.scala	rejects	type mismatch
 pos/i11731.scala	accepts	
-pos/i11732.scala	rejects	no given instance
+pos/i11732.scala	accepts	
 pos/i1174.scala	accepts	
 pos/i11781.scala	oos	inheritance
 pos/i1181.scala	accepts	
@@ -3167,7 +3167,7 @@ pos/i18234.scala	syntax	expected {}, found {}
 pos/i18247.scala	accepts	
 pos/i18253.orig.scala	accepts	
 pos/i18253.scala	accepts	
-pos/i18260.scala	rejects	too many arguments
+pos/i18260.scala	accepts	
 pos/i18261	accepts	
 pos/i18261.min	accepts	
 pos/i18263.orig.scala	accepts	
@@ -4748,7 +4748,7 @@ pos/private-this-future-migration.scala	accepts
 pos/private-this.scala	accepts	
 pos/private-types-after-typer.scala	accepts	
 pos/privates.scala	accepts	
-pos/product-to-tuple.scala	rejects	type mismatch
+pos/product-to-tuple.scala	accepts	
 pos/profile-test.scala	accepts	
 pos/projection.scala	accepts	
 pos/projections.scala	accepts	
@@ -5065,7 +5065,7 @@ pos/t11788	oos	java
 pos/t11788b	oos	java
 pos/t11788c	oos	java
 pos/t1185.scala	accepts	
-pos/t119.scala	rejects	type mismatch
+pos/t119.scala	accepts	
 pos/t11921.scala	accepts	
 pos/t1203a.scala	accepts	
 pos/t1208.scala	accepts	
@@ -5388,7 +5388,7 @@ pos/t4869.scala	accepts
 pos/t4910.scala	accepts	
 pos/t4911.scala	accepts	
 pos/t4938.scala	accepts	
-pos/t4975.scala	rejects	no given instance
+pos/t4975.scala	accepts	
 pos/t5012.scala	accepts	
 pos/t5013	accepts	
 pos/t5029.scala	accepts	
@@ -5527,7 +5527,7 @@ pos/t6595.scala	accepts
 pos/t6600.scala	std	ScalaNumericConversions
 pos/t661.scala	syntax	expected identifier, found {}
 pos/t6664.scala	accepts	
-pos/t6664b.scala	rejects	{} is already defined
+pos/t6664b.scala	rejects	None of the overloaded alternatives of method A in object T with types
 pos/t6675.scala	accepts	
 pos/t6712.scala	accepts	
 pos/t6722.scala	std	Dynamic

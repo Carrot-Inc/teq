@@ -316,7 +316,7 @@ pub struct Renames {
 const RUNTIME_CALLED: &[&str] = &[
     "toString", "equals", "hashCode", "foreach", "iterator", "hasNext", "next", "drop", "apply", "applyOrElse",
     "isDefinedAt", "_1", "_2", "constructor", "exception", "productArity", "productElement", "productPrefix",
-    "productElementName", "productIterator", "canEqual", "compareTo", "newArray",
+    "productElementName", "productIterator", "canEqual", "compareTo", "newArray", "fromProduct",
 ];
 
 /// Property names that the runtime and the emitter put on instances behind a `$`, which a short
@@ -360,7 +360,7 @@ impl Renames {
                 let sym = syms.sym(m);
                 // A concrete var's setter has no output: its call is the var's assignment.
                 // The val of a companion the typer made that nothing reads has no output either.
-                let unread_companion = crate::tir::is_made_companion_val(syms, m) && !reach.fields_read[m.idx()] && !reach.init_read[m.idx()];
+                let unread_companion = crate::tir::is_desugared_companion_val(syms, m) && !reach.fields_read[m.idx()] && !reach.init_read[m.idx()];
                 if matches!(sym.kind, SymKind::Val | SymKind::Var | SymKind::Def | SymKind::Given) && sym.owner == Owner::Class(c) && !syms.product_synthetics.contains_key(&m) && !crate::typer::setters::is_concrete_setter(syms, m) && !unread_companion {
                     names.push(member_name(m));
                 }

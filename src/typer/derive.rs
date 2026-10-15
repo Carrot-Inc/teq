@@ -4,9 +4,9 @@
 
 use super::{resolve, Worker};
 use crate::ast::{self, mods, TyExpr};
-use crate::intern::{FxMap, Name};
+use crate::intern::Name;
 use crate::names;
-use crate::source::{FileId, Span};
+use crate::source::Span;
 use crate::symbols::*;
 use crate::tir::*;
 use crate::types::*;
@@ -19,6 +19,10 @@ struct ScalaMirrors {
     product: ClassId,
     sum: ClassId,
     singleton: ClassId,
+    /// `Mirror.SingletonProxy`, the mirror of a Scala 2 singleton.
+    singleton_proxy: Option<ClassId>,
+    /// `scala.runtime.TupleMirror`, every tuple's mirror.
+    tuple_mirror: Option<ClassId>,
     product_impl: ClassId,
     sum_impl: ClassId,
     singleton_impl: ClassId,
@@ -44,12 +48,6 @@ enum Wants {
 pub struct Derivation {
     scala: Option<ScalaMirrors>,
     names: Option<MirrorNames>,
-    /// The lazily initialised top-level val that holds the Scala mirror of a class: a cell,
-    /// made under the loader's lock and shared.
-    scala_mirrors: crate::arena::Layered<ClassId, SymId>,
-    /// Scala mirror vals of a file being re-typed (`incremental`), whose initialisers are built
-    /// anew under the same symbol, since other files refer to it.
-    pub scala_reserved: FxMap<ClassId, SymId>,
 }
 
 enum Shape {
@@ -59,24 +57,15 @@ enum Shape {
 }
 
 impl Derivation {
-    pub(super) fn fork(&mut self) {
-        self.scala_mirrors.fork();
-    }
+    pub(super) fn fork(&mut self) {}
 
-    pub(super) fn to_shared(&mut self, on: bool) {
-        self.scala_mirrors.to_shared = on;
-    }
+    pub(super) fn to_shared(&mut self, _on: bool) {}
 
-    pub(super) fn merge_own(&mut self) {
-        self.scala_mirrors.merge_own();
-    }
+    pub(super) fn merge_own(&mut self) {}
 
-    pub(super) fn apply_pending(&mut self) {
-        self.scala_mirrors.apply_pending();
-    }
+    pub(super) fn apply_pending(&mut self) {}
 
     pub(super) fn absorb(&mut self, other: &mut Derivation) {
-        self.scala_mirrors.absorb(other.scala_mirrors.take_local());
         if self.scala.is_none() {
             self.scala = other.scala;
         }
@@ -87,19 +76,18 @@ impl Derivation {
 
     /// Another worker's derivation state over the same mirrors.
     pub(super) fn attach(&self) -> Derivation {
-        Derivation { scala: self.scala, names: self.names, scala_mirrors: self.scala_mirrors.attach(), scala_reserved: FxMap::default() }
+        Derivation { scala: self.scala, names: self.names }
     }
 
     /// The mirrors under the merge's ids (`merge.rs`).
-    pub(super) fn remap(&mut self, sym: impl Fn(SymId) -> SymId, class: impl Fn(ClassId) -> ClassId) {
+    pub(super) fn remap(&mut self, _sym: impl Fn(SymId) -> SymId, class: impl Fn(ClassId) -> ClassId) {
         if let Some(m) = &mut self.scala {
             for c in [&mut m.mirror, &mut m.product, &mut m.sum, &mut m.singleton, &mut m.product_impl, &mut m.sum_impl, &mut m.singleton_impl] {
                 *c = class(*c);
             }
-        }
-        for table in [&mut self.scala_mirrors.local, &mut self.scala_reserved] {
-            let old = std::mem::take(table);
-            table.extend(old.into_iter().map(|(c, s)| (class(c), sym(s))));
+            for c in [&mut m.singleton_proxy, &mut m.tuple_mirror].into_iter().flatten() {
+                *c = class(*c);
+            }
         }
     }
 }
@@ -110,6 +98,8 @@ impl<'a> Worker<'a> {
     /// on demand; the values behind the mirrors (`std/mirrors.scala`) are the std's in both modes.
     pub fn find_mirror_classes(&mut self) {
         let library = self.scala_library_std();
+        // Entered with the std's classes, the lean std's file too: the parents of a case object
+        // name them (`mirror_parent`) whether or not the program names a mirror.
         let pkg = |t: &mut Self, path: [&str; 2]| {
             let mut names = path.map(|n| t.interner.intern(n)).into_iter();
             names.try_fold(ROOT_PKG, |p, n| match t.syms.pkg(p).entries.get(&n).and_then(|e| e.pkg) {
@@ -118,7 +108,7 @@ impl<'a> Worker<'a> {
                     Some(resolve::TermRef::Package(p)) => Some(p),
                     _ => None,
                 },
-                None => None,
+                None => t.demand_pkg(p, n),
             })
         };
         let (Some(deriving), Some(runtime)) = (pkg(self, ["scala", "deriving"]), pkg(self, ["scala", "runtime"])) else { return };
@@ -128,7 +118,7 @@ impl<'a> Worker<'a> {
                 return Some(c);
             }
             if !library {
-                return None;
+                return t.demand_class(p, name);
             }
             match t.pkg_type(p, name) {
                 Some(resolve::TypeRef::Class(c)) => Some(c),
@@ -154,7 +144,315 @@ impl<'a> Worker<'a> {
         else {
             return;
         };
-        self.derive.scala = Some(ScalaMirrors { mirror, product, sum, singleton, product_impl, sum_impl, singleton_impl });
+        let singleton_proxy = nested(self, "SingletonProxy");
+        let tuple_mirror = class(self, runtime, "TupleMirror");
+        self.derive.scala = Some(ScalaMirrors { mirror, product, sum, singleton, singleton_proxy, tuple_mirror, product_impl, sum_impl, singleton_impl });
+        // The members a companion's `fromProduct` and `ordinal` implement (`addMirrorSupport`),
+        // whose signatures the backends' bridges read (`Erasure`): complete before any body, which
+        // would publish what it holds in the middle of a class.
+        for (k, name) in [(product, "fromProduct"), (sum, "ordinal")] {
+            self.complete_class(k);
+            let name = self.interner.intern(name);
+            if let Some(decl) = self.syms.class(k).members.get(&name).copied() {
+                let _ = self.sig_of(decl);
+            }
+        }
+    }
+
+    /// The mirror classes, entering `scala.deriving.Mirror` where no file entered so far defines
+    /// it: a desugared parent asks for them whether or not the program names a mirror.
+    fn demanded_mirror_classes(&mut self) -> Option<ScalaMirrors> {
+        self.derive.scala
+    }
+
+    /// Whether `b` is `scala.deriving.Mirror` or its `Product`, `Sum` or `Singleton`.
+    pub(crate) fn is_mirror_class(&self, b: ClassId) -> bool {
+        self.derive.scala.is_some_and(|m| b == m.mirror || b == m.product || b == m.singleton || b == m.sum)
+    }
+
+    /// dotty's `is(Scala2x)`: a class read from a Scala 2 library, or the lean std's class standing
+    /// for one of scala-library's compiled from Scala 2's sources.
+    pub(super) fn is_scala2x(&self, c: ClassId) -> bool {
+        self.is_scala2_class(c) || self.is_std_scala2_class(c)
+    }
+
+    /// The parent `SyntheticMembers.addMirrorSupport` gives `c`: `Mirror.Singleton` to a case
+    /// object, and to an enum's singleton case (`DesugarEnums`' `ExtendsSingletonMirror`), but of
+    /// a Java enum; none to a class of Scala 2, whose objects scalac mirrors through a
+    /// `Mirror.SingletonProxy`. `Mirror.Product` to the companion of a generic product, and
+    /// `Mirror.Sum` to an enum's, where the companion is the mirror (`mirror_companion`).
+    pub(super) fn mirror_parent(&mut self, c: ClassId) -> Option<ClassId> {
+        let (kind, case, singleton, companion) = {
+            let info = self.syms.class(c);
+            (info.kind, info.mods & mods::CASE != 0, info.singleton.is_some(), info.companion)
+        };
+        let sm = self.demanded_mirror_classes()?;
+        match kind {
+            ClassKind::EnumCase => (singleton && !self.is_java_enum_value(c) && !self.is_scala2x(c)).then_some(sm.singleton),
+            _ if case && self.mirror_module(c) => (!self.is_scala2x(c)).then_some(sm.singleton),
+            _ if self.mirror_module(c) => {
+                let k = companion?;
+                if self.mirror_companion(k) != Some(c) {
+                    return None;
+                }
+                if self.syms.class(k).kind == ClassKind::Enum {
+                    return Some(sm.sum);
+                }
+                // The companion of a sealed class of the program's sources that is a generic sum
+                // (`useCompanionAsSumMirror`'s `isDefinedInSource`, `isGenericSum`), its children
+                // known once its file's classes are complete.
+                match self.sealed_companion_class(c, k) {
+                    Some(true) => {
+                        self.complete_sealed_file(k);
+                        matches!(self.mirror_shape(k), Some(Shape::Sum(_))).then_some(sm.sum)
+                    }
+                    Some(false) => None,
+                    None => self.is_generic_product_by_definition(k).then_some(sm.product),
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// The members `SyntheticMembers.addMirrorSupport` gives the companion `o` that is its
+    /// class's mirror (`mirror_parent`), where it has no definition of the name (`existingDef`):
+    /// of a generic product's, `fromProduct(x$0: Product)`, the class made of the product's
+    /// elements, each cast to its field's type (`fromProductBody`); of an enum's, `ordinal(x$0)`,
+    /// the value's ordinal (`ordinalBody`). JavaScript and the interpreter run them
+    /// (`TClassLists::mirror_members`); the JVM backend and the pickle write them by rule; a
+    /// companion read from scalac's pickle has them as written.
+    /// The mirror members of the typed class `ti` of `c`, made where a check that only reports
+    /// left them (`emits_bodies`): the interpreter running a macro calls them. A shared class's
+    /// were made with it (`check_class_now`).
+    pub(crate) fn ensure_mirror_members(&mut self, c: ClassId, ti: usize) {
+        if self.emits_bodies || self.shared_class(c) || !self.prog.classes[ti].mirror_members().is_empty() {
+            return;
+        }
+        let mirror = self.mirror_members(c);
+        if !mirror.is_empty() {
+            self.prog.classes[ti].lists_mut().mirror_members = mirror;
+        }
+    }
+
+    pub(super) fn mirror_members(&mut self, o: ClassId) -> Vec<FunId> {
+        let (companion, file, span) = {
+            let info = self.syms.class(o);
+            (info.companion, info.file, info.span)
+        };
+        let (Some(sm), Some(k)) = (self.derive.scala, companion) else { return Vec::new() };
+        if !self.mirror_module(o) || self.mirror_companion(k) != Some(o) {
+            return Vec::new();
+        }
+        let (product, sum) = {
+            let bases = &self.syms.class(o).base_types;
+            (bases.iter().any(|&(b, _)| b == sm.product), bases.iter().any(|&(b, _)| b == sm.sum))
+        };
+        let (from_product, ordinal) = (self.interner.intern("fromProduct"), self.interner.intern("ordinal"));
+        let declares = |t: &Self, n: Name| t.syms.class(o).members.contains_key(&n);
+        let env = self.env_at(file, Owner::Class(o), span.start);
+        if product && !self.is_tuple_class(k) && self.is_generic_product_class(k) && !declares(self, from_product) {
+            let Some(decl) = self.syms.class(sm.product).members.get(&from_product).copied() else { return Vec::new() };
+            return self.with_env(env, |t| vec![t.from_product_member(o, k, decl, span)]);
+        }
+        if sum && !declares(self, ordinal) {
+            let Some(decl) = self.syms.class(sm.sum).members.get(&ordinal).copied() else { return Vec::new() };
+            let Some(Shape::Sum(children)) = self.mirror_shape(k) else { return Vec::new() };
+            return self.with_env(env, |t| vec![t.ordinal_member(o, k, &children, decl, span)]);
+        }
+        Vec::new()
+    }
+
+    /// `fromProduct` of the companion `o` of `k` (`mirror_members`).
+    fn from_product_member(&mut self, o: ClassId, k: ClassId, decl: SymId, span: Span) -> FunId {
+        let product_ty = self.b.product.map_or(ANY, |p| self.types.class(p, &[]));
+        let x0 = self.interner.intern("x$0");
+        let param = self.new_local(x0, SymKind::Val, product_ty, span);
+        let element = self.b.product.and_then(|p| {
+            let name = self.interner.intern("productElement");
+            self.syms.class(p).members.get(&name).copied()
+        });
+        let template = element.and_then(|sym| self.syms.sym(sym).intrinsic.clone());
+        let anys: Vec<TypeId> = self.syms.class(k).tparams.iter().map(|_| ANY).collect();
+        let subst: Subst = self.syms.class(k).tparams.iter().map(|&tp| (tp, ANY)).collect();
+        let fields: Vec<TypeId> = self.syms.class(k).ctor.first().map_or(Vec::new(), |cl| cl.params.iter().map(|p| p.ty).collect());
+        let values: Vec<TExprId> = fields
+            .into_iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let p_ref = self.prog.add(TExpr::Local(param));
+                let index = self.prog.add(TExpr::Int(i as i32));
+                let value = match (&template, element) {
+                    (Some(text), Some(sym)) => {
+                        let s = self.prog.add_str(text);
+                        // Named by its member, as a call's template is (`Product.productElement`).
+                        self.prog.template_syms.insert(s, sym);
+                        if self.forked && !self.prog.template_syms.to_shared {
+                            self.pending_shared.push(super::PendingShared::Template(s, sym));
+                        }
+                        let l = self.prog.list(&[p_ref, index]);
+                        self.prog.add(TExpr::Js(s, l))
+                    }
+                    (None, Some(sym)) => {
+                        let args = self.prog.list(&[index]);
+                        self.prog.add(TExpr::CallMethod(p_ref, sym, args))
+                    }
+                    _ => self.prog.add(TExpr::Unit),
+                };
+                let t = self.types.subst(t, &subst);
+                self.lower_cast(value, ANY, t, span).0
+            })
+            .collect();
+        let values = self.prog.list(&values);
+        let body = self.new_instance(k, values, span);
+        let ret = self.types.class(k, &anys);
+        self.mirror_member(o, decl, &[(param, x0, product_ty)], ret, body, span)
+    }
+
+    /// `ordinal` of the companion `o` of the sum `k` of the cases `children` (`mirror_members`).
+    fn ordinal_member(&mut self, o: ClassId, k: ClassId, children: &[ClassId], decl: SymId, span: Span) -> FunId {
+        let anys: Vec<TypeId> = self.syms.class(k).tparams.iter().map(|_| ANY).collect();
+        let sum_ty = self.types.class(k, &anys);
+        let x0 = self.interner.intern("x$0");
+        let param = self.new_local(x0, SymKind::Val, sum_ty, span);
+        let is_enum = self.syms.class(k).kind == ClassKind::Enum;
+        let body = self.ordinal_of(param, children, is_enum);
+        let int = self.b.t_int;
+        self.mirror_member(o, decl, &[(param, x0, sum_ty)], int, body, span)
+    }
+
+    /// A member of `o` named and dispatched as `decl`, of the parameters and the body given.
+    fn mirror_member(&mut self, o: ClassId, decl: SymId, params: &[(SymId, Name, TypeId)], ret: TypeId, body: TExprId, span: Span) -> FunId {
+        let file = self.syms.class(o).file;
+        let name = self.syms.sym(decl).name;
+        let msym = self.syms.new_sym(name, SymKind::Def, mods::OVERRIDE, Owner::Class(o), file, None, span);
+        let sig = MethodSig {
+            tparams: Vec::new(),
+            clauses: vec![ClauseSig {
+                params: params.iter().map(|&(sym, name, ty)| ParamSig { name, ty, by_name: false, repeated: false, has_default: false, sym }).collect(),
+                is_using: false,
+                is_implicit: false,
+            }],
+            ret,
+            declared: crate::tir::NO_TYPE,
+        };
+        {
+            let mut s = self.syms.sym_mut(msym);
+            s.sig = Some(std::sync::Arc::new(sig));
+            s.state().set(Completion::Done);
+        }
+        self.name_like(msym, decl);
+        let f = self.prog.add_fun(TFun {
+            sym: msym,
+            defaults: vec![None; params.len()],
+            params: params.iter().map(|&(s, _, _)| s).collect(),
+            body: Some(body),
+            body_unconsuming: false,
+            captures: 0,
+            lifted: false,
+        });
+        self.fun_of_sym.insert(msym, f);
+        f
+    }
+
+    /// The classes of the file of the sealed class `k` but local ones, completed: the children of
+    /// a sealed class are in its file and known once complete (`ClassInfo::children`).
+    fn complete_sealed_file(&mut self, k: ClassId) {
+        let file = self.syms.class(k).file;
+        let mut classes: Vec<ClassId> = self.def_classes.values_in(file.0 as usize);
+        classes.sort_unstable();
+        for c in classes {
+            let mut owner = self.syms.class(c).owner;
+            while let Owner::Class(o) = owner {
+                owner = self.syms.class(o).owner;
+            }
+            if owner != Owner::Local {
+                self.complete_class(c);
+            }
+        }
+    }
+
+    /// The children of the sealed class `k` in its mirror's order (`mirror_shape`).
+    pub(crate) fn sum_mirror_children(&mut self, k: ClassId) -> Vec<ClassId> {
+        match self.mirror_shape(k) {
+            Some(Shape::Sum(children)) => children,
+            _ => Vec::new(),
+        }
+    }
+
+    /// The type a child of a sum is tested as (`SyntheticMembers.ordinalBody`'s `rawRef`): an
+    /// object's or a value's singleton, a class of any arguments.
+    pub(crate) fn mirror_child_type(&mut self, child: ClassId) -> TypeId {
+        let info = self.syms.class(child);
+        if let Some(v) = info.singleton {
+            return self.types.mk(Type::Term(v));
+        }
+        if let Some(s) = info.module_sym.filter(|_| info.kind == ClassKind::Object) {
+            return self.types.mk(Type::Term(s));
+        }
+        let n = info.tparams.len();
+        self.types.class(child, &vec![WILD; n])
+    }
+
+    /// Whether `o` extends `Mirror.Sum`, as a companion that is its sum's mirror does.
+    pub(crate) fn extends_sum_mirror(&mut self, o: ClassId) -> bool {
+        let Some(sm) = self.derive.scala else { return false };
+        self.complete_class(o);
+        self.syms.class(o).base_types.iter().any(|&(b, _)| b == sm.sum)
+    }
+
+    /// Whether `o`, the companion of `k`, decides its mirror parent as the companion of a sealed
+    /// class: `Some(true)` where `k` is the program's (`useCompanionAsSumMirror`'s
+    /// `isDefinedInSource`) and the file's classes decide it, `Some(false)` where `k` is a library's.
+    pub(super) fn sealed_companion_class(&self, o: ClassId, k: ClassId) -> Option<bool> {
+        let ki = self.syms.class(k);
+        let sealed = ki.mods & mods::SEALED != 0 && (ki.kind == ClassKind::Trait || (ki.kind == ClassKind::Class && ki.mods & mods::ABSTRACT != 0));
+        (sealed && self.mirror_module(o)).then(|| ki.def.is_some() && !self.is_library_class(k))
+    }
+
+    /// Whether the mirror parent of the object `o` waits for `o`'s written parents: the companion
+    /// of a sealed class of the program, whose file's classes decide it and may look into `o`.
+    pub(super) fn defers_mirror_parent(&mut self, o: ClassId) -> bool {
+        let Some(k) = self.syms.class(o).companion else { return false };
+        self.syms.class(k).kind != ClassKind::Enum && self.sealed_companion_class(o, k) == Some(true) && self.mirror_companion(k) == Some(o)
+    }
+
+    /// `isGenericProduct` of a companion's class, as `SyntheticMembers` asks it after typing: read
+    /// off the definition of a class of the program not complete yet, whose completion may look
+    /// into the companion being completed (`case class Owner(o: Owner.Id)` with `object Owner
+    /// extends Typed[Owner]`); the case flag, `Abstract`, one clause and no value class, as
+    /// `whyNotGenericProduct` reads them.
+    fn is_generic_product_by_definition(&mut self, k: ClassId) -> bool {
+        let (file, def, done) = {
+            let info = self.syms.class(k);
+            (info.file, info.def, info.state() == Completion::Done)
+        };
+        let Some(def) = def.filter(|_| !done) else { return self.is_generic_product_class(k) };
+        let info = self.syms.class(k);
+        if info.mods & mods::CASE == 0 || !matches!(info.kind, ClassKind::Class | ClassKind::EnumCase) || info.singleton.is_some() || info.mods & mods::ABSTRACT != 0 {
+            return false;
+        }
+        let ast = self.ast(file);
+        let ast::DefKind::Class(cls) = &ast.def(def).kind else { return false };
+        let value_class = cls.parents.iter().any(|p| match ast.ty(p.ty) {
+            TyExpr::Name(n) => n == names::ANY_VAL,
+            TyExpr::Select(_, n) => n == names::ANY_VAL,
+            _ => false,
+        });
+        cls.clauses.len() <= 1 && cls.clauses.iter().all(|cl| !cl.is_using) && !value_class
+    }
+
+    /// `SymUtils.isGenericProduct` but its access, which the summoning site checks: a case class,
+    /// not abstract and no value class, of one parameter clause.
+    pub(super) fn is_generic_product_class(&mut self, k: ClassId) -> bool {
+        self.complete_class(k);
+        let info = self.syms.class(k);
+        info.mods & mods::CASE != 0
+            && matches!(info.kind, ClassKind::Class | ClassKind::EnumCase)
+            && info.singleton.is_none()
+            && info.mods & mods::ABSTRACT == 0
+            && !info.value_class
+            && info.ctor.len() <= 1
+            && info.ctor.iter().all(|cl| !cl.is_using)
     }
 
     fn mirror_names(&mut self) -> MirrorNames {
@@ -209,13 +507,31 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether one of the parents `desugared_parents` gave `c` is a mirror's (`mirror_parent`).
+    pub(super) fn has_desugared_mirror_parent(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        let from = info.parents.len() - (info.desugared_parents as usize).min(info.parents.len());
+        info.parents[from..].iter().any(|&t| self.types.named_class(t).is_some_and(|k| self.is_mirror_class(k)))
+    }
+
+    /// `scala.deriving.Mirror.Singleton`, once the derivation protocol's classes are found.
+    pub fn scala_singleton_mirror(&self) -> Option<ClassId> {
+        self.derive.scala.map(|m| m.singleton)
+    }
+
     /// Whether `b` is a parent dotty's `Desugar.classDef` gives a case class, a case object or an
     /// enum, or one of its bases: `Product` with `Equals`, `java.io.Serializable`,
-    /// `scala.reflect.Enum`.
+    /// `scala.reflect.Enum`; or one `SyntheticMembers.addMirrorSupport` gives: `Mirror.Singleton`
+    /// with `Mirror.Product` and `Mirror`, `Mirror.Sum`.
     #[inline(always)]
     pub fn is_desugared_parent(&self, b: ClassId) -> bool {
         if Some(b) == self.b.product || Some(b) == self.b.reflect_enum || Some(b) == self.b.equals {
             return true;
+        }
+        if let Some(m) = self.derive.scala {
+            if b == m.mirror || b == m.product || b == m.singleton || b == m.sum {
+                return true;
+            }
         }
         // The one `java.io.Serializable` of its package, once looked up (`java_serializable`).
         match self.java_serializable {
@@ -355,7 +671,7 @@ impl<'a> Worker<'a> {
         reported
     }
 
-    pub fn scala_mirror_given(&mut self, class: ClassId, target: TypeId) -> Option<(TExprId, TypeId)> {
+    pub fn scala_mirror_given(&mut self, class: ClassId, target: TypeId, site: Span) -> Option<(TExprId, TypeId)> {
         let sm = self.derive.scala?;
         let wants = if class == sm.mirror {
             Wants::Any
@@ -410,39 +726,340 @@ impl<'a> Worker<'a> {
             }
         }
         let ty = self.scala_mirror_type(c, &shape, mirrored, subject, &params, names, sm);
-        // The one mirror of a class without parameters is declared with its refined type in link
-        // mode, so that a path to it keeps the type members: scala-library's `summon` is inline
-        // and gives `x.type`, where the std's gives the expected type. So whatever type names the
-        // class (`Red.type`, `A & B`), which keeps its accessor's descriptor that of the
-        // mirror's parent in every build (`complete_program_mirrors`).
-        let plain = self.scala_library_std() && params.is_empty() && self.syms.class(c).tparams.is_empty();
-        // A product nested in a class seen through a prefix (`cw.Foo`) is made with the prefix's
-        // value as its enclosing instance, as dotty's anonymous mirror makes `new pre.C(..)`
-        // (`MirrorImpl.OfProduct(pre)`); the mirror of a class nested in a class is made where it
-        // is summoned in any case (`scala_mirror_value_unlocked`).
+        // `Synthesizer`'s mirror: the companion, the singleton, a `TupleMirror` (`mirror_ref`), or
+        // an anonymous mirror made at the site, cast to the mirror's type.
+        let made = match self.mirror_ref(c, &shape, subject, sm) {
+            Some(value) => Some(value),
+            None => self.anonymous_mirror(c, &shape, subject, &params, sm, site),
+        };
+        if let Some(value) = made {
+            let value = self.mirror_cast(value, ty, sm);
+            return Some((value, ty));
+        }
+        // Where no anonymous class can be made (a quote's body) or no path names the object (an
+        // enum's case of a class or a block), the mirror is one of the runtime's mirror classes made
+        // at the site, a product nested in a class with the prefix's value as its enclosing
+        // instance (`MirrorImpl.OfProduct(pre)`).
         let outer = match (self.types.get(subject), &shape) {
             (Type::Nested(p, _), Shape::Product) if self.outer_class(c).is_some() => self.prefix_value(p),
             _ => None,
         };
-        let value = match outer {
-            Some(outer) => {
-                let span = self.syms.class(c).span;
-                let prefixed = std::mem::replace(&mut self.new_prefixed, true);
-                let value = self.build_scala_mirror(c, &shape, sm.product_impl, span, Some(outer));
-                self.new_prefixed = prefixed;
-                value
-            }
-            None => self.scala_mirror_value(c, &shape, sm, plain.then_some(ty))?,
+        let impl_class = match &shape {
+            Shape::Product => sm.product_impl,
+            Shape::Singleton => sm.singleton_impl,
+            Shape::Sum(_) => sm.sum_impl,
         };
-        // The reference cast to the mirror's type, as dotty's `Synthesizer.productMirror` gives
-        // `mirrorRef.cast(mirrorType)`: a tree of the refined type, not the val's singleton
-        // (a macro matching the summoned mirror's `tpe` as a `Refinement`); the val declared with
-        // that type, the cast is no node of its own.
-        let value = match plain {
-            true => self.lower_cast(value, ty, ty, Span::default()).0,
-            false => value,
-        };
+        let span = self.syms.class(c).span;
+        let now = outer.is_some() || self.new_prefixed;
+        let prefixed = std::mem::replace(&mut self.new_prefixed, now);
+        let value = self.build_scala_mirror(c, &shape, impl_class, span, outer);
+        self.new_prefixed = prefixed;
+        let value = self.lower_cast(value, ty, ty, Span::default()).0;
         Some((value, ty))
+    }
+
+    /// The mirror `Synthesizer` hands out for `c`, as a path or a construction: of a product
+    /// the companion (`companionPath`, `useCompanionAsProductMirror`), of a tuple a
+    /// `TupleMirror` of its arity; of a sum the companion of an enum (`useCompanionAsSumMirror`);
+    /// of a singleton the object (`singletonPath`), a Scala 2 one's in a `SingletonProxy`. None
+    /// where teq's targets have no such companion: a class nested in a class or a block, whose
+    /// companion they lay out by rule; a sealed class's written companion, which they make no
+    /// `Mirror.Sum`; a class of Scala 2.
+    /// The companion `o` of the mirrored type `subject` as `Synthesizer.companionPath` (304) reads
+    /// it: the module of a static owner; a block's object's val; an object of a class's instance
+    /// through the type's prefix, or through the enclosing instance where the site is in it.
+    fn companion_path(&mut self, o: ClassId, subject: TypeId) -> Option<TExprId> {
+        if let Some(this) = self.module_within(o) {
+            return Some(this);
+        }
+        let (owner, local, inner) = {
+            let info = self.syms.class(o);
+            (info.owner, info.local_module, info.inner_object)
+        };
+        match (local, inner) {
+            (Some(v), _) => Some(self.prog.add(TExpr::Local(v))),
+            (None, Some(v)) => match self.types.get(subject) {
+                Type::Nested(pre, _) => {
+                    let recv = self.prefix_value(pre)?;
+                    Some(self.prog.add(TExpr::Field(recv, v)))
+                }
+                // A local enum's class case's companion, an object of the enum's companion, a
+                // block's object: through that object's val.
+                _ => self.inner_object_ref(v).or_else(|| {
+                    let Owner::Class(h) = owner else { return None };
+                    let lv = self.syms.class(h).local_module?;
+                    let recv = self.prog.add(TExpr::Local(lv));
+                    Some(self.prog.add(TExpr::Field(recv, v)))
+                }),
+            },
+            (None, None) if self.is_static_owner(owner) => Some(self.prog.add(TExpr::Module(o))),
+            (None, None) => None,
+        }
+    }
+
+    /// The module of the class `o` where the code stands in `o`'s body, as `tpd.ref` gives it there:
+    /// `This(o)` through the outer links (`followOuterLinks`), not its accessor, which the module
+    /// under construction would call again.
+    fn module_within(&mut self, o: ClassId) -> Option<TExprId> {
+        if !self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == o)) {
+            return None;
+        }
+        Some(self.this_ref(o))
+    }
+
+    fn mirror_ref(&mut self, c: ClassId, shape: &Shape, subject: TypeId, sm: ScalaMirrors) -> Option<TExprId> {
+        let _ = subject;
+        match shape {
+            Shape::Singleton => {
+                let (owner, singleton, local, inner) = {
+                    let info = self.syms.class(c);
+                    (info.owner, info.singleton, info.local_module, info.inner_object)
+                };
+                // The object's path: a local object's val, an inner one's through the prefix; in
+                // its own body, the object itself.
+                let within = self.module_within(c);
+                let path = match (singleton, local, inner) {
+                    _ if within.is_some() => within.unwrap(),
+                    (Some(sym), _, _) if self.is_static_owner(owner) => self.prog.add(TExpr::Static(sym)),
+                    (Some(_), _, _) => return None,
+                    (None, Some(v), _) => self.prog.add(TExpr::Local(v)),
+                    (None, None, Some(v)) => {
+                        let Type::Nested(pre, _) = self.types.get(subject) else { return None };
+                        let recv = self.prefix_value(pre)?;
+                        self.prog.add(TExpr::Field(recv, v))
+                    }
+                    (None, None, None) if self.is_static_owner(owner) => self.prog.add(TExpr::Module(c)),
+                    (None, None, None) => return None,
+                };
+                match sm.singleton_proxy.filter(|_| self.is_scala2x(c)) {
+                    Some(proxy) => {
+                        let args = self.prog.list(&[path]);
+                        Some(self.prog.add(TExpr::New(proxy, args)))
+                    }
+                    None => Some(path),
+                }
+            }
+            Shape::Product if self.is_tuple_class(c) => {
+                let tm = sm.tuple_mirror?;
+                self.complete_class(tm);
+                let n = self.syms.class(c).ctor.first().map_or(0, |cl| cl.params.len());
+                let arity = self.prog.add(TExpr::Int(n as i32));
+                self.prog.set_type(arity, self.b.t_int);
+                let args = self.prog.list(&[arity]);
+                let made = self.prog.add(TExpr::New(tm, args));
+                let tm_ty = self.types.class(tm, &[]);
+                self.prog.set_type(made, tm_ty);
+                Some(made)
+            }
+            Shape::Product => {
+                let o = self.mirror_companion(c)?;
+                self.companion_path(o, subject)
+            }
+            // The companion of an enum, or of a sealed class that is its mirror
+            // (`useCompanionAsSumMirror`): one that extends `Mirror.Sum`.
+            Shape::Sum(_) => {
+                let o = self.mirror_companion(c).filter(|&o| self.extends_sum_mirror(o))?;
+                self.companion_path(o, subject)
+            }
+        }
+    }
+
+    /// `Synthesizer.anonymousMirror`, the mirror of a class whose companion is none (`mirror_ref`):
+    /// an instance of a class made at the site, `Mirror.Product` or `Mirror.Sum` with `type
+    /// MirroredMonoType` the mirrored type, whose `fromProduct` makes the class of the product's
+    /// elements, each cast to its field's type, and whose `ordinal` tests the value's case.
+    fn anonymous_mirror(&mut self, c: ClassId, shape: &Shape, subject: TypeId, params: &[TypeId], sm: ScalaMirrors, span: Span) -> Option<TExprId> {
+        let parent = match shape {
+            Shape::Product => sm.product,
+            Shape::Sum(_) => sm.sum,
+            Shape::Singleton => return None,
+        };
+        if self.quote.level > 0 {
+            return None;
+        }
+        // A type constructor's mono type is the class over its parameters' bounds
+        // (`mkMirroredMonoType`), whose elements its `fromProduct` takes as `Any`.
+        let (mono, subst): (TypeId, Option<Subst>) = if params.is_empty() {
+            (subject, None)
+        } else {
+            let bounds: Vec<TypeId> = params.iter().map(|&p| match self.types.get(p) {
+                Type::Param(id) => self.syms.tparam(id).upper,
+                _ => ANY,
+            }).collect();
+            let anys: Subst = self.syms.class(c).tparams.iter().map(|&tp| (tp, ANY)).collect();
+            (self.types.class(c, &bounds), Some(anys))
+        };
+        let trait_ty = self.types.class(parent, &[]);
+        let shape = match shape {
+            Shape::Sum(children) => Shape::Sum(children.clone()),
+            Shape::Product => Shape::Product,
+            Shape::Singleton => Shape::Singleton,
+        };
+        let is_enum = self.syms.class(c).kind == ClassKind::Enum;
+        let mono_name = self.mirror_names().mono;
+        let (te, _) = self.sam_instance_with_types(trait_ty, 1, span, &[(mono_name, mono)], |t, params| {
+            let (p, _) = params[0];
+            match &shape {
+                Shape::Sum(children) => t.ordinal_of(p, children, is_enum),
+                _ => {
+                    let subst = subst.unwrap_or_else(|| t.owner_subst(subject));
+                    t.product_of(c, p, subject, subst, span)
+                }
+            }
+        })?;
+        Some(te)
+    }
+
+    /// `new C(..)` of the elements of the product `p` holds, each cast to its field's type as
+    /// `subject` sees it, the class nested in a class made in the instance its prefix names.
+    fn product_of(&mut self, c: ClassId, p: SymId, subject: TypeId, subst: Subst, span: Span) -> TExprId {
+        let element = self.b.product.and_then(|pc| {
+            let name = self.interner.intern("productElement");
+            self.syms.class(pc).members.get(&name).copied()
+        });
+        let template = element.and_then(|sym| self.syms.sym(sym).intrinsic.clone());
+        let fields: Vec<TypeId> = self.syms.class(c).ctor.first().map_or(Vec::new(), |cl| cl.params.iter().map(|p| p.ty).collect());
+        let values: Vec<TExprId> = fields
+            .into_iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let p_ref = self.prog.add(TExpr::Local(p));
+                let index = self.prog.add(TExpr::Int(i as i32));
+                let value = match (&template, element) {
+                    (Some(text), Some(sym)) => {
+                        let s = self.prog.add_str(text);
+                        self.prog.template_syms.insert(s, sym);
+                        if self.forked && !self.prog.template_syms.to_shared {
+                            self.pending_shared.push(super::PendingShared::Template(s, sym));
+                        }
+                        let l = self.prog.list(&[p_ref, index]);
+                        self.prog.add(TExpr::Js(s, l))
+                    }
+                    (None, Some(sym)) => {
+                        let args = self.prog.list(&[index]);
+                        self.prog.add(TExpr::CallMethod(p_ref, sym, args))
+                    }
+                    _ => self.prog.add(TExpr::Unit),
+                };
+                let t = self.types.subst(t, &subst);
+                self.lower_cast(value, ANY, t, span).0
+            })
+            .collect();
+        let n = values.len();
+        let xxl = if self.is_tuple_class(c) && n > 22 { self.tuple_xxl_value(&values, span) } else { None };
+        let values = self.prog.list(&values);
+        // A class nested in a class is made in the instance its prefix names (`MirrorImpl
+        // .OfProduct(pre)`), which the creation takes in place of its own enclosing one.
+        let outer = match self.types.get(subject) {
+            Type::Nested(pre, _) if self.outer_class(c).is_some() => self.prefix_value(pre),
+            _ => None,
+        };
+        let now = outer.is_some() || self.new_prefixed;
+        let prefixed = std::mem::replace(&mut self.new_prefixed, now);
+        let instance = match xxl {
+            Some(te) => te,
+            None => self.new_instance(c, values, span),
+        };
+        self.new_prefixed = prefixed;
+        if let Some(outer) = outer {
+            self.pass_outer(instance, outer);
+        }
+        instance
+    }
+
+    /// The ordinal of the value `a` holds among `children`: an enum value's own, else the index of
+    /// the first case it is an instance of.
+    fn ordinal_of(&mut self, a: SymId, children: &[ClassId], is_enum: bool) -> TExprId {
+        let a_ref = self.prog.add(TExpr::Local(a));
+        if is_enum {
+            let template = self.prog.add_str("$0.$ordinal");
+            let args = self.prog.list(&[a_ref]);
+            return self.prog.add(TExpr::Js(template, args));
+        }
+        let mut ordinal = self.prog.add(TExpr::Int(children.len() as i32 - 1));
+        for (i, &child) in children.iter().enumerate().rev().skip(1) {
+            let test = self.class_test(child);
+            let a_ref = self.prog.add(TExpr::Local(a));
+            let is_child = self.prog.add(TExpr::TypeTest(a_ref, test));
+            if self.capturing() {
+                // The case's class, of any arguments (`case _: C[?] => i`).
+                let n = self.syms.class(child).tparams.len();
+                let t = self.types.class(child, &vec![ANY; n]);
+                self.capture_form(is_child, crate::tir::capture::Form::Test(t));
+            }
+            let index = self.prog.add(TExpr::Int(i as i32));
+            ordinal = self.prog.add(TExpr::If(is_child, index, Some(ordinal)));
+        }
+        ordinal
+    }
+
+    /// The companion of `k` that is its mirror (`SymUtils.useCompanionAsProductMirror`,
+    /// `useCompanionAsSumMirror`): an object, no case object, of a class of Scala 3, placed
+    /// statically, where the targets give it the mirror's members by rule
+    /// (`SyntheticMembers.addMirrorSupport`, `mirror_members`).
+    /// Whether `c` is a module's class: an object's, or a class teq makes of an object nested in a
+    /// class or a block (`inner_object`, `local_module`).
+    pub(super) fn mirror_module(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        info.kind == ClassKind::Object || info.inner_object.is_some() || info.local_module.is_some()
+    }
+
+    pub(super) fn mirror_companion(&mut self, k: ClassId) -> Option<ClassId> {
+        let o = self.syms.class(k).companion?;
+        let oi = self.syms.class(o);
+        // A companion nested in a class or a block is the mirror too, read through its prefix
+        // (`useCompanionAsProductMirror` 166 has no owner's restriction; `companionPath` 304).
+        if !self.mirror_module(o) || oi.mods & mods::CASE != 0 {
+            return None;
+        }
+        (!self.is_scala2x(k)).then_some(o)
+    }
+
+    /// The mirror cast to its type, `Synthesizer`'s `mirrorRef.cast(mirrorType)`: the companion
+    /// or the object is the mirror on every target, so the cast tests nothing; the pickle writes
+    /// it as scalac's (`Wrap::Mirror`).
+    fn mirror_cast(&mut self, value: TExprId, ty: TypeId, _sm: ScalaMirrors) -> TExprId {
+        // The cast of a path tests nothing: the companion's or the object's class extends the
+        // mirror's trait on every target (`mirror_parent`), so its erasure conforms and `Erasure`
+        // drops the `$asInstanceOf$` (`TypeTestsCasts.interceptTypeApply`, `CastOp::Erased`). An
+        // anonymous mirror's instance is typed `Object & Serializable` (`anonymousMirror`), whose
+        // erasure does not, so the mirror's trait is tested, as scalac's `checkcast` tests it. The
+        // node is a cast's tree either way, of the mirror's type and no path (`MARK_CAST`), which
+        // an inline argument's copy keeps: `p.MirroredElemTypes` of a summoned mirror is the
+        // refinement's, not a member of the companion's singleton, and a macro's pattern reads the
+        // refinement.
+        // The operand's type as dotty's tree has it: an anonymous mirror's instance ascribed its
+        // class's parents but the mirror's (`Object & Serializable`), an enum's value its declared
+        // type (the enum), an object its class, a construction its class.
+        let from = match self.prog.expr(value) {
+            TExpr::New(c, _) if self.syms.class(c).kind == ClassKind::Anon => {
+                let parents = self.syms.class(c).parents.clone();
+                parents.into_iter().filter(|&p| !self.types.named_class(p).is_some_and(|k| self.is_mirror_class(k))).fold(self.b.t_any_ref, |acc, p| self.types.inter(acc, p))
+            }
+            TExpr::New(c, _) | TExpr::Module(c) => self.types.class(c, &[]),
+            // A companion's own `this` in its body (`module_within`).
+            TExpr::This => self.this_class().map_or(ANY, |c| self.types.class(c, &[])),
+            TExpr::Static(v) | TExpr::Local(v) | TExpr::Field(_, v) => self.sig_of(v).ret,
+            _ => self.prog.type_of(value).unwrap_or(ANY),
+        };
+        // The companion or the object has the mirror's trait from `addMirrorSupport`, after typing
+        // (`ClassInfo::post_typer_bases`): `Erasure`, which sees it, drops the cast.
+        let post_typer = self.class_of(from).is_some_and(|k| self.syms.class(k).post_typer_bases > 0);
+        let op = match self.cast_lowering(from, ty, false) {
+            _ if post_typer => CastOp::Erased,
+            super::prims::CastLowering::Op(op) => op,
+            _ => CastOp::Erased,
+        };
+        let value = self.prog.add(TExpr::Cast(value, op, ty));
+        *self.expr_marks.entry(value).or_default() |= super::MARK_CAST | super::MARK_CALL | super::MARK_RETYPED;
+        // The tree is of the mirror's type, which a quote's pattern reads (`$m: Mirror.SumOf[A]
+        // { type MirroredLabel = l }`).
+        self.prog.set_type(value, ty);
+        self.end_chain(value, ty);
+        if self.capturing() {
+            self.capture_wrap(value, crate::tir::capture::Wrap::Mirror(ty));
+        }
+        value
     }
 
     /// A mirrored type constructor (`type MirroredType = Tree`, or `[X] =>> Tree[X]`), as
@@ -505,10 +1122,11 @@ impl<'a> Worker<'a> {
         let parent = match shape {
             Shape::Sum(_) => sm.sum,
             Shape::Product => sm.product,
-            // scala-library's `Singleton` is the object's own type; the std's mirror object
-            // is a `Product` refined to the object (`std/library/mirrors.scala`).
-            Shape::Singleton if self.scala_library_std() => sm.product,
-            Shape::Singleton => sm.singleton,
+            // A Scala 2 singleton's mirror is its `SingletonProxy`, any other's the object itself.
+            Shape::Singleton => match sm.singleton_proxy {
+                Some(proxy) if self.is_scala2x(c) => proxy,
+                _ => sm.singleton,
+            },
         };
         let (elem_types, elem_names): (Vec<TypeId>, Vec<Name>) = match shape {
             Shape::Product => {
@@ -541,71 +1159,13 @@ impl<'a> Worker<'a> {
         let labels_ty = self.tuple_of(&labels);
         let label = self.types.lit(LitVal::Str(self.syms.class(c).name));
         let mut t = self.types.class(parent, &[]);
-        for (n, rhs) in [(names.mono, mono), (names.mirrored, mirrored), (names.label, label), (names.elem_types, elems_ty), (names.elem_labels, labels_ty)] {
+        // A singleton's is `mirrorCore` alone: its parent fixes the elements.
+        let members = if matches!(shape, Shape::Singleton) { 3 } else { 5 };
+        for (n, rhs) in [(names.mono, mono), (names.mirrored, mirrored), (names.label, label), (names.elem_types, elems_ty), (names.elem_labels, labels_ty)].into_iter().take(members) {
             let r = self.types.refine(Refinement::Alias(n, rhs));
             t = self.types.mk(Type::Refined(t, r));
         }
         t
-    }
-
-    /// The mirror object of a class, one per class whatever the type arguments, held by a
-    /// lazily initialised top-level val.
-    fn scala_mirror_value(&mut self, c: ClassId, shape: &Shape, sm: ScalaMirrors, declared: Option<TypeId>) -> Option<TExprId> {
-        // A mirror's val found is every worker's (applied at a release after the val); a miss is
-        // the lock's to answer, with the lookup made again under it.
-        if self.forked {
-            if let Some(&sym) = self.derive.scala_mirrors.get(&c) {
-                return Some(self.prog.add(TExpr::Static(sym)));
-            }
-        }
-        self.with_loader(|w| w.scala_mirror_value_unlocked(c, shape, sm, declared))
-    }
-
-    /// Under the loader's lock: the declared type a worker passes in is canonicalised into the
-    /// base first, since the signature it becomes is the shared symbol's (the canonicalisation
-    /// rule).
-    fn scala_mirror_value_unlocked(&mut self, c: ClassId, shape: &Shape, sm: ScalaMirrors, declared: Option<TypeId>) -> Option<TExprId> {
-        let view = self.types.view_here();
-        let declared = declared.map(|t| self.types.translate(view, t));
-        if let Some(&sym) = self.derive.scala_mirrors.get(&c) {
-            return Some(self.prog.add(TExpr::Static(sym)));
-        }
-        let (file, owner, span) = {
-            let info = self.syms.class(c);
-            (info.file, info.owner, info.span)
-        };
-        let impl_class = match shape {
-            Shape::Product => sm.product_impl,
-            Shape::Singleton => sm.singleton_impl,
-            Shape::Sum(_) => sm.sum_impl,
-        };
-        // The mirror of a class nested in a class holds the enclosing instance, as scalac's
-        // (the companion) does: it is made where it is summoned, not held by a top-level val.
-        if self.outer_class(c).is_some() {
-            return Some(self.build_scala_mirror(c, shape, impl_class, span, None));
-        }
-        let depth = std::mem::replace(&mut self.implicit_depth, 0);
-        let owners = std::mem::take(&mut self.sites.owners);
-        let env = self.env_for(file, owner);
-        let sym = match self.derive.scala_reserved.remove(&c) {
-            Some(sym) => sym,
-            None => self.mirror_val_sym(c, "derivingMirror", impl_class, span),
-        };
-        // A product class's mirror stands with the class's file, which its conversion makes
-        // later (`rank_files`).
-        if self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
-            self.loaded_mut().product_mirror_vals.push((sym, c));
-        }
-        if let Some(ty) = declared {
-            let sig = self.value_sig(ty);
-            self.syms.sym_mut(sym).sig = Some(sig);
-        }
-        self.derive.scala_mirrors.insert(c, sym);
-        let init = self.with_env(env, |t| t.build_scala_mirror(c, shape, impl_class, span, None));
-        self.prog.top_vals.push((sym, init));
-        self.sites.owners = owners;
-        self.implicit_depth = depth;
-        Some(self.prog.add(TExpr::Static(sym)))
     }
 
     /// The mirror object, whose constructions of the product take `outer` as their enclosing
@@ -957,103 +1517,6 @@ Failed to synthesize an instance of type {}:", shown, shown);
         Some(self.apply_member(module, module_ty, names::DERIVED, None, Vec::new(), span, Some(target)))
     }
 
-    /// The class whose Scala mirror the synthesized top-level val `s` holds
-    /// (`scala_mirror_value`), which no pickle of scalac's names: a writer states its type.
-    pub fn scala_mirror_class(&self, s: SymId) -> Option<ClassId> {
-        let info = self.syms.sym(s);
-        if info.kind != SymKind::Val || info.def.is_some() || !matches!(info.owner, Owner::Package(_)) || !self.interner.get(info.name).starts_with("derivingMirror$") {
-            return None;
-        }
-        let file = info.file;
-        (0..self.syms.classes.len() as u32).map(ClassId).find(|&c| self.syms.class(c).file == file && self.derive.scala_mirrors.get(&c) == Some(&s))
-    }
-
-    pub(super) fn scala_mirrors_of_file(&self, file: FileId) -> Vec<(ClassId, SymId)> {
-        self.derive.scala_mirrors.local.iter().filter(|(c, _)| self.syms.class(**c).file == file).map(|(&c, &s)| (c, s)).collect()
-    }
-
-    pub(super) fn reserve_scala_mirror(&mut self, c: ClassId, sym: SymId) {
-        self.derive.scala_mirrors.remove(&c);
-        self.derive.scala_reserved.insert(c, sym);
-    }
-
-    pub(super) fn rebuild_scala_mirror(&mut self, c: ClassId) {
-        let Some(sm) = self.derive.scala else { return };
-        if let Some(shape) = self.mirror_shape(c) {
-            self.scala_mirror_value(c, &shape, sm, None);
-        }
-    }
-
-    /// On the JVM every class of the program's sources with a mirror has its val, summoned or
-    /// not: another project built over the class files (sbt's residents, `--own`) may summon it,
-    /// and the val stands in the class's file, which that project does not write, as scalac's
-    /// mirror, the companion, is in every build of the class. Declared as a summon of the class
-    /// declares it, so that both projects name the accessor alike. Products keep their own
-    /// rule: a downstream over them holds the mirrors it summons.
-    pub(super) fn complete_program_mirrors(&mut self, only: Option<&[FileId]>) {
-        let Some(sm) = self.derive.scala else { return };
-        if !self.jvm || self.open_world {
-            return;
-        }
-        let mut classes: Vec<ClassId> = (0..self.syms.classes.len() as u32)
-            .map(ClassId)
-            .filter(|&c| self.is_program_mirror_class(c) && only.map_or(true, |files| files.contains(&self.syms.class(c).file)))
-            .collect();
-        classes.sort_by_key(|&c| (self.syms.class(c).file, self.syms.class(c).span.start));
-        let names = self.mirror_names();
-        for c in classes {
-            if self.derive.scala_mirrors.contains_key(&c) || self.outer_class(c).is_some() {
-                continue;
-            }
-            let Some(shape) = self.mirror_shape(c) else { continue };
-            let accessible = match &shape {
-                Shape::Sum(children) => children.iter().all(|&child| !self.in_local_class(child) && self.mirror_ctor_accessible(child)),
-                _ => self.mirror_ctor_accessible(c),
-            };
-            if !accessible {
-                continue;
-            }
-            let declared = (self.scala_library_std() && self.syms.class(c).tparams.is_empty()).then(|| {
-                let mirrored = self.types.class(c, &[]);
-                self.scala_mirror_type(c, &shape, mirrored, mirrored, &[], names, sm)
-            });
-            self.scala_mirror_value(c, &shape, sm, declared);
-        }
-    }
-
-    /// The vals `complete_program_mirrors` writes, which link mode's reach takes as roots: those
-    /// of the program's own classes, summoned or not, outside the product mode. A val a summon
-    /// made for another class is reached where it is used, as before.
-    pub(crate) fn scala_mirror_vals(&self) -> Vec<SymId> {
-        if !self.jvm || self.open_world {
-            return Vec::new();
-        }
-        let mut vals: Vec<SymId> =
-            self.derive.scala_mirrors.local.iter().filter(|(&c, _)| self.is_program_mirror_class(c)).map(|(_, &s)| s).collect();
-        vals.sort();
-        vals
-    }
-
-    /// A class of the program's own sources whose mirror the JVM build writes summoned or not:
-    /// not the std's, a jar's or a product's, and not inside a local class.
-    fn is_program_mirror_class(&self, c: ClassId) -> bool {
-        let info = self.syms.class(c);
-        info.def.is_some()
-            && !self.in_local_class(c)
-            && !self.source(info.file).is_std
-            && !self.in_jar(info.file)
-            && !self.is_body_file(info.file)
-            && !self.is_product_class(c)
-    }
-
-    fn in_local_class(&self, c: ClassId) -> bool {
-        let mut owner = self.syms.class(c).owner;
-        while let Owner::Class(o) = owner {
-            owner = self.syms.class(o).owner;
-        }
-        owner == Owner::Local
-    }
-
     fn mirror_shape(&mut self, c: ClassId) -> Option<Shape> {
         self.complete_class(c);
         let info = self.syms.class(c);
@@ -1082,35 +1545,6 @@ Failed to synthesize an instance of type {}:", shown, shown);
             }
             _ => None,
         }
-    }
-
-    /// The top-level val holding a mirror of `c`, typed as `class[Any]`, named after the class's
-    /// path.
-    fn mirror_val_sym(&mut self, c: ClassId, prefix: &str, class: ClassId, span: Span) -> SymId {
-        let mut name = String::from(prefix);
-        let mut owner = Owner::Class(c);
-        let mut path = Vec::new();
-        while let Owner::Class(o) = owner {
-            path.push(o);
-            owner = self.syms.class(o).owner;
-        }
-        // An object is named apart from a class of the same name, as scalac's module class.
-        for &o in path.iter().rev() {
-            name.push('$');
-            name.push_str(self.interner.get(self.syms.class(o).name));
-            if self.syms.class(o).kind == ClassKind::Object {
-                name.push('$');
-            }
-        }
-        let name = self.interner.intern(&name);
-        let file = self.syms.class(c).file;
-        let sym = self.syms.new_sym(name, SymKind::Val, 0, owner, file, None, span);
-        let ty = self.types.class(class, &[ANY]);
-        let sig = self.value_sig(ty);
-        let mut info = self.syms.sym_mut(sym);
-        info.sig = Some(sig);
-        info.state().set(Completion::Done);
-        sym
     }
 
     fn class_test(&mut self, c: ClassId) -> TestId {
@@ -1147,6 +1581,10 @@ Failed to synthesize an instance of type {}:", shown, shown);
     /// The type of a case as seen from `parent`, the instance of the sum that is being derived.
     fn case_type(&mut self, child: ClassId, parent: TypeId) -> TypeId {
         self.complete_class(child);
+        // An enum's singleton case is its value's type, `solve`'s `child.termRef`.
+        if let Some(value) = self.syms.class(child).singleton {
+            return self.types.mk(Type::Term(value));
+        }
         let arity = self.syms.class(child).tparams.len();
         let vars: Vec<TypeId> = (0..arity).map(|_| self.fresh_var()).collect();
         let mut ty = self.types.class(child, &vars);

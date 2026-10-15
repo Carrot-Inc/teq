@@ -814,10 +814,16 @@ impl<'m> Matcher<'m> {
                 let hole_ty = it.typer.types.subst(hole_ty, &self.subst);
                 // A hole whose type binds the pattern's type variables reads them off the
                 // tree's type where the IR records none.
-                let actual = match it.prog().type_of(s) {
-                    Some(t) => Some(t),
-                    None if self.binds_type_vars(it, hole_ty) => it.tree_type(TreeRef::Expr(s)).ok(),
-                    None => None,
+                // A reference to a local or a val is of its declared type, as dotty's `Ident` is: a
+                // typed hole matches it where that conforms (`$p: Mirror.ProductOf[B] { .. }`
+                // against an inline argument's proxy).
+                let actual = match (it.prog().type_of(s), it.prog().expr(s)) {
+                    (Some(t), _) => Some(t),
+                    (None, TExpr::Local(v) | TExpr::Static(v)) if matches!(it.syms().sym(v).kind, SymKind::Val | SymKind::Param) => {
+                        it.typer.syms.sym(v).sig.as_ref().map(|sig| sig.ret)
+                    }
+                    (None, _) if self.binds_type_vars(it, hole_ty) => it.tree_type(TreeRef::Expr(s)).ok(),
+                    (None, _) => None,
                 };
                 if let Some(actual) = actual {
                     if !self.unify(it, hole_ty, actual) {
@@ -1249,11 +1255,23 @@ impl<'a, 't> Interp<'a, 't> {
     /// `<:<` as the call site sees it: an opaque type is transparent there only when the site
     /// is inside its scope, whatever the scope of the inline method that expands.
     pub(super) fn conforms(&mut self, a: TypeId, b: TypeId) -> bool {
+        // A module class's `TypeRef` (`type_ref_of`'s), whose one value is its module, conforms as
+        // the module's type does, and the module to it (`O.type <:< O$`).
+        let (a, b) = (self.module_class_as_module(a), self.module_class_as_module(b));
         // `=> A` conforms to `=> B` as `A` to `B`, and to no type that is not by-name.
         match (self.by_name_underlying(a).unwrap_or(None), self.by_name_underlying(b).unwrap_or(None)) {
             (Some(x), Some(y)) => self.conforms(x, y),
             (None, None) => self.at_site(|t| t.is_sub(a, b)),
             _ => false,
+        }
+    }
+
+    /// The module's type for a module class's `TypeRef` (`Type::Ctor` of an object without type
+    /// parameters, `type_ref_of`'s), any other type as it is.
+    fn module_class_as_module(&mut self, t: TypeId) -> TypeId {
+        match self.typer.types.get(t) {
+            Type::Ctor(c) if self.syms().class(c).kind == ClassKind::Object && self.syms().class(c).tparams.is_empty() => self.typer.types.class(c, &[]),
+            _ => t,
         }
     }
 
@@ -3473,10 +3491,18 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// The type of a type tree a tree is built with, the typer's: a module class's `TypeRef` its
+    /// module's type (`module_class_as_module`), which the typer tests and compares.
     fn type_tree_arg(&mut self, a: A, i: usize) -> R<TypeId> {
         match a.get(i) {
-            Some(Value::Tree(TreeRef::Type(t))) => Ok(*t),
-            Some(Value::Type(t)) => Ok(*t),
+            Some(Value::Tree(TreeRef::Type(t))) => {
+                let t = *t;
+                Ok(self.module_class_as_module(t))
+            }
+            Some(Value::Type(t)) => {
+                let t = *t;
+                Ok(self.module_class_as_module(t))
+            }
             Some(Value::Tree(t)) => {
                 let t = *t;
                 self.tree_type(t)
@@ -4686,7 +4712,7 @@ fn install_trees(it: &mut Table) {
     q!(it, "Reflect.TypeIdent.apply", |it, a| {
         let s = it.sym_arg(a, 1)?;
         // scalac asserts it, which a macro may catch.
-        if !matches!(s, SymRef::Class(_) | SymRef::TParam(_) | SymRef::Alias(_) | SymRef::Any | SymRef::Nothing | SymRef::PkgClass(_) | SymRef::Root | SymRef::FilePackage(_)) {
+        if !matches!(s, SymRef::Class(_) | SymRef::TParam(_) | SymRef::Alias(_) | SymRef::Any | SymRef::Nothing | SymRef::PkgClass(_) | SymRef::Root) {
             let shown = it.symbol_name(s);
             return it.throw_named("AssertionError", &format!("assertion failed: Expected a type symbol, but got {}", shown));
         }
@@ -4996,8 +5022,10 @@ impl<'a, 't> Interp<'a, 't> {
     /// The type a symbol names: a class applied to nothing, a parameter, an alias.
     fn type_ref_of(&mut self, s: SymRef) -> R<TypeId> {
         Ok(match s {
+            // A module class's is a `TypeRef` to the class, apart from the module's `TermRef`
+            // (`Symbol.typeRef` against `termRef`), as any class with type parameters is.
             SymRef::Class(c) => {
-                if self.syms().class(c).tparams.is_empty() {
+                if self.syms().class(c).tparams.is_empty() && self.syms().class(c).kind != ClassKind::Object {
                     self.typer.types.class(c, &[])
                 } else {
                     self.typer.types.mk(Type::Ctor(c))
@@ -5050,7 +5078,37 @@ impl<'a, 't> Interp<'a, 't> {
         })
     }
 
-    /// The prefix of a named type as the reflect API shows it: the owner package or object.
+    /// The prefix of a definition of `owner` in `file`: a top-level opaque type, alias or term is a
+    /// member of its file's `$package` object (`in_file_module`), whose module val's `TermRef` it
+    /// is (`Desugar.packageDef`, the namer's `enter_file_modules`), any other definition the
+    /// owner's (`prefix_of`).
+    fn def_prefix(&mut self, owner: Owner, file: crate::source::FileId, in_file_module: bool) -> TypeId {
+        match owner {
+            Owner::Package(p) if in_file_module => match self.file_module_val(file, p) {
+                Some(v) => self.typer.types.mk(Type::Term(v)),
+                None => self.prefix_of(owner),
+            },
+            _ => self.prefix_of(owner),
+        }
+    }
+
+    /// The module val of the `$package` object of `file`'s top-level definitions in `p`.
+    fn file_module_val(&self, file: crate::source::FileId, p: PkgId) -> Option<SymId> {
+        self.typer.file_module(file, p).and_then(|c| self.syms().class(c).module_sym)
+    }
+
+    /// Whether `c` is a file's `$package` module class, synthetic as `Desugar.packageDef` makes it.
+    fn is_file_module(&self, c: ClassId) -> bool {
+        let info = self.syms().class(c);
+        matches!(info.owner, Owner::Package(p) if info.kind == ClassKind::Object && self.typer.file_module(info.file, p) == Some(c))
+    }
+
+    /// The owner of a top-level definition of `file` in the package `p` that is no class: its
+    /// file's `$package` object's class (`Desugar.packageDef`), else the package.
+    fn file_module_owner(&self, file: crate::source::FileId, p: PkgId) -> SymRef {
+        self.typer.file_module(file, p).map_or(SymRef::PkgClass(p), SymRef::Class)
+    }
+
     fn prefix_of(&mut self, owner: Owner) -> TypeId {
         match owner {
             Owner::Package(p) if p == ROOT_PKG => self.pkg_type(PkgForm::ThisType, SymRef::PkgClass(p)),
@@ -5089,6 +5147,7 @@ impl<'a, 't> Interp<'a, 't> {
             "4" => PkgForm::SymClassRef,
             _ => return None,
         };
+        let id = id.split_once(':').map_or(id, |(i, _)| i);
         let pkg = if id == "root" { SymRef::Root } else { SymRef::PkgClass(PkgId(id.parse().ok()?)) };
         Some((form, pkg))
     }
@@ -6120,33 +6179,42 @@ impl<'a, 't> Interp<'a, 't> {
         let t = self.typer.zonk(t);
         Ok(match self.typer.types.get(t) {
             Type::Class(c, _) | Type::Ctor(c) => {
-                let (owner, name) = {
+                let (owner, name, file, in_file_module) = {
                     let info = self.syms().class(c);
-                    (info.owner, info.name)
+                    let opaque_companion = info.kind == ClassKind::Object && info.companion.is_some_and(|k| self.syms().class(k).kind == ClassKind::Opaque);
+                    (info.owner, info.name, info.file, info.kind == ClassKind::Opaque || opaque_companion)
                 };
-                let prefix = self.prefix_of(owner);
-                (prefix, self.typer.name_ref(name).to_string())
+                let prefix = self.def_prefix(owner, file, in_file_module);
+                // A module class's `TypeRef` names the class, `O$` (`type_ref_of`).
+                let module_class = matches!(self.typer.types.get(t), Type::Ctor(_)) && self.syms().class(c).kind == ClassKind::Object;
+                let name = self.typer.name_ref(name).to_string();
+                (prefix, if module_class { format!("{}$", name) } else { name })
             }
             Type::Param(p) | Type::AppParam(p, _) => {
                 let name = self.typer.name_ref(self.syms().tparam(p).name).to_string();
                 (self.typer.types.blocked("<noprefix>"), name)
             }
             Type::Term(s) => {
-                let (owner, name) = {
+                let (owner, name, file, in_file_module) = {
                     let info = self.syms().sym(s);
-                    (info.owner, info.name)
+                    let in_file_module = match info.kind {
+                        SymKind::Object(o) => self.syms().class(o).companion.is_some_and(|k| self.syms().class(k).kind == ClassKind::Opaque),
+                        SymKind::Val | SymKind::Var | SymKind::Def | SymKind::Given => true,
+                        _ => false,
+                    };
+                    (info.owner, info.name, info.file, in_file_module)
                 };
-                let prefix = self.prefix_of(owner);
+                let prefix = self.def_prefix(owner, file, in_file_module);
                 (prefix, self.typer.name_ref(name).to_string())
             }
             Type::Select(p, s) => (p, self.typer.name_ref(self.syms().sym(s).name).to_string()),
             Type::Member(p, n) => (p, self.typer.name_ref(n).to_string()),
             Type::Alias(a, _) | Type::Decl(a) => {
-                let (owner, name) = {
+                let (owner, name, file) = {
                     let info = &self.typer.syms.aliases[a.idx()];
-                    (info.owner, info.name)
+                    (info.owner, info.name, info.file)
                 };
-                let prefix = self.prefix_of(owner);
+                let prefix = self.def_prefix(owner, file, true);
                 (prefix, self.typer.name_ref(name).to_string())
             }
             Type::Blocked(_) if matches!(self.pkg_form(t), Some((f, _)) if f != PkgForm::ThisType) => {
@@ -6592,17 +6660,7 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     /// The first of the top-level definitions that scalac wraps in the `file$package` object.
-    fn file_package_start(&self, f: FileId) -> Option<u32> {
-        let ast = &self.typer.asts[f.0 as usize];
-        let syms = self.typer.def_syms.entries_in(f.0 as usize);
-        let classes = self.typer.def_classes.entries_in(f.0 as usize);
-        let terms = syms.iter().filter(|(_, s)| matches!(self.syms().sym(*s).owner, Owner::Package(_))).map(|(d, _)| *d);
-        let givens = classes
-            .iter()
-            .filter(|(_, c)| self.syms().class(*c).kind == ClassKind::GivenImpl && matches!(self.syms().class(*c).owner, Owner::Package(_)))
-            .map(|(d, _)| *d);
-        terms.chain(givens).map(|d| ast.def(d).span.start).min()
-    }
+
 
     /// The `$1$`, `$2$` of scalac's pattern temporaries, counted along the chain.
     fn pattern_temp_number(&self, i: usize) -> usize {
@@ -6655,11 +6713,6 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Ctor(_) => "<init>".to_string(),
             SymRef::Default(_, i) => format!("$lessinit$greater$default${}", i + 1),
             SymRef::Lambda(_) => "$anonfun".to_string(),
-            SymRef::FilePackage(f) => {
-                let path = &self.typer.source(f).path;
-                let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
-                format!("{}$package$", name.strip_suffix(".scala").unwrap_or(name))
-            }
             SymRef::Any => "Any".to_string(),
             SymRef::Nothing => "Nothing".to_string(),
             SymRef::None => "<none>".to_string(),
@@ -6691,7 +6744,8 @@ impl<'a, 't> Interp<'a, 't> {
                     Owner::Class(c) => SymRef::Class(c),
                     // A top-level object is a member of its package, as its class is.
                     Owner::Package(p) if matches!(info.kind, SymKind::Object(_)) => SymRef::PkgClass(p),
-                    Owner::Package(_) => SymRef::FilePackage(info.file),
+                    // Its file's `$package` object, the one another module's products came in too.
+                    Owner::Package(p) => self.file_module_owner(info.file, p),
                     Owner::Local => self.local_owner(s),
                 }
             }
@@ -6699,7 +6753,7 @@ impl<'a, 't> Interp<'a, 't> {
                 let info = self.syms().class(c);
                 match info.owner {
                     Owner::Class(o) => SymRef::Class(o),
-                    Owner::Package(_) if matches!(info.kind, ClassKind::GivenImpl | ClassKind::Opaque) => SymRef::FilePackage(info.file),
+                    Owner::Package(p) if matches!(info.kind, ClassKind::GivenImpl | ClassKind::Opaque) => self.file_module_owner(info.file, p),
                     Owner::Package(p) => SymRef::PkgClass(p),
                     Owner::Local => self.local_owner(s),
                 }
@@ -6730,15 +6784,11 @@ impl<'a, 't> Interp<'a, 't> {
                 let info = &self.typer.syms.aliases[a.idx()];
                 match info.owner {
                     Owner::Class(o) => SymRef::Class(o),
-                    Owner::Package(_) => SymRef::FilePackage(info.file),
+                    Owner::Package(p) => self.file_module_owner(info.file, p),
                     Owner::Local => SymRef::None,
                 }
             }
             SymRef::Ctor(c) | SymRef::Default(c, _) => SymRef::Class(c),
-            SymRef::FilePackage(f) => {
-                let p = self.typer.file_pkgs.get(f.0 as usize).copied().unwrap_or(ROOT_PKG);
-                SymRef::PkgClass(p)
-            }
             SymRef::Lambda(_) => self.innermost_site_sym().map_or(SymRef::None, SymRef::Term),
             SymRef::TParam(_) | SymRef::Any | SymRef::Nothing => SymRef::PkgClass(self.typer.b.scala_pkg),
             SymRef::None => SymRef::None,
@@ -6754,7 +6804,7 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     fn is_class_like(s: SymRef) -> bool {
-        matches!(s, SymRef::Class(_) | SymRef::PkgClass(_) | SymRef::Pkg(_) | SymRef::FilePackage(_) | SymRef::Root | SymRef::None)
+        matches!(s, SymRef::Class(_) | SymRef::PkgClass(_) | SymRef::Pkg(_) | SymRef::Root | SymRef::None)
     }
 
     /// scalac's full name: the owners' up to the innermost class, then the name, with a `_$`
@@ -6885,6 +6935,10 @@ impl<'a, 't> Interp<'a, 't> {
                 // stable one `StableRealizable` too), the program's or a pickle's.
                 if self.syms().is_forwarder(sym) || self.typer.loaded.as_ref().is_some_and(|l| l.exported_members.contains_key(&sym)) { f |= F_EXPORTED }
                 if info.stable { f |= F_STABLE }
+                if let SymKind::Object(c) = info.kind {
+                    if self.is_file_module(c) { f |= F_SYNTHETIC }
+                }
+                let info = self.syms().sym(sym);
                 match info.kind {
                     SymKind::Given if m & mods::LAZY != 0 => f |= F_STABLE,
                     SymKind::Def | SymKind::Given => f |= F_METHOD,
@@ -6951,6 +7005,7 @@ impl<'a, 't> Interp<'a, 't> {
                     let is_case = m & mods::CASE != 0;
                     if is_case { f |= F_CASE }
                 }
+                if self.is_file_module(c) { f |= F_SYNTHETIC }
             }
             SymRef::Pkg(_) | SymRef::PkgClass(_) | SymRef::Root => f |= F_PACKAGE | F_MODULE,
             SymRef::Splice(_) => f |= F_SYNTHETIC | F_MACRO,
@@ -6974,7 +7029,6 @@ impl<'a, 't> Interp<'a, 't> {
             }
             SymRef::Ctor(_) | SymRef::Default(..) => f |= F_METHOD | F_SYNTHETIC,
             SymRef::Lambda(_) => f |= F_METHOD | F_SYNTHETIC,
-            SymRef::FilePackage(_) => f |= F_MODULE | F_SYNTHETIC | F_FINAL,
             SymRef::Any | SymRef::Nothing => f |= F_ABSTRACT,
             SymRef::None => {}
         }
@@ -7446,7 +7500,6 @@ fn install_symbols(it: &mut Table) {
                 _ => None,
             },
             SymRef::Splice(run) => it.macro_ctx.as_ref().filter(|c| c.run == run).and_then(|c| point(c.site_file, c.site_span.start)),
-            SymRef::FilePackage(f) => it.file_package_start(f).and_then(|at| point(f, at)),
             _ => None,
         };
         it.make_option(pos)
@@ -7537,7 +7590,7 @@ fn install_symbols(it: &mut Table) {
     q!(it, "Reflect.SymbolMethods.Symbol.isSuperAccessor", |_it, _a| Ok(Value::Bool(false)));
     q!(it, "Reflect.SymbolMethods.Symbol.isType", |it, a| {
         let s = it.sym_arg(a, 0)?;
-        Ok(Value::Bool(matches!(s, SymRef::Class(_) | SymRef::TParam(_) | SymRef::Alias(_) | SymRef::Any | SymRef::Nothing | SymRef::FilePackage(_) | SymRef::PkgClass(_) | SymRef::Root)))
+        Ok(Value::Bool(matches!(s, SymRef::Class(_) | SymRef::TParam(_) | SymRef::Alias(_) | SymRef::Any | SymRef::Nothing | SymRef::PkgClass(_) | SymRef::Root)))
     });
     q!(it, "Reflect.SymbolMethods.Symbol.isTerm", |it, a| {
         let s = it.sym_arg(a, 0)?;
@@ -7549,7 +7602,7 @@ fn install_symbols(it: &mut Table) {
     });
     q!(it, "Reflect.SymbolMethods.Symbol.isClassDef", |it, a| {
         let s = it.sym_arg(a, 0)?;
-        Ok(Value::Bool(matches!(s, SymRef::Class(_) | SymRef::Any | SymRef::Nothing | SymRef::FilePackage(_) | SymRef::PkgClass(_) | SymRef::Root)))
+        Ok(Value::Bool(matches!(s, SymRef::Class(_) | SymRef::Any | SymRef::Nothing | SymRef::PkgClass(_) | SymRef::Root)))
     });
     q!(it, "Reflect.SymbolMethods.Symbol.isTypeDef", |it, a| {
         let s = it.sym_arg(a, 0)?;
@@ -7775,6 +7828,8 @@ fn install_symbols(it: &mut Table) {
             },
             SymRef::Class(c) if it.syms().class(c).kind == ClassKind::Object => SymRef::Class(c),
             SymRef::Pkg(p) | SymRef::PkgClass(p) => SymRef::PkgClass(p),
+            // A file's `$package` object (`Desugar.packageDef`): its val's module class is the
+            // class its top-level definitions are members of, one symbol.
             _ => SymRef::None,
         }))
     });
@@ -8787,11 +8842,6 @@ impl<'a, 't> Interp<'a, 't> {
                 match self.symbol_owner(SymRef::Alias(a)) {
                     SymRef::Class(c) => {
                         out.push_str(&self.scalac_class_name(c));
-                        out.push('.');
-                    }
-                    SymRef::FilePackage(f) => {
-                        let full = self.symbol_full_name(SymRef::FilePackage(f));
-                        out.push_str(full.trim_end_matches('$'));
                         out.push('.');
                     }
                     _ => {}

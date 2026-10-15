@@ -228,6 +228,8 @@ pub enum Member {
     Lazy(FieldKey, TExprId, ClassId),
     Module(ClassId),
     CaseToString,
+    /// The `toString` of the companion `Desugar.classDef` makes for a case class: the class's name.
+    CompanionToString(ClassId),
     CaseEquals,
     CaseHash,
     ValueEquals(FieldKey),

@@ -3084,7 +3084,7 @@ impl<'a> Gen<'a> {
     fn cast(&mut self, inner: TExprId, op: CastOp) -> JType {
         let object = JType::object();
         let (test, erased) = match op {
-            CastOp::Written => return self.expr_static(inner),
+            CastOp::Written | CastOp::Erased => return self.expr_static(inner),
             CastOp::Nothing => {
                 self.statement(inner);
                 let exception = "java/lang/ClassCastException";
@@ -4047,8 +4047,9 @@ impl<'a> Gen<'a> {
         }
         // A class nested in a class whose companion, an object of each enclosing instance reached
         // by its getter, holds the getters (scalac's layout): another module's or a jar's, and the
-        // program's case class whose companion the backend writes (`emit_inner_companion`).
-        if let (None, Some(r), true) = (via, recv, !cx.emits(c) || cx.has_inner_case_companion(c)) {
+        // program's case class whose companion the backend writes (`emit_inner_companion`) or
+        // completes (`inner_written_companion_members`).
+        if let (None, Some(r), true) = (via, recv, !cx.emits(c) || cx.has_inner_case_companion(c) || cx.has_inner_written_case_companion(c)) {
             if let Owner::Class(o) = cx.input.syms.class(c).owner {
                 if cx.input.syms.class(o).kind == ClassKind::Class {
                     let clauses = cx.input.syms.class(c).ctor.clone();

@@ -273,6 +273,11 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether `te` is a mirror `Synthesizer` hands out, cast to its type (`Wrap::Mirror`).
+    pub(super) fn captured_mirror(&self, te: TExprId) -> bool {
+        self.prog.capture.as_deref().and_then(|c| c.wraps.get(&te)).is_some_and(|ws| ws.iter().any(|w| matches!(w, Wrap::Mirror(_))))
+    }
+
     /// The name `te` was passed by as a named argument, where the capture has one.
     pub(super) fn captured_name(&self, te: TExprId) -> Option<crate::intern::Name> {
         let c = self.prog.capture.as_deref()?;
@@ -891,6 +896,7 @@ pub(super) fn map_wrap(w: Wrap, ty: &mut dyn FnMut(TypeId) -> TypeId) -> Wrap {
     match w {
         Wrap::Ascribed(t) => Wrap::Ascribed(ty(t)),
         Wrap::Cast(t) => Wrap::Cast(ty(t)),
+        Wrap::Mirror(t) => Wrap::Mirror(ty(t)),
         Wrap::Splice(t) => Wrap::Splice(ty(t)),
         Wrap::Unchecked | Wrap::Named(_) | Wrap::Member(..) => w,
     }

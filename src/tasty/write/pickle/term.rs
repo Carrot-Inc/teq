@@ -682,6 +682,17 @@ impl<'w, 'a> P<'w, 'a> {
                 p.buf.end_length(l);
             }),
             Wrap::Cast(t) => self.within(Some(e), |p| p.cast_to(t, |p| p.wrapped(e, inner, recs))),
+            // An anonymous mirror's cast is the node itself (`Worker::mirror_cast`): its operand.
+            Wrap::Mirror(t) => self.within(Some(e), |p| {
+                p.mirror_cast(t, |p| match p.w.prog.expr(e) {
+                    TExpr::Cast(a, _, _) if inner.is_empty() => {
+                        let outer = p.mirror_operand.replace(a);
+                        p.term(a);
+                        p.mirror_operand = outer;
+                    }
+                    _ => p.wrapped(e, inner, recs),
+                })
+            }),
             Wrap::Splice(t) => self.within(Some(e), |p| {
                 let l = p.open(TYPED);
                 p.wrapped(e, inner, recs);
@@ -2510,9 +2521,8 @@ impl<'w, 'a> P<'w, 'a> {
             self.package_ref(pk);
             return;
         }
-        let file = self.w.syms.sym(s).file;
-        let stem = super::super::file_stem(&self.w.files.as_slice()[file.0 as usize].path);
-        let n = self.names.object_class(&format!("{}$package", stem));
+        let module = self.w.file_module_name(self.w.syms.sym(s).file, p);
+        let n = self.names.object_class(&module);
         self.buf.byte(TYPEREF);
         self.buf.nat(n as u64);
         self.package_ref(p);
@@ -3012,6 +3022,51 @@ impl<'w, 'a> P<'w, 'a> {
             self.buf.end_length(b);
             self.buf.end_length(len);
         }
+    }
+
+    /// `e.$asInstanceOf$[T]` of a mirror `Synthesizer` makes (`Wrap::Mirror`), the companion,
+    /// the singleton or a `TupleMirror` cast to the mirror's refinement (`mirror_type`).
+    fn mirror_cast(&mut self, t: TypeId, e: impl FnOnce(&mut Self)) {
+        self.term_at(None);
+        let l = self.open(TYPEAPPLY);
+        let sl = self.open(SELECTIN);
+        let n = self.names.signed("$asInstanceOf$", None, &[SigParam::Types(1)], "java.lang.Object");
+        self.buf.nat(n as u64);
+        e(self);
+        self.external_typeref("scala", "Any");
+        self.buf.end_length(sl);
+        // The type argument is a tree.
+        self.mark_tree();
+        self.mirror_type(t);
+        self.buf.end_length(l);
+    }
+
+    /// A mirror's refinement as `Synthesizer.mirrorCore` and its element members make it: each
+    /// member around the parent the members before it refine, the element types and labels as
+    /// pairs (`TypeOps.nestedPairs`), `T1 *: T2 *: EmptyTuple`, where teq's type holds a tuple.
+    fn mirror_type(&mut self, t: TypeId) {
+        let Type::Refined(parent, r) = self.w.types.get(t) else { return self.ty(t) };
+        let Refinement::Alias(name, rhs) = self.w.types.refinement(r) else { return self.ty(t) };
+        self.buf.byte(REFINEDTYPE);
+        let len = self.buf.begin_length();
+        let n = self.names.simple(&self.name(name));
+        self.buf.nat(n as u64);
+        self.mirror_type(parent);
+        self.buf.byte(TYPEBOUNDS);
+        let b = self.buf.begin_length();
+        let elements = matches!(self.w.interner.get(name), "MirroredElemTypes" | "MirroredElemLabels");
+        let rhs = self.w.deref_alias(rhs);
+        let tuple = match self.w.types.get(rhs) {
+            Type::Class(c, args) if elements && self.w.is_tuple_class(c) => Some(self.w.types.items(args).to_vec()),
+            Type::Class(c, _) if elements && Some(c) == self.w.b.empty_tuple => Some(Vec::new()),
+            _ => None,
+        };
+        match tuple {
+            Some(items) => self.cons_chain(items.len(), &mut |p, k| p.ty(items[k])),
+            None => self.ty(rhs),
+        }
+        self.buf.end_length(b);
+        self.buf.end_length(len);
     }
 
     /// `e0 *: e1 *: .. *: EmptyTuple` of `n` elements, each written by `elem`.
@@ -4295,8 +4350,18 @@ impl<'w, 'a> P<'w, 'a> {
             None => self.w.b.t_any_ref,
         };
         // The instance's type as the typer gave it, the type members its body defines refining
-        // the parents; a cast's target where the instance is cast.
-        let cast = self.records(e).wraps.iter().any(|w| matches!(w, Wrap::Cast(_)));
+        // the parents; a cast's target where the instance is cast. A synthesized mirror's
+        // instance is its class's parents but the mirror's trait, which `Synthesizer
+        // .anonymousMirror` types it with before `SyntheticMembers.addMirrorSupport` adds that one.
+        let mirror = self.mirror_instance(e);
+        let cast = mirror || self.records(e).wraps.iter().any(|w| matches!(w, Wrap::Cast(_)));
+        let ty = match mirror {
+            true => {
+                let kept: Vec<TypeId> = self.w.syms.class(c).parents.iter().copied().filter(|&p| !self.w.types.named_class(p).is_some_and(|k| self.w.is_mirror_class(k))).collect();
+                kept.into_iter().fold(self.w.b.t_any_ref, |acc, p| self.w.types.inter(acc, p))
+            }
+            false => ty,
+        };
         let ty = match self.node_type(e) {
             Some(t) if !cast && !matches!(self.w.types.get(t), Type::Class(k, _) if k == c) => t,
             _ => ty,
@@ -4313,7 +4378,7 @@ impl<'w, 'a> P<'w, 'a> {
             !bound_conforms
         });
         let ty = expected.unwrap_or(ty);
-        if expected.is_none() && self.refining_anon_class(c, ty) {
+        if expected.is_none() && !mirror && self.refining_anon_class(c, ty) {
             return self.fail("an anonymous class whose members refine its type".to_string());
         }
         let b = self.open(BLOCK);
@@ -4327,6 +4392,11 @@ impl<'w, 'a> P<'w, 'a> {
         self.local_class(c);
         self.anon_parent_args = None;
         self.buf.end_length(b);
+    }
+
+    /// Whether `e` is the instance a synthesized mirror's cast takes (`Wrap::Mirror`).
+    fn mirror_instance(&self, e: TExprId) -> bool {
+        self.mirror_operand == Some(e)
     }
 
     /// Whether an anonymous class defines a type member, which scalac's type of the instance
@@ -5940,9 +6010,8 @@ impl<'w, 'a> P<'w, 'a> {
             top = self.enclosing.first().copied();
             if top.is_none() {
                 let Some((class_at, pk)) = self.package_members_this else { return self.fail("a local inline method outside a class or a file's definitions".to_string()) };
-                let file = self.w.syms.sym(m).file;
-                let stem = super::super::file_stem(&self.w.files.as_slice()[file.0 as usize].path);
-                let n = self.names.object_class(&format!("{}$package", stem));
+                let module = self.w.file_module_name(self.w.syms.sym(m).file, pk);
+                let n = self.names.object_class(&module);
                 self.term_at(None);
                 self.buf.byte(IDENTTPT);
                 self.buf.nat(n as u64);
@@ -5972,8 +6041,11 @@ impl<'w, 'a> P<'w, 'a> {
             }
             None => {
                 let file = self.w.syms.sym(m).file;
-                let stem = super::super::file_stem(&self.w.files.as_slice()[file.0 as usize].path);
-                let holder = format!("{}$package", stem);
+                let p = match self.w.syms.sym(m).owner {
+                    Owner::Package(p) => p,
+                    _ => self.w.file_pkgs.own()[file.0 as usize],
+                };
+                let holder = self.w.file_module_name(file, p);
                 let n = self.names.object_class(&holder);
                 self.buf.byte(IDENTTPT);
                 self.buf.nat(n as u64);

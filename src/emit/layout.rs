@@ -268,27 +268,13 @@ impl Layout {
 
     /// Finds the anonymous classes that are closures in all but name: no superclass, one
     /// member, the `apply` of a function type among the parents, the other parents marker
-    /// traits nothing tests for, a body that never names its own `this`, and a creation that
-    /// passes locals and `this` alone. JavaScript writes such a class as an arrow function at
-    /// the place that creates it, with no class, registration or number of its own; what
-    /// distinguished the instance from a lambda was its class name alone. The class-based
-    /// targets keep the class.
+    /// traits no reached type test or cast tests for (`Reach::tested_traits`: a test in code
+    /// the output never runs, a synthetic `fromProduct` of an unreached case class say, sees no
+    /// instance), a body that never names its own `this`, and a creation that passes locals and
+    /// `this` alone. JavaScript writes such a class as an arrow function at the place that
+    /// creates it, with no class, registration or number of its own; what distinguished the
+    /// instance from a lambda was its class name alone. The class-based targets keep the class.
     pub fn lower_closures(&mut self, prog: &Program, syms: &Symbols, interner: &Interner, reach: &Reach) {
-        let mut tested = vec![false; syms.classes.len()];
-        for (i, test) in prog.tests.iter().enumerate() {
-            if let TypeTest::Class(c) | TypeTest::Trait(c) = *test {
-                if !prog.stored_tests.contains_key(&TestId(i as u32)) {
-                    tested[c.idx()] = true;
-                }
-            }
-        }
-        for (i, pat) in prog.pats.iter().enumerate() {
-            if let TPat::Class(c, ..) = *pat {
-                if !prog.stored_pats.contains_key(&TPatId(i as u32)) {
-                    tested[c.idx()] = true;
-                }
-            }
-        }
         let mut created = vec![Created::Never; syms.classes.len()];
         for (c, plain) in anon_creations(prog, syms) {
             let at = &mut created[c.idx()];
@@ -299,7 +285,7 @@ impl Layout {
             };
         }
         let candidates: Vec<usize> = (0..prog.classes.len()).filter(|&i| reach.classes[prog.classes[i].id.idx()] && created[prog.classes[i].id.idx()] == Created::WithLocals).collect();
-        let shaped = |slice: &[usize]| -> Vec<usize> { slice.iter().copied().filter(|&i| is_closure_shaped(prog, syms, interner, reach, &prog.classes[i], &tested)).collect() };
+        let shaped = |slice: &[usize]| -> Vec<usize> { slice.iter().copied().filter(|&i| is_closure_shaped(prog, syms, interner, reach, &prog.classes[i])).collect() };
         let workers = (candidates.len() / 1024).clamp(1, crate::workers());
         let lowered: Vec<usize> = if workers == 1 {
             shaped(&candidates)
@@ -517,7 +503,7 @@ fn anon_creations(prog: &Program, syms: &Symbols) -> Vec<(ClassId, bool)> {
 /// Whether the anonymous class `tc` holds nothing a closure could not: see `lower_closures`.
 /// A parent trait may redeclare the function's `apply` abstractly, as Magnolia's
 /// `SerializableFunction0` does; it may declare nothing else.
-fn is_closure_shaped(prog: &Program, syms: &Symbols, interner: &Interner, reach: &Reach, tc: &TClass, tested: &[bool]) -> bool {
+fn is_closure_shaped(prog: &Program, syms: &Symbols, interner: &Interner, reach: &Reach, tc: &TClass) -> bool {
     let info = syms.class(tc.id);
     if info.kind != ClassKind::Anon || info.js != JsKind::Scala || info.superclass.is_some() {
         return false;
@@ -539,7 +525,7 @@ fn is_closure_shaped(prog: &Program, syms: &Symbols, interner: &Interner, reach:
             continue;
         }
         let redeclares_apply_only = base.member_order.iter().all(|&m| syms.sym(m).name == crate::names::APPLY && reach.is_abstract(syms, m));
-        if base.kind != ClassKind::Trait || !redeclares_apply_only || tested[b.idx()] {
+        if base.kind != ClassKind::Trait || !redeclares_apply_only || reach.tested_traits.get(b.idx()).copied().unwrap_or(false) {
             return false;
         }
     }

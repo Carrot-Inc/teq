@@ -68,6 +68,10 @@
 #   over-scalac-js  (a case with over-scalac-js.txt besides) the last module built by teq for
 #            JavaScript, one file and split, and run in the interpreter, over the upstream
 #            modules scalac built: their bodies read from scalac's pickles; each prints run.txt.
+#   over-scalac-lean  (the same cases) the last module's lean check build (`check --products`)
+#            over those upstream modules, its pickles read by scalac 3.8.4 for Scala.js
+#            (`readjs` of tests/tasty/fromtasty/Gate.scala): what the lean std binds keeps the
+#            upstream declaration's names in a selection's signature.
 #   scalac-client  (a case with client/ and client.txt) scalac 3.8.4 compiles client/ over
 #            every module's products, teq's (their views; `scalac-client-teq`), and over the
 #            modules scalac built in the over-scalac leg (`scalac-client-scalac`, a case with
@@ -836,6 +840,17 @@ PY
       [ "$got" = "$want" ] || { jok=0; jdetail="${jdetail}interp: $got"$'\n'; }
       [ $jok = 1 ] || jdetail="$jdetail""expected: $want"
       result "$name" over-scalac-js $jok "$jdetail"
+      # over-scalac-lean: the last module's lean check build over scalac's upstream products, its
+      # pickles read by scalac (`readjs`, the upstream's classes on the class path): a selection of an
+      # upstream member keeps the declaration's signature through the lean std's bindings.
+      if [ $have_scalac = 1 ]; then
+        if "$teq" compiler check --products "$out/$name/over-lean" --sourceroot "$(sroot "$last")" --classpath "$up" "${jsrcs[@]}" > "$out/$name.over-lean.log" 2>&1; then
+          tastys=$(cd "$out/$name/over-lean" && find . -name '*.tasty' | LC_ALL=C sort | sed "s|^\./|$out/$name/over-lean/|")
+          [ -n "$tastys" ] && printf 'readjs\t%s\t%s\t%s\n' "$name over-scalac-lean" "$up:$out/$name/over-lean" "$(printf '%s\t' $tastys | sed 's/\t$//')" >> "$out/fromtasty.jobs"
+        else
+          result "$name" over-scalac-lean 0 "lean check build: $(head -20 "$out/$name.over-lean.log")"
+        fi
+      fi
     fi
   fi
   # scalac-client: scalac's client over teq's products and over scalac's.

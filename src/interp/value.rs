@@ -111,8 +111,6 @@ pub enum SymRef {
     Default(ClassId, u32),
     /// The method a lambda closes over.
     Lambda(TExprId),
-    /// scalac's `file$package` object, the owner of the top-level definitions of a file.
-    FilePackage(FileId),
     /// A package as the owner of what it contains: scalac's package class, where `Pkg` is the
     /// package's term.
     PkgClass(PkgId),

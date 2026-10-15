@@ -413,9 +413,11 @@ impl<'a> Cx<'a> {
             // Two local classes of one name in one file would share a binary name; a local enum's
             // companion is the module class scalac names `E$`, beside the enum's class.
             _ if info.owner == Owner::Local && info.kind != ClassKind::Anon => {
-                // A local enum's companion made without a definition is placed at its enum.
+                // A local enum's companion made without a definition is placed at its enum; the
+                // companion `Desugar.classDef` makes for a local case class stands at its class:
+                // both module classes, named `$` beside it.
                 let p = syms.placed_class(c);
-                if p != c {
+                if p != c || info.synthetic_companion {
                     out.push('$');
                 }
                 let placed = syms.class(p).info.clone();
@@ -506,7 +508,7 @@ impl<'a> Cx<'a> {
         }
         let roots_of = |tc: &crate::tir::TClass| {
             let mut roots: Vec<TExprId> = Vec::new();
-            for &f in tc.methods.iter().chain(&tc.ctors) {
+            for &f in tc.methods.iter().chain(&tc.ctors).chain(tc.mirror_members()) {
                 roots.extend(prog.funs[f.idx()].body);
                 roots.extend(prog.funs[f.idx()].defaults.iter().flatten().copied());
             }

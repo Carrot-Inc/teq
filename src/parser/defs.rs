@@ -935,6 +935,9 @@ impl<'a> Parser<'a> {
             let is_object = kind == ClassKind::Object;
             self.pending_derives.push(PendingDerives { class: name, span, tparams: tparams.clone(), derives, is_object });
         }
+        if kind == ClassKind::Class && m & mods::CASE != 0 {
+            self.pending_cases.push((name, span));
+        }
         let class = ClassDef { kind, tparams, clauses, parents, body, exports, self_type, self_alias };
         self.ast.add_def(Def { name, span, mods: m, annots, kind: DefKind::Class(Box::new(class)) })
     }
@@ -974,16 +977,59 @@ impl<'a> Parser<'a> {
         self.ast.add_expr(Expr::NewAnon(def), span)
     }
 
+    /// The companions `add_derived_givens` made, each placed right after its class among a body's
+    /// `items`, as `Desugar.classDef` gives the class with its companion (`cdef1 :: companions`), in
+    /// one pass.
+    pub(super) fn place_companions<T>(&self, items: &mut Vec<T>, companions: Vec<DefId>, def_of: impl Fn(&T) -> Option<DefId>, wrap: impl Fn(DefId) -> T) {
+        if companions.is_empty() {
+            return;
+        }
+        let mut by_class: FxMap<Name, DefId> = companions.iter().map(|&o| (self.ast.def(o).name, o)).collect();
+        let mut placed = Vec::with_capacity(items.len() + companions.len());
+        for item in std::mem::take(items) {
+            let companion = def_of(&item).and_then(|d| {
+                let def = self.ast.def(d);
+                let class = matches!(&def.kind, DefKind::Class(c) if c.kind != ClassKind::Object);
+                if class { by_class.remove(&def.name) } else { None }
+            });
+            placed.push(item);
+            if let Some(o) = companion {
+                placed.push(wrap(o));
+            }
+        }
+        // A companion whose class the body does not hold goes last, in its order.
+        placed.extend(companions.into_iter().filter(|o| by_class.contains_key(&self.ast.def(*o).name)).map(wrap));
+        *items = placed;
+    }
+
     /// `derives TC` on `C[A]` stands for `given derived$TC[A: TC]: TC[C[A]] = TC.derived` in the
-    /// companion of `C`. `defs` are the definitions of the body that holds the classes recorded
-    /// since `mark`; a companion that the body lacks is returned for the caller to add.
-    pub(super) fn add_derived_givens(&mut self, mark: usize, defs: &[DefId]) -> Vec<DefId> {
+    /// companion of `C`, and a case class has a companion (`Desugar.classDef`'s `companionDefs`).
+    /// `defs` are the definitions of the body that holds the classes recorded since `mark` and
+    /// `cases_mark`; a companion that the body lacks is made, synthetic
+    /// (`Ast::synthetic_companions`), and returned for the caller to add.
+    pub(super) fn add_derived_givens(&mut self, mark: usize, cases_mark: usize, defs: &[DefId]) -> Vec<DefId> {
         let mut companions = Vec::new();
         let mut objects: FxMap<Name, DefId> = FxMap::default();
+        // The methods of the body: teq's namer holds no module beside a method of its name, which
+        // scalac overloads (`def A(s: String)` beside `object A`), so a case class there keeps its
+        // constructor proxy, as before its companion was made; a value of its name clashes with the
+        // companion, as scalac reports.
+        let mut methods: std::collections::HashSet<Name, crate::intern::FxBuild> = Default::default();
+        // The ranges of the body's classes, which their made companions take.
+        let mut class_ranges: FxMap<Name, Span> = FxMap::default();
         for &d in defs {
             let def = self.ast.def(d);
-            if matches!(&def.kind, DefKind::Class(c) if c.kind == ClassKind::Object) {
-                objects.insert(def.name, d);
+            match &def.kind {
+                DefKind::Class(c) if c.kind == ClassKind::Object => {
+                    objects.insert(def.name, d);
+                }
+                DefKind::Class(_) => {
+                    class_ranges.entry(def.name).or_insert(self.ast.def_range(d));
+                }
+                DefKind::Fun(_) => {
+                    methods.insert(def.name);
+                }
+                _ => {}
             }
         }
         for pending in self.pending_derives.split_off(mark) {
@@ -996,29 +1042,41 @@ impl<'a> Parser<'a> {
                     }
                 }
                 None => {
-                    let class = ClassDef {
-                        kind: ClassKind::Object,
-                        tparams: Vec::new(),
-                        clauses: Vec::new(),
-                        parents: Vec::new(),
-                        body: givens,
-                        exports: ListRef::EMPTY,
-                        self_type: None,
-                        self_alias: names::EMPTY,
-                    };
-                    let companion = self.ast.add_def(Def {
-                        name: pending.class,
-                        span: pending.span,
-                        mods: 0,
-                        annots: Vec::new(),
-                        kind: DefKind::Class(Box::new(class)),
-                    });
+                    let range = class_ranges.get(&pending.class).copied().unwrap_or(pending.span);
+                    let companion = self.synthetic_companion(pending.class, pending.span, range, givens);
                     objects.insert(pending.class, companion);
                     companions.push(companion);
                 }
             }
         }
+        for (class, span) in self.pending_cases.split_off(cases_mark) {
+            if !objects.contains_key(&class) && !methods.contains(&class) {
+                let range = class_ranges.get(&class).copied().unwrap_or(span);
+                let companion = self.synthetic_companion(class, span, range, Vec::new());
+                objects.insert(class, companion);
+                companions.push(companion);
+            }
+        }
         companions
+    }
+
+    /// The companion object `Desugar.classDef` makes for a class that has none written, at the
+    /// class's place and over its range (`companionDefs`' `withSpan(cdef.span)`), holding `body`.
+    fn synthetic_companion(&mut self, name: Name, span: Span, range: Span, body: Vec<Stmt>) -> DefId {
+        let class = ClassDef {
+            kind: ClassKind::Object,
+            tparams: Vec::new(),
+            clauses: Vec::new(),
+            parents: Vec::new(),
+            body,
+            exports: ListRef::EMPTY,
+            self_type: None,
+            self_alias: names::EMPTY,
+        };
+        let companion = self.ast.add_def(Def { name, span, mods: 0, annots: Vec::new(), kind: DefKind::Class(Box::new(class)) });
+        self.ast.def_ranges[companion.idx()] = range;
+        self.ast.synthetic_companions.push(companion);
+        companion
     }
 
     fn derived_given(&mut self, pending: &PendingDerives, tc: TyExprId, tc_name: Name) -> DefId {
@@ -1066,7 +1124,9 @@ impl<'a> Parser<'a> {
         let name = self.interner.intern(&name);
         let given = GivenDef { tparams, clauses: Vec::new(), ty, alias, parents: Vec::new(), body: Vec::new(), self_alias: names::EMPTY };
         // Lazy as in scalac, so that the instance may depend on givens defined after it.
-        self.ast.add_def(Def { name, span, mods: mods::LAZY, annots: Vec::new(), kind: DefKind::Given(Box::new(given)) })
+        let d = self.ast.add_def(Def { name, span, mods: mods::LAZY, annots: Vec::new(), kind: DefKind::Given(Box::new(given)) });
+        self.ast.derived_givens.push(d);
+        d
     }
 
     /// At a template body: `:` or `{` and the body's region, or a brace block where a parent is
@@ -1082,7 +1142,9 @@ impl<'a> Parser<'a> {
     }
 
     /// A template's statements, a language import among them enabling its feature until their
-    /// end, as dotty restores `languageImportContext` after `templateStatSeq`.
+    /// end, as dotty restores `languageImportContext` after `templateStatSeq`; its case classes get
+    /// the companions `Desugar` gives them (`add_derived_givens`), a class's or a trait's an object
+    /// of each instance.
     fn parse_template_body(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
         let saved = self.syntax.postfix_ops;
         let body = self.parse_template_body_scoped(is_enum);
@@ -1106,6 +1168,7 @@ impl<'a> Parser<'a> {
         }
         let exports_mark = self.export_scratch.len();
         let derives_mark = self.pending_derives.len();
+        let cases_mark = self.pending_cases.len();
         let (alias_indent, self_type, alias) = self.parse_self_alias();
         let language = self.language_open.len();
         self.statements(RecoverySite::TemplateBody, |p| {
@@ -1136,11 +1199,16 @@ impl<'a> Parser<'a> {
         self.end_region();
         self.close_language(language);
         self.desugar_pattern_vals(&mut body);
-        if self.pending_derives.len() > derives_mark {
+        // A case class of a class's or a trait's body has its companion there too, an object of
+        // each instance (`Desugar.classDef`); an enum's cases are the enum's.
+        if is_enum {
+            self.pending_cases.truncate(cases_mark);
+        }
+        if self.pending_derives.len() > derives_mark || self.pending_cases.len() > cases_mark {
             let defs: Vec<DefId> =
                 body.iter().filter_map(|s| if let Stmt::Def(d) = s { Some(*d) } else { None }).collect();
-            let companions = self.add_derived_givens(derives_mark, &defs);
-            body.extend(companions.into_iter().map(Stmt::Def));
+            let companions = self.add_derived_givens(derives_mark, cases_mark, &defs);
+            self.place_companions(&mut body, companions, |s| if let Stmt::Def(d) = s { Some(*d) } else { None }, Stmt::Def);
         }
         (body, self.export_list(exports_mark), self_type, alias)
     }

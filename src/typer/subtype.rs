@@ -1950,9 +1950,22 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether the complete class `c` has `b` among its bases as the typer sees them: all but the
+    /// mirror's traits it gets after typing (`ClassInfo::post_typer_bases`).
+    pub(super) fn typer_derives(&self, c: ClassId, b: ClassId) -> bool {
+        let info = self.syms.class(c);
+        let post_typer = 1..1 + info.post_typer_bases as usize;
+        info.base_types.iter().enumerate().any(|(i, &(k, _))| k == b && !post_typer.contains(&i))
+    }
+
     /// `base_type` of the class type `c[args]`, `c` complete.
     fn class_base_type(&mut self, c: ClassId, args: TList, target: ClassId) -> Option<TypeId> {
-        let found = self.base_type_of(c, target);
+        // The mirror's traits the companion gets after typing are none of its typer's bases
+        // (`ClassInfo::post_typer_bases`): a case class's `P` is no `Mirror.Product` there.
+        let info = self.syms.class(c);
+        let post_typer = 1..1 + info.post_typer_bases as usize;
+        let hidden = info.base_types.iter().position(|&(b, _)| b == target).is_some_and(|i| post_typer.contains(&i));
+        let found = if hidden { None } else { self.base_type_of(c, target) };
         let bt = match found {
             Some(bt) => bt,
             None if c == self.b.string => self.string_interface(target)?,
@@ -4201,7 +4214,13 @@ impl<'a> Worker<'a> {
         self.complete_class(c);
         let info = self.syms.class(c);
         let mut found = None;
+        // The mirror's traits the companion gets after typing are no bases of the typer's
+        // (`ClassInfo::post_typer_bases`): `P.fromProduct` is no member of a case class's `P`.
+        let post_typer = 1..1 + info.post_typer_bases as usize;
         for (i, &(bc, bt)) in info.base_types.iter().enumerate() {
+            if post_typer.contains(&i) {
+                continue;
+            }
             if let Some(&sym) = self.syms.class(bc).members.get(&name) {
                 // A private member of an ancestor class is not inherited.
                 if i >= private_until && self.is_private(sym) {

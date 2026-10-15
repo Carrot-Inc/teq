@@ -253,12 +253,13 @@ impl<'a> Worker<'a> {
         Some(&self.prog.classes[i])
     }
 
-    /// The trees of the stored classes' bodies: their methods' and constructors' bodies and
-    /// defaults, their initialisers, their constructor defaults and the arguments to their parent.
+    /// The trees of the stored classes' bodies: their methods', mirror members' and constructors'
+    /// bodies and defaults, their initialisers, their constructor defaults and the arguments to
+    /// their parent.
     pub(super) fn class_roots(&self, classes: &[TClass]) -> Vec<TExprId> {
         let mut out = Vec::new();
         for tc in classes {
-            for &f in tc.methods.iter().chain(&tc.ctors) {
+            for &f in tc.methods.iter().chain(&tc.ctors).chain(tc.mirror_members()) {
                 let fun = &self.prog.funs[f.idx()];
                 out.extend(fun.defaults.iter().flatten().copied());
                 out.extend(fun.body);

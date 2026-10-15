@@ -3180,11 +3180,6 @@ impl<K: Hash + Eq + Copy, V> Layered<K, V> {
         }
     }
 
-    /// Removes the worker's own entry.
-    pub fn remove(&mut self, k: &K) -> Option<V> {
-        self.local.remove(k)
-    }
-
     pub fn retain(&mut self, f: impl FnMut(&K, &mut V) -> bool) {
         self.local.retain(f);
     }

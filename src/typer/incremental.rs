@@ -147,11 +147,6 @@ impl<'a> Worker<'a> {
         self.finish_capture_of(Some(&files));
         self.choose_entry_point();
         self.check_deferred_bounds();
-        let leftover: Vec<ClassId> = self.derive.scala_reserved.keys().copied().collect();
-        for c in leftover {
-            self.rebuild_scala_mirror(c);
-        }
-        self.complete_program_mirrors(Some(&files));
         for (s, old) in constants {
             let ret = self.sig_of(s).ret;
             if self.constant_type(s, ret) != Some(old) {
@@ -364,9 +359,6 @@ impl<'a> Worker<'a> {
                 None => false,
             }
         });
-        for (c, sym) in self.scala_mirrors_of_file(file) {
-            self.reserve_scala_mirror(c, sym);
-        }
     }
 
     /// The anonymous and local classes of a file are made anew when its bodies are typed again;

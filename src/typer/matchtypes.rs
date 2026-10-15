@@ -767,7 +767,7 @@ impl<'a> Worker<'a> {
             return true;
         }
         self.complete_class(sub);
-        self.syms.class(sub).base_types.iter().any(|&(b, _)| b == sup)
+        self.typer_derives(sub, sup)
     }
 
     pub(super) fn is_final_class(&self, c: ClassId) -> bool {

@@ -119,43 +119,26 @@ pub(crate) struct Unit {
     pub kind: UnitKind,
 }
 
-/// The TASTy files of a source file, in the order of its definitions.
+/// The TASTy files of a source file, in the order of its definitions: its classes', then its
+/// `$package` objects', each named as the namer named its module class (`Worker::file_module`).
 pub(crate) fn units_of(w: &Worker, file: FileId) -> Vec<Unit> {
+    let (mut units, package_defs) = split_units(w, file);
+    for (pkg, defs) in package_defs {
+        let name = w.file_module_name(file, pkg);
+        units.push(Unit { file, kind: UnitKind::Package { pkg, name, defs } });
+    }
+    units
+}
+
+/// The packages of a file's top-level definitions that are no class, each with them: the
+/// `<file>$package` objects `Desugar.packageDef` makes (`Worker::enter_file_modules`), in one pass
+/// over the file's definitions.
+pub(crate) fn file_module_packages(w: &Worker, file: FileId) -> Vec<(PkgId, Vec<crate::ast::DefId>)> {
     let ast = w.ast(file);
     let f = file.0 as usize;
-    let mut units: Vec<Unit> = Vec::new();
     let mut package_defs: Vec<(PkgId, Vec<crate::ast::DefId>)> = Vec::new();
     for &d in &ast.top_level {
-        let def = ast.def(d);
-        let class = w.def_classes.get(f, &d).copied();
-        let is_class_def = matches!(&def.kind, crate::ast::DefKind::Class(_));
-        // The companion object of a top-level opaque type goes with it into `$package`.
-        let opaque_companion = class.map_or(false, |c| w.syms.class(c).companion.map_or(false, |k| w.syms.class(k).kind == ClassKind::Opaque));
-        if let (true, Some(c), false) = (is_class_def, class, opaque_companion) {
-            let info = w.syms.class(c);
-            let is_object = info.kind == ClassKind::Object;
-            // A class and its companion object share one file, named after them.
-            if let Some(existing) = units.iter_mut().find(|u| match u.kind {
-                UnitKind::Class { class, module } => {
-                    let other = if is_object { class } else { module };
-                    other.map_or(false, |o| w.syms.class(o).companion == Some(c))
-                }
-                _ => false,
-            }) {
-                if let UnitKind::Class { class, module } = &mut existing.kind {
-                    if is_object {
-                        *module = Some(c);
-                    } else {
-                        *class = Some(c);
-                    }
-                }
-                continue;
-            }
-            // An enum's companion is made by the typer: it goes with the enum. A case class's the
-            // typer made is written as scalac's synthesized one, with the class.
-            let companion = info.companion.filter(|&k| w.syms.class(k).def.is_none() && w.syms.class(k).file == file && !w.syms.class(k).made_companion);
-            let (class, module) = if is_object { (None, Some(c)) } else { (Some(c), companion) };
-            units.push(Unit { file, kind: UnitKind::Class { class, module } });
+        if unit_class(w, file, d).is_some() {
             continue;
         }
         let pkg = owner_pkg(w, file, d).unwrap_or(w.file_pkgs.own()[f]);
@@ -168,15 +151,52 @@ pub(crate) fn units_of(w: &Worker, file: FileId) -> Vec<Unit> {
     if package_defs.is_empty() && !ast.top_exports.is_empty() {
         package_defs.push((w.file_pkgs.own()[f], Vec::new()));
     }
-    let stem = file_stem(&w.files.as_slice()[f].path);
-    // A package object's members are its file's top-level definitions in teq, which compiles
-    // them into `<file>$package$` as for any file: they are pickled under that name (scalac's
-    // is `package`), which is where a downstream build calls them.
-    for (pkg, defs) in package_defs {
-        let name = format!("{}$package", stem);
-        units.push(Unit { file, kind: UnitKind::Package { pkg, name, defs } });
+    package_defs
+}
+
+/// The class of the top-level definition `d` where it has a unit of its own: a class, trait or
+/// object, but the companion object of a top-level opaque type, which goes with it into `$package`.
+fn unit_class(w: &Worker, file: FileId, d: crate::ast::DefId) -> Option<ClassId> {
+    if !matches!(&w.ast(file).def(d).kind, crate::ast::DefKind::Class(_)) {
+        return None;
     }
-    units
+    let c = w.def_classes.get(file.0 as usize, &d).copied()?;
+    let opaque_companion = w.syms.class(c).companion.map_or(false, |k| w.syms.class(k).kind == ClassKind::Opaque);
+    (!opaque_companion).then_some(c)
+}
+
+/// A file's class units, and its top-level definitions that are no class by package.
+fn split_units(w: &Worker, file: FileId) -> (Vec<Unit>, Vec<(PkgId, Vec<crate::ast::DefId>)>) {
+    let ast = w.ast(file);
+    let mut units: Vec<Unit> = Vec::new();
+    for &d in &ast.top_level {
+        let Some(c) = unit_class(w, file, d) else { continue };
+        let info = w.syms.class(c);
+        let is_object = info.kind == ClassKind::Object;
+        // A class and its companion object share one file, named after them.
+        if let Some(existing) = units.iter_mut().find(|u| match u.kind {
+            UnitKind::Class { class, module } => {
+                let other = if is_object { class } else { module };
+                other.map_or(false, |o| w.syms.class(o).companion == Some(c))
+            }
+            _ => false,
+        }) {
+            if let UnitKind::Class { class, module } = &mut existing.kind {
+                if is_object {
+                    *module = Some(c);
+                } else {
+                    *class = Some(c);
+                }
+            }
+            continue;
+        }
+        // An enum's companion is made by the typer: it goes with the enum. A case class's the
+        // typer made is written as scalac's synthesized one, with the class.
+        let companion = info.companion.filter(|&k| w.syms.class(k).def.is_none() && w.syms.class(k).file == file && !w.syms.class(k).made_companion);
+        let (class, module) = if is_object { (None, Some(c)) } else { (Some(c), companion) };
+        units.push(Unit { file, kind: UnitKind::Class { class, module } });
+    }
+    (units, file_module_packages(w, file))
 }
 
 /// The package a top-level definition was entered in.

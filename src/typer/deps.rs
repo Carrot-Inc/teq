@@ -3725,7 +3725,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                     }
                     self.tree_type(t);
                 }
-                Wrap::Ascribed(t) | Wrap::Splice(t) => self.tree_type(t),
+                Wrap::Ascribed(t) | Wrap::Splice(t) | Wrap::Mirror(t) => self.tree_type(t),
                 Wrap::Unchecked | Wrap::Named(_) | Wrap::Member(..) => {}
             }
         }

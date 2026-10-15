@@ -10,6 +10,7 @@ literal                                    23          0        0            0  
 local reference                            15          0        0            0          0
 local val                                   4          0        0            0          0
 method call                                 2          0        0            0          0
+mirror cast                                 0          3        0            0          3
 operator                                    8          0        0            0          0
 string concatenation                       24          0        0            0          0
 synthesized definition                      0          0        0            2          0

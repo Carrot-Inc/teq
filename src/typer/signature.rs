@@ -932,6 +932,11 @@ impl<'a> Worker<'a> {
             TermRef::Local(s) | TermRef::Global(s) | TermRef::ValueMember(_, s) => (s, None),
         };
         if let SymKind::Object(c) = self.syms.sym(s).kind {
+            // A class's companion applied is the class's `apply`s, the one the compiler makes for a
+            // case class shown as the constructor (`Desugar.classDef`'s `companionDefs`).
+            if let Some(k) = self.syms.class(c).companion.filter(|&k| self.syms.class(k).kind == ClassKind::Class) {
+                return self.class_apply_signatures(k);
+            }
             let ty = self.types.class(c, &[]);
             return self.value_signatures(ty);
         }
@@ -1355,10 +1360,10 @@ impl<'a> Worker<'a> {
         let Some(module) = module else { return Vec::new() };
         let module_ty = self.types.class(module, &[]);
         let found = self.find_member(module_ty, crate::names::UNAPPLY).map(|f| (f, false)).or_else(|| self.find_member(module_ty, crate::names::UNAPPLY_SEQ).map(|f| (f, true)));
-        let Some(((s, owner_ty), seq)) = found else { return Vec::new() };
-        let s = self.syms.alternatives(s).and_then(|a| a.first().copied()).unwrap_or(s);
-        // The case class's own extractor, which the compiler makes: its fields, by name.
-        if self.syms.sym(s).def.is_none() && !self.in_jar(self.syms.sym(s).file) {
+        let found = found.map(|((s, owner_ty), seq)| (self.syms.alternatives(s).and_then(|a| a.first().copied()).unwrap_or(s), owner_ty, seq));
+        // The case class's own extractor, which the compiler makes, the companion's whether written
+        // or made (`Desugar.classDef`'s `companionDefs`): its fields, by name.
+        if found.map_or(true, |(s, _, _)| self.syms.sym(s).def.is_none() && !self.in_jar(self.syms.sym(s).file)) {
             if let Some(c) = self.syms.class(module).companion.filter(|&c| case_class(self, c)) {
                 if extracted.is_none() || instance_of(self, c).is_some() {
                     let instance = instance_of(self, c);
@@ -1366,6 +1371,7 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        let Some((s, owner_ty, seq)) = found else { return Vec::new() };
         let rty = match extracted {
             Some(t) => self.zonk(t),
             None => {

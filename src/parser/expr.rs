@@ -169,6 +169,7 @@ impl<'a> Parser<'a> {
 
     fn parse_block_rest_scoped(&mut self, start: Span) -> ExprId {
         let derives_mark = self.pending_derives.len();
+        let cases_mark = self.pending_cases.len();
         let placeholders_mark = self.placeholders.len();
         // `{ x => a; b }`: the lambda's body is the rest of the block, as under scalac.
         let lambda = self.at_lambda_start().then(|| (self.span(), self.parse_lambda_params()));
@@ -177,8 +178,16 @@ impl<'a> Parser<'a> {
         self.statements(RecoverySite::Block, |p| p.parse_block_stmt(&mut stmts));
         self.end_region();
         self.close_language(language);
-        // Local classes are rejected by the typer; their clauses must not reach an outer body.
+        // A block's case classes and `derives` clauses have their companions in the block, each
+        // right after its class (`Desugar.classDef`'s `companionDefs`, a local object of the
+        // block); none reaches an outer body.
+        if self.pending_derives.len() > derives_mark || self.pending_cases.len() > cases_mark {
+            let defs: Vec<DefId> = stmts.iter().filter_map(|s| if let Stmt::Def(d) = s { Some(*d) } else { None }).collect();
+            let companions = self.add_derived_givens(derives_mark, cases_mark, &defs);
+            self.place_companions(&mut stmts, companions, |s| if let Stmt::Def(d) = s { Some(*d) } else { None }, Stmt::Def);
+        }
         self.pending_derives.truncate(derives_mark);
+        self.pending_cases.truncate(cases_mark);
         // A statement that is a placeholder alone binds it to no function: scalac's
         // `checkNoEscapingPlaceholders` around a block's statements (`{ _ } + 10`).
         if let Some(p) = self.placeholders.get(placeholders_mark) {

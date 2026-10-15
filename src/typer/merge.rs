@@ -2014,6 +2014,7 @@ impl<'a> Worker<'a> {
         self.diags.absorb(std::mem::take(&mut o.diags));
         self.absorb_unused(o);
         self.sealed_std_files.append(&mut o.sealed_std_files);
+        debug_assert!(o.pending_mirror_parents.is_empty(), "a companion's mirror parent left to the merge");
         self.profile.absorb(std::mem::take(&mut o.profile));
         self.def_syms.absorb(o.def_syms.take_own());
         self.def_classes.absorb(o.def_classes.take_own());

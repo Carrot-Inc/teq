@@ -1,0 +1,4 @@
+izumi_opaque_prefix$package::Aid
+izop.izumi_opaque_prefix$package::Aid
+Tuple2[+Int,+Int]
+scala.collection.immutable.List[+izop.izumi_opaque_prefix$package::Aid]

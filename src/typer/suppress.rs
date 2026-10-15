@@ -156,7 +156,7 @@ impl<'a> Worker<'a> {
         let ast = self.ast(file);
         let innermost = (0..ast.defs.len())
             .map(|i| DefId(i as u32))
-            .filter(|&d| matches!(ast.def(d).kind, ast::DefKind::Class(_)))
+            .filter(|&d| matches!(ast.def(d).kind, ast::DefKind::Class(_)) && !ast.parser_made(d))
             .filter(|&d| {
                 let r = ast.def_range(d);
                 r != ast::NO_RANGE && r.start <= pos && pos < r.end

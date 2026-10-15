@@ -647,6 +647,12 @@ function $productBase(product) {
   Object.setPrototypeOf($caseProto, product.prototype);
   Object.setPrototypeOf($enumValueProto, product.prototype);
 }
+// `Mirror.Singleton`'s class once the output has its `fromProduct`: a case object and an enum's
+// singleton case are their own mirror (`SyntheticMembers.addMirrorSupport`), which the shapes'
+// prototypes stand for.
+function $singletonBase(singleton) {
+  $caseObjectProto.fromProduct = $enumValueProto.fromProduct = singleton.prototype.fromProduct;
+}
 // The members of Product on a case class, a case object, an enum case or a tuple, which the
 // registration above describes: the class's own definition first (dotty's `existingDef`), then
 // the rule's from its shape; on another product, the class's.

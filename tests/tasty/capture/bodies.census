@@ -34,7 +34,7 @@ return                                      0          2        0            0  
 sequence argument                           0          1        0            0          0
 string concatenation                        4          0        0            0          0
 super                                       1          0        0            0          1
-synthesized definition                      0          0        0            4          0
+synthesized definition                      0          0        0            5          0
 template call                               1          0        0            0          0
 this                                       12          0        0            0         12
 throw                                       1          0        0            0          0

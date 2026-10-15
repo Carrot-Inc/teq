@@ -490,6 +490,8 @@ enum TargetArg {
     Skip,
     Var(TVarId),
     Class { c: ClassId, special: bool, tuple: bool },
+    /// The singleton of an enum's value (`E.A.type`, a sum mirror's element), the same as no class.
+    Value,
     Other,
 }
 
@@ -1544,8 +1546,9 @@ impl<'a> Worker<'a> {
                 let mut b = base;
                 loop {
                     let info = self.syms.class(b);
-                    let is_module = info.kind == ClassKind::Object || info.inner_object.is_some();
-                    let module = if is_module { Some(b) } else { info.companion.filter(|&m| self.is_module_class(m)) };
+                    let is_module = info.kind == ClassKind::Object || info.inner_object.is_some() || info.local_module.is_some();
+                    // A local class's companion is the block's local object (`Desugar.classDef`).
+                    let module = if is_module { Some(b) } else { info.companion.filter(|&m| self.is_module_class(m) || self.syms.class(m).local_module.is_some()) };
                     let module = module.filter(|&m| !(b == c && named_through && self.syms.class(m).inner_object.is_some()));
                     if let Some(m) = module {
                         if !scopes.contains(&m) {
@@ -1963,6 +1966,10 @@ impl<'a> Worker<'a> {
                 return Some(if enclosing { self.this_ref(o) } else { self.prog.add(TExpr::Module(o)) });
             }
         }
+        // A value of an enum of a package or of objects is read as a static, as its reference is.
+        if matches!(self.syms.sym(s).kind, SymKind::EnumValue(_)) && self.static_enum_value(s) {
+            return Some(self.prog.add(TExpr::Static(s)));
+        }
         Some(match self.syms.sym(s).owner {
             Owner::Class(o) => {
                 let classes: Vec<ClassId> = self.env.frames.iter().rev().filter_map(|f| match f {
@@ -2120,9 +2127,18 @@ impl<'a> Worker<'a> {
         Some((companion, sym))
     }
 
+    /// `resolve_given_searching`, whose trees, an argument of the program's own call, stand where
+    /// dotty places what a search inserts: at the call's end, no width (`Typer.implicitArgs`'
+    /// `inferImplicitArg(formal, tree.span.endPos)`), the nested searches' trees too.
     /// `byname` says that the request is for a by-name using parameter, through which a
     /// recursive instance may refer back to itself.
     pub(super) fn resolve_given_pick(&mut self, target: TypeId, span: Span, byname: bool) -> Pick {
+        // The search of a site runs at its end, its nested searches with it.
+        let at = if self.implicit_depth == 0 { Span { start: span.end, end: span.end } } else { span };
+        self.resolve_given_searching(target, at, byname)
+    }
+
+    fn resolve_given_searching(&mut self, target: TypeId, span: Span, byname: bool) -> Pick {
         let pre = self.given_entry();
         if self.implicit_depth >= MAX_IMPLICIT_DEPTH {
             self.read_in_progress(InProgress::DepthLimit);
@@ -2224,7 +2240,13 @@ impl<'a> Worker<'a> {
         };
         if let Some(Pick::Found(expr, ty)) = hit {
             let step = self.step(Step::Replay);
+            // Every tree the search inserted is this site's, nested arguments too, as dotty
+            // places a search's trees at the call that asked (`inferImplicitArg`'s span): the
+            // nodes the kept search made carry its site, which the copy takes over as it copies.
+            let respan = self.prog.span_of(expr).map(|kept| (kept, (self.env.file, span)));
+            let outer = std::mem::replace(&mut self.inline.copy_respan, respan);
             let copied = self.copy_expr(expr);
+            self.inline.copy_respan = outer;
             self.prog.set_span(copied, self.env.file, span);
             self.step_end(step, Step::Replay);
             if let Some(p) = prof {
@@ -2267,12 +2289,14 @@ impl<'a> Worker<'a> {
         let synthesis = if matches!(result, Pick::NoMatch) { self.step(Step::Synthesis) } else { super::profile::StepTok::NONE };
         let result = match result {
             Pick::NoMatch if target_class.map_or(false, |c| self.derive_mirror_class(c)) => {
-                match target_class.and_then(|c| self.scala_mirror_given(c, target)) {
+                match target_class.and_then(|c| self.scala_mirror_given(c, target, span)) {
                     // The mirror of the class the target names, as long as it has the element
                     // types and labels the target asks for, which a mismatch reports
                     // (`Synthesizer.makeProductMirror`'s `checkRefinement`).
                     Some((te, ty)) if !self.mirror_target_fixes_members(target) || self.check_mirror_refinements(target, ty, span) || self.conforms_or_rollback(ty, target) => {
-                        if self.capturing() {
+                        // A mirror held by teq's own val is written as scalac's evidence; one
+                        // `Synthesizer`'s shape gives is written as itself (`Wrap::Mirror`).
+                        if self.capturing() && !self.captured_mirror(te) {
                             self.capture_form(te, crate::tir::capture::Form::Evidence(target));
                         }
                         Pick::Found(te, ty)
@@ -3453,6 +3477,7 @@ impl<'a> Worker<'a> {
                         return true;
                     }
                 }
+                TargetArg::Value if variance == 0 && !special_y => return true,
                 _ => {}
             }
         }
@@ -3466,7 +3491,9 @@ impl<'a> Worker<'a> {
         }
         let Some((_, targs)) = heads.class else { return TargetArg::Skip };
         let x = self.types.items(targs)[i];
-        let arg = if head_dependent(self, x) || self.types.is_wild(x) {
+        let arg = if matches!(self.types.get(x), Type::Term(v) if self.enum_value_singleton(v)) {
+            TargetArg::Value
+        } else if head_dependent(self, x) || self.types.is_wild(x) {
             TargetArg::Skip
         } else {
             let x = self.dealias(x);
@@ -3647,11 +3674,14 @@ impl<'a> Worker<'a> {
             let variance = self.syms.tparam(tp).variance;
             let (x, y) = (self.types.items(targs)[i], self.types.items(gargs)[i]);
             // An argument that depends on a prefix (`Kind.this` of a given reached through an
-            // object that extends `Kind`) is read through that prefix by the shape pass.
-            if head_dependent(self, x) || head_dependent(self, y) || self.types.is_wild(x) {
+            // object that extends `Kind`) is read through that prefix by the shape pass; an enum
+            // value's singleton is a path of no prefix to read.
+            let value = matches!(self.types.get(x), Type::Term(v) if self.enum_value_singleton(v));
+            if (head_dependent(self, x) && !value) || head_dependent(self, y) || self.types.is_wild(x) {
                 continue;
             }
-            let (x, y) = (self.dealias(x), self.dealias(y));
+            // The value's singleton stands as itself: its type is the enum's class.
+            let (x, y) = (if value { x } else { self.dealias(x) }, self.dealias(y));
             let Type::Class(cy, _) = self.types.get(y) else { continue };
             match self.types.get(x) {
                 Type::Var(v) => {
@@ -3664,10 +3694,22 @@ impl<'a> Worker<'a> {
                         return true;
                     }
                 }
+                // An enum value's singleton is the same as no class: `is_sub`'s invariant rule
+                // fails it against any but the special heads (`TC[E.A.type]` asked of `TC[Int]`).
+                Type::Term(v) if variance == 0 && self.enum_value_singleton(v) => {
+                    if !self.special_head(cy) {
+                        return true;
+                    }
+                }
                 _ => {}
             }
         }
         false
+    }
+
+    /// Whether `v` is an enum's value, whose singleton is the type of a sum mirror's element.
+    fn enum_value_singleton(&self, v: SymId) -> bool {
+        matches!(self.syms.sym(v).kind, SymKind::EnumValue(_))
     }
 
     /// Whether a candidate's argument of class `cy` cannot meet the open variable `v` at a
@@ -4248,7 +4290,7 @@ impl<'a> Worker<'a> {
 
     pub(super) fn derives_from(&mut self, c: ClassId, base: ClassId) -> bool {
         self.complete_class(c);
-        self.syms.class(c).base_types.iter().any(|&(b, _)| b == base)
+        self.typer_derives(c, base)
     }
 
     fn fresh_tparam_subst(&mut self, tparams: &[TParamId]) -> Subst {

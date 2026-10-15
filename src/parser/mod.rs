@@ -111,6 +111,9 @@ pub struct Parser<'a> {
     pending_derives: Vec<PendingDerives>,
     /// Whether an annotation named `main` was read, whose methods `add_main_proxies` looks for.
     main_annotated: bool,
+    /// The case classes of the bodies being parsed, each of which has a companion (`Desugar
+    /// .classDef`'s `companionDefs`): one the body does not write is made (`add_derived_givens`).
+    pending_cases: Vec<(Name, Span)>,
     /// The `self =>` alias of the template body being parsed, EMPTY without one; a nested body
     /// hides it, as `Outer.this` is not in the subset either.
     /// One AST per `package p:` block, each read by the typer as a file of its own in that
@@ -199,6 +202,7 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         language_open: Vec::new(),
         pending_derives: Vec::new(),
         main_annotated: false,
+        pending_cases: Vec::new(),
         package_blocks: Vec::new(),
         template_type: false,
         quote_level: 0,
@@ -1115,10 +1119,12 @@ impl<'a> Parser<'a> {
     }
 
     fn add_top_level_derived_givens(&mut self) {
-        if !self.pending_derives.is_empty() {
+        if !self.pending_derives.is_empty() || !self.pending_cases.is_empty() {
             let defs = self.ast.top_level.clone();
-            let companions = self.add_derived_givens(0, &defs);
-            self.ast.top_level.extend(companions);
+            let companions = self.add_derived_givens(0, 0, &defs);
+            let mut top = std::mem::take(&mut self.ast.top_level);
+            self.place_companions(&mut top, companions, |&d| Some(d), |d| d);
+            self.ast.top_level = top;
         }
     }
 

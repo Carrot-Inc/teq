@@ -416,6 +416,7 @@ impl<'w, 'a> Walk<'w, 'a> {
             let construct = match w {
                 Wrap::Ascribed(_) => "ascription",
                 Wrap::Cast(_) => "cast",
+                Wrap::Mirror(_) => "mirror cast",
                 Wrap::Unchecked => "@unchecked",
                 Wrap::Splice(_) => "sequence argument",
                 Wrap::Named(_) => "named argument",
