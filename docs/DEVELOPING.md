@@ -169,6 +169,15 @@ writes them), then runs teq's verbs over the export (`TEQ`). A branch publishes 
 `~/.m2`. The Zed extension (`integrations/zed`) is a crate of its own:
 `cargo test` there; its dev build needs rustup's `wasm32-wasip2` target.
 
+The JVM test runner (`src/task/runner/Runner.java`) is sbt 2.0.8's forked test worker, a JVM for each run, the
+daemon starting the next once a run ends (docs/TOOLING.md, "Tests."): its suites run on a pool of the lock's
+`parallelism`, which the sbt export writes from
+`Test / testForkedParallel` and `Test / testForkedParallelism` and the Mill export as `1`. `tests/task.sh` holds it
+to the pinned worker itself (`worker-2.0.8.jar` from the coursier cache, driven by `probe.Pinned` over the probe
+framework of `tests/support/probe_framework`, the two transcripts made alike by `tests/support/runner_contract.py`)
+and runs the pool through teq; a change of `Runner.java` compiles it again with javac 17 (`tests/runner-classes.sh`
+says how) and lists each class javac writes in `src/task/runner.rs`'s `CLASSES`.
+
 ### The assertion-enabled build
 
 `cargo build --profile checks` gives `target/checks/teq`, whose `teq --version` ends in `assertions`:
@@ -267,7 +276,8 @@ the binary under test, and are mandatory once named: a missing checkout, export,
 `LILA_REDIS`), built asset manifest or suite fails the line, never a skip. `lila-test` holds the run to the
 inventory: without `tests.json`, or with an empty one, it fails at the start, and it runs `teq test --verbose`,
 whose runner names every test with its outcome (`[success]`, `[skipped]`, `[fail]`), so that each suite of the
-inventory has to have run in its project with each of its cases passed (`tests/lila-test-verb.sh`). They run only when `--only` or `--with` names
+inventory has to have run in its project with each of its cases passed (`tests/lila-test-verb.sh`), the lines of
+suites that ran at once on the runner's pool taken by their suites' names. They run only when `--only` or `--with` names
 them until their time and memory are measured within the gate's budget (two added minutes, 12 GB): the
 measurements of `lila.scala`'s `--runs 3` are the admission's record. They run, with the Airstream and Laminar
 lines, on the remote machine that holds the checkouts: its pool line carries `holds=lila,airstream,laminar` (or

@@ -37,6 +37,16 @@ class ExportSuite extends munit.FunSuite {
     IO.read(new File(dir.getOrElse(sys.error("no tests/lock above the working directory")), name), UTF_8)
   }
 
+  test("a test configuration's pool as sbt's forked worker sizes it: one thread, the build's count, else auto") {
+    assertEquals(Export.parallelism(false, None), Json.Num("1"))
+    assertEquals(Export.parallelism(false, Some(4)), Json.Num("1"))
+    assertEquals(Export.parallelism(true, Some(4)), Json.Num("4"))
+    assertEquals(Export.parallelism(true, Some(1)), Json.Num("1"))
+    assertEquals(Export.parallelism(true, None), Json.Str("auto"))
+    assertEquals(Export.parallelism(true, Some(0)), Json.Str("auto"))
+    assertEquals(Export.parallelism(true, Some(-2)), Json.Str("auto"))
+  }
+
   test("the lock's canonical form: the conformance corpus's tree written to its bytes") {
     assertEquals(Lock.canonical(Json.parse(corpus("corpus.json"))), corpus("corpus.lock"))
   }

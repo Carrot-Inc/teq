@@ -12,9 +12,13 @@
 # without the token of `daemon.json` is refused; `stop` ends the daemon. Then `test` over app's
 # munit suites (the jars of the example
 # fixture's jvmapp tests, from the coursier cache): the suites sbt's discovery would define, the
-# exclusion, the patterns, an edit between two warm runs and a resource's, `--changed`, a jar
+# exclusion, the patterns, a runner per run (the next started once a run ends), an edit between two
+# runs and a resource's, `--changed`, a jar
 # rewritten in place restarting the runner, a runner killed and one whose client left, a JVM older
-# than the export's classes refused, `stop` ending the runner. Then `run` (an alias and a main
+# than the export's classes refused, `stop` ending the runner. Then the forked runner's contract, held on sbt
+# 2.0.8's own worker and on teq's runner over the probe framework's suites (javac's, from
+# tests/support/probe_framework), and the runner's pool through teq over an export of its own (the lock's
+# `parallelism`), each section saying what it holds. Then `run` (an alias and a main
 # class, the run block's options, variables and directory, a resource of the runtime classpath,
 # the arguments and the exit code, the refusals, the main class implied without a word as sbt's
 # `run` implies it: the declared one, the single one among the products, a package object's
@@ -34,7 +38,8 @@
 # tests/support/coursier-files.txt among its checks, and teq.cmd under wine's cmd where wine is
 # installed (its section says what wine cannot show); then vite-plugin-teq's own test and
 # bench/ptyper-vite-loop.mjs's six steps over the Scala.js export. Without scala-library or munit's
-# jars in the coursier cache it fails as incomplete validation.
+# jars in the coursier cache it fails as incomplete validation, as it does without sbt's worker and the gson it
+# shades, or without a javac.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 TEQ=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
@@ -68,6 +73,7 @@ cleanup() {
   [ -f "$work/r/target/teq/teq.lock" ] && (cd "$work/r" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -f "$work/js/teq.lock" ] && (cd "$work/js" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -f "$work/e/target/teq/teq.lock" ] && (cd "$work/e" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+  [ -f "$work/pool/target/teq/teq.lock" ] && (cd "$work/pool" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -n "${server:-}" ] && kill "$server" 2> /dev/null
   rm -rf "$work"
 }
@@ -508,9 +514,17 @@ out=$(ulimit -v 8000000 && TEQ_THREADS=2 task compile core)
 if [ $? = 0 ] && [[ "$out" == *"teq: core/compile: no memory mapping for the type store's overlays; one worker types the build"* ]]; then pass "a refused mapping's note reaches the client"; else fail "the refused mapping's note: $out"; fi
 task stop > /dev/null
 
-# `test`: app's munit suites on the daemon's warm runner.
+# `test`: app's munit suites on the daemon's runner, a JVM for each run, the next started once a run ends.
 runner_pid() { pgrep -f "$b/target/teq/app/test/runner.args" | head -1; }
-runners_started() { grep -c '^starting the test runner of app/test' "$b/target/teq/task.log"; }
+# The runner the daemon launched for the next run before it answered, once the spent one has quit (ten seconds at
+# most).
+next_runner() {
+  for _ in $(seq 100); do
+    [ "$(pgrep -f "$b/target/teq/app/test/runner.args" | wc -l | tr -d ' ')" = 1 ] && break
+    sleep 0.1
+  done
+  runner_pid
+}
 out=$(task test app --list)
 expected='Test app.Excluded : subclass(false, munit.Suite)
 Test app.MainTest : subclass(false, munit.Suite)
@@ -518,18 +532,26 @@ Test app.Resources : subclass(false, munit.Suite)
 Test app.Sleeper : subclass(false, munit.Suite)
 Test app.ViaBase : subclass(false, munit.Suite)'
 if [ "$out" = "$expected" ]; then pass "test --list: the suites as sbt's definedTests, a base's subclass among them, the abstract base and a plain class not"; else fail "test --list: $out"; fi
-started=$(runners_started)
+listed=$(runner_pid)
 out=$(task test app)
 if [ $? = 0 ] && [[ "$out" == *"app/test: 4 suites, 5 passed, 0 failed in "* ]] && [[ "$out" == *"app.MainTest"* ]] && [[ "$out" != *"excluded"* ]]; then pass "test runs the suites but the excluded one on the runner, the framework's output then the summary"; else fail "test: $out"; fi
-pid=$(runner_pid)
+pid=$(next_runner)
+# The spent one quits on the daemon's thread, which reaps it.
+for _ in $(seq 50); do alive "$listed" || break; sleep 0.1; done
+if [ -n "$listed" ] && [ -n "$pid" ] && [ "$pid" != "$listed" ] && ! alive "$listed" && grep -q '^stopping the test runner of app/test: its run is done' "$b/target/teq/task.log" \
+  && grep -q '^starting the test runner of app/test for the next run' "$b/target/teq/task.log"; then
+  pass "a runner serves one run: the one --list started runs the suites and quits, the next launched before the answer"
+else
+  fail "the runner per run: --list's $listed, the next $pid"
+fi
 cp "$b/app/test/app/MainTest.scala" "$work/MainTest.scala"
 sed -i.bak 's/core.Core.answer, 42/core.Core.answer, 41/' "$b/app/test/app/MainTest.scala"
 out=$(task test app app.MainTest)
 code=$?
 cp "$work/MainTest.scala" "$b/app/test/app/MainTest.scala"
 again=$(task test app app.MainTest)
-if [ $code = 1 ] && [[ "$out" == *"[fail] app.MainTest.the answer: "* ]] && [[ "$out" == *"app/test: 1 suite, 0 passed, 1 failed"* ]] && [[ "$again" == *"1 suite, 1 passed, 0 failed"* ]] && [ "$(runner_pid)" = "$pid" ] && [ "$(runners_started)" = "$started" ]; then
-  pass "an edit to a suite between two runs on the same warm runner changes the outcome, and its revert"
+if [ $code = 1 ] && [[ "$out" == *"[fail] app.MainTest.the answer: "* ]] && [[ "$out" == *"app/test: 1 suite, 0 passed, 1 failed"* ]] && [[ "$again" == *"1 suite, 1 passed, 0 failed"* ]]; then
+  pass "an edit to a suite between two runs changes the outcome, and its revert"
 else
   fail "the edit between runs ($code): $out // $again"
 fi
@@ -537,7 +559,7 @@ echo bye > "$b/app/test-resources/greeting.txt"
 out=$(task test app '*Resources')
 code=$?
 echo hello > "$b/app/test-resources/greeting.txt"
-if [ $code = 1 ] && [[ "$out" == *"1 suite, 1 passed, 1 failed"* ]] && [ "$(runner_pid)" = "$pid" ]; then pass "a resource of the test configuration is read afresh by the next run"; else fail "the resource: $out"; fi
+if [ $code = 1 ] && [[ "$out" == *"1 suite, 1 passed, 1 failed"* ]]; then pass "a resource of the test configuration is read afresh by the next run"; else fail "the resource: $out"; fi
 out=$(task test app '*Via*' -app.MainTest)
 if [[ "$out" == *"app/test: 1 suite, 1 passed"* ]] && [[ "$out" == *"app.ViaBase"* ]]; then pass "testOnly's patterns select the suites"; else fail "the patterns: $out"; fi
 task test app > /dev/null
@@ -553,14 +575,16 @@ out=$(task test app --changed)
 if [[ "$out" == *"app/test: 1 suite, 1 passed, 0 failed"* ]]; then pass "--changed counts what a compile wrote since the last run of every suite"; else fail "--changed after a compile: $out"; fi
 extra_jar two
 out=$(task test app '*Resources')
-if [[ "$out" == *"1 suite, 1 passed, 1 failed"* ]] && [ "$(runner_pid)" != "$pid" ] && grep -q '^stopping the test runner of app/test: what it was started with changed' "$b/target/teq/task.log"; then
+if [[ "$out" == *"1 suite, 1 passed, 1 failed"* ]] && grep -q '^stopping the test runner of app/test: what it was started with changed' "$b/target/teq/task.log"; then
   pass "a jar of the class path rewritten in place starts the runner anew"
 else
   fail "the jar rewritten: $out"
 fi
 extra_jar one
 task test app '*Resources' > /dev/null
-kill "$(runner_pid)"
+pid=$(next_runner)
+kill "$pid"
+for _ in $(seq 100); do alive "$pid" || break; sleep 0.1; done
 out=$(task test app app.MainTest)
 if [ $? = 0 ] && grep -q '^stopping the test runner of app/test: it ended' "$b/target/teq/task.log"; then pass "a runner that died is started again by the next test"; else fail "the runner died: $out"; fi
 touch "$b/target/sleep"
@@ -591,7 +615,7 @@ fi
 JAVA_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:0 write_export 0.1.7-check.1 80
 (cd "$b" && exec timeout 150 "$TEQ" test app > "$work/suspended.out" 2>&1) &
 client=$!
-for _ in $(seq 100); do pgrep -f "$b/target/teq/app/test/runner.args" > /dev/null && break; sleep 0.1; done
+for _ in $(seq 100); do pgrep -f "suspend=y.*$b/target/teq/app/test/runner.args" > /dev/null && break; sleep 0.1; done
 sleep 1
 { kill "$client"; wait "$client"; } 2> /dev/null
 write_export 0.1.7-check.1 80
@@ -607,10 +631,577 @@ again=$(task test app --changed)
 rm -rf "$b/app/more"
 if [ $code = 1 ] && [[ "$again" == *"every suite, its resident started anew since the last run"* ]] && [[ "$again" == *"4 suites, 5 passed"* ]]; then pass "--changed after a resident started anew runs every suite, its first build failing or not"; else fail "--changed after a restart ($code): $again"; fi
 task test app > /dev/null
-pid=$(runner_pid)
+pid=$(next_runner)
 task stop > /dev/null
 sleep 1
-if [ -n "$pid" ] && ! alive "$pid"; then pass "stop ends the test runner"; else fail "stop left the runner $pid"; fi
+if [ -n "$pid" ] && ! alive "$pid" && ! pgrep -f "$b/target/teq/app/test/runner.args" > /dev/null; then pass "stop ends the test runner launched for the next run"; else fail "stop left the runner $pid"; fi
+
+# The forked runner's contract (docs/TOOLING.md, "Tests."), pinned on sbt 2.0.8's own worker (ForkTestMain of
+# worker-2.0.8.jar, as sbt's ForkTests sends it a run) over the suites of the probe framework
+# (tests/support/probe_framework, compiled by the javac at hand under --release 17): one worker runs a wave's tasks
+# in order, then the tasks they returned (OrderA, OrderB, OrderChild); the loggers are forwarded as called, two
+# workers' lines interleaved (LogA, LogB); a task's events are published once it returns, and a task that throws
+# publishes, after its logged error, one Error of a SuiteSelector and no duration, its own events dropped (Throw;
+# ThrowOne and ThrowTwo at once, each with its own exception and frames); the tasks a task returns wait for its
+# whole wave though a worker is free (WaveA, WaveB, WaveChild); done() is called once the last wave is drained,
+# what it returns printed nowhere. The lines each side writes are compared as tests/support/runner_contract.py makes
+# them.
+javac=${JAVAC:-${JAVA_HOME:+$JAVA_HOME/bin/}javac}
+java=${JAVA_HOME:+$JAVA_HOME/bin/}java
+interface=$M2/org/scala-sbt/test-interface/1.0/test-interface-1.0.jar
+worker=$M2/org/scala-sbt/worker/2.0.8/worker-2.0.8.jar
+gson=$M2/org/scala-sbt/gson/shaded-gson/2.13.1/shaded-gson-2.13.1.jar
+probe=$work/probe
+mkdir -p "$probe/classes"
+if [ ! -f "$interface" ] || [ ! -f "$worker" ] || [ ! -f "$gson" ]; then
+  fail "test-interface 1.0, sbt 2.0.8's worker or shaded-gson 2.13.1 is not in the coursier cache (incomplete validation)"
+elif ! timeout 120 "$javac" --release 17 -nowarn -cp "$interface:$worker:$gson" -d "$probe/classes" $(find tests/support/probe_framework -name '*.java' | sort) > "$probe/javac.log" 2>&1; then
+  fail "the probe framework does not compile: $(tail -5 "$probe/javac.log")"
+else
+  # contract <name> exact|relaxed <threads: 1, n or auto> <framework or suite>...: the expected lines on stdin, held
+  # to the pinned worker's and to those of teq's runner (the committed classes teq embeds) given the same frameworks
+  # and suites, a framework `<class>|<argument>|<suite>,<suite>...` and a bare suite the probe framework's, its
+  # argument empty.
+  contract() {
+    local name=$1 mode=$2 threads=$3 bare= arg specs=() i class argument names suite
+    shift 3
+    for arg; do case $arg in *"|"*) specs+=("$arg") ;; *) bare=${bare:+$bare,}$arg ;; esac; done
+    [ -z "$bare" ] || specs+=("probe.Framework||$bare")
+    cat > "$probe/$name.want"
+    timeout 60 "$java" -cp "$probe/classes:$interface:$worker:$gson" probe.Pinned "$threads" "${specs[@]}" > "$probe/$name.sbt" 2>&1
+    {
+      for i in "${!specs[@]}"; do IFS='|' read -r class argument names <<< "${specs[$i]}"; printf 'framework\t%s\t%s\n' "$class" "$argument"; done
+      printf 'start\nrun\t0\t0\t%s\n' "$threads"
+      for i in "${!specs[@]}"; do
+        IFS='|' read -r class argument names <<< "${specs[$i]}"
+        for suite in ${names//,/ }; do printf 'suite\t%s\t0\t%s\n' "$i" "$suite"; done
+      done
+      printf 'go\nquit\n'
+    } | timeout 60 "$java" -cp "src/task/runner:$probe/classes:$interface" dev.teq.runner.Runner TOKEN7f3a > "$probe/$name.teq" 2>&1
+    local sbt teq sbt_code teq_code
+    sbt=$(python3 tests/support/runner_contract.py sbt - "$mode" "$probe/$name.want" < "$probe/$name.sbt")
+    sbt_code=$?
+    teq=$(python3 tests/support/runner_contract.py teq TOKEN7f3a "$mode" "$probe/$name.want" < "$probe/$name.teq")
+    teq_code=$?
+    if [ $sbt_code = 0 ] && [ $teq_code = 0 ]; then
+      pass "teq's runner keeps the pinned worker's contract: $name"
+    else
+      fail "the contract $name: $sbt $teq"
+    fi
+  }
+  contract order exact 1 probe.pin.OrderA probe.pin.OrderB <<'WANT'
+exec probe.pin.OrderA
+event probe.pin.OrderA Success probe.pin.OrderA test case 1 -
+exec probe.pin.OrderB
+event probe.pin.OrderB Success probe.pin.OrderB test case 1 -
+exec probe.pin.OrderChild
+event probe.pin.OrderChild Success probe.pin.OrderChild test case 1 -
+probe: done
+WANT
+  contract logs relaxed 2 probe.pin.LogA probe.pin.LogB <<'WANT'
+A begin
+B between
+A end
+event probe.pin.LogA Success probe.pin.LogA test case 1 -
+event probe.pin.LogB Success probe.pin.LogB test case 1 -
+probe: done
+WANT
+  contract throw exact 1 probe.pin.Throw <<'WANT'
+[error] Uncaught exception when running probe.pin.Throw: java.lang.RuntimeException: boom
+forkError java.lang.RuntimeException: boom @ probe.pin.Throw.run
+event probe.pin.Throw Error probe.pin.Throw suite 0 java.lang.RuntimeException: boom @ probe.pin.Throw.run
+probe: done
+WANT
+  contract throws relaxed 2 probe.pin.ThrowOne probe.pin.ThrowTwo <<'WANT'
+[error] Uncaught exception when running probe.pin.ThrowOne: java.lang.IllegalStateException: one
+[error] Uncaught exception when running probe.pin.ThrowTwo: java.lang.IllegalArgumentException: two
+forkError java.lang.IllegalStateException: one @ probe.pin.ThrowOne.one,probe.pin.ThrowOne.run
+forkError java.lang.IllegalArgumentException: two @ probe.pin.ThrowTwo.two,probe.pin.ThrowTwo.run
+event probe.pin.ThrowOne Error probe.pin.ThrowOne suite 0 java.lang.IllegalStateException: one @ probe.pin.ThrowOne.one,probe.pin.ThrowOne.run
+event probe.pin.ThrowTwo Error probe.pin.ThrowTwo suite 0 java.lang.IllegalArgumentException: two @ probe.pin.ThrowTwo.two,probe.pin.ThrowTwo.run
+probe: done
+WANT
+  # The review's counter-probe: an event of a selector that is not Serializable, refused by the worker's ForkEvent
+  # before it is buffered, so that the task throws.
+  contract selector exact 1 probe.pin.BadSelector <<'WANT'
+[error] Uncaught exception when running probe.pin.BadSelector: java.lang.UnsupportedOperationException: Selector implementation must be Serializable, but probe.pin.BadSelector$1 is not.
+forkError java.lang.UnsupportedOperationException: Selector implementation must be Serializable, but probe.pin.BadSelector$1 is not. @ probe.pin.BadSelector.run
+event probe.pin.BadSelector Error probe.pin.BadSelector suite 0 java.lang.UnsupportedOperationException: Selector implementation must be Serializable, but probe.pin.BadSelector$1 is not. @ probe.pin.BadSelector.run
+probe: done
+WANT
+  # Two frameworks of one fingerprint: the worker gives the suite to each (ForkTestMain.runTests' matches), the twin
+  # running it after the probe framework.
+  contract twin exact 1 'probe.Framework||probe.pin.OrderB' 'probe.Twin||' <<'WANT'
+exec probe.pin.OrderB
+event probe.pin.OrderB Success probe.pin.OrderB test case 1 -
+probe: done
+twin probe.pin.OrderB
+event probe.pin.OrderB Success probe.pin.OrderB suite 1 -
+WANT
+  # The review's counter-probes: a framework that fails to make its runner, or its tasks, or whose done() throws, ends
+  # the run, no framework after it run (the probe framework's OrderB never runs); done()'s hook, left in place, calls
+  # it again as the JVM ends, which prints its exception.
+  contract runner exact 1 'probe.Failing|runner|probe.pin.FailingCase' probe.pin.OrderB <<'WANT'
+[error] Uncaught exception when running tests: java.lang.IllegalStateException: runner-error
+forkError java.lang.IllegalStateException: runner-error
+WANT
+  contract tasks exact 1 'probe.Failing|tasks|probe.pin.FailingCase' probe.pin.OrderB <<'WANT'
+[error] Uncaught exception when running tests: java.lang.IllegalStateException: tasks-error
+forkError java.lang.IllegalStateException: tasks-error
+WANT
+  contract done exact 1 'probe.Failing|done|probe.pin.FailingCase' probe.pin.OrderB <<'WANT'
+exec probe.pin.FailingCase
+event probe.pin.FailingCase Success probe.pin.FailingCase suite 1 -
+[error] Uncaught exception when running tests: java.lang.IllegalStateException: done-error
+forkError java.lang.IllegalStateException: done-error
+Exception in thread "Thread-0" java.lang.IllegalStateException: done-error
+WANT
+  # The second review's counter-probe: past its fork error the worker goes on, its framework's done() releasing the
+  # resource the throwing task acquired.
+  contract cleanup exact 1 probe.pin.Cleanup <<'WANT'
+[error] Uncaught exception when running probe.pin.Cleanup: java.lang.IllegalStateException: cleanup-error
+forkError java.lang.IllegalStateException: cleanup-error @ probe.pin.Cleanup.run
+event probe.pin.Cleanup Error probe.pin.Cleanup suite 0 java.lang.IllegalStateException: cleanup-error @ probe.pin.Cleanup.run
+probe: done
+probe: resource released
+WANT
+  # The second review's counter-probe: an event of a Serializable selector of none of test-interface's kinds is taken,
+  # and fails when the task's events are sent, outside the task's catch: the future's failure logged, no fork error,
+  # the task's events and the task it returned lost, the run reaching done().
+  contract odd exact 1 probe.pin.OddKind <<'WANT'
+odd accepted
+[error] Failed to execute task java.util.concurrent.FutureTask[Completed exceptionally: cannot serialize probe.pin.OddSelector; did you forget to register a subtype?]
+probe: done
+WANT
+  # The review's counter-probe: a throwable given to the loggers' trace is the worker's fork error, verbose or not.
+  contract trace exact 1 probe.pin.Trace <<'WANT'
+forkError java.lang.IllegalStateException: trace-error @ probe.pin.Trace.run
+event probe.pin.Trace Success probe.pin.Trace test case 1 -
+probe: done
+WANT
+  contract wave relaxed 2 probe.pin.WaveA probe.pin.WaveB <<'WANT'
+exec probe.pin.WaveA
+exec probe.pin.WaveB ends
+exec probe.pin.WaveChild
+event probe.pin.WaveA Success probe.pin.WaveA test case 1 -
+event probe.pin.WaveB Success probe.pin.WaveB test case 1 -
+event probe.pin.WaveChild Success probe.pin.WaveChild test case 1 -
+probe: done
+WANT
+fi
+
+# The pool through teq (docs/TOOLING.md, "Tests."), over an export of its own: a project `pool` whose suites are the
+# probe framework's (its jar on the test class path), its test configuration's `parallelism` each scenario's. Its
+# runner's first argument names the record its tasks append to (each start and end with its thread, done() the most
+# tasks at once and the threads), which the scenarios read: four suites meeting in pairs on a pool of 2, at most 2 at
+# once on 2 threads; four meeting at once once the lock says 4; one worker's order (a task, the next, then the task
+# the first returned) and a pool of 3's waves (the child after its wave, a worker free); a task that reports a success
+# then throws, as the worker reports it, its fork error ending the run as sbt's harness; an event of a selector that
+# is not Serializable refused, its task throwing, and one of a Serializable selector of an unknown kind taken, the
+# task's events lost when sent, the run going on; two tasks throwing at once, the first fork error ending the run with
+# its own frames; past a fork error, the run's tasks in flight finishing and its framework's done() releasing what a
+# task acquired, out of the client's sight; a throwable traced by the loggers failing the run; a framework that fails
+# to make its runner or its tasks, or whose done() throws, ending the run before the next framework; a suite of two
+# frameworks' fingerprint run by each; eight suites of 50 events each on 4 threads, the counts whole and each suite's
+# events together; two suites' log lines as their loggers were called; a run's pool alone alive in its JVM, the run's
+# loader its threads'; a library's state that would outlive a run in a JVM kept across runs (an executor whose thread
+# took the first run's class loader as its context loader, a count of uses), which the next run, in a JVM of its own,
+# does not inherit; a spent runner a shutdown hook holds as it quits, which `stop` waits for within its bound and
+# kills; an absent field the processors the runner's JVM counts (3, by -XX:ActiveProcessorCount); a malformed one
+# refused on its line.
+pl=$work/pool
+if [ -f "$probe/classes/probe/Framework.class" ]; then
+  mkdir -p "$pl/pool/src/pool" "$pl/pool/test/pool" "$pl/project" "$pl/target/teq" "$pl/lib"
+  python3 - "$probe/classes" "$pl/lib/probe.jar" <<'PY'
+import os, sys, zipfile
+classes, jar = sys.argv[1:]
+with zipfile.ZipFile(jar, "w", zipfile.ZIP_DEFLATED) as z:
+    for root, _, files in sorted(os.walk(classes)):
+        for f in sorted(files):
+            z.write(os.path.join(root, f), os.path.relpath(os.path.join(root, f), classes))
+PY
+  printf 'package pool\n\nobject Pool:\n  val n: Int = 1\n' > "$pl/pool/src/pool/Pool.scala"
+  cat > "$pl/pool/test/pool/Suites.scala" <<'SCALA'
+package pool
+
+import probe.{Context, Suite}
+
+abstract class Meet(barrier: String, parties: Int) extends Suite:
+  def run(c: Context): Unit =
+    c.arrive(barrier, parties)
+    c.pass("met")
+
+class Pair1 extends Meet("pair", 2)
+class Pair2 extends Meet("pair", 2)
+class Pair3 extends Meet("pair", 2)
+class Pair4 extends Meet("pair", 2)
+class Quad1 extends Meet("quad", 4)
+class Quad2 extends Meet("quad", 4)
+class Quad3 extends Meet("quad", 4)
+class Quad4 extends Meet("quad", 4)
+class Trio1 extends Meet("trio", 3)
+class Trio2 extends Meet("trio", 3)
+class Trio3 extends Meet("trio", 3)
+class Trio4 extends Meet("trio", 3)
+class Trio5 extends Meet("trio", 3)
+class Trio6 extends Meet("trio", 3)
+
+class Parent extends Suite:
+  def run(c: Context): Unit =
+    c.pass("case")
+    c.nest("pool.Child")
+    c.signal("parent")
+
+class Sibling extends Suite:
+  def run(c: Context): Unit =
+    c.await("parent")
+    Thread.sleep(300)
+    c.record("sibling ends")
+    c.pass("case")
+
+class Child extends Suite:
+  def run(c: Context): Unit = c.pass("case")
+
+class Boom extends Suite:
+  def run(c: Context): Unit =
+    c.pass("before")
+    throw new RuntimeException("boom")
+
+class Cleanup extends Suite:
+  def run(c: Context): Unit =
+    c.resource()
+    throw new IllegalStateException("cleanup-error")
+
+class Slow extends Suite:
+  def run(c: Context): Unit =
+    c.signal("slow")
+    Thread.sleep(1500)
+    c.record("slow completed")
+    c.pass("case")
+
+class Tracing extends Suite:
+  def run(c: Context): Unit =
+    c.await("slow")
+    Thread.sleep(300)
+    c.trace(new IllegalStateException("wave-error"))
+    c.pass("case")
+
+class Traced extends Suite:
+  def run(c: Context): Unit =
+    c.trace(new IllegalStateException("trace-error"))
+    c.pass("case")
+
+class BadSelector extends Suite:
+  def run(c: Context): Unit = c.event(new sbt.testing.Selector {}, sbt.testing.Status.Success, null)
+
+class OddSelector extends sbt.testing.Selector with java.io.Serializable
+
+class OddKind extends Suite:
+  def run(c: Context): Unit =
+    try
+      c.event(new OddSelector, sbt.testing.Status.Success, null)
+      c.record("odd accepted")
+    catch case _: UnsupportedOperationException => c.record("odd caught")
+    c.pass("case")
+
+class FailingCase extends probe.FailingSuite
+
+class Hook extends Suite:
+  def run(c: Context): Unit =
+    Runtime.getRuntime.addShutdownHook(new Thread(() => Thread.sleep(60000)))
+    c.record("hook pid " + ProcessHandle.current.pid)
+    c.pass("hook")
+
+class Clash1 extends Suite:
+  def run(c: Context): Unit =
+    c.arrive("clash", 2)
+    one()
+  def one(): Unit = throw new IllegalStateException("one")
+
+class Clash2 extends Suite:
+  def run(c: Context): Unit =
+    c.arrive("clash", 2)
+    two()
+  def two(): Unit = throw new IllegalArgumentException("two")
+
+abstract class Many extends Suite:
+  def run(c: Context): Unit =
+    for i <- 1 to 50 do
+      c.pass(s"case $i")
+      Thread.`yield`()
+
+class Many1 extends Many
+class Many2 extends Many
+class Many3 extends Many
+class Many4 extends Many
+class Many5 extends Many
+class Many6 extends Many
+class Many7 extends Many
+class Many8 extends Many
+
+class Talk1 extends Suite:
+  def run(c: Context): Unit =
+    c.info("one begins")
+    c.signal("one")
+    c.await("two")
+    c.info("one ends")
+    c.pass("case")
+
+class Talk2 extends Suite:
+  def run(c: Context): Unit =
+    c.await("one")
+    c.info("two between")
+    c.signal("two")
+    c.pass("case")
+
+class Pools extends Suite:
+  def run(c: Context): Unit =
+    c.record("pools " + c.pools())
+    c.pass("case")
+
+class Outlives extends Suite:
+  def run(c: Context): Unit =
+    val found = outlive.Outlive.found("pool-resource.txt")
+    c.record(found)
+    if !found.startsWith("found true ") then throw new IllegalStateException(s"pool-resource.txt not found through the library thread's context loader: $found")
+    c.pass("found")
+SCALA
+  mkdir -p "$pl/pool/test-resources"
+  echo resource > "$pl/pool/test-resources/pool-resource.txt"
+  echo 'lazy val pool = project' > "$pl/build.sbt"
+  echo 'sbt.version=2.0.8' > "$pl/project/build.properties"
+  # pool_export <parallelism, or absent> [<java option>]; FAILING names where the failing framework, listed first,
+  # fails; TWIN lists the twin framework, of the probe framework's fingerprint, last.
+  pool_export() {
+    python3 - "$pl" "$lib" "$lib3" "$interface" "$1" "${2:-}" <<'PY'
+import hashlib, importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("lock", os.environ["LOCK_PY"])
+lock = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lock)
+root, lib, lib3, interface, parallelism, option = sys.argv[1:]
+m2 = lib[: lib.index("/maven2/") + len("/maven2/")]
+def artifact(path):
+    data = open(path, "rb").read()
+    parts = path[len(m2):].split("/")
+    return ":".join([".".join(parts[:-3]), parts[-3], parts[-2]]), f"maven-central {hashlib.sha1(data).hexdigest()} {len(data)}"
+table = dict([artifact(lib3), artifact(lib), artifact(interface)])
+flags = {"ignoredScalacOptions": [], "kindProjector": False, "strictEquality": False, "werror": False}
+test = {"classpath": [{"configuration": "compile", "project": "pool"}] + list(table) + [{"file": "lib/probe.jar"}], "flags": flags, "resources": ["pool/test-resources"], "sources": ["pool/test"],
+        "baseDirectory": ".", "envVars": {}, "exclude": [], "fork": True, "javaOptions": [option] if option else [],
+        "frameworks": ([{"arguments": [os.environ["FAILING"]], "class": "probe.Failing"}] if os.environ.get("FAILING") else []) + [{"arguments": ["record.txt"], "class": "probe.Framework"}]
+                      + ([{"arguments": [], "class": "probe.Twin"}] if os.environ.get("TWIN") else [])}
+if parallelism != "absent":
+    test["parallelism"] = int(parallelism) if parallelism.lstrip("-").isdigit() else parallelism
+project = {"base": "pool", "platform": "jvm", "scalaVersion": "3.8.4", "configurations": {
+    "compile": {"classpath": [k for k in table if "test-interface" not in k], "flags": flags, "generators": [], "mainClasses": [], "resources": [], "sources": ["pool/src"]}, "test": test}}
+inputs = {f: hashlib.sha256(open(os.path.join(root, f), "rb").read()).hexdigest() for f in ["build.sbt", "project/build.properties"]}
+digest = hashlib.sha256("".join(f"{f}\0{d}\n" for f, d in sorted(inputs.items())).encode()).hexdigest()
+export = {"teq": "0.1.7-check.1", "format": 1, "binaries": {}, "inputs": {"files": inputs, "sha256": digest}, "java": {"outputVersion": 17},
+          "repositories": [{"id": "maven-central", "url": "https://repo1.maven.org/maven2/"}], "jars": table, "projects": {"pool": project}}
+open(os.path.join(root, "target/teq/teq.lock"), "w", encoding="utf-8").write(lock.canonical(export))
+PY
+  }
+  pt() { : > "$pl/record.txt"; (cd "$pl" && timeout 150 "$TEQ" test pool "$@" 2>&1); }
+  pool_export 2
+  out=$(pt 'pool.Pair*' --verbose)
+  code=$?
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 4 suites, 4 passed, 0 failed"* ]] && [[ "$out" == *"[debug] Create a test executor with a thread pool of 2 threads."* ]] && [ "$(tail -1 "$pl/record.txt")" = "done 2 2" ]; then
+    pass "a pool of the lock's 2: four suites meeting in pairs, at most 2 at once on 2 threads"
+  else
+    fail "the pool of 2: $out // $(cat "$pl/record.txt")"
+  fi
+  pool_export 4
+  out=$(pt 'pool.Quad*')
+  code=$?
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 4 suites, 4 passed, 0 failed"* ]] && [ "$(tail -1 "$pl/record.txt")" = "done 4 4" ]; then
+    pass "a count changed in the lock is the next run's"
+  else
+    fail "the changed count: $out // $(cat "$pl/record.txt")"
+  fi
+  pool_export 1
+  out=$(pt pool.Parent pool.Sibling)
+  code=$?
+  order=$(sed -E 's/ pool-[0-9]+-thread-[0-9]+$//' "$pl/record.txt" | tr '\n' ',')
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 2 suites, 3 passed, 0 failed"* ]] && [ "$order" = "start pool.Parent,end pool.Parent,start pool.Sibling,sibling ends,end pool.Sibling,start pool.Child,end pool.Child,done 1 1," ]; then
+    pass "one thread: a wave's tasks in order, then the task the first returned"
+  else
+    fail "one thread's order: $out // $order"
+  fi
+  pool_export 3
+  out=$(pt pool.Parent pool.Sibling)
+  code=$?
+  child=$(grep -n '^start pool.Child ' "$pl/record.txt" | cut -d: -f1)
+  ends=$(grep -n '^sibling ends' "$pl/record.txt" | cut -d: -f1)
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 2 suites, 3 passed, 0 failed"* ]] && [ -n "$child" ] && [ -n "$ends" ] && [ "$child" -gt "$ends" ] && grep -q '^start pool.Child pool-[0-9]*-thread-' "$pl/record.txt" && [ "$(tail -1 "$pl/record.txt" | cut -d' ' -f1)" = done ]; then
+    pass "a pool of 3: the task a task returns waits for its whole wave on the pool, a worker free, and done() after it"
+  else
+    fail "the waves: $out // $(cat "$pl/record.txt")"
+  fi
+  pool_export 2
+  : > "$work/pool-events"
+  out=$(pt pool.Boom --events "$work/pool-events")
+  code=$?
+  if [ $code = 1 ] && [[ "$out" == *"[error] Uncaught exception when running pool.Boom: java.lang.RuntimeException: boom"* ]] && [[ "$out" == *"[error] java.lang.RuntimeException: boom"* ]] \
+    && [[ "$out" == *"[error]     at pool.Boom.run("* ]] && [[ "$out" == *"pool/test: the run failed: java.lang.RuntimeException: boom (built in "* ]] && [[ "$out" != *" suite, "* ]] && [ ! -s "$work/pool-events" ]; then
+    pass "a task that reports a success then throws: its error logged, its fork error ending the run as sbt's harness, no summary"
+  else
+    fail "the throwing task ($code): $out // $(cat "$work/pool-events")"
+  fi
+  out=$(pt 'pool.Clash*')
+  code=$?
+  failed=$(printf '%s\n' "$out" | sed -n 's/^pool\/test: the run failed: \(.*\) (built in .*$/\1/p')
+  frame=$(printf '%s\n' "$out" | grep -A1 "^\[error\] $failed\$" | tail -1)
+  case $failed in
+    "java.lang.IllegalStateException: one") want="[error]     at pool.Clash1.one(" ;;
+    "java.lang.IllegalArgumentException: two") want="[error]     at pool.Clash2.two(" ;;
+    *) want=none ;;
+  esac
+  if [ $code = 1 ] && [[ "$frame" == "$want"* ]] && [[ "$out" != *" suites, "* ]]; then
+    pass "two tasks throwing at once: the first fork error ends the run, with its own exception and frames"
+  else
+    fail "the two throws ($code, $failed): $out"
+  fi
+  # The second review's counter-probes: the runner of a run that failed at its fork error is retired as sbt's ForkTests
+  # leaves its worker once it has closed its input, its tasks in flight finishing and its framework's done() running,
+  # what it writes past the error never reaching the client; killed only past the stop bound.
+  pool_export 1
+  out=$(pt pool.Cleanup)
+  code=$?
+  for _ in $(seq 100); do [ ! -e "$pl/record.txt.resource" ] && grep -q '^done ' "$pl/record.txt" && break; sleep 0.1; done
+  if [ $code = 1 ] && [[ "$out" == *"pool/test: the run failed: java.lang.IllegalStateException: cleanup-error"* ]] && [[ "$out" != *"resource released"* ]] \
+    && grep -q '^resource acquired' "$pl/record.txt" && [ ! -e "$pl/record.txt.resource" ]; then
+    pass "a run that failed at its fork error still has its framework's done() release what the task acquired, out of the client's sight"
+  else
+    fail "the cleanup after the fork error ($code): $out // $(cat "$pl/record.txt")"
+  fi
+  pool_export 2
+  out=$(pt pool.Slow pool.Tracing)
+  code=$?
+  for _ in $(seq 100); do grep -q '^done ' "$pl/record.txt" && break; sleep 0.1; done
+  if [ $code = 1 ] && [[ "$out" == *"pool/test: the run failed: java.lang.IllegalStateException: wave-error"* ]] && [[ "$out" != *"probe: done"* ]] \
+    && grep -q '^slow completed' "$pl/record.txt" && grep -q '^done ' "$pl/record.txt"; then
+    pass "a task in flight at another's fork error finishes, and done() runs, after the run's end is reported"
+  else
+    fail "the task in flight at the fork error ($code): $out // $(cat "$pl/record.txt")"
+  fi
+  out=$(pt pool.BadSelector)
+  code=$?
+  if [ $code = 1 ] && [[ "$out" == *"[error] Uncaught exception when running pool.BadSelector: java.lang.UnsupportedOperationException: Selector implementation must be Serializable, but pool.BadSelector\$\$anon\$"*" is not."* ]] \
+    && [[ "$out" == *"pool/test: the run failed: java.lang.UnsupportedOperationException: Selector implementation must be Serializable"* ]] && [[ "$out" != *"1 passed"* ]]; then
+    pass "an event of a selector that is not Serializable is refused before it is buffered, its task throwing"
+  else
+    fail "the refused selector ($code): $out"
+  fi
+  out=$(pt pool.OddKind)
+  code=$?
+  if [ $code = 0 ] && [[ "$out" == *"[error] Failed to execute task java.util.concurrent.FutureTask@"*"[Completed exceptionally: java.lang.UnsupportedOperationException: cannot serialize pool.OddSelector; did you forget to register a subtype?]"* ]] \
+    && [[ "$out" == *"pool/test: 1 suite, 0 passed, 0 failed"* ]] && [[ "$out" != *"the run failed"* ]] && grep -q '^odd accepted' "$pl/record.txt"; then
+    pass "an event of a Serializable selector of an unknown kind is taken, its task's events lost when sent, the run going on to its end"
+  else
+    fail "the selector of an unknown kind ($code): $out // $(cat "$pl/record.txt")"
+  fi
+  ended=
+  for where in runner tasks done; do
+    FAILING=$where pool_export 2
+    out=$(pt pool.FailingCase pool.Pools)
+    code=$?
+    [ $code = 1 ] && [[ "$out" == *"[error] Uncaught exception when running tests: java.lang.IllegalStateException: $where-error"* ]] \
+      && [[ "$out" == *"pool/test: the run failed: java.lang.IllegalStateException: $where-error"* ]] && ! grep -q '^start pool.Pools' "$pl/record.txt" || break
+    ended="$ended $where"
+  done
+  if [ "$ended" = " runner tasks done" ]; then
+    pass "a framework that fails to make its runner or its tasks, or whose done() throws, ends the run, the next framework not run"
+  else
+    fail "the failing framework ($where, $code): $out // $(cat "$pl/record.txt")"
+  fi
+  TWIN=1 pool_export 2
+  out=$(pt pool.Child)
+  code=$?
+  if [ $code = 0 ] && [[ "$out" == *"twin pool.Child"* ]] && [[ "$out" == *"pool/test: 1 suite, 2 passed, 0 failed"* ]] && grep -q '^start pool.Child ' "$pl/record.txt"; then
+    pass "a suite of two frameworks' fingerprint runs on each, as the worker matches them"
+  else
+    fail "the twin frameworks ($code): $out"
+  fi
+  pool_export 2
+  out=$(pt pool.Traced)
+  code=$?
+  if [ $code = 1 ] && [[ "$out" == *"[error] java.lang.IllegalStateException: trace-error"* ]] && [[ "$out" == *"[error]     at pool.Traced.run("* ]] \
+    && [[ "$out" == *"pool/test: the run failed: java.lang.IllegalStateException: trace-error"* ]] && [[ "$out" != *"1 passed"* ]]; then
+    pass "a throwable given to the loggers' trace fails the run, verbose or not, though its suite reported a success"
+  else
+    fail "the traced throwable ($code): $out"
+  fi
+  pool_export 4
+  : > "$work/pool-events"
+  out=$(pt 'pool.Many*' --events "$work/pool-events")
+  code=$?
+  runs=$(cut -f2 "$work/pool-events" | uniq | wc -l | tr -d ' ')
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 8 suites, 400 passed, 0 failed"* ]] && [ "$(wc -l < "$work/pool-events" | tr -d ' ')" = 400 ] && [ "$runs" = 8 ]; then
+    pass "eight suites on 4 threads: the counts whole, each suite's events together"
+  else
+    fail "the counts under the pool ($runs runs of suites): $out"
+  fi
+  pool_export 2
+  out=$(pt 'pool.Talk*')
+  code=$?
+  if [ $code = 0 ] && [ "$(printf '%s\n' "$out" | grep -E '^(one|two) ' | tr '\n' ',')" = "one begins,two between,one ends," ]; then
+    pass "two suites' loggers forwarded as called, their lines interleaved"
+  else
+    fail "the interleaved loggers: $out"
+  fi
+  for _ in 1 2 3; do
+    out=$(pt pool.Pools)
+    pools=$(grep '^pools ' "$pl/record.txt")
+    [ "$pools" = "pools 1 own-loader" ] || break
+  done
+  if [ "$pools" = "pools 1 own-loader" ]; then
+    pass "a run's pool alone alive in its JVM, three runs over, the run's class loader its threads' context loader"
+  else
+    fail "the pools left alive: $pools // $out"
+  fi
+  pool_export 1
+  out=$(pt pool.Outlives)
+  code=$?
+  first=$(grep '^found ' "$pl/record.txt")
+  again=$(pt pool.Outlives)
+  code2=$?
+  second=$(grep '^found ' "$pl/record.txt")
+  if [ $code = 0 ] && [ $code2 = 0 ] && [[ "$first" == "found true uses 1 pid "* ]] && [[ "$second" == "found true uses 1 pid "* ]] && [ "$first" != "$second" ]; then
+    pass "the test verb twice: the second run inherits no library state of the first, its JVM another"
+  else
+    fail "the second run ($code, $code2): $first // $second // $again"
+  fi
+  pool_export absent -XX:ActiveProcessorCount=3
+  out=$(pt 'pool.Trio*')
+  code=$?
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 6 suites, 6 passed, 0 failed"* ]] && [ "$(tail -1 "$pl/record.txt")" = "done 3 3" ]; then
+    pass "no parallelism in the lock: the processors the runner's JVM counts, 3"
+  else
+    fail "the absent field: $out // $(cat "$pl/record.txt")"
+  fi
+  pool_export 0
+  line=$(grep -n '^ *parallelism: 0$' "$pl/target/teq/teq.lock" | cut -d: -f1)
+  out=$(pt 'pool.Pair*')
+  code=$?
+  if [ $code = 2 ] && [[ "$out" == *"line $line: projects.pool.configurations.test.parallelism is auto or a number of threads from 1 to 2147483647, not 0"* ]]; then
+    pass "a parallelism of 0 refused on its line"
+  else
+    fail "the refused parallelism ($code, line $line): $out"
+  fi
+  # The review's counter-probe: a spent runner whose JVM a shutdown hook holds for a minute as it quits, and `stop` at
+  # once; the daemon waits for it within its stop bound and kills it, so that it does not outlive the daemon.
+  pool_export 1
+  pt pool.Hook > /dev/null
+  hooked=$(sed -n 's/^hook pid //p' "$pl/record.txt")
+  daemon=$(sed -nE 's/^daemon ([0-9]+) .*/\1/p' "$pl/target/teq/task.log" | tail -1)
+  (cd "$pl" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+  for _ in $(seq 300); do alive "$daemon" || break; sleep 0.1; done
+  if [ -n "$hooked" ] && [ -n "$daemon" ] && ! alive "$daemon" && ! alive "$hooked"; then
+    pass "stop waits for a spent runner still quitting, a shutdown hook holding it, and kills it within the bound"
+  else
+    fail "the spent runner at stop: the daemon $daemon, the runner $hooked: $(ps -o pid,ppid,etime,args -p "$hooked" 2> /dev/null | tail -1)"
+  fi
+fi
 
 # `run`: app's main classes on a JVM of their own, through the daemon's compile.
 run_app() { (cd "$b" && timeout 150 "$TEQ" run app "$@" 2> "$work/run.err"); }

@@ -332,6 +332,26 @@ pub fn parse(text: &str) -> Result<Value, Error> {
     parser.mapping(0, 0)
 }
 
+/// The line (from 1) of the entry a path of keys names in a text `parse` reads, for a refusal of what the entry
+/// holds: each key looked for among the entries of its parent's block, a block's entries two columns in from its
+/// key; where a value on a key's line (a flow mapping) holds the rest of the path, that key's line. None where the
+/// path's first key is not the root's.
+pub fn line_of(text: &str, path: &[&str]) -> Option<usize> {
+    let lines: Vec<&str> = text.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l)).collect();
+    let indent = |l: &str| l.len() - l.trim_start_matches(' ').len();
+    let reader = Parser { lines: Vec::new(), pos: 0, inner: None, first_line: 1 };
+    let (mut from, mut to, mut column, mut found) = (0, lines.len(), 0, None);
+    for k in path {
+        let entry = (from..to).find(|&i| indent(lines[i]) == column && reader.key(&lines[i][column..], i + 1).is_ok_and(|(key, _)| key == *k));
+        let Some(at) = entry else { return found };
+        found = Some(at + 1);
+        from = at + 1;
+        to = (from..to).find(|&i| indent(lines[i]) <= column).unwrap_or(to);
+        column += 2;
+    }
+    found
+}
+
 struct Parser<'a> {
     lines: Vec<&'a str>,
     pos: usize,
@@ -820,6 +840,17 @@ projects:
         assert!(refused(&lock(&deep_flow)).contains("nested deeper than 64 levels"));
         // A line ended by `\r\n` reads as one ended by `\n`.
         assert_eq!(parse("teq: 1.2.3\r\nformat: 1\r\n").unwrap(), parse("teq: 1.2.3\nformat: 1\n").unwrap());
+    }
+
+    #[test]
+    fn an_entry_s_line_by_its_keys() {
+        let text = "teq: 1.2.3\nformat: 1\nprojects:\n  a:\n    configurations:\n      test:\n        frameworks:\n          - arguments: []\n            parallelism: 9\n        parallelism: 0\n  \"b c\":\n    test: {parallelism: 0}\n";
+        parse(text).unwrap();
+        assert_eq!(line_of(text, &["projects", "a", "configurations", "test", "parallelism"]), Some(10));
+        assert_eq!(line_of(text, &["projects", "b c", "test", "parallelism"]), Some(12));
+        assert_eq!(line_of(text, &["projects", "a", "parallelism"]), Some(4));
+        assert_eq!(line_of(text, &["format"]), Some(2));
+        assert_eq!(line_of(text, &["parallelism"]), None);
     }
 
     #[test]

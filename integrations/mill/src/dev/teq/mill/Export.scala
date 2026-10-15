@@ -36,7 +36,11 @@ import Exported.{Inputs as _, *}
   *    class path (`runClasspath`: `resolvedRunMvnDeps`, `transitiveModuleRunModuleDeps`' products);
   *    `test` the test module's, compiled against its compile class path and run on its run class path
   *    (`runtimeClasspath` where they differ), in a sandbox of its own with `MILL_TEST_RESOURCE_DIR` and
-  *    `MILL_WORKSPACE_ROOT` when Mill's run has them (`TestModule.testSandboxWorkingDir`, `allForkEnv`);
+  *    `MILL_WORKSPACE_ROOT` when Mill's run has them (`TestModule.testSandboxWorkingDir`, `allForkEnv`), its suites
+  *    on one thread (`parallelism: 1`): Mill runs a JVM's suites one after another (`TestRunnerUtils`' queue), its
+  *    `testParallelism` and `testForkGrouping` being about JVM processes, which teq's one runner per configuration
+  *    does not have (grouping unsupported here), and the default grouping, over `discoveredTestClasses`, a compile
+  *    the export never runs;
   *  - a jar by its coordinates, its repository and its path there, from Mill's resolution of the module's
   *    own dependencies with its own resolver settings (`Jvm.getArtifacts`), reconciled with the ordered
   *    class path Mill gives;
@@ -493,7 +497,7 @@ private[mill] object Export:
         val resources = roots("the resource directory", tf.resources)
         val js = t match
           case _: ScalaJSModule => tf.moduleKind.map("moduleKind" -> Json.Str(_)).toSeq ++ tf.jsEnv.map("jsEnv" -> _)
-          case _ => Nil
+          case _ => Seq("parallelism" -> Json.Num("1"))
         val conf = Json.Obj(Map(
           "sources" -> strs((roots("the source directory", tf.sources) ++ testGenerated).distinct),
           "resources" -> strs(resources),

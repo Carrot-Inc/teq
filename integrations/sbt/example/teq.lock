@@ -8,11 +8,11 @@ binaries:
   windows-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-windows-x86_64.exe f93304767201c77990cabbe02573b74482d7ca79 23411200
 inputs:
   files:
-    build.sbt: dd3f64861bbe82ec510c7a7d786df204640b62cf25589974f559be3c45cfd086
+    build.sbt: dfa37491353222cea2af41f3c6a8fb1b691017951415b30888d39f663149fc37
     project/Mirror.scala: d7066899113707dba034f1575cd93a821f8b67a44ff04885d5d52f16a4353d5e
     project/build.properties: 130d92ddf3cbfd0330ca6ec0e9aa88a65c8221ea9b47f0ed83095f52515ebcd3
     project/plugins.sbt: fa152f0de7096552b1e5cda01933efea5c22f9c4ed3aaa5d170a764e04443190
-  sha256: e4eafdd1924409c4d5058bb5180293c728134d0db33eec3e681f93e2d07f2048
+  sha256: 2e9457b72a8ddfd30f6d30d9aaf252029bd8aab5c1cb5f19d2899fde2c8249d1
 jars:
   com.github.sbt:junit-interface:0.13.3: maven-central cc5178fdec607a63c045951f9ba5c7e7e5a1813e 35398
   com.lihaoyi:sourcecode_3:0.4.2: maven-central e7445e5caa2003ce647370451e59615e0c222aba 110490
@@ -220,6 +220,7 @@ projects:
           - arguments: []
             class: zio.test.sbt.ZTestFramework
         javaOptions: []
+        parallelism: auto
         resources:
           - api/src/test/resources
         sources:
@@ -400,6 +401,7 @@ projects:
           env: {}
           executable: node
           kind: node
+          sourceMap: enableIfAvailable
         moduleKind: ESModule
         resources:
           - browserdemo/src/test/resources
@@ -512,6 +514,7 @@ projects:
           env: {}
           executable: node
           kind: node
+          sourceMap: enableIfAvailable
         moduleKind: NoModule
         resources:
           - frontend/src/test/resources
@@ -608,6 +611,7 @@ projects:
           - arguments: []
             class: munit.Framework
         javaOptions: []
+        parallelism: 2
         resources:
           - jvmapp/src/test/resources
         sources:
@@ -683,6 +687,7 @@ projects:
         fork: false
         frameworks: []
         javaOptions: []
+        parallelism: auto
         resources:
           - jvmcore/src/test/resources
         sources:
@@ -791,6 +796,7 @@ projects:
           env: {}
           executable: node
           kind: node
+          sourceMap: enableIfAvailable
         moduleKind: ESModule
         resources:
           - mirrored/src/test/resources
@@ -893,6 +899,7 @@ projects:
           env: {}
           executable: node
           kind: node
+          sourceMap: enableIfAvailable
         moduleKind: NoModule
         resources:
           - shared/src/test/resources
@@ -997,6 +1004,7 @@ projects:
           env: {}
           executable: node
           kind: node
+          sourceMap: enableIfAvailable
         moduleKind: NoModule
         resources:
           - sjsapp/src/test/resources
@@ -1092,6 +1100,7 @@ projects:
           env: {}
           executable: node
           kind: node
+          sourceMap: enableIfAvailable
         moduleKind: NoModule
         resources:
           - sjscore/src/test/resources

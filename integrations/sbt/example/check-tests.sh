@@ -17,7 +17,7 @@
 #
 # teq's own driver, no sbt: the suites `teq test <project> --list` finds in the analysis are those
 # sbt's definedTests finds under scalac, for each JVM project with test frameworks, api and
-# jvmapp; then api's suites run on the warm runner, all of them passing, and an edit to a suite
+# jvmapp; then api's suites run on the runner, all of them passing, and an edit to a suite
 # between two runs changes the outcome, its revert changing it back; and `./teq test jvmapp` through the
 # example's launcher, TEQ's binary (the override path).
 #

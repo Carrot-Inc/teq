@@ -3,7 +3,10 @@
 # prints a transcript, and the verb passes only where every suite of the inventory ran in its project
 # with every case passed, no inventory or an empty one failing at the start
 # (tests/support/lila_test_verb.scala). Scenarios: the run as recorded; no inventory; an empty transcript;
-# another project's summary alone; a failed case; a missing case; a suite in another project.
+# another project's summary alone; a failed case; a missing case; a suite in another project; and the runner's
+# pool's transcripts (docs/TOOLING.md, "Tests."): two suites' lines interleaved, among the suites' own output, the
+# pool's debug line and a logged error; a case reported twice; a case after its project's summary; a suite whose
+# task threw, its error logged and the suite failed, its cases unreported.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 work=$(mktemp -d)
@@ -63,6 +66,19 @@ printf '%s\n' "$recorded" | grep -v 'subtracts' | transcript
 expect "a missing case" fail
 printf '%s\n' "$recorded" | sed 's|^alpha/test|gamma/test|' | transcript
 expect "a suite in another project" fail
+printf '%s\n' '[debug] Create a test executor with a thread pool of 2 threads.' 'lila.a.TwoTest:' '[success] lila.a.OneTest adds' \
+  '[success] lila.a.TwoTest parses' '  + parses 0.01s' '[warn] slow' '[success] lila.a.OneTest subtracts: twice' \
+  'alpha/test: 2 suites, 3 passed, 0 failed in 10 ms (built in 5 ms)' '[success] lila.b.ThreeTest renders' \
+  'beta/test: 1 suite, 1 passed, 0 failed in 4 ms (built in 2 ms)' | transcript
+expect "two suites' lines interleaved by the pool, among other output" pass
+{ printf '%s\n' "$recorded" | head -1; printf '%s\n' "$recorded"; } | transcript
+expect "a case reported twice" fail
+printf '%s\n' "$recorded" | sed '/^\[success\] lila.a.TwoTest parses$/d; /^alpha\/test/a\
+[success] lila.a.TwoTest parses' | transcript
+expect "a case after its project's summary" fail
+printf '%s\n' "$recorded" | sed 's/^\[success\] lila.a.TwoTest parses$/[error] Uncaught exception when running lila.a.TwoTest: java.lang.RuntimeException: boom\
+[fail] lila.a.TwoTest: java.lang.RuntimeException: boom/' | transcript
+expect "a suite whose task threw" fail
 # The verbs' measurement counts the invocation's own process trees alone (the review's probe): an unrelated
 # process holding 64 MiB, which names the runner's class, adds nothing to an empty workload's peak, and a
 # command of the workload, which carries the token, is measured.

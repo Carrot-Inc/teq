@@ -140,11 +140,12 @@ build's remote Maven ones and their credentials hosts; `jars`, every jar a class
 `organization:name:version[:classifier]` with its repository, sha1 and size; `java.outputVersion`, the class
 files' version; and `projects`, each with its platform, Scala version and configurations (the roots, the full
 ordered classpath, the flags, the generators, the declared main classes and the test context of `compile`,
-`runtime` and `test`), the `run`, `dev` and `stage` blocks the verbs read, and the description the plugin's
-own tasks build from. A Mill build's configurations say more (below, "The export of a Mill build"): `transitive:
-false`, the classpath's products the whole of what the sources see; a test configuration's `runtimeClasspath`,
-what its suites run on where that is not its classpath, `sandbox`, a directory of its own for each run, and
-`envPaths`, variables whose values are paths under the root, absolute and joined by `;` (a run block's too).
+`runtime` and `test`, a JVM test context's `parallelism` among it, "Tests." below), the `run`, `dev` and `stage`
+blocks the verbs read, and the description the plugin's own tasks build from. A Mill build's configurations say
+more (below, "The export of a Mill build"): `transitive: false`, the classpath's products the whole of what the
+sources see; a test configuration's `runtimeClasspath`, what its suites run on where that is not its classpath,
+`sandbox`, a directory of its own for each run, and `envPaths`, variables whose values are paths under the root,
+absolute and joined by `;` (a run block's too).
 
 The export compiles nothing and runs none of the build's code: the classpaths come from dependency resolution
 alone, so it costs an sbt start. Under the driver CI checks it with
@@ -262,7 +263,10 @@ The modules map onto teq's projects as sbt's projects do:
 - `test` holds the test module's, compiled against its compile class path and run on its run class path
   (`runtimeClasspath` where they differ), in a directory of its own emptied before each run when Mill's run has
   one (`sandbox`, `testSandboxWorkingDir`), with `MILL_WORKSPACE_ROOT` and `MILL_TEST_RESOURCE_DIR` the paths
-  Mill gives them (`envPaths`), its framework the module's `testFramework`;
+  Mill gives them (`envPaths`), its framework the module's `testFramework`, its suites on one thread
+  (`parallelism: 1`), as Mill runs those of one JVM one after another: Mill's `testParallelism` and
+  `testForkGrouping` are about JVM processes, which teq's one runner per configuration does not have (grouping is
+  not supported), and the default grouping, over `discoveredTestClasses`, would make the export a compile;
 - every configuration is `transitive: false`: Mill compiles each module against its own class path alone, its
   `compileModuleDeps` seen by their dependent alone, so the classpath's products and jars are the whole of what its
   sources see. teq types a configuration in a resident of its own (its compile never inside its test's), with every
@@ -327,8 +331,43 @@ refuses where sbt would prompt; `teq run api server` runs an alias of `teqRunAli
 its name. The program runs under `JAVA_HOME`'s `java`, else the first on the `PATH`, with the run block's
 options, variables and directory; Ctrl-C reaches it, and its exit code is the verb's.
 
-**Tests.** On the JVM the runner is a JVM over sbt's test interface, kept per test configuration from its first
-run; a JVM older than `java.outputVersion`, or than 17, is refused. On Scala.js the test configuration's
+**Tests.** On the JVM the runner is a JVM over sbt's test interface for each run, as sbt forks a worker for each: the
+daemon launches the next one as a run ends, before it answers, with the frameworks to load, so that its JVM starts
+and loads them while the client reads the run, the spent one quitting meanwhile (`stop`, and a daemon that ends,
+waiting for it within their bound and killing it past that), and a run inherits no thread, static or registration of
+the one before (a library's executor whose threads took the earlier run's class loader as their context loader, a
+library object's state, a shutdown hook); a JVM older than `java.outputVersion`, or than 17, is refused. A run is one
+of sbt 2's forked test worker (sbt 2.0.8's `ForkTestMain`): the frameworks one after another on one pool of the test
+configuration's `parallelism` threads, each given every suite whose fingerprint one of its own matches (a suite of
+two frameworks of one fingerprint runs on both, and a framework that matches none still makes its runner and its
+`done()`), a framework's tasks submitted together as a wave, their results awaited in its order before the tasks they
+returned are submitted as the next wave, so that a returned task waits for the whole of its wave though a thread is
+free, and the framework's `done()` once its last wave is drained, what `done()` returns shown nowhere. A suite's
+logger and its output are written as they come, so that the lines of suites running at once interleave; its events
+are reported together once its task returns, and a task that throws has `Uncaught exception when running <suite>:
+<what it threw>` logged as an error and is one `Error` of its suite (a `SuiteSelector`, no duration), the events it
+reported dropped; an event the worker's `ForkEvent` refuses (a selector that is not `Serializable`, a fingerprint of
+neither kind) is thrown to the framework that reported it, so that its task throws, and one of a `Serializable`
+selector of a kind other than test-interface's five is taken and fails, as the worker's gson does, when its task's
+events are sent: `Failed to execute task <future>` is logged, the task's events and the tasks it returned are lost,
+and the run goes on. What a task threw, a throwable a framework gives its logger's `trace`, and what a framework
+throws making its runner or its tasks, or its `done()` throws (after `Uncaught exception when running tests: <what it
+threw>`, no framework after it run), the worker also sends as a fork error, which ends the run as sbt's `ForkTests`
+fails its harness at the first: nothing more of the run reaches the client, its runner retired as `ForkTests` leaves
+its worker once it has closed the worker's input (its tasks in flight finish and its frameworks' `done()` runs, what
+it writes drained unread, within the stop bound, past which it is killed), `[error]` lines with the throwable's first
+line and first frame (its whole trace with `--verbose`) and `<project>/test: the run failed: <what was thrown>` stand
+for the summary, `--events` holds the events reported before it, and the exit code is 1. The pool is made under the
+run's class loader, whose classes its threads see, and shut down before that loader is closed; the count goes with
+every run, so that a lock changed in place is the next run's. `parallelism` is `auto`, the processors the runner's
+JVM counts at each run (`-XX:ActiveProcessorCount` among `javaOptions` sets it), or a count; the export writes it
+from `Test / testForkedParallel` and `Test / testForkedParallelism` as sbt's worker sizes its pool (`1` where the
+flag is false, the count where it is positive, else `auto`), so that sbt 2's defaults give `auto` and sbt 1's,
+without the second key, `1`; a Mill build's is `1` ("The export of a Mill build"); a lock without the field is
+`auto`, and any other value is refused on its line. `--verbose` names the pool's size (`[debug] Create a test
+executor with a thread pool of 4 threads.`). Nothing on the command line sets it, as nothing on sbt's does: the
+build's setting is the lock's.
+On Scala.js the test configuration's
 resident links the program whose entry point starts Scala.js's test bridge (the std's, `test-bridge` 1.22.0's
 port) into one file, and each run starts a node of its own that loads it, speaking to the bridge as
 sbt-scalajs's test adapter does: the frameworks found by their names, one controller runner per framework,
@@ -365,7 +404,9 @@ every other event (`[ignored] <test>`) and the whole trace of a failure, and a l
 with its suites, the passed and failed counts, the ignored, skipped, pending and canceled ones that are not zero,
 and the times; the exit code is 1 when anything failed. `--events <file>` writes every event of the run, a line
 each: the project, the event's name, its selector, its status and the first line of what it threw,
-tab-separated, a suite whose task threw being an `Error` of a `TestSelector` of its name, as sbt reports one.
+tab-separated: on the JVM a suite whose task threw ends the run before its `Error` is reported, as a framework that
+fails does (above); under node a suite whose task or framework threw is an `Error` of a `TestSelector` of its name,
+as sbt reports one through sbt-scalajs.
 Without a project every project's suites run, on either platform, those the export refuses named and the exit
 code 2.
 

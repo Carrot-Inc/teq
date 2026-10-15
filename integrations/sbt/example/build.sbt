@@ -207,6 +207,8 @@ lazy val jvmapp = project
     exportJars := false,
     Test / unmanagedSourceDirectories := Seq((ThisBuild / baseDirectory).value / "sjsapp-test-src"),
     libraryDependencies += "org.scalameta" %% "munit" % "1.3.4" % Test,
+    // The forked test worker's pool of two threads, the lock's `parallelism: 2` (the others' sbt 2's default, auto).
+    Test / testForkedParallelism := Some(2),
   )
 
 lazy val root = project

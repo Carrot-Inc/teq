@@ -9,6 +9,9 @@ ThisBuild / teqReleases := sys.env("AXES_RELEASES")
 ThisBuild / teqBuildTool := true
 // The plugin under test is a SNAPSHOT published locally.
 ThisBuild / teqExportSnapshots := true
+// The forked test worker's pool, whose default each sbt has its own (the order fixture's case), set: a pool of the
+// processors, `parallelism: auto` on both.
+ThisBuild / Test / testForkedParallel := true
 
 lazy val root = project.in(file(".")).aggregate(lib, app, gen, sjs)
 

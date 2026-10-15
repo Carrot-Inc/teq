@@ -189,6 +189,8 @@ impl Configuration {
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct TestContext {
     pub fork: bool,
+    /// The threads a JVM configuration's suites run on (`parallelism`).
+    pub parallelism: Parallelism,
     pub base_directory: String,
     pub env_vars: BTreeMap<String, String>,
     /// Variables whose values are paths under the build's root (`envPaths`): each the paths given,
@@ -204,6 +206,48 @@ pub struct TestContext {
     pub module_kind: Option<String>,
     /// The JavaScript environment a Scala.js configuration's suites run in (`jsEnv`).
     pub js_env: Option<JsEnv>,
+}
+
+/// How many threads a JVM test configuration's suites run on, a pool of sbt's forked test worker
+/// (`ForkTestMain.executorService`): `parallelism` is `auto`, the processors the runner's JVM counts at each run,
+/// as sbt 2 does by default (`testForkedParallel := true`, `testForkedParallelism := None`), or a count, 1 for
+/// `testForkedParallel := false`; the field's absence is `auto`.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub enum Parallelism {
+    #[default]
+    Auto,
+    Threads(u32),
+}
+
+impl Parallelism {
+    /// The field's value, which is `auto` or a positive Java `int`.
+    fn read(value: Option<&Value>) -> Result<Parallelism, String> {
+        let shown = match value {
+            None => return Ok(Parallelism::Auto),
+            Some(Value::Str(s)) if s == "auto" => return Ok(Parallelism::Auto),
+            Some(Value::Int(n)) => match u32::try_from(*n) {
+                Ok(n) if (1..=i32::MAX as u32).contains(&n) => return Ok(Parallelism::Threads(n)),
+                _ => n.to_string(),
+            },
+            Some(Value::Str(s)) => {
+                let mut quoted = String::new();
+                lock::quote(s, &mut quoted);
+                quoted
+            }
+            Some(Value::Bool(b)) => b.to_string(),
+            Some(Value::List(_)) => "a list".to_string(),
+            Some(Value::Map(_)) => "a mapping".to_string(),
+        };
+        Err(format!("is auto or a number of threads from 1 to {}, not {}", i32::MAX, shown))
+    }
+
+    /// The field as the runner's `run` command carries it.
+    pub fn field(self) -> String {
+        match self {
+            Parallelism::Auto => "auto".to_string(),
+            Parallelism::Threads(n) => n.to_string(),
+        }
+    }
 }
 
 /// A Scala.js test configuration's JavaScript environment: its kind (`node`, `jsdom`, or the build
@@ -562,7 +606,7 @@ impl Export {
         };
         let mut projects = BTreeMap::new();
         for (name, p) in value.get("projects").map_or(&[][..], Value::entries) {
-            projects.insert(name.clone(), project(p).map_err(|e| fail(format!("projects.{}: {}", name, e)))?);
+            projects.insert(name.clone(), project(p).map_err(|e| fail(e.message(text, name)))?);
         }
         let mut binaries = Vec::new();
         for (classifier, fields) in value.get("binaries").map_or(&[][..], Value::entries) {
@@ -1320,15 +1364,57 @@ fn definition_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn project(value: &Value) -> Result<Project, String> {
+/// Why a project's entry of the lock is refused, and the keys below the project's of the field it is about, whose
+/// line the reader names (`lock::line_of`); none where the message names its place itself.
+struct Refusal {
+    keys: Vec<String>,
+    why: String,
+}
+
+impl From<String> for Refusal {
+    fn from(why: String) -> Refusal {
+        Refusal { keys: Vec::new(), why }
+    }
+}
+
+impl Refusal {
+    /// A refusal of a field, its keys below the node being read.
+    fn of(keys: &[&str], why: String) -> Refusal {
+        Refusal { keys: keys.iter().map(|k| k.to_string()).collect(), why }
+    }
+
+    /// The refusal of a node read under `field` and `key`.
+    fn within(mut self, field: &str, key: &str) -> Refusal {
+        if self.keys.is_empty() {
+            self.why = format!("{}.{}: {}", field, key, self.why);
+        } else {
+            self.keys.splice(0..0, [field.to_string(), key.to_string()]);
+        }
+        self
+    }
+
+    /// The message of a refusal of the project `name` of the lock's `text`.
+    fn message(self, text: &str, name: &str) -> String {
+        if self.keys.is_empty() {
+            return format!("projects.{}: {}", name, self.why);
+        }
+        let path: Vec<&str> = ["projects", name].into_iter().chain(self.keys.iter().map(String::as_str)).collect();
+        match lock::line_of(text, &path) {
+            Some(line) => format!("line {}: {} {}", line, path.join("."), self.why),
+            None => format!("{} {}", path.join("."), self.why),
+        }
+    }
+}
+
+fn project(value: &Value) -> Result<Project, Refusal> {
     let platform = match value.get("platform").and_then(Value::str) {
         Some("jvm") => Platform::Jvm,
         Some("js") => Platform::Js,
-        other => return Err(format!("platform is jvm or js, not {}", other.unwrap_or("missing"))),
+        other => return Err(format!("platform is jvm or js, not {}", other.unwrap_or("missing")).into()),
     };
     let mut configurations = BTreeMap::new();
     for (name, c) in value.get("configurations").map_or(&[][..], Value::entries) {
-        configurations.insert(name.clone(), configuration(c).map_err(|e| format!("configurations.{}: {}", name, e))?);
+        configurations.insert(name.clone(), configuration(c).map_err(|e| e.within("configurations", name))?);
     }
     let dev = match value.get("dev") {
         None => None,
@@ -1336,7 +1422,7 @@ fn project(value: &Value) -> Result<Project, String> {
             let text = |key: &str| d.get(key).and_then(Value::str).map(str::to_string).ok_or_else(|| format!("dev has no {}", key));
             let command = strings(d.get("command"));
             if command.is_empty() {
-                return Err("dev has no command".to_string());
+                return Err("dev has no command".to_string().into());
             }
             Some(Dev { package_manager: text("packageManager")?, command, lockfile: text("lockfile")? })
         }
@@ -1430,7 +1516,7 @@ fn classpath(value: Option<&Value>, field: &str) -> Result<Vec<Entry>, String> {
     Ok(classpath)
 }
 
-fn configuration(value: &Value) -> Result<Configuration, String> {
+fn configuration(value: &Value) -> Result<Configuration, Refusal> {
     let classpath = classpath(value.get("classpath"), "classpath")?;
     let runtime_classpath = match value.get("runtimeClasspath") {
         Some(v) => Some(self::classpath(Some(v), "runtimeClasspath")?),
@@ -1450,8 +1536,10 @@ fn configuration(value: &Value) -> Result<Configuration, String> {
         language: strings(f.get("language")),
         java_output_version: f.get("javaOutputVersion").and_then(Value::uint),
     });
+    let parallelism = Parallelism::read(value.get("parallelism")).map_err(|why| Refusal::of(&["parallelism"], why))?;
     let test = value.get("frameworks").map(|_| TestContext {
         fork: value.get("fork").and_then(Value::bool) == Some(true),
+        parallelism,
         base_directory: value.get("baseDirectory").and_then(Value::str).unwrap_or(".").to_string(),
         env_vars: string_map(value.get("envVars")),
         env_paths: string_lists(value.get("envPaths")),
@@ -2039,6 +2127,33 @@ repositories:
         assert_eq!(export.owners(&root.join("core/src/C.scala")), [Key::new("core", "compile")]);
         assert!(export.owners(&root.join("elsewhere/E.scala")).is_empty());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A JVM test configuration's `parallelism`: `auto`, a positive Java `int`, or absent (`auto`), anything else
+    /// refused before any run with the field's line, a value of a flow mapping by its key's.
+    #[test]
+    fn the_test_pool_s_size() {
+        let read = |field: &str| {
+            let text = lock(&format!("projects:\n  a:\n    configurations:\n      test:\n        frameworks: []\n{}    platform: jvm\n", field));
+            parse(&text).map(|e| e.projects["a"].configurations["test"].test.as_ref().unwrap().parallelism)
+        };
+        assert_eq!(read(""), Ok(Parallelism::Auto));
+        assert_eq!(read("        parallelism: auto\n"), Ok(Parallelism::Auto));
+        assert_eq!(read("        parallelism: 1\n"), Ok(Parallelism::Threads(1)));
+        assert_eq!(read("        parallelism: 2147483647\n"), Ok(Parallelism::Threads(i32::MAX as u32)));
+        for (value, shown) in [("0", "0"), ("-1", "-1"), ("2147483648", "2147483648"), ("true", "true"), ("\"2\"", "\"2\""), ("Auto", "\"Auto\""), ("[]", "a list"), ("{}", "a mapping")] {
+            assert_eq!(
+                read(&format!("        parallelism: {}\n", value)),
+                Err(format!("/b/teq.lock: line 9: projects.a.configurations.test.parallelism is auto or a number of threads from 1 to 2147483647, not {}", shown)),
+                "{}",
+                value
+            );
+        }
+        let text = lock("projects:\n  a:\n    configurations:\n      test: {flags: {}, parallelism: 0}\n    platform: jvm\n");
+        let refused = parse(&text).err().unwrap_or_default();
+        assert!(refused.starts_with("/b/teq.lock: line 7: projects.a.configurations.test.parallelism is auto"), "{}", refused);
+        assert_eq!(Parallelism::Threads(3).field(), "3");
+        assert_eq!(Parallelism::Auto.field(), "auto");
     }
 
     #[test]
