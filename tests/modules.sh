@@ -37,7 +37,8 @@
 #            case's run.txt;
 #   scalac   scalac 3.8.4 types b (and c) against the upstream products directories
 #            (`scala-cli compile -S 3.8.4 --classpath <dirs>`, -Werror), which is the writer's
-#            validity oracle; a case whose b misuses a's API is refused there too;
+#            validity oracle; a case whose b misuses a's API is refused there too, by scalac's own
+#            errors (a timeout, a signal or a scala-cli that never reached scalac fails the check);
 #   readtasty scalac 3.8.4 reads every module's pickles as its own compilation units
 #            (`-from-tasty`, tests/tasty/fromtasty/Gate.scala, all of them in one JVM): every
 #            right-hand side forced and the tree checker run after readTasty (-Ycheck:all), the
@@ -88,10 +89,17 @@
 # A check listed in tests/modules/known.txt (`<case> <check>  <reason>`) is a known departure:
 # it is run and reported, and does not fail the suite. Without scala-cli the scalac checks are
 # not made, which fails the suite as incomplete validation. tests/modules.sh <case>... runs only
-# those cases. MODULES_OUT=<dir>
+# those cases. The cases run JOBS at a time (by default the machine's processors), each in a process of its own,
+# their lines in the cases' order, the same as one at a time; the checks once per run, the split programs and the
+# reads of the pickles after them. MODULES_OUT=<dir>
 # keeps every build's products there, for comparing the products of two binaries.
 cd "$(dirname "$0")/.."
 root=$PWD
+worker=
+if [ "$1" = --worker ]; then
+  out=$2 worker=$3
+  shift 3
+fi
 . tests/support/jars.sh
 SL=$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar
 if [ ! -f "$SL" ]; then
@@ -100,8 +108,11 @@ if [ ! -f "$SL" ]; then
 fi
 teq=${TEQ:-./target/release/teq}
 case $teq in /*) ;; *) teq=$root/$teq ;; esac
-if [ -n "$MODULES_OUT" ]; then
+if [ -n "$worker" ]; then
+  :
+elif [ -n "$MODULES_OUT" ]; then
   out=$MODULES_OUT
+  case $out in /*) ;; *) out=$root/$out ;; esac
   rm -rf "$out" && mkdir -p "$out"
 else
   out=$(mktemp -d "${TMPDIR:-/tmp}/teq-modules.XXXXXX")
@@ -324,10 +335,24 @@ view() {
 scalac() {
   local cp=$1 dest=$2
   shift 2
-  local ws=$out/ws-$RANDOM
-  mkdir -p "$ws" "$dest"
+  local ws
+  ws=$(mktemp -d "$out/ws.XXXXXX") && mkdir -p "$dest" || return 1
   (cd "$ws" && COURSIER_MODE=offline timeout 300 scala-cli --power compile -S 3.8.4 --jvm system --server=false --offline -q \
     --workspace "$ws" --scalac-option -Werror --classpath "$cp" -d "$dest" "$@" 2>&1)
+}
+# refused <status> <output>: whether scalac ran and refused the sources, scala-cli's exit 1 after scalac's count of
+# errors ("2 errors found"); not a timeout (124), a signal (128 and over), a launch failure (126, 127) or an exit
+# before scalac reported (a dependency not resolved offline, the JVM not started), which a negative check fails on.
+refused() {
+  [ "$1" = 1 ] && printf '%s\n' "$2" | sed "s/$(printf '\033')\[[0-9;]*m//g" | grep -q -E '^[0-9]+ errors? found$'
+}
+# oracle_status <status>: what scala-cli's exit says of the run, for a check's detail.
+oracle_status() {
+  case $1 in
+    124) echo "scalac exit 124: the oracle's bound of 300 s" ;;
+    126 | 127) echo "scalac exit $1: scala-cli did not start" ;;
+    *) if [ "$1" -gt 128 ]; then echo "scalac exit $1: killed by signal $(($1 - 128))"; else echo "scalac exit $1"; fi ;;
+  esac
 }
 
 cases=("$@")
@@ -336,9 +361,11 @@ if [ ${#cases[@]} -eq 0 ]; then
   every_case=1
   for d in tests/modules/*/; do cases+=("$(basename "$d")"); done
 fi
-for name in "${cases[@]}"; do
+# run_case <name>: one case's checks, its lines on stdout and its counts in the counters.
+run_case() {
+  name=$1
   dir=tests/modules/$name
-  [ -d "$dir/a" ] || { echo "no case $name"; fail=$((fail + 1)); continue; }
+  [ -d "$dir/a" ] || { echo "no case $name"; fail=$((fail + 1)); return; }
   mods=(a)
   [ -d "$dir/b" ] && mods+=(b)
   [ -d "$dir/c" ] && mods+=(c)
@@ -388,7 +415,7 @@ for name in "${cases[@]}"; do
   else
     if [ $whole_code -ne 0 ] || [ -n "$split_failed" ]; then
       result "$name" build 0 "$(cat "$out/$name.whole.log"; for m in $split_failed; do cat "$out/$name.$m.log"; done)"
-      continue
+      return
     fi
     ok=1
     detail=""
@@ -711,7 +738,7 @@ PY
   fi
   if [ $have_scalac = 0 ]; then
     skipped=$((skipped + 1))
-    continue
+    return
   fi
   # scalac types each downstream module against the upstream products.
   for m in "${mods[@]}"; do [ -d "$out/$name/$m" ] && view "$out/$name/$m" "$out/$name/view-$m"; done
@@ -721,7 +748,7 @@ PY
     for m in "${mods[@]}"; do
       cp=${cp:+$cp:}$out/$name/view-$m
       tastys=$(cd "$out/$name/view-$m" && find . -name '*.tasty' | LC_ALL=C sort | sed "s|^\./|$out/$name/view-$m/|")
-      [ -n "$tastys" ] && printf 'read\t%s\t%s\t%s\n' "$name readtasty-$m" "$cp" "$(printf '%s\t' $tastys | sed 's/\t$//')" >> "$out/fromtasty.jobs"
+      [ -n "$tastys" ] && printf 'read\t%s\t%s\t%s\n' "$name readtasty-$m" "$cp" "$(printf '%s\t' $tastys | sed 's/\t$//')" >> "$out/fromtasty.d/$worker"
     done
   fi
   cp=$out/$name/view-a
@@ -731,11 +758,13 @@ PY
     log=$(scalac "$cp" "$out/$name/scalac-$m" "${srcs[@]}")
     code=$?
     if [ -f "$expect" ]; then
-      [ $code -ne 0 ] && ok=1 || ok=0
+      refused $code "$log" && ok=1 || ok=0
       [ $ok = 1 ] && scalac_refused=$((scalac_refused + 1))
+      [ $ok = 1 ] || log="the oracle did not refuse $m as scalac: $(oracle_status $code)"$'\n'"$log"
     else
       [ $code -eq 0 ] && ok=1 || ok=0
       [ $ok = 1 ] && scalac_ok=$((scalac_ok + 1))
+      [ $ok = 1 ] || log="$(oracle_status $code)"$'\n'"$log"
     fi
     result "$name" "scalac-$m" $ok "$log"
     cp=$cp:$out/$name/view-$m
@@ -845,7 +874,7 @@ PY
     done
   fi
   # And against the lean check build's pickles where they are not the scala-library build's.
-  [ -n "$lean_differs" ] || continue
+  [ -n "$lean_differs" ] || return
   for m in "${mods[@]}"; do [ -d "$out/$name/jsl-$m" ] && view "$out/$name/jsl-$m" "$out/$name/viewl-$m"; done
   cp=$out/$name/viewl-a
   for m in "${mods[@]:1}"; do
@@ -857,7 +886,44 @@ PY
     result "$name" "scalac-lean-$m" $ok "$log (the lean pickles that differ:$lean_differs)"
     cp=$cp:$out/$name/viewl-$m
   done
+}
+# A worker runs one case alone (tests/modules.sh --worker <out> <index> <name>): its lines into
+# <out>/results/<index>.out, its counts into <out>/results/<index>.counts once it ends, its reads of pickles into
+# <out>/fromtasty.d/<index>.
+if [ -n "$worker" ]; then
+  run_case "$1" > "$out/results/$worker.out" 2>&1
+  echo "$pass $fail $known_count $deferred_count $skipped $scalac_ok $scalac_refused" > "$out/results/$worker.counts.part"
+  mv "$out/results/$worker.counts.part" "$out/results/$worker.counts"
+  exit 0
+fi
+# The cases JOBS at a time (by default the machine's processors), each in a worker of its own, their lines printed
+# and their counts added in the cases' order as each ends; a case whose worker ended without its counts fails. The
+# reads of the cases' pickles are gathered in the same order for the one reader after them.
+JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2> /dev/null || echo 4)}
+mkdir -p "$out/results" "$out/fromtasty.d"
+i=0
+for name in "${cases[@]}"; do
+  echo "$i $name"
+  i=$((i + 1))
+done | xargs -P "$JOBS" -n 2 bash -c 'bash "$0" --worker "$1" "$2" "$3"; echo $? > "$1/results/$2.exit"' "$root/tests/modules.sh" "$out" \
+  2> "$out/results/dealer.err" &
+dealer=$!
+i=0
+for name in "${cases[@]}"; do
+  while [ ! -e "$out/results/$i.counts" ] && kill -0 $dealer 2> /dev/null; do sleep 1; done
+  cat "$out/results/$i.out" 2> /dev/null
+  if [ -e "$out/results/$i.counts" ] && read -r p f k d s so sr < "$out/results/$i.counts"; then
+    pass=$((pass + p)) fail=$((fail + f)) known_count=$((known_count + k)) deferred_count=$((deferred_count + d))
+    skipped=$((skipped + s)) scalac_ok=$((scalac_ok + so)) scalac_refused=$((scalac_refused + sr))
+  else
+    fail=$((fail + 1))
+    echo "FAIL $name worker: the case's worker ended without its counts (exit $(cat "$out/results/$i.exit" 2> /dev/null || echo none))"
+  fi
+  cat "$out/fromtasty.d/$i" >> "$out/fromtasty.jobs" 2> /dev/null
+  i=$((i + 1))
 done
+wait $dealer
+[ ! -s "$out/results/dealer.err" ] || { echo "the workers' dealer said:"; head -20 "$out/results/dealer.err"; }
 # The own directory named twice on the class path is read once, through its manifest: a source
 # that no longer defines `Old` while naming it is refused, and the directory is left as it was.
 if [ -n "$every_case" ]; then
@@ -1014,10 +1080,11 @@ if [ -n "$every_case" ] || [ -n "$SPLIT_PROGRAMS" ]; then
     result "$name" inits $ok "the bodies give [$(echo $derived)], the manifest lists [$(echo $listed)]"
   done < tests/modules/split-programs.txt
 fi
-# The reads of every case's pickles, in one JVM.
+# The reads of every case's pickles, in one JVM (tests/support/gate-reader.sh).
 if [ $have_scalac = 1 ] && [ -s "$out/fromtasty.jobs" ]; then
-  (cd "$out" && COURSIER_MODE=offline timeout 300 scala-cli --power run -S 3.8.4 --jvm system --server=false --offline -q \
-    "$root/tests/tasty/fromtasty/Gate.scala" --dep org.scala-lang:scala3-compiler_3:3.8.4 -- fromtasty.jobs > fromtasty.out 2> fromtasty.err)
+  . tests/support/gate-reader.sh
+  reader=$(gate_reader "$out/reader" 2> "$out/fromtasty.err") &&
+    (cd "$out" && timeout 300 java -cp "$reader" gate fromtasty.jobs > fromtasty.out 2>> fromtasty.err)
   while IFS=$'\t' read -r _ job _; do
     jcase=${job%% *}
     jcheck=${job#* }

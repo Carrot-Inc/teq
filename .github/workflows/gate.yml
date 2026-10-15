@@ -109,7 +109,7 @@ jobs:
             minutes: 35
             jars: true
           - group: modules
-            suites: modules tasty-exec analysis-bytes workers
+            suites: modules tasty-exec analysis-bytes workers gate-scripts
             minutes: 50
             jars: true
           - group: corpus

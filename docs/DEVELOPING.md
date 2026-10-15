@@ -189,9 +189,22 @@ with `TEQ=target/checks/teq` (its header has the modes).
 ## The landing gate
 
 `tests/gate.sh` is what a change passes before it merges; it runs on the maintainers' machines with
-the scripts under `tests/` (its header has the lines and their bounds). A contributor runs
-`tests/all.sh`. Its machine lines reach the remote machines through the scripts `REMOTE_AGENT` names;
-its size, instruction and memory lines run on the reference machine, where their budgets were recorded.
+the scripts under `tests/` (its header has the lines, where each runs and their bounds). A contributor runs
+`tests/all.sh`. The gate takes thirty minutes at most from its first command to its last, its builds, claims
+and transfers included: its last line is that total, and a gate over it is flagged to the owner at once and fixed
+at once, by running more at once or elsewhere, never by weakening a check (the owner's rule, 2026-10-14). Its
+lines run at once. The correctness suites, every suite of `tests/all.sh` but those its `excluded:` lines name
+(`tests/gate-coverage.sh` holds the list to `tests/all.sh`), are dealt to the free remote machines, which the
+scripts `REMOTE_AGENT` names reach, by their recorded times (`tests/gate-times.txt`, which `--record` rewrites
+from a run whose every line passed or whose only lines not passed are timing lines inconclusive, none over: their
+durations are not their verdicts'), the head's binary built once by the first of them and shipped to the
+others, each checking its digest and that it runs there; the timing lines measure after the suites, on a
+machine of their own (below); the project lines, when named, on the machine that holds the projects' checkouts
+("lila"); and the size, instruction, memory and application lines on the reference machine, where their budgets were recorded, at once
+but the application's end-to-end suite, the memory line and the asymptotic probes, which run alone after them (the
+suite's specs wait within the browser's timeouts, the memory line's growth rows and the probes' growth ratios
+depend on the machine's load; the probes run under the node `NODE` names there, node 22).
+`tests/gate-scripts.sh` checks the gate's own decisions against stand-in machines (`tests/gate-agent/`).
 Its application lines (`--app`) read lists that stay outside the repository with the application.
 `bench/app/app-lists.sh <checkout> <project> <dir>` writes them from the application's sbt build, through
 sbt-teq's `teqInputs` (the plugin added to that run alone; until a release has the task, a local SNAPSHOT
@@ -209,7 +222,7 @@ application's end-to-end suite through the script `APP_CYPRESS` names, over the 
 application (its services, its API and its served bundle), a failing spec failing the line, since a build's
 identity cannot see a change of run-time semantics (skipped without the script).
 
-`app-scalac` runs only when `--only` names it, at each release and nightly, not at a landing (scalac's
+`app-scalac` runs only when `--only` or `--with` names it, at each release and nightly, not at a landing (scalac's
 two compiles take minutes): scalac 3.8.4 as the oracle of teq's diagnostics on the main and test lists
 (`bench/app/diagnostics.py`, whose docstring has the passes, the records and the known list's format;
 `tests/scalac-oracle.sh` its own checks, which the line runs first). Both compilers run with warnings
@@ -254,9 +267,16 @@ the binary under test, and are mandatory once named: a missing checkout, export,
 `LILA_REDIS`), built asset manifest or suite fails the line, never a skip. `lila-test` holds the run to the
 inventory: without `tests.json`, or with an empty one, it fails at the start, and it runs `teq test --verbose`,
 whose runner names every test with its outcome (`[success]`, `[skipped]`, `[fail]`), so that each suite of the
-inventory has to have run in its project with each of its cases passed (`tests/lila-test-verb.sh`). They run only when `--only` names
+inventory has to have run in its project with each of its cases passed (`tests/lila-test-verb.sh`). They run only when `--only` or `--with` names
 them until their time and memory are measured within the gate's budget (two added minutes, 12 GB): the
-measurements of `lila.scala`'s `--runs 3` are the admission's record.
+measurements of `lila.scala`'s `--runs 3` are the admission's record. They run, with the Airstream and Laminar
+lines, on the remote machine that holds the checkouts: its pool line carries `holds=lila,airstream,laminar` (or
+`GATE_LILA_MACHINE` names it), no shard or comparison takes it while a project line is selected, and its login
+shell gives the checkouts at the pins (`GATE_LILA_CHECKOUT`, `GATE_AIRSTREAM_CHECKOUT`, `GATE_LAMINAR_CHECKOUT`),
+lila's services (`LILA_MONGOD`, `LILA_REDIS`, its ports 27017, 6379 and 9663 its own), the pins' JDK
+(`JAVA_HOME`) and their jars; each checkout's lines run there one after another (export, compile, test, run). A
+line with no such machine free fails as not run; `--lila`, `--airstream` or `--laminar` naming a checkout runs
+that project's lines on the reference machine instead.
 
 ### Airstream and Laminar
 
@@ -294,7 +314,7 @@ binary, each with its descendants).
 
 The gate's lines `airstream-export`, `airstream-compile`, `airstream-test`, `laminar-export`, `laminar-compile`
 and `laminar-test` take the checkouts (`--airstream`, `--laminar`) and the binary under test, are mandatory once
-named, and run only when `--only` names them. teq does not compile either project yet: their tests use
+named, and run only when `--only` or `--with` names them. teq does not compile either project yet: their tests use
 `scala.compiletime.testing.typeCheckErrors` (scalatest's `assertTypeError`), Airstream's macros a `Type` of a type
 constructor (`AnyKind`), and Laminar overloads methods on `scala.Array` and `js.Array`, which teq's std makes one
 type; the export lines pass.
@@ -302,9 +322,21 @@ type; the export lines pass.
 ## The timing lines on a machine
 
 The gate's `budget`, `runtime` and `sentinel` lines compare the head's plain release build with
-master's on one remote machine, over the budgets of `bench/budgets.txt`, `bench/runtime-budgets.txt`
+master's on remote machines of their own, over the budgets of `bench/budgets.txt`, `bench/runtime-budgets.txt`
 and the sentinel's `bench/reference.txt`; `bench/pairs.py` is the estimator (its docstring has the
-statistic, the schedule and the verdicts).
+statistic, the schedule and the verdicts). They measure once the suites on the shards and the project lines
+have ended: the machines share one host, its memory bandwidth and its scheduler, which a container's processors do
+not isolate, and a pair's band widens with the suites' load (the first sharded gate, beside seven shards at a
+host load of 59 to 62, had a budget row inconclusive and a sentinel row over). Their claims, syncs, builds and the
+head's binary come beside the suites, on as many machines, up to one a line, as leave the shards' end where it is by
+the recorded times; when the suites have ended, the lines go to as few of those as end the gate within thirty
+minutes by the time it has taken and the lines' recorded times, one machine and its lines one after another when
+that fits; each pair on a
+machine is one build configuration (`tests/support/build-manifest.sh`), the head's binary the builder's where its
+manifest is master's build, else built there. The runtime line runs the node
+and java `bench/runtime-machine.txt` records, by their paths, whatever a machine's PATH leads to; and
+`tests/asymptotics.sh`, whose bounds are met on node 22 (the GitHub workflow's), runs the node `NODE` names, so
+that a machine names its node 22 there and each suite that needs one node names it.
 
 ## Property-based tests
 

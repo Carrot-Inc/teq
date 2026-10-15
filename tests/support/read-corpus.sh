@@ -45,12 +45,16 @@ parts=$(( cpus / 4 )); [ $parts -lt 1 ] && parts=1; [ $parts -gt 6 ] && parts=6
 python3 -c "
 l = open('$work/jobs').read().splitlines()
 for i in range($parts): open('$work/part.%d' % i, 'w').write(''.join(x + '\n' for x in l[i::$parts]))"
-root=$PWD
-for i in $(seq 0 $((parts - 1))); do
-  (cd "$work" && COURSIER_MODE=offline timeout 330 scala-cli --power run -S 3.8.4 --jvm system --server=false --offline -q \
-    --java-opt -Xss64m "$root/tests/tasty/fromtasty/Gate.scala" --dep org.scala-lang:scala3-compiler_3:3.8.4 -- "part.$i" > "part.$i.out" 2> "part.$i.err") &
-done
-wait
+# The reader compiled once (tests/support/gate-reader.sh), its parts at once.
+. tests/support/gate-reader.sh
+if reader=$(gate_reader "$work/reader" 2> "$work/reader.err"); then
+  for i in $(seq 0 $((parts - 1))); do
+    (cd "$work" && timeout 330 java -Xss64m -cp "$reader" gate "part.$i" > "part.$i.out" 2> "part.$i.err") &
+  done
+  wait
+else
+  echo "the reader did not compile: $(tail -3 "$work/reader.err")"
+fi
 cat "$work"/part.*.out > "$work/read.out" 2> /dev/null
 read_ok=0; read_fail=0; built=0; left=0
 while IFS=$'\t' read -r name src; do
