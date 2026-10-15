@@ -1,11 +1,11 @@
 //! The test runner of `teq test` (docs/TARGETS.md, "The export and the project verbs"): the class files of
 //! `runner/Runner.java`, compiled once by javac 17 under `--release 17` and committed beside it
 //! (tests/runner-classes.sh holds them to the source), embedded here and written under
-//! `<cache root>/runner/<sha1 of the classes>/` at first use; and the runner's JVM, which the
-//! daemon keeps warm per test configuration, spoken to in the protocol `Runner.java` states.
+//! `<cache root>/runner/<sha1 of the classes>/` at first use; and the runner's JVM, one per run,
+//! which the daemon starts ahead of the run, spoken to in the protocol `Runner.java` states.
 
 use super::events::{Event, Frame, Selector, Status, Tally, Thrown};
-use super::export::{join_paths, Framework};
+use super::export::{join_paths, Framework, Parallelism};
 use super::fetch;
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -16,10 +16,11 @@ use std::time::{Duration, Instant, SystemTime};
 
 const PACKAGE: &str = "dev/teq/runner";
 const MAIN: &str = "dev.teq.runner.Runner";
-const CLASSES: [(&str, &[u8]); 3] = [
+const CLASSES: [(&str, &[u8]); 4] = [
     ("Runner.class", include_bytes!("runner/dev/teq/runner/Runner.class")),
     ("Runner$Events.class", include_bytes!("runner/dev/teq/runner/Runner$Events.class")),
     ("Runner$Forwarded.class", include_bytes!("runner/dev/teq/runner/Runner$Forwarded.class")),
+    ("Runner$Unsendable.class", include_bytes!("runner/dev/teq/runner/Runner$Unsendable.class")),
 ];
 /// The least Java the runner's class files load on.
 pub const LEAST_JAVA: u32 = 17;
@@ -147,6 +148,29 @@ pub struct Runner {
     pub fingerprints: Vec<Fingerprint>,
     /// The frameworks that did not load, with why.
     pub missing: Vec<(String, String)>,
+    /// Whether `handshake` has read the frameworks' answers.
+    handshaken: bool,
+}
+
+/// How a run ended: done, in its milliseconds, or failed by the worker's fork error (what a task threw,
+/// what a framework's logger traced, a framework's failure to make its runner or its tasks, or its
+/// `done()`'s), with what was thrown.
+#[derive(Debug)]
+pub enum Ran {
+    Done(u64),
+    Failed(Option<Thrown>),
+}
+
+/// What was thrown, its causes after it, as one throwable, the lines taken.
+fn chain(thrown: &mut Vec<Thrown>) -> Option<Thrown> {
+    thrown
+        .drain(..)
+        .rev()
+        .fold(None, |cause: Option<Box<Thrown>>, mut t| {
+            t.cause = cause;
+            Some(Box::new(t))
+        })
+        .map(|t| *t)
 }
 
 /// A field of a command, its tabs, line breaks and backslashes escaped.
@@ -245,7 +269,8 @@ fn platform_encoded(text: &str) -> Result<Vec<u8>, char> {
 impl Runner {
     /// Starts the runner's JVM in the spec's directory, with the client's environment and the
     /// spec's variables, its class path in an argument file (a long one passes Windows' limit
-    /// on a command line); `handshake` then waits for it.
+    /// on a command line), and sends it the frameworks to load, which it reads once it is up;
+    /// `handshake` then reads its answers.
     pub fn launch(spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path) -> Result<Runner, String> {
         let mut classpath = vec![classes_dir()?];
         classpath.extend(spec.jars.iter().map(|j| j.path.clone()));
@@ -288,11 +313,25 @@ impl Runner {
                 }
             }
         });
-        Ok(Runner { spec, child: Arc::new(Mutex::new(child)), stdin, stdout, stderr, token, fingerprints: Vec::new(), missing: Vec::new() })
+        let mut runner = Runner { spec, child: Arc::new(Mutex::new(child)), stdin, stdout, stderr, token, fingerprints: Vec::new(), missing: Vec::new(), handshaken: false };
+        let mut commands = String::new();
+        for f in &runner.spec.frameworks {
+            commands.push_str("framework\t");
+            commands.push_str(&field(&f.class));
+            for a in &f.arguments {
+                commands.push('\t');
+                commands.push_str(&field(a));
+            }
+            commands.push('\n');
+        }
+        commands.push_str("start\n");
+        // A JVM that ends before it reads them is told by `handshake`, from what it wrote.
+        let _ = runner.send(&commands);
+        Ok(runner)
     }
 
     /// The JVM's version checked, refused when it is older than the export's classes; the
-    /// frameworks loaded and their fingerprints read.
+    /// frameworks' fingerprints read, and those that did not load.
     pub fn handshake(&mut self) -> Result<(), String> {
         let java = self.spec.java.display().to_string();
         let mut early = String::new();
@@ -315,24 +354,15 @@ impl Runner {
         if version < least {
             return Err(format!("{} is Java {}, older than the {} the export's classes are for (java.outputVersion): set JAVA_HOME to a JDK {} or later", java, version, least, least));
         }
-        let mut commands = String::new();
-        for f in &self.spec.frameworks {
-            commands.push_str("framework\t");
-            commands.push_str(&field(&f.class));
-            for a in &f.arguments {
-                commands.push('\t');
-                commands.push_str(&field(a));
-            }
-            commands.push('\n');
-        }
-        commands.push_str("start\n");
-        self.send(&commands)?;
         loop {
             let Some((before, fields)) = self.next()? else { return Err(self.gone()) };
             self.stderr.lock().unwrap_or_else(|e| e.into_inner()).push_str(&before);
             let at = |i: usize| fields.get(i).map_or("", String::as_str);
             match at(0) {
-                "ready" => return Ok(()),
+                "ready" => {
+                    self.handshaken = true;
+                    return Ok(());
+                }
                 "fingerprint" => {
                     let kind = if at(3) == "annotated" { Kind::Annotated } else { Kind::Subclass };
                     self.fingerprints.push(Fingerprint { framework: at(1).parse().unwrap_or(0), index: at(2).parse().unwrap_or(0), kind, module: at(4) == "true", name: at(5).to_string(), no_args: true });
@@ -347,11 +377,15 @@ impl Runner {
     }
 
     /// Runs the suites, each `(framework, fingerprint, name)`, through a class loader over the
-    /// directories: each event counted into `tally`, the lines the frameworks and the suites write
-    /// and those that report an event passed to `out` as they come; the run's milliseconds.
-    pub fn run(&mut self, directories: &[PathBuf], suites: &[(usize, usize, String)], verbose: bool, ansi: bool, tally: &mut Tally, out: &mut dyn FnMut(&str)) -> Result<u64, String> {
+    /// directories on a pool of `parallelism`'s threads, sent with every run so that a lock changed
+    /// since the runner started has its say: each event counted into `tally`, the lines the frameworks
+    /// and the suites write and those that report an event passed to `out` as they come; how the run
+    /// ended, its first fork error ending it, nothing more of it read, as sbt's `ForkTests` fails its
+    /// harness at the worker's first `forkError`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn run(&mut self, directories: &[PathBuf], suites: &[(usize, usize, String)], parallelism: Parallelism, verbose: bool, ansi: bool, tally: &mut Tally, out: &mut dyn FnMut(&str)) -> Result<Ran, String> {
         let flag = |b: bool| if b { "1" } else { "0" };
-        let mut commands = format!("run\t{}\t{}\n", flag(verbose), flag(ansi));
+        let mut commands = format!("run\t{}\t{}\t{}\n", flag(verbose), flag(ansi), parallelism.field());
         for d in directories {
             commands.push_str(&format!("path\t{}\n", field(&d.to_string_lossy())));
         }
@@ -380,31 +414,24 @@ impl Runner {
                         t.frames.push(Frame { class: at(1).to_string(), text: at(2).to_string() });
                     }
                 }
-                "event" | "crashed" => {
-                    let chained = thrown.drain(..).rev().fold(None, |cause: Option<Box<Thrown>>, mut t| {
-                        t.cause = cause;
-                        Some(Box::new(t))
-                    });
-                    let thrown = chained.map(|t| *t);
-                    let event = if at(0) == "crashed" {
-                        Event::crashed(at(1), thrown)
-                    } else {
-                        let selector = match at(4) {
-                            "test" => Selector::Test(at(5).to_string()),
-                            "nestedTest" => Selector::NestedTest(at(5).to_string(), at(6).to_string()),
-                            "nestedSuite" => Selector::NestedSuite(at(5).to_string()),
-                            "wildcard" => Selector::Wildcard(at(5).to_string()),
-                            _ => Selector::Suite,
-                        };
-                        let status = at(2).parse::<i64>().ok().and_then(Status::of_ordinal).unwrap_or(Status::Error);
-                        Event { suite: at(1).to_string(), name: at(3).to_string(), selector, status, thrown, ms: at(7).parse().unwrap_or(-1), crashed: false }
+                "forkError" => return Ok(Ran::Failed(chain(&mut thrown))),
+                "event" => {
+                    let thrown = chain(&mut thrown);
+                    let selector = match at(4) {
+                        "test" => Selector::Test(at(5).to_string()),
+                        "nestedTest" => Selector::NestedTest(at(5).to_string(), at(6).to_string()),
+                        "nestedSuite" => Selector::NestedSuite(at(5).to_string()),
+                        "wildcard" => Selector::Wildcard(at(5).to_string()),
+                        _ => Selector::Suite,
                     };
+                    let status = at(2).parse::<i64>().ok().and_then(Status::of_ordinal).unwrap_or(Status::Error);
+                    let event = Event { suite: at(1).to_string(), name: at(3).to_string(), selector, status, thrown, ms: at(7).parse().unwrap_or(-1), crashed: false };
                     let lines = tally.add(event, verbose);
                     if !lines.is_empty() {
                         out(&lines);
                     }
                 }
-                "done" => return Ok(at(1).parse::<u64>().unwrap_or(0)),
+                "done" => return Ok(Ran::Done(at(1).parse::<u64>().unwrap_or(0))),
                 _ => {}
             }
         }
@@ -447,6 +474,10 @@ impl Runner {
         }
     }
 
+    pub fn handshaken(&self) -> bool {
+        self.handshaken
+    }
+
     pub fn alive(&self) -> bool {
         matches!(self.child.lock().unwrap_or_else(|e| e.into_inner()).try_wait(), Ok(None))
     }
@@ -473,6 +504,31 @@ impl Runner {
     /// The process, for a watcher to kill when the client that asked for the run is gone.
     pub fn process(&self) -> Arc<Mutex<Child>> {
         self.child.clone()
+    }
+
+    /// A runner whose run failed at its fork error, retired as sbt's `ForkTests` leaves its worker once it has
+    /// closed the worker's input (`WorkerProxy.close`): its tasks in flight finish and its frameworks' `done()`
+    /// runs, what it writes drained unread, then it quits at the run's end; killed if it has not within `bound`.
+    pub fn retire(self, bound: Duration) {
+        let Runner { mut stdin, mut stdout, child, .. } = self;
+        let drained = crate::alloc::spawn(move || {
+            let mut line = Vec::new();
+            while matches!(stdout.read_until(b'\n', &mut line), Ok(n) if n > 0) {
+                line.clear();
+            }
+        });
+        let _ = stdin.write_all(b"quit\n").and_then(|()| stdin.flush());
+        let until = Instant::now() + bound;
+        let ended = || matches!(child.lock().unwrap_or_else(|e| e.into_inner()).try_wait(), Ok(Some(_)) | Err(_));
+        while !ended() && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if !ended() {
+            let mut child = child.lock().unwrap_or_else(|e| e.into_inner());
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        let _ = drained.join();
     }
 
     /// Asks the runner to quit and kills it if it has not within `QUIT_BOUND`.

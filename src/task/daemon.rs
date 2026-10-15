@@ -6,17 +6,18 @@
 //! and this one finishes what it is doing and exits; an export otherwise changed is read again
 //! in place, the residents whose command lines it changed stopped. The daemon holds
 //! `target/teq/task.lock` for its whole life, so that the next one writes `daemon.json` only once
-//! this one is gone. It holds a warm test runner per test configuration too, started by the
-//! configuration's first `test` and again when what it was started with changed or it died.
+//! this one is gone. It holds a test runner per test configuration too, a JVM for each run as sbt
+//! forks a worker for each: started by the configuration's first `test`, launched again as a run
+//! ends so that the next run finds it up, and when what it was started with changed or it died.
 
 use super::analysis::View;
-use super::events::Tally;
+use super::events::{self, Tally};
 use super::export::ModuleKind;
 use super::{jsdom, jsrunner};
 use super::export::{Entry, Export, Exporter, Key, MainClass, Platform, TestContext};
 use super::generators;
 use super::resident::{Answer, Resident};
-use super::runner::{self, Jar, Runner, Spec};
+use super::runner::{self, Jar, Ran, Runner, Spec};
 use super::stage;
 use super::suites::{self, Patterns};
 use super::{paths, Implied, Info, Paths, PROTOCOL};
@@ -40,6 +41,12 @@ const STOP_BOUND: Duration = Duration::from_secs(10);
 
 type Slot = Arc<Mutex<Option<Resident>>>;
 type RunnerSlot = Arc<Mutex<Option<Runner>>>;
+
+/// A runner whose run is done, quitting: its process and whether its stop has completed.
+struct Retiring {
+    process: Arc<Mutex<std::process::Child>>,
+    stopped: Arc<AtomicBool>,
+}
 
 /// The class files a test configuration's resident wrote since the configuration's last run of
 /// every suite that could be affected; all of them when the resident started anew since.
@@ -67,6 +74,10 @@ struct State {
     /// The runners' processes, which an ending daemon kills without waiting for a run that holds
     /// its runner.
     runner_processes: Mutex<BTreeMap<Key, Arc<Mutex<std::process::Child>>>>,
+    /// The runners whose run is done, quitting on threads of their own, each with whether its stop has completed:
+    /// an ending daemon waits for them within the stop bound and kills what is left, so that a spent runner never
+    /// outlives it.
+    retiring: Mutex<Vec<Retiring>>,
     /// By test configuration, from its first run in this daemon's life.
     changes: Mutex<BTreeMap<Key, Changes>>,
     /// Set once the daemon is to end: requests that arrive meanwhile are told to start anew.
@@ -124,7 +135,7 @@ pub fn run(export_file: &Path, identity: String) -> ! {
     }
     log(&format!("daemon {} for {} on port {} ({})", std::process::id(), export.file.display(), port, identity));
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("teq"));
-    let state = Arc::new(State { export: Mutex::new(Arc::new(export)), identity, exe, paths, token, port, residents: Mutex::new(BTreeMap::new()), runners: Mutex::new(BTreeMap::new()), runner_processes: Mutex::new(BTreeMap::new()), changes: Mutex::new(BTreeMap::new()), ending: Mutex::new(None), in_flight: Default::default() });
+    let state = Arc::new(State { export: Mutex::new(Arc::new(export)), identity, exe, paths, token, port, residents: Mutex::new(BTreeMap::new()), runners: Mutex::new(BTreeMap::new()), runner_processes: Mutex::new(BTreeMap::new()), retiring: Mutex::new(Vec::new()), changes: Mutex::new(BTreeMap::new()), ending: Mutex::new(None), in_flight: Default::default() });
     let watched = state.clone();
     crate::alloc::spawn(move || watch(&watched));
     for stream in listener.incoming() {
@@ -426,6 +437,24 @@ fn end(state: &Arc<State>, why: &str) {
             r.stop();
         }
     }
+    // The spent runners still quitting, waited for within the bound, what is left killed.
+    let until = Instant::now() + STOP_BOUND;
+    loop {
+        let left: Vec<Arc<Mutex<std::process::Child>>> = state.retiring.lock().unwrap_or_else(|e| e.into_inner()).iter().filter(|r| !r.stopped.load(Ordering::SeqCst)).map(|r| r.process.clone()).collect();
+        if left.is_empty() {
+            break;
+        }
+        if Instant::now() >= until {
+            log(&format!("killing {} test runners still quitting", left.len()));
+            for process in left {
+                let mut child = process.lock().unwrap_or_else(|e| e.into_inner());
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
     std::process::exit(0);
 }
 
@@ -591,7 +620,7 @@ struct TestRequest {
 }
 
 /// `test`: each test configuration's closure compiled as `compile` does, then its suites run on
-/// its warm runner; a configuration named by its project, or every JVM one with frameworks.
+/// its runner; a configuration named by its project, or every JVM one with frameworks.
 fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut Reply) -> i32 {
     let mut words: Vec<String> = Vec::new();
     let (mut changed, mut list, mut verbose) = (false, false, false);
@@ -779,7 +808,10 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
             r.stop();
         } else {
             kill_when_gone(reply, &finished, r.process(), key);
-            if r.answers() {
+            // One launched once the last run ended has loaded its frameworks meanwhile: its answers are read,
+            // then a ping tells whether it is still there.
+            let ready = (r.handshaken() || (r.alive() && r.handshake().is_ok())) && r.answers();
+            if ready {
                 *runner = Some(r);
             } else {
                 log(&format!("stopping the test runner of {}: it ended", key));
@@ -787,6 +819,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
             }
         }
     }
+    let argfile = export.path(&format!("target/teq/{}/{}/runner.args", key.project, key.configuration));
     if runner.is_none() {
         log(&format!("starting the test runner of {}: {}", key, spec.java.display()));
         if context.sandbox {
@@ -795,29 +828,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
                 return 2;
             }
         }
-        let argfile = export.path(&format!("target/teq/{}/{}/runner.args", key.project, key.configuration));
-        // Launched under the registry's lock, so that an ending daemon's kill pass either sees the
-        // process or the launch sees the daemon ending.
-        let launched = {
-            let mut processes = state.runner_processes.lock().unwrap_or_else(|e| e.into_inner());
-            match state.ending.lock().unwrap_or_else(|e| e.into_inner()).clone() {
-                Some(why) => Err(format!("the daemon is ending ({})", why)),
-                None => Runner::launch(spec, &request.environment, &argfile).inspect(|r| {
-                    processes.insert(key.clone(), r.process());
-                }),
-            }
-        };
-        let started = launched.and_then(|mut r| {
-            kill_when_gone(reply, &finished, r.process(), key);
-            match r.handshake() {
-                Ok(()) => Ok(r),
-                Err(e) => {
-                    r.stop();
-                    Err(e)
-                }
-            }
-        });
-        match started {
+        match start_runner(state, key, spec, &request.environment, &argfile, Some((reply, &finished))) {
             Ok(r) => *runner = Some(r),
             Err(e) => {
                 reply.err(&format!("teq: {}: {}\n", key, e));
@@ -875,14 +886,32 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     }
     let names: Vec<(usize, usize, String)> = selected.iter().map(|s| (s.framework, s.fingerprint, s.name.clone())).collect();
     let mut tally = Tally::default();
-    let result = r.run(&directories, &names, asked.verbose, request.tty, &mut tally, &mut |line| reply.out(line));
+    let result = r.run(&directories, &names, context.parallelism, asked.verbose, request.tty, &mut tally, &mut |line| reply.out(line));
     drop(finished);
     let stderr = r.drain_stderr();
     if !stderr.is_empty() {
         reply.err(&stderr);
     }
     match result {
-        Ok(ms) => {
+        Ok(Ran::Failed(thrown)) => {
+            // As sbt's ForkTests fails its harness at the worker's first forkError: nothing more of the run reaches the
+            // client, no summary, the events reported before it written; the runner, still at its suites, retired as
+            // ForkTests leaves its worker once it has closed its input, its tasks in flight and done() let finish.
+            if let Some(spent) = runner.take() {
+                *runner = renew(state, spent, key, &request.environment, &argfile, true);
+            }
+            if let Some(t) = &thrown {
+                reply.out(&events::fork_error(t, asked.verbose));
+            }
+            let why = thrown.as_ref().and_then(|t| t.text.lines().next()).unwrap_or("a fork error");
+            reply.out(&format!("{}: the run failed: {} (built in {} ms)\n", key, why, built_ms));
+            write_events(asked, key, &tally, reply);
+            1
+        }
+        Ok(Ran::Done(ms)) => {
+            if let Some(spent) = runner.take() {
+                *runner = renew(state, spent, key, &request.environment, &argfile, false);
+            }
             if every && incomplete == 0 {
                 state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
             }
@@ -1269,6 +1298,70 @@ impl Drop for Finished {
 
 /// Kills the runner's process when the request's client leaves before the request is done with
 /// it.
+/// A runner launched, registered for an ending daemon's kill pass, and its frameworks loaded; `watched`, the client
+/// waiting for it, has it killed when it leaves.
+fn start_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path, watched: Option<(&Reply, &Finished)>) -> Result<Runner, String> {
+    launch_runner(state, key, spec, environment, argfile).and_then(|mut r| {
+        if let Some((reply, finished)) = watched {
+            kill_when_gone(reply, finished, r.process(), key);
+        }
+        match r.handshake() {
+            Ok(()) => Ok(r),
+            Err(e) => {
+                r.stop();
+                Err(e)
+            }
+        }
+    })
+}
+
+/// A runner launched and registered for an ending daemon's kill pass.
+fn launch_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path) -> Result<Runner, String> {
+    // Launched under the registry's lock, so that an ending daemon's kill pass either sees the
+    // process or the launch sees the daemon ending.
+    let mut processes = state.runner_processes.lock().unwrap_or_else(|e| e.into_inner());
+    match state.ending.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+        Some(why) => Err(format!("the daemon is ending ({})", why)),
+        None => Runner::launch(spec, environment, argfile).inspect(|r| {
+            processes.insert(key.clone(), r.process());
+        }),
+    }
+}
+
+/// A runner serves one run, as sbt's forked worker does (`ForkTests` starts a worker for each run): a run inherits no
+/// thread, static or registration of the one before, which a JVM kept across runs cannot shed (a library's executor
+/// keeps the class loader of the run that made its threads as their context loader, its objects keep their state).
+/// Once a run ends, the spent runner quits, on a thread of its own and kept among the retiring runners until it has
+/// (an ending daemon waits for them within the stop bound); one whose run `failed` at its fork error is let finish its
+/// run first, its output drained, within the stop bound (`Runner::retire`). The next is launched with its spec before the
+/// client is answered: its JVM starts and loads the frameworks while the client reads the run, and the next `test`
+/// reads its answers. None when it cannot be launched, the next `test` starting its own.
+fn renew(state: &State, spent: Runner, key: &Key, environment: &BTreeMap<String, String>, argfile: &Path, failed: bool) -> Option<Runner> {
+    let spec = spent.spec.clone();
+    if failed {
+        log(&format!("stopping the test runner of {}: its run failed, its tasks in flight and done() given {} s", key, STOP_BOUND.as_secs()));
+    } else {
+        log(&format!("stopping the test runner of {}: its run is done", key));
+    }
+    // Kept until its stop has completed, which an ending daemon waits for.
+    let stopped = Arc::new(AtomicBool::new(false));
+    {
+        let mut retiring = state.retiring.lock().unwrap_or_else(|e| e.into_inner());
+        retiring.retain(|r| !r.stopped.load(Ordering::SeqCst));
+        retiring.push(Retiring { process: spent.process(), stopped: stopped.clone() });
+    }
+    crate::alloc::spawn(move || {
+        if failed {
+            spent.retire(STOP_BOUND);
+        } else {
+            spent.stop();
+        }
+        stopped.store(true, Ordering::SeqCst);
+    });
+    log(&format!("starting the test runner of {} for the next run: {}", key, spec.java.display()));
+    launch_runner(state, key, spec, environment, argfile).inspect_err(|e| log(&format!("the test runner of {} for the next run did not start: {}", key, e))).ok()
+}
+
 fn kill_when_gone(reply: &Reply, finished: &Finished, process: Arc<Mutex<std::process::Child>>, key: &Key) {
     let Ok(mut client) = reply.stream.try_clone() else { return };
     let (finished, key) = (finished.0.clone(), key.clone());

@@ -49,6 +49,10 @@ private[sbt] object Compat {
   /** The project's platform, sbt's own key: `jvm`, `sjs1` for Scala.js. */
   val platform: Def.Initialize[String] = Keys.platform
 
+  /** Whether the forked test worker runs a test configuration's suites on a pool, and the pool's size where the build
+    * sets one (`Test / testForkedParallel`, `Test / testForkedParallelism`, as sbt's `executeTests` reads them). */
+  val testParallelism: Def.Initialize[(Boolean, Option[Int])] = Def.setting(((Test / testForkedParallel).value, (Test / testForkedParallelism).value))
+
   /** The credentials sbt holds (`allCredentials`), as host, user and password, a file's read as sbt
     * reads it; one that cannot be read passed over with a warning, as sbt passes it over. */
   type Credentials = sbt.librarymanagement.Credentials

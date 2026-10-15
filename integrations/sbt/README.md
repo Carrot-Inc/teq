@@ -413,6 +413,7 @@ Scala 2.12 (with `-Xsource:3`) and Scala 3 both read; what each sbt's API has of
 | The build's settings | `Def.Settings`, by scoped key | `Settings[Scope]`, by scope and key |
 | The key a task was defined under | the task's attribute | its `info`'s attribute |
 | The project's platform | `platform` | the plugins enabled (`sjs1` with Scala.js's, else `jvm`) |
+| The forked test worker's pool (the lock's `parallelism`) | `Test / testForkedParallel` (true by default) and `Test / testForkedParallelism` | `Test / testForkedParallel` (false by default) alone, sbt 1 having no count |
 | Credentials | `librarymanagement.Credentials`, a file read by `IvyCredentials` | `librarymanagement.ivy.Credentials` |
 | A task over a task's value | `flatMapTask` | `Def.taskDyn` |
 | A linker report's directory | the path's string under the key's label | the file under `scalaJSLinkerOutputDirectory` |
@@ -425,7 +426,8 @@ The two give one build the same lockfile but where the sbts resolve the build di
 is its own sbt's: a Test class path of a project that depends on another holds the two in the order of each sbt's
 `ClasspathImpl.interSort` (sbt 1 visits the project's configurations before its dependencies, sbt 2 the
 dependencies of each configuration as it goes), the Docker stage's default directory is under each sbt's target,
-and BuildInfo's `sbtVersion` is the sbt that runs. [`axes/check.sh`](axes/check.sh) checks both modules over two
+BuildInfo's `sbtVersion` is the sbt that runs, and a JVM test configuration's `parallelism` is by default each
+sbt's (`auto` on sbt 2, `1` on sbt 1). [`axes/check.sh`](axes/check.sh) checks both modules over two
 fixtures under sbt 1.13.0 and sbt 2.0.8 (its header lists the cases): `equal/`, whose exports are its committed
 lock's bytes on both but for the digest of `project/build.properties` and the hash over the build's files, and
 `order/`, whose exports are each sbt's committed lock, every class path in its sbt's own order.

@@ -799,7 +799,8 @@ jars_of() {
 # sourcecode's two versions and scala-library's; scala3-library, which tests/task.sh's export pins; and the class
 # path of the example's jvmapp tests (integrations/sbt/example/teq.lock's), over which tests/task.sh runs munit's
 # suites; and the Scala.js test frameworks' jars of tests/task.sh's export of tests/scalajs-test (munit 1.3.4 and
-# 1.2.1, scalatest 3.2.20's modules, utest, the zio runtime's), which it reads from the coursier cache.
+# 1.2.1, scalatest 3.2.20's modules, utest, the zio runtime's), which it reads from the coursier cache; and sbt
+# 2.0.8's forked test worker with the gson it shades, which tests/task.sh holds teq's test runner to.
 maven_extras() {
   printf '%s\n' \
     "$M2/com/lihaoyi/sourcecode_3/0.4.2/sourcecode_3-0.4.2-sources.jar" \
@@ -812,6 +813,8 @@ maven_extras() {
     "$M2/junit/junit/4.13.2/junit-4.13.2.jar" \
     "$M2/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar" \
     "$M2/org/scala-sbt/test-interface/1.0/test-interface-1.0.jar" \
+    "$M2/org/scala-sbt/worker/2.0.8/worker-2.0.8.jar" \
+    "$M2/org/scala-sbt/gson/shaded-gson/2.13.1/shaded-gson-2.13.1.jar" \
     "$M2/org/portable-scala/portable-scala-reflect_2.13/1.1.3/portable-scala-reflect_2.13-1.1.3.jar" \
     "$M2/org/scalameta/munit_sjs1_3/1.2.1/munit_sjs1_3-1.2.1.jar" \
     "$M2/org/scalameta/munit-diff_sjs1_3/1.2.1/munit-diff_sjs1_3-1.2.1.jar" \

@@ -122,7 +122,7 @@ pub fn version() -> String {
 const VERBS: &str = "  compile [project...]       type the projects' closures and write their class files
   test [project] [pattern...] [--changed] [--list] [--verbose]
                              compile, then run the project's suites (every JVM project's without
-                             one) on its warm runner: those the patterns name, as sbt's testOnly
+                             one) on a runner of its own: those the patterns name, as sbt's testOnly
                              takes them, or with --changed those whose classes depend on the
                              classes written since the last run of every suite; --list prints
                              the suites as sbt's definedTests, --verbose the frameworks' debug,

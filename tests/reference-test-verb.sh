@@ -9,7 +9,9 @@
 # run's abort (an exit of 2 after every event); a case reported twice; an ignored case pending; the review's
 # two-case inventory, its passed case twice and its ignored case pending; a case the inventory records twice, run
 # twice; the review's two events, a case of another project's suite of the name qualifying none of this one's; a
-# suite of one name in two projects. And the preflight, which refuses a checkout whose directory sbt names Airstream's root project after
+# suite of one name in two projects; the events of two suites interleaved, as a pool sends them, one suite's case
+# after the other's; a suite whose task threw, one Error of its SuiteSelector in the place of its cases (the JVM
+# runner's, docs/TOOLING.md, "Tests."). And the preflight, which refuses a checkout whose directory sbt names Airstream's root project after
 # (tests/support/reference_preflight.scala), and the peak memory the verbs sample, which counts a node the invocation
 # starts with its token (the test runner's), though it names no teq binary (tests/support/reference_sampler.scala).
 cd "$(dirname "$0")/.."
@@ -99,6 +101,10 @@ printf 'foreign%sS%stest x%sSuccess%s\nairstream%sS%stest y%sSuccess%s\n' "$T" "
 expect "the review's two events, a case of another project's suite of the name before this one's" fail "$work/xy.json"
 printf 'airstream%sS%stest x%sSuccess%s\nlaminar%sS%stest y%sSuccess%s\n' "$T" "$T" "$T" "$T" "$T" "$T" "$T" "$T" | events
 expect "a suite of one name in two projects, as recorded" pass "$work/both.json"
+printf '%s\n' "$recorded" | sed -n '1p; 4p; 2p; 3p' | events
+expect "two suites' events interleaved, one suite's case after the other's" pass
+printf '%s\n' "$recorded" | grep -v 'OneSpec' | { cat; printf 'airstream%scom.raquo.airstream.OneSpec%ssuite%sError%sjava.lang.RuntimeException: boom\n' "$T" "$T" "$T" "$T"; } | events 1
+expect "a suite whose task threw" fail
 # The preflight: a checkout whose directory sbt names Airstream's root project after (`Airstream-oracle`, the build
 # naming none) is refused with the reason before anything runs; one named `airstream` passes the name.
 mkdir -p "$work/named/Airstream-oracle" "$work/named/airstream"

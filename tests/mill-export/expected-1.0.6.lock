@@ -307,6 +307,7 @@ projects:
           - arguments: []
             class: munit.Framework
         javaOptions: []
+        parallelism: 1
         resources:
           - core/test/resources
         sandbox: true
@@ -613,6 +614,7 @@ projects:
           - arguments: []
             class: munit.Framework
         javaOptions: []
+        parallelism: 1
         resources:
           - harness/test/resources
         runtimeClasspath:
@@ -712,6 +714,7 @@ projects:
           - arguments: []
             class: utest.runner.Framework
         javaOptions: []
+        parallelism: 1
         resources:
           - matrix/test/resources
         sandbox: true

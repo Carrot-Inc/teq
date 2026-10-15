@@ -52,6 +52,12 @@ private[sbt] object Export {
     teqExportScalaJSTestRefusals := Nil,
   )
 
+  /** A JVM test configuration's pool as sbt's forked test worker sizes it (`ForkTestMain.executorService`), for the
+    * lock's `parallelism`: one thread when the worker runs the suites one after another, the count the build sets
+    * when positive, else `auto`, the processors the runner's JVM counts at each run (never this machine's). */
+  def parallelism(parallel: Boolean, count: Option[Int]): Json.Value =
+    if (!parallel) Json.Num("1") else count.filter(_ > 0).fold[Json.Value](Json.Str("auto"))(n => Json.Num(n.toString))
+
   private val all: Def.Initialize[Task[File]] = Def.taskDyn {
     val build = loadedBuild.value
     val refs = described(build, settingsData.value, buildDependencies.value)
@@ -306,6 +312,7 @@ private[sbt] object Export {
       val testOptions = (Test / Keys.testOptions).value
       val frameworksDeclared = (Test / testFrameworks).value
       val testFork = (Test / fork).value
+      val (testParallel, testParallelism) = Compat.testParallelism.value
       val testBase = (Test / baseDirectory).value
       val testEnv = (Test / Keys.envVars).value
       val testJavaOptions = (Test / javaOptions).value
@@ -509,7 +516,7 @@ private[sbt] object Export {
           "javaOptions" -> strings(testJavaOptions),
           "frameworks" -> Json.Arr(frameworks.sortBy(_("class").str)(using utf8)),
           "exclude" -> strings(excluded),
-        ) ++ (if (js) scalaJSTest else Map.empty) ++ generatorFields(testGenerators, resourceGeneratorsOf(test))),
+        ) ++ (if (js) scalaJSTest else Map("parallelism" -> parallelism(testParallel, testParallelism))) ++ generatorFields(testGenerators, resourceGeneratorsOf(test))),
       )
 
       // sbt's managed source directories are not teq's: a project's generated sources are

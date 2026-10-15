@@ -110,7 +110,9 @@ impl Thrown {
 
 /// An event of a task: the suite whose task it came from, the event's own name and selector,
 /// its status, what it threw and its duration in milliseconds (-1 when the framework did not say);
-/// `crashed` when no framework sent it, the runner making it of a task or a framework that threw.
+/// `crashed` when no framework sent it, Scala.js's runner making it of a task or a framework that threw
+/// (the JVM's runner sends a task that threw as an event, as sbt 2's forked worker does, an `Error` of a
+/// `SuiteSelector`, and a framework's failure as a fork error, which ends the run).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Event {
     pub suite: String,
@@ -123,8 +125,9 @@ pub struct Event {
 }
 
 impl Event {
-    /// A suite whose task or framework threw: an error of the suite, which nothing else reports,
-    /// as sbt reports one, a `TestSelector` of the suite's name.
+    /// A suite whose task or framework threw under node: an error of the suite, which nothing else
+    /// reports, as sbt's own runner reports a task that threw (`TestFramework`'s `errorEvents`), a
+    /// `TestSelector` of the suite's name.
     pub fn crashed(suite: &str, thrown: Option<Thrown>) -> Event {
         Event { suite: suite.to_string(), name: suite.to_string(), selector: Selector::Test(suite.to_string()), status: Status::Error, thrown, ms: -1, crashed: true }
     }
@@ -202,6 +205,13 @@ impl Tally {
     }
 }
 
+/// The lines of a fork error, which ended a run (`runner::Ran::Failed`): `[error] <first line>` and its first
+/// frame, with `verbose` its whole trace.
+pub fn fork_error(thrown: &Thrown, verbose: bool) -> String {
+    let lines = if verbose { thrown.trace() } else { format!("{}\n{}", thrown.text.lines().next().unwrap_or(""), thrown.frames.first().map_or(String::new(), |f| format!("    at {}\n", f.text))) };
+    lines.lines().map(|l| format!("[error] {}\n", l.replace('\t', "    "))).collect()
+}
+
 /// The lines of an event: a failure's `[fail] <test>: <first line>` with the throwable's frames in
 /// the suite's own code (the first frame when none is), the cause the frames came from; with
 /// `verbose` the whole trace, and a line for every other event, `[<status>] <test>`.
@@ -269,6 +279,13 @@ mod tests {
             outer.trace(),
             "java.lang.RuntimeException: outer\n\tat m.B.b(B.scala:2)\n\tat m.Main.main(Main.scala:9)\nCaused by: java.lang.IllegalStateException: inner\n\tat m.A.a(A.scala:1)\n\t... 1 more\n"
         );
+    }
+
+    #[test]
+    fn a_fork_error_by_its_first_frame_or_its_trace() {
+        let thrown = Thrown { text: "java.lang.IllegalStateException: trace-error".to_string(), frames: vec![frame("p.T", "p.T.run(T.java:9)"), frame("p.F", "p.F.go(F.java:2)")], cause: None };
+        assert_eq!(fork_error(&thrown, false), "[error] java.lang.IllegalStateException: trace-error\n[error]     at p.T.run(T.java:9)\n");
+        assert_eq!(fork_error(&thrown, true), "[error] java.lang.IllegalStateException: trace-error\n[error]     at p.T.run(T.java:9)\n[error]     at p.F.go(F.java:2)\n");
     }
 
     #[test]

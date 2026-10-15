@@ -3,10 +3,10 @@ format: 1
 binaries: {}
 inputs:
   files:
-    build.sbt: c4b5ace608d9f99e43b034e93f8d46b2d145e7ff738707fcba20e99daa24335a
+    build.sbt: ef056508313ecf214e73c3be94eb54cda343d7d8c55929b860afd9c223337c3a
     project/build.properties: 2aa36619b308c66c61f629a6fc3d69d03e46ee3a334933819dc6e59adc0e1479
     project/plugins.sbt: 91d3f3f605b86c50bcadd270241c51bc72dde08ab2a5870e2731a25cf74aa144
-  sha256: 7abc4c89ce39c98a09c13a85a1ff23668522ea94822079756eebfd28b7bf1051
+  sha256: 4ee91792e36e51bb2d7608a5f2565de126311f2f71b67dda6faf23e32ee36745
 jars:
   junit:junit:4.13.2: maven-central 8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12 384581
   org.hamcrest:hamcrest-core:1.3: maven-central 42a25dc3219429f0e5d060061f71acb49bf010a0 45024
@@ -100,6 +100,7 @@ projects:
           - arguments: []
             class: munit.Framework
         javaOptions: []
+        parallelism: 1
         resources:
           - app/src/test/resources
         sources:
@@ -188,6 +189,7 @@ projects:
         fork: false
         frameworks: []
         javaOptions: []
+        parallelism: 1
         resources:
           - lib/src/test/resources
         sources:

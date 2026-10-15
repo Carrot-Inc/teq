@@ -52,6 +52,10 @@ private[sbt] object Compat {
     else "jvm"
   }
 
+  /** Whether the forked test worker runs a test configuration's suites on a pool (`Test / testForkedParallel`, false
+    * by sbt 1's default), and no size: sbt 1 has no `testForkedParallelism`, its pool being the processors'. */
+  val testParallelism: Def.Initialize[(Boolean, Option[Int])] = Def.setting(((Test / testForkedParallel).value, None))
+
   /** The credentials sbt holds (`allCredentials`), as host, user and password, a file's read as sbt
     * reads it; one that cannot be read passed over with a warning, as sbt passes it over. */
   type Credentials = IvyCredentials
