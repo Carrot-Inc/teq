@@ -2052,7 +2052,7 @@ pos/21400b.scala	accepts
 pos/21681d.scala	accepts	
 pos/22219.scala	accepts	
 pos/22219b.scala	accepts	
-pos/23056.scala	rejects	type mismatch
+pos/23056.scala	rejects	value {} is not a member of {}
 pos/24707	oos	java
 pos/25198	rejects	exception in macro: scala.MatchError: List(List()) (of class scala.::) (called by foo in object Macros)
 pos/26211.scala	accepts	
@@ -2269,7 +2269,7 @@ pos/constr-proxy-shadowing.scala	accepts
 pos/constraining-lub.scala	accepts	
 pos/constrs.scala	accepts	
 pos/constvalue-of-failed-match-type.scala	accepts	
-pos/consume.scala	rejects	{} is not a member of the package
+pos/consume.scala	rejects	not found: {}
 pos/contextbounds-for-poly-functions.scala	syntax	expected {}, found {}
 pos/contextbounds-implicits-old.scala	std	Manifest
 pos/contrib467.scala	accepts	
