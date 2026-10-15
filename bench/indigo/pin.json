@@ -1,0 +1,47 @@
+{
+ "repository": "https://github.com/PurpleKingdomGames/indigo.git",
+ "commit": "6e357eef01b3381d7c45ec8d3e350a230a8736a3",
+ "date": "2025-11-20T08:36:38Z",
+ "note": "The pinned head announces the move of the source to github.com/PurpleKingdomGames/indigoengine; the pin is taken from the repository named here, at its head on 2026-10-12.",
+ "shallow": true,
+ "build": "indigo",
+ "java": 21,
+ "mill": "1.0.6",
+ "scala": "3.8.4",
+ "steps": [
+  "clean",
+  "-j2 __.compile",
+  "-j1 __.fastLinkJS",
+  "-j2 __.test"
+ ],
+ "bootstrap": {
+  "dir": "indigo-plugin",
+  "root": "/tmp/teq-mill-reference/indigo",
+  "task": "mill-indigo[3].publishLocal",
+  "scala": "3.7.1",
+  "artifacts": {
+   "io.indigoengine/indigo-plugin_3/0.22.1-SNAPSHOT/jars/indigo-plugin_3.jar": "3036f5122886121b167bff040b784b63ad5bab73131cae92fe124b2ef27614fe",
+   "io.indigoengine/mill-indigo_mill1_3/0.22.1-SNAPSHOT/jars/mill-indigo_mill1_3.jar": "ca486fc65840311de9a9268b62db79ae6157e78a4edaf0adacca85a9e6fb4ef6"
+  },
+  "note": "The plugin's class files and TASTy name its sources by their absolute paths: it is built from the commit's tree written afresh to `root`, one path on every machine, and each artifact is held to the digest of its entries' names and bytes (a jar's own timestamps are its build's). Its build's Scala, 3.7.1, is the plugin's own, apart from the 3.8.4 of the build it serves."
+ },
+ "tests": "tests.json",
+ "overlay": {
+  "awt.scala": "7473ba70fdfff2d7f9f3406e4d483da10121d64aa56df4d8c8afdd2ce94bfb65",
+  "build.mill.patch": "763b0d78968313ade9f2021127f61efcf5dbf523b1a59132f41eac43052b1500",
+  "fontgen.scala": "7b7c66e756227370719e2f09c7e450a87fb6b240f8cadde493b46a936ab2afbd",
+  "generate.scala": "eb75c37c4fce148fadb7b0e92e36dea474965b33a4d92efcf8a625ce8d95cb41",
+  "os.scala": "60ccb3be22a843815f337f262d24966d1d996743f2e006b3f93943c92b413ebb",
+  "teq.mill.json": "4d3cf25c1548ed9ea79b3616cb23441f39e64ec663df241e42c99a5994818950"
+ },
+ "run": {
+  "module": "sandbox.js",
+  "files": {
+   "index.html": "run/index.html"
+  },
+  "assets": {
+   "assets": "sandbox/assets"
+  },
+  "smoke": "indigo"
+ }
+}

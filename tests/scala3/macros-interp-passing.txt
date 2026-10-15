@@ -91,6 +91,7 @@ tasty-linenumber
 tasty-linenumber-2
 tasty-location
 tasty-original-source
+tasty-positioned
 tasty-subtyping
 tasty-unsafe-let
 whitebox-inline-macro

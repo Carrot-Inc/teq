@@ -1,0 +1,2 @@
+inner Some(()) true
+State(1,none,true) State(1,x,false)

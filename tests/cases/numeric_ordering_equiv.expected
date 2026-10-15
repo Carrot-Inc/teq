@@ -1,0 +1,5 @@
+equiv 3 3
+true
+equiv 2 2
+true
+List(1, 2, 3)

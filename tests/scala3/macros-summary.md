@@ -4,13 +4,13 @@
 
 | class | tests |
 |---|---|
-| pass | 95 |
-| wrong-output | 57 |
-| run-error | 14 |
+| pass | 96 |
+| wrong-output | 59 |
+| run-error | 12 |
 | run-timeout | 0 |
 | compile-crash | 0 |
 | compile-timeout | 0 |
-| compile-error | 156 |
+| compile-error | 155 |
 
 ## Compile errors by bucket
 
@@ -27,7 +27,7 @@
 | left out on purpose | match / dependent / structural types | 2 |
 | left out on purpose | reflection (getClass/classOf/ClassTag/deriving) | 2 |
 | left out on purpose | exceptions (throw/try) | 2 |
-| left out on purpose | Scala 2 syntax (postfix, `f _`, XML, procedure syntax) | 2 |
+| left out on purpose | Scala 2 syntax (postfix, `f _`, XML, procedure syntax) | 1 |
 
 ## Most frequent gap messages
 
@@ -58,14 +58,14 @@
 - 1 × `Parameter must be a known constant` (tasty-macro-const: `println(natConst(2))`)
 - 1 × `type argument a does not have the same kind as its bound [_]` (tasty-simplified: `case Wrap[Apply[a]] => F[a]`)
 
-## wrong-output (57)
+## wrong-output (59)
 
-Xmacro-settings-compileTimeEnv, exports, expr-map-2, flops-rewrite, flops-rewrite-2, flops-rewrite-3, i12392, i14902, i15968, i17445, i18283, i19732, i20449, i22395, i4803, i4803b, i4803c, i4947e, i4947f, i5119b, i6765, i6765-b, i6765-c, i7898, i7987, i8007, i8514, i8514b, inline-beta-reduce-polyfunction, paramSymss, quote-and-splice, quote-impure-by-name, quote-inline-function, quote-match-poly-function-1, quote-match-poly-function-1-regression, quote-matcher-power, quote-matching-optimize-1, quote-matching-optimize-2, quote-matching-optimize-3, quote-matching-optimize-4, quote-matching-optimize-5, reflect-sourceCode, self, summonIgnoring, tasty-argument-tree-1, tasty-dealias, tasty-dealiasKeepOpaques, tasty-definitions-2, tasty-definitions-3, tasty-eval, tasty-extractors-3, tasty-extractors-owners, tasty-extractors-types, tasty-load-tree-1, tasty-load-tree-2, tasty-typeof, type-print
+Xmacro-settings-compileTimeEnv, exports, expr-map-2, flops-rewrite, flops-rewrite-2, flops-rewrite-3, i12392, i14902, i15968, i17445, i18283, i19732, i20449, i22395, i4803, i4803b, i4803c, i4947e, i4947f, i5119, i5119b, i6765, i6765-b, i6765-c, i7898, i7987, i8007, i8514, i8514b, inline-beta-reduce-polyfunction, paramSymss, quote-and-splice, quote-impure-by-name, quote-inline-function, quote-match-poly-function-1, quote-match-poly-function-1-regression, quote-matcher-power, quote-matching-optimize-1, quote-matching-optimize-2, quote-matching-optimize-3, quote-matching-optimize-4, quote-matching-optimize-5, reflect-sourceCode, self, summonIgnoring, tasty-argument-tree-1, tasty-dealias, tasty-dealiasKeepOpaques, tasty-definitions-2, tasty-definitions-3, tasty-eval, tasty-extractors-3, tasty-extractors-owners, tasty-extractors-types, tasty-load-tree-1, tasty-load-tree-2, tasty-macro-assert, tasty-typeof, type-print
 
-## run-error (14)
+## run-error (12)
 
-TypeRepr-isTupleN, Xmacro-settings-simple, expr-map-1, gestalt-type-toolbox-reflect, i12351, i12352, i17445-new-default, i5119, i6253-c, i6270, is-in-typer, no-symbol, tasty-positioned, tasty-string-interpolation-reporter-test
+TypeRepr-isTupleN, Xmacro-settings-simple, expr-map-1, gestalt-type-toolbox-reflect, i12351, i12352, i17445-new-default, i6253-c, i6270, is-in-typer, no-symbol, tasty-string-interpolation-reporter-test
 
-## pass (95)
+## pass (96)
 
-enum-nat-macro, f-interpolator, from-type, i10011, i10043, i10464, i10880, i10914a, i10914b, i11161, i11856, i12163, i12188, i12417b, i13033, i13183, i13230, i13947, i17257, i17445-copy, i22616c, i25245, i4431-b, i4455, i4492, i4515, i4515b, i4734, i4735, i5110, i5188a, i5533, i6201, i6253, i6253-b, i6622, i6679, i6772, i6803, i7008, i7025, i7025b, i7048, i7715, i8115, i8115b, i8306, i8530, i8671, i8745, i8745b, i8746b, i8877, i9475, i9570, inferred-repeated-result, inline-macro-inner-object, inline-macro-staged-interpreter, inline-option, inline-tuples-2, inline-varargs-1, power-macro, quote-change-owner, quote-elide-prefix, quote-force, quote-indexed-map-by-name, quote-matcher-inference, quote-matcher-string-interpolator, quote-matcher-string-interpolator-2, quote-matcher-string-interpolator-3, quote-matcher-symantics-1, quote-matcher-type-bind, quote-sep-comp, quote-sep-comp-2, quote-simple-macro, quote-toExprOfSeq, quote-type-matcher-2, quote-unrolled-foreach, quote-whitebox, quoted-expr-block, summonIgnoring-nonrecursive, tasty-extractors-constants-1, tasty-getfile, tasty-indexed-map, tasty-linenumber, tasty-linenumber-2, tasty-location, tasty-original-source, tasty-subtyping, tasty-unsafe-let, whitebox-inline-macro, xml-interpolation-3, xml-interpolation-4, xml-interpolation-5, xml-interpolation-6
+enum-nat-macro, f-interpolator, from-type, i10011, i10043, i10464, i10880, i10914a, i10914b, i11161, i11856, i12163, i12188, i12417b, i13033, i13183, i13230, i13947, i17257, i17445-copy, i22616c, i25245, i4431-b, i4455, i4492, i4515, i4515b, i4734, i4735, i5110, i5188a, i5533, i6201, i6253, i6253-b, i6622, i6679, i6772, i6803, i7008, i7025, i7025b, i7048, i7715, i8115, i8115b, i8306, i8530, i8671, i8745, i8745b, i8746b, i8877, i9475, i9570, inferred-repeated-result, inline-macro-inner-object, inline-macro-staged-interpreter, inline-option, inline-tuples-2, inline-varargs-1, power-macro, quote-change-owner, quote-elide-prefix, quote-force, quote-indexed-map-by-name, quote-matcher-inference, quote-matcher-string-interpolator, quote-matcher-string-interpolator-2, quote-matcher-string-interpolator-3, quote-matcher-symantics-1, quote-matcher-type-bind, quote-sep-comp, quote-sep-comp-2, quote-simple-macro, quote-toExprOfSeq, quote-type-matcher-2, quote-unrolled-foreach, quote-whitebox, quoted-expr-block, summonIgnoring-nonrecursive, tasty-extractors-constants-1, tasty-getfile, tasty-indexed-map, tasty-linenumber, tasty-linenumber-2, tasty-location, tasty-original-source, tasty-positioned, tasty-subtyping, tasty-unsafe-let, whitebox-inline-macro, xml-interpolation-3, xml-interpolation-4, xml-interpolation-5, xml-interpolation-6

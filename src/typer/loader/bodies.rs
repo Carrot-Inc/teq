@@ -1318,6 +1318,13 @@ impl<'a> Worker<'a> {
             // its body over the body's names.
             TType::Lambda { kind: LambdaKind::Type, binder, params, result } => {
                 let names: Vec<Name> = params.iter().map(|p| self.conv_name(cv, p.name)).collect();
+                // A lambda written as a tree (`LAMBDAtpt`, a kind projector's `Kleisli[G, R, *]`)
+                // refers to its parameters by their definitions' addresses.
+                for (p, &n) in params.iter().zip(&names) {
+                    if p.addr != 0 {
+                        cv.local_types.insert(p.addr, n);
+                    }
+                }
                 cv.poly_binders.push((*binder, names.clone()));
                 let body = self.conv_type(cv, result);
                 cv.poly_binders.pop();
@@ -2739,6 +2746,31 @@ impl<'a> Worker<'a> {
                         return self.conv_extension_call(cv, g, ext_targs, targs, &clauses);
                     }
                 }
+                // A cast a GADT match made, to `(c.type & r.F[Unit]) & F[Unit]` (`Typer.adapt`'s
+                // `cast` of a pattern-bound value): the parts that name no captured wildcard nor
+                // the value itself are the type it casts to, none a cast that changes nothing.
+                if let [target] = &targs[..] {
+                    let cast = self.selects_named(cv, f, "asInstanceOf") || self.selects_named(cv, f, "$asInstanceOf$");
+                    if cast && self.mentions_wildcard_capture(cv, target) {
+                        let mut parts: Vec<&TType> = Vec::new();
+                        and_parts(target, &mut parts);
+                        let kept: Vec<TType> = parts
+                            .into_iter()
+                            .filter(|p| !self.mentions_wildcard_capture(cv, p) && !matches!(p, TType::LocalTerm(..) | TType::TermRef(..)))
+                            .cloned()
+                            .collect();
+                        let recv = match &f.kind {
+                            TermKind::Select(q, _) | TermKind::SelectIn(q, ..) => &**q,
+                            _ => &**f,
+                        };
+                        let Some(first) = kept.first().cloned() else { return self.conv_expr(cv, recv) };
+                        let meet = kept.into_iter().skip(1).fold(first, |a, b| TType::And(Box::new(a), Box::new(b)));
+                        let fe = self.conv_expr(cv, f);
+                        let item = self.conv_type_arg(cv, &meet);
+                        let l = push_list(&mut cv.ast.ty_lists, &[item]);
+                        return cv.expr(Expr::TypeApply(fe, l));
+                    }
+                }
                 let fe = self.conv_expr(cv, f);
                 // A type argument that names a captured wildcard (`slice.T`, `Array[?]#T`) is
                 // inferred instead.
@@ -4055,9 +4087,6 @@ impl<'a> Worker<'a> {
                             return cv.expr(Expr::NewAnon(d));
                         }
                     }
-                    if items.is_empty() && self.is_js_array_class(cv, tpt) {
-                        return self.empty_array(cv, targs);
-                    }
                     let ty = self.conv_new_type(cv, tpt, targs, inferred);
                     let new = cv.expr(Expr::New(ty, l));
                     if let Some(outer) = self.new_outer(cv, tpt) {
@@ -4203,29 +4232,6 @@ impl<'a> Worker<'a> {
     }
 
     /// `scala.scalajs.js.Array`, the JS array, which teq's `Array` is.
-    fn is_js_array_class(&self, cv: &Conv, tpt: &TType) -> bool {
-        let class_ref = match tpt {
-            TType::Applied(head, _) => &**head,
-            other => other,
-        };
-        matches!(class_ref, TType::TypeRef(prefix, n) if cv.tasty.simple(cv.tasty.source_name(*n)) == Some("Array") && super::is_scalajs_path(&cv.tasty, prefix))
-    }
-
-    /// `new js.Array[T]()`, Scala.js's empty JS array: `Array.empty[T]`.
-    fn empty_array(&mut self, cv: &mut Conv, targs: &[TType]) -> ExprId {
-        let mut path = cv.expr(Expr::Ident(names::ROOT));
-        for seg in ["scala", "Array", "empty"] {
-            let n = self.interner.intern(seg);
-            path = cv.expr(Expr::Select(path, n));
-        }
-        if targs.is_empty() {
-            return path;
-        }
-        let tys: Vec<TyExprId> = targs.iter().map(|a| self.conv_type_arg(cv, a)).collect();
-        let tl = push_list(&mut cv.ast.ty_lists, &tys);
-        cv.expr(Expr::TypeApply(path, tl))
-    }
-
     /// The type a constructor call `new C[T](args)` constructs, when `t` is one.
     fn constructed_new<'t>(&self, cv: &Conv, t: &'t Term) -> Option<&'t TType> {
         let TermKind::Apply(f, _) = &t.kind else { return None };
@@ -4540,7 +4546,15 @@ impl<'a> Worker<'a> {
                     let companion = enum_companions.iter().find(|(e, _)| *e == cd.addr).map(|&(_, m)| m);
                     let (d, object) = match companion {
                         Some(m) => self.conv_local_enum(cv, cd, m),
-                        None => (self.conv_local_class(cv, cd), None),
+                        None => {
+                            // A local case class's defaults are its synthetic companion's getters.
+                            let name = cv.tasty.source_name(cd.name);
+                            let getters = stats.iter().find_map(|t| match t {
+                                Stat::Class(m) if m.mods.flags.has(tags::OBJECT) && m.mods.flags.has(tags::SYNTHETIC) && !cd.mods.flags.has(tags::OBJECT) && cv.tasty.source_name(m.name) == name => Some(&**m),
+                                _ => None,
+                            });
+                            (self.conv_local_class_with(cv, cd, getters), None)
+                        }
                     };
                     // The enclosing local class's `this`, which the class just converted
                     // names, as a val of this block for it to capture.
@@ -4854,6 +4868,12 @@ impl<'a> Worker<'a> {
     /// meets the `new`, or a named local class, which is a definition of the block; the members
     /// of either are referred to by name.
     fn conv_local_class(&mut self, cv: &mut Conv, cd: &TClassDef) -> Option<DefId> {
+        self.conv_local_class_with(cv, cd, None)
+    }
+
+    /// A local class, the defaults of its constructor's parameters the getters
+    /// (`$lessinit$greater$default$N`) of `companion`, the companion `Desugar.classDef` makes.
+    fn conv_local_class_with(&mut self, cv: &mut Conv, cd: &TClassDef, companion: Option<&TClassDef>) -> Option<DefId> {
         let tasty = cv.tasty.clone();
         let mut tparams = Vec::with_capacity(cd.template.tparams.len());
         for p in &cd.template.tparams {
@@ -4884,13 +4904,22 @@ impl<'a> Worker<'a> {
             cv.local_types.insert(cd.addr, name);
         }
         let derived = flags.has(tags::CASE) || module;
+        let mut getters: FxMap<usize, Term> = FxMap::default();
+        for s in companion.map_or(&[][..], |m| &m.template.stats[..]) {
+            if let Stat::Def(sig, Some(rhs)) = s {
+                if let Some((names::INIT, index)) = self.default_getter(cv, sig.name) {
+                    getters.insert(index, rhs.clone());
+                }
+            }
+        }
         let mut params = Vec::with_capacity(cd.template.params.len());
-        for p in &cd.template.params {
+        for (i, p) in cd.template.params.iter().enumerate() {
             let pname = self.conv_name(cv, p.name);
             cv.locals.insert(p.addr, pname);
             let ty = self.conv_param_type(cv, &p.ty);
             let field = if p.flags.has(tags::LOCAL) { 0 } else { mods::FIELD | flag_mods(p.flags) & mods::MUTABLE };
-            params.push(Param { name: pname, span: cv.span, ty, default: None, mods: field, annots: ListRef::EMPTY });
+            let default = getters.get(&(i + 1)).map(|rhs| self.conv_expr(cv, rhs));
+            params.push(Param { name: pname, span: cv.span, ty, default, mods: field, annots: ListRef::EMPTY });
         }
         let clauses = if cd.template.params.is_empty() { Vec::new() } else { vec![ParamClause { params, is_using: false, is_implicit: false }] };
         for s in &cd.template.stats {
@@ -6309,4 +6338,16 @@ fn term_names_this_member(tasty: &crate::tasty::TastyFile, t: &Term, class: Addr
     };
     walk.term(t, crate::tasty::terms::Scope::default());
     found
+}
+
+/// The parts of an intersection, under its annotations (`(A & B) & C @uncheckedStable`).
+fn and_parts<'t>(t: &'t TType, out: &mut Vec<&'t TType>) {
+    match t {
+        TType::And(a, b) => {
+            and_parts(a, out);
+            and_parts(b, out);
+        }
+        TType::Annotated(inner, _) => and_parts(inner, out),
+        _ => out.push(t),
+    }
 }

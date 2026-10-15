@@ -1227,8 +1227,21 @@ impl<'a> Worker<'a> {
     /// for everything else.
     fn can_equal(&mut self, l: TypeId, r: TypeId, span: Span) -> bool {
         match self.can_equal_predefined(l, r, span) {
-            Some(known) => known,
-            None => self.can_equal_given(l, r, span),
+            Some(true) => true,
+            // A given decides, and one of the pair itself answers where the standard instances
+            // refuse it (`given CanEqual[Option[Camera], Option[Camera]]` in a companion), as
+            // `Implicits.checkCanEqual` searches the pair's implicit scope; two tuples have the
+            // standard `canEqualTuple` alone, which the element-wise rule is.
+            Some(false) if self.both_tuples(l, r) => false,
+            Some(false) | None => self.can_equal_given(l, r, span),
+        }
+    }
+
+    fn both_tuples(&mut self, l: TypeId, r: TypeId) -> bool {
+        let (l, r) = (self.deref(l), self.deref(r));
+        match (self.class_of(l), self.class_of(r)) {
+            (Some(lc), Some(rc)) => self.is_tuple_class(lc) && self.is_tuple_class(rc),
+            _ => false,
         }
     }
 

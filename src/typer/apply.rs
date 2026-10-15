@@ -4624,6 +4624,17 @@ impl<'a> Worker<'a> {
             .count();
         let explicit_lists = lists.iter().filter(|l| !l.using).count();
         let mut ret_ty = self.types.subst(sig.ret, &subst);
+        // An inline method declared without a result type has the one its body infers at the
+        // definition, before any call (dotty's `Namer.inferredResultType`): what is expected
+        // constrains the call's type arguments by it (`NoOp.prepare[E]` given for a
+        // `Shader[Env, Unit]`), where the expansion types the call itself.
+        if ret_ty == ERROR && ctor.is_none() {
+            if let Some(t) = self.inline_inferred_result(call.sym) {
+                let mut with_owner = subst.clone();
+                with_owner.extend(call.owner_subst.iter().copied());
+                ret_ty = self.types.subst(t, &with_owner);
+            }
+        }
         // The std's `summon` of a given standing for a parameter names that parameter for what
         // resolves on the result (`pick(summon[B])` ranks at the declared type).
         let mut summon_names: Option<SymId> = None;
@@ -4794,8 +4805,29 @@ impl<'a> Worker<'a> {
                             eta_context = Some((syms, ptys));
                         }
                     }
+                    // An expansion's result is the expected function's before its using clause is
+                    // searched, as dotty constrains a result by its prototype ahead of the implicit
+                    // arguments (`Application.init`'s `constrainResult`, `adaptNoArgsImplicitMethod`'s
+                    // deepened prototype): tyrian's `Sub.emit[F[_]: Sync, Msg]` expanded where an
+                    // `A => Sub[IO, A]` is expected searches `Sync[IO]`.
+                    if !eta.is_empty() && eta_context.is_none() {
+                        if let Some(r) = eta_ret_expected.filter(|&r| r != ERROR && !self.types.contains_error(r)) {
+                            let mark = self.snapshot();
+                            if !self.is_sub(ret_ty, r) {
+                                self.rollback(mark);
+                            }
+                        }
+                    }
                     let clause_first = args_out.len();
-                    let determined = self.vars_of_applied_clauses(&sig.clauses[..ci], &subst);
+                    let mut determined = self.vars_of_applied_clauses(&sig.clauses[..ci], &subst);
+                    // The receiver's conversion's open variables too, those the using clause names
+                    // (`EncoderOps[?A](xs).toJson(using JsonEncoder[?A])` takes `xs`'s type), as
+                    // dotty's `tvarsInParams` selects a prefix's variables; one it does not name stays
+                    // open for what follows (cats' `pure[F]`).
+                    if !self.conversion_open_vars.is_empty() {
+                        let open: Vec<TVarId> = self.conversion_open_vars.iter().copied().filter(|&v| self.tvars[v].inst.is_none()).collect();
+                        determined.extend(open);
+                    }
                     let mut defaulted: Vec<usize> = Vec::new();
                     for (k, p) in clause.params.iter().enumerate() {
                         let target = self.param_type(p.ty, &subst);
@@ -5936,6 +5968,14 @@ impl<'a> Worker<'a> {
             }
         }
         if self.syms.sym(call.sym).name == names::INIT {
+            // A native class's secondary constructor is JavaScript's constructor called with its
+            // arguments, as Scala.js writes it (`new Int16Array(length)`): the class has no body
+            // of its own that a factory would run.
+            if let Owner::Class(c) = self.syms.sym(call.sym).owner {
+                if self.syms.class(c).js == JsKind::Native {
+                    return self.prog.add(TExpr::New(c, args));
+                }
+            }
             // A secondary constructor of a class nested in a class takes the enclosing instance
             // first, as the primary one does (`new_instance`).
             let args = match self.syms.sym(call.sym).owner {
@@ -7882,19 +7922,51 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> Option<(TExprId, TypeId)> {
+        let open_from = self.conversion_open_vars.len();
         match self.convert_for_member(recv, recv_ty, name, lists, expected, span)? {
             Ok((converted, ty)) => {
                 if let Some(r) = self.prim_op_on(converted, ty, name, targs, lists, span, expected) {
+                    self.interpolate_conversion_vars(open_from, r.1);
                     return Some(r);
                 }
                 self.no_receiver_conversion = true;
-                Some(self.apply_member(converted, ty, name, targs, lists.to_vec(), span, expected))
+                let r = self.apply_member(converted, ty, name, targs, lists.to_vec(), span, expected);
+                self.interpolate_conversion_vars(open_from, r.1);
+                Some(r)
             }
             Err(()) => {
                 self.type_args_for_errors(lists);
                 Some((self.prog.add(TExpr::Unit), ERROR))
             }
         }
+    }
+
+    /// dotty's `interpolateTypeVars` at the selection a converted receiver serves, the tree that
+    /// encloses the conversion: a variable the conversion left open, its result holding it
+    /// nonvariantly (`catsSyntaxOptionId(a): OptionIdOps[?A]`), is instantiated where the member's
+    /// type holds it covariantly (`.some: Option[?A]`, from below), contravariantly or not at all
+    /// (`instantiateTypeVars`), and stays open where that type still holds it nonvariantly (cats'
+    /// `pure[F]`: `F[?A]`). The variables are `conversion_open_vars` from `from` on, this
+    /// conversion's.
+    fn interpolate_conversion_vars(&mut self, from: usize, ty: TypeId) {
+        if self.conversion_open_vars.len() <= from {
+            return;
+        }
+        let ty = self.zonk(ty);
+        let occurring = if self.types.has_vars(ty) { self.var_variances(ty) } else { Vec::new() };
+        // The ones it instantiates leave the list, the others keep their places.
+        let mut kept = from;
+        for i in from..self.conversion_open_vars.len() {
+            let v = self.conversion_open_vars[i];
+            if self.tvars[v].inst.is_none() && !occurring.iter().any(|&(w, s)| w == v && s == 0) {
+                self.solve_var_directed(v, Some(ty));
+            }
+            if self.tvars[v].inst.is_none() {
+                self.conversion_open_vars[kept] = v;
+                kept += 1;
+            }
+        }
+        self.conversion_open_vars.truncate(kept);
     }
 
     /// The case class whose constructor `C(args)` and `C.apply` mean next to the `apply` methods
@@ -8002,8 +8074,9 @@ impl<'a> Worker<'a> {
                     // itself, and the class's qualifier (`NamerOps.addConstructorApplies`): out of
                     // reach, but inside the companion and its class, the object takes no
                     // parameters (E050). A case class has no proxy: its companion's `apply` is the
-                    // synthesized member (`NamerOps.needsConstructorProxies`).
-                    let proxy = self.syms.class(companion).mods & crate::ast::mods::CASE == 0;
+                    // synthesized member (`NamerOps.needsConstructorProxies`), an enum's class case's
+                    // too, a case class as `DesugarEnums` writes it.
+                    let proxy = self.syms.class(companion).mods & crate::ast::mods::CASE == 0 && self.syms.class(companion).kind != ClassKind::EnumCase;
                     if proxy && (!self.proxy_apply_accessible(companion, c) || !self.is_class_accessible(companion)) {
                         let owner = match self.syms.class(c).owner {
                             Owner::Class(o) => format!(" in {}", self.class_description(o)),
@@ -8126,14 +8199,21 @@ impl<'a> Worker<'a> {
         self.syms.class(m).made_companion && self.loaded.as_ref().is_some_and(|l| l.synthetic_members.contains_key(&s))
     }
 
-    fn constructor_next_to_apply(&mut self, recv_ty: TypeId) -> Option<ClassId> {
+    pub(super) fn constructor_next_to_apply(&mut self, recv_ty: TypeId) -> Option<ClassId> {
         let o = self.class_of(recv_ty)?;
         if self.keeps_synthetic_apply(o) {
             return None;
         }
-        let c = self.companion_class(o)?;
-        let mods = self.syms.class(c).mods;
-        (mods & crate::ast::mods::CASE != 0 && mods & crate::ast::mods::ABSTRACT == 0).then_some(c)
+        // A class case of an enum is a case class as `DesugarEnums` writes it, its companion an
+        // object of the enum's (`enum Layer { case Content(..) }` beside `object Content`).
+        let enum_case = self.syms.class(o).companion.filter(|&c| self.syms.class(o).kind == ClassKind::Object && self.syms.class(c).kind == ClassKind::EnumCase);
+        let c = match enum_case {
+            Some(c) => c,
+            None => self.companion_class(o)?,
+        };
+        let info = self.syms.class(c);
+        let case = info.mods & crate::ast::mods::CASE != 0 || info.kind == ClassKind::EnumCase;
+        (case && info.mods & crate::ast::mods::ABSTRACT == 0).then_some(c)
     }
 
     /// An overloaded member: an alternative that applies wins, and the extension methods of
@@ -8153,9 +8233,14 @@ impl<'a> Worker<'a> {
         let converted = std::mem::take(&mut self.no_receiver_conversion);
         let resolved_ty = self.proxy_declared(recv).unwrap_or(recv_ty);
         let ctor = (name == names::APPLY).then(|| self.constructor_next_to_apply(recv_ty)).flatten();
-        // With an extension method of the name in scope, a lone alternative that fits the shape
-        // of the call still has to take the arguments, or the extension is meant.
-        let strict = !self.lexical_extensions(name).is_empty();
+        // With an extension method of the name in scope that may take the receiver, a lone
+        // alternative that fits the shape of the call still has to take the arguments, or the
+        // extension is meant (dotty's `tryWithImplicitOnQualifier`, which retries the application
+        // with an extension whose receiver takes the qualifier): the std's `Array` extension
+        // `apply` is no reason to type the arguments of a case class's companion's `apply` ahead
+        // of its parameters.
+        let lexical = self.lexical_extensions(name);
+        let strict = lexical.into_iter().any(|e| self.extension_may_take(e, recv, recv_ty));
         let failed = match self.try_overloaded(Some(recv), Some(recv_ty), set, ctor, strict, targs, lists, span, expected) {
             Ok(r) => return r,
             Err(failed) => failed,
@@ -9585,8 +9670,20 @@ impl<'a> Worker<'a> {
 
     pub(in crate::typer) fn ctor_param_default(&mut self, c: ClassId, n: usize) -> Option<TypeId> {
         self.complete_class(c);
-        let p = self.syms.class(c).info.ctor.iter().flat_map(|cl| cl.params.iter()).nth(n.checked_sub(1)?)?;
-        p.has_default.then_some(p.ty)
+        let primary = self.syms.class(c).info.ctor.iter().flat_map(|cl| cl.params.iter()).nth(n.checked_sub(1)?).filter(|p| p.has_default).map(|p| p.ty);
+        if primary.is_some() || self.syms.class(c).js != JsKind::Native {
+            return primary;
+        }
+        // A native class's secondary constructor that declares defaults (Scala.js's facades, a
+        // typed array's `byteOffset` and `length`): its getters are `<init>$default$n` too, the
+        // one alternative of the constructors that may have them.
+        for k in self.syms.class(c).ctors.clone() {
+            let sig = self.sig_arc(k);
+            if let Some(p) = sig.clauses.iter().flat_map(|cl| cl.params.iter()).nth(n - 1).filter(|p| p.has_default) {
+                return Some(p.ty);
+            }
+        }
+        None
     }
 
     /// `n` of a `<init>$default$n` name.
@@ -10353,8 +10450,11 @@ impl<'a> Worker<'a> {
     /// which is one argument as written, `ApplyKind.InfixTuple`) used its elements; a unary
     /// member given that tuple used it as written, and there is no other try.
     fn retry_tries(&mut self, sym: SymId, lists: &[ArgList]) -> [Option<RetryTry>; 2] {
-        if self.syms.sym(sym).kind != SymKind::Def {
-            return [None, None];
+        // A value, or a def without a parameter list, whose value's application failed: the
+        // lists as written are the try's (dotty retries any selection's application,
+        // `tryWithImplicitOnQualifier`: `e.width(2)` past a `width: Double` is an extension's).
+        if self.is_value_member(sym) {
+            return if lists.first().is_some_and(|l| !l.using) { [Some(RetryTry::Separate), None] } else { [None, None] };
         }
         let sig = self.sig_arc(sym);
         // A member whose first clause is a using one, or given a using list first, is applied to
@@ -10377,6 +10477,15 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// A member that is a value when selected: a val, a var, an object, a def without a parameter
+    /// list.
+    fn is_value_member(&mut self, sym: SymId) -> bool {
+        if self.syms.sym(sym).kind != SymKind::Def {
+            return true;
+        }
+        self.sig_arc(sym).clauses.iter().all(|c| c.is_using)
+    }
+
     /// One of dotty's `tryWithImplicitOnQualifier` tries (Applications.scala 1373, scalac 3.8.4's
     /// lines) past a member's application that failed. The member's errors stand for the try
     /// where an argument of the first list is an error argument (`FunProto.hasErrorArg`) or the
@@ -10386,6 +10495,9 @@ impl<'a> Worker<'a> {
     /// ProtoTypes.scala 508); otherwise the lists the retry applies an extension or a conversion
     /// to, as written: their applications adapt what the cache holds and type the rest.
     fn boundary_attempt(&mut self, sym: SymId, owner_ty: TypeId, lists: &[ArgList], t: RetryTry) -> Boundary {
+        if self.is_value_member(sym) {
+            return if self.member_args().iter().any(|a| a.error) { Boundary::Stands } else { Boundary::Retry(lists.to_vec()) };
+        }
         let sig = self.sig_arc(sym);
         let (Some(clause), Some(at)) = (sig.clauses.iter().find(|c| !c.is_using), lists.iter().position(|l| !l.using)) else { return Boundary::Stands };
         if t == RetryTry::Tupled {
@@ -11896,6 +12008,16 @@ impl<'a> Worker<'a> {
                 Lexical::Ambiguous(a, b)
             }
         }
+    }
+
+    /// Whether the extension `e` may take `recv_ty` as its receiver: a top-level one whose receiver
+    /// clause takes it (`receiver_fits`), any other, whose receiver its owner's instance may fix.
+    fn extension_may_take(&mut self, e: SymId, recv: TExprId, recv_ty: TypeId) -> bool {
+        if !matches!(self.syms.sym(e).owner, Owner::Package(_)) {
+            return true;
+        }
+        let call = MethodCall { recv: None, sym: e, owner_subst: Vec::new(), ext_recv: Some((recv, recv_ty)), prefix: None, refined: None };
+        self.receiver_fits(&call, recv_ty)
     }
 
     /// Whether the extension `call`'s receiver clause takes `recv_ty`: what dotty's `tryExtension`

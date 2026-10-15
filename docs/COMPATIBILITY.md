@@ -12,6 +12,12 @@ libraries compiled from their jars run against scalac's output. The remaining di
   classes, no view takes an `Any` to an `AnyVal`: an overloaded `unapply` with an `AnyVal` alternative,
   matched on a scrutinee typed `Any`, has no alternative in either round of the resolution, where scalac's
   `Predef.Ensuring` makes the `AnyVal` one applicable (as teq does on scala-library).
+- A match on a sealed type whose cases cover it only together through one irrefutable sequence extractor
+  (`case B() =>` and `case B(a, rest*) =>`, an `unapplySeq` returning a `Seq` or a `Some` of one) is warned
+  as not exhaustive, where scalac's space of the extractor's sequence sees it covered; one case covering every
+  length (`case B(all*)`) is not warned.
+- `val Array(a, b) = s.split(",")` warns that the pattern's type is more specialized than the right-hand
+  side's, which scalac does not.
 
 ### Types and inference
 
@@ -25,6 +31,10 @@ libraries compiled from their jars run against scalac's output. The remaining di
   API lacks reports `not supported yet: scala.quoted <member> (called by <macro>)`. Of the 320 run-macros test
   programs of scalac 3.8.4's tag, 89 pass under node and 94 in the interpreter (41 of each have no check file
   and pass by running without an error).
+- A macro reads teq's trees, not those dotty's typer leaves: an inline call within its argument carries no
+  `Inlined(call, bindings, expansion)` node, a case class's `apply` is `new C(..)` and a mirror is made in place
+  rather than bound to a proxy, so a macro matching those shapes fails (ultraviolet's `toGLSL`, which compiles
+  Indigo's shaders: `ShaderError`s from `CreateShaderAST`).
 - Types carry no annotations (`AnnotatedType(t, annot)` is `t`, the type tree of a `T*` parameter is
   `Seq[T]`, so Magnolia's `repeated` answers `false`).
 - An inline method of a library is expanded from its body as the library's TASTy holds it, checked once
@@ -68,6 +78,9 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   unboxed to `0` where an `Int` is consumed, as scalac unboxes it, but as the result of an inline method's
   expansion; `toString` and `hashCode` called on it give `"null"` and `0` (the interpreter's `toString`
   throws, as scalac's) where scalac throws `NullPointerException`.
+- A collection class of a jar (scalajs-dom's `DOMListSeq`) answers `foreach` and what is built on it through
+  its iterator, but not `map` and the operations that build a collection of its own kind, which the std builds
+  through a member such a class lacks.
 - Nothing blocks or runs in parallel: `Await.result` of an incomplete future throws `TimeoutException` at
   once, `synchronized` takes no monitor on any target, recursion has node's stack of about 10,000 frames
   (50,000 under Scala.js), there is no reflection, and `getStackTrace` is empty.
@@ -75,6 +88,10 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 ### Java and Scala.js interop
 
 - `@JSExportTopLevel` in a jar is not exported, and `js.constructorOf[C]` answers native classes only.
+- An exported member's alternatives (`@JSExport`) are chosen at run time by the number of arguments and the
+  tests of their primitive and Scala-class parameters, as Scala.js chooses; a parameter of a Scala trait is not
+  tested (Scala.js tests it), and alternatives no test tells apart are not reported, Scala.js's "Cannot
+  disambiguate overloads for exported method".
 - Reflective instantiation: every array is one class (`Array[Int]` and `Array[String]` erase alike), and a
   misspelt annotation registers nothing.
 
@@ -134,7 +151,8 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   `Array[Int]` takes every array; a cast of a function type takes a function of any arity (a type test asks for
   the arity), since a JavaScript function's `length` is not its Scala arity and Scala.js's `js.FunctionN` are
   scala's function types here, where a cast to one is unchecked under Scala.js (a cast written to `js.FunctionN`
-  is unchecked whatever its source).
+  is unchecked whatever its source). A `js.Array` converts to an immutable `Seq` where one is expected
+  (Scala.js's `js.WrappedArray` is a mutable one, which scalac does not pass for it).
 - `java.time` is scala-java-time's, from its jar on the class path, and the region zone ids its tzdb jar's,
   as a Scala.js build takes them, rather than a copy of the JDK's in the standard library.
 - `Throwable` extends the native `Error`, and a value JavaScript throws reaches a `catch` as

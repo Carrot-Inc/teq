@@ -275,6 +275,26 @@ package java.util.concurrent:
   trait Executor:
     def execute(command: Runnable): Unit
 
+  // The reactive-streams interfaces, as Scala.js's javalib has them (fs2's `interop.flow`).
+  @jvmClass("java/util/concurrent/Flow")
+  object Flow:
+    @jvmClass("java/util/concurrent/Flow$Publisher")
+    trait Publisher[T]:
+      def subscribe(subscriber: Subscriber[? >: T]): Unit
+    @jvmClass("java/util/concurrent/Flow$Subscriber")
+    trait Subscriber[T]:
+      def onSubscribe(subscription: Subscription): Unit
+      def onNext(item: T): Unit
+      def onError(throwable: Throwable): Unit
+      def onComplete(): Unit
+    @jvmClass("java/util/concurrent/Flow$Subscription")
+    trait Subscription:
+      def request(n: scala.Long): Unit
+      def cancel(): Unit
+    @jvmClass("java/util/concurrent/Flow$Processor")
+    trait Processor[T, R] extends Subscriber[T], Publisher[R]
+    def defaultBufferSize(): Int = 256
+
   class RejectedExecutionException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause)
 
   class CancellationException(message: String = null) extends IllegalStateException(message)

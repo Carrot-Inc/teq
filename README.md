@@ -196,6 +196,16 @@ sbt build exports with sbt-teq, and its generated sources (Play's routers, its s
 come from their own generators under `teq interp`; its compile, its `testFull` suites and its server are
 the gate's lines once they pass (`bench/lila/`, `docs/DEVELOPING.md`'s "lila").
 
+Tyrian and Indigo, the Elm-style framework and the game engine of PurpleKingdomGames, are the public
+reference projects built by Mill: their pinned revisions export through mill-teq by `mill --import`, with
+no edit of the builds. Tyrian is tested against today: its twelve modules (nine Scala.js, three JVM) compile,
+its generated tags come from the build's own generators under `teq interp`, its 232 test cases run as
+scalac's oracle runs them, and its sandbox, built by teq, runs in headless Chrome. Indigo is not: its pin,
+oracle and export are in place and its generated sources come from its plugin's own generators under `teq
+interp`, Mill's to the byte, but its compile stops at its shaders, whose ultraviolet macros read the trees
+dotty's typer leaves (`Inlined` nodes among them), which teq does not make (`bench/tyrian/`, `bench/indigo/`,
+`docs/DEVELOPING.md`'s "Tyrian and Indigo").
+
 ## Documentation
 
 | | |

@@ -1,0 +1,5 @@
+Batch(List(Left, Middle))
+Batch(List(a))
+Batch(List(1, 2))
+Batch(List(0, 1, 2))
+Batch(List(b))

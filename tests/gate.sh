@@ -1,7 +1,7 @@
 #!/bin/bash
 # The landing gate: tests/gate.sh <worktree> [--master <binary>] [--master-rev <revision>] [--app <build.json>]
-#   [--export-manifest <file>] [--lila <checkout>] [--airstream <checkout>] [--laminar <checkout>] [--only <name,...>]
-#   [--with <name,...>] [--record]
+#   [--export-manifest <file>] [--lila <checkout>] [--airstream <checkout>] [--laminar <checkout>] [--tyrian <checkout>]
+#   [--indigo <checkout>] [--only <name,...>] [--with <name,...>] [--record]
 #
 # <worktree> holds the landing: a branch rebased onto master, committed (the gate refuses a tree with changes outside
 # its head, since the machines get the tree and every binary names the head). The gate takes thirty minutes at most
@@ -27,7 +27,8 @@
 # gate polls the machines and retries its claims every GATE_POLL_SECONDS (default 30; the comparison's polls at half
 # of it).
 # split-determinism, when the tree has it, compares with master's binary (REF), built on its machine from master's
-# sources, the revision --master names.
+# sources, the revision --master names, unless --export-manifest is given: the landing then changes the output, as
+# the export line attests through the manifest, and the suite's own runs are compared with each other alone.
 #
 # The timing lines: compare the head with master on a machine of their own (tests/gate-compare.sh, bench/pairs.py;
 # docs/DEVELOPING.md, "The timing lines on a machine"): budget, the type phase of every program of the compile
@@ -55,13 +56,19 @@
 # the pin's; an export that compiles the build or records a generator only sbt runs fails), airstream-compile and
 # laminar-compile (teq compile of the pin's projects, the generators' outputs deleted first and written again with
 # the pin's bytes) and airstream-test and laminar-test (teq test --verbose, the suites and cases by outcome against
-# the project's tests.json); each bench/<project>/<project>.scala's verb under the head's binary, each checkout's
+# the project's tests.json); four each over Tyrian and Indigo, the public reference projects built by Mill,
+# tyrian-export and indigo-export (mill-teq through `mill --import`, Indigo's plugin published first), tyrian-compile
+# and indigo-compile (every module and the generated inputs' digests), tyrian-test and indigo-test (the cases against
+# tests.json) and tyrian-run and indigo-run (the sandbox built by teq and checked in headless Chrome by
+# bench/smoke.mjs, after the browser is checked to make a WebGL2 context, `node bench/smoke.mjs webgl`), each
+# bench/mill-reference.scala's verb for the project; each bench/<project>/<project>.scala's verb under the head's binary otherwise, each checkout's
 # lines one after another (export, compile, test, run: compile and test stop the project's daemon and delete its
 # products). They run on the machine that holds the checkouts, its pool line carrying `holds=<project>,...`, or the
 # one GATE_LILA_MACHINE names, which no shard and no comparison takes while a project line is selected: its login
-# shell gives the checkouts at the pins (GATE_LILA_CHECKOUT, GATE_AIRSTREAM_CHECKOUT, GATE_LAMINAR_CHECKOUT, their npm
+# shell gives the checkouts at the pins (GATE_LILA_CHECKOUT, GATE_AIRSTREAM_CHECKOUT, GATE_LAMINAR_CHECKOUT,
+# GATE_TYRIAN_CHECKOUT, GATE_INDIGO_CHECKOUT, their npm
 # fixtures installed), lila's services (LILA_MONGOD, LILA_REDIS), the pins' JDK (JAVA_HOME) and their jars in the
-# coursier cache, and its lines take lila's ports (27017, 6379, 9663). With --lila, --airstream or --laminar naming a
+# coursier cache, and its lines take lila's ports (27017, 6379, 9663). With --lila, --airstream, --laminar, --tyrian or --indigo naming a
 # checkout here, that project's lines run on the reference machine instead. A line without its checkout, an export, a
 # service or a suite fails, never skips, and so does a line with no machine to run on.
 #
@@ -114,7 +121,7 @@ cd "$(dirname "$0")/.."
 root=$PWD
 ra=${REMOTE_AGENT:-}
 usage() {
-  echo "usage: tests/gate.sh <worktree> [--master <binary>] [--master-rev <revision>] [--app <build.json>] [--export-manifest <file>] [--lila <checkout>] [--airstream <checkout>] [--laminar <checkout>] [--only <name,...>] [--with <name,...>] [--record]" >&2
+  echo "usage: tests/gate.sh <worktree> [--master <binary>] [--master-rev <revision>] [--app <build.json>] [--export-manifest <file>] [--lila <checkout>] [--airstream <checkout>] [--laminar <checkout>] [--tyrian <checkout>] [--indigo <checkout>] [--only <name,...>] [--with <name,...>] [--record]" >&2
   exit 2
 }
 absolute() { case $1 in /*) echo "$1" ;; *) echo "$caller/$1" ;; esac; }
@@ -125,6 +132,8 @@ app=
 lila=
 airstream=
 laminar=
+tyrian=
+indigo=
 manifest=
 only=
 with=
@@ -139,6 +148,8 @@ while [ $# -gt 0 ]; do
     --lila) [ -n "$2" ] || usage; lila=$(absolute "$2"); shift 2 ;;
     --airstream) [ -n "$2" ] || usage; airstream=$(absolute "$2"); shift 2 ;;
     --laminar) [ -n "$2" ] || usage; laminar=$(absolute "$2"); shift 2 ;;
+    --tyrian) [ -n "$2" ] || usage; tyrian=$(absolute "$2"); shift 2 ;;
+    --indigo) [ -n "$2" ] || usage; indigo=$(absolute "$2"); shift 2 ;;
     --only) [ -n "$2" ] || usage; only=" ${2//,/ } "; shift 2 ;;
     --with) [ -n "$2" ] || usage; with=" ${2//,/ } "; shift 2 ;;
     --record) record=1; shift ;;
@@ -179,6 +190,8 @@ machine=(
   "app ./tests/app.sh"
   "lila-test-verb ./tests/lila-test-verb.sh"
   "reference-test-verb ./tests/reference-test-verb.sh"
+  "mill-test-verb ./tests/mill-test-verb.sh"
+  "std-entered ./tests/std-entered.sh"
   "jvm ./tests/run_jvm.sh"
   "jvm-21 ./tests/run_jvm.sh --java-output-version=21"
   "interp ./tests/run_interp.sh"
@@ -199,11 +212,11 @@ machine=(
 # excluded: prop  outside the gate, as tests/all.sh says (its crates are fetched apart); the GitHub gate runs it
 compare="budget runtime sentinel"
 local_lines="size instructions instructions-derive memory asymptotics app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
-project_lines="lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test"
+project_lines="lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test tyrian-export tyrian-compile tyrian-test tyrian-run indigo-export indigo-compile indigo-test indigo-run"
 # The lines run only when --only or --with names them: the scalac oracle, at a release and nightly; the reference
 # projects', until their time and memory are measured within the gate's budget (docs/DEVELOPING.md, "lila",
-# "Airstream and Laminar").
-optional="app-scalac lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test"
+# "Airstream and Laminar", "Tyrian and Indigo").
+optional="app-scalac lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test tyrian-export tyrian-compile tyrian-test tyrian-run indigo-export indigo-compile indigo-test indigo-run"
 names=" $compare $local_lines $project_lines "
 for entry in "${machine[@]}"; do names="$names${entry%% *} "; done
 [ -z "$only" ] || [ -z "$with" ] || { echo "gate: --only and --with exclude each other" >&2; exit 2; }
@@ -259,11 +272,11 @@ remote_selected=0
 for name in $compare; do selected $name && remote_selected=1; done
 for entry in "${machine[@]}"; do selected "${entry%% *}" && remote_selected=1; done
 # The projects whose lines run on the machine that holds their checkouts (projects), and those whose checkout
-# --lila, --airstream or --laminar names here, whose lines run on the reference machine (here_projects, here_lines).
+# --lila, --airstream, --laminar, --tyrian or --indigo names here, whose lines run on the reference machine (here_projects, here_lines).
 projects=
 here_projects=
 here_lines=
-for p in lila airstream laminar; do
+for p in lila airstream laminar tyrian indigo; do
   wanted=0
   for name in $project_lines; do
     [[ $name == $p-* ]] && selected $name || continue
@@ -471,7 +484,30 @@ local_line() {
       ;;
   esac
 }
-# local_project <project>: the project's lines over its checkout here (--lila, --airstream, --laminar), one after
+# project_script <project>: the script whose verbs a project's lines run and the arguments before the verb:
+# bench/<project>/<project>.scala, or bench/mill-reference.scala with the project's name for Tyrian and Indigo.
+project_script() {
+  case $1 in
+    tyrian|indigo) echo "bench/mill-reference.scala -- $1" ;;
+    *) echo "bench/$1/$1.scala --" ;;
+  esac
+}
+# project_preflight <project> <verb>: what a verb needs before it runs: Tyrian's and Indigo's run a browser that
+# makes a WebGL2 context, which headless Chrome does through SwiftShader.
+project_preflight() {
+  case $1-$2 in
+    tyrian-run|indigo-run) echo "timeout 120 node bench/smoke.mjs webgl && " ;;
+  esac
+}
+# project_env <project>: the assignments a project's verbs run under: Indigo's at one typer worker, whose whole
+# compile stays under 3 GB where the automatic count's (eight) reached 22.2 GB, past a driver's 16 GB allowance (the
+# parallel typer's growth on indigo.js, a found line of its own).
+project_env() {
+  case $1 in
+    indigo) echo "TEQ_THREADS=1 " ;;
+  esac
+}
+# local_project <project>: the project's lines over its checkout here (--lila, --airstream, --laminar, --tyrian, --indigo), one after
 # another: bench/<project>/<project>.scala's verbs, its logs and caches under the gate's temporary directory and its
 # logs copied into the attempt's afterwards.
 local_project() {
@@ -480,7 +516,7 @@ local_project() {
     selected "$p-$verb" || continue
     s=$(now)
     mkdir -p "$tmp/$p" "$out/$p"
-    (cd "$wt" && timeout 3600 "$bin" interp bench/$p/$p.scala -- "$verb" "$checkout" "$tmp/$p" --teq "$bin") > "$out/$p-$verb.log" 2>&1
+    (cd "$wt" && eval "$(project_preflight $p $verb)true" && env $(project_env $p)timeout 3600 "$bin" interp $(project_script $p) "$verb" "$checkout" "$tmp/$p" --teq "$bin") > "$out/$p-$verb.log" 2>&1
     code=$?
     find "$tmp/$p" -maxdepth 2 -name '*.log' -exec cp {} "$out/$p/" \;
     result "$p-$verb" local $(($(now) - s)) $code "$(grep -E "^(FAIL )?$p: " "$out/$p-$verb.log" | tail -1)" "$out/local.results"
@@ -835,7 +871,7 @@ projects_half() {
       # The project's directory of logs and caches, outside the repository and fresh at its export.
       entry="d=\$(dirname \"\$PWD\")/gate-projects/$p; c=\${GATE_$(echo $p | tr a-z A-Z)_CHECKOUT:-}; [ -n \"\$c\" ] || { echo \"FAIL $p: needs GATE_$(echo $p | tr a-z A-Z)_CHECKOUT, the checkout at bench/$p/pin.json's commit, on \$(hostname)\"; exit 1; }"
       [ $verb != export ] || entry="$entry; rm -rf \"\$d\""
-      entry="$entry; mkdir -p \"\$d\" out/gate/$p && timeout 3600 \"\$TEQ\" interp bench/$p/$p.scala -- $verb \"\$c\" \"\$d\" --teq \"\$TEQ\"; code=\$?; find \"\$d\" -maxdepth 2 -name '*.log' -exec cp {} out/gate/$p/ \\;; exit \$code"
+      entry="$entry; mkdir -p \"\$d\" out/gate/$p && $(project_preflight $p $verb)$(project_env $p)timeout 3600 \"\$TEQ\" interp $(project_script $p) $verb \"\$c\" \"\$d\" --teq \"\$TEQ\"; code=\$?; find \"\$d\" -maxdepth 2 -name '*.log' -exec cp {} out/gate/$p/ \\;; exit \$code"
       list="$list$p-$verb $entry"$'\n'
     done
   done
@@ -1067,7 +1103,7 @@ for entry in sorted(want, key=lambda e: -times.get(e.split()[0], 120)):
 PY
   ref=
   ref_shard=
-  if [ -n "$mfull" ] && [ "$mfull" != "$full" ] && grep -q ' split-determinism ' "$tmp/deal"; then
+  if [ -n "$mfull" ] && [ "$mfull" != "$full" ] && [ -z "$manifest" ] && grep -q ' split-determinism ' "$tmp/deal"; then
     # master's sources for REF: this gate's own clone at master's revision, mirrored as a project of its own
     refdir=$tmp/teq-master
     git clone -q --shared --no-checkout "$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir)" "$refdir"

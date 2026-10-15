@@ -125,7 +125,7 @@ jobs:
             minutes: 30
             jars: true
           - group: task
-            suites: task runner-classes lila-test-verb reference-test-verb
+            suites: task runner-classes lila-test-verb reference-test-verb mill-test-verb std-entered
             minutes: 30
             jars: true
           - group: determinism

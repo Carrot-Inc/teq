@@ -51,8 +51,8 @@ pub struct Entry {
 
 /// The simple names of the Scala.js annotations the loader reads (`scala.scalajs.js.native` and
 /// those of `scala.scalajs.js.annotation`).
-pub const JS_ANNOTATION_NAMES: [&str; 8] =
-    ["native", "JSType", "JSGlobal", "JSImport", "JSName", "JSBracketAccess", "JSGlobalScope", "JSExportTopLevel"];
+pub const JS_ANNOTATION_NAMES: [&str; 9] =
+    ["native", "JSType", "JSGlobal", "JSImport", "JSName", "JSBracketAccess", "JSGlobalScope", "JSExportTopLevel", "JSExport"];
 
 /// An annotation with the arguments of its constructor call, as far as they are constants or paths.
 #[derive(Clone, Debug)]

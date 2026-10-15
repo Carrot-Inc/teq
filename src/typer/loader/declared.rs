@@ -6,7 +6,7 @@
 
 use super::super::Worker;
 use super::bodies::Conv;
-use super::super::apply::{ArgList, Callee, StaticPath};
+use super::super::apply::{ArgList, ArgSrc, Callee, StaticPath};
 use crate::ast::{DeclRef, Expr, ExprId, ListRef};
 use crate::source::Span;
 use crate::tir::{DefaultOf, TExpr, TExprId};
@@ -1018,6 +1018,10 @@ impl<'a> Worker<'a> {
     #[cold]
     #[inline(never)]
     pub(in crate::typer) fn apply_declared(&mut self, d: DeclRef, node: ExprId, q: ExprId, name: Name, targs: Option<ListRef>, lists: Vec<ArgList>, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
+        let lists = match self.declared_member(d) {
+            Some(sym) => self.regrouped_for(sym, lists),
+            None => lists,
+        };
         let outer_took = self.declared_took.take();
         let typed = match self.resolve_static_path(q, name, false) {
             StaticPath::Callee(callee) => {
@@ -1059,6 +1063,34 @@ impl<'a> Worker<'a> {
             self.dump_declared(d, node, span, Some(typed.1), took);
         }
         typed
+    }
+
+    /// The argument lists of a library body's call regrouped as the clauses of the member its pickle
+    /// declares, where the two group the same arguments otherwise: the body was compiled against a
+    /// version of the member's library whose method took them in other clauses, and its call names by
+    /// its signature the method kept for binary compatibility, which erasure flattens alike (munit's
+    /// deprecated `assertEquals(obtained, expected, clue, loc, compare)` that munit-cats-effect's
+    /// `assertEquals(a, returns, clue)(loc, compare)` links to). No list holds a repeated argument.
+    fn regrouped_for(&mut self, sym: SymId, lists: Vec<ArgList>) -> Vec<ArgList> {
+        if self.syms.sym(sym).kind != SymKind::Def || lists.len() < 2 {
+            return lists;
+        }
+        let sig = self.sig_arc(sym);
+        let shapes: Vec<usize> = sig.clauses.iter().map(|c| c.params.len()).collect();
+        let given: Vec<usize> = lists.iter().map(|l| l.args.len()).collect();
+        let repeated = sig.clauses.iter().any(|c| c.params.iter().any(|p| p.repeated));
+        if shapes == given || shapes.iter().sum::<usize>() != given.iter().sum::<usize>() || shapes.len() >= lists.len() || repeated {
+            return lists;
+        }
+        let first_span = lists[0].span;
+        let mut args = lists.into_iter().flat_map(|l| l.args.into_iter());
+        sig.clauses
+            .iter()
+            .map(|c| {
+                let taken: Vec<ArgSrc> = args.by_ref().take(c.params.len()).collect();
+                ArgList { args: taken, using: c.is_using, span: first_span }
+            })
+            .collect()
     }
 
     /// The member a library body's selection calls where the receiver's name is overloaded:

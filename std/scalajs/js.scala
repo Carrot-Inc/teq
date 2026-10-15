@@ -8,13 +8,12 @@ import scala.scalajs.js
 type Any = scala.Any
 
 object Any:
-  // The conversions a `_sjs1_` jar's bodies call by name: a JS array is teq's `Array`, a
-  // dictionary is a map whose updates write through to it (scala-java-time's tzdb provider reads
-  // its zone tables so).
-  def jsArrayOps[A](array: Array[A]): Array[A] = array
-  def wrapArray[A](array: Array[A]): List[A] = array.toList
-  def wrapDictionary[A](dict: Dictionary[A]): scala.collection.mutable.Map[String, A] =
-    new scala.collection.mutable.HashMap(dictionaryEntries(dict))
+  // The conversions a `_sjs1_` jar's bodies call by name: a JS array's collection methods and the
+  // array as a sequence, a dictionary as a map whose updates write through to it (scala-java-time's
+  // tzdb provider reads its zone tables so).
+  def jsArrayOps[A](array: Array[A]): ArrayOps[A] = new ArrayOps(array)
+  def wrapArray[A](array: Array[A]): WrappedArray[A] = new WrappedArray(array)
+  def wrapDictionary[A](dict: Dictionary[A]): WrappedDictionary[A] = new WrappedDictionary(dict)
   def fromString(s: String): Any = s
   def fromInt(i: Int): Any = i
   def fromDouble(d: Double): Any = d
@@ -218,16 +217,136 @@ type Function4[-A, -B, -C, -D, +R] = (A, B, C, D) => R
 type Function5[-A, -B, -C, -D, -E, +R] = (A, B, C, D, E) => R
 type Function6[-A, -B, -C, -D, -E, -F, +R] = (A, B, C, D, E, F) => R
 
-/** teq's Array is the JS array, so js.Array shares its collection methods; push mutates in place. */
-type Array[A] = scala.Array[A]
+/** Scala.js's `js.Array`, the JavaScript array: a type of its own beside Scala's `Array` (one
+  * JavaScript value in teq), whose collection methods are `js.ArrayOps`'s, building `js.Array`s
+  * without a `ClassTag`. */
+@js.native
+@JSGlobal
+class Array[A](arrayLength: Int = js.native) extends Object, Iterable[A]:
+  def length: Int = js.native
+  @js("$0.length = $1")
+  def length_=(n: Int): Unit
+  @JSBracketAccess
+  def apply(index: Int): A = js.native
+  @JSBracketAccess
+  def update(index: Int, value: A): Unit = js.native
+  def concat[B >: A](items: Array[? <: B]*): Array[B] = js.native
+  def join(seperator: String = js.native): String = js.native
+  def pop(): A = js.native
+  def push(items: A*): Int = js.native
+  @JSName("reverse")
+  def reverseInPlace(): Array[A] = js.native
+  def shift(): A = js.native
+  @JSName("slice")
+  def jsSlice(start: Int = 0, end: Int = Int.MaxValue): Array[A] = js.native
+  @js("$0.sort()")
+  def sort(): Array[A]
+  def sort(compareFn: Function2[A, A, Int]): Array[A] = js.native
+  def splice(index: Int, deleteCount: Int, items: A*): Array[A] = js.native
+  def unshift(items: A*): Int = js.native
+  def indexOf(searchElement: A): Int = js.native
+  def lastIndexOf(searchElement: A): Int = js.native
 
-object Array:
+object Array extends LowPrioArrayConversions:
   @js("[...$1]")
   def apply[A](items: A*): Array[A]
   @js("Array.isArray($1)")
   def isArray(arg: scala.Any): Boolean
   @js("Array.from($1)")
-  def from[A](iterable: scala.Any): Array[A]
+  def from[A](iterable: Iterable[A]): Array[A]
+  // Scala.js's `js.Any.jsArrayOps`, found in the implicit scope of `js.Any`, which the array's
+  // companion stands for here, `js.Any` being `scala.Any`: `arr.map(f)` is a `js.Array`.
+  implicit def jsArrayOps[A](array: Array[A]): ArrayOps[A] = new ArrayOps(array)
+
+// Scala.js's `js.LowPrioAnyImplicits.wrapArray`: the array as a sequence where one is expected,
+// below `jsArrayOps` for the methods both have.
+trait LowPrioArrayConversions:
+  implicit def wrapArray[A](array: Array[A]): WrappedArray[A] = new WrappedArray(array)
+
+/** Scala.js's `js.ArrayOps`: the collection methods of a `js.Array`, each building a `js.Array`. */
+final class ArrayOps[A](private val array: Array[A]) extends scala.IndexedSeqOps[A, Array, Array[A]]:
+  def length: Int = array.length
+  def apply(i: Int): A =
+    if i < 0 || i >= array.length then throw new IndexOutOfBoundsException(i.toString) else array(i)
+  def buildCC[B](items: scala.RawBuffer[B]): Array[B] = scala.unsafeCast[scala.RawBuffer[B], Array[B]](items)
+  override def iterator: scala.Iterator[A] = scala.Iterator.over(scala.unsafeCast[Array[A], scala.RawBuffer[A]](array))
+  def foreach[U](f: A => U): Unit =
+    var i = 0
+    while i < array.length do
+      f(array(i))
+      i += 1
+  override def className: String = "ArrayOps"
+  // Scala.js's in-place operations, each the array itself after it. No member here is overloaded
+  // (`remove(index, count)` is left out): a JVM build, where this layer is open too, names every
+  // overloaded member's alternatives, which would complete this class over the lean std's traits.
+  def +=(elem: A): Array[A] =
+    array.push(elem)
+    array
+  def addOne(elem: A): Array[A] = this += elem
+  def append(elem: A): Array[A] = this += elem
+  def ++=(elems: IterableOnce[A]): Array[A] =
+    elems.iterator.foreach(x => array.push(x))
+    array
+  def addAll(elems: IterableOnce[A]): Array[A] = this ++= elems
+  def appendAll(elems: IterableOnce[A]): Array[A] = this ++= elems
+  def +=:(elem: A): Array[A] =
+    array.unshift(elem)
+    array
+  def prepend(elem: A): Array[A] = elem +=: this
+  def ++=:(elems: IterableOnce[A]): Array[A] =
+    val items = elems.iterator.toList
+    items.reverseIterator.foreach(x => array.unshift(x))
+    array
+  def prependAll(elems: IterableOnce[A]): Array[A] = elems ++=: this
+  def insert(index: Int, elem: A): Unit =
+    if index < 0 || index > array.length then throw new IndexOutOfBoundsException(index.toString)
+    array.splice(index, 0, elem)
+  def insertAll(index: Int, elems: IterableOnce[A]): Unit =
+    if index < 0 || index > array.length then throw new IndexOutOfBoundsException(index.toString)
+    var at = index
+    elems.iterator.foreach { x =>
+      array.splice(at, 0, x)
+      at += 1
+    }
+  def remove(index: Int): A =
+    if index < 0 || index >= array.length then throw new IndexOutOfBoundsException(index.toString)
+    array.splice(index, 1)(0)
+  def -=(elem: A): Array[A] =
+    val i = indexOf(elem)
+    if i >= 0 then array.splice(i, 1)
+    array
+  def subtractOne(elem: A): Array[A] = this -= elem
+  def clear(): Unit = array.length = 0
+  def trimStart(n: Int): Unit = array.splice(0, math.min(math.max(n, 0), array.length))
+  def trimEnd(n: Int): Unit = array.length = math.max(0, array.length - math.max(n, 0))
+  def filterInPlace(p: A => Boolean): Array[A] =
+    var i = 0
+    while i < array.length do
+      if p(array(i)) then i += 1 else array.splice(i, 1)
+    array
+  def mapInPlace(f: A => A): Array[A] =
+    var i = 0
+    while i < array.length do
+      array(i) = f(array(i))
+      i += 1
+    array
+
+/** Scala.js's `js.WrappedArray`: a `js.Array` as a mutable indexed sequence, its updates the
+  * array's. */
+final class WrappedArray[A](private val array: Array[A]) extends scala.SeqOps[A, WrappedArray, WrappedArray[A]], scala.IndexedSeq[A]:
+  def this() = this(Array[A]())
+  def length: Int = array.length
+  def apply(i: Int): A =
+    if i < 0 || i >= array.length then throw new IndexOutOfBoundsException(i.toString) else array(i)
+  def update(i: Int, elem: A): Unit =
+    if i < 0 || i >= array.length then throw new IndexOutOfBoundsException(i.toString) else array(i) = elem
+  def addOne(elem: A): this.type =
+    array.push(elem)
+    this
+  def +=(elem: A): this.type = addOne(elem)
+  def buildCC[B](items: scala.RawBuffer[B]): WrappedArray[B] = new WrappedArray(scala.unsafeCast[scala.RawBuffer[B], Array[B]](items))
+  override def iterator: scala.Iterator[A] = scala.Iterator.over(scala.unsafeCast[Array[A], scala.RawBuffer[A]](array))
+  override def className: String = "WrappedArray"
 
 @js.native
 trait Dictionary[A] extends Any:
@@ -237,10 +356,30 @@ trait Dictionary[A] extends Any:
   def update(key: String, value: A): Unit = js.native
 
 object Dictionary:
+  // Scala.js's `js.Any.wrapDictionary`, found in the implicit scope of `js.Any`, which a
+  // dictionary's companion stands for here, `js.Any` being `scala.Any`: a map whose updates write
+  // through to the dictionary (`dataset.collect { .. }`).
+  implicit def wrapDictionary[A](dict: Dictionary[A]): WrappedDictionary[A] = Any.wrapDictionary(dict)
   @js("$jsObj(...$1)")
   def apply[A](fields: (String, A)*): Dictionary[A]
   @js("({})")
   def empty[A]: Dictionary[A]
+
+/** Scala.js's `js.WrappedDictionary`: a dictionary as a mutable map whose updates write through to it, its `map` of
+  * pairs one again, and the dictionary again by its companion's `toJSDictionary` (`dict.addAll(..)` where a
+  * dictionary is expected). */
+final class WrappedDictionary[A](private val dict: Dictionary[A]) extends scala.collection.mutable.HashMap[String, A](dictionaryEntries(dict)):
+  def map[B](f: ((String, A)) => (String, B)): WrappedDictionary[B] =
+    val out = Dictionary.empty[B]
+    foreach { e =>
+      val (k, v) = f(e)
+      out(k) = v
+    }
+    new WrappedDictionary(out)
+
+object WrappedDictionary:
+  def empty[A]: WrappedDictionary[A] = new WrappedDictionary(Dictionary.empty[A])
+  implicit def toJSDictionary[A](wrappedDict: WrappedDictionary[A]): Dictionary[A] = wrappedDict.dict
 
 @js.native
 trait Dynamic
@@ -270,6 +409,16 @@ object Dynamic:
 trait Iterable[+A] extends Object:
   @js("$0[Symbol.iterator]()")
   def jsIterator(): Iterator[A]
+
+object Iterable:
+  // Scala.js's `js.Any.iterableOps`, found in the implicit scope of `js.Any`, which an iterable's
+  // companion stands for here: the JavaScript iterable as a Scala one, iterated afresh by each
+  // `iterator` (a `dom.Headers` mapped, a typed array read as an `IterableOnce`).
+  implicit def iterableOps[A](iterable: Iterable[A]): scala.Iterable[A] =
+    new scala.collection.AbstractIterable[A]:
+      def buildCC[B](items: scala.RawBuffer[B]): scala.Iterable[B] = scala.fromArray(items)
+      override def iterator: scala.Iterator[A] = Iterator.JsIteratorOps.toIterator(iterable.jsIterator())
+      def foreach[U](f: A => U): Unit = iterator.foreach(f)
 
 @js.native
 trait Iterator[+A] extends Object:

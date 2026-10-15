@@ -363,11 +363,14 @@ impl<'a> Parser<'a> {
         }
         // A name followed by a token no pattern continues with is the val's name: `val m Meter(4)`
         // lacks its `=`.
-        let simple = self.at(Tok::Ident)
+        let simple = (self.at(Tok::Ident)
             && !matches!(
                 self.kind_at(1),
                 Tok::LParen | Tok::LBracket | Tok::Dot | Tok::At | Tok::OpIdent | Tok::Arrow | Tok::LArrow | Tok::Underscore
-            );
+            ))
+            // An operator's name is the val's too, as dotty's `simplePattern` takes any identifier:
+            // tyrian's `val ==: = Batch.==:`.
+            || (self.at(Tok::OpIdent) && (matches!(self.kind_at(1), Tok::Eq | Tok::Comma) || self.written_colon_at(1)));
         // `val _: T = e` runs and checks `e` under a name nothing can use.
         let unnamed = self.at(Tok::Underscore) && (self.written_colon_at(1) || self.kind_at(1) == Tok::Eq);
         let (name, span, pat) = if simple {
@@ -864,6 +867,10 @@ impl<'a> Parser<'a> {
     /// The type classes of a `derives` clause, each with the last name of its path.
     fn parse_derives(&mut self) -> Vec<(TyExprId, Name)> {
         let mut derives = Vec::new();
+        // dotc's `newLinesOptWhenFollowedBy(nme.derives)`: the clause on the line after the header.
+        if self.at(Tok::Newline) && self.kind_at(1) == Tok::Ident && self.toks.get(self.pos + 1).is_some_and(|t| t.name == names::DERIVES) {
+            self.bump();
+        }
         if self.at_soft(names::DERIVES) {
             self.bump();
             loop {
@@ -1010,11 +1017,10 @@ impl<'a> Parser<'a> {
     pub(super) fn add_derived_givens(&mut self, mark: usize, cases_mark: usize, defs: &[DefId]) -> Vec<DefId> {
         let mut companions = Vec::new();
         let mut objects: FxMap<Name, DefId> = FxMap::default();
-        // The methods of the body: teq's namer holds no module beside a method of its name, which
-        // scalac overloads (`def A(s: String)` beside `object A`), so a case class there keeps its
-        // constructor proxy, as before its companion was made; a value of its name clashes with the
+        // A method of the class's name beside it does not keep the companion away: the namer holds
+        // the module and the methods as alternatives of one name, as scalac overloads them
+        // (`def A(s: String)` beside `object A`), and a value of its name clashes with the
         // companion, as scalac reports.
-        let mut methods: std::collections::HashSet<Name, crate::intern::FxBuild> = Default::default();
         // The ranges of the body's classes, which their made companions take.
         let mut class_ranges: FxMap<Name, Span> = FxMap::default();
         for &d in defs {
@@ -1025,9 +1031,6 @@ impl<'a> Parser<'a> {
                 }
                 DefKind::Class(_) => {
                     class_ranges.entry(def.name).or_insert(self.ast.def_range(d));
-                }
-                DefKind::Fun(_) => {
-                    methods.insert(def.name);
                 }
                 _ => {}
             }
@@ -1050,7 +1053,7 @@ impl<'a> Parser<'a> {
             }
         }
         for (class, span) in self.pending_cases.split_off(cases_mark) {
-            if !objects.contains_key(&class) && !methods.contains(&class) {
+            if !objects.contains_key(&class) {
                 let range = class_ranges.get(&class).copied().unwrap_or(span);
                 let companion = self.synthetic_companion(class, span, range, Vec::new());
                 objects.insert(class, companion);

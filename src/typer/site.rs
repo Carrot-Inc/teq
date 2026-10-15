@@ -430,6 +430,7 @@ impl<'a> Worker<'a> {
             return None;
         }
         let target = self.solve_bounded_in(target);
+        let target = if self.define_tagged_var(target) { self.solve_bounded_in(target) } else { target };
         let Type::Class(_, args) = self.types.get(target) else { return None };
         let subject = self.dealias(*self.types.items(args).first()?);
         let subject = self.deref(subject);
@@ -453,6 +454,39 @@ impl<'a> Worker<'a> {
             return self.wrapped_tag(class, evidence);
         }
         self.tag_of_class(class, c, matches!(self.types.get(subject), Type::Any), subject)
+    }
+
+    /// dotty's `synthesizedClassTag` makes an open argument fully defined first (`instArg`'s
+    /// `isFullyDefined(tp, ForceDegree.all)`): a variable bounded below by a type beside other
+    /// variables (`B >: String, B >: A, B <: A` of `xs.toArray` given for an `Array[A]`, which the
+    /// solver makes the open `A` of the enclosing application) takes that type: whether it did.
+    fn define_tagged_var(&mut self, target: TypeId) -> bool {
+        let target = self.zonk(target);
+        let first = match self.types.get(target) {
+            Type::Class(_, args) => self.types.items(args).first().copied(),
+            _ => None,
+        };
+        let Some(arg) = first else { return false };
+        let arg = self.deref(arg);
+        let Type::Var(v) = self.types.get(arg) else { return false };
+        if self.tvars[v].inst.is_some() {
+            return false;
+        }
+        let lowers: Vec<TypeId> = self.tvars[v].lower.clone();
+        let mut ground: Vec<TypeId> = Vec::new();
+        for t in lowers {
+            let t = self.zonk(t);
+            if !self.types.has_vars(t) {
+                ground.push(t);
+            }
+        }
+        let [lower] = ground.as_slice() else { return false };
+        let mark = self.snapshot();
+        if self.is_sub(arg, *lower) {
+            return true;
+        }
+        self.rollback(mark);
+        false
     }
 
     /// `ClassTag[AnyRef]`, the tag of `java.lang.Object`.

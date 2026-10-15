@@ -1,0 +1,32 @@
+{
+ "repository": "https://github.com/PurpleKingdomGames/tyrian.git",
+ "commit": "10da68e3119230d01821b720c5a9fe4d841bfdf4",
+ "date": "2025-11-20T08:33:40Z",
+ "shallow": false,
+ "build": ".",
+ "java": 21,
+ "mill": "1.0.6",
+ "scala": "3.8.4",
+ "steps": [
+  "clean",
+  "-j2 __.compile",
+  "-j1 __.fastLinkJS",
+  "-j2 __.test"
+ ],
+ "tests": "tests.json",
+ "overlay": {
+  "build.mill.patch": "9f8880aaf686e367beefee442d432e6121d29295b10b4996021088ef36ef4879",
+  "generate.scala": "b8a00a62f5912aa1f7d89de7661299e2187a76bb7d7e939842eadf3d42b2ffe2",
+  "os.scala": "6b9d5005b5d4b8df6314e56808ea64c3e7fd6a92788a6e51d07a656e8ac78824",
+  "teq.mill.json": "4998ba4989a441ec7c80281d7fe9aa05bb09fa4186210da9dc53a11b0694cbf4"
+ },
+ "run": {
+  "module": "sandbox.js",
+  "page": "sandbox/index.html",
+  "files": {
+   "tyrianapp.js": "run/tyrianapp.js"
+  },
+  "assets": {},
+  "smoke": "tyrian"
+ }
+}

@@ -2389,10 +2389,13 @@ impl<'a> Worker<'a> {
         if !self.function_targets.is_empty() {
             self.read_in_progress(InProgress::ConversionGuard);
         }
-        if self.types.has_vars(t) || self.function_targets.contains(&t) {
+        let (from, to) = (self.types.items(args)[0], self.types.items(args)[1]);
+        // The argument's type is known; the result may leave variables the conversion's result
+        // fixes, as dotty's search constrains them (`B` of `flatten`'s `Array[Int] => IterableOnce[B]`
+        // from `genericWrapArray`'s `ArraySeq[Int]`).
+        if self.types.has_vars(from) || self.function_targets.contains(&t) {
             return Attempt::Mismatch;
         }
-        let (from, to) = (self.types.items(args)[0], self.types.items(args)[1]);
         if self.conversion_result_excluded(given.0, to) {
             return Attempt::Mismatch;
         }
@@ -3192,8 +3195,15 @@ impl<'a> Worker<'a> {
         let (fits, context_free) = if self.syms.sym(given.0).kind == SymKind::Def && self.is_conversion_candidate(given.0) {
             // The target is looked at before the method's signature, which a jar decodes.
             self.profile.try_start(given.0);
+            // An open variable of the result is the conversion's to fix (`try_conversion_method`);
+            // one of the argument leaves the candidate nothing to be applied to.
+            let head = self.deref(target);
+            let from = match self.types.get(head) {
+                Type::Class(_, args) if self.types.items(args).len() == 2 => self.types.items(args)[0],
+                _ => target,
+            };
             let fits = target_class == Some(self.function_class(1))
-                && !self.has_unbounded_var(target)
+                && !self.has_unbounded_var(from)
                 && self.is_conversion_def(given.0)
                 && self.conversion_method_may_fit(given.0, target);
             self.profile.try_end(!fits, true);

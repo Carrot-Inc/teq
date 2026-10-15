@@ -1,0 +1,20 @@
+diff --git a/build.mill b/build.mill
+index 477d6a195b075b0a000a69dd5d71d1d6f440277d..c8d8223e0ffcced766cea778122ea0a367c91ab8 100644
+--- a/build.mill
++++ b/build.mill
+@@ -16,13 +16,13 @@ import org.typelevel.scalacoptions.*
+ import com.goyeau.mill.scalafix.ScalafixModule
+ 
+ trait Shared extends ScalafmtModule, ScalafixModule:
+-  def scalaVersion = "3.7.3"
++  def scalaVersion = "3.8.4"
+ 
+   override def scalacOptions = Task {
+     super.scalacOptions() ++
+       ScalacOptions.tokensForVersion(
+         ScalaVersion.unsafeFromString(scalaVersion()),
+-        ScalacOptions.default ++ ScalacOptions.fatalWarningOptions
++        ScalacOptions.default
+       )
+   }
+ 

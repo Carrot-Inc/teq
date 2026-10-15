@@ -1,4 +1,4 @@
-package scala
+package scala.collection.immutable
 
 // scala-library's `NumericRange`: the elements from `start` towards `end` by `step`, computed by
 // the `Integral` (of `Long`, `Char`, `BigInt`, a `BigDecimal` as if integral), its length counted as
@@ -31,6 +31,7 @@ sealed class NumericRange[T](val start: T, val end: T, val step: T, val isInclus
       count += 1
       x
     new FnIterator(() => count < length, () => next())
+  override def head: T = if isEmpty then noSuchElement("head of empty NumericRange") else start
   override def last: T = if isEmpty then noSuchElement("last of empty NumericRange") else apply(length - 1)
   override def toString: String =
     val empty = if isEmpty then "empty " else ""
@@ -72,40 +73,43 @@ object NumericRange:
     else if start == end then (if isInclusive then 1 else 0)
     else if upward != posStep then 0
     else
+      // The bounds and the step tried as `Int`s one after another, each converted only once the one
+      // before it fits, deferring to an `Int` range where all three do.
       val startint = num.toInt(start)
-      val endint = num.toInt(end)
-      val stepint = num.toInt(step)
-      if start == num.fromInt(startint) && end == num.fromInt(endint) && step == num.fromInt(stepint) then
-        new Range(startint, endint, stepint, isInclusive).length
-      else
-        if num.isInstanceOf[Numeric.BigDecimalAsIfIntegral.type] then bigDecimalCheckUnderflow(start, end, step)
-        val one = num.one
-        val limit = num.fromInt(Int.MaxValue)
-        def check(t: T): T = if num.gt(t, limit) then throw new IllegalArgumentException("More than Int.MaxValue elements.") else t
-        val startside = num.sign(start)
-        val endside = num.sign(end)
-        num.toInt(
-          if num.gteq(num.times(startside, endside), zero) then
-            val diff = num.minus(end, start)
-            val quotient = check(num.quot(diff, step))
-            val remainder = num.minus(diff, num.times(quotient, step))
-            if !isInclusive && zero == remainder then quotient else check(num.plus(quotient, one))
-          else
-            // Through a point beside zero, in three pieces, as scala-library steps there.
-            val negone = num.fromInt(-1)
-            val startlim = if posStep then negone else one
-            val startdiff = num.minus(if num.lteq(num.abs(start), num.abs(startlim)) then start else startlim, start)
-            val startq = check(num.quot(startdiff, step))
-            val waypointA = if startq == zero then start else num.plus(start, num.times(startq, step))
-            val waypointB = num.plus(waypointA, step)
-            check {
-              if num.lt(waypointB, end) != upward then
-                if isInclusive && waypointB == end then num.plus(startq, num.fromInt(2))
-                else num.plus(startq, one)
-              else
-                val enddiff = num.minus(end, waypointB)
-                val endq = check(num.quot(enddiff, step))
-                val last = if endq == zero then waypointB else num.plus(waypointB, num.times(endq, step))
-                num.plus(startq, num.plus(endq, if !isInclusive && last == end then one else num.fromInt(2)))
-            }
-        )
+      if start == num.fromInt(startint) then
+        val endint = num.toInt(end)
+        if end == num.fromInt(endint) then
+          val stepint = num.toInt(step)
+          if step == num.fromInt(stepint) then
+            return new Range(startint, endint, stepint, isInclusive).length
+      if num.isInstanceOf[Numeric.BigDecimalAsIfIntegral.type] then bigDecimalCheckUnderflow(start, end, step)
+      val one = num.one
+      val limit = num.fromInt(Int.MaxValue)
+      def check(t: T): T = if num.gt(t, limit) then throw new IllegalArgumentException("More than Int.MaxValue elements.") else t
+      val startside = num.sign(start)
+      val endside = num.sign(end)
+      num.toInt(
+        if num.gteq(num.times(startside, endside), zero) then
+          val diff = num.minus(end, start)
+          val quotient = check(num.quot(diff, step))
+          val remainder = num.minus(diff, num.times(quotient, step))
+          if !isInclusive && zero == remainder then quotient else check(num.plus(quotient, one))
+        else
+          // Through a point beside zero, in three pieces, as scala-library steps there.
+          val negone = num.fromInt(-1)
+          val startlim = if posStep then negone else one
+          val startdiff = num.minus(if num.lteq(num.abs(start), num.abs(startlim)) then start else startlim, start)
+          val startq = check(num.quot(startdiff, step))
+          val waypointA = if startq == zero then start else num.plus(start, num.times(startq, step))
+          val waypointB = num.plus(waypointA, step)
+          check {
+            if num.lt(waypointB, end) != upward then
+              if isInclusive && waypointB == end then num.plus(startq, num.fromInt(2))
+              else num.plus(startq, one)
+            else
+              val enddiff = num.minus(end, waypointB)
+              val endq = check(num.quot(enddiff, step))
+              val last = if endq == zero then waypointB else num.plus(waypointB, num.times(endq, step))
+              num.plus(startq, num.plus(endq, if !isInclusive && last == end then one else num.fromInt(2)))
+          }
+      )

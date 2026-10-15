@@ -8765,7 +8765,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// The package scala-library declares a class of the std's `scala` package in.
     fn scala_library_package(name: &str) -> &'static str {
         match name {
-            "List" | "Nil" | "::" | "Vector" | "Map" | "Set" | "Seq" | "IndexedSeq" | "Iterable" | "LazyList" | "Range" | "NumericRange" | "ArraySeq" | "ListMap" | "SortedMap" | "SortedSet" | "TreeMap" | "TreeSet" => {
+            "List" | "Nil" | "::" | "Vector" | "Map" | "Set" | "Seq" | "IndexedSeq" | "Iterable" | "LazyList" | "Range" | "ArraySeq" | "ListMap" | "SortedMap" | "SortedSet" | "TreeMap" | "TreeSet" => {
                 "scala.collection.immutable"
             }
             "Iterator" | "IterableOnce" | "Factory" | "BuildFrom" | "IterableOps" | "SeqOps" | "SetOps" | "IndexedSeqOps" | "View" | "MapView" | "IterableFactory" | "IterableFactoryDefaults" | "SeqFactory" | "MapFactory" | "StrictOptimizedIterableOps" | "StrictOptimizedSeqOps" | "StrictOptimizedSeqFactory" => "scala.collection",

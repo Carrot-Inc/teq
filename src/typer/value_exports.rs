@@ -781,8 +781,11 @@ impl<'a> Worker<'a> {
         };
         let any = in_scala && matches!(class_name.as_str(), "Any" | "AnyRef" | "Object");
         let product = Some(b) == self.b.product || (in_scala && class_name == "Equals");
+        // A source case class has no symbol of its synthesized `equals`: the member its type has
+        // of the name is `scala.Equals`'s, which the synthesized one implements.
         match self.name_str(name).as_str() {
-            "hashCode" | "equals" | "toString" => any,
+            "hashCode" | "toString" => any,
+            "equals" => any || product,
             "canEqual" | "productArity" | "productPrefix" | "productElement" | "productElementName" => product,
             _ => false,
         }
@@ -1173,6 +1176,7 @@ impl<'a> Worker<'a> {
         match home {
             Home::Class(c) => {
                 self.syms.class_mut(c).type_aliases.insert(alias, a);
+                crate::symbols::type_member_written(alias);
             }
             Home::File(p, _) => self.syms.pkgs[p.idx()].entries.entry(alias).or_default().alias = Some(a),
         }

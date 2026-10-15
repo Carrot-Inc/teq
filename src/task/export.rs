@@ -275,22 +275,6 @@ impl TestContext {
         env
     }
 
-    /// How a Scala.js configuration's suites would run, as a refusal names it: the module kind and
-    /// the environment; empty when the export says neither.
-    pub fn js_run(&self) -> String {
-        let env = self.js_env.as_ref().map(|e| match e.kind.as_str() {
-            "node" => "under node".to_string(),
-            "jsdom" => "under node with jsdom".to_string(),
-            other => format!("in the JavaScript environment {}", other),
-        });
-        match (self.module_kind.as_deref(), env) {
-            (Some(kind), Some(env)) => format!(" (linked as {}, run {})", kind, env),
-            (Some(kind), None) => format!(" (linked as {})", kind),
-            (None, Some(env)) => format!(" (run {})", env),
-            (None, None) => String::new(),
-        }
-    }
-
     /// How teq runs a Scala.js configuration's link, as sbt-scalajs does: its module kind and an
     /// environment of node or jsdom, jsdom installed by a lockfile at its package root; else why not.
     pub fn js_test(&self) -> Result<(ModuleKind, &JsEnv), String> {
@@ -793,40 +777,34 @@ impl Export {
         let tool = self.exporter.name();
         // What a resident's one program shows a configuration typed in it that its build tool keeps out of
         // its sight (`transitive: false`): the resident's sources and class path are one union, so such a
-        // configuration sees every configuration of the resident's closure its class path does not name
-        // (a prerequisite of one it names, Mill's `compileModuleDeps`), and every jar of the resident's
-        // class path that its own does not name (a test configuration's, the resident of its compile
-        // configuration's test); and it is typed without every jar of its own class path the resident's
-        // does not name (Mill's `compileMvnDeps` of an upstream module, which its dependents' class paths
-        // leave out): scalac compiles the two apart, each against its own. The configurations that build
-        // on it are the one program's for every build, a reference to them a cycle no build tool compiles.
-        // Refused until configurations have compilation scopes of their own.
+        // configuration sees a prerequisite of one it names that its class path leaves out (Mill's
+        // `compileModuleDeps` of an upstream), and it is typed without every jar
+        // of its own class path whose module the resident's does not name at all (Mill's `compileMvnDeps`
+        // of an upstream module, which its dependents' class paths leave out): scalac compiles the two
+        // apart, each against its own. Refused until configurations have compilation scopes of their own.
+        // What sbt's one program shows its configurations is not: a configuration of the closure none it
+        // names builds on (a sibling), a jar of the resident's class path its own does not name (a
+        // dependent's library, a test's framework) and a module the resident names at another version
+        // (the dependent's resolution evicting the upstream's), which sbt's configurations, typed in
+        // their dependents' residents, see as well.
         for resident in typed.iter().filter(|k| k.configuration != "runtime") {
             let Some(union) = self.configuration(resident) else { continue };
             let closure = self.closure(resident);
             let union_jars = jars_of(&union.classpath);
+            let union_modules: Vec<Option<&str>> = union_jars.iter().map(|j| artifact_module(j)).filter(Option::is_some).collect();
             for key in closure.iter().filter(|k| self.configuration(k).is_some_and(|c| !c.transitive)) {
                 let conf = self.configuration(key).expect("present");
                 let named = products(&conf.classpath);
                 let builds_on_it = |k: &Key| k != key && self.closure(k).contains(key);
+                // A prerequisite of a configuration it names that its class path leaves out (an
+                // upstream's `compileModuleDeps`); a configuration none of them builds on (a sibling
+                // under the resident's project) it sees as an sbt configuration sees its siblings.
                 for hidden in closure.iter().filter(|k| *k != key && !named.contains(k) && !builds_on_it(k)) {
-                    let through = named.iter().find(|n| self.closure(n).contains(hidden)).map_or_else(String::new, |n| format!(", which {} builds on", n));
-                    add(format!("{} does not see {}{}: teq types {} as one program with every configuration it builds on, where {} would be seen; {} {} with {}", key, hidden, through, resident, hidden, verb, resident.project, tool));
+                    let Some(through) = named.iter().find(|n| self.closure(n).contains(hidden)) else { continue };
+                    add(format!("{} does not see {}, which {} builds on: teq types {} as one program with every configuration it builds on, where {} would be seen; {} {} with {}", key, hidden, through, resident, hidden, verb, resident.project, tool));
                 }
                 let own = jars_of(&conf.classpath);
-                let unseen: Vec<&String> = union_jars.iter().filter(|j| !own.contains(*j)).collect();
-                if let Some(first) = unseen.first() {
-                    let more = match unseen.len() {
-                        1 => String::new(),
-                        2 => format!(" and {}", unseen[1]),
-                        n => format!(", {} and {} more", unseen[1], n - 2),
-                    };
-                    add(format!(
-                        "{} is typed inside {}, whose class path holds {}{}, which {}'s does not name: teq types a configuration with those that build on it as one program until configurations have compilation scopes of their own; {} {} with {}",
-                        key, resident, first, more, key, verb, resident.project, tool
-                    ));
-                }
-                let lacking: Vec<&String> = own.iter().filter(|j| !union_jars.contains(*j)).collect();
+                let lacking: Vec<&String> = own.iter().filter(|j| !union_jars.contains(*j) && !union_modules.contains(&artifact_module(j))).collect();
                 if let Some(first) = lacking.first() {
                     let more = match lacking.len() {
                         1 => String::new(),
@@ -856,14 +834,18 @@ impl Export {
         for why in p.unsupported.get(verb).into_iter().flatten() {
             add(format!("{}: {}", project, why));
         }
-        if verb == "test" && p.platform == Platform::Js && self.exporter == Exporter::Sbt {
+        if verb == "test" && p.platform == Platform::Js {
             if let Some(test) = p.configurations.get("test").and_then(|c| c.test.as_ref()).filter(|t| !t.frameworks.is_empty()) {
                 match test.js_test() {
                     Err(why) => add(format!("{}: {}", project, why)),
                     Ok((kind, env)) if env.kind == "jsdom" && kind != ModuleKind::NoModule => add(format!(
-                        "{}: Test / jsEnv is JSDOMNodeJSEnv, which runs a script alone, and the test link is a {} (sbt-scalajs refuses the pair too)",
+                        "{}: its suites run under JSDOMNodeJSEnv, which runs a script alone, and the test link is a {} ({} refuses the pair too)",
                         project,
-                        kind.name()
+                        kind.name(),
+                        match self.exporter {
+                            Exporter::Sbt => "sbt-scalajs",
+                            Exporter::Mill => "Mill's Scala.js worker",
+                        }
                     )),
                     Ok(_) => {}
                 }
@@ -1058,8 +1040,8 @@ impl Export {
         inputs
     }
 
-    /// The test link of a Scala.js project's test configuration with frameworks whose run sbt-teq's
-    /// export describes (`moduleKind`): the session of the configuration links the program whose entry
+    /// The test link of a Scala.js project's test configuration with frameworks whose run the export
+    /// describes (`moduleKind`, sbt-teq's and mill-teq's alike): the session of the configuration links the program whose entry
     /// point starts Scala.js's test bridge (`HARNESS_SOURCE`, under `harness`, one of the session's
     /// inputs) into one file, named for the module kind node loads it as (`.cjs` is CommonJS and
     /// `.mjs` an ES module whatever a `package.json` above says).
@@ -1067,7 +1049,7 @@ impl Export {
         let project = self.projects.get(&key.project)?;
         let test = project.configurations.get(&key.configuration)?.test.as_ref()?;
         let module_kind = ModuleKind::parse(test.module_kind.as_deref()?)?;
-        if project.platform != Platform::Js || key.configuration != "test" || test.frameworks.is_empty() || self.exporter != Exporter::Sbt {
+        if project.platform != Platform::Js || key.configuration != "test" || test.frameworks.is_empty() {
             return None;
         }
         let dir = self.path(&format!("target/teq/{}/{}", key.project, key.configuration));
@@ -1115,6 +1097,13 @@ fn jars_of(classpath: &[Entry]) -> Vec<String> {
             Entry::Product(_) => None,
         })
         .collect()
+}
+
+/// The module of an artifact's coordinates (`group:artifact` of `group:artifact:version`), which a
+/// file's path is not.
+fn artifact_module(jar: &str) -> Option<&str> {
+    let (module, _) = jar.rsplit_once(':')?;
+    (module.matches(':').count() == 1 && !jar.contains(['/', '\\'])).then_some(module)
 }
 
 /// The configurations whose products a classpath names, in its order.
@@ -2402,11 +2391,13 @@ projects:
     configurations:
       compile: {}
       test:
-        frameworks: []
+        frameworks:
+          - class: munit.Framework
         jsEnv:
           args:
             - \"--experimental-vm-modules\"
           kind: jsdom
+          lockfile: package-lock.json
         moduleKind: CommonJSModule
     platform: js
 ",
@@ -2435,17 +2426,21 @@ projects:
         assert_eq!((env["MILL_WORKSPACE_ROOT"].as_str(), env["GIVEN"].as_str()), ("/b", "x"));
         let web = export.configuration(&Key::new("web", "test")).unwrap().test.as_ref().unwrap();
         assert_eq!(web.js_env.as_ref().map(|e| (e.kind.as_str(), e.args.len())), Some(("jsdom", 1)));
-        assert_eq!(web.js_run(), " (linked as CommonJSModule, run under node with jsdom)");
+        assert_eq!(
+            export.refusals("test", "web"),
+            ["web: its suites run under JSDOMNodeJSEnv, which runs a script alone, and the test link is a CommonJSModule (Mill's Scala.js worker refuses the pair too)"]
+        );
         // Transitive configurations, as sbt's are: their products' prerequisites seen.
         let sbt = parse(&text.replace("exporter: mill\n", "").replace("transitive: false", "transitive: true")).unwrap();
         assert!(sbt.refusals("compile", "c").is_empty());
     }
 
     /// A configuration that is not transitive (a Mill module's) typed inside another configuration's resident
-    /// sees the resident's whole union: `leak`'s compile configuration, typed as `leak/test`, would see munit,
-    /// which only its test's class path names, so its test is refused, while its compile and watch get a
-    /// resident of their own (`widest`, `serves`); `lib`'s, typed inside `app`, whose class path adds a jar,
-    /// refuses `app`'s compile; `same`'s test adds nothing its compile does not name and runs. An sbt export's
+    /// sees the resident's jars as an sbt configuration typed there does: `leak`'s compile configuration,
+    /// typed as `leak/test`, sees munit, which only its test's class path names, and its test runs, while its
+    /// compile and watch get a resident of their own (`widest`, `serves`); `lib`'s, typed inside `app`, whose
+    /// class path adds a jar, compiles with `app`; `sib1`'s, typed inside `top` beside `sib2`, which neither
+    /// names, compiles with it; `same`'s test adds nothing its compile does not name. An sbt export's
     /// configurations, transitive, are typed as before.
     #[test]
     fn a_configuration_typed_inside_another_resident_sees_its_union() {
@@ -2489,6 +2484,29 @@ projects:
           - {configuration: compile, project: lib}
         transitive: false
     platform: jvm
+  sib1:
+    configurations:
+      compile:
+        classpath:
+          - x:scala:1
+        transitive: false
+    platform: jvm
+  sib2:
+    configurations:
+      compile:
+        classpath:
+          - x:scala:1
+        transitive: false
+    platform: jvm
+  top:
+    configurations:
+      compile:
+        classpath:
+          - x:scala:1
+          - {configuration: compile, project: sib1}
+          - {configuration: compile, project: sib2}
+        transitive: false
+    platform: jvm
   same:
     configurations:
       compile:
@@ -2507,15 +2525,12 @@ projects:
 ",
         );
         let export = parse(&text).unwrap();
-        assert_eq!(
-            export.refusals("test", "leak"),
-            ["leak/compile is typed inside leak/test, whose class path holds x:munit:1, which leak/compile's does not name: teq types a configuration with those that build on it as one program until configurations have compilation scopes of their own; test leak with mill"]
-        );
+        assert!(export.refusals("test", "leak").is_empty());
         assert!(export.refusals("compile", "leak").is_empty() && export.refusals("watch", "leak").is_empty());
         assert_eq!(export.widest("leak"), Some(Key::new("leak", "compile")));
         assert!(!export.serves(&Key::new("leak", "test"), &Key::new("leak", "compile")) && export.serves(&Key::new("leak", "compile"), &Key::new("leak", "compile")));
-        assert_eq!(export.refusals("compile", "app").len(), 1);
-        assert!(export.refusals("compile", "app")[0].starts_with("lib/compile is typed inside app/compile, whose class path holds x:extra:1, which lib/compile's does not name"));
+        assert!(export.refusals("compile", "app").is_empty());
+        assert!(export.refusals("compile", "top").is_empty());
         assert!(export.refusals("test", "same").is_empty());
         let sbt = parse(&text.replace("exporter: mill\n", "").replace("transitive: false", "transitive: true")).unwrap();
         assert!(sbt.refusals("test", "leak").is_empty() && sbt.refusals("compile", "app").is_empty());
@@ -2526,7 +2541,9 @@ projects:
     /// An upstream configuration that is not transitive, typed inside a downstream resident whose class path
     /// lacks a jar of its own (Mill's `compileMvnDeps`, which its dependents' class paths leave out), would not
     /// find what it reads, where scalac compiles it apart against its own class path: the downstream's
-    /// compile is refused, naming the two configurations and the jar, while the upstream's compiles alone.
+    /// compile is refused, naming the two configurations and the jar, while the upstream's compiles alone. A
+    /// downstream naming the module at another version (`evicting`, the dependent's resolution) compiles, as
+    /// an sbt configuration typed in its dependent's resident does.
     #[test]
     fn a_configuration_typed_inside_a_resident_that_lacks_its_jars_is_refused() {
         let text = lock(
@@ -2534,6 +2551,7 @@ projects:
 jars:
   x:scala:1: maven-central 0000000000000000000000000000000000000002 1
   x:sourcecode:1: maven-central 0000000000000000000000000000000000000004 1
+  x:sourcecode:2: maven-central 0000000000000000000000000000000000000005 1
 repositories:
   - id: maven-central
     url: https://repo1.maven.org/maven2/
@@ -2554,6 +2572,15 @@ projects:
           - {configuration: compile, project: upstream}
         transitive: false
     platform: jvm
+  evicting:
+    configurations:
+      compile:
+        classpath:
+          - x:scala:1
+          - x:sourcecode:2
+          - {configuration: compile, project: upstream}
+        transitive: false
+    platform: jvm
 ",
         );
         let export = parse(&text).unwrap();
@@ -2562,6 +2589,7 @@ projects:
             ["upstream/compile is typed inside downstream/compile, whose class path lacks x:sourcecode:1, which upstream/compile's names: teq types a configuration with those that build on it as one program until configurations have compilation scopes of their own; compile downstream with mill"]
         );
         assert!(export.refusals("compile", "upstream").is_empty());
+        assert!(export.refusals("compile", "evicting").is_empty());
         let sbt = parse(&text.replace("exporter: mill\n", "").replace("transitive: false", "transitive: true")).unwrap();
         assert!(sbt.refusals("compile", "downstream").is_empty());
     }

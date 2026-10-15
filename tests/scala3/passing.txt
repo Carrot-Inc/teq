@@ -18,6 +18,7 @@ Lazies2
 LazyLists
 LazyValsLongs
 MultiArr
+QueueTest
 Signals1
 Signals2
 StackMap
@@ -91,6 +92,7 @@ fully-abstract-nat-1
 fully-abstract-nat-3
 function-arity
 functionXXL
+generic
 genericTupleMembers
 gestalt-optional-inline
 getClassTest-valueClass
@@ -150,6 +152,8 @@ i13183
 i13215
 i13216
 i13228
+i13252a
+i13252b
 i13304
 i13334
 i13358
@@ -176,6 +180,7 @@ i14587
 i14587.min
 i14587.opaques
 i1463
+i14667
 i14675
 i14693
 i14705
@@ -233,6 +238,7 @@ i19396
 i19587
 i1960
 i19629
+i19641
 i19711
 i19724
 i1991
@@ -340,6 +346,7 @@ i5823
 i5924
 i5924b
 i5924c
+i6490
 i6664
 i6664b
 i6677
@@ -378,6 +385,7 @@ i8096
 i8314
 i8396
 i8398
+i8530
 i8662
 i8726
 i8903
@@ -418,6 +426,7 @@ lazyVals
 lazyVals_c3.0.0
 lazyVals_c3.1.0
 liftedTry
+list-apply-eval
 list_map
 lists-run
 literals
@@ -554,6 +563,7 @@ t3487
 t3496
 t3508
 t3509
+t3516
 t3529
 t3563
 t3603
@@ -569,6 +579,7 @@ t3855
 t3877
 t3895
 t3923
+t3935
 t3980
 t4013
 t4013b

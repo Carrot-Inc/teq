@@ -23,6 +23,17 @@ trait Ordering[T] extends java.util.Comparator[T]:
       val c = compare(a, b)
       if c != 0 then c else other.compare(a, b)
   def orElseBy[S](f: T => S)(implicit ord: Ordering[S]): Ordering[T] = orElse(ord.on(f))
+  // scala-library's comparisons written as operators, which a library's body selects
+  // (`num.mkOrderingOps(a) < b` of scalacheck's `Gen.chooseNum`).
+  class OrderingOps(lhs: T):
+    def <(rhs: T): Boolean = lt(lhs, rhs)
+    def <=(rhs: T): Boolean = lteq(lhs, rhs)
+    def >(rhs: T): Boolean = gt(lhs, rhs)
+    def >=(rhs: T): Boolean = gteq(lhs, rhs)
+    def equiv(rhs: T): Boolean = Ordering.this.equiv(lhs, rhs)
+    def max(rhs: T): T = Ordering.this.max(lhs, rhs)
+    def min(rhs: T): T = Ordering.this.min(lhs, rhs)
+  implicit def mkOrderingOps(lhs: T): OrderingOps = new OrderingOps(lhs)
 
 final class FunctionOrdering[T](f: (T, T) => Int) extends Ordering[T]:
   def compare(a: T, b: T): Int = f(a, b)
@@ -187,7 +198,8 @@ object Ordering:
           while res == 0 && xs.hasNext && ys.hasNext do res = ord.compare(xs.next(), ys.next())
           if res != 0 then res else java.lang.Boolean.compare(xs.hasNext, ys.hasNext)
 
-trait Numeric[T]:
+// An `Ordering`, as scala-library's is: its comparisons are the ordering's.
+trait Numeric[T] extends Ordering[T]:
   def zero: T
   def one: T
   def plus(a: T, b: T): T
@@ -197,20 +209,25 @@ trait Numeric[T]:
   def toInt(x: T): Int
   def toLong(x: T): Long
   def toDouble(x: T): Double
-  def compare(a: T, b: T): Int
   def negate(x: T): T = minus(zero, x)
   def abs(x: T): T = if compare(x, zero) < 0 then negate(x) else x
   def sign(x: T): T =
     val c = compare(x, zero)
     if c < 0 then negate(one) else if c > 0 then one else zero
   def signum(x: T): Int = compare(x, zero)
-  def lt(a: T, b: T): Boolean = compare(a, b) < 0
-  def gt(a: T, b: T): Boolean = compare(a, b) > 0
-  def lteq(a: T, b: T): Boolean = compare(a, b) <= 0
-  def gteq(a: T, b: T): Boolean = compare(a, b) >= 0
-  def equiv(a: T, b: T): Boolean = compare(a, b) == 0
-  def max[U <: T](a: U, b: U): U = if compare(a, b) >= 0 then a else b
-  def min[U <: T](a: U, b: U): U = if compare(a, b) <= 0 then a else b
+  // scala-library's arithmetic written as operators, which a library's body selects
+  // (`num.mkNumericOps(a) - b` of scalacheck's `Gen.chooseNum`).
+  class NumericOps(lhs: T):
+    def +(rhs: T): T = plus(lhs, rhs)
+    def -(rhs: T): T = minus(lhs, rhs)
+    def *(rhs: T): T = times(lhs, rhs)
+    def unary_- : T = negate(lhs)
+    def abs: T = Numeric.this.abs(lhs)
+    def sign: T = Numeric.this.sign(lhs)
+    def toInt: Int = Numeric.this.toInt(lhs)
+    def toLong: Long = Numeric.this.toLong(lhs)
+    def toDouble: Double = Numeric.this.toDouble(lhs)
+  implicit def mkNumericOps(lhs: T): NumericOps = new NumericOps(lhs)
 
 trait Integral[T] extends Numeric[T]:
   def quot(a: T, b: T): T

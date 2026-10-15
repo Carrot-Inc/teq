@@ -1882,7 +1882,7 @@ impl<'a> Gen<'a> {
             return Some(encode(self.cx.input.interner.get(n)));
         }
         let &n = self.cx.input.source_target_names?.get(&s)?;
-        Some(self.cx.input.interner.get(n).to_string())
+        Some(encode(self.cx.input.interner.get(n)))
     }
 
     /// The flattened parameters of a def: by-name ones are functions, repeated ones sequences.
@@ -2154,7 +2154,11 @@ impl<'a> Gen<'a> {
     /// names it, scalac's.
     pub fn field_name(&mut self, s: SymId) -> String {
         let cx = self.cx;
-        let base = encode(cx.input.interner.get(cx.input.syms.sym(s).name));
+        // A value's `@targetName` names its field as it names its getter.
+        let base = match self.target_name(s) {
+            Some(target) if cx.input.syms.sym(s).kind == SymKind::Val => target,
+            _ => encode(cx.input.interner.get(cx.input.syms.sym(s).name)),
+        };
         self.expanded_private_name(s, base)
     }
 

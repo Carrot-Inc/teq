@@ -632,6 +632,78 @@ object PriorityQueue:
   def apply[A](elems: A*)(implicit ord: Ordering[A]): PriorityQueue[A] = from(elems)
   def from[A](elems: IterableOnce[A])(implicit ord: Ordering[A]): PriorityQueue[A] = empty[A].addAll(elems)
 
+/** scala-library's `mutable.Queue`: first in, first out, over a buffer. */
+final class Queue[A](private val items: RawBuffer[A]) extends SeqOps[A, Queue, Queue[A]], IndexedSeq[A], Builder[A, Queue[A]]:
+  def this() = this(emptyBuffer[A])
+  def this(initialSize: Int) = this(emptyBuffer[A])
+  def buildCC[B](items: RawBuffer[B]): Queue[B] = new Queue(items)
+  override def iterator: Iterator[A] = Iterator.over(items)
+  def length: Int = items.length
+  def apply(i: Int): A =
+    if i < 0 || i >= items.length then indexOutOfBounds(i.toString + " is out of bounds (min 0, max " + (items.length - 1).toString + ")")
+    else items(i)
+  def update(i: Int, elem: A): Unit =
+    if i < 0 || i >= items.length then indexOutOfBounds(i.toString + " is out of bounds (min 0, max " + (items.length - 1).toString + ")")
+    else items(i) = elem
+  def enqueue(elem: A): this.type =
+    items.push(elem)
+    this
+  def enqueue(elem1: A, elem2: A, elems: A*): this.type =
+    items.push(elem1)
+    items.push(elem2)
+    enqueueAll(elems)
+  def enqueueAll(elems: IterableOnce[A]): this.type =
+    elems.iterator.foreach(x => items.push(x))
+    this
+  def +=(elem: A): this.type = enqueue(elem)
+  def addOne(elem: A): this.type = enqueue(elem)
+  def ++=(elems: IterableOnce[A]): this.type = enqueueAll(elems)
+  def addAll(elems: IterableOnce[A]): this.type = enqueueAll(elems)
+  def dequeue(): A =
+    if items.length == 0 then noSuchElement("empty collection")
+    else
+      val head = items(0)
+      bufferRemove(items, 0)
+      head
+  def dequeueFirst(p: A => Boolean): Option[A] =
+    var i = 0
+    while i < items.length && !p(items(i)) do i += 1
+    if i == items.length then None
+    else
+      val found = items(i)
+      bufferRemove(items, i)
+      Some(found)
+  // The elements that pass, in order, out of the queue; the rest stay in theirs.
+  def dequeueAll(p: A => Boolean): Seq[A] =
+    val taken = emptyBuffer[A]
+    val kept = emptyBuffer[A]
+    var i = 0
+    while i < items.length do
+      val x = items(i)
+      if p(x) then taken.push(x) else kept.push(x)
+      i += 1
+    bufferRemoveRange(items, 0, items.length)
+    i = 0
+    while i < kept.length do
+      items.push(kept(i))
+      i += 1
+    new ArraySeq(untaggedArray(taken))
+  def dequeueWhile(p: A => Boolean): Seq[A] =
+    val taken = emptyBuffer[A]
+    while items.length > 0 && p(items(0)) do taken.push(dequeue())
+    new ArraySeq(untaggedArray(taken))
+  def front: A = if items.length == 0 then noSuchElement("queue empty") else items(0)
+  def clear(): Unit = bufferRemoveRange(items, 0, items.length)
+  def result(): Queue[A] = this
+  override def collectionClassName: String = "Queue"
+  override def toString: String = mkString("Queue(", ", ", ")")
+
+object Queue:
+  def empty[A]: Queue[A] = new Queue(emptyBuffer[A])
+  def apply[A](elems: A*): Queue[A] = from(elems)
+  def from[A](elems: IterableOnce[A]): Queue[A] = new Queue(iterableToArray(elems))
+  def newBuilder[A]: Builder[A, Queue[A]] = empty[A]
+
 /** scala-library's `ArrayBuilder`, over the array it builds: what `Array.newBuilder` gives. */
 class ArrayBuilder[T] extends Builder[T, Array[T]]:
   private var items: RawBuffer[T] = emptyBuffer[T]

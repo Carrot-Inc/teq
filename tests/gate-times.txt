@@ -42,5 +42,7 @@ task 167
 runner-classes 1
 lila-test-verb 7
 reference-test-verb 6
+mill-test-verb 1
+std-entered 0
 gate-coverage 0
 gate-scripts 85

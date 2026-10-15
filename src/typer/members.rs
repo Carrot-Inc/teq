@@ -4,7 +4,7 @@
 //! name, as scalac compares type references.
 
 use super::Worker;
-use crate::intern::Name;
+use crate::intern::{FxMap, Name};
 use crate::symbols::*;
 use crate::types::*;
 
@@ -467,6 +467,46 @@ impl<'a> Worker<'a> {
         if !self.syms.class(c).inherits_types {
             return None;
         }
+        self.inherited_named.current();
+        if let Some(&(at, found)) = self.inherited_named.nested.get(&(c, name)) {
+            if !crate::symbols::type_member_written_since(name, at) {
+                return found;
+            }
+        }
+        self.inherited_nested_class_found(c, name)
+    }
+
+    /// `inherited_nested_class` where nothing is kept for the name yet.
+    #[inline(never)]
+    fn inherited_nested_class_found(&mut self, c: ClassId, name: Name) -> Option<ClassId> {
+        let stamp = crate::symbols::type_member_stamp();
+        // A name no base declares is no class of theirs, without a search (dotty's `memberNames`).
+        let found = if self.bases_declare(c, name) { self.inherited_nested_class_uncached(c, name) } else { None };
+        self.inherited_named.nested.insert((c, name), (stamp, found));
+        found
+    }
+
+    /// Whether a base of `c` may declare a nested class or a type alias `name`: the names its bases
+    /// declare, collected once per class (dotty's `memberNames`), answer for a name none of them has,
+    /// unless a table took one of its bucket since.
+    pub(super) fn bases_declare(&mut self, c: ClassId, name: Name) -> bool {
+        let bases = self.syms.class(c).base_types.len();
+        if !self.inherited_named.names.get(&c).is_some_and(|&(_, n, _)| n == bases) {
+            let stamp = crate::symbols::type_member_stamp();
+            let mut names: FxMap<Name, ()> = FxMap::default();
+            for i in 1..bases {
+                let b = self.syms.class(c).base_types[i].0;
+                let info = self.syms.class(b);
+                names.extend(info.nested.keys().map(|&n| (n, ())));
+                names.extend(info.type_aliases.keys().map(|&n| (n, ())));
+            }
+            self.inherited_named.names.insert(c, (stamp, bases, names));
+        }
+        let (stamp, _, names) = &self.inherited_named.names[&c];
+        names.contains_key(&name) || crate::symbols::type_member_written_since(name, *stamp)
+    }
+
+    fn inherited_nested_class_uncached(&mut self, c: ClassId, name: Name) -> Option<ClassId> {
         let n = self.syms.class(c).base_types.len();
         for i in 1..n {
             let b = self.syms.class(c).base_types[i].0;
@@ -2561,4 +2601,35 @@ struct Rebase<'r> {
     /// (`Boxes.ib.T`), as dotty's substitution of a parameter keeps the `TypeRef`
     /// (`derivedSelect`), rather than the member's type there.
     keep: bool,
+}
+
+/// The inherited type members (`Worker::inherited_type_member`) and nested classes
+/// (`Worker::inherited_nested_class`) a class was searched for by name, the misses too, as dotty's
+/// `SymDenotations.membersNamed` caches a class's members by name, and the names its bases declare a
+/// nested class or a type alias of, as dotty's `memberNames` keeps them: a name none declares is a
+/// miss without a search. Each is of the tables as they were at its stamp, read again for a name
+/// written since (`symbols::type_member_written_since`), and all are dropped where every class's may
+/// have changed (`symbols::TYPE_MEMBERS_GENERATION`, a retype).
+#[derive(Default)]
+pub struct InheritedNamed {
+    generation: u64,
+    pub types: FxMap<(ClassId, Name), (u64, Option<super::resolve::TypeRef>)>,
+    pub nested: FxMap<(ClassId, Name), (u64, Option<ClassId>)>,
+    /// By class: the stamp, the number of the class's bases then (a class completed since has
+    /// more) and the names.
+    pub names: FxMap<ClassId, (u64, usize, FxMap<Name, ()>)>,
+}
+
+impl InheritedNamed {
+    /// Drops what was found before every class's members may have changed.
+    #[inline]
+    pub fn current(&mut self) {
+        let now = crate::symbols::TYPE_MEMBERS_GENERATION.load(std::sync::atomic::Ordering::Relaxed);
+        if now != self.generation {
+            self.types.clear();
+            self.nested.clear();
+            self.names.clear();
+            self.generation = now;
+        }
+    }
 }

@@ -1,0 +1,8 @@
+3c3
+<   <macro> inline def kinds(inline body: Any): List[String] = (${ (using contextual$1: Quotes) => kindsImpl{(Expr[Any])(Quotes)}('{ body }.apply{(java.lang.Object): java.lang.Object}(contextual$1))(contextual$1) }: List[String])
+---
+>   <macro> inline def kinds(inline body: Any): List[String] = (${ (using contextual$1: Quotes) => kindsImpl{(scala.quoted.Expr, scala.quoted.Quotes): scala.quoted.Expr}('{ body }.apply{(java.lang.Object): java.lang.Object}(contextual$1))(contextual$1) }: List[String])
+8c8
+<       case x$2.reflect.BlockTypeTest(x$2.reflect.Block(stats, _)) => stats.map{([1], Function1): scala.collection.immutable.List}[String](s => kind{(x$2.reflect.Statement)}(s))
+---
+>       case x$2.reflect.BlockTypeTest(x$2.reflect.Block(stats, _)) => stats.map{([1], Function1): scala.collection.immutable.List}[String](eta$0 => kind{(x$2.reflect.Statement)}(eta$0))

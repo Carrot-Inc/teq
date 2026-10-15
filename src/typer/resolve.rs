@@ -1084,10 +1084,31 @@ impl<'a> Worker<'a> {
     /// TypeClass[T]` of `Common[TypeClass[_]]`, inside a `Derivation[TC[_]] extends
     /// Common[TC]`), by the alias itself where nothing is to substitute.
     fn inherited_type_member(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
+        self.inherited_named.current();
+        // Kept once the class was completed for it.
+        if let Some(&(at, found)) = self.inherited_named.types.get(&(c, name)) {
+            if !crate::symbols::type_member_written_since(name, at) {
+                return found;
+            }
+        }
+        self.inherited_type_member_found(c, name)
+    }
+
+    /// `inherited_type_member` where nothing is kept for the name yet.
+    #[inline(never)]
+    fn inherited_type_member_found(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
         self.complete_class(c);
-        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+        let stamp = crate::symbols::type_member_stamp();
+        // A name no base declares is no member, without a search (dotty's `memberNames`).
+        let found = if self.bases_declare(c, name) { self.inherited_type_member_uncached(c, name) } else { None };
+        self.inherited_named.types.insert((c, name), (stamp, found));
+        found
+    }
+
+    fn inherited_type_member_uncached(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
         let object = self.syms.class(c).kind == ClassKind::Object;
-        for b in bases {
+        for i in 1..self.syms.class(c).base_types.len() {
+            let b = self.syms.class(c).base_types[i].0;
             // An opaque type of a trait is the object's own copy through an object.
             if let Some(&n) = self.syms.class(b).nested.get(&name).filter(|&&n| object && self.is_opaque_path_class(n)) {
                 return Some(TypeRef::Class(self.derived_opaque(n, c)));
@@ -1349,13 +1370,15 @@ impl<'a> Worker<'a> {
     #[inline]
     /// A term of a package: a member of its package object, which the loader spills into the
     /// package, is read through the object.
-    fn package_term(syms: &Symbols, s: SymId) -> TermRef {
+    fn package_term(&self, s: SymId) -> TermRef {
         // A reference resolves a deprecated member of a package here: the std's, whose reading
-        // left the checks off (`Syntax::std`), turns them on before the reference is checked.
-        if syms.sym(s).mods & crate::ast::mods::DEPRECATED != 0 {
+        // left the checks off (`Syntax::std`), turns them on before the reference is checked; one
+        // the std makes itself (its `val Stream = immutable.Stream`, typed for its inferred
+        // type) checks nothing, the std's code giving no warnings.
+        if self.syms.sym(s).mods & crate::ast::mods::DEPRECATED != 0 && !self.source(self.env.file).is_std {
             super::deprecation::note_deprecated();
         }
-        match syms.sym(s).owner {
+        match self.syms.sym(s).owner {
             Owner::Class(c) => TermRef::ModuleMember(c, s),
             _ => TermRef::Global(s),
         }
@@ -1374,12 +1397,12 @@ impl<'a> Worker<'a> {
         let mut alias = None;
         let defined = pkg.entries.get(&name).and_then(|e| {
             let lone_extension = match e.extensions.as_slice() {
-                [s] if lone_extension => Some(Self::package_term(&self.syms, *s)),
+                [s] if lone_extension => Some(self.package_term(*s)),
                 _ => None,
             };
             alias = e.alias;
             e.term
-                .map(|s| Self::package_term(&self.syms, s))
+                .map(|s| self.package_term(s))
                 .or(e.class.filter(|&c| !self.skip_proxy(c)).map(TermRef::Class))
                 .or(e.pkg.map(TermRef::Package))
                 .or(lone_extension)
@@ -1395,7 +1418,7 @@ impl<'a> Worker<'a> {
             // (`DayOfWeek.MONDAY`).
             if matches!(found, TermRef::Class(c) if self.syms.class(c).kind == ClassKind::Builtin) && self.demand_std(p, name, crate::stdindex::TERM) {
                 if let Some(s) = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term) {
-                    return Some(Self::package_term(&self.syms, s));
+                    return Some(self.package_term(s));
                 }
             }
             let placeholder = matches!(found, TermRef::Class(c) if self.is_java_placeholder(c));
@@ -1405,7 +1428,7 @@ impl<'a> Worker<'a> {
                 // nothing to enter for, and the entries are read again.
                 if self.load_pkg_member(p, name) || self.forked {
                     if let Some(s) = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term) {
-                        return Some(if placeholder { Self::package_term(&self.syms, s) } else { TermRef::Global(s) });
+                        return Some(if placeholder { self.package_term(s) } else { TermRef::Global(s) });
                     }
                 }
             }
@@ -1426,10 +1449,10 @@ impl<'a> Worker<'a> {
             let pkg = self.syms.pkg(p);
             let found = pkg.entries.get(&name).and_then(|e| {
                 let lone_extension = match e.extensions.as_slice() {
-                    [s] if lone_extension => Some(Self::package_term(&self.syms, *s)),
+                    [s] if lone_extension => Some(self.package_term(*s)),
                     _ => None,
                 };
-                e.term.map(|s| Self::package_term(&self.syms, s)).or(e.class.map(TermRef::Class)).or(e.pkg.map(TermRef::Package)).or(lone_extension)
+                e.term.map(|s| self.package_term(s)).or(e.class.map(TermRef::Class)).or(e.pkg.map(TermRef::Package)).or(lone_extension)
             });
             if found.is_some() {
                 return found;
@@ -1457,10 +1480,10 @@ impl<'a> Worker<'a> {
             if self.load_pkg_member(p, name) || self.forked {
                 if let Some(e) = self.syms.pkg(p).entries.get(&name) {
                     let lone_extension = match e.extensions.as_slice() {
-                        [s] if lone_extension => Some(Self::package_term(&self.syms, *s)),
+                        [s] if lone_extension => Some(self.package_term(*s)),
                         _ => None,
                     };
-                    return e.term.map(|s| Self::package_term(&self.syms, s)).or(e.class.map(TermRef::Class)).or(e.pkg.map(TermRef::Package)).or(lone_extension);
+                    return e.term.map(|s| self.package_term(s)).or(e.class.map(TermRef::Class)).or(e.pkg.map(TermRef::Package)).or(lone_extension);
                 }
             }
             // Another module's top-level exports, its package objects entered now.
@@ -1486,7 +1509,7 @@ impl<'a> Worker<'a> {
     /// HtmlTagOf`), a lookup inside the forwarder's own completion.
     fn exported_alias_pkg_term(&mut self, p: PkgId, name: Name, a: AliasId) -> Option<TermRef> {
         if (self.sees_classpath() || self.std_bridges_into(p)) && (self.load_pkg_member(p, name) || self.forked) {
-            let own = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term.map(|s| Self::package_term(&self.syms, s)).or(e.class.map(TermRef::Class)).or(e.pkg.map(TermRef::Package)));
+                let own = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term.map(|s| self.package_term(s)).or(e.class.map(TermRef::Class)).or(e.pkg.map(TermRef::Package)));
             if own.is_some() {
                 return own;
             }
@@ -4850,6 +4873,18 @@ impl<'a> Worker<'a> {
             if let TermRef::SelfAlias(_) = r {
                 return t.path_of_ref(r).ok().map(Ok);
             }
+            // A top-level case class's name as a path: its companion, made where a path names it as
+            // where a value does (`materialized_companion`), `val T: p.T.type = p.T` of indigo's
+            // package aliases.
+            let r = match r {
+                TermRef::Class(c) if t.syms.class(c).mods & ast::mods::CASE != 0 && matches!(t.syms.class(c).owner, Owner::Package(_)) => {
+                    match t.materialized_companion(c).and_then(|m| t.syms.class(m).module_sym) {
+                        Some(m) => TermRef::Global(m),
+                        None => r,
+                    }
+                }
+                _ => r,
+            };
             let s = r.sym()?;
             Some(t.path_of_ref(r).map_err(|_| s))
         };
@@ -6811,25 +6846,34 @@ impl<'a> Worker<'a> {
             let info = self.syms.class(c);
             let m = info.member_order[i];
             let (kind, name) = (self.syms.sym(m).kind, self.syms.sym(m).name);
-            // A val meets what it implements only where an ancestor overloads the name: the
-            // other alternatives are members of `c` next to it.
-            let is_val = matches!(kind, SymKind::Val | SymKind::Var) && inherits_overloads;
-            if kind != SymKind::Def && !is_val {
+            // A val meets what it implements only where an ancestor overloads the name, or a method
+            // of the name that takes parameters (which it does not implement; dotty's
+            // `Signature.matchDegree`): the other alternatives are members of `c` next to it.
+            let value = matches!(kind, SymKind::Val | SymKind::Var);
+            if kind != SymKind::Def && !value {
                 continue;
             }
             // A name none of the bases has meets nothing there (the bases' names gathered once).
-            let named = inherited.get_or_insert_with(|| self.base_member_names(c)).has(name);
-            let info = self.syms.class(c);
+            if !inherited.get_or_insert_with(|| self.base_member_names(c)).has(name) {
+                continue;
+            }
             // A method meets an inherited value of its name too, which it overloads unless their
             // parameters agree (dotty's `membersNamed` keeps every member no other matches).
-            let meets = named && info.base_types[1..].iter().any(|&(b, _)| {
-                self.syms.class(b).members.get(&name).map_or(false, |&p| match self.syms.sym(p).kind {
-                    SymKind::Overloaded(_) => true,
-                    SymKind::Def => (!is_std || in_jar) && !is_val,
+            let entries: Vec<SymId> = self.syms.class(c).base_types[1..].iter().filter_map(|&(b, _)| self.syms.class(b).members.get(&name).copied()).collect();
+            let mut meets = false;
+            for p in entries {
+                meets = match self.syms.sym(p).kind {
+                    SymKind::Overloaded(_) => !value || inherits_overloads,
+                    SymKind::Def if value => (!is_std || in_jar) && self.declares_parameters(p),
+                    SymKind::Def => !is_std || in_jar,
                     SymKind::Val | SymKind::Var | SymKind::Given => (!is_std || in_jar) && kind == SymKind::Def,
                     _ => false,
-                })
-            });
+                };
+                if meets {
+                    break;
+                }
+            }
+            let info = self.syms.class(c);
             if meets {
                 let entry = info.members[&name];
                 let mut flags = self.syms.sym_mut(entry);
@@ -7365,7 +7409,9 @@ impl<'a> Worker<'a> {
                     continue;
                 }
                 let name = info.name;
-                if info.kind == SymKind::Def {
+                // A value beside methods of its name in another ancestor is one more alternative of
+                // the joined entry, where their parameters tell them apart.
+                if matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var) {
                     match first_method.get(&name) {
                         None => {
                             first_method.insert(name, (b, m));
@@ -7411,14 +7457,16 @@ impl<'a> Worker<'a> {
             if self.record_synthesizes(c, name) {
                 continue;
             }
-            let is_method = |t: &Self, k: ClassId| {
+            // A value takes part as a method does: whether it is one member with the other side's
+            // is `inherited_members_match`'s (a value and a method of parameters are two).
+            let is_member = |t: &Self, k: ClassId| {
                 let entry = t.syms.sym(t.syms.class(k).members[&name]);
-                matches!(entry.kind, SymKind::Def | SymKind::Overloaded(_))
+                matches!(entry.kind, SymKind::Def | SymKind::Overloaded(_) | SymKind::Val | SymKind::Var)
             };
             // A given whose right-hand side is written `deferred` is abstract if that names the
             // marker, which its signature's completion decides (`Worker::is_deferred_given`).
             let candidate = |t: &Self, k: ClassId| t.deferred_candidate(t.syms.class(k).members[&name]);
-            if (is_method(self, first) && is_method(self, second)) || candidate(self, first) || candidate(self, second) {
+            if (is_member(self, first) && is_member(self, second)) || candidate(self, first) || candidate(self, second) {
                 self.inherited_pairs.push((c, name, first, second, marked));
             } else {
                 self.report_conflicting_members(c, name, first, second, marked);
@@ -7447,12 +7495,47 @@ impl<'a> Worker<'a> {
                         && !self.is_abstract_member(a)
                         && !self.is_deferred_given(b)
                         && !self.is_abstract_member(b)
-                        && self.same_parameters(c, &bases, a, b, second_ty);
+                        && self.inherited_members_match(c, &bases, a, b, second_ty);
                 }
             }
             if conflict {
                 self.report_conflicting_members(c, name, first, second, marked);
             }
+        }
+    }
+
+    /// Whether the method `p` declares type or value parameters, as its definition is written or
+    /// its jar's signature has them: a value of its name is then another member beside it.
+    fn declares_parameters(&mut self, p: SymId) -> bool {
+        let (def, file) = (self.syms.sym(p).def, self.syms.sym(p).file);
+        if let (Some(d), false) = (def, self.in_jar(file)) {
+            if let ast::DefKind::Fun(f) = &self.ast(file).def(d).kind {
+                return !f.tparams.is_empty() || f.clauses.iter().any(|cl| !cl.params.is_empty());
+            }
+        }
+        let sig = self.sig_arc(p);
+        !sig.tparams.is_empty() || sig.clauses.iter().any(|cl| !cl.params.is_empty())
+    }
+
+    /// Whether two concrete members of one name that `c` inherits from unrelated ancestors are one
+    /// member twice, dotty's `Denotation.matches`: their target names are one, and two values match,
+    /// a value matches a method of no type or value parameters (`MethodNotAMethodMatch`), and two
+    /// methods match where they take the same parameters. A value and a method that takes parameters
+    /// are two members of the name.
+    fn inherited_members_match(&mut self, c: ClassId, bases: &[(ClassId, TypeId)], a: SymId, b: SymId, b_ty: TypeId) -> bool {
+        let value = |t: &Self, s: SymId| matches!(t.syms.sym(s).kind, SymKind::Val | SymKind::Var);
+        let (va, vb) = (value(self, a), value(self, b));
+        if (va || vb) && !self.same_target_name(a, b) {
+            return false;
+        }
+        match (va, vb) {
+            (true, true) => true,
+            (true, false) | (false, true) => {
+                let method = if va { b } else { a };
+                let sig = self.sig_arc(method);
+                sig.tparams.is_empty() && sig.clauses.iter().all(|cl| cl.params.is_empty())
+            }
+            (false, false) => self.same_parameters(c, bases, a, b, b_ty),
         }
     }
 
@@ -7669,9 +7752,10 @@ impl Binding for TermRef {
     /// dotty's `isSameRef`: a stable forwarder of an object or of a top-level definition is that
     /// definition's path, a subtype of it and it of the forwarder (`trans` imported by name and
     /// through a value whose class exports it), another module's forwarder read from its pickle
-    /// too (`zio.ZIO` beside a prelude's `export zio.ZIO`).
+    /// too (`zio.ZIO` beside a prelude's `export zio.ZIO`), and a val declared as an object's
+    /// singleton (`val T: p.T.type = p.T`) that object.
     fn same(t: &mut Worker, a: TermRef, b: TermRef) -> bool {
-        if super::exports::same_term(a, b) {
+        if super::exports::same_term(a, b) || matches!((names_object(t, a), names_object(t, b)), (Some(x), Some(y)) if x == y) {
             return true;
         }
         let forwarder = |t: &Worker, r: TermRef| r.sym().is_some_and(|s| t.syms.sym(s).stable && (t.syms.is_forwarder(s) || t.is_pickled_forwarder(s)));
@@ -7699,6 +7783,26 @@ impl Binding for TermRef {
             && info.owner != Owner::Class(k)
             && !matches!(info.kind, SymKind::Param)
             && !names_a_path
+    }
+}
+
+/// The object a term binding names: the object itself, or a val whose type is the object's, as
+/// `isSameRef` compares the two refs by their types: the val's signature is completed here, a
+/// declared `Target.type` or an alias of it alike, and one in the middle of its completion names
+/// none.
+fn names_object(t: &mut Worker, r: TermRef) -> Option<ClassId> {
+    let s = r.sym()?;
+    match t.syms.sym(s).kind {
+        SymKind::Object(c) => Some(c),
+        SymKind::Val if t.syms.sym_cells.get(s.0) != crate::symbols::Completion::InProgress => {
+            let ret = t.sig_of(s).ret;
+            let ret = t.deref_alias(ret);
+            match t.types.get(ret) {
+                Type::Class(c, _) if t.syms.class(c).kind == ClassKind::Object => Some(c),
+                _ => None,
+            }
+        }
+        _ => None,
     }
 }
 

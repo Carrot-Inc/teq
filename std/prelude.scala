@@ -203,6 +203,17 @@ def identity[A](x: A): A = x
 
 type Serializable = java.io.Serializable
 
+// scala-library's deprecated names in package `scala` (scala/package.scala), which libraries built on
+// 2.13 still name: scalacheck's shrinks are `Stream`s, cats-kernel-laws' laws `Traversable`s.
+@deprecated("Use LazyList instead of Stream", "2.13.0")
+type Stream[+A] = scala.collection.immutable.Stream[A]
+@deprecated("Use LazyList instead of Stream", "2.13.0")
+val Stream = scala.collection.immutable.Stream
+@deprecated("Use Iterable instead of Traversable", "2.13.0")
+type Traversable[+A] = Iterable[A]
+@deprecated("Use IterableOnce instead of TraversableOnce", "2.13.0")
+type TraversableOnce[+A] = IterableOnce[A]
+
 // What a case class, a case object, an enum case or a tuple is: its elements by position. A case
 // class or object takes `Product` among its parents and the members it does not define by rule
 // (dotty's `SyntheticMembers`), which the runtime answers from its shape after any definition the

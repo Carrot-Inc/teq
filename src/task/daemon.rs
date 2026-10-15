@@ -14,7 +14,7 @@ use super::analysis::View;
 use super::events::{self, Tally};
 use super::export::ModuleKind;
 use super::{jsdom, jsrunner};
-use super::export::{Entry, Export, Exporter, Key, MainClass, Platform, TestContext};
+use super::export::{Entry, Export, Key, MainClass, Platform, TestContext};
 use super::generators;
 use super::resident::{Answer, Resident};
 use super::runner::{self, Jar, Ran, Runner, Spec};
@@ -649,7 +649,6 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
     }
     let named = words.first().filter(|w| export.projects.contains_key(*w)).cloned();
     let mut left_out = Vec::new();
-    let mut scalajs_left_out: Vec<String> = Vec::new();
     let keys = match &named {
         Some(name) => {
             let project = &export.projects[name];
@@ -662,10 +661,6 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
                 }
                 return 2;
             }
-            if project.platform != Platform::Jvm && export.exporter == Exporter::Mill {
-                reply.err(&format!("teq: {}\n", scalajs_suites(export, name)));
-                return 2;
-            }
             if let Some(why) = super::refused(export, "test", &[name]) {
                 reply.err(&format!("teq: {}\n", why));
                 return 2;
@@ -673,16 +668,14 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
             vec![Key::new(name, "test")]
         }
         // Every project with frameworks, on either platform, but those the export records what the
-        // build tool alone runs of for its test, and a Mill build's Scala.js projects, whose suites teq
-        // does not run yet: named in the summary and failing the run, never skipped unsaid.
+        // build tool alone runs of for its test: named in the summary and failing the run, never
+        // skipped unsaid.
         None => {
             let mut keys = Vec::new();
             // A test configuration the export left out with its reasons is left out here, named.
             left_out.extend(export.projects.iter().filter(|(_, p)| !p.configurations.contains_key("test") && p.unsupported.get("test").is_some_and(|w| !w.is_empty())).map(|(n, _)| n.clone()));
-            for (n, p) in export.projects.iter().filter(|(_, p)| p.configurations.get("test").and_then(|c| c.test.as_ref()).is_some_and(|t| !t.frameworks.is_empty())) {
-                if p.platform != Platform::Jvm && export.exporter == Exporter::Mill {
-                    scalajs_left_out.push(n.clone());
-                } else if export.refusals("test", n).is_empty() {
+            for (n, _) in export.projects.iter().filter(|(_, p)| p.configurations.get("test").and_then(|c| c.test.as_ref()).is_some_and(|t| !t.frameworks.is_empty())) {
+                if export.refusals("test", n).is_empty() {
                     keys.push(Key::new(n, "test"))
                 } else {
                     left_out.push(n.clone())
@@ -693,7 +686,7 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
     };
     let patterns = Patterns::new(&words[usize::from(named.is_some())..]);
     let asked = TestRequest { keys, patterns, changed, list, verbose, events };
-    if asked.keys.is_empty() && left_out.is_empty() && scalajs_left_out.is_empty() {
+    if asked.keys.is_empty() && left_out.is_empty() {
         reply.out("teq: no project with test frameworks\n");
         return 0;
     }
@@ -721,19 +714,7 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
         }
     }
     reply.out(&super::left_out(export, "test", &left_out));
-    for n in &scalajs_left_out {
-        reply.out(&format!("teq: test left out {}\n", scalajs_suites(export, n)));
-    }
-    left_out.extend(scalajs_left_out);
     super::with_left_out(code, &left_out)
-}
-
-/// Why a Scala.js project of a Mill build's export does not run its suites, naming how Mill runs them:
-/// the link's module kind and the JavaScript environment. teq runs them as sbt-scalajs does, which
-/// it has not been checked against Mill's run of them.
-fn scalajs_suites(export: &Export, name: &str) -> String {
-    let how = export.configuration(&Key::new(name, "test")).and_then(|c| c.test.as_ref()).map_or_else(String::new, |t| t.js_run());
-    format!("{} is a Scala.js project, whose suites{} teq does not run yet", name, how)
 }
 
 /// The residents a run over `keys` builds them with, as `plan` chooses for each in turn over the

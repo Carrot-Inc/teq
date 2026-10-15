@@ -186,6 +186,7 @@ impl Symbols {
             + self.overloads.held()
             + self.overloads.own().iter().map(|(_, alternatives)| array(alternatives)).sum::<usize>()
             + self.dispatch_names.held()
+            + self.js_export_names.held()
             + self.class_cells.held()
             + self.sym_cells.held()
             + self.body_cells.held()

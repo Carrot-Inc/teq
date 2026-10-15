@@ -21,7 +21,10 @@
 # tests/support/predef_lib.scala compiled the same way; depfun-lib, tests/support/depfun_lib.scala
 # compiled the same way; inlinebodies-lib, tests/support/inline_bodies_lib.scala compiled the same way; view-lib, tests/support/view_lib.scala compiled the same way; nestedcompanion-lib,
 # tests/support/nestedcompanion_lib.scala compiled the same way; javareview-lib,
-# tests/support/javareview_lib.scala compiled the same way; extend-lib,
+# tests/support/javareview_lib.scala compiled the same way; companionmethod-lib,
+# tests/support/companion_method_lib.scala compiled the same way; regroup-a1, regroup-a2 and regroup-b,
+# tests/support/regroup/ compiled the same way, b against a1; lazyval-lib, tests/support/lazyval_lib.scala
+# compiled the same way; bodycasts-lib, tests/support/body_casts_lib.scala compiled the same way; extend-lib,
 # tests/support/extend_lib.scala compiled the same way; bundle-lib,
 # tests/support/bundle's properties file as a jar (a resource bundle); reflect-lib,
 # tests/support/reflect_lib.scala compiled the same way for Scala.js; erasure-lib,
@@ -91,7 +94,7 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
         stem = f[:-len('.tasty')]
         if stem in rdecl:
             continue
-        pkg = 'fix/overacc' if stem == 'AccAssertions' else 'fix/reader' if stem in reader else 'fix/icdef' if stem in icdef else 'fix/jargetter' if stem in jargetter else 'fix/casts' if stem in casts else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
+        pkg = 'fix/overacc' if stem == 'AccAssertions' else 'fix/reader' if stem in reader else 'fix/icdef' if stem in icdef else 'fix/jargetter' if stem in jargetter else 'fix/casts' if stem in casts else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/rstats' if stem == 'StatementKinds' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
         z.write(os.path.join('tests/tasty/fixtures', f), pkg + '/' + f)
 PY
   echo "$jar"
@@ -378,6 +381,65 @@ depfun_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/lazyval_lib.scala compiled by scalac into a jar: vals of a class a subclass overrides.
+lazyval_lib_jar() {
+  local src=tests/support/lazyval_lib.scala
+  local jar=$scratch-lazyval-lib.jar
+  local dir=$scratch-lazyval-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/lazyval_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# tests/support/body_casts_lib.scala compiled by scalac into a jar: a GADT cast and a local case class's
+# defaults in bodies.
+bodycasts_lib_jar() {
+  local src=tests/support/body_casts_lib.scala
+  local jar=$scratch-bodycasts-lib.jar
+  local dir=$scratch-bodycasts-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/body_casts_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# tests/support/regroup/<name>.scala compiled by scalac into a jar, with the jars it names after it on
+# its class path: a_v1 and a_v2, two versions of a library, and b, compiled against a_v1 (a library run
+# with a later version of its dependency than it was compiled against, munit-cats-effect's over munit).
+regroup_jar() {
+  local name=$1 src=tests/support/regroup/$1.scala
+  shift
+  local jar=$scratch-regroup-$name.jar
+  local dir=$scratch-regroup-$name.$$
+  local deps=()
+  for d in "$@"; do deps+=(--jar "$(regroup_jar "$d")"); done
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/$name.scala" "${deps[@]}" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# tests/support/companion_method_lib.scala compiled by scalac into a jar: an object and a method of
+# one name in an object (scalacheck's `Seed`).
+companion_method_lib_jar() {
+  local src=tests/support/companion_method_lib.scala
+  local jar=$scratch-companionmethod-lib.jar
+  local dir=$scratch-companionmethod-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/companion_method_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/nestedcompanion_lib.scala compiled by scalac into a jar: case classes nested in
 # traits whose companions the traits' bodies apply, run by a macro (chimney's shape).
 nestedcompanion_lib_jar() {
@@ -617,6 +679,12 @@ jar_of() {
     view-lib) view_lib_jar ;;
     nestedcompanion-lib) nestedcompanion_lib_jar ;;
     javareview-lib) javareview_lib_jar ;;
+    companionmethod-lib) companion_method_lib_jar ;;
+    lazyval-lib) lazyval_lib_jar ;;
+    bodycasts-lib) bodycasts_lib_jar ;;
+    regroup-a1) regroup_jar a_v1 ;;
+    regroup-a2) regroup_jar a_v2 ;;
+    regroup-b) regroup_jar b a_v1 ;;
     extend-lib) extend_lib_jar ;;
     state-lib) state_lib_jar ;;
     scala2-lib) scala2_lib_jar ;;

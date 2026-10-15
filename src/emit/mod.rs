@@ -2545,8 +2545,19 @@ impl<'a> Emitter<'a> {
             // does not exist yet.
             let outer_locals = std::mem::replace(&mut self.ctor_locals, tc.ctor_params.clone());
             self.before_super = true;
-            if let (Some(via), true) = (tc.parent_via, superclass.is_some()) {
-                via_inits = self.emit_super_via(tc, via, is_anon, "super");
+            if let (Some(via), Some(_), false) = (tc.parent_via, superclass, makes_function) {
+                via_inits = self.emit_super_via(tc, via, is_anon, "super", "");
+            } else if let (Some(via), Some(_), true) = (tc.parent_via, superclass, makes_function) {
+                // The first callable class of a chain over a secondary constructor of its
+                // superclass: the superclass constructed apart through it, its fields copied.
+                let own_name = self.class_name(tc.id);
+                let primary = format!("{}{}{}{}{}", SUPER_FIELDS[0], this, SUPER_FIELDS[1], own_name, SUPER_FIELDS[2]);
+                via_inits = self.emit_super_via(tc, via, is_anon, &primary, ", new.target))");
+                for init in via_inits.iter_mut() {
+                    if let Some(rest) = init.strip_prefix("this.") {
+                        *init = format!("{}.{}", this, rest);
+                    }
+                }
             } else if superclass.is_some() && !makes_function {
                 // A callable class returns the function in place of `this`, which a
                 // superclass constructor could not have made; it constructs nothing anyway.
@@ -2624,7 +2635,7 @@ impl<'a> Emitter<'a> {
                     // A case's call of a secondary constructor of its enum runs its chain into `$init`.
                     Some(via) => {
                         let init = format!("{}.$init", this);
-                        for call in self.emit_super_via(tc, via, false, &init) {
+                        for call in self.emit_super_via(tc, via, false, &init, "") {
                             self.line();
                             self.out.push_str(&call);
                         }
@@ -2765,6 +2776,16 @@ impl<'a> Emitter<'a> {
             self.out.push_str("return $v;");
             self.leave_scope();
             self.close("}");
+            // A jar's val read through the getter: a subclass's val that overrides it assigns the
+            // field, which the setter makes the instance's own (`SymInfo::needs_setter`).
+            if self.syms.sym(*sym).needs_setter {
+                self.line();
+                self.out.push_str("set ");
+                self.out.push_str(&field);
+                self.out.push_str("(v) { ");
+                self.out.push_str(LAZY_FIELD);
+                let _ = write!(self.out, "\"{}\", {{ value: v, writable: true }}); }}", field);
+            }
         }
         let mut methods = tc.methods.clone();
         methods.sort_by(|&a, &b| layout::compare_syms(self.syms, self.interner, prog.funs[a.idx()].sym, prog.funs[b.idx()].sym));
@@ -2787,6 +2808,7 @@ impl<'a> Emitter<'a> {
         self.emit_reflective_proxies(tc);
         self.emit_super_accessors(tc);
         self.emit_secondary_ctors(tc);
+        self.emit_js_exporters(tc.id);
         if info.value_class && info.mods & mods::CASE == 0 {
             self.emit_value_class_equality(tc, &name);
         }
@@ -2807,6 +2829,118 @@ impl<'a> Emitter<'a> {
             }
             self.accessors.push(accessor);
         }
+    }
+
+    /// The members of class `c` exported to JavaScript (`@JSExport`), as Scala.js's exporters
+    /// (`PrepJSExports.genExportDefs`, `JSExportsGen.genExportMethod`): a property is a getter of
+    /// the exported name, and the alternatives of one name are one method, which runs the one the
+    /// number of arguments and their run-time types select, the alternatives that test more of
+    /// their arguments first. The exporter calls the member on `this`, so a subclass's override
+    /// answers.
+    fn emit_js_exporters(&mut self, c: ClassId) {
+        if !self.syms.class(c).js_exports {
+            return;
+        }
+        let mut groups: Vec<(Name, Vec<SymId>)> = Vec::new();
+        for a in reach::js_exported_members(self.syms, c) {
+            let js = *self.syms.js_export_names.get(&a).expect("exported");
+            match groups.iter_mut().find(|(n, _)| *n == js) {
+                Some((_, alts)) => alts.push(a),
+                None => groups.push((js, vec![a])),
+            }
+        }
+        for (js, alts) in groups {
+            let js_name = self.interner.get(js).to_string();
+            let key = if is_js_identifier(&js_name) {
+                js_name.clone()
+            } else {
+                let mut quoted = String::new();
+                js_string(&js_name, &mut quoted);
+                format!("[{}]", quoted)
+            };
+            let first = self.syms.sym(alts[0]);
+            let property = alts.len() == 1 && (first.kind != SymKind::Def || first.sig.as_ref().map_or(true, |sig| sig.clauses.is_empty()));
+            if property {
+                let s = alts[0];
+                let n = self.sym_name(s);
+                let info = self.syms.sym(s);
+                let call = if info.kind == SymKind::Def || info.needs_accessor { "()" } else { "" };
+                self.line();
+                let _ = write!(self.out, "get {}() {{ return this.{}{}; }}", key, n, call);
+                continue;
+            }
+            // Each alternative: its name, its parameters' tests, the number it requires and the
+            // number it takes (none past a repeated parameter).
+            let mut cases: Vec<(Rc<str>, Vec<Option<String>>, usize, Option<usize>, bool)> = Vec::new();
+            for &a in &alts {
+                let n = self.sym_name(a);
+                let Some(sig) = self.syms.sym(a).sig.clone() else { continue };
+                let params: Vec<&crate::symbols::ParamSig> = sig.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter()).collect();
+                let repeated = params.last().is_some_and(|p| p.repeated);
+                let required = params.iter().take_while(|p| !p.has_default && !p.repeated).count();
+                let most = if repeated { None } else { Some(params.len()) };
+                let tests: Vec<Option<String>> = params.iter().enumerate().map(|(i, p)| self.export_test(p.ty, &format!("$a[{}]", i))).collect();
+                cases.push((n, tests, required, most, repeated));
+            }
+            cases.sort_by_key(|(_, tests, required, most, _)| (most.unwrap_or(usize::MAX), *required, std::cmp::Reverse(tests.iter().filter(|t| t.is_some()).count())));
+            self.line();
+            let _ = write!(self.out, "{}(...$a) ", key);
+            self.open("{");
+            for (n, tests, required, most, repeated) in cases {
+                let mut cond = match most {
+                    Some(m) if m == required => format!("$a.length === {}", m),
+                    Some(m) => format!("$a.length >= {} && $a.length <= {}", required, m),
+                    None => format!("$a.length >= {}", required),
+                };
+                for (i, t) in tests.iter().enumerate() {
+                    if let Some(t) = t {
+                        // An argument a default stands for is not tested.
+                        if i >= required && !(repeated && i + 1 == tests.len()) {
+                            let _ = write!(cond, " && ($a[{}] === undefined || {})", i, t);
+                        } else if !(repeated && i + 1 == tests.len()) {
+                            let _ = write!(cond, " && {}", t);
+                        }
+                    }
+                }
+                self.line();
+                let args = match (repeated, self.array_seq) {
+                    (true, Some(seq)) => {
+                        let seq = self.class_name(seq);
+                        let fixed: String = (0..tests.len() - 1).map(|i| format!("$a[{}], ", i)).collect();
+                        format!("{}new {}($a.slice({}))", fixed, seq, tests.len() - 1)
+                    }
+                    _ => "...$a".to_string(),
+                };
+                let _ = write!(self.out, "if ({}) return this.{}({});", cond, n, args);
+            }
+            self.line();
+            self.out.push_str("throw new TypeError(\"No matching overload\");");
+            self.close("}");
+        }
+    }
+
+    /// The run-time test of an exported member's argument of type `t`, Scala.js's `typeTestForTpe`
+    /// of the parameter's erased type: `None` where every value passes (a JS type, whose IR type
+    /// is `any`, a type parameter, `Any`).
+    fn export_test(&mut self, t: TypeId, x: &str) -> Option<String> {
+        let Type::Class(c, _) = self.types.get(t) else { return None };
+        let info = self.syms.class(c);
+        let qualified = self.qualified_name(c);
+        Some(match qualified.as_str() {
+            "java.lang.String" | "scala.String" => format!("typeof {} === \"string\"", x),
+            "scala.Char" => format!("(typeof {0} === \"string\" && {0}.length === 1)", x),
+            "scala.Int" | "scala.Short" | "scala.Byte" => format!("(typeof {0} === \"number\" && ({0} | 0) === {0})", x),
+            "scala.Double" | "scala.Float" => format!("typeof {} === \"number\"", x),
+            "scala.Long" => format!("typeof {} === \"bigint\"", x),
+            "scala.Boolean" => format!("typeof {} === \"boolean\"", x),
+            _ => match (info.js, info.kind) {
+                (JsKind::Scala, ClassKind::Class) if self.reach.classes[c.idx()] => {
+                    let n = self.class_name(c);
+                    format!("{} instanceof {}", x, n)
+                }
+                _ => return None,
+            },
+        })
     }
 
     /// A plain constructor parameter is kept in a field when something reads it as one: a
@@ -3044,7 +3178,7 @@ impl<'a> Emitter<'a> {
     /// may run before it. Returns the
     /// calls that run the statements after each self call, innermost first, for the caller to
     /// place once the superclass's body has run.
-    fn emit_super_via(&mut self, tc: &TClass, via: SymId, anon: bool, primary: &str) -> Vec<String> {
+    fn emit_super_via(&mut self, tc: &TClass, via: SymId, anon: bool, primary: &str, suffix: &str) -> Vec<String> {
         let mut inits: Vec<String> = Vec::new();
         let mut placeholders: Vec<String> = Vec::new();
         let mut args: Vec<TExprId> = Vec::new();
@@ -3097,6 +3231,7 @@ impl<'a> Emitter<'a> {
                     self.line();
                     self.out.push_str(primary);
                     self.emit_args(l);
+                    self.out.push_str(suffix);
                     self.out.push(';');
                     break;
                 }

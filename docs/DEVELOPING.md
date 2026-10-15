@@ -329,6 +329,54 @@ named, and run only when `--only` or `--with` names them. teq does not compile e
 constructor (`AnyKind`), and Laminar overloads methods on `scala.Array` and `js.Array`, which teq's std makes one
 type; the export lines pass.
 
+### Tyrian and Indigo
+
+Tyrian ([PurpleKingdomGames/tyrian](https://github.com/PurpleKingdomGames/tyrian), an Elm-style Scala.js
+framework) and Indigo ([PurpleKingdomGames/indigo](https://github.com/PurpleKingdomGames/indigo), a game engine
+over WebGL) are the public reference projects built by Mill (1.0.6), as lila is for sbt: Scala.js modules with
+cats-effect, ZIO and fs2, source generators, macros run in teq's interpreter (Indigo's shaders, ultraviolet's) and
+munit suites, the JVM's modules beside Tyrian's. `bench/tyrian/` and `bench/indigo/` hold each one's pin
+(`pin.json`: the commit, the JDK, the Mill the build names, the build's directory, the oracle's steps, the
+overlay's digests, the run, and for Indigo the bootstrap of its own Mill plugin, which its engine build imports
+from a local repository: built from the commit's tree written to one path on every machine, since its class files
+and TASTy name their sources' absolute paths, and each artifact held to the digest of its entries), the oracle's inventory (`tests.json`: each module's scalac warnings and its suites and
+cases with their outcomes under scalac 3.8.4), the generated inputs' digests (`generated.json`), the overlay
+(`build.mill.patch`, Scala 3.8.4 and no fatal warnings for the oracle's build and teq's alike; `teq.mill.json`,
+the generators teq runs in the place of Mill's, with the scripts they run beside it) and `run/`, the page's
+script the run serves. One script drives both, `bench/mill-reference.scala <tyrian|indigo> <verb> <checkout>
+<out>`: `checkout` (the pin, the overlay applied), `oracle` (the bootstrap, then the steps under Mill, the
+inventory read from Mill's `out/`, `--runs n`, `--record`), `export` (mill-teq published from
+`integrations/mill` under a version of the run's own and imported by `mill --import`, no edit of the build),
+`compile`, `test` (the export's modules, whatever the inventory holds: each with a test configuration asked for
+its suites by `teq test --list` and run by `teq test --verbose` where it has one, its modules, suites and cases
+held to `tests.json` identity for identity both ways, `tests/mill-test-verb.sh` its scenarios) and `run`
+(the module the pin's `run` names built by `teq build`, served with its page by `bench/smoke.mjs`, which opens it
+in headless Chrome over the DevTools protocol on a pipe and drives it: Tyrian's sandbox counter clicked, Indigo's
+sandbox frame drawn and its scene switched; an exception, a console error, a failed request or the time running
+out fails it). The pin, the inventory, the digests and the overlay move together, as lila's do.
+
+Indigo's generated sources come from its plugin's own files under `teq interp` (the overlay's `generate.scala`,
+the module's options copied from its `package.mill`), over stand-ins of the part of os-lib and of `java.awt` they
+name (`os.scala`, `awt.scala`) and a font generator of its own (`fontgen.scala`: the plugin's layouts and source,
+the TrueType file read in Scala, the advances `hdmx` records for the size, the sheet drawn and written as a PNG into
+the module's assets, where the plugin writes it, declared among the generator's outputs); the four modules' sources
+are Mill's to the byte, the sheet is drawn by another rasterizer than AWT's, so the checkout's committed sheets are
+the build's products the pin check leaves to the compile verb, which holds them to `generated.json` and deletes the
+sheets and the generated directories apart to see each written again. Its compile
+stops at the engine's shaders: ultraviolet's `toGLSL` macro matches the trees dotty's typer leaves (an inline
+call's `Inlined(call, bindings, expansion)`, a case class's `apply`, a mirror bound to a proxy), which teq's are
+not (`docs/COMPATIBILITY.md`, "Macros, inline and derivation"), so `indigo-compile`, `indigo-test` and `indigo-run` fail until
+teq's trees carry them. The driver kills teq's processes past `MILL_REFERENCE_MEMORY_GB` (default 16), failing the
+verb: Indigo's whole compile at eight workers reached the container's 22 GB, at one worker 2.9 GB, so the gate runs
+Indigo's lines at one typer worker (`TEQ_THREADS=1`).
+
+The gate's lines `tyrian-export`, `tyrian-compile`, `tyrian-test`, `tyrian-run` and Indigo's four take the
+checkouts (`--tyrian`, `--indigo`) and the binary under test, and are mandatory once named: a missing checkout,
+export, browser or suite fails the line, never a skip; a run line first checks that Chrome (`CHROME` names
+another) makes a WebGL2 context (`node bench/smoke.mjs webgl`), which headless Chrome does through SwiftShader.
+They run only when `--only` names them, until their time and memory are measured within the gate's budget, as
+lila's.
+
 ## The timing lines on a machine
 
 The gate's `budget`, `runtime` and `sentinel` lines compare the head's plain release build with

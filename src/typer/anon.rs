@@ -2299,6 +2299,14 @@ impl<'a> Worker<'a> {
         s
     }
 
+    /// Whether `s` is an outer accessor the typer made (`outer_accessor`, or its definition in a
+    /// class mixing in a trait), under teq's name or scalac's.
+    pub fn is_outer_accessor(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        let name = self.interner.get(info.name);
+        info.def.is_none() && (name.starts_with("$outer$") || name.ends_with("$$$outer"))
+    }
+
     /// scalac's name for the outer accessor of a jar's class, which its class file declares and
     /// its methods call: `p$Outer$Inner$$$outer`, the qualified name with `$` between the parts
     /// and an object's own `$` left out.

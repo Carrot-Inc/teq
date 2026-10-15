@@ -1,0 +1,10 @@
+List(3, 1, 2)
+Vector(3, 1, 2)
+Queue(3, 1, 2)
+List(0, 1, 2, 0, 2, 4, 1, 2, 5, 3, 1)
+List(1, 2)
+TreeMap(10 -> aa, 20 -> bb)
+Queue(1)
+true false
+request 2
+complete List(4, 5)

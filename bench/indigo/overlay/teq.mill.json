@@ -1,0 +1,163 @@
+{
+  "modules": {
+    "perf.js": {
+      "generators": [
+        {
+          "run": [
+            "teq",
+            "interp",
+            "teq-overlay/generate.scala",
+            "teq-overlay/os.scala",
+            "teq-overlay/fontgen.scala",
+            "teq-overlay/awt.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/CharSet.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/DataType.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/ElectronInstall.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/FontLayout.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/FontOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoAssets.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoElectronOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoGameMetadata.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoGenerators.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoTemplate.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/RGB.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/AssetListing.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/ConfigGen.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedData.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedGLSLShaderPair.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedText.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/Generators.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/PathTree.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/utils/Utils.scala",
+            "--",
+            "perf"
+          ],
+          "inputs": []
+        }
+      ]
+    },
+    "physics.js": {
+      "generators": [
+        {
+          "run": [
+            "teq",
+            "interp",
+            "teq-overlay/generate.scala",
+            "teq-overlay/os.scala",
+            "teq-overlay/fontgen.scala",
+            "teq-overlay/awt.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/CharSet.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/DataType.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/ElectronInstall.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/FontLayout.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/FontOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoAssets.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoElectronOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoGameMetadata.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoGenerators.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoTemplate.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/RGB.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/AssetListing.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/ConfigGen.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedData.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedGLSLShaderPair.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedText.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/Generators.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/PathTree.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/utils/Utils.scala",
+            "--",
+            "physics"
+          ],
+          "inputs": [
+            "physics/assets/**",
+            "physics/generator-data/*.ttf"
+          ],
+          "outputs": [
+            "physics/assets/generated/PixelatedFont.png"
+          ]
+        }
+      ]
+    },
+    "sandbox.js": {
+      "generators": [
+        {
+          "run": [
+            "teq",
+            "interp",
+            "teq-overlay/generate.scala",
+            "teq-overlay/os.scala",
+            "teq-overlay/fontgen.scala",
+            "teq-overlay/awt.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/CharSet.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/DataType.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/ElectronInstall.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/FontLayout.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/FontOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoAssets.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoElectronOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoGameMetadata.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoGenerators.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoTemplate.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/RGB.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/AssetListing.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/ConfigGen.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedData.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedGLSLShaderPair.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedText.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/Generators.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/PathTree.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/utils/Utils.scala",
+            "--",
+            "sandbox"
+          ],
+          "inputs": [
+            "sandbox/assets/fonts/*.ttf"
+          ],
+          "outputs": [
+            "sandbox/assets/generated/TestFont.png"
+          ]
+        }
+      ]
+    },
+    "shader.js": {
+      "generators": [
+        {
+          "run": [
+            "teq",
+            "interp",
+            "teq-overlay/generate.scala",
+            "teq-overlay/os.scala",
+            "teq-overlay/fontgen.scala",
+            "teq-overlay/awt.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/CharSet.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/DataType.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/ElectronInstall.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/FontLayout.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/FontOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoAssets.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoElectronOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoGameMetadata.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoGenerators.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoOptions.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/IndigoTemplate.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/RGB.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/AssetListing.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/ConfigGen.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedData.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedGLSLShaderPair.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/EmbedText.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/Generators.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/generators/PathTree.scala",
+            "../indigo-plugin/indigo-plugin/src/indigoplugin/utils/Utils.scala",
+            "--",
+            "shader"
+          ],
+          "inputs": []
+        }
+      ]
+    }
+  }
+}

@@ -235,22 +235,22 @@ sealed class Vector[+A](root: RawBuffer[Any], depth: Int, offset: Int, trieLengt
   override def collectionClassName: String = "Vector"
   override def toString: String = mkString("Vector(", ", ", ")")
 
-object Vector:
-  // scala-library's companion is an `IterableFactory`, whose `iterableFactory` a library body
-  // names as the implicit `Factory` it resolved.
-  implicit def iterableFactory[A]: Factory[A, Vector[A]] =
+// scala-library's companion is an `IterableFactory` (`to(Vector)` passes it), whose
+// `iterableFactory` a library body names as the implicit `Factory` it resolved.
+object Vector extends IterableFactory[Vector]:
+  implicit override def iterableFactory[A]: Factory[A, Vector[A]] =
     new Factory[A, Vector[A]]:
       def fromSpecific(it: IterableOnce[A]): Vector[A] = from(it)
       def newBuilder: scala.collection.mutable.Builder[A, Vector[A]] = Vector.newBuilder[A]
   def wrap[A](items: RawBuffer[A]): Vector[A] = new Vector(null, 0, 0, 0, items, items.length)
   def newBuilder[A]: scala.collection.immutable.VectorBuilder[A] = new scala.collection.immutable.VectorBuilder[A]
-  def apply[A](elems: A*): Vector[A] = wrap(iterableToArray(elems))
+  override def apply[A](elems: A*): Vector[A] = wrap(iterableToArray(elems))
   def from[A](source: IterableOnce[A]): Vector[A] = source match
     case v: Vector[?] => unsafeCast(v)
     case _ => wrap(iterableToArray(source))
   def empty[A]: Vector[A] = wrap(emptyBuffer[A])
-  def fill[A](n: Int)(elem: => A): Vector[A] = wrap(filledBuffer(n)(elem))
-  def tabulate[A](n: Int)(f: Int => A): Vector[A] = wrap(tabulatedBuffer(n)(f))
+  override def fill[A](n: Int)(elem: => A): Vector[A] = wrap(filledBuffer(n)(elem))
+  override def tabulate[A](n: Int)(f: Int => A): Vector[A] = wrap(tabulatedBuffer(n)(f))
 
   // The trie over the first `n` of `items`: full leaves of 32 stacked 32 to a node, the rest
   // as the tail.

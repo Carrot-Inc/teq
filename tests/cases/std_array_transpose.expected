@@ -1,0 +1,6 @@
+a,d | b,e | c,f
+3
+[1 4 6] [2 5] [3]
+0
+List(List(x, z), List(y, w))
+cells 6

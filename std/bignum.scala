@@ -4,6 +4,7 @@
 package scala.math:
 
   import java.math.{BigDecimal as BigDec, BigInteger, MathContext}
+  import scala.collection.immutable.NumericRange
 
   final class BigDecimal(val bigDecimal: BigDec, val mc: MathContext) extends java.lang.Number, Ordered[BigDecimal]:
     if bigDecimal eq null then throw new IllegalArgumentException("null value for BigDecimal")

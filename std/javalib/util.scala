@@ -458,14 +458,6 @@ package java.io:
 
 package java.util:
 
-  @jvmClass("java/util/Comparator")
-  trait Comparator[T]:
-    def compare(a: T, b: T): Int
-
-  @javaDefined
-  @jvmClass("java/util/Comparator")
-  object Comparator
-
   @jvmClass("java/util/Iterator")
   trait Iterator[E]:
     def hasNext: Boolean

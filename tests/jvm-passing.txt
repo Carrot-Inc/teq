@@ -108,6 +108,7 @@ byname_in_function_type
 byname_varargs
 byte_buffer_longs
 byte_short_float
+callable_secondary_parent
 callable_stateful_superclass
 capture_a
 capture_assign_target
@@ -139,6 +140,8 @@ capture_this
 capture_u
 capture_w
 capture_x
+case_apply_bare_in_companion
+case_apply_beside_curried
 case_class_below_superclass
 case_class_copy_through_trait
 case_class_equals_alias
@@ -177,6 +180,7 @@ case_clause_nested_guard_block
 case_clause_trailing_bar
 case_clause_union_type_in_parens
 case_companion_nested
+case_companion_package_path
 case_companion_value
 case_companion_written_or_not
 case_copy_clauses
@@ -239,6 +243,7 @@ class_tag_of_opaque
 class_tag_of_types
 class_tag_of_unit_arrays
 class_tag_ordinary_arguments
+class_tag_outer_variable
 class_tag_to_array_evidence
 class_tag_unapply
 class_tag_void_array
@@ -315,6 +320,8 @@ conversion_method_java_supertype
 conversion_method_null
 conversion_method_scope
 conversion_nested_class_prefix
+conversion_open_var_case_join
+conversion_open_var_using
 conversion_prefix_and_expected_member
 conversion_private_member
 conversion_receivers
@@ -370,6 +377,7 @@ dependent_function_types
 dependent_givens
 dependent_override
 dependent_val_refinement
+derives_next_line
 derives_type_constructor
 derives_type_ctor
 discard_through_var_bound
@@ -381,6 +389,7 @@ duration_names
 duration_syntax_import
 duration_time_unit
 duration_time_unit_constants
+dynamic_variable
 either_merge_adders
 either_right
 else_between_widths_brace_lambda
@@ -388,6 +397,7 @@ empty_args_ext_apply
 empty_args_given_apply
 empty_failures
 end_markers
+enum_case_companion_apply
 enum_case_companion_mirror
 enum_case_defaults
 enum_case_given_through_object
@@ -438,6 +448,7 @@ expected_result_path_param
 expected_type_instantiation
 expected_types
 export_alias_outer_instance
+export_alias_singleton_path
 export_anonymous_value
 export_by_name_param
 export_companion_apply_empty
@@ -465,6 +476,7 @@ export_opaque_bound_path
 export_qualified_protected
 export_relay_given
 export_self_type_companion
+export_singleton_val_path
 export_synthetic_companion_wildcard
 export_through_forwarder
 export_through_value_import
@@ -839,6 +851,7 @@ inline_guard_constant_type
 inline_hk_alias_summon
 inline_if_literal_type
 inline_inferred_result_dependent
+inline_inferred_result_expected
 inline_local_class_secondary_ctor
 inline_local_forward_unused_import
 inline_match
@@ -990,8 +1003,10 @@ lexical_extension_ranked_givens
 lexical_extension_ranked_macro
 lexical_extension_ranked_receiver
 lexical_extension_retry_leading
+library_body_casts
 list_fill_order
 list_map_conserve
+list_range_last_element
 list_reverse_prepend
 literal_constant_types
 literal_overload_constant
@@ -1078,6 +1093,7 @@ macro_fresh_nested_site
 macro_heal_types
 macro_hole_cast
 macro_identity_hash
+macro_implicit_conversion
 macro_inferred_result_type
 macro_jar_ctor_val
 macro_jdk_bodies
@@ -1167,6 +1183,7 @@ map_iterable_overloads
 map_store_callbacks
 maps
 marker_traits
+match_abstract_member_type
 match_nested_bound
 match_type_case_and_line
 match_type_case_trailing_and
@@ -1236,6 +1253,7 @@ nested_case_companion_value
 nested_case_object_identity
 nested_class_ctor_defaults
 nested_class_inherited
+nested_class_overloads
 nested_class_prefix
 nested_class_prefix_givens
 nested_class_prefix_inherited
@@ -1269,6 +1287,9 @@ nullary_over_java_parens
 number_boxes
 numeric
 numeric_companion_constants
+numeric_ordering_equiv
+numeric_range_conversion_order
+numeric_range_factory
 object_inherited_member_prefix
 object_inherited_protected
 object_member
@@ -1279,6 +1300,7 @@ objects_java_equality
 objects_jdk_bodies
 opaque_applied_prefix
 opaque_bound
+opaque_companion_literal_alternatives
 opaque_intersection_bound
 opaque_into_union
 opaque_join_prefix
@@ -1307,6 +1329,7 @@ overload_basic
 overload_class_generic
 overload_class_inheritance
 overload_context_lambda
+overload_eta_unit_function
 overload_expected_result_retry
 overload_explicit_targs
 overload_exports
@@ -1439,6 +1462,7 @@ qualified_this_outer_alias
 quote_pattern_hole_inferred
 quote_pattern_hole_upper_bound
 quote_tag_collision
+quoted_jar_statement_extractors
 random_subclass
 range_bounds_and_sum
 reader_utf8_boundary
@@ -1495,6 +1519,7 @@ sam_method_by_name
 sam_outer_name
 sam_overloaded_lambda
 sam_result_widened
+same_ref_bindings
 scala2_control
 scala2_control_mixed
 scala2_implicit_ranking
@@ -1684,11 +1709,13 @@ sourcecode_multi
 sourcecode_names
 splice_conversion
 split_def_beside_class
+std_array_transpose
 std_array_view
 std_byteswap
 std_collection_names
 std_console_valueof
 std_duration_parse
+std_factories_flow
 std_formats
 std_grouped_iterator
 std_implicit_evidence
@@ -1699,6 +1726,7 @@ std_listset
 std_map_set_buffer
 std_maps_sets
 std_mapview_map
+std_math_queue_breaks
 std_misc
 std_mutable_map_default
 std_mutable_sorted_set
@@ -1720,11 +1748,14 @@ std_surface
 std_try
 stdextras
 stdin_lines
+stream_abstract_seq_parent
 stream_descriptors
+stream_iterator_lazy_tail
 stream_ops
 stream_spread_and_collector_protocol
 streams_jdk_semantics
 strict_equality
+strict_equality_given_pair
 strict_equality_null_given
 strict_equality_std
 string_bounds
@@ -1779,9 +1810,11 @@ target_name_bridge_alias
 target_name_dispatch
 target_name_qualified_dispatch
 target_name_qualified_lone
+target_name_shared
 target_name_shared_names
 target_name_unrelated_value
 target_name_unrelated_value_written
+target_name_values
 target_name_wildcard_dispatch
 template_arguments_once
 template_arguments_throwing
@@ -1915,6 +1948,7 @@ typer_state_widened_ascription
 unapply_selection
 unapply_selection_prefix
 unapply_selection_synthetic
+unapply_seq_direct
 unapply_seq_product
 unchecked_variance_local
 union_join_lower_bound
@@ -1949,6 +1983,7 @@ value_import
 value_import_given_old_implicits
 value_import_given_shadows_own
 value_import_givens
+value_method_overloads
 value_of
 value_of_inner_object
 value_of_singletons

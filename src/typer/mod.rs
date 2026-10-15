@@ -1111,6 +1111,17 @@ pub struct Worker<'a> {
     /// them (`Worker::interpolate_open`), at the latest the definition whose typing made them
     /// (`var_frame_end`). Ordered by when each was left open, so a tree's own are at the end.
     pub open_vars: Vec<TVarId>,
+    /// The variables a conversion left open for the member it serves (`conversions.rs`), which the
+    /// member's using clauses instantiate where their types name them, before the search (dotty's
+    /// `adaptNoArgsImplicitMethod` over `Inferencing.tvarsInParams`); dropped at the item's end.
+    pub conversion_open_vars: Vec<TVarId>,
+    /// The type parameters a conversion's declared result holds nonvariantly, by that result (a
+    /// hash-consed type of the conversion's own parameters): found once, read for each conversion
+    /// made through it (`conversions.rs`).
+    pub conversion_nonvariant: FxMap<TypeId, std::sync::Arc<[TParamId]>>,
+    /// An inline conversion is expanded where it is typed, not in the later phase: the given
+    /// search's candidate of a function type (`conversion_method_body`).
+    pub eager_inline_conversion: bool,
     /// How many variables an interpolation has left open so far: a quote whose typing left one
     /// open has its nodes' recorded types zonked at its end (`settle_node_types`).
     pub opened: u32,
@@ -1620,6 +1631,9 @@ pub struct Worker<'a> {
     pub suffixed_roots: FxMap<SymId, ()>,
     pub prog_index: check::ProgIndex,
     pub roots_memo: FxMap<SymId, std::sync::Arc<[SymId]>>,
+    /// The inherited type members and nested classes found by name, misses included
+    /// (`members::InheritedNamed`).
+    pub inherited_named: members::InheritedNamed,
     pub subclasses: overload::SubclassIndex,
     /// Set once the alternatives of every overloaded name have their names in the output;
     /// an entry that is settled later names its alternatives right away.
@@ -2580,6 +2594,9 @@ impl<'a> Worker<'a> {
             last_arg_types: Vec::new(),
             pending_widenings: Vec::new(),
             open_vars: Vec::new(),
+            conversion_open_vars: Vec::new(),
+            conversion_nonvariant: FxMap::default(),
+            eager_inline_conversion: false,
             opened: 0,
             unsimplified: false,
             inline_val_rhs: false,
@@ -2759,6 +2776,7 @@ impl<'a> Worker<'a> {
             suffixed_roots: FxMap::default(),
             prog_index: check::ProgIndex::default(),
             roots_memo: FxMap::default(),
+            inherited_named: Default::default(),
             subclasses: overload::SubclassIndex::default(),
             alternatives_named: false,
             inherited_pairs: Vec::new(),
@@ -2966,6 +2984,9 @@ impl<'a> Worker<'a> {
             last_arg_types: Default::default(),
             pending_widenings: Default::default(),
             open_vars: Default::default(),
+            conversion_open_vars: Default::default(),
+            conversion_nonvariant: Default::default(),
+            eager_inline_conversion: false,
             opened: 0,
             unsimplified: false,
             inline_val_rhs: false,
@@ -3139,6 +3160,7 @@ impl<'a> Worker<'a> {
             suffixed_roots: self.suffixed_roots.clone(),
             prog_index: Default::default(),
             roots_memo: self.roots_memo.clone(),
+            inherited_named: Default::default(),
             subclasses: Default::default(),
             alternatives_named: Default::default(),
             inherited_pairs: Default::default(),
@@ -3239,6 +3261,9 @@ impl<'a> Worker<'a> {
             self.apply_inline_unboxes();
         }
         self.var_frames.truncate(frame);
+        if frame <= 1 {
+            self.conversion_open_vars.clear();
+        }
         let Some((start, _)) = self.var_frames.pop() else { return };
         if !self.open_vars.is_empty() {
             self.force_open_vars(start as usize);
@@ -3383,6 +3408,7 @@ impl<'a> Worker<'a> {
         self.derived_opaques.to_shared = on;
         self.derive.to_shared(on);
         self.syms.dispatch_names.to_shared = on;
+        self.syms.js_export_names.to_shared = on;
         self.arity_classes.to_shared = on;
         self.prog.template_syms.to_shared = on;
         self.prog.top_funs.alloc_shared = on;
@@ -3524,6 +3550,7 @@ impl<'a> Worker<'a> {
         self.quote.apply_pending();
         self.derive.apply_pending();
         self.syms.dispatch_names.apply_pending();
+        self.syms.js_export_names.apply_pending();
         self.fun_of_sym.apply_pending();
         self.val_init.apply_pending();
         self.prog.class_bodies.apply_pending();
@@ -3620,6 +3647,7 @@ impl<'a> Worker<'a> {
         self.derived_opaques.fork();
         self.derive.fork();
         self.syms.dispatch_names.fork();
+        self.syms.js_export_names.fork();
         self.arity_classes.fork();
         self.prog.template_syms.fork();
         self.prog.class_bodies.fork();

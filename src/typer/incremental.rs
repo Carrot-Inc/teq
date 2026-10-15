@@ -32,6 +32,9 @@ impl<'a> super::Typer<'a> {
     /// while its builds are incremental and keep none of them so: a full build has its own.
     pub fn retype(&mut self, changes: &[Change]) -> Result<Vec<FileId>, String> {
         self.on_thread(|w| {
+            // The files' classes are entered again: what their bases were searched for by name
+            // is found again (`members::InheritedNamed`).
+            crate::symbols::type_members_changed();
             // A build starts without the files the last one's macros read (`interp::files`).
             crate::interp::forget_files();
             // The macros' info messages are the retype's to print once it stands; one that

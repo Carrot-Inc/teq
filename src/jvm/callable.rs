@@ -225,8 +225,11 @@ impl<'a> Cx<'a> {
             return None;
         }
         let x = syms.class(o).companion?;
-        let kind = syms.class(x).kind;
-        (matches!(kind, ClassKind::Class | ClassKind::Enum) && self.emits(x) && self.statically_placed(x)).then_some(x)
+        // An enum's class case is a case class whose companion is the object of its name in the enum's companion
+        // (`DesugarEnums`): one module class, the object's.
+        let info = syms.class(x);
+        let class_case = info.kind == ClassKind::EnumCase && info.singleton.is_none();
+        ((matches!(info.kind, ClassKind::Class | ClassKind::Enum) || class_case) && self.emits(x) && self.statically_placed(x)).then_some(x)
     }
 
     /// The mirror class of static forwarders of top-level module class `o` that has no
