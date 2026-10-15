@@ -474,7 +474,7 @@ impl<'a> Emitter<'a> {
             TExpr::Static(s) => file_init(reference(s)),
             TExpr::Field(r, s) => reference(s).min(self.arg_purity(r)),
             TExpr::Cast(r, op, _) => match op {
-                CastOp::Written | CastOp::Nothing => self.arg_purity(r),
+                CastOp::Written | CastOp::Nothing | CastOp::Erased => self.arg_purity(r),
                 CastOp::Check(..) | CastOp::Unbox(..) => self.arg_purity(r).min(Purity::Idempotent),
                 CastOp::Adapt(..) => self.arg_purity(r),
             },
@@ -1394,7 +1394,7 @@ impl<'a> Emitter<'a> {
     fn emit_cast(&mut self, inner: TExprId, op: CastOp, bare: bool) {
         let prog = self.prog;
         let test = match op {
-            CastOp::Written => return self.emit_expr_as(inner, bare),
+            CastOp::Written | CastOp::Erased => return self.emit_expr_as(inner, bare),
             CastOp::Nothing => return self.emit_helper_call("$asNothing", inner),
             CastOp::Unbox(test, _) => return self.emit_helper_call(unbox_helper(prog.js_test(test)), inner),
             // `null`, or a field read before its assignment, the zero; a template's text in

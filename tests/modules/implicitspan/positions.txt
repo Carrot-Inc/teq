@@ -1,0 +1,7 @@
+# scalac 3.8.4's spans of the trees a search inserts at each of Api's two calls (`teq tasty --positions`
+# of scalac's Api.tasty): at the call's end, no width (`inferImplicitArg(formal, tree.span.endPos)`),
+# the second call's its own, though the search's result is kept from the first.
+isp/Api.tasty APPLY 70 .. 70 b/Api.scala
+isp/Api.tasty TERMREF 70 .. 70 b/Api.scala
+isp/Api.tasty TERMREF 70 .. 70 b/Api.scala
+isp/Api.tasty APPLY 112 .. 112 b/Api.scala

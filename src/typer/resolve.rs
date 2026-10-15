@@ -5678,11 +5678,17 @@ impl<'a> Worker<'a> {
     /// complete their classes, so that the sealed ones know their children.
     pub(super) fn outermost_completion_done(&mut self) {
         if self.completing == 0 {
-            // A file of several sealed classes is completed once (`Option`, `Either` and `List`).
-            self.sealed_std_files.sort_unstable();
-            self.sealed_std_files.dedup();
-            while let Some(file) = self.sealed_std_files.pop() {
-                self.complete_file_classes(file);
+            loop {
+                // A file of several sealed classes is completed once (`Option`, `Either` and `List`).
+                self.sealed_std_files.sort_unstable();
+                self.sealed_std_files.dedup();
+                while let Some(file) = self.sealed_std_files.pop() {
+                    self.complete_file_classes(file);
+                }
+                if self.pending_mirror_parents.is_empty() {
+                    break;
+                }
+                self.complete_pending_mirror_parents();
             }
             self.late_naming_done();
         }
@@ -5726,6 +5732,12 @@ impl<'a> Worker<'a> {
     /// classes completed under it.
     pub(super) fn leave_completion(&mut self) {
         self.completing -= 1;
+        // A sealed class's companion whose `Mirror.Sum` waits (`set_deferred_mirror_parent`) is in
+        // progress, its cell claimed: decided once this thread's completions are done, whichever
+        // completion that is, so that no other worker waits on it past them.
+        if self.completing == 0 && !self.pending_mirror_parents.is_empty() {
+            self.complete_pending_mirror_parents();
+        }
         self.settle_pending_names();
     }
 
@@ -5752,9 +5764,24 @@ impl<'a> Worker<'a> {
             t.types.class(c, &targs)
         };
         let Some(def_id) = def_id else {
-            // A class read from a jar, or a synthesized enum companion.
-            if self.loaded.is_some() {
+            // A class read from a jar, or a synthesized enum companion, which is the enum's
+            // `Mirror.Sum` (`SyntheticMembers.addMirrorSupport`).
+            let enum_companion = kind == ClassKind::Object
+                && self.syms.class(c).companion.is_some_and(|e| self.syms.class(e).kind == ClassKind::Enum && self.syms.class(e).def.is_some());
+            // The companion the namer made for an enum's class case of the sources
+            // (`enter_enum_case_companion`), the case's `Mirror.Product`.
+            let case_companion = self.syms.class(c).made_companion
+                && self.syms.class(c).companion.is_some_and(|k| self.syms.class(k).kind == ClassKind::EnumCase && self.syms.class(k).def.is_some());
+            if self.loaded.is_some() && !enum_companion && !case_companion {
                 self.complete_loaded_class(c);
+                return;
+            }
+            if let Some(mirror) = self.mirror_parent(c).filter(|_| enum_companion || case_companion) {
+                let t = self.types.class(mirror, &[]);
+                let span = self.syms.class(c).span;
+                self.set_parents(c, vec![(t, span)]);
+                self.syms.class_mut(c).desugared_parents = 1;
+                self.syms.class_mut(c).state().set(Completion::Done);
                 return;
             }
             let self_ty = self_args_done(self);
@@ -5808,7 +5835,10 @@ impl<'a> Worker<'a> {
             }
             _ => {}
         });
-        self.syms.class_mut(c).state().set(Completion::Done);
+        // A companion whose mirror parent waits stays in progress (`set_deferred_mirror_parent`).
+        if !self.pending_mirror_parents.iter().any(|&(p, _)| p == c) {
+            self.syms.class_mut(c).state().set(Completion::Done);
+        }
     }
 
     fn complete_class_def(&mut self, c: ClassId, kind: ClassKind, cls: &'a ast::ClassDef, owner: Owner) {
@@ -5973,8 +6003,11 @@ impl<'a> Worker<'a> {
         if kind == ClassKind::Trait && parents.first().is_some_and(|&(t, _)| self.dealias(t) == ANY) {
             self.syms.class_mut(c).mods |= mods::UNIVERSAL;
         }
-        self.desugared_parents(c, kind, &mut parents);
-        self.set_parents(c, parents);
+        if self.desugared_parents(c, kind, &mut parents) {
+            self.set_deferred_mirror_parent(c, parents);
+        } else {
+            self.set_parents(c, parents);
+        }
         // The self type may name a class that extends this one (tapir's
         // `EndpointTransputMacros[T] { this: EndpointTransput[T] => }`), so it is resolved once
         // this class is complete enough to be extended.
@@ -6181,29 +6214,45 @@ impl<'a> Worker<'a> {
 
     /// The parents dotty's `Desugar.classDef` adds after the written ones: `Product` and
     /// `Serializable` to a case class or case object that is no enum case, `scala.reflect.Enum`
-    /// to an enum. One the class writes itself is not written twice.
-    fn desugared_parents(&mut self, c: ClassId, kind: ClassKind, parents: &mut Vec<(TypeId, Span)>) {
+    /// to an enum; and the one `SyntheticMembers.addMirrorSupport` adds, `Mirror.Singleton` to a
+    /// case object and an enum's singleton case (`mirror_parent`). One the class writes itself is
+    /// not written twice.
+    /// Whether the mirror parent waits for the class's written parents (`set_deferred_mirror_parent`).
+    fn desugared_parents(&mut self, c: ClassId, kind: ClassKind, parents: &mut Vec<(TypeId, Span)>) -> bool {
         let (is_case, span, before) = {
             let info = self.syms.class(c);
             (info.mods & mods::CASE != 0, info.span, info.desugared_parents)
         };
-        let added: [Option<ClassId>; 2] = match kind {
-            ClassKind::Class | ClassKind::Object if is_case => [self.b.product, self.java_serializable_class()],
-            ClassKind::Enum => [self.b.reflect_enum, None],
+        let mut deferred = false;
+        // An object nested in a class or a block is a class of teq's with its module's val.
+        let module = self.mirror_module(c);
+        let added: [Option<ClassId>; 3] = match kind {
+            ClassKind::Class | ClassKind::Object if is_case => [self.b.product, self.java_serializable_class(), self.mirror_parent(c)],
+            ClassKind::Enum => [self.b.reflect_enum, None, None],
+            _ if module && self.defers_mirror_parent(c) => {
+                deferred = true;
+                [None, None, None]
+            }
+            ClassKind::EnumCase | ClassKind::Object => [self.mirror_parent(c), None, None],
+            _ if module => [self.mirror_parent(c), None, None],
             _ => {
                 if before != 0 {
                     self.syms.class_mut(c).desugared_parents = 0;
                 }
-                return;
+                return false;
             }
         };
         parents.reserve(2);
         let mut count = 0;
         for p in added.into_iter().flatten() {
-            let written = parents.iter().any(|&(t, _)| match self.types.get(t) {
-                Type::Class(k, _) => k == p,
-                _ => self.class_of(t) == Some(p),
-            });
+            // A mirror parent `SyntheticMembers.addMirrorSupport` adds beside a written one of its
+            // class is a parent of its own, as the typed tree has both (the backends keep one
+            // interface); `Desugar.classDef`'s are not added twice.
+            let written = !self.is_mirror_class(p)
+                && parents.iter().any(|&(t, _)| match self.types.get(t) {
+                    Type::Class(k, _) => k == p,
+                    _ => self.class_of(t) == Some(p),
+                });
             if !written {
                 // `Product` and `Enum` have their class types among the builtins.
                 // `java.io.Serializable`'s, once complete, is the first of its base types.
@@ -6223,12 +6272,85 @@ impl<'a> Worker<'a> {
         if before != count {
             self.syms.class_mut(c).desugared_parents = count;
         }
+        deferred
+    }
+
+    /// The written parents of a sealed class's companion, its `Mirror.Sum` left to the outermost
+    /// completion (`complete_pending_mirror_parents`), as `SyntheticMembers.addMirrorSupport` adds
+    /// it after typing: the classes of the sealed class's file decide it, and they may look into
+    /// the companion (`extends FakeEnumType.Value`) or be under way themselves (`sealed trait S
+    /// extends S.Named`), which the written parents serve, the companion in progress until then.
+    fn set_deferred_mirror_parent(&mut self, c: ClassId, parents: Vec<(TypeId, Span)>) {
+        let errors = self.diags.error_count();
+        self.set_parents(c, parents.clone());
+        // Parents in error take no mirror, whose second linearisation would report them again.
+        if self.diags.error_count() == errors {
+            self.pending_mirror_parents.push((c, parents));
+        }
+    }
+
+    /// The companions whose mirror parent waited for the outermost completion: the classes of
+    /// their sealed classes' files complete now, none of them half complete, and each companion
+    /// takes its `Mirror.Sum` where the class is a generic sum, then is complete.
+    fn complete_pending_mirror_parents(&mut self) {
+        while let Some((c, parents)) = self.pending_mirror_parents.pop() {
+            // A shared class's (the std's) under the loader's lock, as its completion was.
+            if self.shared_class(c) {
+                self.with_loader_for(crate::measure::Hold::ClassCompletion, |w| w.complete_pending_mirror_parent(c, parents));
+            } else {
+                self.complete_pending_mirror_parent(c, parents);
+            }
+        }
+        self.settle_pending_names();
+    }
+
+    /// The pending mirror parents of the shared classes, under the loader's lock at the end of its
+    /// outermost hold; the program's stay for their thread's completions' end (`leave_completion`).
+    pub(super) fn complete_pending_shared_mirror_parents(&mut self) {
+        let mut kept = Vec::new();
+        while let Some((c, parents)) = self.pending_mirror_parents.pop() {
+            if self.shared_class(c) {
+                self.complete_pending_mirror_parent(c, parents);
+            } else {
+                kept.push((c, parents));
+            }
+        }
+        self.pending_mirror_parents.extend(kept);
+    }
+
+    fn complete_pending_mirror_parent(&mut self, c: ClassId, mut parents: Vec<(TypeId, Span)>) {
+        self.completing += 1;
+        if let Some(m) = self.mirror_parent(c) {
+            let span = self.syms.class(c).span;
+            parents.push((self.types.class(m, &[]), span));
+            self.syms.class_mut(c).desugared_parents = 1;
+            self.set_parents(c, parents);
+        }
+        self.syms.class_mut(c).state().set(Completion::Done);
+        self.completing -= 1;
     }
 
     /// The leading bases after the class itself that are classes `Desugar.classDef` gives
-    /// (`ClassInfo::rule_prefix`).
-    fn rule_prefix_of(&self, base: &[(ClassId, TypeId)]) -> u8 {
-        base.iter().skip(1).take(4).take_while(|&&(b, _)| self.is_desugared_parent(b)).count() as u8
+    /// (`ClassInfo::rule_prefix`), after the `post_typer` ones of the mirror parent.
+    fn rule_prefix_of(&self, base: &[(ClassId, TypeId)], post_typer: u8) -> u8 {
+        let given = base.iter().skip(1 + post_typer as usize).take(4).take_while(|&&(b, _)| self.is_desugared_parent(b) && !self.is_mirror_class(b)).count();
+        post_typer + given as u8
+    }
+
+    /// The bases of the linearisation `base` that the mirror parent `desugared_parents` gave the
+    /// class brings, first there (`ClassInfo::post_typer_bases`): `SyntheticMembers.addMirrorSupport`
+    /// adds it after typing. None where a written parent brings a mirror's trait, which the
+    /// typer sees.
+    fn post_typer_bases_of(&self, parents: &[TypeId], written: usize, base: &[(ClassId, TypeId)]) -> u8 {
+        let mirror_class = |t: &Self, p: TypeId| t.types.named_class(p).is_some_and(|k| t.is_mirror_class(k));
+        if parents.len() <= written || !parents.last().is_some_and(|&p| mirror_class(self, p)) {
+            return 0;
+        }
+        let brings_mirror = |t: &Self, p: TypeId| t.types.named_class(p).is_some_and(|k| t.syms.class(k).base_types.iter().any(|&(b, _)| t.is_mirror_class(b)));
+        if parents[..written].iter().any(|&p| brings_mirror(self, p)) {
+            return 0;
+        }
+        base.iter().skip(1).take_while(|&&(b, _)| self.is_mirror_class(b)).count() as u8
     }
 
     /// The names of the members of the classes `Desugar.classDef` gives
@@ -6246,7 +6368,7 @@ impl<'a> Worker<'a> {
             self.rule_member_names = names;
         }
         let info = self.syms.class(c);
-        debug_assert!(info.base_types[1..1 + info.rule_prefix as usize].iter().all(|&(b, _)| self.syms.class(b).members.keys().all(|n| self.rule_member_names.contains(n))));
+        debug_assert!(info.base_types[1 + info.post_typer_bases as usize..1 + info.rule_prefix as usize].iter().all(|&(b, _)| self.syms.class(b).members.keys().all(|n| self.rule_member_names.contains(n))));
         self.rule_member_names.iter().any(|&n| own & crate::symbols::name_bit(n) != 0 && info.members.contains_key(&n))
     }
 
@@ -6289,7 +6411,7 @@ impl<'a> Worker<'a> {
     }
 
     /// `java.io.Serializable`, looked up once.
-    fn java_serializable_class(&mut self) -> Option<ClassId> {
+    pub(super) fn java_serializable_class(&mut self) -> Option<ClassId> {
         if let Some(found) = self.java_serializable {
             return found;
         }
@@ -6467,8 +6589,11 @@ impl<'a> Worker<'a> {
         let mut inherits_exports = false;
         // `Product`, `Equals`, `Serializable` and `Enum` bring no native class, self type, type
         // member or nested class.
-        let rule_prefix = self.rule_prefix_of(&base);
-        debug_assert!(base[1..1 + rule_prefix as usize].iter().all(|&(b, _)| self.brings_walks_nothing(b)), "a class Desugar.classDef gives brings {} what a walk passing over it misses", self.class_path(c));
+        // The mirror's traits `SyntheticMembers.addMirrorSupport` adds after typing lead them, which
+        // no walk of the typer's reads (`ClassInfo::post_typer_bases`).
+        let post_typer_bases = self.post_typer_bases_of(&parent_types, written, &base);
+        let rule_prefix = self.rule_prefix_of(&base, post_typer_bases);
+        debug_assert!(base[1 + post_typer_bases as usize..1 + rule_prefix as usize].iter().all(|&(b, _)| self.brings_walks_nothing(b)), "a class Desugar.classDef gives brings {} what a walk passing over it misses", self.class_path(c));
         // Whether no base declares an extension, which a member call not found reads before it
         // walks the bases for one (`instance_extension_owner`); the rule prefix's read apart.
         let mut no_inherited_extensions = base[1..1 + rule_prefix as usize].iter().all(|&(b, _)| self.syms.class(b).extensions.is_empty());
@@ -6498,6 +6623,7 @@ impl<'a> Worker<'a> {
         info.parent_failed = parent_failed;
         info.base_types = base;
         info.rule_prefix = rule_prefix;
+        info.post_typer_bases = post_typer_bases;
         info.superclass = superclass;
         info.inherits_types = inherits_types;
         info.inherits_exports = inherits_exports;

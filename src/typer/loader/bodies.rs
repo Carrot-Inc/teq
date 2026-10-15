@@ -146,7 +146,6 @@ impl Conv {
         self.file
     }
 
-
     /// The tables of what the conversion keeps beside the AST.
     fn reader(&mut self) -> &mut crate::ast::ReaderTables {
         self.ast.reader.get_or_insert_with(Default::default)
@@ -2733,9 +2732,6 @@ impl<'a> Worker<'a> {
                 if let Some(e) = self.conv_pattern_hole(cv, f, targs) {
                     return e;
                 }
-                if let Some(target) = self.companion_mirror(cv, t) {
-                    return self.summon_mirror(cv, target);
-                }
                 // `q.ext[X](recv)[Y]`, an extension method with no clause after its own type
                 // arguments, called through its owner: `q.ext[X, Y](recv)` here.
                 if let Some((g, ext_targs, clauses)) = extension_clauses(f) {
@@ -2841,9 +2837,6 @@ impl<'a> Worker<'a> {
             }
             TermKind::Inlined { expansion, call, bindings, .. } if self.product_summoned(cv, expansion, call.as_deref(), bindings).is_some() => {
                 let arg = self.product_summoned(cv, expansion, call.as_deref(), bindings).unwrap();
-                if let Some(target) = self.companion_mirror(cv, arg) {
-                    return self.summon_mirror(cv, target);
-                }
                 let a = self.conv_expr(cv, arg);
                 let mut summon = cv.expr(Expr::Ident(names::ROOT));
                 for seg in ["scala", "summon"] {
@@ -3408,41 +3401,6 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The refinement `t` casts a product's companion to where it is the mirror of a case class
-    /// as scalac's `Synthesizer` writes it (`companionPath`), `C.$asInstanceOf$[Mirror.Product {
-    /// type MirroredMonoType = C; .. }]`: the product's companion holds none of the mirror members
-    /// its pickle appends (`enter_loaded_class`), and the mirror is the one the typer synthesizes,
-    /// as for a program's own.
-    fn companion_mirror<'t>(&mut self, cv: &mut Conv, t: &'t Term) -> Option<&'t TType> {
-        let TermKind::TypeApply(f, targs, _) = &t.kind else { return None };
-        let (TermKind::SelectIn(q, n, ..) | TermKind::Select(q, n)) = &f.kind else { return None };
-        if cv.tasty.name(cv.tasty.source_name(*n)) != "$asInstanceOf$" {
-            return None;
-        }
-        let [target @ TType::Refined(base, members)] = &targs[..] else { return None };
-        let product = matches!(&**base, TType::TypeRef(_, b) if cv.tasty.simple(*b) == Some("Product"));
-        if !product || !members.iter().any(|(m, _)| cv.tasty.simple(*m) == Some("MirroredMonoType")) {
-            return None;
-        }
-        let TermKind::Path(p) = &q.kind else { return None };
-        let mut cx = super::MapCx::new(cv.file);
-        let s = self.path_term(&mut cx, p)?;
-        let SymKind::Object(m) = self.syms.sym(s).kind else { return None };
-        self.syms.class(m).companion.filter(|_| self.is_product_class(m))?;
-        Some(target)
-    }
-
-    /// `summon[T]` of the refinement a companion's mirror is cast to: the typer synthesizes it.
-    /// The name as `Predef` brings it, scala-library's member there or the lean std's of `scala`.
-    fn summon_mirror(&mut self, cv: &mut Conv, target: &TType) -> ExprId {
-        let mut cx = super::MapCx::new(cv.file);
-        let ty = self.map_type(&mut cx, target);
-        let t = cv.ty(TyExpr::Resolved(ty));
-        let summon = cv.expr(Expr::Ident(names::SUMMON));
-        let l = push_list(&mut cv.ast.ty_lists, &[t]);
-        cv.expr(Expr::TypeApply(summon, l))
-    }
-
     /// `summon[Quotes]`: the `Quotes` a splice runs with.
     /// `summon[Type[t]]` for the `Type[t]` a quote type pattern bound: the typer synthesizes it
     /// from the type variable, as scalac's pattern does.
@@ -3904,13 +3862,6 @@ impl<'a> Worker<'a> {
         };
         if let Some(e) = self.conv_package_accessor(cv, f, args) {
             return e;
-        }
-        // A companion's mirror passed to a using clause (`Schema.derived[C](C.$asInstanceOf$[..])`)
-        // is left to the typer, which synthesizes it there as the program's own build does.
-        if let [arg] = args {
-            if self.companion_mirror(cv, arg).is_some() && self.fills_using_clause(cv, f) {
-                return self.conv_expr(cv, f);
-            }
         }
         // `IArray.apply[T](arr)(i)`, the extension called through its owner, whose name the
         // companion's `apply(xs*)` would take: the element of `arr`.
@@ -4448,12 +4399,6 @@ impl<'a> Worker<'a> {
         !clauses.is_empty() && clauses.into_iter().all(|using| !using)
     }
 
-    /// Whether the clause a call `f(..)` fills is a using clause of every method `f` may name.
-    fn fills_using_clause(&mut self, cv: &mut Conv, f: &Term) -> bool {
-        let clauses = self.filled_clauses(cv, f);
-        !clauses.is_empty() && clauses.into_iter().all(|using| using)
-    }
-
     fn static_path_scope(&mut self, cv: &mut Conv, t: &TType) -> Option<PathScope> {
         match t {
             TType::Package(p) => {
@@ -4625,6 +4570,7 @@ impl<'a> Worker<'a> {
                 other => self.conv_stat(cv, other, &mut stmts),
             }
         }
+        Self::make_local_companions(cv, &mut stmts);
         let e = self.conv_expr(cv, expr);
         if stmts.is_empty() {
             return e;
@@ -4632,6 +4578,57 @@ impl<'a> Worker<'a> {
         stmts.push(Stmt::Expr(e));
         let l = push_list(&mut cv.ast.stmts, &stmts);
         cv.expr(Expr::Block(l))
+    }
+
+    /// The companion `Desugar.classDef` makes for each case class of the block, which the
+    /// pickle's synthetic companion stood for and the reading leaves to be made again: an object
+    /// of its name right after it, over its range, as the parser makes it in source
+    /// (`add_derived_givens`), unless the block defines an object or a method of the name.
+    fn make_local_companions(cv: &mut Conv, stmts: &mut Vec<Stmt>) {
+        let defs: Vec<DefId> = stmts.iter().filter_map(|s| match s {
+            Stmt::Def(d) => Some(*d),
+            _ => None,
+        }).collect();
+        let mut made: Vec<(DefId, DefId)> = Vec::new();
+        for &d in &defs {
+            let def = cv.ast.def(d);
+            let DefKind::Class(c) = &def.kind else { continue };
+            if c.kind != ast::ClassKind::Class || def.mods & mods::CASE == 0 {
+                continue;
+            }
+            let name = def.name;
+            let taken = defs.iter().any(|&o| {
+                let od = cv.ast.def(o);
+                od.name == name && matches!(&od.kind, DefKind::Fun(_) | DefKind::Class(_)) && o != d && !matches!(&od.kind, DefKind::Class(k) if k.kind != ast::ClassKind::Object)
+            });
+            if taken {
+                continue;
+            }
+            let (span, range) = (def.span, cv.ast.def_range(d));
+            let class = ast::ClassDef {
+                kind: ast::ClassKind::Object,
+                tparams: Vec::new(),
+                clauses: Vec::new(),
+                parents: Vec::new(),
+                body: Vec::new(),
+                exports: ListRef::EMPTY,
+                self_type: None,
+                self_alias: names::EMPTY,
+            };
+            let companion = cv.ast.add_def(Def { name, span, mods: 0, annots: Vec::new(), kind: DefKind::Class(Box::new(class)) });
+            cv.ast.def_ranges[companion.idx()] = range;
+            cv.ast.synthetic_companions.push(companion);
+            // At its class's place in the product, which the output names it by, as in source.
+            if let Some(&(_, addr)) = cv.def_at.iter().find(|&&(x, _)| x == d) {
+                cv.def_at.push((companion, addr));
+            }
+            made.push((d, companion));
+        }
+        for (d, companion) in made {
+            if let Some(i) = stmts.iter().position(|s| matches!(s, Stmt::Def(x) if *x == d)) {
+                stmts.insert(i + 1, Stmt::Def(companion));
+            }
+        }
     }
 
     /// The local enum `cd` and its companion `m`: the enum's definition with the cases the
@@ -6185,7 +6182,6 @@ fn extension_clauses(t: &Term) -> Option<(&Term, &[TType], Vec<&[Term]>)> {
 fn term_param_count(sig: &DefSig) -> usize {
     sig.clauses.iter().map(|c| if let Clause::Terms(ps) = c { ps.len() } else { 0 }).sum()
 }
-
 
 /// `xs$1`, `$1`: a fresh name (`UniqueName`), which `Lifter.lift` gives a lifted temporary.
 fn is_lifted_name(tasty: &TastyFile, n: NameRef) -> bool {

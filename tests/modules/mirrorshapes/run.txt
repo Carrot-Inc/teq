@@ -1,0 +1,17 @@
+Plain(1,a)
+Generic(7)
+0 1
+One
+Many(3)
+0 1
+1
+Lone
+(4,p)
+Plain(2,b)
+Generic(g)
+1
+Plain(3,c)
+1
+0
+Lone
+Generic(h)

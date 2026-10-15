@@ -98,6 +98,10 @@ impl<'a> Worker<'a> {
         let DefKind::Class(cls) = &def.kind else { return };
         let c = self.syms.new_class(def.name, ClassKind::Class, def.mods | mods::FINAL, Owner::Local, file, Some(d), def.span);
         self.def_classes.insert(file.0 as usize, d, c);
+        // The companion `Desugar.classDef` makes for a case class of the block.
+        if ast.synthetic_companions.binary_search(&d).is_ok() {
+            self.syms.class_mut(c).synthetic_companion = true;
+        }
         self.syms.class_mut(c).has_exports = !cls.exports.is_empty();
         self.record_self_alias(c);
         self.enter_class_annots(file, def, c);

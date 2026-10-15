@@ -1545,6 +1545,11 @@ impl<'a, 't> Interp<'a, 't> {
         if let Some(m) = self.shape_member(c, name) {
             return m;
         }
+        if name == crate::names::TO_STRING {
+            if let Some(k) = crate::emit::synthetic_case_companion_of(self.syms(), c) {
+                return Member::CompanionToString(k);
+            }
+        }
         if let Some(sup) = superclass {
             return self.member(sup, name);
         }
@@ -1824,7 +1829,18 @@ impl<'a, 't> Interp<'a, 't> {
         let ti = self.tclass_index(k)?;
         let n = self.prog().classes[ti].methods.len();
         if self.method_index[k.idx()].is_none() || (self.methods_seen[k.idx()] as usize) < n {
+            let fresh = self.method_index[k.idx()].is_none();
             self.method_index[k.idx()].get_or_insert_with(|| Box::new(FxMap::default()));
+            // A companion's mirror members (`TClassLists::mirror_members`), with the first index.
+            if fresh {
+                self.typer.ensure_mirror_members(k, ti);
+                let mirror = self.typer.prog.classes[ti].mirror_members().to_vec();
+                for f in mirror {
+                    let sym = self.typer.prog.funs[f.idx()].sym;
+                    let name = self.syms().dispatch_name(sym);
+                    self.method_index[k.idx()].as_mut().unwrap().insert(name, f);
+                }
+            }
             for i in self.methods_seen[k.idx()] as usize..n {
                 let f = self.typer.prog.classes[ti].methods[i];
                 let (sym, has_body) = {
@@ -2234,6 +2250,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             Member::Module(c) => self.module(c),
             Member::CaseToString => Ok(Value::string(self.case_to_string(&recv)?)),
+            Member::CompanionToString(k) => Ok(Value::string(self.name(self.syms().class(k).name).to_string())),
             Member::CaseEquals => {
                 let other = args.into_iter().next().unwrap_or(Value::Null);
                 Ok(Value::Bool(self.case_equals(&recv, &other)?))

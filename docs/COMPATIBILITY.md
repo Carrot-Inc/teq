@@ -34,8 +34,6 @@ libraries compiled from their jars run against scalac's output. The remaining di
   it again at the call, where a member only the argument's class has is accepted on the parameter: of the
   library bodies the suites expand (50 on the JVM, 27 of them scala-library's, and 23 on JavaScript), the one
   whose quote applies an inline parameter.
-- The mirror of a case object or a parameterless enum case is an object of its own
-  (`summon[Mirror.Of[O.type]] eq O` is false).
 
 ### The standard library on JavaScript
 

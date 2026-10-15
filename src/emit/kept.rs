@@ -395,7 +395,7 @@ impl<'c> Recorder<'c> {
                 self.events.push(Event::Sym(id));
             }
         }
-        let mut funs: Vec<FunId> = tc.methods.iter().chain(&tc.ctors).copied().collect();
+        let mut funs: Vec<FunId> = tc.methods.iter().chain(&tc.ctors).chain(tc.mirror_members()).copied().collect();
         funs.sort_unstable_by_key(|&f| (prog.funs[f.idx()].sym, tc.ctors.contains(&f)));
         for f in funs {
             self.events.push(Event::Part(if tc.ctors.contains(&f) { "constructor" } else { "method" }));

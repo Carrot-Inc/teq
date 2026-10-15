@@ -399,6 +399,11 @@ struct P<'w, 'a> {
     /// While a file's top-level definitions are written: the address of their object's class
     /// and its package, the `this` their references go through.
     package_members_this: Option<(usize, PkgId)>,
+    /// The `$package` object's own type as its self type writes it, `TERMREFsymbol` to its module
+    /// val, which an opaque type's companion of the file is prefixed with (shared, as scalac's).
+    package_members_val: Option<usize>,
+    /// The operand of the synthesized mirror's cast being written (`Wrap::Mirror`).
+    mirror_operand: Option<crate::tir::TExprId>,
     positions_name: u32,
     attributes_name: u32,
     /// Numbers the anonymous parameters of higher-kinded type parameters, `_$1` on.
@@ -549,6 +554,8 @@ impl<'w, 'a> P<'w, 'a> {
             source_path: source_path.to_string(),
             synth_span: Span::default(),
             package_members_this: None,
+            package_members_val: None,
+            mirror_operand: None,
             positions_name: 0,
             attributes_name: 0,
             hk_param_counter: 0,
@@ -1187,7 +1194,8 @@ impl<'w, 'a> P<'w, 'a> {
         self.template(c, None);
         self.synth_span = saved_span;
         let mut flags = self.class_flags(&info);
-        if anon {
+        // A block's companion `Desugar.classDef` made, synthetic as `companionDefs` makes it.
+        if anon || (info.local_module.is_some() && info.synthetic_companion) {
             flags.push(SYNTHETIC);
         }
         if matches!(info.kind, ClassKind::Enum | ClassKind::EnumCase) {
@@ -1478,6 +1486,12 @@ impl<'w, 'a> P<'w, 'a> {
         if let Some(e) = local_enum {
             self.enum_cases(e);
         }
+        // A local case class's companion holds `Desugar.classDef`'s members, as an object's does
+        // (`object_unit_now`).
+        if let Some(k) = self.local_case_of(&info) {
+            let case_info = self.class_info(k);
+            self.case_companion_head(k, &case_info, info.synthetic_companion);
+        }
         self.members(c, &info);
         if let Some(e) = local_enum {
             self.enum_tail(e);
@@ -1487,6 +1501,12 @@ impl<'w, 'a> P<'w, 'a> {
         self.enclosing.pop();
         self.tparams.truncate(tmark);
         self.buf.end_length(len);
+    }
+
+    /// The case class whose companion the class described by `info` is, when that companion is a
+    /// local object (a case class of a block).
+    fn local_case_of(&self, info: &ClassInfo) -> Option<ClassId> {
+        info.companion.filter(|&k| info.local_module.is_some() && self.w.syms.class(k).kind == ClassKind::Class && self.w.syms.class(k).mods & mods::CASE != 0)
     }
 
     /// The enum whose companion the class described by `info` is, when that companion is a local
@@ -2425,9 +2445,16 @@ impl<'w, 'a> P<'w, 'a> {
     fn body_order(&mut self, c: ClassId, info: &ClassInfo) -> Vec<BodyItem> {
         let mut out = Vec::new();
         let Some(d) = info.def else {
-            // A var's setter is written with the var (`setter`).
+            // The type members a class the compiler makes defines (`Synthesizer.anonymousMirror`'s
+            // `MirroredMonoType`), then its members; a var's setter is written with the var
+            // (`setter`).
+            let mut aliases: Vec<AliasId> = info.type_aliases.values().copied().collect();
+            aliases.sort();
+            out.extend(aliases.into_iter().map(BodyItem::Alias));
+            // The val of a made companion of an enum's class case is written with the case
+            // (`enum_cases`, `synthetic_companion`).
             for &s in &info.member_order {
-                if self.w.syms.sym(s).mods & mods::SETTER == 0 {
+                if self.w.syms.sym(s).mods & mods::SETTER == 0 && !crate::tir::is_made_case_companion_val(&self.w.syms, s) {
                     out.push(BodyItem::Sym(s));
                 }
             }
@@ -3784,17 +3811,42 @@ impl<'w, 'a> P<'w, 'a> {
             // The source's own access of the object, which its class may not hold.
             _ => info.def.map_or(0, |d| self.w.ast(info.file).def(d).mods & (mods::PRIVATE | mods::PROTECTED)),
         };
-        let obj = Obj {
-            class: Some(o),
-            companion,
-            name: self.name(info.name),
-            owner: info.owner,
-            span: self.def_span(info.file, info.def, info.span),
-            name_at: info.span.start,
-            synthetic: info.def.is_none() || made_companion,
-            mods: info.mods | access,
+        // The companion `Desugar.classDef` makes for a case class (`ClassInfo::synthetic_companion`)
+        // stands at the class's name, with its class's privacy, as a body-less one's
+        // (`synthetic_companion`).
+        let case_made = info.synthetic_companion && companion.is_some_and(|k| self.w.syms.class(k).mods & mods::CASE != 0) && !self.object_has_body(o);
+        let obj = match companion.filter(|_| case_made) {
+            Some(k) => {
+                let ki = self.class_info(k);
+                Obj {
+                    class: Some(o),
+                    companion,
+                    name: self.name(info.name),
+                    owner: info.owner,
+                    span: Span { start: ki.span.start, end: ki.span.start },
+                    name_at: ki.span.start,
+                    synthetic: true,
+                    mods: ki.mods & mods::PRIVATE,
+                }
+            }
+            None => Obj {
+                class: Some(o),
+                companion,
+                name: self.name(info.name),
+                owner: info.owner,
+                span: self.def_span(info.file, info.def, info.span),
+                name_at: info.span.start,
+                synthetic: info.def.is_none() || made_companion || info.synthetic_companion,
+                mods: info.mods | access,
+            },
         };
         self.object_unit(&obj);
+    }
+
+    /// Whether object `o` has members of its own (a `derives` clause's givens).
+    fn object_has_body(&self, o: ClassId) -> bool {
+        let info = self.w.syms.class(o);
+        info.def.is_some_and(|d| matches!(&self.w.ast(info.file).def(d).kind, crate::ast::DefKind::Class(c) if !c.body.is_empty()))
     }
 
     /// The companion scalac makes for a case class, a value class or a class whose
@@ -3865,7 +3917,9 @@ impl<'w, 'a> P<'w, 'a> {
         self.placed = true;
         self.buf.byte(TYPEREFSYMBOL);
         self.def_ref(ckey);
-        self.owner_prefix(obj.owner);
+        if !self.file_module_prefix(obj.class, true) {
+            self.owner_prefix(obj.owner);
+        }
         self.new_module(&obj.name, obj.owner, tpt, tref);
         // A companion the source does not write takes its class's boundary with its access, as
         // `Desugar`'s `companionMods` keeps the class's `privateWithin` (`private[p] enum`).
@@ -3949,6 +4003,8 @@ impl<'w, 'a> P<'w, 'a> {
             ki.mods & mods::CASE != 0 && matches!(ki.kind, ClassKind::Class | ClassKind::EnumCase) && ki.singleton.is_none()
         });
         let companion_enum = obj.companion.filter(|&k| self.w.syms.class(k).kind == ClassKind::Enum);
+        // A sealed class's companion that is its mirror (`Worker::mirror_parent`).
+        let companion_sum = obj.companion.filter(|&k| self.w.syms.class(k).kind != ClassKind::Enum && obj.class.is_some_and(|o| self.w.extends_sum_mirror(o)));
         let case_object = obj.mods & mods::CASE != 0;
         self.buf.byte(TEMPLATE);
         let len = self.buf.begin_length();
@@ -3996,7 +4052,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.mirror_parent("Product");
             appended += 1;
         }
-        if companion_enum.is_some() {
+        if companion_enum.is_some() || companion_sum.is_some() {
             self.mark_tree();
             self.mirror_parent("Sum");
             appended += 1;
@@ -4018,7 +4074,12 @@ impl<'w, 'a> P<'w, 'a> {
             self.owner_prefix(obj.owner);
         } else {
             self_type = Some(self.buf.addr());
-            self.def_termref(Self::module_key(obj), obj.owner);
+            self.placed = true;
+            self.buf.byte(TERMREFSYMBOL);
+            self.def_ref(Self::module_key(obj));
+            if !self.file_module_prefix(obj.class, false) {
+                self.owner_prefix(obj.owner);
+            }
         }
         // The constructor.
         let ia = self.buf.addr();
@@ -4038,7 +4099,16 @@ impl<'w, 'a> P<'w, 'a> {
             self.count_template_roots(o);
         }
         if self.is_static(obj.owner) {
-            self.write_replace(self_type);
+            // An opaque type's companion's class literal names it from its `$package` object's
+            // `this`, as scalac's `writeReplace` does (`guard$package.this.Step`).
+            match obj.class.filter(|&o| self.opaque_companion_package(o).is_some() && self.package_members_this.is_some()) {
+                Some(o) => self.write_replace_with(|p| {
+                    p.buf.byte(TERMREFSYMBOL);
+                    p.def_ref(Key::Module(o));
+                    p.file_module_prefix(Some(o), true);
+                }),
+                None => self.write_replace(self_type),
+            }
         }
         if let Some(e) = companion_enum {
             self.enum_cases(e);
@@ -4081,6 +4151,9 @@ impl<'w, 'a> P<'w, 'a> {
         }
         if let Some(e) = companion_enum {
             self.enum_tail(e);
+        }
+        if let Some(k) = companion_sum {
+            self.sum_mirror_members(k, Synth::SumOrdinal(k));
         }
         if let Some(o) = obj.class {
             self.inline_accessor_defs(o);
@@ -4245,6 +4318,13 @@ impl<'w, 'a> P<'w, 'a> {
         let enum_ty = self.enum_wild_type(e);
         let int = self.w.b.t_int;
         self.synth_def("fromOrdinal", &[("ordinal", int)], false, enum_ty, &[SYNTHETIC], Synth::FromOrdinal(e));
+        self.sum_mirror_members(e, Synth::SelectOrdinal(e));
+    }
+
+    /// The mirror's `MirroredMonoType` and `ordinal` of the companion of the sum `e`
+    /// (`SyntheticMembers.addMirrorSupport`'s `makeSumMirror`), the ordinal's body `ordinal`.
+    fn sum_mirror_members(&mut self, e: ClassId, ordinal: Synth) {
+        let int = self.w.b.t_int;
         let addr = self.buf.addr();
         self.buf.byte(TYPEDEF);
         let len = self.buf.begin_length();
@@ -4278,7 +4358,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.synthetic_position(pa);
         self.buf.end_length(pl);
         self.tpt(int);
-        self.synth_rhs("enum ordinal", int, Synth::SelectOrdinal(e), &[pa]);
+        self.synth_rhs("enum ordinal", int, ordinal, &[pa]);
         self.write_flags(&[SYNTHETIC]);
         self.synthetic_position(oa);
         self.buf.end_length(ol);
@@ -4304,6 +4384,26 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.end_length(len);
     }
 
+    /// The prefix of an opaque type's companion of this file, a member of its file's `$package`
+    /// object as `Desugar.packageDef` makes it: the object's `this` (`this_form`) or its module
+    /// val. False, writing nothing, for any other object.
+    fn file_module_prefix(&mut self, o: Option<ClassId>, this_form: bool) -> bool {
+        let Some(p) = o.and_then(|o| self.opaque_companion_package(o)) else { return false };
+        let (Some((class_at, pk)), Some(vaddr)) = (self.package_members_this, self.package_members_val) else { return false };
+        if pk != p {
+            return false;
+        }
+        if this_form {
+            self.buf.byte(THIS);
+            self.buf.byte(TYPEREFSYMBOL);
+            self.buf.reference(class_at);
+            self.package_ref(pk);
+        } else {
+            self.shared_type_at(vaddr);
+        }
+        true
+    }
+
     fn holds_opaque(&self, o: ClassId) -> bool {
         self.w.syms.class(o).nested.values().any(|&k| self.w.syms.class(k).kind == ClassKind::Opaque)
     }
@@ -4315,7 +4415,15 @@ impl<'w, 'a> P<'w, 'a> {
         let app = self.buf.begin_length();
         self.buf.byte(SELECTIN);
         let sel = self.buf.begin_length();
-        let full = format!("{}$", self.owner_full_name(owner, name));
+        let full = match owner {
+            // An opaque type's companion is its file's `$package` object's member (`scala_name`).
+            Owner::Package(p) if self.package_members_this.is_some_and(|(_, pk)| pk == p) && self.opaque_companion_named(p, name) => {
+                let module = self.w.file_module_name(self.file, p);
+                let path = self.pkg_path(p);
+                if path.is_empty() { format!("{}$.{}$", module, name) } else { format!("{}.{}$.{}$", path, module, name) }
+            }
+            _ => format!("{}$", self.owner_full_name(owner, name)),
+        };
         let n = self.names.signed("<init>", None, &[], &full);
         self.buf.nat(n as u64);
         self.buf.byte(NEW);
@@ -4338,7 +4446,14 @@ impl<'w, 'a> P<'w, 'a> {
             Owner::Class(c) => {
                 let ci = self.w.syms.class(c);
                 let own = self.w.module_class_text(c).unwrap_or_else(|| self.name(ci.name));
-                let outer = self.owner_full_name(ci.owner, &own);
+                // An opaque type's companion is its file's `$package` object's member.
+                let outer = match self.opaque_companion_package(c) {
+                    Some(p) => {
+                        let module = self.w.file_module_name(ci.file, p);
+                        self.owner_full_name(Owner::Package(p), &format!("{}$.{}", module, own))
+                    }
+                    None => self.owner_full_name(ci.owner, &own),
+                };
                 let sep = if ci.kind == ClassKind::Object { "$." } else { "." };
                 format!("{}{}{}", outer, sep, name)
             }
@@ -4356,6 +4471,30 @@ impl<'w, 'a> P<'w, 'a> {
     /// `private def writeReplace(): AnyRef`, which scalac gives every object: `new
     /// ModuleSerializationProxy(classOf[X.type])`, the singleton type the object's self type
     /// has at `self_type`.
+    /// `writeReplace` whose class literal's type `module_type` writes.
+    fn write_replace_with(&mut self, module_type: impl FnOnce(&mut Self)) {
+        let addr = self.buf.addr();
+        self.buf.byte(DEFDEF);
+        let len = self.buf.begin_length();
+        let n = self.names.simple("writeReplace");
+        self.buf.nat(n as u64);
+        self.buf.byte(EMPTYCLAUSE);
+        let any_ref = self.w.b.t_any_ref;
+        self.tpt(any_ref);
+        let mark = self.body_begin();
+        self.write_replace_body(module_type);
+        match self.body_end(mark) {
+            Ok(()) => self.count_body(Producer::Synthesized("writeReplace")),
+            Err(reason) => {
+                self.count_withheld(&reason);
+                self.elided(any_ref);
+            }
+        }
+        self.write_flags(&[PRIVATE, SYNTHETIC]);
+        self.synthetic_position(addr);
+        self.buf.end_length(len);
+    }
+
     fn write_replace(&mut self, self_type: Option<usize>) {
         let addr = self.buf.addr();
         self.buf.byte(DEFDEF);
@@ -4424,7 +4563,8 @@ impl<'w, 'a> P<'w, 'a> {
         }
         for &(b, _) in info.base_types.iter().skip(1) {
             if let Some(&s) = self.w.syms.class(b).members.get(&n) {
-                candidates.extend(alternatives(self, s).into_iter().filter(|&a| self.w.syms.sym(a).mods & mods::ABSTRACT == 0 && self.w.syms.sym(a).kind == SymKind::Def));
+                let inherited: Vec<SymId> = alternatives(self, s).into_iter().filter(|&a| self.w.syms.sym(a).kind == SymKind::Def && !self.w.is_abstract_member(a)).collect();
+                candidates.extend(inherited);
             }
         }
         candidates.into_iter().any(|a| {
@@ -5061,6 +5201,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.end_length(il);
         self.write_replace(Some(self_type));
         self.package_members_this = Some((caddr, pkg));
+        self.package_members_val = Some(self_type);
         self.in_package_object = true;
         for d in defs {
             if let Some(&s) = self.w.def_syms.get(f, d) {
@@ -5162,14 +5303,6 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The stem of the `$package` object a file's top-level definitions are members of: the
     /// file's, scala-library's for the std's `iarray.scala` (`IArray$package`).
-    fn package_stem(&self, file: FileId) -> String {
-        let stem = super::file_stem(&self.w.files.as_slice()[file.0 as usize].path);
-        let std = self.w.files.as_slice()[file.0 as usize].is_std && !self.w.in_jar(file);
-        match stem.as_str() {
-            "iarray" if std => "IArray".to_string(),
-            _ => stem,
-        }
-    }
 
     /// A class nested in a class, through `prefix`: `TYPEREF name prefix`, or `TYPEREFsymbol
     /// addr prefix` for a class of this file.
@@ -5246,8 +5379,8 @@ impl<'w, 'a> P<'w, 'a> {
                     self.package_ref(pk);
                 }
                 None => {
-                    let stem = self.package_stem(info.file);
-                    self.file_package_term(p, stem);
+                    let module = self.w.file_module_name(info.file, p);
+                    self.file_package_term(p, module);
                 }
             }
             return;
@@ -5298,7 +5431,16 @@ impl<'w, 'a> P<'w, 'a> {
             self.placed = true;
             self.buf.byte(TYPEREFSYMBOL);
             self.def_ref(Key::Class(o));
-            self.owner_prefix(info.owner);
+            // An opaque type's companion's class is a member of its file's `$package` object.
+            match (self.opaque_companion_package(o), self.package_members_this) {
+                (Some(p), Some((class_at, pk))) if p == pk => {
+                    self.buf.byte(THIS);
+                    self.buf.byte(TYPEREFSYMBOL);
+                    self.buf.reference(class_at);
+                    self.package_ref(pk);
+                }
+                _ => self.owner_prefix(info.owner),
+            }
             return;
         }
         let (pkg, name) = self.external_class_name(o);
@@ -5306,13 +5448,22 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.byte(TYPEREF);
         self.buf.nat(n as u64);
         if let Some(p) = self.opaque_companion_package(o) {
-            let stem = self.package_stem(info.file);
-            return self.file_package_term(p, stem);
+            let module = self.w.file_module_name(info.file, p);
+            return self.file_package_term(p, module);
         }
         match pkg {
             Some(p) => self.package_path(&p),
             None => self.owner_prefix(info.owner),
         }
+    }
+
+    /// Whether `name` of package `p` names an opaque type's companion (`opaque_companion_package`).
+    fn opaque_companion_named(&self, p: PkgId, name: &str) -> bool {
+        let n = self.w.interner.lookup(name);
+        n.and_then(|n| self.w.syms.pkg(p).entries.get(&n)).and_then(|e| e.term).is_some_and(|s| match self.w.syms.sym(s).kind {
+            SymKind::Object(o) => self.opaque_companion_package(o) == Some(p),
+            _ => false,
+        })
     }
 
     /// The package of the program's object `o` where it is the companion of a top-level opaque
@@ -5360,20 +5511,25 @@ impl<'w, 'a> P<'w, 'a> {
             self.placed = true;
             self.buf.byte(TERMREFSYMBOL);
             self.def_ref(Key::Module(o));
-            self.owner_prefix(info.owner);
+            // An opaque type's companion is a member of its file's `$package` object, as
+            // `Desugar.packageDef` makes it: its module val the prefix.
+            match (self.opaque_companion_package(o), self.package_members_this, self.package_members_val) {
+                (Some(p), Some((_, pk)), Some(self_type)) if p == pk => self.shared_type_at(self_type),
+                _ => self.owner_prefix(info.owner),
+            }
             return;
         }
         let name = self.name(info.name);
-        if let (ClassKind::Object, Owner::Package(p), Some(stem)) = (info.kind, info.owner, name.strip_suffix("$package")) {
-            return self.file_package_term(p, stem.to_string());
+        if let (ClassKind::Object, Owner::Package(p), true) = (info.kind, info.owner, name.ends_with("$package")) {
+            return self.file_package_term(p, name);
         }
         let (pkg, _) = self.external_class_name(o);
         let n = self.names.simple(&name);
         self.buf.byte(TERMREF);
         self.buf.nat(n as u64);
         if let Some(p) = self.opaque_companion_package(o) {
-            let stem = self.package_stem(info.file);
-            return self.file_package_term(p, stem);
+            let module = self.w.file_module_name(info.file, p);
+            return self.file_package_term(p, module);
         }
         match pkg {
             Some(p) => self.package_path(&p),
@@ -5381,17 +5537,18 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
-    /// `TERMREF F$package p`, a file's package object as a prefix, shared once written.
-    fn file_package_term(&mut self, p: PkgId, stem: String) {
-        if let Some(&a) = self.package_object_terms.get(&(p, stem.clone())) {
+    /// `TERMREF F$package p`, a file's package object (the module `name`) as a prefix, shared once
+    /// written.
+    fn file_package_term(&mut self, p: PkgId, name: String) {
+        if let Some(&a) = self.package_object_terms.get(&(p, name.clone())) {
             return self.shared_type_at(a);
         }
         let at = self.buf.addr();
-        let n = self.names.simple(&format!("{}$package", stem));
+        let n = self.names.simple(&name);
         self.buf.byte(TERMREF);
         self.buf.nat(n as u64);
         self.package_ref(p);
-        self.package_object_terms.insert((p, stem), at);
+        self.package_object_terms.insert((p, name), at);
     }
 
     /// Whether the instance of the class `c` has a path here: an enclosing class's `this`, a
@@ -5438,9 +5595,8 @@ impl<'w, 'a> P<'w, 'a> {
                     self.package_ref(pk);
                     return;
                 }
-                let file = self.w.syms.sym(s).file;
-                let stem = super::file_stem(&self.w.files.as_slice()[file.0 as usize].path);
-                self.file_package_term(p, stem);
+                let module = self.w.file_module_name(self.w.syms.sym(s).file, p);
+                self.file_package_term(p, module);
             }
             other => self.owner_prefix(other),
         }
@@ -5658,13 +5814,6 @@ impl<'w, 'a> P<'w, 'a> {
                     self.class_typeref(c);
                 }
             }
-            // A mirror teq synthesized, which scalac's pickle has as the companion cast to the
-            // mirror's refinement (`product_mirror`): that refinement.
-            Type::Term(s) if self.w.scala_mirror_class(s).is_some_and(|c| self.companion_mirror_of(c)) => {
-                let c = self.w.scala_mirror_class(s).expect("a mirror's class");
-                self.placed = true;
-                self.product_mirror_type(c);
-            }
             Type::Term(s) => self.term_ref(s),
             Type::Select(prefix, s) => {
                 self.placed = true;
@@ -5871,8 +6020,8 @@ impl<'w, 'a> P<'w, 'a> {
         // references (`Symbols::opaque_holders`).
         if let Owner::Package(p) = info.owner {
             if self.w.syms.opaque_holders.get(&info.file) == Some(&s) {
-                let stem = super::file_stem(&self.w.files.as_slice()[info.file.0 as usize].path);
-                return self.file_package_term(p, stem);
+                let module = self.w.file_module_name(info.file, p);
+                return self.file_package_term(p, module);
             }
         }
         // A top-level object's module val is the object's `TermRef` (`TERMREF O p`), a member of
@@ -5933,8 +6082,8 @@ impl<'w, 'a> P<'w, 'a> {
                     self.package_ref(p);
                     return;
                 }
-                let stem = super::file_stem(&self.w.files.as_slice()[info.file.0 as usize].path);
-                self.file_package_term(p, stem);
+                let module = self.w.file_module_name(info.file, p);
+                self.file_package_term(p, module);
             }
             other => self.owner_prefix(other),
         }
@@ -6225,9 +6374,9 @@ impl<'w, 'a> P<'w, 'a> {
             Owner::Class(c) => self.w.library_class_name(c, ""),
             // A top-level method: its file's `$package` object's class, as `INLINED` names it.
             Owner::Package(p) => {
-                let stem = super::file_stem(&self.w.files.as_slice()[file.0 as usize].path);
+                let module = self.w.file_module_name(file, p);
                 let pkg = self.pkg_path(p);
-                if pkg.is_empty() { format!("{}$package$", stem) } else { format!("{}.{}$package$", pkg, stem) }
+                if pkg.is_empty() { format!("{}$", module) } else { format!("{}.{}$", pkg, module) }
             }
             Owner::Local => return None,
         };
@@ -6630,11 +6779,29 @@ fn scala_name_now(w: &Worker, c: ClassId) -> String {
     match info.owner {
         Owner::Package(p) => {
             let pkg = pkg_path_of(w, p);
-            let is_std = w.files.as_slice().get(info.file.0 as usize).map_or(false, |f| f.is_std) || info.def.is_none() && info.kind == ClassKind::Builtin;
+            // A class read from scala-library's own pickle keeps its name, as dotty's unpickled
+            // symbol does: only the lean std's are named back (`STD_BINDINGS`).
+            let is_std = (w.files.as_slice().get(info.file.0 as usize).map_or(false, |f| f.is_std) && !w.in_jar(info.file)) || info.def.is_none() && info.kind == ClassKind::Builtin;
             if is_std {
                 if let Some(lib) = std_library_name(&pkg, &name) {
                     return lib;
                 }
+            }
+            // An opaque type's companion is a member of its file's `$package` object
+            // (`Desugar.packageDef`): `p.F$package$.C$`.
+            let opaque_companion = info.kind == ClassKind::Object
+                && info.companion.is_some_and(|k| w.syms.class(k).kind == ClassKind::Opaque && w.syms.class(k).owner == info.owner);
+            if opaque_companion {
+                // The lean std's stands for a library's, whose file holds the opaque type alone and
+                // is named after it (scala-library's `IArray$package`, scalajs-dom's
+                // `RequestCache$package`), where the std's file holds several.
+                let std = is_std && w.files.as_slice().get(info.file.0 as usize).is_some_and(|f| f.is_std) && !w.in_jar(info.file);
+                let module = match (info.companion, info.owner) {
+                    (Some(k), _) if std => format!("{}$package", w.interner.get(w.syms.class(k).name)),
+                    (_, Owner::Package(p)) => w.file_module_name(info.file, p),
+                    _ => String::new(),
+                };
+                return if pkg.is_empty() { format!("{}$.{}", module, name) } else { format!("{}.{}$.{}", pkg, module, name) };
             }
             if pkg.is_empty() { name } else { format!("{}.{}", pkg, name) }
         }
@@ -6666,6 +6833,10 @@ fn pkg_path_of(w: &Worker, p: PkgId) -> String {
 /// `STD_BINDINGS` with the library's canonical choice where several of its names bind to one.
 fn std_library_name(pkg: &str, name: &str) -> Option<String> {
     let preferred: &[(&str, &str, &str)] = &[
+        // A class scala-library has under the std's own name keeps it, whatever other name binds
+        // to it (`collection.SortedSet`): the name a source or a jar's pickle gave it.
+        ("scala.collection.immutable", "SortedSet", "scala.collection.immutable.SortedSet"),
+        ("scala.collection.immutable", "SortedMap", "scala.collection.immutable.SortedMap"),
         ("scala", "Iterable", "scala.collection.Iterable"),
         ("scala", "SeqOps", "scala.collection.SeqOps"),
         ("scala", "SetOps", "scala.collection.SetOps"),

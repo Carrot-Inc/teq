@@ -2685,7 +2685,7 @@ impl<'a> Worker<'a> {
         let ast = self.ast(f);
         let def = ast.def(d);
         let name = self.name_str(def.name);
-        if name.contains('$') || ast.def_ranges.get(d.idx()).map_or(true, |&r| r == ast::NO_RANGE) {
+        if name.contains('$') || ast.parser_made(d) || ast.def_ranges.get(d.idx()).map_or(true, |&r| r == ast::NO_RANGE) {
             return None;
         }
         let selection = self.name_at(f, def.span.start, def.name).unwrap_or(def.span);
@@ -2882,7 +2882,7 @@ impl<'a> Worker<'a> {
         let ast = self.ast(file);
         let mut best: Option<(Span, Target)> = None;
         for (i, &range) in ast.def_ranges.iter().enumerate() {
-            if range == ast::NO_RANGE || range.start > span.start || range.end < span.end {
+            if range == ast::NO_RANGE || range.start > span.start || range.end < span.end || ast.parser_made(ast::DefId(i as u32)) {
                 continue;
             }
             if best.map_or(false, |(b, _)| range.end - range.start >= b.end - b.start) {

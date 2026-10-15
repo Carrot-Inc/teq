@@ -367,6 +367,9 @@ pub enum Wrap {
     Ascribed(TypeId),
     /// `e.asInstanceOf[T]` where the cast leaves the node as it was.
     Cast(TypeId),
+    /// `e.$asInstanceOf$[T]`, the cast `Synthesizer` makes of the mirror it hands out (the
+    /// companion, the singleton, a `TupleMirror`) to the mirror's refinement `T`.
+    Mirror(TypeId),
     /// `(e: @unchecked)`.
     Unchecked,
     /// `e: _*`, passed to a repeated parameter of the element type.

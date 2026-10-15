@@ -51,6 +51,9 @@ pub struct InlineState {
     /// the tree (`copy_expr`): dotty's `MapToUnderlying` over `InlineProxy` bindings, which a
     /// macro's `underlyingArgument` sets for one copy.
     pub copy_locals: FxMap<SymId, TExprId>,
+    /// While a search's kept tree is copied to a new site (`resolve_given_searching`'s replay):
+    /// the kept site's position and the new one's, which a copied node standing at the first takes.
+    pub copy_respan: Option<((crate::source::FileId, crate::source::Span), (crate::source::FileId, crate::source::Span))>,
     pub depth: u32,
     /// Whether the last expansion's value is a block of the receiver's and the arguments'
     /// bindings around the body's expansion, for the capture (`capture::InlineCall::binds`).
@@ -286,6 +289,8 @@ impl InlineState {
             last_binds: _,
             // Set and emptied around one copy (`underlyingArgument`).
             copy_locals: _,
+            // Set around one copy (a search's replay).
+            copy_respan: _,
             // Kept by a local of the code that wrote the entry (a proxy, a binder, a local
             // `inline val`) or by an expression, neither of which a body typed on its own
             // names; what an `inline val` was evaluated to is read again after its body.
@@ -1414,16 +1419,23 @@ impl<'a> Worker<'a> {
                 None => self.inline.param_proxies.remove(&param),
             };
         }
-        let result = if bound.stmts.is_empty() {
+        bound.stmts.sort_by_key(|&(at, _)| at);
+        // A binding the expansion never reads of an argument scalac finds elideable goes, as
+        // `Inliner.dropUnusedDefs` drops it; one it reads stays.
+        let mut stmts: Vec<TStmt> = Vec::with_capacity(bound.stmts.len());
+        for &(_, st) in &bound.stmts {
+            if !self.unread_elideable_binding(st, te) {
+                stmts.push(st);
+            }
+        }
+        let result = if stmts.is_empty() {
             te
         } else {
-            bound.stmts.sort_by_key(|&(at, _)| at);
-            let stmts: Vec<TStmt> = bound.stmts.iter().map(|&(_, s)| s).collect();
             let l = self.prog.stmts.push_slice(&stmts);
             self.prog.add(TExpr::Block(l, te))
         };
         if self.capturing() {
-            self.inline.last_binds = !bound.stmts.is_empty();
+            self.inline.last_binds = !stmts.is_empty();
         }
         // Inside a body an inline call's result has the type the call has at the definition,
         // whatever parameter the body returned as written: the call is the boundary of the
@@ -1437,6 +1449,86 @@ impl<'a> Worker<'a> {
             None => {}
         }
         (result, ty)
+    }
+
+    /// Whether the parameter binding `st` is one `Inliner.dropUnusedDefs` drops: `body` never reads
+    /// it and its argument is elideable (`elideable_argument`). The one reader of an expansion's
+    /// result this adds, the inliner's own, as dotty's `dropUnusedDefs` reads the expansion.
+    fn unread_elideable_binding(&mut self, st: TStmt, body: TExprId) -> bool {
+        let TStmt::Val(proxy, init) = st else { return false };
+        self.elideable_argument(init) && !self.prog.descendants(body).any(|x| matches!(self.prog.expr(x), TExpr::Local(v) if v == proxy))
+    }
+
+    /// `Inliner.isElideableExpr` (40–99) of an argument teq binds: a pure value; `Synthesizer`'s
+    /// `$asInstanceOf$` (`Any_typeCast`, pure over a pure operand) of a path that is pure or of its
+    /// anonymous mirror's instance (a class of no definition, which no program names); a
+    /// construction of a class of no initialisers (`TreeInfo.isPureApply` 666–674: the constructor
+    /// of a no-inits class is stable) over elideable arguments. Any other cast is the program's
+    /// `asInstanceOf` (`Any_asInstanceOf`), never pure.
+    fn elideable_argument(&mut self, e: TExprId) -> bool {
+        match self.prog.expr(e) {
+            TExpr::Cast(a, CastOp::Erased, _) => match self.prog.expr(a) {
+                // A module's reference is pure where its class runs no initialiser (`refPurity`).
+                TExpr::Module(c) => self.no_inits_real_class(c),
+                _ => self.is_pure_value(a),
+            },
+            TExpr::Cast(a, _, _) => match self.prog.expr(a) {
+                TExpr::New(c, _) => {
+                    let info = self.syms.class(c);
+                    info.kind == ClassKind::Anon && info.def.is_none() && info.parents.iter().any(|&p| self.types.named_class(p).is_some_and(|k| self.is_mirror_class(k)))
+                }
+                _ => false,
+            },
+            TExpr::New(c, args) => {
+                let args = self.prog.expr_list(args).to_vec();
+                self.no_inits_real_class(c) && args.into_iter().all(|a| self.elideable_argument(a))
+            }
+            _ => self.is_pure_value(e),
+        }
+    }
+
+    /// `SymDenotation.isNoInitsRealClass`: a class or a module's, no trait, of which every base
+    /// class runs no initialiser (`NoInits`).
+    fn no_inits_real_class(&mut self, c: ClassId) -> bool {
+        if self.syms.class(c).kind == ClassKind::Trait {
+            return false;
+        }
+        self.complete_class(c);
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+        bases.into_iter().all(|b| self.class_no_inits(b))
+    }
+
+    /// Whether `b` runs no initialiser of its own (`NoInits`): `Any`, `AnyRef` and the parents a
+    /// desugaring gives (`Product`, `Serializable`, `Equals`, the mirrors), which have none; a class
+    /// of the program whose parents are applied to no arguments (`TreeInfo.parentsKind`) and whose
+    /// body holds definitions, types, imports and abstract values alone (`defKind`: an object is a
+    /// module val its body initialises; the givens of a `derives` clause stand apart from it, as
+    /// `Namer` sets `NoInits` from the written body, which `Deriving`'s givens are not part of); a
+    /// class read from a pickle as its template runs (`ClassInfo::read_no_inits`); any other class
+    /// of a library is taken to run one.
+    fn class_no_inits(&self, b: ClassId) -> bool {
+        let info = self.syms.class(b);
+        if info.kind == ClassKind::Builtin || b == self.b.any_ref || self.is_desugared_parent(b) {
+            return true;
+        }
+        // A pickle's class as its template runs, whatever definitions the loader made of it.
+        if self.in_jar(info.file) {
+            return info.read_no_inits;
+        }
+        let Some(def) = info.def else { return false };
+        let ast = self.ast(info.file);
+        let crate::ast::DefKind::Class(cls) = &ast.def(def).kind else { return false };
+        cls.parents.iter().all(|p| p.args.iter().all(|&(l, _)| l.len == 0))
+            && cls.body.iter().all(|st| match st {
+                crate::ast::Stmt::Import(_) => true,
+                crate::ast::Stmt::Expr(_) => false,
+                crate::ast::Stmt::Def(d) => match &ast.def(*d).kind {
+                    crate::ast::DefKind::Fun(_) | crate::ast::DefKind::TypeAlias { .. } => true,
+                    crate::ast::DefKind::Class(k) => k.kind != crate::ast::ClassKind::Object,
+                    crate::ast::DefKind::Val { rhs, .. } => rhs.is_none(),
+                    crate::ast::DefKind::Given(_) => ast.derived_givens.binary_search(d).is_ok(),
+                },
+            })
     }
 
     /// Whether an inline method body is a splice: the method is a macro.
@@ -2068,7 +2160,10 @@ impl<'a> Worker<'a> {
         if ty != NO_TYPE {
             self.prog.set_type(id, ty);
         }
-        self.prog.copy_span(e, id);
+        match (self.inline.copy_respan, self.prog.span_of(e)) {
+            (Some((from, to)), Some(at)) if at == from => self.prog.set_span(id, to.0, to.1),
+            _ => self.prog.copy_span(e, id),
+        }
         if self.inline.evaluated.contains_key(&e) {
             self.inline.evaluated.insert(id, ());
         }
@@ -2099,8 +2194,8 @@ impl<'a> Worker<'a> {
         }
         // An erased value's copy is one too (`Erasure.checkNotErased` of every copy kept).
         if !self.erased_values.is_empty() {
-            if let Some(&(_, file, at)) = self.erased_values.iter().find(|m| m.0 == e) {
-                self.erased_values.push((id, file, at));
+            if let Some(&(_, file, at, inlined)) = self.erased_values.iter().find(|m| m.0 == e) {
+                self.erased_values.push((id, file, at, inlined));
             }
         }
         if self.prog.is_setter_assign(e) {
@@ -3804,7 +3899,15 @@ impl<'a> Worker<'a> {
     pub(super) fn note_erased_value(&mut self, e: TExprId, span: Span) {
         if !self.checks_inline_definition() {
             let (file, at) = self.inline.sites.first().map_or((self.env.file, span), |s| (s.file, s.span));
-            self.erased_values.push((e, file, at));
+            // The inlined code's own place of the call, which scalac's message keeps for its
+            // uniqueness (`UniqueMessagePositions`): the copy's, else the innermost body's.
+            let inlined = match (self.inline.sites.last(), self.prog.span_of(e)) {
+                (None, _) => None,
+                (Some(_), Some((f, s))) if s != Span::default() => Some((f, s)),
+                (Some(site), _) if span != Span::default() => Some((site.body_file, span)),
+                (Some(_), _) => None,
+            };
+            self.erased_values.push((e, file, at, inlined));
         }
     }
 
@@ -3858,21 +3961,34 @@ impl<'a> Worker<'a> {
         if self.erased_values.len() <= mark {
             return;
         }
-        let mut made: Vec<(TExprId, FileId, Span)> = self.erased_values.split_off(mark);
+        let mut made: Vec<(TExprId, FileId, Span, Option<(FileId, Span)>)> = self.erased_values.split_off(mark);
         made.sort_by_key(|m| m.0);
-        let mut used: Vec<(FileId, Span)> = Vec::new();
+        let mut used: Vec<(FileId, Span, Option<(FileId, Span)>)> = Vec::new();
         for &root in roots {
             for e in self.prog.descendants(root) {
                 if let Ok(i) = made.binary_search_by_key(&e, |m| m.0) {
-                    let (_, file, span) = made[i];
-                    if !used.contains(&(file, span)) {
-                        used.push((file, span));
+                    let (_, file, span, inlined) = made[i];
+                    if !used.iter().any(|&(f, s, _)| (f, s) == (file, span)) {
+                        used.push((file, span, inlined));
                     }
                 }
             }
         }
-        for (file, span) in used {
-            self.diags.error(file, span, "method erasedValue is declared as `erased`, but is in fact used");
+        // At the call, the inlined place recorded: an error whose inlined place another took is
+        // hidden, as scalac's `UniqueMessagePositions` hides it (`Diagnostics::hidden_inlined`).
+        for (file, span, inlined) in used {
+            let mut msg = "method erasedValue is declared as `erased`, but is in fact used".to_string();
+            if let Some((f, s)) = inlined.filter(|&(f, _)| f != file || inlined.is_some_and(|(_, s)| s != span)) {
+                let source = &self.source(f);
+                if !source.text.is_empty() {
+                    let (line, _, _) = crate::source::locate(&source.text, s.start as usize);
+                    msg.push_str(&format!("\n  inlined from {}:{}", source.path, line));
+                }
+            }
+            self.diags.error(file, span, msg);
+            if let Some(d) = self.diags.items.last_mut() {
+                d.inlined_from = inlined;
+            }
         }
     }
 

@@ -2863,6 +2863,7 @@ impl<'c> Copier<'c> {
         copy.js = info.js;
         copy.has_overloads = info.has_overloads;
         copy.has_statements = info.has_statements;
+        copy.read_no_inits = info.read_no_inits;
         copy.stateful = info.stateful;
         copy.desugared_parents = info.desugared_parents;
         drop(copy);
@@ -2910,15 +2911,16 @@ impl<'c> Copier<'c> {
             })
             .collect();
         let constants: Vec<(SymId, TExprId)> = tc.constants().iter().map(|&(s, e)| (self.sym(s), self.expr(t, e))).collect();
+        let methods: Vec<FunId> = tc.methods.iter().map(|&f| self.fun(t, f)).collect();
         let lists = tc.lists.as_deref().map(|l| {
             Box::new(crate::tir::TClassLists {
                 equals_order: l.equals_order.clone(),
                 existing_defs: l.existing_defs.iter().map(|&(bit, s)| (bit, self.sym(s))).collect(),
+                mirror_members: l.mirror_members.iter().map(|&f| self.fun(t, f)).collect(),
                 constants,
                 eq_outer: l.eq_outer.map(|s| self.sym(s)),
             })
         });
-        let methods: Vec<FunId> = tc.methods.iter().map(|&f| self.fun(t, f)).collect();
         let ctors: Vec<FunId> = tc.ctors.iter().map(|&f| self.fun(t, f)).collect();
         // Each copy is its member's function, as the class's typing registers its methods: a call
         // dispatched by the member (the interpreter's) runs the copy, never a typing of the stored
@@ -3385,7 +3387,7 @@ impl<'c> Copier<'c> {
                     CastOp::Check(test, erased) => CastOp::Check(self.test(t, test), self.ty(t, erased)),
                     CastOp::Unbox(test, erased) => CastOp::Unbox(self.test(t, test), self.ty(t, erased)),
                     CastOp::Adapt(test, erased) => CastOp::Adapt(self.test(t, test), self.ty(t, erased)),
-                    CastOp::Written | CastOp::Nothing => op,
+                    CastOp::Written | CastOp::Nothing | CastOp::Erased => op,
                 };
                 // A quote's cast is decided where the quote runs, its holes filled (a stored
                 // body's where the walk has its receiver).

@@ -500,6 +500,12 @@ pub struct Import {
 }
 
 pub struct Ast {
+    /// The companion objects the parser made, in order: `Desugar.classDef`'s of a case class or
+    /// of a class with a `derives` clause that the body writes none for.
+    pub synthetic_companions: Vec<DefId>,
+    /// The givens of `derives` clauses the parser made, in order, which `Deriving.enterDerived`
+    /// enters in the companion apart from its written body.
+    pub derived_givens: Vec<DefId>,
     pub exprs: Vec<Expr>,
     pub expr_spans: Vec<Span>,
     pub pats: Vec<Pat>,
@@ -807,6 +813,8 @@ impl Ast {
     pub fn new(size_hint: usize) -> Ast {
         let n = size_hint / 8 + 16;
         Ast {
+            synthetic_companions: Vec::new(),
+            derived_givens: Vec::new(),
             exprs: Vec::with_capacity(n),
             expr_spans: Vec::with_capacity(n),
             pats: Vec::new(),
@@ -895,6 +903,12 @@ impl Ast {
     }
 
     /// The range of the whole definition, or its name's span where the parser has none.
+    /// Whether the parser made the definition, no source written for it: `Desugar.classDef`'s
+    /// companion of a case class or a `derives` clause's given.
+    pub fn parser_made(&self, id: DefId) -> bool {
+        self.synthetic_companions.binary_search(&id).is_ok() || self.derived_givens.binary_search(&id).is_ok()
+    }
+
     pub fn def_range(&self, id: DefId) -> Span {
         match self.def_ranges.get(id.idx()) {
             Some(&r) if r != NO_RANGE => r,

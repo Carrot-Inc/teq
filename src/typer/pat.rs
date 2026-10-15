@@ -253,12 +253,35 @@ impl<'a> Worker<'a> {
             }
             seen.push(k);
             if let Some(&a) = self.syms.class(k).type_aliases.get(&n) {
-                return if self.syms.aliases[a.idx()].exported { self.exported_alias_class(a) } else { None };
+                return if self.syms.aliases[a.idx()].exported { self.exported_alias_class(a).or_else(|| self.exported_case_class(a)) } else { None };
             }
             let parents = self.syms.class(k).parents.clone();
             stack.extend(parents.into_iter().rev().filter_map(|t| self.class_of(t)));
         }
         None
+    }
+
+    /// The case class an exported alias stands for in a constructor pattern where the class has its
+    /// companion, the source's or `Desugar.classDef`'s: the export forwards that object too, a stable
+    /// path whose extractor the pattern takes (`AppPrelude.Nel(h, _)`, `typedUnApply` of the forwarder).
+    fn exported_case_class(&mut self, a: crate::types::AliasId) -> Option<ClassId> {
+        let TypeRef::Class(k) = self.forwarded_type_target(TypeRef::Alias(a))? else { return None };
+        let info = self.syms.class(k);
+        (info.kind == ClassKind::Class && info.mods & crate::ast::mods::CASE != 0 && info.companion.is_some()).then_some(k)
+    }
+
+    /// The class whose companion a stable value `s` is: an object nested in a class or a block, or
+    /// any value of an object's type (`val FooAlias: Foo.type = Foo`), whose `unapply` the pattern
+    /// selects (`typedUnApply`), the companion's.
+    fn module_val_companion(&mut self, s: SymId) -> Option<ClassId> {
+        let ret = self.sig_of(s).ret;
+        let ret = self.deref(ret);
+        let ret = self.types.strip_nested(ret);
+        let Type::Class(o, _) = self.types.get(ret) else { return None };
+        if !self.mirror_module(o) {
+            return None;
+        }
+        self.syms.class(o).companion
     }
 
     /// Resolves the class named by a constructor pattern.
@@ -268,6 +291,8 @@ impl<'a> Worker<'a> {
         let found = match ast.expr(path) {
             Expr::SymRef(s) => match self.syms.sym(s).kind {
                 SymKind::Object(o) => self.syms.class(o).companion,
+                // An object nested in a class or a block: its val.
+                SymKind::Val => self.module_val_companion(s),
                 _ => None,
             },
             Expr::Ident(name) => match self.lookup_type(name) {
@@ -2585,6 +2610,15 @@ impl<'a> Worker<'a> {
                 let v = self.types.lit_val(l);
                 TypeTest::Value(self.literal_expr(v))
             }
+            // An enum's singleton case is its value's type: the test of the value
+            // (TypeTestsCasts.scala 325-326), as `case _: x.type` makes it.
+            Type::Class(c, _) if self.syms.class(c).singleton.is_some_and(|v| self.static_enum_value(v)) => {
+                let v = self.syms.class(c).singleton.unwrap();
+                let term = self.types.mk(Type::Term(v));
+                let value = self.prog.add(TExpr::Static(v));
+                self.prog.set_type(value, term);
+                TypeTest::Value(value)
+            }
             Type::Class(c, args) => {
                 if args != EMPTY_LIST && !unchecked && !self.args_determined(c, args, sty) {
                     let msg = format!(
@@ -2715,6 +2749,14 @@ impl<'a> Worker<'a> {
         } else {
             return None;
         })
+    }
+
+    /// Whether the enum value `v` is read as a static (its companion an object of a package or
+    /// of objects), the reference a program's `E.V` is.
+    pub(super) fn static_enum_value(&self, v: SymId) -> bool {
+        let Owner::Class(o) = self.syms.sym(v).owner else { return false };
+        let info = self.syms.class(o);
+        info.kind == ClassKind::Object && info.local_module.is_none() && info.inner_object.is_none() && self.is_static_owner(info.owner)
     }
 
     /// `test`, the class test of a pattern of type `t`, with the test of the instance's outer

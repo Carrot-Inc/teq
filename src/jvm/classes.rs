@@ -999,6 +999,20 @@ impl<'a> Gen<'a> {
                 self.emit_fun(m);
             }
         }
+        // A sealed class's companion's `ordinal` (`SyntheticMembers.addMirrorSupport`), and the
+        // mirror members of a local class's companion, a local object of its block; the other
+        // companions of a case class and of an enum have theirs by rule (`companion_members`,
+        // `enum_companion_members`).
+        // And of the companion of a case class of a block's object that the rule leaves, the class
+        // taking more than its enclosing instance (`has_inner_written_case_companion`).
+        let local = info.local_module.is_some() || (info.inner_object.is_some() && info.companion.is_some_and(|k| cx.in_a_block(k) && !cx.has_inner_written_case_companion(k)));
+        if info.companion.is_some_and(|k| syms.class(k).kind != ClassKind::Enum && (local || syms.class(k).mods & mods::CASE == 0)) {
+            // Published whatever this build reaches: a consumer's `Mirror.SumOf` calls it
+            // (`SyntheticMembers.addMirrorSupport` enters it in every such companion).
+            for &m in tc.mirror_members() {
+                self.emit_fun(m);
+            }
+        }
         if syms.class(c).has_exports {
             let mut aliases: Vec<crate::types::AliasId> = syms.class(c).type_aliases.values().copied().filter(|&a| syms.aliases[a.idx()].owner == Owner::Class(c)).collect();
             aliases.sort();
@@ -1309,6 +1323,14 @@ impl<'a> Gen<'a> {
             // class without parameter clauses (`given f[A]: F[A] with`) is scalac's def making one.
             if out.iter().any(|f| f.sym == s) || cx.given_objects.contains_key(&s) || cx.given_classes.contains_key(&s) {
                 continue;
+            }
+            // The val of a made case companion the rule writes, its field and getter scalac's
+            // (`instance_case_companion_fields`, `inner_case_companion_getters`).
+            if crate::tir::is_made_case_companion_val(syms, s) {
+                let made = syms.class(tc.id).nested.get(&syms.sym(s).name).and_then(|&k| syms.class(k).companion);
+                if made.is_some_and(|m| cx.made_case_companion(m)) {
+                    continue;
+                }
             }
             let ty = self.sym_type(s);
             let name = self.field_name(s);
@@ -3535,12 +3557,27 @@ fn module_field_flags(syms: &Symbols, m: SymId) -> u16 {
 }
 
 /// Whether `c` is a parent `Desugar.classDef` gives: `Product`, its `Equals`, `java.io.Serializable`
-/// (`Symbols::is_synthetic_parent`) or `scala.reflect.Enum`.
+/// (`Symbols::is_synthetic_parent`) or `scala.reflect.Enum`; or one `SyntheticMembers
+/// .addMirrorSupport` gives: `scala.deriving.Mirror` and its `Product`, `Sum` and `Singleton`.
 fn is_desugared_parent(syms: &crate::symbols::Symbols, interner: &crate::intern::Interner, c: ClassId) -> bool {
     if syms.is_synthetic_parent(interner, c) {
         return true;
     }
     let info = syms.class(c);
-    let Owner::Package(p) = info.owner else { return false };
-    interner.get(info.name) == "Enum" && interner.get(syms.pkg(p).name) == "reflect" && syms.pkg(p).parent.is_some_and(|q| interner.get(syms.pkg(q).name) == "scala")
+    let in_package = |p: crate::types::PkgId, name: &str, parent: &str| {
+        interner.get(syms.pkg(p).name) == name && syms.pkg(p).parent.is_some_and(|q| interner.get(syms.pkg(q).name) == parent)
+    };
+    match info.owner {
+        Owner::Package(p) => match interner.get(info.name) {
+            "Enum" => in_package(p, "reflect", "scala"),
+            "Mirror" => in_package(p, "deriving", "scala"),
+            _ => false,
+        },
+        Owner::Class(m) => {
+            matches!(interner.get(info.name), "Product" | "Sum" | "Singleton")
+                && matches!(interner.get(syms.class(m).name), "Mirror" | "Mirror$")
+                && matches!(syms.class(m).owner, Owner::Package(p) if in_package(p, "deriving", "scala"))
+        }
+        _ => false,
+    }
 }

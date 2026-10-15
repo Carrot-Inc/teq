@@ -157,6 +157,8 @@ pub struct Loaded {
     /// the top-level definitions of their package, each with its object.
     /// Read outside the lock (`Worker::is_product_top_def`).
     pub product_package_members: SharedMap<SymId, ClassId>,
+    /// The classes of those objects (an opaque type, a given's class), each with its object.
+    pub product_package_classes: SharedMap<ClassId, ClassId>,
     /// Those objects, and whether their definitions were converted.
     pub product_packages: FxMap<ClassId, bool>,
     /// The top-level definitions of those objects' pseudo files checked so far.
@@ -184,9 +186,12 @@ pub struct Loaded {
     /// The members a pickle marks `EXPORTED`, an export's forwarders, scalac's or another module
     /// of teq's, which reflection reports so (`Flags.Exported`), as the program's own.
     pub exported_members: FxMap<SymId, ()>,
-    /// The vals holding the mirrors of products' classes the program derived, each with its
-    /// class: the val stands in the class's file once the class is converted.
-    pub product_mirror_vals: Vec<(SymId, ClassId)>,
+    /// Per position of a jar member's signature that names a library class the lean std binds to
+    /// one of its own (`STD_BINDINGS`, several names to one class), keyed by the parameter's symbol
+    /// or, for the result, the member's: the std class with the name the pickle gave there, the
+    /// declaration's signature position by position as the selection keeps it
+    /// (`TreePickler.pickleTree` SELECTin).
+    pub declared_names: FxMap<SymId, (ClassId, PkgId, crate::intern::Name)>,
     /// The classes of products that no conversion places, each with its place in its source,
     /// which orders it as the whole program's class: a SAM conversion's
     /// class (the lambda's place) and an enum's value case (its definition's point).
@@ -357,6 +362,7 @@ impl Loaded {
             product_sources_by_token: FxMap::default(),
             product_files: FxMap::default(),
             product_package_members: SharedMap::new(),
+            product_package_classes: SharedMap::new(),
             product_packages: FxMap::default(),
             product_checked: FxMap::default(),
             replay_files: SharedMap::new(),
@@ -366,7 +372,7 @@ impl Loaded {
             default_getters: FxMap::default(),
             synthetic_members: FxMap::default(),
             exported_members: FxMap::default(),
-            product_mirror_vals: Vec::new(),
+            declared_names: FxMap::default(),
             product_class_places: FxMap::default(),
         }
     }
@@ -1045,8 +1051,13 @@ impl<'a> Worker<'a> {
             classes.dedup();
             for k in classes {
                 self.syms.class_mut(k).owner = Owner::Package(pkg);
+                self.loaded_mut().product_package_classes.insert(k, obj);
             }
             self.loaded_mut().product_packages.insert(obj, false);
+            // The object is its file's module of those definitions, as the namer's of a source's
+            // (`Worker::file_module`): what reflection and the writer read them through.
+            let file = self.syms.class(obj).file;
+            self.file_modules.insert((file.0, pkg.0), obj);
         }
     }
 
@@ -1147,26 +1158,14 @@ impl<'a> Worker<'a> {
             .filter(|e| e.tag == tags::TYPEDEF && e.is_class && !tasty.is_object_class(e.name))
             .map(|e| (self.lname(&tasty, e.name), e.flags.has(tags::ENUM)))
             .collect();
+        // The case classes, an enum's class cases among them, whose synthesized companions are the
+        // ones the program's own have (`Desugar.classDef`, `enter_enum_case_companion`).
         let case_names: Vec<Name> = entries
             .iter()
-            .filter(|e| e.tag == tags::TYPEDEF && e.is_class && !tasty.is_object_class(e.name) && e.flags.has(tags::CASE) && !e.flags.has(tags::ENUM))
+            .filter(|e| e.tag == tags::TYPEDEF && e.is_class && !tasty.is_object_class(e.name) && e.flags.has(tags::CASE))
             .map(|e| self.lname(&tasty, e.name))
             .collect();
-        // Another module's enum case classes have no companion in teq's model of them, as the
-        // program's own have none: the case is made by its constructor.
         let product = self.loaded.as_ref().map_or(false, |l| l.cp.is_products(l.file(file).cp));
-        let enum_cases: Vec<Name> = if product {
-            entries
-                .iter()
-                .filter(|e| e.tag == tags::TYPEDEF && e.is_class && e.flags.has(tags::ENUM) && e.flags.has(tags::CASE))
-                .map(|e| self.lname(&tasty, e.name))
-                .collect()
-        } else {
-            Vec::new()
-        };
-        // A case class nested in a class has its companion, as the program's own has (`Namer`'s,
-        // `Desugar.classDef`'s `companionDefs`).
-        let nested_cases: Vec<Name> = Vec::new();
         // A given with a body and no parameters is a given object in scalac's pickle; in teq's
         // model, which another module's classes are read as, a lazy given of a class of its own.
         let given_objects: Vec<Name> = if product {
@@ -1180,12 +1179,6 @@ impl<'a> Worker<'a> {
         };
         for e in entries {
             if e.tag == tags::TYPEDEF {
-                if e.is_class && tasty.is_object_class(e.name) && e.flags.has(tags::SYNTHETIC) && !(enum_cases.is_empty() && nested_cases.is_empty()) {
-                    let name = self.lname(&tasty, e.name);
-                    if enum_cases.contains(&name) || nested_cases.contains(&name) {
-                        continue;
-                    }
-                }
                 if e.is_class && tasty.is_object_class(e.name) && !given_objects.is_empty() {
                     let name = self.lname(&tasty, e.name);
                     if given_objects.contains(&name) {
@@ -1572,13 +1565,19 @@ impl<'a> Worker<'a> {
             if let Some(sym) = inner {
                 self.loaded_mut().syms.insert(sym, LSym { file, addr: e.addr, conversion: false });
                 self.loaded_mut().tables[file as usize].terms.insert(e.addr, sym);
-                // The companion an enum of a class made is eager, as the program's own is
-                // (dotty's `LazyVals.transformSyntheticModule`); a written one or a trait's lazy.
+                // The companion an enum or a case class of a class made is eager, as the program's
+                // own is (dotty's `LazyVals.transformSyntheticModule`, after the pickler, which
+                // writes it lazy); a written one or a trait's lazy.
+                let companion = self.nested_object_of(o, name).and_then(|c| self.syms.class(c).companion.map(|k| (c, k)));
                 let made = e.flags.has(tags::SYNTHETIC)
-                    && self.syms.class(o).kind != ClassKind::Trait
-                    && self.nested_object_of(o, name).and_then(|c| self.syms.class(c).companion).is_some_and(|en| self.syms.class(en).kind == ClassKind::Enum);
-                if made {
-                    self.syms.sym_mut(sym).mods &= !mods::LAZY;
+                    && companion.is_some_and(|(_, k)| self.syms.class(k).kind == ClassKind::Enum || self.syms.class(k).mods & mods::CASE != 0);
+                if let (true, Some((c, k))) = (made, companion) {
+                    if self.syms.class(k).mods & mods::CASE != 0 {
+                        self.syms.class_mut(c).synthetic_companion = true;
+                    }
+                    if self.syms.class(o).kind != ClassKind::Trait {
+                        self.syms.sym_mut(sym).mods &= !mods::LAZY;
+                    }
                 }
                 // An `implicit object` of a trait is a given of the trait (scalatest's
                 // `UseDefaultAssertions`), found by its singleton type as the path itself.
@@ -1600,6 +1599,11 @@ impl<'a> Worker<'a> {
             return;
         }
         self.loaded_mut().tables[file as usize].terms.insert(e.addr, sym);
+        // The companion `Desugar.classDef` made for a case class, whose module val the pickle
+        // flags synthetic: the program's own made one (`ClassInfo::synthetic_companion`).
+        if e.flags.has(tags::SYNTHETIC) && self.syms.class(obj).companion.is_some_and(|k| self.syms.class(k).mods & mods::CASE != 0) {
+            self.syms.class_mut(obj).synthetic_companion = true;
+        }
         let m = flag_mods(e.flags) & (mods::IMPLICIT | mods::GIVEN | mods::LAZY);
         if m == 0 {
             return;
@@ -1757,7 +1761,9 @@ impl<'a> Worker<'a> {
             let sig = decoder.def_sig(lc.addr);
             let mut cx = MapCx::new(lc.file);
             let parent = self.map_type(&mut cx, &sig.ret);
-            self.set_loaded_parents(c, vec![parent]);
+            // The singleton case is its own `Mirror.Singleton`, as a program's (`mirror_parent`).
+            let mirror = self.mirror_parent(c).map(|m| self.types.class(m, &[]));
+            self.set_loaded_parents(c, std::iter::once(parent).chain(mirror).collect());
             self.syms.class_mut(c).state().set(Completion::Done);
             return;
         }
@@ -1781,6 +1787,8 @@ impl<'a> Worker<'a> {
             };
             let keep = parents.len().saturating_sub(appended as usize);
             let tail = parents.split_off(keep);
+            // A case object's `Mirror.Singleton` and a companion's mirror stay, as its source's
+            // (`mirror_parent`).
             for p in tail {
                 if matches!(self.types.get(p), Type::Class(pc, _) if self.is_desugared_parent(pc)) {
                     parents.push(p);
@@ -1870,6 +1878,10 @@ impl<'a> Worker<'a> {
         // A product's trait is another module's program: its vals and its statements run as the
         // whole program's do. On the JVM a jar trait's statements are its
         // `$init$`'s, which every class mixing it in calls, as scalac's `Mixin` does.
+        // `TreeUnpickler.indexStats`' `NoInits` (`normalizeFlags` makes a module's val lazy).
+        let read_no_inits = !sig.index.statements
+            && sig.index.members.iter().all(|e| e.tag != tags::VALDEF || !e.has_body || e.flags.has(tags::LAZY) || e.flags.has(tags::OBJECT));
+        self.syms.class_mut(c).read_no_inits = read_no_inits;
         if kind == ClassKind::Trait {
             let tasty = self.tasty(lc.file);
             let product = self.loaded.as_ref().map_or(false, |l| l.is_product_class(c));
@@ -2158,7 +2170,9 @@ impl<'a> Worker<'a> {
                 subclasses.push(c);
             }
         }
-        let rule_prefix = base.iter().skip(1).take(4).take_while(|&&(b, _)| self.is_desugared_parent(b)).count() as u8;
+        // A pickled class's mirror parent is one its reader's typer sees (`PostTyper` ran before the
+        // pickler): no rule prefix of it (`ClassInfo::post_typer_bases`).
+        let rule_prefix = base.iter().skip(1).take(4).take_while(|&&(b, _)| self.is_desugared_parent(b) && !self.is_mirror_class(b)).count() as u8;
         debug_assert!(base[1..1 + rule_prefix as usize].iter().all(|&(b, _)| self.brings_walks_nothing(b)), "a class Desugar.classDef gives brings {} what a walk passing over it misses", self.class_path(c));
         let inherits_types = base.iter().skip(1).any(|&(b, _)| {
             let bi = self.syms.class(b);
@@ -2299,8 +2313,10 @@ impl<'a> Worker<'a> {
             first_terms = false;
             syms_per_clause.push(syms);
         }
-        // `class C` is pickled with the empty clause of `class C()`.
-        if clauses.len() == 1 && clauses[0].params.is_empty() && !clauses[0].is_using {
+        // `class C` is pickled with the empty clause of `class C()`; a case class has its clause
+        // whatever it holds (`case class C()`), as the program's own.
+        let case_class = self.syms.class(c).mods & mods::CASE != 0 && self.syms.class(c).kind == ClassKind::Class;
+        if clauses.len() == 1 && clauses[0].params.is_empty() && !clauses[0].is_using && !case_class {
             clauses.clear();
             syms_per_clause.clear();
         }
@@ -2676,6 +2692,26 @@ impl<'a> Worker<'a> {
     // ---- signatures ----
 
     pub(super) fn loaded_sig(&mut self, sym: SymId) -> Option<Arc<MethodSig>> {
+        let outer = self.sig_bound_names.replace(Vec::new());
+        let sig = self.loaded_sig_reading(sym);
+        self.sig_bound_names = outer;
+        sig
+    }
+
+    /// The name the pickle gave the class `ty` erases to, where its decoding since `mark` bound a
+    /// library name to that std class (`sig_bound_names`), kept for the position `key`.
+    fn note_declared_name(&mut self, key: SymId, mark: usize, ty: TypeId) {
+        if self.sig_bound_names.as_ref().map_or(true, |b| b.len() <= mark) {
+            return;
+        }
+        let Some(c) = self.class_of(ty) else { return };
+        let found = self.sig_bound_names.as_ref().and_then(|b| b[mark..].iter().find(|&&(k, _, _)| k == c).copied());
+        if let Some(found) = found {
+            self.loaded_mut().declared_names.insert(key, found);
+        }
+    }
+
+    fn loaded_sig_reading(&mut self, sym: SymId) -> Option<Arc<MethodSig>> {
         let Some(ls) = self.loaded.as_ref()?.syms.get(&sym).copied() else { return self.java_sig(sym) };
         self.loaded_mut().signatures_decoded += 1;
         let tasty = self.tasty(ls.file);
@@ -2769,6 +2805,7 @@ impl<'a> Worker<'a> {
             let mut cs = ClauseSig { params: Vec::with_capacity(ps.len()), is_using, is_implicit: is_implicit_clause(ps) };
             for p in ps {
                 let name = self.lname(&tasty, p.name);
+                let mark = self.sig_bound_names.as_ref().map_or(0, Vec::len);
                 let ((ty, by_name, repeated), declared) = {
                     let mut shape = (false, false);
                     let (ty, declared) = self.map_declared(&mut cx, &p.ty, |w, cx| {
@@ -2800,6 +2837,9 @@ impl<'a> Worker<'a> {
                 if let Some(text) = p.implicit_not_found.and_then(|n| tasty.simple(n).map(str::to_string)) {
                     self.loaded_mut().param_not_found.insert(psym, text);
                 }
+                if !by_name && !repeated {
+                    self.note_declared_name(psym, mark, ty);
+                }
                 cs.params.push(ParamSig { name, ty, by_name, repeated, has_default: p.flags.has(tags::HASDEFAULT), sym: psym });
             }
             out.push(cs);
@@ -2812,7 +2852,9 @@ impl<'a> Worker<'a> {
                 self.types.class(c, &args)
             }
             _ => {
+                let mark = self.sig_bound_names.as_ref().map_or(0, Vec::len);
                 let (ret, view) = self.map_declared(&mut cx, &sig.ret, |w, cx| w.map_type(cx, &sig.ret));
+                self.note_declared_name(sym, mark, ret);
                 declared = view;
                 ret
             }

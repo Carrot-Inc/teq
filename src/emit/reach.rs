@@ -92,6 +92,9 @@ pub struct Reach {
     /// `scala.Product`, whose concrete members a reached class's registration gives the shapes
     /// of the runtime (`$productBase`).
     pub product: Option<ClassId>,
+    /// `scala.deriving.Mirror.Singleton`, whose `fromProduct` a reached registration gives the
+    /// prototypes of the case objects' and enum values' shapes (`$singletonBase`).
+    pub singleton: Option<ClassId>,
     /// The parents of a desugaring (`Worker::is_desugared_parent`) the walk met as bases of a
     /// case class, case object or enum, sorted: the shapes' prototypes stand for them.
     pub desugared: Vec<ClassId>,
@@ -183,6 +186,7 @@ impl Reach {
             templates: Vec::new(),
             globals: Vec::new(),
             product: None,
+            singleton: None,
             desugared: Vec::new(),
             product_to_string: Vec::new(),
             product_hash: Vec::new(),
@@ -535,7 +539,6 @@ fn link_root_members(typer: &Worker, std_files: &[bool], products: bool) -> (Vec
         .map(|&f| typer.prog.funs[f.idx()].sym)
         .chain(top_vals.map(|(i, _)| SymId(i as u32)))
         .chain(top_extensions)
-        .chain(typer.scala_mirror_vals())
         .filter(|&s| program_file(syms.sym(s).file) && runs(s))
         .collect();
     (classes, top)
@@ -700,6 +703,7 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
     w.library = t.w().loaded.is_some();
     w.products = t.w().open_world;
     w.reach.product = t.w().b.product;
+    w.reach.singleton = t.w().scala_singleton_mirror();
     w.open_world = w.link || w.products;
     if w.open_world {
         (w.link_root_members, w.link_root_funs) = link_root_members(t.w(), &w.std_files, w.products);
@@ -1197,7 +1201,7 @@ impl<T: Copy> Links<T> {
 struct Walker {
     jvm: Option<JvmHelpers>,
     /// The initialisers of the vals of companions the typer made for case classes nested in a
-    /// class (`is_made_companion_val`), walked when the val is first read.
+    /// class (`is_desugared_companion_val`), walked when the val is first read.
     deferred_companions: FxMap<SymId, TExprId>,
     /// Std classes reached, whose subclasses across the std's files the typer brings in.
     pending_extenders: Vec<ClassId>,
@@ -1475,7 +1479,7 @@ impl Walker {
         self.reach.imports.resize(cx.prog.js_imports.len(), false);
         for (i, tc) in cx.prog.classes.iter().enumerate().skip(self.n_classes) {
             self.tclass_of[tc.id.idx()] = slot(i);
-            for &f in tc.methods.iter().chain(&tc.ctors) {
+            for &f in tc.methods.iter().chain(&tc.ctors).chain(tc.mirror_members()) {
                 self.fun_of[cx.prog.funs[f.idx()].sym.idx()] = slot(f.idx());
             }
             self.layout.note_class(cx.prog, cx.syms, tc);
@@ -2351,6 +2355,16 @@ impl Walker {
                 }
             }
         }
+        // A companion's mirror members, which no table of the class holds (`TClassLists
+        // ::mirror_members`).
+        if let Some(i) = index(self.tclass_of[c.idx()]) {
+            for &f in cx.prog.classes[i].mirror_members() {
+                if cx.syms.dispatch_name(cx.prog.funs[f.idx()].sym) == name {
+                    self.reach_fun(f);
+                    found = true;
+                }
+            }
+        }
         found
     }
 
@@ -2565,7 +2579,7 @@ impl Walker {
             // On JavaScript the companion the typer made for a case class nested here is reached
             // where its val is read (`field`); the JVM writes it as scalac does.
             if let TInit::Field(s, e) = *init {
-                if self.jvm.is_none() && crate::tir::is_made_companion_val(syms, s) && !self.reach.fields_read[s.idx()] && !self.reach.init_read[s.idx()] {
+                if self.jvm.is_none() && crate::tir::is_desugared_companion_val(syms, s) && !self.reach.fields_read[s.idx()] && !self.reach.init_read[s.idx()] {
                     self.deferred_companions.insert(s, e);
                     continue;
                 }
@@ -2977,9 +2991,9 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             match op {
                 CastOp::Check(test, _) | CastOp::Unbox(test, _) => visit_test(m, cx, test),
                 CastOp::Adapt(..) => {}
-                CastOp::Written | CastOp::Nothing => {}
+                CastOp::Written | CastOp::Nothing | CastOp::Erased => {}
             }
-            if !matches!(op, CastOp::Written | CastOp::Adapt(..)) {
+            if !matches!(op, CastOp::Written | CastOp::Adapt(..) | CastOp::Erased) {
                 m.cast(cx);
             }
         }

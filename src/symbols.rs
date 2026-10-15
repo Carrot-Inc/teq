@@ -141,6 +141,12 @@ pub struct ClassInfo {
     /// places them first: walks to which they bring nothing (givens, target names, trait
     /// initialisers, outer instances) start after them, so that they cost no case class a visit.
     pub rule_prefix: u8,
+    /// How many of `base_types` after the class itself the mirror parent brings that
+    /// `SyntheticMembers.addMirrorSupport` adds after typing (`addParent`'s `installAfter` of
+    /// `PostTyper`), first in the linearisation and counted in `rule_prefix`: the backends, the
+    /// products and the override checks read them; the typer's member lookup and subtyping do
+    /// not, as dotty's typer does not see them (`Worker::typer_bases_from`).
+    pub post_typer_bases: u8,
     /// Whether a parent the source writes did not resolve (an error was reported there): what
     /// the class inherits is unknown, so it is not held to implement it.
     pub parent_failed: bool,
@@ -202,9 +208,17 @@ pub struct ClassInfo {
     pub has_imports: bool,
     /// Whether the body has expression statements, or for a trait vals with an initialiser.
     pub has_statements: bool,
+    /// A class read from a pickle whose template runs no initialiser, as `TreeUnpickler.indexStats`
+    /// finds its `NoInits`: no statement, and each of its terms a method, deferred or lazy (a
+    /// module's val is); a class of a source reads its definition instead.
+    pub read_no_inits: bool,
     /// A `@javaDefined` stand-in of the standard library that a definition of the same name in
     /// package `scala` took the place of; it is left out of the program.
     pub replaced: bool,
+    /// An object `Desugar.classDef` made, the companion of a case class or of a class with a
+    /// `derives` clause that has none written (`Ast::synthetic_companions`): the targets write it
+    /// as scalac's synthetic module (final, a case class's with its `toString`).
+    pub synthetic_companion: bool,
     pub js: JsKind,
     pub js_binding: Option<JsBinding>,
     /// Whether the class or one of its ancestors overloads a name.
@@ -1064,13 +1078,16 @@ impl Symbols {
             stateful: false,
             desugared_parents: 0,
             rule_prefix: 0,
+            post_typer_bases: 0,
             parent_failed: false,
             has_exports: false,
             forwarders_made: false,
             self_alias: crate::names::EMPTY,
             has_imports: false,
             has_statements: false,
+            read_no_inits: false,
             replaced: false,
+            synthetic_companion: false,
             js: JsKind::Scala,
             js_binding: None,
             has_overloads: false,

@@ -151,6 +151,13 @@ impl<'a> Worker<'a> {
         Some((pkg, name))
     }
 
+    /// Whether the std's class `name` of package `p` is what `STD_BINDINGS` binds a library
+    /// class of another name to.
+    pub(in crate::typer) fn is_std_binding_target(&self, p: PkgId, name: Name) -> bool {
+        let n = self.interner.get(name);
+        STD_BINDINGS.iter().any(|&(_, bound, to)| bound == n && self.pkg_is(p, to))
+    }
+
     pub(in crate::typer) fn pkg_is(&self, p: PkgId, path: &str) -> bool {
         let mut segs = path.rsplit('.');
         let mut at = Some(p);
@@ -551,11 +558,14 @@ impl<'a> Worker<'a> {
             if !reached.get(i).copied().unwrap_or(false) || info.owner != Owner::Local {
                 continue;
             }
+            // A local object's module class is `E$` (`Desugar.moduleDef`), apart from the class of
+            // its name at one place, as the output names it (`push_module_mark`).
+            let mark = if info.local_module.is_some() { "$" } else { "" };
             let name = match info.kind {
                 ClassKind::Anon => self.name_str(info.name),
                 _ => match self.syms.product_position(info.file, info.def) {
-                    Some((token, offset)) => format!("{}${}_{}", self.name_str(info.name), crate::source::tag_text(token), offset),
-                    None => format!("{}${}", self.name_str(info.name), self.prog.position(info.file, info.span.start)),
+                    Some((token, offset)) => format!("{}{}${}_{}", self.name_str(info.name), mark, crate::source::tag_text(token), offset),
+                    None => format!("{}{}${}", self.name_str(info.name), mark, self.prog.position(info.file, info.span.start)),
                 },
             };
             named.entry(name).or_default().push(c);

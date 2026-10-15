@@ -313,6 +313,10 @@ pub enum CastOp {
     Adapt(TestId, TypeId),
     /// A cast to `Nothing`, which throws `ClassCastException` whatever the value, `null` included.
     Nothing,
+    /// A cast whose operand's erasure conforms to the type's, which erasure drops
+    /// (`TypeTestsCasts.interceptTypeApply`): the operand on every target, the node keeping the
+    /// type it was cast to, a synthesized mirror's refinement (`Worker::mirror_cast`).
+    Erased,
 }
 
 #[derive(Clone)]
@@ -968,6 +972,11 @@ pub struct TClassLists {
     /// `existingDef` takes in its place (`synthetic`'s bit, the member), which a lookup of the name
     /// finds before the bases' other definitions.
     pub existing_defs: Vec<(u16, SymId)>,
+    /// Of a companion that is its class's mirror (`Worker::mirror_parent`), the members
+    /// `SyntheticMembers.addMirrorSupport` gives it, after its body (`newBody :+`), which
+    /// JavaScript and the interpreter run: `fromProduct`, `ordinal`. The JVM backend and the
+    /// pickle write them by rule; no table of the class holds them, nor `TClass::methods`.
+    pub mirror_members: Vec<FunId>,
     /// The constant vals of the class's body (`constant_val`) with their constants as literals,
     /// which a getter answers whatever the constructor has run (`Memoize`); a right side that is
     /// no literal stays in `init`, the constructor's work.
@@ -994,6 +1003,10 @@ impl TClass {
 
     pub fn constants(&self) -> &[(SymId, TExprId)] {
         self.lists.as_deref().map_or(&[], |l| &l.constants)
+    }
+
+    pub fn mirror_members(&self) -> &[FunId] {
+        self.lists.as_deref().map_or(&[], |l| &l.mirror_members)
     }
 
     /// The lists, made where the class has none yet.
@@ -2044,7 +2057,7 @@ impl<'a> Iterator for Descendants<'a> {
                 self.exprs.push(r);
                 self.tests.push(test);
             }
-            TExpr::Cast(r, CastOp::Written | CastOp::Nothing, _) => self.exprs.push(r),
+            TExpr::Cast(r, CastOp::Written | CastOp::Nothing | CastOp::Erased, _) => self.exprs.push(r),
             TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args)
             | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => {
                 self.exprs.extend_from_slice(prog.expr_list(args));
@@ -2150,16 +2163,46 @@ mod tests {
 }
 
 /// Whether `s` is the lazy val of a companion the typer made for a case class nested in a class
-/// (`Namer`'s, `Desugar.classDef`'s `companionDefs`), which has no body to run: on JavaScript it is
-/// written, and the companion reached, only where something reads it.
+/// (`Namer`'s, `Desugar.classDef`'s `companionDefs`), which has no body to run.
 pub fn is_made_companion_val(syms: &crate::symbols::Symbols, s: SymId) -> bool {
+    companion_val_of_case(syms, s).is_some_and(|m| syms.class(m).made_companion)
+}
+
+/// Whether `s` is the lazy val of a companion the typer or the parser made for a case class nested
+/// in a class (`Desugar.classDef`'s `companionDefs`), which has no body to run: on JavaScript it is
+/// written, and the companion reached, only where something reads it.
+pub fn is_desugared_companion_val(syms: &crate::symbols::Symbols, s: SymId) -> bool {
+    companion_val_of_case(syms, s).is_some_and(|m| syms.class(m).made_companion || syms.class(m).synthetic_companion)
+}
+
+/// Whether `s` is the val, lazy or eager, of the companion the namer made for a case class or an
+/// enum's class case nested in its owner (`ClassInfo::made_companion`), which the rules of the
+/// backends and the writer lay out with its class rather than as a member.
+pub fn is_made_case_companion_val(syms: &crate::symbols::Symbols, s: SymId) -> bool {
     use crate::symbols::{Owner, SymKind};
     let info = syms.sym(s);
-    if info.kind != SymKind::Val || info.mods & crate::ast::mods::LAZY == 0 {
+    if info.kind != SymKind::Val {
         return false;
     }
     let Owner::Class(owner) = info.owner else { return false };
     let Some(&k) = syms.class(owner).nested.get(&info.name) else { return false };
-    let companion = syms.class(k).companion;
-    syms.class(k).mods & crate::ast::mods::CASE != 0 && companion.is_some_and(|m| syms.class(m).inner_object == Some(s) && syms.class(m).made_companion)
+    if syms.class(k).mods & crate::ast::mods::CASE == 0 {
+        return false;
+    }
+    syms.class(k).companion.is_some_and(|m| syms.class(m).inner_object == Some(s) && syms.class(m).made_companion && syms.class(m).def.is_none())
+}
+
+/// The companion whose lazy val `s` is, of a case class nested in a class.
+fn companion_val_of_case(syms: &crate::symbols::Symbols, s: SymId) -> Option<crate::types::ClassId> {
+    use crate::symbols::{Owner, SymKind};
+    let info = syms.sym(s);
+    if info.kind != SymKind::Val || info.mods & crate::ast::mods::LAZY == 0 {
+        return None;
+    }
+    let Owner::Class(owner) = info.owner else { return None };
+    let &k = syms.class(owner).nested.get(&info.name)?;
+    if syms.class(k).mods & crate::ast::mods::CASE == 0 {
+        return None;
+    }
+    syms.class(k).companion.filter(|&m| syms.class(m).inner_object == Some(s))
 }

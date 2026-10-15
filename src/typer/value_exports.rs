@@ -937,7 +937,7 @@ impl<'a> Worker<'a> {
         let Some(k) = self.class_of(q) else { return Vec::new() };
         self.complete_class(k);
         let from_case_class = self.syms.class(k).mods & mods::CASE != 0;
-        let bases: Vec<ClassId> = self.syms.class(k).base_types.iter().map(|&(b, _)| b).collect();
+        let bases = self.namer_bases(k);
         let mut out: Vec<Name> = Vec::new();
         for b in bases {
             self.complete_class(b);
@@ -945,6 +945,9 @@ impl<'a> Worker<'a> {
             for m in members {
                 let info = self.syms.sym(m);
                 let name = info.name;
+                if b == k && self.mirror_support_member(k, info.owner, name, info.def.is_some()) {
+                    continue;
+                }
                 // Neither private nor synthetic members (dotty's `PrivateOrSynthetic`): a case
                 // class's selectors `_1`..`_n` are the class's own (`mods::SELECTOR`), a library's
                 // compiler-made members its pickle's (`Loaded::synthetic_members`).
@@ -978,6 +981,32 @@ impl<'a> Worker<'a> {
             }
         }
         out
+    }
+
+    /// The bases of `k` an export sees, `Namer.exportForwarders` running before `PostTyper`: all
+    /// but the mirror's traits `SyntheticMembers.addMirrorSupport` adds then (`ClassInfo::post_typer_bases`,
+    /// an enum's companion's among them).
+    fn namer_bases(&self, k: ClassId) -> Vec<ClassId> {
+        let info = self.syms.class(k);
+        let post_typer = 1..1 + info.post_typer_bases as usize;
+        let mirror_parent = self.has_desugared_mirror_parent(k);
+        info.base_types.iter().enumerate().filter(|&(i, &(b, _))| !post_typer.contains(&i) && !(mirror_parent && self.is_mirror_class(b))).map(|(_, &(b, _))| b).collect()
+    }
+
+    /// Whether a member or alias of `k`, the class an export's path names, is one
+    /// `SyntheticMembers.addMirrorSupport` gives it after `Namer`: a member of its mirror's traits,
+    /// or one of their names it enters in `k` where `k` defines none (`ordinal`, `fromProduct`,
+    /// `MirroredMonoType`, and the refinement's aliases an enum's companion holds).
+    fn mirror_support_member(&self, k: ClassId, owner: Owner, name: Name, has_def: bool) -> bool {
+        if matches!(owner, Owner::Class(o) if self.is_mirror_class(o)) {
+            return true;
+        }
+        if owner != Owner::Class(k) || has_def || !self.has_desugared_mirror_parent(k) {
+            return false;
+        }
+        self.syms.class(k).base_types.iter().any(|&(b, _)| {
+            self.is_mirror_class(b) && (self.syms.class(b).members.contains_key(&name) || self.syms.class(b).type_aliases.contains_key(&name))
+        })
     }
 
     /// The extension methods of the path's class and its bases, named `name` or all of them, in
@@ -1072,12 +1101,16 @@ impl<'a> Worker<'a> {
         let q = self.widen_path(vp.path);
         let Some(k) = self.class_of(q) else { return Vec::new() };
         self.complete_class(k);
-        let bases: Vec<ClassId> = self.syms.class(k).base_types.iter().map(|&(b, _)| b).collect();
+        let bases = self.namer_bases(k);
         let mut out: Vec<Name> = Vec::new();
         for b in bases {
             self.complete_class(b);
             let aliases: Vec<(Name, AliasId)> = self.syms.class(b).type_aliases.iter().map(|(&n, &a)| (n, a)).collect();
             for (n, a) in aliases {
+                let (owner, has_def) = (self.syms.aliases[a.idx()].owner, self.syms.aliases[a.idx()].def.is_some());
+                if b == k && self.mirror_support_member(k, owner, n, has_def) {
+                    continue;
+                }
                 if !out.contains(&n) && !self.private_alias(a) {
                     out.push(n);
                 }

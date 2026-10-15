@@ -1891,6 +1891,20 @@ impl<'a> Worker<'a> {
         span: Span,
         body: impl FnOnce(&mut Self, &[(SymId, TypeId)]) -> TExprId,
     ) -> Option<(TExprId, TypeId)> {
+        self.sam_instance_with_types(trait_ty, arity, span, &[], body)
+    }
+
+    /// `sam_instance_typed` whose class defines the type aliases `types` too, which its
+    /// instance's type refines the trait with (`anon_instance`): `Synthesizer.anonymousMirror`'s
+    /// `type MirroredMonoType`.
+    pub(super) fn sam_instance_with_types(
+        &mut self,
+        trait_ty: TypeId,
+        arity: usize,
+        span: Span,
+        types: &[(crate::intern::Name, TypeId)],
+        body: impl FnOnce(&mut Self, &[(SymId, TypeId)]) -> TExprId,
+    ) -> Option<(TExprId, TypeId)> {
         let (trait_ty, method, sig, subst) = self.sam_method(trait_ty, arity)?;
         let stored = self.stores_classes();
         if self.checks_inline_definition() && !stored {
@@ -1903,18 +1917,36 @@ impl<'a> Worker<'a> {
         self.note_made_at(c, span, stored);
         self.anon_envs.insert(c, Arc::new(self.env.clone()));
         self.syms.class_mut(c).state().set(Completion::InProgress);
-        self.set_parents(c, vec![(trait_ty, span)]);
+        // `Synthesizer.anonymousMirror`'s class extends `Object` and `java.io.Serializable`
+        // before the mirror's trait `SyntheticMembers.addMirrorSupport` adds.
+        let serializable = (!types.is_empty()).then(|| self.java_serializable_class()).flatten().map(|s| (self.types.class(s, &[]), span));
+        self.set_parents(c, serializable.into_iter().chain(std::iter::once((trait_ty, span))).collect());
         self.syms.class_mut(c).state().set(Completion::Done);
         self.class_done.insert(c, ());
         self.syms.check_cells.set(c.0, Completion::Done);
+        for &(alias, rhs) in types {
+            let a = AliasId(self.syms.aliases.len() as u32);
+            self.syms.aliases.push(AliasInfo { name: alias, owner: Owner::Class(c), file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js: false, declared_rhs: crate::tir::NO_TYPE, exported: false });
+            self.syms.alias_cells.set(a.0, Completion::Done);
+            self.syms.class_mut(c).type_aliases.insert(alias, a);
+        }
 
         let mname = self.syms.sym(method).name;
         let msym = self.syms.new_sym(mname, SymKind::Def, mods::OVERRIDE, Owner::Class(c), file, None, span);
         let mut params = Vec::with_capacity(arity);
         let mut param_sigs = Vec::with_capacity(arity);
+        // A parameter or a result that names a type member the class defines is that member's
+        // type here (`ordinal`'s and `fromProduct`'s `MirroredMonoType` in
+        // `Synthesizer.anonymousMirror`'s class), not the trait's own.
+        let own_member = |t: &Self, ty: TypeId| match t.types.get(ty) {
+            Type::Member(_, n) => types.iter().find(|&&(m, _)| m == n).map_or(ty, |&(_, rhs)| rhs),
+            Type::Decl(a) => types.iter().find(|&&(m, _)| m == t.syms.aliases[a.idx()].name).map_or(ty, |&(_, rhs)| rhs),
+            _ => ty,
+        };
         for p in &sig.clauses[0].params {
             let ty = self.types.subst(p.ty, &subst);
             let ty = self.solve_maximized_in(ty);
+            let ty = own_member(self, ty);
             let s = self.new_local(p.name, SymKind::Val, ty, span);
             params.push((s, ty));
             param_sigs.push(ParamSig { name: p.name, ty, by_name: false, repeated: false, has_default: false, sym: s });
@@ -1922,6 +1954,7 @@ impl<'a> Worker<'a> {
         let ret = self.types.subst(sig.ret, &subst);
         let param_syms: Vec<SymId> = params.iter().map(|&(s, _)| s).collect();
         let ret = self.sam_dependent_ret(ret, &sig.clauses[0].params, &param_syms);
+        let ret = own_member(self, ret);
         let msig = Arc::new(MethodSig {
             tparams: Vec::new(),
             clauses: vec![ClauseSig { params: param_sigs, is_using: false, is_implicit: false }],
@@ -1942,7 +1975,11 @@ impl<'a> Worker<'a> {
         let first_expr = self.prog.exprs.len();
         self.env.frames.push(Frame::Class(c));
         self.push_scope();
-        self.sam_classes.insert(c, ());
+        // A class that defines type members is no closure's (a SAM type has no abstract type
+        // member to fix): written as the class it is (`Synthesizer.anonymousMirror`).
+        if types.is_empty() {
+            self.sam_classes.insert(c, ());
+        }
         let tb = body(self, &params);
         self.pop_scope();
         self.env.frames.pop();

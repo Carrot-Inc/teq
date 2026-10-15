@@ -546,7 +546,6 @@ impl<'a> Worker<'a> {
         self.settle_val_accessors();
         self.name_all_alternatives();
         self.choose_entry_point();
-        self.complete_program_mirrors(None);
         self.phase_end(p);
     }
 
@@ -1804,7 +1803,14 @@ impl<'a> Worker<'a> {
             // enclosing `val` (macwire's eligible values) finds its type, not the recursion.
             let nested_local = outer != 0 && self.syms.sym(sym).owner == Owner::Local;
             if !nested_local {
+                let erased_mark = self.erased_values.len();
                 self.flush_pending_since(pending);
+                // What the expansions made that the body still holds is used
+                // (`Erasure.checkNotErased`), as the body's own typing's is (`type_body`).
+                if self.erased_values.len() > erased_mark {
+                    let roots: Vec<TExprId> = self.fun_of_sym.get(&sym).and_then(|&f| self.prog.funs[f.idx()].body).into_iter().chain(self.val_init.get(&sym).copied()).collect();
+                    self.report_erased_values(erased_mark, &roots);
+                }
             }
         }
         inferred
@@ -3062,6 +3068,13 @@ impl<'a> Worker<'a> {
         self.check_synthesized_conflicts(c, synthesized);
         self.check_companion_apply_defaults(c);
         tclass.synthesized = synthesized;
+        // A check that only reports leaves the program's to the interpreter's first use, a macro's
+        // (`ensure_mirror_members`), as it leaves the selectors' bodies (`emits_bodies`); a shared
+        // class's are made here, under the loader's lock.
+        let mirror = if self.emits_bodies || self.shared_class(c) { self.mirror_members(c) } else { Vec::new() };
+        if !mirror.is_empty() {
+            tclass.lists_mut().mirror_members = mirror;
+        }
         if !existing_defs.is_empty() {
             tclass.lists_mut().existing_defs = existing_defs;
         }
@@ -3071,7 +3084,7 @@ impl<'a> Worker<'a> {
         }
         // A pickle's synthesized companion of a case class, its body read, and the one the parser
         // makes for a `derives` clause: the rule's `toString`.
-        if def_id.is_some() && (self.syms.class(c).made_companion || self.derives_companion(c)) {
+        if def_id.is_some() && (self.syms.class(c).made_companion || self.syms.class(c).synthetic_companion || self.derives_companion(c)) {
             if let Some(f) = self.case_companion_to_string(c) {
                 tclass.methods.push(f);
             }
@@ -3270,7 +3283,9 @@ impl<'a> Worker<'a> {
     }
 
     /// The initialisers of the values of the enum whose companion the class `m` is, when it is an
-    /// instance: each a creation of its case with this instance as its outer.
+    /// instance: each a creation of its case with this instance as its outer; and of the lazy
+    /// vals of its class cases' companions (`enter_enum_case_companion`), objects of this
+    /// instance as a case class's made companion in a class body is.
     pub(super) fn instance_enum_values(&mut self, m: ClassId) -> Vec<TInit> {
         let info = self.syms.class(m);
         let Some(e) = info.companion.filter(|&e| self.syms.class(e).kind == ClassKind::Enum) else { return Vec::new() };
@@ -3279,16 +3294,30 @@ impl<'a> Worker<'a> {
         }
         let children = self.syms.class(e).children.clone();
         let mut values = Vec::new();
+        let mut companions = Vec::new();
         self.env.frames.push(Frame::Class(m));
         for case in children {
-            let Some(v) = self.syms.class(case).singleton else { continue };
             let span = self.syms.class(case).span;
+            let Some(v) = self.syms.class(case).singleton else {
+                let made = self.syms.class(case).companion.filter(|&o| self.syms.class(o).made_companion && self.syms.class(o).def.is_none());
+                if let Some((o, val)) = made.and_then(|o| self.syms.class(o).inner_object.map(|v| (o, v))) {
+                    // A stored body's enum keeps it with its cases (`finish_local_enum`).
+                    self.note_nested_stored_class(m, o);
+                    self.check_class(o);
+                    let init = self.new_instance(o, ast::ListRef::EMPTY, span);
+                    companions.push(TInit::Field(val, init));
+                }
+                continue;
+            };
             let made = self.new_instance(case, ast::ListRef::EMPTY, span);
             let ty = self.syms.this_type(case);
             self.prog.set_type(made, ty);
             values.push(TInit::Field(v, made));
         }
         self.env.frames.pop();
+        // The cases' companions after the values, which come first (above), as the companion's
+        // template read from a pickle runs them.
+        values.extend(companions);
         values
     }
 
@@ -3495,12 +3524,12 @@ impl<'a> Worker<'a> {
     /// The `toString` of the companion `Desugar.classDef` gives a case class without a written one,
     /// the class's name (`companionDefs`' `toString`): a member of the object `m`, defined here.
     fn case_companion_to_string(&mut self, m: ClassId) -> Option<FunId> {
-        if !self.syms.class(m).made_companion && !self.derives_companion(m) {
+        if !self.syms.class(m).made_companion && !self.syms.class(m).synthetic_companion && !self.derives_companion(m) {
             return None;
         }
         let k = self.syms.class(m).companion?;
         let info = self.syms.class(k);
-        if info.kind != ClassKind::Class || info.mods & mods::CASE == 0 {
+        if !matches!(info.kind, ClassKind::Class | ClassKind::EnumCase) || info.mods & mods::CASE == 0 {
             return None;
         }
         let name = info.name;
@@ -3782,7 +3811,7 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether the value case `c` is one of an enum extending `java.lang.Enum`.
-    fn is_java_enum_value(&self, c: ClassId) -> bool {
+    pub(super) fn is_java_enum_value(&self, c: ClassId) -> bool {
         let Owner::Class(companion) = self.syms.class(c).owner else { return false };
         let Some(e) = self.syms.class(companion).companion else { return false };
         self.syms.class(e).superclass.is_some_and(|s| {
@@ -5670,6 +5699,9 @@ impl<'a> Worker<'a> {
     /// for the loose match of a nullary pair as `p`'s do.
     pub(super) fn compare_sigs_of(&mut self, c: ClassId, m: Option<SymId>, mut msig: Arc<MethodSig>, m_owner: Option<TypeId>, p: SymId, p_owner: TypeId) -> Agreement {
         let mut psig = self.sig_arc(p);
+        if let Some(mono) = self.post_typer_mono(c, p) {
+            psig = Arc::new(self.mono_replaced_sig(&psig, mono));
+        }
         // `def x` and `def x()` are one member, either overriding the other, where either or a
         // member either overrides is Java's, `Any`'s or `Object.clone`, or of a Scala 2 class
         // (dotty's `matchNullaryLoosely`, `OverridingPairs.isOverridingPair`).
@@ -5683,6 +5715,61 @@ impl<'a> Worker<'a> {
         }
         let lenient_using = self.is_std_scala_member(p);
         self.compare_sig_pair(c, msig, m_owner, psig, p_owner, false, lenient_using)
+    }
+
+    /// The `MirroredMonoType` that `RefChecks` reads a member `p` of a mirror's trait through in the
+    /// companion `c`, which `SyntheticMembers.addMirrorSupport` makes its class's mirror after
+    /// typing: the alias it adds beside the parent where `c` has none (`monoType`, 683–699), the
+    /// class over wildcards. The typer's tables hold neither (`ClassInfo::post_typer_bases`).
+    fn post_typer_mono(&mut self, c: ClassId, p: SymId) -> Option<TypeId> {
+        let Owner::Class(pb) = self.syms.sym(p).owner else { return None };
+        if !self.is_mirror_class(pb) || !self.has_desugared_mirror_parent(c) {
+            return None;
+        }
+        let k = self.syms.class(c).companion?;
+        if self.mirror_companion(k) != Some(c) {
+            return None;
+        }
+        // `monoType`: the member the companion has of the name, its own or inherited, where it is
+        // no `Deferred` one, which the override reads as it stands; else the alias it enters.
+        let mono = self.interner.intern("MirroredMonoType");
+        if self.typer_type_member(c, mono).is_some_and(|a| !self.syms.aliases[a.idx()].is_abstract()) {
+            return None;
+        }
+        let n = self.syms.class(k).tparams.len();
+        Some(self.types.class(k, &vec![WILD; n]))
+    }
+
+    /// The type member `name` of the complete class `c` as the typer finds it: its own, then its
+    /// bases' in linearisation order but the mirror's traits it gets after typing
+    /// (`ClassInfo::post_typer_bases`), a concrete one before an abstract one, as a member's
+    /// denotation prefers it.
+    fn typer_type_member(&self, c: ClassId, name: Name) -> Option<AliasId> {
+        let info = self.syms.class(c);
+        let post_typer = 1..1 + info.post_typer_bases as usize;
+        let found: Vec<AliasId> = info.base_types.iter().enumerate().filter(|(i, _)| !post_typer.contains(i)).filter_map(|(_, &(b, _))| self.syms.class(b).type_aliases.get(&name).copied()).collect();
+        found.iter().copied().find(|a| !self.syms.aliases[a.idx()].is_abstract()).or(found.first().copied())
+    }
+
+    /// `sig` with the mirror's abstract `MirroredMonoType` read as `mono` (`post_typer_mono`).
+    fn mono_replaced_sig(&mut self, sig: &MethodSig, mono: TypeId) -> MethodSig {
+        let name = self.interner.intern("MirroredMonoType");
+        let (types, syms) = (&*self.types, &self.syms);
+        fn replaced(types: &crate::types::TypeStore, syms: &crate::symbols::Symbols, t: TypeId, name: Name, mono: TypeId) -> TypeId {
+            match types.get(t) {
+                Type::Decl(a) if syms.aliases[a.idx()].name == name => mono,
+                Type::Member(_, n) if n == name => mono,
+                _ => types.map_parts(t, &mut |x| replaced(types, syms, x, name, mono)),
+            }
+        }
+        let mut out = sig.clone();
+        out.ret = replaced(types, syms, out.ret, name, mono);
+        for cl in out.clauses.iter_mut() {
+            for p in cl.params.iter_mut() {
+                p.ty = replaced(types, syms, p.ty, name, mono);
+            }
+        }
+        out
     }
 
     /// A member of the lean std, whose overrides may add a using clause the ancestor lacks
@@ -5934,6 +6021,7 @@ impl<'a> Worker<'a> {
         let info = self.syms.sym(m);
         let kind = match info.kind {
             SymKind::Def | SymKind::Overloaded(_) => "method",
+            SymKind::Val if self.inner_object_of_sym(m).is_some() => "object",
             SymKind::Val if info.mods & mods::LAZY != 0 => "lazy value",
             SymKind::Val | SymKind::Param => "value",
             SymKind::Var => "variable",
@@ -6075,9 +6163,12 @@ impl<'a> Worker<'a> {
         // A case class or object and an enum case are given every abstract member of `Product`,
         // `Equals` and `Enum` by rule or have an existing definition of it (`SyntheticMembers`),
         // so those parents need no walk.
+        // So is a companion that is its class's mirror (`SyntheticMembers.addMirrorSupport`):
+        // `fromProduct` or `ordinal` by rule.
         let completed_by_rule = {
             let info = self.syms.class(c);
-            which == Abstracts::Declared && (info.mods & mods::CASE != 0 || info.kind == ClassKind::EnumCase)
+            which == Abstracts::Declared
+                && (info.mods & mods::CASE != 0 || info.kind == ClassKind::EnumCase || (self.mirror_module(c) && info.desugared_parents > 0))
         };
         // Of a class completed by rule, the leading classes `Desugar.classDef` gives
         // (`rule_prefix`) are passed over without a visit.

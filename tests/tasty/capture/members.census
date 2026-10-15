@@ -12,7 +12,7 @@ local val                                   1          0        0            0  
 method call                                 1          0        0            0          0
 named argument                              0          1        0            0          0
 operator                                    0          1        0            0          0
-synthesized definition                      0          0        0            2          0
+synthesized definition                      0          0        0            3          0
 this                                        1          0        0            0          1
 tuple member                                0          5        0            0          0
 orphans 0, captured types with an unsolved variable 0

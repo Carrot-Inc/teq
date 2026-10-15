@@ -1004,6 +1004,9 @@ pub struct Worker<'a> {
     /// The prefix of the class the next constructor application makes (`new o.I(a)`, `o.I(a)`),
     /// which its signature is seen from; taken by the application.
     pub ctor_prefix: Option<TypeId>,
+    /// While the loader reads a jar member's signature, the library classes the std binds to
+    /// one of its own under another name, as the pickle named them (`Loaded::declared_names`).
+    pub sig_bound_names: Option<Vec<(ClassId, PkgId, Name)>>,
     /// In a secondary constructor of a class nested in a class: that class and the
     /// constructor's outer parameter, which stands for its `this` there (`outer_this_sym`).
     pub ctor_outer: Option<(ClassId, SymId)>,
@@ -1076,10 +1079,16 @@ pub struct Worker<'a> {
     /// Opaque types whose definition is visible in the current environment.
     pub transparent: Vec<ClassId>,
     /// The values `erasedValue` made, each with where it was called (the outermost inline call
-    /// that expanded it): one a unit's trees still hold when typed is used, which scalac's
+    /// that expanded it) and where the inlined code holds it (the innermost body's call of
+    /// `erasedValue`): one a unit's trees still hold when typed is used, which scalac's
     /// `Erasure.checkNotErased` rejects (`Worker::report_erased_values`).
-    pub erased_values: Vec<(crate::tir::TExprId, FileId, Span)>,
+    pub erased_values: Vec<(crate::tir::TExprId, FileId, Span, Option<(FileId, Span)>)>,
     pub file_opaques: crate::arena::FileVec<Vec<ClassId>>,
+    /// The module classes `Desugar.packageDef` makes of a file's top-level definitions that are
+    /// no class, one per package they stand in (`<file>$package`), by file and package: made by
+    /// the namer (`enter_file_modules`), and for another module's products the object the loader
+    /// read; reflection and the writer take them from here (`file_module`).
+    pub file_modules: std::sync::Arc<crate::arena::SharedMap<(u32, u32), ClassId>>,
     /// The runtime versions of a jar's inline overrides, as scalac retained them for dispatch.
     pub retained_bodies: crate::arena::Layered<SymId, crate::ast::ExprId>,
     /// The bodies of the program's inline methods typed at their definitions
@@ -1645,6 +1654,9 @@ pub struct Worker<'a> {
     /// The files of sealed std classes completed inside another completion, whose classes
     /// complete once the outermost is done.
     pub sealed_std_files: Vec<FileId>,
+    /// The companions of sealed classes whose `Mirror.Sum` parent waits for the outermost
+    /// completion (`set_deferred_mirror_parent`), with their written parents; in progress until then.
+    pub pending_mirror_parents: Vec<(ClassId, Vec<(TypeId, Span)>)>,
     /// The first overload set of the std files entered, or the std classes completed, after the
     /// final passes, whose sets and unsettled entries are named once no completion is under way.
     pub late_naming_from: Option<usize>,
@@ -2533,6 +2545,7 @@ impl<'a> Worker<'a> {
             infix_declared: None,
             direct_ext_targs: false,
             ctor_prefix: None,
+            sig_bound_names: None,
             ctor_outer: None,
             copy_application: false,
             case_scrutinee: None,
@@ -2559,6 +2572,7 @@ impl<'a> Worker<'a> {
             transparent: Vec::new(),
             erased_values: Vec::new(),
             file_opaques: crate::arena::FileVec::from_vec(vec![Vec::new(); n_files]),
+            file_modules: std::sync::Arc::new(crate::arena::SharedMap::new()),
             retained_bodies: Default::default(),
             inline_definitions: Default::default(),
             superseded_definitions: Vec::new(),
@@ -2757,6 +2771,7 @@ impl<'a> Worker<'a> {
             bound_path: Vec::new(),
             array_seq_asked: false,
             sealed_std_files: Vec::new(),
+            pending_mirror_parents: Vec::new(),
             late_naming_from: None,
             dep_depth: 0,
             lookups: Vec::new(),
@@ -2916,6 +2931,7 @@ impl<'a> Worker<'a> {
             infix_declared: None,
             direct_ext_targs: Default::default(),
             ctor_prefix: None,
+            sig_bound_names: None,
             ctor_outer: None,
             copy_application: false,
             case_scrutinee: None,
@@ -2942,6 +2958,7 @@ impl<'a> Worker<'a> {
             transparent: Default::default(),
             erased_values: Vec::new(),
             file_opaques: self.file_opaques.attach(worker),
+            file_modules: self.file_modules.clone(),
             retained_bodies: self.retained_bodies.attach(),
             inline_definitions: self.inline_definitions.attach(),
             superseded_definitions: Vec::new(),
@@ -3134,6 +3151,7 @@ impl<'a> Worker<'a> {
             bound_path: Vec::new(),
             array_seq_asked: Default::default(),
             sealed_std_files: Default::default(),
+            pending_mirror_parents: Default::default(),
             late_naming_from: Default::default(),
             dep_depth: Default::default(),
             body_depth: Default::default(),
@@ -3327,6 +3345,11 @@ impl<'a> Worker<'a> {
         }
         let r = f(self);
         if outermost {
+            // A shared class's mirror parent left pending by a completion under the lock is
+            // decided in the same hold, its claim never outliving the lock (`complete_class_uncompleted`).
+            if !self.pending_mirror_parents.is_empty() {
+                self.complete_pending_shared_mirror_parents();
+            }
             // Releasing is charged to its category up to the hold's end, the unlock included.
             let _measured = crate::measure::hold_for(crate::measure::Hold::Release);
             self.lock_released();
@@ -4141,12 +4164,6 @@ impl<'a> Worker<'a> {
         self.syms.product_callee_sources = loaded.product_callee_sources.clone();
         self.syms.product_synthetics = loaded.product_synthetics.clone();
         self.syms.product_class_places = loaded.product_class_places.clone();
-        for &(s, c) in &loaded.product_mirror_vals {
-            let f = self.syms.class(c).file;
-            if loaded.product_files.contains_key(&f) {
-                self.syms.sym_mut(s).file = f;
-            }
-        }
         self.syms.file_ranks = ranks;
     }
 

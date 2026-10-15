@@ -2448,7 +2448,7 @@ impl<'a> Emitter<'a> {
         let defers_body = extended && self.has_body[tc.id.idx()];
         let runs_body = (body_above || defers_body) && info.mods & mods::ABSTRACT == 0;
         // The val of a companion the typer made that nothing reads is no initialiser.
-        let unread_companion = |s: SymId| crate::tir::is_made_companion_val(self.syms, s) && !self.reach.fields_read[s.idx()] && !self.reach.init_read[s.idx()];
+        let unread_companion = |s: SymId| crate::tir::is_desugared_companion_val(self.syms, s) && !self.reach.fields_read[s.idx()] && !self.reach.init_read[s.idx()];
         let initialised = tc.init.iter().any(|i| !matches!(*i, TInit::Field(s, _) if unread_companion(s)));
         let needs_ctor = if is_trait {
             tc.init.iter().any(|i| match i {
@@ -2738,8 +2738,8 @@ impl<'a> Emitter<'a> {
             if self.syms.sym(*sym).mods & mods::LAZY == 0 {
                 continue;
             }
-            // The val of a companion the typer made, which nothing reads (`is_made_companion_val`).
-            if crate::tir::is_made_companion_val(self.syms, *sym) && !self.reach.fields_read[sym.idx()] && !self.reach.init_read[sym.idx()] {
+            // The val of a companion the typer made, which nothing reads (`is_desugared_companion_val`).
+            if crate::tir::is_desugared_companion_val(self.syms, *sym) && !self.reach.fields_read[sym.idx()] && !self.reach.init_read[sym.idx()] {
                 continue;
             }
             if let Some(k) = self.given_module_of(*sym) {
@@ -2774,8 +2774,15 @@ impl<'a> Emitter<'a> {
             }
             self.emit_method_getters(m, &methods);
         }
+        // A companion's mirror members, after its body (`SyntheticMembers.addMirrorSupport`).
+        for &m in tc.mirror_members() {
+            if self.reach.funs[m.idx()] {
+                self.emit_function(m, FunKind::Method);
+            }
+        }
         self.emit_ctor_getters(idx);
-        self.emit_object_members(tc.id);
+        let own_to_string = methods.iter().any(|&m| self.reach.funs[m.idx()] && self.syms.sym(prog.funs[m.idx()].sym).name == crate::names::TO_STRING);
+        self.emit_object_members(tc.id, own_to_string);
         self.emit_bridges(tc);
         self.emit_reflective_proxies(tc);
         self.emit_super_accessors(tc);
@@ -2891,13 +2898,21 @@ impl<'a> Emitter<'a> {
 
     /// A nested object that implements a member of a parent trait is reached the way the trait
     /// declared it: as a property for a `val`, through a method for a `def`.
-    fn emit_object_members(&mut self, c: ClassId) {
+    fn emit_object_members(&mut self, c: ClassId, own_to_string: bool) {
         for (declared, nested) in implemented_nested_objects(self.syms, c) {
             let js = self.sym_name(declared);
             let accessor = self.module_accessor(nested);
             let form = if self.syms.sym(declared).kind == SymKind::Def { "" } else { "get " };
             self.line();
             let _ = write!(self.out, "{}{}() {{ return {}(); }}", form, js, accessor);
+        }
+        // The `toString` `Desugar.classDef` gives the companion it makes for a case class, where
+        // the companion's body does not define it already (`case_companion_to_string`).
+        if let Some(k) = synthetic_case_companion_of(self.syms, c).filter(|_| !own_to_string) {
+            self.line();
+            self.out.push_str("toString() { return ");
+            js_string(self.interner.get(self.syms.class(k).name), &mut self.out);
+            self.out.push_str("; }");
         }
     }
 
@@ -3309,6 +3324,9 @@ impl<'a> Emitter<'a> {
         self.out.push_str(");");
         if Some(tc.id) == self.reach.product {
             let _ = write!(self.out, " $productBase({});", name);
+        }
+        if Some(tc.id) == self.reach.singleton {
+            let _ = write!(self.out, " $singletonBase({});", name);
         }
         // Where the superclass's chain has the member the rule would make (`existingDef`), the
         // inherited one shows: the registration copies the shape's when that chain is not linked
@@ -3748,4 +3766,14 @@ fn module_of_callee(syms: &Symbols, file_modules: &[usize], callee: SymId) -> us
     let of_file = |f: FileId| file_modules.get(f.0 as usize).copied().unwrap_or(0);
     let Some(&source) = syms.product_callee_sources.get(&callee) else { return of_file(syms.sym(callee).file) };
     syms.product_files.iter().filter(|&(_, &s)| s == source).map(|(&f, _)| f).min().map_or_else(|| of_file(syms.sym(callee).file), of_file)
+}
+
+/// The case class whose companion `c` is, where `Desugar.classDef` made it (`ClassInfo
+/// ::synthetic_companion`): the object prints the class's name.
+pub(crate) fn synthetic_case_companion_of(syms: &Symbols, c: ClassId) -> Option<ClassId> {
+    let info = syms.class(c);
+    if !info.synthetic_companion {
+        return None;
+    }
+    info.companion.filter(|&k| syms.class(k).mods & mods::CASE != 0)
 }

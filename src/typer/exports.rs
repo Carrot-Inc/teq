@@ -787,11 +787,12 @@ impl<'a> Worker<'a> {
         if info.parents.is_empty() {
             return true;
         }
-        if info.kind == ClassKind::Object {
-            return false;
-        }
-        // The parents `Desugar.classDef` gives, last (`desugared_parents`), export nothing.
+        // The parents `Desugar.classDef` gives, last (`desugared_parents`), export nothing, and
+        // an object of none else (a case class's companion, its mirror parent aside) inherits none.
         let written = info.parents.len() - (info.desugared_parents as usize).min(info.parents.len());
+        if info.kind == ClassKind::Object {
+            return written == 0;
+        }
         info.parents[..written].iter().all(|&parent| match self.types.get(parent) {
             Type::Class(pc, _) => matches!(self.class_exports.get(&pc), Some(ExportSlot::Empty)),
             _ => true,
@@ -1584,15 +1585,23 @@ impl<'a> Worker<'a> {
             self.complete_class(c);
         }
         if let Some(info) = self.syms.class_done(c) {
-            return info
+            // The mirror parents among the desugared ones are `SyntheticMembers.addMirrorSupport`'s,
+            // which `PostTyper` adds after `Namer` made the forwarders: no export sees what they give
+            // (`ordinal`, `MirroredMonoType`); `Desugar.classDef`'s are there already.
+            let desugared_from = info.parents.len() - (info.desugared_parents as usize).min(info.parents.len());
+            let parents: Vec<ClassId> = info
                 .parents
                 .iter()
-                .filter_map(|&t| match self.types.get(t) {
-                    Type::Class(pc, _) => Some(pc),
-                    Type::Nested(_, class) => self.types.named_class(class),
+                .enumerate()
+                .filter_map(|(i, &t)| match self.types.get(t) {
+                    Type::Class(pc, _) => Some((i, pc)),
+                    Type::Nested(_, class) => self.types.named_class(class).map(|pc| (i, pc)),
                     _ => None,
                 })
+                .filter(|&(i, pc)| i < desugared_from || !self.is_mirror_class(pc))
+                .map(|(_, pc)| pc)
                 .collect();
+            return parents;
         }
         let info = self.syms.class(c);
         let (file, owner, span) = (info.file, info.owner, info.span);

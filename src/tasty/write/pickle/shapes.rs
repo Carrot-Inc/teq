@@ -265,10 +265,53 @@ impl<'w, 'a> P<'w, 'a> {
             }
         }
         let sig = self.member_signature_now(s);
+        let sig = if self.w.in_jar(file) { sig.map(|sig| sig.map(|sig| self.declared_signature(s, sig))) } else { sig };
         if library {
             self.index.library_signatures.borrow_mut().insert(s, sig.clone());
         }
         sig
+    }
+
+    /// The signature of the jar member `s` as its declaration has it: a class the lean std binds
+    /// several library names to (`STD_BINDINGS`) under the name the jar's pickle gave the member
+    /// (`Loaded::declared_names`), not the inverse's choice, as `TreePickler` 487–508 writes the
+    /// selected declaration's own signature.
+    fn declared_signature(&mut self, s: SymId, (params, result): (Vec<SigParam>, String)) -> (Vec<SigParam>, String) {
+        let Some(loaded) = self.w.loaded.as_ref() else { return (params, result) };
+        if loaded.declared_names.is_empty() {
+            return (params, result);
+        }
+        // The positions in the signature's order: each clause's parameters, then the result.
+        let sig = self.w.sig_of(s);
+        let keys: Vec<SymId> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
+        let declared_at = |w: &crate::typer::Worker, key: SymId| -> Option<(String, String)> {
+            let &(c, p, n) = w.loaded.as_ref()?.declared_names.get(&key)?;
+            let pkg = super::pkg_path_of(w, p);
+            let declared = if pkg.is_empty() { w.interner.get(n).to_string() } else { format!("{}.{}", pkg, w.interner.get(n)) };
+            Some((super::scala_name(w, c), declared))
+        };
+        let rename = |t: &str, at: Option<(String, String)>| -> String {
+            let dims = t.len() - t.trim_start_matches('[').len();
+            let (prefix, rest) = t.split_at(dims);
+            match at {
+                Some((written, declared)) if written == rest => format!("{}{}", prefix, declared),
+                _ => t.to_string(),
+            }
+        };
+        let mut position = 0;
+        let params = params
+            .into_iter()
+            .map(|p| match p {
+                SigParam::Type(t) => {
+                    let at = keys.get(position).and_then(|&k| declared_at(self.w, k));
+                    position += 1;
+                    SigParam::Type(rename(&t, at))
+                }
+                other => other,
+            })
+            .collect();
+        let at = declared_at(self.w, s);
+        (params, rename(&result, at))
     }
 
     fn member_signature_now(&mut self, s: SymId) -> Result<Option<(Vec<SigParam>, String)>, String> {

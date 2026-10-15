@@ -1,6 +1,5 @@
 ledgerreceiver classes  an expansion of the upstream's inline methods over the products makes its anonymous classes and the upstream file's `$package` holder where the whole build places them otherwise (`$anon$<site>` names, `Lib$package` owned by a module that does not write it): the origins of an expansion's classes (kind 2), the products part's follow-up
 ledgerreceiver subset  the same
-ledgerreceiver bundle  the same
 macroquote scalac-b  scalac's compilation of the downstream expands the upstream's macros by calling their implementations in teq's class files, which do not have them (`Could not find method mqa.Mac$.twiceImpl with parameters (class scala.quoted.Expr, interface scala.quoted.Quotes)`): the JVM backend emitting the quoted layer's run-time calls (`QuoteUnpickler.unpickleExprV2` of each quote's pickled body), queued
 macroquote scalac-run  the same: scalac compiles no downstream to run
 macropattern scalac-b  the same as macroquote: scalac's compilation of the downstream calls the macros' implementations in teq's class files, which do not have them: the JVM backend emitting the quoted layer's run-time calls (`QuoteMatching.ExprMatch.unapply` of each pattern's pickled body), queued

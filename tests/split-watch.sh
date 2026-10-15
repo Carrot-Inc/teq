@@ -257,6 +257,28 @@ kept_step Main.scala "a comment inserted after they were" true
 stop
 rm -rf "$work/out"
 
+# The anonymous classes JavaScript writes as arrow functions are those no reached test tells apart
+# (`Layout::lower_closures`, `Reach::tested_traits`): a summon that reaches an unreached case
+# class's `fromProduct`, whose cast tests `java.io.Serializable`, makes Magnolia's thunks classes
+# again, and taking it out makes them arrows; each build is a fresh one's.
+src=$work/closure_tested_trait
+cp -r tests/split/closure_tested_trait "$src"
+start "$src" --split "$work/out"
+expect "closure_tested_trait: first build" "$(field ok),$(cat "$work/out"/*.mjs | grep -c 'callable(\$f')" 'true,0'
+same_as_fresh "closure_tested_trait: first build" "$src"
+cp "$src/Main.scala" "$src/Main.orig"
+sed -i.bak 's|println(summon\[Record\[Address\]\].render(address))|&; println(summon[Mirror.ProductOf[Unreached]].fromProduct(("u", Kind.Plain, true)))|' "$src/Main.scala"
+build "$src/Main.scala"
+expect "closure_tested_trait: the cast reached" "$(field ok),$(cat "$work/out"/*.mjs | grep -c 'callable(\$f')" 'true,14'
+same_as_fresh "closure_tested_trait: the cast reached" "$src"
+expect "closure_tested_trait: the cast reached runs" "$(timeout 20 node "$work/out/main.mjs" | sed -n 2p)" 'Unreached(u,Plain,true)'
+cp "$src/Main.orig" "$src/Main.scala"
+build "$src/Main.scala"
+expect "closure_tested_trait: the cast taken out" "$(field ok),$(cat "$work/out"/*.mjs | grep -c 'callable(\$f')" 'true,0'
+same_as_fresh "closure_tested_trait: the cast taken out" "$src"
+stop
+rm -rf "$work/out"
+
 # What a retype adds outside its units (`Kept::added_outside`): a macro whose run takes a path the
 # first build's did not and types std bodies (`toList`, `count`) that no walk asks for keeps the
 # reach, which a walk from the roots would not meet either.

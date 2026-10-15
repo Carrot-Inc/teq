@@ -50,6 +50,9 @@ pub(super) enum Synth {
     FromOrdinal(ClassId),
     /// `x$0.ordinal`: the companion's `ordinal` of its mirror, by the enum.
     SelectOrdinal(ClassId),
+    /// `(x$0: @unchecked) match { case _: C1 => 0; .. }`: a sealed class's companion's `ordinal`
+    /// of its mirror (`SyntheticMembers.ordinalBody`), by the class.
+    SumOrdinal(ClassId),
     /// `$new(_$ordinal, $name)` of an enum of values: the instance of an anonymous subclass
     /// whose members answer the two.
     EnumNew(ClassId),
@@ -204,6 +207,7 @@ impl<'w, 'a> P<'w, 'a> {
             Synth::EnumValueOf(e) => self.enum_value_of(e, params[0]),
             Synth::FromOrdinal(e) => self.from_ordinal(e, params[0]),
             Synth::SelectOrdinal(e) => self.ordinal_of(e, |p| p.param_ref(params[0])),
+            Synth::SumOrdinal(k) => self.sum_ordinal(k, params[0]),
             Synth::Int(i) => self.int_literal(i),
             Synth::JsNative => {
                 self.term_at(None);
@@ -667,6 +671,38 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// `productElement` and `productElementName`: `n match { case i => this._{i+1} | "name";
     /// case _ => throw new IndexOutOfBoundsException(n.toString()) }`.
+    /// `(x$0: x$0.type @unchecked) match { case _: C => i; .. }` over the children of the sealed
+    /// class `k` in its mirror's order (`SyntheticMembers.ordinalBody`).
+    fn sum_ordinal(&mut self, k: ClassId, x0: usize) {
+        let children = self.w.sum_mirror_children(k);
+        self.term_at(None);
+        let m = self.open_tree(MATCH);
+        self.term_at(None);
+        let t = self.open_tree(TYPED);
+        self.param_ref(x0);
+        self.mark_tree();
+        self.buf.byte(ANNOTATEDTYPE);
+        let l = self.buf.begin_length();
+        self.buf.byte(TERMREFDIRECT);
+        self.buf.reference(x0);
+        self.annotation_tree("scala", "unchecked");
+        self.buf.end_length(l);
+        self.buf.end_length(t);
+        for (i, child) in children.into_iter().enumerate() {
+            self.term_at(None);
+            let cd = self.open_tree(CASEDEF);
+            let pat = self.w.mirror_child_type(child);
+            self.term_at(None);
+            let tp = self.open_tree(TYPED);
+            self.wildcard(pat);
+            self.tpt(pat);
+            self.buf.end_length(tp);
+            self.int_literal(i as i32);
+            self.buf.end_length(cd);
+        }
+        self.buf.end_length(m);
+    }
+
     fn product_match(&mut self, c: ClassId, n: usize, names: bool) {
         let fields = self.case_fields(c);
         self.term_at(None);

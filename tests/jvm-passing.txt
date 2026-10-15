@@ -178,6 +178,7 @@ case_clause_trailing_bar
 case_clause_union_type_in_parens
 case_companion_nested
 case_companion_value
+case_companion_written_or_not
 case_copy_clauses
 case_copy_nested
 case_empty_body
@@ -265,6 +266,7 @@ companion_apply_default_replace
 companion_apply_unqualified
 companion_as_function
 companion_init_order
+companion_mirror_order
 companion_ref_quoted_class
 comparable_boxes
 concat_order
@@ -386,6 +388,7 @@ empty_args_ext_apply
 empty_args_given_apply
 empty_failures
 end_markers
+enum_case_companion_mirror
 enum_case_defaults
 enum_case_given_through_object
 enum_cases
@@ -406,6 +409,7 @@ enum_reference
 enum_secondary_ctor
 enum_settings
 enum_usage
+enum_value_singleton_test
 enumvalues
 equality_default
 equals_trait
@@ -414,6 +418,7 @@ erased_union_bound
 erasure_shapes
 eta_by_name_inferred
 eta_expected_parameter_conversion
+eta_nested_companion_apply
 eta_sam_conversion
 eta_sam_widening
 eta_underscore_typevars
@@ -582,6 +587,7 @@ given_deferred_own_marker
 given_deferred_scope
 given_deferred_site
 given_dependent_members
+given_enum_value_singleton_head
 given_export_by_givenness
 given_extension_context_chain
 given_extension_levels
@@ -854,6 +860,7 @@ inline_reduce_local_value
 inline_retained
 inline_retained_match
 inline_retained_match_effects
+inline_self_member
 inline_substitution_anon_parent_args
 inline_substitution_case_binder_scope
 inline_substitution_class_alias
@@ -891,6 +898,7 @@ inline_summon_from_guards
 inline_this_receiver
 inline_tuples
 inline_type_test_null
+inline_unused_effectful_argument
 inline_val_expansion_check
 inline_val_pure_path
 inner_class_creators
@@ -991,6 +999,7 @@ literal_union_members
 local_alias_after_path
 local_alias_path
 local_case_classes
+local_case_companion
 local_class_capture_body
 local_class_trait_capture
 local_class_trait_reads
@@ -1005,6 +1014,7 @@ local_imports_blocks
 local_imports_members
 local_lazy_forward
 local_lazy_val_return
+local_object_case_companion
 local_object_import
 local_objects
 local_trait_captures
@@ -1061,6 +1071,8 @@ macro_derivation
 macro_enum_case_type_ref
 macro_environment
 macro_evidence_refl
+macro_file_module_class
+macro_file_module_identity
 macro_fresh_names
 macro_fresh_nested_site
 macro_heal_types
@@ -1181,14 +1193,23 @@ member_retry_matrix
 member_retry_splice
 member_retry_transparent
 memberaliases
+mirror_declared_parent_interfaces
 mirror_declared_type
 mirror_derives
 mirror_from_product_typed
 mirror_from_tuple_extension
 mirror_from_tuple_refined
+mirror_mono_abstract
+mirror_mono_inherited
+mirror_mono_written
+mirror_nested_companion_path
+mirror_parent_after_typer
 mirror_private_ctor
 mirror_refined_alias
+mirror_singleton_identity
 mirror_unchecked_members
+mirror_within_companion
+mirror_written_from_product
 mkstring
 module_init
 module_serializable
@@ -1211,6 +1232,7 @@ names_parsed_on_threads
 nan_comparisons
 negative_literal_space
 nested_accessor_temps
+nested_case_companion_value
 nested_case_object_identity
 nested_class_ctor_defaults
 nested_class_inherited
@@ -1586,6 +1608,7 @@ scala3_t8893
 scala3_transparentByName
 scala3_tryPatternMatch
 scala3_tuple-deconstruct-wildcard-sideeffect
+scala3_typeclass-derivation3
 scala3_unions
 scala3_view-headoption
 scala3_virtpatmat_alts

@@ -1,0 +1,8 @@
+street="Main St", number=12, note=-
+name="Ada", age=36, active=yes, address=Address(street="Main St", number=12, note=-), tags=["a", "b"]
+id="o-1", count=3, items=["pen"], gift=no, note="fragile", recipient="Bob"
+code="W1", capacity=500, open=yes, manager="Cy", zones=[1, 2], note=-, count=7
+order="o-1", warehouse="W1", boxes=2, express=yes, tags=[], note=-, count=0, weight=15
+id:none count:1 items:none gift:none note:none recipient:none
+code:none capacity:none open:none manager:none zones:none note:none count:1
+order:none warehouse:none boxes:none express:none tags:List(x) note:none count:1 weight:none
