@@ -1,0 +1,2 @@
+javaparentfirst/Main$ throughJava: invokevirtual bridge/JavaReceiver.hello:()I
+javaparentfirst/Main$ throughTrait: invokeinterface bridge/Trait.hello:()I

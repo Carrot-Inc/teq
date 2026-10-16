@@ -3275,6 +3275,9 @@ impl<'a> Worker<'a> {
             }
         }
         self.check_overrides(c);
+        if self.jvm && kind != ClassKind::Trait {
+            self.complete_forwarded_members(c);
+        }
         self.check_variances(c);
         if !matches!(kind, ClassKind::Trait | ClassKind::Enum) && def.mods & mods::ABSTRACT == 0 && !self.is_body_file(file) && !self.syms.class(c).parent_failed {
             let implemented = tclass.synthesized | self.enum_value_parent_members(c) | self.inherited_synthesized(c);
@@ -4782,6 +4785,31 @@ impl<'a> Worker<'a> {
     /// comparisons run outside it, where a signature another worker holds is waited for.
     fn check_overrides(&mut self, c: ClassId) {
         self.check_overrides_unlocked(c)
+    }
+
+    /// Completes the signatures of the members of `Object`'s names `c`'s bases declare, which
+    /// nothing may have called: the JVM's mixin forwarders of them in `c` are chosen and bridged
+    /// by their types before erasure (`Gen::object_method_forwarders`, dotty's
+    /// `MixinOps.needsMixinForwarder` and `Bridges.addBridgeIfNeeded`), a polymorphic
+    /// `clone[A]()` overriding no `Object.clone()`.
+    fn complete_forwarded_members(&mut self, c: ClassId) {
+        let bases: Vec<ClassId> = self.syms.class(c).base_types[1..].iter().map(|&(b, _)| b).collect();
+        let finalize = self.interner.lookup("finalize");
+        let names: Vec<Name> = [names::TO_STRING, names::HASH_CODE, names::EQUALS, names::CLONE].into_iter().chain(finalize).collect();
+        for b in bases {
+            for &name in &names {
+                let Some(&m) = self.syms.class(b).members.get(&name) else { continue };
+                let alternatives: Vec<SymId> = match self.syms.alternatives(m) {
+                    Some(alts) => alts.to_vec(),
+                    None => vec![m],
+                };
+                for a in alternatives {
+                    if self.syms.sym(a).owner == Owner::Class(b) {
+                        self.sig_of(a);
+                    }
+                }
+            }
+        }
     }
 
     /// Decides again, from the flags every body left, what the override checks decided from

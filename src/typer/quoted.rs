@@ -2304,6 +2304,36 @@ impl<'c> Copier<'c> {
         }
     }
 
+    /// What stands for the ascribed parameter's read `e` (the record's node `node`, its recorded
+    /// type `recorded`, the ascription's) once the copy `id` of what fills the parameter takes its
+    /// place: `id` where it erases as the ascription does; else, on the JVM, the ascription kept as
+    /// a node of its own over it, of the ascribed type, as dotty's inliner keeps the `Typed` tree
+    /// around the argument it puts for the parameter (`InlinerMap`) and `Erasure.typedTyped`
+    /// erases it to its target: `(x: Mid).f()` of an argument that is a `Leaf` names `Mid.f`. The
+    /// typing keeps a pending call's expansion of another type alike (`Worker::expand_pending`).
+    /// Only the JVM reads the mark (`Gen::qualifier_site`), so every other tree stays as it was.
+    fn kept_ascription(&mut self, t: &mut Worker, e: TExprId, node: Option<StoredNode>, recorded: Option<TypeId>, id: TExprId) -> TExprId {
+        use super::site::Erased;
+        let (Some(ty), true) = (recorded, t.jvm && t.prog.is_ascribed(e)) else { return id };
+        let ty = match node {
+            Some(n) if n.has(StoredNode::CLOSED) => t.types.import(ty),
+            _ => self.ty(t, ty),
+        };
+        let Some(own) = self.copy_type(t, id) else { return id };
+        if own == ty || own == ERROR || ty == ERROR {
+            return id;
+        }
+        let (to, from) = (t.cast_erasure(ty), t.cast_erasure(own));
+        if to == from || !matches!(to, Erased::Of(c, 0) if !t.is_primitive_class(c)) {
+            return id;
+        }
+        let kept = t.prog.add(TExpr::Block(crate::ast::ListRef::EMPTY, id));
+        self.set_copy_type(t, kept, ty);
+        t.prog.copy_span(e, kept);
+        t.prog.mark_ascribed(kept);
+        kept
+    }
+
     /// The type of a copy: the program's where it keeps types, the map's for a stored body.
     fn copy_type(&self, t: &Worker, id: TExprId) -> Option<TypeId> {
         match &self.map {
@@ -3168,7 +3198,7 @@ impl<'c> Copier<'c> {
                     if t.capturing() {
                         self.put_for(t, e, filled, id);
                     }
-                    return id;
+                    return self.kept_ascription(t, e, node, recorded, id);
                 }
                 let s = self.sym(s);
                 self.note_local(s);
@@ -3465,6 +3495,11 @@ impl<'c> Copier<'c> {
         t.prog.copy_span(e, id);
         if t.prog.is_setter_assign(e) {
             t.prog.mark_setter_assign(id);
+        }
+        // An ascription stays one in every copy, a quote's too: erasure retains its type
+        // (`Program::ascribed_bits`), whatever the folding marks a quote's copy leaves.
+        if t.prog.is_ascribed(e) {
+            t.prog.mark_ascribed(id);
         }
         if t.capturing() {
             self.captured(t, e, id);

@@ -1630,6 +1630,9 @@ impl<'a> Worker<'a> {
         if self.load_java_pkg_member(p, name) {
             return self.syms.pkg(p).entries.get(&name).and_then(|e| e.class);
         }
+        if let Some(c) = self.scala_pkg_class(p, name) {
+            return Some(c);
+        }
         if read {
             if let Some((source, cf)) = self.locate_java_class(p, text, true) {
                 return Some(self.enter_java_class(Owner::Package(p), Owner::Package(p), name, source, cf, None, 0));
@@ -1639,6 +1642,20 @@ impl<'a> Worker<'a> {
             return self.placeholder_class(p, name, arity);
         }
         None
+    }
+
+    /// The class `name` of the class path's package `p` that a Scala source of the jars defines,
+    /// entered by its loader, the TASTy one or Scala 2's: one class per name of the package,
+    /// whichever reference met it first, as dotty's `SymbolLoaders.initializeFromClassPath` reads
+    /// a class file beside its TASTy from the TASTy. A Java class's parent or signature naming a
+    /// Scala trait is that trait, never the empty placeholder the Java reader would leave of its
+    /// class file, which `locate_java_class` refuses.
+    fn scala_pkg_class(&mut self, p: PkgId, name: Name) -> Option<ClassId> {
+        self.loaded.as_ref()?.slot(p)?;
+        if !self.load_pkg_member(p, name) {
+            return None;
+        }
+        self.syms.pkg(p).entries.get(&name).and_then(|e| e.class)
     }
 }
 

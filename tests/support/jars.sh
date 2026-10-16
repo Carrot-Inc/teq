@@ -21,7 +21,16 @@
 # tests/support/predef_lib.scala compiled the same way; depfun-lib, tests/support/depfun_lib.scala
 # compiled the same way; inlinebodies-lib, tests/support/inline_bodies_lib.scala compiled the same way; view-lib, tests/support/view_lib.scala compiled the same way; nestedcompanion-lib,
 # tests/support/nestedcompanion_lib.scala compiled the same way; javareview-lib,
-# tests/support/javareview_lib.scala compiled the same way; companionmethod-lib,
+# tests/support/javareview_lib.scala compiled the same way; hiddenowner-lib, tests/support/hidden_owner/hidden's
+# Java sources compiled by the javac at hand under --release 17 (JAVAC, else JAVA_HOME's, else PATH's), and
+# bridgetrait-lib, tests/support/hidden_owner/bridge's Scala trait compiled by scalac with its Java class compiled
+# against it by that javac; inlineabi-v1 and inlineabi-v2, tests/support/hidden_owner/inlineabi's two versions
+# compiled by that javac; throwsclone-lib, tests/support/hidden_owner/throwsclone compiled by scalac;
+# javadefault-lib, tests/support/hidden_owner/javadefault's Java sources compiled by that javac, and
+# genericclone-lib, polyclone-lib, mixedclone-lib and privateclone-lib, tests/support/hidden_owner's
+# genericclone, polyclone, mixedclone and privateclone traits compiled by scalac, and parammeta-lib, its trait
+# and Java annotation compiled by scalac, each but mixedclone's with
+# <name>-scalac, the directory's Use.scala compiled by scalac against it; companionmethod-lib,
 # tests/support/companion_method_lib.scala compiled the same way; regroup-a1, regroup-a2 and regroup-b,
 # tests/support/regroup/ compiled the same way, b against a1; lazyval-lib, tests/support/lazyval_lib.scala
 # compiled the same way; bodycasts-lib, tests/support/body_casts_lib.scala compiled the same way; extend-lib,
@@ -167,6 +176,139 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
     for f in sorted(os.listdir('tests/classfile/fixtures/fix')):
         z.write(os.path.join('tests/classfile/fixtures/fix', f), 'fix/' + f)
 PY
+  echo "$jar"
+}
+# The javac the Java fixtures are compiled by under --release 17, as tests/runner-classes.sh takes it.
+fixture_javac=${JAVAC:-${JAVA_HOME:+$JAVA_HOME/bin/}javac}
+# The class files and TASTy files under a directory as a jar, in a stable order.
+dir_jar() {
+  python3 - "$1" "$2" <<'PY'
+import os, sys, zipfile
+with zipfile.ZipFile(sys.argv[2], 'w', zipfile.ZIP_DEFLATED) as z:
+    for top, dirs, files in os.walk(sys.argv[1]):
+        dirs.sort()
+        for f in sorted(files):
+            if f.endswith('.class') or f.endswith('.tasty'):
+                path = os.path.join(top, f)
+                z.write(path, os.path.relpath(path, sys.argv[1]))
+PY
+}
+# tests/support/hidden_owner/hidden compiled by javac into a jar: a package-private class whose public members
+# a public subclass inherits, reached from another package through the subclass alone.
+hidden_owner_jar() {
+  local src=tests/support/hidden_owner/hidden
+  local jar=$scratch-hiddenowner-lib.jar
+  local work=$scratch-hiddenowner-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
+    rm -rf "$work" && mkdir -p "$work"
+    timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/*.java > /dev/null 2>&1 \
+      && dir_jar "$work" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/hidden_owner/bridge as a jar: a Scala trait compiled by scalac, its class file and TASTy, and a
+# Java class implementing it compiled by javac against them.
+bridge_trait_jar() {
+  local src=tests/support/hidden_owner/bridge
+  local jar=$scratch-bridgetrait-lib.jar
+  local work=$scratch-bridgetrait-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java' -o -newer "$jar" -name '*.scala')" ]; then
+    rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
+    cp "$src/Trait.scala" "$work/src/"
+    timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws" -d "$work/classes" "$work/src/Trait.scala" > /dev/null 2>&1 \
+      && timeout 120 "$fixture_javac" --release 17 -nowarn -cp "$work/classes:$(scala_library_jar)" -d "$work/classes" "$src/JavaReceiver.java" > /dev/null 2>&1 \
+      && dir_jar "$work/classes" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/hidden_owner/inlineabi/<version> compiled by javac into a jar: a package-private class under a
+# public one that inherits a member (v1) or declares it (v2), for a client built against v1 and run on v2.
+inline_abi_jar() {
+  local src=tests/support/hidden_owner/inlineabi/$1
+  local jar=$scratch-inlineabi-$1.jar
+  local work=$scratch-inlineabi-$1.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
+    rm -rf "$work" && mkdir -p "$work"
+    timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/inlineabi/*.java > /dev/null 2>&1 \
+      && dir_jar "$work" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/hidden_owner/throwsclone's Scala trait compiled by scalac into a jar, its class file and TASTy.
+throws_clone_jar() {
+  local src=tests/support/hidden_owner/throwsclone
+  local jar=$scratch-throwsclone-lib.jar
+  local work=$scratch-throwsclone-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.scala')" ]; then
+    rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
+    cp "$src/ThrowsClone.scala" "$work/src/"
+    timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws" -d "$work/classes" "$work/src/ThrowsClone.scala" > /dev/null 2>&1 \
+      && dir_jar "$work/classes" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/hidden_owner/javadefault's Java interface and annotation compiled by javac into a jar.
+java_default_jar() {
+  local src=tests/support/hidden_owner/javadefault
+  local jar=$scratch-javadefault-lib.jar
+  local work=$scratch-javadefault-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
+    rm -rf "$work" && mkdir -p "$work"
+    timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/jann/*.java > /dev/null 2>&1 \
+      && dir_jar "$work" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/hidden_owner/<name>'s trait G.scala compiled by scalac into a jar, its class file and TASTy.
+scalac_trait_jar() {
+  local src=tests/support/hidden_owner/$1
+  local jar=$scratch-$1-lib.jar
+  local work=$scratch-$1-lib.$$
+  if [ ! -f "$jar" ] || [ "$src/G.scala" -nt "$jar" ]; then
+    rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
+    cp "$src/G.scala" "$work/src/"
+    timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws" -d "$work/classes" "$work/src/G.scala" > /dev/null 2>&1 \
+      && dir_jar "$work/classes" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/hidden_owner/parammeta's Java annotation compiled by javac and its trait by scalac against it, into
+# one jar.
+param_meta_jar() {
+  local src=tests/support/hidden_owner/parammeta
+  local jar=$scratch-parammeta-lib.jar
+  local work=$scratch-parammeta-lib.$$
+  if [ ! -f "$jar" ] || [ "$src/G.scala" -nt "$jar" ] || [ "$src/pm/Tag.java" -nt "$jar" ]; then
+    rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
+    cp "$src/G.scala" "$work/src/"
+    timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work/classes" "$src/pm/Tag.java" > /dev/null 2>&1 \
+      && timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws" --classpath "$work/classes" -d "$work/classes" "$work/src/G.scala" > /dev/null 2>&1 \
+      && dir_jar "$work/classes" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# The Use.scala of tests/support/hidden_owner/<name> compiled by scalac against the jar <lib> names, into a
+# jar: scalac's products of the class a teq build is compared with.
+scalac_use_jar() {
+  local name=$1 lib
+  lib=$(jar_of "$2")
+  local src=tests/support/hidden_owner/$name/Use.scala
+  local jar=$scratch-$name-scalac.jar
+  local work=$scratch-$name-scalac.$$
+  if [ -f "$lib" ] && { [ ! -f "$jar" ] || [ "$src" -nt "$jar" ] || [ "$lib" -nt "$jar" ]; }; then
+    rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
+    cp "$src" "$work/src/"
+    timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws" --jar "$lib" -d "$work/classes" "$work/src/Use.scala" > /dev/null 2>&1 \
+      && dir_jar "$work/classes" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
   echo "$jar"
 }
 # The scalac side of the ABI probes, compiled by scala-cli when missing or older than its source.
@@ -679,6 +821,22 @@ jar_of() {
     view-lib) view_lib_jar ;;
     nestedcompanion-lib) nestedcompanion_lib_jar ;;
     javareview-lib) javareview_lib_jar ;;
+    hiddenowner-lib) hidden_owner_jar ;;
+    bridgetrait-lib) bridge_trait_jar ;;
+    inlineabi-v1) inline_abi_jar v1 ;;
+    inlineabi-v2) inline_abi_jar v2 ;;
+    throwsclone-lib) throws_clone_jar ;;
+    javadefault-lib) java_default_jar ;;
+    javadefault-scalac) scalac_use_jar javadefault javadefault-lib ;;
+    genericclone-lib) scalac_trait_jar genericclone ;;
+    genericclone-scalac) scalac_use_jar genericclone genericclone-lib ;;
+    polyclone-lib) scalac_trait_jar polyclone ;;
+    polyclone-scalac) scalac_use_jar polyclone polyclone-lib ;;
+    mixedclone-lib) scalac_trait_jar mixedclone ;;
+    privateclone-lib) scalac_trait_jar privateclone ;;
+    privateclone-scalac) scalac_use_jar privateclone privateclone-lib ;;
+    parammeta-lib) param_meta_jar ;;
+    parammeta-scalac) scalac_use_jar parammeta parammeta-lib ;;
     companionmethod-lib) companion_method_lib_jar ;;
     lazyval-lib) lazyval_lib_jar ;;
     bodycasts-lib) bodycasts_lib_jar ;;

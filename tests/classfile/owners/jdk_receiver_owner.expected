@@ -1,0 +1,11 @@
+jdkowner/Main$ dequeEmpty: invokevirtual java/util/ArrayDeque.isEmpty:()Z
+jdkowner/Main$ linkedSize: invokevirtual java/util/LinkedHashMap.size:()I
+jdkowner/Main$ listEmpty: invokevirtual java/util/ArrayList.isEmpty:()Z
+jdkowner/Main$ listSize: invokevirtual java/util/ArrayList.size:()I
+jdkowner/Main$ listStream: invokevirtual java/util/ArrayList.stream:()Ljava/util/stream/Stream; invokeinterface java/util/stream/Stream.count:()J
+jdkowner/Main$ listString: invokevirtual java/util/ArrayList.toString:()Ljava/lang/String;
+jdkowner/Main$ mapDefault: invokevirtual java/util/HashMap.getOrDefault:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+jdkowner/Main$ message: invokevirtual java/lang/IllegalStateException.getMessage:()Ljava/lang/String;
+jdkowner/Main$ sbAppend: invokevirtual java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+jdkowner/Main$ sbChar: invokevirtual java/lang/StringBuilder.charAt:(I)C
+jdkowner/Main$ sbLength: invokevirtual java/lang/StringBuilder.length:()I

@@ -1930,6 +1930,10 @@ impl<'a> Worker<'a> {
             CastLowering::Same => {
                 *self.expr_marks.entry(recv).or_default() |= super::MARK_CAST | super::MARK_CALL | super::MARK_RETYPED;
                 self.end_chain(recv, t);
+                // The value is of the cast's erased target, as an ascription's: an upcast is one
+                // (`TypeTestsCasts.transformAsInstanceOf`: "Replace cast by type ascription"), and a
+                // cast a passed test leaves untested (`untested_lowering`) dotty's cast tree.
+                self.prog.mark_ascribed(recv);
                 if self.capturing() {
                     self.capture_wrap(recv, Wrap::Cast(t));
                 }
@@ -2127,7 +2131,7 @@ impl<'a> Worker<'a> {
 
     /// The erasure of a cast's type (`TypeErasure.erasure`, `bound_erasure`), `Object` where it has
     /// none.
-    fn cast_erasure(&mut self, t: TypeId) -> super::site::Erased {
+    pub(super) fn cast_erasure(&mut self, t: TypeId) -> super::site::Erased {
         self.bound_erasure(t, 0).unwrap_or(super::site::Erased::Of(self.b.any_ref, 0))
     }
 

@@ -1,0 +1,2 @@
+cloneforwarder/C clone$: invokespecial cloneforwarder/C.clone:()Ljava/lang/String;
+cloneforwarder/Main$ c: invokeinterface cloneforwarder/D.clone:()Ljava/lang/String;

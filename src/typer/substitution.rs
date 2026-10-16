@@ -1063,7 +1063,9 @@ impl<'a> Worker<'a> {
     fn walk(&mut self, w: &mut Walk, e: TExprId) -> TExprId {
         // A part the copy left, reached: copied now, the walk never writing into the stored body.
         let e = if w.demand.is_left(e) { self.demand_in_walk(w, e, None) } else { e };
-        let walked = self.walk_node(w, e);
+        // An ascription's type, before the walk gives the node its replacement's.
+        let ascription = self.prog.is_ascribed(e).then(|| self.walked_type(w, e));
+        let mut walked = self.walk_node(w, e);
         // Whatever the walk puts in a node's place (an argument for a parameter's read, a
         // by-name read's argument, the branch an `inline if` or `inline match` reduces to, a
         // kept call's expansion) stands for it where an ascription widened it, or it is a plain
@@ -1079,6 +1081,12 @@ impl<'a> Worker<'a> {
                 self.prog.mark_spread(walked);
             }
         }
+        // And an ascription stands over what the walk made of its expression, whether it put
+        // another node in its place or typed it anew (a call's result once its type arguments
+        // are known, a block's its result's).
+        if let Some(ascribed) = ascription {
+            walked = self.keep_ascription(w, e, ascribed, walked);
+        }
         if w.settling > 0 && walked != e {
             w.replaced.push((e, walked));
         }
@@ -1088,6 +1096,33 @@ impl<'a> Worker<'a> {
             w.kinds.mark(walked, CopyKinds::TREES);
         }
         walked
+    }
+
+    /// What stands for the ascribed `e`, of the ascription's type `ascribed`, once the walk put
+    /// `walked` in its place (an argument, a kept call's expansion, a reduced branch) or typed `e`
+    /// anew: `walked`, marked, where it erases as the ascription does; else, on the JVM, the
+    /// ascription as a node of its own over it, of the ascribed type, as dotty's inliner keeps the
+    /// `Typed` tree around what replaces its expression (`InlinerMap`) and `Erasure.typedTyped`
+    /// erases it to its target: `(x: Mid).f()` of an argument that is a `Leaf` names `Mid.f`. The
+    /// typing keeps a pending call's expansion of another type alike (`Worker::expand_pending`),
+    /// and the copy a parameter's read (`Copier::kept_ascription`). Only the JVM reads the mark
+    /// (`Gen::qualifier_site`); elsewhere the tree stays as it was.
+    fn keep_ascription(&mut self, w: &mut Walk, e: TExprId, ascribed: TypeId, walked: TExprId) -> TExprId {
+        use super::site::Erased;
+        let own = self.walked_type(w, walked);
+        let lost = self.jvm && ascribed != own && ascribed != ERROR && own != ERROR && {
+            let (to, from) = (self.cast_erasure(ascribed), self.cast_erasure(own));
+            to != from && matches!(to, Erased::Of(c, 0) if !self.is_primitive_class(c))
+        };
+        if !lost {
+            self.prog.mark_ascribed(walked);
+            return walked;
+        }
+        let kept = self.prog.add(TExpr::Block(crate::ast::ListRef::EMPTY, walked));
+        self.prog.copy_span(e, kept);
+        self.set_walked_type(w, kept, ascribed);
+        self.prog.mark_ascribed(kept);
+        kept
     }
 
     /// A cast of the body, decided now that the copy fills its types in, as dotty's erasure

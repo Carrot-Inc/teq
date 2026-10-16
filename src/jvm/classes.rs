@@ -2542,28 +2542,14 @@ impl<'a> Gen<'a> {
             if self.cw.has_method(&name, &desc) {
                 continue;
             }
-            let (params, ret) = parse_method_desc(&desc);
+            let (params, _) = parse_method_desc(&desc);
             let target = implemented
                 .iter()
                 .filter(|(n, d)| *n == name && parse_method_desc(d).0.len() == params.len())
                 .max_by_key(|(_, d)| parse_method_desc(d).0.iter().zip(&params).filter(|(a, b)| a == b).count())
                 .cloned();
             let Some((_, target_desc)) = target else { continue };
-            let (target_params, target_ret) = parse_method_desc(&target_desc);
-            let locals: Vec<(Option<SymId>, JType)> = params.iter().map(|t| (None, t.clone())).collect();
-            self.begin_method(false, false, &locals, ret.clone(), &[]);
-            self.load_this();
-            let mut slot = 1u16;
-            for (from, to) in params.iter().zip(&target_params) {
-                self.load(slot, from);
-                self.adapt(from, to);
-                slot += if from.wide() { 2 } else { 1 };
-            }
-            let owner = self.this_name.clone();
-            self.invoke_desc(Invoke::Virtual, &owner, false, &name, &target_desc, target_params.len(), &target_ret);
-            self.adapt(&target_ret, &ret);
-            self.return_value(&ret);
-            self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, &name, &desc);
+            self.self_bridge(&name, &desc, &target_desc);
         }
     }
 
@@ -2652,6 +2638,16 @@ impl<'a> Gen<'a> {
 
     /// `m` in the class, calling the trait's default `im`.
     fn mixin_forwarder(&mut self, m: &MRef, im: &MRef) {
+        // Of another erased signature than the default's, the method is erasure's bridge.
+        let bridge = if m.desc != im.desc { ACC_BRIDGE } else { 0 };
+        self.default_forwarder(m, im, ACC_PUBLIC | ACC_SYNTHETIC | bridge);
+    }
+
+    /// The class's method `m` of the access `access`, calling the trait's default `im` by
+    /// `invokespecial`, every forwarder of a trait's member the class writes: each parameter
+    /// loaded from its slot, the slots following the types' widths (dotty's `locals.makeLocal`),
+    /// and adapted to `im`'s, the result to `m`'s. Nothing where the class has `m` already.
+    fn default_forwarder(&mut self, m: &MRef, im: &MRef, access: u16) {
         if self.cw.has_method(&m.name, &m.desc) {
             return;
         }
@@ -2667,9 +2663,29 @@ impl<'a> Gen<'a> {
         self.invoke_desc(Invoke::Special, &im.owner, true, &im.name, &im.desc, im.params.len(), &im.ret);
         self.adapt(&im.ret, &m.ret);
         self.return_value(&m.ret);
-        // Of another erased signature than the default's, the method is erasure's bridge.
-        let bridge = if m.desc != im.desc { ACC_BRIDGE } else { 0 };
-        self.end_method(ACC_PUBLIC | ACC_SYNTHETIC | bridge, &m.name, &m.desc);
+        self.end_method(access, &m.name, &m.desc);
+    }
+
+    /// The class's bridge `name` `desc` to its own method of the descriptor `target`, called
+    /// virtually (dotty's `Bridges`): each parameter loaded from its slot by the types' widths and
+    /// adapted to the target's, the result adapted back.
+    fn self_bridge(&mut self, name: &str, desc: &str, target: &str) {
+        let (params, ret) = parse_method_desc(desc);
+        let (target_params, target_ret) = parse_method_desc(target);
+        let locals: Vec<(Option<SymId>, JType)> = params.iter().map(|t| (None, t.clone())).collect();
+        self.begin_method(false, false, &locals, ret.clone(), &[]);
+        self.load_this();
+        let mut slot = 1u16;
+        for (from, to) in params.iter().zip(&target_params) {
+            self.load(slot, from);
+            self.adapt(from, to);
+            slot += if from.wide() { 2 } else { 1 };
+        }
+        let owner = self.this_name.clone();
+        self.invoke_desc(Invoke::Virtual, &owner, false, name, target, target_params.len(), &target_ret);
+        self.adapt(&target_ret, &ret);
+        self.return_value(&ret);
+        self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, name, desc);
     }
 
     /// A method of a superclass wins over the default method of an interface, where Scala takes
@@ -2825,83 +2841,159 @@ impl<'a> Gen<'a> {
                     continue;
                 }
                 let Some(target) = implemented.iter().find(|m| m.name == declared.name && m.params.len() == declared.params.len()).cloned() else { continue };
-                let params: Vec<(Option<SymId>, JType)> = declared.params.iter().map(|t| (None, t.clone())).collect();
-                self.begin_method(false, false, &params, declared.ret.clone(), &[]);
-                self.load_this();
-                let mut slot = 1u16;
-                for (from, to) in declared.params.iter().zip(&target.params) {
-                    self.load(slot, from);
-                    self.adapt(from, to);
-                    slot += if from.wide() { 2 } else { 1 };
-                }
-                let owner = self.this_name.clone();
-                self.invoke_desc(Invoke::Virtual, &owner, false, &target.name, &target.desc, target.params.len(), &target.ret);
-                self.adapt(&target.ret, &declared.ret);
-                self.return_value(&declared.ret);
-                self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, &declared.name, &declared.desc);
+                self.self_bridge(&declared.name, &declared.desc, &target.desc);
             }
         }
     }
 
-    /// `toString`, `hashCode` and `equals` of `Object` win over the default methods of an
-    /// interface, so a class takes the ones its traits define through a forwarder (scalac's
-    /// `Mixin.mixinForwarders` by `MixinOps.needsMixinForwarder`): where the first of its
-    /// linearisation to define one is a trait, of the program or of a jar, that its superclass
-    /// does not mix in already (the superclass's forwarder is inherited, and so is a class's
-    /// own method).
+    /// Which members of `Object`'s names, `toString`, `hashCode`, `equals`, `clone` and
+    /// `finalize`, need a mixin forwarder in the class, as dotty's `Mixin.mixinForwarders` asks
+    /// `MixinOps.needsMixinForwarder` of each declaration (Mixin.scala 314 to 318): each
+    /// declaration of each trait the class mixes in that its superclass does not, every
+    /// alternative of a name on its own (`clone(): Object` beside `clone[A](): List[A]`), where it
+    /// competes with `Object`'s member of the name, which it overrides (`needsForwarder`: a
+    /// method of a class, which the JVM would select over the trait's default, the protected
+    /// `clone` and `finalize` failing the call), not private, an accessor or deferred, and is the
+    /// class's member (`isInImplementingClass`). The other members of these names, which compete
+    /// with no class's (`clone(x: Long, y: Int)`, a generic `clone(x: A)`), are the class's
+    /// other paths' (`mixin_members`), as every other trait method's. Each forwarder is
+    /// written as every forwarder of a trait's member (`mixin_forwarder_to`).
     fn object_method_forwarders(&mut self, c: ClassId) {
         let cx = self.cx;
         let syms = cx.input.syms;
-        let bases: Vec<ClassId> = syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+        let lin: Vec<ClassId> = syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
         let inherited = |t: ClassId| syms.class(c).superclass.is_some_and(|s| syms.class(s).base_types.iter().any(|&(b, _)| b == t));
-        for (name, desc, params, ret) in [
-            (n::TO_STRING, "()Ljava/lang/String;", vec![], JType::L(Rc::from(STRING))),
-            (n::HASH_CODE, "()I", vec![], JType::I),
-            (n::EQUALS, "(Ljava/lang/Object;)Z", vec![JType::object()], JType::Z),
-        ] {
-            let text = cx.input.interner.get(name);
-            if self.cw.has_method(text, desc) {
-                continue;
+        let mut names = vec![(n::TO_STRING, "()Ljava/lang/String;"), (n::HASH_CODE, "()I"), (n::EQUALS, "(Ljava/lang/Object;)Z"), (n::CLONE, "()Ljava/lang/Object;")];
+        // No class of the program declares a member of a name never interned.
+        if let Some(finalize) = cx.input.interner.lookup("finalize") {
+            names.push((finalize, "()V"));
+        }
+        let mixins: Vec<ClassId> = lin.iter().skip(1).copied().filter(|&t| syms.class(t).kind == ClassKind::Trait && !inherited(t)).collect();
+        for (name, object_desc) in names {
+            // `Object`'s member of the name, the competing method of a class.
+            let object = Decl { desc: object_desc.to_string(), poly: Some(0), sym: None, private: false, deferred: false };
+            // Each base's declarations of the name, in the linearisation's order.
+            let declared: Vec<(ClassId, Vec<Decl>)> = lin.iter().map(|&b| (b, self.declarations(b, name))).collect();
+            for &mixin in &mixins {
+                let own = declared.iter().find(|d| d.0 == mixin).map_or_else(Vec::new, |d| d.1.clone());
+                for meth in own {
+                    if object.matches(&meth) && self.needs_mixin_forwarder(mixin, &meth, &declared) {
+                        self.mixin_forwarder_to(mixin, name, &meth, &declared, &object);
+                    }
+                }
             }
-            // The class's member of the name, as dotty's `isInImplementingClass` asks for it.
-            let declared: Vec<(ClassId, bool)> =
-                bases.iter().filter_map(|&b| self.declares_object_method(b, name, desc).map(|concrete| (b, concrete))).collect();
-            let Some(b) = syms.member_declaration(&declared) else { continue };
-            if syms.class(b).kind != ClassKind::Trait || inherited(b) {
-                continue;
-            }
-            let base = self.class_name(b);
-            let ps: Vec<(Option<SymId>, JType)> = params.iter().map(|t| (None, t.clone())).collect();
-            self.begin_method(false, false, &ps, ret.clone(), &[]);
-            self.load_this();
-            for (i, t) in params.iter().enumerate() {
-                self.load(i as u16 + 1, t);
-            }
-            self.invoke_desc(Invoke::Special, &base, true, text, desc, params.len(), &ret);
-            self.return_value(&ret);
-            self.end_method(ACC_PUBLIC, text, desc);
         }
     }
 
-    /// Whether `b` declares `toString`, `hashCode` or `equals`, and with a body: a jar's class in
-    /// its class file, a class of the program as a member, abstract or one the program reaches.
-    fn declares_object_method(&self, b: ClassId, name: crate::intern::Name, desc: &str) -> Option<bool> {
+    /// Whether `c` needs a forwarder of `meth`, a declaration of its mixin `mixin` that competes
+    /// with a class's method (`MixinOps.needsMixinForwarder`): a method, not private, an accessor
+    /// or deferred, a sealed Java interface's only in a class it permits, and `c`'s member, no
+    /// later declaration overriding it (`isInImplementingClass`, `Symbols::member_declaration`
+    /// over the declarations it matches).
+    fn needs_mixin_forwarder(&mut self, mixin: ClassId, meth: &Decl, declared: &[(ClassId, Vec<Decl>)]) -> bool {
         let cx = self.cx;
+        let syms = cx.input.syms;
+        if meth.private || meth.deferred || meth.sym.is_some_and(|s| syms.sym(s).kind != SymKind::Def) {
+            return false;
+        }
+        if let Some(cf) = cx.class_files.get(&mixin) {
+            if !cf.scala && !cf.permitted.is_empty() && !cf.permitted.iter().any(|p| **p == *self.this_name) {
+                return false;
+            }
+        }
+        let matching: Vec<(ClassId, bool)> =
+            declared.iter().flat_map(|(b, ds)| ds.iter().filter(|d| !d.private && d.matches(meth)).map(move |d| (*b, !d.deferred))).collect();
+        syms.member_declaration(&matching) == Some(mixin)
+    }
+
+    /// The forwarder of `meth`, a declaration of the trait `mixin`, written as every forwarder of
+    /// a trait's member (`default_forwarder`, as `MixinOps.mkForwarderSym` makes it): the member's
+    /// reference (`mref`, a loaded declaration's from its class file's descriptor where the
+    /// program has no symbol of it), final where `meth` is (dotty's `javaFlags`), with the
+    /// metadata of `meth` as its class file holds it; and a bridge of each member it overrides
+    /// whose erased signature is another, in the linearisation's order, `Object`'s last
+    /// (`Bridges.addBridgeIfNeeded`, Bridges.scala 88 to 93: the pairs that match before
+    /// erasure), each as every bridge to the class's own method (`self_bridge`).
+    fn mixin_forwarder_to(&mut self, mixin: ClassId, name: crate::intern::Name, meth: &Decl, declared: &[(ClassId, Vec<Decl>)], object: &Decl) {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let text = cx.input.interner.get(name);
+        let im = match meth.sym.map(|s| self.mref(s)).filter(|m| m.desc == meth.desc) {
+            Some(m) => m,
+            None => {
+                let (params, ret) = parse_method_desc(&meth.desc);
+                Rc::new(MRef { owner: self.class_name(mixin), owner_is_interface: true, name: text.to_string(), params, ret, desc: meth.desc.clone(), kind: Invoke::Interface })
+            }
+        };
+        if self.cw.has_method(text, &im.desc) {
+            return;
+        }
+        let fin = meth.sym.is_some_and(|s| syms.sym(s).mods & mods::FINAL != 0);
+        self.default_forwarder(&im, &im, if fin { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC });
+        // And the selected method's metadata as its class file holds it, the exceptions it
+        // declares and its parameters' annotations among them (`MixinOps.mkForwarderSym` copies
+        // the member's and its parameters' annotations); a member teq compiles declares none
+        // (`@throws` changes nothing, docs/COMPATIBILITY.md), alike whole and split.
+        if let Some(m) = cx.class_files.get(&mixin).and_then(|cf| cf.methods.iter().find(|m| m.name == text && m.descriptor == im.desc && m.access & (ACC_STATIC | ACC_BRIDGE) == 0)) {
+            self.cw.method_metadata(text, &im.desc, m);
+        }
+        let overridden = declared.iter().filter(|d| d.0 != mixin).flat_map(|d| d.1.iter()).filter(|d| !d.private && d.matches(meth)).chain(std::iter::once(object).filter(|o| o.matches(meth)));
+        let overridden: Vec<String> = overridden.map(|d| d.desc.clone()).collect();
+        let mut bridged: Vec<&str> = Vec::new();
+        for overridden in &overridden {
+            let overridden = overridden.as_str();
+            if overridden == im.desc || bridged.contains(&overridden) || self.cw.has_method(text, overridden) {
+                continue;
+            }
+            bridged.push(overridden);
+            self.self_bridge(text, overridden, &im.desc);
+        }
+    }
+
+    /// `b`'s declarations of `name`, each alternative on its own, with one record whichever reads
+    /// it, so that the whole and the split build decide alike: a jar's class's methods of the
+    /// name in its class file, not static, a bridge or synthetic, with the program's symbol of
+    /// each by its descriptor; a class of the program's members of the name, by their erasure, a
+    /// concrete one the program does not reach left out (it writes no body of it). A private
+    /// method of a trait the products hold is written under its expanded name, which none of
+    /// `Object`'s names is, as the source's carries its `private`.
+    fn declarations(&mut self, b: ClassId, name: crate::intern::Name) -> Vec<Decl> {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let alternatives: Vec<SymId> = match syms.class(b).members.get(&name) {
+            Some(&m) => match syms.alternatives(m) {
+                Some(alts) => alts.to_vec(),
+                None => vec![m],
+            },
+            None => Vec::new(),
+        };
+        let own: Vec<SymId> = alternatives.into_iter().filter(|&a| syms.sym(a).owner == Owner::Class(b)).collect();
+        let poly = |s: SymId| syms.sym(s).sig.as_ref().map(|sig| sig.tparams.len());
         if let Some(cf) = cx.class_files.get(&b) {
             let text = cx.input.interner.get(name);
-            let m = cf.methods.iter().find(|m| m.name == text && m.descriptor == desc && m.access & ACC_STATIC == 0)?;
-            return Some(m.access & ACC_ABSTRACT == 0);
+            let methods: Vec<&crate::classfile::Method> = cf.methods.iter().filter(|m| m.name == text && m.access & (ACC_STATIC | ACC_BRIDGE | ACC_SYNTHETIC) == 0).collect();
+            return methods
+                .into_iter()
+                .map(|m| {
+                    let sym = own.iter().copied().find(|&a| self.mref(a).desc == m.descriptor);
+                    // Without the program's symbol, a generic signature that declares type
+                    // parameters is a polymorphic method's.
+                    let poly = sym.and_then(poly).or_else(|| Some(if m.signature.as_deref().is_some_and(|g| g.starts_with('<')) { 1 } else { 0 }));
+                    Decl { desc: m.descriptor.clone(), poly, sym, private: m.access & ACC_PRIVATE != 0, deferred: m.access & ACC_ABSTRACT != 0 }
+                })
+                .collect();
         }
-        let syms = cx.input.syms;
-        let &m = syms.class(b).members.get(&name)?;
-        if syms.sym(m).owner != Owner::Class(b) {
-            return None;
+        let mut out = Vec::new();
+        for a in own {
+            let concrete = concrete_member(cx, a);
+            let f = cx.fun_of_sym[a.idx()];
+            if concrete && !(f != u32::MAX && cx.input.prog.funs[f as usize].body.is_some() && cx.input.reach.funs[f as usize]) {
+                continue;
+            }
+            let desc = self.mref(a).desc.clone();
+            out.push(Decl { desc, poly: poly(a), sym: Some(a), private: syms.sym(a).mods & mods::PRIVATE != 0, deferred: !concrete });
         }
-        if !concrete_member(cx, m) {
-            return Some(false);
-        }
-        let f = cx.fun_of_sym[m.idx()];
-        (f != u32::MAX && cx.input.prog.funs[f as usize].body.is_some() && cx.input.reach.funs[f as usize]).then_some(true)
+        out
     }
 
     // ---- case classes, case objects and enum values ----
@@ -3502,6 +3594,28 @@ fn implemented(cx: &super::Cx, s: SymId) -> bool {
 
 /// Whether a member has a body, as the member choice reads it: an `abstract override` of
 /// another module's trait has one (`Input::stackable`), which dotty takes for no `Deferred`.
+/// A declaration of a member of one of `Object`'s names (`Gen::declarations`): its erased
+/// descriptor, how many type parameters it takes where that is known, the program's symbol of it,
+/// and whether it is private or deferred.
+#[derive(Clone)]
+struct Decl {
+    desc: String,
+    poly: Option<usize>,
+    sym: Option<SymId>,
+    private: bool,
+    deferred: bool,
+}
+
+impl Decl {
+    /// Whether the two match as dotty's `matches` before erasure tells overriding members: of as
+    /// many type parameters (where both are known) and of the same erased parameters, whatever
+    /// their results (an override's may be narrower).
+    fn matches(&self, other: &Decl) -> bool {
+        let taking = |d: &str| d[..d.find(')').map_or(d.len(), |at| at + 1)].to_string();
+        taking(&self.desc) == taking(&other.desc) && !matches!((self.poly, other.poly), (Some(a), Some(b)) if a != b)
+    }
+}
+
 fn concrete_member(cx: &super::Cx, s: SymId) -> bool {
     !cx.input.reach.is_abstract(cx.input.syms, s) || cx.input.stackable.map_or(false, |st| st.contains_key(&s))
 }

@@ -511,6 +511,7 @@ harmonize_literals
 harmonize_runtime
 hashing
 hashing_doubles
+hidden_owner_scala
 hk_base_conformance
 hk_bound_given
 hk_bound_members

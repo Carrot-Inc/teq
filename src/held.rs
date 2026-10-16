@@ -87,6 +87,7 @@ impl Program {
             widened_bits,
             opaque_bits,
             spread_bits,
+            ascribed_bits,
             setter_assign_bits,
             shifts: _,
             lifted_funs: _,
@@ -143,6 +144,7 @@ impl Program {
             + widened_bits.held()
             + opaque_bits.held()
             + spread_bits.held()
+            + ascribed_bits.held()
             + setter_assign_bits.held()
             + capture.as_ref().map_or(0, |c| c.held())
     }

@@ -171,6 +171,53 @@ impl ConstPool {
     pub fn double(&mut self, v: f64) -> u16 {
         self.add(Const::Double(v.to_bits()))
     }
+    /// `a` as a class file's annotation (JVMS 4.7.16), its names and constants in this pool.
+    pub fn annotation(&mut self, a: &crate::classfile::Annotation, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.utf8(&a.descriptor).to_be_bytes());
+        out.extend_from_slice(&(a.elements.len() as u16).to_be_bytes());
+        for (name, value) in &a.elements {
+            out.extend_from_slice(&self.utf8(name).to_be_bytes());
+            self.element_value(value, out);
+        }
+    }
+
+    fn element_value(&mut self, v: &crate::classfile::ElementValue, out: &mut Vec<u8>) {
+        use crate::classfile::{ConstValue, ElementValue};
+        match v {
+            ElementValue::Const(tag, c) => {
+                out.push(*tag);
+                let i = match c {
+                    ConstValue::Int(v) => self.int(*v),
+                    ConstValue::Long(v) => self.long(*v),
+                    ConstValue::Float(v) => self.float(*v),
+                    ConstValue::Double(v) => self.double(*v),
+                    ConstValue::Str(s) => self.utf8(s),
+                };
+                out.extend_from_slice(&i.to_be_bytes());
+            }
+            ElementValue::Enum(ty, name) => {
+                out.push(b'e');
+                out.extend_from_slice(&self.utf8(ty).to_be_bytes());
+                out.extend_from_slice(&self.utf8(name).to_be_bytes());
+            }
+            ElementValue::Class(desc) => {
+                out.push(b'c');
+                out.extend_from_slice(&self.utf8(desc).to_be_bytes());
+            }
+            ElementValue::Annotation(a) => {
+                out.push(b'@');
+                self.annotation(a, out);
+            }
+            ElementValue::Array(values) => {
+                out.push(b'[');
+                out.extend_from_slice(&(values.len() as u16).to_be_bytes());
+                for v in values {
+                    self.element_value(v, out);
+                }
+            }
+        }
+    }
+
     pub fn name_and_type(&mut self, name: &str, desc: &str) -> u16 {
         let n = self.utf8(name);
         let d = self.utf8(desc);
@@ -759,6 +806,56 @@ impl ClassWriter {
             attrs.push((attr, bytes));
         }
         self.methods.push(Member { access, name, desc, attrs });
+    }
+
+    /// Adds to the method `name` `desc` written already what a forwarder writes of the method it
+    /// forwards to, as dotty copies its annotations (`MixinOps.mkForwarderSym`) and the backend
+    /// writes them (`BCodeSkelBuilder.initJMethod`): the exceptions it declares, its deprecation,
+    /// its annotations and its parameters', runtime-visible and invisible, in ASM's order of the
+    /// attributes. Each list in the reverse of the method's order, as `addAnnotations` prepends
+    /// each annotation.
+    pub fn method_metadata(&mut self, name: &str, desc: &str, from: &crate::classfile::Method) {
+        let (Some(&n), Some(&d)) = (self.cp.utf8.get(name), self.cp.utf8.get(desc)) else { return };
+        let Some(at) = self.methods.iter().position(|m| m.name == n && m.desc == d) else { return };
+        let mut attrs = Vec::new();
+        if !from.exceptions.is_empty() {
+            let mut body = (from.exceptions.len() as u16).to_be_bytes().to_vec();
+            for e in from.exceptions.iter().rev() {
+                body.extend_from_slice(&self.cp.class(e).to_be_bytes());
+            }
+            attrs.push((self.cp.utf8("Exceptions"), body));
+        }
+        if from.deprecated {
+            attrs.push((self.cp.utf8("Deprecated"), Vec::new()));
+        }
+        if let Some(kept) = &from.kept_annotations {
+            for (attr, list) in [("RuntimeVisibleAnnotations", &kept.0), ("RuntimeInvisibleAnnotations", &kept.1)] {
+                if list.is_empty() {
+                    continue;
+                }
+                let mut body = (list.len() as u16).to_be_bytes().to_vec();
+                for a in list.iter().rev() {
+                    self.cp.annotation(a, &mut body);
+                }
+                attrs.push((self.cp.utf8(attr), body));
+            }
+        }
+        if let Some(kept) = &from.kept_parameter_annotations {
+            for (attr, lists) in [("RuntimeVisibleParameterAnnotations", &kept.0), ("RuntimeInvisibleParameterAnnotations", &kept.1)] {
+                if lists.iter().all(|l| l.is_empty()) {
+                    continue;
+                }
+                let mut body = vec![lists.len() as u8];
+                for list in lists {
+                    body.extend_from_slice(&(list.len() as u16).to_be_bytes());
+                    for a in list.iter().rev() {
+                        self.cp.annotation(a, &mut body);
+                    }
+                }
+                attrs.push((self.cp.utf8(attr), body));
+            }
+        }
+        self.methods[at].attrs.extend(attrs);
     }
 
     /// A bootstrap method with its static arguments (constant pool indices); returns its index.

@@ -18,7 +18,7 @@
 //! backend knows them by that text.
 
 use super::classfile::*;
-use super::gen::{Gen, Invoke};
+use super::gen::{Gen, Invoke, Referenced};
 use super::names::*;
 use crate::ast::ListRef;
 use crate::symbols::Owner;
@@ -96,9 +96,10 @@ impl<'a> Gen<'a> {
                 self.unbox_or(&prim, args[1]);
                 return prim;
             }
+            // `Object`'s members are called on the class the receiver points at, as every
+            // inherited member is (`Gen::object_member_call`).
             "$hashCode($0)" => {
-                self.expr(args[0], &object);
-                self.invoke(Invoke::Virtual, OBJECT, false, "hashCode", &[], &JType::I);
+                self.object_member_call(args[0], "hashCode", &[], &JType::I, |_| {});
                 return JType::I;
             }
             "$identityHash($0)" => {
@@ -120,14 +121,13 @@ impl<'a> Gen<'a> {
                         return class;
                     }
                 }
-                self.expr(args[0], &object);
-                self.invoke(Invoke::Virtual, OBJECT, false, "getClass", &[], &class);
+                self.object_member_call(args[0], "getClass", &[], &class, |_| {});
                 return class;
             }
             "$equals($0, $1)" => {
-                self.expr(args[0], &object);
-                self.expr(args[1], &object);
-                self.invoke(Invoke::Virtual, OBJECT, false, "equals", &[object], &JType::Z);
+                let other = args[1];
+                let param = object.clone();
+                self.object_member_call(args[0], "equals", &[param], &JType::Z, |g| g.expr(other, &object));
                 return JType::Z;
             }
             // The lookups of an enum's companion (`prims.rs`): its own `values`, `valueOf` and
@@ -264,6 +264,7 @@ impl<'a> Gen<'a> {
                         "invokeinterface" => Invoke::Interface,
                         _ => Invoke::Special,
                     };
+                    let mut site = None;
                     if single {
                         let mut wanted: Vec<JType> = Vec::new();
                         if kind != Invoke::Static {
@@ -271,6 +272,14 @@ impl<'a> Gen<'a> {
                         }
                         wanted.extend(params.iter().cloned());
                         let skip = args.len().saturating_sub(wanted.len());
+                        // The JDK's member called on the receiver is named on the class the
+                        // receiver points at, as the program's members are (`Gen::method_site`).
+                        if matches!(kind, Invoke::Virtual | Invoke::Interface) && skip < args.len() {
+                            site = self.method_site(args[skip], &Rc::from(owner), kind == Invoke::Interface, name, desc, Referenced::Method(name));
+                            if let Some(site) = &site {
+                                wanted[0] = site.qualifier.clone();
+                            }
+                        }
                         for (a, w) in args[skip..].iter().zip(&wanted) {
                             self.expr(*a, w);
                         }
@@ -278,7 +287,10 @@ impl<'a> Gen<'a> {
                         let n = params.len() + (kind != Invoke::Static) as usize;
                         stack.truncate(stack.len().saturating_sub(n));
                     }
-                    self.invoke_desc(kind, owner, kind == Invoke::Interface, name, desc, params.len(), &ret);
+                    match site {
+                        Some(site) => self.invoke_desc(site.kind(), &site.owner, site.interface, name, desc, params.len(), &ret),
+                        None => self.invoke_desc(kind, owner, kind == Invoke::Interface, name, desc, params.len(), &ret),
+                    }
                     if ret != JType::V {
                         stack.push(ret);
                     }

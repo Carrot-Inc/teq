@@ -1,0 +1,19 @@
+# Methods scalac writes and teq writes otherwise, whatever the owners of their references: left out of
+# the comparison so that it speaks of the owners alone.
+# teq's forwarder of a trait's override of Object's member calls the trait's method by invokespecial,
+# scalac's the trait's static clone$.
+owners/Cloned clone
+# The value class's synthesized equality: scalac's Objects.equals over the underlying values, teq's
+# own comparison.
+owners/Value$ equals$extension
+hiddenclient/Cloned clone
+hiddenclient/Value$ equals$extension
+# scalac's static forwarders of the members an object inherits take its var's accessors too.
+hiddenclient/Module field
+hiddenclient/Module field_$eq
+# scalac keeps an object's var in a static field of its module class, teq in an instance field.
+hiddenscala/Statics$ field
+hiddenscala/Statics$ field_$eq
+# The forwarder of a trait's narrower clone and its bridge, of the same name: scalac's forwarder calls the
+# trait's static clone$, teq's the trait's method; the clients of tests/classfile.scala call them.
+cloneforwarder/E clone
