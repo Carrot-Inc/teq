@@ -4517,7 +4517,7 @@ async function idleMinute() {
   }
 }
 
-// `LSP_ONLY=<scenario>,...` runs those alone, for a run by hand.
+// `LSP_ONLY=<scenario>,...` runs those alone, in the order below (a piece of tests/lsp.sh's, or a run by hand).
 const only = process.env.LSP_ONLY?.split(",")
 // --- Unused imports: the hints of a session outside the flag, its warnings under it -----------
 
@@ -4799,8 +4799,19 @@ async function refusedMapping() {
 const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, refusedMapping, idleMinute, jarFetch }
 // Run only when named: the idle minute and the jar fetch, which tests/lsp.sh runs once each.
 const named = new Set(["idleMinute", "jarFetch"])
+// A name of no scenario fails the run before any runs; `LSP_UNITS=<file>` is given every scenario's name, which
+// tests/lsp.sh holds its list of units to; `PIECES_RAN=<file>` is told each scenario as it starts, with the count of
+// workers it runs at (tests/support/pieces.sh).
+const unknown = (only ?? []).filter((name) => !Object.hasOwn(scenarios, name))
+if (unknown.length > 0) {
+  console.log(`FAIL LSP_ONLY names no scenario: ${unknown.map((name) => JSON.stringify(name)).join(", ")}`)
+  process.exit(2)
+}
+if (process.env.LSP_UNITS) writeFileSync(process.env.LSP_UNITS, Object.keys(scenarios).join("\n") + "\n")
 for (const [name, run] of Object.entries(scenarios)) {
-  if (only ? only.includes(name) : !named.has(name)) await run()
+  if (!(only ? only.includes(name) : !named.has(name))) continue
+  if (process.env.PIECES_RAN) appendFileSync(process.env.PIECES_RAN, `${name} ${process.env.TEQ_SESSION_THREADS ?? "auto"}\n`)
+  await run()
 }
 console.log(`${passed} passed, ${failed} failed`)
 process.exit(failed === 0 ? 0 : 1)

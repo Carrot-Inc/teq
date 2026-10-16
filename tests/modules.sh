@@ -96,13 +96,26 @@
 # those cases. The cases run JOBS at a time (by default the machine's processors), each in a process of its own,
 # their lines in the cases' order, the same as one at a time; the checks once per run, the split programs and the
 # reads of the pickles after them. MODULES_OUT=<dir>
-# keeps every build's products there, for comparing the products of two binaries.
+# keeps every build's products there, for comparing the products of two binaries. `--piece <k>/<n>` runs piece k of
+# n alone (tests/support/pieces.sh): a unit is a case, one of the checks made once per run or one of the split
+# programs.
 cd "$(dirname "$0")/.."
 root=$PWD
+. tests/support/pieces.sh
+suite_units() {
+  for d in tests/modules/*/; do basename "$d"; done
+  printf '%s\n' own-twice own-moved own-cut
+  awk '$1 != "" && $1 !~ /^#/ { print "split-" $1 }' tests/modules/split-programs.txt
+}
 worker=
 if [ "$1" = --worker ]; then
   out=$2 worker=$3
   shift 3
+elif pieces_option modules "$1" "$2"; then
+  shift 2
+  [ $# = 0 ] || { echo "modules: a piece runs the cases of its units, not cases named" >&2; exit 2; }
+else
+  pieces_refuse modules "$@"
 fi
 . tests/support/jars.sh
 SL=$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar
@@ -363,10 +376,13 @@ cases=("$@")
 every_case=""
 if [ ${#cases[@]} -eq 0 ]; then
   every_case=1
-  for d in tests/modules/*/; do cases+=("$(basename "$d")"); done
+  for d in tests/modules/*/; do
+    piece_has "$(basename "$d")" && cases+=("$(basename "$d")")
+  done
 fi
 # run_case <name>: one case's checks, its lines on stdout and its counts in the counters.
 run_case() {
+  piece_ran "$1" || return
   name=$1
   dir=tests/modules/$name
   [ -d "$dir/a" ] || { echo "no case $name"; fail=$((fail + 1)); return; }
@@ -942,96 +958,107 @@ wait $dealer
 # The own directory named twice on the class path is read once, through its manifest: a source
 # that no longer defines `Old` while naming it is refused, and the directory is left as it was.
 if [ -n "$every_case" ]; then
-  od=$out/own-twice
-  mkdir -p "$od"
-  printf 'package test\nobject Old:\n  def n: Int = 42\n' > "$od/A.scala"
-  ok=1
-  detail=""
-  if "$teq" compiler build --target jvm --products "$od/out" --sourceroot "$od" --classpath "$od/out:$SL" "$od/A.scala" > "$od/log" 2>&1; then
-    cp -R "$od/out" "$od/before"
-    printf 'package test\nobject New:\n  def n: Int = Old.n\n' > "$od/A.scala"
-    if "$teq" compiler build --target jvm --products "$od/out" --sourceroot "$od" --classpath "$od/out:$od/out:$SL" "$od/A.scala" >> "$od/log" 2>&1; then
+  if piece_has own-twice; then
+    piece_ran own-twice
+    od=$out/own-twice
+    mkdir -p "$od"
+    printf 'package test\nobject Old:\n  def n: Int = 42\n' > "$od/A.scala"
+    ok=1
+    detail=""
+    if "$teq" compiler build --target jvm --products "$od/out" --sourceroot "$od" --classpath "$od/out:$SL" "$od/A.scala" > "$od/log" 2>&1; then
+      cp -R "$od/out" "$od/before"
+      printf 'package test\nobject New:\n  def n: Int = Old.n\n' > "$od/A.scala"
+      if "$teq" compiler build --target jvm --products "$od/out" --sourceroot "$od" --classpath "$od/out:$od/out:$SL" "$od/A.scala" >> "$od/log" 2>&1; then
+        ok=0
+        detail="the build naming its own removed object succeeded"$'\n'
+      fi
+      grep -q "not found: Old" "$od/log" || { ok=0; detail="$detail$(tail -3 "$od/log")"$'\n'; }
+      diff -rq "$od/before" "$od/out" > /dev/null || { ok=0; detail="${detail}the directory changed"; }
+    else
       ok=0
-      detail="the build naming its own removed object succeeded"$'\n'
+      detail="the first build failed: $(head -3 "$od/log")"
     fi
-    grep -q "not found: Old" "$od/log" || { ok=0; detail="$detail$(tail -3 "$od/log")"$'\n'; }
-    diff -rq "$od/before" "$od/out" > /dev/null || { ok=0; detail="${detail}the directory changed"; }
-  else
-    ok=0
-    detail="the first build failed: $(head -3 "$od/log")"
+    result own-twice subset $ok "$detail"
   fi
-  result own-twice subset $ok "$detail"
   # A definition moved to another source keeps its products through the build of the source it
   # left, and through that source's removal: the build of the new owner alone, then of the old
   # one alone (or its manifest-only removal), and the downstream runs over the directory.
-  od=$out/own-moved
-  mkdir -p "$od"
-  printf 'package move\nobject X { def n: Int = 42 }\nobject A\n' > "$od/A.scala"
-  printf 'package move\nobject B\n' > "$od/B.scala"
-  printf '@main def run(): Unit = println(move.X.n)\n' > "$od/Use.scala"
-  ok=1
-  detail=""
-  own=(--target jvm --products "$od/out" --sourceroot "$od" --classpath "$od/out:$SL")
-  if "$teq" compiler build "${own[@]}" "$od/A.scala" "$od/B.scala" > "$od/log" 2>&1; then
-    printf 'package move\nobject A\n' > "$od/A.scala"
-    printf 'package move\nobject X { def n: Int = 43 }\nobject B\n' > "$od/B.scala"
-    "$teq" compiler build "${own[@]}" "$od/B.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the new owner's build failed"$'\n'; }
-    cp -R "$od/out" "$od/removed"
-    "$teq" compiler build "${own[@]}" "$od/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the old owner's build failed"$'\n'; }
-    "$teq" compiler build --target jvm --products "$od/removed" --removed "$od/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the removal failed"$'\n'; }
-    for d in out removed; do
-      for f in move/X.class 'move/X$.class' move/X.tasty; do
-        [ -f "$od/$d/$f" ] || { ok=0; detail="$detail$d: $f is gone"$'\n'; }
+  if piece_has own-moved; then
+    piece_ran own-moved
+    od=$out/own-moved
+    mkdir -p "$od"
+    printf 'package move\nobject X { def n: Int = 42 }\nobject A\n' > "$od/A.scala"
+    printf 'package move\nobject B\n' > "$od/B.scala"
+    printf '@main def run(): Unit = println(move.X.n)\n' > "$od/Use.scala"
+    ok=1
+    detail=""
+    own=(--target jvm --products "$od/out" --sourceroot "$od" --classpath "$od/out:$SL")
+    if "$teq" compiler build "${own[@]}" "$od/A.scala" "$od/B.scala" > "$od/log" 2>&1; then
+      printf 'package move\nobject A\n' > "$od/A.scala"
+      printf 'package move\nobject X { def n: Int = 43 }\nobject B\n' > "$od/B.scala"
+      "$teq" compiler build "${own[@]}" "$od/B.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the new owner's build failed"$'\n'; }
+      cp -R "$od/out" "$od/removed"
+      "$teq" compiler build "${own[@]}" "$od/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the old owner's build failed"$'\n'; }
+      "$teq" compiler build --target jvm --products "$od/removed" --removed "$od/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the removal failed"$'\n'; }
+      for d in out removed; do
+        for f in move/X.class 'move/X$.class' move/X.tasty; do
+          [ -f "$od/$d/$f" ] || { ok=0; detail="$detail$d: $f is gone"$'\n'; }
+        done
       done
-    done
-    if [ $have_java = 1 ] && "$teq" compiler build --target jvm -o "$od/use.jar" --classpath "$od/out:$SL" "$od/Use.scala" >> "$od/log" 2>&1; then
-      got=$(timeout 60 java -cp "$od/use.jar:$od/out:$SL" run 2>&1)
-      [ "$got" = 43 ] || { ok=0; detail="${detail}the downstream printed: $(head -3 <<< "$got")"$'\n'; }
-    elif [ $have_java = 1 ]; then
+      if [ $have_java = 1 ] && "$teq" compiler build --target jvm -o "$od/use.jar" --classpath "$od/out:$SL" "$od/Use.scala" >> "$od/log" 2>&1; then
+        got=$(timeout 60 java -cp "$od/use.jar:$od/out:$SL" run 2>&1)
+        [ "$got" = 43 ] || { ok=0; detail="${detail}the downstream printed: $(head -3 <<< "$got")"$'\n'; }
+      elif [ $have_java = 1 ]; then
+        ok=0
+        detail="${detail}the downstream's build failed: $(tail -3 "$od/log")"
+      fi
+    else
       ok=0
-      detail="${detail}the downstream's build failed: $(tail -3 "$od/log")"
+      detail="the first build failed: $(head -3 "$od/log")"
     fi
-  else
-    ok=0
-    detail="the first build failed: $(head -3 "$od/log")"
+    result own-moved subset $ok "$detail"
   fi
-  result own-moved subset $ok "$detail"
   # A publication killed after its files and before its manifest (`TEQ_CUT_PUBLICATION`) is
   # undone by the next build that reads the directory: a downstream built then reads the last
   # whole publication's products, and the directory is that publication's byte for byte; the
   # build after it publishes the new ones.
-  od=$out/own-cut
-  mkdir -p "$od"
-  printf 'package cut\nobject A:\n  def n: Int = 1\n' > "$od/A.scala"
-  printf '@main def run(): Unit = println(cut.A.n)\n' > "$od/Use.scala"
-  ok=1
-  detail=""
-  own=(--target jvm --products "$od/out" --sourceroot "$od" --classpath "$od/out:$SL")
-  if "$teq" compiler build "${own[@]}" "$od/A.scala" > "$od/log" 2>&1; then
-    cp -R "$od/out" "$od/before"
-    printf 'package cut\nobject A:\n  def n: Int = 2\n' > "$od/A.scala"
-    TEQ_CUT_PUBLICATION=1 "$teq" compiler build "${own[@]}" "$od/A.scala" >> "$od/log" 2>&1 && { ok=0; detail="${detail}the cut build exited 0"$'\n'; }
-    [ -d "$od/out.teq-stage" ] || { ok=0; detail="${detail}the cut build left no staging directory"$'\n'; }
-    if [ $have_java = 1 ]; then
-      "$teq" compiler build --target jvm -o "$od/use.jar" --classpath "$od/out:$SL" "$od/Use.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the downstream's build failed"$'\n'; }
-      diff -r "$od/before" "$od/out" > /dev/null && [ ! -d "$od/out.teq-stage" ] || { ok=0; detail="${detail}the directory is not the last publication's: $(diff -rq "$od/before" "$od/out" | head -3)"$'\n'; }
-      got=$(timeout 60 java -cp "$od/use.jar:$od/out:$SL" run 2>&1)
-      [ "$got" = 1 ] || { ok=0; detail="${detail}the downstream over the undone directory printed: $(head -3 <<< "$got")"$'\n'; }
-      "$teq" compiler build "${own[@]}" "$od/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the next publication failed"$'\n'; }
-      got=$(timeout 60 java -cp "$od/use.jar:$od/out:$SL" run 2>&1)
-      [ "$got" = 2 ] || { ok=0; detail="${detail}the downstream over the next publication printed: $(head -3 <<< "$got")"$'\n'; }
+  if piece_has own-cut; then
+    piece_ran own-cut
+    od=$out/own-cut
+    mkdir -p "$od"
+    printf 'package cut\nobject A:\n  def n: Int = 1\n' > "$od/A.scala"
+    printf '@main def run(): Unit = println(cut.A.n)\n' > "$od/Use.scala"
+    ok=1
+    detail=""
+    own=(--target jvm --products "$od/out" --sourceroot "$od" --classpath "$od/out:$SL")
+    if "$teq" compiler build "${own[@]}" "$od/A.scala" > "$od/log" 2>&1; then
+      cp -R "$od/out" "$od/before"
+      printf 'package cut\nobject A:\n  def n: Int = 2\n' > "$od/A.scala"
+      TEQ_CUT_PUBLICATION=1 "$teq" compiler build "${own[@]}" "$od/A.scala" >> "$od/log" 2>&1 && { ok=0; detail="${detail}the cut build exited 0"$'\n'; }
+      [ -d "$od/out.teq-stage" ] || { ok=0; detail="${detail}the cut build left no staging directory"$'\n'; }
+      if [ $have_java = 1 ]; then
+        "$teq" compiler build --target jvm -o "$od/use.jar" --classpath "$od/out:$SL" "$od/Use.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the downstream's build failed"$'\n'; }
+        diff -r "$od/before" "$od/out" > /dev/null && [ ! -d "$od/out.teq-stage" ] || { ok=0; detail="${detail}the directory is not the last publication's: $(diff -rq "$od/before" "$od/out" | head -3)"$'\n'; }
+        got=$(timeout 60 java -cp "$od/use.jar:$od/out:$SL" run 2>&1)
+        [ "$got" = 1 ] || { ok=0; detail="${detail}the downstream over the undone directory printed: $(head -3 <<< "$got")"$'\n'; }
+        "$teq" compiler build "${own[@]}" "$od/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the next publication failed"$'\n'; }
+        got=$(timeout 60 java -cp "$od/use.jar:$od/out:$SL" run 2>&1)
+        [ "$got" = 2 ] || { ok=0; detail="${detail}the downstream over the next publication printed: $(head -3 <<< "$got")"$'\n'; }
+      fi
+    else
+      ok=0
+      detail="the first build failed: $(head -3 "$od/log")"
     fi
-  else
-    ok=0
-    detail="the first build failed: $(head -3 "$od/log")"
+    result own-cut subset $ok "$detail"
   fi
-  result own-cut subset $ok "$detail"
 fi
 # The programs of tests/split as two modules (tests/modules/split-programs.txt), on JavaScript:
 # the upstream's Scala.js products, the downstream built whole and over them.
 if [ -n "$every_case" ] || [ -n "$SPLIT_PROGRAMS" ]; then
   while read -r prog upfiles; do
     case "$prog" in ''|'#'*) continue ;; esac
+    piece_has "split-$prog" || continue
+    piece_ran "split-$prog" || continue
     sdir=tests/split/$prog
     name=split-$prog
     ups=()
@@ -1118,4 +1145,6 @@ if [ $skipped -gt 0 ]; then
   fail=$((fail + 1))
 fi
 echo "modules: $pass passed, $fail failed, $known_count known departures, $deferred_count deferred; scalac typed $scalac_ok modules and refused $scalac_refused misuses as expected$note"
+pieces_end $((fail > 0)) passed=$pass failed=$((fail - (skipped > 0))) known=$known_count deferred=$deferred_count \
+  typed=$scalac_ok refused=$scalac_refused skipped=$skipped any:scalac-missing=$((skipped > 0))
 [ $fail -eq 0 ]

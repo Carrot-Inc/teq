@@ -1,20 +1,32 @@
 # How long each suite of tests/gate.sh and each of its comparison lines takes on a remote machine, in seconds, as
 # its last run with --record whose every line passed measured them; the gate deals the suites out to the machines by
 # these times, longest first, so that the machines end together, and spreads the comparison lines by them. A suite
-# or line missing here counts as 120.
+# or line missing here counts as 120. A suite the gate runs as pieces (`pieced` in tests/gate.sh) has a row for each
+# piece, `<suite>.<k>/<n>`, which --record writes, never the suite's own row (left as it was), whose time divided by n
+# a piece without a row of its own counts; a piece's row under another n of its suite goes at the next --record.
 cases 227
 errors 154
 parser 3
 interop 3
 dce 2
 split 288
+split.1/2 159
+split.2/2 129
 split-watch 286
 check-watch 53
 jvm-watch 329
+jvm-watch.1/2 160
+jvm-watch.2/2 169
 lsp 912
+lsp.1/4 242
+lsp.2/4 226
+lsp.3/4 190
+lsp.4/4 255
 watch-memory 187
 tasty 124
 modules 392
+modules.1/2 208
+modules.2/2 184
 tasty-exec 57
 analysis-bytes 220
 classfile 3

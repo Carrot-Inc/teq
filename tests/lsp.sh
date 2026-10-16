@@ -22,7 +22,17 @@
 # read from the server's trace against the rule, its line giving their count and spacing; and its `jarFetch`
 # alone: a pinned jar fetched from a repository on the loopback interface, the fetch told in the client's log
 # before the transfer ends, and nothing asked of the repository by a second server over the same cache.
+# `--piece <k>/<n>` runs piece k of n alone (tests/support/pieces.sh): a unit is one of the driver's scenarios at all
+# three counts, or the idle minute, or the jar fetch; the evidence of forks and joins is the whole suite's then, the
+# gate summing it over the pieces.
 cd "$(dirname "$0")/.."
+. tests/support/pieces.sh
+suite_units() {
+  sed -n 's/^const scenarios = { \(.*\) }$/\1/p' tests/lsp/driver.mjs | tr -d ' ' | tr ',' '\n' | grep -v -x -E 'idleMinute|jarFetch' | sed 's/$/ auto 2 16/'
+  printf '%s\n' 'idleMinute auto' 'jarFetch auto'
+}
+! pieces_option lsp "$1" "$2" || shift 2
+[ $# = 0 ] || pieces_usage
 TEQ=${TEQ:-./target/release/teq}
 TEQ=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
 if ! command -v node > /dev/null; then
@@ -55,39 +65,69 @@ if [ ! -d integrations/vite/node_modules/yaml ] && ! timeout 120 npm --prefix in
   echo "FAIL: npm install in integrations/vite, whose lock.js the driver imports (see $work/vite-npm.log)"
   exit 1
 fi
+# A piece's scenarios of the three counts, every one of them in a whole run, which names none to the driver; the
+# driver's own list of scenarios is held to the units.
+scenarios=
+for s in $(suite_units | cut -d' ' -f1 | grep -v -x -E 'idleMinute|jarFetch'); do piece_has "$s" && scenarios=$scenarios,$s; done
+only=()
+[ -z "$PIECE" ] || only=(LSP_ONLY="${scenarios#,}" LSP_UNITS="$work/units")
+ran() { [ -z "$PIECE" ] || [ -n "$scenarios" ]; }
+# tally <log>: a run's counts of checks into the suite's, a run without them one failure.
+passed=0
+failed=0
+tally() {
+  local p f
+  read -r p f < <(sed -n 's/^\([0-9]*\) passed, \([0-9]*\) failed$/\1 \2/p' "$1" | tail -1)
+  passed=$((passed + ${p:-0}))
+  failed=$((failed + ${f:-1}))
+}
+evidence=
+status=0
 sessions_log "$work/workers.log"
-timeout 330 node tests/lsp/driver.mjs "$TEQ" "$work/run" "$jar" "$jar2"
-status=$?
+if ran; then
+  timeout 330 env "${only[@]}" node tests/lsp/driver.mjs "$TEQ" "$work/run" "$jar" "$jar2" | tee "$work/driver.log"
+  status=${PIPESTATUS[0]}
+  tally "$work/driver.log"
+fi
 sessions_forked lsp
 unset TEQ_SESSION_WORKERS_LOG
 # The idle minute, once: the server's schedule, which the worker count does not touch.
-timeout 150 env LSP_ONLY=idleMinute node tests/lsp/driver.mjs "$TEQ" "$work/idle" "$jar" "$jar2" > "$work/idle.log" 2>&1
-code=$?
-grep -E '^(lsp: an idle|FAIL)' "$work/idle.log"
-echo "lsp: the idle minute: $(tail -1 "$work/idle.log")"
-[ $code = 0 ] || status=1
+if piece_has idleMinute; then
+  timeout 150 env LSP_ONLY=idleMinute ${PIECE:+LSP_UNITS="$work/units"} node tests/lsp/driver.mjs "$TEQ" "$work/idle" "$jar" "$jar2" > "$work/idle.log" 2>&1
+  code=$?
+  grep -E '^(lsp: an idle|FAIL)' "$work/idle.log"
+  echo "lsp: the idle minute: $(tail -1 "$work/idle.log")"
+  tally "$work/idle.log"
+  [ $code = 0 ] || status=1
+fi
 # A jar fetched for a session from a repository on the loopback interface, once: the transfer is no worker count's.
-timeout 150 env LSP_ONLY=jarFetch node tests/lsp/driver.mjs "$TEQ" "$work/fetch" "$jar" "$jar2" > "$work/fetch.log" 2>&1
-code=$?
-grep -E '^FAIL' "$work/fetch.log"
-echo "lsp: a jar fetched over the loopback interface: $(tail -1 "$work/fetch.log")"
-[ $code = 0 ] || status=1
+if piece_has jarFetch; then
+  timeout 150 env LSP_ONLY=jarFetch ${PIECE:+LSP_UNITS="$work/units"} node tests/lsp/driver.mjs "$TEQ" "$work/fetch" "$jar" "$jar2" > "$work/fetch.log" 2>&1
+  code=$?
+  grep -E '^FAIL' "$work/fetch.log"
+  echo "lsp: a jar fetched over the loopback interface: $(tail -1 "$work/fetch.log")"
+  tally "$work/fetch.log"
+  [ $code = 0 ] || status=1
+fi
 if [ "${TEQ_FORK:-}" = 1 ]; then
   if "$TEQ" --version | grep -q assertions; then
     forks=$(sed -nE 's/^view checks: end [0-9]+: (typed|not typed), ([0-9]+) forks.*/\2/p' "$TEQ_VIEW_CHECKS_LOG" | awk '{ n += $1 } END { print n + 0 }')
     echo "lsp: under TEQ_FORK=1 the sessions forked and merged $forks times"
-    [ "$forks" -gt 0 ] || { echo "FAIL: no session forked under TEQ_FORK=1"; status=1; }
+    evidence="$evidence pos:forks=$forks"
+    [ "$forks" -gt 0 ] || [ "$PIECE_N" -gt 1 ] || { echo "FAIL: no session forked under TEQ_FORK=1"; status=1; }
   else
     echo "lsp: under TEQ_FORK=1, the forks unproven: the evidence is the assertion-enabled build's checks' log"
   fi
 fi
 for n in 2 16; do
+  ran || continue
   log=$work/checks-$n.log
   : > "$log"
-  env -u TEQ_FORK TEQ_SESSION_THREADS=$n TEQ_STATE_GIVEWAY=off TEQ_VIEW_CHECKS_LOG=$log \
+  env -u TEQ_FORK TEQ_SESSION_THREADS=$n TEQ_STATE_GIVEWAY=off TEQ_VIEW_CHECKS_LOG=$log "${only[@]}" \
     timeout 330 node tests/lsp/driver.mjs "$TEQ" "$work/run-$n" "$jar" "$jar2" > "$work/driver-$n.log" 2>&1
   code=$?
   echo "lsp: the sessions' first builds at $n workers: $(tail -1 "$work/driver-$n.log")"
+  tally "$work/driver-$n.log"
   if [ $code != 0 ]; then
     grep -E '^FAIL' "$work/driver-$n.log" | head -5
     status=1
@@ -111,7 +151,8 @@ PY
 )
     read -r joined wrong unjoined started <<< "$verdict"
     echo "lsp: $joined of $started sessions joined their first build's $n workers, once each"
-    [ "$joined" -gt 0 ] && [ "$wrong" = 0 ] && [ "$unjoined" = 0 ] || { echo "FAIL: at $n workers $wrong joins not one session's first at that count, $unjoined sessions typed without one"; status=1; }
+    evidence="$evidence pos:joins-$n=$joined"
+    { [ "$joined" -gt 0 ] || [ "$PIECE_N" -gt 1 ]; } && [ "$wrong" = 0 ] && [ "$unjoined" = 0 ] || { echo "FAIL: at $n workers $wrong joins not one session's first at that count, $unjoined sessions typed without one"; status=1; }
     if [ -n "${first_joined:-}" ] && [ "$joined" != "$first_joined" ]; then
       echo "FAIL: $joined sessions joined at $n workers, $first_joined at 2"
       status=1
@@ -119,4 +160,9 @@ PY
     first_joined=${first_joined:-$joined}
   fi
 done
+if [ -n "$PIECE" ] && [ -z "$PIECES_DRY" ] && [ "$(sort "$work/units" 2> /dev/null)" != "$(suite_units | cut -d' ' -f1 | sort)" ]; then
+  echo "FAIL: the driver's scenarios are not the units tests/lsp.sh lists: $(sort "$work/units" 2> /dev/null | tr '\n' ' ')"
+  status=1
+fi
+pieces_end $status passed=$passed failed=$failed$evidence
 exit $status

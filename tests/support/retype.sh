@@ -13,6 +13,10 @@
 # What a retype of one file does to the rest shows only when another file is edited next: a file
 # typed again takes its classes out of the program's list and puts them back at its end, so
 # whatever holds a position in that list from an earlier build reads another class there.
+#
+# The sessions tests/jvm-watch.sh runs as units of its pieces begin with their stamp
+# (`piece_ran retype/<name>`, tests/support/pieces.sh), a no-op in the suites that run whole.
+declare -F piece_ran > /dev/null || piece_ran() { :; }
 
 # tests/split/retype: macros that construct a class with an initialiser, read its lazy val and a
 # top-level val and group by a key, called from a class, a top-level def and an object, an
@@ -24,6 +28,7 @@
 # edited, and a caller is made to read them: the macro fails on any value but the new one. Last
 # a type expression is added above a parameter typed `A @uncheckedVariance`.
 retype_entry() {
+  piece_ran retype/entry || return
   local src=$work/retype
   rm -rf "$src" "$work/out"
   cp -r tests/split/retype "$src"
@@ -68,6 +73,7 @@ crate1 true" retype.Main
 # expands. The expansions elsewhere depend on each, so an edit of any of them takes the full
 # path; the caller's own edit is typed incrementally.
 retype_reads() {
+  piece_ran retype/reads || return
   local src=$work/reads
   rm -rf "$src" "$work/out"
   cp -r tests/split/retype_reads "$src"
@@ -103,6 +109,7 @@ STEPS
 # came from the provider through the facade (`inline_deps` records the provider, not the
 # facade); a selector changed in an export clause takes the full path.
 retype_facade() {
+  piece_ran retype/facade || return
   local src=$work/facade
   rm -rf "$src" "$work/out"
   cp -r tests/split/facade "$src"
@@ -236,6 +243,7 @@ List(2, 4)" retypeinit.run
 # build does and as scalac's, whose macro classes are loaded anew for every run: the caller's
 # second typing is the build's first expansion.
 retype_state() {
+  piece_ran retype/state || return
   local src=$work/state
   rm -rf "$src" "$work/out"
   cp -r tests/split/retype_state "$src"
@@ -265,6 +273,7 @@ STEPS
 # (2026-09-28), and under scala-cli's
 # incremental compiler this program answers `actual 1`.
 retype_state_pair() {
+  piece_ran retype/state_pair || return
   local src=$work/pair
   rm -rf "$src" "$work/out"
   cp -r tests/split/retype_state_pair "$src"
@@ -366,6 +375,7 @@ STEPS
 # one `getClass`, which puts the qualified name on every class. Both are taken out by an edit
 # and put back: the modules are a fresh build's each time, the other files' among them.
 retype_roots() {
+  piece_ran retype/roots || return
   local src=$work/roots
   rm -rf "$src" "$work/out"
   cp -r tests/split/retype_roots "$src"
@@ -395,6 +405,7 @@ STEPS
 # before and whether an edit added an expansion, which holds since the copies are named by the
 # site of their expansion.
 retype_quotes() {
+  piece_ran retype/quotes || return
   local src=$work/quotes
   rm -rf "$src" "$work/out"
   cp -r tests/split/retype_quotes "$src"
@@ -440,6 +451,7 @@ STEPS
 # same error at the start and after an edit. A build after a failed full one is a retype under
 # `--check` and a full build where something is emitted (`$after_failed_full`).
 retype_cacheable() {
+  piece_ran retype/cacheable || return
   local at
   for at in 1 2; do
     retype_cacheable_at $at "$@"
@@ -552,6 +564,7 @@ retype_cacheable_at() {
 # declared to hold cacheable state, it counts on from one retype to the next (the first retype after
 # a full build makes it anew: a full build's state is not the retypes').
 retype_jar_state() {
+  piece_ran retype/jar_state || return
   local jar src=$work/jarstate declared n
   jar=$(jar_of state-lib)
   if [ ! -f "$jar" ]; then
