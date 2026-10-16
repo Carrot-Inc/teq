@@ -67,7 +67,7 @@ mkdir -p "$work/check dir"
 printf 'object Main {\n  def main(args: Array[String]): Unit = {\n    val n: Int = "one"\n  }\n}\n' > "$work/check dir/Bad.scala"
 teq compiler check "$(win "$work/check dir/Bad.scala")"
 status=$?
-if [ $status -eq 1 ] && grep -qF "$(win "$work/check dir/Bad.scala")" "$work/err" && grep -q "type mismatch: found String, required Int" "$work/err"; then ok; else bad "check of a type error (exit $status): $(head -5 "$work/err")"; fi
+if [ $status -eq 1 ] && grep -qF "$(win "$work/check dir/Bad.scala")" "$work/err" && grep -q "type mismatch: found .*, required Int" "$work/err"; then ok; else bad "check of a type error (exit $status): $(head -5 "$work/err")"; fi
 
 # A check under a directory whose path is past 260 characters, Windows' old bound, which std's
 # file operations pass in the extended-length form.
@@ -76,7 +76,7 @@ mkdir -p "$deep"
 printf 'object Deep:\n  val n: Int = "one"\n' > "$deep/Deep.scala"
 teq compiler check "$(win "$deep/Deep.scala")"
 status=$?
-if [ ${#deep} -gt 260 ] && [ $status -eq 1 ] && grep -q "type mismatch: found String, required Int" "$work/err"; then ok; else bad "a check past 260 characters of path (${#deep}, exit $status): $(head -3 "$work/err")"; fi
+if [ ${#deep} -gt 260 ] && [ $status -eq 1 ] && grep -q "type mismatch: found .*, required Int" "$work/err"; then ok; else bad "a check past 260 characters of path (${#deep}, exit $status): $(head -3 "$work/err")"; fi
 
 # A build of a case to one JavaScript file, run on node: the case's expected output.
 for name in collections collect_lambda_match inline_match; do

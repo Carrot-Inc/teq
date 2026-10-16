@@ -182,7 +182,9 @@ fn start(export: &Export, paths: &Paths, identity: &str) -> Result<(TcpStream, I
     Err(format!("the daemon did not listen within {} s (see {})", START_BOUND.as_secs(), paths.log.display()))
 }
 
-/// The daemon outlives the client: its own process group, no console of the client's.
+/// The daemon outlives the client: its own process group, no console of the client's. On Windows
+/// it gets a hidden console of its own rather than none, since its residents, generators and test
+/// runners inherit it, where each child of a process without a console opens a console window.
 fn detach(command: &mut Command) {
     #[cfg(unix)]
     {
@@ -192,9 +194,9 @@ fn detach(command: &mut Command) {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+        command.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
     }
 }
 
