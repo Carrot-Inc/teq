@@ -262,6 +262,14 @@ impl Layout {
         self.has_body[c.idx()] = true;
     }
 
+    /// A jar's class on the JVM: its class file is what runs, so it has no body the layout knows
+    /// of, whatever bodies the build converted for a macro's run.
+    pub fn note_jar(&mut self, c: ClassId) {
+        if let Some(b) = self.has_body.get_mut(c.idx()) {
+            *b = false;
+        }
+    }
+
     pub fn has_body(&self, c: ClassId) -> bool {
         self.has_body.get(c.idx()).copied().unwrap_or(false)
     }

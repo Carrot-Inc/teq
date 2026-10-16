@@ -5431,8 +5431,13 @@ impl<'a> Worker<'a> {
                 te
             }
         };
-        if self.inline.checking > 0 && ctor.is_none() && !sig.tparams.is_empty() {
+        if (self.inline.checking > 0 || self.inline.counting > 0 && !inline_callee) && ctor.is_none() && !sig.tparams.is_empty() {
             self.note_type_args(te, &subst[call.owner_subst.len()..]);
+            // A library body's list its pickle inferred is none the source wrote.
+            let pickled = targs.is_some_and(|l| self.in_converted_body() && self.cur_ast().inferred_type_lists.binary_search(&l.start).is_ok());
+            if self.written_targs(targs) && !pickled {
+                self.note_written_type_args(te);
+            }
         }
         if self.capturing() && !sig.tparams.is_empty() && !(inline_callee && !self.keeps_inline_calls()) {
             let targs: Vec<TypeId> = subst[call.owner_subst.len()..].iter().map(|&(_, t)| t).collect();

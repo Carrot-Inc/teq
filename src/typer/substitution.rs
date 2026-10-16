@@ -14,7 +14,7 @@
 use super::apply::MethodCall;
 use crate::ast::DefKind as DefKindAst;
 use super::inline::{InlineArg, InlineBody, Intrinsic};
-use super::inline_definition::{Bindings, Demand, Instance, StoredIndex};
+use super::inline_definition::{Bindings, Demand, Instance, StoredIndex, TreeOf};
 use super::{ResolvedImport, Worker};
 use crate::intern::FxMap;
 use crate::source::Span;
@@ -160,6 +160,10 @@ pub(super) struct Walk {
     /// class's captures by the stored nodes (`settle_class_body`).
     settling: u32,
     replaced: Vec<(TExprId, TExprId)>,
+    /// While the bindings of an expansion are counted (`InlineState::counting`), each node the
+    /// walk put in the place of another, with the node it replaced, which takes its type trees
+    /// (`export_type_trees`).
+    moved: Vec<(TExprId, TExprId)>,
 }
 
 /// Where the walk stands with the copy of a named local class: its body being settled, with the
@@ -182,6 +186,7 @@ enum ClassPart {
 struct Absorbed {
     reducible: usize,
     deferred: usize,
+    type_trees: usize,
     imports: usize,
     aliases: usize,
     classes: usize,
@@ -199,6 +204,8 @@ struct CopyKinds {
 impl CopyKinds {
     const REDUCIBLE: u8 = 1;
     const DEFERRED: u8 = 2;
+    /// A node with type trees for a count (`Instance::type_trees`), or one standing for it.
+    const TREES: u8 = 4;
 
     /// Empty, for a copy whose nodes begin at `base`, of a record of `nodes` nodes, its room kept.
     fn reset(&mut self, base: u32, nodes: usize) {
@@ -721,8 +728,143 @@ impl<'a> Worker<'a> {
         counts::walked(walk.demand.copied, walk.visited, walk.discarded);
         counts::pruned(walk.pruned);
         let te = if walk.failed { self.prog.add(TExpr::Unit) } else { te };
+        self.export_type_trees(&mut walk, te, body);
         self.put_walk(walk);
         self.unbind_inline_call(&mut bound, te, ty)
+    }
+
+    /// The type trees of the tree `dropped` the walk left out of the expansion, standing on
+    /// `kept` (`export_type_trees`).
+    #[inline(never)]
+    fn carry_type_trees(&mut self, w: &mut Walk, dropped: TExprId, kept: TExprId) {
+        let marked: Vec<TExprId> = self.prog.descendants(dropped).filter(|&n| w.kinds.is(n, CopyKinds::TREES)).collect();
+        if !marked.is_empty() {
+            w.moved.extend(marked.into_iter().map(|n| (n, kept)));
+            w.kinds.mark(kept, CopyKinds::TREES);
+        }
+    }
+
+    /// The type trees of the copy's nodes and binders, for the count of the bindings of the
+    /// expansions under way (`InlineState::type_trees`, `binder_trees`), as the paths they name
+    /// in the expansion's terms: the record's trees (`Instance::type_trees`) and the declared
+    /// types of the binders the copy renamed, each path of a parameter or a binder the one the
+    /// copy gives it (`Demand::bindings`). A type of the copy would not do: it reads a member a
+    /// proxy's refinement fixes as what it is fixed to (`Type::Member`), where dotty's tree keeps
+    /// the path (`m$proxy.MirroredElemTypes`). Each tree stands on the node that stands for its
+    /// own once walked; a deferred call's type arguments are none, the call being expanded and
+    /// the count passing over an `Inlined` call to its expansion. A val whose type the walk
+    /// infers again (`infer_walked_val`) keeps the type the walk gives it.
+    #[inline(never)]
+    fn export_type_trees(&mut self, w: &mut Walk, te: TExprId, body: &InlineBody) {
+        if self.inline.counting == 0 {
+            w.moved.clear();
+            return;
+        }
+        // The nodes with trees, each with the node standing for it once walked.
+        let moved = &w.moved;
+        let standing_of = |mut e: TExprId| {
+            for _ in 0..64 {
+                match moved.iter().rev().find(|&&(from, _)| from == e) {
+                    Some(&(_, to)) => e = to,
+                    None => break,
+                }
+            }
+            e
+        };
+        let def = w.def.clone();
+        let paths: &[(SymId, TypeId)] = w.demand.bindings().1;
+        let mut found: Vec<TypeId> = Vec::new();
+        // The result type the expansion is ascribed, as `PrepareInlineable.wrapRHS` wraps the body
+        // of a method no transparent one: written, or inferred (`InlineDefinition::ty`).
+        if !body.transparent {
+            self.tree_paths(def.ty, paths, !body.declared, &mut found);
+            self.inline.type_trees.extend(found.drain(..).map(|p| (te, p)));
+        }
+        let index = w.demand.index().clone();
+        for &(e, at) in &w.inst.type_trees {
+            let (types, inferred) = match at {
+                TreeOf::Args(_) if w.kinds.is(e, CopyKinds::DEFERRED) => continue,
+                TreeOf::Args(i) => (&def.type_args[i as usize].1, index.inferred_args[i as usize]),
+                TreeOf::Trees(i) => (&def.type_trees[i as usize].1, false),
+            };
+            for &t in types {
+                self.tree_paths(t, paths, inferred, &mut found);
+            }
+            if !found.is_empty() {
+                let node = standing_of(e);
+                self.inline.type_trees.extend(found.drain(..).map(|p| (node, p)));
+            }
+        }
+        let mut binders: Vec<(SymId, TypeId)> = Vec::new();
+        for &(stored, pattern) in &index.open_binders {
+            let Some(&copy) = w.inst.renames.get(&stored) else { continue };
+            let Some(sig) = self.syms.sym(stored).sig.clone() else { continue };
+            let inferred = pattern || w.inferred_vals.contains_key(&copy) || def.pickle_inferred_vals.contains(&stored);
+            // A binder the typer gave a variable (a generator's `x <- xs`) has what it was solved to.
+            let ret = self.zonk(sig.ret);
+            self.tree_paths(ret, paths, inferred, &mut found);
+            for c in &sig.clauses {
+                for p in &c.params {
+                    let t = self.zonk(p.ty);
+                    self.tree_paths(t, paths, false, &mut found);
+                }
+            }
+            binders.extend(found.drain(..).map(|p| (copy, p)));
+        }
+        self.inline.binder_trees.extend(binders);
+    }
+
+    /// The paths the record's type arguments of the deferred call `e` name, by the callee's type
+    /// parameter (`InlineState::inherited`), while the call expands: the count of the bindings
+    /// under way reads the type trees of its expansion that name a type parameter as the
+    /// paths its argument names, as dotty's `TreeTypeMap` substitutes `m$proxy.MirroredElemTypes`
+    /// for the parameter where teq's copy reads what the proxy fixes the member to.
+    #[inline(never)]
+    fn inherit_type_args(&mut self, w: &Walk, e: TExprId) {
+        let Some(stored) = self.inline.stored_deferred.get(&e).cloned() else { return };
+        if stored.subst.iter().all(|&(_, t)| !self.types.has_paths(t) && self.inline.inherited.is_empty()) {
+            return;
+        }
+        let paths = w.demand.bindings().1;
+        let mut found: Vec<TypeId> = Vec::new();
+        let mut frame: Vec<(TParamId, TypeId)> = Vec::new();
+        for &(p, t) in &stored.subst {
+            self.tree_paths(t, paths, false, &mut found);
+            // Of a path no count under way reads, nothing.
+            frame.extend(found.drain(..).filter(|&x| self.inline.counted.iter().any(|&c| self.types.names_term(x, &[c]))).map(|x| (p, x)));
+        }
+        self.inline.inherited.extend(frame);
+    }
+
+    /// The paths of the expansion that the record's type `t` names (`export_type_trees`): those
+    /// the copy gives its parameters and binders, and those the type argument of a type
+    /// parameter of the method named where the call was a deferred one of an expansion's
+    /// (`InlineState::inherited`). Of an `inferred` type, dotty's `InferredTypeTree`, none a
+    /// match type names: the expansion's terms reduce it, where a written tree keeps the
+    /// `RefTree` of its path (`val x = constValue[Tuple.Size[m.MirroredElemTypes]]` is an
+    /// `x: (1 : Int)` once expanded). A written refinement is inferred within: the inliner's
+    /// typer makes it the `TypeTree` of its type (`ReTyper.typedRefinedTypeTree`).
+    fn tree_paths(&self, t: TypeId, paths: &[(SymId, TypeId)], inferred: bool, out: &mut Vec<TypeId>) {
+        let inherited = &self.inline.inherited;
+        if inherited.is_empty() && !self.types.has_paths(t) {
+            return;
+        }
+        let mut stack = vec![(t, inferred)];
+        let mut parts: Vec<TypeId> = Vec::new();
+        while let Some((x, inferred)) = stack.pop() {
+            match self.types.get(x) {
+                Type::Term(v) | Type::Select(_, v) => out.extend(paths.iter().rev().find(|&&(s, _)| s == v).map(|&(_, p)| p)),
+                Type::Param(p) | Type::AppParam(p, _) => out.extend(inherited.iter().filter(|&&(q, _)| q == p).map(|&(_, t)| t)),
+                Type::Alias(..) | Type::Match(..) if inferred => continue,
+                _ => {}
+            }
+            if inherited.is_empty() && !self.types.has_paths(x) {
+                continue;
+            }
+            let within = inferred || matches!(self.types.get(x), Type::Refined(..) | Type::Rec(_));
+            self.types.parts(x, &mut parts);
+            stack.extend(parts.drain(..).map(|p| (p, within)));
+        }
     }
 
     /// Under `TEQ_INLINE_MEASURE=copy`, the copy a call the walk takes would make, made and
@@ -796,6 +938,7 @@ impl<'a> Worker<'a> {
             binder_types: FxMap::default(),
             settling: 0,
             replaced: Vec::new(),
+            moved: Vec::new(),
         })
     }
 
@@ -825,6 +968,7 @@ impl<'a> Worker<'a> {
         w.binder_types = FxMap::default();
         w.settling = 0;
         w.replaced.clear();
+        w.moved.clear();
     }
 
     /// A walk's state kept for the next expansion, up to the depth the expansions nest to.
@@ -855,6 +999,10 @@ impl<'a> Worker<'a> {
             w.kinds.mark(e, CopyKinds::DEFERRED);
         }
         a.deferred = inst.deferred.len();
+        for &(e, _) in &inst.type_trees[a.type_trees..] {
+            w.kinds.mark(e, CopyKinds::TREES);
+        }
+        a.type_trees = inst.type_trees.len();
         let mut blocks: Vec<TExprId> = Vec::new();
         for i in &inst.imports[a.imports..] {
             w.imports.entry(i.block).or_default().push((i.at, i.import));
@@ -933,6 +1081,11 @@ impl<'a> Worker<'a> {
         }
         if w.settling > 0 && walked != e {
             w.replaced.push((e, walked));
+        }
+        // A node with type trees for the count stands for them once walked (`export_type_trees`).
+        if walked != e && w.kinds.is(e, CopyKinds::TREES) {
+            w.moved.push((e, walked));
+            w.kinds.mark(walked, CopyKinds::TREES);
         }
         walked
     }
@@ -2157,7 +2310,12 @@ impl<'a> Worker<'a> {
         let call = MethodCall { recv, sym, owner_subst, ext_recv: None, prefix, refined: None };
         self.inline.site_at_end = d.at_end;
         self.inline.arg_types = arg_types;
+        let inherited = self.inline.inherited.len();
+        if self.inline.counting > 0 {
+            self.inherit_type_args(w, e);
+        }
         let expanded = self.expand_inline(&call, &sig, &subst, &args, ret_ty, d.span, d.expected);
+        self.inline.inherited.truncate(inherited);
         self.inline.entry = None;
         self.inline.site_at_end = false;
         self.inline.arg_types.clear();
@@ -2476,6 +2634,12 @@ impl<'a> Worker<'a> {
                 self.mark_folded_leaf(selected, |t| t.leaf_near(c2));
             }
             if self.is_idempotent(c2) {
+                // The condition's type trees stay counted (`export_type_trees`): scalac's
+                // `InlineTyper.typedIf` keeps a condition that is no `ConstantValue`, whatever
+                // the walk folds it to.
+                if self.inline.counting > 0 {
+                    self.carry_type_trees(w, c2, selected);
+                }
                 return selected;
             }
             let stmts = self.prog.stmts.push_slice(&[TStmt::Expr(c2)]);
@@ -2515,6 +2679,9 @@ impl<'a> Worker<'a> {
                 }
             };
             self.mark_folded_leaf(selected, |t| t.leaf_near(c2));
+            if self.inline.counting > 0 {
+                self.carry_type_trees(w, c2, selected);
+            }
             return selected;
         }
         e

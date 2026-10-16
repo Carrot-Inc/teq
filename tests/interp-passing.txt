@@ -812,6 +812,7 @@ inline_arg_summoned
 inline_arg_summoned_resolution
 inline_arg_throwing_branch
 inline_arg_wrapped
+inline_binding_refs
 inline_bodies_scalac_product
 inline_body_import_nested_given
 inline_constant_final

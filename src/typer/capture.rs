@@ -80,6 +80,46 @@ impl<'a> Worker<'a> {
         self.deps = deps;
     }
 
+    /// The annotations written on the type `ty` of a local val of a program file's body (`Int
+    /// @Ann(m)`, `Ast::type_annots`), typed where the val stands for its pickle's `ANNOTATEDtpt`
+    /// (`Capture::annotations`), quietly as `capture_annotations` types a definition's.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn capture_type_annotations(&mut self, ty: crate::ast::TyExprId) {
+        let file = self.env.file;
+        if !self.prog.capture.as_deref().map_or(false, |c| c.annotates(file)) {
+            return;
+        }
+        let ast = self.ast(file);
+        let at = ast.type_annots.partition_point(|&(x, _)| x < ty);
+        let instances: Vec<crate::ast::ExprId> = ast.type_annots[at..].iter().take_while(|&&(x, _)| x == ty).map(|&(_, e)| e).collect();
+        if instances.is_empty() {
+            return;
+        }
+        let deps = self.deps.take();
+        let outer = std::mem::replace(&mut self.typing_annotation, true);
+        for instance in instances {
+            let mark = self.diags.items.len();
+            let frame = self.var_frame_begin();
+            let pending = self.attempts.pending_len();
+            let te = self.type_expr(instance, None).0;
+            if self.attempts.pending_len() > pending {
+                self.flush_pending_from(pending);
+            }
+            self.var_frame_end(frame);
+            let span = ast.expr_span(instance);
+            let own = |d: &crate::source::Diagnostic| d.file == file && d.span.start >= span.start && d.span.end <= span.end;
+            let typed = !self.diags.items[mark..].iter().any(|d| own(d) && !d.is_warning);
+            let elsewhere: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !own(d)).collect();
+            self.diags.items.extend(elsewhere);
+            if let (true, Some(c)) = (typed, self.prog.capture.as_deref_mut()) {
+                c.annotations.insert((file, instance), te);
+            }
+        }
+        self.typing_annotation = outer;
+        self.deps = deps;
+    }
+
     /// Runs `f`, the typing of a definition an annotation's typing may ask for on demand (a body
     /// whose result is inferred, a class's check, an inline method's definition), outside the
     /// annotation: its flags say nothing of the definition's own trees.
@@ -963,6 +1003,7 @@ impl super::merge::Remap {
             for (_, _, s) in stmts.iter_mut() {
                 match s {
                     BlockStmt::InlineDef(x) => *x = self.map_sym(*x),
+                    BlockStmt::TypeAlias(a) => *a = self.map_alias(*a),
                     BlockStmt::Import(i) => {
                         i.target = match i.target {
                             T::ClassMember(k, n) => T::ClassMember(self.map_class(k), n),

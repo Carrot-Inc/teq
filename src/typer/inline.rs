@@ -165,6 +165,26 @@ pub struct InlineState {
     pub checking: u32,
     /// What the bodies under the definition check keep for the expansion, innermost last.
     pub notes: Vec<super::inline_definition::Notes>,
+    /// How many expansions under way bind an elideable argument, whose bindings
+    /// `Inliner.dropUnusedDefs` counts the references to (`Worker::referenced_bindings`).
+    pub counting: u32,
+    /// While one is: the type trees of their nodes the typed IR leaves out, each with its node
+    /// (`InlineDefinition::type_trees`), as the paths they name in the expansions' terms.
+    pub type_trees: Vec<(TExprId, TypeId)>,
+    /// And the paths the declared types of their binders name, each with its binder: a copy's
+    /// binder reads a member a proxy fixes as what it is fixed to (`export_type_trees`).
+    pub binder_trees: Vec<(SymId, TypeId)>,
+    /// And the deferred calls the copies made, each with the record's own deferred call it
+    /// copies, whose type arguments are in the record's terms.
+    pub(super) stored_deferred: FxMap<TExprId, Arc<super::quoted::DeferredInline>>,
+    /// The paths the type arguments of the deferred calls being expanded name, by the callee's
+    /// type parameter: a type tree of the callee's body that names the parameter names them.
+    pub inherited: Vec<(TParamId, TypeId)>,
+    /// The proxies the counts under way count the references to (`BoundCall::counted`).
+    pub counted: Vec<SymId>,
+    /// The type trees a block being typed puts on its node once made, from a block's mark on:
+    /// a local type alias's right-hand side, the paths a type annotation names.
+    pub pending_trees: Vec<TypeId>,
     /// Set while the interpreter folds an expression, which must not start another fold.
     pub folding: bool,
     /// Set while a constant is read off a tree as it stands: no val's body is typed for it.
@@ -228,6 +248,13 @@ pub struct Expanding {
     retained: u32,
     checking: u32,
     notes: Vec<super::inline_definition::Notes>,
+    counting: u32,
+    type_trees: Vec<(TExprId, TypeId)>,
+    binder_trees: Vec<(SymId, TypeId)>,
+    stored_deferred: FxMap<TExprId, Arc<super::quoted::DeferredInline>>,
+    inherited: Vec<(TParamId, TypeId)>,
+    counted: Vec<SymId>,
+    pending_trees: Vec<TypeId>,
     lenient_match: u32,
     record_args: bool,
     arg_types: Vec<(TExprId, TypeId)>,
@@ -264,6 +291,13 @@ impl InlineState {
             retained,
             checking,
             notes,
+            counting,
+            type_trees,
+            binder_trees,
+            stored_deferred,
+            inherited,
+            counted,
+            pending_trees,
             lenient_match,
             record_args,
             arg_types,
@@ -317,6 +351,13 @@ impl InlineState {
             && *retained == 0
             && *checking == 0
             && notes.is_empty()
+            && *counting == 0
+            && type_trees.is_empty()
+            && binder_trees.is_empty()
+            && stored_deferred.is_empty()
+            && inherited.is_empty()
+            && counted.is_empty()
+            && pending_trees.is_empty()
             && *lenient_match == 0
             && !*record_args
             && !*site_at_end
@@ -367,6 +408,13 @@ impl InlineState {
             retained: take(retained),
             checking: take(checking),
             notes: take(notes),
+            counting: take(counting),
+            type_trees: take(type_trees),
+            binder_trees: take(binder_trees),
+            stored_deferred: take(stored_deferred),
+            inherited: take(inherited),
+            counted: take(counted),
+            pending_trees: take(pending_trees),
             lenient_match: take(lenient_match),
             record_args: take(record_args),
             arg_types: take(arg_types),
@@ -398,6 +446,13 @@ impl InlineState {
         self.retained = outer.retained;
         self.checking = outer.checking;
         self.notes = outer.notes;
+        self.counting = outer.counting;
+        self.type_trees = outer.type_trees;
+        self.binder_trees = outer.binder_trees;
+        self.stored_deferred = outer.stored_deferred;
+        self.inherited = outer.inherited;
+        self.counted = outer.counted;
+        self.pending_trees = outer.pending_trees;
         self.lenient_match = outer.lenient_match;
         self.record_args = outer.record_args;
         self.arg_types = outer.arg_types;
@@ -494,6 +549,11 @@ pub(super) struct BoundCall {
     /// The call's result type with its parameters' paths moved to the proxies'.
     pub ret_ty: TypeId,
     pub params: Vec<BoundParam>,
+    /// The proxies of `stmts` whose arguments are elideable (`elideable_argument`), whose
+    /// references `Inliner.dropUnusedDefs` counts (`referenced_bindings`).
+    counted: Vec<SymId>,
+    /// Whether the method is a transparent one, whose expansion is ascribed no result type.
+    transparent: bool,
 }
 
 /// A parameter of a call bound by `Worker::bind_inline_call`.
@@ -1072,6 +1132,8 @@ impl<'a> Worker<'a> {
             paths_mark: 0,
             ret_ty,
             params: Vec::new(),
+            counted: Vec::new(),
+            transparent: body.transparent,
         };
         if let (Some(r), Owner::Class(c)) = (call.recv, self.syms.sym(sym).owner) {
             if self.is_stable(r) && !matches!(self.prog.expr(r), TExpr::This) {
@@ -1214,6 +1276,19 @@ impl<'a> Worker<'a> {
         if self.types.has_paths(bound.ret_ty) {
             let paths = self.inline.param_paths[bound.paths_mark..].to_vec();
             bound.ret_ty = self.subst_paths(bound.ret_ty, &paths);
+        }
+        // The bindings `Inliner.dropUnusedDefs` may drop, whose expansion notes the type trees
+        // its nodes leave out for the count (`InlineState::type_trees`).
+        for i in 0..bound.stmts.len() {
+            if let TStmt::Val(proxy, init) = bound.stmts[i].1 {
+                if self.elideable_argument(init) {
+                    bound.counted.push(proxy);
+                }
+            }
+        }
+        if !bound.counted.is_empty() {
+            self.inline.counting += 1;
+            self.inline.counted.extend_from_slice(&bound.counted);
         }
         self.part_end(bind);
         bound
@@ -1420,11 +1495,22 @@ impl<'a> Worker<'a> {
             };
         }
         bound.stmts.sort_by_key(|&(at, _)| at);
-        // A binding the expansion never reads of an argument scalac finds elideable goes, as
-        // `Inliner.dropUnusedDefs` drops it; one it reads stays.
+        // A binding of an elideable argument that nothing of the expansion or of the other
+        // bindings refers to goes, as `Inliner.dropUnusedDefs` drops it; any other stays.
+        let referenced = self.referenced_bindings(bound, te);
+        if !bound.counted.is_empty() {
+            self.inline.counting -= 1;
+            let at = self.inline.counted.len() - bound.counted.len();
+            self.inline.counted.truncate(at);
+            if self.inline.counting == 0 {
+                self.inline.type_trees.clear();
+                self.inline.binder_trees.clear();
+                self.inline.stored_deferred.clear();
+            }
+        }
         let mut stmts: Vec<TStmt> = Vec::with_capacity(bound.stmts.len());
         for &(_, st) in &bound.stmts {
-            if !self.unread_elideable_binding(st, te) {
+            if !matches!(st, TStmt::Val(p, _) if bound.counted.contains(&p) && !referenced.contains(&p)) {
                 stmts.push(st);
             }
         }
@@ -1451,12 +1537,123 @@ impl<'a> Worker<'a> {
         (result, ty)
     }
 
-    /// Whether the parameter binding `st` is one `Inliner.dropUnusedDefs` drops: `body` never reads
-    /// it and its argument is elideable (`elideable_argument`). The one reader of an expansion's
-    /// result this adds, the inliner's own, as dotty's `dropUnusedDefs` reads the expansion.
-    fn unread_elideable_binding(&mut self, st: TStmt, body: TExprId) -> bool {
-        let TStmt::Val(proxy, init) = st else { return false };
-        self.elideable_argument(init) && !self.prog.descendants(body).any(|x| matches!(self.prog.expr(x), TExpr::Local(v) if v == proxy))
+    /// `Inliner.dropUnusedDefs`' count (Inliner.scala 1147, `countRefs`) over the expansion `te`
+    /// and the bindings, for the bindings of elideable arguments (`BoundCall::counted`): the
+    /// proxies it finds a reference to, whose bindings stay. A reference is a read of the proxy
+    /// (a `RefTree`), or its path in the type of a type tree (`updateTermRefCounts`): a val's, a
+    /// local def's parameter's or result's, a lambda parameter's, a type pattern's, and those the
+    /// nodes leave out (`InlineState::type_trees`: a call's type arguments, an ascription, a
+    /// `new`, a local type alias, a type annotation's arguments); the type the expansion is
+    /// ascribed where the method is no transparent one (`PrepareInlineable.wrapRHS`'s `Typed`);
+    /// and each binding's own value and type. The calls the expansion expanded count as their
+    /// expansions do: the count passes over an `Inlined` call.
+    #[inline(never)]
+    fn referenced_bindings(&mut self, bound: &BoundCall, te: TExprId) -> Vec<SymId> {
+        let counted = &bound.counted;
+        let mut found: Vec<SymId> = Vec::new();
+        if counted.is_empty() {
+            return found;
+        }
+        let mut trees = std::mem::take(&mut self.inline.type_trees);
+        trees.sort_unstable_by_key(|&(e, _)| e);
+        let mut binders = std::mem::take(&mut self.inline.binder_trees);
+        binders.sort_unstable_by_key(|&(s, _)| s);
+        let binder_paths = |s: SymId, out: &mut Vec<TypeId>| {
+            let at = binders.partition_point(|&(x, _)| x < s);
+            out.extend(binders[at..].iter().take_while(|&&(x, _)| x == s).map(|&(_, t)| t));
+        };
+        let mut types: Vec<TypeId> = Vec::new();
+        if !bound.transparent {
+            types.push(bound.ret_ty);
+        }
+        let mut roots = vec![te];
+        for &(_, st) in &bound.stmts {
+            if let TStmt::Val(p, init) = st {
+                types.push(self.sig_of(p).ret);
+                roots.push(init);
+            }
+        }
+        let mut pats: Vec<TPatId> = Vec::new();
+        'roots: for root in roots {
+            for e in self.prog.descendants(root) {
+                match self.prog.expr(e) {
+                    TExpr::Local(v) => {
+                        if counted.contains(&v) && !found.contains(&v) {
+                            found.push(v);
+                        }
+                    }
+                    TExpr::Block(stmts, _) => {
+                        for &st in self.prog.stmt_list(stmts) {
+                            match st {
+                                TStmt::Val(s, _) => {
+                                    types.extend(self.syms.sym(s).sig.as_ref().map(|g| g.ret));
+                                    binder_paths(s, &mut types);
+                                }
+                                TStmt::Fun(f) => {
+                                    let s = self.prog.funs[f.idx()].sym;
+                                    if let Some(sig) = &self.syms.sym(s).sig {
+                                        types.push(sig.ret);
+                                        for c in &sig.clauses {
+                                            for p in &c.params {
+                                                types.push(p.ty);
+                                                binder_paths(p.sym, &mut types);
+                                            }
+                                        }
+                                    }
+                                    binder_paths(s, &mut types);
+                                }
+                                TStmt::Pat(p, _) => pats.push(p),
+                                TStmt::Expr(_) => {}
+                            }
+                        }
+                    }
+                    TExpr::Lambda(params, _) => {
+                        for &p in self.prog.sym_list(params) {
+                            types.extend(self.syms.sym(p).sig.as_ref().map(|g| g.ret));
+                            binder_paths(p, &mut types);
+                        }
+                    }
+                    TExpr::Match(_, cases) => pats.extend(self.prog.case_list(cases).iter().map(|c| c.pat)),
+                    TExpr::Try(i) => pats.extend(self.prog.case_list(self.prog.tries[i as usize].cases).iter().map(|c| c.pat)),
+                    TExpr::Cast(_, CastOp::Written, to) => types.push(to),
+                    _ => {}
+                }
+                let at = trees.partition_point(|&(x, _)| x < e);
+                types.extend(trees[at..].iter().take_while(|&&(x, _)| x == e).map(|&(_, t)| t));
+                while let Some(p) = pats.pop() {
+                    match self.prog.pats[p.idx()] {
+                        TPat::Test(_, t, inner) => {
+                            types.push(t);
+                            pats.push(inner);
+                        }
+                        TPat::Bind(_, inner) => pats.extend(inner),
+                        TPat::Class(_, _, _, subs) | TPat::Alt(subs) => pats.extend_from_slice(self.prog.pat_list(subs)),
+                        TPat::Seq(items, rest) => {
+                            pats.extend_from_slice(self.prog.pat_list(items));
+                            pats.extend(rest);
+                        }
+                        TPat::Unapply(_, _, inner) => pats.push(inner),
+                        _ => {}
+                    }
+                }
+                for t in types.drain(..) {
+                    if !self.types.has_paths(t) {
+                        continue;
+                    }
+                    for &c in counted {
+                        if !found.contains(&c) && self.types.names_term(t, &[c]) {
+                            found.push(c);
+                        }
+                    }
+                }
+                if found.len() == counted.len() {
+                    break 'roots;
+                }
+            }
+        }
+        self.inline.type_trees = trees;
+        self.inline.binder_trees = binders;
+        found
     }
 
     /// `Inliner.isElideableExpr` (40–99) of an argument teq binds: a pure value; `Synthesizer`'s

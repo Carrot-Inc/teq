@@ -2319,7 +2319,12 @@ impl<'a> Worker<'a> {
                     // (`TypeErasure.tupleArity`).
                     let js_written = self.written_js_alias(ids[0]);
                     let t = self.resolve_declared_type(ids[0]);
-                    return Some(self.lower_cast_written(recv, recv_ty, t, span, js_written));
+                    let cast = self.lower_cast_written(recv, recv_ty, t, span, js_written);
+                    // The type argument is a type tree of the cast (`InlineDefinition::type_trees`).
+                    if self.notes_type_trees() {
+                        self.note_type_tree(cast.0, t);
+                    }
+                    return Some(cast);
                 }
                 let t = self.resolve_type(ids[0]);
                 // `x.isInstanceOf[T @unchecked]` as a pattern's `case _: T @unchecked` is.
@@ -2331,6 +2336,9 @@ impl<'a> Worker<'a> {
                     self.note_leaf_test(test, t);
                 }
                 let te = self.prog.add(TExpr::TypeTest(recv, test));
+                if self.notes_type_trees() {
+                    self.note_type_tree(te, t);
+                }
                 if self.capturing() {
                     self.capture_form(te, Form::Test(t));
                 }

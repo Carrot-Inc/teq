@@ -1839,6 +1839,12 @@ impl<'a> Worker<'a> {
                     _ => te,
                 };
                 self.ascribed(te, t);
+                if self.notes_type_trees() {
+                    self.note_type_tree(te, t);
+                    for p in self.written_paths(ty, false) {
+                        self.note_type_tree(te, p);
+                    }
+                }
                 if self.capturing() {
                     self.capture_wrap(te, Wrap::Ascribed(t));
                 }
@@ -2425,6 +2431,10 @@ impl<'a> Worker<'a> {
         self.new_prefixed = outer_prefixed;
         self.part_end(part);
         self.new_enclosing_instance(e, typed, prefixed);
+        // The class type `new` writes is a type tree of the node (`InlineDefinition::type_trees`).
+        if self.notes_type_trees() {
+            self.note_type_tree(typed.0, typed.1);
+        }
         // A class named through an import of a value's members takes the value as its enclosing
         // instance, where its type carries no prefix that passed it.
         if let Some(v) = imported.filter(|_| !matches!(self.types.get(typed.1), Type::Nested(..))) {
@@ -4026,6 +4036,7 @@ impl<'a> Worker<'a> {
         let import_aliases = self.inline.import_aliases.len();
         let deferred = self.deferred_classes.len();
         let pending_imports = if self.inline.checking > 0 { self.pending_imports_mark() } else { None };
+        let pending_trees = self.block_trees_mark();
         self.push_scope();
         self.local_blocks.push(super::resolve::LocalBlock { file, stmts, frame_depth: self.env.frames.len(), imports_scope, next: 0 });
         let cursor = items.iter().any(|s| matches!(s, Stmt::Def(d) if matches!(ast.def(*d).kind, DefKind::Fun(_)) && ast.def(*d).mods & mods::INLINE != 0));
@@ -4216,6 +4227,11 @@ impl<'a> Worker<'a> {
                             let from = self.ast(file).def(d).span.start;
                             self.capture_block_stmts(s, out.len() as u32, from, vec![crate::tir::capture::BlockStmt::InlineDef(sym)]);
                         }
+                        // A type alias stands among the statements, as scalac's pickle keeps it.
+                        if let Some(a) = self.block_alias_of(d) {
+                            let from = self.ast(file).def(d).span.start;
+                            self.capture_block_stmts(s, out.len() as u32, from, vec![crate::tir::capture::BlockStmt::TypeAlias(a)]);
+                        }
                     }
                 }
                 Stmt::Import(i) => {
@@ -4258,6 +4274,7 @@ impl<'a> Worker<'a> {
             self.capture_block_classes(block, classes);
         }
         self.note_block_imports(block, pending_imports);
+        self.note_block_trees(block, pending_trees);
         (block, ty)
     }
 
@@ -4497,6 +4514,12 @@ impl<'a> Worker<'a> {
                     if self.capturing() && lost != 0 {
                         self.capture_local(sym, |l| l.mods = lost);
                     }
+                    // A type its pickle inferred is none the source wrote.
+                    if let (Some(&t), true) = (ty.as_ref(), self.capturing()) {
+                        if !(self.in_converted_body() && ast.inferred_types.binary_search(&t.0).is_ok()) {
+                            self.capture_local(sym, |l| l.tpt = Some(t));
+                        }
+                    }
                     self.bind_local(def.name, sym);
                     if def.mods & mods::IMPLICIT != 0 {
                         self.bind_given(sym);
@@ -4505,6 +4528,16 @@ impl<'a> Worker<'a> {
                     sym
                 }) };
                 let inferred = ty.filter(|t| self.in_converted_body() && pat.is_none() && early.is_none() && ast.inferred_types.binary_search(&t.0).is_ok());
+                // What its written type names is a type tree of the block (`written_paths`).
+                if let (Some(t), None, true) = (ty, inferred, self.notes_type_trees()) {
+                    for p in self.written_paths(*t, true) {
+                        self.note_pending_tree(p);
+                    }
+                }
+                // Its type's annotations, for the pickle (`ANNOTATEDtpt`).
+                if let (Some(t), true) = (ty, self.capturing() && !ast.type_annots.is_empty()) {
+                    self.capture_type_annotations(*t);
+                }
                 let outer_inline_val = std::mem::replace(&mut self.inline_val_rhs, def.mods & mods::INLINE != 0);
                 let (init, mut ity) = match declared {
                     Some(t) if inferred.is_some() => {
@@ -4552,6 +4585,8 @@ impl<'a> Worker<'a> {
                             s.sig = Some(sig);
                             s.state().set(Completion::Done);
                             self.note_inferred_val(sym);
+                        } else if inferred.is_some() && self.checks_inline_definition() {
+                            self.note_pickle_inferred_val(sym);
                         }
                         out.push(TStmt::Val(sym, init));
                     }
@@ -4700,6 +4735,10 @@ impl<'a> Worker<'a> {
         let sym = self.new_local(name, kind, ity, span);
         self.syms.sym_mut(sym).mods |= lazy;
         self.bind_local(name, sym);
+        // One the typer inferred, as dotty's desugaring of the tuple's element infers it.
+        if declared.is_none() {
+            self.note_inferred_val(sym);
+        }
         out.push(TStmt::Val(sym, init));
     }
 

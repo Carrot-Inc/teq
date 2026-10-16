@@ -257,6 +257,16 @@ impl<'a> Cx<'a> {
             }
         }
         lap.done("tables: class names", n_classes);
+        // A jar's class keeps a jar class's layout where the build converted it for a macro's run
+        // (tapir's `Schema` for `schemaForMap`): nothing touches its companion before `new`, as
+        // where the build converted nothing (`Some(x)`), so a build over products, which runs
+        // no such macro, writes the same.
+        let reach = cx.input.reach;
+        for (i, &library) in reach.library_classes.iter().enumerate() {
+            if library && !reach.product_classes.get(i).copied().unwrap_or(false) {
+                cx.layout.note_jar(ClassId(i as u32));
+            }
+        }
         // Another module's object runs code when it is loaded where its manifest says so.
         for &c in &cx.input.reach.external_bodies {
             let object = syms.class(c).kind == ClassKind::Object;

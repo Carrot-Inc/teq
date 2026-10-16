@@ -40,7 +40,12 @@
 # tests/support/anon_final/list.sh's listing against anon_final.expected, listed from scalac's class files. And each program of tests/support/abi, built as a module's
 # products, has scalac's layout of the members its `// abi:` line names: the names, descriptors and
 # flags tests/support/abi/listing.py reads from its class files against <name>.expected, which
-# tests/support/abi/expected.sh writes from scalac 3.8.4's.
+# tests/support/abi/expected.sh writes from scalac 3.8.4's. And an inline call's binding stays where
+# scalac's does: tests/support/inline_bindings/list.sh's listing of tests/cases/inline_binding_refs
+# against inline_bindings.expected, listed from scalac's class files (left out without javap). And a jar's companion
+# is never touched before `new` of its case class, whatever bodies the build converted for a macro's run, where the
+# program's own companion that runs code is: tests/support/jar_companion_touch/list.sh's listing of
+# jar_companion_touch.scala against jar_companion_touch.expected (left out without javap or the jars).
 cd "$(dirname "$0")/.."
 # The lists are sorted bytewise: `sort -u` and `comm` under a locale's collation would take
 # `tail_calls` and `tailcalls` for one name. The character set stays the locale's, which java's
@@ -231,6 +236,39 @@ trait_inits() {
     return 1
   fi
 }
+inline_bindings() {
+  command -v javap > /dev/null || return 0
+  local work=$out/inline_bindings
+  rm -rf "$work"
+  if ! timeout 60 "$TEQ" compiler build tests/cases/inline_binding_refs/*.scala --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
+    echo "INLINE BINDINGS: the fixture does not build (see $work.log)"
+    return 1
+  fi
+  bash tests/support/inline_bindings/list.sh "$work" > "$work.txt"
+  if ! diff tests/support/inline_bindings/inline_bindings.expected "$work.txt" > "$work.diff"; then
+    echo "INLINE BINDINGS: an inline call's binding does not stay where scalac's does"
+    head -10 "$work.diff"
+    return 1
+  fi
+}
+jar_companion_touch() {
+  command -v javap > /dev/null || return 0
+  local src=tests/support/jar_companion_touch/jar_companion_touch.scala work=$out/jar_companion_touch
+  . tests/support/jars.sh
+  jars_of "$src"
+  [ -z "$JARS_MISSING" ] || return 0
+  rm -rf "$work"
+  if ! timeout 120 "$TEQ" compiler build "$src" --target jvm --products "$work" --classpath "$JARS_CP" > "$work.log" 2>&1; then
+    echo "JAR COMPANION TOUCH: the fixture does not build (see $work.log)"
+    return 1
+  fi
+  bash tests/support/jar_companion_touch/list.sh "$work" > "$work.txt"
+  if ! diff tests/support/jar_companion_touch/jar_companion_touch.expected "$work.txt" > "$work.diff"; then
+    echo "JAR COMPANION TOUCH: a companion touched before \`new\` is not the program's own"
+    head -10 "$work.diff"
+    return 1
+  fi
+}
 abi_layout() {
   command -v python3 > /dev/null || return 0
   local f name work fails=0
@@ -257,6 +295,8 @@ if [ -z "$VERSION" ]; then
   forwarder_order || status=1
   trait_inits || status=1
   anon_final || status=1
+  inline_bindings || status=1
+  jar_companion_touch || status=1
   abi_layout || status=1
 fi
 count() { grep -c "^$1 " "$out/results.txt"; }
