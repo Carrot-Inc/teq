@@ -22,7 +22,6 @@ lsp.1/4 242
 lsp.2/4 226
 lsp.3/4 190
 lsp.4/4 255
-watch-memory 187
 tasty 124
 modules 392
 modules.1/2 208

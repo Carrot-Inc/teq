@@ -165,6 +165,8 @@ for v in APP_MODULES APP_CLASSPATH APP_SCALAC_OPTIONS APP_TEST_MODULES APP_TEST_
 done
 [ -z "$manifest" ] || [ -f "$manifest" ] || { echo "gate: no manifest $manifest" >&2; exit 2; }
 
+# excluded: watch-memory  tests/watch-memory/budgets.txt's footprints are the recording machine's (a shard's host crossed the
+# sixteen-worker rows by its load), so the suite runs here alone as the line memory, not on a machine
 # The machines' suites, as tests/all.sh names and runs them; a command's first path is the script the tree must have
 # (the repository's launcher, ./teq, aside: a suite written in Scala is the path it interprets).
 machine=(
@@ -180,7 +182,6 @@ machine=(
   "lsp ./tests/lsp.sh"
   "task ./tests/task.sh"
   "runner-classes ./tests/runner-classes.sh"
-  "watch-memory ./tests/watch-memory.sh"
   "tasty ./tests/tasty.sh"
   "modules ./tests/modules.sh"
   "tasty-exec ./teq interp tests/tasty-exec.scala"
