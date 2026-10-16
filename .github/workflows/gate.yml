@@ -108,9 +108,14 @@ jobs:
             suites: tasty classfile classpath stdlib
             minutes: 35
             jars: true
-          - group: modules
-            suites: modules tasty-exec analysis-bytes workers gate-scripts
-            minutes: 50
+          # The modules suite as its two pieces (tests/all.sh's `modules.1/2`): whole it is thirty minutes of the runner.
+          - group: modules-1
+            suites: modules.1/2 workers tasty-exec
+            minutes: 35
+            jars: true
+          - group: modules-2
+            suites: modules.2/2 analysis-bytes gate-scripts
+            minutes: 35
             jars: true
           - group: corpus
             suites: app planted asymptotics

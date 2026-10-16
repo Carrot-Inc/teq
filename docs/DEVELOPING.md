@@ -220,7 +220,8 @@ parts), dealt by the weights of `tests/support/piece-weights.txt` and never by t
 added lands in one part (`tests/support/pieces.sh`); each unit's body stamps itself as it starts, and a piece fails
 unless every unit of its part ran exactly once. The gate deals each piece as a suite of its own (`lsp.1/4`, a
 row of `tests/gate-times.txt` of its own) and merges their summaries into the suite's row, which fails when a piece
-fails or is missing; `tests/all.sh`, and a suite run by hand, run it whole.
+fails or is missing; `tests/all.sh` and a suite run by hand run it whole, or one piece when it is named as
+`modules.1/2`, which the GitHub gate's two modules jobs do.
 `tests/gate-scripts.sh` checks the gate's own decisions against stand-in machines (`tests/gate-agent/`).
 Its application lines (`--app`) read lists that stay outside the repository with the application.
 `bench/app/app-lists.sh <checkout> <project> <dir>` writes them from the application's sbt build, through
@@ -255,7 +256,8 @@ runners for every push to GitHub's `dev`, where every landing goes, for every pu
 and by hand. GitHub's `master` is green only: it is fast-forwarded to a `dev` head whose run is green in every job,
 and never pushed to otherwise. One job per group of suites, each within its bound, every suite in one of them but
 `budget`, `runtime` and `watch-memory`, whose numbers are the recording machine's (the workflow's `excluded:` lines;
-`tests/gate-coverage.sh` fails a suite neither run nor excluded); `tests/gate.sh` runs those on the maintainers'
+`tests/gate-coverage.sh` fails a suite neither run nor excluded, and a suite run as pieces must have each of its
+pieces named once over the jobs); `tests/gate.sh` runs those on the maintainers'
 machines. It needs nothing
 of the maintainers' machines: one job builds the release binary, one prepares the jars once (the Maven ones from
 the cache `tests/support/jars.sh` keys or from Maven Central, the built ones handed on as an artifact,

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Whether the GitHub gate (.github/workflows/gate.yml) runs every suite tests/all.sh names: the suites its jobs
-# select (a matrix row's `suites:` line, a step's `tests/all.sh <suites>`) and the ones its `# excluded: <suite>
+# select (a matrix row's `suites:` line, a step's `tests/all.sh <suites>`; a suite as pieces, `modules.1/2`, each of
+# 1..n once over the jobs) and the ones its `# excluded: <suite>
 # <reason>` lines leave out, against the names of tests/all.sh's `suite` lines. A suite of tests/all.sh neither
 # selected nor excluded fails, and so does a name either side lacks, a suite selected twice or selected and
 # excluded, and an exclusion without its reason. And the same of the landing gate, tests/gate.sh: its lines (the
@@ -16,14 +17,29 @@ for m in re.finditer(r"^suite\s+(\S+)", all_sh, re.M):
     if m.group(1) not in suites:
         suites.append(m.group(1))
 selected = []
+# A suite run as pieces (`modules.1/2`, tests/all.sh's piece names) counts as selected once when each of 1..n is
+# named exactly once over the jobs.
+pieces = {}
+def select(words):
+    for w in words:
+        m = re.fullmatch(r"([a-z0-9-]+)\.(\d+)/(\d+)", w)
+        if m:
+            pieces.setdefault(m.group(1), []).append((int(m.group(2)), int(m.group(3))))
+        else:
+            selected.append(w)
 for m in re.finditer(r"^[ \t]+suites:[ \t]*(.*)$", workflow, re.M):
-    selected += m.group(1).split()
+    select(m.group(1).split())
 for m in re.finditer(r"^\s*(?:-\s+run:\s*)?tests/all\.sh[ \t]+(.*)$", workflow, re.M):
     words = m.group(1).split()
     if words and not words[0].startswith("${{"):
-        selected += words
+        select(words)
 excluded = {}
 fails = []
+for name, ps in pieces.items():
+    n = ps[0][1]
+    if {m for _, m in ps} != {n} or sorted(k for k, _ in ps) != list(range(1, n + 1)):
+        fails.append(f"{name}: its pieces are {', '.join(f'{k}/{m}' for k, m in ps)}, not each of 1..n once")
+    selected.append(name)
 for m in re.finditer(r"^#\s*excluded:\s*(\S+)[ \t]*(.*)$", workflow, re.M):
     if not m.group(2).strip():
         fails.append(f"{m.group(1)} is excluded without a reason")

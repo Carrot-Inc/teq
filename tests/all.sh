@@ -1,5 +1,6 @@
 #!/bin/bash
-# Runs every suite in turn, or only the suites named as arguments (`tests/all.sh cases jvm`), and
+# Runs every suite in turn, or only the suites named as arguments (`tests/all.sh cases jvm`; a pieced suite's
+# one piece as `modules.1/2`), and
 # ends with one line per suite; exits non-zero when any failed or a name is unknown. The
 # output of a failing suite is printed in full, a passing one is summed up by its last line. The
 # scala3 harnesses fail without a checkout in $SCALA3. These skip and count as passed then: the
@@ -24,7 +25,23 @@ summary=()
 logs=out/all
 mkdir -p "$logs"
 rm -f "$logs/times.txt"
-only=" $* "
+# A suite named `<suite>.<k>/<n>` runs the k-th of its n pieces (`--piece k/n`, the suites the gate deals as
+# pieces: tests/support/pieces.sh) under that name in the summary, the log and the times; one piece of a suite a run.
+pieced=" lsp jvm-watch modules split "
+declare -A piece
+only="  "
+for name in "$@"; do
+  if [[ $name =~ ^([a-z0-9-]+)\.([1-9][0-9]*)/([1-9][0-9]*)$ ]]; then
+    if [[ "$pieced" != *" ${BASH_REMATCH[1]} "* ]]; then
+      status=1
+      summary+=("FAIL  $name: ${BASH_REMATCH[1]} runs whole, in no pieces")
+      continue
+    fi
+    piece[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}/${BASH_REMATCH[3]}
+    name=${BASH_REMATCH[1]}
+  fi
+  only+="$name "
+done
 seen=()
 suite() {
   local name=$1
@@ -33,21 +50,27 @@ suite() {
   if [ "$only" != "  " ] && [[ "$only" != *" $name "* ]]; then
     return
   fi
+  local label=$name
+  if [ -n "${piece[$name]:-}" ]; then
+    set -- "$@" --piece "${piece[$name]}"
+    label="$name.${piece[$name]}"
+  fi
+  local log=$logs/${label//\//-}.log
   local out start=$SECONDS
   # Written as the suite runs, so that a run cut short keeps what it printed.
-  "$@" > "$logs/$name.log" 2>&1
+  "$@" > "$log" 2>&1
   local code=$?
-  out=$(cat "$logs/$name.log")
+  out=$(cat "$log")
   local last
   last=$(tail -1 <<< "$out")
   if [ $code -ne 0 ]; then
     status=1
     echo "$out"
-    summary+=("FAIL  $name: $last")
-    echo "$name $((SECONDS - start)) FAIL" >> "$logs/times.txt"
+    summary+=("FAIL  $label: $last")
+    echo "$label $((SECONDS - start)) FAIL" >> "$logs/times.txt"
   else
-    summary+=("ok    $name: $last")
-    echo "$name $((SECONDS - start)) ok" >> "$logs/times.txt"
+    summary+=("ok    $label: $last")
+    echo "$label $((SECONDS - start)) ok" >> "$logs/times.txt"
   fi
 }
 suite cases         ./tests/run.sh
