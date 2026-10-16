@@ -148,8 +148,9 @@ pub struct Cx<'a> {
     /// Those of a Scala 2 jar, each with the pickle (`ScalaSignature`) that describes it: its own
     /// class file's, or a nested class's owner's, which holds it (`owning_pickle`).
     pub scala2_pickles: FxMap<ClassId, std::sync::Arc<Vec<u8>>>,
-    /// Every class by its binary name, made when an erasure first asks.
-    named: std::sync::OnceLock<FxMap<String, ClassId>>,
+    /// Every class by its binary name, made when an erasure first asks: the first so named, and
+    /// apart the others of a name several classes share (a std stand-in and the JDK's class).
+    named: std::sync::OnceLock<(FxMap<String, ClassId>, FxMap<String, Vec<ClassId>>)>,
     /// The given objects of a package or of objects (`given x: T with { ... }`), by their class
     /// and by their given: scalac's module classes `Owner$x$`, which every read reaches through
     /// `MODULE$` (`static_given_objects`).
@@ -179,10 +180,17 @@ struct SyncCx<'a>(&'a Cx<'a>);
 unsafe impl Sync for SyncCx<'_> {}
 unsafe impl Send for SyncCx<'_> {}
 
+/// A reference of the program the JVM cannot link, refused where it stands with the error's
+/// message (`Gen::refuse`).
+pub type Refusal = (crate::source::FileId, crate::source::Span, String);
+
 pub struct Output {
     pub classes: Vec<Emitted>,
     pub main_class: Option<String>,
     pub errors: Vec<String>,
+    /// The program's references refused, compile errors at their places, in file and position
+    /// order.
+    pub refused: Vec<Refusal>,
     /// Under `--all-mains`, the classes the `java` launcher runs, by source file: the class of
     /// a `@main` method, or the class holding an object's static `main`.
     pub main_classes: Vec<(FileId, String)>,
@@ -699,16 +707,31 @@ impl<'a> Cx<'a> {
         info.mods & mods::LAZY != 0 || info.kind == SymKind::Given
     }
 
+    fn named(&self) -> &(FxMap<String, ClassId>, FxMap<String, Vec<ClassId>>) {
+        self.named.get_or_init(|| {
+            let mut named: FxMap<String, ClassId> = FxMap::default();
+            let mut more: FxMap<String, Vec<ClassId>> = FxMap::default();
+            for (i, n) in self.class_names.iter().enumerate() {
+                match named.entry(n.clone()) {
+                    std::collections::hash_map::Entry::Occupied(_) => more.entry(n.clone()).or_default().push(ClassId(i as u32)),
+                    std::collections::hash_map::Entry::Vacant(v) => {
+                        v.insert(ClassId(i as u32));
+                    }
+                }
+            }
+            (named, more)
+        })
+    }
+
     /// The class of a binary name, the first of the program's classes so named.
     pub fn class_named(&self, name: &str) -> Option<ClassId> {
-        let named = self.named.get_or_init(|| {
-            let mut named = FxMap::default();
-            for (i, n) in self.class_names.iter().enumerate() {
-                named.entry(n.clone()).or_insert(ClassId(i as u32));
-            }
-            named
-        });
-        named.get(name).copied()
+        self.named().0.get(name).copied()
+    }
+
+    /// Every class of a binary name, the first first.
+    pub fn classes_named<'s>(&'s self, name: &str) -> impl Iterator<Item = ClassId> + 's {
+        let (first, more) = self.named();
+        first.get(name).copied().into_iter().chain(more.get(name).into_iter().flatten().copied())
     }
 
     pub fn is_interface(&self, c: ClassId) -> bool {
@@ -894,8 +917,8 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
     };
     let shared = SyncCx(&cx);
     let workers = if prog.exprs.len() < 100_000 { 1 } else { crate::workers() };
-    // Each unit's class files, errors and function arities, by its index in `units`.
-    let emit_units = |which: &[usize]| -> Vec<(usize, Vec<Emitted>, Vec<String>, u64)> {
+    // Each unit's class files, errors, refusals and function arities, by its index in `units`.
+    let emit_units = |which: &[usize]| -> Vec<(usize, Vec<Emitted>, Vec<String>, Vec<Refusal>, u64)> {
         let next = AtomicUsize::new(0);
         let work = || {
             let shared = &shared;
@@ -912,7 +935,7 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
                 let mut classes = vec![Emitted { name, bytes: bytes.into(), source, of }];
                 classes.extend(g.extra_classes.drain(..).map(|(name, bytes)| Emitted { name, bytes: bytes.into(), source, of }));
                 // The two arities every build declares, whichever memo answered the unit's.
-                done.push((i, classes, std::mem::take(&mut g.errors), g.function_arities | 0b11));
+                done.push((i, classes, std::mem::take(&mut g.errors), std::mem::take(&mut g.refused), g.function_arities | 0b11));
             }
             done
         };
@@ -933,8 +956,10 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
     let fresh: Vec<usize> = (0..units.len()).filter(|&i| !keep[i]).collect();
     let mut per_unit: Vec<Option<(Vec<Emitted>, u64)>> = (0..units.len()).map(|_| None).collect();
     let mut errors = Vec::new();
-    for (i, done, errs, used) in emit_units(&fresh) {
+    let mut refused: Vec<Refusal> = Vec::new();
+    for (i, done, errs, refusals, used) in emit_units(&fresh) {
         errors.extend(errs);
+        refused.extend(refusals);
         per_unit[i] = Some((done, used));
     }
     lap.done("units, in parallel", fresh.len());
@@ -945,22 +970,24 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
         }
         if kept::checked() && usage.kept > 0 {
             let kept_units: Vec<usize> = (0..units.len()).filter(|&i| keep[i]).collect();
-            for (i, done, errs, used) in emit_units(&kept_units) {
+            for (i, done, errs, refusals, used) in emit_units(&kept_units) {
                 let (classes, arities) = k.get(&cx, units[i]);
                 let same = errs.is_empty()
+                    && refusals.is_empty()
                     && used == arities
                     && done.len() == classes.len()
                     && done.iter().zip(classes).all(|(a, b)| a.name == b.name && a.bytes == b.bytes && a.source == b.source && a.of == b.of);
                 if !same {
                     let names = |cs: &[Emitted]| cs.iter().map(|c| format!("{} ({} bytes)", c.name, c.bytes.len())).collect::<Vec<_>>().join(", ");
                     panic!(
-                        "the kept class files of {:?} differ from its emission now: kept {} arities {:#x}, emitted {} arities {:#x} errors {:?}",
+                        "the kept class files of {:?} differ from its emission now: kept {} arities {:#x}, emitted {} arities {:#x} errors {:?} {:?}",
                         units[i],
                         names(classes),
                         arities,
                         names(&done),
                         used,
-                        errs
+                        errs,
+                        refusals
                     );
                 }
             }
@@ -990,6 +1017,7 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
             classes.push(standalone(entry));
         }
         errors.extend(std::mem::take(&mut g.errors));
+        refused.extend(std::mem::take(&mut g.refused));
         arities |= g.function_arities;
         main_class = Some(runtime::LAUNCHER.to_string());
     }
@@ -1027,6 +1055,7 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
             }
         }
         errors.extend(std::mem::take(&mut g.errors));
+        refused.extend(std::mem::take(&mut g.refused));
         arities |= g.function_arities;
     }
     arities |= 0b11;
@@ -1050,6 +1079,8 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
     errors.extend(twice.into_iter().map(|n| format!("two classes are named {}", n)));
     errors.sort();
     errors.dedup();
+    refused.sort_by(|a, b| (a.0 .0, a.1.start, a.1.end, &a.2).cmp(&(b.0 .0, b.1.start, b.1.end, &b.2)));
+    refused.dedup();
     // An object whose construction runs code, among them a companion its class's unit writes
     // (`forwarding_class`): a split build over these products touches it before `new` of the
     // class, as the whole build does (`touched_companion`).
@@ -1062,13 +1093,13 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
     lap.done("sorted", classes.len());
     lap.count("class file bytes", classes.iter().map(|c| c.bytes.len()).sum());
     if let Some(k) = kept {
-        match snapshot.filter(|_| errors.is_empty()) {
+        match snapshot.filter(|_| errors.is_empty() && refused.is_empty()) {
             Some(snapshot) => k.store(&cx, &units, per_unit, &owns, snapshot),
             None => k.clear(),
         }
         lap.done("store updated", usage.kept + usage.emitted);
     }
-    Output { classes, main_class, errors, main_classes, inits, kept: usage }
+    Output { classes, main_class, errors, refused, main_classes, inits, kept: usage }
 }
 
 /// Writes the classes as a jar when the path ends in `.jar`, else as a directory tree.

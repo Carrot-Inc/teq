@@ -967,6 +967,11 @@ impl<'a> Worker<'a> {
         } else {
             self.prog.mark_expansion(result.0);
         }
+        // A plain inline method's expansion is ascribed its result (`PrepareInlineable.wrapRHS`'s
+        // `Typed`), which erasure keeps (`Program::ascribed_bits`).
+        if !body.transparent {
+            self.prog.mark_ascribed(result.0);
+        }
         // A plain inline method's call ends a chain of `+` that it heads; a transparent one's
         // expansion stands where the call stood, to scalac's backend as to its typer.
         if !body.transparent {
@@ -2384,6 +2389,9 @@ impl<'a> Worker<'a> {
         }
         if self.prog.is_spread(e) {
             self.prog.mark_spread(id);
+        }
+        if self.prog.is_ascribed(e) {
+            self.prog.mark_ascribed(id);
         }
         // A pending call's copy in an expansion is pending in its turn (`pend_copy`).
         if self.inline.depth > 0 && self.attempts.pending_len() != 0 && self.is_pending_call(e) {

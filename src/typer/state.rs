@@ -1219,6 +1219,9 @@ impl<'a> Worker<'a> {
         if self.prog.is_widened(from) {
             self.prog.mark_widened(to);
         }
+        if self.prog.is_ascribed(from) {
+            self.prog.mark_ascribed(to);
+        }
         if self.prog.is_opaque(from) {
             self.prog.mark_opaque(to);
         }

@@ -606,6 +606,8 @@ pub struct InlineDefinition {
     pub opaque: Vec<TExprId>,
     /// The body's arrays spread into a varargs `Program::spread_bits` marks, which its copies keep.
     pub spread: Vec<TExprId>,
+    /// The body's ascriptions `Program::ascribed_bits` marks, which its copies keep.
+    pub ascribed: Vec<TExprId>,
     /// The body's calls of `erasedValue`, scala-library's a plain method: each copy an expansion
     /// makes is an erased value as the call is (`Erasure.checkNotErased`), which the unit's end
     /// reports where the trees keep it (`Worker::erased_values`).
@@ -1150,6 +1152,15 @@ pub struct Program {
     /// the sequence the typer converts one to is no sequence a program wrote, and a Java
     /// parameter takes the array itself, as scalac passes it.
     pub spread_bits: Bits,
+    /// The ascriptions, as bits by expression: an expression the program ascribes a type
+    /// (`(e: T)`), the root of a plain inline method's expansion, which dotty ascribes its declared
+    /// result (`PrepareInlineable.wrapRHS`), and the operand of a cast that keeps no node (an
+    /// upcast, which `TypeTestsCasts.transformAsInstanceOf` makes an ascription, and a cast a
+    /// passed test leaves untested). The node keeps no tree of its own, its recorded type is the
+    /// ascribed one, which erasure retains (`Erasure.typedTyped`) where the node's own erasure
+    /// would be another (a generic result's `Object`): the JVM's qualifier of a member is of the
+    /// ascribed class (`Gen::qualifier_site`).
+    pub ascribed_bits: Bits,
     /// The setter calls the typer made of an assignment through an abstract var (`c.x = v`,
     /// `Worker::assignment`), as bits by expression: scalac's tree keeps an assignment, where a
     /// call written `c.x_=(v)` is an application (dotty's `Typer.typedAssign`), which the trees a
@@ -1311,6 +1322,7 @@ impl Program {
         self.widened_bits.fork();
         self.opaque_bits.fork();
         self.spread_bits.fork();
+        self.ascribed_bits.fork();
         self.setter_assign_bits.fork();
         self.file_tags.fork();
         #[cfg(debug_assertions)]
@@ -1327,7 +1339,7 @@ impl Program {
             let own_base = self.exprs.own_base();
             self.expr_types.follow_escapes(marks.clone(), own_base);
             self.expr_spans.follow_escapes(marks.clone(), own_base);
-            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.setter_assign_bits] {
+            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.setter_assign_bits] {
                 bits.follow_escapes(marks.clone(), own_base);
             }
         }
@@ -1399,6 +1411,7 @@ impl Program {
             widened_bits: Bits::attach(self.widened_bits.shared_arc(), worker),
             opaque_bits: Bits::attach(self.opaque_bits.shared_arc(), worker),
             spread_bits: Bits::attach(self.spread_bits.shared_arc(), worker),
+            ascribed_bits: Bits::attach(self.ascribed_bits.shared_arc(), worker),
             setter_assign_bits: Bits::attach(self.setter_assign_bits.shared_arc(), worker),
             leaf_bits: Bits::attach(self.leaf_bits.shared_arc(), worker),
             leaf_tests: FxMap::default(),
@@ -1500,6 +1513,7 @@ impl Default for Program {
             widened_bits: Bits::default(),
             opaque_bits: Bits::default(),
             spread_bits: Bits::default(),
+            ascribed_bits: Bits::default(),
             setter_assign_bits: Bits::default(),
             leaf_bits: Bits::default(),
             leaf_tests: FxMap::default(),
@@ -1787,6 +1801,16 @@ impl Program {
     /// Marks `e` as `spread_bits` says.
     pub fn mark_spread(&mut self, e: TExprId) {
         self.spread_bits.set(e.0);
+    }
+
+    /// Marks `e` as `ascribed_bits` says.
+    pub fn mark_ascribed(&mut self, e: TExprId) {
+        self.ascribed_bits.set(e.0);
+    }
+
+    #[inline(always)]
+    pub fn is_ascribed(&self, e: TExprId) -> bool {
+        self.ascribed_bits.has(e.0)
     }
 
     #[inline(always)]

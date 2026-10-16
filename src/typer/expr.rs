@@ -1839,6 +1839,9 @@ impl<'a> Worker<'a> {
                     _ => te,
                 };
                 self.ascribed(te, t);
+                // Its type stands as written to erasure (`Erasure.typedTyped`), the JVM's
+                // qualifier of a member selected from it (`Program::ascribed_bits`).
+                self.prog.mark_ascribed(te);
                 if self.notes_type_trees() {
                     self.note_type_tree(te, t);
                     for p in self.written_paths(ty, false) {

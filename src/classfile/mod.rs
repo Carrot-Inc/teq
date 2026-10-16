@@ -71,6 +71,38 @@ pub struct Method {
     pub param_names: Option<Vec<Option<String>>>,
     pub deprecated: bool,
     pub annotations: Vec<String>,
+    /// The method's annotations whole, runtime-visible then invisible, where a mixin forwarder
+    /// can select it, a method of one of `Object`'s names (`FORWARDED`) in any class file, a
+    /// Java interface's default among them: what the forwarder writes again
+    /// (`Gen::object_method_forwarders`, dotty's `MixinOps.mkForwarderSym`).
+    pub kept_annotations: Option<Box<(Vec<Annotation>, Vec<Annotation>)>>,
+    /// Its parameters' annotations whole, runtime-visible then invisible, a list per parameter,
+    /// kept as `kept_annotations` is.
+    pub kept_parameter_annotations: Option<Box<(Vec<Vec<Annotation>>, Vec<Vec<Annotation>>)>>,
+}
+
+/// The names of the methods whose annotations a class file's reading keeps whole: `Object`'s
+/// members, of which a class teq writes forwards the ones a trait or a Java interface overrides.
+const FORWARDED: [&str; 5] = ["clone", "finalize", "toString", "hashCode", "equals"];
+
+/// An annotation as a class file holds it, by its type's descriptor, with its elements' values
+/// resolved from the constant pool, so that another class file can write it again.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Annotation {
+    pub descriptor: String,
+    pub elements: Vec<(String, ElementValue)>,
+}
+
+/// An annotation element's value (JVMS 4.7.16.1): a constant by its tag (`B`, `C`, `D`, `F`, `I`,
+/// `J`, `S`, `Z`, or `s` for a string), an enum constant by its type's descriptor and its name, a
+/// class by its return descriptor, a nested annotation, an array.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ElementValue {
+    Const(u8, ConstValue),
+    Enum(String, String),
+    Class(String),
+    Annotation(Annotation),
+    Array(Vec<ElementValue>),
 }
 
 #[derive(Debug)]
@@ -261,6 +293,34 @@ impl ClassFile {
                 let (name, len) = attribute_head(&mut r, &pool)?;
                 let end = r.pos + len;
                 match name.as_str() {
+                    "RuntimeVisibleParameterAnnotations" | "RuntimeInvisibleParameterAnnotations" if FORWARDED.contains(&m.name.as_str()) => {
+                        let mut lists = Vec::new();
+                        for _ in 0..r.u8()? {
+                            let mut whole = Vec::new();
+                            for _ in 0..r.u16()? {
+                                whole.push(annotation_whole(&mut r, &pool, 0)?);
+                            }
+                            lists.push(whole);
+                        }
+                        let kept = m.kept_parameter_annotations.get_or_insert_with(Default::default);
+                        if name == "RuntimeVisibleParameterAnnotations" { kept.0 = lists } else { kept.1 = lists }
+                    }
+                    "RuntimeVisibleAnnotations" | "RuntimeInvisibleAnnotations" => {
+                        let visible = name == "RuntimeVisibleAnnotations";
+                        if FORWARDED.contains(&m.name.as_str()) {
+                            let at = r.pos;
+                            let mut whole = Vec::new();
+                            for _ in 0..r.u16()? {
+                                whole.push(annotation_whole(&mut r, &pool, 0)?);
+                            }
+                            let kept = m.kept_annotations.get_or_insert_with(Default::default);
+                            if visible { kept.0 = whole } else { kept.1 = whole }
+                            r.pos = at;
+                        }
+                        if visible {
+                            m.annotations = annotations(&mut r, &pool)?;
+                        }
+                    }
                     "Signature" => m.signature = Some(pool.utf8(r.u16()?)?),
                     "Exceptions" => {
                         for _ in 0..r.u16()? {
@@ -268,7 +328,6 @@ impl ClassFile {
                         }
                     }
                     "Deprecated" => m.deprecated = true,
-                    "RuntimeVisibleAnnotations" => m.annotations = annotations(&mut r, &pool)?,
                     "MethodParameters" => {
                         let mut names = Vec::new();
                         for _ in 0..r.u8()? {
@@ -455,6 +514,48 @@ fn annotation_into(r: &mut Reader, pool: &Pool, depth: u32, mut sig: Option<&mut
         element_value(r, pool, depth + 1, sink)?;
     }
     Ok(name)
+}
+
+/// An annotation with its elements' values (`Annotation`).
+fn annotation_whole(r: &mut Reader, pool: &Pool, depth: u32) -> Result<Annotation, String> {
+    let descriptor = pool.utf8(r.u16()?)?;
+    let mut elements = Vec::new();
+    for _ in 0..r.u16()? {
+        let name = pool.utf8(r.u16()?)?;
+        elements.push((name, element_value_whole(r, pool, depth + 1)?));
+    }
+    Ok(Annotation { descriptor, elements })
+}
+
+fn element_value_whole(r: &mut Reader, pool: &Pool, depth: u32) -> Result<ElementValue, String> {
+    if depth > MAX_DEPTH {
+        return Err("annotation values nested too deeply".to_string());
+    }
+    Ok(match r.u8()? {
+        b's' => ElementValue::Const(b's', ConstValue::Str(pool.utf8(r.u16()?)?)),
+        t @ (b'B' | b'C' | b'D' | b'F' | b'I' | b'J' | b'S' | b'Z') => {
+            let i = r.u16()?;
+            let v = match pool.get(i)? {
+                Const::Int(v) => ConstValue::Int(*v),
+                Const::Long(v) => ConstValue::Long(*v),
+                Const::Float(v) => ConstValue::Float(*v),
+                Const::Double(v) => ConstValue::Double(*v),
+                _ => return Err(format!("constant pool entry {} is no annotation constant", i)),
+            };
+            ElementValue::Const(t, v)
+        }
+        b'e' => ElementValue::Enum(pool.utf8(r.u16()?)?, pool.utf8(r.u16()?)?),
+        b'c' => ElementValue::Class(pool.utf8(r.u16()?)?),
+        b'@' => ElementValue::Annotation(annotation_whole(r, pool, depth)?),
+        b'[' => {
+            let mut values = Vec::new();
+            for _ in 0..r.u16()? {
+                values.push(element_value_whole(r, pool, depth + 1)?);
+            }
+            ElementValue::Array(values)
+        }
+        t => return Err(format!("unknown annotation value tag {} at offset {}", t, r.pos - 1)),
+    })
 }
 
 fn element_value(r: &mut Reader, pool: &Pool, depth: u32, mut sink: Option<&mut Vec<u8>>) -> Result<(), String> {

@@ -1386,6 +1386,19 @@ fn finish_jvm(
         });
     }
     note_parts(report, Duration::ZERO, true);
+    // The references the backend refused are the program's errors, beside the typer's warnings.
+    if !output.refused.is_empty() {
+        let mut refused = Diagnostics::default();
+        for (file, span, message) in &output.refused {
+            refused.error(*file, *span, message.clone());
+        }
+        let files = diag_files(t, sources);
+        report.errors = render_all(&refused, &files, false);
+        let mut shown = render_check(&t.diags, &files);
+        shown.extend(render_check(&refused, &files));
+        report.diagnostics = Some(shown);
+        return false;
+    }
     if !output.errors.is_empty() {
         report.errors = output.errors.iter().map(|e| json_object(&[("message", JsonValue::Str(&format!("jvm backend: {}", e)))])).collect();
         report.diagnostics = Some(output.errors.iter().map(|e| json_object(&[("severity", JsonValue::Str("error")), ("message", JsonValue::Str(&format!("jvm backend: {}", e)))])).collect());

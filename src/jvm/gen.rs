@@ -76,6 +76,33 @@ pub struct MRef {
     pub kind: Invoke,
 }
 
+/// Where a virtual call or a field access on a qualifier points (`Gen::qualifier_site`): the
+/// class the qualifier is evaluated at and the owner the instruction names, chosen per site
+/// where `MRef` holds the declaration's.
+pub struct Site {
+    pub qualifier: JType,
+    pub owner: Rc<str>,
+    pub interface: bool,
+}
+
+/// The member a reference names, as dotty's refusal of an unwritable reference shows it
+/// (`Gen::unwritable_reference`): a symbol, or a std template's method by its name.
+#[derive(Clone, Copy)]
+pub enum Referenced<'s> {
+    Sym(SymId),
+    Method(&'s str),
+}
+
+impl Site {
+    pub fn kind(&self) -> Invoke {
+        if self.interface {
+            Invoke::Interface
+        } else {
+            Invoke::Virtual
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Local {
     pub slot: u16,
@@ -217,6 +244,9 @@ impl Default for MethodCx {
 pub struct Gen<'a> {
     pub cx: &'a Cx<'a>,
     pub errors: Vec<String>,
+    /// The program's references this target cannot write, refused at their place as dotty's
+    /// erasure refuses them (`refuse`).
+    pub refused: Vec<super::Refusal>,
     erased: Vec<Option<JType>>,
     /// Whether the erasures are kept in `erased_overlay` alone: for a Gen that emits a few units
     /// (a session's retype), whose types are the store's last ids, the table by id would be made
@@ -311,6 +341,7 @@ impl<'a> Gen<'a> {
         Gen {
             cx,
             errors: Vec::new(),
+            refused: Vec::new(),
             erased: Vec::new(),
             sparse: false,
             erased_overlay: FxMap::default(),
@@ -360,15 +391,25 @@ impl<'a> Gen<'a> {
         self.errors.push(format!("{}: {}", self.context, what));
     }
 
+    /// Refuses the program at `e` with the error `message`, a compile error at the expression's
+    /// place; one of no place is the class's (`unsupported`).
+    pub fn refuse(&mut self, e: TExprId, message: String) {
+        match self.cx.input.prog.span_of(e) {
+            Some((file, span)) => self.refused.push((file, span, message)),
+            None => self.unsupported(&message),
+        }
+    }
+
     /// A class with a method too long for 16-bit jump offsets is emitted again with wide jumps.
     pub fn emit_unit(&mut self, unit: Unit) -> (String, Vec<u8>) {
         self.wide = false;
-        let errors = self.errors.len();
+        let (errors, refused) = (self.errors.len(), self.refused.len());
         let out = self.emit_unit_once(unit);
         if !self.overflow {
             return out;
         }
         self.errors.truncate(errors);
+        self.refused.truncate(refused);
         self.wide = true;
         self.overflow = false;
         let out = self.emit_unit_once(unit);
@@ -2950,28 +2991,23 @@ impl<'a> Gen<'a> {
                 // dotty's `typedSelect` boxes an erased value class qualifier (`Erasure.scala`
                 // 733): the program's `v.toString` is the box's method, which a null reference
                 // the box stayed throws on, where a rendering writes `null`.
-                if self.expr_value_class(inner).is_some() {
+                let string = JType::L(Rc::from(STRING));
+                if self.expr_value_class(inner).is_some() && conv.is_rendering() {
                     let object = JType::object();
-                    let string = JType::L(Rc::from(STRING));
                     self.expr(inner, &object);
-                    if conv.is_rendering() {
-                        self.string_value_of(&object);
-                    } else {
-                        self.invoke(Invoke::Virtual, OBJECT, false, "toString", &[], &string);
-                    }
+                    self.string_value_of(&object);
+                    return string;
+                }
+                // The program's `x.toString` on a reference is the call, which `null` throws
+                // on, as dotty's `genApply` invokes it, on the class the qualifier points at
+                // (`object_member_call`, a value class's box); a rendering writes `null`.
+                if !conv.is_rendering() && (self.expr_value_class(inner).is_some() || self.static_type(inner).is_ref()) {
+                    self.object_member_call(inner, "toString", &[], &string, |_| {});
                     return string;
                 }
                 let t = self.expr_static(inner);
-                match &t {
-                    // The program's `x.toString` on a reference is the call, which `null` throws
-                    // on, as dotty's `genApply` invokes it; a rendering writes `null`.
-                    JType::L(n) if !conv.is_rendering() => {
-                        let owner = if &**n == STRING { STRING } else { OBJECT };
-                        self.invoke(Invoke::Virtual, owner, false, "toString", &[], &JType::L(Rc::from(STRING)));
-                    }
-                    _ => self.string_value_of(&t),
-                }
-                JType::L(Rc::from(STRING))
+                self.string_value_of(&t);
+                string
             }
             TExpr::Js(template, args) => self.intrinsic(e, template, args),
             TExpr::Cast(inner, op, _) => self.cast(inner, op),
@@ -3801,6 +3837,208 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The receiver of a reference to `s` evaluated where the reference points: at the site's
+    /// class, or at the declaring class as `receiver` evaluates it.
+    fn site_receiver(&mut self, r: TExprId, s: SymId, site: &Option<Site>) {
+        match site {
+            Some(site) => self.expr(r, &site.qualifier),
+            None => self.receiver(r, s),
+        }
+    }
+
+    /// Where a virtual call or a field access on the qualifier `r` of a member that `owner`
+    /// declares points, as dotty's erasure and backend choose it: the qualifier's class, not the
+    /// declaring one (`BCodeBodyBuilder.genApply` and `genLoad`'s `receiverClass`: "using
+    /// sym.owner may lead to IllegalAccessError"), so that a public subclass reaches what a
+    /// package-private superclass declares. The class is the qualifier after
+    /// `Erasure.typedSelect`'s adaptation: its erased type (an erased value class's box, a
+    /// member's or a local's declared erasure, so that a generic result is an `Object`, an
+    /// ascription's the ascribed type, the outermost deciding, a block's its result's as
+    /// `Typer.typedBlock` types it, the recorded type's for a conditional, a cast and the rest) where that derives from the owner and the JVM lets this class name it
+    /// (`isJvmAccessible`: a Java class that is not public, from its own package alone); else the
+    /// cast's target, the owner (`None`: the declaring class, the receiver cast to it as
+    /// `receiver` casts it) or, where the owner is not accessible, the qualifier's type before
+    /// erasure (`originalQual`, scala3#8661). Where that is not accessible either, or is the
+    /// erased type itself, the reference cannot be written: refused as dotty refuses it
+    /// (Erasure.scala 746-758), `member` naming what is referenced. An array, a primitive or a
+    /// bottom (`defn.isBottomClass`) is `None` too, its member `Object`'s.
+    fn qualifier_site(&mut self, r: TExprId, owner: &str, member: Referenced) -> Option<Site> {
+        let cx = self.cx;
+        // An ascription's value is of the ascribed type, the outermost one deciding: erasure
+        // retains it (`Erasure.typedTyped`, `Program::ascribed_bits`), a generic result's `Object`
+        // cast to it. Else a block's value is its result's (`Typer.typedBlock`).
+        let mut result = r;
+        while !cx.input.prog.is_ascribed(result) {
+            let TExpr::Block(_, res) = cx.input.prog.expr(result) else { break };
+            result = res;
+        }
+        let ascribed = cx.input.prog.is_ascribed(result) && self.expr_value_class(result).is_none();
+        let erased = match self.recorded(result) {
+            Some(t) if ascribed => t,
+            _ => match self.expr_value_class(result) {
+                Some((c, _)) => self.class_type(c),
+                None => match cx.input.prog.expr(result) {
+                    TExpr::Local(_) | TExpr::Static(_) | TExpr::Field(..) | TExpr::CallStatic(..) | TExpr::CallMethod(..) | TExpr::CallClosure(..) | TExpr::This | TExpr::Module(_) | TExpr::New(..) | TExpr::NewVia(..) => self.natural_type(result),
+                    TExpr::Null | TExpr::Super(_) => return None,
+                    _ => self.static_type(result),
+                },
+            },
+        };
+        let JType::L(name) = erased else { return None };
+        if name.starts_with('[') || super::runtime::ARRAY_MARKERS.contains(&&*name) {
+            return None;
+        }
+        let accessible = self.jvm_accessible(&name);
+        if accessible && &*name == owner {
+            return None;
+        }
+        let target = if accessible && self.erased_derives(&name, owner) {
+            name
+        } else if self.jvm_accessible(owner) {
+            return None;
+        } else {
+            match self.recorded(r) {
+                Some(JType::L(n)) if n != name && !n.starts_with('[') && self.erased_derives(&n, owner) && self.jvm_accessible(&n) => n,
+                _ => {
+                    let message = self.unwritable_reference(member, owner);
+                    self.refuse(r, message);
+                    return None;
+                }
+            }
+        };
+        let interface = cx.classes_named(&target).any(|c| cx.is_interface(c));
+        Some(Site { qualifier: JType::L(target.clone()), owner: target, interface })
+    }
+
+    /// dotty's message of a reference `typedSelect` cannot adapt: "Unable to emit reference to
+    /// method m in class Base, class Base is not accessible in object Main" (the member's
+    /// `showLocated`, its owner, the enclosing class).
+    fn unwritable_reference(&self, member: Referenced, owner: &str) -> String {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let what = match member {
+            Referenced::Method(name) => format!("method {}", name),
+            Referenced::Sym(s) => {
+                let kind = match cx.input.java_member(s) {
+                    Some((cf, JMember::Field(i))) if cf.fields[i as usize].access & ACC_FINAL != 0 => "value",
+                    Some((_, JMember::Field(_))) => "variable",
+                    Some((_, JMember::Method(_))) => "method",
+                    None => match syms.sym(s).kind {
+                        SymKind::Def => "method",
+                        SymKind::Var => "variable",
+                        _ => "value",
+                    },
+                };
+                format!("{} {}", kind, cx.input.interner.get(syms.sym(s).name))
+            }
+        };
+        let shown = |c: ClassId| {
+            let kind = match syms.class(c).kind {
+                ClassKind::Trait => "trait",
+                ClassKind::Object => "object",
+                _ => "class",
+            };
+            format!("{} {}", kind, cx.input.interner.get(syms.class(c).name))
+        };
+        let simple = |n: &str| n.rsplit('/').next().unwrap_or(n).to_string();
+        let declaring = cx.classes_named(owner).next().map_or_else(|| format!("class {}", simple(owner)), shown);
+        let enclosing = self.this_class.map_or_else(|| format!("object {}", simple(&self.this_name).trim_end_matches('$')), shown);
+        format!("Unable to emit reference to {} in {}, {} is not accessible in {}", what, declaring, declaring, enclosing)
+    }
+
+    /// Whether the erased class `from` derives from `to`, as `Erasure.typedSelect` tests an
+    /// erased qualifier (`derivesFrom` after erasure, where a trait's parents are interfaces
+    /// alone): `is_subclass`, and over every class the program names where that knows the
+    /// reached ones alone (a JDK class, `ArrayList` for `Collection`).
+    fn erased_derives(&self, from: &str, to: &str) -> bool {
+        if to == OBJECT || self.is_subclass(from, to) {
+            return true;
+        }
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        cx.classes_named(from).any(|f| {
+            cx.classes_named(to).any(|t| !(syms.class(f).kind == ClassKind::Trait && syms.class(t).kind != ClassKind::Trait) && syms.class(f).base_types.iter().any(|&(b, _)| b == t))
+        })
+    }
+
+    /// Whether the class being written can name the class `name` without the JVM refusing it, as
+    /// dotty asks it (`Erasure.typedSelect.isJvmAccessible`): every class not defined in Java; a
+    /// Java class where it is accessible from here before erasure (`SymDenotations.
+    /// isAccessibleFrom` of its owner's `this`, within its `accessBoundary`), by the flags of its
+    /// own `InnerClasses` entry where it is nested. A private nested class's boundary is its
+    /// enclosing class, which no class teq writes is inside; a public one's, and a protected
+    /// one's reached through its owner's `this`, is the root; a class of its package alone,
+    /// top-level or nested, is accessible from that package, Java's packages flat (JVMS 5.4.4).
+    fn jvm_accessible(&self, name: &str) -> bool {
+        let cx = self.cx;
+        let Some(java) = cx.classes_named(name).find_map(|c| cx.input.java_class(c)) else { return true };
+        if java.cf.scala {
+            return true;
+        }
+        fn package(n: &str) -> &str {
+            n.rfind('/').map_or("", |at| &n[..at])
+        }
+        let access = match java.cf.own_inner_entry() {
+            Some(entry) if entry.outer.is_some() => entry.access,
+            _ => java.cf.access,
+        };
+        if access & ACC_PRIVATE != 0 {
+            return false;
+        }
+        access & (ACC_PUBLIC | crate::classfile::ACC_PROTECTED) != 0 || package(name) == package(&self.this_name)
+    }
+
+    /// Where a virtual call of `s` through the reference `m` on the qualifier `r` points
+    /// (`BCodeBodyBuilder.genCallMethod`): the qualifier's class (`qualifier_site`) for a member
+    /// that is neither private nor static, `invokeinterface` where that class is an interface and
+    /// `invokevirtual` where it is a class whatever declares the member; the declaring interface
+    /// where the qualifier's interface inherits a member overriding one of `Object`'s, the
+    /// workaround of JDK-8154587 (`isTraitMethodOverridingObjectMember`). dotty's `isScalaStatic`
+    /// leaves out no member here: teq writes an `@static` member as its object's instance member,
+    /// reached through the object, whose class is the declaring one (`qualifier_site`'s `None`).
+    fn invoke_site(&mut self, r: TExprId, s: SymId, m: &MRef) -> Option<Site> {
+        if !self.virtual_member(s, m) {
+            return None;
+        }
+        self.method_site(r, &m.owner, m.owner_is_interface, &m.name, &m.desc, Referenced::Sym(s))
+    }
+
+    /// `invoke_site` of a virtual call of the method `name` of descriptor `desc` that `owner`
+    /// declares, a std template's (`assemble`) as a member's.
+    pub(super) fn method_site(&mut self, r: TExprId, owner: &Rc<str>, owner_is_interface: bool, name: &str, desc: &str, member: Referenced) -> Option<Site> {
+        let mut site = self.qualifier_site(r, owner, member)?;
+        let overrides_object = &**owner != OBJECT
+            && matches!(
+                (name, desc),
+                ("clone", "()Ljava/lang/Object;") | ("equals", "(Ljava/lang/Object;)Z") | ("finalize", "()V") | ("hashCode", "()I") | ("toString", "()Ljava/lang/String;")
+            );
+        if site.interface && overrides_object {
+            site.owner = owner.clone();
+            site.interface = owner_is_interface;
+        }
+        Some(site)
+    }
+
+    /// Whether `s`, called through `m`, is called in `genApply`'s virtual style: a class's or a
+    /// trait's member that is neither private nor static (`InvokeStyle.Virtual`).
+    fn virtual_member(&self, s: SymId, m: &MRef) -> bool {
+        let info = self.cx.input.syms.sym(s);
+        matches!(m.kind, Invoke::Virtual | Invoke::Interface) && matches!(info.owner, Owner::Class(_)) && info.mods & mods::PRIVATE == 0
+    }
+
+    /// `Object`'s member `name` called on the qualifier `r` emitted at `site`'s class
+    /// (`qualifier_site`, its `None` `Object` itself), the call's arguments emitted by `args`.
+    pub(super) fn object_member_call(&mut self, r: TExprId, name: &str, params: &[JType], ret: &JType, args: impl FnOnce(&mut Self)) {
+        let site = self.qualifier_site(r, OBJECT, Referenced::Method(name));
+        let object = JType::object();
+        self.expr(r, site.as_ref().map_or(&object, |s| &s.qualifier));
+        args(self);
+        match site {
+            Some(site) => self.invoke(site.kind(), &site.owner, site.interface, name, params, ret),
+            None => self.invoke(Invoke::Virtual, OBJECT, false, name, params, ret),
+        }
+    }
+
     fn field_read(&mut self, r: TExprId, s: SymId) -> JType {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
@@ -3814,9 +4052,19 @@ impl<'a> Gen<'a> {
             if f.access & ACC_STATIC != 0 {
                 self.getstatic(&cf.name, &f.name, &t);
             } else {
-                let owner = JType::L(Rc::from(cf.name.as_str()));
-                self.expr(r, &owner);
-                self.getfield(&cf.name, &f.name, &t);
+                // Named on the qualifier's class, as dotty's `fieldOp` names the receiver it is
+                // given (`BCodeBodyBuilder.scala` 549-560).
+                match self.qualifier_site(r, &cf.name, Referenced::Sym(s)) {
+                    Some(site) => {
+                        self.expr(r, &site.qualifier);
+                        self.getfield(&site.owner, &f.name, &t);
+                    }
+                    None => {
+                        let owner = JType::L(Rc::from(cf.name.as_str()));
+                        self.expr(r, &owner);
+                        self.getfield(&cf.name, &f.name, &t);
+                    }
+                }
             }
             return self.java_value(t);
         }
@@ -3864,9 +4112,13 @@ impl<'a> Gen<'a> {
             return t;
         }
         let s = self.deferred_implementation(r, s).unwrap_or(s);
-        self.receiver(r, s);
         let m = self.mref(s);
-        self.invoke_mref(&m);
+        let site = self.invoke_site(r, s, &m);
+        self.site_receiver(r, s, &site);
+        match site {
+            Some(site) => self.invoke_desc(site.kind(), &site.owner, site.interface, &m.name, &m.desc, m.params.len(), &m.ret),
+            None => self.invoke_mref(&m),
+        }
         m.ret.clone()
     }
 
@@ -3946,11 +4198,13 @@ impl<'a> Gen<'a> {
                         self.load_file_module(info.file);
                     }
                 }
-                self.setter_call(s, value);
+                self.setter_call(s, value, None);
             }
             TExpr::Field(r, s) => {
-                self.receiver(r, s);
-                self.setter_call(s, value);
+                let m = self.mref(s);
+                let site = self.invoke_site(r, s, &m);
+                self.site_receiver(r, s, &site);
+                self.setter_call(s, value, site);
             }
             _ => self.unsupported("assignment to this kind of target"),
         }
@@ -3966,19 +4220,32 @@ impl<'a> Gen<'a> {
             self.expr(value, &t);
             self.putstatic(owner, &f.name, &t);
         } else {
-            if let TExpr::Field(r, _) = self.cx.input.prog.expr(target) {
-                self.expr(r, &JType::L(Rc::from(owner)));
+            // Named on the qualifier's class, as `field_read` names it.
+            let mut named: Rc<str> = Rc::from(owner);
+            if let TExpr::Field(r, s) = self.cx.input.prog.expr(target) {
+                match self.qualifier_site(r, owner, Referenced::Sym(s)) {
+                    Some(site) => {
+                        self.expr(r, &site.qualifier);
+                        named = site.owner;
+                    }
+                    None => self.expr(r, &JType::L(named.clone())),
+                }
             }
             self.expr(value, &t);
-            self.putfield(owner, &f.name, &t);
+            self.putfield(&named, &f.name, &t);
         }
     }
 
-    fn setter_call(&mut self, s: SymId, value: TExprId) {
+    /// The setter of `s` called with `value` on the receiver on the stack, where `site` points
+    /// (`invoke_site`) or on the declaring class.
+    fn setter_call(&mut self, s: SymId, value: TExprId, site: Option<Site>) {
         let m = self.mref(s);
         self.expr(value, &m.ret);
         let name = format!("{}_$eq", m.name);
-        self.invoke(m.kind, &m.owner, m.owner_is_interface, &name, &[m.ret.clone()], &JType::V);
+        match site {
+            Some(site) => self.invoke(site.kind(), &site.owner, site.interface, &name, &[m.ret.clone()], &JType::V),
+            None => self.invoke(m.kind, &m.owner, m.owner_is_interface, &name, &[m.ret.clone()], &JType::V),
+        }
     }
 
     // ---- calls ----
@@ -4384,12 +4651,24 @@ impl<'a> Gen<'a> {
                             SuperTarget::Chain => self.this_class.and_then(|c| cx.input.syms.class(c).superclass),
                             SuperTarget::Class(c) | SuperTarget::Mixin(c) => Some(c),
                         };
-                        owner.map(|c| (self.class_name(c), cx.input.syms.class(c).kind == ClassKind::Trait))
+                        owner.map(|c| (Invoke::Special, self.class_name(c), cx.input.syms.class(c).kind == ClassKind::Trait))
                     }
+                    // Another receiver's getter is named where the receiver points, as the
+                    // method is (`invoke_site`).
+                    _ if self.virtual_member(s, &m) => self.qualifier_site(r, &m.owner, Referenced::Sym(s)).map(|site| (site.kind(), site.owner, site.interface)),
                     _ => None,
                 };
-                self.receiver(r, s);
-                let owner_type = JType::L(m.owner.clone());
+                let owner_type = match &special {
+                    Some((Invoke::Special, ..)) | None => {
+                        self.receiver(r, s);
+                        JType::L(m.owner.clone())
+                    }
+                    Some((_, owner, _)) => {
+                        let t = JType::L(owner.clone());
+                        self.expr(r, &t);
+                        t
+                    }
+                };
                 let slot = self.store_new(&owner_type);
                 let temps = self.default_priors(priors, &types);
                 self.load(slot, &owner_type);
@@ -4404,8 +4683,9 @@ impl<'a> Gen<'a> {
     }
 
     /// The getter of default `i` of method `s` called on the receiver on the stack with the
-    /// arguments in `temps`, leaving the parameter's type, a by-name one's value.
-    fn default_getter_value(&mut self, s: SymId, i: usize, temps: &[(u16, JType)], special: Option<(Rc<str>, bool)>) -> JType {
+    /// arguments in `temps`, leaving the parameter's type, a by-name one's value; through
+    /// `site`'s instruction and owner where given, else the method's.
+    fn default_getter_value(&mut self, s: SymId, i: usize, temps: &[(u16, JType)], site: Option<(Invoke, Rc<str>, bool)>) -> JType {
         let m = self.mref(s);
         let shape = self.default_getter_shape(s, i);
         let want = if shape.by_name {
@@ -4419,8 +4699,8 @@ impl<'a> Gen<'a> {
         let args = self.getter_args(s, shape.before, temps);
         let before: Vec<JType> = args.iter().map(|(_, t)| t.clone()).collect();
         let (name, desc) = self.default_getter_ref(s, i, &before);
-        match special {
-            Some((owner, interface)) => self.getter_call(Invoke::Special, &owner, interface, name, &desc, &args, &want, false),
+        match site {
+            Some((kind, owner, interface)) => self.getter_call(kind, &owner, interface, name, &desc, &args, &want, false),
             None => self.getter_call(m.kind, &m.owner, m.owner_is_interface, name, &desc, &args, &want, false),
         }
         want
@@ -4858,10 +5138,14 @@ impl<'a> Gen<'a> {
                 _ => self.unsupported("not supported on the JVM yet: this super call"),
             }
         }
-        self.receiver(r, s);
+        let site = if matches!(cx.input.prog.expr(r), TExpr::Super(_)) { None } else { self.invoke_site(r, s, &m) };
+        self.site_receiver(r, s, &site);
         let params = m.params.clone();
         self.arguments(Some(s), args, &params);
-        self.invoke_mref(&m);
+        match site {
+            Some(site) => self.invoke_desc(site.kind(), &site.owner, site.interface, &m.name, &m.desc, m.params.len(), &m.ret),
+            None => self.invoke_mref(&m),
+        }
         if java {
             return self.java_value(m.ret.clone());
         }
@@ -4902,7 +5186,13 @@ impl<'a> Gen<'a> {
                 pm.kind = Invoke::Special;
             }
         } else {
-            self.receiver(r, s);
+            let site = self.invoke_site(r, s, m);
+            self.site_receiver(r, s, &site);
+            if let Some(site) = site {
+                pm.kind = site.kind();
+                pm.owner = site.owner;
+                pm.owner_is_interface = site.interface;
+            }
         }
         let given: Vec<TExprId> = cx.input.prog.expr_list(args).iter().take(k).copied().collect();
         for &p in proxies {
@@ -5162,9 +5452,15 @@ impl<'a> Gen<'a> {
             // A class of a class that this build does not write (another module's, a jar's)
             // takes the enclosing instance the typer passes first, as scalac's `ExplicitOuter`
             // gives its constructor.
-            // Loaded as the whole build loads a captured outer (`load_new_captures`).
+            // Loaded as the whole build loads a captured outer (`load_capture_arg`): a local at
+            // the enclosing class, the capture's type, whatever subclass the instance is of, and
+            // any other value at its own type, so that the two builds' class files agree.
             let first = self.cx.input.prog.expr_list(args)[0];
-            self.expr_static(first);
+            if matches!(self.cx.input.prog.expr(first), TExpr::Local(_)) {
+                self.expr(first, &outer);
+            } else {
+                self.expr_static(first);
+            }
             let rest = ListRef { start: args.start + 1, len: args.len - 1 };
             let declared = self.ctor_param_types(c);
             self.ctor_arguments(c, rest, &declared);

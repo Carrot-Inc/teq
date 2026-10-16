@@ -2001,6 +2001,17 @@ fn answer_diagnostics(sets: &[&source::Diagnostics], files: &[source::SourceFile
     ANSWER_EXTRAS.lock().unwrap_or_else(|e| e.into_inner()).diagnostics = Some(format!("[{}]", items.join(",")));
 }
 
+/// Adds the diagnostics of `d` to those the answer carries (`answer_diagnostics`), where a phase
+/// after the typer's reports more.
+fn answer_more_diagnostics(d: &source::Diagnostics, files: &[source::SourceFile]) {
+    let items = watch::render_check(d, files).join(",");
+    let mut extras = ANSWER_EXTRAS.lock().unwrap_or_else(|e| e.into_inner());
+    extras.diagnostics = Some(match extras.diagnostics.take() {
+        Some(known) if known.len() > 2 => format!("{},{}]", &known[..known.len() - 1], items),
+        _ => format!("[{}]", items),
+    });
+}
+
 /// `,"diagnostics":[...],"ms":{...}` of what is known, `total` the time since the build began.
 fn answer_extras() -> String {
     use std::fmt::Write as _;
@@ -2268,6 +2279,23 @@ fn build_jvm(
     let output = jvm::emit(input, cp, None);
     let t_emit = Instant::now();
     measure::report_parts(&mut report, measure::Pass::Emit, t_emit - t_emit_start, &[]);
+    // The references the backend refused (`Gen::refuse`) are the program's compile errors, as
+    // dotty's erasure reports them.
+    if !output.refused.is_empty() {
+        let mut refused = source::Diagnostics::default();
+        for (file, span, message) in &output.refused {
+            refused.error(*file, *span, message.clone());
+        }
+        eprint!("{}", refused.render(&all_sources));
+        let n = output.refused.len();
+        eprintln!("{} error{} found", n, if n == 1 { "" } else { "s" });
+        for e in &output.errors {
+            eprintln!("jvm backend: {}", e);
+        }
+        answer_more_diagnostics(&refused, &all_sources);
+        answer_failure(opts);
+        exit_with_report(opts, &report, 1);
+    }
     if !output.errors.is_empty() {
         for e in &output.errors {
             eprintln!("jvm backend: {}", e);

@@ -832,6 +832,7 @@ impl<'a> Worker<'a> {
         let mut widened = Vec::new();
         let mut opaque = Vec::new();
         let mut spread = Vec::new();
+        let mut ascribed = Vec::new();
         let mut erased = Vec::new();
         if let Some(b) = body {
             // What the notes name of a typing the body dropped (an alternative tried and
@@ -858,6 +859,8 @@ impl<'a> Worker<'a> {
             opaque.sort();
             spread = nodes.keys().copied().filter(|&e| self.prog.is_spread(e)).collect();
             spread.sort();
+            ascribed = nodes.keys().copied().filter(|&e| self.prog.is_ascribed(e)).collect();
+            ascribed.sort();
             // The lean library's call is the intrinsic's, deferred: each expansion evaluates it anew.
             erased = nodes.keys().copied().filter(|&e| !notes.deferred.contains(&e) && self.calls_erased_value(e)).collect();
             erased.sort();
@@ -902,6 +905,7 @@ impl<'a> Worker<'a> {
             widened,
             opaque,
             spread,
+            ascribed,
             erased,
             hoisted,
             imports: if body.is_some() { notes.imports } else { Vec::new() },
@@ -1122,6 +1126,9 @@ impl<'a> Worker<'a> {
         }
         for (i, &e) in def.spread.iter().enumerate() {
             note(e, Meta::Spread(i as u32));
+        }
+        for (i, &e) in def.ascribed.iter().enumerate() {
+            note(e, Meta::Ascribed(i as u32));
         }
         for (i, &e) in def.erased.iter().enumerate() {
             note(e, Meta::Erased(i as u32));
@@ -1614,6 +1621,7 @@ impl<'a> Worker<'a> {
                 Meta::Widened(_) => self.prog.mark_widened(copy),
                 Meta::Opaque(_) => self.prog.mark_opaque(copy),
                 Meta::Spread(_) => self.prog.mark_spread(copy),
+                Meta::Ascribed(_) => self.prog.mark_ascribed(copy),
                 Meta::Erased(_) => self.note_erased_value(copy, Span::default()),
                 Meta::Import(i) => {
                     let imp = def.imports[i as usize];
@@ -2655,6 +2663,7 @@ enum Meta {
     Widened(u32),
     Opaque(u32),
     Spread(u32),
+    Ascribed(u32),
     Erased(u32),
     Import(u32),
     Alias(u32),
@@ -2761,6 +2770,7 @@ impl InlineDefinition {
             opaque: Vec::new(),
             erased: Vec::new(),
             spread: Vec::new(),
+            ascribed: Vec::new(),
             hoisted: Vec::new(),
             imports: Vec::new(),
             node_types: FxMap::default(),

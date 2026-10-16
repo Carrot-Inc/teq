@@ -1337,7 +1337,7 @@ impl Remap {
             *t = self.test(*t);
         }
         self.syms_in(&mut d.hoisted);
-        for e in d.widened.iter_mut().chain(d.opaque.iter_mut()).chain(d.spread.iter_mut()).chain(d.erased.iter_mut()) {
+        for e in d.widened.iter_mut().chain(d.opaque.iter_mut()).chain(d.spread.iter_mut()).chain(d.ascribed.iter_mut()).chain(d.erased.iter_mut()) {
             *e = self.expr(*e);
         }
         for tc in &mut d.classes {
@@ -2419,7 +2419,7 @@ impl<'a> Worker<'a> {
         prog.expr_types.place(expr_numbering, crew);
         prog.expr_spans.place(expr_numbering, crew);
         // The bit sets, a task of the crew each.
-        let bits: Vec<std::sync::Mutex<&mut crate::arena::Bits>> = [&mut prog.expansion_bits, &mut prog.leaf_bits, &mut prog.chain_end_bits, &mut prog.taken_then_bits, &mut prog.taken_else_bits, &mut prog.widened_bits, &mut prog.opaque_bits, &mut prog.spread_bits, &mut prog.setter_assign_bits].into_iter().map(std::sync::Mutex::new).collect();
+        let bits: Vec<std::sync::Mutex<&mut crate::arena::Bits>> = [&mut prog.expansion_bits, &mut prog.leaf_bits, &mut prog.chain_end_bits, &mut prog.taken_then_bits, &mut prog.taken_else_bits, &mut prog.widened_bits, &mut prog.opaque_bits, &mut prog.spread_bits, &mut prog.ascribed_bits, &mut prog.setter_assign_bits].into_iter().map(std::sync::Mutex::new).collect();
         crew.each(bits.len(), &|i| bits[i].lock().unwrap_or_else(|e| e.into_inner()).place(expr_numbering));
         drop(bits);
         clock.part("placement of the side tables");
@@ -2803,6 +2803,7 @@ mod tests {
             opaque: Vec::new(),
             erased: Vec::new(),
             spread: Vec::new(),
+            ascribed: Vec::new(),
             hoisted: Vec::new(),
             imports: Vec::new(),
             node_types: FxMap::default(),
