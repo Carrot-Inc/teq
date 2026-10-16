@@ -4,9 +4,10 @@
 # command, run from the mirror's root as tests/all.sh runs it). It takes the head's binary, and beside it builds what
 # the list needs (the unit tests' build for cargo-test; for split-determinism, master's binary from the mirror
 # GATE_REF names, when the gate has synced one), then runs the suites one after another, each under TEQ=the head's
-# binary and a bound of GATE_SUITE_SECONDS (default 1800), its output in out/gate/<name>.log; a suite that exits 0
-# but says it skipped for want of something (a line matching GATE_SKIPS and not GATE_ALLOWED) fails. Each step
-# appends "<name> <exit> <seconds> <its last line>" to out/gate/status, and "done" ends it; the gate polls that file.
+# binary and a bound of GATE_SUITE_SECONDS (default 1800), its output in out/gate/<name>.log (a piece's, `lsp.1/4`, in
+# out/gate/lsp.1of4.log); a suite that exits 0 but says it skipped for want of something (a line matching GATE_SKIPS
+# and not GATE_ALLOWED) fails. Each step appends "<name> <exit> <seconds> <its last line>" to out/gate/status, and
+# "done" ends it; the gate polls that file.
 # The head's binary is built once for the gate, by the machine it names the builder (GATE_BUILD=1, or any machine
 # when GATE_HEAD_DIR is unset), as the timing lines build (build_teq of tests/support/build-manifest.sh): stamped
 # with the head's revision, GATE_REVISION, checked to name it, and described in out/gate/build.manifest (GATE_SOURCE
@@ -77,7 +78,7 @@ fi
 while read -r name cmd; do
   [ -n "$name" ] || continue
   started=$(now)
-  log=$gate/$name.log
+  log=$gate/${name//\//of}.log
   if [ "$name" = cargo-test ] && ! wait $test_build; then
     cp $gate/cargo-test.build.log $log
     step $name 1 $started $log

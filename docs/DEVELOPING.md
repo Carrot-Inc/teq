@@ -213,6 +213,15 @@ machine of their own (below); the project lines, when named, on the machine that
 but the application's end-to-end suite, the memory line and the asymptotic probes, which run alone after them (the
 suite's specs wait within the browser's timeouts, the memory line's growth rows and the probes' growth ratios
 depend on the machine's load; the probes run under the node `NODE` names there, node 22).
+The longest suites run as pieces, so that the machines' half shrinks with their number: `tests/lsp.sh`,
+`tests/jvm-watch.sh`, `tests/modules.sh` and `tests/split.sh` take `--piece <k>/<n>`, which runs the k-th of n parts
+of the units they list (a scenario, a program with its checks, a section of sessions; `--pieces <n>` prints the
+parts), dealt by the weights of `tests/support/piece-weights.txt` and never by the recorded times, so that a unit
+added lands in one part (`tests/support/pieces.sh`); each unit's body stamps itself as it starts, and a piece fails
+unless every unit of its part ran exactly once. The gate deals each piece as a suite of its own (`lsp.1/4`, a
+row of `tests/gate-times.txt` of its own) and merges their summaries into the suite's row, which fails when a piece
+fails or is missing; `tests/all.sh` and a suite run by hand run it whole, or one piece when it is named as
+`modules.1/2`, which the GitHub gate's two modules jobs do.
 `tests/gate-scripts.sh` checks the gate's own decisions against stand-in machines (`tests/gate-agent/`).
 Its application lines (`--app`) read lists that stay outside the repository with the application.
 `bench/app/app-lists.sh <checkout> <project> <dir>` writes them from the application's sbt build, through
@@ -247,7 +256,8 @@ runners for every push to GitHub's `dev`, where every landing goes, for every pu
 and by hand. GitHub's `master` is green only: it is fast-forwarded to a `dev` head whose run is green in every job,
 and never pushed to otherwise. One job per group of suites, each within its bound, every suite in one of them but
 `budget`, `runtime` and `watch-memory`, whose numbers are the recording machine's (the workflow's `excluded:` lines;
-`tests/gate-coverage.sh` fails a suite neither run nor excluded); `tests/gate.sh` runs those on the maintainers'
+`tests/gate-coverage.sh` fails a suite neither run nor excluded, and a suite run as pieces must have each of its
+pieces named once over the jobs); `tests/gate.sh` runs those on the maintainers'
 machines. It needs nothing
 of the maintainers' machines: one job builds the release binary, one prepares the jars once (the Maven ones from
 the cache `tests/support/jars.sh` keys or from Maven Central, the built ones handed on as an artifact,
@@ -386,11 +396,10 @@ statistic, the schedule and the verdicts). They measure once the suites on the s
 have ended: the machines share one host, its memory bandwidth and its scheduler, which a container's processors do
 not isolate, and a pair's band widens with the suites' load (the first sharded gate, beside seven shards at a
 host load of 59 to 62, had a budget row inconclusive and a sentinel row over). Their claims, syncs, builds and the
-head's binary come beside the suites, on as many machines, up to one a line, as leave the shards' end where it is by
-the recorded times; when the suites have ended, the lines go to as few of those as end the gate within thirty
-minutes by the time it has taken and the lines' recorded times, one machine and its lines one after another when
-that fits; each pair on a
-machine is one build configuration (`tests/support/build-manifest.sh`), the head's binary the builder's where its
+head's binary come beside the suites, on one machine a line, the first free ones of the pool, claimed before the
+shards are dealt the others (one at least left to them); when the suites have ended, the lines go to as few of those
+as end the gate within thirty minutes by the time it has taken and the lines' recorded times, one machine and its
+lines one after another when that fits; each pair on a machine is one build configuration (`tests/support/build-manifest.sh`), the head's binary the builder's where its
 manifest is master's build, else built there. The runtime line runs the node
 and java `bench/runtime-machine.txt` records, by their paths, whatever a machine's PATH leads to; and
 `tests/asymptotics.sh`, whose bounds are met on node 22 (the GitHub workflow's), runs the node `NODE` names, so

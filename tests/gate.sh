@@ -22,8 +22,9 @@
 # claimed for one shard, the tree synced there, the shard's suites run one after another as tests/all.sh runs them
 # (tests/gate-shard.sh), the machine released as soon as its shard ends, and at the end or on a failure whatever is
 # still held. The suites are dealt out to the machines by their times in tests/gate-times.txt, longest first, so the
-# shards end together; --record rewrites those times from this run, and only from a run whose every line passed or
-# whose only lines not passed are timing lines inconclusive, none over (their durations not their verdicts'). The
+# shards end together, the longest of them as pieces dealt each as a suite of its own (`pieced` below); --record
+# rewrites those times from this run, and only from a run whose every line passed or whose only lines not passed are
+# timing lines inconclusive, none over (their durations not their verdicts'). The
 # gate polls the machines and retries its claims every GATE_POLL_SECONDS (default 30; the comparison's polls at half
 # of it).
 # split-determinism, when the tree has it, compares with master's binary (REF), built on its machine from master's
@@ -36,8 +37,8 @@
 # bench/reference.txt against its reference revision under their cumulative ceilings. They measure once the suites on
 # the shards and the project lines have ended, since those machines share the comparison's host, its memory bandwidth
 # and its scheduler, and a pair's band widens with their load; the comparison's claim, syncs, builds and the head's
-# binary come beside the suites, on as many machines, up to one a line, as leave the shards' end where it is by the
-# recorded times (`prepare`). When the suites have ended, the lines go to as few of those as end the gate within
+# binary come beside the suites, on one machine a line, the first free ones of the pool, claimed before the shards
+# are dealt the others, one of them at least left to the shards (`prepare`). When the suites have ended, the lines go to as few of those as end the gate within
 # thirty minutes by the time it has taken and the lines' recorded times, one machine and its lines one after another
 # when that fits (`deal_lines`); the shards take the other free machines but those the projects hold. Every side is a
 # plain release build stamped with its revision: master's (the revision --master-rev names, by default the head's
@@ -164,6 +165,8 @@ for v in APP_MODULES APP_CLASSPATH APP_SCALAC_OPTIONS APP_TEST_MODULES APP_TEST_
 done
 [ -z "$manifest" ] || [ -f "$manifest" ] || { echo "gate: no manifest $manifest" >&2; exit 2; }
 
+# excluded: watch-memory  tests/watch-memory/budgets.txt's footprints are the recording machine's (a shard's host crossed the
+# sixteen-worker rows by its load), so the suite runs here alone as the line memory, not on a machine
 # The machines' suites, as tests/all.sh names and runs them; a command's first path is the script the tree must have
 # (the repository's launcher, ./teq, aside: a suite written in Scala is the path it interprets).
 machine=(
@@ -179,7 +182,6 @@ machine=(
   "lsp ./tests/lsp.sh"
   "task ./tests/task.sh"
   "runner-classes ./tests/runner-classes.sh"
-  "watch-memory ./tests/watch-memory.sh"
   "tasty ./tests/tasty.sh"
   "modules ./tests/modules.sh"
   "tasty-exec ./teq interp tests/tasty-exec.scala"
@@ -210,6 +212,14 @@ machine=(
   "gate-scripts ./tests/gate-scripts.sh"
 )
 # excluded: prop  outside the gate, as tests/all.sh says (its crates are fetched apart); the GitHub gate runs it
+# The suites the machines run as pieces (tests/support/pieces.sh), `<suite>:<n>`: each piece is a line of the plan
+# of its own, `<suite>.<k>/<n>`, the suite's command with `--piece <k>/<n>`, dealt by its own time in
+# tests/gate-times.txt (else the suite's divided by n, else 120), and the suite's row of the table merges the pieces'
+# rows and summaries (tests/support/pieces.py merge), failing when one of them failed, is missing or is not one of
+# the plan's.
+pieced="lsp:4 jvm-watch:2 modules:2 split:2"
+# pieces_of <suite>: its number of pieces, nothing for a suite run whole.
+pieces_of() { local spec; for spec in $pieced; do [ "${spec%%:*}" != "$1" ] || echo "${spec#*:}"; done; }
 compare="budget runtime sentinel"
 local_lines="size instructions instructions-derive memory asymptotics app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
 project_lines="lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test tyrian-export tyrian-compile tyrian-test tyrian-run indigo-export indigo-compile indigo-test indigo-run"
@@ -599,10 +609,31 @@ for entry in "${machine[@]}"; do
     result "$name" - 0 skip "no $path in this tree"
     continue
   fi
-  want+=("$entry")
+  pn=$(pieces_of "$name")
+  if [ -z "$pn" ]; then
+    want+=("$entry")
+  else
+    for k in $(seq 1 "$pn"); do want+=("$name.$k/$pn ${entry#* } --piece $k/$pn"); done
+  fi
 done
 for entry in "${want[@]}"; do echo "$entry"; done > "$tmp/want"
 [ ${#want[@]} -gt 0 ] || touch "$tmp/shards.none" "$tmp/shards.asked"
+# The plan's times, which the dealer reads: the recorded rows, then a row for each piece without one of its own, its
+# suite's time divided among the pieces.
+python3 - tests/gate-times.txt "$tmp/want" > "$tmp/times" <<'PY'
+import sys
+times = {}
+for l in open(sys.argv[1]):
+    if l.strip() and not l.startswith("#"):
+        name, secs = l.split()
+        times[name] = int(secs)
+        print(name, secs)
+for l in open(sys.argv[2]):
+    name = l.split()[0]
+    suite, _, piece = name.partition(".")
+    if piece and name not in times and suite in times:
+        print(name, round(times[suite] / int(piece.split("/")[1])))
+PY
 
 # sha256 <file>: its digest.
 sha256() { { sha256sum "$1" 2> /dev/null || shasum -a 256 "$1"; } | cut -d' ' -f1; }
@@ -630,33 +661,15 @@ ship() {
   "$ra/sync.sh" "$1" "$tmp/teq-head" > "$2" 2>&1 &&
     "$ra/run.sh" "$1" teq -t 60 "echo $(cat "$tmp/head.from") $(cat "$tmp/head.digest") > ../teq-head/ready" >> "$2" 2>&1
 }
-# prepare <free machines> <lines>: how many of the free machines the comparison prepares, by the recorded times
-# (tests/gate-times.txt; a build 240 s, a suite or line without a time 120): up to one a line, leaving the shards one
-# when there are suites, as many as keep the shards' end (the head's build, then the suites dealt to the other
-# machines) within a minute of their end beside one comparison machine. Which of them measure is decided when the
-# suites have ended (deal_lines).
+# prepare <free machines> <lines>: how many of the free machines the comparison prepares: one a line, leaving the
+# shards one when there are suites, and one at least, whatever the shards' end (the suites in pieces end later with
+# every machine taken from them, which kept one machine and the lines one after another). Which of them measure is
+# decided when the suites have ended (deal_lines), side by side when the gate is late.
 prepare() {
-  python3 - tests/gate-times.txt "$1" "$2" "$tmp/want" <<'PY'
-import sys
-times = {}
-for l in open(sys.argv[1]):
-    if l.strip() and not l.startswith("#"):
-        name, secs = l.split()
-        times[name] = int(secs)
-free, lines = int(sys.argv[2]), sys.argv[3].split()
-suites = [l.split()[0] for l in open(sys.argv[4]) if l.strip()]
-build = times.get("build", 240)
-def span(names, n):
-    load = [0] * n
-    for t in sorted((times.get(x, 120) for x in names), reverse=True):
-        load[load.index(min(load))] += t
-    return max(load)
-def suites_end(k):
-    shards = min(free - k, len(suites))
-    return build + span(suites, shards) if shards > 0 else (float("inf") if suites else 0)
-most = max(1, min(len(lines), free - (1 if suites else 0)))
-print(max(k for k in range(1, most + 1) if k == 1 or suites_end(k) <= suites_end(1) + 60))
-PY
+  local most=$(($1 - ($(grep -c . "$tmp/want") > 0 ? 1 : 0)))
+  local lines=$(echo $2 | wc -w)
+  [ $lines -lt $most ] && most=$lines
+  echo $((most > 0 ? most : 1))
 }
 # deal_lines <seconds so far> <machines ready> <lines>: the lines dealt to the fewest of the machines, in their order,
 # with which the gate ends within thirty minutes (the time so far, the lines' recorded times dealt longest first to
@@ -982,7 +995,7 @@ collect() {
     [ "$name" = done ] || result "$name" "${hosts[$i]}" "$secs" "$code" "$last"
   done < "$tmp/status.$i"
   while read -r name _; do
-    grep -q "^$name " "$tmp/status.$i" || result "$name" "${hosts[$i]}" 0 1 "not finished"
+    awk -v n="$name" '$1 == n {f = 1} END {exit !f}' "$tmp/status.$i" || result "$name" "${hosts[$i]}" 0 1 "not finished"
   done < "$tmp/list.$i"
   result shard "${hosts[$i]}" "$(awk '$1 != "done" {s += $3} END {print s + 0}' "$tmp/status.$i")" 0 \
     "the build, then $(awk '{printf "%s%s", sep, $1; sep = " "}' "$tmp/list.$i"); ended $(($(now) - machines_started))s into the machines' half"
@@ -1086,7 +1099,7 @@ fi
 [ $n -gt 0 ] || touch "$tmp/shards.none" "$tmp/shards.asked"
 if [ $n -gt 0 ]; then
   # The suites dealt out by their recorded times, longest first, each to the shard with the least so far.
-  python3 - "$tmp/want" tests/gate-times.txt "$n" > "$tmp/deal" <<'PY'
+  python3 - "$tmp/want" "$tmp/times" "$n" > "$tmp/deal" <<'PY'
 import sys
 want = [l.rstrip("\n") for l in open(sys.argv[1]) if l.strip()]
 times = {}
@@ -1216,13 +1229,28 @@ local_ended=$(cat "$out/local.ended" 2> /dev/null || echo "$local_started")
 compare_ended=$(cat "$out/compare.ended" 2> /dev/null || echo "$compare_started")
 projects_ended=$(cat "$out/projects.ended" 2> /dev/null || echo "$projects_started")
 
-# The table: the claims and builds, the suites in tests/all.sh's order, the comparison, the projects' lines, the
-# reference machine's lines.
+# A suite run as pieces gets its row from theirs: its verdict and counts merged from their rows and the summaries
+# their logs end with, its seconds theirs added up, which is no wall time.
+for spec in $pieced; do
+  name=${spec%%:*}
+  pn=${spec#*:}
+  grep -q "^$name\.1/$pn " "$tmp/want" || continue
+  IFS=$'\t' read -r code secs line < <(python3 tests/support/pieces.py merge "$name" "$pn" --results "$results" \
+    $(for k in $(seq 1 "$pn"); do echo "$out/$name.${k}of$pn.log"; done))
+  result "$name" "$pn pieces" "${secs:-0}" "${code:-1}" "${line:-no merge of the pieces}; total piece time ${secs:-0}s, not wall time"
+done
+
+# The table: the claims and builds, the suites in tests/all.sh's order, each run as pieces with its pieces under it,
+# the comparison, the projects' lines, the reference machine's lines.
 status=0
 recordable=1
 printf '\n%-18s %-9s %6s  %-5s %s\n' line where secs exit result
 order="pool claim sync collect release shard build ship"
-for entry in "${machine[@]}"; do order="$order ${entry%% *}"; done
+for entry in "${machine[@]}"; do
+  order="$order ${entry%% *}"
+  pn=$(pieces_of "${entry%% *}")
+  [ -z "$pn" ] || for k in $(seq 1 "$pn"); do order="$order ${entry%% *}.$k/$pn"; done
+done
 order="$order compare-half compare $compare projects-half projects $project_lines local-half $local_lines"
 for name in $order; do
   while IFS=$'\t' read -r row where secs code line; do
@@ -1236,19 +1264,24 @@ for name in $order; do
     printf '%-18s %-9s %6s  %-5s %s\n' "$name" "$where" "$secs" "$mark" "$(echo "$line" | cut -c1-150)"
   done < "$results"
 done
-# The times of the suites and the comparison's lines are recorded from a run whose every line passed, or whose only
-# lines not passed are timing lines inconclusive (none over), whose durations do not depend on their verdicts; from
-# no other run.
+# The times of the suites, of the pieces of those run as pieces (never the merged rows) and of the comparison's lines
+# are recorded from a run whose every line passed, or whose only lines not passed are timing lines inconclusive (none
+# over), whose durations do not depend on their verdicts; from no other run. A piece's row under another number of
+# pieces of its suite goes.
 if [ $record = 1 ] && [ $recordable = 1 ]; then
-  python3 - "$results" tests/gate-times.txt "$(for entry in "${machine[@]}"; do echo "${entry%% *}"; done) $compare" "$compare" <<'PY'
-import sys
+  python3 - "$results" tests/gate-times.txt "$(cut -d' ' -f1 "$tmp/want") $compare" "$compare" <<'PY'
+import re, sys
 recorded, timing = set(sys.argv[3].split()), set(sys.argv[4].split())
 measured = {}
 for l in open(sys.argv[1]):
     name, where, secs, code, _ = l.rstrip("\n").split("\t", 4)
     if name in recorded and where not in ("-", "local") and (code == "0" or (code == "3" and name in timing)):
         measured[name] = secs
-lines = open(sys.argv[2]).read().splitlines()
+pieces = {m.group(1): m.group(2) for m in (re.fullmatch(r"(.+)\.\d+/(\d+)", name) for name in measured) if m}
+def stale(name):
+    m = re.fullmatch(r"(.+)\.\d+/(\d+)", name)
+    return m is not None and m.group(1) in pieces and m.group(2) != pieces[m.group(1)]
+lines = [l for l in open(sys.argv[2]).read().splitlines() if l.startswith("#") or not l.strip() or not stale(l.split()[0])]
 out = [l if l.startswith("#") or not l.strip() or l.split()[0] not in measured else f"{l.split()[0]} {measured.pop(l.split()[0])}" for l in lines]
 out += [f"{name} {secs}" for name, secs in measured.items()]
 open(sys.argv[2], "w").write("\n".join(out) + "\n")

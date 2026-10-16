@@ -18,6 +18,22 @@
 #            expectations, another system's, another std's, a budget of one platform, the JVM's platform, a split
 #            watch case of another std or of the JVM alone), the want-of ones refused (a jar, a tool, a note of a
 #            check a tool's absence leaves undone).
+#   pieces   the long suites' pieces (tests/support/pieces.sh): each of lsp, jvm-watch, modules and split deals every
+#            unit it lists to exactly one piece of 1 to 8, in its order, its listing of three the units dealt; the
+#            module-only checks and split programs, the programs on both of jvm-watch's lists and the language
+#            server's idle minute and jar fetch among the units; selectors out of range or misspelled refused before
+#            any setup, another option refused there too, a piece of no units passed; every listed unit asked for once
+#            by the suite's places that run units (PIECES_DRY=1); a unit asked for twice, never or unlisted, a body
+#            run twice, never or unasked failing a stand-in suite's piece; the execution identities, each unit's body
+#            stamping its name and site as it starts over stand-in binaries (PIECES_STAMP_ONLY=1): every piece of
+#            every n of 1 to 8 running each site of each of its units once, the pieces of each n together the whole
+#            run's bodies and the whole run's 1/1's (tests/lsp.sh's scenarios each at the automatic count, two and
+#            sixteen workers, the idle minute and the jar fetch once); on a copy of tests/jvm-watch.sh, a program's body
+#            run twice behind its guard, another's dropped behind it, a section's dropped, a retype session called
+#            twice and another's call deleted each failing the piece;
+#            tests/support/pieces.py's merge summing counters, counting a whole suite's verdict and a failure any
+#            piece finds once, summing evidence before its check, and failing on a piece missing, doubled, unexpected,
+#            of another number, without its summary or failed; tests/all.sh running the four whole.
 #   driver   tests/gate.sh over stand-in machines (tests/gate-agent; cargo and rustc stand-ins whose build writes a
 #            binary naming the revision asked for and running TEQ), on a copy of this tree in a repository of its
 #            own: the first shard's machine builds the head and the others take its binary, one whose
@@ -27,7 +43,11 @@
 #            one; the last line is the gate's total; and with five machines the comparison (bench/pairs.py a stand-in
 #            in the landing) prepares three, each over the builder's binary, and measures its lines after the shards'
 #            suites end on one of them, on three when the recorded times put one machine's end past thirty minutes; a
-#            run whose only line not passed is a timing line inconclusive records the times.
+#            run whose only line not passed is a timing line inconclusive records the times; and with tests/lsp.sh a
+#            stand-in of six units, its four pieces dealt as lines of their own under the suite's merged row, their
+#            times recorded and the suite's left, then read again by the dealer and the comparison's planner beside a
+#            planted failure, a killed piece, one past the suite's bound and a skip for want of a jar, each failing
+#            the suite, nothing recorded.
 # Every run is bounded; the script exits 1 on a failure. Needs the release binary (TEQ), scala-cli and the coursier
 # cache the suites read.
 cd "$(dirname "$0")/.." || exit 1
@@ -162,6 +182,183 @@ refused|skip the corpus: no /scala3/tests/warn
 WORDINGS
 check "skips: the want-of rule admits the by-design skips and refuses the others" "$work/skips.log" eval '[ ! -s "$work/skips.log" ]'
 
+# The long suites' pieces (tests/support/pieces.sh): every unit a suite lists in exactly one piece, in the suite's
+# order, for every number of pieces; the units only a whole run used to reach among them.
+for suite in lsp jvm-watch modules split; do
+  tests/$suite.sh --pieces 1 > "$work/pieces-$suite.1" 2>&1
+  tests/$suite.sh --pieces 3 > "$work/pieces-$suite.3" 2>&1
+  python3 - "$suite" "$work/pieces-$suite.1" "$work/pieces-$suite.3" > "$work/pieces-$suite.log" 2>&1 <<'PY'
+import collections, subprocess, sys
+suite, one, three = sys.argv[1:]
+units = [l.split()[1] for l in open(one) if not l.startswith("#")]
+assert units and all(l.startswith("1/1 ") for l in open(one) if not l.startswith("#")), "the whole is not one piece"
+for n in range(1, 9):
+    listing = subprocess.run(["python3", "tests/support/pieces.py", "list", suite, str(n)], input="\n".join(units),
+                             capture_output=True, text=True, check=True).stdout
+    if n == 3:
+        assert listing == open(three).read(), "the suite's listing of three pieces is not its units dealt"
+    rows = [l.split() for l in listing.splitlines() if not l.startswith("#")]
+    count = collections.Counter(u for _, u in rows)
+    assert len(rows) == len(units) and set(count) == set(units) and set(count.values()) == {1}, f"{n} pieces: {count.most_common(2)}"
+    for k in range(1, n + 1):
+        mine = [u for p, u in rows if p == f"{k}/{n}"]
+        assert mine == [u for u in units if u in set(mine)], f"piece {k}/{n} is out of the suite's order"
+print("ok", len(units))
+PY
+  check "pieces: $suite deals each of its units to exactly one piece, in its order, of 1 to 8" "$work/pieces-$suite.log" grep -q "^ok " "$work/pieces-$suite.log"
+done
+units_of() { grep -v '^#' "$work/pieces-$1.1" | cut -d' ' -f2; }
+check "pieces: modules lists the checks once a run and the split programs as units" "$work/pieces-modules.1" eval \
+  '[ "$(units_of modules | grep -c -x -E "own-twice|own-moved|own-cut")" = 3 ] &&
+  [ "$(units_of modules | grep -c "^split-")" = "$(grep -c -v -E "^[[:space:]]*(#|$)" tests/modules/split-programs.txt)" ] &&
+  [ "$(units_of modules | grep -c -v -E "^(own-|split-)")" = "$(ls -d tests/modules/*/ | wc -l)" ]'
+check "pieces: jvm-watch lists a program by its list, the two on both lists twice, and its nine sessions one after another" "$work/pieces-jvm-watch.1" eval \
+  '[ "$(units_of jvm-watch | grep -c -x -E "(passing|watch-only)/(inline_definition_gaps|scala3_typeclass-derivation3)")" = 4 ] &&
+  [ "$(units_of jvm-watch | grep -c "^passing/")" = "$(wc -w < tests/jvm-passing.txt)" ] && [ "$(units_of jvm-watch | grep -c "^retype/")" = 9 ]'
+check "pieces: lsp lists every scenario of the driver once, the idle minute and the jar fetch among them" "$work/pieces-lsp.1" eval \
+  '[ "$(units_of lsp | sort)" = "$(sed -n "s/^const scenarios = { \(.*\) }$/\1/p" tests/lsp/driver.mjs | tr -d " " | tr "," "\n" | sort)" ] &&
+  [ "$(units_of lsp | grep -c -x -E "idleMinute|jarFetch")" = 2 ]'
+# A selector out of range or misspelled, or another option, is refused before any setup; a piece of no units passes
+# as one.
+: > "$work/selectors.log"
+for suite in lsp jvm-watch modules split; do
+  for bad in "--piece 0/2" "--piece 3/2" "--piece 1/0" "--piece a/b" "--piece" "--pieces 0" "--peice 1/2" "--bogus"; do
+    out=$(TEQ=/nonexistent COURSIER_CACHE=$work/no-cache timeout 60 tests/$suite.sh $bad 2> /dev/null)
+    code=$?
+    [ $code = 2 ] && [ -z "$out" ] || echo "$suite $bad: exit $code, $out" >> "$work/selectors.log"
+  done
+done
+TEQ=/nonexistent timeout 60 tests/modules.sh --piece 1/2 misuse > /dev/null 2>&1
+[ $? = 2 ] || echo "modules --piece 1/2 misuse: not refused" >> "$work/selectors.log"
+out=$(TEQ=/nonexistent timeout 60 tests/lsp.sh --piece 40/40 2>&1)
+code=$?
+[ $code = 0 ] && [ "$out" = "$(printf 'pieces: lsp 40/40: 0 units:\npieces: lsp 40/40 summary: exit=0 units=0')" ] || echo "lsp --piece 40/40: exit $code, $out" >> "$work/selectors.log"
+check "pieces: selectors out of range or misspelled refused before setup, a piece of no units passed" "$work/selectors.log" eval '[ ! -s "$work/selectors.log" ]'
+# Each suite's places that run units ask for every unit it lists once (PIECES_DRY=1: none runs).
+for suite in lsp jvm-watch modules split; do
+  PIECES_DRY=1 timeout 300 tests/$suite.sh --piece 1/2 > "$work/dry-$suite.log" 2>&1
+  code=$?
+  check "pieces: every unit of $suite's list is asked for once by the places that run it" "$work/dry-$suite.log" eval \
+    '[ $code = 0 ] && ! grep -q "^FAIL" "$work/dry-$suite.log" && tail -1 "$work/dry-$suite.log" | grep -q "^pieces: $suite 1/2 summary: exit=0 "'
+done
+# A unit asked for twice, never, or not listed, a body run twice, never, or not asked for, each fails the piece.
+printf '%s\n' '#!/bin/bash' "cd '$PWD'" '. tests/support/pieces.sh' 'suite_units() { printf "%s\n" a "b - again" c; }' \
+  '! pieces_option stub "$1" "$2" || shift 2' 'for u in $STUB_ASK; do piece_has $u || continue; done' \
+  'for u in $STUB_RUN; do piece_ran ${u/:/ }; done' 'pieces_end 0 passed=0 failed=0' > "$work/stub.sh"
+: > "$work/stub.log"
+while IFS='|' read -r ask run said; do
+  STUB_ASK=$ask STUB_RUN=$run bash "$work/stub.sh" --piece 1/1 > "$work/stub.out" 2>&1
+  code=$?
+  if [ -z "$said" ]; then
+    [ $code = 0 ] && ! grep -q "^FAIL" "$work/stub.out" || { echo "asked $ask, ran $run: $(cat "$work/stub.out")" >> "$work/stub.log"; }
+  else
+    [ $code = 1 ] && grep -q -x -F "FAIL pieces: $said" "$work/stub.out" || { echo "asked $ask, ran $run: not '$said': $(cat "$work/stub.out")" >> "$work/stub.log"; }
+  fi
+done <<'CASES'
+a b c|a b b:again c|
+a a b c|a b b:again c|the unit a was asked for 2 times, not once
+a b|a b b:again|the unit c was asked for 0 times, not once
+a b c d|a b b:again c|a unit d was asked for that the suite does not list
+a b c|a a b b:again c|the unit a ran 2 times, 1 due
+a b c|a b c|the unit b never ran at again
+a b c|a b b:again c d|the unit d ran 1 times, 0 due
+CASES
+check "pieces: a unit asked for twice, never or unlisted, a body run twice, never or unasked fails the piece" "$work/stub.log" eval '[ ! -s "$work/stub.log" ]'
+# Execution identities: each unit's body stamps its name and site as it starts (PIECES_STAMPS), over stand-in
+# binaries (a teq whose sessions answer at once and whose builds fail, a node that runs the language server's driver
+# as a list of its scenarios, a java and a scala-cli that fail) and PIECES_STAMP_ONLY=1 (a program's body ends at its
+# stamp, a section runs on): every piece of every n of 1 to 8 runs each site of each of its units once and nothing
+# else, the pieces of each n together run the bodies the whole run runs, and the whole run's are 1/1's.
+stand=$work/stand
+mkdir -p "$stand" "$work/stamps" "$work/exec"
+printf '%s\n' '#!/bin/bash' 'case "$1 $2" in' \
+  '  "compiler watch") echo "{\"ok\":false}"; while read -r line; do case $line in quit) exit 0 ;; build*) echo "{\"ok\":false}" ;; esac; done; exit 0 ;;' \
+  '  "compiler check") exit 0 ;;' '  "--version "*) echo "teq 0.0.0 stand-in"; exit 0 ;;' 'esac' 'exit 1' > "$stand/teq"
+printf '%s\n' '#!/bin/bash' 'case $1 in tests/lsp/driver.mjs) ;; *) exec "$REAL_NODE" "$@" ;; esac' \
+  'names=$(sed -n "s/^const scenarios = { \(.*\) }$/\1/p" tests/lsp/driver.mjs | tr -d " " | tr "," "\n")' \
+  '[ -z "$LSP_UNITS" ] || echo "$names" > "$LSP_UNITS"' \
+  'for name in $names; do' \
+  '  case ,${LSP_ONLY:-}, in *,$name,*) ;; ,,) case $name in idleMinute|jarFetch) continue ;; esac ;; *) continue ;; esac' \
+  '  [ -z "$PIECES_RAN" ] || echo "$name ${TEQ_SESSION_THREADS:-auto}" >> "$PIECES_RAN"' 'done' 'echo "0 passed, 0 failed"' > "$stand/node"
+for tool in java javap scala-cli; do printf '#!/bin/sh\nexit 1\n' > "$stand/$tool"; done
+chmod +x "$stand"/*
+real_node=$(command -v node)
+for suite in split modules jvm-watch lsp; do
+  echo "$suite whole -"
+  for n in 1 2 3 4 5 6 7 8; do for k in $(seq 1 $n); do echo "$suite $n $k"; done; done
+done | env PATH="$stand:$PATH" TEQ="$stand/teq" REAL_NODE="$real_node" JOBS=2 PIECES_STAMP_ONLY=1 \
+  xargs -P "$(getconf _NPROCESSORS_ONLN 2> /dev/null || echo 4)" -L 1 bash -c 'if [ "$2" = whole ]; then piece=; else piece="--piece $3/$2"; fi
+    PIECES_STAMPS=$0/stamps/$1.$2.$3 timeout 600 tests/$1.sh $piece > $0/exec/$1.$2.$3.log 2>&1' "$work" 2> "$work/exec/xargs.err"
+python3 - "$work" > "$work/identities.log" 2>&1 <<'PY'
+import collections, os, sys
+work = sys.argv[1]
+def stamps(name):
+    path = os.path.join(work, "stamps", name)
+    return collections.Counter(l.strip() for l in open(path) if l.strip()) if os.path.exists(path) else collections.Counter()
+bad = []
+for suite in ("lsp", "jvm-watch", "modules", "split"):
+    whole, one = stamps(f"{suite}.whole.-"), stamps(f"{suite}.1.1")
+    if not one or whole != one or max(one.values()) != 1:
+        bad.append(f"{suite}: the whole run's bodies ({sum(whole.values())}) are not 1/1's ({sum(one.values())})")
+    for n in range(1, 9):
+        union = sum((stamps(f"{suite}.{n}.{k}") for k in range(1, n + 1)), collections.Counter())
+        if union != one:
+            bad.append(f"{suite}: the {n} pieces run {sorted((union - one).items())[:2]} more, {sorted((one - union).items())[:2]} fewer than 1/1")
+        for k in range(1, n + 1):
+            log = open(os.path.join(work, "exec", f"{suite}.{n}.{k}.log"), errors="replace").read()
+            fails = [l for l in log.splitlines() if l.startswith("FAIL pieces:")]
+            if fails or f"pieces: {suite} {k}/{n} summary:" not in log:
+                bad.append(f"{suite} {k}/{n}: " + (fails[0] if fails else "no summary"))
+print("\n".join(bad) or "identities: ok")
+PY
+for n in 1 2 3 4 5 6 7 8; do for k in $(seq 1 $n); do rm -rf "out/split.${k}of$n"; done; done
+check "pieces: every unit's body runs once over the pieces of every n of 1 to 8, the whole run's bodies 1/1's" "$work/identities.log" \
+  grep -q -x "identities: ok" "$work/identities.log"
+# The merge of the pieces' summaries: counters summed, a verdict of every piece's counted once, a failure any piece
+# finds counted once, evidence summed before its check; a piece missing, doubled, unexpected, of another number or
+# without its summary fails the suite.
+python3 - "$work" > "$work/merge.log" 2>&1 <<'PY'
+import os, sys
+sys.path.insert(0, "tests/support")
+from pieces import merge
+work = sys.argv[1]
+def log(name, line):
+    path = os.path.join(work, name)
+    open(path, "w").write(f"some output\n{line}\n")
+    return path
+def rows(*names):
+    path = os.path.join(work, f"rows.{len(os.listdir(work))}")
+    open(path, "w").write("".join(f"{n}\tm1\t{s}\t{c}\tlast\n" for n, s, c in names))
+    return path
+a = log("s.1of2.log", "pieces: s 1/2 summary: exit=0 units=3 passed=5 failed=0 and:parse=ok pos:joins=0")
+b = log("s.2of2.log", "pieces: s 2/2 summary: exit=0 units=2 passed=4 failed=0 and:parse=ok pos:joins=2")
+ok = rows(("s.1/2", "10", "0"), ("s.2/2", "20", "0"))
+assert merge("s", 2, [a, b], ok) == (0, 30, "s: 2 pieces, 10 passed, 0 failed"), merge("s", 2, [a, b], ok)
+bad = log("s.2of2.bad", "pieces: s 2/2 summary: exit=1 units=2 passed=4 failed=0 and:parse=fail pos:joins=0")
+code, _, line = merge("s", 2, [a, bad], None)
+assert code == 1 and line.startswith("s: 2 pieces, 9 passed, 2 failed;") and "parse failed in 1 of 2 pieces" in line and "no joins in any piece" in line and "piece 2/2 failed" in line, line
+missing = [log(f"s.{k}of2.any", f"pieces: s {k}/2 summary: exit=1 units=2 passed=3 failed=0 any:scalac={k - 1}") for k in (1, 2)]
+code, _, line = merge("s", 2, missing, None)
+assert code == 1 and line.startswith("s: 2 pieces, 6 passed, 1 failed;") and "scalac in 1 pieces" in line, line
+whole = log("s.whole", "pieces: s whole summary: exit=0 units=5 passed=9 failed=0 and:parse=ok pos:joins=2")
+assert merge("s", 1, [whole], None)[2] == merge("s", 2, [a, b], None)[2].replace("2 pieces", "1 pieces"), "the whole and its pieces differ"
+for what, results, logs, said in [
+    ("missing", rows(("s.1/2", "10", "0")), [a, b], "piece 2/2: no result"),
+    ("doubled", rows(("s.1/2", "10", "0"), ("s.2/2", "20", "0"), ("s.2/2", "20", "0")), [a, b], "piece 2/2: 2 results"),
+    ("unexpected", rows(("s.1/2", "10", "0"), ("s.2/2", "20", "0"), ("s.3/2", "5", "0")), [a, b], "an unexpected result s.3/2"),
+    ("another number", rows(("s.1/2", "10", "0"), ("s.2/2", "20", "0"), ("s.1/3", "5", "0")), [a, b], "an unexpected result s.1/3"),
+    ("no summary", ok, [a, log("s.2of2.quiet", "2 passed")], "piece 2/2: no summary"),
+    ("a summary of another number", ok, [a, log("s.2of2.other", "pieces: s 2/3 summary: exit=0 units=1 passed=1 failed=0")], "is the summary of piece 2/3, not of one of 2"),
+    ("a failed row", rows(("s.1/2", "10", "0"), ("s.2/2", "20", "124")), [a, b], "piece 2/2 failed"),
+]:
+    code, _, line = merge("s", 2, logs, results)
+    assert code == 1 and said in line, f"{what}: {line}"
+print("merge: ok")
+PY
+check "pieces: the merge sums counters, counts a whole suite's verdict once and fails on a missing or doubled piece" "$work/merge.log" grep -q "^merge: ok$" "$work/merge.log"
+check "pieces: tests/all.sh runs the long suites whole" /dev/null eval \
+  '[ "$(grep -c -E "^suite (lsp|jvm-watch|modules|split) +\./tests/(lsp|jvm-watch|modules|split)\.sh$" tests/all.sh)" = 4 ]'
+
 # The gate's driver over stand-in machines.
 agent=$work/agent
 mkdir -p "$agent/bin" "$agent/scala3/tests"
@@ -185,6 +382,34 @@ mkdir -p "$landing" && git -C "$landing" init -q &&
   echo "reference $(git -C "$landing" rev-parse --short HEAD) 2026-10-14 ceiling 1.20 the landing's own" >> "$landing/bench/reference.txt" &&
   git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "the reference" ||
   { echo "FAIL driver: no landing in $landing"; fail=$((fail + 1)); }
+# A program's body run twice behind its one guard, another's guard kept and its body dropped, a section's body
+# dropped behind its guard, a retype session called twice and another's call deleted: each fails the piece, on a
+# copy of tests/jvm-watch.sh in the landing.
+python3 - "$landing/tests/jvm-watch.sh" <<'PY'
+import re, sys
+path = sys.argv[1]
+s = open(path).read()
+twice = 'piece_has "passing/$name" && program_case "$name" "passing/$name"'
+dropped = 'piece_has "watch-only/$name" && program_case "$name" "watch-only/$name"'
+assert twice in s and dropped in s
+s = s.replace(twice, 'piece_has "passing/$name" && { program_case "$name" "passing/$name"; program_case "$name" "passing/$name"; }')
+s = s.replace(dropped, 'piece_has "watch-only/$name" && :')
+retype = 'piece_has "retype/$name" && "retype_$name" $PIN'
+assert retype in s
+s = s.replace(retype, 'piece_has "retype/$name" && { [ "$name" = reads ] || "retype_$name" $PIN; [ "$name" != entry ] || "retype_$name" $PIN; }')
+s, n = re.subn(r"(?ms)^if piece_has owned-mirrors; then\n.*?^fi\n", "if piece_has owned-mirrors; then\n  :\nfi\n", s)
+assert n == 1
+open(path, "w").write(s)
+PY
+(cd "$landing" && env PATH="$stand:$PATH" TEQ="$stand/teq" REAL_NODE="$real_node" PIECES_STAMP_ONLY=1 timeout 300 tests/jvm-watch.sh --piece 1/1) > "$work/mutants.log" 2>&1
+code=$?
+git -C "$landing" checkout -q tests/jvm-watch.sh
+check "pieces: a body run twice behind its guard, or dropped behind it, a retype session called twice or not at all, fails the piece" "$work/mutants.log" eval '[ $code = 1 ] &&
+  grep -q -x "FAIL pieces: the unit retype/entry ran 2 times, 1 due" "$work/mutants.log" &&
+  grep -q -x "FAIL pieces: the unit retype/reads never ran" "$work/mutants.log" &&
+  [ "$(grep -c -E "^FAIL pieces: the unit passing/[^ ]+ ran 2 times, 1 due$" "$work/mutants.log")" = "$(wc -w < tests/jvm-passing.txt)" ] &&
+  [ "$(grep -c -E "^FAIL pieces: the unit watch-only/[^ ]+ never ran$" "$work/mutants.log")" = 6 ] &&
+  grep -q -x "FAIL pieces: the unit owned-mirrors never ran" "$work/mutants.log"'
 # gate <log> <pool lines> <gate's arguments...>: the landing's gate over a fresh pool of stand-in machines.
 gate() {
   local log=$1 pool=$2
@@ -195,7 +420,8 @@ gate() {
   # the gate's own settings and the machine contract's variables of this machine's shell are not the stand-ins'
   (cd "$landing" && for v in $(compgen -e | grep -E '^(GATE_|LILA_|APP_|CHAIN_KNOWN$|SCALAC_KNOWN$|NODE$)' | grep -v '^GATE_AGENT_'); do unset "$v"; done &&
     env -u JOBS REMOTE_AGENT="$scripts" GATE_AGENT_ROOT="$agent" GATE_AGENT_TEQ="$TEQ" GATE_POLL_SECONDS=2 \
-    GATE_CLAIM_WAIT=6 GATE_CLAIM_SECONDS=6 GATE_HEAD_WAIT=120 timeout 300 tests/gate.sh "$landing" "$@") > "$log" 2>&1
+    GATE_CLAIM_WAIT=6 GATE_CLAIM_SECONDS=6 GATE_HEAD_WAIT=120 ${suite_seconds:+GATE_SUITE_SECONDS=$suite_seconds} \
+    timeout 300 tests/gate.sh "$landing" "$@") > "$log" 2>&1
 }
 row() { grep -E "^$1 +$2 " "$3"; }
 times_before=$(cat "$landing/tests/gate-times.txt")
@@ -245,6 +471,67 @@ check "driver: the lines on three machines when one would end the gate past thir
   [ "$(grep -E "^(budget|runtime|sentinel) " "$log" | awk "{print \$2}" | sort -u | wc -l)" = 3 ] && grep -q -E "^compare .* ok +measure: the lines on 3 of 3 machines ready" "$log" &&
   grep -q -E "^budget .* INCONCLUSIVE " "$log" && grep -q "^gate: the times recorded" "$log" &&
   [ "$recorded" = "$({ echo "budget $(row budget "m[0-9]" "$log" | awk "{print \$3}")"; echo "fold $(row fold "m[0-9]" "$log" | awk "{print \$3}")"; echo "parser $(row parser "m[0-9]" "$log" | awk "{print \$3}")"; echo "runtime $(row runtime "m[0-9]" "$log" | awk "{print \$3}")"; echo "sentinel $(row sentinel "m[0-9]" "$log" | awk "{print \$3}")"; } | sort | tr "\n" " ")" ]'
+
+# A suite run as pieces: tests/lsp.sh a stand-in over tests/support/pieces.sh with six units, each passing unless
+# tests/lsp/plant names it. The pieces are dealt as lines of their own, their rows under the suite's merged row, their
+# times recorded and the suite's left as it was; the comparison's planner and the dealer read them again, and a
+# planted failure, a killed piece, one past the suite's bound and a skip for want of a jar each fail the suite and
+# record nothing.
+base=$(git -C "$landing" rev-parse HEAD)
+cat > "$landing/tests/lsp.sh" <<'EOF'
+#!/bin/bash
+cd "$(dirname "$0")/.."
+. tests/support/pieces.sh
+suite_units() { printf '%s\n' u1 u2 u3 u4 u5 u6; }
+! pieces_option lsp "$1" "$2" || shift 2
+pass=0
+fail=0
+for u in $(suite_units); do
+  piece_has $u || continue
+  piece_ran $u
+  case $(awk -v u=$u '$2 == u { print $1 }' tests/lsp/plant 2> /dev/null) in
+    fail) echo "FAIL $u: planted"; fail=$((fail + 1)) ;;
+    kill) kill -9 $$ ;;
+    sleep) sleep 60 ;;
+    skip) echo "skip $u: not in the coursier cache: planted" ;;
+    *) pass=$((pass + 1)) ;;
+  esac
+done
+echo "$pass passed, $fail failed"
+pieces_end $((fail > 0)) passed=$pass failed=$fail
+EOF
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "a stand-in of the suite"
+times_before=$(cat "$landing/tests/gate-times.txt")
+gate "$work/driver-6.log" "$(printf 'm1 free\nm2 free\nm3 free')" --only lsp,fold --record
+code=$?
+log=$work/driver-6.log
+recorded_pieces=$(for k in 1 2 3 4; do echo "lsp.$k/4 $(row "lsp\\.$k/4" "m[123]" "$log" | awk '{print $3}')"; done | sort)
+check "driver: a suite's four pieces dealt as lines, under its merged row, their times recorded and not the suite's" "$log" eval '[ $code = 0 ] &&
+  row lsp "4 pieces" "$log" | grep -q " ok .*lsp: 4 pieces, 6 passed, 0 failed; total piece time [0-9]*s, not wall time" &&
+  [ "$(grep -c -E "^lsp\.[1-4]/4 +m[123] .* ok +pieces: lsp [1-4]/4 summary: exit=0 units=[12] passed=[12] failed=0$" "$log")" = 4 ] &&
+  [ "$(grep -E "^lsp(\.[1-4]/4)? " "$log" | cut -d" " -f1 | tr "\n" " ")" = "lsp lsp.1/4 lsp.2/4 lsp.3/4 lsp.4/4 " ] &&
+  grep -q "^gate: the times recorded" "$log" &&
+  [ "$(grep -E "^lsp\.[0-9]+/[0-9]+ " "$landing/tests/gate-times.txt" | sort)" = "$recorded_pieces" ] &&
+  [ "$(echo "$times_before" | grep -v -E "^(fold|lsp\.[1-4]/4) ")" = "$(grep -v -E "^(fold|lsp\.[1-4]/4) " "$landing/tests/gate-times.txt")" ]'
+printf '%s\n' "fail u1" "kill u2" "sleep u3" "skip u4" > "$landing/tests/lsp/plant"
+# Pieces whose end falls with every machine they get: the comparison still takes one machine a line.
+sed -i -E 's/^(lsp\.[1-4]\/4) [0-9]+$/\1 600/' "$landing/tests/gate-times.txt"
+git -C "$landing" add -A && git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "the pieces' times; units that fail"
+times_before=$(cat "$landing/tests/gate-times.txt")
+suite_seconds=8 gate "$work/driver-7.log" "$(printf 'm1 free\nm2 free\nm3 free\nm4 free\nm5 free')" --only lsp,budget,runtime,sentinel --master-rev HEAD --record
+code=$?
+log=$work/driver-7.log
+times_after=$(cat "$landing/tests/gate-times.txt")
+git -C "$landing" reset -q --hard "$base"
+check "driver: a failed, a killed, a timed-out and a skipping piece fail the suite and record nothing; three comparison lines claim three machines" "$log" eval '[ $code = 1 ] &&
+  [ "$(grep -E "^[0-9:]+ comparison: m[1-5] m[1-5] m[1-5] prepared for budget runtime sentinel$" "$log" | wc -l)" = 1 ] &&
+  [ "$(grep -c -E "^compare +m[1-5] .* ok +claim: waited " "$log")" = 3 ] &&
+  row lsp "4 pieces" "$log" | grep -q " FAIL .*lsp: 4 pieces, 1 passed, 1 failed; piece 2/4: no summary; piece 3/4: no summary; pieces 1/4, 2/4, 3/4, 4/4 failed;" &&
+  row "lsp\.1/4" "m[1-5]" "$log" | grep -q " FAIL .*summary: exit=1 " && row "lsp\.2/4" "m[1-5]" "$log" | grep -q " FAIL " &&
+  row "lsp\.3/4" "m[1-5]" "$log" | grep -q " FAIL " &&
+  row "lsp\.4/4" "m[1-5]" "$log" | grep -q " FAIL .*gate: a skip for want of what the machine should hold: skip u4" &&
+  [ "$(grep -E "^(budget|runtime|sentinel) " "$log" | grep -c " ok ")" = 3 ] &&
+  grep -q "^gate: no times recorded" "$log" && [ "$times_before" = "$times_after" ]'
 
 echo "gate-scripts: $pass passed, $fail failed"
 [ $fail = 0 ]
