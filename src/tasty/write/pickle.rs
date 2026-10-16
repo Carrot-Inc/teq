@@ -391,6 +391,9 @@ struct P<'w, 'a> {
     /// Set while an annotation's tree is written: scalac lifts no argument of an annotation's
     /// constructor (`Applications.isAnnotConstr`), nor does teq of any constructor in its tree.
     in_annotation: bool,
+    /// Whether the call being written is one of an inline body's whose type arguments the source
+    /// wrote (`InlineDefinition::written_type_args`), taken by the application that writes them.
+    written_targs: bool,
     errors: Vec<String>,
     /// The source's name for the `@SourceFile` annotation and the attributes.
     source_path: String,
@@ -541,6 +544,7 @@ impl<'w, 'a> P<'w, 'a> {
             tparam_annots: FxMap::default(),
             source_params: false,
             in_annotation: false,
+            written_targs: false,
             expected_fn: None,
             inline_body: None,
             inline_owner: None,
@@ -1009,6 +1013,116 @@ impl<'w, 'a> P<'w, 'a> {
     fn tpt(&mut self, t: TypeId) {
         self.mark_tree();
         self.ty(t);
+    }
+
+    /// A type the source wrote, as the tree dotty's typer keeps for it and `TreePickler.pickleTpt`
+    /// writes: an applied type's constructor and arguments as trees, a union's and an
+    /// intersection's operands, a member of a path selected from it, a singleton, a named type's
+    /// identifier over its reference. The reader tells it
+    /// from a type the typer inferred, written as the type alone (`TreeUnpickler.readTpt`'s
+    /// `TypeTree`, `Trees.TypeTree.isInferred`), so that an inline body read from the products
+    /// keeps the provenance its source gave each type: `Inliner.dropUnusedDefs` counts a
+    /// written tree's paths where an inferred one's normalize. An argument a wildcard is the
+    /// type, as the typer's tree holds one it inferred; a type of another form (a refinement, a
+    /// nested class's) the type alone.
+    fn written_tpt(&mut self, t: TypeId) {
+        let t = self.w.zonk(t);
+        match self.w.types.get(t) {
+            Type::Class(c, args) if args != EMPTY_LIST && self.written_applied(c, args) => {
+                let args: Vec<TypeId> = self.w.types.items(args).to_vec();
+                self.mark_tree();
+                self.buf.byte(APPLIEDTPT);
+                let len = self.buf.begin_length();
+                self.mark_tree();
+                self.buf.byte(IDENTTPT);
+                let n = self.simple_name(self.w.syms.class(c).name);
+                self.buf.nat(n as u64);
+                self.class_typeref(c);
+                for a in args {
+                    self.written_arg(a);
+                }
+                self.buf.end_length(len);
+            }
+            Type::Alias(a, args) if args != EMPTY_LIST && self.w.types.items(args).len() == self.w.syms.alias(a).tparams.len() => {
+                let args: Vec<TypeId> = self.w.types.items(args).to_vec();
+                self.mark_tree();
+                self.buf.byte(APPLIEDTPT);
+                let len = self.buf.begin_length();
+                self.mark_tree();
+                self.buf.byte(IDENTTPT);
+                let n = self.simple_name(self.w.syms.alias(a).name);
+                self.buf.nat(n as u64);
+                self.alias_ref(a);
+                for a in args {
+                    self.written_arg(a);
+                }
+                self.buf.end_length(len);
+            }
+            // `A | B` and `A & B` as scalac's typer leaves them, the alias `scala.|` (`scala.&`)
+            // applied to the two written trees.
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
+                let op = if matches!(self.w.types.get(t), Type::Union(..)) { "|" } else { "&" };
+                self.mark_tree();
+                self.buf.byte(APPLIEDTPT);
+                let len = self.buf.begin_length();
+                self.mark_tree();
+                self.buf.byte(IDENTTPT);
+                let n = self.names.simple(op);
+                self.buf.nat(n as u64);
+                self.external_typeref("scala", op);
+                self.written_arg(a);
+                self.written_arg(b);
+                self.buf.end_length(len);
+            }
+            Type::Member(prefix, name) if matches!(self.w.types.get(prefix), Type::Term(_) | Type::Select(..)) => {
+                self.mark_tree();
+                self.buf.byte(SELECTTPT);
+                let n = self.simple_name(name);
+                self.buf.nat(n as u64);
+                self.ty(prefix);
+            }
+            Type::Term(_) | Type::Select(..) => {
+                self.mark_tree();
+                self.buf.byte(SINGLETONTPT);
+                self.ty(t);
+            }
+            Type::Class(c, args) if args == EMPTY_LIST && ![self.w.b.null, self.w.b.any_ref, self.w.b.any_val].contains(&c) => {
+                self.mark_tree();
+                self.buf.byte(IDENTTPT);
+                let n = self.simple_name(self.w.syms.class(c).name);
+                self.buf.nat(n as u64);
+                self.ty(t);
+            }
+            Type::Param(p) if !self.is_capture(p) => {
+                self.mark_tree();
+                self.buf.byte(IDENTTPT);
+                let n = self.simple_name(self.w.syms.tparam(p).name);
+                self.buf.nat(n as u64);
+                self.ty(t);
+            }
+            _ => self.tpt(t),
+        }
+    }
+
+    /// Whether `C[args]` is written as the applied tree of its class (`written_tpt`): not a class
+    /// the type writer spells otherwise (a by-name or repeated parameter's, a tuple scalac has no
+    /// class of, a `*:` chain ending in `EmptyTuple`).
+    fn written_applied(&self, c: ClassId, args: crate::types::TList) -> bool {
+        let b = &self.w.b;
+        let items = self.w.types.items(args);
+        if Some(c) == b.by_name || Some(c) == b.repeated || (items.len() > 22 && self.w.is_tuple_class(c)) {
+            return false;
+        }
+        !(Some(c) == b.cons_tuple && items.len() == 2 && matches!(self.w.types.get(items[1]), Type::Class(e, _) if Some(e) == b.empty_tuple))
+    }
+
+    /// An argument of a written applied type (`written_tpt`).
+    fn written_arg(&mut self, a: TypeId) {
+        match self.w.types.get(a) {
+            Type::Wild | Type::BoundedWild(..) => self.ty_arg(a),
+            Type::Param(p) if self.is_capture(p) => self.ty_arg(a),
+            _ => self.written_tpt(a),
+        }
     }
 
     /// `TYPEREF name (TERMREFpkg pkg)` as a tree.
@@ -3717,6 +3831,10 @@ impl<'w, 'a> P<'w, 'a> {
                 self.ty(lo);
                 self.ty(hi);
                 self.buf.end_length(len);
+            }
+            // A block's alias as scalac's typer leaves it: the tree its source wrote.
+            None if info.owner == Owner::Local => {
+                self.written_tpt(if info.declared_rhs != crate::tir::NO_TYPE { info.declared_rhs } else { info.rhs });
             }
             None => {
                 self.buf.byte(TYPEBOUNDS);

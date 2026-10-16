@@ -12,7 +12,8 @@
 
 use super::site::SiteOwner;
 use super::{Frame, Worker};
-use crate::ast::{mods, DefKind};
+use crate::ast::{mods, DefKind, Expr, ExprId, TyExpr, TyExprId};
+use crate::intern::Name;
 use crate::source::{Diagnostic, FileId, Span};
 use crate::symbols::*;
 use crate::tir::*;
@@ -27,6 +28,8 @@ pub struct Notes {
     reducible: Vec<(TExprId, ReducibleSource)>,
     deferred: Vec<TExprId>,
     type_args: Vec<(TExprId, Vec<TypeId>)>,
+    /// `InlineDefinition::type_trees`, one type a note.
+    type_trees: Vec<(TExprId, TypeId)>,
     splices: Vec<TExprId>,
     leaf_tests: Vec<TestId>,
     imports: Vec<BlockImport>,
@@ -45,6 +48,9 @@ pub struct Notes {
     class_bodies: Vec<TClass>,
     inline_vals: Vec<SymId>,
     inferred_vals: Vec<SymId>,
+    pickle_inferred_vals: Vec<SymId>,
+    /// `InlineDefinition::written_type_args`.
+    written_targs: Vec<TExprId>,
     held: Option<HeldForm>,
     /// The method, for the message a `return` in its body gets.
     pub sym: SymId,
@@ -93,14 +99,187 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The type arguments of the call `te` of a method with type parameters.
+    /// The type arguments of the call `te` of a method with type parameters: the body's under
+    /// the definition check, or the expansion's whose bindings are counted (`note_type_tree`).
     pub(super) fn note_type_args(&mut self, te: TExprId, subst: &[(TParamId, TypeId)]) {
-        if subst.is_empty() || !self.checks_inline_definition() || self.quote.level > 0 {
+        if subst.is_empty() || self.quote.level > 0 {
             return;
         }
-        let targs: Vec<TypeId> = subst.iter().map(|&(_, t)| self.zonk(t)).collect();
+        if self.checks_inline_definition() {
+            let targs: Vec<TypeId> = subst.iter().map(|&(_, t)| self.zonk(t)).collect();
+            if let Some(n) = self.level_notes() {
+                n.type_args.push((te, targs));
+            }
+        } else if self.inline.counting > 0 {
+            for &(_, t) in subst {
+                self.note_type_tree(te, t);
+            }
+        }
+    }
+
+    /// A call of the body whose type arguments the source wrote, of those `note_type_args` notes
+    /// (`InlineDefinition::written_type_args`).
+    pub(super) fn note_written_type_args(&mut self, te: TExprId) {
+        if !self.checks_inline_definition() || self.quote.level > 0 {
+            return;
+        }
         if let Some(n) = self.level_notes() {
-            n.type_args.push((te, targs));
+            n.written_targs.push(te);
+        }
+    }
+
+    /// Whether the code being typed notes the type trees its nodes leave out: a body under the
+    /// definition check, for its record (`InlineDefinition::type_trees`), or an expansion whose
+    /// bindings `Inliner.dropUnusedDefs` counts (`InlineState::type_trees`).
+    #[inline]
+    pub(super) fn notes_type_trees(&self) -> bool {
+        (self.inline.checking > 0 || self.inline.counting > 0) && self.quote.level == 0
+    }
+
+    /// A type tree of the node `te` that the node leaves out (`InlineDefinition::type_trees`).
+    pub(super) fn note_type_tree(&mut self, te: TExprId, ty: TypeId) {
+        if self.quote.level > 0 {
+            return;
+        }
+        if self.checks_inline_definition() {
+            let ty = self.zonk(ty);
+            if let Some(n) = self.level_notes() {
+                n.type_trees.push((te, ty));
+            }
+        } else if self.inline.counting > 0 {
+            let ty = self.zonk(ty);
+            if self.types.has_paths(ty) {
+                self.inline.type_trees.push((te, ty));
+            }
+        }
+    }
+
+    /// The paths of the locals the written type `ty` names, as dotty's typed tree holds them:
+    /// the qualifiers of its selections and singletons (`m.MirroredElemTypes`, `m.type`), the
+    /// paths a type a pickle wrote names, and, with `annotations`, the arguments of the
+    /// annotations written on it (`Int @Ann(m)`, `Ast::type_annots`: dotty's `Annotated` tree
+    /// keeps the annotation's tree), as a local val's type has them, which its pickle states
+    /// (`ANNOTATEDtpt`). `Inliner.dropUnusedDefs` counts each `RefTree` of them; a type resolved
+    /// in the expansion's terms reads a member a proxy fixes as what it is fixed to.
+    /// A body under the definition check reads the paths of its types as typed, which name its
+    /// parameters (`InlineDefinition::type_trees`, the binders' signatures): its annotations alone.
+    pub(super) fn written_paths(&mut self, ty: TyExprId, annotations: bool) -> Vec<TypeId> {
+        let ast = self.cur_ast();
+        let mut names: Vec<Name> = Vec::new();
+        let mut out: Vec<TypeId> = Vec::new();
+        let mut tys = if self.checks_inline_definition() { Vec::new() } else { vec![ty] };
+        let mut exprs: Vec<ExprId> = Vec::new();
+        if annotations && !ast.type_annots.is_empty() {
+            let at = ast.type_annots.partition_point(|&(x, _)| x < ty);
+            exprs.extend(ast.type_annots[at..].iter().take_while(|&&(x, _)| x == ty).map(|&(_, e)| e));
+        }
+        while !tys.is_empty() || !exprs.is_empty() {
+            while let Some(t) = tys.pop() {
+                match ast.ty(t) {
+                    TyExpr::Select(q, _) | TyExpr::Singleton(q) => {
+                        let mut q = q;
+                        loop {
+                            match ast.ty(q) {
+                                TyExpr::Name(n) => {
+                                    names.push(n);
+                                    break;
+                                }
+                                TyExpr::Select(inner, _) => q = inner,
+                                _ => {
+                                    tys.push(q);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    TyExpr::Apply(f, args) => {
+                        tys.push(f);
+                        tys.extend_from_slice(ast.ty_list(args));
+                    }
+                    TyExpr::Fun(ps, r) | TyExpr::CtxFun(ps, r) => {
+                        tys.extend_from_slice(ast.ty_list(ps));
+                        tys.push(r);
+                    }
+                    TyExpr::Tuple(items) | TyExpr::NamedTuple(_, items) => tys.extend_from_slice(ast.ty_list(items)),
+                    TyExpr::Union(a, b) | TyExpr::Inter(a, b) | TyExpr::BoundedWildcard(a, b) => tys.extend([a, b]),
+                    TyExpr::ByName(x) | TyExpr::Repeated(x) | TyExpr::Unchecked(x) | TyExpr::UncheckedVariance(x) | TyExpr::Project(x, _) => tys.push(x),
+                    TyExpr::Refined(x, _) => tys.push(x),
+                    TyExpr::Resolved(r) => {
+                        let mut stack = vec![r];
+                        while let Some(x) = stack.pop() {
+                            if !self.types.has_paths(x) {
+                                continue;
+                            }
+                            if let Type::Term(v) | Type::Select(_, v) = self.types.get(x) {
+                                out.push(self.types.mk(Type::Term(v)));
+                            }
+                            self.types.parts(x, &mut stack);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            while let Some(e) = exprs.pop() {
+                match ast.expr(e) {
+                    Expr::Ident(n) => names.push(n),
+                    // A library body's reference its loader resolved (a parameter of the method).
+                    Expr::SymRef(v) => out.push(self.types.mk(Type::Term(v))),
+                    Expr::Select(q, _) | Expr::NamedArg(_, q) | Expr::Parens(q) | Expr::Unchecked(q) | Expr::Prefix(_, q) => exprs.push(q),
+                    Expr::TypeApply(q, l) => {
+                        exprs.push(q);
+                        tys.extend_from_slice(ast.ty_list(l));
+                    }
+                    Expr::Apply(f, l) | Expr::UsingApply(f, l) => {
+                        exprs.push(f);
+                        exprs.extend_from_slice(ast.expr_list(l));
+                    }
+                    Expr::New(t, l) => {
+                        tys.push(t);
+                        exprs.extend_from_slice(ast.expr_list(l));
+                    }
+                    Expr::Typed(x, t) => {
+                        exprs.push(x);
+                        tys.push(t);
+                    }
+                    Expr::SeqLit(l, _) | Expr::Tuple(l) => exprs.extend_from_slice(ast.expr_list(l)),
+                    Expr::Infix(a, _, b) => exprs.extend([a, b]),
+                    Expr::If(c, t, els) => {
+                        exprs.extend([c, t]);
+                        exprs.extend(els);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for n in names {
+            if let Some(super::resolve::TermRef::Local(v)) = self.lookup_term(n) {
+                out.push(self.types.mk(Type::Term(v)));
+            }
+        }
+        out
+    }
+
+    /// Where the type trees a block being typed puts on its node begin (`note_block_trees`).
+    pub(super) fn block_trees_mark(&self) -> Option<usize> {
+        self.notes_type_trees().then_some(self.inline.pending_trees.len())
+    }
+
+    /// A type tree of the block being typed: a local type alias's right-hand side, the paths a
+    /// type annotation names.
+    pub(super) fn note_pending_tree(&mut self, ty: TypeId) {
+        if self.notes_type_trees() {
+            self.inline.pending_trees.push(ty);
+        }
+    }
+
+    /// The type trees the block `block` noted since `mark`, on its node.
+    pub(super) fn note_block_trees(&mut self, block: TExprId, mark: Option<usize>) {
+        let Some(mark) = mark else { return };
+        if self.inline.pending_trees.len() > mark {
+            let trees: Vec<TypeId> = self.inline.pending_trees.drain(mark..).collect();
+            for t in trees {
+                self.note_type_tree(block, t);
+            }
         }
     }
 
@@ -181,6 +360,14 @@ impl<'a> Worker<'a> {
     pub(super) fn note_inferred_val(&mut self, s: SymId) {
         if let Some(n) = self.level_notes() {
             n.inferred_vals.push(s);
+        }
+    }
+
+    /// A val of a converted body whose type its pickle wrote as inferred
+    /// (`InlineDefinition::pickle_inferred_vals`).
+    pub(super) fn note_pickle_inferred_val(&mut self, s: SymId) {
+        if let Some(n) = self.level_notes() {
+            n.pickle_inferred_vals.push(s);
         }
     }
 
@@ -401,7 +588,7 @@ impl<'a> Worker<'a> {
         let env = self.env_at(file, owner, span.start);
         let sig = self.sig_arc(sym);
         let marks = (self.diags.items.len(), self.deferred_matches.len(), self.deferred_bounds.len());
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         self.outside_annotation(|t| {
             t.outside_search(|t| {
@@ -435,7 +622,7 @@ impl<'a> Worker<'a> {
         }
         let env = self.env_at(file, owner, span.start);
         let marks = (self.diags.items.len(), self.deferred_matches.len(), self.deferred_bounds.len());
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         let index = self.index.take();
         let ty = self.outside_annotation(|t| {
@@ -535,7 +722,7 @@ impl<'a> Worker<'a> {
         let keeps_index = self.index.is_some() && !library;
         let index = if keeps_index { None } else { self.index.take() };
         let index_mark = self.index_mark();
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         // The expansion by substitution reads the type of every node of the stored body, which
         // a build that keeps no types keeps aside for the record alone.
@@ -657,6 +844,8 @@ impl<'a> Worker<'a> {
             notes.reducible.retain(|(e, _)| nodes.contains_key(e));
             notes.deferred.retain(|e| nodes.contains_key(e));
             notes.type_args.retain(|(e, _)| nodes.contains_key(e));
+            notes.type_trees.retain(|(e, _)| nodes.contains_key(e));
+            notes.written_targs.retain(|e| nodes.contains_key(e));
             notes.splices.retain(|e| nodes.contains_key(e));
             notes.imports.retain(|i| nodes.contains_key(&i.block));
             notes.aliases.retain(|a| nodes.contains_key(&a.block));
@@ -705,6 +894,7 @@ impl<'a> Worker<'a> {
             deferred: notes.deferred,
             // A search's variables may be solved after the call was built.
             type_args: notes.type_args.into_iter().map(|(e, ts)| (e, ts.into_iter().map(|t| self.zonk(t)).collect())).collect(),
+            type_trees: self.grouped_type_trees(notes.type_trees),
             splices: notes.splices,
             leaves,
             leaf_tests: notes.leaf_tests,
@@ -720,6 +910,8 @@ impl<'a> Worker<'a> {
             classes: if body.is_some() { notes.class_bodies } else { Vec::new() },
             inline_vals: if body.is_some() { notes.inline_vals } else { Vec::new() },
             inferred_vals: if body.is_some() { notes.inferred_vals } else { Vec::new() },
+            pickle_inferred_vals: if body.is_some() { notes.pickle_inferred_vals } else { Vec::new() },
+            written_type_args: if body.is_some() { notes.written_targs } else { Vec::new() },
             walk_lack: None,
         };
         let mut record = record;
@@ -738,6 +930,24 @@ impl<'a> Worker<'a> {
 
     /// The record of the kept call `e` with its type variables replaced by what they were solved
     /// to.
+    /// The body's type tree notes as the record keeps them: by node, in the nodes' order, each
+    /// type zonked; none that can name no path of an expansion (`closed_type`).
+    fn grouped_type_trees(&mut self, mut notes: Vec<(TExprId, TypeId)>) -> Vec<(TExprId, Vec<TypeId>)> {
+        notes.sort_by_key(|&(e, _)| e);
+        let mut out: Vec<(TExprId, Vec<TypeId>)> = Vec::new();
+        for (e, t) in notes {
+            let t = self.zonk(t);
+            if self.closed_type(t, &[]) {
+                continue;
+            }
+            match out.last_mut() {
+                Some((last, ts)) if *last == e => ts.push(t),
+                _ => out.push((e, vec![t])),
+            }
+        }
+        out
+    }
+
     fn zonk_deferred(&mut self, e: TExprId) {
         let Some(d) = self.quote.deferred.get(&e).cloned() else { return };
         let mut changed = false;
@@ -895,6 +1105,9 @@ impl<'a> Worker<'a> {
         for (i, &(e, _)) in def.type_args.iter().enumerate() {
             note(e, Meta::TypeArgs(i as u32));
         }
+        for (i, &(e, _)) in def.type_trees.iter().enumerate() {
+            note(e, Meta::TypeTrees(i as u32));
+        }
         for (i, &e) in def.splices.iter().enumerate() {
             note(e, Meta::Splice(i as u32));
         }
@@ -923,7 +1136,61 @@ impl<'a> Worker<'a> {
             (Some(lo), Some(hi)) => (lo, hi - lo + 1),
             _ => (0, 0),
         };
-        let node = self.stored_nodes(def, nodes, &meta);
+        let mut node = self.stored_nodes(def, nodes, &meta);
+        // An intrinsic's expansion has no type tree of a body's (`constValue`'s is a literal).
+        for i in 0..node.len() {
+            if node[i].has(StoredNode::OPEN_TARGS) {
+                let callee = self.quote.deferred.get(&TExprId(nodes.0 + i as u32)).map(|d| d.sym);
+                if callee.is_some_and(|s| self.intrinsic_of(s).is_some()) {
+                    node[i].flags &= !StoredNode::OPEN_TARGS;
+                }
+            }
+        }
+        let stored_classes: Vec<ClassId> = def.classes.iter().map(|tc| tc.id).collect();
+        let open = |t: &Self, ts: &[TypeId]| ts.iter().any(|&x| !t.closed_type(x, &stored_classes));
+        // A deferred call's are its expansion's to name (`export_type_trees`).
+        let open_args = def.type_args.iter().map(|(e, ts)| !self.quote.deferred.contains_key(e) && open(self, ts)).collect();
+        let inferred_args = def.type_args.iter().map(|(e, _)| !def.written_type_args.contains(e)).collect();
+        let open_trees = def.type_trees.iter().map(|(_, ts)| open(self, ts)).collect();
+        // A pattern's binders, whose types the typer inferred (dotty's `Bind`, and the vals of a
+        // pattern definition, `x: (1 : Int)` once expanded).
+        let mut pattern_binders: Vec<SymId> = Vec::new();
+        if let Some(b) = def.body {
+            for root in self.stored_roots(std::iter::once(b).chain(def.defaults.iter().flatten().copied())) {
+                for e in self.prog.descendants(root) {
+                    match self.prog.expr(e) {
+                        TExpr::Match(_, cases) => {
+                            for c in self.prog.case_list(cases) {
+                                self.pat_binders(c.pat, &mut pattern_binders);
+                            }
+                        }
+                        TExpr::Try(i) => {
+                            for c in self.prog.case_list(self.prog.tries[i as usize].cases) {
+                                self.pat_binders(c.pat, &mut pattern_binders);
+                            }
+                        }
+                        TExpr::Block(stmts, _) => {
+                            for st in self.prog.stmt_list(stmts) {
+                                if let TStmt::Pat(p, _) = *st {
+                                    self.pat_binders(p, &mut pattern_binders);
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        let open_binders = def
+            .binders
+            .iter()
+            .copied()
+            .filter(|&b| match self.syms.sym(b).sig.clone() {
+                Some(sig) => open(self, &[sig.ret]) || sig.clauses.iter().any(|c| c.params.iter().any(|p| open(self, &[p.ty]))),
+                None => false,
+            })
+            .map(|b| (b, pattern_binders.contains(&b)))
+            .collect();
         StoredIndex {
             meta,
             sizes: std::sync::Mutex::new(FxMap::default()),
@@ -933,6 +1200,10 @@ impl<'a> Worker<'a> {
             nodes,
             node,
             binds: !def.binders.is_empty() || !def.classes.is_empty(),
+            open_args,
+            inferred_args,
+            open_trees,
+            open_binders,
         }
     }
 
@@ -965,8 +1236,11 @@ impl<'a> Worker<'a> {
             let e = TExprId(lo + i as u32);
             let marks = self.output_marks(e);
             slot.flags |= marks;
-            if self.quote.deferred.contains_key(&e) {
+            if let Some(d) = self.quote.deferred.get(&e) {
                 slot.flags |= StoredNode::DEFERRED;
+                if d.subst.iter().any(|&(_, t)| !self.closed_type(t, &stored_classes)) {
+                    slot.flags |= StoredNode::OPEN_TARGS;
+                }
             }
             if meta.contains_key(&e) {
                 slot.flags |= StoredNode::META;
@@ -1080,6 +1354,7 @@ impl<'a> Worker<'a> {
             inst.classes => 0,
             inst.deferred => def.deferred.len(),
             inst.type_args => def.type_args.len(),
+            inst.type_trees => if self.inline.counting > 0 { def.type_args.len() + def.type_trees.len() } else { 0 },
             inst.splices => def.splices.len(),
             inst.leaves => def.leaves.len(),
             inst.leaf_tests => def.leaf_tests.len(),
@@ -1320,6 +1595,14 @@ impl<'a> Worker<'a> {
                 Meta::TypeArgs(i) => {
                     let ts: Vec<TypeId> = def.type_args[i as usize].1.iter().map(|&t| self.demand_type(d, subst, t)).collect();
                     inst.type_args.push((copy, ts));
+                    if self.inline.counting > 0 && d.index.open_args[i as usize] {
+                        inst.type_trees.push((copy, TreeOf::Args(i)));
+                    }
+                }
+                Meta::TypeTrees(i) => {
+                    if self.inline.counting > 0 && d.index.open_trees[i as usize] {
+                        inst.type_trees.push((copy, TreeOf::Trees(i)));
+                    }
                 }
                 Meta::Splice(_) => inst.splices.push(copy),
                 Meta::Leaf(_) => {
@@ -2211,6 +2494,9 @@ pub struct Instance {
     pub reducible: Vec<TExprId>,
     pub deferred: Vec<TExprId>,
     pub type_args: Vec<(TExprId, Vec<TypeId>)>,
+    /// While the expansion's bindings are counted (`InlineState::counting`): the copies of the
+    /// record's type trees, each with where the record keeps them, in the record's terms.
+    pub type_trees: Vec<(TExprId, TreeOf)>,
     pub splices: Vec<TExprId>,
     pub leaves: Vec<TExprId>,
     pub leaf_tests: Vec<TestId>,
@@ -2271,6 +2557,7 @@ impl Instance {
             classes: Vec::new(),
             deferred: Vec::new(),
             type_args: Vec::new(),
+            type_trees: Vec::new(),
             splices: Vec::new(),
             leaves: Vec::new(),
             leaf_tests: Vec::new(),
@@ -2340,6 +2627,20 @@ impl Demand {
     pub fn bindings(&self) -> (&Subst, &[(SymId, TypeId)], &[(ClassId, TypeId)]) {
         (&self.subst, &self.paths, &self.this_paths)
     }
+
+    /// The index of the record the copy is of.
+    pub(super) fn index(&self) -> &Arc<StoredIndex> {
+        &self.index
+    }
+}
+
+/// Where a record keeps a type tree of a copied node (`Instance::type_trees`).
+#[derive(Clone, Copy)]
+pub(super) enum TreeOf {
+    /// `InlineDefinition::type_args`.
+    Args(u32),
+    /// `InlineDefinition::type_trees`.
+    Trees(u32),
 }
 
 /// A kind of the record's metadata on a node, with its index in the record's list.
@@ -2348,6 +2649,7 @@ enum Meta {
     Reducible(u32),
     Deferred(u32),
     TypeArgs(u32),
+    TypeTrees(u32),
     Splice(u32),
     Leaf(u32),
     Widened(u32),
@@ -2376,6 +2678,17 @@ pub(super) struct StoredIndex {
     /// Whether the body defines a binder or makes a class, which a part's copy renames or names:
     /// a body without either is copied without looking for them.
     pub(super) binds: bool,
+    /// Whether each of the record's type arguments and other type trees (`InlineDefinition::
+    /// type_args`, `type_trees`) can name a path of an expansion, a path or a type parameter
+    /// in it (`Worker::closed_type`): those a count of the expansion's bindings reads.
+    pub(super) open_args: Vec<bool>,
+    pub(super) open_trees: Vec<bool>,
+    /// Whether each of the record's type arguments was inferred, the source writing none
+    /// (`InlineDefinition::written_type_args`).
+    pub(super) inferred_args: Vec<bool>,
+    /// The binders whose declared types can name one, each with whether a pattern binds it,
+    /// whose type the typer inferred.
+    pub(super) open_binders: Vec<(SymId, bool)>,
 }
 
 impl StoredIndex {
@@ -2411,6 +2724,9 @@ impl StoredNode {
     pub const INTERPOLATION: u16 = 32;
     /// The node is a kept call with its record among the deferred calls.
     pub const DEFERRED: u16 = 128;
+    /// Its record's type arguments can name a path of an expansion (`StoredIndex::open_args`),
+    /// and it is no intrinsic's.
+    pub const OPEN_TARGS: u16 = 512;
     /// The record's metadata names the node (`StoredIndex::meta`).
     pub const META: u16 = 256;
     /// The marks of the output a copy takes.
@@ -2436,6 +2752,7 @@ impl InlineDefinition {
             reducible_sources: Vec::new(),
             deferred: Vec::new(),
             type_args: Vec::new(),
+            type_trees: Vec::new(),
             splices: Vec::new(),
             leaves: Vec::new(),
             leaf_tests: Vec::new(),
@@ -2451,6 +2768,8 @@ impl InlineDefinition {
             classes: Vec::new(),
             inline_vals: Vec::new(),
             inferred_vals: Vec::new(),
+            pickle_inferred_vals: Vec::new(),
+            written_type_args: Vec::new(),
             walk_lack: None,
         }
     }

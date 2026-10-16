@@ -93,7 +93,7 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     /// The class an annotation's tree instantiates.
-    fn annotation_class(&self, te: TExprId) -> Option<ClassId> {
+    pub(super) fn annotation_class(&self, te: TExprId) -> Option<ClassId> {
         match self.w.prog.expr(te) {
             TExpr::New(c, _) => Some(c),
             TExpr::NewVia(s, _) => match self.w.syms.sym(s).owner {

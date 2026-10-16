@@ -259,6 +259,9 @@ pub enum BlockStmt {
     Import(crate::typer::ResolvedImport),
     /// A local inline method, its body the record the definition check stored.
     InlineDef(SymId),
+    /// A local type alias, which scalac's pickle keeps among the block's statements
+    /// (`TYPEDEF`) and an inline body's count reads (`Inliner.dropUnusedDefs`).
+    TypeAlias(crate::types::AliasId),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -398,6 +401,9 @@ pub struct Local {
     /// The type of a temporary the typer gave `Any` in the place of its value's (a hoisted
     /// argument's or operand's).
     pub ty: Option<TypeId>,
+    /// The type tree the source wrote for a val, which the pickle writes as a tree, one the
+    /// typer inferred being the type alone (`written_tpt`).
+    pub tpt: Option<crate::ast::TyExprId>,
 }
 
 /// An inline method's call as it was typed, before its expansion: scalac's pickle keeps an

@@ -679,7 +679,7 @@ impl<'w, 'a> P<'w, 'a> {
                     (Some(c), TExpr::Int(i)) => p.within(Some(e), |p| p.int_constant(i, c)),
                     _ => p.wrapped(e, inner, recs),
                 }
-                p.tpt(t);
+                p.written_tpt(t);
                 p.buf.end_length(l);
             }),
             Wrap::Cast(t) => self.within(Some(e), |p| p.cast_to(t, |p| p.wrapped(e, inner, recs))),
@@ -748,6 +748,9 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     fn unwrapped(&mut self, e: TExprId, recs: &NodeRecords) {
+        // Type arguments the source wrote are trees, as `TreePickler.pickleTpt` writes them; those
+        // the typer inferred the types alone.
+        self.written_targs = recs.targs.is_some() && self.inline_body.as_ref().is_some_and(|d| d.written_type_args.contains(&e));
         if !recs.inline_calls.is_empty() {
             return self.inline_chain(e, recs);
         }
@@ -1753,10 +1756,12 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     fn applied_args(&mut self, s: SymId, targs: Option<TList>, args: &[TExprId], head: impl FnOnce(&mut Self), qual: Option<Qual>) {
+        let written = std::mem::take(&mut self.written_targs);
         let receiver = self.select_receiver.take();
         let evidence = std::mem::take(&mut self.call_evidence);
         let appended = self.appended_varargs(s, receiver.map(|(c, _)| c));
         if let Some(target) = self.std_target(s) {
+            self.written_targs = written;
             return self.std_call(s, target, targs, args, qual, &evidence);
         }
         // The evidence the lean std leaves out of the member's signature, scalac's last clause.
@@ -1873,7 +1878,11 @@ impl<'w, 'a> P<'w, 'a> {
             match layer {
                 Layer::Types(r) => {
                     for &t in &targs[r.clone()] {
-                        self.tpt(t);
+                        if written {
+                            self.written_tpt(t);
+                        } else {
+                            self.tpt(t);
+                        }
                     }
                 }
                 Layer::Clause(ci) => {
@@ -3515,6 +3524,7 @@ impl<'w, 'a> P<'w, 'a> {
         qual: impl FnOnce(&mut Self),
         owner: impl FnOnce(&mut Self),
     ) {
+        let written = std::mem::take(&mut self.written_targs);
         if clauses.iter().sum::<usize>() != args.len() {
             return self.fail(format!("a call of the std's {} with {} arguments", name, args.len()));
         }
@@ -3561,7 +3571,11 @@ impl<'w, 'a> P<'w, 'a> {
         }
         if let Some(l) = ta {
             for &t in targs {
-                self.tpt(t);
+                if written {
+                    self.written_tpt(t);
+                } else {
+                    self.tpt(t);
+                }
             }
             self.buf.end_length(l);
         }
@@ -4781,7 +4795,14 @@ impl<'w, 'a> P<'w, 'a> {
                 self.import_at = None;
             }
             &crate::tir::capture::BlockStmt::InlineDef(s) => self.local_inline_def(s),
+            &crate::tir::capture::BlockStmt::TypeAlias(a) => self.local_type_alias(a),
         }
+    }
+
+    /// A block's local type alias as scalac's pickle keeps it, `TYPEDEF` as a member's
+    /// (`alias_def`), a lambda over its type parameters.
+    fn local_type_alias(&mut self, a: AliasId) {
+        self.alias_def(a);
     }
 
     /// A block's local inline method, from the record the definition check stored, as a
@@ -5044,7 +5065,24 @@ impl<'w, 'a> P<'w, 'a> {
         if matches!(self.w.types.get(t), Type::Wild | Type::BoundedWild(..)) {
             return self.fail("a local of a wildcard type".to_string());
         }
-        self.tpt(t);
+        // A type the source wrote is its tree, one the typer inferred the type alone.
+        match recorded.and_then(|r| r.tpt) {
+            Some(ty) => {
+                let annots = self.type_annotation_trees(info.file, ty);
+                if annots.is_empty() {
+                    self.written_tpt(t);
+                } else {
+                    // An annotation the encoder has no reading for leaves the type its tree.
+                    let mark = self.body_begin();
+                    self.annotated_tpt(t, &annots);
+                    if let Err(reason) = self.body_end(mark) {
+                        self.count(format!("type annotation withheld: {}", reason));
+                        self.written_tpt(t);
+                    }
+                }
+            }
+            None => self.tpt(t),
+        }
         self.term_to(init, t);
         let mut flags = Vec::new();
         if info.kind == SymKind::Var {
@@ -5073,6 +5111,38 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.write_flags(&flags);
         self.buf.end_length(l);
+    }
+
+    /// The trees the capture typed of the annotations written on the type `ty` of `file`
+    /// (`Ast::type_annots`, `Capture::annotations`), in the order written, each the
+    /// construction of its class, whole as the source wrote it (`Int @Ann(List(m))`).
+    fn type_annotation_trees(&self, file: FileId, ty: crate::ast::TyExprId) -> Vec<TExprId> {
+        let ast = self.w.ast(file);
+        let Some(capture) = self.w.prog.capture.as_deref() else { return Vec::new() };
+        let at = ast.type_annots.partition_point(|&(x, _)| x < ty);
+        ast.type_annots[at..]
+            .iter()
+            .take_while(|&&(x, _)| x == ty)
+            .filter_map(|&(_, e)| capture.annotations.get(&(file, e)).copied())
+            .filter(|&te| self.annotation_class(te).is_some())
+            .collect()
+    }
+
+    /// The written type `t` (`written_tpt`) under the annotations `annots`: `ANNOTATEDtpt` of it
+    /// and each annotation's tree, the last written outermost, as dotty's `Annotated` trees nest.
+    fn annotated_tpt(&mut self, t: TypeId, annots: &[TExprId]) {
+        let mut slots = Vec::with_capacity(annots.len());
+        for _ in annots {
+            self.mark_tree();
+            slots.push(self.open(ANNOTATEDTPT));
+        }
+        self.written_tpt(t);
+        for (i, &a) in annots.iter().enumerate() {
+            let outer = std::mem::replace(&mut self.in_annotation, true);
+            self.term(a);
+            self.in_annotation = outer;
+            self.buf.end_length(slots[annots.len() - 1 - i]);
+        }
     }
 
     /// The type scalac infers for a local of no declared type whose initializer the pickle holds

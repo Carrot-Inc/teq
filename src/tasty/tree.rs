@@ -230,6 +230,9 @@ pub struct DefSig {
     pub ret: TType,
     /// Whether scalac inferred the result type.
     pub ret_inferred: bool,
+    /// The annotations of the written result type, each its tree's address
+    /// (`tpt_annotations`).
+    pub ret_annotations: Vec<Addr>,
     pub mods: Mods,
     pub body: Option<Addr>,
 }
@@ -948,10 +951,11 @@ impl<'a> Decoder<'a> {
         let name = self.r.nat();
         let clauses = if tag == DEFDEF { self.clauses(end) } else { Vec::new() };
         let ret_inferred = self.tpt_is_inferred();
+        let ret_annotations = if ret_inferred { Vec::new() } else { self.tpt_annotations() };
         let ret = self.read_tpt();
         let body = self.skip_rhs(end);
         let mods = self.modifiers(end);
-        DefSig { addr, tag, name, clauses, ret, ret_inferred, mods, body }
+        DefSig { addr, tag, name, clauses, ret, ret_inferred, ret_annotations, mods, body }
     }
 
     /// The `TYPEDEF` at `addr` of a type member, alias or opaque type.
@@ -1146,6 +1150,25 @@ impl<'a> Decoder<'a> {
                 _ => return true,
             }
         }
+    }
+
+    /// The annotations of the type tree at the reader, where it is an annotated one (`Int
+    /// @Ann(List(m))`), each the address of its tree, the reader left where it stands: dotty's
+    /// `Annotated` tree keeps the annotation's whole, whose `RefTree`s an inline body's count of
+    /// an expansion's bindings meets (`Ast::type_annots`).
+    pub fn tpt_annotations(&mut self) -> Vec<Addr> {
+        let saved = self.r.pos;
+        let mut out = Vec::new();
+        while self.r.peek() == ANNOTATEDTPT {
+            self.r.byte();
+            self.r.end();
+            let underlying = self.r.pos;
+            self.skip_tree();
+            out.push(self.r.pos as Addr);
+            self.r.pos = underlying;
+        }
+        self.r.pos = saved;
+        out
     }
 
     pub fn read_tpt(&mut self) -> TType {

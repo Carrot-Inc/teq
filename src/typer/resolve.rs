@@ -5373,6 +5373,13 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The alias the block being typed entered for its definition `d`, one with a right-hand
+    /// side.
+    pub(super) fn block_alias_of(&self, d: ast::DefId) -> Option<AliasId> {
+        let Some(Frame::Locals { aliases, .. }) = self.env.frames.last() else { return None };
+        aliases.iter().rev().map(|&(_, a)| a).find(|&a| self.syms.aliases[a.idx()].def == Some(d) && self.syms.aliases[a.idx()].rhs != ERROR)
+    }
+
     /// The block's alias of the definition `d` (`declare_local_alias`), completed at its
     /// statement.
     pub(super) fn complete_local_alias(&mut self, d: ast::DefId) {
@@ -5383,6 +5390,11 @@ impl<'a> Worker<'a> {
         };
         if let Some(a) = found {
             self.complete_alias(a);
+            // Its right-hand side is a type tree of the block (`InlineDefinition::type_trees`).
+            if self.notes_type_trees() {
+                let rhs = self.syms.aliases[a.idx()].rhs;
+                self.note_pending_tree(rhs);
+            }
         }
     }
 
@@ -5415,6 +5427,10 @@ impl<'a> Worker<'a> {
         self.finish_alias(a, ids, ty, bounds);
         if let Some(Frame::Locals { aliases, .. }) = self.env.frames.last_mut() {
             aliases.push((def.name, a));
+        }
+        if self.notes_type_trees() {
+            let rhs = self.syms.aliases[a.idx()].rhs;
+            self.note_pending_tree(rhs);
         }
     }
 

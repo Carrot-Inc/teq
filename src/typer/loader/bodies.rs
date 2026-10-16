@@ -5266,6 +5266,17 @@ impl<'a> Worker<'a> {
                         if !sig.mods.flags.has(tags::MUTABLE) && !sig.mods.flags.has(tags::LAZY) && sig.ret_inferred {
                             cv.mark_inferred(ty);
                         }
+                        // Its annotations, whole, as the source's type annotations stand
+                        // (`Ast::type_annots`).
+                        if !sig.ret_annotations.is_empty() {
+                            let tasty = cv.tasty.clone();
+                            for &at in &sig.ret_annotations {
+                                let mut decoder = Decoder::new(&tasty);
+                                let tree = crate::tasty::terms::TermDecoder::new(&mut decoder).term_at(at);
+                                let e = self.conv_expr(cv, &tree);
+                                cv.ast.type_annots.push((ty, e));
+                            }
+                        }
                         (ty, false)
                     }
                 };

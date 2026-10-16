@@ -581,6 +581,12 @@ pub struct InlineDefinition {
     /// The type arguments of the body's calls of methods with type parameters, which the call
     /// nodes leave out.
     pub type_args: Vec<(TExprId, Vec<TypeId>)>,
+    /// The body's other type trees the nodes leave out, each with the node it stands on: an
+    /// ascription's type, a `new`'s class type, the type of an `isInstanceOf` or an
+    /// `asInstanceOf`, and, on its block, a local type alias's right-hand side and the paths
+    /// a type annotation's arguments name (`Int @Ann(m)`). An expansion's copies take them in
+    /// its terms, which `Inliner.dropUnusedDefs`' count reads with the expansion's tree.
+    pub type_trees: Vec<(TExprId, Vec<TypeId>)>,
     /// The top-level splices, `TExpr::Splice` nodes.
     pub splices: Vec<TExprId>,
     /// What an expansion takes from its call site (its leaves, `Program::leaf_bits`): the
@@ -631,6 +637,15 @@ pub struct InlineDefinition {
     /// The body's vals whose type the definition inferred from their initialiser, which an
     /// expansion infers again from the walked one, as the retype path types them.
     pub inferred_vals: Vec<SymId>,
+    /// A converted body's vals whose pickle wrote their type as inferred (a type, no type tree),
+    /// which an expansion keeps as typed: an expansion's count reads the type of each, as of
+    /// `inferred_vals`, as dotty's inferred `TypeTree`, whose match types the expansion's terms
+    /// reduce (`export_type_trees`).
+    pub pickle_inferred_vals: Vec<SymId>,
+    /// The body's calls of `type_args` whose type arguments the source wrote: those of any other
+    /// were inferred, which an expansion's count reads as dotty's inferred `TypeTree`
+    /// (`export_type_trees`).
+    pub written_type_args: Vec<TExprId>,
     /// The first form of the checked body the expansion by substitution does not take, found
     /// once when the record is made (`Worker::walk_lack`).
     pub walk_lack: Option<WalkLack>,

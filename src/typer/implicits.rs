@@ -5166,7 +5166,7 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        if self.inline.checking > 0 && !sig.tparams.is_empty() {
+        if self.notes_type_trees() && !sig.tparams.is_empty() {
             let own: Vec<(TParamId, TypeId)> = subst.iter().filter(|(p, _)| sig.tparams.contains(p)).copied().collect();
             self.note_type_args(te, &own);
         }

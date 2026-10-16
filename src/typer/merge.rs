@@ -1322,12 +1322,12 @@ impl Remap {
         for p in &mut d.pattern_tparams {
             *p = self.tparam(*p);
         }
-        for list in [&mut d.reducible, &mut d.deferred, &mut d.splices, &mut d.leaves] {
+        for list in [&mut d.reducible, &mut d.deferred, &mut d.splices, &mut d.leaves, &mut d.written_type_args] {
             for e in list.iter_mut() {
                 *e = self.expr(*e);
             }
         }
-        for (e, ts) in &mut d.type_args {
+        for (e, ts) in d.type_args.iter_mut().chain(d.type_trees.iter_mut()) {
             *e = self.expr(*e);
             for t in ts.iter_mut() {
                 *t = self.ty(*t);
@@ -1345,6 +1345,7 @@ impl Remap {
         }
         self.syms_in(&mut d.inline_vals);
         self.syms_in(&mut d.inferred_vals);
+        self.syms_in(&mut d.pickle_inferred_vals);
         for a in &mut d.aliases {
             a.block = self.expr(a.block);
             a.local = self.sym(a.local);
@@ -1504,6 +1505,10 @@ impl Remap {
 
     pub(super) fn map_class(&self, c: ClassId) -> ClassId {
         self.class(c)
+    }
+
+    pub(super) fn map_alias(&self, a: AliasId) -> AliasId {
+        self.alias(a)
     }
 
     /// The types made during the body phase, and how many of them the chunk's records name
@@ -2789,6 +2794,7 @@ mod tests {
             reducible_sources: Vec::new(),
             deferred,
             type_args: Vec::new(),
+            type_trees: Vec::new(),
             splices: Vec::new(),
             leaves: Vec::new(),
             leaf_tests: Vec::new(),
@@ -2804,6 +2810,8 @@ mod tests {
             classes: Vec::new(),
             inline_vals: Vec::new(),
             inferred_vals: Vec::new(),
+            pickle_inferred_vals: Vec::new(),
+            written_type_args: Vec::new(),
             walk_lack: None,
         }
     }

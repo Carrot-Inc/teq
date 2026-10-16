@@ -971,7 +971,7 @@ impl<'a> Worker<'a> {
             self.rollback(mark);
             return None;
         }
-        if self.inline.checking > 0 && is_def && !shape.tparams.is_empty() {
+        if self.notes_type_trees() && is_def && !shape.tparams.is_empty() {
             let own: Subst = subst.iter().filter(|(p, _)| shape.tparams.contains(p)).copied().collect();
             self.note_type_args(te, &own);
         }

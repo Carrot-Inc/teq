@@ -3502,6 +3502,11 @@ impl<'c> Copier<'c> {
             };
             t.quote.deferred.insert(id, Arc::new(copy));
             t.quote.copied_deferred.push(id);
+            // The record's own, whose type arguments name its paths before the copy reads a
+            // member a proxy fixes (`InlineState::stored_deferred`).
+            if t.inline.counting > 0 && node.is_some_and(|n| n.has(super::inline_definition::StoredNode::OPEN_TARGS)) {
+                t.inline.stored_deferred.insert(id, d);
+            }
         }
         if t.capturing() {
             self.copy_named(t, e, id);

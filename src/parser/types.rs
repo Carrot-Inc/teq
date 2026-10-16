@@ -578,6 +578,9 @@ impl<'a> Parser<'a> {
                     for a in annots.iter().filter(|a| a.name == names::NOWARN) {
                         self.ast.nowarn_ascriptions.push((start.to(self.prev_span()), a.clone()));
                     }
+                    for a in annots.iter().filter(|a| ![names::UNCHECKED, names::UNCHECKED_VARIANCE, names::NOWARN].contains(&a.name)) {
+                        self.ast.type_annots.push((t, a.instance));
+                    }
                     if annots.iter().any(|a| a.name == names::UNCHECKED) {
                         t = self.ast.add_ty(TyExpr::Unchecked(t), start.to(self.prev_span()));
                     }

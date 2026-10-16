@@ -629,6 +629,11 @@ pub struct Ast {
     /// source order: no meaning is read of them but `@unchecked`'s and `@uncheckedVariance`'s,
     /// while their names use the imports they resolve through (`typer::unused`).
     pub inline_annots: Vec<Annot>,
+    /// The annotations written on types (`Int @Ann(m)`), each with the type it annotates and
+    /// the annotation as `inline_annots` reads it (`Annot::instance`), in the types' order; a
+    /// library body's, those its pickle wrote (`ANNOTATEDtpt`) as the paths they name. A type's
+    /// node leaves them out; dotty's `Annotated` tree keeps the annotation's tree.
+    pub type_annots: Vec<(TyExprId, ExprId)>,
     /// Whether an annotation named `nowarn` was written in the file, whose definitions and
     /// ascriptions `@nowarn` suppresses the warnings of (`warnings.rs`), and the ascriptions
     /// and types so annotated (`e: @nowarn`, `T @nowarn`), each with its whole range.
@@ -873,6 +878,7 @@ impl Ast {
             package_ranges: Vec::new(),
             reader: None,
             inline_annots: Vec::new(),
+            type_annots: Vec::new(),
             has_nowarn: false,
             main_proxies: Vec::new(),
             nowarn_ascriptions: Vec::new(),
