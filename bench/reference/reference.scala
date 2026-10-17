@@ -1,8 +1,9 @@
 // What the scripts of teq's public reference projects share (bench/lila/lila.scala, bench/airstream/airstream.scala,
-// bench/laminar/laminar.scala): the inventory of a test run, read from an oracle's JUnit reports or from a
-// `teq test --verbose` transcript and held to the pinned one (tests.json), and the peak memory of the processes one
+// bench/laminar/laminar.scala): the inventory of a test run, read from an oracle's JUnit reports or from the events
+// `teq test --events` writes and held to the pinned one (tests.json), and the peak memory of the processes one
 // invocation starts while it runs.
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
+import java.security.MessageDigest
 
 object Reference:
   // The peak memory of the process trees one invocation starts, sampled each second: the processes whose environment
@@ -34,15 +35,17 @@ object Reference:
 final case class Suite(project: String, cases: Vector[(String, String)])
 final case class Tests(suites: Map[(String, String), Suite]):
   def cases: Int = suites.values.map(_.cases.size).sum
+  // Each case with its status, as the deviations take them (bench/reference/records.scala), and the suites that hold
+  // a case (a suite of none, a base class sbt's JUnit reports listed, is compared by neither side).
+  def items: Vector[(TestCase, String)] =
+    suites.toVector.sortBy(_._1).flatMap((key, s) => s.cases.map((c, st) => TestCase(key._1, key._2, c) -> st))
+  def heldSuites: Vector[(String, String)] = suites.toVector.filter(_._2.cases.nonEmpty).map(_._1).sorted
   // How many cases of each status, in the interface's order.
   def counts: String =
     val all = suites.values.flatMap(_.cases.map(_._2)).groupBy(identity).view.mapValues(_.size).toMap
     Tests.statuses.filter(all.contains).map(s => s"${all(s)} ${s.toLowerCase}").mkString(", ")
 
 object Tests:
-  // A test configuration's summary line: `<project>/test: N suites, P passed, F failed in ...`.
-  val summaryLine = "^([^ ]+)/test: ([0-9]+) suites?, ([0-9]+) passed, ([0-9]+) failed".r
-
   // sbt's statuses, `sbt.testing.Status` in its order; tests.json keeps a case that passed under `cases` and one of
   // another status under the status's name in lower case.
   val statuses = Vector("Success", "Error", "Failure", "Skipped", "Ignored", "Canceled", "Pending")
@@ -113,36 +116,6 @@ object Tests:
       (projectOf(p), name) -> Suite(projectOf(p), cases)
     }.toMap)
 
-  // A `teq test --verbose` transcript as the run's inventory (lila's): each project's section ends with its summary
-  // line (`<project>/test: N suites, ..`), and holds a line per test the run reports, its status (`[success]`,
-  // `[skipped]`, `[ignored]`, `[canceled]`, `[pending]`) or `[fail]` (a failure or an error, which the transcript
-  // does not tell apart) before the suite and the test (`task::events::report`). A test is matched to the
-  // inventory's suite whose name prefixes it, another suite is the line's first word.
-  def fromTranscript(transcript: String, expected: Tests): Tests =
-    val known = expected.suites.keys.map(_._2).toVector.distinct.sortBy(-_.length)
-    val casesOf = expected.suites.toVector.groupMap(_._1._2)(_._2.cases.map(_._1)).view.mapValues(_.flatten).toMap
-    val outcome = "^\\[(success|skipped|ignored|canceled|pending|fail)\\] (.*)$".r
-    val suites = scala.collection.mutable.LinkedHashMap.empty[(String, String), Vector[(String, String)]]
-    var section = Vector.empty[(String, String, String)]
-    for line <- transcript.linesIterator do
-      summaryLine.findFirstMatchIn(line) match
-        case Some(m) =>
-          val project = m.group(1).stripSuffix("/test")
-          for (suite, test, result) <- section do
-            suites((project, suite)) = suites.getOrElse((project, suite), Vector.empty) :+ (test -> result)
-          section = Vector.empty
-        case None =>
-          line match
-            case outcome(kind, named) if !named.startsWith("  ") && !named.startsWith(" at ") =>
-              val suite = known.find(n => named == n || named.startsWith(n + " ")).getOrElse(named.takeWhile(_ != ' '))
-              val rest = named.drop(suite.length).stripPrefix(" ")
-              // A failure's line goes on with its throwable's first line after `: `.
-              val test = if kind == "fail" then casesOf.get(suite).flatMap(_.filter(c => rest == c || rest.startsWith(c + ": ")).maxByOption(_.length)).getOrElse(rest.takeWhile(_ != ':')) else rest
-              val result = if kind == "fail" then "Failure" else kind.capitalize
-              section = section :+ (suite, test, result)
-            case _ => ()
-    Tests(suites.toMap.map((key, cases) => key -> Suite(key._1, cases)))
-
   // The events of a run as `teq test --events` writes them (`task::events::Event::line`) and the oracle's listener
   // (bench/reference/oracle/OracleEvents.scala): a line each, the project, the event's name (the suite), its selector,
   // its status and the first line of what it threw, tab-separated. A case is the test a `test <name>` selector names,
@@ -185,3 +158,61 @@ object Tests:
     for (project, name) <- found.suites.keys.toVector.sorted if !expected.suites.contains((project, name)) && found.suites((project, name)).cases.nonEmpty do
       out += s"suite $name ($project) is not in tests.json"
     out.result()
+
+// sbt-teq for a reference project's export: TEQ_PLUGIN_VERSION's where it names one (published by the caller), else
+// the head's own, from integrations/sbt, published on both sbt lines (`^publish`: sbt-teq_sbt2_3 and
+// sbt-teq_2.12_1.0) under a SNAPSHOT named by the digest of what the plugin is built from, into a Maven repository of
+// its own beside the line's directory of logs and caches, once for each digest: an export takes the plugin of the
+// sources under test, nothing reaches ~/.ivy2/local and no release's version is published (docs/DEVELOPING.md, "Building
+// and testing"). The overlay's plugins.sbt adds the repository the property `teq.plugin.repository` names. The
+// version and the repository, None for TEQ_PLUGIN_VERSION's.
+object SbtPlugin:
+  private def sha256(bytes: Array[Byte]): String = MessageDigest.getInstance("SHA-256").digest(bytes).map(b => f"${b & 0xff}%02x").mkString
+
+  // What the plugin is built from: its build and sources (not its fixtures, checks and products), the launchers it
+  // bakes in and the compiler's version Cargo.toml names.
+  def sources: Vector[Path] =
+    val sbt = Paths.get("integrations/sbt")
+    val kept = Vector("build.sbt", "plugin-version.txt", "project", "src").map(sbt.resolve) ++ Vector(Paths.get("tools/launcher"), Paths.get("Cargo.toml"))
+    kept.filter(Files.exists(_)).flatMap(p => Files.walk(p).toArray.toVector.map(_.asInstanceOf[Path]))
+      .filter(Files.isRegularFile(_)).filterNot(p => p.toString.split('/').exists(s => s == "target" || s == ".bsp")).sortBy(_.toString)
+
+  def digest: String = sha256(sources.map(f => s"$f ${sha256(Files.readAllBytes(f))}\n").mkString.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+
+  // What an export that failed for want of its plugin lacked, in its own words, from sbt's log: the coordinates it could
+  // not download (sbt 1's `build.teq:sbt-teq;sbtVersion=1.0;scalaVersion=2.12:<version>`, sbt 2's
+  // `build.teq:sbt-teq_sbt2_3:<version>`), and where TEQ_PLUGIN_VERSION named it, that it names a plugin the machine has
+  // not published for that sbt.
+  def missing(log: Path): Option[String] =
+    val text = try Files.readString(log) catch case _: java.io.IOException => ""
+    "Error downloading build\\.teq:(sbt-teq[^ ;:]*)(?:;sbtVersion=([^;]+);scalaVersion=([^:]+))?:(\\S+)".r.findFirstMatchIn(text).map { m =>
+      val line = Option(m.group(2)).fold(if m.group(1).contains("sbt2") then "sbt 2" else m.group(1))(v => s"sbt $v (Scala ${m.group(3)})")
+      val named = Option(System.getenv("TEQ_PLUGIN_VERSION")).filter(_ == m.group(4))
+      s"sbt-teq ${m.group(4)} for $line is in no repository sbt reads" +
+        named.fold("")(_ => s": TEQ_PLUGIN_VERSION names it, a plugin this machine has not published for $line; unset TEQ_PLUGIN_VERSION, and the export publishes the head's")
+    }
+
+  def forExport(out: Path, jdk: Path): (String, Option[String]) =
+    Option(System.getenv("TEQ_PLUGIN_VERSION")).filter(_.nonEmpty) match
+      case Some(v) => (v, None)
+      case None =>
+        val d = digest.take(12)
+        val version = s"${Files.readString(Paths.get("integrations/sbt/plugin-version.txt")).trim}-reference-$d-SNAPSHOT"
+        val repo = out.toAbsolutePath.normalize.getParent.resolve(s"sbt-teq-$d")
+        if !Files.isRegularFile(repo.resolve("published")) then
+          val staged = Files.createTempDirectory(out.toAbsolutePath.normalize.getParent, s"sbt-teq-$d.")
+          val log = out.resolve("plugin.log")
+          Log.stamped(s"sbt-teq: publishing integrations/sbt as $version on both sbt lines into $repo, its log $log")
+          val r = Sh("sbt", "-java-home", jdk.toString, "--server", "--batch", "-no-colors", "-Dsbt.supershell=false", "-Dsbt.server.autostart=false",
+            s"set version := \"$version\"", s"set publishTo := Some(\"teq-reference\" at \"file://$staged\")", "^publish")
+            .in(Paths.get("integrations/sbt").toAbsolutePath).withEnv("JAVA_HOME" -> jdk.toString, "PATH" -> s"$jdk/bin:${System.getenv("PATH")}").without("SBT_OPTS")
+            .stdout(log).mergeErr.timeout(900).check(false).run()
+          val jars = Vector("sbt-teq_sbt2_3", "sbt-teq_2.12_1.0").map(a => staged.resolve(s"build/teq/$a/$version/$a-$version.jar"))
+          if r.status != 0 || !jars.forall(Files.isRegularFile(_)) then
+            println(Files.readString(log).linesIterator.toVector.takeRight(20).mkString("\n"))
+            Sh.remove(staged)
+            Log.die(s"sbt-teq: the publication of integrations/sbt exits ${r.status}${if r.status == 0 then ", without both lines' jars" else s": ${Log.cause(log)}"} (its log $log)")
+          Files.writeString(staged.resolve("published"), s"$version\n")
+          try Files.move(staged, repo, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+          catch case _: java.io.IOException => Sh.remove(staged) // another export published the same digest meanwhile
+        (version, Some(s"file://$repo"))

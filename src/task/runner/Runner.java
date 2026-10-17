@@ -81,7 +81,7 @@ import sbt.testing.TestWildcardSelector;
  * ordinal&gt; &lt;name&gt; &lt;selector&gt; &lt;a&gt; &lt;b&gt; &lt;ms&gt;", the selector suite, test, nestedSuite, nestedTest or wildcard
  * with its names in a and b; a fork error, which ends the run (what a task threw, before its event, what a
  * framework's logger traced, or what a framework threw making its runner or its tasks, or done() threw), is
- * "forkError". Before each, what it threw: "throwable &lt;toString&gt;", then
+ * "forkError"; after a task's events, "ran &lt;suite&gt;", its suite run, a task that sent no event too. Before each, what it threw: "throwable &lt;toString&gt;", then
  * "cause &lt;toString&gt;" for each cause, each followed by a "frame &lt;class&gt; &lt;toString&gt;" per frame of its
  * stack; a task's events and
  * what they threw are written at once, so that no other line comes between.
@@ -290,7 +290,7 @@ public final class Runner {
             events.forkError(t);
             batch = List.of((Object) events.error(suite, t));
         }
-        events.send(batch);
+        events.send(batch, suite);
         return nested;
     }
 
@@ -351,7 +351,8 @@ public final class Runner {
         }
 
         /** A task's lines, written at once. */
-        void send(List<Object> batch) {
+        /** A task's events, then that its suite ran, a task of no event among them (an empty suite's). */
+        void send(List<Object> batch, String suite) {
             StringBuilder text = new StringBuilder();
             for (Object e : batch) {
                 if (e instanceof Unsendable u) {
@@ -360,9 +361,8 @@ public final class Runner {
                 }
                 text.append(e);
             }
-            if (!batch.isEmpty()) {
-                out.print(text);
-            }
+            text.append(line("ran", suite));
+            out.print(text);
         }
 
         /** What the worker sends as a fork error (ForkTestMain.writeError): what a task threw, or what a framework's

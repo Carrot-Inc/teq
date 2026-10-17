@@ -1,4 +1,5 @@
 //> using file ../tools/script
+//> using file reference/records.scala
 // The public reference projects built by Mill, Tyrian and Indigo (github.com/PurpleKingdomGames), as lila is for sbt
 // (bench/lila/lila.scala): the pinned revision checked out with the reviewed overlay, built and tested under scalac
 // 3.8.4 by its own Mill build (the oracle), exported with mill-teq, then compiled and tested by teq against the
@@ -26,16 +27,24 @@
 //           lock recording a generator only Mill runs fails
 // compile   `teq compile` of every module over the export (--teq <binary>), teq's outputs but the lock removed before
 //           each run (--runs n): each run's wall time, the peak memory of teq's processes, its errors and warnings by
-//           module, then the generated inputs' digests against generated.json (--record rewrites them): each
-//           configuration's generated directory and each file the overlay's generators declare they write besides
-//           (Indigo's font sheets in its assets), then each kind deleted apart and compiled again to the same digests;
-//           a module that does not compile fails the verb
+//           module, each run held to bench/<project>/errors.txt (bench/reference/records.scala: every configuration
+//           compiled once, the run complete, its errors within the record's, a new one failing, one gone listed;
+//           --record writes a passing run's improvement, --baseline the first record, --migrate <reason> one over new
+//           inputs), then the generated inputs' digests against generated.json (--baseline and --migrate rewrite
+//           them from a run that is evidence, a run that is not recording nothing): each configuration's generated
+//           directory and each file the overlay's generators declare they write besides (Indigo's font sheets in its
+//           assets), then each kind deleted apart and compiled again to the same digests, each of those compiles held
+//           to the record too
 // test      the export's modules, the projects of the lock made at the pin (its settings' digest the pin's), each
 //           with a test configuration asked for its suites (`teq test --list`) and run where it has one (`teq test
 //           --verbose`), whatever tests.json holds: the modules, the suites listed and run and the cases against
-//           tests.json, identity for identity, failing on one either side lacks, on a case that did not pass and on a
-//           module whose run failed (--runs n)
-// run       the module pin.json's `run` names built by `teq build` over the export, its output served as out/ beside the
+//           tests.json, identity for identity, each case's statuses as many times as each side reports it, every
+//           departure held to deviations.json (bench/reference/records.scala: a module whose own build failed
+//           blocked, its cases departures of its; --record writes a passing run's improvement, --baseline the first
+//           record, --migrate <reason> one over a new pin or inventory) (--runs n)
+// run       (its named assertions held to run.json, bench/reference/records.scala: an assertion the run does not hold a
+//           violation by its name, a build that failed blocking every one; --record, --baseline, --migrate as compile's)
+//           the module pin.json's `run` names built by `teq build` over the export, its output served as out/ beside the
 //           page it names, the harness's files of bench/<project>/run/ and the assets it lists, and opened in headless
 //           Chrome by bench/smoke.mjs, whose scenario drives the page (Tyrian's counter clicked, Indigo's frame drawn
 //           and its scene switched) and fails on a browser error or its time running out
@@ -51,10 +60,11 @@ import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 import java.security.MessageDigest
 
 @main def millReference(argv: String*): Unit = Script.run {
-  val args = new Args(argv, "bench/mill-reference.scala <tyrian|indigo> <checkout|oracle|export|compile|test|run> <checkout> <out> [--runs n] [--record] [--teq <binary>]")
+  val args = new Args(argv, "bench/mill-reference.scala <tyrian|indigo> <checkout|oracle|export|compile|test|run> <checkout> <out> [--runs n] [--record | --baseline | --migrate <reason>] [--teq <binary>]")
   val teq = args.teq("./target/release/teq")
   val runs = args.option("runs").map(_.toInt).getOrElse(1)
-  val record = args.flag("record")
+  val mode = Mode.of(args)
+  val record = mode == Mode.Record
   val positionals = args.exactly(4)
   val (project, verb, checkoutArg, outArg) = (positionals(0), positionals(1), positionals(2), positionals(3))
   if project != "tyrian" && project != "indigo" then args.fail(s"no reference project $project")
@@ -69,6 +79,7 @@ import java.security.MessageDigest
   verb match
     case "checkout" => Ref.checkout(pin, checkout)
     case "oracle" =>
+      if mode != Mode.Judge && mode != Mode.Record then args.fail("the oracle records its inventory with --record alone")
       Ref.atPin(pin, checkout)
       Ref.oracle(pin, checkout, out, runs, record)
     case "export" =>
@@ -76,13 +87,13 @@ import java.security.MessageDigest
       Ref.exportLock(pin, checkout, out)
     case "compile" =>
       Ref.atPin(pin, checkout)
-      Ref.compile(pin, checkout, out, teq, runs, record)
+      Ref.compile(pin, checkout, out, teq, runs, mode)
     case "test" =>
       Ref.atPin(pin, checkout)
-      Ref.test(pin, checkout, out, teq, runs)
+      Ref.test(pin, checkout, out, teq, runs, mode)
     case "run" =>
       Ref.atPin(pin, checkout)
-      Ref.run(pin, checkout, out, teq)
+      Ref.run(pin, checkout, out, teq, mode)
     case other => args.fail(s"no verb $other")
 }
 
@@ -224,7 +235,7 @@ object Ref:
       val (r, wall, _) = mill(pin, buildDir, out, log, Seq(b("task").str, "--localIvyRepo", out.resolve("ivy").toString, "--doc", "false", "--transitive", "true"))
       if r.status != 0 then
         println(Files.readString(log).linesIterator.toVector.takeRight(20).mkString("\n"))
-        Log.die(s"${pin.name}: the bootstrap exits ${r.status}")
+        Log.die(s"${pin.name}: the bootstrap exits ${r.status}: ${Log.cause(log)} (Mill's log $log)")
       val published = b("artifacts").members.map { (artifact, digest) =>
         val jar = out.resolve("ivy").resolve(artifact)
         if !Files.isRegularFile(jar) then Log.die(s"${pin.name}: the bootstrap did not publish $artifact, which pin.json names")
@@ -237,7 +248,8 @@ object Ref:
       println(f"${pin.name}: bootstrap in $wall%.1f s, the ${b("artifacts").members.size} artifacts pin.json names published with its digests")
 
   def oracle(pin: Pin, dir: Path, out: Path, runs: Int, record: Boolean): Unit =
-    val expected = Inventory.read(pin.here.resolve("tests.json"))
+    // Read where a run is compared with it: a recording replaces it, whatever form it has.
+    lazy val expected = Inventory.read(pin.here.resolve("tests.json"))
     bootstrap(pin, dir, out)
     val buildDir = dir.resolve(pin.build)
     var failed = false
@@ -281,7 +293,7 @@ object Ref:
       .stdout(log).mergeErr.timeout(millSeconds).check(false).run()
     if r.status != 0 then
       println(Files.readString(log).linesIterator.toVector.takeRight(20).mkString("\n"))
-      Log.die(s"${pin.name}: mill-teq did not build (exit ${r.status})")
+      Log.die(s"${pin.name}: mill-teq did not build (exit ${r.status}): ${Log.cause(log)} (its log $log)")
     version
 
   def exportLock(pin: Pin, dir: Path, out: Path): Unit =
@@ -293,7 +305,7 @@ object Ref:
     val (r, wall, peak) = mill(pin, buildDir, out, log, Seq("--import", s"mvn:build.teq::mill-teq::$version", "dev.teq.mill.Teq/teqExportAll"), Seq(s"file://${out.resolve("maven")}"))
     if r.status != 0 then
       println(Files.readString(log).linesIterator.toVector.takeRight(20).mkString("\n"))
-      Log.die(s"${pin.name}: the export exits ${r.status}")
+      Log.die(s"${pin.name}: the export exits ${r.status}: ${Log.cause(log)} (Mill's log $log)")
     val lock = buildDir.resolve("target/teq/teq.lock")
     Files.copy(lock, out.resolve("teq.lock"), StandardCopyOption.REPLACE_EXISTING)
     println(f"${pin.name}: exported ${Files.size(lock)} bytes in $wall%.1f s (peak ${peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")}), copied to ${out.resolve("teq.lock")}")
@@ -370,73 +382,92 @@ object Ref:
 
   // The generated inputs' differences from generated.json's, each a line.
   def digestDifferences(recorded: Map[String, String], digests: Map[String, String]): Vector[String] =
-    recorded.toVector.sortBy(_._1).filter((k, v) => !digests.get(k).contains(v)).map((k, _) => s"the generated $k differs from generated.json's") ++
-      digests.keys.toVector.sorted.filter(k => !recorded.contains(k)).map(k => s"the generated $k is not in generated.json")
+    recorded.toVector.sortBy(_._1).filter((k, v) => !digests.get(k).contains(v)).map((k, v) => s"generated $k: ${digests.getOrElse(k, "absent")}, generated.json has $v") ++
+      digests.keys.toVector.sorted.filter(k => !recorded.contains(k)).map(k => s"generated $k: ${digests(k)}, generated.json has none")
 
   // A compile's diagnostics by project, from teq's lines `<project>/<configuration>: N errors` and the diagnostics
   // printed before them.
   private val summary = "^([^ /]+)/(compile|test): (.*)$".r
 
-  def compile(pin: Pin, dir: Path, out: Path, teq: String, runs: Int, record: Boolean): Unit =
-    exported(pin, dir)
+  def compile(pin: Pin, dir: Path, out: Path, teq: String, runs: Int, mode: Mode): Unit =
+    val lock = exported(pin, dir)
     val bin = binary(teq)
+    val version = Sh(bin, "--version").timeout(30).check(false).run().out.trim
     val buildDir = dir.resolve(pin.build)
+    val roots = Roots.of(buildDir, dir, out)
     var failed = false
+    val seen = Vector.newBuilder[(Observation, String, Map[String, String])]
     for i <- 1 to runs do
       Sh(bin, "stop").in(buildDir).timeout(120).check(false).run()
       coldOutputs(buildDir)
       val log = out.resolve(s"compile-$i.log")
+      // The builds' diagnostics as teq records them (`--diagnostics`), never read from the text.
+      val diagnostics = out.resolve(s"compile-$i.diagnostics")
+      Files.deleteIfExists(diagnostics)
       Log.stamped(s"${pin.name}: teq compile, run $i of $runs, its output $log")
       val started = System.nanoTime()
-      val (r, peak) = sampled(pin.name, bin, out)(Sh(bin, "compile").in(buildDir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      val (r, peak) = sampled(pin.name, bin, out)(Sh(bin, "compile", "--diagnostics", diagnostics.toString).in(buildDir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
+      Files.writeString(log, Transcript.mark(r.status), java.nio.file.StandardOpenOption.APPEND)
       val text = Files.readString(log)
-      val errors = text.linesIterator.count(_.contains(": error: "))
-      val warnings = text.linesIterator.count(_.contains(": warning: "))
+      val records = Transcript.recorded(diagnostics)
+      // Every compile configuration the export holds sources for covered by the run (`Locks.hold`).
+      val observed = Locks.hold(Transcript.compile(text, records, roots), lock)
+      val warnings = records.fold(Vector.empty)(Transcript.shown).count(_.severity == "warning")
       // Each configuration's last line is its outcome (its generators print before it).
       val outcomes = text.linesIterator.flatMap(l => summary.findFirstMatchIn(l)).map(m => s"${m.group(1)}/${m.group(2)}" -> m.group(3)).toMap.toVector.sorted.map((k, v) => s"$k: $v")
-      println(f"${pin.name}: compile run $i: exit ${r.status}, $wall%.1f s, peak ${peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")}, $errors errors, $warnings warnings")
+      println(f"${pin.name}: compile run $i: exit ${r.status}, $wall%.1f s, peak ${peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")}, ${observed.debt.size} errors, $warnings warnings")
       outcomes.foreach(o => println(s"  $o"))
-      if r.status != 0 then
-        println(s"FAIL ${pin.name}: compile run $i: teq exits ${r.status}")
-        failed = true
+      // The generated inputs' digests as this run left them: each run's held apart, so that no later run hides an
+      // earlier one's bytes.
+      seen += ((observed, roots(text), generatedDigests(pin, buildDir)))
     Sh(bin, "stop").in(buildDir).timeout(120).check(false).run()
-    val digests = generatedDigests(pin, buildDir)
     val recordedFile = pin.here.resolve("generated.json")
-    if record then
-      Files.writeString(recordedFile, Json.write(Json.Obj(digests.toVector.sortBy(_._1).map((k, v) => k -> Json.str(v))), indent = 1) + "\n")
-      println(s"${pin.name}: recorded the digests of ${digests.size} generated directories and files in bench/${pin.name}/generated.json")
-    val recorded = if Files.isRegularFile(recordedFile) then Json.parse(Files.readString(recordedFile)).members.map((k, v) => k -> v.str).toMap else Map.empty[String, String]
+    val runsSeen = seen.result()
+    // The digests the runs are held to: a baseline's or a migration's those the first run left, published with its
+    // record as one recording; else generated.json's, a generated input that differs an item of the runs' debt with the digest
+    // it has (other bytes another item, so that a change of the generated bytes takes a migration).
+    val recording = mode match
+      case Mode.Baseline | Mode.Migrate(_) => true
+      case _ => false
+    val recorded =
+      if recording then runsSeen.head._3
+      else if Files.isRegularFile(recordedFile) then Json.parse(Files.readString(recordedFile)).members.map((k, v) => k -> v.str).toMap
+      else Map.empty[String, String]
     if recorded.isEmpty then
-      println(s"FAIL ${pin.name}: no digests of the generated inputs in bench/${pin.name}/generated.json (compile --record)")
+      println(s"FAIL ${pin.name}: no digests of the generated inputs in bench/${pin.name}/generated.json (compile --baseline)")
       failed = true
-    for d <- digestDifferences(recorded, digests) do
-      println(s"FAIL ${pin.name}: $d")
-      failed = true
+    val staged = if recording then Vector("generated.json" -> (Json.write(Json.Obj(recorded.toVector.sortBy(_._1).map((k, v) => k -> Json.str(v))), indent = 1) + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8)) else Vector.empty
+    val judged = Vector.newBuilder[(String, Observation)]
+    for ((observed, _, digests), i) <- runsSeen.zipWithIndex do judged += s"compile run ${i + 1}" -> Transcript.withDebt(observed, digestDifferences(recorded, digests))
     // Each kind of generated input deleted apart, the generators' records kept: the files the generators declare
     // they write besides (the build's assets), then the generated directories; a compile writes each again, to
-    // generated.json's bytes.
+    // the digests the runs are held to, and its errors are the record's: each of these compiles a run of the line.
     val apart = Vector("the generators' declared files" -> (() => pin.generatorOutputs.map(buildDir.resolve).foreach(Files.deleteIfExists)),
       "the generated directories" -> (() => managedRoots(buildDir).foreach(Sh.remove)))
     for (what, delete) <- apart if what != apart.head._1 || pin.generatorOutputs.nonEmpty do
       Sh(bin, "stop").in(buildDir).timeout(120).check(false).run()
       delete()
       val log = out.resolve(s"compile-regenerated-${if what == apart.head._1 then "files" else "directories"}.log")
-      val r = Sh(bin, "compile").in(buildDir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run()
+      val diagnostics = out.resolve(log.getFileName.toString.stripSuffix(".log") + ".diagnostics")
+      Files.deleteIfExists(diagnostics)
+      val r = Sh(bin, "compile", "--diagnostics", diagnostics.toString).in(buildDir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run()
       Sh(bin, "stop").in(buildDir).timeout(120).check(false).run()
+      Files.writeString(log, Transcript.mark(r.status), java.nio.file.StandardOpenOption.APPEND)
       val differences = digestDifferences(recorded, generatedDigests(pin, buildDir))
-      println(s"${pin.name}: $what deleted, compile exits ${r.status}, ${if differences.isEmpty then "every generated input written again as generated.json has it" else s"${differences.size} differences"}")
-      for d <- differences do
-        println(s"FAIL ${pin.name}: $what deleted: $d")
-        failed = true
+      println(s"${pin.name}: $what deleted, compile exits ${r.status}, ${if differences.isEmpty then "every generated input written again with the digests the runs are held to" else s"${differences.size} differences"}")
+      judged += s"compile, $what deleted" -> Locks.hold(Transcript.withDebt(Transcript.compile(Files.readString(log), Transcript.recorded(diagnostics), roots), differences), lock)
+    if !Lines.hold(pin.name, "compile", pin.here, Shape.Compile, judged.result(), runsSeen.head._2, mode, version, checked = !failed, staged) then failed = true
     Script.exit(if failed then 1 else 0)
 
   private val listedSuite = "^Test ([^ ]+) : .*".r
 
-  def test(pin: Pin, dir: Path, out: Path, teq: String, runs: Int): Unit =
+  def test(pin: Pin, dir: Path, out: Path, teq: String, runs: Int, mode: Mode): Unit =
     val lock = exported(pin, dir)
     val bin = binary(teq)
+    val version = Sh(bin, "--version").timeout(30).check(false).run().out.trim
     val buildDir = dir.resolve(pin.build)
+    val roots = Roots.of(buildDir, dir, out)
     // The oracle's inventory, which the run is held to: without one nothing would be checked.
     val inventory = pin.here.resolve("tests.json")
     if !Files.isRegularFile(inventory) then Log.die(s"no inventory at $inventory: record it with the oracle (oracle --record)")
@@ -446,6 +477,7 @@ object Ref:
     val scope = Export.projects(lock)
     if scope.isEmpty then Log.die(s"the export $lock holds no project")
     var failed = false
+    val held = Vector.newBuilder[(String, Observation, String)]
     for i <- 1 to runs do
       val log = out.resolve(s"test-$i.log")
       Log.stamped(s"${pin.name}: teq test, run $i of $runs, its output $log")
@@ -453,51 +485,115 @@ object Ref:
       // Each module whose test configuration has sources asked for its suites (sbt's definedTests), then each with a
       // suite run verbose, so that the runner names every suite and every test with its outcome: the listing and the
       // transcript are the run's inventory. A module without a test source has no suite (teq's Scala.js runner
-      // refuses a listing or a run of none, which Mill's passes).
+      // refuses a listing or a run of none, which Mill's passes). Each invocation's output and exit is the module's
+      // own, so that a module whose listing or run failed in its own build is blocked by it; its two channels collected
+      // apart, teq's own lines (a build's diagnostics and count, the summaries) on stderr, the listing and the run's
+      // stream on stdout; the outcomes are the events' (`Transcript`).
       Files.writeString(log, "")
-      val ((listed, statuses), peak) = sampled(pin.name, bin, out) {
+      val ((listed, statuses, (invoked, ranModules)), peak) = sampled(pin.name, bin, out) {
         val listed = scope.map { (m, sources) =>
-          if !Export.holdsSources(buildDir, sources) then (m, Vector.empty[String], 0)
+          if !Export.holdsSources(buildDir, sources) then (m, Vector.empty[String], 0, Option.empty[(String, String, Option[String])])
           else
-            val r = Sh(bin, "test", "--list", m).in(buildDir).mergeErr.timeout(teqSeconds).check(false).run()
-            (m, r.outAll().linesIterator.collect { case listedSuite(s) => s }.toVector.distinct, r.status)
+            val diagnostics = out.resolve(s"test-$i-$m-list.diagnostics")
+            Files.deleteIfExists(diagnostics)
+            val r = Sh(bin, "test", "--list", m, "--diagnostics", diagnostics.toString).in(buildDir).timeout(teqSeconds).check(false).run()
+            val (text, errText) = (r.outAll(), r.errAll())
+            Files.writeString(log, Invocation.shown(text, errText), java.nio.file.StandardOpenOption.APPEND)
+            (m, text.linesIterator.collect { case listedSuite(s) => s }.toVector.distinct, r.status, Some((text, errText, Transcript.recorded(diagnostics))))
         }
-        val statuses = listed.filter(_._2.nonEmpty).map((m, _, _) => m -> Sh(bin, "test", "--verbose", m).in(buildDir).stdout(log, append = true).mergeErr.timeout(teqSeconds).check(false).run().status)
-        (listed, listed.filter(_._3 != 0).map((m, _, status) => s"$m --list" -> status) ++ statuses)
+        // Each module's run writes its events (`--events`), every case under the status its framework reported (an
+        // error apart from a failure, which the transcript's `[fail]` does not tell apart).
+        // Each invocation's output collected apart, then appended to the run's log: its transcript is its own, whatever
+        // the invocations before it printed.
+        val invocations = listed.filter(_._2.nonEmpty).map { (m, _, _, _) =>
+          val own = out.resolve(s"test-$i-$m.log")
+          val ownErr = out.resolve(s"test-$i-$m.err")
+          val events = out.resolve(s"test-$i-events-$m.txt")
+          val diagnostics = out.resolve(s"test-$i-$m.diagnostics")
+          Files.deleteIfExists(events)
+          Files.deleteIfExists(diagnostics)
+          val r = Sh(bin, "test", "--verbose", "--events", events.toString, "--diagnostics", diagnostics.toString, m).in(buildDir).stdout(own).stderr(ownErr).timeout(teqSeconds).check(false).run()
+          val (text, errText) = (r.outAll(), r.errAll())
+          Files.writeString(log, Invocation.shown(text, errText), java.nio.file.StandardOpenOption.APPEND)
+          (m, r.status, (text, errText, Transcript.recorded(diagnostics)), Option.when(Files.isRegularFile(events))(Files.readString(events)))
+        }
+        // Every invocation as the records judge it: each listing (no events asked) and each run (its events).
+        val invoked = listed.collect { case (m, _, status, Some((text, errText, records))) => Invocation(s"$m --list", status, text, errText, records, Some("")) } ++
+          invocations.map((m, status, text, events) => Invocation(m, status, text._1, text._2, text._3, events))
+        (listed, listed.filter(_._3 != 0).map((m, _, status, _) => s"$m --list" -> status) ++ invocations.map((m, status, _, _) => m -> status), (invoked, invocations))
       }
       val wall = (System.nanoTime() - started) / 1e9
-      val ran = Inventory.fromTranscript(Files.readString(log), expected)
-      val found = Inventory(listed.map((m, suites, _) => m -> Module(0, suites, ran.modules.get(m).fold(Vector.empty)(_.cases))).toMap)
+      val text = Files.readString(log)
+      // What ran is the run's events, never its text and never a count: the cases they name with their statuses (a
+      // run without its events a problem) and each suite whose task ran, by name, one that ran no case too
+      // (`Deviations.ran`).
+      val ran = Inventory.fromEvents(ranModules.flatMap(_._4).mkString)
+      val named = ranModules.flatMap(_._4.toVector.flatMap(Deviations.ran)).groupMap(_._1)(_._2).map((m, suites) => m -> suites.toSet)
+      val found = Inventory(listed.map((m, suites, _, _) => m -> Module(0, suites, ran.modules.get(m).fold(Vector.empty)(_.cases))).toMap)
       println(f"${pin.name}: test run $i: $wall%.1f s, peak ${peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")}, ${found.modules.size} modules, ${found.suites} suites listed, ${ran.suites} run, ${found.cases} cases run (tests.json: ${expected.modules.size} modules, ${expected.suites} suites, ${expected.cases} cases)")
       for (m, status) <- statuses if status != 0 do println(s"  $m: teq test exits $status")
-      val differences = Inventory.compare(expected, found, warnings = false) ++ Inventory.ranAsListed(found, ran)
-      if statuses.exists(_._2 != 0) || differences.nonEmpty then
-        println(s"FAIL ${pin.name}: test run $i: the run is not tests.json's: ${statuses.count(_._2 != 0)} modules failed, ${differences.size} differences")
+      val differences = Inventory.compare(expected, found, warnings = false) ++ Inventory.ranAsListed(found, ran, named)
+      if differences.nonEmpty then
+        println(s"${pin.name}: test run $i: ${differences.size} differences from tests.json")
         differences.take(60).foreach(d => println(s"  $d"))
-        failed = true
+      // The run held to deviations.json by the records' one judgment of a test run (`Deviations.judge`, the same for
+      // every driver): every listing and run, the oracle's modules and cases (a case `<suite>.<test>` under no suite),
+      // the modules complete with nothing to run (a listing that passed with no suite), the suites listed; and Mill's
+      // own departures, a suite listed against its run and a module beyond the oracle's.
+      def cases(t: Inventory) = t.modules.toVector.sortBy(_._1).flatMap((m, mod) => mod.cases.map((c, st) => TestCase(m, "", c) -> st))
+      def suites(t: Inventory) = t.modules.toVector.sortBy(_._1).flatMap((m, mod) => mod.suites.distinct.map(m -> _))
+      val evidence = TestEvidence(invoked, expected.modules.keys.toVector.sorted, cases(expected), suites(expected), qualified = true,
+        completedWithoutRun = listed.collect { case (m, suites, 0, _) if suites.isEmpty => m },
+        listedSuites = Some(suites(found)),
+        debt = Inventory.ranAsListed(found, ran, named) ++ scope.map(_._1).filterNot(expected.modules.contains).map(m => s"$m (a module not the oracle's)"),
+        owed = listed.collect { case (m, _, _, Some(_)) => m })
+      val observed = Deviations.judge(evidence, roots)
+      held += ((s"test run $i", observed, roots(text)))
     Sh(bin, "stop").in(buildDir).timeout(120).check(false).run()
+    val seen = held.result()
+    if !Lines.hold(pin.name, "test", pin.here, Shape.Tests, seen.map((n, o, _) => n -> o), seen.head._3, mode, version) then failed = true
     Script.exit(if failed then 1 else 0)
 
   // The run check: pin.json's `run` module built by teq, served with its page and checked in a browser by
   // bench/smoke.mjs; the build's time and peak memory are the line's, the page's steps the smoke's log.
-  def run(pin: Pin, dir: Path, out: Path, teq: String): Unit =
+  def run(pin: Pin, dir: Path, out: Path, teq: String, mode: Mode): Unit =
     exported(pin, dir)
     val bin = binary(teq)
+    val version = Sh(bin, "--version").timeout(30).check(false).run().out.trim
     val buildDir = dir.resolve(pin.build)
+    val roots = Roots.of(buildDir, dir, out)
     val spec = pin.json.get("run").getOrElse(Log.die(s"bench/${pin.name}/pin.json names no run"))
     val module = spec("module").str
     val log = out.resolve("run-build.log")
+    // The build's diagnostics as the compiler records them (`--diagnostics`, the compiler's flag `teq build` passes on).
+    val diagnostics = out.toAbsolutePath.resolve("run-build.diagnostics")
+    Files.deleteIfExists(diagnostics)
+    // The checker's assertions, its own declaration of them held complete (`Assertions.declared`) before the run makes
+    // any evidence: a listing that failed, timed out or declared nothing whole judges and records nothing.
+    val listing = Sh("node", "bench/smoke.mjs", spec("smoke").str, "--assertions").timeout(60).check(false).run()
+    val names = Assertions.declared(listing.status, listing.timedOut, listing.out) match
+      case Right(declared) => declared
+      case Left(why) =>
+        println(s"FAIL ${pin.name}: run: bench/smoke.mjs ${spec("smoke").str} --assertions: $why: nothing is judged or recorded")
+        Script.exit(1)
     Sh(bin, "stop").in(buildDir).timeout(120).check(false).run()
     Log.stamped(s"${pin.name}: teq build $module, its output $log")
     val started = System.nanoTime()
-    val (r, peak) = sampled(pin.name, bin, out)(Sh(bin, "build", module).in(buildDir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+    val (r, peak) = sampled(pin.name, bin, out)(Sh(bin, "build", module, "--diagnostics", diagnostics.toString).in(buildDir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
     val wall = (System.nanoTime() - started) / 1e9
     Sh(bin, "stop").in(buildDir).timeout(120).check(false).run()
     val built = buildDir.resolve("target/teq").resolve(module).resolve("out")
+    // The run held to run.json by the records' one judgment of a run (`Assertions.judge`, the same for every driver):
+    // the smoke scenario's assertions, and where the build failed before any could be checked, its exit and its own
+    // errors (`teq build` is a one-shot build: its errors' whole blocks).
+    def held(evidence: RunEvidence, shown: String): Nothing =
+      Script.exit(if Lines.hold(pin.name, "run", pin.here, Shape.Run, Vector("run" -> Assertions.judge(evidence)), shown, mode, version) then 0 else 1)
     if r.status != 0 || !Files.isDirectory(built) then
-      println(Files.readString(log).linesIterator.filter(_.contains("error")).take(20).mkString("\n"))
-      println(s"FAIL ${pin.name}: teq build $module exits ${r.status}${if Files.isDirectory(built) then "" else s", no output at $built"}")
-      Script.exit(1)
+      val text = Files.readString(log)
+      println(text.linesIterator.filter(_.contains("error")).take(20).mkString("\n"))
+      println(s"${pin.name}: teq build $module exits ${r.status}${if Files.isDirectory(built) then "" else s", no output at $built"}")
+      val (errors, counted) = RunEvidence.errors(text, Transcript.recorded(diagnostics), roots)
+      held(RunEvidence(names, s"teq build $module", Some((r.status, errors)), "", Transcript.crashes(text, Transcript.recorded(diagnostics), roots) ++ counted), roots(text))
     println(f"${pin.name}: built $module in $wall%.1f s, peak ${peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")}")
     // The page's directory: the build as out/, the page, the harness's files and the assets.
     val serve = out.resolve("serve")
@@ -518,16 +614,18 @@ object Ref:
     Log.stamped(s"${pin.name}: bench/smoke.mjs ${spec("smoke").str} over $serve, its log $smoke")
     val s = Sh("node", "bench/smoke.mjs", spec("smoke").str, serve.toString, "--seconds", "120", "--screenshots", out.resolve("shots").toString)
       .stdout(smoke).mergeErr.timeout(300).check(false).run()
-    val lines = Files.readString(smoke).linesIterator.toVector
-    lines.filter(_.startsWith("  ")).filterNot(_.startsWith("  page: ")).foreach(println)
-    val verdict = lines.reverse.find(l => l.startsWith("smoke: ") || l.startsWith("FAIL smoke: ")).getOrElse(s"FAIL smoke: no verdict (node exits ${s.status})")
-    if s.status == 0 && verdict.startsWith("smoke: ") then println(s"${pin.name}: run: ${verdict.stripPrefix("smoke: ")}")
-    else
-      println(s"FAIL ${pin.name}: run: ${verdict.stripPrefix("FAIL smoke: ")}")
-      Script.exit(1)
+    val smokeText = Files.readString(smoke)
+    val lines = smokeText.linesIterator.toVector
+    lines.filter(l => l.startsWith("  ") || l.startsWith("assert ")).filterNot(_.startsWith("  page: ")).foreach(println)
+    val verdict = lines.reverse.find(l => l.startsWith("smoke: ") || l.startsWith("FAIL smoke: "))
+    println(s"${pin.name}: run: ${verdict.fold(s"no verdict (node exits ${s.status})")(_.stripPrefix("FAIL ").stripPrefix("smoke: "))}")
+    // The smoke's assertions held to run.json, with its exit and its verdict, which the judgment holds them to.
+    held(RunEvidence(names, s"teq build $module", None, smokeText, Vector.empty, checker = Some((s.status, verdict.map(_.startsWith("smoke: "))))), roots(smokeText))
 
 // A module's scalac warnings (its main and test compiles) and its test cases, by their names as Mill and teq's
-// runner give them (`<suite>.<test>`), with their outcomes.
+// runner give them (`<suite>.<test>`), each with the status the framework reported (`sbt.testing.Status`'s name:
+// `Success`, `Error`, `Failure`, `Skipped`, `Ignored`, `Canceled`, `Pending`), a case as many times as the run reported
+// it.
 final case class Module(warnings: Int, suites: Vector[String], cases: Vector[(String, String)])
 final case class Inventory(modules: Map[String, Module]):
   def cases: Int = modules.values.map(_.cases.size).sum
@@ -535,19 +633,29 @@ final case class Inventory(modules: Map[String, Module]):
   def warnings: Int = modules.values.map(_.warnings).sum
 
 object Inventory:
+  // sbt.testing.Status's names, in its order.
+  val statuses = Vector("Success", "Error", "Failure", "Skipped", "Ignored", "Canceled", "Pending")
+
+  // tests.json: each module's cases under their statuses, each status's names sorted, a name as many times as the
+  // case ran with that status. An inventory of the outcomes alone (an object of names, before the statuses were
+  // kept) does not read: the oracle records it again (oracle --record).
   def read(file: Path): Inventory =
     if !Files.isRegularFile(file) then Inventory(Map.empty)
     else
       val j = Json.parse(Files.readString(file))
       Inventory(j("modules").members.map { (name, m) =>
-        name -> Module(m("warnings").int, m("suites").elements.map(_.str), m("cases").members.map((c, o) => c -> o.str))
+        val cases = m("cases").members.flatMap { (status, names) =>
+          if !statuses.contains(status) then Log.die(s"$file: module $name's cases are under `$status`, no status of sbt.testing.Status's: the oracle records the inventory again (oracle --record)")
+          names.elements.map(c => c.str -> status)
+        }
+        name -> Module(m("warnings").int, m("suites").elements.map(_.str), cases)
       }.toMap)
 
-  // Every module with its warnings, suites and cases' outcomes, sorted, the counts first.
+  // Every module with its warnings, suites and cases by status, sorted, the counts first.
   def write(t: Inventory): String =
     val modules = t.modules.toVector.sortBy(_._1).map { (name, m) =>
-      name -> Json.obj("warnings" -> Json.num(m.warnings), "suites" -> Json.Arr(m.suites.sorted.map(Json.str)),
-        "cases" -> Json.Obj(m.cases.sortBy(_._1).map((c, o) => c -> Json.str(o))))
+      val byStatus = statuses.filter(st => m.cases.exists(_._2 == st)).map(st => st -> Json.Arr(m.cases.filter(_._2 == st).map(_._1).sorted.map(Json.str)))
+      name -> Json.obj("warnings" -> Json.num(m.warnings), "suites" -> Json.Arr(m.suites.sorted.map(Json.str)), "cases" -> Json.Obj(byStatus))
     }
     Json.write(Json.obj("modules_count" -> Json.num(t.modules.size), "suites_count" -> Json.num(t.suites), "cases_count" -> Json.num(t.cases),
       "warnings_count" -> Json.num(t.warnings), "modules" -> Json.Obj(modules)), indent = 1) + "\n"
@@ -582,10 +690,11 @@ object Inventory:
       val segs = segmentsOf(p)
       val key = moduleKey(segs.dropRight(1))
       val results = Json.parse(Files.readString(p))("value")("results").elements
-      val cases = results.map(r => r("fullyQualifiedName").str -> (r("status").str match
-        case "Success" => "passed"
-        case "Ignored" | "Skipped" | "Pending" | "Canceled" => "skipped"
-        case _ => "failed"))
+      val cases = results.map { r =>
+        val status = r("status").str
+        if !statuses.contains(status) then Log.die(s"$p: a case of status $status, no status of sbt.testing.Status's")
+        r("fullyQualifiedName").str -> status
+      }
       // The suites: Mill's discovered classes on the JVM; on Scala.js, which records none, each case's
       // longest prefix that is a class the test module compiled (`<suite>.<test>`).
       val discovered = p.getParent.resolve("discoveredTestClasses.json")
@@ -599,38 +708,18 @@ object Inventory:
       modules(key) = m.copy(suites = suites, cases = cases)
     Inventory(modules.toMap)
 
-  // A `teq test --verbose` transcript as the run's inventory: each project's section ends with its summary line
-  // (`<project>/test: N suites, ..`) and holds a line per test with its outcome (`[success]`, `[skipped]`,
-  // `[ignored]`, `[canceled]`, `[pending]`, `[fail]`, the last followed by `: ` and the throwable's first line, which
-  // the inventory's names tell apart from a name that holds `: ` itself).
-  def fromTranscript(transcript: String, expected: Inventory): Inventory =
-    val outcome = "^\\[(success|skipped|ignored|canceled|pending|fail)\\] (.*)$".r
-    val summaryLine = "^([^ ]+)/test: ([0-9]+) suites?, ".r
-    val suiteLine = "^([A-Za-z_$][A-Za-z0-9_$.]*):$".r
+  // The events of a run as `teq test --events` writes them (`task::events::Event::line`): a line each, the project
+  // (the module), the event's name (the suite), its selector, its status and the first line of what it threw,
+  // tab-separated; a case is the test a `test <name>` selector names (`<suite>.<test>`, Mill's and munit's
+  // fully qualified name), another selector as it is written.
+  def fromEvents(text: String): Inventory =
     val modules = scala.collection.mutable.LinkedHashMap.empty[String, Module]
-    var section = Vector.empty[(String, String, String)]
-    var suites = Vector.empty[String]
-    // The JVM's runner prints its frameworks' report as they colour it.
-    for line <- transcript.linesIterator.map(_.replaceAll("\u001b\\[[0-9;]*m", "")) do
-      summaryLine.findFirstMatchIn(line) match
-        case Some(m) =>
-          val project = m.group(1)
-          val known = expected.modules.get(project).map(_.cases.map(_._1)).getOrElse(Vector.empty)
-          val cases = section.map { (kind, named, _) =>
-            val name = if kind == "fail" then known.filter(c => named == c || named.startsWith(c + ": ")).maxByOption(_.length).getOrElse(named.takeWhile(_ != ':')) else named
-            name -> (kind match
-              case "success" => "passed"
-              case "fail" => "failed"
-              case _ => "skipped")
-          }
-          modules(project) = Module(0, suites.distinct, cases)
-          section = Vector.empty
-          suites = Vector.empty
-        case None =>
-          line match
-            case outcome(kind, named) if !named.startsWith(" ") => section = section :+ (kind, named, line)
-            case suiteLine(suite) => suites = suites :+ suite
-            case _ => ()
+    for line <- text.linesIterator if line.nonEmpty do
+      line.split("\t", -1) match
+        case Array(project, suite, selector, status, _*) =>
+          val m = modules.getOrElse(project, Module(0, Vector.empty, Vector.empty))
+          modules(project) = m.copy(suites = (m.suites :+ suite).distinct, cases = m.cases :+ ((if selector.startsWith("test ") then selector.drop(5) else selector) -> status))
+        case _ => ()
     Inventory(modules.toMap)
 
   // Where the run and the expected inventory differ, each a line, identity for identity: a module, a suite or a case
@@ -645,30 +734,37 @@ object Inventory:
           if warnings && f.warnings != m.warnings then out += s"$name: ${f.warnings} warnings, tests.json has ${m.warnings}"
           for s <- m.suites.distinct.sorted if !f.suites.contains(s) do out += s"$name: suite $s of tests.json is not the run's"
           for s <- f.suites.distinct.sorted if !m.suites.contains(s) do out += s"$name: suite $s is not in tests.json"
-          val outcomes = f.cases.toMap
-          for (c, o) <- m.cases do
-            outcomes.get(c) match
-              case None => out += s"$name: case \"$c\" did not run"
-              case Some(got) if got == o => ()
-              case Some(got) => out += s"$name: case \"$c\" $got, tests.json has $o"
-          for (c, _) <- f.cases if !m.cases.exists(_._1 == c) do out += s"$name: case \"$c\" is not in tests.json"
+          // Each case with its statuses as many times as each side reports it: a case run twice, a status changed (an
+          // ignored case pending), a failure after a pass.
+          def times(statuses: Vector[String]): String =
+            statuses.groupBy(identity).toVector.sortBy(_._1).map((st, all) => if all.size == 1 then st else s"$st x${all.size}").mkString(", ")
+          val (want, got) = (m.cases.groupMap(_._1)(_._2), f.cases.groupMap(_._1)(_._2))
+          for c <- (m.cases.map(_._1) ++ f.cases.map(_._1)).distinct do
+            val (w, g) = (want.getOrElse(c, Vector.empty).sorted, got.getOrElse(c, Vector.empty).sorted)
+            if w != g then
+              if g.isEmpty then out += s"$name: case \"$c\" did not run"
+              else if w.isEmpty then out += s"$name: case \"$c\" (${times(g)}) is not in tests.json"
+              else out += s"$name: case \"$c\" ${times(g)}, tests.json has ${times(w)}"
     for name <- found.modules.keys.toVector.sorted if !expected.modules.contains(name) do
       out += s"module $name is not in tests.json"
     out.result()
 
-  // A suite teq's runner listed and did not run, or ran unlisted, each a line, and a module with suites with no
-  // summary in the transcript. A suite ran where the transcript heads its report with its name or names one of its
-  // cases (an ignored suite reports one case, `<suite>.<unknown>`, under no heading).
-  def ranAsListed(listed: Inventory, ran: Inventory): Vector[String] =
+  // A suite teq's runner listed and did not run, or ran unlisted, each a line, and a module with suites that ran none.
+  // What ran is the run's events (`named`: each module's suites whose tasks ran, by name), never its text nor a count:
+  // a suite ran where its own line names it, or an event names it or one of its cases (an ignored suite reports one
+  // case, `<suite>.<unknown>`; Scala.js's bridge names a case `<suite>.<test>`).
+  def ranAsListed(listed: Inventory, ran: Inventory, named: Map[String, Set[String]]): Vector[String] =
     val out = Vector.newBuilder[String]
+    def of(s: String, n: String) = n == s || n.startsWith(s + ".")
     for (name, m) <- listed.modules.toVector.sortBy(_._1) if m.suites.nonEmpty do
-      ran.modules.get(name) match
-        case None => out += s"module $name did not run its ${m.suites.size} suites"
-        case Some(r) =>
-          def wasRun(s: String) = r.suites.contains(s) || r.cases.exists(_._1.startsWith(s + "."))
-          for s <- m.suites.distinct.sorted if !wasRun(s) do out += s"$name: suite $s was listed and did not run"
-          for s <- r.suites.distinct.sorted if !m.suites.contains(s) do out += s"$name: suite $s ran and was not listed"
-    for name <- ran.modules.keys.toVector.sorted if !listed.modules.contains(name) do out += s"module $name ran and is not the export's"
+      val suites = named.getOrElse(name, Set.empty)
+      if !ran.modules.contains(name) && suites.isEmpty then out += s"module $name did not run its ${m.suites.size} suites"
+      else
+        val r = ran.modules.getOrElse(name, Module(0, Vector.empty, Vector.empty))
+        def wasRun(s: String) = suites.contains(s) || r.suites.exists(of(s, _)) || r.cases.exists(c => of(s, c._1))
+        for s <- m.suites.distinct.sorted if !wasRun(s) do out += s"$name: suite $s was listed and did not run"
+        for s <- (r.suites ++ suites).distinct.sorted if !m.suites.exists(of(_, s)) do out += s"$name: suite $s ran and was not listed"
+    for name <- (ran.modules.keySet ++ named.keySet).toVector.sorted if !listed.modules.contains(name) do out += s"module $name ran and is not the export's"
     out.result()
 
 object Bootstrap:

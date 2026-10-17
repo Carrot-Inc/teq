@@ -27,7 +27,7 @@
  "tests": "tests.json",
  "overlay": {
   "LaminarTeq.scala": "bb07c7e032c1c4e3bba4f8cfde587b98b3e30762f8770db2dff32cfb12c0be16",
-  "plugins.sbt": "6e34164869bc9c6d20d495fb634db57a41c95c7a0237e5226815697866948163"
+  "plugins.sbt": "c6f88e74d069a9a03e96a215c56b0b439f6b86807e4f2598976b898f70f0bce3"
  },
  "head": {
   "commit": "95c235917f3fe675eaaa0f5ec3d0d3511bd3fe70",

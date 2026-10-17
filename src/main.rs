@@ -488,6 +488,11 @@ pub(crate) struct Options {
     /// `--java-output-version`: the Java release the class files of a JVM build are written for.
     pub java_output_version: u32,
     pub size_report: bool,
+    /// `--diagnostics <file>`: each diagnostic the build shows recorded there, a JSON line each
+    /// (`source::record_diagnostics_to`).
+    pub diagnostics: Option<String>,
+    /// `--diagnostics-append <file>`: `diagnostics` after the records a verb wrote there first.
+    pub diagnostics_append: bool,
     /// `--no-outline`: every inline expansion and anonymous class written at its site.
     pub no_outline: bool,
     pub syntax: parser::Syntax,
@@ -660,7 +665,13 @@ const COMPILER_USAGE: &str = "usage: teq compiler <build|check|watch> <files or 
          \x20         resolutions, conversion searches, inline expansions and the rest, per kind\n\
          \x20         and per site, each with the hint that would remove the cost;\n\
          \x20         --profile=<file.json> also writes the whole table\n\
-         --size-report  reports where the bytes of the JavaScript output went";
+         --size-report  reports where the bytes of the JavaScript output went\n\
+         --diagnostics <file>  writes each diagnostic the build shows to <file> as well, a JSON\n\
+         \x20         line each in the order shown: its severity, its file, line and column where it\n\
+         \x20         has them, its whole message, and the lines shown for it (`shown`), a macro's\n\
+         \x20         info among them; what is shown does not change\n\
+         --diagnostics-append <file>  the same, after the records a verb wrote there first\n\
+         \x20         (`teq build`'s generators')";
 
 fn usage() -> ! {
     eprintln!("{}", COMPILER_USAGE);
@@ -847,6 +858,8 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
         jdk_release: None,
         java_output_version: jvm::classfile::DEFAULT_OUTPUT_VERSION,
         size_report: false,
+        diagnostics: None,
+        diagnostics_append: false,
         no_outline: false,
         syntax: parser::Syntax::default(),
         profile: false,
@@ -978,6 +991,13 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
                 }
             }
             "--size-report" => o.size_report = true,
+            "--diagnostics" | "--diagnostics-append" => match args.next() {
+                Some(file) => {
+                    o.diagnostics_append = a == "--diagnostics-append";
+                    o.diagnostics = Some(file);
+                }
+                None => usage_for(command),
+            },
             "--no-outline" => o.no_outline = true,
             "--kind-projector" => o.syntax.kind_projector = true,
             "--profile" => o.profile = true,
@@ -1590,6 +1610,12 @@ fn compile() -> i32 {
     let opts = parse_options();
     if opts.command == "watch" {
         watch::run(&opts);
+    }
+    if let Some(file) = &opts.diagnostics {
+        if let Err(e) = source::record_diagnostics_to(file, opts.diagnostics_append) {
+            eprintln!("teq: {}", e);
+            std::process::exit(2);
+        }
     }
     let t_start = Instant::now();
     answer_start(t_start);

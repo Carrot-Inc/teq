@@ -141,7 +141,13 @@ const VERBS: &str = "  compile [project...]       type the projects' closures an
   dev <project> [-- args]    a Scala.js project's dev loop: its generators, the package manager's
                              install, the export's dev command with the args added, restarted
                              when the export or the binary changes
-  stop                       end the daemon, its residents and its test runners";
+  stop                       end the daemon, its residents and its test runners
+
+  compile, test, run and build take --diagnostics file: each diagnostic their builds show is written
+  there as well, a JSON line each in the order shown (its configuration, severity, file, line
+  and column, whole message, and the lines shown for it, a macro's info among them), and each
+  failure of a configuration's (severity failure, a generator's with its command's output) and
+  what each passing generator printed (severity note); what is shown does not change";
 
 /// The verbs after the project verbs, a line each.
 const WORDS: &str = "  interp <files or directories...> [options] [-- args]
@@ -335,15 +341,35 @@ fn one_project(export: &Export, verb: &str, args: &[String]) -> i32 {
     }
     let closure = export.closure(&key);
     let env = std::env::vars().filter(|(k, _)| k == "SOURCE_VERSION").collect();
+    // `--diagnostics <file>`: made afresh here, this verb's records first (each generator's note,
+    // shown before the compiler runs), the compiler's appended after them (`--diagnostics-append`),
+    // in the order shown.
+    let mut options = options.to_vec();
+    let records = match options.iter().position(|o| o == "--diagnostics") {
+        Some(i) if i + 1 < options.len() => {
+            let file = options.remove(i + 1);
+            options.remove(i);
+            let file = std::env::current_dir().map(|d| d.join(&file)).unwrap_or_else(|_| PathBuf::from(&file));
+            if let Err(e) = std::fs::File::create(&file) {
+                eprintln!("teq: cannot write {}: {}", file.display(), e);
+                return 2;
+            }
+            Some(file)
+        }
+        _ => None,
+    };
     let prepared = generators::run(export, &closure, export.path(&export.classes(&key)), &env).and_then(|notes| {
         for note in notes {
-            eprintln!("{}", note);
+            noted(records.as_deref(), &key, &note);
         }
         let (mut args, configuration) = match project.platform {
             Platform::Jvm => (export.resident_args_with(&key, &|line| eprintln!("{}", line))?, key.configuration.as_str()),
-            Platform::Js => (js_args(export, name, verb, options)?, "compile"),
+            Platform::Js => (js_args(export, name, verb, &options)?, "compile"),
         };
         args.extend(options.iter().cloned());
+        if let Some(file) = &records {
+            args.extend(["--diagnostics-append".to_string(), file.to_string_lossy().to_string()]);
+        }
         let file = crate::argfile::named_by(&export.path(&format!("target/teq/{}/{}", name, configuration)), verb, &args);
         crate::argfile::write(&file, &args)?;
         Ok(file)
@@ -359,6 +385,28 @@ fn one_project(export: &Export, verb: &str, args: &[String]) -> i32 {
     let mut command = std::process::Command::new(exe);
     command.arg(crate::argfile::at(&file)).current_dir(&export.root);
     become_resident(command)
+}
+
+/// What a generator of `key`'s closure printed as it passed, shown on stderr and recorded whole
+/// where the verb was given a file for the records (`--diagnostics`, severity `note`, as the
+/// daemon's `noted`): its text is the command's, never one of teq's own lines.
+fn noted(records: Option<&Path>, key: &export::Key, note: &str) {
+    let shown = format!("{}\n", note);
+    eprint!("{}", shown);
+    if let Some(file) = records {
+        record(file, vec![("key", key.to_string().as_str().into()), ("severity", "note".into()), ("message", note.into()), ("shown", shown.as_str().into())]);
+    }
+}
+
+/// One record of a client verb's own appended to its `--diagnostics` file, a JSON line, as the
+/// daemon's (`daemon::record`): `teq build`'s generators' notes, `teq run`'s program started.
+pub(crate) fn record(file: &Path, fields: Vec<(&str, crate::lsp::json::Json)>) {
+    let mut line = crate::lsp::json::Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect()).to_text();
+    line.push('\n');
+    let written = std::fs::OpenOptions::new().create(true).append(true).open(file).and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+    if let Err(e) = written {
+        eprintln!("teq: cannot write {}: {}", file.display(), e);
+    }
 }
 
 /// Replaces this process with the resident, its stdin and stdout the caller's.

@@ -1,0 +1,21 @@
+{
+ "kind": "baseline",
+ "reason": "",
+ "revision": "355fe5e6e",
+ "binary": "teq 0.1.8 355fe5e6e",
+ "pin": "10da68e3119230d01821b720c5a9fe4d841bfdf4",
+ "inputs": "ea7d2c68f7802838e4275c3a485cad1cd860d39fa6a0e8922e33a35702b3af03",
+ "assertions": [
+  "a counter after insert",
+  "no exception, console error or failed request",
+  "the app's page 2",
+  "the counter one more after +"
+ ],
+ "violations": [
+  "a counter after insert: not reached",
+  "blocked: teq build sandbox.js: fs2-core_sjs1_3-3.12.2.jar!core/shared/src/main/scala/fs2/Stream.scala:3454:7: error: type mismatch: found Any, required O (in the body of fs2.Stream.emits)\n  body: os match {\n      case package.Nil => { empty }\n      case scala.collection.Seq[O](x) => { emit[[x] =>> package.Pure[x], O](x) }\n      case _ => { Pull.StreamPullOps[Nothing, O](Pull.output[Nothing, O](Chunk.from[O](os))).streamNoScope }\n    }",
+  "no exception, console error or failed request: not reached",
+  "the app's page 2: not reached",
+  "the counter one more after +: not reached"
+ ]
+}

@@ -694,6 +694,7 @@ impl JsRun {
         self.suite = task.name.clone();
         match self.call(EXECUTE, &request, tally)? {
             Ok(reply) => {
+                tally.ran(&task.name);
                 for next in (In { bytes: &reply, at: 0 }).list(In::task_info)? {
                     self.execute(run, next, ansi, tally)?;
                 }
@@ -701,6 +702,7 @@ impl JsRun {
             Err(thrown) => {
                 let lines = tally.add(Event::crashed(&task.name, Some(thrown)), self.verbose);
                 (self.out)(&lines);
+                tally.ran(&task.name);
             }
         }
         Ok(())

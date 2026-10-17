@@ -1,0 +1,19 @@
+{
+ "kind": "baseline",
+ "reason": "",
+ "revision": "355fe5e6e",
+ "binary": "teq 0.1.8 355fe5e6e",
+ "pin": "7bf3aee9b3fa53eaa1b48e6c778fd394ed7331da",
+ "inputs": "36615d803c7e83cbf24aabc162e5d90367f95945e06c9d10fea209a931cd53f5",
+ "projects": [
+  "airstream"
+ ],
+ "deviations": [
+  "airstream: blocked by airstream/test src/main/scala-3/com/raquo/airstream/split/MacrosUtilities.scala:73:38: error: type argument CC does not have the same kind as its bound\n    def nameOfExpr[CC[_]](using Type[CC], Quotes): Expr[String] = Expr(Type.show[CC])\n                                     ^^",
+  "airstream: blocked by airstream/test src/main/scala-3/com/raquo/airstream/split/MacrosUtilities.scala:73:72: error: type argument CC does not have the same kind as its bound\n    def nameOfExpr[CC[_]](using Type[CC], Quotes): Expr[String] = Expr(Type.show[CC])\n                                                                       ^^^^^^^^^^^^^",
+  "airstream: blocked by airstream/test src/main/scala-3/com/raquo/airstream/split/SplitMatchSeqMacros.scala:415:77: error: not supported yet in a macro: Unit has no member apply (called by nameOf in object ShowType)\n  inlined from src/main/scala-3/com/raquo/airstream/split/MacrosUtilities.scala:74\n            \"Macro expansion failed, cannot find Splittable instance of \" + MacrosUtilities.ShowType.nameOf[CC]\n                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "airstream: blocked by airstream/test src/test/scala/com/raquo/airstream/flatten/EventStreamFlattenSpec.scala:506:5: error: not supported yet: value typeCheckErrors of testing (needed by org.scalatest.Assertions.assertTypeError)\n  body: { splice[Assertion]((using evidence$5: Quotes) => CompileMacro.assertTypeErrorImpl(quote[Predef.String](code).apply(evidence$5), quote[List[Error]](package$package.typeCheckErrors(code)).apply(evidence$5))(evidence$5)) }\n  inlined from scalatest-core_sjs1_3-3.2.19.jar!dotty/core.js/target/scala-3/src_managed/main/org/scalatest/Assertions.scala:666\n    assertTypeError(\"bus.events.flatMap(_ => EventStream.fromValue(1))\")\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "airstream: blocked by airstream/test src/test/scala/com/raquo/airstream/ownership/DynamicOwnerSpec.scala:214:85: error: not found: dynSub2\n      lazy val dynSub1 = createSub(\"dynSub1\", dynOwner, effects, onActivate = () => dynSub2.kill())\n                                                                                    ^^^^^^^",
+  "airstream: blocked by airstream/test src/test/scala/com/raquo/airstream/ownership/DynamicOwnerSpec.scala:450:106: error: not found: dynSub3\n      lazy val dynSub2: DynamicSubscription = createSub(\"dynSub2\", dynOwner, effects, onActivate = () => dynSub3.kill())\n                                                                                                         ^^^^^^^"
+ ]
+}

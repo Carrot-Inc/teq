@@ -1,6 +1,7 @@
 //> using file ../../tools/script
 //> using file ../reference/reference.scala
 //> using file ../reference/scalajs.scala
+//> using file ../reference/records.scala
 // Airstream (github.com/raquo/Airstream), the FRP library of Laminar, as one of teq's public reference projects
 // for the JavaScript target: its pinned release checked out, built and tested under scalac 3.8.4 by its own sbt
 // build (the oracle), exported with sbt-teq through the overlay, then compiled and tested by teq against the

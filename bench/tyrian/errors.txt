@@ -1,0 +1,18 @@
+# The accepted errors of a reference project's line (bench/reference/records.scala; docs/DEVELOPING.md, "The project records").
+kind baseline
+revision 355fe5e6e
+binary teq 0.1.8 355fe5e6e
+pin 10da68e3119230d01821b720c5a9fe4d841bfdf4
+inputs ea7d2c68f7802838e4275c3a485cad1cd860d39fa6a0e8922e33a35702b3af03
+key sandbox-next.js/compile
+key sandbox-ssr.jvm/compile
+key sandbox-zio.js/compile
+key sandbox.js/compile
+key tyrian-htmx.js/compile
+key tyrian-htmx.jvm/compile
+key tyrian-io.js/compile
+key tyrian-next.js/compile
+key tyrian-tags.js/compile
+key tyrian-tags.jvm/compile
+key tyrian-zio.js/compile
+key tyrian.js/compile

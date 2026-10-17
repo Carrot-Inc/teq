@@ -1135,9 +1135,11 @@ PY
   : > "$work/pool-events"
   out=$(pt 'pool.Many*' --events "$work/pool-events")
   code=$?
-  runs=$(cut -f2 "$work/pool-events" | uniq | wc -l | tr -d ' ')
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 8 suites, 400 passed, 0 failed"* ]] && [ "$(wc -l < "$work/pool-events" | tr -d ' ')" = 400 ] && [ "$runs" = 8 ]; then
-    pass "eight suites on 4 threads: the counts whole, each suite's events together"
+  # A case's line has five fields, a suite's that ran three (`<project> <suite> ran`, after the cases).
+  runs=$(awk -F'\t' 'NF > 3' "$work/pool-events" | cut -f2 | uniq | wc -l | tr -d ' ')
+  ran=$(awk -F'\t' 'NF == 3 && $3 == "ran"' "$work/pool-events" | cut -f2 | sort -u | wc -l | tr -d ' ')
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 8 suites, 400 passed, 0 failed"* ]] && [ "$(awk -F'\t' 'NF > 3' "$work/pool-events" | wc -l | tr -d ' ')" = 400 ] && [ "$runs" = 8 ] && [ "$ran" = 8 ]; then
+    pass "eight suites on 4 threads: the counts whole, each suite's events together, each suite's run named"
   else
     fail "the counts under the pool ($runs runs of suites): $out"
   fi
@@ -2172,7 +2174,7 @@ PY
 jstest() { (cd "$js" && timeout 300 "$TEQ" test "$@" 2>&1); }
 # The oracle's lines of a project, sorted: its events, or with `defined` its suites; a throwable's colours left out.
 oracle_of() { grep "^$1	" "tests/scalajs-test/oracle-${tuple:-1.22.0}.txt" | if [ "${2:-}" = defined ]; then grep '	defined	'; else grep -v '	defined	'; fi | sed 's/\x1b\[[0-9;]*m//g' | sort; }
-inventory() { sed 's/\x1b\[[0-9;]*m//g' "$1" | sort; }
+inventory() { sed 's/\x1b\[[0-9;]*m//g' "$1" | awk -F'\t' 'NF != 3 || $3 != "ran"' | sort; }
 out=$(jstest suites --events "$js/suites.events")
 code=$?
 if [ $code = 1 ] && [ "$(inventory "$js/suites.events")" = "$(oracle_of suites)" ] && [[ "$out" == *"suites/test: 6 suites, 7 passed, 5 failed, 3 ignored, 1 pending, 1 canceled"* ]] \
@@ -2219,14 +2221,14 @@ else
   fail "scalajs tests: --list: $listed // $(oracle_of suites defined | cut -f2) // $out"
 fi
 out=$(jstest suites fixture.UtestSuite --events "$js/pattern.events")
-if [ $? = 1 ] && [ "$(cut -f2 "$js/pattern.events" | sort -u)" = "fixture.UtestSuite" ] && [[ "$out" == *"suites/test: 1 suite, 2 passed, 1 failed"* ]]; then
+if [ $? = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/pattern.events" | cut -f2 | sort -u)" = "fixture.UtestSuite" ] && [[ "$out" == *"suites/test: 1 suite, 2 passed, 1 failed"* ]]; then
   pass "scalajs tests: a pattern runs the suites it names"
 else
   fail "scalajs tests: a pattern: $(cat "$js/pattern.events") $out"
 fi
 printf '\n// an edit\n' >> "$js/suites/src/test/scala/fixture/UtestSuite.scala"
 out=$(jstest suites --changed --events "$js/changed.events")
-if [ $? = 1 ] && [ "$(cut -f2 "$js/changed.events" | sort -u)" = "fixture.UtestSuite" ]; then
+if [ $? = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/changed.events" | cut -f2 | sort -u)" = "fixture.UtestSuite" ]; then
   pass "scalajs tests: --changed after an edit runs the suite the edit reaches alone"
 else
   fail "scalajs tests: --changed: $(cut -f2 "$js/changed.events" | sort -u) $out"
@@ -2243,7 +2245,7 @@ fi
 rm "$js/removal/src/test/scala/fixture/Marked.scala"
 out=$(jstest removal --changed --events "$js/removal2.events")
 code=$?
-if [ $code = 1 ] && [ "$(cut -f2 "$js/removal2.events" | sort -u)" = "fixture.SelectedSuite.selected" ] && [[ "$out" == *"removal/test: 1 suite, 0 passed, 1 failed"* ]]; then
+if [ $code = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/removal2.events" | cut -f2 | sort -u)" = "fixture.SelectedSuite.selected" ] && [[ "$out" == *"removal/test: 1 suite, 0 passed, 1 failed"* ]]; then
   pass "scalajs tests: --changed after deleting a given a summonFrom found, its case binding none, runs the suite of the inline call"
 else
   fail "scalajs tests: --changed after deleting a summonFrom's given ($code): $(cut -f2,4 "$js/removal2.events" 2> /dev/null | tr '\n' ' ') $out"

@@ -168,9 +168,24 @@ fn named_test(name: &str, test: &str) -> String {
 pub struct Tally {
     pub events: Vec<Event>,
     pub counts: [u64; 7],
+    /// The suites whose tasks ran, in the order they did, a task that sent no event among them (an
+    /// empty suite's): what a run's events say of a suite beside its cases.
+    pub ran: Vec<String>,
 }
 
 impl Tally {
+    /// A suite's task ran.
+    pub fn ran(&mut self, suite: &str) {
+        self.ran.push(suite.to_string());
+    }
+
+    /// The `--events` file's line of a suite that ran: the project and the suite, tab-separated, then
+    /// `ran`, apart from a case's line by its three fields.
+    pub fn ran_line(project: &str, suite: &str) -> String {
+        let clean = |s: &str| s.replace(['\t', '\n', '\r'], " ");
+        format!("{}\t{}\tran\n", clean(project), clean(suite))
+    }
+
     /// The event counted and kept; the lines that report it, which a failure always has and
     /// any other event has when `verbose`.
     pub fn add(&mut self, event: Event, verbose: bool) -> String {

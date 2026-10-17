@@ -11,7 +11,10 @@
 //! class, the args; in the block's directory, with the client's environment and the block's
 //! variables. The JVM is the test runner's, `JAVA_HOME`'s else the one on `PATH`, refused when it
 //! is older than the export's classes. It leads its own process group and holds the terminal
-//! (`job.rs`), and its exit code is the verb's.
+//! (`job.rs`), and its exit code is the verb's. With `--diagnostics <file>` the build's records
+//! are the daemon's, and the client adds one of its own as the program starts (severity `run`):
+//! the program's output follows teq's on the same channels, and a reader of the records never takes
+//! it for the build's.
 
 use super::client;
 use super::export::{Entry, Export, Key, Platform};
@@ -25,8 +28,19 @@ use std::time::Duration;
 const POLL: Duration = Duration::from_millis(20);
 
 pub fn run(export: &Export, args: &[String]) -> i32 {
+    // `--diagnostics <file>` before `--`: the build's diagnostics recorded there (the daemon's).
+    let mut args = args.to_vec();
+    let end = args.iter().position(|a| a == "--").unwrap_or(args.len());
+    let mut diagnostics = Vec::new();
+    if let Some(i) = args[..end].iter().position(|a| a == "--diagnostics") {
+        if i + 1 >= end {
+            eprintln!("teq run: --diagnostics needs a file");
+            return 2;
+        }
+        diagnostics = args.drain(i..i + 2).collect();
+    }
     let Some((name, rest)) = args.split_first() else {
-        eprintln!("usage: teq run <project> [alias or main class] [-- args]");
+        eprintln!("usage: teq run <project> [alias or main class] [--diagnostics file] [-- args]");
         return 2;
     };
     // The word after the project is the alias or main class unless it is `--`, which starts the
@@ -88,7 +102,9 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
             return 2;
         }
     };
-    let (code, data) = client::request_data(export, "classes", std::slice::from_ref(name));
+    let records = diagnostics.get(1).map(PathBuf::from);
+    let request: Vec<String> = std::iter::once(name.clone()).chain(diagnostics).collect();
+    let (code, data) = client::request_data(export, "classes", &request);
     if code != 0 {
         return code;
     }
@@ -127,6 +143,13 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
     if let Err(e) = prepared {
         eprintln!("teq: {}", e);
         return 2;
+    }
+    // The build passed and the program starts: recorded (`--diagnostics`, severity `run`, after the
+    // build's records), so that a reader takes everything after teq's own lines on these channels
+    // for the program's output, never for the build's, as dotty's `RunTest.verifyOutput` judges a
+    // program's output apart from the compiler's reporters.
+    if let Some(file) = &records {
+        super::record(file, vec![("key", Key::new(name, "compile").to_string().as_str().into()), ("severity", "run".into()), ("message", main.as_str().into()), ("shown", "".into())]);
     }
     let mut command = Command::new(&java);
     command.args(&context.java_options).arg(format!("@{}", argfile.display())).arg(&main).args(extra).current_dir(export.path(&context.base_directory)).envs(&context.env_vars).envs(export.env_paths(&context.env_paths));
