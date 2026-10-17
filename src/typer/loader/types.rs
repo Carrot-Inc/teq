@@ -89,6 +89,28 @@ pub fn hk_arity(info: &TType) -> u8 {
     }
 }
 
+/// Whether `t` is annotated with `scala.annotation.internal.RuntimeChecked` at its top: the
+/// annotation's class by its full name (dotty's `defn.RuntimeCheckedAnnot`, which
+/// `Checking.checkIrrefutable` tests), a class of that simple name elsewhere being another.
+pub fn runtime_checked_annot(tasty: &TastyFile, t: &TType) -> bool {
+    let TType::Annotated(_, annot) = t else { return false };
+    is_runtime_checked(tasty, annot)
+}
+
+/// Whether the annotation `annot` (its tree's type) is `scala.annotation.internal.RuntimeChecked`.
+pub fn is_runtime_checked(tasty: &TastyFile, annot: &TType) -> bool {
+    let class = match annot {
+        TType::Applied(tycon, _) => &**tycon,
+        other => other,
+    };
+    match class {
+        TType::TypeRef(prefix, n) => {
+            matches!(&**prefix, TType::Package(p) if tasty.name(*p).to_string() == "scala.annotation.internal") && tasty.simple(*n) == Some("RuntimeChecked")
+        }
+        _ => false,
+    }
+}
+
 /// The element type of a repeated parameter's type, `T*` written as `Seq[T] @Repeated` or as
 /// `<repeated>[T]`.
 pub fn repeated_element<'t>(tasty: &TastyFile, t: &'t TType) -> Option<&'t TType> {
@@ -253,7 +275,18 @@ impl<'a> Worker<'a> {
                 let a = self.map_type(cx, inner);
                 self.by_name_type(a)
             }
-            TType::Annotated(u, _) => self.map_type_ctor(cx, u),
+            // `T @RuntimeChecked` is the annotated type (an annotation under others included,
+            // `T @RuntimeChecked @Mark`, as Types.scala 438-439's `hasAnnotation` recurses over
+            // nested `AnnotatedType`s); any other annotation is dropped.
+            TType::Annotated(u, annot) => {
+                let inner = self.map_type_ctor(cx, u);
+                let tasty = self.tasty(cx.file);
+                if is_runtime_checked(&tasty, annot) && inner != ERROR && !matches!(self.types.get(inner), Type::Annotated(_)) {
+                    self.types.mk(Type::Annotated(inner))
+                } else {
+                    inner
+                }
+            }
             TType::Refined(parent, members) => {
                 // `PolyFunction { def apply[A](a: A): A }` is a polymorphic function type; one
                 // refining more than its `apply` (`; val tag: Int`) is a refinement as any other,

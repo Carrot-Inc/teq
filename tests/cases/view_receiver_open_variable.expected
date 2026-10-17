@@ -1,0 +1,5 @@
+auto: 1 two 3
+named: x
+bare: 6
+stateless: 6 ()
+def: two

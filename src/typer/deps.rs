@@ -2096,7 +2096,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             Type::Select(prefix, s) => self.named_term(s, Some(prefix)),
             // A refinement's own member names no symbol (the refinement class is local).
             Type::Member(prefix, _) if matches!(self.w.types.get(prefix), Type::RecThis(_)) => {}
-            Type::Rec(body) => self.type_deps(body),
+            Type::Rec(body) | Type::Annotated(body) => self.type_deps(body),
             Type::RecThis(_) => {}
             Type::Member(prefix, name) => {
                 if let Some(a) = self.member_alias(prefix, name) {

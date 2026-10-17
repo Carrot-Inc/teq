@@ -2651,6 +2651,8 @@ impl<'w, 'a> P<'w, 'a> {
             ("collections", "Long", _) => StdTarget::Wrapped { conv: "longWrapper", targs: false, param: "scala.Long", result: "scala.Long", class: ("scala.runtime", "RichLong") },
             ("collections", "Double", _) => StdTarget::Wrapped { conv: "doubleWrapper", targs: false, param: "scala.Double", result: "scala.Double", class: ("scala.runtime", "RichDouble") },
             ("prelude", "*", "->") => StdTarget::Wrapped { conv: "ArrowAssoc", targs: true, param: "java.lang.Object", result: "java.lang.Object", class: ("scala.Predef", "ArrowAssoc") },
+            // `Predef`'s own extension, a method of the object taking the receiver first.
+            ("prelude", "*", "runtimeChecked") => StdTarget::Object { pkg: "scala", object: "Predef" },
             ("collections" | "core", "Array", _) => StdTarget::Array,
             ("core", "Function1", _) => StdTarget::Receiver { pkg: "scala", class: "Function1", java: false },
             ("core", "Tuple2", _) => StdTarget::Receiver { pkg: "scala", class: "Tuple2", java: false },
@@ -5102,10 +5104,7 @@ impl<'w, 'a> P<'w, 'a> {
         if info.kind == SymKind::Given || info.mods & mods::GIVEN != 0 {
             flags.push(GIVEN);
         }
-        let synthetic = {
-            let name = self.w.interner.get(info.name);
-            name.contains('$')
-        };
+        let synthetic = info.synthetic || self.w.interner.get(info.name).contains('$');
         if synthetic {
             flags.push(SYNTHETIC);
         }

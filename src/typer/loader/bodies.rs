@@ -1204,6 +1204,7 @@ impl<'a> Worker<'a> {
         };
         let m = flag_mods(f) | mods::PRIVATE;
         let sym = self.syms.new_sym(name, kind, m, Owner::Class(c), file_id, None, Span::default());
+        self.syms.sym_mut(sym).synthetic = f.has(tags::SYNTHETIC);
         self.loaded_mut().syms.insert(sym, LSym { file: cv.file, addr: sig.addr, conversion: false });
         self.loaded_mut().tables[cv.file as usize].terms.insert(sig.addr, sym);
         self.register_term(Owner::Class(c), sym);
@@ -1213,6 +1214,13 @@ impl<'a> Worker<'a> {
     // ---- types ----
 
     fn conv_type(&mut self, cv: &mut Conv, t: &TType) -> TyExprId {
+        // `T @RuntimeChecked` (an ascription's) keeps its annotation, which the store does not hold.
+        if let TType::Annotated(u, _) = t {
+            if super::types::runtime_checked_annot(cv.tasty(), t) {
+                let inner = self.conv_type(cv, u);
+                return cv.ty(TyExpr::Annotated(inner, None));
+            }
+        }
         if let Some(captured) = self.opaque_wildcard_capture(cv, t) {
             return cv.ty(TyExpr::Resolved(captured));
         }
@@ -5309,6 +5317,10 @@ impl<'a> Worker<'a> {
                     m |= mods::LIFTED;
                 }
                 let d = cv.ast.add_def(Def { name, span: cv.span, mods: m, annots: Vec::new(), kind: DefKind::Val { pat: None, ty, rhs: init } });
+                // A pattern definition's holder (`$N$`, `Synthetic`), the parser's holder to the typer.
+                if sig.mods.flags.has(tags::SYNTHETIC) && super::is_pattern_field_name(Some(&cv.tasty.name(cv.tasty.source_name(sig.name)))) {
+                    cv.ast.patdef_holders.insert(d);
+                }
                 cv.def_at.push((d, sig.addr));
                 out.push(Stmt::Def(d));
             }

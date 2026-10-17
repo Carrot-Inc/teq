@@ -1,0 +1,4 @@
+0
+Box(None)
+Some(5)
+Box(Some(4))

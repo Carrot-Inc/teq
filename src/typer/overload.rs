@@ -3454,9 +3454,11 @@ impl<'a> Worker<'a> {
                 // alternatives apart (`for (k, v) <- m yield k + v` an `Iterable` of a `Map`).
                 ArgSrc::ForLambda(binder, rest) => {
                     if let Some((_, params)) = common {
-                        let result = self.fresh_var();
+                        let (result, v) = self.fresh_var_id();
                         let expected = self.fun_type(&params, result);
+                        self.wildcard_results.push(v);
                         let (te, ty) = self.type_for_lambda(binder, rest, expected, list.span);
+                        self.wildcard_results.pop();
                         if let Some((_, r)) = self.as_function(ty) {
                             lambdas[j] = Some((te, ty, r));
                         }
@@ -3486,7 +3488,7 @@ impl<'a> Worker<'a> {
             }
             if is_lambda {
                 let Some((_, params)) = common else { continue };
-                let result = self.fresh_var();
+                let (result, v) = self.fresh_var_id();
                 let partial = is_cases && any_partial;
                 let partial_function = if partial { self.partial_function_class() } else { None };
                 let expected = match (partial, partial_function, params.as_slice()) {
@@ -3494,7 +3496,9 @@ impl<'a> Worker<'a> {
                     _ => self.fun_type(&params, result),
                 };
                 let prof = self.prof(Kind::Retry, self.cur_ast().expr_span(value), About::None);
+                self.wildcard_results.push(v);
                 let (te, ty) = self.type_expr(value, Some(expected));
+                self.wildcard_results.pop();
                 if let Some(p) = prof {
                     self.profile.typed_ahead(p, te);
                 }

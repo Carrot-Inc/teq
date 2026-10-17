@@ -2458,6 +2458,7 @@ impl<'a> Worker<'a> {
         }
         if f.has(tags::SYNTHETIC) {
             self.loaded_mut().synthetic_members.insert(sym, ());
+            self.syms.sym_mut(sym).synthetic = true;
         }
         if f.has(tags::EXPORTED) {
             self.loaded_mut().exported_members.insert(sym, ());
@@ -2773,7 +2774,7 @@ impl<'a> Worker<'a> {
         let file_id = self.syms.sym(sym).file;
         if sig.tag == tags::VALDEF {
             let ty = self.map_type(&mut cx, &sig.ret);
-            return Some(Arc::new(MethodSig::value(ty)));
+            return Some(Arc::new(MethodSig::value(self.types.unannotated(ty))));
         }
         let is_extension = self.syms.sym(sym).is_extension;
         let name_text = tasty.name(tasty.source_name(sig.name));
@@ -2858,6 +2859,7 @@ impl<'a> Worker<'a> {
                 let pm = if is_using { mods::IMPLICIT } else { 0 };
                 let psym = self.syms.new_sym(name, SymKind::Param, pm, Owner::Local, file_id, None, Span::default());
                 {
+                    let local_ty = self.types.unannotated(local_ty);
                     let mut s = self.syms.sym_mut(psym);
                     s.sig = Some(Arc::new(MethodSig { declared, ..MethodSig::value(local_ty) }));
                     s.state().set(Completion::Done);
@@ -2886,7 +2888,9 @@ impl<'a> Worker<'a> {
                 let (ret, view) = self.map_declared(&mut cx, &sig.ret, |w, cx| w.map_type(cx, &sig.ret));
                 self.note_declared_name(sym, mark, ret);
                 declared = view;
-                ret
+                // A method of no parameters is no application's: its reference is the `TermRef`,
+                // which carries no annotation of its result.
+                if out.is_empty() { self.types.unannotated(ret) } else { ret }
             }
         };
         // A given object of another module's products as teq types the program's (the namer's

@@ -654,6 +654,7 @@ pub fn run(opts: &Options) -> ! {
             t.known_caches = !opts.no_known_caches;
             t.macro_state_per_worker = opts.macro_state_per_worker;
             t.dialect = opts.dialect;
+            t.source = opts.syntax.source;
             t.diags.policy = std::sync::Arc::new(opts.policy());
             // The unused imports: warnings under the flag, else a language server's hints.
             t.unused.mode = match (opts.wunused_imports, opts.index) {

@@ -1074,7 +1074,29 @@ impl<'a> Worker<'a> {
         self.return_to = outer_return;
         self.returns = outer_returns;
         self.partial_match = outer_partial;
+        let ty = self.avoid_bindings(&bound, ty);
         self.unbind_inline_call(&mut bound, te, ty)
+    }
+
+    /// dotty's `TypeAssigner.assignType` of an `Inlined`: an expansion's type avoids its bindings
+    /// (`avoidingType`, `TypeOps.avoid` over their symbols), the place outside them reading a
+    /// proxy's singleton as the proxy's type (`Option(7).runtimeChecked`'s `x.type` is the
+    /// argument's type, `Option[Int]`), a transparent body's as a plain one's declared result.
+    pub(super) fn avoid_bindings(&mut self, bound: &BoundCall, ty: TypeId) -> TypeId {
+        // A type that names no term names none of the bindings (most).
+        if !self.types.has_paths(ty) {
+            return ty;
+        }
+        let mut locals: Vec<SymId> = bound.proxies.iter().chain(&bound.givens).copied().collect();
+        locals.extend(bound.this_proxy);
+        locals.extend(bound.stmts.iter().filter_map(|&(_, st)| match st {
+            TStmt::Val(s, _) => Some(s),
+            _ => None,
+        }));
+        if !self.types.names_term(ty, &locals) {
+            return ty;
+        }
+        self.avoid_params(ty, &locals, 1, &mut Vec::new())
     }
 
     /// The declared result a body is checked against where the call's differs from it in a
@@ -1270,11 +1292,21 @@ impl<'a> Worker<'a> {
             let info = self.syms.sym(sym);
             self.ext_scope = Some(ExtScope { owner: info.owner, file: info.file, group: body.ext_group, receiver });
         }
-        // A type that names a parameter (`x.type`) names the local standing for it.
+        // A type that names a parameter (`x.type`) names the local standing for it, or the
+        // constant it was bound to: dotty's inliner substitutes a pure argument for the parameter,
+        // the body's references and the result's path alike (`Inliner.paramBindingDef` and
+        // `dropUnusedDefs`), so `5.runtimeChecked`'s `x.type` is `(5 : Int)`, which the folded body
+        // conforms to; an ascribed constant (`(5: Int)`) is no constant type.
         bound.paths_mark = self.inline.param_paths.len();
-        let params: Vec<SymId> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
-        for (&p, &proxy) in params.iter().zip(&bound.proxies) {
-            let path = self.types.mk(Type::Term(proxy));
+        for k in 0..bound.params.len() {
+            let BoundParam { sym: p, proxy, constant, arg, by_name, inline, .. } = bound.params[k];
+            let path = match constant {
+                Some(v) if !by_name && !inline && self.prog.expr(arg).is_constant() => {
+                    let lit = self.types.lit(v);
+                    if self.prog.is_widened(arg) { self.widen_lit(lit) } else { lit }
+                }
+                _ => self.types.mk(Type::Term(proxy)),
+            };
             self.inline.param_paths.push((p, path));
         }
         // The result type is in the call's terms already; only its parameter paths move.
@@ -1451,7 +1483,14 @@ impl<'a> Worker<'a> {
         bound.params[at].arg = te;
         self.mark_leaf(te);
         if by_name || inline || constant.is_some() || self.is_stable(te) || self.idempotent_selection(te) {
-            self.inline.args.insert(proxy, InlineArg { expr: te, ty: local_ty, source: None });
+            // A constant bound to an ordinary parameter stands for it at each use with its constant
+            // type, as the literal dotty's inliner substitutes for it (`ConstantType`), unless
+            // ascribed; an `inline` or by-name parameter's argument is retyped at each use.
+            let ty = match constant {
+                Some(v) if !by_name && !inline && self.prog.expr(te).is_constant() && !self.prog.is_widened(te) => self.types.lit(v),
+                _ => local_ty,
+            };
+            self.inline.args.insert(proxy, InlineArg { expr: te, ty, source: None });
         } else {
             bound.stmts.push((at as u32 + 1, TStmt::Val(proxy, te)));
         }
@@ -2039,7 +2078,7 @@ impl<'a> Worker<'a> {
         }
         match self.types.get(t) {
             Type::Term(x) => x == s,
-            Type::Select(p, _) | Type::Member(p, _) | Type::Lambda(_, p) => self.mentions_term(p, s),
+            Type::Select(p, _) | Type::Member(p, _) | Type::Lambda(_, p) | Type::Annotated(p) => self.mentions_term(p, s),
             Type::Poly(ps, p) => self.mentions_term(p, s) || self.types.poly_bounds(ps).to_vec().into_iter().any(|b| self.mentions_term(b, s)),
             Type::AppMember(m, args) => self.mentions_term(m, s) || self.types.items(args).iter().any(|&a| self.mentions_term(a, s)),
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
@@ -3654,6 +3693,7 @@ impl<'a> Worker<'a> {
                 self.collect_type_vars(a, out);
                 self.collect_type_vars(b, out);
             }
+            TyExpr::Annotated(inner, _) => self.collect_type_vars(inner, out),
             _ => {}
         }
     }

@@ -419,6 +419,9 @@ impl<'a> Worker<'a> {
                 }
                 let kind = if def.mods & mods::MUTABLE != 0 { SymKind::Var } else { SymKind::Val };
                 let sym = self.syms.new_sym(def.name, kind, def.mods, owner, file, Some(id), def.span);
+                if self.ast(file).patdef_holders.contains(&id) {
+                    self.syms.sym_mut(sym).synthetic = true;
+                }
                 self.note_scoped_private(file, sym);
                 self.def_syms.insert(file.0 as usize, id, sym);
                 if !self.register_term(owner, sym) {

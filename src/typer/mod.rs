@@ -1469,6 +1469,15 @@ pub struct Worker<'a> {
     /// error type, which their own type does not show: one that is an application's argument
     /// counts as an erroneous argument of it (`typed_arg`).
     pub erroneous_lambdas: Vec<crate::tir::TExprId>,
+    /// The result variables of the function types an overloaded call's lambda arguments are typed
+    /// ahead against, standing for dotty's wildcard result (`Applications.pretypeArgs`): a lambda
+    /// given one is wholly inferred (`Worker::contextual_result`).
+    pub wildcard_results: Vec<TVarId>,
+    /// The lambdas whose body's type named their parameters, each by where its body's variables
+    /// began and its parameters: teq's stand-in for dotty's nesting levels, a variable made before
+    /// a lambda's body being at a level its parameters are deeper than (`Worker::fix_levels`);
+    /// dropped at the item's end.
+    pub lambda_levels: Vec<(u32, Vec<SymId>)>,
     /// `new A(...)` of a named local class typed before the class was, whose captures are added
     /// to the arguments once they are known.
     pub local_news: Vec<(ClassId, crate::tir::TExprId, bool, Vec<(SymId, crate::tir::TExprId)>)>,
@@ -1586,6 +1595,9 @@ pub struct Worker<'a> {
     pub withheld_met: u32,
     /// The dialect flags of the build (`src/dialect.rs`), `strict_equality` among them.
     pub dialect: crate::dialect::Dialect,
+    /// `--source` (scalac's `-source`), which decides whether a pattern that can fail is reported,
+    /// a warning or an error (`report.errorOrMigrationWarning` over a `MigrationVersion`).
+    pub source: crate::parser::SourceVersion,
     /// The JVM target: intrinsics come from `@jvm`, and expressions keep their static types.
     pub jvm: bool,
     /// `scala.scalajs.js.internal.UnitOps` once looked up, which is in the implicit scope of `Unit`
@@ -2727,6 +2739,8 @@ impl<'a> Worker<'a> {
             arg_types_seen: Vec::new(),
             erroneous_args: Vec::new(),
             erroneous_lambdas: Vec::new(),
+            wildcard_results: Vec::new(),
+            lambda_levels: Vec::new(),
             local_news: Vec::new(),
             deferred_classes: Vec::new(),
             lifted_members: FxMap::default(),
@@ -2762,6 +2776,7 @@ impl<'a> Worker<'a> {
             emits_bodies: true,
             withheld_met: 0,
             dialect: crate::dialect::Dialect::default(),
+            source: crate::parser::SourceVersion::default(),
             deferred_bounds: Vec::new(),
             jvm: false,
             unit_ops: None,
@@ -3103,6 +3118,8 @@ impl<'a> Worker<'a> {
             arg_types_seen: Default::default(),
             erroneous_args: Default::default(),
             erroneous_lambdas: Default::default(),
+            wildcard_results: Default::default(),
+            lambda_levels: Vec::new(),
             local_news: self.local_news.clone(),
             deferred_classes: Vec::new(),
             lifted_members: self.lifted_members.clone(),
@@ -3144,6 +3161,7 @@ impl<'a> Worker<'a> {
             emits_bodies: self.emits_bodies,
             withheld_met: 0,
             dialect: self.dialect,
+            source: self.source,
             jvm: self.jvm,
             unit_ops: self.unit_ops,
             java_serializable: self.java_serializable,
@@ -3270,6 +3288,7 @@ impl<'a> Worker<'a> {
         self.var_frames.truncate(frame);
         if frame <= 1 {
             self.conversion_open_vars.clear();
+            self.lambda_levels.clear();
         }
         let Some((start, _)) = self.var_frames.pop() else { return };
         if !self.open_vars.is_empty() {

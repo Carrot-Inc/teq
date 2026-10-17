@@ -907,11 +907,11 @@ impl<'a> Worker<'a> {
         let further = more.iter().any(|l| !l.using);
         let frame = SelectionFrame { file: self.env.file, q: r, name: op, at: l, app: span, expected, kind: FrameKind::Operand { more: further } };
         let (tr, rty) = self.type_selected(r, frame);
-        // The receiver's variables that have bounds are solved, as a selection's receiver's are
-        // (`type_receiver`); one nothing bounds yet stays open, so that the body of
-        // `foldLeft(Nil)((acc, x) => x :: acc)` settles the element of the improved `acc:
-        // List[?X]` rather than the first `::` fixing it to `Nothing`.
-        let rty = self.solve_bounded_in(rty);
+        // The receiver's variables as a selection's receiver's (`type_receiver`): one its
+        // interpolation left open stays open, so that the body of `foldLeft(Nil)((acc, x) => x ::
+        // acc)` settles the element of the improved `acc: List[?X]` rather than the first `::`
+        // fixing it to `Nothing`.
+        let rty = self.receiver_vars(rty);
         if rty == ERROR || self.has_member_or_std_extension(rty, op) || (op == names::CONS_TUPLE && self.tuple_elements(rty).is_some()) {
             // The order is only observable when both operands have effects.
             let hoist = !self.is_stable(tr);

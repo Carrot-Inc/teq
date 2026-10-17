@@ -202,7 +202,7 @@ impl<'a> Worker<'a> {
                     }
                     TyExpr::Tuple(items) | TyExpr::NamedTuple(_, items) => tys.extend_from_slice(ast.ty_list(items)),
                     TyExpr::Union(a, b) | TyExpr::Inter(a, b) | TyExpr::BoundedWildcard(a, b) => tys.extend([a, b]),
-                    TyExpr::ByName(x) | TyExpr::Repeated(x) | TyExpr::Unchecked(x) | TyExpr::UncheckedVariance(x) | TyExpr::Project(x, _) => tys.push(x),
+                    TyExpr::ByName(x) | TyExpr::Repeated(x) | TyExpr::Unchecked(x) | TyExpr::UncheckedVariance(x) | TyExpr::Annotated(x, _) | TyExpr::Project(x, _) => tys.push(x),
                     TyExpr::Refined(x, _) => tys.push(x),
                     TyExpr::Resolved(r) => {
                         let mut stack = vec![r];

@@ -4987,7 +4987,7 @@ impl<'a, 't> Interp<'a, 't> {
                 if ret == t { SymRef::None } else { self.type_symbol(ret) }
             }
             Type::Lambda(_, b) | Type::Poly(_, b) => self.type_symbol(b),
-            Type::Refined(p, _) | Type::AppMember(p, _) | Type::Rec(p) => self.type_symbol(p),
+            Type::Refined(p, _) | Type::AppMember(p, _) | Type::Rec(p) | Type::Annotated(p) => self.type_symbol(p),
             Type::Nested(_, c) => self.type_symbol(c),
             Type::Blocked(_) => self.pkg_form(t).map_or(SymRef::None, |(_, p)| p),
             Type::RecThis(_)
@@ -6452,7 +6452,7 @@ impl<'a, 't> Interp<'a, 't> {
                 self.narrow_variances(hi, v, params, out, depth + 1);
             }
             Type::Lambda(_, b) | Type::Poly(_, b) => self.narrow_variances(b, v, params, out, depth + 1),
-            Type::Refined(parent, _) | Type::Rec(parent) => self.narrow_variances(parent, v, params, out, depth + 1),
+            Type::Refined(parent, _) | Type::Rec(parent) | Type::Annotated(parent) => self.narrow_variances(parent, v, params, out, depth + 1),
             Type::AppVar(_, args) | Type::AppMember(_, args) | Type::Alias(_, args) => {
                 let args: Vec<TypeId> = self.typer.types.items(args).to_vec();
                 for a in args {
@@ -6917,6 +6917,7 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Term(sym) => {
                 let info = self.syms().sym(sym);
                 let m = info.mods;
+                if info.synthetic { f |= F_SYNTHETIC }
                 if m & mods::PRIVATE != 0 { f |= F_PRIVATE }
                 if m & mods::PROTECTED != 0 { f |= F_PROTECTED }
                 if m & mods::FINAL != 0 { f |= F_FINAL }

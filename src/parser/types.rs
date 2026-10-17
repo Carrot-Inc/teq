@@ -578,14 +578,20 @@ impl<'a> Parser<'a> {
                     for a in annots.iter().filter(|a| a.name == names::NOWARN) {
                         self.ast.nowarn_ascriptions.push((start.to(self.prev_span()), a.clone()));
                     }
-                    for a in annots.iter().filter(|a| ![names::UNCHECKED, names::UNCHECKED_VARIANCE, names::NOWARN].contains(&a.name)) {
-                        self.ast.type_annots.push((t, a.instance));
-                    }
                     if annots.iter().any(|a| a.name == names::UNCHECKED) {
                         t = self.ast.add_ty(TyExpr::Unchecked(t), start.to(self.prev_span()));
                     }
                     if annots.iter().any(|a| a.name == names::UNCHECKED_VARIANCE) {
                         t = self.ast.add_ty(TyExpr::UncheckedVariance(t), start.to(self.prev_span()));
+                    }
+                    for a in annots.iter().filter(|a| !matches!(a.name, names::UNCHECKED | names::UNCHECKED_VARIANCE | names::NOWARN)) {
+                        let class = self.ast.annot_new(a).map(|(path, _)| path);
+                        t = self.ast.add_ty(TyExpr::Annotated(t, class), start.to(self.prev_span()));
+                    }
+                    // The annotations' trees under the type as written, which a val's declared
+                    // type names (`Int @Ann(m)`, the pickle's `ANNOTATEDtpt`).
+                    for a in annots.iter().filter(|a| ![names::UNCHECKED, names::UNCHECKED_VARIANCE, names::NOWARN].contains(&a.name)) {
+                        self.ast.type_annots.push((t, a.instance));
                     }
                 }
                 Tok::LBracket => {

@@ -412,6 +412,10 @@ pub struct SymInfo {
     pub superseded: bool,
     /// Set for a method that an overloaded name stands for, in its own class or in a subclass.
     pub alternative: bool,
+    /// dotty's `Synthetic`: a pattern definition's holder (`Ast::patdef_holders`,
+    /// `Desugar.makePatDef`'s `patMods`), or a definition a pickle marks `SYNTHETIC`; a copy
+    /// keeps it, reflection reports it and the pickle writes it.
+    pub synthetic: bool,
     /// Whether the method has a name of its own in the output, which `Symbols::dispatch_names`
     /// holds: an alternative of an overloaded name.
     pub dispatch: Dispatch,
@@ -1201,6 +1205,7 @@ impl Symbols {
             merge_pending: false,
             superseded: false,
             alternative: false,
+            synthetic: false,
             dispatch: Dispatch::Unknown,
         }))
     }

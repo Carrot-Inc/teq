@@ -682,13 +682,15 @@ impl<'a> Worker<'a> {
 
     /// A local like `s`, for the definitions of a quote's body renamed at each run.
     pub fn clone_local(&mut self, s: SymId) -> SymId {
-        let (name, kind, mods, file, span, sig, by_name) = {
+        let (name, kind, mods, file, span, sig, by_name, synthetic) = {
             let info = self.syms.sym(s);
-            (info.name, info.kind, info.mods, info.file, info.span, info.sig.clone(), info.by_name)
+            (info.name, info.kind, info.mods, info.file, info.span, info.sig.clone(), info.by_name, info.synthetic)
         };
         let fresh = self.syms.new_sym(name, kind, mods, Owner::Local, file, None, span);
         let mut info = self.syms.sym_mut(fresh);
         info.sig = sig;
+        // Its flags are the original's, `Synthetic` among them (`Symbols.mapSymbols`).
+        info.synthetic = synthetic;
         // A by-name parameter stays one, its type an `ExprType` that `TreeTypeMap` maps with the
         // rest of the symbol's info: its reads apply the thunk its callers pass.
         info.by_name = by_name;
@@ -1136,6 +1138,7 @@ impl<'a> Worker<'a> {
                 self.bound_pattern_type_vars(a, vars);
                 self.bound_pattern_type_vars(b, vars);
             }
+            TyExpr::Annotated(inner, _) => self.bound_pattern_type_vars(inner, vars),
             TyExpr::Tuple(items) => {
                 for a in ast.ty_list(items).to_vec() {
                     self.bound_pattern_type_vars(a, vars);
@@ -1289,6 +1292,7 @@ impl<'a> Worker<'a> {
                 self.lowercase_type_names(a, out);
                 self.lowercase_type_names(b, out);
             }
+            TyExpr::Annotated(inner, _) => self.lowercase_type_names(inner, out),
             // `Mirror.Product { type MirroredElemLabels = labels }`
             TyExpr::Refined(parent, defs) => {
                 self.lowercase_type_names(parent, out);

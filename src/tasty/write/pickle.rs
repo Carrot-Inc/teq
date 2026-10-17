@@ -3395,6 +3395,10 @@ impl<'w, 'a> P<'w, 'a> {
         if info.stable && is_def {
             out.push(STABLE);
         }
+        // A pattern definition's holder (`Desugar.makePatDef`'s `patMods`).
+        if info.synthetic {
+            out.push(SYNTHETIC);
+        }
         out
     }
 
@@ -6013,6 +6017,15 @@ impl<'w, 'a> P<'w, 'a> {
             }
             Type::Decl(a) => self.alias_ref(a),
             Type::Refined(parent, r) => self.refined(parent, r),
+            // `ANNOTATEDtype` of the type and `new RuntimeChecked()`, as TreePickler writes an
+            // `AnnotatedType` (a method's declared result `T @RuntimeChecked`).
+            Type::Annotated(u) => {
+                self.buf.byte(ANNOTATEDTYPE);
+                let len = self.buf.begin_length();
+                self.ty(u);
+                self.annotation_tree("scala.annotation.internal", "RuntimeChecked");
+                self.buf.end_length(len);
+            }
             // `RECtype` over the refined chain, its self references `RECthis` to it
             // (`TreePickler.pickleType`).
             Type::Rec(body) => {

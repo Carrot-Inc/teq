@@ -40,6 +40,12 @@ impl<'a> Worker<'a> {
         self.types.mk(Type::Var(v))
     }
 
+    /// `fresh_var` with its variable.
+    pub fn fresh_var_id(&mut self) -> (TypeId, TVarId) {
+        let v = self.tvars.id(self.tvars.len());
+        (self.fresh_var(), v)
+    }
+
     pub fn snapshot(&self) -> usize {
         self.trail.len()
     }
@@ -95,6 +101,12 @@ impl<'a> Worker<'a> {
     }
 
     pub(super) fn instantiate(&mut self, v: TVarId, t: TypeId) {
+        // An instance that is the variable itself, through one made one with it (`unify_vars`
+        // leaves it among the kept one's bounds, which `bounds_but_itself` reads as nothing), is none.
+        if matches!(self.types.get(t), Type::Var(_)) && self.is_var_itself(t, v) {
+            return;
+        }
+        let t = self.fix_levels(v, t);
         self.tvars[v].inst = Some(t);
         self.trail.push(Undo::Inst(v));
         self.note_instance_deps(v, t);
@@ -199,9 +211,36 @@ impl<'a> Worker<'a> {
     #[inline]
     pub fn deref(&mut self, t: TypeId) -> TypeId {
         match self.types.get(t) {
-            Type::Var(_) | Type::AppVar(..) => self.deref_var(t),
+            // A `RuntimeChecked` annotation is seen through by what reads the type's shape.
+            Type::Var(_) | Type::AppVar(..) | Type::Annotated(_) => self.deref_var(t),
             _ => t,
         }
+    }
+
+    /// The type under an annotation at the head of `t`, through instantiated variables: what a
+    /// map maps under the annotation it keeps (`TypeMap`'s `derivedAnnotatedType`), where the
+    /// shape `deref` gives sees through it.
+    #[inline]
+    pub fn annotated_under(&mut self, t: TypeId) -> Option<TypeId> {
+        let t = self.deref_keeping(t);
+        match self.types.get(t) {
+            Type::Annotated(u) => Some(u),
+            _ => None,
+        }
+    }
+
+    /// Follows instantiated inference variables at the head of the type, an annotation kept.
+    #[inline]
+    pub fn deref_keeping(&mut self, t: TypeId) -> TypeId {
+        match self.types.get(t) {
+            Type::Var(_) | Type::AppVar(..) => self.deref_var_keeping(t),
+            _ => t,
+        }
+    }
+
+    #[inline(never)]
+    fn deref_var_keeping(&mut self, t: TypeId) -> TypeId {
+        self.follow_vars::<false>(t)
     }
 
     /// Follows instantiated inference variables and expands an alias kept by name at the
@@ -228,6 +267,13 @@ impl<'a> Worker<'a> {
 
     #[inline(never)]
     fn deref_var(&mut self, t: TypeId) -> TypeId {
+        self.follow_vars::<true>(t)
+    }
+
+    /// The instance chain of the variable at the head of `t`, through annotations where
+    /// `THROUGH` (the shape `deref` reads).
+    #[inline(always)]
+    fn follow_vars<const THROUGH: bool>(&mut self, t: TypeId) -> TypeId {
         let mut t = t;
         loop {
             match self.types.get(t) {
@@ -247,6 +293,7 @@ impl<'a> Worker<'a> {
                     }
                     None => return t,
                 },
+                Type::Annotated(u) if THROUGH => t = u,
                 _ => return t,
             }
         }
@@ -257,8 +304,12 @@ impl<'a> Worker<'a> {
         if !self.types.has_vars(t) {
             return t;
         }
-        let t = self.deref(t);
+        let t = self.deref_keeping(t);
         match self.types.get(t) {
+            Type::Annotated(u) => {
+                let u = self.zonk(u);
+                self.types.mk(Type::Annotated(u))
+            }
             Type::Class(c, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
                 let z: Vec<TypeId> = items.iter().map(|&a| self.zonk(a)).collect();
@@ -489,9 +540,16 @@ impl<'a> Worker<'a> {
             if w == v {
                 return true;
             }
+            let v_ty = self.types.mk(Type::Var(v));
+            // `w <: v` recorded already: the two are one variable (dotty's `addLess`, which
+            // `unify`s `p1` and `p2` where `p2 <: p1` holds), so a chain of variables each ordered
+            // both ways against the next (the `Set[?A]` of every argument joined into one `Map`'s
+            // values) stays one variable rather than a list of pairs each new one is checked against.
+            if self.tvars[w].upper.contains(&v_ty) && self.unifiable(v, w) {
+                return self.unify_vars(v, w);
+            }
             // `v <: w` between two open variables is kept as a pair of bounds, and in either's
             // dependencies (the lenses): `v` growing narrows `w`, `w` shrinking narrows `v`.
-            let v_ty = self.types.mk(Type::Var(v));
             if !self.tvars[w].lower.contains(&v_ty) {
                 self.tvars[w].lower.push(v_ty);
                 self.trail.push(Undo::Lower(w));
@@ -507,6 +565,26 @@ impl<'a> Worker<'a> {
         // narrowed, copying no list); a comparison only records bounds after them.
         let n = self.tvars[v].lower.len();
         (0..n).all(|k| self.tvars[v].lower.get(k).copied().map_or(true, |l| self.is_sub(l, b)))
+    }
+
+    /// Whether two open variables can be made one: neither is being solved or stands for the
+    /// join of an `if`'s branches (`guide`).
+    fn unifiable(&self, v: TVarId, w: TVarId) -> bool {
+        let (a, b) = (&self.tvars[v], &self.tvars[w]);
+        a.inst.is_none() && b.inst.is_none() && !a.solving && !b.solving && !a.guide && !b.guide
+    }
+
+    /// dotty's `ConstraintHandling.unify`: of two open variables each below the other, the one
+    /// made later is instantiated to the other (dotty keeps the one of the outer nesting level),
+    /// and its bounds move to the one kept.
+    fn unify_vars(&mut self, v: TVarId, w: TVarId) -> bool {
+        let (kept, removed) = if w.index() <= v.index() { (w, v) } else { (v, w) };
+        let kept_ty = self.types.mk(Type::Var(kept));
+        let lowers = self.bounds_but_itself(removed, true);
+        let uppers = self.bounds_but_itself(removed, false);
+        self.instantiate(removed, kept_ty);
+        lowers.into_iter().all(|l| self.is_var_itself(l, kept) || self.is_sub(l, kept_ty))
+            && uppers.into_iter().all(|u| self.is_var_itself(u, kept) || self.is_sub(kept_ty, u))
     }
 
     fn add_lower(&mut self, v: TVarId, a: TypeId) -> bool {
@@ -2634,7 +2712,10 @@ impl<'a> Worker<'a> {
         // Nothing is known about it: the choice below would be `Nothing` after every step. Most
         // such variables are what a rolled-back candidate of a nested search left.
         if self.tvars[v].lower.is_empty() && self.tvars[v].upper.is_empty() {
-            self.tvars[v].inst = Some(NOTHING);
+            // Unless the result holds it contravariantly, which `interpolateTypeVars`
+            // instantiates from above (Inferencing.scala 718-745): `Sink[-A]`'s `A` is `Any`.
+            let contra = result.is_some_and(|r| self.types.has_vars(r) && self.var_variances(r).iter().any(|&(w, s)| w == v && s == -1));
+            self.tvars[v].inst = Some(if contra { ANY } else { NOTHING });
             self.trail.push(Undo::Inst(v));
             self.drop_deps(v);
             return true;
@@ -2733,6 +2814,7 @@ impl<'a> Worker<'a> {
         // again (dotty's `instantiateWith` compares nothing), unless a bound names the variable,
         // which reads its instance once it is made.
         let compared = fitted == Some(choice) && !uppers.iter().any(|&u| self.types.has_vars(u) && self.occurs(v, u));
+        let choice = self.fix_levels(v, choice);
         self.tvars[v].inst = Some(choice);
         self.trail.push(Undo::Inst(v));
         self.note_instance_deps(v, choice);
@@ -2978,6 +3060,12 @@ impl<'a> Worker<'a> {
                 _ => {
                     let u = if force { self.solve_in(u) } else { self.solve_own_in(v, u) };
                     match self.types.get(u) {
+                        // A variable an interpolation left open (`open_vars`) is the bound itself,
+                        // as dotty's `fullUpperBound` keeps a parameter above (`maxUpper`): the
+                        // conversion's `A` of `catsSyntaxEither(Right(v)).ensure[AA >: A]`, which
+                        // `interpolateTypeVars` instantiates from above (`fromBelow =
+                        // hasLowerBound`), is `AA`, and `AA` takes its value from below.
+                        Type::Var(w) if !force && !self.tvars[w].solving && self.open_vars.contains(&w) => outer.push(w),
                         // A bound being solved (`?fr <: ?R1` while `?R1` joins its lower bounds,
                         // `?fr` among them) offers what bounds it from above itself.
                         Type::Var(w) => {
@@ -3003,7 +3091,11 @@ impl<'a> Worker<'a> {
 
     /// Solves the variables of `t` that belong to the application of `v`, leaving those of the
     /// enclosing applications open inside it, as `T` in a bound `Page[T]` of an inner
-    /// `List.empty[A]`: the enclosing call settles it once its own arguments are typed.
+    /// `List.empty[A]`: the enclosing call settles it once its own arguments are typed. One an
+    /// interpolation left open, held nonvariantly by its tree (`open_vars`), stays open too:
+    /// dotty's instance is the full bound (`ConstraintHandling.approximation`), whose nested
+    /// variables `fixLevels` hands to the trees around rather than instantiating them, so `B` of
+    /// `xs.map(c => Item(c.label, Some(c.code)))` is `Item[T]` and a later expected type fixes `T`.
     fn solve_own_in(&mut self, v: TVarId, t: TypeId) -> TypeId {
         let t = self.zonk(t);
         if !self.types.has_vars(t) {
@@ -3013,7 +3105,7 @@ impl<'a> Worker<'a> {
         let mut vars = Vec::new();
         self.collect_vars(t, &mut vars);
         for w in vars {
-            if w.index() as u32 >= base {
+            if w.index() as u32 >= base && !self.open_vars.contains(&w) {
                 self.solve_var(w);
             }
         }
@@ -3655,6 +3747,299 @@ impl<'a> Worker<'a> {
         self.zonk(ty)
     }
 
+    /// A lambda's body, of type `ty`, typed against the open result its expected function type
+    /// gave (`contextual_result`): the variables its interpolations left open stay open for the
+    /// trees around, but for those whose bounds name the lambda's parameters `params`, directly
+    /// or through another such variable, which are instantiated here as `define_body_vars` does.
+    /// dotty hands them to the trees around too, whose instantiation of the closure's result
+    /// avoids the deeper parameter (`ConstraintHandling.fixLevels`, `TypeOps.AvoidMap` reading an
+    /// open variable's instance): teq's variables carry no nesting level to avoid by, so the
+    /// parameter's path is settled where it is in scope, and the closure's dependent type avoids
+    /// it as before (`call(x => Item("t", x.a), s)` is an `Item[?]`).
+    pub(super) fn settle_param_vars(&mut self, mark: usize, ty: TypeId, params: &[SymId]) -> TypeId {
+        if params.is_empty() || !self.open_vars.last().is_some_and(|&v| self.tvars.made_since(v, mark)) {
+            return ty;
+        }
+        let from = self.open_vars.iter().rposition(|&v| !self.tvars.made_since(v, mark)).map_or(0, |i| i + 1);
+        let mut named: Vec<TVarId> = Vec::new();
+        loop {
+            let before = named.len();
+            for i in from..self.open_vars.len() {
+                let v = self.open_vars[i];
+                if self.tvars[v].inst.is_some() || named.contains(&v) {
+                    continue;
+                }
+                let names = |w: &mut Self, b: TypeId, named: &[TVarId]| {
+                    let z = w.zonk(b);
+                    w.types.names_term(z, params) || (!named.is_empty() && w.types.has_vars(z) && {
+                        let mut vs = Vec::new();
+                        w.collect_vars(z, &mut vs);
+                        vs.iter().any(|x| named.contains(x))
+                    })
+                };
+                let mut hit = false;
+                for k in 0..self.tvars[v].lower.len() + self.tvars[v].upper.len() {
+                    let n = self.tvars[v].lower.len();
+                    let b = if k < n { self.tvars[v].lower[k] } else { self.tvars[v].upper[k - n] };
+                    if names(self, b, &named) {
+                        hit = true;
+                        break;
+                    }
+                }
+                if hit {
+                    named.push(v);
+                }
+            }
+            if named.len() == before {
+                break;
+            }
+        }
+        if named.is_empty() {
+            return ty;
+        }
+        self.open_vars.retain(|v| !named.contains(v));
+        for v in named {
+            if self.tvars[v].inst.is_none() {
+                let from_below = self.has_lower_bound(v);
+                self.instantiate_from(v, from_below, ANY);
+            }
+        }
+        self.zonk(ty)
+    }
+
+    /// `Namer.valOrDefDefSig`'s hygiene constraint for a closure whose result is the contextual
+    /// type `r` (Namer.scala 1912–1919): the body's type with the lambda's parameters avoided
+    /// (`TypeOps.avoid`, `avoid_params`) has to conform to `r`, which it constrains; where it
+    /// cannot, the lambda is refused as dotty refuses it. A result that names the parameters
+    /// itself (a dependent function expected) is dotty's `InLambdaTypeTree`, which checks
+    /// nothing. Where the body's type names a parameter, the lambda's parameters are recorded
+    /// with where its body began (`lambda_levels`), the level an instantiation avoids them from.
+    pub(super) fn check_hygienic(&mut self, mark: usize, bty: TypeId, r: TypeId, params: &[SymId], span: crate::source::Span) {
+        if params.is_empty() {
+            return;
+        }
+        let z = self.zonk(bty);
+        if !self.types.has_paths(z) && !self.types.has_vars(z) {
+            return;
+        }
+        let hygienic = self.avoid_params(z, params, 1, &mut Vec::new());
+        if hygienic == z {
+            return;
+        }
+        self.lambda_levels.push((mark as u32, params.to_vec()));
+        if self.types.names_term(r, params) {
+            return;
+        }
+        let snap = self.snapshot();
+        if self.is_sub(hygienic, r) {
+            return;
+        }
+        self.rollback(snap);
+        // The result as its variables end, as dotty renders the message once they are
+        // instantiated (`A` of `pair(x => Item(x.a), s)` is `Any`, `fixLevels` avoiding `x.A`).
+        let snap = self.snapshot();
+        let solved = self.solve_in(r);
+        let (r_text, h_text) = self.show_pair(solved, hygienic);
+        self.rollback(snap);
+        let msg = format!("return type {} of lambda cannot be made hygienic\nit is not a supertype of the hygienic type {}", r_text, h_text);
+        self.error(span, msg);
+    }
+
+    /// dotty's `TypeOps.avoid` over the lambda parameters `params` (its `AvoidMap`, an
+    /// `ApproximatingTypeMap`), at the variance `v` of the place (1, -1, or 0 for an invariant
+    /// argument): a parameter's singleton is its type from above, `Nothing` from below; a type
+    /// member through one is its bounds, the upper from above, the lower from below; an open
+    /// variable whose bounds name one is its instance avoided (`instanceType`, from below where the
+    /// place is covariant, or invariant and it has a lower bound), itself where that changes
+    /// nothing. At variance 0 the range of both is the wildcard of its bounds, as an invariant
+    /// argument takes it.
+    pub(super) fn avoid_params(&mut self, t: TypeId, params: &[SymId], v: i8, seen: &mut Vec<TVarId>) -> TypeId {
+        // An annotated type's range is the annotated bounds (`ApproximatingTypeMap`'s
+        // `derivedAnnotatedType`), the annotation kept over a type.
+        let t = self.deref_keeping(t);
+        if let Type::Annotated(u) = self.types.get(t) {
+            let u = self.avoid_params(u, params, v, seen);
+            return if matches!(self.types.get(u), Type::Wild | Type::BoundedWild(..)) { u } else { self.types.mk(Type::Annotated(u)) };
+        }
+        match self.types.get(t) {
+            Type::Var(w) => {
+                if seen.contains(&w) || !self.bounds_name(w, params) {
+                    return t;
+                }
+                seen.push(w);
+                let from_below = v > 0 || v == 0 && self.has_lower_bound(w);
+                let snap = self.snapshot();
+                self.instantiate_from(w, from_below, ANY);
+                let inst = self.zonk(t);
+                self.rollback(snap);
+                let avoided = self.avoid_params(inst, params, v, seen);
+                seen.pop();
+                if avoided != inst { avoided } else { t }
+            }
+            _ if !self.types.names_term(t, params) && !self.types.has_vars(t) => t,
+            Type::Term(s) | Type::Select(_, s) if params.contains(&s) || matches!(self.types.get(t), Type::Select(p, _) if self.types.names_term(p, params)) => {
+                if v < 0 {
+                    return NOTHING;
+                }
+                let widened = self.sig_of(s).ret;
+                let hi = self.avoid_params(widened, params, 1, seen);
+                if v > 0 { hi } else { self.types.bounded_wild(NOTHING, hi) }
+            }
+            Type::Member(p, name) if self.types.names_term(p, params) => {
+                let prefix = self.avoid_params(p, params, 1, seen);
+                match self.type_member(prefix, name) {
+                    Some(super::members::MemberInfo::Alias(a)) => self.avoid_params(a, params, v, seen),
+                    Some(super::members::MemberInfo::Bounds(lo, hi)) => match v {
+                        1 => self.avoid_params(hi, params, 1, seen),
+                        -1 => self.avoid_params(lo, params, -1, seen),
+                        _ => {
+                            let (lo, hi) = (self.avoid_params(lo, params, -1, seen), self.avoid_params(hi, params, 1, seen));
+                            self.types.bounded_wild(lo, hi)
+                        }
+                    },
+                    None => match v {
+                        1 => ANY,
+                        -1 => NOTHING,
+                        _ => WILD,
+                    },
+                }
+            }
+            Type::Class(k, args) => {
+                let items: Vec<TypeId> = self.types.items(args).to_vec();
+                let variances: Vec<i8> = self.syms.class(k).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
+                let mut out = Vec::with_capacity(items.len());
+                for (i, &a) in items.iter().enumerate() {
+                    let w = variances.get(i).copied().unwrap_or(0);
+                    out.push(self.avoid_params(a, params, v * w, seen));
+                }
+                self.types.class(k, &out)
+            }
+            // `derivedOrType` and `derivedAndType` of an `ApproximatingTypeMap`: where a part became a
+            // range, the lower bounds are joined and the upper ones, `range(lower(a) | lower(b),
+            // upper(a) | upper(b))`, before an invariant argument takes the range as its wildcard,
+            // so `Item[x.A | String]` avoids to `Item[? >: String]`.
+            Type::Union(a, b, kind) => {
+                let ((la, ha), (lb, hb)) = (self.avoid_range(a, params, v, seen), self.avoid_range(b, params, v, seen));
+                let (lo, hi) = (self.or_parts(kind, la, lb), self.or_parts(kind, ha, hb));
+                self.range_at(lo, hi, v)
+            }
+            Type::Inter(a, b) => {
+                let ((la, ha), (lb, hb)) = (self.avoid_range(a, params, v, seen), self.avoid_range(b, params, v, seen));
+                let (lo, hi) = (self.and_parts(la, lb), self.and_parts(ha, hb));
+                self.range_at(lo, hi, v)
+            }
+            _ => {
+                let types = self.types.clone();
+                types.map_parts(t, &mut |x| self.avoid_params(x, params, v, seen))
+            }
+        }
+    }
+
+    /// `avoid_params` of `t` at `v` as a range: the bounds of the wildcard it gave at variance 0,
+    /// the type itself twice otherwise.
+    fn avoid_range(&mut self, t: TypeId, params: &[SymId], v: i8, seen: &mut Vec<TVarId>) -> (TypeId, TypeId) {
+        let r = self.avoid_params(t, params, v, seen);
+        match self.types.get(r) {
+            Type::Wild if v == 0 => (NOTHING, ANY),
+            Type::BoundedWild(lo, hi) if v == 0 => (lo, hi),
+            _ => (r, r),
+        }
+    }
+
+    /// A range's place at variance `v`: its upper bound from above, its lower from below, the
+    /// wildcard of both in an invariant argument, the type where the two are one.
+    fn range_at(&mut self, lo: TypeId, hi: TypeId, v: i8) -> TypeId {
+        match v {
+            _ if lo == hi => lo,
+            1 => hi,
+            -1 => lo,
+            _ => self.types.bounded_wild(lo, hi),
+        }
+    }
+
+    /// `a | b` as dotty's `|` makes it (`TypeComparer.lub`'s `mergeIfSuper`, frozen): a part the
+    /// other is above of dropped, a union kept otherwise.
+    fn or_parts(&mut self, kind: crate::types::UnionKind, a: TypeId, b: TypeId) -> TypeId {
+        if a == b || b == NOTHING || a == ANY {
+            return a;
+        }
+        if a == NOTHING || b == ANY {
+            return b;
+        }
+        if self.frozen_sub(b, a) {
+            return a;
+        }
+        if self.frozen_sub(a, b) {
+            return b;
+        }
+        self.types.union_as(kind, a, b)
+    }
+
+    /// `a & b` as dotty's `&` makes it (`glb`'s `mergeIfSub`, frozen).
+    fn and_parts(&mut self, a: TypeId, b: TypeId) -> TypeId {
+        if a == b || b == ANY || a == NOTHING {
+            return a;
+        }
+        if a == ANY || b == NOTHING {
+            return b;
+        }
+        if self.frozen_sub(a, b) {
+            return a;
+        }
+        if self.frozen_sub(b, a) {
+            return b;
+        }
+        self.types.inter(a, b)
+    }
+
+    /// Whether a bound of the open variable `w` names one of `terms`.
+    fn bounds_name(&mut self, w: TVarId, terms: &[SymId]) -> bool {
+        for k in 0..self.tvars[w].lower.len() + self.tvars[w].upper.len() {
+            let n = self.tvars[w].lower.len();
+            let b = if k < n { self.tvars[w].lower[k] } else { self.tvars[w].upper[k - n] };
+            // A bound with no path and no variable names no term (most).
+            if !self.types.has_paths(b) && !self.types.has_vars(b) {
+                continue;
+            }
+            let z = if self.types.has_vars(b) { self.zonk(b) } else { b };
+            if self.types.names_term(z, terms) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// dotty's `fixLevels` (ConstraintHandling.scala 516) for the instance `t` of `v`: the parameters
+    /// of a lambda whose body began after `v` was made are deeper than `v` (`lambda_levels`, the
+    /// level teq keeps of them), and are avoided in its instance, from above as an instance from
+    /// below is approximated.
+    #[inline]
+    pub(super) fn fix_levels(&mut self, v: TVarId, t: TypeId) -> TypeId {
+        if self.lambda_levels.is_empty() || !self.types.has_paths(t) && !self.types.has_vars(t) {
+            return t;
+        }
+        self.fix_levels_slow(v, t)
+    }
+
+    #[inline(never)]
+    fn fix_levels_slow(&mut self, v: TVarId, t: TypeId) -> TypeId {
+        let mut deeper: Vec<SymId> = Vec::new();
+        for i in 0..self.lambda_levels.len() {
+            let mark = self.lambda_levels[i].0 as usize;
+            if !self.tvars.made_since(v, mark) {
+                deeper.extend(self.lambda_levels[i].1.iter().copied());
+            }
+        }
+        if deeper.is_empty() {
+            return t;
+        }
+        let z = self.zonk(t);
+        if !self.types.names_term(z, &deeper) {
+            return t;
+        }
+        self.avoid_params(z, &deeper, 1, &mut Vec::new())
+    }
+
     /// The recorded types of the nodes from `from` on, zonked: a variable they name that an
     /// interpolation left open is instantiated by now.
     pub(super) fn settle_node_types(&mut self, from: usize) {
@@ -3807,9 +4192,29 @@ impl<'a> Worker<'a> {
         }
         let mut vars = Vec::new();
         self.collect_vars(t, &mut vars);
+        let mut solved = false;
         for v in vars {
             if selected.contains(&v) {
                 self.solve_var(v);
+                solved = true;
+            }
+        }
+        // dotty's accumulator goes on into a selected variable's instance (an instantiated
+        // `TypeVar` is folded over, `IsFullyDefinedAccumulator`), where the variables of the
+        // arguments' own applications are selected too (`tvarsInParams` takes an argument's type
+        // application): one an argument's interpolation left open inside the instance, which
+        // solving the selected one keeps open (`solve_own_in`), is instantiated before the search,
+        // so `f(Set(new Dog))` over `f[T: Ev]` searches `Ev[Set[Dog]]`.
+        if solved && !self.open_vars.is_empty() {
+            let z = self.zonk(t);
+            if self.types.has_vars(z) {
+                let mut nested = Vec::new();
+                self.collect_vars(z, &mut nested);
+                for w in nested {
+                    if w.index() as u32 >= self.app_base && self.open_vars.contains(&w) {
+                        self.solve_var(w);
+                    }
+                }
             }
         }
     }

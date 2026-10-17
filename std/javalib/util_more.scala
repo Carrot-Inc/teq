@@ -149,6 +149,89 @@ package java.util:
       val least = (scala.math.random() * 4294967296.0).toLong << 32 | (scala.math.random() * 4294967296.0).toLong
       new UUID((most & ~0xf000L) | 0x4000L, (least & 0x3fffffffffffffffL) | Long.MinValue).toString
 
+    // Version 3: the bytes hashed by MD5 as they are, the version and variant set, two big-endian halves.
+    @jvm("invokestatic java/util/UUID.nameUUIDFromBytes([B)Ljava/util/UUID;")
+    def nameUUIDFromBytes(name: Array[Byte]): UUID =
+      if name == null then throw new NullPointerException()
+      val md5 = Md5.digest(name)
+      md5(6) = ((md5(6) & 0x0f) | 0x30).toByte
+      md5(8) = ((md5(8) & 0x3f) | 0x80).toByte
+      var most = 0L
+      var least = 0L
+      var i = 0
+      while i < 8 do
+        most = (most << 8) | (md5(i) & 0xff)
+        least = (least << 8) | (md5(i + 8) & 0xff)
+        i += 1
+      new UUID(most, least)
+
+    // MD5 (RFC 1321), synchronous on every target, which `MessageDigest` is not on JavaScript.
+    private object Md5:
+      private val shifts = Array(7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21)
+      private val sines = Array(
+        0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
+        0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be, 0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
+        0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa, 0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
+        0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed, 0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
+        0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c, 0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
+        0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05, 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
+        0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039, 0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
+        0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391)
+
+      def digest(input: Array[Byte]): Array[Byte] =
+        val padded = new Array[Byte](((input.length + 8) / 64 + 1) * 64)
+        System.arraycopy(input, 0, padded, 0, input.length)
+        padded(input.length) = 0x80.toByte
+        val bits = input.length.toLong * 8
+        var i = 0
+        while i < 8 do
+          padded(padded.length - 8 + i) = (bits >>> (8 * i)).toByte
+          i += 1
+        val state = Array(0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476)
+        val m = new Array[Int](16)
+        var block = 0
+        while block < padded.length do
+          var j = 0
+          while j < 16 do
+            val at = block + 4 * j
+            m(j) = (padded(at) & 0xff) | (padded(at + 1) & 0xff) << 8 | (padded(at + 2) & 0xff) << 16 | (padded(at + 3) & 0xff) << 24
+            j += 1
+          var a = state(0)
+          var b = state(1)
+          var c = state(2)
+          var d = state(3)
+          var k = 0
+          while k < 64 do
+            val round = k / 16
+            val f =
+              if round == 0 then (b & c) | (~b & d)
+              else if round == 1 then (d & b) | (~d & c)
+              else if round == 2 then b ^ c ^ d
+              else c ^ (b | ~d)
+            val g =
+              if round == 0 then k
+              else if round == 1 then (5 * k + 1) % 16
+              else if round == 2 then (3 * k + 5) % 16
+              else (7 * k) % 16
+            val sum = a + f + sines(k) + m(g)
+            val s = shifts(round * 4 + k % 4)
+            a = d
+            d = c
+            c = b
+            b = b + ((sum << s) | (sum >>> (32 - s)))
+            k += 1
+          state(0) += a
+          state(1) += b
+          state(2) += c
+          state(3) += d
+          block += 64
+        val out = new Array[Byte](16)
+        var w = 0
+        while w < 16 do
+          out(w) = (state(w / 4) >>> (8 * (w % 4))).toByte
+          w += 1
+        out
+
     @jvm("invokestatic java/util/UUID.fromString(Ljava/lang/String;)Ljava/util/UUID;")
     def fromString(name: String): UUID =
       val len = name.length
@@ -203,9 +286,9 @@ package java.util:
   object Base64:
     private val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
     private val urlAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-    private val basic = new Encoder(false, 0, true)
-    private val url = new Encoder(true, 0, true)
-    private val mime = new Encoder(false, 76, true)
+    private val basic = new Encoder(false, null, -1, true)
+    private val url = new Encoder(true, null, -1, true)
+    private val mime = new Encoder(false, Array('\r'.toByte, '\n'.toByte), 76, true)
 
     @jvm("invokestatic java/util/Base64.getEncoder()Ljava/util/Base64$Encoder;")
     def getEncoder(): Encoder = basic
@@ -213,6 +296,16 @@ package java.util:
     def getUrlEncoder(): Encoder = url
     @jvm("invokestatic java/util/Base64.getMimeEncoder()Ljava/util/Base64$Encoder;")
     def getMimeEncoder(): Encoder = mime
+    // The separator is checked even when the length turns wrapping off; a positive length is rounded
+    // down to a multiple of 4, and the encoder keeps the array itself.
+    @jvm("$1:I $2 invokestatic java/util/Base64.getMimeEncoder(I[B)Ljava/util/Base64$Encoder;")
+    def getMimeEncoder(lineLength: Int, lineSeparator: Array[Byte]): Encoder =
+      java.util.Objects.requireNonNull(lineSeparator)
+      for b <- lineSeparator do
+        if b == '='.toByte || alphabet.indexOf((b & 255).toChar) >= 0 then
+          throw new IllegalArgumentException("Illegal base64 line separator character 0x" + java.lang.Integer.toString(b, 16))
+      val rounded = lineLength & ~3
+      if rounded <= 0 then basic else new Encoder(false, lineSeparator, rounded, true)
     @jvm("invokestatic java/util/Base64.getDecoder()Ljava/util/Base64$Decoder;")
     def getDecoder(): Decoder = new Decoder(false, false)
     @jvm("invokestatic java/util/Base64.getUrlDecoder()Ljava/util/Base64$Decoder;")
@@ -222,9 +315,9 @@ package java.util:
 
     @javaDefined
     @jvmClass("java/util/Base64$Encoder")
-    final class Encoder(isUrl: Boolean, lineMax: Int, padding: Boolean):
+    final class Encoder(isUrl: Boolean, newline: Array[Byte], lineMax: Int, padding: Boolean):
       @jvm("$0 invokevirtual java/util/Base64$Encoder.withoutPadding()Ljava/util/Base64$Encoder;")
-      def withoutPadding(): Encoder = new Encoder(isUrl, lineMax, false)
+      def withoutPadding(): Encoder = if padding then new Encoder(isUrl, newline, lineMax, false) else this
       @jvm("$0 rt $1:L rtcall javaBytes(Ljava/lang/Object;)Ljava/lang/Object; checkcast [B invokevirtual java/util/Base64$Encoder.encodeToString([B)Ljava/lang/String;")
       def encodeToString(src: Array[Byte]): String =
         val chars = if isUrl then urlAlphabet else alphabet
@@ -235,7 +328,7 @@ package java.util:
           val n = src.length - i
           val bits = (src(i) & 255) << 16 | (if n > 1 then (src(i + 1) & 255) << 8 else 0) | (if n > 2 then src(i + 2) & 255 else 0)
           if lineMax > 0 && line == lineMax then
-            out.append("\r\n")
+            for b <- newline do out.append((b & 255).toChar)
             line = 0
           out.append(chars.charAt(bits >> 18 & 63))
           out.append(chars.charAt(bits >> 12 & 63))

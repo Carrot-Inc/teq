@@ -1871,7 +1871,7 @@ impl<'a> Worker<'a> {
             DefKind::Val { ty, .. } => match ty {
                 Some(ty) => {
                     let (ty, declared) = t.declared_view(*ty, |w| w.resolve_declared_type(*ty));
-                    MethodSig { declared, ..MethodSig::value(t.declared_chain(ty, declared)) }
+                    MethodSig { declared, ..MethodSig::value(t.types.unannotated(t.declared_chain(ty, declared))) }
                 }
                 // An incomplete val's type is unknown unless it was declared.
                 None if def.mods & mods::INCOMPLETE != 0 => MethodSig::value(ERROR),
@@ -1886,7 +1886,7 @@ impl<'a> Worker<'a> {
                     if t.shared_sym(sym) {
                         t.publish_body(sym);
                     }
-                    MethodSig::value(inferred)
+                    MethodSig::value(t.types.unannotated(inferred))
                 }
             },
             DefKind::Fun(f) if def.name == names::INIT => {
@@ -1923,6 +1923,9 @@ impl<'a> Worker<'a> {
                     }
                     None => (None, NO_TYPE),
                 };
+                // A method of no parameters is no application's: its reference is the `TermRef`,
+                // which carries no annotation of its result (`T @RuntimeChecked`).
+                let ret = ret.map(|r| if clauses.is_empty() { t.types.unannotated(r) } else { r });
                 t.env.frames.pop();
                 let mut sig = MethodSig { tparams, clauses, ret: ret.unwrap_or(ERROR), declared };
                 // A macro without a declared result type has the type its splice's `Expr` holds,
@@ -1947,6 +1950,9 @@ impl<'a> Worker<'a> {
                         }
                         let shape = sig.clone();
                         sig.ret = t.infer_body_then_expand(sym, &sig, inherited, |ret| Arc::new(MethodSig { ret, ..shape.clone() }));
+                        if sig.clauses.is_empty() {
+                            sig.ret = t.types.unannotated(sig.ret);
+                        }
                         if t.shared_sym(sym) {
                             t.publish_body(sym);
                         }
@@ -2855,6 +2861,9 @@ impl<'a> Worker<'a> {
                     // but for an object's, which stays its singleton as dotty keeps a module's
                     // `TermRef` (`val chosen = summon[B.u.type]` of a given object `u` is a
                     // `B.u.type`, `val w = summon[B.W.type]` of an object `W` too).
+                    if !keeps_constant {
+                        result_ty = self.widen_annotated_singleton(result_ty);
+                    }
                     let module = match self.types.get(result_ty) {
                         Type::Term(s) | Type::Select(_, s) => self.inner_object_of_sym(s).is_some() || self.given_object_type(s).is_some(),
                         _ => false,
@@ -6809,7 +6818,7 @@ impl<'a> Worker<'a> {
                     stack.push(a);
                     stack.push(b);
                 }
-                TyExpr::ByName(inner) | TyExpr::Repeated(inner) | TyExpr::Unchecked(inner) | TyExpr::Lambda(_, inner) | TyExpr::PolyFun(_, inner) => {
+                TyExpr::ByName(inner) | TyExpr::Repeated(inner) | TyExpr::Unchecked(inner) | TyExpr::Annotated(inner, _) | TyExpr::Lambda(_, inner) | TyExpr::PolyFun(_, inner) => {
                     stack.push(inner)
                 }
                 _ => {}

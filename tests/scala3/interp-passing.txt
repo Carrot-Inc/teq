@@ -423,7 +423,6 @@ lambda-sam-bridge
 lambda-unit
 lazy-implicit-lists
 lazy-implicit-nums
-lazy-val-pattern
 lazy-val-pattern-2
 lazy-val-pattern-3
 lazyVals

@@ -283,7 +283,13 @@ impl<'a> Parser<'a> {
                         let unit = self.ast.add_expr(Expr::UnitLit, span);
                         self.ast.add_pat(Pat::Lit(unit), span)
                     }
-                    1 if !matches!(self.ast.pat(self.ast.pat_list(l)[0]), Pat::NamedField(..)) => self.ast.pat_list(l)[0],
+                    1 if !matches!(self.ast.pat(self.ast.pat_list(l)[0]), Pat::NamedField(..)) => {
+                        let only = self.ast.pat_list(l)[0];
+                        if matches!(self.ast.pat(only), Pat::Typed(..)) {
+                            self.ast.paren_typed_pats.insert(only);
+                        }
+                        only
+                    }
                     _ => self.ast.add_pat(Pat::Tuple(l), span),
                 }
             }

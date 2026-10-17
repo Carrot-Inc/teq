@@ -530,6 +530,14 @@ impl<'a> Cmp<'a> {
             | (Singleton(t), Singleton(u))
             | (Unchecked(t), Unchecked(u))
             | (UncheckedVariance(t), UncheckedVariance(u)) => self.ty_eq(t, u),
+            (Annotated(t, a), Annotated(u, b)) => {
+                self.ty_eq(t, u)
+                    && match (a, b) {
+                        (Some(a), Some(b)) => self.ty_eq(a, b),
+                        (None, None) => true,
+                        _ => false,
+                    }
+            }
             (Lambda(l, t), Lambda(k, u)) | (PolyFun(l, t), PolyFun(k, u)) => self.names_eq(l, k) && self.ty_eq(t, u),
             (Match(t, l), Match(u, k)) => self.ty_eq(t, u) && self.tys_eq(l, k),
             (MatchCase(p, t), MatchCase(q, u)) => self.ty_eq(p, q) && self.ty_eq(t, u),

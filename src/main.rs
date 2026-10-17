@@ -1667,6 +1667,7 @@ fn compile() -> i32 {
     typer.macro_state_per_worker = opts.macro_state_per_worker;
     crate::measure::set_macro_state_per_worker(opts.macro_state_per_worker);
     typer.dialect = opts.dialect;
+    typer.source = opts.syntax.source;
     typer.diags.policy = std::sync::Arc::new(opts.policy());
     if opts.wunused_imports {
         typer.unused.mode = typer::unused::Mode::Warn;
@@ -2923,6 +2924,7 @@ pub(crate) fn with_typed_program<R: Send>(name: &str, text: &str, flags: &[&str]
             install_std(&mut typer, std, &selected, &blocks_of, scalajs_unlocked);
             open_classpath(&opts, &mut typer, cp, jar_files, jdk_file);
             typer.dialect = opts.dialect;
+            typer.source = opts.syntax.source;
             typer.inline.max_depth = opts.max_inlines;
             typer.inline.outlines = !opts.jvm && !opts.interp && !opts.no_outline;
             if opts.jvm {

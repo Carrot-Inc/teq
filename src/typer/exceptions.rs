@@ -110,6 +110,16 @@ impl<'a> Worker<'a> {
         let i = self.prog.tries.len() as u32;
         self.prog.tries.push(TTry { body, cases, finalizer, wraps });
         let e = self.prog.add(TExpr::Try(i));
+        // dotty's `assignType(Try)`: the body's type without handlers (a finalizer's own being
+        // dropped), the handlers' joined with it else (TypeAssigner.scala 479-481).
+        let annotated = exp.is_none() && branches.iter().any(|&(_, ty)| self.has_runtime_checked(ty));
+        let result_ty = if annotated {
+            let written: Vec<Option<crate::ast::ExprId>> = std::iter::once(Some(t.body)).chain(ast.case_list(t.cases).iter().map(|c| Some(c.body))).chain(std::iter::repeat(None)).take(branches.len()).collect();
+            let joined: Vec<(TExprId, TypeId, Option<crate::ast::ExprId>)> = branches.iter().zip(written).map(|(&(b, ty), w)| (b, ty, w)).collect();
+            self.annotated_join_type(&joined).unwrap_or(result_ty)
+        } else {
+            result_ty
+        };
         (e, result_ty)
     }
 
@@ -642,7 +652,7 @@ impl<'a> Worker<'a> {
         let ast = self.ast(file);
         let crate::ast::DefKind::Fun(f) = &ast.def(d).kind else { return false };
         let Some(ty) = f.clauses.iter().find(|c| !c.is_using && !c.is_implicit).and_then(|c| c.params.first()).map(|p| p.ty) else { return false };
-        matches!(ast.ty(ty), crate::ast::TyExpr::Unchecked(_))
+        matches!(ast.ty(ast.under_annotations(ty)), crate::ast::TyExpr::Unchecked(_))
     }
 
     /// Whether an extractor's input type is an abstract type member's (applied or not), whose
