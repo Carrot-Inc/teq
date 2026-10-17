@@ -1713,10 +1713,10 @@ neg/polymorphic-functions1.scala	same
 neg/polymorphic-functions2.scala	same	
 neg/power.scala	same	
 neg/power2.scala	same	
-neg/preview-message.scala	different	cannot resolve import
-neg/preview-non-viral	different	cannot resolve import
-neg/previewOverloads.scala	different	cannot resolve import
-neg/previewOverride.scala	different	cannot resolve import
+neg/preview-message.scala	different	{} is not a member of the package
+neg/preview-non-viral	different	{} is not a member of the package
+neg/previewOverloads.scala	different	{} is not a member of the package
+neg/previewOverride.scala	different	{} is not a member of the package
 neg/print-infix-type.scala	same	
 neg/print-tuple-union.scala	superset	+1 lines: type argument A does not conform to upper bound Tuple
 neg/private-case-class-constr.scala	same	
@@ -4739,7 +4739,7 @@ pos/precise-pattern-type.scala	rejects	value {} is not a member of {}
 pos/predef-runtimechecked-import.scala	rejects	cannot resolve import
 pos/prefix.scala	accepts	
 pos/preserve-union.scala	accepts	
-pos/preview-flag.scala	rejects	cannot resolve import
+pos/preview-flag.scala	rejects	{} is not a member of the package
 pos/printTest.scala	accepts	
 pos/printbounds.scala	accepts	
 pos/private-class-in-trait.scala	accepts	
