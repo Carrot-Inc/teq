@@ -37,7 +37,8 @@ trait Base:
   def base: Int = 1
   def self2: Base = self
 
-trait Chained:
+// `with` as a type operator warns from 3.4 (`MigrationVersion.WithOperator`), at the default version too.
+@scala.annotation.nowarn trait Chained:
   self: Service with Logger with Named =>
   def both: String = run + viaThis
 

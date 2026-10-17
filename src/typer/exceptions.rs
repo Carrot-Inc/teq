@@ -156,7 +156,7 @@ impl<'a> Worker<'a> {
         } else {
             (names::APPLY, vec![ArgSrc::Typed(arg, throwable)])
         };
-        let lists = vec![ArgList { args, using: false, span }];
+        let lists = vec![ArgList { args, using: false, span, fun: ArgList::NO_FUN }];
         let (body, ty) = self.apply_member(th, hty, method, None, lists, span, exp.or(guide));
         let (body, ty) = match exp {
             Some(t) => (self.adapt(body, ty, t, span), t),
@@ -449,7 +449,7 @@ impl<'a> Worker<'a> {
         let scrut = self.fresh_local("u", narrowed, span);
         let arg = self.prog.add(TExpr::Local(scrut));
         self.prog.set_type(arg, narrowed);
-        let lists = vec![ArgList { args: vec![ArgSrc::Typed(arg, narrowed)], using: false, span }];
+        let lists = vec![ArgList { args: vec![ArgSrc::Typed(arg, narrowed)], using: false, span, fun: ArgList::NO_FUN }];
         // The alternative selected is applied, not resolved again for the narrowed scrutinee.
         let (call, rty) = if overloaded || chosen.is_some() {
             let callee = self.member_callee_in(recv, rty, Some(owner_ty), unapply);

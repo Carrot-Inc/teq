@@ -22,9 +22,47 @@ enum Region {
     Case { width: u32, at: u32, guard: bool },
 }
 
+/// What the source version makes of the text as dotty's scanner reads it. `given` and `enum` are
+/// identifiers where `Feature.migrateTo3` holds at the token the scanner fetches (`Scanners.toToken`,
+/// `scala3keywords`): under the setting's version from the start, and from `switch`'s offset on under
+/// the version the unit's source import names, which the parser finds (`Parsed::keywords`).
+/// Indentation is significant unless the setting is `3.0-migration` (`indentSyntax`, which the scanner
+/// fixes at its construction, before any import is read): without it no line opens an indented
+/// region and `end` marks no end.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Keywords {
+    pub migrating: bool,
+    pub switch: Option<(u32, bool)>,
+    pub indent: bool,
+}
+
+impl Default for Keywords {
+    fn default() -> Self {
+        Keywords { migrating: false, switch: None, indent: true }
+    }
+}
+
+impl Keywords {
+    /// The setting's reading, before the unit's import is known.
+    pub fn of_setting(source: crate::source_version::SourceVersion) -> Keywords {
+        Keywords { migrating: source.migrate_to_3(), switch: None, indent: !source.migrate_to_3() }
+    }
+
+    pub fn migrating_at(self, offset: u32) -> bool {
+        match self.switch {
+            Some((at, migrating)) if offset >= at => migrating,
+            _ => self.migrating,
+        }
+    }
+}
+
 pub struct LexResult {
+    /// How `given`, `enum` and the indentation were read (`Keywords`).
+    pub keywords: Keywords,
     pub tokens: Vec<Token>,
     pub errors: Vec<(Span, String)>,
+    /// The migration warnings of the keywords read as identifiers (`Keywords`).
+    pub warnings: Vec<(Span, String)>,
     /// The `end name` markers, in source order; they leave no token behind.
     pub end_markers: Vec<Span>,
     /// The lines that start inside an unclosed parenthesis or bracket indented no further than
@@ -38,6 +76,13 @@ pub struct LexResult {
     /// its pattern or guard ended at, before which the file is lexed again with the region closed
     /// (`lex_closing`), as dotty's parser leaves `InCase` where the pattern or guard ends.
     pub case_lines: Vec<(u32, u32)>,
+}
+
+impl LexResult {
+    /// No tokens: what a parse leaves while it holds the result (`parser::parse`).
+    pub fn empty() -> LexResult {
+        LexResult { keywords: Keywords::default(), tokens: Vec::new(), errors: Vec::new(), warnings: Vec::new(), end_markers: Vec::new(), boundaries: Vec::new(), case_lines: Vec::new() }
+    }
 }
 
 /// How many times the lexer reads a file again to close the delimiters an error left open.
@@ -95,6 +140,8 @@ struct Lexer<'a> {
     /// One past the index of the last `enum` token, 0 before any: `enum_header_before` scans
     /// no further back.
     last_enum: usize,
+    keywords: Keywords,
+    warnings: Vec<(Span, String)>,
 }
 
 /// A brace block, while the lexer looks for a missing `}`.
@@ -118,6 +165,11 @@ pub fn lex(text: &str, interner: &Interner) -> LexResult {
 /// to find the blocks that lack their `}` (`BraceBlock::suspect`), and again with the earliest
 /// such block closed before its first line indented less than it, as long as one is found.
 pub fn lex_closing(text: &str, interner: &Interner, close_parens: &[u32]) -> LexResult {
+    lex_with(text, interner, close_parens, Keywords::default())
+}
+
+/// `lex_closing`, `given` and `enum` read as `keywords` says.
+pub fn lex_with(text: &str, interner: &Interner, close_parens: &[u32], keywords: Keywords) -> LexResult {
     let mut close_braces: Vec<u32> = Vec::new();
     let mut drop_closers: Vec<u32> = Vec::new();
     let mut diagnose = false;
@@ -152,6 +204,8 @@ pub fn lex_closing(text: &str, interner: &Interner, close_parens: &[u32]) -> Lex
             line_width: 0,
             case_lines: Vec::new(),
             last_enum: 0,
+            keywords,
+            warnings: Vec::new(),
         };
         lx.run();
         let unbalanced = lx.brace_left_open || lx.closer_unmatched;
@@ -174,8 +228,10 @@ pub fn lex_closing(text: &str, interner: &Interner, close_parens: &[u32]) -> Lex
             }
             _ => {
                 return LexResult {
+                    keywords,
                     tokens: lx.tokens,
                     errors: lx.errors,
+                    warnings: lx.warnings,
                     end_markers: lx.end_markers,
                     boundaries: lx.boundaries,
                     case_lines: lx.case_lines,
@@ -349,7 +405,8 @@ impl<'a> Lexer<'a> {
     }
 
     fn try_skip_end_marker(&mut self) -> bool {
-        if !self.text[self.pos..].starts_with("end ") {
+        // `isEndMarker` holds under `indentSyntax` alone.
+        if !self.keywords.indent || !self.text[self.pos..].starts_with("end ") {
             return false;
         }
         let mut p = self.pos + 4;
@@ -362,6 +419,13 @@ impl<'a> Lexer<'a> {
         }
         if p == word_start || !self.at_line_end(p) {
             return false;
+        }
+        // A header's `:` at the end of its line right before the marker has an empty body, which the marker
+        // ends (dotty's `newTemplateStart`, `END` after `COLONeol`: no template body, an anonymous class's
+        // empty one after `new`).
+        if self.tokens.last().is_some_and(|t| t.kind == Tok::ColonEol && self.src[t.span.start as usize] == b':') {
+            self.push(Tok::Indent, self.pos, self.pos);
+            self.push(Tok::Outdent, self.pos, self.pos);
         }
         self.end_markers.push(Span::new(self.pos as u32, p as u32));
         self.pos = p;
@@ -614,7 +678,7 @@ impl<'a> Lexer<'a> {
                 if s == "_" {
                     (Tok::Underscore, e)
                 } else {
-                    (keyword(s).unwrap_or(Tok::Ident), e)
+                    (keyword(s).filter(|&kw| !self.migrated(kw, p)).unwrap_or(Tok::Ident), e)
                 }
             }
             _ if is_op_char(b) => {
@@ -661,13 +725,18 @@ impl<'a> Lexer<'a> {
 
     /// The layout before the line at `pos`, whose first token is the next one pushed: its
     /// tokens go at the end of `tokens`, which `at` is.
+    /// Whether the keyword at `at` is read as an identifier: `given` and `enum`, Scala 3's, where the
+    /// version is `3.0-migration` (`Keywords`).
+    fn migrated(&self, kw: Tok, at: usize) -> bool {
+        matches!(kw, Tok::KwGiven | Tok::KwEnum) && self.keywords.migrating_at(at as u32)
+    }
+
     fn line_break(&mut self, width: u32, next: Tok, leading_op: bool, cond_body: bool, at: usize, pos: usize) {
         debug_assert_eq!(at, self.tokens.len());
         let last = if at == 0 { Tok::Eof } else { self.tokens[at - 1].kind };
         let top = *self.regions.last().unwrap_or(&Region::Indent(0));
-        let opens_indent = last.can_start_indent()
-            || cond_body
-            || (self.extension_line && matches!(last, Tok::RParen | Tok::RBracket) && next != Tok::LParen);
+        let opens_indent = self.keywords.indent
+            && (last.can_start_indent() || cond_body || (self.extension_line && matches!(last, Tok::RParen | Tok::RBracket) && next != Tok::LParen));
         match top {
             Region::Enclosed(close, known) => {
                 let w = known.unwrap_or_else(|| {
@@ -1341,21 +1410,29 @@ impl<'a> Lexer<'a> {
             return;
         }
         if let Some(kw) = keyword(s) {
-            if kw == Tok::KwDef {
-                self.extension_line = false;
-            }
-            self.push(kw, start, self.pos);
-            match kw {
-                Tok::KwCase => self.open_case(start),
-                Tok::KwEnum => self.last_enum = self.tokens.len(),
-                Tok::KwIf => {
-                    if let Some(Region::Case { guard, .. }) = self.regions.last_mut() {
-                        *guard = true;
-                    }
+            if !self.migrated(kw, start) {
+                if kw == Tok::KwDef {
+                    self.extension_line = false;
                 }
-                _ => {}
+                self.push(kw, start, self.pos);
+                match kw {
+                    Tok::KwCase => self.open_case(start),
+                    Tok::KwEnum => self.last_enum = self.tokens.len(),
+                    Tok::KwIf => {
+                        if let Some(Region::Case { guard, .. }) = self.regions.last_mut() {
+                            *guard = true;
+                        }
+                    }
+                    _ => {}
+                }
+                return;
             }
-            return;
+            // `Scanners.toToken`'s `handleMigration`: `report.errorOrMigrationWarning` of `Scala2to3`
+            // under `3.0-migration`, a migration warning.
+            self.warnings.push((
+                Span::new(start as u32, self.pos as u32),
+                format!("{s} is now a keyword, write `{s}` instead of {s} to keep it as an identifier{}", crate::source_version::rewrite_notice("This", "3.0-migration")),
+            ));
         }
         let name = self.interner.intern(s);
         self.tokens.push(Token {
@@ -1561,6 +1638,8 @@ impl<'a> Lexer<'a> {
     /// the InterpBrace region once the matching `}` is reached.
     fn lex_interp_parts(&mut self, triple: bool) {
         let mut part_start = self.pos;
+        // Where dotty's scanner stands for the part it is reading: the literal's quote, then past each splice.
+        let mut part_offset = self.pos - if triple { 3 } else { 1 };
         loop {
             if self.pos >= self.src.len() {
                 self.error(part_start, self.pos, if triple { "unclosed multi-line string literal" } else { "unclosed string literal" });
@@ -1617,6 +1696,14 @@ impl<'a> Lexer<'a> {
                     if s == "this" {
                         self.push(Tok::KwThis, id_start, self.pos);
                     } else {
+                        // `getInterpolatedIdentRest` reads the name through `toToken`, whose migration warning
+                        // stands at the part's offset.
+                        if matches!(s, "given" | "enum") && self.keywords.migrating_at(id_start as u32) {
+                            self.warnings.push((
+                                Span::new(part_offset as u32, part_offset as u32 + 1),
+                                format!("{s} is now a keyword, write `{s}` instead of {s} to keep it as an identifier{}", crate::source_version::rewrite_notice("This", "3.0-migration")),
+                            ));
+                        }
                         let name = self.interner.intern(s);
                         self.tokens.push(Token {
                             kind: Tok::Ident,
@@ -1625,6 +1712,7 @@ impl<'a> Lexer<'a> {
                         });
                     }
                     part_start = self.pos;
+                    part_offset = self.pos;
                 } else {
                     self.pos += 1;
                 }

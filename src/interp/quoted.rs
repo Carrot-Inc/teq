@@ -2304,7 +2304,7 @@ impl<'a, 't> Interp<'a, 't> {
                             None => ArgSrc::Typed(e, ty),
                         });
                     }
-                    lists.push(ArgList { args: srcs, using: false, span });
+                    lists.push(ArgList { args: srcs, using: false, span, fun: ArgList::NO_FUN });
                 }
                 // `!b` rebuilt by a macro: the builtin's prefix operator.
                 if lists.is_empty() {

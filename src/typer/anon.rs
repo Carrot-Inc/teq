@@ -41,7 +41,8 @@ impl<'a> Worker<'a> {
                 if cls.parents.len() == 1 && cls.body.is_empty() && self.syms.class(k).mods & mods::ABSTRACT == 0 =>
             {
                 let first_written = matches!(first.args.as_slice(), [(_, false), _, ..]);
-                let args: Vec<(ast::ListRef, bool, Span)> = first.args.iter().map(|&(l, using)| (l, using, span)).collect();
+                let args: Vec<(ast::ListRef, bool, Span, super::apply::FunEnd)> =
+                    first.args.iter().enumerate().map(|(k, &(l, using))| (l, using, span, super::apply::FunEnd::at(first.fun_end(ast, k)))).collect();
                 return self.type_new(first.ty, &args, first_written, span, expected);
             }
             Ok(k) => k,

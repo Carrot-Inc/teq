@@ -1,0 +1,5 @@
+exit 0
+warning 1:55
+  Implicit parameters should be provided with a `using` clause.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"

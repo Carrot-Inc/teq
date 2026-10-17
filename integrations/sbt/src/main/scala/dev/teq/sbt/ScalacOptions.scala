@@ -19,6 +19,7 @@ private[teq] final case class ScalacOptions(
   wtostringInterpolated: Boolean = false,
   wconf: Seq[String] = Nil,
   language: Seq[String] = Nil,
+  source: Option[String] = None,
 ) {
   /** Whether the unused imports are reported, as scalac's `WunusedHas.imports` reads the kinds. */
   def wunusedImports: Boolean =
@@ -36,11 +37,14 @@ private[teq] final case class ScalacOptions(
       (if (feature) Seq("--feature") else Nil) ++
       (if (wtostringInterpolated) Seq("--wtostring-interpolated") else Nil) ++
       wconf.flatMap(rules => Seq("--wconf", rules)) ++
+      source.toSeq.flatMap(v => Seq("--source", v)) ++
       (if (jvm) javaOutputVersion.toSeq.flatMap(n => Seq("--java-output-version", n.toString)) else Nil)
 }
 
 private[teq] object ScalacOptions {
-  private val withArgument = Set("-source", "-release", "-encoding", "-java-output-version")
+  private val withArgument = Set("-release", "-encoding", "-java-output-version")
+  /** scalac's `-source` and its alias, whose value teq's `--source` takes as it is, refusing what scalac refuses. */
+  private val sourceNames = Seq("-source", "--source")
   /** `-release` names the class files' version too, unless `-java-output-version` does. */
   private val outputVersion = Seq("-java-output-version", "-release")
 
@@ -55,6 +59,7 @@ private[teq] object ScalacOptions {
     val wunused = mutable.ArrayBuffer.empty[String]
     val wconf = mutable.ArrayBuffer.empty[String]
     val language = mutable.ArrayBuffer.empty[String]
+    var source = Option.empty[String]
     val versions = mutable.Map.empty[String, Int]
     val ignored = mutable.ArrayBuffer.empty[String]
     var rest = options.toList
@@ -74,6 +79,13 @@ private[teq] object ScalacOptions {
           rest = tail
         case option :: tail if option.startsWith("-Xmax-inlines:") && option.stripPrefix("-Xmax-inlines:").toIntOption.isDefined =>
           maxInlines = option.stripPrefix("-Xmax-inlines:").toIntOption
+          rest = tail
+        // scalac's source version, in either form; the last given is the setting, as scalac's driver reads it.
+        case option :: v :: tail if sourceNames.contains(option) =>
+          source = Some(v)
+          rest = tail
+        case option :: tail if sourceNames.exists(name => option.startsWith(name + ":")) =>
+          source = Some(option.dropWhile(_ != ':').drop(1))
           rest = tail
         case "-Xkind-projector" :: tail =>
           kindProjector = true
@@ -123,6 +135,6 @@ private[teq] object ScalacOptions {
         case Nil => ()
       }
     val javaOutputVersion = outputVersion.collectFirst { case name if versions.contains(name) => versions(name) }
-    ScalacOptions(maxInlines, strictEquality, kindProjector, werror, javaOutputVersion, ignored.distinct.toSeq, wunused.distinct.toSeq, deprecation, feature, wtostringInterpolated, wconf.toSeq, language.distinct.toSeq)
+    ScalacOptions(maxInlines, strictEquality, kindProjector, werror, javaOutputVersion, ignored.distinct.toSeq, wunused.distinct.toSeq, deprecation, feature, wtostringInterpolated, wconf.toSeq, language.distinct.toSeq, source)
   }
 }

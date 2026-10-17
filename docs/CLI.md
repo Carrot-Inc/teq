@@ -44,6 +44,10 @@ teq compiler check src/                    # type check only
                                   # a summary, which --werror counts too
       --wtostring-interpolated    # scalac's -Wtostring-interpolated
       --wconf 'id=E198:s,any:e'   # scalac's -Wconf: filters and actions, the rightmost rule winning
+      --source 3.0-migration      # scalac's -source: the source version of a file whose source version
+                                  # import names none (docs/COMPATIBILITY.md, "The source version")
+      --source-at <dir> <version> # the source version of the files under a directory: another module's,
+                                  # in a build of a closure (the project verbs pass it)
       --language implicitConversions  # scalac's -language
       --threads n                 # workers typing the bodies; by default one under 512 KiB of source,
                                   # else the cores, at most 8 (docs/TARGETS.md, "The typer's workers")
@@ -64,8 +68,11 @@ teq tasty --body lib.jar a.b.C.m  # a definition with its body in Scala-like syn
 - `//> using file <path>` and `//> using files <path> <path>...` among the comments that open a file bring other
   sources in: each path relative to the file that names it, quoted or not; a directory, the `.scala` files below
   it, hidden ones left out; each file once. A path that names nothing stops the run (status 2) with the file and
-  the line. An included file's own directives are followed, which scala-cli (1.17.1) refuses. Every other `using`
-  key stays a comment, as it is to scalac.
+  the line. An included file's own directives are followed, which scala-cli (1.17.1) refuses. The `-source` among
+  the scalac options of `//> using options` (`option`, `scalacOptions`), `-source:<v>` or `-source <v>`, is the
+  program's source version unless the command line names one, as scala-cli puts the command line's options after
+  the directives'; the first file's in the program's order where several name one. Every other `using` key stays a
+  comment, as it is to scalac.
 - `teq compiler` and the language server read no directive and see a script alone: a check names what the
   script includes, `teq compiler check tools/script scripts/x.scala`.
 - In a project the launcher runs its scripts (`./teq interp scripts/x.scala`), so the release `teq.lock` pins

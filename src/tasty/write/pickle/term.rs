@@ -1331,7 +1331,7 @@ impl<'w, 'a> P<'w, 'a> {
                 return self.member_termref(s);
             }
             self.buf.byte(SELECT);
-            let n = self.simple_name(self.w.syms.sym(s).name);
+            let n = self.term_name(s);
             self.buf.nat(n as u64);
             self.term_at(None);
             if self.enclosing.last() == Some(&c) {
@@ -1439,7 +1439,7 @@ impl<'w, 'a> P<'w, 'a> {
             return self.object_path(pkg, object);
         }
         self.buf.byte(SELECT);
-        let n = self.simple_name(self.w.syms.sym(s).name);
+        let n = self.term_name(s);
         self.buf.nat(n as u64);
         self.owner_path(s);
     }
@@ -1463,7 +1463,7 @@ impl<'w, 'a> P<'w, 'a> {
             return;
         }
         self.buf.byte(SELECT);
-        let n = self.simple_name(self.w.syms.sym(s).name);
+        let n = self.term_name(s);
         self.buf.nat(n as u64);
         self.term(r);
     }
@@ -1517,7 +1517,7 @@ impl<'w, 'a> P<'w, 'a> {
             Owner::Class(_) | Owner::Package(_) if self.is_local(Key::Sym(s)) && self.static_owner(owner) => self.member_termref(s),
             _ => {
                 self.buf.byte(SELECT);
-                let n = self.simple_name(self.w.syms.sym(s).name);
+                let n = self.term_name(s);
                 self.buf.nat(n as u64);
                 self.owner_path(s);
             }
@@ -4222,7 +4222,7 @@ impl<'w, 'a> P<'w, 'a> {
             _ => return self.fail("a summoned path of no singleton type".to_string()),
         };
         self.buf.byte(TERMREF);
-        let n = self.simple_name(self.w.syms.sym(s).name);
+        let n = self.term_name(s);
         self.buf.nat(n as u64);
         match owner {
             Some(r) => self.path_type(r),
@@ -4245,7 +4245,7 @@ impl<'w, 'a> P<'w, 'a> {
             TExpr::Local(s) => self.local_ref(s),
             TExpr::Field(r, f) => {
                 self.buf.byte(TERMREF);
-                let n = self.simple_name(self.w.syms.sym(f).name);
+                let n = self.term_name(f);
                 self.buf.nat(n as u64);
                 self.path_type(r);
             }
@@ -4678,7 +4678,7 @@ impl<'w, 'a> P<'w, 'a> {
         let l = self.open(PARAM);
         let n = match name {
             Some(name) => self.names.simple(&name),
-            None => self.simple_name(self.w.syms.sym(s).name),
+            None => self.term_name(s),
         };
         self.buf.nat(n as u64);
         let t = self.w.sig_of(s).ret;
@@ -4928,7 +4928,7 @@ impl<'w, 'a> P<'w, 'a> {
                 self.define(Key::Sym(v), addr);
                 self.term_at(None);
                 let l = self.open(VALDEF);
-                let n = self.simple_name(self.w.syms.sym(v).name);
+                let n = self.term_name(v);
                 self.buf.nat(n as u64);
                 self.tpt(types[0]);
                 write_match(self, &|p0| {
@@ -4976,7 +4976,7 @@ impl<'w, 'a> P<'w, 'a> {
                     self.define(Key::Sym(v), addr);
                     self.term_at(None);
                     let vl = self.open(VALDEF);
-                    let n = self.simple_name(self.w.syms.sym(v).name);
+                    let n = self.term_name(v);
                     self.buf.nat(n as u64);
                     self.tpt(types[i]);
                     self.term_at(None);
@@ -5404,7 +5404,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.define(Key::Sym(s), addr);
         }
         let l = self.open(BIND);
-        let n = self.simple_name(self.w.syms.sym(s).name);
+        let n = self.term_name(s);
         self.buf.nat(n as u64);
         let t = self.w.sig_of(s).ret;
         let t = self.w.zonk(t);

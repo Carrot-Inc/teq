@@ -1,0 +1,222 @@
+# The runs of tests/source-version.scala, one per line: `[interp] <probe> [<scalac options>] [=> <tag>]`. A probe is
+# tests/source-version/probes/<probe>.scala; scalac's options map to teq's flags (`-source:<v>` and `-source <v>` to
+# `--source <v>`); `interp` runs the program (scala-cli run, teq interp) where the rest are checked. A run's name is
+# its probe, then `@` and its options, `-source:` dropped and blanks, `:`, `=` and `/` as `_`. Both scalacs' captures are pinned apart
+# under expected/<tag>/; teq is held to 3.8.4's, or to the tag after `=>` where 3.8.4 cannot show the behaviour.
+#
+# The migration table's rows (src/source_version.rs, dotty's MigrationVersion): each probe without a setting and at
+# the versions its thresholds make distinct under report.errorOrMigrationWarning (the latest legal version before
+# warnFrom, warnFrom, errorFrom.prevMigrating, errorFrom; a unit test computes them and holds this list to them).
+
+Scala2to3
+Scala2to3 -source:3.0-migration
+Scala2to3 -source:3.0
+OverrideValParameter
+OverrideValParameter -source:3.0
+OverrideValParameter -source:future-migration
+OverrideValParameter -source:future
+ForComprehensionPatternWithoutCase
+ForComprehensionPatternWithoutCase -source:3.1
+ForComprehensionPatternWithoutCase -source:3.2
+ForComprehensionPatternWithoutCase -source:3.4-migration
+ForComprehensionPatternWithoutCase -source:3.4
+ForComprehensionUncheckedPathDefs
+ForComprehensionUncheckedPathDefs -source:3.1
+ForComprehensionUncheckedPathDefs -source:3.2
+ForComprehensionUncheckedPathDefs -source:future-migration
+ForComprehensionUncheckedPathDefs -source:future
+NonLocalReturns
+NonLocalReturns -source:3.1
+NonLocalReturns -source:3.2
+NonLocalReturns -source:future-migration
+NonLocalReturns -source:future
+AscriptionAfterPattern
+AscriptionAfterPattern -source:3.2
+AscriptionAfterPattern -source:3.3
+AscriptionAfterPattern -source:future-migration
+AscriptionAfterPattern -source:future
+ExplicitContextBoundArgument
+ExplicitContextBoundArgument -source:3.3
+ExplicitContextBoundArgument -source:3.4
+ExplicitContextBoundArgument -source:3.5-migration
+ExplicitContextBoundArgument -source:3.5
+AlphanumericInfix
+AlphanumericInfix -source:3.3
+AlphanumericInfix -source:3.4
+AlphanumericInfix -source:future-migration
+AlphanumericInfix -source:future
+RemoveThisQualifier
+RemoveThisQualifier -source:3.3
+RemoveThisQualifier -source:3.4
+RemoveThisQualifier -source:future-migration
+RemoveThisQualifier -source:future
+UninitializedVars
+UninitializedVars -source:3.3
+UninitializedVars -source:3.4
+UninitializedVars -source:future-migration
+UninitializedVars -source:future
+VarargSpliceAscription
+VarargSpliceAscription -source:3.3
+VarargSpliceAscription -source:3.4
+VarargSpliceAscription -source:future-migration
+VarargSpliceAscription -source:future
+WildcardType
+WildcardType -source:3.3
+WildcardType -source:3.4
+WildcardType -source:future-migration
+WildcardType -source:future
+WithOperator
+WithOperator -source:3.3
+WithOperator -source:3.4
+WithOperator -source:future-migration
+WithOperator -source:future
+WithOperator -source:3.10-migration
+WithOperator -source:3.10
+FunctionUnderscore
+FunctionUnderscore -source:3.3
+FunctionUnderscore -source:3.4
+FunctionUnderscore -source:future-migration
+FunctionUnderscore -source:future
+NonNamedArgumentInJavaAnnotation
+NonNamedArgumentInJavaAnnotation -source:3.5
+NonNamedArgumentInJavaAnnotation -source:3.6-migration
+NonNamedArgumentInJavaAnnotation -source:3.6
+AmbiguousNamedTupleSyntax
+AmbiguousNamedTupleSyntax -source:3.5
+AmbiguousNamedTupleSyntax -source:3.6
+AmbiguousNamedTupleSyntax -source:future-migration
+AmbiguousNamedTupleSyntax -source:future
+ImportWildcard
+ImportWildcard -source:3.9
+ImportWildcard -source:future-migration
+ImportWildcard -source:future
+ImportRename
+ImportRename -source:3.9
+ImportRename -source:future-migration
+ImportRename -source:future
+ParameterEnclosedByParenthesis
+ParameterEnclosedByParenthesis -source:3.9
+ParameterEnclosedByParenthesis -source:future-migration
+ParameterEnclosedByParenthesis -source:future
+XmlLiteral
+XmlLiteral -source:3.9
+XmlLiteral -source:future-migration
+XmlLiteral -source:future
+GivenSyntax
+GivenSyntax -source:3.9
+GivenSyntax -source:future-migration
+GivenSyntax -source:future
+ImplicitParamsWithoutUsing
+ImplicitParamsWithoutUsing -source:3.6
+ImplicitParamsWithoutUsing -source:3.7
+ImplicitParamsWithoutUsing -source:future-migration
+ImplicitParamsWithoutUsing -source:future
+Scala2Implicits
+Scala2Implicits -source:3.9
+Scala2Implicits -source:future-migration
+Scala2Implicits -source:future
+IdentifierDollars
+IdentifierDollars -source:3.8
+IdentifierDollars -source:3.9 => 3.10.0
+IdentifierDollars -source:future => 3.10.0
+
+# The model: the parser's current version and the unit's final one; dotty's restrictions on a source import.
+earlier_type -source:3.8
+earlier_parse -source:future
+duplicate
+local
+renamed
+import_override -source:3.8
+import_future_twice
+import_213_row
+package_line
+package_semi
+package_nested
+package_braces
+package_colon
+package_object
+given_ident
+given_ident -source:3.0-migration
+given_ident -source:3.0
+future_import_init
+future_setting_init -source:future
+namedtuple_old
+namedtuple_old -source:3.6
+namedtuple_old -source:3.7
+
+# The scanner: a version an import names applies from the token the scanner fetches after it; the settings it reads
+# at its construction (the indentation syntax) stay.
+mid
+mid_newline
+scanner_layout
+mid_enum_newline
+mid_enum_semi
+mid_enum_comma
+mid_given_newline
+reverse -source:3.0-migration
+reverse_indent
+reverse_indent -source:3.0-migration
+setting_indent -source:3.0-migration
+
+# The values: the setting's and the import's, each tag's own.
+values -source:3.9
+values -source 3.9
+values -source:3.1-migration
+values -source:2.13
+values -source:future-migration
+values -source:future
+values -source:3.10-migration
+values -source:3.10
+values -source:3.11
+import_213
+import_31m
+import_39
+import_310
+
+# The directive, and its precedence over the setting (scala-cli's).
+interp interp_directive
+interp interp_directive -source:3.3
+interp directive_split
+interp directive_option
+interp directive_scalac_options
+interp interp_setting -source:3.0-migration
+
+# The for comprehension's lowering by version: filtered (FilterNow, CheckAndFilter) or checked (Check).
+interp forpat_run -source:3.1
+interp forpat_run -source:3.3
+interp forpat_run -source:3.4-migration
+
+# The parser's warnings carry dotty's message identities (`DeprecatedWithOperatorID`): -Wconf's `id` and `name`
+# filters and @nowarn select them.
+with_id -Wconf:id=E003:s -Werror
+with_id -Wconf:name=DeprecatedWithOperator:s -Werror
+with_id -Werror
+with_nowarn
+
+# A context bound's evidence by its name's kind, not its spelling (a parameter written `evidence$1` is not one); an
+# empty argument list for its clause (`matchingApply`, `failEmptyArgs`).
+fake_evidence
+fake_evidence -source:3.5
+empty_context
+empty_context -source:3.4
+empty_context -source:3.5
+
+# A context bound's evidence takes no named argument (its name is a `ContextBoundParamName`, `Applications`' match
+# by name whole); the implicit clause's argument as written: a brace block, an infix operand with and without
+# parentheses, and comments between the function and the argument, a `(` in one counted, a line comment's `\r`
+# before its line's end (`checkParentheses`' slice of the text from the function tree's end to the argument). The
+# function tree's end as dotty's trees have it: a right-associative operator's `Select(r, op)` past its argument,
+# the slice empty; a left-associative one's operator, an operand tuple the one argument (`InfixTuple`); a parent's
+# and a `new`'s lists after `New(T)` and the lists before; a curried call's list after the one before. The argument
+# as written where the parser's tree holds less of it: an operand's block and its parentheses but one level
+# (`binop`'s `Parens(arg)`), an argument's own parentheses and block, a colon argument's indented region (`blockExpr`:
+# its one expression as written, in parentheses or braces, else the block of its statements).
+bound_named -source:3.4
+block_implicit
+infix_implicit
+comment_implicit
+comment_crlf
+rightassoc_implicit
+fun_end_implicit
+written_arg_implicit
+colon_implicit

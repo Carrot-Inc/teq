@@ -139,7 +139,8 @@ inputs a Mill build names besides its scripts); `repositories`, the
 build's remote Maven ones and their credentials hosts; `jars`, every jar a classpath names, once, by its key
 `organization:name:version[:classifier]` with its repository, sha1 and size; `java.outputVersion`, the class
 files' version; and `projects`, each with its platform, Scala version and configurations (the roots, the full
-ordered classpath, the flags, the generators, the declared main classes and the test context of `compile`,
+ordered classpath, the flags (the scalac options teq honours, `source` the configuration's `-source`, under which a
+session of a closure types that configuration's roots, `--source-at`), the generators, the declared main classes and the test context of `compile`,
 `runtime` and `test`, a JVM test context's `parallelism` among it, "Tests." below), the `run`, `dev` and `stage`
 blocks the verbs read, and the description the plugin's own tasks build from. A Mill build's configurations say
 more (below, "The export of a Mill build"): `transitive: false`, the classpath's products the whole of what the

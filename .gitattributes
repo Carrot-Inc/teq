@@ -2,3 +2,5 @@
 /teq text eol=lf
 /teq.cmd text eol=crlf
 /teq.lock text eol=lf
+# A probe whose lines end in CRLF, a line comment's `\r` before its line's end (tests/source-version/runs.txt).
+/tests/source-version/probes/comment_crlf.scala -text

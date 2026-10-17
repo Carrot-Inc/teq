@@ -838,11 +838,11 @@ impl<'a> Worker<'a> {
                 };
                 args.push((push_list(&mut cv.ast.expr_lists, &items), using));
             }
-            out.push(Parent { ty, args });
+            out.push(Parent { ty, args, ends: Vec::new() });
         }
         if let (true, true, Some(t)) = (anonymous, out.is_empty(), builtin) {
             let ty = cv.ty(TyExpr::Resolved(t));
-            out.push(Parent { ty, args: Vec::new() });
+            out.push(Parent { ty, args: Vec::new(), ends: Vec::new() });
         }
         out
     }
@@ -4207,7 +4207,7 @@ impl<'a> Worker<'a> {
                 let r = items[0];
                 // The operator's selection, whose point is the operator's: what a diagnostic of
                 // it names, as scalac's does.
-                let e = cv.at(head.at, |cv| cv.expr(Expr::Infix(l, name, r)));
+                let e = cv.at(head.at, |cv| cv.expr(Expr::Infix(l, name, r, crate::ast::NO_END)));
                 self.keep_declaration(cv, head, e);
                 return e;
             }

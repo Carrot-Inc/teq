@@ -35,6 +35,9 @@ pub enum Category {
     /// `UncheckedWarning`: on by default (scalac's `-unchecked`).
     Unchecked,
     Configuration,
+    /// `MigrationWarning`: the migration table's at a version's migration (`report.errorOrMigrationWarning`),
+    /// presented as a migration warning; no `cat=` filter names it.
+    Migration,
 }
 
 impl Category {
@@ -54,6 +57,7 @@ impl Category {
             Category::Feature => "feature",
             Category::Unchecked => "unchecked",
             Category::Configuration => "configuration",
+            Category::Migration => "migration",
         }
     }
 }
@@ -61,6 +65,7 @@ impl Category {
 /// The ids of the messages teq gives with scalac's (`ErrorMessageID.errorNumber`).
 pub mod id {
     pub const EMPTY_CATCH_AND_FINALLY_BLOCK: u16 = 2;
+    pub const DEPRECATED_WITH_OPERATOR: u16 = 3;
     pub const PATTERN_MATCH_EXHAUSTIVITY: u16 = 29;
     pub const MATCH_CASE_UNREACHABLE: u16 = 30;
     pub const MATCH_CASE_ONLY_NULL: u16 = 121;

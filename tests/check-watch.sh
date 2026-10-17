@@ -5,8 +5,9 @@
 # typed program survives an error), a parse error and its fix, a warning (and the same program
 # under --werror), a file added, the UTF-16 columns of a line with a non-ASCII character, a first
 # build with an error followed by its fix, a constant val's value changed where its singleton
-# type is read (the full path, as a fresh check), a nested class's prefix changed under a client
-# (scalac's error, as a fresh check), a first build with a file that fails to parse (its
+# type is read (the full path, as a fresh check), a library's source version import changed under a
+# client's explicit evidence argument and back (the full path, as a fresh check), a nested class's
+# prefix changed under a client (scalac's error, as a fresh check), a first build with a file that fails to parse (its
 # recovered tree typed with the rest) followed by its fix, and the `text` command: an unsaved
 # text standing in for the file on disk for a named and for a plain `build`, and its withdrawal;
 # and that a text of megabytes with a parse error leaves no mapping kept once two more builds
@@ -273,6 +274,26 @@ printf 'object C:\n  final val one = 1\n' > "$cdir/A.scala"
 build "$cdir/A.scala"
 expect "a constant again" "$(field ok),$(count error)" 'true,0'
 as_fresh "a constant again" "$cdir/A.scala" "$cdir/B.scala"
+stop
+
+# A unit's source version decides its signatures: a context bound's evidence is an `implicit` clause below 3.6
+# and a using clause from it (`Desugar.elimContextBounds`), which a client's explicit argument list fits or not.
+# A source version import changed, whose import `imports` does not hold, takes the full path either way, whose
+# answer is a fresh check's: the client refused under the library's 3.8, accepted again under its 3.3.
+vdir=$work/version
+mkdir -p "$vdir"
+printf 'import scala.language.`3.3`\ntrait C[T]\nobject Lib { def f[T: C](): Int = 1 }\n' > "$vdir/Lib.scala"
+printf 'import scala.language.`3.3`\nobject Use { val x: Int = Lib.f[Int]()(new C[Int] {}) }\n' > "$vdir/Use.scala"
+start "$vdir/Lib.scala" "$vdir/Use.scala"
+expect "a source version import: the first build" "$(field ok),$(count error)" 'true,0'
+printf 'import scala.language.`3.8`\ntrait C[T]\nobject Lib { def f[T: C](): Int = 1 }\n' > "$vdir/Lib.scala"
+build "$vdir/Lib.scala"
+expect "a source version import changed: the full path" "$(field ok),$(field incremental),$(field fallback)" 'false,false,"'"$vdir"'/Lib.scala: source version changed"'
+as_fresh "a source version import changed" "$vdir/Lib.scala" "$vdir/Use.scala"
+printf 'import scala.language.`3.3`\ntrait C[T]\nobject Lib { def f[T: C](): Int = 1 }\n' > "$vdir/Lib.scala"
+build "$vdir/Lib.scala"
+expect "a source version import changed back: the full path" "$(field ok),$(field incremental),$(field fallback),$(count error)" 'true,false,"'"$vdir"'/Lib.scala: source version changed",0'
+as_fresh "a source version import changed back" "$vdir/Lib.scala" "$vdir/Use.scala"
 stop
 
 # A class nested in a class is a type of its own through each prefix: a result moved from

@@ -36,6 +36,7 @@ mod shake;
 mod shape;
 mod shared;
 mod source;
+mod source_version;
 mod stdindex;
 mod symbols;
 mod task;
@@ -131,7 +132,7 @@ pub(crate) fn parse_build(
     let parallel = frontend::parallel(&files);
     let mut slots: Vec<Option<Vec<ast::Ast>>> = (0..files.len()).map(|_| None).collect();
     let mut used = frontend::UsedNames::default();
-    frontend::parse_files(&files, n_std..files.len(), &mut slots, interner, diags, Some(&mut used), parallel, usize::MAX, opts.syntax);
+    frontend::parse_files(&files, n_std..files.len(), &mut slots, interner, diags, Some(&mut used), parallel, usize::MAX, opts.syntax, &opts.source_at);
     let scalajs_unlocked = scalajs_jar(&opts.classpath) || frontend::names_scalajs(&used, interner);
     let selected = frontend::select_std(&std, &used, interner, scalajs_unlocked);
     for i in (0..n_std).filter(|&i| selected[i]) {
@@ -140,7 +141,7 @@ pub(crate) fn parse_build(
     let todo = (0..n_std).filter(|&i| selected[i]);
     // The std files are few and small: a handful of workers parse them in the time it would
     // take to start a full set.
-    frontend::parse_files(&files, todo, &mut slots, interner, diags, None, parallel, frontend::STD_WORKERS, parser::Syntax::default());
+    frontend::parse_files(&files, todo, &mut slots, interner, diags, None, parallel, frontend::STD_WORKERS, parser::Syntax::default(), &[]);
     let (asts, blocks_of) = frontend::lay_out(&mut files, slots, &std);
     let locked = used.defines_scalajs;
     (files, asts, blocks_of, std, selected, scalajs_unlocked && !locked)
@@ -496,6 +497,11 @@ pub(crate) struct Options {
     /// `--no-outline`: every inline expansion and anonymous class written at its site.
     pub no_outline: bool,
     pub syntax: parser::Syntax,
+    /// `--source` was given: a directive's `-source` does not override it (`directives::using_source`).
+    pub source_given: bool,
+    /// `--source-at <root> <version>`: the setting of the files under a root, another module's in a build
+    /// of a closure (`Export::source_args`), by the root's canonical path.
+    pub source_at: Vec<(std::path::PathBuf, source_version::SourceVersion)>,
     /// `--profile`: where the type phase's time went, and the file its whole table goes to.
     pub profile: bool,
     pub profile_json: Option<String>,
@@ -636,8 +642,8 @@ const COMPILER_USAGE: &str = "usage: teq compiler <build|check|watch> <files or 
          \x20         type lambda (`Either[String, *]` for `[X] =>> Either[String, X]`)\n\
          --max-inlines  scalac's -Xmax-inlines: how deep inline calls may nest (32 by default);\n\
          \x20         a `max-inlines = n` in the teq.toml sets it for a project\n\
-         --source  scalac's -source: the source version the parser reads (3.0-migration to 3.9,\n\
-                   future), 3.8 by default\n\
+         --source  scalac's -source: the source version of a file whose source import names none\n\
+         \x20         (3.0-migration to 3.9, future-migration, future), 3.8 by default\n\
          --language  scalac's -language: the comma-separated features enabled for the program\n\
          \x20         (`implicitConversions`, `strictEquality`)\n\
          --werror  fails the build on warnings\n\
@@ -862,6 +868,8 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
         diagnostics_append: false,
         no_outline: false,
         syntax: parser::Syntax::default(),
+        source_given: false,
+        source_at: Vec::new(),
         profile: false,
         profile_json: None,
         no_cache: jarcache::disabled_by_env(),
@@ -1027,10 +1035,32 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
                 None => usage_for(command),
             },
             _ if a.starts_with("--wconf=") => o.wconf.push(a["--wconf=".len()..].to_string()),
-            // scalac's `-source`: the version the parser reads (`3.0-migration` .. `3.9`, `future`).
-            "--source" => match args.next().as_deref().and_then(parser::SourceVersion::parse) {
-                Some(v) => o.syntax.source = v,
+            // scalac's `-source`: the unit's version where its source import names none (`Feature.sourceVersion`),
+            // the values the tracked tag's settings take, refused as its driver refuses them.
+            "--source" => match args.next() {
+                Some(v) => match source_version::SourceVersion::setting(&v, source_version::TAG) {
+                    Ok(v) => {
+                        o.syntax.source = v;
+                        o.source_given = true;
+                    }
+                    Err(e) => {
+                        eprintln!("error: {}", e.replace("-source", "--source"));
+                        std::process::exit(2);
+                    }
+                },
                 None => usage_for(command),
+            },
+            "--source-at" => match (args.next(), args.next()) {
+                (Some(root), Some(v)) => match source_version::SourceVersion::setting(&v, source_version::TAG) {
+                    // A root made after the session starts (a managed sources' directory) is matched by its
+                    // absolute path.
+                    Ok(v) => o.source_at.push((source::canonicalize(&root).or_else(|_| std::path::absolute(&root)).unwrap_or_else(|_| std::path::PathBuf::from(&root)), v)),
+                    Err(e) => {
+                        eprintln!("error: {}", e.replace("-source", "--source-at"));
+                        std::process::exit(2);
+                    }
+                },
+                _ => usage_for(command),
             },
             "--language" => match args.next() {
                 Some(features) => {
@@ -1607,7 +1637,7 @@ fn main() {
 
 fn compile() -> i32 {
     alloc::enter();
-    let opts = parse_options();
+    let mut opts = parse_options();
     if opts.command == "watch" {
         watch::run(&opts);
     }
@@ -1635,6 +1665,19 @@ fn compile() -> i32 {
             }
         }
     }
+    // A script's `//> using options -source:<v>`, which `--source` overrides as scala-cli's command line
+    // follows the directives (docs/CLI.md).
+    if opts.interp && !opts.source_given {
+        if let Some((file, line, v)) = program.iter().find_map(|f| directives::using_source(&f.text).map(|(line, v)| (&f.path, line, v))) {
+            match source_version::SourceVersion::setting(&v, source_version::TAG) {
+                Ok(v) => opts.syntax.source = v,
+                Err(e) => {
+                    eprintln!("{}:{}: error: {}", file, line, e);
+                    std::process::exit(2);
+                }
+            }
+        }
+    }
     let t_read = Instant::now();
 
     let mut interner = intern::Interner::new();
@@ -1649,8 +1692,8 @@ fn compile() -> i32 {
     }
     if opts.dump_defs {
         for f in &program {
-            let (asts, errors) = frontend::parse_one(&f.text, &interner, opts.syntax);
-            print!("file\t{}\n{}", f.path, parser::dump::dump(&asts, &errors, &interner));
+            let (asts, found) = frontend::parse_one(&f.text, &interner, opts.syntax);
+            print!("file\t{}\n{}", f.path, parser::dump::dump(&asts, &found.errors, &interner));
         }
         std::process::exit(0);
     }
@@ -1669,12 +1712,16 @@ fn compile() -> i32 {
     // The recovered trees are typed whatever the parser reported, as scalac's typer runs; the
     // syntax errors come first, as scalac prints them. A parallel attempt that gave way printed
     // them before it typed (`serial_again`).
+    // The syntax's warnings are presented with the typer's, under the build's policy.
+    let (syntax_warnings, syntax_errors): (Vec<_>, Vec<_>) = std::mem::take(&mut diags.items).into_iter().partition(|d| d.is_warning);
+    diags.items = syntax_errors;
     let parse_errors = diags.error_count();
     if parse_errors > 0 && !serial_attempt() {
         eprint!("{}", diags.render(files.as_slice()));
     }
 
     let mut typer = typer::Typer::new(&asts, &files, &mut interner);
+    typer.diags.items.extend(syntax_warnings);
     typer.recovered = parse_errors > 0;
     typer.diags.syntax_errors = parse_errors > 0;
     // The build again by one worker, after a parallel attempt gave way (`serial_again`).
@@ -1693,7 +1740,6 @@ fn compile() -> i32 {
     typer.macro_state_per_worker = opts.macro_state_per_worker;
     crate::measure::set_macro_state_per_worker(opts.macro_state_per_worker);
     typer.dialect = opts.dialect;
-    typer.source = opts.syntax.source;
     typer.diags.policy = std::sync::Arc::new(opts.policy());
     if opts.wunused_imports {
         typer.unused.mode = typer::unused::Mode::Warn;
@@ -3183,7 +3229,6 @@ pub(crate) fn with_typed_program<R: Send>(name: &str, text: &str, flags: &[&str]
             install_std(&mut typer, std, &selected, &blocks_of, scalajs_unlocked);
             open_classpath(&opts, &mut typer, cp, jar_files, jdk_file);
             typer.dialect = opts.dialect;
-            typer.source = opts.syntax.source;
             typer.inline.max_depth = opts.max_inlines;
             typer.inline.outlines = !opts.jvm && !opts.interp && !opts.no_outline;
             if opts.jvm {

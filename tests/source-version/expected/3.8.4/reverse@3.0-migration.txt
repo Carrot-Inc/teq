@@ -1,0 +1,4 @@
+exit 0
+migration warning 1:16
+  given is now a keyword, write `given` instead of given to keep it as an identifier
+  This can be rewritten automatically under -rewrite -source 3.0-migration.

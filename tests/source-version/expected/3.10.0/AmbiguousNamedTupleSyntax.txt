@@ -1,0 +1,4 @@
+exit 1
+error 1:54
+  Found:    (a : Int)
+  Required: Int

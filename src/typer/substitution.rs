@@ -101,7 +101,7 @@ fn typed_without_effects(ast: &crate::ast::Ast, e: crate::ast::ExprId) -> bool {
         Expr::Select(r, _) | Expr::Parens(r) | Expr::Typed(r, _) | Expr::Prefix(_, r) | Expr::NamedArg(_, r) => typed_without_effects(ast, r),
         Expr::Apply(f, args) | Expr::UsingApply(f, args) => typed_without_effects(ast, f) && all(args),
         Expr::TypeApply(f, _) => typed_without_effects(ast, f),
-        Expr::Infix(a, _, b) => typed_without_effects(ast, a) && typed_without_effects(ast, b),
+        Expr::Infix(a, _, b, _) => typed_without_effects(ast, a) && typed_without_effects(ast, b),
         Expr::New(_, args) | Expr::Tuple(args) => all(args),
         _ => false,
     }
@@ -2604,7 +2604,7 @@ impl<'a> Worker<'a> {
             Vec::new()
         } else {
             let typed = args.iter().map(|&a| super::apply::ArgSrc::Typed(a, self.walked_type(w, a))).collect();
-            vec![super::apply::ArgList { args: typed, using: false, span }]
+            vec![super::apply::ArgList { args: typed, using: false, span, fun: super::apply::ArgList::NO_FUN }]
         };
         self.tuple_member(recv, rt, name, &lists, span)
     }

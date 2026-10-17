@@ -443,7 +443,7 @@ mixin-primitive-on-generic-5
 mixins
 multi-apply
 named-patmatch
-named-tuples-strictEquality
+named-tuples-strictEquality	--language strictEquality
 nested-object-implements-val
 no-init-enclosing-static-objects
 non-jvm-sam-non-apply

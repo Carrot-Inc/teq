@@ -765,11 +765,11 @@ impl<'a> Worker<'a> {
     /// matched against, at that part in a generator (a typed pattern at its type), at the
     /// right-hand side (`rhs`) in a val.
     pub fn check_irrefutable(&mut self, tp: TPatId, pat: PatId, sty: TypeId, rhs: Option<Span>) {
-        use crate::parser::SourceVersion;
+        use crate::source_version::{rewrite_notice, Migration, SourceVersion};
         // The unit's source version (`Feature.sourceVersion`): a language import's, else the build's.
-        let source = self.cur_ast().source_import.unwrap_or(self.source);
+        let source = self.cur_ast().source_version;
         // Before 3.2 nothing is checked (`recur`'s `!sourceVersion.isAtLeast(`3.2`)`).
-        if sty == ERROR || !source.is_at_least(SourceVersion::release(2)) {
+        if sty == ERROR || !source.is_at_least(SourceVersion::V3_2) {
             return;
         }
         let sty = self.erased_named_tuple(sty);
@@ -792,28 +792,27 @@ impl<'a> Worker<'a> {
             }
         };
         let usage = if extractor.is_some() { "this usage" } else { "the narrowing" };
-        let since_3_8 = source.is_at_least(SourceVersion::release(8));
+        let since_3_8 = source.is_at_least(SourceVersion::V3_8);
         let (fix, addendum, version) = match rhs {
             Some(_) if since_3_8 => ("adding `.runtimeChecked` after the expression", "may result in a MatchError at runtime", "3.8-migration"),
             Some(_) => ("adding `: @unchecked` after the expression", "may result in a MatchError at runtime", "3.2-migration"),
             None => ("adding the `case` keyword before the full pattern", "will result in a filtering for expression (using `withFilter`)", "3.2-migration"),
         };
         let msg = format!(
-            "{}\n\nIf {} is intentional, this can be communicated by {},\nwhich {}.\nThis patch can be rewritten automatically under -rewrite -source {}.",
-            message, usage, fix, addendum, version
+            "{}\n\nIf {} is intentional, this can be communicated by {},\nwhich {}.{}",
+            message, usage, fix, addendum, rewrite_notice("This patch", version)
         );
         // `report.errorOrMigrationWarning` over `MigrationVersion.ForComprehensionUncheckedPathDefs`
         // (a warning from 3.2, an error from `future`) for a definition, `ForComprehensionPatternWithoutCase`
         // (from 3.2, an error from 3.4) for a generator; the error's own migration version warns.
-        let error_from = if rhs.is_some() { SourceVersion::FUTURE } else { SourceVersion::release(4) };
-        let error = source.is_at_least(error_from) && !source.migrates_to(error_from);
+        let row = if rhs.is_some() { Migration::ForComprehensionUncheckedPathDefs } else { Migration::ForComprehensionPatternWithoutCase };
         let span = match rhs {
             // A refutable extractor's spans the pattern and the right side.
             Some(rhs) if extractor.is_some() => Span { start: at.start, end: rhs.end.max(at.end) },
             Some(rhs) => rhs,
             None => part_at,
         };
-        if error { self.error(span, msg) } else { self.warn(span, msg) }
+        self.migration(row, span, msg, crate::warnings::NO_ID);
     }
 
     /// The first sub-pattern that may fail: the type it asks of its scrutinee, that scrutinee's
@@ -1696,7 +1695,7 @@ impl<'a> Worker<'a> {
         self.prog.set_type(arg, xxl_ty);
         let recv = self.prog.add(TExpr::Module(module));
         let recv_ty = self.types.class(module, &[]);
-        let lists = vec![super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(arg, xxl_ty)], using: false, span }];
+        let lists = vec![super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(arg, xxl_ty)], using: false, span, fun: super::apply::ArgList::NO_FUN }];
         let (call, _) = self.apply_member(recv, recv_ty, names::UNAPPLY_SEQ, None, lists, span, None);
         let some = self.std_class("Some")?;
         self.complete_class(some);
@@ -1985,7 +1984,7 @@ impl<'a> Worker<'a> {
         let scrut = self.fresh_local("u", sty, span);
         let arg = self.prog.add(TExpr::Local(scrut));
         self.prog.set_type(arg, sty);
-        let lists = vec![super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(arg, sty)], using: false, span }];
+        let lists = vec![super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(arg, sty)], using: false, span, fun: super::apply::ArgList::NO_FUN }];
         let n = self.diags.items.len();
         let (call, rty) = self.apply_member(tag, tag_ty, names::UNAPPLY, None, lists, span, None);
         if self.diags.items.len() > n || rty == ERROR {

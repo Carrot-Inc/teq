@@ -1,0 +1,7 @@
+exit 1
+warning 1:56
+  Context bounds will map to context parameters.
+  A `using` clause is needed to pass explicit arguments to them.
+  This code can be rewritten automatically under -rewrite -source 3.4-migration.
+error 1:65
+  method f in object P: (implicit evidence$1: C[Int]): Int does not have a parameter evidence$1

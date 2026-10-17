@@ -1,0 +1,12 @@
+exit 1
+error 1:25
+  `implicit` vals are no longer supported, use a `given` clause instead. Example:
+  
+  given x: Int = ...
+  
+  Note: given clauses are evaluated lazily unless the right hand side is
+  a simple reference.  If eager evaluation of the value's right hand side
+  is important, you can define a regular val and a given instance like this:
+  
+  val x = ...
+  given Int = x

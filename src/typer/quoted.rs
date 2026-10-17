@@ -1316,7 +1316,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Expr::Select(q, _) | Expr::Parens(q) | Expr::Splice(q) | Expr::Quote(q) | Expr::NamedArg(_, q) => self.collect_ascriptions(q, out),
-            Expr::Infix(l, _, r) => {
+            Expr::Infix(l, _, r, _) => {
                 self.collect_ascriptions(l, out);
                 self.collect_ascriptions(r, out);
             }

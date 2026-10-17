@@ -979,8 +979,8 @@ pub struct Worker<'a> {
     pub member_call: Option<Box<apply::MemberCall>>,
     pub member_calls: Vec<Box<apply::MemberCall>>,
     /// The first elements of the tuples an infix operation's operand was flattened from
-    /// (`a op (b, c)`, dotty's `ApplyKind.InfixTuple`), by file.
-    pub infix_tuples: FxMap<(crate::source::FileId, crate::ast::ExprId), ()>,
+    /// (`a op (b, c)`, dotty's `ApplyKind.InfixTuple`), by file, each with its tuple.
+    pub infix_tuples: FxMap<(crate::source::FileId, crate::ast::ExprId), crate::ast::ExprId>,
     /// Under a member's retry, set where `try_extensions` applied a lexical extension it
     /// selected (dotty's `tryExtension`), whose failure to apply opens no conversion search.
     pub lexical_selected: Option<bool>,
@@ -1595,9 +1595,6 @@ pub struct Worker<'a> {
     pub withheld_met: u32,
     /// The dialect flags of the build (`src/dialect.rs`), `strict_equality` among them.
     pub dialect: crate::dialect::Dialect,
-    /// `--source` (scalac's `-source`), which decides whether a pattern that can fail is reported,
-    /// a warning or an error (`report.errorOrMigrationWarning` over a `MigrationVersion`).
-    pub source: crate::parser::SourceVersion,
     /// The JVM target: intrinsics come from `@jvm`, and expressions keep their static types.
     pub jvm: bool,
     /// `scala.scalajs.js.internal.UnitOps` once looked up, which is in the implicit scope of `Unit`
@@ -2776,7 +2773,6 @@ impl<'a> Worker<'a> {
             emits_bodies: true,
             withheld_met: 0,
             dialect: crate::dialect::Dialect::default(),
-            source: crate::parser::SourceVersion::default(),
             deferred_bounds: Vec::new(),
             jvm: false,
             unit_ops: None,
@@ -3161,7 +3157,6 @@ impl<'a> Worker<'a> {
             emits_bodies: self.emits_bodies,
             withheld_met: 0,
             dialect: self.dialect,
-            source: self.source,
             jvm: self.jvm,
             unit_ops: self.unit_ops,
             java_serializable: self.java_serializable,
@@ -3435,6 +3430,7 @@ impl<'a> Worker<'a> {
         self.derive.to_shared(on);
         self.syms.dispatch_names.to_shared = on;
         self.syms.js_export_names.to_shared = on;
+        self.syms.context_bounds.to_shared = on;
         self.arity_classes.to_shared = on;
         self.prog.template_syms.to_shared = on;
         self.prog.top_funs.alloc_shared = on;
@@ -3577,6 +3573,7 @@ impl<'a> Worker<'a> {
         self.derive.apply_pending();
         self.syms.dispatch_names.apply_pending();
         self.syms.js_export_names.apply_pending();
+        self.syms.context_bounds.apply_pending();
         self.fun_of_sym.apply_pending();
         self.val_init.apply_pending();
         self.prog.class_bodies.apply_pending();
@@ -3674,6 +3671,7 @@ impl<'a> Worker<'a> {
         self.derive.fork();
         self.syms.dispatch_names.fork();
         self.syms.js_export_names.fork();
+        self.syms.context_bounds.fork();
         self.arity_classes.fork();
         self.prog.template_syms.fork();
         self.prog.class_bodies.fork();
@@ -4069,6 +4067,20 @@ impl<'a> Worker<'a> {
     pub fn warn_as(&mut self, span: Span, msg: impl Into<String>, w: crate::source::Warning) {
         if !self.source(self.env.file).is_std && !self.is_body_file(self.env.file) {
             self.diags.warn_as(self.env.file, span, msg, w, self.dependent_checks > 0);
+        }
+    }
+
+    /// A diagnostic of a row of the migration table at the unit's version (`report.errorOrMigrationWarning`
+    /// under `Feature.sourceVersion`): nothing, a warning, a migration warning or an error.
+    /// `id` is dotty's message's (`warnings::id`), or `NO_ID` for a message of none.
+    pub fn migration(&mut self, row: crate::source_version::Migration, span: Span, msg: impl Into<String>, id: u16) {
+        use crate::source_version::Outcome;
+        let plain = crate::source::Warning { id, ..crate::source::Warning::plain() };
+        match row.outcome(self.cur_ast().source_version) {
+            Outcome::Silent => {}
+            Outcome::Warning => self.warn_as(span, msg, plain),
+            Outcome::MigrationWarning => self.warn_as(span, msg, crate::source::Warning { category: crate::warnings::Category::Migration, ..plain }),
+            Outcome::Error => self.error(span, msg),
         }
     }
 

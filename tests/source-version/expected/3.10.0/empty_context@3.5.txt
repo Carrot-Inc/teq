@@ -1,0 +1,4 @@
+exit 1
+error 5:11
+  Context bounds will map to context parameters.
+  A `using` clause is needed to pass explicit arguments to them.

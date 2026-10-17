@@ -1,7 +1,16 @@
 # Scala 3 compile-only tests against teq
 
-`harness.py` runs `tests/neg` and `tests/pos` of a scala3 checkout through `teq compiler check` and
-classifies every test (see the docstring for the categories). The sources are not copied: set
+`harness.py` runs `tests/neg`, `tests/pos` and `tests/warn` of a scala3 checkout through `teq compiler check`
+and classifies every test (see the docstring for the categories). A test's options are read as dotty's test
+framework reads them (a `// scalac:` line among a file's first ten, the `//> using option(s)` directives of its
+header, the group's files joined), and its `-source` and `-language` reach teq as `--source` and `--language`
+(`scalac_options`, `teq_flags`; `tests/scala3/run.py` reads them with the same functions). A warn test is held to
+scalac 3.8.4's own diagnostics of it (`warn-oracle.jsonl`, which `--capture-warn` writes by running scala-cli over a
+copy of the test's files, its directives' options included): the multisets of severity (a migration warning
+apart), file, line, column and whole message. The corpus's `.check` files are its own commit's compiler's, not
+3.8.4's, and are not read; scalac's notes about its options (`bad option … was ignored`, an option of a later
+compiler) are left out with the options teq is not given. One that compiles without a warning scalac gives is
+`silent`. The sources are not copied: set
 `SCALA3` to the checkout (default `../teq-ref/scala3`) and `TEQ` to the
 binary (default `target/release/teq` of this repository).
 
@@ -16,7 +25,8 @@ teq's output is kept up to its first 1 MiB and last 4 KiB (`HEAD_CAP`, `TAIL_CAP
 read and dropped, so a test that prints millions of errors is classified by its first errors
 and its count.
 
-`expected.txt` holds one line per test (`suite/name`, category, detail); only the category is
+`expected.txt` names the scala3 commit it was recorded on and holds one line per test (`suite/name`,
+category, detail, and the flags the test's options gave teq where they gave any); only the category is
 compared, so the file doubles as a regression check when the compiler changes: a neg test moving
 from `accepts` to `same` is progress, a pos test moving from `accepts` to `rejects` is a
 regression.
@@ -439,3 +449,64 @@ own, queued under language completeness:
 - `inner-classes-of-universal-traits`: a value class cannot be a member of another class, and a
   universal trait (`extends Any`) cannot hold an object or a case class.
 - `t4815`: `final` is not allowed on a local def, val, var or type.
+
+## The source version's options (2026-10-17)
+
+With the reader of a test's options (the source-version part's first commit) the record gained the 402 tests
+of `tests/warn`, the flags of the 432 tests whose options name `-source` or `-language`, and the commit; on
+master's binary forwarding the options moved one test, `neg/conversion-lang-import.scala` (`different` to
+`options`): its `-source 3.11` is a version 3.8.4 refuses ("3.11 is not a valid choice for -source"), as teq does.
+
+The source version itself (the same part's model, its rows and its scanner, 2026-10-17) moved fourteen tests:
+
+- Seven to `same` where teq now gives scalac's diagnostics by the version: `neg/source-import.scala` and
+  `neg/source-import-3-1-migration.scala` (a duplicate or local source version import, `3.1-migration` refused with
+  dotty's candidate), `neg/with-type-operator-future.scala`, `neg/i11225b.scala` and `neg/i8896-a.scala` (`A with B`,
+  `= _` and an explicit context-bound argument refused under `future` and 3.5), and in `tests/warn`
+  `uninitialized-3.4.scala`, `uninitialized-future-migration.scala`, `with-type-operator-3.4-migration.scala`,
+  `context-bounds-migration-3.4.scala` (from `silent` or `rejects`: the warnings and migration warnings by the
+  version) and `i13440.scala` (from `syntax`: `given` and `enum` identifiers under `3.0-migration`, the one in an
+  interpolation among them).
+- `pos/i10080.scala` and `pos/i24250.scala` to `accepts` (from `syntax`): a header's `:` with an end marker after it
+  has an empty body, an anonymous class's after `new` (dotty's `newTemplateStart`).
+- `neg/i11581.scala` to `accepts` (from `syntax`): the same empty bodies parse, and its errors are duplicate end
+  markers, which teq does not check (docs/internal/DIFFERENCES.md, "The parser's recovery": *end-marker*).
+- `neg/i22440.scala` to `subset` (from `accepts`): under `future` the explicit argument for an `implicit` clause is
+  refused (`ImplicitParamsWithoutUsing`); the `implicit` clause itself (`Scala2Implicits`) is not yet.
+
+The review of the source version's first push (2026-10-17) found the warn suite's rule too weak (line sets, and the
+first message lines of a `.check` of another commit): the suite is held to scalac 3.8.4's captured diagnostics
+whole since, which moved 115 of its tests: 84 from `silent` to `same` (scalac 3.8.4 gives none of the test's
+warnings either: they are a later compiler's, or of an option 3.8.4 lacks), 11 from `silent` and 2 from `subset`
+to `different`, 10 from `same` to `wording` and 2 to `different` (teq's message, column or count where 3.8.4's
+differ: `unreachable case` for `Unreachable case`, a counterexample list cut short, a type test's reason worded
+otherwise), 3 from `superset` to `same`, 1 from `silent` to `superset`, and 2 from `silent` to `accepts` (scalac
+3.8.4 refuses the test). The same change of `Applications`' rule for an empty argument list of an `implicit` clause
+(`matchingApply`) moved `pos/i576.scala` from `rejects` to `accepts`: `foo()()` passes no argument to a clause
+whose parameter has a default, as scalac's does.
+
+The review of the fold (2026-10-17) found two defects of the oracle, folded since: a capture that failed stood as an
+empty expectation (its exit status and scalac's refusal outside its boxes were dropped), and the capture read a
+test's `//> using` directives but not its `// scalac:` line. Each capture keeps its exit status and scalac's notes
+outside its boxes; a capture that timed out or failed with no diagnostic is `unpinned`, one whose options scalac
+refuses `options`; the invocation is the shared reader's options in their order, the copies' directive lines blanked
+so that scala-cli does not read them twice; scalac's summaries of the warnings its options hide (`there was 1
+deprecation warning; re-run with -deprecation for details`) count as its unplaced warnings, teq's flags read as
+scalac's options in them. Eight tests moved: the six `warn/*-deprecated-flag.scala` of a `-language:experimental.…`
+choice 3.8.4 refuses (`better-fors`, `better-match-type-extractors`, `clause-interleaving`, `fewerbraces`,
+`named-tuples`, `relaxed-extension-imports`) from `same` to `options`, `warn/avoid-warn-deprecation.scala` from
+`superset` to `same`, its summary now scalac's too, and `warn/i22731.scala` from `different` to `same`: its implicit
+clause's argument in braces is warned at the block without the rewrite notice, as `Migrations.implicitParams` places it
+and `checkParentheses` decides it (the same fold's). No capture's status
+or diagnostics changed in the recapture: the corpus's warn tests carry no `// scalac:` line.
+
+The rebase of the source version onto app-blockers-3's landing (master `d8f69001a`, 2026-10-17) moves, against
+master's record, the eleven `neg` and `pos` tests above as before (`neg/conversion-lang-import.scala`, the seven of
+the version's rows and the end markers, `neg/i22440.scala`, `pos/i576.scala`) and adds the warn suite's 402 tests;
+no other test of master's record moves. In the warn suite two tests moved against the fold's record, by
+app-blockers-3's `Checking.checkIrrefutable` (gated at 3.2, dotty's message and remedy) read at the unit's version
+and reported through `report.errorOrMigrationWarning`: `warn/strict-pattern-bindings-3.2.scala` from `rejects` to
+`wording` (its ``import language.`3.2` `` makes each refutable pattern a warning, as scalac's; teq's message shows a
+literal pattern's type `Int` for scalac's `(1 : Int)` and the extractor `Positive` for `Test.Positive`), and
+`warn/i16639a.scala` from `different` to `silent` (under `-source:3.3` teq no longer reports its pattern definition
+of a `Seq` as refutable; scalac's warnings there are `-Wunused:all`'s, an option teq is not given).

@@ -1,0 +1,5 @@
+exit 0
+warning 1:58
+  Context bounds will map to context parameters.
+  A `using` clause is needed to pass explicit arguments to them.
+  This code can be rewritten automatically under -rewrite -source 3.4-migration.

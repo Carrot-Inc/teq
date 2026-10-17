@@ -102,7 +102,7 @@ impl<'a> Worker<'a> {
         let (recv, ty) = self.this_receiver(tl)?;
         let setter = self.interner.intern(&format!("{}_=", self.name_ref(name)));
         self.find_member(ty, setter)?;
-        let lists = vec![ArgList { args: vec![ArgSrc::Ast(rhs)], using: false, span }];
+        let lists = vec![ArgList { args: vec![ArgSrc::Ast(rhs)], using: false, span, fun: ArgList::NO_FUN }];
         let (call, _) = self.apply_member(recv, ty, setter, None, lists, span, None);
         Some((call, self.b.t_unit))
     }

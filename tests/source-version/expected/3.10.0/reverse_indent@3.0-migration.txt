@@ -1,0 +1,3 @@
+exit 1
+error 3:3
+  indented definitions expected, val found

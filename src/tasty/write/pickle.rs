@@ -673,6 +673,29 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     /// The name table's entry of an interned name, as a simple name.
+    /// A term parameter's name, `n` where its symbol is none: a context bound's generated evidence as dotty
+    /// pickles its `ContextBoundParamName`, a unique name of the separator `evidence$`, which a reader tells
+    /// from a parameter written `evidence$1` (`term_name`).
+    fn param_name(&mut self, sym: SymId, n: Name) -> u32 {
+        if sym != SymId(u32::MAX) {
+            return self.term_name(sym);
+        }
+        self.simple_name(n)
+    }
+
+    /// The name of a term symbol where a tree or a reference names it: the simple name of its text, a context
+    /// bound's evidence (a method's parameter, a class's field) the unique name dotty's `ContextBoundParamName`
+    /// is, at its definition and at every reference alike.
+    pub(super) fn term_name(&mut self, s: SymId) -> u32 {
+        let (n, evidence) = (self.w.syms.sym(s).name, self.w.syms.context_bounds.contains_key(&s));
+        if evidence {
+            if let Some(num) = self.w.interner.get(n).strip_prefix("evidence$").and_then(|d| d.parse().ok()) {
+                return self.names.unique_of("evidence$", num);
+            }
+        }
+        self.simple_name(n)
+    }
+
     fn simple_name(&mut self, n: Name) -> u32 {
         self.names.interned(n, self.w.interner.get(n))
     }
@@ -686,7 +709,7 @@ impl<'w, 'a> P<'w, 'a> {
                 let (prefix, member) = self.w.inline_accessor_parts(c, target, setter);
                 self.names.inline_accessor(&prefix, &member)
             }
-            None => self.simple_name(self.w.syms.sym(s).name),
+            None => self.term_name(s),
         }
     }
 
@@ -1640,7 +1663,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.buf.byte(PARAM);
         let len = self.buf.begin_length();
-        let n = self.simple_name(param.name);
+        let n = self.param_name(param.sym, param.name);
         self.buf.nat(n as u64);
         self.param_type(param);
         let smods = sym.map_or(0, |s| self.w.syms.sym(s).mods);
@@ -2051,7 +2074,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.buf.byte(PARAM);
         let len = self.buf.begin_length();
-        let n = self.simple_name(p.name);
+        let n = self.param_name(p.sym, p.name);
         self.buf.nat(n as u64);
         // A type of the reflection API the parameter declares on a named `Quotes`
         // (`t: q.reflect.Term`): that one's.
@@ -3262,13 +3285,13 @@ impl<'w, 'a> P<'w, 'a> {
         match (prev, through) {
             (Some(p), _) => {
                 self.buf.byte(SELECT);
-                let n = self.simple_name(self.w.syms.sym(val).name);
+                let n = self.term_name(val);
                 self.buf.nat(n as u64);
                 self.value_import_path(p);
             }
             (None, Some(o)) => {
                 self.buf.byte(SELECT);
-                let n = self.simple_name(self.w.syms.sym(val).name);
+                let n = self.term_name(val);
                 self.buf.nat(n as u64);
                 self.module_term(o);
             }
@@ -5970,12 +5993,11 @@ impl<'w, 'a> P<'w, 'a> {
             Type::Term(s) => self.term_ref(s),
             Type::Select(prefix, s) => {
                 self.placed = true;
-                let info = self.sym_info(s);
                 if self.is_local(Key::Sym(s)) {
                     self.buf.byte(TERMREFSYMBOL);
                     self.def_ref(Key::Sym(s));
                 } else {
-                    let n = self.simple_name(info.name);
+                    let n = self.term_name(s);
                     self.buf.byte(TERMREF);
                     self.buf.nat(n as u64);
                 }

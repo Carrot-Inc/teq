@@ -1,7 +1,9 @@
 // `var x: T = _` starts a field at the zero of its type, as `uninitialized` does.
 import scala.compiletime.uninitialized
+import scala.annotation.nowarn
 
-class Cell:
+// `= _` is deprecated from 3.4 (`MigrationVersion.UninitializedVars`), a warning at the default version.
+@nowarn class Cell:
   var value: String = _
   var count: Int = _
   var flag: Boolean = _

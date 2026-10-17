@@ -1,0 +1,3 @@
+exit 1
+error 1:34
+  source version import is only allowed at the toplevel

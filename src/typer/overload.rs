@@ -2434,7 +2434,7 @@ impl<'a> Worker<'a> {
             let reported = self.diags.items.len();
             let dummy = self.prog.add(TExpr::Unit);
             self.prog.set_type(dummy, arg);
-            let mut lists = vec![ArgList { args: vec![ArgSrc::Typed(dummy, arg)], using: false, span }];
+            let mut lists = vec![ArgList { args: vec![ArgSrc::Typed(dummy, arg)], using: false, span, fun: ArgList::NO_FUN }];
             let spans_mark = self.overload_arg_spans.len();
             let choice = self.resolve_overloaded(&alts, None, &mut lists, &mut Vec::new(), None, true, false, None);
             self.overload_arg_spans.truncate(spans_mark);
@@ -2449,7 +2449,7 @@ impl<'a> Worker<'a> {
         }
         let failure = first_failure.unwrap_or(Failure::NoneApplicable);
         let dummy = self.prog.add(TExpr::Unit);
-        let lists = vec![ArgList { args: vec![ArgSrc::Typed(dummy, sty)], using: false, span }];
+        let lists = vec![ArgList { args: vec![ArgSrc::Typed(dummy, sty)], using: false, span, fun: ArgList::NO_FUN }];
         let msg = self.overload_failure(set, &alts, &failure, &lists, &[], None, None);
         self.error(span, msg);
         None
@@ -2626,7 +2626,7 @@ impl<'a> Worker<'a> {
             .map(|call| Alt { sym: call.sym, sig: self.sig_arc(call.sym), owner_subst: call.owner_subst.clone(), ctor: None, info: None, denoted: None, refined: None })
             .collect();
         let span = lists.first().map_or(Span::default(), |l| l.span);
-        lists.insert(0, ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span });
+        lists.insert(0, ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span, fun: ArgList::NO_FUN });
         let mut infos = Vec::new();
         let spans_mark = self.overload_arg_spans.len();
         let choice = self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false, None);
@@ -3226,7 +3226,7 @@ impl<'a> Worker<'a> {
 
     /// The parameter each argument of a list goes to, when the list fits the clause: by
     /// position or by name, a repeated parameter taking the rest, defaults filling what is left.
-    fn map_args(clause: &ClauseSig, args: &[ArgShape]) -> Option<Mapping> {
+    fn map_args(syms: &Symbols, clause: &ClauseSig, args: &[ArgShape]) -> Option<Mapping> {
         let n = clause.params.len();
         let plain = args.len() == n
             && args.iter().all(|a| a.name.is_none() && a.shape != Shape::Splice)
@@ -3241,7 +3241,7 @@ impl<'a> Worker<'a> {
         for a in args {
             let i = match a.name {
                 Some(name) => {
-                    let i = clause.params.iter().position(|p| p.name == name)?;
+                    let i = clause.params.iter().position(|p| super::apply::takes_named(syms, p, name))?;
                     if filled[i] {
                         return None;
                     }
@@ -3310,7 +3310,7 @@ impl<'a> Worker<'a> {
                     None => self.find_member(alt.sig.ret, names::APPLY).is_some(),
                 };
         };
-        let Some(mapping) = Self::map_args(clause, args) else { return false };
+        let Some(mapping) = Self::map_args(&self.syms, clause, args) else { return false };
         args.iter().enumerate().all(|(j, a)| match a.shape {
             Shape::Lambda(arity, any_arity) => self.takes_function(clause.params[mapping.param(j)].ty, arity, any_arity, untupled, partial),
             Shape::ContextLambda(arity) => self.takes_context_function(clause.params[mapping.param(j)].ty, arity),
@@ -3390,7 +3390,7 @@ impl<'a> Worker<'a> {
     /// parameters: typed with those, its result tells the candidates apart.
     fn pretype_args(&mut self, alts: &[Alt], cands: &[usize], k: usize, list: &mut ArgList, shapes: Vec<ArgShape>, open: bool, explicit: &[TypeId]) -> ListInfo {
         let mappings: Vec<Option<Mapping>> =
-            cands.iter().map(|&i| alts[i].clause(k).and_then(|cl| Self::map_args(cl, &shapes))).collect();
+            cands.iter().map(|&i| alts[i].clause(k).and_then(|cl| Self::map_args(&self.syms, cl, &shapes))).collect();
         let mut types = vec![None; shapes.len()];
         let mut literals: Vec<Option<TypeId>> = Vec::new();
         let mut lambdas = vec![None; shapes.len()];
@@ -3652,7 +3652,7 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let Some(clause) = alt.clause(k) else { continue };
-            let Some(mapping) = Self::map_args(clause, &info.shapes) else { continue };
+            let Some(mapping) = Self::map_args(&self.syms, clause, &info.shapes) else { continue };
             for (j, lit) in info.literals.iter().enumerate() {
                 let Some(lit) = *lit else { continue };
                 let (te, ty) = match lists[li].args[j] {
@@ -3681,7 +3681,7 @@ impl<'a> Worker<'a> {
         for (k, &li) in explicit_lists.iter().enumerate() {
             let Some(info) = infos.get(li).and_then(|i| i.as_ref()) else { continue };
             let Some(clause) = alt.clause(k) else { continue };
-            let Some(mapping) = Self::map_args(clause, &info.shapes) else { continue };
+            let Some(mapping) = Self::map_args(&self.syms, clause, &info.shapes) else { continue };
             for (j, lambda) in info.lambdas.iter().enumerate() {
                 let Some((te, ty, _)) = *lambda else { continue };
                 let pty = clause.params[mapping.param(j)].ty;
@@ -3749,7 +3749,7 @@ impl<'a> Worker<'a> {
                 }
                 return k == 0 && self.function_result_takes(alt, subst, info);
             };
-            let Some(mapping) = Self::map_args(clause, &info.shapes) else { return false };
+            let Some(mapping) = Self::map_args(&self.syms, clause, &info.shapes) else { return false };
             for j in 0..info.shapes.len() {
                 let declared = clause.params[mapping.param(j)].ty;
                 // A spread's sequence has to be one of the repeated parameter's elements, which
@@ -3979,7 +3979,7 @@ impl<'a> Worker<'a> {
             return false;
         }
         let shapes = vec![ArgShape { name: None, shape: Shape::Plain }; clause.params.len()];
-        let Some(mapping) = Self::map_args(other, &shapes) else { return false };
+        let Some(mapping) = Self::map_args(&self.syms, other, &shapes) else { return false };
         let mark = self.snapshot();
         let subst = self.alt_subst(b, explicit);
         let ok = clause.params.iter().enumerate().all(|(j, p)| {

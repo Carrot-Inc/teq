@@ -244,7 +244,7 @@ impl<'a> Worker<'a> {
                         tys.push(t);
                     }
                     Expr::SeqLit(l, _) | Expr::Tuple(l) => exprs.extend_from_slice(ast.expr_list(l)),
-                    Expr::Infix(a, _, b) => exprs.extend([a, b]),
+                    Expr::Infix(a, _, b, _) => exprs.extend([a, b]),
                     Expr::If(c, t, els) => {
                         exprs.extend([c, t]);
                         exprs.extend(els);

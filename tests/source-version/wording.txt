@@ -1,0 +1,6 @@
+# Runs compared on their exit, severities and places, without their messages: the syntax errors of `given` and
+# `enum` read as keywords, which teq words as its own (docs/internal/DIFFERENCES.md, "The parser's recovery").
+given_ident
+given_ident@3.0
+renamed
+interp_directive@3.3

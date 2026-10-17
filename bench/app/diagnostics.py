@@ -183,7 +183,7 @@ def tail(path, n=3):
         return "(no output)"
 
 
-HEADER = re.compile(r"^(?:\S.*?: )?(error|warning): ")
+HEADER = re.compile(r"^(?:\S.*?: )?(error|(?:migration )?warning): ")
 
 
 def teq_run(teq, label, out, cwd, root, scope, inputs, classpath, flags, seconds):

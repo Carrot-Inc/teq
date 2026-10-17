@@ -1,0 +1,4 @@
+exit 0
+migration warning 1:33
+  `_` is no longer supported for a wildcard import; use `*` instead
+  This construct can be rewritten automatically under -rewrite -source future-migration.

@@ -1,0 +1,7 @@
+exit 1
+error 1:26
+  pattern's type Some[Int] is more specialized than the right hand side expression's type Option[Int]
+  
+  If the narrowing is intentional, this can be communicated by adding `.runtimeChecked` after the expression,
+  which may result in a MatchError at runtime.
+  This patch can be rewritten automatically under -rewrite -source 3.8-migration.

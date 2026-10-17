@@ -1,0 +1,6 @@
+exit 1
+error 1:18
+  Ignoring [this] qualifier.
+  The syntax `private[this]` will be deprecated in the future; just write `private` instead.
+  See: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.

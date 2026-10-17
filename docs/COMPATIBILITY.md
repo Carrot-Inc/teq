@@ -4,6 +4,31 @@ Teq aims at compiling every Scala 3 program and running it as scalac 3.8.4 does:
 every test program comes from scalac, the Scala 3 compiler's own test suites run in the gate, and community
 libraries compiled from their jars run against scalac's output. The remaining differences are listed below.
 
+## The source version
+
+scalac's `-source` is read where a build states it: teq's `--source` (`3.0-migration` to `3.9`, `future-migration`
+and `future`, scalac 3.8.4's values, the others refused with its words, `2.13` and `3.1-migration` among them;
+`3.8` by default), the sbt and Mill plugins' `-source 3.x` and `-source:3.x` among a configuration's `scalacOptions`
+(the lock's `source` field of the configuration), and a script's `//> using options -source:3.x` under `teq interp`,
+which a `--source` on the command line overrides as scala-cli's does; `teq compiler` reads no directive. A build of
+several modules types each module's sources under its own version. A unit's source version import
+(``import scala.language.`3.x` ``, or `future`) sets the unit's version as scalac's does: one per unit, at its top
+level; the parser reads it from the import on (under `3.0-migration`, `given` and `enum` are identifiers from the
+second token after the import), the typer for the whole unit, the definitions before the import included. Under a
+`3.0-migration` setting indentation is not significant, whatever a later import names.
+
+The version decides, as scalac's migration table does, whether a construct the language deprecates is accepted
+silently, warned (from the version that deprecates it), warned as a migration (`migration warning`, at the
+`-migration` version just before it becomes an error) or refused. At the default version these are refused: a
+`for` generator whose pattern can fail without `case`, and explicit arguments for a context bound's parameters;
+scalac 3.8.4 also refuses positional arguments of a Java annotation but its `value`, which teq does not check yet.
+Scala 2's syntax (`given` and `enum` as identifiers among it) is read, with a migration warning, under
+`3.0-migration` alone. teq reports by the version `with` as a
+type operator, `var x: T = _`, explicit arguments for a context bound's or an implicit clause's parameters, a
+pattern that can fail in a pattern definition or in a `for` generator without `case` and, under `3.0-migration`,
+the Scala 3 keywords used as identifiers; the table's other rows are read as before (below). Below `3.4` such a
+generator is still lowered as from `3.4` (its value checked, a `MatchError` when it fails), where scalac's filters it.
+
 ## Not yet
 
 ### Syntax and definitions
@@ -124,9 +149,12 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   scalac's gives it a constant type. A cast between primitives that no conversion makes warns where it is
   written but not where an inline method's expansion makes one, so a build with `-Werror` passes here where
   scalac fails it.
-- The deprecated syntax scalac 3.8.4 reads with a migration warning is read here without one: `with` as a
-  type operator (`A with B`, `A & B`), `_` for a wildcard type argument (`List[_ <: A]`), and an alphanumeric
-  extractor written infix (`case a withKey b`) that is not declared `infix`.
+- The deprecated syntax scalac 3.8.4 reads with a warning at the default version is read here without one: `_` for
+  a wildcard type argument (`List[_ <: A]`), `private[this]`, `xs: _*`, `f _`, an override of a `val` parameter, and an
+  alphanumeric method or extractor written infix (`case a withKey b`) that is not declared `infix`; nor does a source
+  version reach Scala 2's procedure syntax, an ascription after a pattern, an implicit lambda, the old given syntax,
+  `_` and `=>` in import selectors or a `$` in an identifier, each of which scalac warns about or refuses by the
+  version (its `MigrationVersion` rows).
 
 ## Known differences
 

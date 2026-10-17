@@ -20,7 +20,10 @@
 # teq's; the generators sbt alone runs are recorded and `teq compile` refuses gen, naming them, and exits 2 over
 # every project while it compiles the others; `teq compile`, `teq test` (lib's munit suites, and sjs's under node
 # through Scala.js's test bridge) and `teq run` (app's alias, the arguments passed) over each axis's export of equal
-# give the same answers; `teq dev sjs` runs the dev script of sjs's package.json after npm's install, until SIGINT;
+# give the same answers; over each axis's export of order `teq compile` and `teq run` type each module under its own
+# source version (`-source 3.0-migration` beside `-source:3.9` and the default, in one closure) and refuse the Scala 2
+# modules' sources once the lock drops their version, as sbt's own compile under teq does each project's;
+# `teq dev sjs` runs the dev script of sjs's package.json after npm's install, until SIGINT;
 # sbt's own tasks with teq as the compiler (`TEQ_COMPILER=1`) run lib's suites (`test` twice runs them twice on
 # sbt 1, whose `test` is the full run; sbt 2's is testQuick), app's main and sjs's suites through sbt-scalajs's
 # test adapter, and `++3.8.4!` and `+lib/testOnly`; the release the build pins is resolved from a mirror of its GitHub release
@@ -201,6 +204,35 @@ for version in $axes; do
   fi
 done
 
+# The source version of each module over each axis's export of order: lib and sjscore are Scala 2 sources under
+# `-source 3.0-migration` (scalac's two forms), app under `-source:3.9` and sjsapp under the default declare givens
+# beside them; teq compiles each closure as one program, each unit under its own module's version (lib's identifiers
+# migration warnings), runs app, and refuses lib's and sjscore's sources once the lock drops their version.
+for version in $axes; do
+  dir=$work/order-$version
+  [ -n "${locks[order-$version]:-}" ] || continue
+  (
+    cd "$dir" || exit 1
+    export TEQ=$teq
+    out=$(timeout 300 ./teq compile lib app sjscore sjsapp 2>&1); echo "compile: $? $(grep -c ': error: ' <<< "$out") errors"
+    out=$(timeout 300 ./teq run app 2> /dev/null); echo "run app: $? $out"
+    grep -c '^ *source: 3.0-migration$' teq.lock | sed 's/^/versions in the lock: /'
+    sed -i.versions '/^ *source: 3.0-migration$/d' teq.lock
+    out=$(timeout 300 ./teq compile app 2>&1); echo "compile app at the default: $? $(grep -c "lib/src/lib/Util.scala:.*: error: " <<< "$out") errors in lib"
+    out=$(timeout 300 ./teq compile sjsapp 2>&1); echo "compile sjsapp at the default: $? $(grep -c "sjscore/src/core/Core.scala:.*: error: " <<< "$out") errors in sjscore"
+    mv teq.lock.versions teq.lock
+    timeout 60 ./teq stop > /dev/null 2>&1
+  ) > "$work/source-$version.txt" 2>&1
+  if grep -q "^compile: 0 0 errors$" "$work/source-$version.txt" && grep -q "^run app: 0 shown 2$" "$work/source-$version.txt" &&
+    grep -q "^versions in the lock: [1-9]" "$work/source-$version.txt" &&
+    grep -q "^compile app at the default: 1 [1-9][0-9]* errors in lib$" "$work/source-$version.txt" &&
+    grep -q "^compile sjsapp at the default: 1 [1-9][0-9]* errors in sjscore$" "$work/source-$version.txt"; then
+    pass "teq over order's export on sbt $version: each module under its own source version, lib's and sjscore's sources refused once the lock drops theirs"
+  else
+    fail "teq over order's export on sbt $version, the source versions: $(cat "$work/source-$version.txt")"
+  fi
+done
+
 # teq dev over each axis's export of equal: sjs's dev loop, the package manager's install in sjs (npm, its package
 # holding no dependency) and then the dev script with the arguments after --, TEQ naming the binary, until SIGINT
 # ends the loop with 130.
@@ -240,6 +272,18 @@ for version in $axes; do
     fi
   else
     fail "sbt $version under teqCompiler: $(sed 's/\x1b\[[0-9;]*m//g' "$work/compiler-$version.log" | grep -a "error" | head -20)"
+  fi
+done
+
+# sbt's own compile with teq as the compiler over order on each axis: each project's flags its own source version
+# (TeqCompile's), lib's and sjscore's Scala 2 sources and app's and sjsapp's givens compiled, app run.
+for version in $axes; do
+  dir=$(copy order "$version" compiler)
+  if (export TEQ_COMPILER=1 TEQ=$teq; sbt_in "$dir" "$work/order-compiler-$version.log" app/compile sjsapp/compile app/run) &&
+    sed 's/\x1b\[[0-9;]*m//g' "$work/order-compiler-$version.log" | grep -q "^shown 2$"; then
+    pass "sbt $version under teqCompiler over order: each project at its own source version, app run"
+  else
+    fail "sbt $version under teqCompiler over order: $(sed 's/\x1b\[[0-9;]*m//g' "$work/order-compiler-$version.log" | grep -a "error\|shown" | head -20)"
   fi
 done
 

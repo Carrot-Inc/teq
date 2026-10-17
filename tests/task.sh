@@ -40,6 +40,8 @@
 # bench/ptyper-vite-loop.mjs's six steps over the Scala.js export. Without scala-library or munit's
 # jars in the coursier cache it fails as incomplete validation, as it does without sbt's worker and the gson it
 # shades, or without a javac.
+# Last, a closure of two modules of their own source versions, one's root nested in the other's, compiled by the
+# resident and built to JavaScript (each file under its innermost root's module's version).
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 TEQ=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
@@ -2723,6 +2725,76 @@ if timeout 120 node bench/ptyper-vite-loop.mjs "$w" web 1 "$w/web/src/web/Main.s
   pass "bench/ptyper-vite-loop.mjs: the vite plugin's session over a project of teq.lock, its six steps answered"
 else
   fail "bench/ptyper-vite-loop.mjs: $(cat "$work/vite-loop.out" "$work/vite-loop.jsonl" 2> /dev/null | tail -8)"
+fi
+
+# The source version of each module (docs/COMPATIBILITY.md, "The source version"): a closure whose module legacy
+# (`-source 3.0-migration`, `given` an identifier) has the root src and its dependent modern (at the default, a given
+# declared) the root src/modern inside it; the resident (`compile`) and the JavaScript build (`build`) type each file
+# under the innermost root's module's version, the default's included (`Export::source_args`).
+nv=$work/nested-versions
+mkdir -p "$nv/src/modern"
+printf 'object Legacy { val given = 1 }\n' > "$nv/src/Legacy.scala"
+printf 'object Modern { given Int = Legacy.`given`; def main(args: Array[String]): Unit = println(summon[Int]) }\n' > "$nv/src/modern/Modern.scala"
+cat > "$nv/teq.lock" <<'LOCK'
+teq: 0.1.8
+format: 1
+binaries: {}
+inputs:
+  files: {}
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+jars: {}
+java:
+  outputVersion: 17
+projects:
+  legacy:
+    base: .
+    configurations:
+      compile:
+        classpath: []
+        flags:
+          source: 3.0-migration
+        generators: []
+        mainClasses: []
+        resources: []
+        sources:
+          - src
+    description:
+      excludes: []
+      out: build-legacy
+      sources:
+        - src
+    platform: js
+    scalaVersion: 3.8.4
+  modern:
+    base: .
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: legacy}
+        flags: {}
+        generators: []
+        mainClasses:
+          - Modern
+        resources: []
+        sources:
+          - src/modern
+    description:
+      excludes: []
+      out: build-modern
+      sources:
+        - src
+        - src/modern
+    platform: js
+    scalaVersion: 3.8.4
+repositories: []
+LOCK
+nv_compile=$(cd "$nv" && timeout 150 "$TEQ" compile modern 2>&1); nv_code=$?
+nv_build=$(cd "$nv" && timeout 150 "$TEQ" build modern -o "$nv/out.js" 2>&1) && nv_run=$(timeout 30 node "$nv/out.js" 2>&1)
+(cd "$nv" && timeout 60 "$TEQ" stop > /dev/null 2>&1)
+if [ $nv_code = 0 ] && [ "${nv_run:-}" = 1 ] && [[ "$nv_compile" == *"src/Legacy.scala:1:21: "*"given is now a keyword"* ]] && [[ "$nv_compile" != *Modern.scala* ]]; then
+  pass "source versions by module: legacy's root under 3.0-migration, modern's root nested in it at the default, through the resident and the JavaScript build"
+else
+  fail "source versions by module, a nested root ($nv_code): $nv_compile $nv_build ${nv_run:-}"
 fi
 
 [ $status = 0 ] && echo "task: all passed"

@@ -1,0 +1,7 @@
+exit 1
+error 2:56
+  an identifier expected, but 'given' found
+error 2:62
+  an identifier expected, but '=' found
+error 2:75
+  expression expected but [31mgiven[0m found

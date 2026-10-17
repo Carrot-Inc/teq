@@ -4080,17 +4080,19 @@ impl<'a> Worker<'a> {
                 .map(|p| {
                     p.args
                         .iter()
-                        .filter(|&&(_, using)| using || !evidence_only)
-                        .map(|&(l, using)| ArgList {
+                        .enumerate()
+                        .filter(|&(_, &(_, using))| using || !evidence_only)
+                        .map(|(k, &(l, using))| ArgList {
                             args: ast.expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(),
                             using,
                             span,
+                            fun: super::apply::FunEnd::at(p.fun_end(ast, k)),
                         })
                         .collect()
                 })
                 .unwrap_or_default();
             if !evidence_only && !lists.iter().any(|l| !l.using) {
-                lists.insert(0, ArgList { args: Vec::new(), using: false, span });
+                lists.insert(0, ArgList { args: Vec::new(), using: false, span, fun: ArgList::NO_FUN });
             }
             let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
             let applied = self.with_env(outside.clone(), |t| {
@@ -4235,10 +4237,12 @@ impl<'a> Worker<'a> {
             .map(|p| {
                 p.args
                     .iter()
-                    .map(|&(l, using)| ArgList {
+                    .enumerate()
+                    .map(|(k, &(l, using))| ArgList {
                         args: ast.expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(),
                         using,
                         span,
+                        fun: super::apply::FunEnd::at(p.fun_end(ast, k)),
                     })
                     .collect()
             })
@@ -4247,7 +4251,7 @@ impl<'a> Worker<'a> {
         let has_normal_clause = sig.clauses.iter().any(|cl| !cl.is_using)
             || (self.syms.class(parent).mods & crate::ast::mods::PRIVATE_CTOR != 0 && !self.syms.class(parent).ctors.is_empty() && self.is_java_class(parent));
         if lists.is_empty() && has_normal_clause {
-            lists.push(ArgList { args: Vec::new(), using: false, span });
+            lists.push(ArgList { args: Vec::new(), using: false, span, fun: ArgList::NO_FUN });
         }
         // `extends E()` for a parent declared without a parameter list.
         if !has_normal_clause && lists.first().map_or(false, |l| !l.using && l.args.is_empty()) {

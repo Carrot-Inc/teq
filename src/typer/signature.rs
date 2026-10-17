@@ -407,7 +407,7 @@ fn owner(ast: &Ast, text: &str, paren: u32, offset: u32, closes: &[(u32, u32)], 
             // `a op (b, c)`, `a op (b)`: the operand's span with its parentheses or without them,
             // which the parser drops around a single expression. A right-associative operator's
             // right operand is its receiver.
-            Expr::Infix(l, op, r)
+            Expr::Infix(l, op, r, _)
                 if !interner.get(op).ends_with(':')
                     && ((matches!(ast.expr(r), Expr::Tuple(_) | Expr::Parens(_) | Expr::UnitLit) && ast.expr_span(r).start == paren)
                         || (text.as_bytes().get(paren as usize) == Some(&b'(') && ast.expr_span(r).start > paren && blank(text, paren + 1, ast.expr_span(r).start))) =>

@@ -80,13 +80,13 @@ polybounds/fix/polybounds/PbCtx.tasty 00349592fa53eceb00e50db4686b18f4
 polybounds/fix/polybounds/PbLower.tasty 00bd1595b29d35b30032ceee32a34f02
 polybounds/fix/polybounds/PbParent.tasty 00552c471657fbe800611f871913d4cf
 qualified/fix/shapes/QaApplicative.tasty 003326413a29c0e800443e95cc6513aa
-qualified/fix/shapes/QaClient.tasty 00887f32949650d000a64bf5aed67dd0
+qualified/fix/shapes/QaClient.tasty 004f9520cbc5ccd700a64bf2aed67dd7
 qualified/fix/shapes/QaFoldOps.tasty 00ae63019ee97fd000a3adc2de78d788
 qualified/fix/shapes/QaFunctor.tasty 004e68cfc727bce9001470b184e96685
-qualified/fix/shapes/QaPolicy.tasty 0048d521c031b4d7008823c11e65f1aa
+qualified/fix/shapes/QaPolicy.tasty 00b366bd821a9ad6008822c11e65f1ab
 qualified/fix/shapes/QaSyntax.tasty 00887a72505bc6c40033b445d8d4b6f6
 qualified/fix/shapes/QaUnorderedOps.tasty 00d01f9268d1ddd500b006f71f5796de
-quotepat38/fix/qp38/Qp38.tasty 009050b8334c9f8e007046a8067a1481
+quotepat38/fix/qp38/Qp38.tasty 00288ce33f11378d007046ab067a1482
 quotes38/fix/q38/Quotes38.tasty 00c38e5c5f6794a200db59a2e91bd5a7
 rassoc/fix/rassoc/RightAssoc.tasty 001fc3652d8e2dbc00ee18c5ea3326ce
 rassoc/fix/rassoc/Vec.tasty 00e9d065086a24ed00e06664f349359c
@@ -110,7 +110,7 @@ reader_decl/fix/rdecl/RdTraces.tasty 00d656e29fd44bd6009618f2b5a2e38a
 reader_decl/fix/rdecl/RdWrap.tasty 00c8d7d1a2af8cdc00c3e6e00cef80f4
 recrefine/fix/recrefine/RrBox.tasty 00f9377ea50f7cef001d2e457a66238a
 recrefine/fix/recrefine/RrShapes.tasty 000d1e7515ba76c000b4e0fe1f5d148d
-reflect38/fix/r38/Reflect38.tasty 00bff762a05e30be000dbf6007fb39e1
+reflect38/fix/r38/Reflect38.tasty 00d78db0aca4c5bd0032bf6007f839e2
 reflectstats/fix/rstats/StatementKinds.tasty 00b6422b179b5fe50075e6d4732d98c7
 retain/fix/retain/Fmt.tasty 00a13032ba2bb4eb00fd340b15cb03aa
 retain/fix/retain/Grid.tasty 008f2c1e3698b2af0043efc9e4f970d7

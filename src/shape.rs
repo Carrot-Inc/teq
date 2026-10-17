@@ -73,6 +73,12 @@ impl<'a> Cmp<'a> {
         if !self.imports_eq(&o.imports, &n.imports) {
             return differ("imports");
         }
+        // The unit's version, which a source version import sets and `imports` does not hold, decides
+        // its signatures (a context bound's evidence an `implicit` clause below 3.6,
+        // `Desugar.elimContextBounds`) and how its consumers are typed against them.
+        if o.source_version != n.source_version {
+            return differ("source version changed");
+        }
         if !self.imports_eq(&o.top_exports, &n.top_exports) {
             return differ("export clauses");
         }
@@ -371,7 +377,7 @@ impl<'a> Cmp<'a> {
             (Apply(e, l), Apply(f, k)) | (UsingApply(e, l), UsingApply(f, k)) => self.expr_eq(e, f) && self.exprs_eq(l, k),
             (NamedArg(n, e), NamedArg(m, f)) => n == m && self.expr_eq(e, f),
             (TypeApply(e, l), TypeApply(f, k)) => self.expr_eq(e, f) && self.tys_eq(l, k),
-            (Infix(e1, n, e2), Infix(f1, m, f2)) => n == m && self.expr_eq(e1, f1) && self.expr_eq(e2, f2),
+            (Infix(e1, n, e2, _), Infix(f1, m, f2, _)) => n == m && self.expr_eq(e1, f1) && self.expr_eq(e2, f2),
             (Prefix(n, e), Prefix(m, f)) => n == m && self.expr_eq(e, f),
             (PolyLambda(l, e), PolyLambda(k, f)) => self.names_eq(l, k) && self.expr_eq(e, f),
             (Lambda(pl, e), Lambda(ql, f)) => {

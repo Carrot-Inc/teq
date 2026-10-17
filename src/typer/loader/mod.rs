@@ -2305,6 +2305,9 @@ impl<'a> Worker<'a> {
                     s.by_name = by_name;
                     s.set_declared_alias(declared_alias);
                 }
+                if is_context_bound_name(&tasty, p.name) {
+                    self.syms.context_bounds.insert(sym, ());
+                }
                 if !self.syms.class(c).members.contains_key(&name) {
                     self.register_term(Owner::Class(c), sym);
                 }
@@ -2864,6 +2867,9 @@ impl<'a> Worker<'a> {
                     s.sig = Some(Arc::new(MethodSig { declared, ..MethodSig::value(local_ty) }));
                     s.state().set(Completion::Done);
                     s.by_name = by_name;
+                }
+                if is_context_bound_name(&tasty, p.name) {
+                    self.syms.context_bounds.insert(psym, ());
                 }
                 self.loaded_mut().tables[ls.file as usize].terms.insert(p.addr, psym);
                 if let Some(text) = p.implicit_not_found.and_then(|n| tasty.simple(n).map(str::to_string)) {
@@ -3501,4 +3507,10 @@ impl<'a> Worker<'a> {
         }
         (None, None)
     }
+}
+
+/// A context bound's evidence name, `evidence$<n>` of dotty's `ContextBoundParamName` (a unique name of the
+/// separator `evidence$`), not a parameter written so.
+fn is_context_bound_name(tasty: &TastyFile, n: u32) -> bool {
+    matches!(tasty.names.get(n as usize), Some(crate::tasty::TName::Unique { separator, .. }) if tasty.simple(*separator) == Some("evidence$"))
 }
