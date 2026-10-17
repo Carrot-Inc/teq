@@ -1,0 +1,14 @@
+  71 lines in 17 recursing arms of 47, src/emit/share.rs:1035
+  29 lines in  9 recursing arms of 15, src/jvm/free.rs:387
+  21 lines in  6 recursing arms of 15, src/jvm/free.rs:148
+  15 lines in  6 recursing arms of 36, src/typer/deps.rs:3828
+   5 lines in  5 recursing arms of 39, src/jvm/gen.rs:2908
+   2 lines in  2 recursing arms of 18, src/typer/elaborate.rs:155
+   0 lines in  0 recursing arms of 31, src/typer/substitution.rs:1160
+   0 lines in  0 recursing arms of 20, src/typer/inline.rs:2855
+   0 lines in  0 recursing arms of 30, src/typer/inline.rs:2260
+   0 lines in  0 recursing arms of 42, src/typer/capture_census.rs:530
+   0 lines in  0 recursing arms of 38, src/emit/scope.rs:1572
+   0 lines in  0 recursing arms of 31, src/emit/reach.rs:2876
+   0 lines in  0 recursing arms of 50, src/emit/expr.rs:701
+walkers 13 recursing-arm lines 143

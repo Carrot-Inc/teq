@@ -1286,3 +1286,28 @@ impl Regex {
         Ok(out)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn found(re: &str, input: &str, start: usize, anchored: bool, full: bool) -> Option<(usize, usize)> {
+        let (chars, _) = unit_chars(input);
+        Regex::compile(re).unwrap().find(&chars, start, anchored, full).unwrap().map(|f| f.groups[0].unwrap())
+    }
+
+    /// `java.util.regex`'s answers where another engine gives others (bench/survey/oracle.scala,
+    /// JDK 24): a back reference (the `regex` crate refuses one), an index past a supplementary
+    /// character in UTF-16 units (the `regex` crate's is 4, in bytes), case folding of ASCII
+    /// letters alone under `(?i)` and of every letter under `(?iu)`, and a search from inside a
+    /// surrogate pair, which takes its low surrogate alone.
+    #[test]
+    fn answers_as_java_util_regex() {
+        assert_eq!(found(r"(a)\1", "aa", 0, true, true), Some((0, 2)));
+        assert_eq!(found("b", "\u{1F600}b", 0, false, false), Some((2, 3)));
+        assert_eq!(found("(?i)\u{e9}", "\u{c9}", 0, true, true), None);
+        assert_eq!(found("(?iu)\u{e9}", "\u{c9}", 0, true, true), Some((0, 1)));
+        assert_eq!(found(".", "\u{1F600}", 0, false, false), Some((0, 2)));
+        assert_eq!(found(".", "\u{1F600}", 1, false, false), Some((1, 2)));
+    }
+}

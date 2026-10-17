@@ -1,0 +1,18 @@
+# tests/support/identity.sh <master> <spike> out/identity, before the five lila jars were fetched
+identity js: 2146 of 2146 programs identical
+identity jvm: 2146 of 2146 programs identical
+differs: diags errors-type_params_before_completion_analysis
+identity diags: 2741 of 2742 programs identical
+differs: flagged errors-type_params_before_completion_analysis
+identity flagged: 2741 of 2742 programs identical
+exit 1 seconds 152
+# again with every jar in the cache (identity-jars.log)
+differs: js jar_case_class_selectors
+differs: js play_json_macros
+identity js: 2144 of 2146 programs identical
+identity jvm: 2146 of 2146 programs identical
+differs: diags errors-type_params_before_completion_analysis
+identity diags: 2741 of 2742 programs identical
+differs: flagged errors-type_params_before_completion_analysis
+identity flagged: 2741 of 2742 programs identical
+exit 1

@@ -1,0 +1,12 @@
+threads 1: 2143 same, 3 differ, of 2146; built without error: master 2046, spike 2046
+threads 4: 2141 same, 5 differ, of 2146; built without error: master 2042, spike 2042
+t1 inline_substitution_class_alias: exit 134/134 thread id alone
+t1 match_nested_bound: exit 134/134 thread id alone
+t1 match_types: exit 134/134 thread id alone
+t1 given_import_bound_situated same
+t1 given_import_bounds same
+t4 inline_substitution_class_alias: exit 134/134 thread id alone
+t4 match_nested_bound: exit 134/134 thread id alone
+t4 match_types: exit 134/134 thread id alone
+t4 given_import_bound_situated: exit 134/134 OTHER
+t4 given_import_bounds: exit 134/134 OTHER

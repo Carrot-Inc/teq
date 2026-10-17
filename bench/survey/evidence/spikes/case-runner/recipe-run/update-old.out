@@ -1,0 +1,8 @@
+wrote 19 names to tests/stdlib-passing.txt
+SUMMARIES (< tests/stdlib-summaries.txt, > this run):
+3c3
+< either_right: warning: there were 11 deprecation warnings; re-run with --deprecation for details
+---
+> either_right: warning: there were 10 deprecation warnings; re-run with --deprecation for details
+stdlib: 19 passed, 3 failed
+exit 1

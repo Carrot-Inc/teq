@@ -1,0 +1,3 @@
+new: 2049 identical, 37 differ by the checkout's path alone, 3 by --time's figures alone, 1 otherwise
+new-1: 2049 identical, 36 differ by the checkout's path alone, 3 by --time's figures alone, 2 otherwise
+otherwise: import_value_type_member (both new runs), decimal_format_scientific (JOBS=1): failing in every run, node's RangeError (call stack exceeded) at another frame of an unending recursion; not the runner's

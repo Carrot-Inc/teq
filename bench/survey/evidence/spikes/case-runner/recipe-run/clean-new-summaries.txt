@@ -1,0 +1,3 @@
+bigint_ops: warning: there was 1 deprecation warning; re-run with --deprecation for details
+buffer_append_varargs: warning: there were 2 deprecation warnings; re-run with --deprecation for details
+either_right: warning: there were 10 deprecation warnings; re-run with --deprecation for details

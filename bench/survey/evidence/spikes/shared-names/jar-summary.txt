@@ -1,0 +1,33 @@
+core-only master threads 1 exit 0
+core-only master threads 8 exit 0
+core-only master cachegrind 9781870341
+core-only spike threads 1 exit 0
+core-only spike threads 8 exit 0
+core-only spike cachegrind 9668012118
+core-only threads 1: jars identical (40946844 bytes, 24792 entries)
+core-only threads 8: jars identical (40946844 bytes, 24792 entries)
+core-only master:     218,666,201  (2.2%)            <alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}>>>::from_iter
+core-only master: > 218,666,201 (2.2%, 29.6%)  <alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}>>>::from_iter:???
+core-only spike:     109,980,479  (1.1%)            <core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<u32, <alloc::vec::Vec<u32>>::extend_trusted<core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}>>::{closure#0}>::{closure#0}>
+core-only spike: > 109,980,479 (1.1%, 38.8%)  <core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<u32, <alloc::vec::Vec<u32>>::extend_trusted<core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}>>::{closure#0}>::{closure#0}>:???
+api master threads 1 exit 0
+api master threads 8 exit 0
+api master cachegrind 9193205127
+api spike threads 1 exit 0
+api spike threads 8 exit 0
+api spike cachegrind 9119427947
+api threads 1: jars identical (27871590 bytes, 8256 entries)
+api threads 8: jars identical (27871590 bytes, 8256 entries)
+api master:     152,356,640  (1.7%)            <alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}>>>::from_iter
+api master: > 152,356,640 (1.7%, 17.7%)  <alloc::vec::Vec<u32> as alloc::vec::spec_from_iter_nested::SpecFromIterNested<u32, core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}>>>::from_iter:???
+api spike:      76,393,928  (0.8%)            <core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<u32, <alloc::vec::Vec<u32>>::extend_trusted<core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}>>::{closure#0}>::{closure#0}>
+api spike: >  76,393,928 (0.8%, 29.4%)  <core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::traits::iterator::Iterator::for_each::call<u32, <alloc::vec::Vec<u32>>::extend_trusted<core::iter::adapters::map::Map<core::slice::iter::Iter<(alloc::string::String, alloc::borrow::Cow<[u8]>)>, teq::jvm::classfile::write_jar::{closure#1}>>::{closure#0}>::{closure#0}>:???
+many master threads 1 exit 1
+many master threads 8 exit 1
+many master cachegrind 10164977263
+many spike threads 1 exit 1
+many spike threads 8 exit 1
+many spike cachegrind 10162601923
+many threads 1: JARS DIFFER
+many threads 8: JARS DIFFER
+done

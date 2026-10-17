@@ -1,0 +1,12 @@
+test result: ok. 313 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.32s
+exit 0
+ src/deflate.rs      | 41 +++++++++++++++++++++++++++++++++++++++++
+ src/intern.rs       | 15 +++++++++++++++
+ src/interp/regex.rs | 25 +++++++++++++++++++++++++
+ src/jvm/api.rs      | 11 +++++++++++
+ src/lsp/json.rs     | 11 +++++++++++
+ src/products.rs     |  8 ++++++++
+ src/source.rs       |  8 ++++++++
+ src/write.rs        | 12 ++++++++++++
+ src/zip.rs          | 11 +++++++++++
+ 9 files changed, 142 insertions(+)

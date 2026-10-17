@@ -1,0 +1,2 @@
+rust warnings: none in the release and checks profiles' targets
+exit 0

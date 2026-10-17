@@ -1,0 +1,9 @@
+# tests/run_interp.sh, the spike, before the jars
+2068 passed, 4 unsupported, 5 compile, 0 exception, 16 output, 0 timeout, 53 skipped
+exit 0 seconds 26
+# the spike, every jar
+2066 passed, 6 unsupported, 5 compile, 0 exception, 16 output, 0 timeout, 53 skipped
+exit 0
+# master, every jar
+2066 passed, 6 unsupported, 5 compile, 0 exception, 16 output, 0 timeout, 53 skipped
+exit 0

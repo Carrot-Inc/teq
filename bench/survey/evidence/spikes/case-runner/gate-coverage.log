@@ -1,0 +1,2 @@
+gate-coverage: 45 suites of tests/all.sh, 42 run by the workflow, 3 excluded; 43 lines of tests/gate.sh, 2 excluded; 0 failed
+exit 0 seconds 0

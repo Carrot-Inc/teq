@@ -1,0 +1,5 @@
+repeated-keys {"z":3,"a":2} z=3
+depth 128: refused (recursion limit exceeded at line 1 column 128)
+depth 129: refused (recursion limit exceeded at line 1 column 128)
+depth 512: refused (recursion limit exceeded at line 1 column 128)
+lone-surrogate: refused (unexpected end of hex escape at line 1 column 8)

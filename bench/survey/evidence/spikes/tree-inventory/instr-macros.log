@@ -1,0 +1,6 @@
+macro-cls: master min 9.114G landing min 9.115G  min +0.02%  median +0.02%  master spread 0.00%
+derive30: master min 0.577G landing min 0.577G  min -0.00%  median -0.00%  master spread 0.00%
+kittens30: master min 0.491G landing min 0.491G  min -0.00%  median -0.00%  master spread 0.00%
+schema30: master min 0.437G landing min 0.437G  min -0.00%  median -0.00%  master spread 0.00%
+instructions: macro-cls +0.02%, derive30 -0.00%, kittens30 -0.00%, schema30 -0.00% (minimum of 1, within 0.5%)
+exit 0 seconds 255

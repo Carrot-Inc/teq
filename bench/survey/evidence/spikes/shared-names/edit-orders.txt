@@ -1,0 +1,24 @@
+# tests/analysis-bytes.sh, spike
+deps session: 5 of 5 checks
+analysis-bytes: 2703 passed, 0 failed
+exit 0 seconds 258
+# tests/analysis-bytes.sh, master
+deps session: 5 of 5 checks
+analysis-bytes: 2703 passed, 0 failed
+exit 0 seconds 255
+# tests/jvm-watch.sh, spike
+jvm-watch: 2464 full builds of sessions at the automatic count, 11 forked (cacheable: 5 joined 2, 6 retried 2), the rest under the threshold or pinned to one worker
+6478 passed, 0 failed
+exit 0 seconds 408
+# tests/jvm-watch.sh, master
+jvm-watch: 2464 full builds of sessions at the automatic count, 11 forked (cacheable: 5 joined 2, 6 retried 2), the rest under the threshold or pinned to one worker
+6478 passed, 0 failed
+exit 0 seconds 405
+# tests/modules.sh, spike
+known selftypecompanion readtasty-a
+modules: 5701 passed, 0 failed, 68 known departures, 44 deferred; scalac typed 479 modules and refused 7 misuses as expected
+exit 0 seconds 449
+# tests/modules.sh, master
+known selftypecompanion readtasty-a
+modules: 5701 passed, 0 failed, 68 known departures, 44 deferred; scalac typed 479 modules and refused 7 misuses as expected
+exit 0 seconds 452

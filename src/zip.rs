@@ -783,6 +783,17 @@ mod inflating_tests {
 
 #[cfg(test)]
 mod tests {
+    /// CRC-32's check value (`java.util.zip.CRC32` of "123456789", bench/survey/oracle.scala), whole
+    /// and continued across a split at every length the slicing by 8 takes apart.
+    #[test]
+    fn crc32_is_the_jdks() {
+        assert_eq!(super::crc32(b"123456789"), 0xcbf4_3926);
+        let data: Vec<u8> = (0..100u32).map(|i| (i * 31 % 256) as u8).collect();
+        for cut in 0..=data.len() {
+            assert_eq!(super::crc32_update(super::crc32(&data[..cut]), &data[cut..]), super::crc32(&data), "cut at {cut}");
+        }
+    }
+
     /// Threads reading one jar at once each read their own entry's bytes: a read moves nothing
     /// another thread's read relies on (a macro's resource on a worker beside the loader's
     /// classes, which seeking a shared cursor gave a bad header or a mismatched checksum).

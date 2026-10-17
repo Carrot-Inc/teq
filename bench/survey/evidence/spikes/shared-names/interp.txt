@@ -1,0 +1,2 @@
+2066 passed, 6 unsupported, 5 compile, 0 exception, 16 output, 0 timeout, 53 skipped
+exit 0 seconds 25

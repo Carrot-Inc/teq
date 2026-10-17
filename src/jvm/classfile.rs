@@ -1159,3 +1159,18 @@ fn crc32(table: &[u32; 256], data: &[u8]) -> u32 {
     }
     c ^ 0xffff_ffff
 }
+
+#[cfg(test)]
+mod tests {
+    /// The jar writer's CRC-32 is the one zip.rs reads jars by: the check value, and every length
+    /// past the slicing by 8's blocks.
+    #[test]
+    fn the_jars_crc32_is_zips() {
+        let table = super::crc_table();
+        assert_eq!(super::crc32(&table, b"123456789"), 0xcbf4_3926);
+        let data: Vec<u8> = (0..300u32).map(|i| (i * 131 % 256) as u8).collect();
+        for len in 0..data.len() {
+            assert_eq!(super::crc32(&table, &data[..len]), crate::zip::crc32(&data[..len]), "length {len}");
+        }
+    }
+}

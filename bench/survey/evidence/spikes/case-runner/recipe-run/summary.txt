@@ -1,0 +1,11 @@
+the tree: 227d531cd with 0e2ef0f12's tests/run_stdlib.sh beside it, 46 entries of tests/cases for 23 names; the binary teq 0.1.8 0e2ef0f12
+ok    clean: exit 0 and 0, lines the same, files the same; old's last: stdlib: 20 passed, 0 failed
+ok    planted: exit 1 and 1, lines the same, files the same; old's last: stdlib: 19 passed, 3 failed
+ok    nojar: exit 0 and 0, lines the same, files the same; old's last: stdlib: skipped, no scala-library 3.x jar in the coursier cache
+ok    update: exit 1 and 1, the lists the same (19 names)
+ok    missing: exit 1 and 1; old's last: stdlib: 0 passed, 22 failed; new's: Exception in thread "main" java.io.IOException: Cannot run program "/nonexistent/teq": error=2, No such file or directory
+ok    wrapper: 22 builds through the wrapper for 22 cases selected
+      cancel, old: exit 143, 2 processes of its session left a second later
+        2972745 timeout 20 bash -c out=$1 build=()     shift     while [ $# -gt 0 ] && [ "$1" != -- ]; do build+=("$1"); shift; 
+        2972746 node out/stdlib-tests/zz_planted_loop.js
+ok    cancel, new: exit 143, 0 processes of its session left a second later

@@ -1,0 +1,12 @@
+capture_release_ctor_param: output differs
+zz_planted_error: error: type mismatch: found "s", required Int
+zz_planted_loop: output differs
+passing but not in tests/stdlib-passing.txt: abandoned_operand_frames abstract_constructor_extractor access_qualifiers bigint_ops buffer_append_varargs 
+REGRESSIONS: capture_release_ctor_param 
+SUMMARIES (< tests/stdlib-summaries.txt, > this run):
+1c1
+< either_right: warning: there were 11 deprecation warnings; re-run with --deprecation for details
+---
+> either_right: warning: there were 10 deprecation warnings; re-run with --deprecation for details
+stdlib: 19 passed, 3 failed
+exit 1

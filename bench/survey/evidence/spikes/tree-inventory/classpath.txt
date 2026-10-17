@@ -1,0 +1,6 @@
+# tests/classpath.sh, the spike
+classpath: 476 passed, 0 skipped
+exit 0 seconds 158
+# master
+classpath: 476 passed, 0 skipped
+exit 0 seconds 103

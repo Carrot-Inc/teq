@@ -1,0 +1,6 @@
+./Main.scala:4:11: error: exception in macro: java.lang.ClassCastException: class scala.quoted.Expr cannot be cast to class scala.quoted.Reflect$Apply (called by fun in object Probe)
+  inlined from ./Macro.scala:4
+    println(Probe.fun(42))
+            ^^^^^^^^^^^^^
+1 error found
+exit 1
