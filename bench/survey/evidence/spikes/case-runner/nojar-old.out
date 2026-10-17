@@ -1,0 +1,2 @@
+stdlib: skipped, no scala-library 3.x jar in the coursier cache
+exit 0

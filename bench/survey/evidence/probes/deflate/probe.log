@@ -1,0 +1,72 @@
+LIBZ_SYS_STATIC=unset
+== miniz
+differs deflate.short.1.raw: jdk 10 6ccc21fc, backend 9 7c3dde91
+differs deflate.short.1.zlib: jdk 16 57d5426e, backend 15 94e2eed1
+differs deflate.repeated.1.raw: jdk 52 45ea58ce, backend 53 2ab86b89
+differs deflate.repeated.1.zlib: jdk 58 9fd6fdc4, backend 59 01653931
+differs deflate.repeated.6.raw: jdk 30 3842f013, backend 29 f8d3621d
+differs deflate.repeated.6.zlib: jdk 36 f2799de0, backend 35 a313258b
+differs deflate.repeated.9.raw: jdk 30 3842f013, backend 29 f8d3621d
+differs deflate.repeated.9.zlib: jdk 36 da36f0fe, backend 35 eec6a5b3
+differs deflate.ramp.1.raw: jdk 357 ad7d81ba, backend 360 e3129e3b
+differs deflate.ramp.1.zlib: jdk 363 d5fcbe60, backend 366 a6273249
+differs deflate.ramp.6.raw: jdk 341 85ea52b1, backend 333 aba20390
+differs deflate.ramp.6.zlib: jdk 347 c82bf80f, backend 339 1ddb5ed7
+differs deflate.ramp.9.raw: jdk 341 85ea52b1, backend 333 aba20390
+differs deflate.ramp.9.zlib: jdk 347 2fbd4a8b, backend 339 4c3c8c0f
+differs deflate.zeros.1.raw: jdk 61 875385ef, backend 62 c9fd4510
+differs deflate.zeros.1.zlib: jdk 67 8251b71f, backend 68 db107f57
+differs deflate.zeros.6.raw: jdk 27 23604fa1, backend 26 59c815d2
+differs deflate.zeros.6.zlib: jdk 33 447555d3, backend 32 e4de3169
+differs deflate.zeros.9.raw: jdk 27 23604fa1, backend 26 59c815d2
+differs deflate.zeros.9.zlib: jdk 33 785ff948, backend 32 cd967b4d
+backend agrees on 12 of 32 oracle outputs
+== zlib-rs
+differs deflate.short.1.raw: jdk 10 6ccc21fc, backend 9 7c3dde91
+differs deflate.short.1.zlib: jdk 16 57d5426e, backend 15 94e2eed1
+differs deflate.repeated.1.raw: jdk 52 45ea58ce, backend 62 a998f489
+differs deflate.repeated.1.zlib: jdk 58 9fd6fdc4, backend 68 9d763730
+differs deflate.repeated.6.raw: jdk 30 3842f013, backend 50 cfd385ed
+differs deflate.repeated.6.zlib: jdk 36 f2799de0, backend 56 081414d8
+differs deflate.ramp.1.raw: jdk 357 ad7d81ba, backend 357 3f3ee8fe
+differs deflate.ramp.1.zlib: jdk 363 d5fcbe60, backend 363 43d96f0b
+differs deflate.ramp.6.raw: jdk 341 85ea52b1, backend 358 f9f46a19
+differs deflate.ramp.6.zlib: jdk 347 c82bf80f, backend 364 717ad240
+differs deflate.zeros.1.raw: jdk 61 875385ef, backend 101 1d915c98
+differs deflate.zeros.1.zlib: jdk 67 8251b71f, backend 107 d5e87e15
+differs deflate.zeros.6.raw: jdk 27 23604fa1, backend 27 0098ea36
+differs deflate.zeros.6.zlib: jdk 33 447555d3, backend 33 c5530982
+backend agrees on 18 of 32 oracle outputs
+== zlib-c
+backend agrees on 32 of 32 oracle outputs
+zlibVersion() = 1.3.2
+== zlib-c: features
+libz-sys v1.1.30
+└── flate2 v1.1.10
+    └── survey-deflate-probe v0.0.0 (<probes>/deflate)
+        └── survey-deflate-probe feature "zlib-c" (command-line)
+    ├── flate2 feature "any_c_zlib"
+    │   └── flate2 feature "zlib"
+    │       └── survey-deflate-probe feature "zlib-c" (command-line)
+    ├── flate2 feature "any_impl"
+    │   └── flate2 feature "any_zlib"
+    │       └── flate2 feature "any_c_zlib" (*)
+    ├── flate2 feature "any_zlib" (*)
+    ├── flate2 feature "libz-sys"
+    │   └── flate2 feature "zlib" (*)
+    └── flate2 feature "zlib" (*)
+└── libz-sys feature "static"
+    └── survey-deflate-probe v0.0.0 (<probes>/deflate) (*)
+== zlib-c: dynamic libraries
+	linux-vdso.so.1 (0x000074ebd99d5000)
+	libgcc_s.so.1 => /usr/lib/x86_64-linux-gnu/libgcc_s.so.1 (0x000074ebd992a000)
+	libc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x000074ebd9709000)
+	/lib64/ld-linux-x86-64.so.2 (0x000074ebd99d7000)
+== simulated system zlib, --features zlib-c
+backend agrees on 32 of 32 oracle outputs
+zlibVersion() = 1.3.2
+no libz among the dynamic libraries
+== simulated system zlib, --features flate2/zlib
+backend agrees on 32 of 32 oracle outputs
+	libz.so.1 => /usr/lib/x86_64-linux-gnu/libz.so.1 (0x0000733dc7b9e000)
+== done

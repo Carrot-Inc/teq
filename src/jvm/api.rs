@@ -4121,6 +4121,17 @@ mod murmur {
 mod tests {
     use super::*;
 
+    /// FNV-1a's 64-bit test vectors, for the fingerprint of a body's tokens and the hash of an
+    /// extra type parameter's text: both are in the analysis's bytes.
+    #[test]
+    fn fingerprints_are_fnv_1a() {
+        for (text, want) in [("", 0xcbf2_9ce4_8422_2325u64), ("a", 0xaf63_dc4c_8601_ec8c), ("foobar", 0x8594_4171_f739_67e8)] {
+            let mut fp = Fp::new();
+            fp.bytes(text.as_bytes());
+            assert_eq!((fp.0, fnv(text.as_bytes())), (want, want), "{text:?}");
+        }
+    }
+
     #[test]
     fn tree_hash_of_an_annotation_without_arguments_is_scalacs() {
         let mut h = 4;

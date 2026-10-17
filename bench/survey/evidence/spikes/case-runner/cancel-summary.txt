@@ -1,0 +1,7 @@
+old: session 2398298, processes before 3, left 1 s after SIGTERM: 2
+   2398752 timeout 20 bash -c out=$1 build=()     shift     while [ $# -gt 0 ] && [ "$1" != -- ]; do build+=("$1"); shift; done     [ $# = 0 ] || shif
+   2398753 node out/stdlib-tests/zz_planted_loop.js
+new: session 2398795, processes before 2, left 1 s after SIGTERM: 0
+   
+old: exit 15
+new: exit 143

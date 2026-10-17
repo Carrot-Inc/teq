@@ -418,6 +418,17 @@ mod tests {
         assert!(Json::parse(&deep).is_err());
     }
 
+    /// An object keeps every key as written, a repeated one too, and a lookup finds the first:
+    /// the manifest's identity hashes the text written back (`products.rs`), which a map that
+    /// sorts or merges keys would change (serde_json gives `{"a":2,"z":3}` and 3).
+    #[test]
+    fn keeps_repeated_keys_in_order() {
+        let text = r#"{"z":1,"a":2,"z":3}"#;
+        let v = Json::parse(text).unwrap();
+        assert_eq!(v.to_text(), text);
+        assert_eq!(v.get("z").and_then(Json::num), Some(1.0));
+    }
+
     #[test]
     fn lone_surrogate_reads_as_replacement() {
         assert_eq!(Json::parse(r#""\ud800x""#).unwrap(), Json::Str("\u{fffd}x".to_string()));

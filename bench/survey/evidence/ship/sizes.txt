@@ -1,0 +1,3 @@
+master raw 30474656 stripped 28280464 gzip 10531555 wall 8:49.14 peak-kb 4803352
+shared-names raw 30473912 stripped 28279792 gzip 10531722 wall 8:32.16 peak-kb 4797296
+tree-inventory raw 30477296 stripped 28283104 gzip 10533340 wall 8:59.24 peak-kb 4802028

@@ -1,0 +1,13 @@
+# scala3-typing.log
+  oos        139
+
+no category changed
+exit 0 seconds 8
+# scala3-macros.log
+322 tests in 1s: pass 96, wrong-output 59, run-error 12, compile-error 155
+all 96 listed tests still pass
+exit 0 seconds 1
+# scala3-macros-interp.log
+322 tests in 1s: pass 101, wrong-output 52, run-error 15, compile-error 154
+all 101 listed tests still pass
+exit 0 seconds 1

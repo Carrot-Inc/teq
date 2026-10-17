@@ -656,6 +656,14 @@ pub fn add_class_attributes(bytes: &[u8], attrs: &[(&str, &[u8])]) -> Result<Vec
 mod tests {
     use super::*;
 
+    /// FNV-1a's 64-bit test vectors: a fingerprint is persisted in the manifest.
+    #[test]
+    fn fingerprint_is_fnv_1a() {
+        assert_eq!(fingerprint(""), "0:cbf29ce484222325");
+        assert_eq!(fingerprint("a"), "1:af63dc4c8601ec8c");
+        assert_eq!(fingerprint("foobar"), "6:85944171f73967e8");
+    }
+
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("teq-publication-{}-{}", name, std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

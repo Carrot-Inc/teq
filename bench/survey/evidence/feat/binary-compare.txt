@@ -1,0 +1,8 @@
+# this branch's release binary against master's built in a worktree of this one's path length; master's built
+# there and in the export have one digest (binaries.sha256), so the build embeds no path, and the bytes that differ
+# are the sources' (ThinLTO's .llvm.<hash> symbol suffixes, the .strtab and the layout they move)
+teq 0.1.8 0e2ef0f12
+teq 0.1.8 b8da521ea
+34935832 <worktree>/out/survey/spikes/master-samepath-teq
+34937096 <worktree>/out/survey/spikes/feat-teq
+cmp: EOF on ‘<worktree>/out/survey/spikes/master-samepath-teq’ after byte 34935832

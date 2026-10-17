@@ -1,0 +1,25 @@
+# The crates bench/survey/survey.scala reads from the registry: each candidate a screening named (README.md's
+# table), one per line.
+crc32fast
+miniz_oxide
+flate2
+libz-sys
+libz-rs-sys
+zip
+regex
+fancy-regex
+unicode-general-category
+unicode-properties
+ureq
+serde_json
+serde_yaml
+serde_yml
+yaml-rust2
+mimalloc
+bumpalo
+typed-arena
+rustc-hash
+ahash
+fnv
+sha1
+sha2

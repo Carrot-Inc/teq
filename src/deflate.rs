@@ -1022,5 +1022,46 @@ mod tests {
         }
         assert_eq!(deflate(&[], 6, false), vec![3, 0]);
     }
+
+    /// What `java.util.zip.Deflater` gives at each level over four inputs, raw and with zlib's
+    /// wrapper, as the output's length and CRC-32 (bench/survey/oracle.scala, JDK 24): a backend
+    /// in this one's place has to give these bytes, which a round trip does not see (miniz_oxide's
+    /// level 6 over the repeated input is 29 bytes of its own).
+    #[test]
+    fn gives_the_jdks_bytes() {
+        let inputs: [(&str, Vec<u8>); 4] = [
+            ("short", b"hello hello hello hello".to_vec()),
+            ("repeated", b"abcde".repeat(1000)),
+            ("ramp", (0..8192u32).map(|i| (i % 251) as u8).collect()),
+            ("zeros", vec![0; 10000]),
+        ];
+        #[rustfmt::skip]
+        let jdk: [(&str, i32, bool, usize, u32); 32] = [
+            ("short", 0, false, 28, 0x7116e0f0), ("short", 0, true, 34, 0xd4d9ef2d),
+            ("short", 1, false, 10, 0x6ccc21fc), ("short", 1, true, 16, 0x57d5426e),
+            ("short", 6, false, 10, 0x6ccc21fc), ("short", 6, true, 16, 0xa13e5f96),
+            ("short", 9, false, 10, 0x6ccc21fc), ("short", 9, true, 16, 0x493ff019),
+            ("repeated", 0, false, 5005, 0xc7e9a465), ("repeated", 0, true, 5011, 0xe9a5b725),
+            ("repeated", 1, false, 52, 0x45ea58ce), ("repeated", 1, true, 58, 0x9fd6fdc4),
+            ("repeated", 6, false, 30, 0x3842f013), ("repeated", 6, true, 36, 0xf2799de0),
+            ("repeated", 9, false, 30, 0x3842f013), ("repeated", 9, true, 36, 0xda36f0fe),
+            ("ramp", 0, false, 8197, 0x4a356476), ("ramp", 0, true, 8203, 0x92798a4e),
+            ("ramp", 1, false, 357, 0xad7d81ba), ("ramp", 1, true, 363, 0xd5fcbe60),
+            ("ramp", 6, false, 341, 0x85ea52b1), ("ramp", 6, true, 347, 0xc82bf80f),
+            ("ramp", 9, false, 341, 0x85ea52b1), ("ramp", 9, true, 347, 0x2fbd4a8b),
+            ("zeros", 0, false, 10005, 0xad9bef56), ("zeros", 0, true, 10011, 0xdc8818b0),
+            ("zeros", 1, false, 61, 0x875385ef), ("zeros", 1, true, 67, 0x8251b71f),
+            ("zeros", 6, false, 27, 0x23604fa1), ("zeros", 6, true, 33, 0x447555d3),
+            ("zeros", 9, false, 27, 0x23604fa1), ("zeros", 9, true, 33, 0x785ff948),
+        ];
+        for (name, level, wrap, len, crc) in jdk {
+            let input = &inputs.iter().find(|(n, _)| *n == name).unwrap().1;
+            let out = deflate(input, level, wrap);
+            assert_eq!((out.len(), crate::zip::crc32(&out)), (len, crc), "{name} level {level} wrap {wrap}");
+        }
+        let jdk_bytes = "edc4390100000804a0ace7d3bf8229dc6020d5b391244992244992f4d901";
+        let ours: String = deflate(&inputs[1].1, 6, false).iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(ours, jdk_bytes);
+    }
 }
 

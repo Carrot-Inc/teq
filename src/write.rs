@@ -560,3 +560,15 @@ pub fn classes_after(dir: &str, classes: &[crate::jvm::Emitted], previous: &mut 
     lap.done("write: published", written.len() + deleted.len());
     Ok((written, deleted))
 }
+
+#[cfg(test)]
+mod tests {
+    /// A pin of the hash a module's footer, `hot-build.mjs` and the products' identity name a
+    /// text by: an output and a cache key, so a change of it changes every module's bytes.
+    #[test]
+    fn hash_is_pinned() {
+        assert_eq!(super::hash(b""), 0);
+        assert_eq!(super::hash(b"abc"), 0xa649_5773_1491_5a86);
+        assert_eq!(super::hash(b"0123456789abcdefg"), 0xc0a0_ad83_fed0_e53e);
+    }
+}

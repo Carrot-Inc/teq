@@ -1,0 +1,8 @@
+[package]
+name = "survey-json-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }

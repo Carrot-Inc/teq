@@ -160,3 +160,18 @@ impl Interner {
         self.strs.get(n.0 as usize)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The hash of teq's maps, a pin of its algorithm: the order an `FxMap` is walked in follows
+    /// it, and a walk that reaches an output makes it part of the output. rustc-hash 1.1.0, whose
+    /// word step this is, reads a tail by 4, 2 and 1 bytes and gives `c360d75917ea8923` here.
+    #[test]
+    fn fx_hasher_reads_a_tail_padded_with_zeros() {
+        let mut h = FxHasher::default();
+        h.write(b"abc");
+        assert_eq!(h.finish(), 0x8c41_a58a_f392_0c75);
+    }
+}

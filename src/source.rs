@@ -895,6 +895,14 @@ pub fn locate(text: &str, offset: usize) -> (usize, usize, &str) {
 mod tests {
     use super::*;
 
+    /// FNV-1a's test vectors, 32 bits for a file's tag and 64 for a body's: both reach names in
+    /// the output.
+    #[test]
+    fn tags_are_fnv_1a() {
+        assert_eq!([file_tag(""), file_tag("a"), file_tag("foobar")], [0x811c_9dc5, 0xe40c_292c, 0xbf9c_f968]);
+        assert_eq!([body_tag(""), body_tag("a"), body_tag("foobar")], [0xcbf2_9ce4_8422_2325, 0xaf63_dc4c_8601_ec8c, 0x8594_4171_f739_67e8]);
+    }
+
     /// Three keys, two of which hash alike and the third with the next tag: the displaced key
     /// passes over the third's tag, which stays the third's.
     #[test]

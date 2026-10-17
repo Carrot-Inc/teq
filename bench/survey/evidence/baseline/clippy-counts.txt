@@ -1,0 +1,100 @@
+# cargo clippy --release --message-format short -- -W clippy::all at 0e2ef0f12 (clippy 0.1.98): warnings by message, a quoted name as X
+  685 this X can be simplified
+   62 very complex type used. Consider factoring parts into X definitions
+   48 this function has too many arguments (8/7)
+   26 unnecessary use of X to create a slice from a reference: help: try: X
+   21 unnecessary closure used with X
+   18 this expression creates a reference which is immediately dereferenced by the compiler: help: change this to: X
+   16 unnecessary use of X: help: use: X
+   12 the loop variable X is used to index X
+   12 this function has too many arguments (9/7)
+   10 replacing an X with X: help: consider using X instead: X
+   10 this X may be rewritten with the X operator: help: replace it with: X
+    9 manual implementation of X: help: replace with: X
+    9 this block may be rewritten with the X operator: help: replace it with: X
+    9 this X can be written more concisely: help: consider using X instead: X
+    8 methods with the following characteristics: (X and X type is not X) usually take X by reference
+    8 call to X with a value that does not implement X. Dropping such a type only extends its contained lifetimes
+    7 redundant closure: help: replace the closure with the function itself: X
+    7 called X on X after checking its variant with X
+    7 using X with a format string that ends in a single newline
+    7 the borrowed expression implements the required traits: help: change this to: X
+    7 this loop could be written as a X loop: help: try: X
+    7 consider using X
+    7 deref which would be done by auto-deref: help: try: X
+    5 using X with a constant chunk size: help: consider using X instead: X
+    5 methods called X usually take no X
+    5 the function X doesn't need a mutable reference
+    5 using X with a constant chunk size
+    5 this X can be collapsed into the outer X
+    5 usage of X followed by X on a X
+    5 using X on type X which implements the X trait: help: try dereferencing it: X
+    5 X is already on the heap, the boxing is unnecessary: help: try: X
+    4 using X instead of X is more efficient: help: try: X
+    4 this pattern is unneeded as the X pattern can match that element: help: remove it
+    4 expression can be simplified using X
+    4 this X expression can be replaced with X
+    4 this X has identical blocks
+    4 the loop variable X is only used to index X
+    3 manual X implementation: help: use: X
+    3 this X statement can be collapsed
+    3 called X on a X; this will needlessly iterate the entire iterator
+    3 mutable borrow from immutable input(s)
+    3 writing X instead of X involves a new object where a slice will do
+    3 useless use of X: help: consider using X: X
+    2 empty line after doc comment
+    2 creating a new box: help: replace existing content with inner value instead: X
+    2 manual implementation of X: help: consider using X: X
+    2 redundant pattern matching
+    2 calling X using a single-character string literal: help: consider using X with a character literal: X
+    2 you seem to be trying to use X for destructuring a single pattern. Consider using X
+    2 unnecessary use of X
+    2 length comparison to one: help: using X is clearer and more explicit: X
+    2 returning the result of a X binding from a block
+    2 unneeded X statement
+    2 this function has too many arguments (10/7)
+    2 for loop over a single element
+    2 in a X scrutinee, avoid complex blocks or closures with blocks; instead, move the block or closure higher and bind it with a X
+    1 empty line after outer attribute
+    1 empty lines after doc comment
+    1 bound is defined in more than one place
+    1 redundant field names in struct initialization: help: replace it with: X
+    1 manually reimplementing X: help: consider using X: X
+    1 redundant guard
+    1 X is never smaller than X and has therefore no effect: help: try: X
+    1 deref on an immutable reference: help: if you would like to reborrow, try removing X: X
+    1 methods called X usually return X
+    1 this function has too many arguments (11/7)
+    1 redundant closure: help: replace the closure with the associated function itself: X
+    1 manual implementation of X: help: try: X
+    1 this range is empty so it will yield no values
+    1 called X on an X
+    1 this manual char comparison can be written more succinctly: help: consider using an array of X: X
+    1 the variable X is used as a loop counter: help: consider using: X
+    1 unnecessary use of X because there is X: help: remove X
+    1 in an X condition, avoid complex blocks or closures with blocks; instead, move the block or closure higher and bind it with a X
+    1 you seem to be trying to use X: help: consider using just X: X
+    1 large size difference between variants: the entire enum is at least 280 bytes
+    1 the following explicit lifetimes could be elided: 'k
+    1 methods called X usually take X by reference or X by mutable reference
+    1 using X on type X which implements the X trait: help: try removing the X call: X
+    1 large size difference between variants: the entire enum is at least 320 bytes
+    1 this X can be derived
+    1 variables in the condition are not mutated in the loop body
+    1 this block may be rewritten with the X operator
+    1 you seem to be trying to use X for destructuring a single pattern. Consider using X: help: try: X
+    1 match expression looks like X macro
+    1 variant name ends with the enum's name
+    1 draining all elements of a collection into a new collection of the same type: help: use X to avoid creating a new allocation: X
+    1 the X-variant returned from this function is very large: the X-variant is at least 248 bytes
+    1 call to X with argument X
+    1 unnecessary map of the identity function: help: remove the call to X
+    1 this match could be written as a X statement
+    1 casting to the same type is unnecessary (X -> X): help: try: X
+    1 you seem to want to iterate on a map's keys
+    1 you seem to be trying to use X. Consider using just X
+    1 iterating on a map's keys: help: try: X
+    1 calling X after slicing a string: help: try: X
+warning: `teq` (bin "teq") generated 1157 warnings (run `cargo clippy --fix --bin "teq" -p teq -- -W clippy::all` to apply 913 suggestions)
+    Finished `release` profile [optimized] target(s) in 28.53s
+exit 0

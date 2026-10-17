@@ -1,0 +1,5 @@
+DIFFERS inline_substitution_class_alias
+DIFFERS match_nested_bound
+DIFFERS match_types
+products identity: 2143 same, 3 differ, of 2146 programs (2046 built without error), threads 1
+exit 1 seconds 74

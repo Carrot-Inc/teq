@@ -1,0 +1,2 @@
+2972745 timeout 20 bash -c out=$1 build=()     shift     while [ $# -gt 0 ] && [ "$1" != -- ]; do build+=("$1"); shift; done     [ $# = 0 ] || shift     if [ -n "$RUN_DIAGNOSTICS" ]; then       "$TEQ" compiler build "${build[@]}" -o "$out" > "$RUN_DIAGNOSTICS" 2>&1     else       "$TEQ" compiler build "${build[@]}" -o "$out"     fi && exec node "$out" "$@" run_js out/stdlib-tests/zz_planted_loop.js tests/cases/zz_planted_loop.scala --std=scala-library
+2972746 node out/stdlib-tests/zz_planted_loop.js

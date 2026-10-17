@@ -1,0 +1,50 @@
+Select.unapply on a tree that is no selection
+qualifier of a tree that is no selection
+name of a tree that is no selection
+Apply.unapply on a tree that is no application
+fun of a tree that is no application
+args of a tree that is no application
+TypeApply.unapply on a tree that is no type application
+fun of a tree that is no type application
+args of a tree that is no type application
+New.unapply on a tree that is no new
+tpt of a tree that is no new
+Typed.unapply on a tree that is no ascription
+expr of a tree that is no ascription
+tpt of a tree that is no ascription
+Repeated.unapply on a tree that is no vararg
+elems of a tree that is no vararg
+elemtpt of a tree that is no vararg
+NamedArg.unapply on a tree that is no named argument
+name of a tree that is no named argument
+value of a tree that is no named argument
+Assign.unapply on a tree that is no assignment
+lhs of a tree that is no assignment
+rhs of a tree that is no assignment
+If.unapply on a tree that is no conditional
+cond of a tree that is no conditional
+thenp of a tree that is no conditional
+elsep of a tree that is no conditional
+Match.unapply on a tree that is no match
+scrutinee of a tree that is no match
+cases of a tree that is no match
+CaseDef.unapply on a tree that is no case
+pattern of a tree that is no case
+guard of a tree that is no case
+rhs of a tree that is no case
+Try.unapply on a tree that is no try
+body of a tree that is no try
+cases of a tree that is no try
+finalizer of a tree that is no try
+Return.unapply on a tree that is no return
+expr of a tree that is no return
+While.unapply on a tree that is no loop
+cond of a tree that is no loop
+body of a tree that is no loop
+Bind.unapply on a tree that is no binder
+name of a tree that is no binder
+pattern of a tree that is no binder
+Unapply.unapply on a tree that is no extractor pattern
+patterns of a tree that is no extractor pattern
+Alternatives.unapply on a tree that is no alternative
+patterns of a tree that is no alternative

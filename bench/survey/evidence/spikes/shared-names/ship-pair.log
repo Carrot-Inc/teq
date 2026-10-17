@@ -1,0 +1,7 @@
+depth_1: master min 0.267G landing min 0.267G  min +0.00%  median +0.00%  master spread 0.00%
+gview_1: master min 0.536G landing min 0.536G  min +0.00%  median +0.00%  master spread 0.00%
+core-only: master min 2.124G landing min 2.124G  min +0.00%  median +0.00%  master spread 0.00%
+realistic-api: master min 4.682G landing min 4.682G  min +0.00%  median +0.00%  master spread 0.00%
+realistic-frontend: master min 9.967G landing min 9.967G  min -0.00%  median -0.00%  master spread 0.00%
+instructions: depth_1 +0.00%, gview_1 +0.00%, core-only +0.00%, realistic-api +0.00%, realistic-frontend -0.00% (minimum of 1, recorded apart)
+exit 0 seconds 293

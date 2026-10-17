@@ -1,0 +1,18 @@
+[package]
+name = "survey-deflate-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[features]
+miniz = ["flate2/miniz_oxide"]
+zlib-rs = ["flate2/zlib-rs"]
+zlib-c = ["flate2/zlib", "dep:libz-sys"]
+
+[dependencies]
+flate2 = { version = "=1.1.10", default-features = false }
+libz-sys = { version = "=1.1.30", default-features = false, features = ["static"], optional = true }
+crc32fast = "=1.5.2"
+
+[profile.release]
+panic = "abort"

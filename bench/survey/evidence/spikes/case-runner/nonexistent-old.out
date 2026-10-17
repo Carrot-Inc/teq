@@ -1,0 +1,3 @@
+REGRESSIONS: annotated_type_params boolean_strict_operators capture_release_ctor_param cast_inline_box cast_statement_werror derives_type_constructor either_right given_import_bound_exclusion inline_anon_shared leading_infix_backquoted mirror_derives predef_wrap_string_linked scala3_t5387 throwable_init_cause vc_box_match 
+stdlib: 0 passed, 22 failed
+exit 1

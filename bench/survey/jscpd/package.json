@@ -1,0 +1,7 @@
+{
+  "name": "teq-survey-jscpd",
+  "private": true,
+  "dependencies": {
+    "jscpd": "5.4.1"
+  }
+}
