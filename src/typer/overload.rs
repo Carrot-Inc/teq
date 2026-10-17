@@ -2244,17 +2244,29 @@ impl<'a> Worker<'a> {
 
     /// Variables of the arguments that were typed before an alternative was known belong to
     /// no application that would solve them. One that nothing constrains stays open where
-    /// the result mentions it, for the enclosing application to settle.
+    /// the result mentions it, for the enclosing application to settle, and so does one an
+    /// interpolation left open (`open_vars`), bounded or not: its tree's type holds it
+    /// nonvariantly, and dotty's `interpolateTypeVars` leaves it to the trees around, as the
+    /// `R` of `Window(()).focus` that only the expected type of the chain fixes.
     fn settle_overload_vars(&mut self, first_var: usize, result: Option<TypeId>) {
         let mut in_result = Vec::new();
         if let Some(ty) = result {
             let ty = self.zonk(ty);
             self.collect_vars(ty, &mut in_result);
         }
+        let left: FxMap<TVarId, ()> = if self.open_vars.last().is_some_and(|&w| self.tvars.made_since(w, first_var)) {
+            let left_open = self.open_vars.iter().rposition(|&w| !self.tvars.made_since(w, first_var)).map_or(0, |i| i + 1);
+            self.open_vars[left_open..].iter().map(|&w| (w, ())).collect()
+        } else {
+            Default::default()
+        };
         for v in first_var..self.tvars.len() {
             let info = &self.tvars[v];
             let unconstrained = info.lower.is_empty() && info.upper.is_empty();
             if info.inst.is_some() || info.guide || (unconstrained && in_result.contains(&self.tvars.id(v))) {
+                continue;
+            }
+            if !left.is_empty() && left.contains_key(&self.tvars.id(v)) {
                 continue;
             }
             self.solve_var(self.tvars.id(v));
