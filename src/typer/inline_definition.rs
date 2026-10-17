@@ -46,6 +46,8 @@ pub struct Notes {
     /// (`InlineDefinition::classes`), and their bodies once checked.
     classes: Vec<ClassId>,
     class_bodies: Vec<TClass>,
+    /// The body's blocks that declare classes (`InlineDefinition::blocks`).
+    blocks: Vec<(TExprId, Vec<ClassId>)>,
     inline_vals: Vec<SymId>,
     inferred_vals: Vec<SymId>,
     pickle_inferred_vals: Vec<SymId>,
@@ -371,6 +373,33 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The classes a block declares (`Program::block_classes`): a stored body's or a quote's
+    /// record holds a template's, the program the rest.
+    pub(super) fn note_block_classes(&mut self, block: TExprId, classes: Vec<ClassId>) {
+        if self.quote.level > 0 {
+            if let Some(blocks) = self.quote.blocks.last_mut() {
+                blocks.push((block, classes));
+            }
+        } else if self.stores_classes() {
+            if let Some(n) = self.level_notes() {
+                n.blocks.push((block, classes));
+            }
+        } else {
+            self.prog.block_classes.insert(block, classes);
+        }
+    }
+
+    /// The node `to` given the node of `from` declares what `from` did (`Program::block_classes`),
+    /// as it takes the capture's records (`capture_moved`).
+    pub(super) fn move_declared(&mut self, from: TExprId, to: TExprId) {
+        if self.prog.block_classes.is_empty() {
+            return;
+        }
+        if let Some(cs) = self.prog.block_classes.get(&from).cloned() {
+            self.prog.block_classes.insert(to, cs);
+        }
+    }
+
     /// The class `c` made by the body under the check, kept with its record.
     pub(super) fn note_stored_class(&mut self, c: ClassId) {
         if let Some(n) = self.level_notes() {
@@ -588,7 +617,7 @@ impl<'a> Worker<'a> {
         let env = self.env_at(file, owner, span.start);
         let sig = self.sig_arc(sym);
         let marks = (self.diags.items.len(), self.deferred_matches.len(), self.deferred_bounds.len());
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), blocks: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         self.outside_annotation(|t| {
             t.outside_search(|t| {
@@ -622,7 +651,7 @@ impl<'a> Worker<'a> {
         }
         let env = self.env_at(file, owner, span.start);
         let marks = (self.diags.items.len(), self.deferred_matches.len(), self.deferred_bounds.len());
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), blocks: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         let index = self.index.take();
         let ty = self.outside_annotation(|t| {
@@ -722,7 +751,7 @@ impl<'a> Worker<'a> {
         let keeps_index = self.index.is_some() && !library;
         let index = if keeps_index { None } else { self.index.take() };
         let index_mark = self.index_mark();
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), type_trees: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), blocks: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), pickle_inferred_vals: Vec::new(), written_targs: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         // The expansion by substitution reads the type of every node of the stored body, which
         // a build that keeps no types keeps aside for the record alone.
@@ -912,6 +941,7 @@ impl<'a> Worker<'a> {
             node_types,
             aliases: if body.is_some() { notes.aliases } else { Vec::new() },
             classes: if body.is_some() { notes.class_bodies } else { Vec::new() },
+            blocks: if body.is_some() { notes.blocks } else { Vec::new() },
             inline_vals: if body.is_some() { notes.inline_vals } else { Vec::new() },
             inferred_vals: if body.is_some() { notes.inferred_vals } else { Vec::new() },
             pickle_inferred_vals: if body.is_some() { notes.pickle_inferred_vals } else { Vec::new() },
@@ -1524,7 +1554,7 @@ impl<'a> Worker<'a> {
         // The classes of an expansion's copy take the output's names; one of the census or a
         // measurement takes none.
         let names_classes = d.names_classes;
-        let stored_copy = super::quoted::StoredCopy { index: &d.index, this: d.this, this_paths: &d.this_paths, bound: d.bound, leaves_for_demand: d.on_demand.then_some(&d.index.reducible), classes: &def.classes, names_classes, owner_params: d.owner_params };
+        let stored_copy = super::quoted::StoredCopy { index: &d.index, this: d.this, this_paths: &d.this_paths, bound: d.bound, leaves_for_demand: d.on_demand.then_some(&d.index.reducible), classes: &def.classes, blocks: &def.blocks, names_classes, owner_params: d.owner_params };
         d.part.start();
         let map = super::quoted::CopyMap { exprs: &mut inst.exprs, tests: &mut inst.tests, types: &mut inst.types, part: &mut d.part };
         self.instantiate_tree_mapped(roots, &d.args, &subst, &inst.renames, &d.paths, stored_copy, map, &mut d.members, &mut d.copied_classes);
@@ -2776,6 +2806,7 @@ impl InlineDefinition {
             node_types: FxMap::default(),
             aliases: Vec::new(),
             classes: Vec::new(),
+            blocks: Vec::new(),
             inline_vals: Vec::new(),
             inferred_vals: Vec::new(),
             pickle_inferred_vals: Vec::new(),

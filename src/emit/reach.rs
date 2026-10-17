@@ -315,6 +315,9 @@ trait Typing<'a> {
     fn complete_erased_jar_classes(&mut self);
     /// The reflective signatures of members a reflective call's name meets.
     fn reflective_sigs(&mut self, members: &[SymId]) -> Vec<Option<crate::typer::ReflectiveSig>>;
+    /// The signatures of what the members of classes the module makes override, which their
+    /// bridges read (`Worker::complete_overridden_members`).
+    fn complete_overridden(&mut self, classes: &[ClassId]);
 }
 
 impl<'a> Typing<'a> for Worker<'a> {
@@ -380,6 +383,12 @@ impl<'a> Typing<'a> for Worker<'a> {
 
     fn reflective_sigs(&mut self, members: &[SymId]) -> Vec<Option<crate::typer::ReflectiveSig>> {
         members.iter().map(|&m| self.reflective_sig(m)).collect()
+    }
+
+    fn complete_overridden(&mut self, classes: &[ClassId]) {
+        for &c in classes {
+            self.complete_overridden_members(c);
+        }
     }
 }
 
@@ -476,6 +485,9 @@ impl<'w, 'a> Typing<'a> for Unchanged<'w, 'a> {
             })
             .collect()
     }
+
+    /// The signatures the kept walk had completed stay complete.
+    fn complete_overridden(&mut self, _classes: &[ClassId]) {}
 }
 
 /// In link mode the output stands where scalac's class files would, which the jars' bytecode,
@@ -485,47 +497,23 @@ impl<'w, 'a> Typing<'a> for Unchanged<'w, 'a> {
 fn link_root_members(typer: &Worker, std_files: &[bool], products: bool) -> (Vec<(ClassId, Vec<SymId>)>, Vec<SymId>) {
     let syms = &typer.syms;
     let program_file = |f: crate::source::FileId| !std_files.get(f.0 as usize).copied().unwrap_or(true);
-    let runs = |m: SymId| {
-        let info = syms.sym(m);
-        let quoted = info.sig.as_ref().map_or(false, |s| {
-            quoted_type(typer, s.ret, 4) || s.clauses.iter().any(|cl| cl.params.iter().any(|p| quoted_type(typer, p.ty, 4)))
-        });
-        // What `private[p]` opens to the rest of its package is kept, since a downstream module
-        // may be in the package, whether it reads the products or builds over the sources.
-        let private = info.mods & crate::ast::mods::PRIVATE != 0 && !info.scoped_private;
-        // An inline method is not output, but its ordinary default getters are methods of
-        // their own that a later caller's expansion applies (`Desugar.addDefaultGetters`).
-        let getters = || typer.fun_of_sym.get(&m).is_some_and(|&f| typer.prog.funs[f.idx()].body.is_none() && typer.prog.funs[f.idx()].defaults.iter().any(Option::is_some));
-        matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var | SymKind::Given)
-            && (info.mods & crate::ast::mods::INLINE == 0 || getters())
-            && !private
-            && !quoted
-    };
     let mut classes = Vec::new();
     for (i, info) in syms.classes.iter().enumerate() {
         let c = ClassId(i as u32);
         let enum_companion = info.kind == ClassKind::Object && info.companion.map_or(false, |e| syms.class(e).kind == ClassKind::Enum);
+        // In a module's products a class nested in a local class is the local class's to write with
+        // it (`materialised`): a quote's or an inline body's template's nested class is none of the
+        // module's.
+        let local = if products { syms.in_local_class(c) } else { info.owner == Owner::Local };
         let own = (info.def.is_some() || enum_companion)
-            && info.owner != Owner::Local
+            && !local
             && (matches!(info.kind, ClassKind::Class | ClassKind::Object | ClassKind::Enum | ClassKind::EnumCase | ClassKind::Trait)
                 || products && info.kind == ClassKind::GivenImpl)
-            && program_file(info.file)
+            && program_file(info.module_file())
             && typer.loaded.as_ref().map_or(true, |l| !l.classes.contains_key(&c));
-        if !own {
-            continue;
+        if own {
+            classes.push((c, root_members(typer, c, false)));
         }
-        let mut members: Vec<SymId> = Vec::new();
-        for &m in info.members.values() {
-            match syms.alternatives(m) {
-                Some(alts) => members.extend(alts.iter().copied()),
-                None => members.push(m),
-            }
-        }
-        // The extension methods too, which a downstream module calls from its own class files
-        // whether it reads the products or, as sbt's residents do, builds over the sources.
-        members.extend(info.extensions.iter().copied());
-        members.retain(|&m| syms.sym(m).owner == Owner::Class(c) && runs(m));
-        classes.push((c, members));
     }
     let top_vals = syms.syms.iter().enumerate().filter(|(_, info)| {
         matches!(info.owner, Owner::Package(_)) && info.def.is_some() && !matches!(info.kind, SymKind::Def)
@@ -539,9 +527,56 @@ fn link_root_members(typer: &Worker, std_files: &[bool], products: bool) -> (Vec
         .map(|&f| typer.prog.funs[f.idx()].sym)
         .chain(top_vals.map(|(i, _)| SymId(i as u32)))
         .chain(top_extensions)
-        .filter(|&s| program_file(syms.sym(s).file) && runs(s))
+        .filter(|&s| program_file(syms.sym(s).file) && runs_later(typer, s, false))
         .collect();
     (classes, top)
+}
+
+/// The members of class `c` the output keeps for later callers, as scalac writes every
+/// definition of a template (`BCodeSkelBuilder.genPlainClass`): those `c` declares itself, its
+/// extension methods among them, which a downstream module calls from its own class files
+/// whether it reads the products or, as sbt's residents do, builds over the sources; with
+/// `whole`, of a class the module materialises, every one that runs later by its role
+/// (`runs_later`), its private ones too, which a reflective caller finds.
+fn root_members(typer: &Worker, c: ClassId, whole: bool) -> Vec<SymId> {
+    let syms = &typer.syms;
+    let info = syms.class(c);
+    let mut members: Vec<SymId> = Vec::new();
+    for &m in info.members.values() {
+        match syms.alternatives(m) {
+            Some(alts) => members.extend(alts.iter().copied()),
+            None => members.push(m),
+        }
+    }
+    members.extend(info.extensions.iter().copied());
+    members.retain(|&m| syms.sym(m).owner == Owner::Class(c) && runs_later(typer, m, whole));
+    members
+}
+
+/// Whether member `m` runs after compile time, so that a later caller may call it, by its
+/// declaration's role: a method, value, variable or given, not an inline method, which runs at
+/// compile time only. Of a class the module materialises (`materialised`), a quote's copy or a
+/// local class, every such member, private ones included, whatever types its signature names, as
+/// scalac writes every definition of the template (`BCodeSkelBuilder.genPlainClass`); of the
+/// module's own definitions, what `private[p]` opens to the rest of its package (a downstream
+/// module may be in the package, whether it reads the products or builds over the sources), and
+/// not what names a type of `scala.quoted`: where the module's macro implementations and their
+/// helpers are declared, which its products leave to the compiler (`tests/modules/deferred.txt`'s
+/// `scalac-b`).
+fn runs_later(typer: &Worker, m: SymId, materialised: bool) -> bool {
+    let info = typer.syms.sym(m);
+    let quoted = !materialised
+        && info.sig.as_ref().map_or(false, |s| {
+            quoted_type(typer, s.ret, 4) || s.clauses.iter().any(|cl| cl.params.iter().any(|p| quoted_type(typer, p.ty, 4)))
+        });
+    let hidden = !materialised && info.mods & crate::ast::mods::PRIVATE != 0 && !info.scoped_private;
+    // An inline method is not output, but its ordinary default getters are methods of
+    // their own that a later caller's expansion applies (`Desugar.addDefaultGetters`).
+    let getters = || typer.fun_of_sym.get(&m).is_some_and(|&f| typer.prog.funs[f.idx()].body.is_none() && typer.prog.funs[f.idx()].defaults.iter().any(Option::is_some));
+    matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var | SymKind::Given)
+        && (info.mods & crate::ast::mods::INLINE == 0 || getters())
+        && !hidden
+        && !quoted
 }
 
 /// A type of package `scala.quoted` (`Quotes`, `Expr`, `ToExpr`), or one taking such a type
@@ -663,6 +698,10 @@ fn differences(typer: &Worker, kept: &Reach, fresh: &Reach, out: &mut Vec<String
 
 fn compute_now(typer: &mut Worker, array_seq: Option<ClassId>, js_visible: bool, stop: &dyn Fn() -> bool) -> Option<(Reach, Setup)> {
     let mut lap = crate::measure::Lap::begin(crate::measure::Pass::Reach);
+    // A module's products hold the named classes its expansions of quotes make.
+    if typer.open_world {
+        typer.place_quoted_classes();
+    }
     let before = crate::measure::parts_on().then(|| LoadedCounts::of(typer));
     let diags_before = typer.diags.items.len();
     // The JVM backend names `MatchError` in every match; on JavaScript the runtime's exception
@@ -771,6 +810,12 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
                 w.reflective_proxies_in(Cx::of(t.w()), c, i);
             }
         }
+        if !w.pending_overridden.is_empty() {
+            let classes = std::mem::take(&mut w.pending_overridden);
+            t.complete_overridden(&classes);
+            w.grow(Cx::of(t.w()));
+            lap.done("overridden signatures completed", classes.len());
+        }
         // A product's top-level definition reached: checked with its file (an eager val with
         // the file's group), then reached again as the whole program's.
         let packages = std::mem::take(&mut w.pending_packages);
@@ -876,7 +921,7 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
             w.reach.reflective = registrations;
             w.reach.reflective_reached = true;
         }
-        if w.work.is_empty() && w.pending.is_empty() && w.pending_getters.is_empty() && w.pending_classes.is_empty() && w.pending_extenders.is_empty() && w.pending_packages.is_empty() && w.pending_sigs.is_empty() && !(w.wants_runtime_exceptions && !w.runtime_exceptions_found) && (w.wants_reflect, w.wants_for_name) == w.registered {
+        if w.work.is_empty() && w.pending.is_empty() && w.pending_getters.is_empty() && w.pending_classes.is_empty() && w.pending_extenders.is_empty() && w.pending_packages.is_empty() && w.pending_sigs.is_empty() && w.pending_overridden.is_empty() && !(w.wants_runtime_exceptions && !w.runtime_exceptions_found) && (w.wants_reflect, w.wants_for_name) == w.registered {
             w.reach.js_names.sort_unstable();
             w.reach.js_names.dedup();
             w.reach.globals.sort_unstable();
@@ -1293,6 +1338,9 @@ struct Walker {
     /// classes and signatures of `reflective_sigs` to check again with them.
     pending_sigs: Vec<SymId>,
     pending_proxy_checks: Vec<(ClassId, usize)>,
+    /// Classes the module makes from a library's or a product's template, whose overridden
+    /// members' signatures the typer completes for their bridges (`Typing::complete_overridden`).
+    pending_overridden: Vec<ClassId>,
     /// The source name of each called alternative of an overloaded method, by its name in the
     /// output, which is what calls are recorded under.
     overloaded: FxMap<Name, Name>,
@@ -1396,6 +1444,7 @@ impl Walker {
             called_any: Vec::new(),
             reflective_sigs: Vec::new(),
             pending_sigs: Vec::new(),
+            pending_overridden: Vec::new(),
             pending_proxy_checks: Vec::new(),
             overloaded: FxMap::default(),
             descendants: Links::new(),
@@ -1615,31 +1664,53 @@ impl Walker {
                     }
                 }
             }
-            // A later caller may call an abstract extension through the class too, which its
-            // class file declares as scalac's does, called here or not.
-            for &m in &cx.syms.class(c).extensions {
-                let info = cx.syms.sym(m);
-                if info.owner == Owner::Class(c) && info.mods & mods::INLINE == 0 {
-                    self.reach.declared[m.idx()] = true;
-                }
-            }
-            for m in members {
+            self.keep_members(cx, c, members);
+        }
+    }
+
+    /// Keeps `members` of class `c` (`root_members`) for the later callers of the open world.
+    fn keep_members(&mut self, cx: Cx, c: ClassId, members: Vec<SymId>) {
+        // A later caller may call an abstract extension through the class too, which its
+        // class file declares as scalac's does, called here or not.
+        for &m in &cx.syms.class(c).extensions {
+            let info = cx.syms.sym(m);
+            if info.owner == Owner::Class(c) && info.mods & mods::INLINE == 0 {
                 self.reach.declared[m.idx()] = true;
-                let n = self.output_name(cx, m);
-                self.call_name(cx, n, Some(c));
-                // A module's products keep every method a class or trait defines, whether or
-                // not a class of the module that runs it is made: a downstream one may be. A
-                // given with type parameters or a clause is one (scalac's def, `Parsers.givenDef`).
-                let def = match cx.syms.sym(m).kind {
-                    SymKind::Def => true,
-                    SymKind::Given => index(self.fun_of[m.idx()]).is_some(),
-                    _ => false,
-                };
-                if self.products && def {
-                    self.reach_fun_of(cx, m);
-                }
             }
         }
+        for m in members {
+            self.reach.declared[m.idx()] = true;
+            let n = self.output_name(cx, m);
+            self.call_name(cx, n, Some(c));
+            // A module's products keep every method a class or trait defines, whether or
+            // not a class of the module that runs it is made: a downstream one may be. A
+            // given with type parameters or a clause is one (scalac's def, `Parsers.givenDef`).
+            let def = match cx.syms.sym(m).kind {
+                SymKind::Def => true,
+                SymKind::Given => index(self.fun_of[m.idx()]).is_some(),
+                _ => false,
+            };
+            if self.products && def {
+                self.reach_fun_of(cx, m);
+            }
+        }
+    }
+
+    /// Whether a module's products write class `c` whole once it is reached, every runtime
+    /// declaration of it, private members and constructors included: a local or anonymous class
+    /// the module's own code makes, or a class nested in one, of one of its files or of an
+    /// expansion at a site in one (`ClassInfo::made_at`, `placed_at`). The unit that makes a class
+    /// owns it whatever the file its template stands in, as dotty's splice and inlining put the
+    /// expanded tree into the site's compilation unit (`Splicer.splice`, `Inlining.run`), whose
+    /// backend writes every definition of each template (`BCodeSkelBuilder.genPlainClass`).
+    fn materialised(&self, cx: Cx, c: ClassId) -> bool {
+        self.products && cx.syms.in_local_class(c) && self.program_file(cx.syms.class(c).module_file())
+    }
+
+    /// Whether `f` is one of the program's source files: not the std's, nor a library's or a
+    /// product's pseudo file of bodies, whose ids follow the files the walk began over.
+    fn program_file(&self, f: FileId) -> bool {
+        !self.std_files.get(f.0 as usize).copied().unwrap_or(true)
     }
 
     /// Walks the work list out; false where `stop` said so, which it asks every 1,024 items.
@@ -1767,6 +1838,26 @@ impl Walker {
         }
         if self.writes_runtime_whole(cx, cx.syms.class(c).file) {
             self.reach_members_whole(cx, c);
+        }
+        // A local class of the module's making is a root with its members when it is first made:
+        // its template's, an inline body's or a quote's, is no output of its own.
+        if self.materialised(cx, c) {
+            self.keep_members(cx, c, root_members(cx.typer, c, true));
+            // Its constructors, secondary ones among them, which a reflective caller finds.
+            for &s in &cx.syms.class(c).ctors {
+                self.reach_fun_of(cx, s);
+            }
+            // Its nested classes, declarations of its template as its members are.
+            let mut nested: Vec<ClassId> = cx.syms.class(c).nested.values().copied().collect();
+            nested.sort_unstable();
+            for k in nested {
+                self.reach_class(cx, k);
+            }
+            // Its bridges read what its members override, which the override check of a class
+            // of the program's files has completed and a library's template's never had.
+            if !self.program_file(cx.syms.class(c).file) {
+                self.pending_overridden.push(c);
+            }
         }
         if let Some(JsBinding::Import(i)) = cx.syms.class(c).js_binding {
             self.reach.imports[i as usize] = true;
@@ -2818,6 +2909,8 @@ pub(super) trait Meet {
     fn throw_unwrap(&mut self, cx: Cx);
     /// A cast that tests its value, which may throw `ClassCastException`.
     fn cast(&mut self, cx: Cx);
+    /// A block, which declares the classes `Program::block_classes` gives it.
+    fn declared(&mut self, _cx: Cx, _block: TExprId) {}
     fn try_end(&mut self, cx: Cx, wraps: bool);
     fn pat_seq(&mut self, cx: Cx);
     fn pat_rest(&mut self, cx: Cx);
@@ -2945,6 +3038,7 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             visit(m, cx, body);
         }
         TExpr::Block(stmts, res) => {
+            m.declared(cx, e);
             // A plan's temporary of a getter's application its call leaves to the callee's default.
             let dropped: Vec<SymId> = match prog.stmts[stmts.range()].first() {
                 Some(TStmt::Val(t, _)) if cx.syms.sym(*t).mods & mods::LIFTED != 0 => {
@@ -3130,6 +3224,19 @@ impl Meet for Walker {
     fn expansion(&mut self, e: TExprId) {
         if let Some(p) = self.place {
             self.reach.roots.push((e, p));
+        }
+    }
+
+    /// A module's products write what a block of the module's code declares, made or only named,
+    /// as scalac's backend writes the class definitions of its trees (`materialised`).
+    fn declared(&mut self, cx: Cx, block: TExprId) {
+        if !self.products {
+            return;
+        }
+        if let Some(classes) = cx.prog.block_classes.get(&block) {
+            for c in classes.clone() {
+                self.reach_class(cx, c);
+            }
         }
     }
 

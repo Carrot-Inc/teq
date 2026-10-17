@@ -1279,6 +1279,11 @@ impl Remap {
         let p = &mut w.prog;
         self.map(&mut p.overrides.local, |r, s| r.sym(s), |r, ps| r.syms_in(ps));
         self.map(&mut p.expansions, |r, e| r.expr(e), |r, x| x.callee = r.sym(x.callee));
+        self.map(&mut p.block_classes, |r, e| r.expr(e), |r, cs| {
+            for c in cs {
+                *c = r.class(*c);
+            }
+        });
         self.map(&mut p.leaf_tests, |r, t| r.test(t), |_, _| {});
         self.map(&mut p.stored_tests, |r, t| r.test(t), |_, _| {});
         self.map(&mut p.stored_pats, |r, t| r.pat(t), |_, _| {});
@@ -1344,6 +1349,7 @@ impl Remap {
         for tc in &mut d.classes {
             records::tclass(self, tc);
         }
+        records::declared_blocks(self, &mut d.blocks);
         self.syms_in(&mut d.inline_vals);
         self.syms_in(&mut d.inferred_vals);
         self.syms_in(&mut d.pickle_inferred_vals);
@@ -2128,6 +2134,7 @@ impl<'a> Worker<'a> {
         self.prog.template_syms.absorb(o.prog.template_syms.take_local());
         self.prog.overrides.absorb(o.prog.overrides.take_local());
         union(&mut self.prog.expansions, &mut o.prog.expansions);
+        union(&mut self.prog.block_classes, &mut o.prog.block_classes);
         union(&mut self.prog.leaf_tests, &mut o.prog.leaf_tests);
         union(&mut self.prog.stored_tests, &mut o.prog.stored_tests);
         union(&mut self.prog.stored_pats, &mut o.prog.stored_pats);
@@ -2810,6 +2817,7 @@ mod tests {
             node_types: FxMap::default(),
             aliases: Vec::new(),
             classes: Vec::new(),
+            blocks: Vec::new(),
             inline_vals: Vec::new(),
             inferred_vals: Vec::new(),
             pickle_inferred_vals: Vec::new(),

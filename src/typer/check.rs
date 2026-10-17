@@ -4821,6 +4821,29 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Completes the signatures of the members `c`'s own members and extensions override, which
+    /// nothing may have called: the JVM's bridges of `c`'s methods read them (dotty's
+    /// `Bridges.addBridgeIfNeeded`, the overridden member completed on demand). The override
+    /// check completes them for a class of the program's files; a class an expansion copies from
+    /// a library's or a product's template, whose file is that library's, is not checked
+    /// (`check_overrides`), and a module's products write it whole (`reach::materialised`).
+    pub(crate) fn complete_overridden_members(&mut self, c: ClassId) {
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+        for i in 0..self.own_member_count(c) {
+            let m = self.own_member(c, i);
+            let (name, is_ext) = (self.syms.sym(m).name, self.syms.sym(m).is_extension);
+            for &b in &bases {
+                let mut k = 0;
+                while let Some(p) = self.inherited_member(b, name, is_ext, k) {
+                    k += 1;
+                    if matches!(self.syms.sym(p).kind, SymKind::Def | SymKind::Val | SymKind::Var | SymKind::Given) {
+                        self.sig_of(p);
+                    }
+                }
+            }
+        }
+    }
+
     /// Decides again, from the flags every body left, what the override checks decided from
     /// the flags they read (`override_pairs`): whether a method is an alternative is set by the
     /// merge of an entry with the inherited alternatives, which a lookup makes when it gets

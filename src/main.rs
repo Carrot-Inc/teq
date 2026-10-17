@@ -1791,7 +1791,7 @@ fn compile() -> i32 {
         check_inits(&typer.w, &mut entries);
         let files: Vec<(String, Vec<u8>)> = written.products.iter().map(|p| (products::tasty_path(p), p.bytes.clone())).collect();
         let own = typer.w.loaded.as_ref().and_then(|l| l.cp.own.as_ref());
-        let (publication, generated) = products_publication(own, "js", Fresh { entries, files, std: Vec::new() }).unwrap_or_else(|e| {
+        let (publication, generated) = products_publication(own, dir, "js", Fresh { entries, files, std: Vec::new(), shared: Vec::new() }).unwrap_or_else(|e| {
             eprintln!("{}", e);
             exit_failed(&opts, 2)
         });
@@ -2247,6 +2247,11 @@ fn build_jvm(
         .unwrap_or_default();
     let owned = owned_files(opts, &all_sources);
     let stackable = stackable_overrides(&typer, reach);
+    // The sources that expand a quote's shared classes, whose products use them (`products::Entry::uses`).
+    let class_sites: Vec<(source::FileId, types::ClassId)> = typer.quoted_class_sites().to_vec();
+    let mut named: Vec<types::ClassId> = class_sites.iter().map(|&(_, c)| c).collect();
+    named.sort_unstable();
+    named.dedup();
     let typer::Worker { prog, syms, file_pkgs, types, tvars, interner, loaded, entry_points, mixin_supers, jvm_volatile, .. } = &mut typer;
     let product_inits = loaded.as_ref().map(|l| l.get_mut().cp.product_inits.clone()).unwrap_or_default();
     // A JVM build always reads the class path: scala-library is on it.
@@ -2276,6 +2281,7 @@ fn build_jvm(
         mixin_supers: opts.products.is_some().then_some(&*mixin_supers),
         stackable: Some(&stackable),
         product_inits: Some(&product_inits),
+        named: &named,
     };
     let t_emit_start = Instant::now();
     let output = jvm::emit(input, cp, None);
@@ -2310,11 +2316,13 @@ fn build_jvm(
     let (out_path, publication) = match &opts.products {
         Some(dir) => {
             let owned: Vec<bool> = all_sources.iter().map(|s| !s.is_std).collect();
-            let entries = mark_products(&mut output, &pickled, &all_sources, &owned);
+            let mut entries = mark_products(&mut output, &pickled, &all_sources, &owned);
+            note_uses(&mut entries, &output, &class_sites, &all_sources, &owned);
             let pickles = products.as_ref().map_or(&[][..], |(w, _)| w.products.as_slice());
-            let fresh = jvm_fresh_products(&output, entries, &all_sources, &owned, pickles);
+            let mut fresh = jvm_fresh_products(&output, entries, &all_sources, &owned, pickles);
+            fresh.shared = output.classes.iter().filter(|c| c.of.is_some_and(|k| syms.class(k).placed_at.is_some())).map(|c| format!("{}.class", c.name)).collect();
             let own = typer.loaded.as_ref().and_then(|l| l.cp.own.as_ref());
-            let publication = products_publication(own, "jvm", fresh).unwrap_or_else(|e| {
+            let publication = products_publication(own, dir, "jvm", fresh).unwrap_or_else(|e| {
                 eprintln!("{}", e);
                 answer_failure(opts);
                 exit_with_report(opts, &report, 2)
@@ -2470,26 +2478,7 @@ fn jvm_fresh_products(output: &jvm::Output, mut entries: Vec<products::Entry>, s
     let owned_classes: intern::FxMap<&str, ()> = output.classes.iter().filter(|c| c.source.map_or(false, |f| owned[f.0 as usize])).map(|c| (c.name.as_str(), ())).collect();
     let inits: Vec<&String> = output.inits.iter().filter(|n| owned_classes.contains_key(n.as_str())).collect();
     for e in entries.iter_mut() {
-        let mut named: Vec<&str> = Vec::new();
-        let mut seen: intern::FxMap<&str, ()> = intern::FxMap::default();
-        for b in e.classes.iter().filter_map(|c| bytes.get(c)) {
-            for n in products::classes_named(b, &std_names) {
-                if seen.insert(n, ()).is_none() {
-                    named.push(n);
-                }
-            }
-        }
-        let mut i = 0;
-        while i < named.len() {
-            for &n in std_refs.get(named[i]).into_iter().flatten() {
-                if seen.insert(n, ()).is_none() {
-                    named.push(n);
-                }
-            }
-            i += 1;
-        }
-        e.std = named.iter().map(|n| format!("{}.class", n)).collect();
-        e.std.sort();
+        e.std = std_closure(e.classes.iter().filter_map(|c| bytes.get(c).copied()), &std_names, &std_refs);
         let classes: intern::FxMap<&str, ()> = e.classes.iter().map(|c| (c.as_str(), ())).collect();
         e.inits = inits.iter().filter(|n| classes.contains_key(format!("{}.class", n).as_str())).map(|n| n.to_string()).collect();
     }
@@ -2498,7 +2487,33 @@ fn jvm_fresh_products(output: &jvm::Output, mut entries: Vec<products::Entry>, s
         files.extend(e.classes.iter().filter_map(|c| bytes.get(c).map(|b| (c.clone(), b.to_vec()))));
     }
     let std = output.classes.iter().filter(|c| is_std(c)).map(|c| (format!("{}.class", c.name), c.bytes.to_vec())).collect();
-    Fresh { entries, files, std }
+    Fresh { entries, files, std, shared: Vec::new() }
+}
+
+/// The std classes the class files `classes` name, closed over the names the std classes hold in
+/// turn (`refs`): a product's `std`, which the directory holds while a product names them.
+fn std_closure<'n, 'b>(classes: impl Iterator<Item = &'b [u8]>, std_names: &intern::FxMap<&'n str, ()>, refs: &intern::FxMap<&'n str, Vec<&'n str>>) -> Vec<String> {
+    let mut named: Vec<&str> = Vec::new();
+    let mut seen: intern::FxMap<&str, ()> = intern::FxMap::default();
+    for b in classes {
+        for n in products::classes_named(b, std_names) {
+            if seen.insert(n, ()).is_none() {
+                named.push(n);
+            }
+        }
+    }
+    let mut i = 0;
+    while i < named.len() {
+        for &n in refs.get(named[i]).into_iter().flatten() {
+            if seen.insert(n, ()).is_none() {
+                named.push(n);
+            }
+        }
+        i += 1;
+    }
+    let mut out: Vec<String> = named.iter().map(|n| format!("{}.class", n)).collect();
+    out.sort();
+    out
 }
 
 /// The manifest's entries of a JVM build, each class file under the product its name falls
@@ -2532,6 +2547,7 @@ fn mark_products(
             inits: Vec::new(),
             std: Vec::new(),
             digest: String::new(),
+            uses: Vec::new(),
         })
         .collect();
     // The pickle's class, as `GenBCode` places the attribute: the class of the product's name,
@@ -2550,20 +2566,11 @@ fn mark_products(
         if !owned.get(f.0 as usize).copied().unwrap_or(false) {
             continue;
         }
-        let (pkg, stem) = match c.name.rsplit_once('/') {
-            Some((p, s)) => (p, s),
-            None => ("", c.name.as_str()),
-        };
         // A class of another source than the product's (a quote's copy made at an expansion's
         // site, whose name is the quote's file's) is that source's, as a downstream module that
         // makes it lists it.
         let own = sources[f.0 as usize].path.as_str();
-        let best = products
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| p.package == pkg && p.source == own && (stem == p.name || stem.starts_with(&format!("{}$", p.name))))
-            .max_by_key(|(_, p)| p.name.len())
-            .map(|(i, _)| i);
+        let best = product_of(&entries, own, &format!("{}.class", c.name));
         let mut attrs: Vec<(&str, Vec<u8>)> = Vec::new();
         match best {
             Some(i) => {
@@ -2581,6 +2588,7 @@ fn mark_products(
                 inits: Vec::new(),
                 std: Vec::new(),
                 digest: String::new(),
+                uses: Vec::new(),
             }),
         }
         attrs.push(("Scala", Vec::new()));
@@ -2595,6 +2603,71 @@ fn mark_products(
     }
     entries.extend(extra);
     entries
+}
+
+/// The shared classes each owned source's expansions make that no product of the source holds
+/// (`products::Entry::uses`), on the source's entry without a `.tasty`, made where it has none.
+fn note_uses(entries: &mut Vec<products::Entry>, output: &jvm::Output, sites: &[(source::FileId, types::ClassId)], sources: &[SourceFile], owned: &[bool]) {
+    for &(f, c) in sites {
+        if !owned.get(f.0 as usize).copied().unwrap_or(false) {
+            continue;
+        }
+        let Some((_, name)) = output.names.iter().find(|&&(k, _)| k == c) else { continue };
+        if output.classes.iter().any(|e| e.of == Some(c) && e.source == Some(f) && &e.name == name) {
+            continue;
+        }
+        let file = format!("{}.class", name);
+        let source = &sources[f.0 as usize];
+        let e = uses_entry(entries, &source.path, &Some(products::fingerprint(&source.text)));
+        if !e.uses.contains(&file) {
+            e.uses.push(file);
+            e.uses.sort();
+        }
+    }
+}
+
+/// The product of `source` a class file falls under, as `GenBCode` writes a class's files beside its
+/// `.tasty`: of the class's package, the class's own name or a `$`-nested one of it, the longest
+/// name; none for a class of another file's, which takes an entry of its own. One rule for a
+/// fresh build's entries (`mark_products`) and a hand-over's (`settle_shared`).
+fn product_of(entries: &[products::Entry], source: &str, class_file: &str) -> Option<usize> {
+    let name = class_file.strip_suffix(".class").unwrap_or(class_file);
+    let (pkg, stem) = name.rsplit_once('/').unwrap_or(("", name));
+    entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.source == source)
+        .filter_map(|(i, e)| {
+            let t = e.tasty.as_deref()?.strip_suffix(".tasty")?;
+            let (p, n) = t.rsplit_once('/').unwrap_or(("", t));
+            (p == pkg && (stem == n || stem.starts_with(&format!("{}$", n)))).then_some((i, n.len()))
+        })
+        .max_by_key(|&(_, l)| l)
+        .map(|(i, _)| i)
+}
+
+/// A source's `uses` record: on one entry of its own, without a `.tasty` or a class file, whatever
+/// build writes it (`note_uses` of a fresh build, `settle_shared` of a hand-over), so that the
+/// manifest is one text whatever the order of the builds.
+fn uses_entry<'e>(entries: &'e mut Vec<products::Entry>, source: &str, fingerprint: &Option<String>) -> &'e mut products::Entry {
+    let at = match entries.iter().position(|e| e.source == source && e.tasty.is_none() && e.classes.is_empty()) {
+        Some(i) => i,
+        None => {
+            entries.push(products::Entry {
+                source: source.to_string(),
+                fingerprint: fingerprint.clone(),
+                tasty: None,
+                classes: Vec::new(),
+                bodies: false,
+                inits: Vec::new(),
+                std: Vec::new(),
+                digest: String::new(),
+                uses: Vec::new(),
+            });
+            entries.len() - 1
+        }
+    };
+    &mut entries[at]
 }
 
 fn product_entries(typer: &typer::Worker, written: &tasty::write::Written) -> Vec<products::Entry> {
@@ -2612,6 +2685,7 @@ fn product_entries(typer: &typer::Worker, written: &tasty::write::Written) -> Ve
             inits: Vec::new(),
             std: Vec::new(),
             digest: String::new(),
+            uses: Vec::new(),
         })
         .collect()
 }
@@ -2669,6 +2743,11 @@ struct Fresh {
     entries: Vec<products::Entry>,
     files: Vec<(String, Vec<u8>)>,
     std: Vec<(String, Vec<u8>)>,
+    /// The class files of the classes a quote declares, one class across its expansions
+    /// (`ClassInfo::placed_at`): the manifest keeps them while an entry holds or uses one
+    /// (`settle_shared`), so the answer's journal lists them under no source, as the runtime's, and
+    /// a build tool moves none of them aside with a source.
+    shared: Vec<String>,
 }
 
 /// What a build publishes into its directory of products, and the answer's `generated` journal:
@@ -2676,7 +2755,7 @@ struct Fresh {
 /// build's, the dropped entries' files and the std classes no entry names any more removed;
 /// otherwise the build's alone, as the directory's whole products (docs/TARGETS.md, "The contract
 /// between the plugin and the compiler").
-fn products_publication(own: Option<&classpath::OwnRead>, target: &str, mut fresh: Fresh) -> Result<(products::Publication, String), String> {
+fn products_publication(own: Option<&classpath::OwnRead>, dir: &str, target: &str, mut fresh: Fresh) -> Result<(products::Publication, String), String> {
     use crate::lsp::json::Json;
     let root = std::env::current_dir().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
     let mut owner: intern::FxMap<String, String> = intern::FxMap::default();
@@ -2719,7 +2798,7 @@ fn products_publication(own: Option<&classpath::OwnRead>, target: &str, mut fres
             entries.push(e);
         }
     }
-    let generated_rows = generated_journal(&fresh.entries);
+    let generated_rows = generated_journal(&fresh.entries, &fresh.shared);
     entries.extend(fresh.entries);
     let mut manifest = products::Manifest { target: target.to_string(), root, entries, std: Vec::new(), legacy_inits: Vec::new() };
     manifest.sort();
@@ -2727,31 +2806,185 @@ fn products_publication(own: Option<&classpath::OwnRead>, target: &str, mut fres
     // took it over in an earlier build.
     let listed: intern::FxMap<&str, ()> = manifest.entries.iter().flat_map(|e| e.files()).map(|f| (f, ())).collect();
     let mut removed: Vec<String> = dropped.into_iter().filter(|f| !listed.contains_key(f)).map(str::to_string).collect();
+    drop(listed);
+    adopt_std_uses(&mut manifest);
+    settle_shared(&mut manifest, &mut removed, dir, old.map(|(m, _)| m), &fresh.files, &fresh.std);
     let mut std: Vec<String> = manifest.entries.iter().flat_map(|e| e.std.iter().cloned()).collect();
     std.sort();
     std.dedup();
     if let Some((m, _)) = old {
         removed.extend(m.std.iter().filter(|s| std.binary_search(s).is_err()).cloned());
     }
+    // A file the manifest still names stays: an entry's, a use's or a std class an entry needs.
+    let named: intern::FxMap<&str, ()> = manifest.entries.iter().flat_map(|e| e.files().chain(e.uses.iter().map(String::as_str))).chain(std.iter().map(String::as_str)).map(|f| (f, ())).collect();
+    removed.retain(|f| !named.contains_key(f.as_str()));
+    drop(named);
     let written_std: Vec<(String, Vec<u8>)> = fresh.std.into_iter().filter(|(p, _)| std.binary_search(p).is_ok()).collect();
     let mut rows = generated_rows;
-    rows.push(Json::Obj(vec![("source".to_string(), Json::Null), ("files".to_string(), Json::Arr(written_std.iter().map(|(p, _)| Json::Str(p.clone())).collect()))]));
+    let sourceless = written_std.iter().map(|(p, _)| p).chain(fresh.shared.iter()).map(|p| Json::Str(p.clone())).collect();
+    rows.push(Json::Obj(vec![("source".to_string(), Json::Null), ("files".to_string(), Json::Arr(sourceless))]));
     manifest.std = std;
     let mut files = fresh.files;
     files.extend(written_std);
     Ok((products::Publication { files, removed, manifest: manifest.to_json() }, Json::Arr(rows).to_text()))
 }
 
+/// A class of the module an entry lists among its std classes, which another entry holds: a quote's
+/// shared class as a directory written before `uses` recorded it, the runtime's class of every
+/// entry whose classes name it. Adopted, it is that entry's source's use (`uses_entry`), so that
+/// the class stays while a source needs it (`settle_shared`), as a build of the source now records it.
+fn adopt_std_uses(manifest: &mut products::Manifest) {
+    let held: intern::FxMap<String, String> = {
+        let std: intern::FxMap<&str, ()> = manifest.entries.iter().flat_map(|e| e.std.iter()).map(|s| (s.as_str(), ())).collect();
+        manifest.entries.iter().flat_map(|e| e.classes.iter().filter(|c| std.contains_key(c.as_str())).map(move |c| (c.clone(), e.source.clone()))).collect()
+    };
+    if held.is_empty() {
+        return;
+    }
+    let mut adopted: Vec<(String, Option<String>, String)> = Vec::new();
+    for e in manifest.entries.iter_mut() {
+        e.std.retain(|s| match held.get(s) {
+            Some(holder) => {
+                if *holder != e.source {
+                    adopted.push((e.source.clone(), e.fingerprint.clone(), s.clone()));
+                }
+                false
+            }
+            None => true,
+        });
+    }
+    for (source, fingerprint, f) in adopted {
+        let e = uses_entry(&mut manifest.entries, &source, &fingerprint);
+        if !e.uses.contains(&f) {
+            e.uses.push(f);
+            e.uses.sort();
+        }
+    }
+}
+
+/// Settles each class a quote declares that a source of the module uses (`products::Entry::uses`)
+/// on its first site among the sources that hold or use it, by source, as a clean build of the
+/// directory's sources places it (`Worker::place_quoted_classes`), whatever the order of the builds:
+/// a class whose holder went (its source removed, or built again without the expansion) is kept for
+/// the first user; one a later source holds moves to an earlier user, the holder using it then.
+/// The holder's entry is one of its own, as a source's products hold another file's class, its
+/// digest and std classes those of its bytes by the fresh publication's rule (`std_closure`).
+fn settle_shared(manifest: &mut products::Manifest, removed: &mut Vec<String>, dir: &str, old: Option<&products::Manifest>, fresh_files: &[(String, Vec<u8>)], fresh_std: &[(String, Vec<u8>)]) {
+    let mut used: Vec<String> = manifest.entries.iter().flat_map(|e| e.uses.iter().cloned()).collect();
+    if used.is_empty() {
+        return;
+    }
+    used.sort();
+    used.dedup();
+    let bytes_of = |f: &str| -> Option<Vec<u8>> { fresh_files.iter().chain(fresh_std).find(|(p, _)| p == f).map(|(_, b)| b.clone()).or_else(|| std::fs::read(std::path::Path::new(dir).join(f)).ok()) };
+    // The std classes the directory holds, with the names each holds, for the closure.
+    let mut std_files: Vec<String> = old.map_or(Vec::new(), |m| m.std.clone());
+    std_files.extend(fresh_std.iter().map(|(p, _)| p.clone()));
+    std_files.sort();
+    std_files.dedup();
+    // Not a class of the module's, which an older directory may list among them (`adopt_std_uses`).
+    {
+        let module: intern::FxMap<&str, ()> = manifest.entries.iter().flat_map(|e| e.classes.iter()).chain(&used).map(|c| (c.as_str(), ())).collect();
+        std_files.retain(|f| !module.contains_key(f.as_str()));
+    }
+    let std_bytes: Vec<(String, Vec<u8>)> = std_files.iter().filter_map(|f| bytes_of(f).map(|b| (f.trim_end_matches(".class").to_string(), b))).collect();
+    let std_names: intern::FxMap<&str, ()> = std_bytes.iter().map(|(n, _)| (n.as_str(), ())).collect();
+    let std_refs: intern::FxMap<&str, Vec<&str>> = std_bytes.iter().map(|(n, b)| (n.as_str(), products::classes_named(b, &std_names))).collect();
+    // An entry's digest, std classes and order after a hand-over changed its classes, by the fresh
+    // publication's rules (`std_closure`, the files' digest in the entry's order).
+    let refresh = |e: &mut products::Entry| {
+        e.classes.sort();
+        e.inits.sort();
+        let files: Vec<(String, Vec<u8>)> = e.files().filter_map(|p| bytes_of(p).map(|b| (p.to_string(), b))).collect();
+        e.digest = products::digest(files.iter().map(|(p, b)| (p.as_str(), b.as_slice())));
+        e.std = std_closure(files.iter().filter(|(p, _)| p.ends_with(".class")).map(|(_, b)| b.as_slice()), &std_names, &std_refs);
+    };
+    for f in used {
+        let users: Vec<usize> = (0..manifest.entries.len()).filter(|&i| manifest.entries[i].uses.contains(&f)).collect();
+        let Some(&first) = users.iter().min_by(|&&a, &&b| manifest.entries[a].source.cmp(&manifest.entries[b].source)) else { continue };
+        let holder = manifest.entries.iter().position(|e| e.classes.contains(&f));
+        let acts = match holder {
+            None => removed.contains(&f),
+            Some(h) => manifest.entries[first].source < manifest.entries[h].source,
+        };
+        if !acts || bytes_of(&f).is_none() {
+            continue;
+        }
+        let init_of = |n: &String| format!("{}.class", n) == f;
+        let inits: Vec<String>;
+        match holder {
+            None => {
+                inits = old.into_iter().flat_map(|m| m.entries.iter()).filter(|e| e.classes.contains(&f)).flat_map(|e| e.inits.iter()).filter(|n| init_of(n)).cloned().collect();
+                removed.retain(|r| r != &f);
+            }
+            Some(h) => {
+                let holder_source = manifest.entries[h].source.clone();
+                let holder_fingerprint = manifest.entries[h].fingerprint.clone();
+                inits = manifest.entries[h].inits.iter().filter(|n| init_of(n)).cloned().collect();
+                manifest.entries[h].classes.retain(|c| c != &f);
+                manifest.entries[h].inits.retain(|n| !init_of(n));
+                if manifest.entries[h].tasty.is_some() {
+                    refresh(&mut manifest.entries[h]);
+                }
+                uses_entry(&mut manifest.entries, &holder_source, &holder_fingerprint).uses.push(f.clone());
+            }
+        }
+        let user_source = manifest.entries[first].source.clone();
+        let user_fingerprint = manifest.entries[first].fingerprint.clone();
+        manifest.entries[first].uses.retain(|u| u != &f);
+        // The new holder's product the class falls under, or an entry of its own (`product_of`).
+        let at = match product_of(&manifest.entries, &user_source, &f) {
+            Some(i) => i,
+            None => {
+                manifest.entries.push(products::Entry { source: user_source, fingerprint: user_fingerprint, tasty: None, classes: Vec::new(), bodies: false, inits: Vec::new(), std: Vec::new(), digest: String::new(), uses: Vec::new() });
+                manifest.entries.len() - 1
+            }
+        };
+        manifest.entries[at].classes.push(f.clone());
+        manifest.entries[at].inits.extend(inits);
+        refresh(&mut manifest.entries[at]);
+    }
+    // A source's `uses` records on one entry (`uses_entry`): a holder's entry left without files,
+    // and another source's uses-only entry, merged into the first.
+    let mut first_of: intern::FxMap<String, usize> = intern::FxMap::default();
+    for i in 0..manifest.entries.len() {
+        let e = &manifest.entries[i];
+        if e.tasty.is_some() || !e.classes.is_empty() {
+            continue;
+        }
+        match first_of.get(&e.source) {
+            Some(&k) => {
+                let uses = std::mem::take(&mut manifest.entries[i].uses);
+                manifest.entries[k].uses.extend(uses);
+            }
+            None => {
+                first_of.insert(e.source.clone(), i);
+            }
+        }
+    }
+    manifest.entries.retain(|e| e.tasty.is_some() || !e.classes.is_empty() || !e.uses.is_empty());
+    for e in manifest.entries.iter_mut() {
+        e.uses.sort();
+        e.uses.dedup();
+        if e.tasty.is_none() && e.classes.is_empty() {
+            e.std.clear();
+            e.inits.clear();
+            e.digest = products::digest(std::iter::empty());
+        }
+    }
+    manifest.sort();
+}
+
 /// The answer's `generated` rows of a build's own entries, in the manifest's order: per source,
 /// every file of its products.
-fn generated_journal(entries: &[products::Entry]) -> Vec<crate::lsp::json::Json> {
+fn generated_journal(entries: &[products::Entry], shared: &[String]) -> Vec<crate::lsp::json::Json> {
     use crate::lsp::json::Json;
     let mut rows: Vec<(String, Vec<Json>)> = Vec::new();
     for e in entries {
         if rows.last().map_or(true, |(s, _)| *s != e.source) {
             rows.push((e.source.clone(), Vec::new()));
         }
-        rows.last_mut().unwrap().1.extend(e.files().map(|f| Json::Str(f.to_string())));
+        rows.last_mut().unwrap().1.extend(e.files().filter(|f| !shared.iter().any(|s| s == f)).map(|f| Json::Str(f.to_string())));
     }
     rows.into_iter().map(|(s, files)| Json::Obj(vec![("source".to_string(), Json::Str(s)), ("files".to_string(), Json::Arr(files))])).collect()
 }
@@ -2788,7 +3021,7 @@ fn manifest_only(opts: &Options) -> ! {
     let retained: Vec<bool> = m.entries.iter().map(|e| !dropped.contains(&classpath::entry_source(&m, &e.source))).collect();
     let target = m.target.clone();
     let own = classpath::OwnRead { entry: 0, manifest: Some(m), retained };
-    match products_publication(Some(&own), &target, Fresh::default()) {
+    match products_publication(Some(&own), dir, &target, Fresh::default()) {
         Ok((publication, _)) => publish_products(opts, dir, publication, answer),
         Err(e) => {
             eprintln!("{}", e);

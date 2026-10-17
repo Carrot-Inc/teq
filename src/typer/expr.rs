@@ -4366,8 +4366,14 @@ impl<'a> Worker<'a> {
         // A call in the block of a local trait's lifted member typed before the trait was
         // lifted, in a local def or a closure, passes its proxies (`LambdaLift.addFreeArgs`).
         self.adapt_block_calls(block);
-        if !classes.is_empty() && self.capturing() {
-            self.capture_block_classes(block, classes);
+        if !classes.is_empty() {
+            // What a JVM build of products writes of the block (`Program::block_classes`).
+            if self.open_world {
+                self.note_block_classes(block, classes.clone());
+            }
+            if self.capturing() {
+                self.capture_block_classes(block, classes);
+            }
         }
         self.note_block_imports(block, pending_imports);
         self.note_block_trees(block, pending_trees);

@@ -37,6 +37,11 @@ pub struct Entry {
     pub std: Vec<String>,
     /// The hash of the product's files, their paths and bytes in the entry's order.
     pub digest: String,
+    /// The class files an expansion in the source makes that another source's product holds: a
+    /// class a quote declares is one class across its expansions, held by the first site's source
+    /// (`ClassInfo::placed_at`); the directory keeps it while an entry uses it, the first entry that
+    /// does holding it once its holder goes (`products_publication`). Written where there is one.
+    pub uses: Vec<String>,
 }
 
 impl Entry {
@@ -96,7 +101,7 @@ impl Manifest {
             .entries
             .iter()
             .map(|e| {
-                Json::Obj(vec![
+                let mut fields = vec![
                     ("source".to_string(), Json::Str(e.source.clone())),
                     ("sourceFingerprint".to_string(), e.fingerprint.clone().map_or(Json::Null, Json::Str)),
                     ("tasty".to_string(), e.tasty.clone().map_or(Json::Null, Json::Str)),
@@ -105,7 +110,11 @@ impl Manifest {
                     ("inits".to_string(), Json::Arr(e.inits.iter().cloned().map(Json::Str).collect())),
                     ("std".to_string(), Json::Arr(e.std.iter().cloned().map(Json::Str).collect())),
                     ("digest".to_string(), Json::Str(e.digest.clone())),
-                ])
+                ];
+                if !e.uses.is_empty() {
+                    fields.push(("uses".to_string(), Json::Arr(e.uses.iter().cloned().map(Json::Str).collect())));
+                }
+                Json::Obj(fields)
             })
             .collect();
         let json = Json::Obj(vec![
@@ -159,6 +168,7 @@ impl Manifest {
                 inits: strings(e, "inits"),
                 std: strings(e, "std"),
                 digest: e.get("digest").and_then(Json::str).unwrap_or("").to_string(),
+                uses: strings(e, "uses"),
             })
             .collect();
         Ok(Manifest { target, root, entries, std: strings(&json, "std"), legacy_inits: strings(&json, "inits") })

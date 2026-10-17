@@ -1183,6 +1183,7 @@ impl<'a> Worker<'a> {
                     }
                 }
                 self.prog.copy_chain_marks(expanded, node);
+                self.move_declared(expanded, node);
                 if self.capturing() {
                     self.capture_moved(expanded, node);
                 }

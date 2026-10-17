@@ -18,7 +18,7 @@ localenum subset  the same as classes
 localtrait subset  the same as classes
 inlinelocalclass subset  the same as classes
 macroderive subset  the same as classes, and its run stops as jvm-run does
-macroquote subset  the same as classes; `a` compiled alone also leaves out the quote's local class `mqa/Box$1ebb5g8_1479`, which the whole build writes in `a`'s products because `b`'s expansion reaches it
+macroquote subset  the same as classes
 macrotransparent subset  the same as classes
 stdforms bundle  the split build's bundle differs in what it reaches, master's binary the same for the first: a product body that calls a member of a `java.util.List` (`l.size()`, `asScala`'s conversion) reaches the lean std's `java.util.Collection`, whose members (`stream`, `spliterator`, `parallelStream`) shift the release renaming's short names; and `Option.flatten`'s and `orNull`'s evidence, which the whole build's typer synthesizes, is read back as the call of `<:<.refl` the product holds, which reaches the std's `<:<` object (read so, since a program may choose that evidence explicitly: `stdformsuser`)
 inlinesam classes  the expansion's copy of the SAM class `Eqv.derived`'s and `Eqv.by`'s inline bodies make is named at the product's pseudo file's place (`Eqv$$anon$29nea2pclhon2_36$1rc96ct_84`, `a!isa.Eqv`), the whole build's at Eqv.scala's (`Eqv$$anon$f7ad9v_598$1rc96ct_84`): a class an inline body makes is `$stored`, of no origin in the product; master's binary the same for any anonymous class an inline body makes (`new Eqv[Long] { .. }`)
@@ -69,3 +69,9 @@ nesteddefaultssecondary bundle  the same as nestedprefixlast's secondary constru
 runtimecheckedinline classes  the call of `runtimeChecked` inside the upstream's transparent expansion is positioned at the downstream's call site (Main.scala, a zero span), the whole build's at the body's place in Checked.scala: the call's site is in the product's pseudo file, which no position names (`within_site`), as for any plain inline call inside an upstream transparent body (`transparent inline def outer(x: Option[Int]) = inner(x)` fails these three legs on master): the JVM product mode's follow-up
 runtimecheckedinline subset  the same as runtimecheckedinline classes
 runtimecheckedinline check-lean-whole  the same as runtimecheckedinline classes, in the Scala.js check build's pickle
+quotecopymembers classes  the same as macroquote: the classes b's expansions make (the quote's copies, its local class, object and given) carry the pseudo file's SourceFile and line numbers (`a!ema.Macros`, `a!ema.Shapes`), the whole build's Macros.scala's and Shapes.scala's; their members are the members leg's
+quotecopymembers subset  the same as classes
+quotecopymembers bundle  the same as companionderived bundle: the quote's copies a JavaScript build over b's products makes are named by the pickle's places of b's sites (`Shapes$$anon$tn9h43_591$1a3660gi0d6c3_12`), the whole build's by the source's (`$1rc96ct_235`); master's binary the same
+inlinecopymembers classes  the same as inlinesam: the classes b's expansions of a's inline bodies make are named at the product's pseudo file's places (`Mac$$anon$iw5fyuj19dac_11$1rc96ct_139`), the whole build's at Mac.scala's (`Mac$$anon$1ebb5g8_456$1rc96ct_139`), which `Made$` constructs, and carry its SourceFile; their members are the members leg's
+inlinecopymembers subset  the same as classes
+inlinecopymembers bundle  the same as inlinesam bundle

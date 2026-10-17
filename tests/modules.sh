@@ -18,8 +18,25 @@
 #            (`--removed`), the directory a whole build's of the other sources (docs/TARGETS.md,
 #            "The contract between the plugin and the compiler"); and, once per run, the own
 #            directory named twice on the class path read once (`own-twice`), a definition
-#            moved to another source keeping its products (`own-moved`), and a publication killed
-#            after its files undone by the next build that reads the directory (`own-cut`);
+#            moved to another source keeping its products (`own-moved`), a publication killed
+#            after its files undone by the next build that reads the directory (`own-cut`), and a class
+#            a quote declares that two sources expand kept through each source's build alone, through
+#            the removal of, and the edit that stops the expansion in, the source that holds it, and
+#            through the earlier source added after the later one was built alone, its directory and
+#            the runtime classes it needs a clean build's byte for byte, a scalac-compiled consumer of
+#            the other source running over it, and so over a directory written before the module recorded
+#            such uses (`own-shared`); a quote's copy's uncalled member whose signature names a type of
+#            `scala.quoted` written in the split and the whole products, which a later caller invokes
+#            (`quoted-member`, which no list waives);
+#   members  (a case with members.txt) each line `<module> <class> <member>...` names a class the module's
+#            products must hold whole: the class, a regular expression over a class file's path without
+#            `.class`, matches exactly one class file of the module's split products and one of the whole
+#            build's, each owned by one of the module's sources (not one of the std classes the manifest
+#            marks), each declaring every member, a name and its JVM descriptor (`dead(I)I`). It reads the
+#            class files themselves, so that no exemption of the classes check (a SourceFile, a line number)
+#            can hide a missing member, and neither list below waives it; a line `<module> !<class>` says
+#            that the module's split products hold no class the expression matches, and the whole build's
+#            none that the module's sources own or that is std;
 #   check    the Scala.js module's check build over the same std (`teq compiler check --products
 #            --std=scala-library`) writes the same .tasty as the JVM build;
 #   check-lean  the Scala.js module's check build over teq's lean std, what a Scala.js module
@@ -104,7 +121,7 @@ root=$PWD
 . tests/support/pieces.sh
 suite_units() {
   for d in tests/modules/*/; do basename "$d"; done
-  printf '%s\n' own-twice own-moved own-cut
+  printf '%s\n' own-twice own-moved own-cut own-shared quoted-member
   awk '$1 != "" && $1 !~ /^#/ { print "split-" $1 }' tests/modules/split-programs.txt
 }
 worker=
@@ -155,6 +172,12 @@ is_known() { [ -f "$known" ] && grep -q "^$1 $2 " "$known"; }
 is_deferred() { [ -f "$deferred" ] && grep -q "^$1 $2 " "$deferred"; }
 result() {
   local name=$1 check=$2 ok=$3 detail=$4
+  # What a class must declare is never a known departure: a waived member is a missing one.
+  if [ "$check" = members ] && { is_known "$name" "$check" || is_deferred "$name" "$check"; }; then
+    fail=$((fail + 1))
+    echo "FAIL $name members: listed in $known or $deferred, which do not waive it"
+    return
+  fi
   if is_deferred "$name" "$check"; then
     deferred_count=$((deferred_count + 1))
     if [ "$ok" = 1 ]; then echo "deferred $name $check passes now: take it off $deferred"; else echo "deferred $name $check"; fi
@@ -336,6 +359,89 @@ sys.exit(1 if bad else 0)
 EOF
 }
 
+# members_check <split dir> <whole dir> <module> <module's sources> <members.txt>: the members leg's lines of the
+# module, against both directories; prints what is missing.
+members_check() {
+  python3 - "$@" <<'EOF'
+import json, os, re, struct, sys
+split, whole, module, srcs, spec = sys.argv[1], sys.argv[2], sys.argv[3], set(sys.argv[4].split("\n")), sys.argv[5]
+
+def methods(path):
+    b = open(path, "rb").read()
+    u2 = lambda at: struct.unpack(">H", b[at:at + 2])[0]
+    count, pool, at, i = u2(8), {}, 10, 1
+    while i < count:
+        tag = b[at]
+        at += 1
+        if tag == 1:
+            n = u2(at)
+            pool[i] = b[at + 2:at + 2 + n].decode("utf-8", "replace")
+            at += 2 + n
+        elif tag in (3, 4, 9, 10, 11, 12, 17, 18):
+            at += 4
+        elif tag in (5, 6):
+            at += 8
+            i += 1
+        elif tag in (7, 8, 16, 19, 20):
+            at += 2
+        elif tag == 15:
+            at += 3
+        i += 1
+    at += 6
+    at += 2 + 2 * u2(at)
+    out = []
+    for kind in ("field", "method"):
+        n = u2(at)
+        at += 2
+        for _ in range(n):
+            if kind == "method":
+                out.append(pool[u2(at + 2)] + pool[u2(at + 4)])
+            attrs = u2(at + 6)
+            at += 8
+            for _ in range(attrs):
+                at += 6 + struct.unpack(">I", b[at + 2:at + 6])[0]
+    return set(out)
+
+def classes(d):
+    for root, _, files in os.walk(d):
+        for f in files:
+            if f.endswith(".class"):
+                yield os.path.relpath(os.path.join(root, f), d)[:-len(".class")]
+
+bad = []
+for line in open(spec):
+    words = line.split()
+    if not words or words[0].startswith("#") or words[0] != module:
+        continue
+    absent = words[1].startswith("!")
+    pattern, members = re.compile(words[1].lstrip("!")), words[2:]
+    for label, d in (("split", split), ("whole", whole)):
+        m = json.load(open(os.path.join(d, "teq-products.json")))
+        owner = {c: p.get("source") for p in m["products"] for c in p["classes"]}
+        std = set(m.get("std", []))
+        found = sorted(c for c in classes(d) if pattern.fullmatch(c))
+        if absent:
+            if label == "whole":
+                found = [c for c in found if c + ".class" in std or owner.get(c + ".class") in srcs]
+            if found:
+                bad.append(f"{label}: {words[1]} matches {' '.join(found)}, which the module should not write")
+            continue
+        if len(found) != 1:
+            bad.append(f"{label}: {words[1]} matches {len(found)} classes: {' '.join(found)}")
+            continue
+        f = found[0] + ".class"
+        if f in std or f not in owner:
+            bad.append(f"{label}: {f} is {'a std class' if f in std else 'no product'} of the manifest, not the module's")
+        elif owner[f] not in srcs:
+            bad.append(f"{label}: {f} is owned by {owner[f]}, none of module {module}'s sources")
+        missing = [x for x in members if x not in methods(os.path.join(d, f))]
+        if missing:
+            bad.append(f"{label}: {f} lacks {' '.join(missing)}")
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+EOF
+}
+
 # The products scalac is given: a directory's own classes and pickles, without the std
 # classes the manifest marks, which teq's reader leaves out too (they are teq's own std until
 # the one-artifact std, and would stand for scala-library's classes of the same names).
@@ -459,6 +565,14 @@ run_case() {
       log=$(manifest_check "$out/$name/$m" "$(sources "$dir/$m")") || { ok=0; detail="$detail$m: $log"$'\n'; }
     done
     result "$name" manifest $ok "$detail"
+    if [ -f "$dir/members.txt" ]; then
+      ok=1
+      detail=""
+      for m in "${mods[@]}"; do
+        log=$(members_check "$out/$name/$m" "$w" "$m" "$(sources "$dir/$m")" "$dir/members.txt") || { ok=0; detail="$detail$log"$'\n'; }
+      done
+      result "$name" members $ok "$detail"
+    fi
     ok=1
     detail=""
     sub=$out/$name/subset
@@ -1050,6 +1164,167 @@ if [ -n "$every_case" ]; then
       detail="the first build failed: $(head -3 "$od/log")"
     fi
     result own-cut subset $ok "$detail"
+  fi
+  # A class a quote declares, one class across its expansions, that two sources of a module expand:
+  # held by the first source's products, used by the second's (`Entry::uses`), it stays through each
+  # source's build alone, through the removal of the first and through the first's edit that stops
+  # its expansion, the second taking it with the runtime classes its body needs (a sequence pattern's
+  # helpers), and the first takes it when added after the second was built alone; with a second shared
+  # class, and the second source holding a local class of its own beside its record of what it uses;
+  # the directory each time a clean build's byte for byte, its manifest included, and a
+  # scalac-compiled consumer of the second source's object runs over it. In the quote's package the
+  # class falls under the TASTy product of its name (`product_of`), the second source's object
+  # (`grouped`) or the first's (`first`), and moves into and out of it. Over a directory written
+  # before the manifest recorded uses (the class among the std classes of each source that needs it),
+  # the first source built again and then removed, the consumer runs and every file the manifest
+  # names is there; both built again, the directory is a clean build's.
+  if piece_has own-shared; then
+    piece_ran own-shared
+    od=$out/own-shared
+    mkdir -p "$od/a" "$od/d"
+    printf 'package osa\nimport scala.quoted.*\ntrait Pair:\n  def dead: Int\nobject Mac:\n  inline def make: Pair = ${ impl }\n  def impl(using Quotes): Expr[Pair] =\n    %s{ class Box extends Pair { def dead: Int = Array(1, 2) match { case Array(a, rest*) => a + rest.length }; def bonus: Int = 3 }; class Crate { def n: Int = 4 }; new Box }\n' "'" > "$od/a/Mac.scala"
+    printf 'package osd\n@main def later(): Unit = println(osb.Last.value.dead)\n@main def grouped(): Unit = println(osa.Box.value.dead)\n@main def firstly(): Unit = println(osa.First.value.dead)\n' > "$od/d/Later.scala"
+    ok=1
+    detail=""
+    sb() { "$teq" compiler build --target jvm --sourceroot "$od" "$@"; }
+    # first <layout> <package> <first's object> <second's object>: the module's sources
+    first() {
+      mkdir -p "$od/$1/b"
+      printf 'package %s\nobject %s:\n  val value: osa.Pair = %s\n' "$2" "$3" "${5:-osa.Mac.make}" > "$od/$1/b/A.scala"
+      [ -n "${5:-}" ] && return
+      printf 'package %s\nobject %s:\n  val value: osa.Pair = osa.Mac.make\n  def unique: osa.Pair =\n    class Unique extends osa.Pair { def dead: Int = 5 }\n    new Unique\n' "$2" "$4" > "$od/$1/b/Z.scala"
+    }
+    layouts="plain:osb:First:Last:later grouped:osa:First:Box:grouped first:osa:Box:First:firstly"
+    # legacy <dir>: its manifest as a build before `uses` wrote it (each one-class holder's shared class listed among
+    # the std classes, with the holder's, of the .tasty entry of every source that holds or uses it)
+    legacy() {
+      python3 - "$1" <<'EOP'
+import json, os, sys
+p = os.path.join(sys.argv[1], 'teq-products.json')
+m = json.load(open(p))
+es = m['products']
+for f in sorted({u for e in es for u in e.get('uses', [])}):
+    h = next(e for e in es if f in e['classes'])
+    sources = {h['source']} | {e['source'] for e in es if f in e.get('uses', [])}
+    for e in es:
+        if e['source'] in sources and e.get('tasty'):
+            e['std'] = sorted(set(e['std']) | {f} | set(h['std']))
+    h['classes'].remove(f)
+for e in es:
+    e.pop('uses', None)
+m['products'] = [e for e in es if e.get('tasty') or e['classes']]
+m['std'] = sorted({s for e in m['products'] for s in e['std']})
+json.dump(m, open(p, 'w'), indent=2)
+EOP
+    }
+    # named <label> <dir>: every file the manifest names is in the directory
+    named() {
+      local missing
+      missing=$(python3 -c "
+import json, os, sys
+d = sys.argv[1]; m = json.load(open(os.path.join(d, 'teq-products.json')))
+fs = set(m.get('std', []))
+for e in m['products']:
+    fs |= set(([e['tasty']] if e.get('tasty') else []) + e['classes'] + e.get('std', []) + e.get('uses', []))
+print(' '.join(sorted(f for f in fs if not os.path.exists(os.path.join(d, f)))))" "$2")
+      [ -z "$missing" ] || { ok=0; detail="$detail$n, $1: the manifest names missing files: $missing"$'\n'; }
+    }
+    sb --products "$od/ap" --classpath "$SL" "$od/a/Mac.scala" > "$od/log" 2>&1 || { ok=0; detail="${detail}a's build failed"$'\n'; }
+    for l in $layouts; do
+      IFS=: read -r n pkg ao zo main <<< "$l"
+      first "$n" "$pkg" "$ao" "$zo"
+      sb --products "$od/$n/bp" --classpath "$od/$n/bp:$od/ap:$SL" "$od/$n/b/A.scala" "$od/$n/b/Z.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}$n: b's build failed"$'\n'; }
+    done
+    if [ $ok = 1 ] && [ $have_scalac = 1 ] && [ $have_java = 1 ]; then
+      view "$od/ap" "$od/ap-view"
+      view "$od/plain/bp" "$od/plain-view"
+      view "$od/grouped/bp" "$od/grouped-view"
+      log=$(scalac "$od/plain-view:$od/grouped-view:$od/ap-view:$SL" "$od/use" "$od/d/Later.scala")
+      [ $? = 0 ] || { ok=0; detail="${detail}scalac's consumer failed: $(head -3 <<< "$log")"$'\n'; }
+      for l in $layouts; do
+        IFS=: read -r n pkg ao zo main <<< "$l"
+        lb=$od/$n
+        runs() {
+          local got
+          got=$(timeout 60 java -cp "$od/use:$2:$od/ap:$SL" "osd.$main" 2>&1)
+          [ "$got" = 2 ] || { ok=0; detail="$detail$n, $1: the consumer printed $(head -2 <<< "$got")"$'\n'; }
+        }
+        same() { diff -r "$2" "$3" > /dev/null || { ok=0; detail="$detail$n, $1: $(diff -rq "$2" "$3" | head -3)"$'\n'; }; }
+        runs clean "$lb/bp"
+        for f in A Z; do
+          cp -R "$lb/bp" "$lb/alone-$f"
+          sb --products "$lb/alone-$f" --classpath "$lb/alone-$f:$od/ap:$SL" "$lb/b/$f.scala" >> "$od/log" 2>&1 || { ok=0; detail="$detail$n, $f alone: the build failed"$'\n'; }
+          same "$f alone" "$lb/bp" "$lb/alone-$f"
+        done
+        cp -R "$lb/bp" "$lb/removed"
+        "$teq" compiler build --target jvm --products "$lb/removed" --removed "$lb/b/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}$n: the removal failed"$'\n'; }
+        sb --products "$lb/removed-clean" --classpath "$lb/removed-clean:$od/ap:$SL" "$lb/b/Z.scala" >> "$od/log" 2>&1
+        runs removed "$lb/removed"
+        same removed "$lb/removed-clean" "$lb/removed"
+        cp -R "$lb/bp" "$lb/edited"
+        first "$n" "$pkg" "$ao" "$zo" null
+        sb --products "$lb/edited" --classpath "$lb/edited:$od/ap:$SL" "$lb/b/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}$n: the edit's build failed"$'\n'; }
+        sb --products "$lb/edited-clean" --classpath "$lb/edited-clean:$od/ap:$SL" "$lb/b/A.scala" "$lb/b/Z.scala" >> "$od/log" 2>&1
+        runs edited "$lb/edited"
+        same edited "$lb/edited-clean" "$lb/edited"
+        first "$n" "$pkg" "$ao" "$zo"
+        sb --products "$lb/added" --classpath "$lb/added:$od/ap:$SL" "$lb/b/Z.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}$n: Z alone failed"$'\n'; }
+        sb --products "$lb/added" --classpath "$lb/added:$od/ap:$SL" "$lb/b/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}$n: A added failed"$'\n'; }
+        runs added "$lb/added"
+        same added "$lb/bp" "$lb/added"
+        [ "$n" = plain ] || continue
+        # A directory written before `uses`: each shared class among the runtime's classes of every source
+        # that holds or uses it, no holder (`adopt_std_uses`). The first source built again, then removed.
+        cp -R "$lb/bp" "$lb/legacy"
+        legacy "$lb/legacy"
+        runs legacy "$lb/legacy"
+        sb --products "$lb/legacy" --classpath "$lb/legacy:$od/ap:$SL" "$lb/b/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}$n: A over the older directory failed"$'\n'; }
+        runs "legacy, A again" "$lb/legacy"
+        "$teq" compiler build --target jvm --products "$lb/legacy" --removed "$lb/b/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}$n: the removal from the older directory failed"$'\n'; }
+        runs "legacy, A removed" "$lb/legacy"
+        named "legacy, A removed" "$lb/legacy"
+        # Both sources built again over it: a clean build's directory.
+        cp -R "$lb/bp" "$lb/legacy-both"
+        legacy "$lb/legacy-both"
+        for f in A Z; do
+          sb --products "$lb/legacy-both" --classpath "$lb/legacy-both:$od/ap:$SL" "$lb/b/$f.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}$n: $f over the older directory failed"$'\n'; }
+        done
+        same "legacy, both again" "$lb/bp" "$lb/legacy-both"
+      done
+    elif [ $ok = 1 ]; then
+      ok=0
+      detail="no scala-cli or java for the consumer"
+    fi
+    result own-shared subset $ok "$detail"
+  fi
+  # A member of a quote's copy whose signature names a type of `scala.quoted` runs later as any other
+  # (`runs_later`): the copy's uncalled `bonus(Expr[Int])` is in b's products and in the whole build's,
+  # and a later caller finds it and invokes it over each (through a method handle's argument list).
+  if piece_has quoted-member; then
+    piece_ran quoted-member
+    qd=$out/quoted-member
+    mkdir -p "$qd/a" "$qd/b" "$qd/d"
+    printf 'package qma\nimport scala.quoted.*\nobject Mac:\n  inline def make: AnyRef = ${ impl }\n  def impl(using Quotes): Expr[AnyRef] =\n    %s{ new Object { def bonus(x: Expr[Int]): Int = 16 } }\n' "'" > "$qd/a/Mac.scala"
+    printf 'package qmb\nobject Use:\n  val value: AnyRef = qma.Mac.make\n' > "$qd/b/Use.scala"
+    printf 'package qmd\n@main def later(): Unit =\n  val bonus = qmb.Use.value.getClass.getDeclaredMethod("bonus", classOf[scala.quoted.Expr[?]])\n  val args = new java.util.ArrayList[AnyRef]()\n  args.add(qmb.Use.value)\n  args.add(null)\n  println(java.lang.invoke.MethodHandles.lookup().unreflect(bonus).invokeWithArguments(args))\n' > "$qd/d/Later.scala"
+    ok=1
+    detail=""
+    qb() { "$teq" compiler build --target jvm --sourceroot "$qd" "$@" >> "$qd/log" 2>&1; }
+    : > "$qd/log"
+    qb --products "$qd/ap" --classpath "$SL" "$qd/a/Mac.scala" || { ok=0; detail="${detail}a's build failed"$'\n'; }
+    qb --products "$qd/bp" --classpath "$qd/ap:$SL" "$qd/b/Use.scala" || { ok=0; detail="${detail}b's build failed"$'\n'; }
+    qb --products "$qd/dp" --classpath "$qd/bp:$qd/ap:$SL" "$qd/d/Later.scala" || { ok=0; detail="${detail}the caller's build failed"$'\n'; }
+    qb --products "$qd/whole" --classpath "$SL" "$qd/a/Mac.scala" "$qd/b/Use.scala" "$qd/d/Later.scala" || { ok=0; detail="${detail}the whole build failed"$'\n'; }
+    if [ $ok = 1 ] && [ $have_java = 1 ]; then
+      for cp in "split:$qd/dp:$qd/bp:$qd/ap" "whole:$qd/whole"; do
+        got=$(timeout 60 java -cp "${cp#*:}:$SL" qmd.later 2>&1)
+        [ "$got" = 16 ] || { ok=0; detail="$detail${cp%%:*}: the caller printed $(head -2 <<< "$got")"$'\n'; }
+      done
+    elif [ $ok = 1 ]; then
+      ok=0
+      detail="no java for the caller"
+    fi
+    result quoted-member members $ok "$detail"
   fi
 fi
 # The programs of tests/split as two modules (tests/modules/split-programs.txt), on JavaScript:

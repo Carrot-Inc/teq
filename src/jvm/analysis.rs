@@ -221,6 +221,9 @@ fn render_file(t: &mut Worker, out: &Output, file: FileId, emitted: &[usize], ma
         let c = &out.classes[i];
         let path = format!("{}.class", c.name);
         match c.of {
+            // A class a quote declares is one class across its expansions, which the products'
+            // manifest keeps while a source holds or uses it: no source's to move aside.
+            Some(id) if syms.class(id).placed_at.is_some() => {}
             Some(id) if syms.class(id).owner == Owner::Local || syms.class(id).kind == ClassKind::Anon => local.push(path),
             Some(id) => match of_class.iter_mut().find(|(k, _)| *k == id) {
                 Some((_, paths)) => paths.push(path),

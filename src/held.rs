@@ -76,6 +76,7 @@ impl Program {
             quotes,
             quote_pats,
             expansions,
+            block_classes,
             expansion_bits,
             leaf_bits,
             leaf_tests,
@@ -128,10 +129,12 @@ impl Program {
             + expr_spans.held()
             + file_tags.held()
             + quotes.held()
-            + quotes.own().iter().map(|q| array(&q.holes) + array(&q.types) + array(&q.binders)).sum::<usize>()
+            + quotes.own().iter().map(|q| array(&q.holes) + array(&q.types) + array(&q.binders) + array(&q.blocks) + q.blocks.iter().map(|(_, cs)| array(cs)).sum::<usize>()).sum::<usize>()
             + quote_pats.held()
             + quote_pats.own().iter().map(|q| array(&q.holes) + array(&q.type_params) + array(&q.types)).sum::<usize>()
             + table(expansions)
+            + table(block_classes)
+            + block_classes.values().map(array).sum::<usize>()
             + table(aside_types)
             + expansion_bits.held()
             + leaf_bits.held()
