@@ -360,6 +360,7 @@ impl<'a> Worker<'a> {
         }
         self.prog.copy_span(te, original);
         self.rewrite_expr(te, TExpr::Cast(original, op, prim));
+        self.move_declared(te, original);
         if self.capturing() {
             self.capture_moved(te, original);
             self.capture_form(te, Form::Promotion);

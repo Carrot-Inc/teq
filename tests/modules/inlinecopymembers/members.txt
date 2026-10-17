@@ -1,0 +1,18 @@
+# What scalac writes of each class b makes (tests/modules.sh, "members"), its expansions of a's inline bodies first:
+# every member, the implementations of `Pair`'s abstract extensions, `bonus`, which no caller names, a private
+# method and a secondary constructor; the control's two ordinary members; the classes by their sites in
+# b/Use.scala.
+b ica/Mac\$\$anon\$[^$]+\$1rc96ct_139 live(I)I dead(I)I bonus()I secret()I
+b ica/Box\$[^$]+\$[^$]+ <init>(I)V <init>()V live(I)I dead(I)I bonus()I
+b ica/Mac\$\$anon\$[^$]+\$1rc96ct_199\$\$anon\$.+ live(I)I dead(I)I bonus()I
+b ica/Mac\$\$anon\$[^$]+\$1rc96ct_231 live()I dead()I
+# The module's own anonymous and local classes, which implement the extensions of a's `Pair` as the copies do.
+b icb/Made\$\$anon\$[^$]+ live(I)I dead(I)I bonus()I
+b icb/Mine\$[^$]+ live(I)I dead(I)I bonus()I
+# A class the body declares and no expansion makes is b's all the same; one of the branch the expansion drops
+# is none, and the body's are no product of a's.
+b ica/Unused\$.+ <init>()V bonus()I
+b ica/Mac\$\$anon\$[^$]+\$1rc96ct_638 live(I)I dead(I)I
+b ica/Chosen\$.+ live(I)I dead(I)I
+b !ica/Dropped.*
+a !ica/(Dropped|Unused|Chosen).*

@@ -520,6 +520,9 @@ pub struct TQuote {
     pub types: Vec<(TParamId, TExprId)>,
     /// The locals the body defines, which every run of the quote renames afresh.
     pub binders: Vec<SymId>,
+    /// The blocks of the body that declare classes, each with them (`Program::block_classes`):
+    /// a run's copy of a block declares them at the run's site (`Copier::declared`).
+    pub blocks: Vec<(TExprId, Vec<ClassId>)>,
     /// The `Quotes` the given search found for the quote, which scalac's pickle applies it to
     /// (`'{ e }.apply(q)`, `Type.of[T](q)`); kept for the TASTy writer, which alone reads it.
     pub quotes: Option<TExprId>,
@@ -633,6 +636,9 @@ pub struct InlineDefinition {
     /// names the output gives: each expansion copies the one it makes, named then
     /// (`Worker::anon_name`).
     pub classes: Vec<TClass>,
+    /// The blocks of the body that declare classes, each with them (`Program::block_classes`):
+    /// an expansion's copy of a block declares their copies, made or not (`Copier::declared`).
+    pub blocks: Vec<(TExprId, Vec<ClassId>)>,
     /// The body's `inline val`s whose value an inline call kept for the expansion gives
     /// (`inline val size = constValue[Tuple.Size[E]]`), which each expansion's uses take.
     pub inline_vals: Vec<SymId>,
@@ -1123,6 +1129,12 @@ pub struct Program {
     /// writes the expansions of one method that are one shape as calls of one function
     /// (`emit/outline.rs`).
     pub expansions: FxMap<TExprId, Expansion>,
+    /// Per block of the program's code, the named classes it declares, which the IR lifts out of
+    /// the block: its own, or in an expansion's copy of a block the copies of its template's
+    /// (`TQuote::blocks`, `InlineDefinition::blocks`). A module's products write what a block the
+    /// reach walks declares, made or not, as scalac's backend writes the class definitions of
+    /// the trees it is given (`reach::Walker::declared`).
+    pub block_classes: FxMap<TExprId, Vec<ClassId>>,
     /// What an inline method's call gave, as bits by expression, on every target: the keys of
     /// `expansions` on JavaScript, which a walk tests at every node. Where a chain of `+` ends
     /// is `chain_end_bits`' to say, which a transparent method's call does not set.
@@ -1404,6 +1416,7 @@ impl Program {
             quotes: Arena::attach(self.quotes.shared_arc(), worker),
             quote_pats: Arena::attach(self.quote_pats.shared_arc(), worker),
             expansions: FxMap::default(),
+            block_classes: FxMap::default(),
             expansion_bits: Bits::attach(self.expansion_bits.shared_arc(), worker),
             chain_end_bits: Bits::attach(self.chain_end_bits.shared_arc(), worker),
             taken_then_bits: Bits::attach(self.taken_then_bits.shared_arc(), worker),
@@ -1506,6 +1519,7 @@ impl Default for Program {
             quotes: Arena::new(),
             quote_pats: Arena::new(),
             expansions: FxMap::default(),
+            block_classes: FxMap::default(),
             expansion_bits: Bits::default(),
             chain_end_bits: Bits::default(),
             taken_then_bits: Bits::default(),

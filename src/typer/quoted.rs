@@ -22,12 +22,28 @@ use std::sync::Arc;
 const MACRO_STEPS: u64 = 1_000_000_000;
 const MACRO_DEPTH: u32 = 2_000;
 
+/// What a JVM build of products places of the classes quotes declare (`Worker::place_declared`,
+/// `place_quoted_classes`), behind one pointer in every other build's typing state.
+#[derive(Default)]
+struct Placement {
+    /// The named classes the macros' results declare, each with every outermost expansion site
+    /// that made it: a class is one across the quote's runs, which the first site's module holds.
+    placed: FxMap<(ClassId, (FileId, u32)), ()>,
+    /// The classes `place_quoted_classes` placed last, whose place it settles again.
+    placed_classes: Vec<ClassId>,
+    /// Each file with a site of a placed class, with the class (`Worker::quoted_class_sites`).
+    site_files: Vec<(FileId, ClassId)>,
+}
+
 #[derive(Default)]
 pub struct QuoteState {
     /// How many quotes enclose the expression being typed, less the splices inside them.
     pub level: u32,
     /// The quotes being typed, innermost last, with the holes their splices opened so far.
     frames: Vec<Vec<(SymId, TExprId)>>,
+    /// The blocks that declare classes of the quotes being typed, innermost last
+    /// (`TQuote::blocks`).
+    pub(super) blocks: Vec<Vec<(TExprId, Vec<ClassId>)>>,
     /// The ranges of `Program::exprs` that hold the code of the holes: level-0 code inside a
     /// quote, which an anonymous class of the quote does not capture from. Cleared as each
     /// outermost quote begins and left after it, so that a worker's at the join are stale.
@@ -42,6 +58,11 @@ pub struct QuoteState {
     /// site, which tell the copies of one site apart: a count that depends on the site's
     /// expansions alone, not on what was typed before them.
     copies: FxMap<(ClassId, Option<(FileId, u32)>), u32>,
+    /// What a JVM build of products places of the classes quotes declare (`Placement`).
+    placement: Box<Placement>,
+    /// How many runs of quotes declared or copied a class: an expansion whose runs made none
+    /// places nothing (`Worker::place_declared`).
+    declaring: u32,
     /// How many fresh names (`Symbol.freshName`) the macro runs under each outermost expansion
     /// site made, which number the next: one count per site whatever runs nest under it,
     /// begun anew with the site's expansion.
@@ -132,6 +153,14 @@ impl QuoteState {
                 *e = r.map_expr(*e);
             }
         }
+        for frame in &mut self.blocks {
+            for (e, cs) in frame {
+                *e = r.map_expr(*e);
+                for c in cs {
+                    *c = r.map_class(*c);
+                }
+            }
+        }
         let deferred = std::mem::take(&mut self.deferred.local);
         for (e, mut d) in r.entries_in_order(deferred, |e| r.map_expr(e)) {
             r.deferred_inline(&mut d);
@@ -142,6 +171,8 @@ impl QuoteState {
         }
         let copies = std::mem::take(&mut self.copies);
         self.copies.extend(copies.into_iter().map(|((c, site), n)| ((r.map_class(c), site), n)));
+        let placed = std::mem::take(&mut self.placement.placed);
+        self.placement.placed.extend(placed.into_iter().map(|((c, site), ())| ((r.map_class(c), site), ())));
     }
 
     /// An outermost expansion site begins: its fresh names are numbered from the first.
@@ -160,6 +191,7 @@ impl QuoteState {
     pub(super) fn absorb(&mut self, other: &mut QuoteState) {
         debug_assert!(other.frames.is_empty() && other.copied_deferred.is_empty());
         self.copies.extend(std::mem::take(&mut other.copies));
+        self.placement.placed.extend(std::mem::take(&mut other.placement.placed));
         self.fresh.extend(std::mem::take(&mut other.fresh));
         self.deferred.absorb(other.deferred.take_local());
         if self.classes.is_none() {
@@ -171,6 +203,7 @@ impl QuoteState {
     /// again (`incremental.rs`).
     pub(super) fn forget_file(&mut self, file: FileId) {
         self.copies.retain(|&(_, site), _| site.map_or(true, |(f, _)| f != file));
+        self.placement.placed.retain(|&(_, (f, _)), _| f != file);
         self.fresh.retain(|&(f, _), _| f != file);
     }
 }
@@ -185,6 +218,62 @@ pub(crate) struct QuotedClasses {
 }
 
 impl<'a> Worker<'a> {
+    /// Places each named class the runs of quotes made at the first of its sites, by file and
+    /// position (`ClassInfo::placed_at`): a module's JVM products write it for that site's
+    /// source, every member with it (`reach::materialised`), as each expansion of the quote in
+    /// dotty makes the class in its site's unit (`Splicer.splice`, `PickledQuotes.quotedExprToTree`).
+    /// A class no site makes any more goes back to its template's file.
+    pub fn place_quoted_classes(&mut self) {
+        // Every site's file of each class, a member class of a placed class taking its sites.
+        let mut sites: FxMap<ClassId, Vec<(FileId, u32)>> = FxMap::default();
+        for &(c, site) in self.quote.placement.placed.keys() {
+            sites.entry(c).or_default().push(site);
+        }
+        let mut work: Vec<ClassId> = sites.keys().copied().collect();
+        work.sort_unstable();
+        while let Some(c) = work.pop() {
+            let mut nested: Vec<ClassId> = self.syms.class(c).nested.values().copied().collect();
+            nested.sort_unstable();
+            for k in nested {
+                let outer = sites[&c].clone();
+                let at = sites.entry(k).or_default();
+                let before = at.len();
+                at.extend(outer);
+                at.sort_unstable();
+                at.dedup();
+                if at.len() != before {
+                    work.push(k);
+                }
+            }
+        }
+        for c in std::mem::take(&mut self.quote.placement.placed_classes) {
+            if !sites.contains_key(&c) && c.idx() < self.syms.classes.len() {
+                self.syms.class_mut(c).placed_at = None;
+            }
+        }
+        let mut placed: Vec<ClassId> = sites.keys().copied().collect();
+        placed.sort_unstable();
+        let mut files: Vec<(FileId, ClassId)> = Vec::new();
+        for &c in &placed {
+            let at = &sites[&c];
+            // The first site by its source's path, then its position, as the products' publication
+            // settles the holder (`settle_shared`), whatever order the build was given its sources.
+            let first = at.iter().min_by(|&&(f, p), &&(g, q)| self.source(f).path.cmp(&self.source(g).path).then(p.cmp(&q))).map(|&(f, _)| f);
+            self.syms.class_mut(c).placed_at = first;
+            files.extend(at.iter().map(|&(f, _)| (f, c)));
+        }
+        files.sort_unstable();
+        files.dedup();
+        self.quote.placement.placed_classes = placed;
+        self.quote.placement.site_files = files;
+    }
+
+    /// Each source file with the classes an expansion at a site in it placed (`place_quoted_classes`):
+    /// the products of a source that holds none of them still use them (`products::Entry::uses`).
+    pub fn quoted_class_sites(&self) -> &[(FileId, ClassId)] {
+        &self.quote.placement.site_files
+    }
+
     pub(crate) fn quoted_classes(&mut self) -> QuotedClasses {
         if let Some(c) = self.quote.classes {
             return c;
@@ -308,6 +397,7 @@ impl<'a> Worker<'a> {
         }
         self.quote.level += 1;
         self.quote.frames.push(Vec::new());
+        self.quote.blocks.push(Vec::new());
         self.push_scope();
         let captured = self.capture_mark();
         let (vars_mark, nodes_mark, opened) = (self.tvars.len(), self.prog.exprs.len(), self.opened);
@@ -337,6 +427,7 @@ impl<'a> Worker<'a> {
         };
         self.pop_scope();
         let holes = self.quote.frames.pop().unwrap_or_default();
+        let blocks = self.quote.blocks.pop().unwrap_or_default();
         self.quote.level -= 1;
         let ty = self.solve_inferred(ty);
         let ty = self.widen_lit(ty);
@@ -347,7 +438,7 @@ impl<'a> Worker<'a> {
             self.capture_publish(captured);
         }
         let quote = self.prog.quotes.len();
-        self.prog.quotes.push(TQuote { body: Some(te), ty, holes: holes.clone(), types: types.clone(), binders, quotes });
+        self.prog.quotes.push(TQuote { body: Some(te), ty, holes: holes.clone(), types: types.clone(), binders, blocks, quotes });
         let out = self.quote_template(quote, holes.iter().map(|&(_, e)| e).chain(types.iter().map(|&(_, e)| e)).collect());
         (out, self.expr_type(ty))
     }
@@ -402,7 +493,7 @@ impl<'a> Worker<'a> {
             }
         }
         let quote = self.prog.quotes.len();
-        self.prog.quotes.push(TQuote { body: None, ty: t, holes: Vec::new(), types: types.clone(), binders: Vec::new(), quotes });
+        self.prog.quotes.push(TQuote { body: None, ty: t, holes: Vec::new(), types: types.clone(), binders: Vec::new(), blocks: Vec::new(), quotes });
         Some(self.quote_template(quote, types.iter().map(|&(_, e)| e).collect()))
     }
 
@@ -1591,6 +1682,7 @@ impl<'a> Worker<'a> {
         let caches = crate::interp::take_caches();
         let deferred_mark = self.quote.copied_deferred.len();
         let class_mark = self.prog.classes.len();
+        let declaring_mark = self.quote.declaring;
         let lambda_params = self.site_lambda_params(&owners);
         let lambda_trees: FxMap<u32, TExprId> = owners
             .iter()
@@ -1703,6 +1795,10 @@ impl<'a> Worker<'a> {
             Ok(tree) => {
                 self.static_this_as_module(tree);
                 self.expand_deferred_inlines(tree, deferred_mark, class_mark, span);
+                // Read by a JVM build of products alone, for an expansion whose runs made a class.
+                if self.open_world && self.quote.declaring != declaring_mark {
+                    self.place_declared(tree, (unit_file, unit_span.start));
+                }
                 let ty = self.prog.type_of(tree).unwrap_or(ret);
                 (tree, ty)
             }
@@ -1742,6 +1838,42 @@ impl<'a> Worker<'a> {
 
     /// The inline calls a macro's expansion brings from its quotes, expanded at the site: what
     /// they know of their position (`Position.ofMacroExpansion`) is the macro's call.
+    /// Places at the expansion's outermost `site` each class of the macro's result that no copy
+    /// stands for (`QuoteState::placed`): what its tree declares (`Program::block_classes`) or
+    /// constructs or names of the local classes, and so on through the bodies of those classes, of
+    /// the ones the run copied and of their nested classes, a named quote class's kept bodies with
+    /// what they declare and construct among them. What a tree the macro built and dropped declares
+    /// stays out, as dotty's splice transfers the tree the macro returns alone, with its classes'
+    /// bodies (`Splicer.splice`, `PickledQuotes.quotedExprToTree`).
+    fn place_declared(&mut self, tree: TExprId, site: (FileId, u32)) {
+        let mut roots = vec![tree];
+        let mut seen: FxMap<ClassId, ()> = FxMap::default();
+        while let Some(r) = roots.pop() {
+            let mut found: Vec<ClassId> = Vec::new();
+            for e in self.prog.descendants(r) {
+                match self.prog.expr(e) {
+                    TExpr::Block(..) => found.extend(self.prog.block_classes.get(&e).into_iter().flatten().copied()),
+                    TExpr::New(c, _) | TExpr::ClassOf(c, _) if self.syms.in_local_class(c) => found.push(c),
+                    _ => {}
+                }
+            }
+            while let Some(c) = found.pop() {
+                if seen.insert(c, ()).is_some() {
+                    continue;
+                }
+                if self.syms.class(c).made_at.is_none() {
+                    self.quote.placement.placed.insert((c, site), ());
+                }
+                if let Some(i) = self.prog_index.class(&self.prog, c) {
+                    roots.extend(self.class_roots(std::slice::from_ref(&self.prog.classes[i])));
+                }
+                let mut nested: Vec<ClassId> = self.syms.class(c).nested.values().copied().collect();
+                nested.sort_unstable();
+                found.extend(nested);
+            }
+        }
+    }
+
     fn expand_deferred_inlines(&mut self, tree: TExprId, mark: usize, class_mark: usize, site: Span) {
         if self.quote.copied_deferred.len() <= mark {
             return;
@@ -1800,6 +1932,7 @@ impl<'a> Worker<'a> {
                 self.prog.exprs[e.idx()] = node;
                 self.prog.set_type(e, ty);
                 self.prog.copy_chain_marks(expanded, e);
+                self.move_declared(expanded, e);
                 if self.capturing() {
                     self.capture_moved(expanded, e);
                 }
@@ -1878,7 +2011,22 @@ impl<'a> Worker<'a> {
     /// proxies of a macro's parameters the arguments they stand for, and the type parameters
     /// that had a `Type` value the types they were given.
     pub fn instantiate_quote(&mut self, body: TExprId, holes: &FxMap<SymId, TExprId>, params: &FxMap<SymId, TExprId>, subst: &Subst, renames: &FxMap<SymId, SymId>) -> TExprId {
-        self.instantiate_tree(body, holes, params, subst, renames, &[])
+        self.instantiate_tree(body, holes, params, subst, renames, &[], &[])
+    }
+
+    /// `instantiate_quote` for a run of quote `index`, the tree a macro's `'{..}` evaluates to,
+    /// whose blocks declare what the quote's do (`TQuote::blocks`, `Copier::declared`). The bodies
+    /// of the quote's named classes are no copy's but the run's as they are: their blocks declare
+    /// in the program's register too (`place_declared`, the reach).
+    pub fn run_quote(&mut self, index: usize, body: TExprId, holes: &FxMap<SymId, TExprId>, params: &FxMap<SymId, TExprId>, subst: &Subst, renames: &FxMap<SymId, SymId>) -> TExprId {
+        let blocks = self.prog.quotes[index].blocks.clone();
+        if !blocks.is_empty() {
+            self.quote.declaring += 1;
+            for (b, cs) in &blocks {
+                self.prog.block_classes.entry(*b).or_insert_with(|| cs.clone());
+            }
+        }
+        self.instantiate_tree(body, holes, params, subst, renames, &[], &blocks)
     }
 
     /// The reads of the expansion's by-name parameters in the copy `root` of a stored body's
@@ -1905,9 +2053,11 @@ impl<'a> Worker<'a> {
 
     /// `instantiate_quote` with the recorded types' paths of the renamed terms moved as well:
     /// `paths` pairs each with the path of what stands for it.
-    pub(super) fn instantiate_tree(&mut self, body: TExprId, holes: &FxMap<SymId, TExprId>, params: &FxMap<SymId, TExprId>, subst: &Subst, renames: &FxMap<SymId, SymId>, paths: &[(SymId, TypeId)]) -> TExprId {
+    /// `declared`: the template's blocks that declare classes (a quote's), the program's register
+    /// answering for the rest (`Copier::declared`).
+    pub(super) fn instantiate_tree(&mut self, body: TExprId, holes: &FxMap<SymId, TExprId>, params: &FxMap<SymId, TExprId>, subst: &Subst, renames: &FxMap<SymId, SymId>, paths: &[(SymId, TypeId)], declared: &[(TExprId, Vec<ClassId>)]) -> TExprId {
         let copies = self.capturing().then(FxMap::default);
-        let mut copier = Copier { holes, params, subst, renames, paths, extra: FxMap::default(), classes: FxMap::default(), added: FxMap::default(), locals: None, carries_chain: false, map: None, copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: None, deferring: false, class_depth: 0, body_depth: 0, hole_depth: None, suspended: Vec::new(), scratch: Scratch::default(), reducing: false };
+        let mut copier = Copier { holes, params, subst, renames, paths, extra: FxMap::default(), classes: FxMap::default(), added: FxMap::default(), locals: None, carries_chain: false, map: None, copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: None, deferring: false, class_depth: 0, body_depth: 0, hole_depth: None, suspended: Vec::new(), scratch: Scratch::default(), reducing: false, declared, block_declares: None };
         let copied = copier.expr(self, body);
         if copier.copies.is_some() {
             let roots: Vec<TExprId> = std::iter::once(body).chain(copier.filled.iter().copied()).collect();
@@ -1934,7 +2084,7 @@ impl<'a> Worker<'a> {
         let copies = self.capturing().then(FxMap::default);
         let (extra, copied_classes) = (std::mem::take(members), std::mem::take(classes));
         let scratch = std::mem::take(&mut map.part.scratch);
-        let mut copier = Copier { holes: &holes, params, subst, renames, paths, extra, classes: copied_classes, added: FxMap::default(), locals: None, carries_chain: false, map: Some(map), copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: Some(stored), deferring: stored.leaves_for_demand.is_some(), class_depth: 0, body_depth: 0, hole_depth: None, suspended: Vec::new(), scratch, reducing: false };
+        let mut copier = Copier { holes: &holes, params, subst, renames, paths, extra, classes: copied_classes, added: FxMap::default(), locals: None, carries_chain: false, map: Some(map), copies, occurrences: Vec::new(), pat_copies: Vec::new(), filled: Vec::new(), stored: Some(stored), deferring: stored.leaves_for_demand.is_some(), class_depth: 0, body_depth: 0, hole_depth: None, suspended: Vec::new(), scratch, reducing: false, declared: stored.blocks, block_declares: None };
         for &r in roots {
             let copy = copier.expr(self, r);
             copier.map.as_mut().expect("the copy's map").part.roots.push(copy);
@@ -2134,6 +2284,8 @@ pub struct StoredCopy<'c> {
     pub leaves_for_demand: Option<&'c FxMap<TExprId, ()>>,
     /// The classes the stored body makes, which a copy copies where it makes them.
     pub classes: &'c [TClass],
+    /// The stored body's blocks that declare classes (`InlineDefinition::blocks`).
+    pub blocks: &'c [(TExprId, Vec<ClassId>)],
     /// Whether the copies of those classes take the output's names (the walk's) or none (the
     /// census's), which consumes none of the counters of the names.
     pub names_classes: bool,
@@ -2178,6 +2330,11 @@ struct Copier<'c> {
     /// For a stored inline body's copy, what it made of each node (`instantiate_tree_mapped`).
     map: Option<CopyMap<'c>>,
     stored: Option<StoredCopy<'c>>,
+    /// The template's blocks that declare classes: a quote's (`TQuote::blocks`) or a stored body's
+    /// (`InlineDefinition::blocks`), the program's register answering for a block of its code.
+    declared: &'c [(TExprId, Vec<ClassId>)],
+    /// What the block just copied declares, which its copy's node takes once added (`declared`).
+    block_declares: Option<Vec<ClassId>>,
     /// Whether the node being copied is one the walk visits, where a copy on demand leaves the
     /// branches and the reduced cases' parts for their demands: not a test's value nor a
     /// splice's code, which the walk does not enter.
@@ -2409,7 +2566,7 @@ impl<'c> Copier<'c> {
         let receiver = self.stored.and_then(|s| s.this);
         let body = q.body.map(|b| {
             let none = FxMap::default();
-            let copied = t.instantiate_tree(b, &none, self.params, &subst, &renames, &paths);
+            let copied = t.instantiate_tree(b, &none, self.params, &subst, &renames, &paths, &q.blocks);
             t.read_by_name_params(copied, &by_name);
             // The quote's `this` is the method's class's, which the receiver stands for where the
             // body expands (`'x` of a field `x` of the class reads the receiver's).
@@ -2427,8 +2584,13 @@ impl<'c> Copier<'c> {
         });
         let ty = self.ty_under(t, q.ty, &subst);
         let quotes = q.quotes.map(|e| self.expr(t, e));
+        // The copy's blocks declare what the quote's did (`Copier::declared`).
+        let blocks: Vec<(TExprId, Vec<ClassId>)> = match body {
+            Some(b) if !q.blocks.is_empty() => t.prog.descendants(b).filter_map(|e| t.prog.block_classes.get(&e).map(|cs| (e, cs.clone()))).collect(),
+            _ => Vec::new(),
+        };
         let copied = t.prog.quotes.len();
-        t.prog.quotes.push(TQuote { body, ty, binders, quotes, ..q });
+        t.prog.quotes.push(TQuote { body, ty, binders, blocks, quotes, ..q });
         let mut items = items;
         items[0] = t.prog.add(TExpr::Int(copied as i32));
         if let (Some(map), Some(&stored_index)) = (&mut self.map, t.prog.expr_list(stored_args).first()) {
@@ -2552,6 +2714,7 @@ impl<'c> Copier<'c> {
             None => name.push_str(&format!("${}", repeat)),
         }
         let name = t.interner.intern(&name);
+        t.quote.declaring += 1;
         // Made at the site, whose module holds it and whose typing again makes it anew.
         let nc = match t.prog_index.class(&t.prog, c) {
             Some(index) => {
@@ -3101,7 +3264,31 @@ impl<'c> Copier<'c> {
         if self.map.is_some() {
             self.mapped(t, e, id, node);
         }
+        if self.block_declares.is_some() {
+            self.note_block_declares(t, id);
+        }
         id
+    }
+
+    /// The copy `id` of the block just copied declares what it does (`declared`).
+    #[cold]
+    #[inline(never)]
+    fn note_block_declares(&mut self, t: &mut Worker, id: TExprId) {
+        if let Some(classes) = self.block_declares.take() {
+            t.prog.block_classes.insert(id, classes);
+        }
+    }
+
+    /// What the copy of block `e` declares: what `e` does, a stored body's classes copied, made by
+    /// the expansion whether anything constructs them or not (`Inliner`'s copy of the body keeps
+    /// every class definition; `dropUnusedDefs` drops bindings alone), a quote's as they are.
+    #[cold]
+    fn declared(&mut self, t: &mut Worker, e: TExprId) -> Option<Vec<ClassId>> {
+        let classes = match self.declared.iter().find(|(b, _)| *b == e) {
+            Some((_, cs)) => cs.clone(),
+            None => t.prog.block_classes.get(&e)?.clone(),
+        };
+        Some(classes.into_iter().map(|c| if self.stored_class_body(c).is_some() { self.stored_class(t, c) } else { c }).collect())
     }
 
     /// What a reducible match's pattern holds or reaches beyond patterns and tests (a value, an
@@ -3381,6 +3568,9 @@ impl<'c> Copier<'c> {
                 self.scratch.stmts.truncate(mark);
                 let res = self.expr(t, res);
                 self.carries_chain = true;
+                if !self.declared.is_empty() || !t.prog.block_classes.is_empty() {
+                    self.block_declares = self.declared(t, e);
+                }
                 TExpr::Block(l, res)
             }
             TExpr::Assign(a, b) => {

@@ -1034,6 +1034,7 @@ local_case_companion
 local_class_capture_body
 local_class_companion_defaults
 local_class_defaults
+local_class_nested_members
 local_class_trait_capture
 local_class_trait_reads
 local_classes

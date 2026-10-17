@@ -1374,6 +1374,7 @@ fn finish_jvm(
             mixin_supers: None,
             stackable: Some(&stackable),
             product_inits: Some(&product_inits),
+            named: &[],
         };
         jvm::emit(input, cp, jvm::kept::wanted().then_some(&mut state.kept))
     });

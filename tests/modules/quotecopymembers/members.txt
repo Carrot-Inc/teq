@@ -1,0 +1,29 @@
+# What scalac writes of each class b's expansions make (tests/modules.sh, "members"): every member, the
+# implementations of the abstract extensions of `EnumMirror` and `Pair` with their bridges, `bonus`, which no
+# caller names, and a private method; the classes a quote declares whether a run makes them (`Unused`) or names
+# them alone (`classOf[Kept]`); the classes by their sites in b/Use.scala.
+b ema/Macros\$\$anon\$[^$]+\$[^$]+ ordinal(Lemb/Models$Color;)I ordinal(Ljava/lang/Object;)I entryName(Lemb/Models$Color;)Ljava/lang/String; entryName(Ljava/lang/Object;)Ljava/lang/String; mirroredName()Ljava/lang/String; size()I values()Ljava/lang/Object;
+b ema/Shapes\$\$anon\$[^$]+\$1rc96ct_235 live(I)I dead(I)I bonus()I secret()I
+b ema/Box\$[^$]+ live(I)I dead(I)I bonus()I
+b ema/Solo\$[^$]+ live(I)I dead(I)I bonus()I
+b ema/box\$[^$]+ live(I)I dead(I)I bonus()I
+b ema/Shapes\$\$anon\$[^$]+\$\$anon\$[^$]+\$1rc96ct_368 live(I)I dead(I)I bonus()I
+b ema/Kept\$[^$]+ <init>()V bonus()I
+b ema/Unused\$[^$]+ <init>()V bonus()I
+b ema/Shapes\$\$anon\$[^$]+\$1rc96ct_438 live(I)I dead(I)I
+# A class nested in a declared one is b's with it, and neither is a's: a quote's template is no product.
+b ema/Outer\$[^$]+ <init>()V live()I
+b ema/Outer\$[^$]+\$Inner bonus()I
+a !ema/Outer.*
+# A quote the macro evaluates and drops declares nothing.
+b !ema/Discarded.*
+a !ema/Discarded.*
+# What a named class's methods declare and construct is b's with it: an anonymous class its method makes, a class
+# its method declares and names alone.
+b ema/Holder\$[^$]+ <init>()V pair()Lema/Pair;
+b ema/Holder\$\$anon\$[^$]+ live(I)I dead(I)I bonus()I
+b ema/Lister\$[^$]+ <init>()V kind()Ljava/lang/Class;
+b ema/Hidden\$[^$]+ <init>()V bonus()I
+a !ema/(Holder|Lister|Hidden).*
+# A member whose signature names a type of `scala.quoted` (`Expr`, a class like any other) is a member like any other.
+b ema/Shapes\$\$anon\$[^$]+\$1rc96ct_616 bonus(Lscala/quoted/Expr;)I none()Lscala/Option;

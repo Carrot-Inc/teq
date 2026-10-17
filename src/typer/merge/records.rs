@@ -484,7 +484,18 @@ pub(in crate::typer) fn quote<M: Mapping + ?Sized>(m: &M, q: &mut TQuote) {
         *e = m.expr(*e);
     }
     syms_in(m, &mut q.binders);
+    declared_blocks(m, &mut q.blocks);
     q.quotes = q.quotes.map(|e| m.expr(e));
+}
+
+/// The blocks of a tree that declare classes, each with them (`TQuote::blocks`).
+pub(in crate::typer) fn declared_blocks<M: Mapping + ?Sized>(m: &M, blocks: &mut [(TExprId, Vec<ClassId>)]) {
+    for (e, cs) in blocks {
+        *e = m.expr(*e);
+        for c in cs {
+            *c = m.class(*c);
+        }
+    }
 }
 
 pub(in crate::typer) fn quote_pat<M: Mapping + ?Sized>(m: &M, q: &mut TQuotePat) {

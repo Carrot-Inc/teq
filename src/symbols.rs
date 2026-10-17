@@ -169,6 +169,12 @@ pub struct ClassInfo {
     /// For an anonymous class made while an inline method expanded: the file of the outermost
     /// call site, whose module holds the class, since the site's typing makes it and names it.
     pub made_at: Option<FileId>,
+    /// For a named class a quote defines, one class across the quote's expansions where each
+    /// anonymous one is copied (`Copier::expr`): the file of the first expansion's outermost
+    /// site, whose module holds the class in a module's JVM products, as dotty's splice puts the
+    /// quote's tree into the site's unit (`Worker::place_quoted_classes`). The class stays its
+    /// template's file's otherwise: typing the site again does not make it anew.
+    pub placed_at: Option<FileId>,
     pub tparams: Vec<TParamId>,
     pub parents: Vec<TypeId>,
     /// How many of `parents`, at the end, dotty's `Desugar.classDef` gives the class rather than
@@ -302,7 +308,7 @@ pub struct ClassInfo {
 impl ClassInfo {
     /// The file whose module the class belongs to.
     pub fn module_file(&self) -> FileId {
-        self.made_at.unwrap_or(self.file)
+        self.made_at.or(self.placed_at).unwrap_or(self.file)
     }
 
     /// The name a case class or a case object prints itself by (its `productPrefix`): its own,
@@ -801,6 +807,18 @@ impl Symbols {
         }
     }
 
+    /// Whether class `c` is a local class or nested in one, however deep.
+    pub fn in_local_class(&self, c: ClassId) -> bool {
+        let mut k = c;
+        loop {
+            match self.class(k).owner {
+                Owner::Local => return true,
+                Owner::Class(o) => k = o,
+                _ => return false,
+            }
+        }
+    }
+
     /// Whether class `c` is one of `files`' own: it stands in one, or an expansion at a site in
     /// one made it (`made_at`); what typing the file again makes anew.
     pub fn class_of_files(&self, c: ClassId, files: &[FileId]) -> bool {
@@ -1146,6 +1164,7 @@ impl Symbols {
             has_overloads: false,
             named_for_output: false,
             made_at: None,
+            placed_at: None,
             value_class: false,
             ctors: Vec::new(),
             primary_ctor: None,

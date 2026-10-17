@@ -42,3 +42,5 @@ derivedmirror scalac-lean-b  the same as macropattern's: scalac runs the downstr
 mirroroverride scalac-b  the same as macroquote: scalac's compilation of the downstream expands the upstream's macro by calling its implementation in teq's class files, which do not have it (`Could not find method mo.Mac$.impl with parameters (interface scala.quoted.Quotes)`), the JVM prerequisite
 mirroroverride scalac-run  the same: scalac compiles no downstream to run
 mirroroverride scalac-lean-b  the same as macropattern's: scalac runs the downstream's macro on the JVM and the Scala.js check build's products are TASTy alone
+quotecopymembers scalac-b  the same as macroquote: scalac's compilation of b expands a's macros by calling their implementations in teq's class files, which do not have them (`Could not find method ema.Macros$.derivedEnumMirror`), the JVM prerequisite; the main module's compile over teq's products and its run (scalac-run) are the case's leg
+quotecopymembers scalac-lean-b  the same as macropattern's: scalac runs b's expansions of a's macros on the JVM and the Scala.js check build's products are TASTy alone

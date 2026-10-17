@@ -605,7 +605,7 @@ fn install_quotes(it: &mut Table) {
                         it.typer.subst_local_type(renames[&b], &subst);
                     }
                 }
-                let copied = it.typer.instantiate_quote(b, &holes, &params, &subst, &renames);
+                let copied = it.typer.run_quote(index, b, &holes, &params, &subst, &renames);
                 Ok(Value::Tree(TreeRef::Expr(copied)))
             }
             None => {

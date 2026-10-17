@@ -208,10 +208,13 @@ PY
   check "pieces: $suite deals each of its units to exactly one piece, in its order, of 1 to 8" "$work/pieces-$suite.log" grep -q "^ok " "$work/pieces-$suite.log"
 done
 units_of() { grep -v '^#' "$work/pieces-$1.1" | cut -d' ' -f2; }
+# The modules suite's checks made once a run, by their list (tests/modules.sh's suite_units): each a unit once, the
+# split programs the units named split-, and the rest the cases, one per directory under tests/modules.
+modules_checks="own-twice own-moved own-cut own-shared quoted-member"
 check "pieces: modules lists the checks once a run and the split programs as units" "$work/pieces-modules.1" eval \
-  '[ "$(units_of modules | grep -c -x -E "own-twice|own-moved|own-cut")" = 3 ] &&
+  '[ "$(units_of modules | grep -x -F -f <(printf "%s\n" $modules_checks) | sort)" = "$(printf "%s\n" $modules_checks | sort)" ] &&
   [ "$(units_of modules | grep -c "^split-")" = "$(grep -c -v -E "^[[:space:]]*(#|$)" tests/modules/split-programs.txt)" ] &&
-  [ "$(units_of modules | grep -c -v -E "^(own-|split-)")" = "$(ls -d tests/modules/*/ | wc -l)" ]'
+  [ "$(units_of modules | grep -v "^split-" | grep -c -v -x -F -f <(printf "%s\n" $modules_checks))" = "$(ls -d tests/modules/*/ | wc -l)" ]'
 check "pieces: jvm-watch lists a program by its list, the two on both lists twice, and its nine sessions one after another" "$work/pieces-jvm-watch.1" eval \
   '[ "$(units_of jvm-watch | grep -c -x -E "(passing|watch-only)/(inline_definition_gaps|scala3_typeclass-derivation3)")" = 4 ] &&
   [ "$(units_of jvm-watch | grep -c "^passing/")" = "$(wc -w < tests/jvm-passing.txt)" ] && [ "$(units_of jvm-watch | grep -c "^retype/")" = 9 ]'

@@ -79,6 +79,9 @@ pub struct Input<'a> {
     /// The module classes of the class path's product directories whose initialisation runs
     /// code (their manifests' `inits`).
     pub product_inits: Option<&'a FxMap<String, ()>>,
+    /// The classes whose class files' names the caller asks for (`Output::names`), written or not:
+    /// a module's products record the shared classes a source uses (`products::Entry::uses`).
+    pub named: &'a [ClassId],
 }
 
 /// Link mode (`Worker::link_mode`), the JVM's one mode: the output runs beside the jars of the
@@ -198,6 +201,8 @@ pub struct Output {
     pub inits: Vec<String>,
     /// How a session's build used the class files it kept (`kept`).
     pub kept: kept::Use,
+    /// The class file of each class `Input::named` gives, by its binary name.
+    pub names: Vec<(ClassId, String)>,
 }
 
 /// A class file by binary name, with the file and the class of the program it stands for: a
@@ -1099,7 +1104,8 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
         }
         lap.done("store updated", usage.kept + usage.emitted);
     }
-    Output { classes, main_class, errors, refused, main_classes, inits, kept: usage }
+    let names = cx.input.named.iter().map(|&c| (c, cx.class_names[c.idx()].clone())).collect();
+    Output { classes, main_class, errors, refused, main_classes, inits, kept: usage, names }
 }
 
 /// Writes the classes as a jar when the path ends in `.jar`, else as a directory tree.

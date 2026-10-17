@@ -2043,7 +2043,9 @@ impl<'a> Worker<'a> {
             self.inline.args.remove(&s);
         }
         let (stmts2, res2) = self.unhoist(w, stmts, res2);
-        if stmts2.len == 0 {
+        // A block that declares classes stands, as dotty's does with their definitions among its
+        // statements (`Program::block_classes`).
+        if stmts2.len == 0 && (self.prog.block_classes.is_empty() || !self.prog.block_classes.contains_key(&e)) {
             return res2;
         }
         if (stmts2, res2) != (stmts, res) {
