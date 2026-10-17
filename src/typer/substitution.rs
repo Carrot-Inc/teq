@@ -730,6 +730,7 @@ impl<'a> Worker<'a> {
         let te = if walk.failed { self.prog.add(TExpr::Unit) } else { te };
         self.export_type_trees(&mut walk, te, body);
         self.put_walk(walk);
+        let ty = self.avoid_bindings(&bound, ty);
         self.unbind_inline_call(&mut bound, te, ty)
     }
 

@@ -179,6 +179,12 @@ impl<'a> Worker<'a> {
             }
             Type::Class(c, args) => {
                 let items = self.types.items(args);
+                // The repeated parameter's class (`<repeated>[T]`) is `T*`, as dotty prints it.
+                if Some(c) == self.b.repeated && items.len() == 1 {
+                    self.show_into(items[0], out, true);
+                    out.push('*');
+                    return;
+                }
                 if self.is_context_function_class(c) {
                     let arity = items.len() - 1;
                     if nested {
@@ -413,6 +419,11 @@ impl<'a> Worker<'a> {
                 if nested {
                     out.push(')');
                 }
+            }
+            // `Option[Int] @RuntimeChecked`, as dotty's printer shows an `AnnotatedType`.
+            Type::Annotated(b) => {
+                self.show_into(b, out, false);
+                out.push_str(" @RuntimeChecked");
             }
             // `{z1 => AnyRef{type T; type U = z1.T}}`, as dotty's `PlainPrinter` shows a `RecType`.
             Type::Rec(b) => {

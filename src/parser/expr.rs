@@ -168,6 +168,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_block_rest_scoped(&mut self, start: Span) -> ExprId {
+        let patdefs_mark = self.pattern_vals;
         let derives_mark = self.pending_derives.len();
         let cases_mark = self.pending_cases.len();
         let block_defaults_mark = self.pending_defaults.len();
@@ -190,6 +191,7 @@ impl<'a> Parser<'a> {
         self.pending_derives.truncate(derives_mark);
         self.pending_cases.truncate(cases_mark);
         self.pending_defaults.truncate(block_defaults_mark);
+        self.desugar_local_pattern_vals(&mut stmts, patdefs_mark);
         // A statement that is a placeholder alone binds it to no function: scalac's
         // `checkNoEscapingPlaceholders` around a block's statements (`{ _ } + 10`).
         if let Some(p) = self.placeholders.get(placeholders_mark) {
@@ -336,11 +338,13 @@ impl<'a> Parser<'a> {
     /// in `Location.InBlock`), an `implicit` one's too (`implicitClosure`): the body of
     /// `{ implicit u => implicit v => .. }` is the inner lambda.
     fn parse_block_lambda(&mut self) -> ExprId {
+        let patdefs_mark = self.pattern_vals;
         let start = self.span();
         let params = self.parse_lambda_params();
         let body_start = self.span();
         let mut stmts: Vec<Stmt> = Vec::new();
         self.block_lambda_body(&mut stmts);
+        self.desugar_local_pattern_vals(&mut stmts, patdefs_mark);
         let body = match stmts[..] {
             [Stmt::Expr(e)] => e,
             _ => {
@@ -445,6 +449,23 @@ impl<'a> Parser<'a> {
     }
 
     /// What may follow an infix expression: `match`, an assignment, an ascription.
+    /// `e: @A` ascribes `e`'s own type annotated (dotty's `Annotated` tree of `e`), every
+    /// annotation kept whatever its spelling, which the typer resolves.
+    #[inline(never)]
+    fn annotation_ascription(&mut self, e: ExprId, annots: &[Annot], start: Span) -> ExprId {
+        let kept: Vec<&Annot> = annots.iter().filter(|a| !matches!(a.name, names::UNCHECKED | names::UNCHECKED_VARIANCE | names::NOWARN)).collect();
+        if kept.is_empty() {
+            return e;
+        }
+        let span = start.to(self.prev_span());
+        let mut own = self.ast.add_ty(TyExpr::Wildcard, span);
+        for a in kept {
+            let class = self.ast.annot_new(a).map(|(path, _)| path);
+            own = self.ast.add_ty(TyExpr::Annotated(own, class), span);
+        }
+        self.ast.add_expr(Expr::Typed(e, own), span)
+    }
+
     fn parse_expr1_rest(&mut self, mut e: ExprId, start: Span) -> ExprId {
         loop {
             match self.kind() {
@@ -468,6 +489,7 @@ impl<'a> Parser<'a> {
                     if annots.iter().any(|a| a.name == names::UNCHECKED) {
                         e = self.ast.add_expr(Expr::Unchecked(e), start.to(self.prev_span()));
                     }
+                    e = self.annotation_ascription(e, &annots, start);
                 }
                 // `xs: _*` is the Scala 2 spelling of `xs*`, which the argument list reads.
                 Tok::Colon if self.kind_at(1) == Tok::Underscore && self.spread_star_at(2) => {
@@ -701,6 +723,7 @@ impl<'a> Parser<'a> {
 
     /// The statements up to the next `case` or the end of the cases' region, as a block.
     fn parse_case_lines(&mut self) -> ExprId {
+        let patdefs_mark = self.pattern_vals;
         let start = self.span();
         let mut stmts: Vec<Stmt> = Vec::new();
         loop {
@@ -716,6 +739,7 @@ impl<'a> Parser<'a> {
                 self.statement_end();
             }
         }
+        self.desugar_local_pattern_vals(&mut stmts, patdefs_mark);
         let l = push_list(&mut self.ast.stmts, &stmts);
         self.ast.add_expr(Expr::Block(l), start.to(self.prev_span()))
     }
@@ -729,6 +753,7 @@ impl<'a> Parser<'a> {
         if matches!(self.kind(), Tok::Newline | Tok::Outdent | Tok::KwCase | Tok::RBrace | Tok::Eof) {
             return self.ast.add_expr(Expr::UnitLit, self.span());
         }
+        let patdefs_mark = self.pattern_vals;
         let start = self.span();
         let mut stmts: Vec<Stmt> = Vec::new();
         loop {
@@ -737,6 +762,7 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
+        self.desugar_local_pattern_vals(&mut stmts, patdefs_mark);
         if let [Stmt::Expr(e)] = stmts[..] {
             return e;
         }
@@ -1381,6 +1407,9 @@ impl<'a> Parser<'a> {
                 }
                 if matches!(self.ast.expr(only), Expr::Tuple(_)) {
                     return self.ast.add_expr(Expr::Parens(only), span);
+                }
+                if matches!(self.ast.expr(only), Expr::Unchecked(_)) || self.ast.annotation_only(only) {
+                    self.ast.paren_annotated.insert(only);
                 }
                 only
             }

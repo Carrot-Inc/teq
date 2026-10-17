@@ -246,6 +246,11 @@ extension [A](a: A)
 
 extension [T](x: T | Null)
   inline def nn: T = x.asInstanceOf[T]
+// scala 3.8's `Predef.runtimeChecked` (Predef.scala 608): the term exempt from the static checks a
+// run makes reliably, its result the receiver's singleton annotated, which a pattern definition and
+// a match read on their scrutinee.
+extension [T](x: T)
+  inline def runtimeChecked: x.type @scala.annotation.internal.RuntimeChecked = x
 extension (x: AnyRef | Null)
   inline infix def eq(y: AnyRef | Null): Boolean = x.asInstanceOf[AnyRef] eq y.asInstanceOf[AnyRef]
   inline infix def ne(y: AnyRef | Null): Boolean = !(x.asInstanceOf[AnyRef] eq y.asInstanceOf[AnyRef])

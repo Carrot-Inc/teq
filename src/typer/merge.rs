@@ -788,6 +788,7 @@ impl Remap {
             Type::Union(a, b, soft) => types.mk(Type::Union(part(p, a), part(p, b), soft)),
             Type::Inter(a, b) => types.mk(Type::Inter(part(p, a), part(p, b))),
             Type::Rec(b) => types.mk(Type::Rec(part(p, b))),
+            Type::Annotated(b) => types.mk(Type::Annotated(part(p, b))),
             Type::RecThis(k) => types.mk(Type::RecThis(k)),
             Type::BoundedWild(lo, hi) => types.mk(Type::BoundedWild(part(p, lo), part(p, hi))),
             Type::AppVar(v, args) => {

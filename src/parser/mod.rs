@@ -51,6 +51,24 @@ impl SourceVersion {
         SourceVersion(self.0 | 1) >= SourceVersion::of(6, false)
     }
 
+    /// `3.<minor>`, or `future` past them.
+    pub const fn release(minor: u8) -> SourceVersion {
+        SourceVersion::of(minor, false)
+    }
+
+    pub const FUTURE: SourceVersion = SourceVersion(Self::FUTURE_MIGRATION + 1);
+
+    /// `SourceVersion.isAtLeast`: a migration version is compared as its stable one.
+    pub fn is_at_least(self, other: SourceVersion) -> bool {
+        SourceVersion(self.0 | 1) >= other
+    }
+
+    /// Whether this is `other`'s migration version (`prevMigrating`), under which what `other`
+    /// makes an error is a migration warning (`report.errorOrMigrationWarning`).
+    pub fn migrates_to(self, other: SourceVersion) -> bool {
+        self.0 & 1 == 0 && self.0 + 1 == other.0
+    }
+
     /// `Feature.migrateTo3`: `given` and `enum` are identifiers (`Scanners.toToken`'s
     /// `handleMigration` over `scala3keywords`).
     pub fn migrate_to_3(self) -> bool {
@@ -100,6 +118,9 @@ pub struct Parser<'a> {
     placeholders: Vec<LambdaParam>,
     placeholder_names: Vec<Name>,
     fresh_counter: u32,
+    /// The pattern definitions (`val pat = rhs`) parsed so far: a body or block whose statements
+    /// began at the same count holds none, and is not scanned for them (`desugar_pattern_vals_in`).
+    pattern_vals: u32,
     ext_groups: u32,
     expr_scratch: Vec<ExprId>,
     pat_scratch: Vec<PatId>,
@@ -202,6 +223,7 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         placeholders: Vec::new(),
         placeholder_names: Vec::new(),
         fresh_counter: 0,
+        pattern_vals: 0,
         ext_groups: 0,
         expr_scratch: Vec::new(),
         pat_scratch: Vec::new(),
@@ -1424,6 +1446,7 @@ impl<'a> Parser<'a> {
             } else if matches!(out[i].sel, ImportSel::Name(names::FUTURE, r) if r != Some(names::WILDCARD)) {
                 self.ast.source_future = true;
                 self.source = SourceVersion::parse("future").unwrap_or(self.source);
+                self.ast.source_import = Some(self.source);
             } else if matches!(out[i].sel, ImportSel::Name(names::POSTFIX_OPS, _)) {
                 self.syntax.postfix_ops = true;
             } else if let ImportSel::Name(n, _) = out[i].sel {
@@ -1433,6 +1456,7 @@ impl<'a> Parser<'a> {
                     // `import scala.language.`3.6``: the version from here on (`Feature.sourceVersion`
                     // of the unit, which the language import sets).
                     self.source = v;
+                    self.ast.source_import = Some(v);
                 }
             }
             self.language_scratch.push(out[i].clone());

@@ -1,0 +1,5 @@
+Apply(Select(Apply(catsSyntaxEq, 1), ===), 1) every Select extracted
+Apply(Select(Apply(<init>, 1), ===), 1) every Select extracted
+Ident(number) every Select extracted
+Ident(number) every Select extracted
+Apply(Select(Ident(segments), forall), 1) every Select extracted

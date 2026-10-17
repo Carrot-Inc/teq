@@ -1,0 +1,4 @@
+(false,None),(false,Some(Open)),(true,Some(Shipped))
+(false,None),(false,Some(Open)),(true,Some(Shipped))
+List(None, Some(Open), Some(Shipped))
+List(None, Some(Open), Some(Shipped))

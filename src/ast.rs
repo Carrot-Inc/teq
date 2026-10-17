@@ -184,6 +184,22 @@ pub enum Enumerator {
     Val(PatId, ExprId),
 }
 
+/// Which of dotty's `makePatDef` optimizations a tuple pattern definition takes (`Ast::patdef_tuple`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PatDefTuple {
+    Simple,
+    Matchable,
+}
+
+/// A component of a tuple pattern definition: its variable (none for a wildcard), the type written
+/// for it, where it is.
+#[derive(Clone, Copy, Debug)]
+pub struct TupleComponent {
+    pub name: Option<Name>,
+    pub ty: Option<TyExprId>,
+    pub span: Span,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Pat {
     Wildcard,
@@ -256,6 +272,13 @@ pub enum TyExpr {
     Unchecked(TyExprId),
     /// `T @uncheckedVariance`: left out of the variance check.
     UncheckedVariance(TyExprId),
+    /// `T @A`, the annotation's class path as written whatever its spelling (an import may rename
+    /// it), which the typer resolves: `scala.annotation.internal.RuntimeChecked`, the annotation of
+    /// `Predef.runtimeChecked`'s result, is the type a pattern's static checks exempt, any other
+    /// leaves `T` as it is (`None`: read from TASTy, where the class was checked by its full
+    /// name). A wildcard inside stands for the ascribed expression's own type (`e: @A`). The
+    /// annotations read by their name (`@unchecked`, `@uncheckedVariance`, `@nowarn`) are not kept.
+    Annotated(TyExprId, Option<TyExprId>),
     /// `S match { case P => T ... }`; the list holds `MatchCase` nodes.
     Match(TyExprId, ListRef),
     /// One case of a match type; the lowercase names of the pattern are `TypeVar`s it binds.
@@ -571,6 +594,9 @@ pub struct Ast {
     pub val_copies: crate::intern::FxMap<DefId, DefId>,
     /// `import scala.language.future`: the migration warnings of the next version are errors.
     pub source_future: bool,
+    /// The source version a language import of the file names (`import scala.language.`3.6``,
+    /// `future`), the unit's from then on (`Feature.sourceVersion`), over the build's `--source`.
+    pub source_import: Option<crate::parser::SourceVersion>,
     /// `import language.experimental.relaxedLambdaSyntax` was met: a lambda after `:` may stand on
     /// the colon's line (dotty's `followingIsLambdaAfterColon`, case 1b).
     pub relaxed_lambdas: bool,
@@ -589,6 +615,18 @@ pub struct Ast {
     /// The selectors of the matches a member's pattern definition makes (`val P = e`, dotty's
     /// `makePatDef` with `MatchCheck.IrrefutablePatDef`), whose case is checked to be irrefutable.
     pub patdef_scrutinees: std::collections::HashSet<ExprId, crate::intern::FxBuild>,
+    /// A typed pattern in parentheses of its own (`(h: Accept)`), and an annotated right side in
+    /// its own (`(e: @unchecked)`, `(e: @A)`): dotty's `makePatDef` reads the untyped trees, where
+    /// the parentheses are a node (`Ast::patdef_tuple`).
+    pub paren_typed_pats: std::collections::HashSet<PatId, crate::intern::FxBuild>,
+    /// The vals a member's pattern definition derives for its variables (dotty's `derivedValDef`
+    /// with its `PatternVar` attachment): pattern variables to the unused check, never reported.
+    pub patdef_components: std::collections::HashSet<DefId, crate::intern::FxBuild>,
+    /// The holders a pattern definition's lowering makes (`$N`, dotty's `UniqueName` holder of
+    /// `patMods` that include `Synthetic`, Desugar.scala 1637-1647): an owner a macro skips as it
+    /// skips dotty's synthetic symbols (`Flags.Synthetic`).
+    pub patdef_holders: std::collections::HashSet<DefId, crate::intern::FxBuild>,
+    pub paren_annotated: std::collections::HashSet<ExprId, crate::intern::FxBuild>,
     /// The `new C()` written with an empty first argument list before further lists: the `()`
     /// is an argument list, never the place of a using clause.
     pub new_empty_first: Vec<ExprId>,
@@ -858,6 +896,7 @@ impl Ast {
             default_inits: Vec::new(),
             val_copies: crate::intern::FxMap::default(),
             source_future: false,
+            source_import: None,
             relaxed_lambdas: false,
             top_level: Vec::new(),
             access_scopes: Vec::new(),
@@ -865,6 +904,10 @@ impl Ast {
             new_outers: crate::intern::FxMap::default(),
             given_binds: Default::default(),
             patdef_scrutinees: Default::default(),
+            paren_typed_pats: Default::default(),
+            patdef_components: Default::default(),
+            patdef_holders: Default::default(),
+            paren_annotated: Default::default(),
             new_empty_first: Vec::new(),
             inferred_type_lists: Vec::new(),
             js_alias_types: Vec::new(),
@@ -1033,6 +1076,119 @@ impl Ast {
     #[inline]
     pub fn annot_args(&self, a: &Annot) -> &[StrId] {
         &self.str_lists[a.args.range()]
+    }
+
+    /// dotty's `makePatDef` optimizations of a tuple pattern definition (Desugar.scala 1505-1660):
+    /// a tuple pattern whose every element is a variable, a wildcard or one of them typed (not in
+    /// parentheses of its own), its components in order, over a right side whose every result is a
+    /// tuple of that arity (`SimpleTuple`: the right side as it is) or any other but a `: @unchecked`
+    /// one (`MatchableTuple`: `rhs match { case $1 @ pat => $1 }`). Each named component is then a
+    /// val of the element, of the type written for it: a typed element is a declared type there,
+    /// checked by typing, which the definition's refutability check does not exempt.
+    pub fn patdef_tuple(&self, pat: PatId, rhs: ExprId) -> Option<(PatDefTuple, Vec<TupleComponent>)> {
+        let Pat::Tuple(l) = self.pat(pat) else { return None };
+        let pats = self.pat_list(l);
+        let mut components = Vec::with_capacity(pats.len());
+        for &p in pats {
+            let span = self.pat_spans[p.idx()];
+            let (inner, ty) = match self.pat(p) {
+                Pat::Typed(inner, t) if !self.paren_typed_pats.contains(&p) => (inner, Some(t)),
+                Pat::Typed(..) => return None,
+                _ => (p, None),
+            };
+            let name = match self.pat(inner) {
+                Pat::Bind(n, None) => Some(n),
+                Pat::Wildcard => None,
+                _ => return None,
+            };
+            components.push(TupleComponent { name, ty, span });
+        }
+        let arity = components.len();
+        // `isMatchingTuple`: a tuple literal of the pattern's arity without a named argument.
+        let matching = |e: ExprId| match self.expr(e) {
+            Expr::Tuple(l) => l.len as usize == arity && !self.expr_list(l).iter().any(|&x| matches!(self.expr(x), Expr::NamedArg(..))),
+            _ => false,
+        };
+        if self.all_results(rhs, &matching) {
+            Some((PatDefTuple::Simple, components))
+        } else if (matches!(self.expr(rhs), Expr::Unchecked(_)) || self.annotation_only(rhs)) && !self.paren_annotated.contains(&rhs) {
+            // `!rhs.isInstanceOf[Annotated]` (Desugar.scala 1582): any annotated right side, not
+            // in parentheses of its own, takes the general match.
+            None
+        } else {
+            Some((PatDefTuple::Matchable, components))
+        }
+    }
+
+    /// The type under `t`'s annotations (`T @A @B`'s `T`), whose own shape a reader of the written
+    /// type asks for.
+    pub fn under_annotations(&self, mut t: TyExprId) -> TyExprId {
+        while let TyExpr::Annotated(inner, _) = self.ty(t) {
+            t = inner;
+        }
+        t
+    }
+
+    /// Whether `e` is written `: @unchecked`, under any other annotations ascribed over it
+    /// (`e: @unchecked @A`, an annotation-only ascription a layer each): dotty's
+    /// `hasAnnotation(UncheckedAnnot)` on the typed tree's type, which looks through stacked
+    /// annotations (Types.scala 438-440), the one query refutability (Checking.scala 1146),
+    /// exhaustivity and reachability (Space.scala 947, 1111) make.
+    pub fn is_unchecked(&self, mut e: ExprId) -> bool {
+        loop {
+            match self.expr(e) {
+                Expr::Unchecked(_) => return true,
+                Expr::Typed(inner, _) if self.annotation_only(e) => e = inner,
+                _ => return false,
+            }
+        }
+    }
+
+    /// Whether `e` is an annotation-only ascription, dotty's `Annotated(e, annot)` tree (`e: @A`).
+    pub fn annotation_only(&self, e: ExprId) -> bool {
+        let Expr::Typed(_, mut t) = self.expr(e) else { return false };
+        let mut wrapped = false;
+        while let TyExpr::Annotated(inner, _) = self.ty(t) {
+            t = inner;
+            wrapped = true;
+        }
+        wrapped && matches!(self.ty(t), TyExpr::Wildcard)
+    }
+
+    /// Whether `e` is an ascription to a written type (`e: T`, dotty's `Typed`, of the type written),
+    /// not an annotation-only one (`e: @A`, `e`'s own type annotated).
+    pub fn is_ascription(&self, e: ExprId) -> bool {
+        matches!(self.expr(e), Expr::Typed(..)) && !self.annotation_only(e)
+    }
+
+    /// The type under `t`'s annotations and their class paths, outermost first.
+    pub fn annotations_of(&self, mut t: TyExprId) -> (TyExprId, Vec<Option<TyExprId>>) {
+        let mut classes = Vec::new();
+        while let TyExpr::Annotated(inner, class) = self.ty(t) {
+            classes.push(class);
+            t = inner;
+        }
+        (t, classes)
+    }
+
+    /// dotty's `forallResults` (TreeInfo.scala 355-363) over the untyped right side `makePatDef`
+    /// reads, whole: `p` of each result of an `If`, a `Match`, a `Block` and `Parens`, and of every
+    /// tree dotty makes a subclass of one (Trees.scala: `InlineIf` of `If`, 588; `InlineMatch` and
+    /// `SubMatch` of `Match`, 615 and 621; untpd's `XMLBlock` of `Block`, untpd.scala 182), which
+    /// teq writes as `Expr::InlineIf` and `Expr::InlineMatch` (no sub-match or XML literal is
+    /// parsed). A `try` is the parser's `ParsedTry` there, which `forallResults`' `Try` case does not
+    /// match, so it is a result, as is anything else.
+    fn all_results(&self, e: ExprId, p: &dyn Fn(ExprId) -> bool) -> bool {
+        match self.expr(e) {
+            Expr::If(_, t, Some(f)) | Expr::InlineIf(_, t, Some(f)) => self.all_results(t, p) && self.all_results(f, p),
+            Expr::Match(_, cases) | Expr::InlineMatch(_, cases) => self.case_list(cases).iter().all(|c| self.all_results(c.body, p)),
+            Expr::Block(stmts) => match self.stmt_list(stmts).last() {
+                Some(Stmt::Expr(r)) => self.all_results(*r, p),
+                _ => false,
+            },
+            Expr::Parens(inner) => self.all_results(inner, p),
+            _ => p(e),
+        }
     }
 
     /// The `new` of an annotation: the class path it names, without type arguments, and its

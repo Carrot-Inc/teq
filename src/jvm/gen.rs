@@ -677,7 +677,7 @@ impl<'a> Gen<'a> {
                 None => JType::object(),
             },
             Type::Lambda(_, body) | Type::Poly(_, body) => self.erase(body),
-            Type::Refined(parent, _) | Type::Rec(parent) => self.erase(parent),
+            Type::Refined(parent, _) | Type::Rec(parent) | Type::Annotated(parent) => self.erase(parent),
             // A match type the typer left unreduced erases to its bound.
             Type::Match(_, m) => {
                 let bound = cx.input.types.match_info(m).bound;
@@ -873,7 +873,7 @@ impl<'a> Gen<'a> {
                 Some(ret) => self.lub_part(ret, boxed, seen),
                 None => Lub::Erased(JType::object()),
             },
-            Type::Refined(parent, _) | Type::Rec(parent) => self.lub_part(parent, boxed, seen),
+            Type::Refined(parent, _) | Type::Rec(parent) | Type::Annotated(parent) => self.lub_part(parent, boxed, seen),
             Type::Member(..) | Type::Decl(_) => match self.abstract_upper(t) {
                 Some(upper) => self.lub_part(upper, boxed, seen),
                 None => Lub::Erased(JType::object()),
@@ -1038,7 +1038,7 @@ impl<'a> Gen<'a> {
                 let ret = cx.input.syms.sym(s).sig.as_ref()?.ret;
                 self.array_bound(ret)
             }
-            Type::Refined(parent, _) | Type::Rec(parent) | Type::Lambda(_, parent) | Type::Nested(_, parent) => self.array_bound(parent),
+            Type::Refined(parent, _) | Type::Rec(parent) | Type::Annotated(parent) | Type::Lambda(_, parent) | Type::Nested(_, parent) => self.array_bound(parent),
             Type::Alias(a, args) => {
                 let x = self.alias_expansion(a, args)?;
                 self.array_bound(x)
@@ -1301,7 +1301,7 @@ impl<'a> Gen<'a> {
             match cx.input.types.get(t) {
                 Type::This(c) | Type::Class(c, _) => break c,
                 Type::Term(s) | Type::Select(_, s) => t = cx.input.syms.sym(s).sig.as_ref()?.ret,
-                Type::Refined(p, _) | Type::Rec(p) | Type::Nested(_, p) => t = p,
+                Type::Refined(p, _) | Type::Rec(p) | Type::Annotated(p) | Type::Nested(_, p) => t = p,
                 Type::Var(v) => t = cx.input.insts.inst(v)?,
                 Type::Inter(a, _) => t = a,
                 _ => return None,

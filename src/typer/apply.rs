@@ -463,22 +463,36 @@ impl<'a> Worker<'a> {
         let outer = std::mem::replace(&mut self.apply_selected, selected);
         let (tq, qty) = self.type_selected(q, selection);
         self.apply_selected = outer;
-        // A variable of the receiver's type stays open through the selection where the
-        // receiver's interpolation left it so (its type holds it nonvariantly, or a polymorphic
-        // method named without a parameter list made it), as dotty selects a member on `Box[?T]`
-        // without instantiating `?T`: `foo(1).zero` against a `1` makes `?T` a `1`. A receiver
-        // that is a variable itself is instantiated, as the trees around would have a covariant
-        // one.
+        (tq, self.receiver_vars(qty))
+    }
+
+    /// A variable of the receiver's type stays open through the selection where the receiver's
+    /// interpolation left it so (its type holds it nonvariantly, or a polymorphic method named
+    /// without a parameter list made it), as dotty selects a member on `Box[?T]` without
+    /// instantiating `?T`: `foo(1).zero` against a `1` makes `?T` a `1`, and `::` on the
+    /// `List[Item[?T]]` of `xs.map(c => Item(c, Some(c)))` leaves `?T` to its expected type. A
+    /// receiver that is a variable itself is instantiated, as the trees around would have a
+    /// covariant one.
+    #[inline]
+    pub(in crate::typer) fn receiver_vars(&mut self, qty: TypeId) -> TypeId {
+        // A head that is no variable (most): the type as it is.
+        if !matches!(self.types.get(qty), Type::Var(_) | Type::AppVar(..) | Type::Annotated(_)) {
+            return qty;
+        }
+        self.receiver_vars_slow(qty)
+    }
+
+    #[inline(never)]
+    fn receiver_vars_slow(&mut self, qty: TypeId) -> TypeId {
         let head = self.deref(qty);
-        let qty = match self.types.get(head) {
+        match self.types.get(head) {
             Type::Var(_) => self.solve_bounded_in(qty),
             // `?G[Unit]`, whose members are its variable's: dotty's selection instantiates the
             // constructor bounded below and selects again (`couldInstantiateTypeVar` of an
             // `AppliedType`), so `fk.foo.bla` over `foo[G[x] >: M[x]]: G[Unit]` selects on `M[Unit]`.
             Type::AppVar(..) if self.could_instantiate_var(qty, false) => self.zonk(qty),
             _ => qty,
-        };
-        (tq, qty)
+        }
     }
 
     /// `q` typed as the qualifier of the selection, with no expected type but the selection's.
@@ -5457,6 +5471,7 @@ impl<'a> Worker<'a> {
         }
         if eta.is_empty() {
             te = self.wrap_hoisted(hoist_mark, te);
+            ty = self.skolemized_annotated_result(call.sym, ty);
         } else {
             (te, ty) = self.widen_lambda_result(te, ty, eta_ret_expected, span);
             if let (Some(ret), true, 1) = (eta_ret_expected, eta_sam.is_some(), eta.len()) {
@@ -5603,6 +5618,35 @@ impl<'a> Worker<'a> {
         }
         let params: Vec<SymId> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
         types.into_iter().any(|t| self.types.names_term(t, &params))
+    }
+
+    /// An application's result `x.type @RuntimeChecked` whose argument is no path: the annotated
+    /// singleton of a skolem of the argument's type, as dotty's `SkolemType` stands for an unstable
+    /// argument in a dependent result, so that two such applications are distinct singletons (an
+    /// `if` of `Option(7).runtimeChecked` and `Option(8).runtimeChecked` is their union).
+    #[inline]
+    pub(super) fn skolemized_annotated_result(&mut self, callee: SymId, ty: TypeId) -> TypeId {
+        match self.types.get(ty) {
+            Type::Annotated(inner) => self.skolemized_annotated(callee, ty, inner),
+            _ => ty,
+        }
+    }
+
+    #[inline(never)]
+    fn skolemized_annotated(&mut self, callee: SymId, ty: TypeId, inner: TypeId) -> TypeId {
+        if callee.0 == u32::MAX || self.types.is_path(inner) {
+            return ty;
+        }
+        let ret = self.sig_of(callee).ret;
+        let singleton = match self.types.get(ret) {
+            Type::Annotated(r) => matches!(self.types.get(r), Type::Term(_)),
+            _ => false,
+        };
+        if !singleton {
+            return ty;
+        }
+        let skolem = self.rec_anchor(inner);
+        self.types.mk(Type::Annotated(skolem))
     }
 
     /// What a parameter's path stands for once an argument is in: the argument's path, the
@@ -7226,7 +7270,13 @@ impl<'a> Worker<'a> {
         if unknown && ptys.len() == 1 && matches!(binder, ForBinder::Pat(_) | ForBinder::CasePat(_)) {
             self.error(span, "cannot infer the element type of this generator");
         }
+        // The rest is typed as a written lambda's body is (`type_lambda`): against the result its
+        // expected function type gives, an open variable included, and adapted to that variable
+        // before the closure is made (`lambda_body_closed`), as dotty types the closure
+        // `Desugar.makeFor` writes: `yield raw` under `map[B]` with `B <: ToRaw` takes the view.
         let ret_expected = self.concrete_expected(Some(ret));
+        let rest_expected = ret_expected.or(Some(ret));
+        let body_mark = self.tvars.len();
         let ast = self.cur_ast();
         let lambda_span = match binder {
             ForBinder::Pat(p) | ForBinder::CasePat(p) => ast.pat_spans[p.idx()],
@@ -7266,7 +7316,7 @@ impl<'a> Worker<'a> {
                     let packed = self.prog.add(TExpr::Local(sym));
                     stmts.push(TStmt::Val(local, self.prog.add(TExpr::Index(packed, i as u32))));
                 }
-                let (tb, bty) = self.type_for_rest(rest, span, ret_expected);
+                let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
                 let l = self.prog.stmts.push_slice(&stmts);
                 let unpacked = self.prog.add(TExpr::Block(l, tb));
                 if let Some(t) = tuple {
@@ -7283,7 +7333,7 @@ impl<'a> Worker<'a> {
                     }
                     self.note_def_at(sym, ast.pat_spans[pat.idx()].start);
                     self.bind_local(name, sym);
-                    let (tb, bty) = self.type_for_rest(rest, span, ret_expected);
+                    let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
                     (sym, tb, bty)
                 }
                 Pat::StableId(path) if matches!(ast.expr(path), Expr::Ident(_)) => {
@@ -7294,12 +7344,12 @@ impl<'a> Worker<'a> {
                     }
                     self.note_def_at(sym, ast.pat_spans[pat.idx()].start);
                     self.bind_local(name, sym);
-                    let (tb, bty) = self.type_for_rest(rest, span, ret_expected);
+                    let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
                     (sym, tb, bty)
                 }
                 Pat::Wildcard => {
                     let sym = self.fresh_local("w", elem, span);
-                    let (tb, bty) = self.type_for_rest(rest, span, ret_expected);
+                    let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
                     (sym, tb, bty)
                 }
                 _ => {
@@ -7312,7 +7362,7 @@ impl<'a> Worker<'a> {
                     if checked {
                         self.check_irrefutable(tp, pat, elem, None);
                     }
-                    let (tb, bty) = self.type_for_rest(rest, span, ret_expected);
+                    let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
                     let scrut = self.prog.add(TExpr::Local(sym));
                     let mut cases = vec![TCase { pat: tp, guard: None, body: tb }];
                     if filter {
@@ -7325,10 +7375,15 @@ impl<'a> Worker<'a> {
                 }
             },
         };
+        let (sym, tb, bty) = result;
+        let (tb, bty) = match ret_expected {
+            Some(_) => (tb, bty),
+            None => self.adapt_open_body(tb, bty, Some(ret), lambda_span),
+        };
+        let bty = self.lambda_body_closed(body_mark, bty, None, Some(ret), &[sym], lambda_span);
         self.for_bases.pop();
         self.pop_scope();
         self.sites.owners.pop();
-        let (sym, tb, bty) = result;
         // A yield's value, not typed against the call's result where that is a variable, whose
         // bounds may expect a function of it: what a completion of a name there reads.
         if let (true, None, ForRest::Rest { idx, end, body, is_yield: true }) = (self.index.is_some(), ret_expected, rest) {

@@ -39,6 +39,7 @@ assign_op_chains
 assign_op_extensions
 assign_op_type_applied
 assignop
+base64_mime_custom
 bench_adts
 bench_boxing
 bench_closures
@@ -407,6 +408,10 @@ foldleft_nil_lambda
 for_case
 for_in_parens
 for_trailing_map
+for_yield_view
+for_yield_view_chain
+for_yield_view_depth
+for_yield_view_forms
 fractional_equals_method
 function_class_name_field
 function_conversions
@@ -747,6 +752,13 @@ kind_projector
 lambda_discard_pinned_unit
 lambda_discard_to_unit_bound
 lambda_from_expected
+lambda_open_result_cons
+lambda_open_result_expected
+lambda_open_result_hygiene
+lambda_open_result_named_arg
+lambda_open_result_nested_apply
+lambda_open_result_strict
+lambda_open_result_variance
 lambda_union_expected
 lambdas
 layout_mixed
@@ -1029,6 +1041,11 @@ partial_function_classes
 partial_function_match_body
 partial_sites
 pattern_abstract_scrutinee
+pattern_bind_tuple_type
+pattern_binding_irrefutable
+pattern_binding_runtime_checked_exempt
+pattern_binding_source_3_1
+pattern_binding_tuple_components
 pattern_equality
 pattern_type_vars
 pattern_unrelated_type
@@ -1486,6 +1503,7 @@ using_conversion_param
 using_default
 util_sorting
 uuid
+uuid_name_bytes
 val_implements_def_and_val
 val_overrides_tostring
 val_refinement_subst
@@ -1514,7 +1532,11 @@ vc_null_interpolation
 vc_stable_pattern
 vdom_dsl
 vector_trie
+view_contravariant_variable
+view_instance_open_variable
+view_open_upper_variable
 view_operations
+view_receiver_open_variable
 view_sizes_sorted
 widened_double_text
 wildcard_bounds

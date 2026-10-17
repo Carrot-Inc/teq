@@ -748,6 +748,9 @@ impl<'t> Registrar<'t> {
         let qualified = ast.access_scopes.iter().any(|&(at, _)| at == def.span.start);
         let private = def.mods & mods::PRIVATE != 0 && def.mods & mods::QUALIFIED == 0 && !qualified;
         let kind = match ctx {
+            // A val a member's pattern definition derives is its pattern variable (dotty's
+            // `PatternVar`), which `-Wunused:privates` leaves alone.
+            _ if ast.patdef_components.contains(&d) => Kind::PatVar { member: !matches!(ctx, Context::Local), allowed: false },
             Context::TopLevel => Kind::Member { private: false, anonymous: false },
             Context::Member { anonymous } => Kind::Member { private: private || (anonymous && def.mods & mods::OVERRIDE == 0), anonymous },
             Context::Local => Kind::Local,

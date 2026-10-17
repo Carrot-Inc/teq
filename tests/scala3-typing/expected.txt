@@ -1741,8 +1741,8 @@ neg/repeatable	oos	java
 neg/repeatedArgs213.scala	same	
 neg/rightassoc-extmethod.scala	same	
 neg/rootImplicits.scala	same	
-neg/runtimeChecked-2.scala	different	value {} is not a member of {}
-neg/runtimeChecked.scala	different	value {} is not a member of {}
+neg/runtimeChecked-2.scala	accepts	
+neg/runtimeChecked.scala	accepts	
 neg/safe-setting.scala	accepts	
 neg/safeThrowsStrawman.scala	syntax	'erased' is not part of the supported Scala subset
 neg/saferExceptions.scala	different	throws takes 1 type argument(s), 2 given
@@ -2060,7 +2060,7 @@ pos/26238-min.scala	accepts
 pos/26238.scala	rejects	cannot resolve import
 pos/26312-2	oos	java
 pos/26590.scala	accepts	
-pos/26773.scala	rejects	value {} is not a member of {}
+pos/26773.scala	rejects	type mismatch
 pos/26887.scala	rejects	Maximal number of successive inlines (32) exceeded,
 pos/26987	accepts	
 pos/3190.scala	std	App
@@ -3629,7 +3629,7 @@ pos/i2551	accepts
 pos/i25513.scala	accepts	
 pos/i2554.scala	accepts	
 pos/i25542.scala	accepts	
-pos/i25547.scala	rejects	value {} is not a member of {}
+pos/i25547.scala	rejects	type mismatch
 pos/i25557.scala	accepts	
 pos/i25600.scala	accepts	
 pos/i25634	std	SharedCapability
@@ -4951,8 +4951,8 @@ pos/staleSymbol.scala	accepts
 pos/stats-in-empty-pkg.scala	accepts	
 pos/stm.scala	accepts	
 pos/strawman-i79.scala	std	App
-pos/strict-pattern-bindings-3.0-migration.scala	rejects	pattern's type String is more specialized than the right hand side expression's type AnyRef
-pos/strict-pattern-bindings-3.1.scala	rejects	pattern's type String is more specialized than the right hand side expression's type AnyRef
+pos/strict-pattern-bindings-3.0-migration.scala	accepts	
+pos/strict-pattern-bindings-3.1.scala	accepts	
 pos/stringConstantFold.scala	accepts	
 pos/strings.scala	accepts	
 pos/strip-tvars-for-lubbasetypes.scala	accepts	

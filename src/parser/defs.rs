@@ -421,7 +421,11 @@ impl<'a> Parser<'a> {
             }
             p.end_annotation_region(region);
             let kind = DefKind::Val { pat, ty, rhs };
-            out.push(p.ast.add_def(Def { name, span, mods: m, annots: annots.clone(), kind }));
+            let d = p.ast.add_def(Def { name, span, mods: m, annots: annots.clone(), kind });
+            if pat.is_some() {
+                p.pattern_vals += 1;
+            }
+            out.push(d);
         };
         define(self, name, span, pat);
         let errors_reported = self.errors.len();
@@ -1174,6 +1178,7 @@ impl<'a> Parser<'a> {
 
     fn parse_template_body_scoped(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
         let mut body = Vec::new();
+        let patdefs_mark = self.pattern_vals;
         if self.at_bare_body() {
             self.bump();
         } else if !(self.at(Tok::ColonEol) && self.kind_at(1) == Tok::Indent) {
@@ -1219,7 +1224,7 @@ impl<'a> Parser<'a> {
         }
         self.end_region();
         self.close_language(language);
-        self.desugar_pattern_vals(&mut body);
+        self.desugar_pattern_vals(&mut body, patdefs_mark);
         // A case class of a class's or a trait's body has its companion there too, an object of
         // each instance (`Desugar.classDef`); an enum's cases are the enum's.
         if is_enum {
@@ -1238,11 +1243,59 @@ impl<'a> Parser<'a> {
     /// scalac's `makePatDef` for a member: `val (a, b) = e` is a private val holding
     /// `(e: @unchecked) match { case (a, b) => (a, b) }` and a val per variable reading its
     /// element; a lone variable is the match itself.
-    fn desugar_pattern_vals(&mut self, body: &mut Vec<Stmt>) {
-        if !body.iter().any(|s| matches!(s, Stmt::Def(d) if matches!(self.ast.def(*d).kind, DefKind::Val { pat: Some(_), rhs: Some(_), .. }))) {
+    fn desugar_pattern_vals(&mut self, body: &mut Vec<Stmt>, mark: u32) {
+        if self.pattern_vals != mark {
+            self.desugar_pattern_vals_in(body, true);
+        }
+    }
+
+    /// `makePatDef` for a block's pattern definitions that `lowers_simple_tuple` names, as a member's:
+    /// a lazy one's holder lazy and a `def` per variable (Desugar.scala 1659), a `SimpleTuple`'s
+    /// holder and a val per variable.
+    #[inline]
+    pub(super) fn desugar_local_pattern_vals(&mut self, stmts: &mut Vec<Stmt>, mark: u32) {
+        if self.pattern_vals != mark {
+            self.desugar_pattern_vals_in(stmts, false);
+        }
+    }
+
+    /// Whether `makePatDef`'s plan for a definition over `rhs` is a `SimpleTuple` over a holder
+    /// (its right side's results tuple literals, Desugar.scala 1575, not split elementwise,
+    /// 1626-1631), whose components are then the typer's plain selections `$1._i` (1650-1657),
+    /// adapted as any selection is: a block lowers it here, as a member's is, and a lazy one (its
+    /// variables `def`s), rather than leave it to the typer. The decision is the parsed tree's alone.
+    fn lowers_simple_tuple(&self, rhs: ExprId, plan: Option<&(PatDefTuple, Vec<TupleComponent>)>) -> bool {
+        match plan {
+            Some((PatDefTuple::Simple, components)) => !(matches!(self.ast.expr(rhs), Expr::Tuple(_)) && components.iter().all(|c| c.name.is_some())),
+            _ => false,
+        }
+    }
+
+    /// `makePatDef` over a body's pattern definitions, a member's (`member`: each, the holder
+    /// private) or a block's lazy ones. A lazy definition's holder is lazy and each variable a
+    /// `def` reading its element (`DefDef(name, Nil, tpt, selector(idx))`, Desugar.scala 1659), so
+    /// that each read adapts the element anew; above `MaxTupleArity` the element is
+    /// `holder.apply(idx)`, zero-based (1650-1654).
+    fn desugar_pattern_vals_in(&mut self, body: &mut Vec<Stmt>, member: bool) {
+        // `makePatDef`'s plan of each pattern definition, decided once on the parsed definition, and
+        // whether the body lowers it: a member each, a block its lazy ones and those
+        // `lowers_simple_tuple` names, the others the typer's. A body that lowers none is left whole.
+        let mut plans = Vec::new();
+        for s in body.iter() {
+            let Stmt::Def(d) = *s else { continue };
+            let def = self.ast.def(d);
+            let DefKind::Val { pat: Some(pat), ty, rhs: Some(rhs) } = def.kind else { continue };
+            let plan = if ty.is_none() { self.ast.patdef_tuple(pat, rhs) } else { None };
+            let lowered = member || def.mods & mods::LAZY != 0 || self.lowers_simple_tuple(rhs, plan.as_ref());
+            plans.push((lowered, plan));
+        }
+        if !plans.iter().any(|&(lowered, _)| lowered) {
             return;
         }
-        for stmt in std::mem::take(body) {
+        let capacity = body.len() + 2 * plans.len();
+        let stmts = std::mem::replace(body, Vec::with_capacity(capacity));
+        let mut plans = plans.into_iter();
+        for stmt in stmts {
             let Stmt::Def(d) = stmt else {
                 body.push(stmt);
                 continue;
@@ -1251,18 +1304,113 @@ impl<'a> Parser<'a> {
                 body.push(stmt);
                 continue;
             };
+            let Some((true, plan)) = plans.next() else {
+                body.push(stmt);
+                continue;
+            };
             let (span, m, annots) = {
                 let def = self.ast.def(d);
                 (def.span, def.mods, def.annots.clone())
             };
             let scope = self.ast.access_scopes.iter().find(|&&(at, _)| at == span.start).map(|&(_, s)| s);
+            // The definitions made of it stand in its statement (`def_range`), not in what encloses
+            // it, which a later `close_def_ranges` would give them.
+            let range = self.ast.def_range(d);
+            let define = |p: &mut Self, body: &mut Vec<Stmt>, name: Name, at: Span, mods: Mods, ty: Option<TyExprId>, rhs: ExprId| {
+                let kind = DefKind::Val { pat: None, ty, rhs: Some(rhs) };
+                let d = p.ast.add_def(Def { name, span: at, mods, annots: annots.clone(), kind });
+                p.ast.def_ranges[d.idx()] = range;
+                body.push(Stmt::Def(d));
+                if let Some(scope) = scope.filter(|_| at.start != span.start) {
+                    p.ast.access_scopes.push((at.start, scope));
+                }
+                d
+            };
+            // A variable's definition: a val, a `def` of a lazy definition's.
+            let component = |p: &mut Self, body: &mut Vec<Stmt>, name: Name, at: Span, ty: Option<TyExprId>, rhs: ExprId| {
+                if m & mods::LAZY == 0 {
+                    return define(p, body, name, at, m, ty, rhs);
+                }
+                let fun = FunDef { tparams: Vec::new(), clauses: Vec::new(), ret: ty, body: Some(rhs), ext_tparams: 0, ext_clauses: 0, is_extension: false, ext_group: 0 };
+                let d = p.ast.add_def(Def { name, span: at, mods: m & !mods::LAZY, annots: annots.clone(), kind: DefKind::Fun(Box::new(fun)) });
+                p.ast.def_ranges[d.idx()] = range;
+                body.push(Stmt::Def(d));
+                if let Some(scope) = scope.filter(|_| at.start != span.start) {
+                    p.ast.access_scopes.push((at.start, scope));
+                }
+                d
+            };
+            // The holder's `idx`-th element of `arity`: `_{idx + 1}`, or `apply(idx)` above
+            // `MaxTupleArity`.
+            let select = |p: &mut Self, holder: Name, idx: usize, arity: usize, at: Span| {
+                let base = p.ast.add_expr(Expr::Ident(holder), at);
+                if arity <= 22 {
+                    let field = p.interner.intern(&format!("_{}", idx + 1));
+                    return p.ast.add_expr(Expr::Select(base, field), at);
+                }
+                let fun = p.ast.add_expr(Expr::Select(base, names::APPLY), at);
+                let index = p.ast.add_expr(Expr::IntLit(idx as i64), at);
+                let args = push_list(&mut p.ast.expr_lists, &[index]);
+                p.ast.add_expr(Expr::Apply(fun, args), at)
+            };
+            let holder_mods = if member { mods::PRIVATE | (m & mods::LAZY) } else { m & mods::LAZY };
+            // dotty's tuple optimizations (`Ast::patdef_tuple`): the right side held as it is
+            // (`SimpleTuple`) or the match binding the whole value (`MatchableTuple`), each named
+            // component a val of its element of the type written for it, read where the pattern
+            // closes (scalac's `$N._i`); a tuple literal of the arity with no wildcard and no type
+            // over the pattern is one val per element.
+            // A declared type (`val (a, b): T = e`) keeps the general lowering below: dotty hands
+            // `makePatDef` the pattern ascribed it (`patDef`'s `Typed(pat, tpt)`), the ascription the
+            // inner pattern's expected type, where teq's ascribed pattern is a type test.
+            if let Some((kind, components)) = plan {
+                let elems = match self.ast.expr(rhs) {
+                    Expr::Tuple(l) if kind == PatDefTuple::Simple && ty.is_none() && components.iter().all(|c| c.name.is_some()) => Some(self.ast.expr_list(l).to_vec()),
+                    _ => None,
+                };
+                if let Some(elems) = elems {
+                    // 3.8.4's lazy split is a `def` per element over the elements themselves, each read
+                    // evaluating it.
+                    for (c, e) in components.iter().zip(elems) {
+                        let d = component(self, body, c.name.unwrap(), c.span, c.ty, e);
+                        self.ast.patdef_components.insert(d);
+                    }
+                    continue;
+                }
+                let lowered = match kind {
+                    PatDefTuple::Simple => rhs,
+                    PatDefTuple::Matchable => {
+                        let scrutinee = self.ast.add_expr(Expr::Unchecked(rhs), span);
+                        if !self.ast.is_unchecked(rhs) {
+                            self.ast.patdef_scrutinees.insert(scrutinee);
+                        }
+                        let whole = self.fresh_name("");
+                        let pat_span = self.ast.pat_spans[pat.idx()];
+                        let bound = self.ast.add_pat(Pat::Bind(whole, Some(pat)), pat_span);
+                        let result = self.ast.add_expr(Expr::Ident(whole), pat_span);
+                        let cases = push_list(&mut self.ast.cases, &[CaseClause { pat: bound, guard: None, body: result }]);
+                        self.ast.add_expr(Expr::Match(scrutinee, cases), span)
+                    }
+                };
+                let holder = self.fresh_name("");
+                let h = define(self, body, holder, span, holder_mods, ty, lowered);
+                self.ast.patdef_holders.insert(h);
+                let pat_span = self.ast.pat_spans[pat.idx()];
+                let close = Span { start: pat_span.end.saturating_sub(1).max(pat_span.start), end: pat_span.end };
+                for (i, c) in components.iter().enumerate() {
+                    let Some(n) = c.name else { continue };
+                    let element = select(self, holder, i, components.len(), close);
+                    let d = component(self, body, n, c.span, c.ty, element);
+                    self.ast.patdef_components.insert(d);
+                }
+                continue;
+            }
             let mut vars = Vec::new();
             self.pattern_vars(pat, &mut vars);
             let typed = match ty {
                 Some(t) => self.ast.add_expr(Expr::Typed(rhs, t), span),
                 None => rhs,
             };
-            let checked = !matches!(self.ast.expr(rhs), Expr::Unchecked(_));
+            let checked = !self.ast.is_unchecked(rhs);
             let scrutinee = self.ast.add_expr(Expr::Unchecked(typed), span);
             if checked {
                 self.ast.patdef_scrutinees.insert(scrutinee);
@@ -1278,25 +1426,19 @@ impl<'a> Parser<'a> {
             };
             let cases = push_list(&mut self.ast.cases, &[CaseClause { pat, guard: None, body: result }]);
             let matched = self.ast.add_expr(Expr::Match(scrutinee, cases), span);
-            let mut define = |p: &mut Self, name: Name, at: Span, mods: Mods, rhs: ExprId| {
-                let kind = DefKind::Val { pat: None, ty: None, rhs: Some(rhs) };
-                body.push(Stmt::Def(p.ast.add_def(Def { name, span: at, mods, annots: annots.clone(), kind })));
-                if let Some(scope) = scope.filter(|_| at.start != span.start) {
-                    p.ast.access_scopes.push((at.start, scope));
-                }
-            };
             if let [(n, s)] = vars.as_slice() {
-                define(self, *n, *s, m, matched);
+                let d = define(self, body, *n, *s, m, None, matched);
+                self.ast.patdef_components.insert(d);
                 continue;
             }
             // scalac's `UniqueName` holder, `$N`, in no namespace of a parameter's (`x$N`).
             let holder = self.fresh_name("");
-            define(self, holder, span, mods::PRIVATE | (m & mods::LAZY), matched);
+            let h = define(self, body, holder, span, holder_mods, None, matched);
+            self.ast.patdef_holders.insert(h);
             for (i, &(n, s)) in vars.iter().enumerate() {
-                let base = self.ast.add_expr(Expr::Ident(holder), s);
-                let field = self.interner.intern(&format!("_{}", i + 1));
-                let element = self.ast.add_expr(Expr::Select(base, field), s);
-                define(self, n, s, m, element);
+                let element = select(self, holder, i, vars.len(), s);
+                let d = component(self, body, n, s, None, element);
+                self.ast.patdef_components.insert(d);
             }
         }
     }

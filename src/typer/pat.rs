@@ -35,7 +35,15 @@ impl<'a> Worker<'a> {
         // A selector of a primitive type an erased call gave is the primitive, as dotty's
         // selector val of that type holds it.
         let ts = self.unbox_erased(ts, sty);
-        let pty = self.selector_type(scrut, ts, sty);
+        // The patterns read the selector's type through its annotation, which the checks read.
+        let checked = self.has_runtime_checked(sty);
+        let shape = if checked {
+            let z = self.zonk(sty);
+            self.types.unannotated(z)
+        } else {
+            sty
+        };
+        let pty = self.selector_type(scrut, ts, shape);
         let clauses = ast.case_list(cases).to_vec();
         // A match whose cases are the expected match type's (dotty's `isMatchTypeShaped`): each
         // body is typed against its case's body, the match is the match type
@@ -58,7 +66,7 @@ impl<'a> Worker<'a> {
             let was_open = std::mem::replace(&mut self.gadt_open, true);
             let was_dead = std::mem::replace(&mut self.dead_case, caught_all);
             let pat = self.type_pattern(c.pat, pty);
-            if let Some(rhs) = patdef {
+            if let Some(rhs) = patdef.filter(|_| !checked) {
                 self.check_irrefutable(pat, c.pat, sty, Some(rhs));
             }
             self.dead_case = was_dead;
@@ -100,7 +108,10 @@ impl<'a> Worker<'a> {
             }
         };
         let l = self.prog.cases.push_slice(&out);
-        if !matches!(ast.expr(scrut), Expr::Unchecked(_)) {
+        // `: @unchecked` turns both checks off (`exhaustivityCheckable`, `reachabilityCheckable`),
+        // `.runtimeChecked` exhaustivity alone: its cases' reachability is still checked.
+        if !ast.is_unchecked(scrut) {
+            let partial = partial || checked;
             // A named tuple is erased by the check, which notes it.
             let broken = ast.broken_cases_in(cases);
             // E029 stands at the scrutinee, where `checkExhaustivity` reports it (`m.selector`,
@@ -112,6 +123,15 @@ impl<'a> Worker<'a> {
             self.defer_match_check(sty, out, clauses, partial, at, broken);
         }
         let e = self.prog.add(TExpr::Match(ts, l));
+        // TypeAssigner's `Match`: the cases' types joined (`annotated_join_type`) where one is annotated.
+        let annotated = dependent.is_none() && body_types.iter().any(|&t| self.has_runtime_checked(t));
+        let result_ty = if annotated {
+            let ast = self.cur_ast();
+            let bodies: Vec<(TExprId, TypeId, Option<ExprId>)> = self.prog.cases[l.range()].iter().zip(&body_types).zip(ast.case_list(cases)).map(|((c, &t), w)| (c.body, t, Some(w.body))).collect();
+            self.annotated_join_type(&bodies).unwrap_or(result_ty)
+        } else {
+            result_ty
+        };
         if let Some(record) = self.branch_types.as_mut() {
             record.insert(e, body_types);
         }
@@ -219,7 +239,7 @@ impl<'a> Worker<'a> {
     /// Whether the selector `e`, typed to `te`, is a reference as dotty types one (a `TermRef`,
     /// or `this`): a name or a selection that is no application, where `one` of a `def one():
     /// 1` is one, adapted to `one()`.
-    fn selector_is_reference(&mut self, e: ExprId, te: TExprId) -> bool {
+    pub(super) fn selector_is_reference(&mut self, e: ExprId, te: TExprId) -> bool {
         let ast = self.cur_ast();
         let mut e = e;
         while let Expr::Parens(inner) = ast.expr(e) {
@@ -745,7 +765,11 @@ impl<'a> Worker<'a> {
     /// matched against, at that part in a generator (a typed pattern at its type), at the
     /// right-hand side (`rhs`) in a val.
     pub fn check_irrefutable(&mut self, tp: TPatId, pat: PatId, sty: TypeId, rhs: Option<Span>) {
-        if sty == ERROR {
+        use crate::parser::SourceVersion;
+        // The unit's source version (`Feature.sourceVersion`): a language import's, else the build's.
+        let source = self.cur_ast().source_import.unwrap_or(self.source);
+        // Before 3.2 nothing is checked (`recur`'s `!sourceVersion.isAtLeast(`3.2`)`).
+        if sty == ERROR || !source.is_at_least(SourceVersion::release(2)) {
             return;
         }
         let sty = self.erased_named_tuple(sty);
@@ -757,6 +781,9 @@ impl<'a> Worker<'a> {
             Some(name) if name.is_empty() => "pattern binding uses refutable extractor".to_string(),
             Some(name) => format!("pattern binding uses refutable extractor `{}`", name),
             None => {
+                // The right side's type widened where the pattern's is no singleton
+                // (`reportedPt.widen`): `x` of `{ val x = o; x }` reads as its `Option[Int]`.
+                let part_sty = if matches!(self.types.get(pat_ty), Type::Term(_) | Type::Select(..) | Type::This(_)) { part_sty } else { self.widen_path(part_sty) };
                 let mark = self.snapshot();
                 let narrows = self.is_sub(pat_ty, part_sty);
                 self.rollback(mark);
@@ -765,20 +792,28 @@ impl<'a> Worker<'a> {
             }
         };
         let usage = if extractor.is_some() { "this usage" } else { "the narrowing" };
+        let since_3_8 = source.is_at_least(SourceVersion::release(8));
         let (fix, addendum, version) = match rhs {
-            Some(_) => ("adding `.runtimeChecked` after the expression", "may result in a MatchError at runtime", "3.8-migration"),
+            Some(_) if since_3_8 => ("adding `.runtimeChecked` after the expression", "may result in a MatchError at runtime", "3.8-migration"),
+            Some(_) => ("adding `: @unchecked` after the expression", "may result in a MatchError at runtime", "3.2-migration"),
             None => ("adding the `case` keyword before the full pattern", "will result in a filtering for expression (using `withFilter`)", "3.2-migration"),
         };
         let msg = format!(
             "{}\n\nIf {} is intentional, this can be communicated by {},\nwhich {}.\nThis patch can be rewritten automatically under -rewrite -source {}.",
             message, usage, fix, addendum, version
         );
-        match rhs {
-            // A refutable extractor's warning spans the pattern and the right side.
-            Some(rhs) if extractor.is_some() => self.warn(Span { start: at.start, end: rhs.end.max(at.end) }, msg),
-            Some(rhs) => self.warn(rhs, msg),
-            None => self.error(part_at, msg),
-        }
+        // `report.errorOrMigrationWarning` over `MigrationVersion.ForComprehensionUncheckedPathDefs`
+        // (a warning from 3.2, an error from `future`) for a definition, `ForComprehensionPatternWithoutCase`
+        // (from 3.2, an error from 3.4) for a generator; the error's own migration version warns.
+        let error_from = if rhs.is_some() { SourceVersion::FUTURE } else { SourceVersion::release(4) };
+        let error = source.is_at_least(error_from) && !source.migrates_to(error_from);
+        let span = match rhs {
+            // A refutable extractor's spans the pattern and the right side.
+            Some(rhs) if extractor.is_some() => Span { start: at.start, end: rhs.end.max(at.end) },
+            Some(rhs) => rhs,
+            None => part_at,
+        };
+        if error { self.error(span, msg) } else { self.warn(span, msg) }
     }
 
     /// The first sub-pattern that may fail: the type it asks of its scrutinee, that scrutinee's
@@ -787,6 +822,12 @@ impl<'a> Worker<'a> {
     /// typed pattern, whose type is its place, a tuple or a case class, alternatives), else the
     /// nearest enclosing one's place `at`.
     fn refutable_part(&mut self, p: TPatId, sty: TypeId, ast: Option<PatId>, at: Span) -> Option<(TypeId, TypeId, Span, Option<String>)> {
+        // A component of the type `RuntimeCheckedAnnot` annotates cannot fail, as dotty's `recur`
+        // tests `pt.hasAnnotation` on each component it carries (Checking.scala 1141-1144):
+        // `unapply(x: Int): Tuple1[Option[Int] @RuntimeChecked]`'s `Some(n)`.
+        if self.has_runtime_checked(sty) {
+            return None;
+        }
         let conforms = |t: &mut Self, target: TypeId| {
             let mark = t.snapshot();
             let ok = t.is_sub(sty, target);
@@ -813,8 +854,13 @@ impl<'a> Worker<'a> {
                     Some(Pat::Typed(i, ty)) => (Some(i), self.cur_ast().ty_spans[ty.idx()]),
                     _ => (None, at),
                 };
-                if !conforms(self, t) || matches!(self.prog.pats[inner.idx()], TPat::Seq(..)) {
+                if !conforms(self, t) {
                     return Some((t, sty, test_at, None));
+                }
+                // A sequence's extractor over what passed the test (`List(a, b)`, the companion's
+                // `unapplySeq`) is checked against the tested type, its elements as written.
+                if matches!(self.prog.pats[inner.idx()], TPat::Seq(..)) {
+                    return self.refutable_part(inner, t, ast, at);
                 }
                 self.refutable_part(inner, sty, written_inner, at)
             }
@@ -830,7 +876,10 @@ impl<'a> Worker<'a> {
                     }
                     _ => vec![None; subs.len()],
                 };
-                let fields = self.class_field_types(t).unwrap_or_default();
+                // A case class's or a tuple's pattern takes its components through its extractor's
+                // inference (`UnapplyArgs` over `unapply[A]` instantiated from the scrutinee).
+                let inferred = self.inferred_args(t);
+                let fields = self.class_field_types(inferred).unwrap_or_default();
                 subs.iter().zip(fields).zip(written).find_map(|((&s, fty), w)| self.refutable_part(s, fty, w, at))
             }
             // A literal against its own singleton type cannot fail (`val E(1) = x` for an
@@ -876,13 +925,55 @@ impl<'a> Worker<'a> {
                 };
                 items.iter().zip(elems).zip(written).find_map(|((&s, ety), w)| self.refutable_part(s, ety, w, at))
             }
+            // An extractor's own result, as its signature gives it: a product's components keep what
+            // annotates them there (`UnapplyArgs` over the extractor as instantiated:
+            // `Tuple1[Option[Int] @RuntimeChecked]`'s component).
             TPat::Unapply(_, _, inner) if self.irrefutable_pats.contains_key(&p) => match self.prog.pats[inner.idx()] {
-                TPat::Class(_, result, _, _) => self.refutable_part(inner, result, None, at),
+                TPat::Class(_, result, _, subs) => {
+                    let subs = self.prog.pat_lists[subs.range()].to_vec();
+                    let fields = self.class_field_types(result).unwrap_or_default();
+                    subs.iter().zip(fields).find_map(|(&s, fty)| self.refutable_part(s, fty, None, at))
+                }
                 _ => None,
             },
+            // A sequence's extractor cannot fail as an extractor: an `unapplySeq` whose result has an
+            // element type (`unapplySeqTypeElemTp`) is irrefutable (`SpaceEngine.isIrrefutable`),
+            // however many elements it asks; its patterns are checked against the element type
+            // (`UnapplyArgs.argTypes`), the rest's too, which as `elem*` does not match it (scalac
+            // warns of `val List(a, rest*) = xs`).
+            TPat::Seq(items, rest) => {
+                let dealiased = self.dealias(sty);
+                let array_elem = match self.types.get(dealiased) {
+                    Type::Class(c, args) if c == self.b.array && args != EMPTY_LIST => Some(self.types.items(args)[0]),
+                    _ => None,
+                };
+                let elem = match array_elem {
+                    Some(e) => e,
+                    None => match self.seq_class().and_then(|seq| self.base_type(sty, seq)).map(|b| self.types.get(b)) {
+                        Some(Type::Class(_, args)) if args != EMPTY_LIST => self.types.items(args)[0],
+                        _ => return None,
+                    },
+                };
+                // The companion's `unapplySeq[A]` (`List(..)`) takes the element type through its
+                // inference, which an annotation at the element's top does not reach.
+                let elem = self.inferred_component(elem);
+                let items = self.prog.pat_lists[items.range()].to_vec();
+                let written: Vec<Option<PatId>> = match written {
+                    Some(Pat::Ctor(_, l)) => {
+                        let l = self.cur_ast().pat_list(l).to_vec();
+                        if l.len() == items.len() + rest.is_some() as usize { l.into_iter().map(Some).collect() } else { vec![None; items.len() + 1] }
+                    }
+                    _ => vec![None; items.len() + 1],
+                };
+                if let Some(found) = items.iter().zip(&written).find_map(|(&i, &w)| self.refutable_part(i, elem, w, at)) {
+                    return Some(found);
+                }
+                rest?;
+                Some((self.repeated_type(elem), elem, at, None))
+            }
             // A refutable extractor (`checkIrrefutable`'s `RefutableExtractor`), by its qualifier as
             // written (`E` of `E(x)`).
-            TPat::Seq(..) | TPat::Unapply(..) => {
+            TPat::Unapply(..) => {
                 let name = match written {
                     Some(Pat::Ctor(path, _)) => {
                         let ast = self.cur_ast();
@@ -892,6 +983,28 @@ impl<'a> Worker<'a> {
                 };
                 Some((sty, sty, at, Some(name)))
             }
+        }
+    }
+
+    /// A type argument as an extractor's inference instantiates it: the comparison records an
+    /// annotated argument's underlying type as the variable's bound (`TypeComparer`'s
+    /// `AnnotatedType` case on the left), so `List.unapplySeq[Option[Int]]` over a
+    /// `List[Option[Int] @RuntimeChecked]` (Checking.scala 1163-1164's `UnapplyArgs`).
+    fn inferred_component(&mut self, t: TypeId) -> TypeId {
+        let t = self.deref_keeping(t);
+        self.types.unannotated(t)
+    }
+
+    /// `t` with its type arguments as `inferred_component` gives them.
+    fn inferred_args(&mut self, t: TypeId) -> TypeId {
+        let t = self.deref_keeping(t);
+        match self.types.get(t) {
+            Type::Class(c, args) if args != EMPTY_LIST => {
+                let items: Vec<TypeId> = self.types.items(args).to_vec();
+                let stripped: Vec<TypeId> = items.iter().map(|&a| self.inferred_component(a)).collect();
+                if stripped == items { t } else { self.types.class(c, &stripped) }
+            }
+            _ => t,
         }
     }
 
@@ -1229,6 +1342,13 @@ impl<'a> Worker<'a> {
                 Some(c) => self.instantiate_pattern_class(c, sty).0,
                 None => sty,
             },
+            // A tuple pattern is its tuple class's (dotty's `typedBind` takes the pattern's type,
+            // `Tuple2.unapply`'s parameter where the scrutinee is no tuple): `$1 @ (foo, bar)` over
+            // an `Any` binds an `(Any, Any)`, whose `_1` a pattern definition's val reads.
+            Pat::Tuple(subs) if subs.len >= 2 && subs.len <= 22 && !ast.pat_list(subs).iter().any(|&s| matches!(ast.pat(s), Pat::NamedField(..))) => {
+                let c = self.tuple_class(subs.len as usize);
+                self.instantiate_pattern_class(c, sty).0
+            }
             _ => sty,
         }
     }
@@ -2931,6 +3051,9 @@ pub(super) fn type_unchecked(ast: &crate::ast::Ast, ty: crate::ast::TyExprId) ->
     match ast.ty(ty) {
         TyExpr::Unchecked(_) => true,
         TyExpr::Apply(_, args) => ast.ty_list(args).iter().any(|&a| type_unchecked(ast, a)),
+        // Another annotation over it (`List[Int] @unchecked @Mark`), which the map goes through as
+        // `TypeTestsCasts`' `replaceP` does (a `TypeMap` over the `AnnotatedType`).
+        TyExpr::Annotated(inner, _) => type_unchecked(ast, inner),
         _ => false,
     }
 }

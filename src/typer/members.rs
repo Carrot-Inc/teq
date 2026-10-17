@@ -1641,7 +1641,12 @@ impl<'a> Worker<'a> {
         if !self.types.has_paths(t) {
             return t;
         }
-        let t = self.deref(t);
+        // An annotated type is mapped under its annotation (`TypeMap`'s `derivedAnnotatedType`).
+        let t = self.deref_keeping(t);
+        if let Type::Annotated(u) = self.types.get(t) {
+            let u = self.rebase(u, r);
+            return self.types.mk(Type::Annotated(u));
+        }
         match self.types.get(t) {
             Type::This(k) => match r.this_of {
                 Some((c, prefix)) if k == c => prefix,

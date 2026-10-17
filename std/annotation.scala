@@ -31,6 +31,11 @@ final class unroll
 @field @param
 class constructorOnly
 
+// The annotation of `Predef.runtimeChecked`'s result, which a pattern's checks read on the
+// scrutinee's type.
+package internal:
+  final class RuntimeChecked() extends Annotation
+
 package unchecked:
   final class uncheckedVariance
   @field @getter

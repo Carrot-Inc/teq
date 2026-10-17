@@ -2881,11 +2881,13 @@ java.util.Base64$	getDecoder	:java.util.Base64$.Decoder
 java.util.Base64$	getEncoder	:java.util.Base64$.Encoder
 java.util.Base64$	getMimeDecoder	:java.util.Base64$.Decoder
 java.util.Base64$	getMimeEncoder	:java.util.Base64$.Encoder
+java.util.Base64$	getMimeEncoder	scala.Int,scala.Byte[]:java.util.Base64$.Encoder
 java.util.Base64$	getUrlDecoder	:java.util.Base64$.Decoder
 java.util.Base64$	getUrlEncoder	:java.util.Base64$.Encoder
 java.util.Base64$.Decoder	<init>	scala.Boolean,scala.Boolean:java.util.Base64$.Decoder
 java.util.Base64$.Decoder	decode	java.lang.String:scala.Byte[]
 java.util.Base64$.Decoder	decode	scala.Byte[]:scala.Byte[]
+java.util.Base64$.Encoder	<init>	scala.Boolean,scala.Byte[],scala.Int,scala.Boolean:java.util.Base64$.Encoder
 java.util.Base64$.Encoder	encode	scala.Byte[]:scala.Byte[]
 java.util.Base64$.Encoder	encodeToString	scala.Byte[]:java.lang.String
 java.util.Base64$.Encoder	withoutPadding	:java.util.Base64$.Encoder
@@ -3716,6 +3718,7 @@ java.util.UUID	toString	:java.lang.String
 java.util.UUID	variant	:scala.Int
 java.util.UUID	version	:scala.Int
 java.util.UUID$	fromString	java.lang.String:java.util.UUID
+java.util.UUID$	nameUUIDFromBytes	scala.Byte[]:java.util.UUID
 java.util.UUID$	randomUUID	:java.util.UUID
 java.util.WeakHashMap	<init>	[2],scala.Int:java.util.WeakHashMap
 java.util.WeakHashMap	<init>	[2]:java.util.WeakHashMap
@@ -14478,6 +14481,7 @@ scala.Predef$	println	java.lang.Object:scala.Unit
 scala.Predef$	refArrayOps	[1],java.lang.Object[]:java.lang.Object
 scala.Predef$	require	scala.Boolean,scala.Function0:scala.Unit
 scala.Predef$	require	scala.Boolean:scala.Unit
+scala.Predef$	runtimeChecked	[1],java.lang.Object:java.lang.Object
 scala.Predef$	shortArrayOps	scala.Short[]:java.lang.Object
 scala.Predef$	summon	[1],java.lang.Object:java.lang.Object
 scala.Predef$	unitArrayOps	scala.runtime.BoxedUnit[]:java.lang.Object
@@ -15117,6 +15121,7 @@ scala.annotation.implicitAmbiguous	<init>	java.lang.String:scala.annotation.impl
 scala.annotation.implicitAmbiguous	msg	-:java.lang.String
 scala.annotation.implicitNotFound	<init>	java.lang.String:scala.annotation.implicitNotFound
 scala.annotation.implicitNotFound	msg	-:java.lang.String
+scala.annotation.internal.RuntimeChecked	<init>	:scala.annotation.internal.RuntimeChecked
 scala.annotation.meta.beanGetter	<init>	:scala.annotation.meta.beanGetter
 scala.annotation.meta.beanSetter	<init>	:scala.annotation.meta.beanSetter
 scala.annotation.meta.companionClass	<init>	:scala.annotation.meta.companionClass

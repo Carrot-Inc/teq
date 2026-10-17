@@ -2813,11 +2813,15 @@ impl<'a> Worker<'a> {
                         return self.types.mk(Type::Member(prefix, name));
                     }
                 }
+                // The alias named is dotty's `TypeRef`, whose top carries no annotation of its right
+                // side: `hasAnnotation` reads a type after `stripTypeVar`, never dealiased (Types.scala
+                // 438-440), so `type Checked = Option[Int] @RuntimeChecked` exempts nothing it names.
                 let info = &self.syms.aliases[a.idx()];
+                let rhs = self.types.unannotated(info.rhs);
                 let t = if info.tparams.is_empty() || info.rhs == ERROR {
-                    info.rhs
+                    rhs
                 } else {
-                    let (tparams, rhs) = (info.tparams.clone(), info.rhs);
+                    let tparams = info.tparams.clone();
                     let ps: Vec<TypeId> = tparams.iter().map(|&p| self.types.param(p)).collect();
                     let l = self.types.list(&ps);
                     self.types.mk(Type::Lambda(l, rhs))
@@ -3714,6 +3718,19 @@ impl<'a> Worker<'a> {
                     self.note_declared_through(id, t);
                 }
                 inner
+            }
+            // `T @A`: the annotated type where `A` resolves to `RuntimeChecked`, as dotty's
+            // `AnnotatedType` (`Typer.typedAnnotated`); any other annotation leaves `T`.
+            TyExpr::Annotated(t, class) => {
+                let inner = self.resolve_type(t);
+                if self.declaring > 0 && !self.declared_views.is_empty() {
+                    self.note_declared_through(id, t);
+                }
+                if inner != ERROR && self.runtime_checked_annot(class) && !matches!(self.types.get(inner), Type::Annotated(_)) {
+                    self.types.mk(Type::Annotated(inner))
+                } else {
+                    inner
+                }
             }
             TyExpr::Repeated(t) => self.resolve_type(t),
             TyExpr::UncheckedVariance(t) => {
@@ -5034,7 +5051,7 @@ impl<'a> Worker<'a> {
             TyExpr::Name(n) | TyExpr::Select(_, n) if n == class_name => None,
             TyExpr::Name(n) => self.lookup_type_at(n, span),
             TyExpr::Select(q, n) => self.lookup_type_in_path(q, n),
-            TyExpr::Apply(f, _) | TyExpr::Unchecked(f) | TyExpr::UncheckedVariance(f) => return self.written_alias(f, class_name),
+            TyExpr::Apply(f, _) | TyExpr::Unchecked(f) | TyExpr::UncheckedVariance(f) | TyExpr::Annotated(f, _) => return self.written_alias(f, class_name),
             _ => None,
         };
         match found {
@@ -5104,6 +5121,8 @@ impl<'a> Worker<'a> {
                 };
                 let declared_alias = primitive.and_then(|k| self.written_alias(p.ty, k));
                 {
+                    // Its reference is the `TermRef`, which carries no annotation of its type.
+                    let local_ty = self.types.unannotated(local_ty);
                     let mut s = self.syms.sym_mut(sym);
                     s.sig = Some(Arc::new(MethodSig { declared, ..MethodSig::value(local_ty) }));
                     s.state().set(Completion::Done);
@@ -7895,7 +7914,7 @@ pub(super) fn ty_selects_from(ast: &ast::Ast, ty: TyExprId, is_param: &dyn Fn(Na
         TyExpr::Fun(params, ret) | TyExpr::CtxFun(params, ret) => any(params) || ty_selects_from(ast, ret, is_param),
         TyExpr::Tuple(items) | TyExpr::NamedTuple(_, items) => any(items),
         TyExpr::Union(a, b) | TyExpr::Inter(a, b) | TyExpr::BoundedWildcard(a, b) => ty_selects_from(ast, a, is_param) || ty_selects_from(ast, b, is_param),
-        TyExpr::ByName(t) | TyExpr::Repeated(t) | TyExpr::Unchecked(t) | TyExpr::UncheckedVariance(t) | TyExpr::Lambda(_, t) | TyExpr::PolyFun(_, t) => {
+        TyExpr::ByName(t) | TyExpr::Repeated(t) | TyExpr::Unchecked(t) | TyExpr::UncheckedVariance(t) | TyExpr::Annotated(t, _) | TyExpr::Lambda(_, t) | TyExpr::PolyFun(_, t) => {
             ty_selects_from(ast, t, is_param)
         }
         TyExpr::Project(t, _) | TyExpr::Refined(t, _) => ty_selects_from(ast, t, is_param),
@@ -7911,7 +7930,7 @@ pub(super) fn ty_mentions(ast: &ast::Ast, ty: TyExprId, name: Name) -> bool {
         TyExpr::Fun(params, ret) | TyExpr::CtxFun(params, ret) => any(params) || ty_mentions(ast, ret, name),
         TyExpr::Tuple(items) | TyExpr::NamedTuple(_, items) => any(items),
         TyExpr::Union(a, b) | TyExpr::Inter(a, b) | TyExpr::BoundedWildcard(a, b) => ty_mentions(ast, a, name) || ty_mentions(ast, b, name),
-        TyExpr::ByName(t) | TyExpr::Repeated(t) | TyExpr::Unchecked(t) | TyExpr::UncheckedVariance(t) | TyExpr::Lambda(_, t) | TyExpr::PolyFun(_, t) => {
+        TyExpr::ByName(t) | TyExpr::Repeated(t) | TyExpr::Unchecked(t) | TyExpr::UncheckedVariance(t) | TyExpr::Annotated(t, _) | TyExpr::Lambda(_, t) | TyExpr::PolyFun(_, t) => {
             ty_mentions(ast, t, name)
         }
         TyExpr::Project(t, _) | TyExpr::Refined(t, _) => ty_mentions(ast, t, name),

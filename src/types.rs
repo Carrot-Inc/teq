@@ -72,6 +72,14 @@ pub enum Type {
     Poly(TList, TypeId),
     Var(TVarId),
     AppVar(TVarId, TList),
+    /// `T @RuntimeChecked`, dotty's `AnnotatedType` of `scala.annotation.internal.RuntimeChecked`,
+    /// the one annotation teq keeps on a type (its others it drops, as it always has): the type of
+    /// `Predef.runtimeChecked`'s application and of an ascription to an annotated type, which a
+    /// pattern's static checks read on the scrutinee (`Checking.checkIrrefutable`'s
+    /// `pt.hasAnnotation`). Transparent to what reads a type's shape (`Worker::deref` looks
+    /// through it, as dotty's operations see through a non-refining annotation); kept by
+    /// substitution, the parts' maps and the typer's joins, which carry it as dotty's do.
+    Annotated(TypeId),
     /// A union, of its kind (`UnionKind`): hard, soft or named.
     Union(TypeId, TypeId, UnionKind),
     Inter(TypeId, TypeId),
@@ -537,7 +545,7 @@ impl TypeStore {
                 ((self.entry_flag(m) | args) & THROUGH_PREFIX) | (args & APP_PARAM_BIT)
             }
             Type::Refined(p, r) => (self.entry_flag(p) | self.refinement_flags(r)) & THROUGH_PREFIX,
-            Type::Rec(b) => self.entry_flag(b),
+            Type::Rec(b) | Type::Annotated(b) => self.entry_flag(b),
             Type::RecThis(_) => PATHS_BIT | REC_BIT,
             Type::Match(s, m) => REDUCIBLE_BIT | self.entry_flag(s) | self.match_parts(m).fold(0, |acc, a| acc | self.entry_flag(a)),
             _ => 0,
@@ -1017,7 +1025,7 @@ impl TypeStore {
                         Refinement::Val(_, _, x) => self.names_term(x, terms),
                     }
             }
-            Type::Rec(b) => self.names_term(b, terms),
+            Type::Rec(b) | Type::Annotated(b) => self.names_term(b, terms),
             Type::Match(s, m) => {
                 let info = self.match_info(m);
                 self.names_term(s, terms) || self.names_term(info.bound, terms) || info.cases.iter().any(|c| self.names_term(c.pattern, terms) || self.names_term(c.body, terms))
@@ -1048,7 +1056,7 @@ impl TypeStore {
                         Refinement::Val(_, _, x) => self.names_tparam(x, tparams),
                     }
             }
-            Type::Rec(b) => self.names_tparam(b, tparams),
+            Type::Rec(b) | Type::Annotated(b) => self.names_tparam(b, tparams),
             Type::Match(s, m) => {
                 let info = self.match_info(m);
                 self.names_tparam(s, tparams) || self.names_tparam(info.bound, tparams) || info.cases.iter().any(|c| self.names_tparam(c.pattern, tparams) || self.names_tparam(c.body, tparams))
@@ -1083,6 +1091,15 @@ impl TypeStore {
     #[inline]
     pub fn is_path(&self, t: TypeId) -> bool {
         matches!(self.get(t), Type::This(_) | Type::Term(_) | Type::Select(..))
+    }
+
+    /// The type without its annotations (`Type::Annotated`): a value's, whose reference is the
+    /// `TermRef`, which carries none.
+    pub fn unannotated(&self, mut t: TypeId) -> TypeId {
+        while let Type::Annotated(u) = self.get(t) {
+            t = u;
+        }
+        t
     }
 
     /// Whether a wildcard argument occurs anywhere in the type.
@@ -1360,7 +1377,7 @@ impl TypeStore {
             Type::Select(p, _) | Type::Member(p, _) => self.contains_error(p),
             Type::Nested(p, c) => self.contains_error(p) || self.contains_error(c),
             Type::Refined(p, r) => self.contains_error(p) || self.refinement_types(r).into_iter().any(|a| self.contains_error(a)),
-            Type::Rec(b) => self.contains_error(b),
+            Type::Rec(b) | Type::Annotated(b) => self.contains_error(b),
             Type::Match(s, m) => self.contains_error(s) || self.match_parts(m).collect::<Vec<_>>().into_iter().any(|a| self.contains_error(a)),
             Type::Alias(_, args) => self.items(args).iter().any(|&a| self.contains_error(a)),
         }
@@ -1449,6 +1466,10 @@ impl TypeStore {
                 }
             }
             // A substitution's replacements are closed, so the binder captures none of them.
+            Type::Annotated(b) => {
+                let nb = self.subst(b, s);
+                if nb == b { t } else { self.mk(Type::Annotated(nb)) }
+            }
             Type::Rec(b) => {
                 let nb = self.subst(b, s);
                 if nb == b {
@@ -1726,6 +1747,10 @@ impl TypeStore {
             Type::Rec(b) => {
                 let nb = f(b);
                 if nb == b { t } else { self.mk(Type::Rec(nb)) }
+            }
+            Type::Annotated(b) => {
+                let nb = f(b);
+                if nb == b { t } else { self.mk(Type::Annotated(nb)) }
             }
             Type::Match(scrut, m) => {
                 let ns = f(scrut);
@@ -2243,7 +2268,7 @@ impl TypeStore {
                 out.push(m);
                 out.extend_from_slice(self.entry_items(args));
             }
-            Type::Rec(b) => out.push(b),
+            Type::Rec(b) | Type::Annotated(b) => out.push(b),
             Type::Refined(p, r) => {
                 out.push(p);
                 match self.entry_refinement(r) {
@@ -2694,7 +2719,7 @@ impl TypeStore {
                 ty(p);
                 view::built(self, Sub::Refinements, r.0);
             }
-            Type::Rec(b) => ty(b),
+            Type::Rec(b) | Type::Annotated(b) => ty(b),
             Type::Match(sc, m) => {
                 ty(sc);
                 view::built(self, Sub::Matches, m.0);
@@ -3343,6 +3368,11 @@ impl ShadowNs<'_> {
                     key.push(b2);
                     Self::real(&[b2]).then(|| Type::Rec(TypeId(b2 as u32)))
                 }
+                Type::Annotated(b) => {
+                    let b2 = edge(self, b);
+                    key.push(b2);
+                    Self::real(&[b2]).then(|| Type::Annotated(TypeId(b2 as u32)))
+                }
                 Type::Match(sc, m) => {
                     let (s2, m2) = (edge(self, sc), self.match_record(m));
                     key.extend([s2, m2]);
@@ -3976,6 +4006,10 @@ impl TypeStore {
             Type::Rec(b) => {
                 let b = part(b);
                 self.mk(Type::Rec(b))
+            }
+            Type::Annotated(b) => {
+                let b = part(b);
+                self.mk(Type::Annotated(b))
             }
             Type::Match(s, m) => {
                 let s = part(s);

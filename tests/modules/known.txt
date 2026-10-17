@@ -66,3 +66,6 @@ companionnoinitsread classes  a companion whose body holds a given alias or a ne
 companionnoinitsread subset  the same as classes
 companionnoinitsread bundle  the same as classes, the JavaScript builds keeping and dropping the module's accessor alike
 nesteddefaultssecondary bundle  the same as nestedprefixlast's secondary constructor: the bundle over the lean products lowers a secondary constructor that delegates to the primary as a primary call and an empty `$init1` (`$t.$init1($outer, s, k)`) where the whole build returns the call, as on master for a top-level class's
+runtimecheckedinline classes  the call of `runtimeChecked` inside the upstream's transparent expansion is positioned at the downstream's call site (Main.scala, a zero span), the whole build's at the body's place in Checked.scala: the call's site is in the product's pseudo file, which no position names (`within_site`), as for any plain inline call inside an upstream transparent body (`transparent inline def outer(x: Option[Int]) = inner(x)` fails these three legs on master): the JVM product mode's follow-up
+runtimecheckedinline subset  the same as runtimecheckedinline classes
+runtimecheckedinline check-lean-whole  the same as runtimecheckedinline classes, in the Scala.js check build's pickle

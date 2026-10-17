@@ -33,6 +33,16 @@ struct BlockLocals {
 /// The template a body withheld from its products is typed as.
 pub const WITHHELD_TEMPLATE: &str = "$withheld";
 
+/// An operand of a join (`Worker::annotated_join_type`): its type as dotty assigns it (`ty`, annotated
+/// where it is), the type under the annotation (`under`), and whether that is a singleton (a stable
+/// path's, a skolem's), as `TypeComparer.lub` reads `isSingleton`.
+#[derive(Clone, Copy)]
+struct Operand {
+    ty: TypeId,
+    under: TypeId,
+    singleton: bool,
+}
+
 impl<'a> Worker<'a> {
     pub fn push_scope(&mut self) {
         self.env.frames.push(Frame::locals(self.sites.owners.len() as u32));
@@ -1808,6 +1818,24 @@ impl<'a> Worker<'a> {
                     }
                     return (te, ty);
                 }
+                // `e: @A` (dotty's `Annotated` tree of `e`): the type `e` was assigned, annotated
+                // where `A` resolves to `RuntimeChecked` (`Typer.typedAnnotated`'s
+                // `arg1.tpe.widenIfUnstable`, Typer.scala 3667-3671): a stable reference's
+                // `TermRef`, an ascription's written type (`((a: Option[Int])): @A` is
+                // `Option[Int] @A`), any other expression's own type; `e`'s own else. `e: T @A` is an
+                // ascription below, of the type the resolver gives `T @A`.
+                if matches!(ast.ty(ty), TyExpr::Annotated(..)) {
+                    let (inner_ty, classes) = ast.annotations_of(ty);
+                    if matches!(ast.ty(inner_ty), TyExpr::Wildcard) {
+                        let real = classes.into_iter().any(|class| self.runtime_checked_annot(class));
+                        let (te, tty) = self.type_expr(inner, expected);
+                        if real && tty != ERROR {
+                            let own = if self.selector_is_reference(inner, te) { self.path_of(te).unwrap_or(tty) } else { tty };
+                            return (te, self.types.mk(Type::Annotated(own)));
+                        }
+                        return (te, tty);
+                    }
+                }
                 let t = self.resolve_type(ty);
                 // An ascription scalac inserted in a library body yields to the expression's own
                 // type as a val's inferred type does.
@@ -1944,6 +1972,8 @@ impl<'a> Worker<'a> {
                     let (te, ty2) = self.type_expr_adapted(els, Some(exp));
                     let ty = self.joined_branches(exp, &[ty1, ty2]);
                     let e = self.prog.add(TExpr::If(tc, tt, Some(te)));
+                    let annotated = self.has_runtime_checked(ty1) || self.has_runtime_checked(ty2);
+                    let ty = if annotated { self.annotated_join_type(&[(tt, ty1, Some(t)), (te, ty2, Some(els))]).unwrap_or(ty) } else { ty };
                     if let Some(record) = self.branch_types.as_mut() {
                         record.insert(e, vec![ty1, ty2]);
                     }
@@ -1964,6 +1994,8 @@ impl<'a> Worker<'a> {
                 let l = self.lub(branches[0].1, branches[1].1);
                 let l = self.solve_bounded_in(l);
                 let e = self.prog.add(TExpr::If(tc, tt, Some(te)));
+                let annotated = self.has_runtime_checked(branches[0].1) || self.has_runtime_checked(branches[1].1);
+                let l = if annotated { self.annotated_join_type(&[(branches[0].0, branches[0].1, Some(t)), (branches[1].0, branches[1].1, Some(els))]).unwrap_or(l) } else { l };
                 if let Some(record) = self.branch_types.as_mut() {
                     record.insert(e, vec![branches[0].1, branches[1].1]);
                 }
@@ -3117,9 +3149,14 @@ impl<'a> Worker<'a> {
                     body_own = Some(own);
                     (tb, r)
                 }
-                None => self.type_expr(body, None),
+                None => {
+                    let ret = exp_fn.as_ref().map(|&(_, r)| r);
+                    let (tb, bty) = self.type_expr(body, ret);
+                    let body_span = self.cur_ast().expr_span(body);
+                    self.adapt_open_body(tb, bty, ret, body_span)
+                }
             };
-            let bty = self.define_body_vars(body_mark, bty);
+            let bty = self.lambda_body_closed(body_mark, bty, body_own, exp_fn.as_ref().map(|&(_, r)| r), &params, span);
             self.case_scrutinee = None;
             self.pop_scope();
             let class = self.tuple_class(ptys.len());
@@ -3253,11 +3290,19 @@ impl<'a> Worker<'a> {
                 let (tb, bty) = self.type_expr(body, ret);
                 let (tb, bty) = self.apply_context_to_open_result(body, tb, bty, ret);
                 let body_span = self.cur_ast().expr_span(body);
-                let (tb, bty) = self.widen_lambda_result(tb, bty, ret, body_span);
-                (tb, if ret.is_none() { self.widen_unions(bty) } else { bty })
+                self.adapt_open_body(tb, bty, ret, body_span)
             }
         };
-        let bty = self.define_body_vars(body_mark, bty);
+        // The parameters, the untupled one's tuple among them.
+        let joined: Vec<SymId>;
+        let params: &[SymId] = match untupled {
+            Some((tuple_sym, _)) => {
+                joined = syms.iter().copied().chain([tuple_sym]).collect();
+                &joined
+            }
+            None => &syms,
+        };
+        let bty = self.lambda_body_closed(body_mark, bty, body_own, exp_fn.as_ref().map(|&(_, r)| r), params, span);
         self.pop_scope();
         let branches = match outer_branches {
             Some(outer) => std::mem::replace(&mut self.branch_types, outer),
@@ -3362,13 +3407,61 @@ impl<'a> Worker<'a> {
                 self.widen_lambda_result(tb, bty, ret, body_span)
             }
         };
-        let bty = self.define_body_vars(body_mark, bty);
+        let bty = self.lambda_body_closed(body_mark, bty, body_own, exp_fn.as_ref().map(|&(_, r)| r), &syms, span);
         self.pop_scope();
         let ty = self.closure_type(true, &syms, &param_tys, bty, span);
         let l = self.prog.syms(&syms);
         let lambda = self.prog.add(TExpr::Lambda(l, tb));
         self.note_erroneous_lambda(lambda, body_own);
         (lambda, ty)
+    }
+
+    /// A lambda's body, written or a for-comprehension's, typed against `ret`, the open result its
+    /// expected function type gives or none, adapted to it before the closure is made, as dotty's
+    /// closure's right-hand side is adapted to its result type tree (`Typer.adapt`: a numeric
+    /// widening, a discarded value, the view into the variable's bounds; `widen_lambda_result`);
+    /// given no result, its unions are widened as an inferred result's are.
+    pub(in crate::typer) fn adapt_open_body(&mut self, tb: TExprId, bty: TypeId, ret: Option<TypeId>, body_span: Span) -> (TExprId, TypeId) {
+        let (tb, bty) = self.widen_lambda_result(tb, bty, ret, body_span);
+        (tb, if ret.is_none() { self.widen_unions(bty) } else { bty })
+    }
+
+    /// The body of a lambda whose expected function type gave the result `ret`, of type `bty`,
+    /// typed (its variables made from `mark` on): a contextual result leaves them open for the
+    /// trees around but for those naming the lambda's `params` (`settle_param_vars`), and the
+    /// body's type with the parameters avoided has to conform to it (`check_hygienic`); a wholly
+    /// inferred lambda's are instantiated (`define_body_vars`).
+    /// `own` is the body's own type where it was checked against a result given, `bty` that result.
+    pub(in crate::typer) fn lambda_body_closed(&mut self, mark: usize, bty: TypeId, own: Option<TypeId>, ret: Option<TypeId>, params: &[SymId], span: Span) -> TypeId {
+        match ret.filter(|_| self.contextual_result(ret)) {
+            Some(r) => {
+                let bty = self.settle_param_vars(mark, bty, params);
+                self.check_hygienic(mark, own.unwrap_or(bty), r, params, span);
+                bty
+            }
+            None => self.define_body_vars(mark, bty),
+        }
+    }
+
+    /// Whether a lambda whose expected function type has the result `ret` takes that result as
+    /// its own, open or not: dotty's closure is an anonymous method whose result type tree is
+    /// the expected function's result (`Typer.decomposeProtoFunction`), which, not fully defined,
+    /// types the body against it and constrains it from below (`Namer.valOrDefDefSig`'s `ANON_FUN`
+    /// case): the variables the body holds nonvariantly stay open for the trees around. A lambda
+    /// given no result (no function type expected, or a wildcard's, an overloaded call's argument
+    /// typed ahead) is wholly inferred, its result fully defined (`inferredResultType`), and so is
+    /// one given a fully defined result here, whose body's variables nothing outside it reaches.
+    pub(super) fn contextual_result(&mut self, ret: Option<TypeId>) -> bool {
+        let Some(r) = ret else { return false };
+        if !self.types.has_vars(r) {
+            return false;
+        }
+        let head = self.deref(r);
+        if let Type::Var(v) = self.types.get(head) {
+            return !self.wildcard_results.contains(&v);
+        }
+        let z = self.zonk(r);
+        self.types.has_vars(z)
     }
 
     /// A lambda's body of a context function type, typed against no result type or an open
@@ -4388,6 +4481,7 @@ impl<'a> Worker<'a> {
             TyExpr::Union(a, b) | TyExpr::Inter(a, b) => self.names_term_path(a) || self.names_term_path(b),
             TyExpr::Tuple(items) => ast.ty_list(items).iter().any(|&a| self.names_term_path(a)),
             TyExpr::Fun(items, r) => ast.ty_list(items).iter().any(|&a| self.names_term_path(a)) || self.names_term_path(r),
+            TyExpr::Annotated(inner, _) => self.names_term_path(inner),
             _ => false,
         }
     }
@@ -4469,7 +4563,7 @@ impl<'a> Worker<'a> {
                     if pat.is_none() {
                         let declared = ty.map_or(ERROR, |t| self.resolve_type(t));
                         let kind = if def.mods & mods::MUTABLE != 0 { SymKind::Var } else { SymKind::Val };
-                        let sym = self.new_local(def.name, kind, declared, def.span);
+                        let sym = self.new_local(def.name, kind, self.types.unannotated(declared), def.span);
                         self.bind_local(def.name, sym);
                     }
                     return;
@@ -4480,8 +4574,8 @@ impl<'a> Worker<'a> {
                 let declared = ty.map(|t| self.resolve_type(t));
                 if let Some(p) = *pat {
                     if declared.is_none() {
+                        let kind = if def.mods & mods::MUTABLE != 0 { SymKind::Var } else { SymKind::Val };
                         if let Some(elems) = self.elementwise_tuple_val(p, rhs) {
-                            let kind = if def.mods & mods::MUTABLE != 0 { SymKind::Var } else { SymKind::Val };
                             for (name, ty, e, span) in elems {
                                 self.type_binder_val(name, kind, def.mods & mods::LAZY, ty, e, span, out);
                             }
@@ -4507,9 +4601,12 @@ impl<'a> Worker<'a> {
                 }
                 let sym = if early.is_some() { early } else { pat.is_none().then(|| {
                     let kind = if def.mods & mods::MUTABLE != 0 { SymKind::Var } else { SymKind::Val };
-                    let sym = self.new_local(def.name, kind, declared.unwrap_or(ERROR), def.span);
+                    // Its reference is the `TermRef`, which carries no annotation of its type.
+                    let sym = self.new_local(def.name, kind, self.types.unannotated(declared.unwrap_or(ERROR)), def.span);
+                    let holder = ast.patdef_holders.contains(&d);
                     let mut s = self.syms.sym_mut(sym);
                     s.mods |= def.mods & (mods::LAZY | mods::IMPLICIT | mods::LIFTED);
+                    s.synthetic = holder;
                     if declared.is_none() {
                         s.state().set(Completion::InProgress);
                     }
@@ -4527,7 +4624,12 @@ impl<'a> Worker<'a> {
                     if def.mods & mods::IMPLICIT != 0 {
                         self.bind_given(sym);
                     }
-                    self.sites.owners.push(SiteOwner::Sym(sym));
+                    // A pattern definition's holder is a synthetic owner, which a macro skips.
+                    if holder {
+                        self.sites.owners.push(SiteOwner::PatternTemp(def.span));
+                    } else {
+                        self.sites.owners.push(SiteOwner::Sym(sym));
+                    }
                     sym
                 }) };
                 let inferred = ty.filter(|t| self.in_converted_body() && pat.is_none() && early.is_none() && ast.inferred_types.binary_search(&t.0).is_ok());
@@ -4558,7 +4660,13 @@ impl<'a> Worker<'a> {
                     None => {
                         let (te, t) = self.type_expr(rhs, None);
                         let (te, t) = self.apply_inferred_context(rhs, te, t);
+                        // A pattern definition's right side keeps its annotation for the pattern's
+                        // checks, which read it on the type (`Checking.checkIrrefutable`); a val's
+                        // inferred type drops it, as dotty's widening of an inferred type does.
+                        let checked = pat.is_some() && self.has_runtime_checked(t);
+                        let t = if checked { t } else { self.widen_annotated_singleton(t) };
                         let t = self.solve_inferred(t);
+                        let t = if checked && !self.has_runtime_checked(t) { self.types.mk(Type::Annotated(t)) } else { t };
                         // A val of a primitive type its erased initializer gave holds the primitive.
                         (self.unbox_erased(te, t), t)
                     }
@@ -4583,7 +4691,8 @@ impl<'a> Worker<'a> {
                     (Some(p), _) => out.push(self.pattern_val(*p, rhs, init, ity)),
                     (None, Some(sym)) => {
                         if declared.is_none() {
-                            let sig = self.value_sig(ity);
+                            // Its reference is the `TermRef`, which carries no annotation.
+                            let sig = self.value_sig(self.types.unannotated(ity));
                             let mut s = self.syms.sym_mut(sym);
                             s.sig = Some(sig);
                             s.state().set(Completion::Done);
@@ -4750,7 +4859,7 @@ impl<'a> Worker<'a> {
     /// wildcards counts the wildcards, as scalac's tuple optimisations do.
     fn single_binder(&self, pat: ast::PatId, rhs: ExprId) -> Option<Name> {
         let ast = self.cur_ast();
-        if let (Pat::Tuple(ps), false) = (ast.pat(pat), matches!(ast.expr(rhs), Expr::Unchecked(_))) {
+        if let (Pat::Tuple(ps), false) = (ast.pat(pat), ast.is_unchecked(rhs)) {
             let plain = ast.pat_list(ps).iter().all(|&p| match ast.pat(p) {
                 Pat::Wildcard | Pat::Bind(_, None) => true,
                 Pat::Typed(inner, _) => matches!(ast.pat(inner), Pat::Wildcard | Pat::Bind(_, None)),
@@ -4799,14 +4908,212 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// `val pat = rhs`: a pattern that can fail is a warning, unless the rhs is `: @unchecked`.
+    /// Whether a `T @RuntimeChecked` written with the annotation's class path `class` names
+    /// `scala.annotation.internal.RuntimeChecked`, the path resolved where it is written: dotty's
+    /// `Checking.checkIrrefutable` tests the symbol `defn.RuntimeCheckedAnnot` (Definitions.scala
+    /// 1081), not the name. `None`, a type read from TASTy, was checked by its full name there.
+    pub(super) fn runtime_checked_annot(&mut self, class: Option<crate::ast::TyExprId>) -> bool {
+        let Some(path) = class else { return true };
+        let mark = self.diags.items.len();
+        let resolved = self.resolve_type_ctor(path);
+        let resolved = self.dealias(resolved);
+        self.drop_reported_since(mark);
+        matches!(self.types.get(resolved), Type::Class(k, _) | Type::Ctor(k) if self.class_path(k) == "scala.annotation.internal.RuntimeChecked")
+    }
+
+    /// `pt.hasAnnotation(RuntimeCheckedAnnot)` (Types.scala 438-439) of a type as typed: the
+    /// annotation at its top, through instantiated variables.
+    #[inline]
+    pub(super) fn has_runtime_checked(&mut self, t: TypeId) -> bool {
+        self.annotated_under(t).is_some()
+    }
+
+    /// dotty's `widenSingletons` of an inferred type annotated at its top (Namer's `widenRhs`):
+    /// an annotated singleton (`x.type @RuntimeChecked`, a constant's) is the singleton widened,
+    /// the annotation dropped with the `dealias` it widens; another keeps its annotation (`def
+    /// f(o: Option[Int]) = checked(o)` is `Option[Int] @RuntimeChecked`).
+    #[inline]
+    pub(super) fn widen_annotated_singleton(&mut self, t: TypeId) -> TypeId {
+        match self.types.get(t) {
+            Type::Annotated(_) | Type::Var(_) => self.widen_annotated_singleton_slow(t),
+            _ => t,
+        }
+    }
+
+    #[inline(never)]
+    fn widen_annotated_singleton_slow(&mut self, t: TypeId) -> TypeId {
+        let Some(u) = self.annotated_under(t) else { return t };
+        let u = self.zonk(u);
+        if self.types.is_path(u) {
+            let w = self.widen_path(u);
+            self.widen_lit(w)
+        } else if matches!(self.types.get(u), Type::Lit(_)) {
+            self.widen_lit(u)
+        } else {
+            t
+        }
+    }
+
+    /// The type of a join of branches (an `if`, a match, a `try` with handlers) where one carries
+    /// the annotation, as dotty's type assignment joins them: `TypeComparer.lub` folded from
+    /// `Nothing` (TypeAssigner.scala 429, 468, 479-481; TypeComparer.scala 2572-2614), keeping the
+    /// operand that subsumes the other, a union of the parts that do not (`opt.runtimeChecked`
+    /// and `opt2.runtimeChecked` are `(opt.type @RuntimeChecked) | (opt2.type @RuntimeChecked)`,
+    /// whose parts a later annotated supertype subsumes). `None` where no branch is annotated:
+    /// the typer's own join stands. A branch's operand is its type, a stable path's singleton
+    /// where the branch is a path (dotty's `TermRef`, which teq types widened) and no ascription,
+    /// whose type is the one written (TypeAssigner.scala 413).
+    pub(super) fn annotated_join_type(&mut self, branches: &[(TExprId, TypeId, Option<ExprId>)]) -> Option<TypeId> {
+        let mut any = false;
+        let mut operands = Vec::with_capacity(branches.len());
+        for &(b, ty, written) in branches {
+            let op = self.join_operand(b, ty, written);
+            any |= op.map_or(false, |o| o.ty != o.under);
+            operands.push(op);
+        }
+        if !any {
+            return None;
+        }
+        let mut acc: Vec<Operand> = Vec::new();
+        for op in operands.into_iter().flatten() {
+            acc = self.lub_parts(acc, op);
+        }
+        let mut parts = acc.into_iter();
+        let first = parts.next()?;
+        let mut t = first.ty;
+        for p in parts {
+            t = self.types.union_as(crate::types::UnionKind::Soft, t, p.ty);
+        }
+        Some(t)
+    }
+
+    /// A branch's operand, `None` for `Nothing` (`lub` drops a bottom operand).
+    fn join_operand(&mut self, b: TExprId, ty: TypeId, written: Option<ExprId>) -> Option<Operand> {
+        let z = self.zonk(ty);
+        let (annotated, under) = match self.types.get(z) {
+            Type::Annotated(u) => (true, u),
+            _ => (false, z),
+        };
+        if self.deref(under) == NOTHING {
+            return None;
+        }
+        let ascribed = written.map_or(false, |w| self.cur_ast().is_ascription(w));
+        let under = if !annotated && !ascribed && !matches!(self.types.get(under), Type::Union(..)) {
+            self.path_of(b).unwrap_or(under)
+        } else {
+            under
+        };
+        let singleton = self.types.is_path(under);
+        let ty = if annotated { z } else { under };
+        Some(Operand { ty, under, singleton })
+    }
+
+    /// `lub(acc, next)` with `acc` the parts of a union (none: `Nothing`): an operand conforming
+    /// to a part leaves the union, the parts conforming to the operand drop out of it
+    /// (TypeComparer.scala 2602-2612).
+    fn lub_parts(&mut self, mut acc: Vec<Operand>, next: Operand) -> Vec<Operand> {
+        match acc.len() {
+            0 => vec![next],
+            1 => match self.lub_operands(acc[0], next) {
+                Some(j) => vec![j],
+                None => {
+                    acc.push(next);
+                    acc
+                }
+            },
+            _ => {
+                for k in 0..acc.len() {
+                    if self.operand_sub(next, acc[k]) {
+                        return acc;
+                    }
+                }
+                let mut kept = Vec::with_capacity(acc.len() + 1);
+                for p in acc {
+                    if !self.operand_sub(p, next) {
+                        kept.push(p);
+                    }
+                }
+                kept.push(next);
+                kept
+            }
+        }
+    }
+
+    /// `lub(a, b)`'s operand kept, `None` for a union of the two: a singleton that conforms to
+    /// the other gives way to it, two distinct singletons are a union, and a type the other
+    /// conforms to stays.
+    fn lub_operands(&mut self, a: Operand, b: Operand) -> Option<Operand> {
+        if a.singleton && self.operand_sub(a, b) {
+            return Some(b);
+        }
+        if b.singleton && self.operand_sub(b, a) {
+            return Some(a);
+        }
+        if a.singleton && b.singleton {
+            return None;
+        }
+        if self.operand_sub(b, a) {
+            Some(a)
+        } else if self.operand_sub(a, b) {
+            Some(b)
+        } else {
+            None
+        }
+    }
+
+    /// `a <: b` between two operands, frozen, the annotations seen through.
+    fn operand_sub(&mut self, a: Operand, b: Operand) -> bool {
+        if a.under == b.under {
+            return true;
+        }
+        if b.singleton && !a.singleton {
+            return false;
+        }
+        self.frozen_sub(a.under, b.under)
+    }
+
+    /// `val pat = rhs`: a pattern that can fail is a warning, unless the rhs is `: @unchecked`
+    /// or of the type `.runtimeChecked` gives.
     fn pattern_val(&mut self, pat: ast::PatId, rhs: ExprId, init: TExprId, ity: TypeId) -> TStmt {
         let tp = self.type_pattern(pat, ity);
+        self.check_tuple_components(pat, rhs, ity);
         let ast = self.cur_ast();
-        if !matches!(ast.expr(rhs), Expr::Unchecked(_)) {
+        if !ast.is_unchecked(rhs) && !self.has_runtime_checked(ity) {
             self.check_irrefutable(tp, pat, ity, Some(ast.expr_span(rhs)));
         }
         TStmt::Pat(tp, init)
+    }
+
+    /// dotty's `MatchableTuple` component vals of a local pattern definition (`Ast::patdef_tuple`):
+    /// a named, typed component is `val x: T = $1._i`, the element's type checked against `T`
+    /// where the pattern closes, as the typing of that val reports it; the refutability check's
+    /// exemption (`.runtimeChecked`) is none of it. A tuple literal's elements are checked
+    /// against their types as the right side's are (`SimpleTuple`'s split).
+    fn check_tuple_components(&mut self, pat: ast::PatId, rhs: ExprId, ity: TypeId) {
+        let ast = self.cur_ast();
+        let Some((ast::PatDefTuple::Matchable, components)) = ast.patdef_tuple(pat, rhs) else { return };
+        if !components.iter().any(|c| c.name.is_some() && c.ty.is_some()) {
+            return;
+        }
+        let Some(elems) = self.tuple_elements(ity) else { return };
+        if elems.len() != components.len() {
+            return;
+        }
+        let pat_span = ast.pat_spans[pat.idx()];
+        let close = Span { start: pat_span.end.saturating_sub(1).max(pat_span.start), end: pat_span.end };
+        for (i, c) in components.iter().enumerate() {
+            let (Some(_), Some(written)) = (c.name, c.ty) else { continue };
+            let mark = self.diags.items.len();
+            let declared = self.resolve_type(written);
+            self.drop_reported_since(mark);
+            if declared == ERROR || elems[i] == ERROR {
+                continue;
+            }
+            if !self.frozen_sub(elems[i], declared) {
+                let (found, required) = self.show_pair(elems[i], declared);
+                self.error(close, format!("type mismatch: found {}, required {}", found, required));
+            }
+        }
     }
 
     /// `lazy val (a, b) = e`, dotty's `makePatDef` for a lazy definition: a lazy holder of
@@ -4814,13 +5121,14 @@ impl<'a> Worker<'a> {
     /// lone variable being the match itself, so that `e` and the match run once, at the first
     /// read of any of them.
     fn lazy_pattern_val(&mut self, pat: ast::PatId, rhs: ExprId, init: TExprId, ity: TypeId, span: Span, out: &mut Vec<TStmt>) {
+        self.check_tuple_components(pat, rhs, ity);
         let mark = match self.env.frames.last() {
             Some(Frame::Locals { names, .. }) => names.len(),
             _ => 0,
         };
         let tp = self.type_pattern(pat, ity);
         let ast = self.cur_ast();
-        if !matches!(ast.expr(rhs), Expr::Unchecked(_)) {
+        if !ast.is_unchecked(rhs) && !self.has_runtime_checked(ity) {
             self.check_irrefutable(tp, pat, ity, Some(ast.expr_span(rhs)));
         }
         // The pattern's variables are the case's; the definitions bind their names.

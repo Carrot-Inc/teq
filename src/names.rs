@@ -220,4 +220,5 @@ well_known! {
     // (`symbols::name_bit`) is computed from.
     NEW_ARRAY = "newArray",
     OBJECT_FUNCTION = "objectFunction",
+    RUNTIME_CHECKED_ANNOT = "RuntimeChecked",
 }

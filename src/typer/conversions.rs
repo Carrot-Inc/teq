@@ -912,6 +912,7 @@ impl<'a> Worker<'a> {
             // The receiver and the result the caller accepted fix the given's parameters before
             // its using clauses are resolved (`defaultToNoBackend[X, P, S](using ev: X =>
             // Step2[P, S]): Conversion[X, ..]`).
+            let instance_vars = self.tvars.len();
             let target = match self.conversion_class_of(g) {
                 Some(conversion) => {
                     let result = self.fresh_var();
@@ -931,9 +932,9 @@ impl<'a> Worker<'a> {
                     let (te, ty) = self.apply_member(r, rty, name, None, Vec::new(), span, None);
                     (te, ty)
                 }),
-                Via::Module(m) => self.instantiate_given_with((g, GivenScope::Module(m)), target, span, true),
-                Via::Path(p) => self.instantiate_given_with((g, GivenScope::Path(p)), target, span, true),
-                Via::Scope => self.instantiate_given_with((g, GivenScope::Lexical), target, span, true),
+                Via::Module(m) => self.instantiate_given_with((g, GivenScope::Module(m)), target, span, to_type),
+                Via::Path(p) => self.instantiate_given_with((g, GivenScope::Path(p)), target, span, to_type),
+                Via::Scope => self.instantiate_given_with((g, GivenScope::Lexical), target, span, to_type),
             };
             let Some((instance, inst_ty)) = instance else {
                 self.rollback(mark);
@@ -949,9 +950,38 @@ impl<'a> Worker<'a> {
                 self.index_forget_applied(recorded);
             }
             // What the instance's using clauses fixed (`Step3[P, S, Unit]` with `P` and `S` from
-            // `ev`) is the result, where the shape alone left them open.
+            // `ev`) is the result: dotty's `typedImplicit` types the view as the instance applied
+            // to the receiver (`tryConversion`, Implicits.scala 1204-1217), of that application's
+            // type with its variables and their constraints, an enclosing application's (the
+            // receiver's nonvariant `S` of `initialState[S]`, which `ev` made one with the
+            // instance's) and the instance's own alike (`conv[B]: Conversion[Raw, Box[B]]`'s `B`,
+            // which the member selected on the view then fixes: `put("three")` makes it a
+            // `String`).
+            // Where the view gives a member its receiver, the instance's variables were left open
+            // and are interpolated as dotty's `interpolateTypeVars` takes the application's
+            // (`instantiate_vars`): their variances read through the bounds (`variances`'
+            // `propagate`, Inferencing.scala 555-597: `Box[+A, B <: A]`'s nonvariant `B` makes
+            // `A` nonvariant too), one held nonvariantly stays open for the member ("no
+            // interpolation for nonvariant", 745), which the selection's interpolation settles
+            // after it (`conversion_open_vars`, as an `implicit def`'s), and the others are
+            // instantiated in their direction, a variable waiting for the one it depends on
+            // (`instantiateTypeVars`' filtering and ordering): `Sink[-A]`'s `A` is `Any`.
+            if !to_type {
+                let applied_z = self.zonk(applied);
+                // The instance's variables in the order dotty's owned variables are met, the view's
+                // target variable (teq's stand-in for the `ViewProto`, which no type of dotty's
+                // holds) after them: its lower bound holds them, which its instantiation would
+                // otherwise settle before their own direction does.
+                let occurring: Vec<TVarId> = self.var_variances(applied_z).into_iter().map(|(v, _)| v).collect();
+                let mut vars: Vec<TVarId> = (instance_vars..self.tvars.len()).map(|k| self.tvars.id(k)).filter(|&v| self.tvars[v].inst.is_none()).collect();
+                vars.sort_by_key(|v| !occurring.contains(v));
+                let open_mark = self.open_vars.len();
+                self.instantiate_vars(&vars, instance_vars, applied_z, None);
+                let left: Vec<TVarId> = self.open_vars[open_mark.min(self.open_vars.len())..].to_vec();
+                self.conversion_open_vars.extend(left);
+            }
             let applied = self.zonk(applied);
-            if !self.types.has_vars(applied) && applied != ERROR {
+            if applied != ERROR {
                 if !accept(self, applied) {
                     self.rollback(mark);
                     return None;
@@ -1409,22 +1439,127 @@ impl<'a> Worker<'a> {
         self.convert_to_var_bound_typed(te, actual, v, expected, span).map(|(te, _)| te)
     }
 
+    /// dotty's view into an open variable (`Implicits.inferView`, whose `ViewProto` takes the
+    /// expected type's `wildApprox`): one search into the meet of its upper bounds, through the
+    /// variables among them, each with the open variables it holds approximated by wildcards of
+    /// their own bounds (`ProtoTypes.wildApprox`), so `Raw` finds a view to `List[String]` for a
+    /// variable below `List[?X]`; the conversion's result then bounds the variable below.
     pub fn convert_to_var_bound_typed(&mut self, te: TExprId, actual: TypeId, v: TVarId, expected: TypeId, span: Span) -> Option<(TExprId, TypeId)> {
+        let mut target = ANY;
         for u in self.upper_bounds_through_vars(v) {
             let u = self.zonk(u);
-            if u == ANY || self.types.has_vars(u) {
-                continue;
-            }
-            let mark = self.attempt();
-            if let Some((converted, ty)) = self.convert_to_typed(te, actual, u, span, false) {
-                if ty != ERROR && self.is_sub(ty, expected) {
-                    self.close(mark);
-                    return Some((converted, ty));
-                }
-            }
-            self.retract(mark);
+            let u = self.wild_approx_vars(u, &mut vec![v]);
+            target = if target == ANY { u } else { self.types.inter(target, u) };
         }
+        if target == ANY {
+            return None;
+        }
+        let mark = self.attempt();
+        if let Some((converted, ty)) = self.convert_to_typed(te, actual, target, span, false) {
+            if ty != ERROR && self.is_sub(ty, expected) {
+                self.close(mark);
+                return Some((converted, ty));
+            }
+        }
+        self.retract(mark);
         None
+    }
+
+    /// `t` with the open variables it holds approximated by wildcards of their bounds, as
+    /// dotty's `wildApprox` approximates a constrained parameter by `WildcardType` of its
+    /// constraint's bounds, themselves approximated: a variable met again on the way (`seen`, the
+    /// variables being approximated) is a plain wildcard, the only cut, as dotty cuts a cycle. A
+    /// bound that approximates to a wildcard bounds the variable by its own bound on that side
+    /// (`B <: A` with `A <: Int` is below `Int`), and an intersection or a union with a wildcard part
+    /// is the wildcard of the parts' bounds combined (`approxAnd`'s `wildBounds(tp1a) &
+    /// wildBounds(tp2a)`, `approxOr`'s `tp1a.bounds | tp2a.bounds`, ProtoTypes.scala 1022-1042).
+    fn wild_approx_vars(&mut self, t: TypeId, seen: &mut Vec<TVarId>) -> TypeId {
+        if !self.types.has_vars(t) {
+            return t;
+        }
+        let t = self.deref(t);
+        match self.types.get(t) {
+            Type::Var(v) => {
+                if seen.contains(&v) {
+                    return WILD;
+                }
+                seen.push(v);
+                let mut lo = NOTHING;
+                for k in 0..self.tvars[v].lower.len() {
+                    let l = self.tvars[v].lower[k];
+                    let a = self.wild_approx_vars(l, seen);
+                    let l = self.wild_side(a, true);
+                    if l != NOTHING {
+                        lo = if lo == NOTHING { l } else { self.types.union_as(crate::types::UnionKind::Soft, lo, l) };
+                    }
+                }
+                let mut hi = ANY;
+                for k in 0..self.tvars[v].upper.len() {
+                    let u = self.tvars[v].upper[k];
+                    let a = self.wild_approx_vars(u, seen);
+                    let u = self.wild_side(a, false);
+                    if u != ANY {
+                        hi = if hi == ANY { u } else { self.types.inter(hi, u) };
+                    }
+                }
+                seen.pop();
+                self.types.bounded_wild(lo, hi)
+            }
+            Type::Class(c, args) => {
+                let items: Vec<TypeId> = self.types.items(args).to_vec();
+                let approx: Vec<TypeId> = items.iter().map(|&a| self.wild_approx_vars(a, seen)).collect();
+                self.types.class(c, &approx)
+            }
+            Type::Union(a, b, soft) => {
+                let (a, b) = (self.wild_approx_vars(a, seen), self.wild_approx_vars(b, seen));
+                if !self.is_wild(a) && !self.is_wild(b) {
+                    return self.types.union_as(soft, a, b);
+                }
+                // `TypeBounds.|`: the lower bounds met, the upper ones joined, a plain type its own
+                // two bounds (`TypeAlias`).
+                let (la, ha) = self.wild_part_bounds(a, a);
+                let (lb, hb) = self.wild_part_bounds(b, b);
+                let lo = if la == NOTHING || lb == NOTHING { NOTHING } else { self.types.inter(la, lb) };
+                let hi = if ha == ANY || hb == ANY { ANY } else { self.types.union_as(soft, ha, hb) };
+                self.types.bounded_wild(lo, hi)
+            }
+            Type::Inter(a, b) => {
+                let (a, b) = (self.wild_approx_vars(a, seen), self.wild_approx_vars(b, seen));
+                if !self.is_wild(a) && !self.is_wild(b) {
+                    return self.types.inter(a, b);
+                }
+                // `TypeBounds.&` of `wildBounds`: a plain type an upper bound alone.
+                let (la, ha) = self.wild_part_bounds(a, NOTHING);
+                let (lb, hb) = self.wild_part_bounds(b, NOTHING);
+                let lo = if la == NOTHING { lb } else if lb == NOTHING { la } else { self.types.union_as(crate::types::UnionKind::Soft, la, lb) };
+                let hi = if ha == ANY { hb } else if hb == ANY { ha } else { self.types.inter(ha, hb) };
+                self.types.bounded_wild(lo, hi)
+            }
+            _ => t,
+        }
+    }
+
+    fn is_wild(&self, t: TypeId) -> bool {
+        matches!(self.types.get(t), Type::Wild | Type::BoundedWild(..))
+    }
+
+    /// The bounds a wildcard gives, a plain type `(lo, itself)`.
+    fn wild_part_bounds(&self, t: TypeId, lo: TypeId) -> (TypeId, TypeId) {
+        match self.types.get(t) {
+            Type::Wild => (NOTHING, ANY),
+            Type::BoundedWild(l, h) => (l, h),
+            _ => (lo, t),
+        }
+    }
+
+    /// An approximated bound as the side of a variable it bounds reads it: a wildcard by its
+    /// own bound on that side.
+    fn wild_side(&self, t: TypeId, lower: bool) -> TypeId {
+        match self.types.get(t) {
+            Type::Wild => if lower { NOTHING } else { ANY },
+            Type::BoundedWild(l, h) => if lower { l } else { h },
+            _ => t,
+        }
     }
 
     pub(super) fn convert_to_typed(&mut self, te: TExprId, actual: TypeId, expected: TypeId, span: Span, report: bool) -> Option<(TExprId, TypeId)> {
