@@ -1,0 +1,3 @@
+exit 0
+migration warning 1:32
+  Given member definitions starting with `with` are no longer supported; use `{...}` or `:` followed by newline instead

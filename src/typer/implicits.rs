@@ -2618,8 +2618,8 @@ impl<'a> Worker<'a> {
             words.extend(self.unentered_impls.iter().map(|s| s.0));
         }
         // The file's language settings, which the synthesis of a `CanEqual` reads.
-        let (strict, future) = (self.strict_equality(), self.cur_ast().source_future);
-        words.extend([5, strict as u32, future as u32]);
+        let (strict, version) = (self.strict_equality(), self.cur_ast().source_version);
+        words.extend([5, strict as u32, version.ordinal()]);
         let h = words.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &w| (h ^ w as u64).wrapping_mul(0x0100_0000_01b3));
         self.given_context = words;
         (self.env.file, h)

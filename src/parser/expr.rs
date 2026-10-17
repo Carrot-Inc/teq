@@ -209,10 +209,19 @@ impl<'a> Parser<'a> {
                 self.ast.add_expr(Expr::Block(l), start.to(self.prev_span()))
             }
         };
-        match lambda {
+        let block = match lambda {
             Some((lambda_start, params)) => self.ast.add_expr(Expr::Lambda(params, body), lambda_start.to(self.prev_span())),
             None => body,
+        };
+        // A brace block that keeps no node of its own (one expression, a lambda over the rest): its span, for an
+        // argument as written.
+        if start.end > start.start {
+            let written = start.to(self.prev_span());
+            if written != self.ast.expr_span(block) {
+                self.ast.push_written(block, written, false);
+            }
         }
+        block
     }
 
     pub(super) fn parse_block_stmt(&mut self, out: &mut Vec<Stmt>) {
@@ -220,7 +229,9 @@ impl<'a> Parser<'a> {
             let at = self.bump().span.start;
             let start = self.ast.local_imports.len() as u32;
             let mut imports = std::mem::take(&mut self.ast.local_imports);
+            self.importing = Some(false);
             self.parse_import_exprs(&mut imports, at);
+            self.importing = None;
             self.ast.local_imports = imports;
             let language = std::mem::take(&mut self.language_scratch);
             self.open_language_scopes(&language, at, true);
@@ -1009,7 +1020,7 @@ impl<'a> Parser<'a> {
             } else {
                 self.parse_infix_prec(if right { prec } else { prec + 1 })
             };
-            lhs = self.ast.add_expr(Expr::Infix(lhs, t.name, rhs), start.to(self.prev_span()));
+            lhs = self.ast.add_expr(Expr::Infix(lhs, t.name, rhs, t.span.end), start.to(self.prev_span()));
             self.note_name(lhs, t.span);
         }
     }
@@ -1314,7 +1325,7 @@ impl<'a> Parser<'a> {
                 }
                 let has_body = self.at(Tok::ColonEol) && self.kind_at(1) == Tok::Indent;
                 if self.at(Tok::KwWith) || has_body {
-                    self.parse_anon_class(ty, args, start)
+                    self.parse_anon_class(ty, args, ends.iter().map(|s| s.end).collect(), start)
                 } else {
                     // `new C(a)(using b)`: the lists after the first apply to the instance.
                     // A first list that is a using list stays an application of it.
@@ -1411,6 +1422,8 @@ impl<'a> Parser<'a> {
                 if matches!(self.ast.expr(only), Expr::Unchecked(_)) || self.ast.annotation_only(only) {
                     self.ast.paren_annotated.insert(only);
                 }
+                // The expression keeps no node of its parentheses: their span, for an argument as written.
+                self.ast.push_written(only, span, true);
                 only
             }
             _ => {
@@ -1651,8 +1664,18 @@ impl<'a> Parser<'a> {
                     self.note_cut_args(e, cut);
                 }
                 Tok::ColonEol if self.kind_at(1) == Tok::Indent && self.colon_takes_argument() => {
-                    self.bump();
+                    let opener = self.bump().span;
+                    // The argument as written: a brace's block, or after a colon the indented region, which
+                    // dotty's `blockExpr` makes the expression it holds alone, as written (`f:` over `(1)` passes
+                    // `(1)`), or a block of its statements.
+                    let region = self.toks.get(self.pos + 1).map_or(opener, |t| t.span);
                     let body = self.parse_block();
+                    if self.text.as_bytes().get(opener.start as usize) != Some(&b'{') {
+                        let written = region.to(self.prev_span());
+                        if written != self.ast.expr_span(body) {
+                            self.ast.push_written(body, written, false);
+                        }
+                    }
                     let args = push_list(&mut self.ast.expr_lists, &[body]);
                     e = self.ast.add_expr(Expr::Apply(e, args), start.to(self.prev_span()));
                 }

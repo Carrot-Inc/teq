@@ -1,0 +1,7 @@
+exit 1
+error 1:20
+  XML literals are no longer supported.
+  See https://docs.scala-lang.org/scala3/reference/dropped-features/xml.html
+error 1:20
+  To support XML literals, your project must depend on scala-xml.
+  See https://github.com/scala/scala-xml for more information.

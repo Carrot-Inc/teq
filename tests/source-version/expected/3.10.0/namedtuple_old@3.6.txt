@@ -1,0 +1,5 @@
+exit 1
+error 1:21
+  Not found: a
+error 1:28
+  Not found: b

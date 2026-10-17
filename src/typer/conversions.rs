@@ -940,7 +940,7 @@ impl<'a> Worker<'a> {
                 self.rollback(mark);
                 return None;
             };
-            let lists = vec![ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span }];
+            let lists = vec![ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span, fun: ArgList::NO_FUN }];
             let blocked = std::mem::replace(&mut self.no_receiver_conversion, true);
             let recorded = self.index_mark();
             let (te, applied) = self.apply_member(instance, inst_ty, names::APPLY, None, lists, span, None);

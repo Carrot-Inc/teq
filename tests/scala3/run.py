@@ -9,8 +9,12 @@ Classes: pass, wrong-output, run-error, run-timeout, compile-error, compile-cras
 compile-timeout. Compile errors are bucketed by their first message into what teq leaves out on
 purpose and gaps.
 
-Writes results.json, summary.md and, with --update, the allow-list passing.txt; without --update
-a listed test that no longer passes fails the run.
+A test's options are read as tests/scala3-typing/harness.py reads them (`scalac_options`, `teq_flags`): its
+`-source` and `-language` reach teq as flags, recorded with the test's result; files naming two source versions
+are left out (a compile-error of the topic "conflicting options"), never compiled under one of them.
+
+Writes results.json, summary.md and, with --update, the allow-list passing.txt (a test passing under flags its
+options gave lists them after a tab); without --update a listed test that no longer passes fails the run.
 """
 import argparse
 import collections
@@ -24,6 +28,11 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
+# The reader of a test's options the typing harness has (`scalac_options`, `teq_flags`): `-source` and
+# `-language` reach teq as its flags.
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.join(REPO, "tests", "scala3-typing"))
+from harness import scalac_options, teq_flags  # noqa: E402
 
 
 def default_scala3():
@@ -164,9 +173,16 @@ def run_one(test, teq, out_dir, compile_timeout, run_timeout, target="js"):
     if java:
         result.update(status="compile-error", bucket="left out on purpose", topic="Java", error="test contains Java sources")
         return result
+    # The test's options as teq's flags, recorded; files naming two source versions are no test of one.
+    flags, conflict = teq_flags(scalac_options(files))
+    if flags:
+        result["flags"] = " ".join(flags)
+    if conflict:
+        result.update(status="compile-error", bucket="left out on purpose", topic="conflicting options", error=conflict)
+        return result
     if target == "interp":
-        return run_one_interp(test, teq, result, compile_timeout + run_timeout)
-    cmd = [teq, "compiler", "build", *files, "-o", js]
+        return run_one_interp(test, teq, result, compile_timeout + run_timeout, flags)
+    cmd = [teq, "compiler", "build", *files, "-o", js, *flags]
     t0 = time.monotonic()
     try:
         build = subprocess.run(cmd, capture_output=True, text=True, timeout=compile_timeout)
@@ -210,11 +226,11 @@ def run_one(test, teq, out_dir, compile_timeout, run_timeout, target="js"):
     return result
 
 
-def run_one_interp(test, teq, result, timeout):
+def run_one_interp(test, teq, result, timeout, flags):
     """`teq interp`: the compile and the run are one process, so a failure is told
     apart by the exit code (3 for what the interpreter does not execute) and the message."""
     name, files, check, _ = test
-    cmd = [teq, "interp", *files]
+    cmd = [teq, "interp", *files, *flags]
     t0 = time.monotonic()
     try:
         run = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
@@ -273,6 +289,10 @@ def write_summary(path, results):
         names = sorted(r["name"] for r in results if r["status"] == status)
         if names:
             lines += ["", f"## {status} ({len(names)})", "", ", ".join(names)]
+    flagged = sorted((r["name"], r["flags"]) for r in results if r.get("flags"))
+    if flagged:
+        lines += ["", f"## run with the flags their options give ({len(flagged)})", ""]
+        lines += [f"- {n}: `{f}`" for n, f in flagged]
     passing = sorted(r["name"] for r in results if r["status"] == "pass")
     lines += ["", f"## pass ({len(passing)})", "", ", ".join(passing), ""]
     with open(path, "w") as f:
@@ -336,7 +356,7 @@ def main():
         tests = [t for t in tests if rx.search(t[0])]
     if args.listed:
         with open(os.path.join(HERE, prefix + "passing.txt")) as f:
-            listed = {l.strip() for l in f if l.strip() and not l.startswith("#")}
+            listed = {l.split("\t")[0].strip() for l in f if l.strip() and not l.startswith("#")}
         tests = [t for t in tests if t[0] in listed]
     os.makedirs(args.out, exist_ok=True)
     t0 = time.monotonic()
@@ -357,15 +377,17 @@ def main():
     passing_path = os.path.join(HERE, prefix + ("passing.txt" if args.target == "js" else args.target + "-passing.txt"))
     passing_now = {r["name"] for r in results if r["status"] == "pass"}
     if args.update:
+        # A test that passed under flags its options gave lists them after a tab.
+        flags_of = {r["name"]: r.get("flags", "") for r in results}
         with open(passing_path, "w") as f:
-            f.write("\n".join(sorted(passing_now)) + "\n")
+            f.write("\n".join(n + ("\t" + flags_of[n] if flags_of.get(n) else "") for n in sorted(passing_now)) + "\n")
         print(f"wrote {len(passing_now)} names to passing.txt")
         return 0
     if not os.path.exists(passing_path):
         print("no passing.txt yet; run with --update to create it")
         return 0
     with open(passing_path) as f:
-        listed = {l.strip() for l in f if l.strip() and not l.startswith("#")}
+        listed = {l.split("\t")[0].strip() for l in f if l.strip() and not l.startswith("#")}
     ran = {r["name"] for r in results}
     regressed = sorted((listed & ran) - passing_now)
     new = sorted(passing_now - listed)

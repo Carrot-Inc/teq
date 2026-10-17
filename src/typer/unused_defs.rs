@@ -956,7 +956,7 @@ impl<'t> Registrar<'t> {
                     self.expr(a, out);
                 }
             }
-            Expr::Infix(a, _, b) | Expr::While(a, b) | Expr::Assign(a, b) => {
+            Expr::Infix(a, _, b, _) | Expr::While(a, b) | Expr::Assign(a, b) => {
                 self.expr(a, out);
                 self.expr(b, out);
             }

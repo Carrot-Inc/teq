@@ -1,0 +1,4 @@
+exit 0
+migration warning 1:45
+  The import renaming `a => b` is no longer supported ; use `a as b` instead
+  This construct can be rewritten automatically under -rewrite -source future-migration.

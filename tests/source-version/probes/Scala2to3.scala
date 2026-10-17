@@ -1,0 +1,1 @@
+object P { def f() { () } }

@@ -13,11 +13,11 @@ inputs:
   files:
     .fixture-version: 4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865
     .mill-version: 51c18dc8694861beb47a67894e61044864214435389f6d3a274704d9566ff96c
-    build.mill: 67b4f36338481bda38718140f518a349283468b74d88e0745f9c9324d2fe5fd7
+    build.mill: 72ae40115b638ce484e03aa61f18e8058b646a41c2badfce419702e9b9b6ae80
     pkg/package.mill: 8408b15a38adedb0164e0e4767b4b2dd15c7c81a6ac7daad855fae1a2b7d5cb4
     teq.mill.json: 70fd0a353d1f1d3b8118796d54950ab577f2b62b0911844705a4bde5267f66de
     versions.mill: 8664e5004b4f8522b16e9991d496c0fa6831946dccdf4810772e68696d1d53d9
-  sha256: e07a579181c02ef0d6663f859181ab1ea49973218164969c8e8804a1b88cba20
+  sha256: 119b80a57e26b45dd3abb97a3176919bda973e76f1e5826264429b8debaea4c0
 jars:
   com.lihaoyi:sourcecode_3:0.4.2: maven-central e7445e5caa2003ce647370451e59615e0c222aba 110490
   com.lihaoyi:sourcecode_3:0.4.3-M5: maven-central 56a3b552100dd68e322cd4b07df5182bba66d51c 115785
@@ -105,6 +105,7 @@ projects:
         flags:
           ignoredScalacOptions: []
           kindProjector: false
+          source: "3.9"
           strictEquality: false
           werror: false
         generators: []

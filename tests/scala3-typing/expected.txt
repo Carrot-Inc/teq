@@ -1,4 +1,5 @@
-# test	category	detail   (written by harness.py --update)
+# scala3 7414c83e175a27726eb3f9b18d4185d9c470d884
+# test	category	detail	teq's flags from the test's options   (written by harness.py --update)
 neg/10349.scala	different	type mismatch
 neg/10747.scala	same	
 neg/11982.scala	different	type mismatch
@@ -12,7 +13,7 @@ neg/17077.scala	same
 neg/17211.scala	same	
 neg/17305.scala	same	
 neg/17579.scala	subset	5/6 lines
-neg/18031.scala	accepts	
+neg/18031.scala	accepts		--source future
 neg/19087.scala	syntax	expected a definition, found {}
 neg/19680.scala	same	
 neg/19680b.scala	same	
@@ -50,7 +51,7 @@ neg/6314-5.scala	same
 neg/6314-6.scala	same	
 neg/6314.scala	same	
 neg/6570-1.scala	same	
-neg/6570.scala	superset	+1 lines: type mismatch
+neg/6570.scala	superset	+1 lines: type mismatch	--source 3.3
 neg/6571.scala	same	
 neg/6709.scala	same	
 neg/6890.scala	accepts	
@@ -70,13 +71,13 @@ neg/NoneMatch.scala	same
 neg/OpaqueEscape.scala	superset	+1 lines: {} needs to be abstract
 neg/OrType.scala	same	
 neg/SummonFrom.scala	same	
-neg/abstract-givens-new.scala	std	is
+neg/abstract-givens-new.scala	std	is	--source future --language experimental.modularity
 neg/abstract-givens.scala	superset	+1 lines: given y cannot override final member given y in trait T
 neg/abstract-inline-val.scala	subset	1/2 lines
 neg/abstract-override.scala	same	
 neg/abstract-tracked-1.scala	syntax	expected end of statement, found {}
 neg/abstract-tracked.scala	syntax	expected a definition, found {}
-neg/adhoc-extension	accepts	
+neg/adhoc-extension	accepts		--source future
 neg/aliasing-subtypes.scala	accepts	
 neg/alloc-abstract.scala	oos	inheritance
 neg/ambiref.scala	same	
@@ -95,7 +96,7 @@ neg/applydynamic_sip.scala	std	App
 neg/arg-eof.scala	syntax	expected an expression, found {}
 neg/assignments.scala	superset	+1 lines: this expression cannot be assigned to
 neg/autoTuplingTest.scala	accepts	
-neg/autoTuplingTestb.scala	accepts	
+neg/autoTuplingTestb.scala	accepts		--language noAutoTupling
 neg/autoUnit.scala	same	
 neg/automatic-tupling-of-function-parameters.scala	same	
 neg/bad-selftype.scala	subset	1/3 lines
@@ -107,7 +108,7 @@ neg/block-ending-in-def.scala	different	type mismatch
 neg/blockescapesNeg.scala	accepts	
 neg/bounds.scala	same	
 neg/boundspropagation.scala	superset	+1 lines: type mismatch
-neg/by-name.scala	syntax	'erased' is not part of the supported Scala subset
+neg/by-name.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/byname-implicits-11.scala	same	
 neg/byname-implicits-16.scala	same	
 neg/byname-implicits-18.scala	std	App
@@ -119,7 +120,7 @@ neg/cannot-reduce-summonFrom.scala	same
 neg/capture-vars-subtyping.scala	syntax	expected {}, found {}
 neg/capture1.scala	std	App
 neg/caseclass-access.scala	same	
-neg/cb-companion-leaks.scala	syntax	expected end of statement, found {}
+neg/cb-companion-leaks.scala	syntax	expected end of statement, found {}	--language experimental.modularity
 neg/cc-fresh-levels.scala	syntax	expected {}, found {}
 neg/cc-only-defs.scala	syntax	expected {}, found {}
 neg/checkNoConflict	same	
@@ -138,29 +139,29 @@ neg/constrParams.scala	accepts
 neg/constructor-only.scala	accepts	
 neg/constructor-proxy-shadowing.scala	std	App
 neg/constructor-proxy-values.scala	std	App
-neg/context-bounds-migration-3.5.scala	same	
-neg/context-bounds-migration-future.scala	same	
+neg/context-bounds-migration-3.5.scala	same		--source 3.5
+neg/context-bounds-migration-future.scala	same		--source future
 neg/context-function-syntax.scala	syntax	expected {}, found {}
-neg/conversion-lang-import.scala	different	cannot resolve import
+neg/conversion-lang-import.scala	options	error: 3.11 is not a valid choice for --source	--source 3.11
 neg/creative-gadt-constraints.scala	same	
 neg/creator-ambiguous.scala	same	
 neg/creator-applys.scala	same	
 neg/creator-applys2.scala	same	
-neg/ctx-bounds-priority-migration.scala	superset	+1 lines: value {} is not a member of {}
-neg/ctx-bounds-priority.scala	same	
+neg/ctx-bounds-priority-migration.scala	superset	+1 lines: value {} is not a member of {}	--source 3.5
+neg/ctx-bounds-priority.scala	same		--source 3.7
 neg/curried-dependent-ift.scala	same	
 neg/cycles.scala	syntax	expected {}, found {}
 neg/cyclic.scala	superset	+1 lines: recursive use of {} needs an explicit result type
 neg/dedented-string-literals.scala	syntax	expected end of statement, found {}
 neg/default-arg-in-refinement.scala	same	
-neg/deferred-givens-2.scala	syntax	expected end of statement, found {}
+neg/deferred-givens-2.scala	syntax	expected end of statement, found {}	--source future --language experimental.modularity
 neg/deferred-givens.scala	superset	+3 lines: No given instance of type Ctx was found for inferring the implementation of the deferred given instance ctx in trait A
 neg/deferred-patdef.scala	oos	pattern-defs
 neg/deferredSummon.scala	same	
 neg/depfuns.scala	syntax	expected {}, found {}
 neg/deprecatedName-nonconstant.scala	accepts	
 neg/deptypes-badsyntax.scala	syntax	expected end of statement, found {}
-neg/deptypes.scala	syntax	expected end of statement, found {}
+neg/deptypes.scala	syntax	expected end of statement, found {}	--language experimental.dependent
 neg/derive-eq.scala	std	App
 neg/deriving-duplicate.scala	std	App
 neg/deriving-from-product-typed.scala	same	
@@ -220,33 +221,33 @@ neg/eql.scala	subset	6/8 lines
 neg/equality.scala	subset	13/28 lines
 neg/equality1.scala	same	
 neg/equality2.scala	same	
-neg/erased-15.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-4.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-5.scala	syntax	expected {}, found {}
-neg/erased-6.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-assign.scala	syntax	'erased' is not part of the supported Scala subset
+neg/erased-15.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-4.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-5.scala	syntax	expected {}, found {}	--language experimental.erasedDefinitions
+neg/erased-6.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-assign.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/erased-can-serialize.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-case-class.scala	syntax	'erased' is not part of the supported Scala subset
+neg/erased-case-class.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/erased-class.scala	std	Erased
-neg/erased-def-rhs.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-if-else.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-in-tuples.scala	syntax	expected {}, found {}
+neg/erased-def-rhs.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-if-else.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-in-tuples.scala	syntax	expected {}, found {}	--language experimental.erasedDefinitions
 neg/erased-inline-unrealizable-path.scala	different	type mismatch
 neg/erased-lazy-given.scala	std	Erased
 neg/erased-lazy-val.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-machine-state-encoding-with-inline.scala	same	
-neg/erased-match.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-object.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-path.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-return.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-try.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-type.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-val-rhs.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-value-class.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erased-var.scala	syntax	'erased' is not part of the supported Scala subset
+neg/erased-machine-state-encoding-with-inline.scala	same		--language experimental.erasedDefinitions
+neg/erased-match.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-object.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-path.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-return.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-try.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-type.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-val-rhs.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-value-class.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/erased-var.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/erasedInline.scala	syntax	'erased' is not part of the supported Scala subset
 neg/erasedValue.scala	same	
-neg/erasedValueb.scala	syntax	'erased' is not part of the supported Scala subset
+neg/erasedValueb.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/errorTypes.scala	same	
 neg/errpos.scala	syntax	expected an expression, found {}
 neg/escapingRefs.scala	same	
@@ -340,7 +341,7 @@ neg/given-ambiguous-default-2.scala	same
 neg/given-eta.scala	same	
 neg/given-loop-prevention.scala	accepts	
 neg/given-pattern.scala	same	
-neg/given-triangle.scala	accepts	
+neg/given-triangle.scala	accepts		--source 3.6
 neg/harmonize.scala	same	
 neg/hidden-type-errors	accepts	
 neg/hk-bounds.scala	subset	5/6 lines
@@ -350,7 +351,7 @@ neg/hk-variance3.scala	accepts
 neg/hklower2.scala	accepts	
 neg/hkprefix.scala	same	
 neg/i0091-infpaths.scala	same	
-neg/i0248-inherit-refined.scala	oos	inheritance
+neg/i0248-inherit-refined.scala	oos	inheritance	--source future --language experimental.modularity
 neg/i0281-null-primitive-conforms.scala	same	
 neg/i0583-skolemize.scala	same	
 neg/i10074.scala	syntax	expected identifier, found {}
@@ -360,7 +361,7 @@ neg/i10098.scala	same
 neg/i10268.scala	same	
 neg/i10295.scala	same	
 neg/i10369.scala	std	PolyFunction
-neg/i1050.scala	different	type mismatch
+neg/i1050.scala	different	type mismatch	--source future
 neg/i1050a.scala	different	type mismatch
 neg/i1050c.scala	subset	4/7 lines
 neg/i10511.scala	same	
@@ -398,7 +399,7 @@ neg/i11208.scala	accepts
 neg/i11208a.scala	std	App
 neg/i11214.scala	same	
 neg/i11225.scala	accepts	
-neg/i11225b.scala	accepts	
+neg/i11225b.scala	same		--source future
 neg/i11226.scala	same	
 neg/i11226a.scala	same	
 neg/i11253.scala	accepts	
@@ -415,7 +416,7 @@ neg/i11544.scala	same
 neg/i11561.scala	same	
 neg/i11565.gadt.scala	same	
 neg/i11567.scala	syntax	expected {}, found {}
-neg/i11581.scala	syntax	expected {}, found {}
+neg/i11581.scala	accepts	
 neg/i11614.scala	same	
 neg/i11616	oos	java
 neg/i11637.scala	accepts	
@@ -509,7 +510,7 @@ neg/i13487.scala	same
 neg/i13497.scala	same	
 neg/i13513.scala	same	
 neg/i13570.scala	same	
-neg/i13580.scala	syntax	expected {}, found {}
+neg/i13580.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
 neg/i13701.scala	accepts	
 neg/i13703.scala	same	
 neg/i13757-match-type-anykind.scala	std	AnyKind
@@ -629,7 +630,7 @@ neg/i16035a.scala	same
 neg/i1605.scala	std	x2233
 neg/i16072.scala	superset	+1 lines: enum Oops_: needs at least one case
 neg/i16092-members-only.scala	superset	+1 lines: {} needs to be abstract
-neg/i16092.scala	different	type mismatch
+neg/i16092.scala	different	type mismatch	--source future
 neg/i16095.scala	same	
 neg/i16130.scala	same	
 neg/i16146.scala	accepts	
@@ -703,7 +704,7 @@ neg/i1747.scala	accepts
 neg/i1750.scala	same	
 neg/i1750a.scala	same	
 neg/i17581.scala	superset	+1 lines: value {} is not a member of {}
-neg/i17612b	accepts	
+neg/i17612b	accepts		--source 3.3
 neg/i17613b	accepts	
 neg/i1771.scala	accepts	
 neg/i17738-infix-object	same	
@@ -726,7 +727,7 @@ neg/i18109.scala	same
 neg/i18122.scala	same	
 neg/i18171.scala	superset	+1 lines: type argument T does not conform to upper bound Tuple
 neg/i18188.scala	accepts	
-neg/i18234.scala	subset	1/63 lines
+neg/i18234.scala	subset	1/63 lines	--source 3.9
 neg/i18244.scala	same	
 neg/i18265.scala	same	
 neg/i18274.scala	same	
@@ -791,7 +792,7 @@ neg/i19413.scala	superset	+1 lines: cannot resolve import
 neg/i19414-desugared.scala	same	
 neg/i19414.scala	superset	+1 lines: type mismatch
 neg/i19445.scala	superset	+1 lines: type argument UnwrapTypes[xs] does not conform to upper bound Tuple
-neg/i19506.scala	same	
+neg/i19506.scala	same		--source 3.4-migration
 neg/i19594.scala	std	App
 neg/i19619	oos	java
 neg/i19731.scala	same	
@@ -815,7 +816,7 @@ neg/i20105.scala	same
 neg/i20127.scala	same	
 neg/i20245	different	{} is not a member of the package
 neg/i20265-1.scala	accepts	
-neg/i20265.scala	superset	+3 lines: X is not a legal path
+neg/i20265.scala	superset	+3 lines: X is not a legal path	--source 3.3
 neg/i2030.scala	same	
 neg/i20317a.scala	different	value {} is not a member of {}
 neg/i2032.scala	accepts	
@@ -843,10 +844,10 @@ neg/i20946a	same
 neg/i21071.scala	superset	+1 lines: Ambiguous overload. The overloaded alternatives of method foo in object MySuite with types
 neg/i2117.scala	syntax	expected identifier, found {}
 neg/i21207.scala	same	
-neg/i21212.scala	accepts	
+neg/i21212.scala	accepts		--source 3.7
 neg/i21239.orig.scala	same	
 neg/i21239.scala	same	
-neg/i21303	oos	java
+neg/i21303	oos	java	--source 3.7-migration
 neg/i21321.scala	subset	1/3 lines
 neg/i21335.scala	same	
 neg/i21351.scala	subset	1/2 lines
@@ -873,8 +874,8 @@ neg/i22357.scala	syntax	expected identifier, found {}
 neg/i22357a.scala	same	
 neg/i22367.scala	accepts	
 neg/i22423.scala	same	
-neg/i22439.scala	superset	+2 lines: method f does not take parameters
-neg/i22440.scala	accepts	
+neg/i22439.scala	superset	+2 lines: missing argument for parameter {}
+neg/i22440.scala	subset	1/2 lines	--source future
 neg/i22498.scala	accepts	
 neg/i22552.scala	superset	+1 lines: Context bounds are not allowed in this position
 neg/i22560.scala	subset	1/3 lines
@@ -916,8 +917,8 @@ neg/i23402b.scala	same
 neg/i23402c.scala	same	
 neg/i23402d.scala	same	
 neg/i23406.scala	syntax	'erased' is not part of the supported Scala subset
-neg/i23435-min.scala	same	
-neg/i23435.scala	same	
+neg/i23435-min.scala	same		--source future
+neg/i23435.scala	same		--source future
 neg/i23459.scala	same	
 neg/i23459b.scala	same	
 neg/i23474.scala	same	
@@ -931,7 +932,7 @@ neg/i23832a.scala	same
 neg/i23832b.scala	accepts	
 neg/i24037.scala	same	
 neg/i24067.scala	accepts	
-neg/i24096.scala	same	
+neg/i24096.scala	same		--source future
 neg/i2412.scala	std	iDontExist
 neg/i24162.scala	syntax	expected {}, found {}
 neg/i24168.scala	oos	extractors
@@ -962,7 +963,7 @@ neg/i24917.scala	accepts
 neg/i2492.scala	same	
 neg/i2492b.scala	same	
 neg/i2494.scala	syntax	expected identifier, found {}
-neg/i24990.scala	std	Erased
+neg/i24990.scala	std	Erased	--language experimental.erasedDefinitions
 neg/i24995.scala	std	Mop
 neg/i25077.scala	accepts	
 neg/i25095.scala	accepts	
@@ -982,7 +983,7 @@ neg/i25531.scala	std	FileVisitor
 neg/i25531b.scala	accepts	
 neg/i25548.scala	syntax	expected {}, found {}
 neg/i25571.scala	accepts	
-neg/i25595.scala	oos	pattern-defs
+neg/i25595.scala	oos	pattern-defs	--source future
 neg/i2564.scala	accepts	
 neg/i25644.scala	syntax	expected end of statement, found {}
 neg/i2564b.scala	accepts	
@@ -992,7 +993,7 @@ neg/i25716.scala	same
 neg/i25717.scala	syntax	expected identifier, found {}
 neg/i25856.scala	same	
 neg/i26416.scala	syntax	expected {}, found {}
-neg/i2642.scala	syntax	expected {}, found {}
+neg/i2642.scala	syntax	expected {}, found {}	--language experimental.erasedDefinitions
 neg/i26683.scala	superset	+4 lines: Cannot prove that Probe[Pick[X]] =:= "not-const".
 neg/i2672.scala	same	
 neg/i2677.scala	same	
@@ -1028,7 +1029,7 @@ neg/i3171.scala	same
 neg/i3200.scala	same	
 neg/i3200b.scala	same	
 neg/i324.scala	same	
-neg/i3246.scala	same	
+neg/i3246.scala	same		--source 3.0-migration
 neg/i3253.scala	accepts	
 neg/i3332.scala	syntax	expected {}, found {}
 neg/i3348.scala	superset	+1 lines: value {} is not a member of {}
@@ -1056,20 +1057,20 @@ neg/i3900.scala	syntax	expected {}, found {}
 neg/i3901.scala	same	
 neg/i3930.scala	std	App
 neg/i3935.scala	same	
-neg/i3964.scala	same	
+neg/i3964.scala	same		--source future --language experimental.modularity
 neg/i3976.scala	different	type argument F does not have the same kind as its bound [_]
 neg/i3989.scala	std	App
 neg/i3989a.scala	std	App
 neg/i3989b.scala	std	App
 neg/i3989c.scala	std	App
 neg/i3989d.scala	superset	+2 lines: covariant type _X occurs in invariant position in type  = _X of type X
-neg/i3989e.scala	std	App
+neg/i3989e.scala	std	App	--source future
 neg/i3989f.scala	std	App
 neg/i3989g.scala	std	App
 neg/i4004.scala	subset	2/8 lines
 neg/i4031-anysel.scala	same	
 neg/i4058.scala	syntax	expected identifier, found {}
-neg/i4060.scala	syntax	'erased' is not part of the supported Scala subset
+neg/i4060.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/i4098.scala	same	
 neg/i4098a.scala	same	
 neg/i4196.scala	superset	+2 lines: TailRec optimisation not applicable, method foo contains no recursive calls
@@ -1179,7 +1180,7 @@ neg/i5495.scala	same
 neg/i5498-postfixOps.scala	syntax	expected an expression, found {}
 neg/i5521.scala	accepts	
 neg/i5525.scala	different	modifier abstract is not allowed for this definition
-neg/i5525b.scala	syntax	'erased' is not part of the supported Scala subset
+neg/i5525b.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/i5546.scala	same	
 neg/i5556.scala	same	
 neg/i5578.scala	same	
@@ -1189,7 +1190,7 @@ neg/i5640.scala	syntax	expected identifier, found {}
 neg/i5690.scala	std	Inherited
 neg/i5810.scala	same	
 neg/i5823.scala	accepts	
-neg/i5854.scala	different	type mismatch
+neg/i5854.scala	different	type mismatch	--source future
 neg/i5888.scala	same	
 neg/i5948.scala	same	
 neg/i5948a.scala	same	
@@ -1238,7 +1239,7 @@ neg/i6622c.scala	same
 neg/i6622d.scala	same	
 neg/i6622e.scala	same	
 neg/i6635a.scala	same	
-neg/i6716-source-3.4.scala	std	App
+neg/i6716-source-3.4.scala	std	App	--source 3.4
 neg/i6716.scala	accepts	
 neg/i6724.scala	same	
 neg/i6762b.scala	same	
@@ -1355,7 +1356,7 @@ neg/i8827b.scala	same
 neg/i8841.scala	same	
 neg/i8861.scala	superset	+3 lines: type mismatch
 neg/i8894.scala	subset	1/2 lines
-neg/i8896-a.scala	subset	1/2 lines
+neg/i8896-a.scala	same	
 neg/i8896-b.scala	subset	1/2 lines
 neg/i8900-promote.scala	accepts	
 neg/i8900.scala	same	
@@ -1443,7 +1444,7 @@ neg/infer-tracked-explicit-witness.scala	std	is
 neg/infer-union-warning-id.scala	accepts	
 neg/infix-named-args.scala	superset	+3 lines: operator {} cannot be applied
 neg/infix-then-complex-expr.scala	syntax	expected end of statement, found {}
-neg/infix.scala	accepts	
+neg/infix.scala	accepts		--source future
 neg/inline-abstract.scala	superset	+1 lines: {} needs to be abstract
 neg/inline-error-pos.scala	same	
 neg/inline-foreach.scala	subset	1/2 lines
@@ -1452,57 +1453,57 @@ neg/inline-overload.scala	same
 neg/inline-override.scala	accepts	
 neg/inline-param-unstable-path.scala	subset	1/2 lines
 neg/inline-parameter-override.scala	accepts	
-neg/inline-trait-body-class-case.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-body-class-extends-inline-trait.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-body-class-generic.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-body-class-params.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-body-class-return.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-body-class-sealed.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-body-class-simple.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-body-override-def-final.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-body-override-val-final.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-body-override-var.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-body-private-name-collision.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-body-trait-inline.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-body-trait-parameter.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-body-trait-simple.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-body-trait-term-parameters.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-child-overrides-parent-missing-override.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clash-method-method-needs-override.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clash-method-param.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-clash-method-val-param-needs-override.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clash-method-var-param-missing-override.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clash-method-var-param.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-clash-val-param-method-2.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clash-val-param-method.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clash-val-param-param.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-clash-val-param-val-param-missing-override.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clash-var-param-method-2.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clash-var-param-method.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clash-var-param-param.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-clash-var-param-var-param.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clashing-parent-members.scala	superset	+2 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clashing-parent-methods.scala	superset	+2 lines: modifier inline is not allowed for this definition
-neg/inline-trait-clashing-parent-val-params.scala	superset	+2 lines: modifier inline is not allowed for this definition
-neg/inline-trait-co-nested.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-cross-reference-defined-after.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-double-nested-class.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-infinite-inline-triangle-cycle.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-inline-overrides-non-inline-retained-inline.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-inline-val-constant-value.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-nested-class-outside-ref.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-nested-class-parameter-passing.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-opaque-type-fail.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-override-private-member-deleted.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-parent-trait-param-access.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-self-inline-anonymous-class.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-self-inline-three-cycle.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-self-inline-two-cycle.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-self-specialization-loop.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-self-type-missing-parent.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/inline-trait-self-type-problems.scala	superset	+4 lines: modifier inline is not allowed for this definition
-neg/inline-trait-supercall-into-trait.scala	different	modifier inline is not allowed for this definition
-neg/inline-trait-uninitialized-value-should-warn.scala	different	modifier inline is not allowed for this definition
+neg/inline-trait-body-class-case.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-class-extends-inline-trait.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-class-generic.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-class-params.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-class-return.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-class-sealed.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-class-simple.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-override-def-final.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-override-val-final.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-override-var.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-private-name-collision.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-trait-inline.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-trait-parameter.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-trait-simple.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-body-trait-term-parameters.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-child-overrides-parent-missing-override.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-method-method-needs-override.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-method-param.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-method-val-param-needs-override.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-method-var-param-missing-override.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-method-var-param.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-val-param-method-2.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-val-param-method.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-val-param-param.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-val-param-val-param-missing-override.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-var-param-method-2.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-var-param-method.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-var-param-param.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clash-var-param-var-param.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clashing-parent-members.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clashing-parent-methods.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-clashing-parent-val-params.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-co-nested.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-cross-reference-defined-after.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-double-nested-class.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-infinite-inline-triangle-cycle.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-inline-overrides-non-inline-retained-inline.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-inline-val-constant-value.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-nested-class-outside-ref.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-nested-class-parameter-passing.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-opaque-type-fail.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-override-private-member-deleted.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-parent-trait-param-access.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-self-inline-anonymous-class.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-self-inline-three-cycle.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-self-inline-two-cycle.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-self-specialization-loop.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/inline-trait-self-type-missing-parent.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-self-type-problems.scala	superset	+4 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-supercall-into-trait.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/inline-trait-uninitialized-value-should-warn.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
 neg/inline-unstable-accessors.scala	accepts	
 neg/inline-val-in-inline-method.scala	same	
 neg/inline-val.scala	same	
@@ -1520,7 +1521,7 @@ neg/interleaving-params.scala	syntax	expected {}, found {}
 neg/interleaving-signatureCollision.scala	syntax	expected {}, found {}
 neg/interleaving-typeApply.scala	syntax	expected {}, found {}
 neg/interleaving-unmatched.scala	syntax	expected {}, found {}
-neg/interleavingExperimental.scala	syntax	expected {}, found {}
+neg/interleavingExperimental.scala	syntax	expected {}, found {}	--source 3.5
 neg/interpolator-dollar.scala	accepts	
 neg/into-inferred.scala	different	cannot resolve import
 neg/into-mods.scala	syntax	expected a definition, found {}
@@ -1545,7 +1546,7 @@ neg/kind-projector.scala	same
 neg/kinds1.scala	same	
 neg/kinds2.scala	same	
 neg/labelNotFound.scala	std	boundary
-neg/lambda-infer.scala	syntax	expected {}, found {}
+neg/lambda-infer.scala	syntax	expected {}, found {}	--language experimental.erasedDefinitions
 neg/lambda-rename.scala	superset	+1 lines: type mismatch
 neg/language-import.scala	different	value {} is not a member of {}
 neg/leading-infix-miss.scala	different	type mismatch
@@ -1567,7 +1568,7 @@ neg/magic-offset-header-d_wrapper.scala	same
 neg/magic-offset-header-e.scala	same	
 neg/magic-offset-header-e_wrapper.scala	same	
 neg/magic-offset-header-f.scala	same	
-neg/magic-offset-header-f_wrapper.scala	same	
+neg/magic-offset-header-f_wrapper.scala	same		--language strictEquality
 neg/main-annotation-by-name-param.scala	same	
 neg/main-functions-doubledef.scala	superset	+1 lines: {} is already defined
 neg/main-functions-nameclash.scala	same	
@@ -1577,7 +1578,7 @@ neg/manifest-summoning.scala	std	manifest
 neg/match-infix.scala	syntax	expected end of statement, found {}
 neg/match-type-enumeration-value-hack.scala	std	Enumeration
 neg/matchtype-seq.scala	same	
-neg/migrate-once.scala	same	
+neg/migrate-once.scala	same		--source 3.5-migration
 neg/mirror-implicit-scope.scala	same	
 neg/mirror-synthesis-errors-b.scala	superset	+3 lines: no given instance
 neg/mirror-synthesis-errors.scala	subset	6/7 lines
@@ -1615,8 +1616,8 @@ neg/multi-file-error	std	foo
 neg/multi-param-derives.scala	std	App
 neg/multi-patterns.scala	syntax	expected {}, found {}
 neg/multiLineOps.scala	syntax	expected a definition, found {}
-neg/multiple-args-consume.scala	syntax	'erased' is not part of the supported Scala subset
-neg/multiple-args.scala	syntax	'erased' is not part of the supported Scala subset
+neg/multiple-args-consume.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+neg/multiple-args.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/name-hints.scala	same	
 neg/named-tuple-apply.scala	subset	3/4 lines
 neg/named-tuple-selectable.scala	same	
@@ -1624,10 +1625,10 @@ neg/named-tuples-2.scala	same
 neg/named-tuples-3.scala	same	
 neg/named-tuples-4.scala	same	
 neg/named-tuples-mirror.scala	same	
-neg/named-tuples-strictEquality.scala	accepts	
+neg/named-tuples-strictEquality.scala	accepts		--language strictEquality
 neg/named-tuples.scala	different	Illegal combination of named and unnamed tuple elements
 neg/namedTypeParams.scala	syntax	expected identifier, found {}
-neg/nested-module-no-inits.scala	syntax	'erased' is not part of the supported Scala subset
+neg/nested-module-no-inits.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/nested_bounds.scala	same	
 neg/no-self-leaks.scala	syntax	expected identifier, found {}
 neg/no-unit.scala	same	
@@ -1643,8 +1644,8 @@ neg/notfound-type-but-term.scala	same
 neg/nowarn-parser-error.scala	syntax	expected identifier, found {}
 neg/nowarn-typer-error.scala	same	
 neg/null-anyval.scala	same	
-neg/nullless.scala	different	several entry points: nullless.main, bar.main; choose one with --main
-neg/old-givens.scala	accepts	
+neg/nullless.scala	different	several entry points: nullless.main, bar.main; choose one with --main	--source future
+neg/old-givens.scala	accepts		--source future
 neg/opaque-bounds-1.scala	superset	+1 lines: the underlying type String does not conform to the bound FlagSet
 neg/opaque-bounds.scala	different	the underlying type String does not conform to the bound FlagSet
 neg/opaque-id.scala	same	
@@ -1664,13 +1665,13 @@ neg/override-erasure-clash.scala	same
 neg/override-extension_normal-methods.scala	same	
 neg/override-inner-class.scala	accepts	
 neg/override-scala2-macro.scala	superset	+1 lines: class Foo cannot extend final class StringContext
-neg/overrideClass.scala	syntax	expected identifier, found {}
+neg/overrideClass.scala	syntax	expected identifier, found {}	--source 3.0-migration
 neg/overrideFinalImplicit.scala	accepts	
 neg/overrides.scala	syntax	expected {}, found {}
 neg/package-export	accepts	
 neg/package-implicit	same	
-neg/parent-refinement-access.scala	oos	inheritance
-neg/parent-refinement.scala	superset	+4 lines: {} needs to be abstract
+neg/parent-refinement-access.scala	oos	inheritance	--source future --language experimental.modularity
+neg/parent-refinement.scala	superset	+4 lines: {} needs to be abstract	--source future --language experimental.modularity
 neg/parser-stability-1.scala	syntax	expected {}, found {}
 neg/parser-stability-10.scala	syntax	expected {}, found {}
 neg/parser-stability-11.scala	subset	1/4 lines
@@ -1734,16 +1735,16 @@ neg/realizability.scala	accepts
 neg/reassignment.scala	same	
 neg/recursive-lower-constraint.scala	same	
 neg/refinedSubtyping.scala	same	
-neg/refutable-pattern-binding-messages-old.scala	same	
-neg/refutable-pattern-binding-messages.scala	same	
+neg/refutable-pattern-binding-messages-old.scala	same		--source 3.7
+neg/refutable-pattern-binding-messages.scala	same		--source 3.8
 neg/renaming-imports.scala	superset	+1 lines: {} is not a member of the package
 neg/repeatable	oos	java
 neg/repeatedArgs213.scala	same	
 neg/rightassoc-extmethod.scala	same	
 neg/rootImplicits.scala	same	
-neg/runtimeChecked-2.scala	accepts	
-neg/runtimeChecked.scala	accepts	
-neg/safe-setting.scala	accepts	
+neg/runtimeChecked-2.scala	accepts		--source future
+neg/runtimeChecked.scala	accepts		--source future
+neg/safe-setting.scala	accepts		--language experimental.safe
 neg/safeThrowsStrawman.scala	syntax	'erased' is not part of the supported Scala subset
 neg/saferExceptions.scala	different	throws takes 1 type argument(s), 2 given
 neg/scala-uri.scala	same	
@@ -1758,7 +1759,7 @@ neg/shapeless-hcons.scala	accepts
 neg/simple-opaque.scala	same	
 neg/singleQuoteStrings-2.scala	syntax	expected end of statement, found {}
 neg/singleQuoteStrings.scala	syntax	unterminated character literal
-neg/singleton-ctx-bound.scala	syntax	expected end of statement, found {}
+neg/singleton-ctx-bound.scala	syntax	expected end of statement, found {}	--source future --language experimental.modularity
 neg/singleton-ops-any.scala	superset	+8 lines: type mismatch
 neg/singleton-ops-boolean.scala	syntax	expected {}, found {}
 neg/singleton-ops-double.scala	different	cannot resolve import
@@ -1769,44 +1770,44 @@ neg/singleton-ops-match-type-scrutinee.scala	same
 neg/singleton-ops-recursive-match-type.scala	same	
 neg/singleton-ops-string.scala	superset	+20 lines: type mismatch
 neg/singleton-ops-type-alias.scala	same	
-neg/singletonInterval.scala	same	
+neg/singletonInterval.scala	same		--source future
 neg/singletonOrs.scala	same	
 neg/singletons.scala	syntax	expected identifier, found {}
 neg/sip54.scala	same	
 neg/ski.scala	subset	7/11 lines
 neg/skolemize.scala	subset	1/2 lines
-neg/source-import-3-1-migration.scala	accepts	
-neg/source-import.scala	accepts	
+neg/source-import-3-1-migration.scala	same	
+neg/source-import.scala	same	
 neg/spaces-vs-tabs.scala	subset	1/5 lines
-neg/specialized-trait-anonymous-class-breaks-rules.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-bad-type-param.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/specialized-trait-banned-covariance.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-drops-specialized-qualifier.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-exhaustivity-check-2.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-exhaustivity-check.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-infinite-inline.scala	superset	+2 lines: modifier inline is not allowed for this definition
-neg/specialized-trait-inline-method-missing-specialized.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/specialized-trait-inlining-causes-implementation-required-loop-bad-manual.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-nested-specialized.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-no-path-dependent.scala	same	
-neg/specialized-trait-no-regression-overrides-nothing.scala	superset	+2 lines: modifier inline is not allowed for this definition
-neg/specialized-trait-not-inline.scala	std	Specialized
-neg/specialized-trait-opaque-type-fail.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/specialized-trait-overload.scala	superset	+1 lines: modifier inline is not allowed for this definition
-neg/specialized-trait-question-mark-in-inheritance.scala	superset	+2 lines: modifier inline is not allowed for this definition
-neg/specialized-trait-question-mark-interface.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-question-mark.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-scoped-inside-object-deep-nesting.scala	same	
-neg/specialized-trait-sealed-cross-file	superset	+3 lines: modifier inline is not allowed for this definition
-neg/specialized-trait-self-type-problems.scala	superset	+4 lines: modifier inline is not allowed for this definition
-neg/specialized-trait-specialized-incorrect-usage.scala	same	
-neg/specialized-trait-specialized-incorrect-usage2.scala	std	Specialized
-neg/specialized-trait-specialized-incorrect-usage3.scala	std	Specialized
-neg/specialized-trait-trait-extends-specialized-trait-no-param.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-trait-extends-specialized-trait.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-variance-not-allowed.scala	superset	+2 lines: modifier inline is not allowed for this definition
-neg/specialized-trait-variance-nothing.scala	different	modifier inline is not allowed for this definition
-neg/specialized-trait-variant-warns.scala	different	modifier inline is not allowed for this definition
+neg/specialized-trait-anonymous-class-breaks-rules.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-bad-type-param.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-banned-covariance.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-drops-specialized-qualifier.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-exhaustivity-check-2.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-exhaustivity-check.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-infinite-inline.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-inline-method-missing-specialized.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-inlining-causes-implementation-required-loop-bad-manual.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-nested-specialized.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-no-path-dependent.scala	same		--language experimental.specializedTraits
+neg/specialized-trait-no-regression-overrides-nothing.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-not-inline.scala	std	Specialized	--language experimental.specializedTraits
+neg/specialized-trait-opaque-type-fail.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-overload.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-question-mark-in-inheritance.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-question-mark-interface.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits,experimental.inlineTraits
+neg/specialized-trait-question-mark.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-scoped-inside-object-deep-nesting.scala	same		--language experimental.specializedTraits
+neg/specialized-trait-sealed-cross-file	superset	+3 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-self-type-problems.scala	superset	+4 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-specialized-incorrect-usage.scala	same		--language experimental.specializedTraits
+neg/specialized-trait-specialized-incorrect-usage2.scala	std	Specialized	--language experimental.specializedTraits
+neg/specialized-trait-specialized-incorrect-usage3.scala	std	Specialized	--language experimental.specializedTraits
+neg/specialized-trait-trait-extends-specialized-trait-no-param.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-trait-extends-specialized-trait.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-variance-not-allowed.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-variance-nothing.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+neg/specialized-trait-variant-warns.scala	different	modifier inline is not allowed for this definition	--language experimental.specializedTraits
 neg/specializing-inline.scala	same	
 neg/spread-patterns.scala	same	
 neg/static-implements.scala	accepts	
@@ -1911,14 +1912,14 @@ neg/toplevel-overload	same
 neg/toplevel-package	accepts	
 neg/toplevel-privates	subset	2/3 lines
 neg/toplevel.scala	syntax	expected a definition, found {}
-neg/tracked.scala	syntax	expected {}, found {}
+neg/tracked.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
 neg/tracked2.scala	syntax	expected {}, found {}
 neg/trailing-comma-pattern.scala	oos	val-type
 neg/trailing-comma-pattern2.scala	oos	val-type
 neg/trailingCommas.scala	syntax	expected identifier, found {}
-neg/trait-extends-inline-trait-indirectly.scala	superset	+2 lines: modifier inline is not allowed for this definition
-neg/trait-extends-inline-trait-with-params-uninitialized.scala	different	modifier inline is not allowed for this definition
-neg/trait-inline-trait-clashing.scala	superset	+1 lines: modifier inline is not allowed for this definition
+neg/trait-extends-inline-trait-indirectly.scala	superset	+2 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/trait-extends-inline-trait-with-params-uninitialized.scala	different	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+neg/trait-inline-trait-clashing.scala	superset	+1 lines: modifier inline is not allowed for this definition	--language experimental.inlineTraits
 neg/trait-java-enum.scala	accepts	
 neg/traitParamsMixin.scala	same	
 neg/traitParamsTyper.scala	same	
@@ -1942,7 +1943,7 @@ neg/tuple-oob1.scala	same
 neg/tuple-ops.scala	same	
 neg/tuple-patterns.scala	same	
 neg/tupled-function-instances.scala	superset	+3 lines: {} is not a member of the package
-neg/type-cast-purity.scala	syntax	'erased' is not part of the supported Scala subset
+neg/type-cast-purity.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/type-lambdas-posttyper.scala	std	App
 neg/type-lambdas.scala	std	App
 neg/type-params.scala	subset	15/17 lines
@@ -1950,7 +1951,7 @@ neg/type-projections.scala	accepts
 neg/type-qmark.scala	syntax	expected end of statement, found {}
 neg/type-test-syntesize.scala	same	
 neg/typeChecks.scala	different	cannot resolve import
-neg/typeclass-derivation2.scala	superset	+6 lines: type mismatch
+neg/typeclass-derivation2.scala	superset	+6 lines: type mismatch	--language experimental.erasedDefinitions
 neg/typeclass-encoding2.scala	different	this type does not take type arguments
 neg/typedIdents	same	
 neg/typedapply.scala	subset	3/4 lines
@@ -1975,7 +1976,7 @@ neg/unroll-illegal3.scala	accepts
 neg/unroll-multipleParams.scala	accepts	
 neg/unroll-no-default.scala	accepts	
 neg/unroll-traitConstructor.scala	accepts	
-neg/unsafe-dollar-in-name-2.scala	accepts	
+neg/unsafe-dollar-in-name-2.scala	accepts		--language experimental.safe
 neg/unsafe-dollar-in-name.scala	accepts	
 neg/unselectable-fields.scala	same	
 neg/unsound-covariant-gadt.scala	same	
@@ -2001,7 +2002,7 @@ neg/widenInst-cycle.scala	same
 neg/wildbase.scala	accepts	
 neg/wildcard-imports	same	
 neg/wildcard-match.scala	same	
-neg/with-type-operator-future.scala	accepts	
+neg/with-type-operator-future.scala	same	
 neg/with-type-operator.scala	accepts	
 neg/yimports-custom	different	type {} not found
 neg/yimports-nojava.scala	accepts	
@@ -2015,7 +2016,7 @@ pos/10077.scala	rejects	type argument f does not have the same kind as its bound
 pos/10510.scala	rejects	type mismatch
 pos/10747-onnxmin.scala	accepts	
 pos/10747-shapeless-min-spec.scala	accepts	
-pos/10747-shapeless-min.scala	accepts	
+pos/10747-shapeless-min.scala	accepts		--source 3.3
 pos/10867.scala	accepts	
 pos/11463.scala	accepts	
 pos/11484	oos	java
@@ -2072,7 +2073,7 @@ pos/6697.scala	accepts
 pos/6709.scala	rejects	value {} is not a member of {}
 pos/7512.scala	accepts	
 pos/8313.scala	accepts	
-pos/8647.scala	accepts	
+pos/8647.scala	accepts		--source 3.3
 pos/8649.scala	accepts	
 pos/8778.scala	rejects	value {} is not a member of {}
 pos/8905-2.scala	accepts	
@@ -2080,7 +2081,7 @@ pos/8905.scala	accepts
 pos/9239.scala	rejects	type argument --[d] does not conform to upper bound Bin
 pos/9623.scala	rejects	type mismatch
 pos/9675.scala	rejects	no given instance
-pos/9757.scala	std	newType
+pos/9757.scala	std	newType	--source 3.3
 pos/9871.scala	accepts	
 pos/9890.scala	accepts	
 pos/A.scala	accepts	
@@ -2095,10 +2096,10 @@ pos/CoderTrait.scala	std	ArrowAssoc
 pos/Dynamic.scala	accepts	
 pos/ErasureAnd.scala	accepts	
 pos/Foo.scala	accepts	
-pos/FromString-cb-companion.scala	std	N
-pos/FromString-named.scala	accepts	
+pos/FromString-cb-companion.scala	std	N	--language experimental.modularity
+pos/FromString-named.scala	accepts		--source future --language experimental.modularity
 pos/FromString-typeparam.scala	accepts	
-pos/FromString.scala	std	is
+pos/FromString.scala	std	is	--source future --language experimental.modularity
 pos/HelloWorld.scala	accepts	
 pos/IArrayToArraySeq.scala	accepts	
 pos/Iter2.scala	accepts	
@@ -2136,7 +2137,7 @@ pos/abstract-inline-val.scala	rejects	inline value must have a literal constant 
 pos/abstract-tracked-2.scala	syntax	expected end of statement, found {}
 pos/abstract-tracked.scala	syntax	expected end of statement, found {}
 pos/abstract.scala	accepts	
-pos/adhoc-extension	accepts	
+pos/adhoc-extension	accepts		--source future
 pos/alias-new.scala	accepts	
 pos/alias.scala	accepts	
 pos/aliasNew.scala	rejects	type mismatch
@@ -2197,7 +2198,7 @@ pos/bigint.scala	accepts
 pos/blockescapes.scala	accepts	
 pos/boundary-variations.scala	rejects	{} is not a member of the package
 pos/bounds.scala	accepts	
-pos/bson	syntax	expected {}, found {}
+pos/bson	syntax	expected {}, found {}	--source 3.5
 pos/bubbleUpNothing.scala	accepts	
 pos/builders.scala	accepts	
 pos/byNameVarargs.scala	accepts	
@@ -2231,10 +2232,10 @@ pos/case-signature.scala	accepts
 pos/caseClassInMethod.scala	accepts	
 pos/caseaccs.scala	accepts	
 pos/caseclass-access.scala	accepts	
-pos/cb-companion-joins.scala	syntax	expected end of statement, found {}
-pos/cbproxy-expansion.scala	rejects	a context bound needs a type constructor with one parameter
+pos/cb-companion-joins.scala	syntax	expected end of statement, found {}	--source future
+pos/cbproxy-expansion.scala	rejects	a context bound needs a type constructor with one parameter	--source future --language experimental.modularity
 pos/cc-backwards-compat	syntax	expected {}, found {}
-pos/cc-self-fluid	syntax	expected {}, found {}
+pos/cc-self-fluid	syntax	expected {}, found {}	--language experimental.captureChecking
 pos/cfcrash.scala	accepts	
 pos/chan.scala	accepts	
 pos/chang	oos	java
@@ -2287,14 +2288,14 @@ pos/default-getter-variance.scala	accepts
 pos/default-getter.scala	accepts	
 pos/default-param-interface.scala	accepts	
 pos/default-super.scala	accepts	
-pos/deferred-givens-singletons.scala	syntax	expected end of statement, found {}
+pos/deferred-givens-singletons.scala	syntax	expected end of statement, found {}	--source future --language experimental.modularity
 pos/deferred-givens.scala	syntax	expected end of statement, found {}
-pos/deferredSummon.scala	syntax	expected end of statement, found {}
+pos/deferredSummon.scala	syntax	expected end of statement, found {}	--source future --language experimental.modularity
 pos/delambdafy-lambdalift.scala	accepts	
-pos/dep-context-bounds.scala	rejects	a context bound needs a type constructor with one parameter
+pos/dep-context-bounds.scala	rejects	a context bound needs a type constructor with one parameter	--language experimental.modularity
 pos/dep-match.scala	accepts	
 pos/dep-poly-class.scala	accepts	
-pos/depclass-1.scala	syntax	expected {}, found {}
+pos/depclass-1.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
 pos/dependent-annot-type-param.scala	accepts	
 pos/dependent-annot.scala	accepts	
 pos/dependent-annot2.scala	accepts	
@@ -2328,25 +2329,25 @@ pos/enum-refinement.scala	syntax	expected {}, found {}
 pos/enum-variance.scala	accepts	
 pos/enum-widen.scala	rejects	type mismatch
 pos/enums-capture.scala	accepts	
-pos/erased-24.scala	syntax	'erased' is not part of the supported Scala subset
-pos/erased-args-lifted.scala	syntax	'erased' is not part of the supported Scala subset
-pos/erased-asInstanceOf.scala	syntax	'erased' is not part of the supported Scala subset
+pos/erased-24.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+pos/erased-args-lifted.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+pos/erased-asInstanceOf.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 pos/erased-class-as-args.scala	syntax	expected {}, found {}
 pos/erased-class-separate	syntax	'erased' is not part of the supported Scala subset
 pos/erased-conforms.scala	std	Erased
-pos/erased-deep-context.scala	syntax	'erased' is not part of the supported Scala subset
+pos/erased-deep-context.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 pos/erased-export.scala	syntax	'erased' is not part of the supported Scala subset
-pos/erased-extension-method.scala	syntax	'erased' is not part of the supported Scala subset
+pos/erased-extension-method.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 pos/erased-lambda.scala	syntax	'erased' is not part of the supported Scala subset
-pos/erased-lub-2.scala	accepts	
-pos/erased-lub.scala	accepts	
-pos/erased-pathdep-1.scala	syntax	'erased' is not part of the supported Scala subset
-pos/erased-pathdep-2.scala	syntax	expected {}, found {}
+pos/erased-lub-2.scala	accepts		--language experimental.erasedDefinitions
+pos/erased-lub.scala	accepts		--language experimental.erasedDefinitions
+pos/erased-pathdep-1.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+pos/erased-pathdep-2.scala	syntax	expected {}, found {}	--language experimental.erasedDefinitions
 pos/erased-pure.scala	syntax	'erased' is not part of the supported Scala subset
-pos/erased-singleton.scala	syntax	'erased' is not part of the supported Scala subset
-pos/erased-soft-keyword.scala	syntax	'erased' is not part of the supported Scala subset
-pos/erased-typedef.scala	accepts	
-pos/erased-var.scala	syntax	'erased' is not part of the supported Scala subset
+pos/erased-singleton.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+pos/erased-soft-keyword.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+pos/erased-typedef.scala	accepts		--language experimental.erasedDefinitions
+pos/erased-var.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 pos/erasure-array.scala	accepts	
 pos/erasure-nsquared.scala	accepts	
 pos/escapes2.scala	accepts	
@@ -2376,7 +2377,7 @@ pos/export-main.scala	accepts
 pos/export-opaque.scala	accepts	
 pos/export-param-flags	accepts	
 pos/export-proxies.scala	accepts	
-pos/extend-java-enum.scala	accepts	
+pos/extend-java-enum.scala	accepts		--source 3.0-migration
 pos/extmethods-2.scala	accepts	
 pos/extmethods.scala	accepts	
 pos/extractor-types.scala	accepts	
@@ -2426,11 +2427,11 @@ pos/gadts2.scala	accepts
 pos/gen-traversable-methods.scala	accepts	
 pos/getset.scala	accepts	
 pos/given-constrapps.scala	std	App
-pos/given-loop-prevention.scala	accepts	
+pos/given-loop-prevention.scala	accepts		--source 3.4
 pos/given-owner-disambiguate.scala	accepts	
 pos/given-pattern.scala	rejects	missing argument for parameter {}
 pos/given-priority.scala	accepts	
-pos/given-syntax.scala	syntax	expected {}, found {}
+pos/given-syntax.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
 pos/givenFallback.scala	rejects	inline value must have a literal constant type
 pos/givenIn.scala	accepts	
 pos/gosh.scala	std	App
@@ -2452,12 +2453,12 @@ pos/hkrange.scala	accepts
 pos/ho-implicits.scala	rejects	no given instance
 pos/homonym.scala	accepts	
 pos/hygiene.scala	accepts	
-pos/hylolib	syntax	expected end of statement, found {}
-pos/hylolib-cb	syntax	expected end of statement, found {}
-pos/hylolib-cb-extract.scala	syntax	expected end of statement, found {}
-pos/hylolib-deferred-given	rejects	no given instance
-pos/hylolib-deferred-given-extract.scala	accepts	
-pos/hylolib-extract.scala	syntax	expected end of statement, found {}
+pos/hylolib	syntax	expected end of statement, found {}	--source future --language experimental.modularity
+pos/hylolib-cb	syntax	expected end of statement, found {}	--source future --language experimental.modularity
+pos/hylolib-cb-extract.scala	syntax	expected end of statement, found {}	--source future --language experimental.modularity
+pos/hylolib-deferred-given	rejects	no given instance	--source future --language experimental.modularity
+pos/hylolib-deferred-given-extract.scala	accepts		--source future --language experimental.modularity
+pos/hylolib-extract.scala	syntax	expected end of statement, found {}	--source future --language experimental.modularity
 pos/i0239.scala	accepts	
 pos/i0268.scala	accepts	
 pos/i0290-type-bind-2.scala	accepts	
@@ -2465,7 +2466,7 @@ pos/i0290-type-bind.scala	accepts
 pos/i0306.scala	accepts	
 pos/i0400.scala	accepts	
 pos/i0881	accepts	
-pos/i10080.scala	syntax	expected {}, found {}
+pos/i10080.scala	accepts	
 pos/i10087.scala	rejects	{} is not a member of the package
 pos/i10107.scala	accepts	
 pos/i10107c.scala	accepts	
@@ -2475,10 +2476,10 @@ pos/i10129.scala	accepts
 pos/i10161.scala	accepts	
 pos/i10174.scala	accepts	
 pos/i10217.scala	accepts	
-pos/i10242.scala	rejects	type argument x does not conform to upper bound String
+pos/i10242.scala	rejects	type argument x does not conform to upper bound String	--source 3.3
 pos/i10247.scala	accepts	
 pos/i10253.scala	accepts	
-pos/i10256.scala	accepts	
+pos/i10256.scala	accepts		--source future
 pos/i10259.scala	accepts	
 pos/i10295.scala	rejects	cannot resolve import
 pos/i10311.scala	accepts	
@@ -2488,7 +2489,7 @@ pos/i10347	oos	java
 pos/i1036.scala	accepts	
 pos/i10366.scala	rejects	cannot resolve import
 pos/i10369.scala	rejects	value {} is not a member of {}
-pos/i10383.scala	accepts	
+pos/i10383.scala	accepts		--source future
 pos/i10389.scala	accepts	
 pos/i10430	accepts	
 pos/i10437.scala	rejects	None of the overloaded alternatives of method apply in class MyClass with types
@@ -2512,14 +2513,14 @@ pos/i10715-java	oos	java
 pos/i10715-scala	rejects	value {} is not a member of {}
 pos/i10769.scala	accepts	
 pos/i10769b.scala	accepts	
-pos/i10848a.scala	syntax	'erased' is not part of the supported Scala subset
-pos/i10848b.scala	syntax	'erased' is not part of the supported Scala subset
+pos/i10848a.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+pos/i10848b.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 pos/i10871.scala	syntax	expected identifier, found {}
 pos/i10897.scala	accepts	
 pos/i10900.scala	rejects	{} is not a member of the package
 pos/i10927.scala	accepts	
-pos/i10929-new-syntax.scala	std	is
-pos/i10929.scala	syntax	expected {}, found {}
+pos/i10929-new-syntax.scala	std	is	--source future --language experimental.modularity
+pos/i10929.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
 pos/i10945	oos	java
 pos/i10951.scala	std	Dynamic
 pos/i10964.scala	accepts	
@@ -2535,7 +2536,7 @@ pos/i11020.scala	accepts
 pos/i11022.scala	accepts	
 pos/i1103.scala	accepts	
 pos/i11057.scala	std	AbstractSeq
-pos/i11064.scala	accepts	
+pos/i11064.scala	accepts		--source future
 pos/i11075	accepts	
 pos/i11078.scala	accepts	
 pos/i11078b.scala	accepts	
@@ -2762,7 +2763,7 @@ pos/i13554.scala	accepts
 pos/i13554a.scala	accepts	
 pos/i13558.scala	accepts	
 pos/i13565.scala	accepts	
-pos/i13580.scala	syntax	expected {}, found {}
+pos/i13580.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
 pos/i13586	accepts	
 pos/i13586.scala	accepts	
 pos/i1365.scala	rejects	class Script cannot extend final class ArrayBuffer
@@ -2877,7 +2878,7 @@ pos/i15133a.scala	accepts
 pos/i15133b.scala	accepts	
 pos/i1515.scala	accepts	
 pos/i15154.scala	accepts	
-pos/i15155.scala	std	Enumeration
+pos/i15155.scala	std	Enumeration	--source 3.3
 pos/i15160.scala	accepts	
 pos/i15165.scala	accepts	
 pos/i15166	oos	java
@@ -2891,7 +2892,7 @@ pos/i15177.app.scala	accepts
 pos/i15177.constr-dep.scala	accepts	
 pos/i15177.hk.scala	accepts	
 pos/i15177.hk2.scala	accepts	
-pos/i15177.hylolib.scala	syntax	expected end of statement, found {}
+pos/i15177.hylolib.scala	syntax	expected end of statement, found {}	--source future --language experimental.modularity
 pos/i15177.orig.scala	accepts	
 pos/i15177.scala	accepts	
 pos/i15177.without.scala	accepts	
@@ -2929,7 +2930,7 @@ pos/i15531.scala	rejects	value {} is not a member of {}
 pos/i15546.scala	accepts	
 pos/i15554.scala	accepts	
 pos/i15564.scala	accepts	
-pos/i15579.scala	accepts	
+pos/i15579.scala	accepts		--source future
 pos/i15595.scala	accepts	
 pos/i15608	oos	java
 pos/i15612.scala	accepts	
@@ -3015,9 +3016,9 @@ pos/i16374c.scala	accepts
 pos/i16374d.scala	accepts	
 pos/i1638.scala	accepts	
 pos/i16407.scala	accepts	
-pos/i16408.min1.scala	accepts	
+pos/i16408.min1.scala	accepts		--source 3.3
 pos/i16408.min2.scala	accepts	
-pos/i16408.scala	rejects	type mismatch
+pos/i16408.scala	rejects	type mismatch	--source 3.3
 pos/i16435.TreeUnpickler.scala	accepts	
 pos/i16435.avoid.scala	accepts	
 pos/i16435.scala	accepts	
@@ -3053,7 +3054,7 @@ pos/i16649-irrefutable.scala	accepts
 pos/i1665.scala	rejects	not found: {}
 pos/i16657.scala	accepts	
 pos/i16673	rejects	type {} is already defined
-pos/i16706.scala	std	h
+pos/i16706.scala	std	h	--source 3.3
 pos/i16707.scala	accepts	
 pos/i16740.scala	accepts	
 pos/i16756.scala	accepts	
@@ -3061,7 +3062,7 @@ pos/i16777.scala	rejects	type mismatch
 pos/i16778.scala	accepts	
 pos/i16785.scala	accepts	
 pos/i16792.scala	accepts	
-pos/i16808.scala	oos	extractors
+pos/i16808.scala	oos	extractors	--source future
 pos/i16814.scala	accepts	
 pos/i16869.scala	accepts	
 pos/i1687.scala	accepts	
@@ -3109,7 +3110,7 @@ pos/i17394	accepts
 pos/i17394b	accepts	
 pos/i17395-spec.ordered.scala	accepts	
 pos/i17395-spec.scala	accepts	
-pos/i17395.scala	accepts	
+pos/i17395.scala	accepts		--source 3.3
 pos/i17465.scala	rejects	type mismatch
 pos/i1747.scala	rejects	method toArray overrides nothing
 pos/i1751.scala	accepts	
@@ -3159,7 +3160,7 @@ pos/i18160	rejects	type argument EventCompatBundle.this.State does not have the 
 pos/i18163.orig.scala	accepts	
 pos/i18163.scala	accepts	
 pos/i18175.scala	syntax	expected {}, found {}
-pos/i18183.migration.scala	accepts	
+pos/i18183.migration.scala	accepts		--source 3.0-migration
 pos/i18211.scala	syntax	expected {}, found {}
 pos/i18226.scala	accepts	
 pos/i18226a.scala	accepts	
@@ -3367,7 +3368,7 @@ pos/i20858-min.scala	accepts
 pos/i20897.scala	accepts	
 pos/i20901	accepts	
 pos/i20952.scala	accepts	
-pos/i21036.scala	accepts	
+pos/i21036.scala	accepts		--source 3.5
 pos/i2104.scala	accepts	
 pos/i2104b.scala	accepts	
 pos/i2112.scala	accepts	
@@ -3383,7 +3384,7 @@ pos/i21239.orig.scala	accepts
 pos/i21239.scala	accepts	
 pos/i21256.scala	accepts	
 pos/i21275.scala	accepts	
-pos/i21282.scala	accepts	
+pos/i21282.scala	accepts		--source future-migration
 pos/i21295.scala	accepts	
 pos/i21300.scala	accepts	
 pos/i21303	oos	java
@@ -3391,7 +3392,7 @@ pos/i21303a	oos	java
 pos/i21319	oos	java
 pos/i21320a.scala	accepts	
 pos/i21320b.scala	accepts	
-pos/i21352a	rejects	type mismatch
+pos/i21352a	rejects	type mismatch	--source 3.5
 pos/i21352b.scala	rejects	ambiguous given instances
 pos/i21352c.scala	syntax	expected {}, found {}
 pos/i21360.scala	accepts	
@@ -3400,7 +3401,7 @@ pos/i2140.scala	accepts
 pos/i21402.scala	accepts	
 pos/i21405.scala	rejects	reference to IO is ambiguous: it is both imported by import o.* and imported subsequently by import p.*
 pos/i21413.scala	rejects	value {} is not a member of {}
-pos/i21415.scala	rejects	cannot resolve import
+pos/i21415.scala	rejects	cannot resolve import	--source 3.4-migration
 pos/i21433.scala	accepts	
 pos/i2152.scala	accepts	
 pos/i21544.scala	accepts	
@@ -3527,7 +3528,7 @@ pos/i23317.scala	accepts
 pos/i2339.scala	accepts	
 pos/i23398.scala	rejects	cannot resolve import
 pos/i2340.scala	accepts	
-pos/i23435-min-3.7.scala	rejects	type mismatch
+pos/i23435-min-3.7.scala	rejects	type mismatch	--source 3.7
 pos/i2345.scala	rejects	class Whatever cannot extend final class HashSet
 pos/i23451.scala	accepts	
 pos/i23459.scala	accepts	
@@ -3571,7 +3572,7 @@ pos/i24192.scala	accepts
 pos/i24206.scala	rejects	missing parameter type
 pos/i24207.scala	accepts	
 pos/i24249.scala	accepts	
-pos/i24250.scala	syntax	expected end of statement, found {}
+pos/i24250.scala	accepts	
 pos/i2426.scala	syntax	expected {}, found {}
 pos/i24308.scala	accepts	
 pos/i2437a.scala	accepts	
@@ -3588,7 +3589,7 @@ pos/i24557.scala	accepts
 pos/i24571.scala	accepts	
 pos/i24588.scala	accepts	
 pos/i24631	oos	java
-pos/i24631b.scala	rejects	method create in class C must be called with () argument
+pos/i24631b.scala	rejects	indented definitions expected, def found	--source 3.0-migration
 pos/i2468.scala	accepts	
 pos/i24686.scala	rejects	no given instance
 pos/i24689a.scala	accepts	
@@ -3685,7 +3686,7 @@ pos/i26959	accepts
 pos/i26959-alias	accepts	
 pos/i26959-joint.scala	accepts	
 pos/i2697.scala	accepts	
-pos/i27041.scala	accepts	
+pos/i27041.scala	accepts		--source 3.9
 pos/i2723.scala	accepts	
 pos/i2732.scala	accepts	
 pos/i2741.scala	accepts	
@@ -3790,12 +3791,12 @@ pos/i3857.scala	accepts
 pos/i3873.scala	accepts	
 pos/i3909.scala	accepts	
 pos/i3917.scala	accepts	
-pos/i3920.scala	syntax	expected {}, found {}
+pos/i3920.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
 pos/i3945.scala	accepts	
 pos/i3955.scala	syntax	expected {}, found {}
 pos/i3956.scala	accepts	
-pos/i3964.scala	syntax	expected {}, found {}
-pos/i3964a	syntax	expected {}, found {}
+pos/i3964.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
+pos/i3964a	syntax	expected {}, found {}	--source future --language experimental.modularity
 pos/i3965.scala	rejects	Ambiguous overload. The overloaded alternatives of method optionSequence1 in class Test with types
 pos/i3965a.scala	accepts	
 pos/i3971.scala	accepts	
@@ -3914,7 +3915,7 @@ pos/i5588a.scala	accepts
 pos/i5588b.scala	rejects	this expression cannot be assigned to
 pos/i5592.scala	accepts	
 pos/i5625.scala	accepts	
-pos/i5625b.scala	rejects	type argument t does not conform to upper bound AnyVal
+pos/i5625b.scala	rejects	type argument t does not conform to upper bound AnyVal	--source 3.3
 pos/i5650.scala	accepts	
 pos/i5655	oos	java
 pos/i566.scala	accepts	
@@ -3924,7 +3925,7 @@ pos/i5700.scala	accepts
 pos/i5711.scala	accepts	
 pos/i5720.scala	accepts	
 pos/i5750.scala	accepts	
-pos/i576.scala	rejects	value {} is not a member of {}
+pos/i576.scala	accepts	
 pos/i5765.scala	accepts	
 pos/i5766.scala	accepts	
 pos/i5773.scala	rejects	Implicit classes must accept exactly one primary constructor parameter
@@ -3973,7 +3974,7 @@ pos/i6247.scala	accepts
 pos/i6286.scala	accepts	
 pos/i6287.scala	accepts	
 pos/i6288.scala	accepts	
-pos/i6290.scala	accepts	
+pos/i6290.scala	accepts		--source 3.3
 pos/i6312.scala	accepts	
 pos/i6312b.scala	accepts	
 pos/i6373.scala	accepts	
@@ -4045,7 +4046,7 @@ pos/i7219.scala	accepts
 pos/i7219b.scala	accepts	
 pos/i7219c.scala	accepts	
 pos/i7247.scala	accepts	
-pos/i7296.scala	accepts	
+pos/i7296.scala	accepts		--source future
 pos/i7304.scala	accepts	
 pos/i7342	accepts	
 pos/i7359.scala	accepts	
@@ -4073,7 +4074,7 @@ pos/i7515.scala	accepts
 pos/i7516.scala	accepts	
 pos/i7525	oos	java
 pos/i7532.scala	accepts	
-pos/i7575.scala	std	Dynamic
+pos/i7575.scala	std	Dynamic	--language dynamics
 pos/i7586.scala	rejects	no given instance
 pos/i7602.scala	accepts	
 pos/i7648.scala	accepts	
@@ -4106,7 +4107,7 @@ pos/i7863.scala	accepts
 pos/i7872.scala	accepts	
 pos/i7876.scala	accepts	
 pos/i7877.scala	std	App
-pos/i7878.scala	accepts	
+pos/i7878.scala	accepts		--language experimental.erasedDefinitions
 pos/i7888.scala	accepts	
 pos/i7893.scala	accepts	
 pos/i7894.scala	accepts	
@@ -4328,7 +4329,7 @@ pos/implicit_cache.scala	accepts
 pos/implicit_tparam.scala	rejects	no given instance
 pos/implicitonSelect.scala	accepts	
 pos/import-rewrite	rejects	cannot resolve import
-pos/imports-pos.scala	rejects	cannot resolve import
+pos/imports-pos.scala	rejects	cannot resolve import	--source 3.2
 pos/indent-colons.scala	std	ArrowAssoc
 pos/indent-in-parens.scala	syntax	expected {}, found {}
 pos/indent.scala	std	ArrowAssoc
@@ -4345,7 +4346,7 @@ pos/infer-tracked-parsercombinators-expanded.scala	rejects	type mismatch
 pos/infer-tracked.scala	rejects	type mismatch
 pos/infer.scala	accepts	
 pos/infer1.scala	accepts	
-pos/infer2-pos.scala	accepts	
+pos/infer2-pos.scala	accepts		--source 3.2
 pos/inferOverloaded.scala	rejects	type mismatch
 pos/inferbroadtype.scala	accepts	
 pos/inferred.scala	accepts	
@@ -4375,102 +4376,102 @@ pos/inline-null-wrapper.scala	rejects	Ambiguous overload. The overloaded alterna
 pos/inline-rewrite.scala	accepts	
 pos/inline-separate	std	App
 pos/inline-t2425.scala	std	App
-pos/inline-trait-1-simple-trait.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-2-generic-trait.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-3-trait-params.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-3-trait-with-params.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-4-no-inner-class.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-accesses-parent-val-param.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-abstract-def.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-context-bound.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-curried-params.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-extension-method.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-final.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-generic-singleton.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-generic.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-implicit.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-inline-abstract.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-inline-compiletime.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-inline-transparent.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-inline.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-lambda.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-local-val.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-params.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-parens.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-simple.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-def-using.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-lazy-val.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-macro	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-macro-suspend	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-rhs-type.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-setter.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-type.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-val-inline.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-body-val.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-clash-type-type.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-class-type-generic.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-extends-abstract-class.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-extends-class.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-extends-non-inline.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-extends-trait-with-parameters.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-extends-trait.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-generic-array.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-inheritance-multiple-override.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-inheritance-multiple.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-inheritance-single-abstract-class-override.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-inheritance-single-abstract-class.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-inheritance-single-object-override.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-inheritance-single-object.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-inter-trait-inlining-no-cycle.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-multiple-files	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-multiple-stages	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-multiple-stages-defs	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-multiple-stages-generic-defs	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-multiple-stages-inline-traits	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-object-not-primitive.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-opaque-type.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-override-overload.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-pair-example.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-parameter-passing.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-parent-method-call.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-parent-ref.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-private-evidence.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-private-nested-inline-must-delete.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-private-this-nowarn.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-return-ref.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-self-inline-two-cycle-no-use.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-self-type.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-generic-context-bound.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-generic-inferred-type.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-generic-invariant.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-generic-parameter.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-generic-refinement-type.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-generic-singleton.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-generic-type-bounds.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-generic-variant.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-parameters-currying.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-parameters-default-value.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-parameters-implicit.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-parameters-using-nameless.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-parameters-using.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-parameters-val-private.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-parameters-val-protected.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-parameters-val.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-parameters-var.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-parentheses.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-sealed.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-signature-simple.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-super-call-non-overridden.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-usage-anonymous-class.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-usage-extension.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-usage-inner.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-usage-param-type.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-usage-return-type.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-usage-type-bound.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-usage-type.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-val-def-inner-class-inner-class-owners-init.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-val-def-inner-class-inner-class-owners.scala	rejects	modifier inline is not allowed for this definition
-pos/inline-trait-y-equals-x-inlined-nowarn.scala	rejects	modifier inline is not allowed for this definition
+pos/inline-trait-1-simple-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-2-generic-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-3-trait-params.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-3-trait-with-params.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-4-no-inner-class.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-accesses-parent-val-param.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-abstract-def.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-context-bound.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-curried-params.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-extension-method.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-final.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-generic-singleton.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-generic.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-implicit.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-inline-abstract.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-inline-compiletime.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-inline-transparent.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-inline.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-lambda.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-local-val.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-params.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-parens.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-simple.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-def-using.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-lazy-val.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-macro	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-macro-suspend	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-rhs-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-setter.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-val-inline.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-body-val.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-clash-type-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-class-type-generic.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-extends-abstract-class.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-extends-class.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-extends-non-inline.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-extends-trait-with-parameters.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-extends-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-generic-array.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-inheritance-multiple-override.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-inheritance-multiple.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-inheritance-single-abstract-class-override.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-inheritance-single-abstract-class.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-inheritance-single-object-override.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-inheritance-single-object.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-inter-trait-inlining-no-cycle.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-multiple-files	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-multiple-stages	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-multiple-stages-defs	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-multiple-stages-generic-defs	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-multiple-stages-inline-traits	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-object-not-primitive.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-opaque-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-override-overload.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-pair-example.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-parameter-passing.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-parent-method-call.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-parent-ref.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-private-evidence.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-private-nested-inline-must-delete.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-private-this-nowarn.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-return-ref.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-self-inline-two-cycle-no-use.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-self-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-context-bound.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-inferred-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-invariant.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-parameter.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-refinement-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-singleton.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-type-bounds.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-generic-variant.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-currying.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-default-value.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-implicit.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-using-nameless.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-using.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-val-private.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-val-protected.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-val.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-parameters-var.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-parentheses.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-sealed.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-signature-simple.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-super-call-non-overridden.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-usage-anonymous-class.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-usage-extension.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-usage-inner.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-usage-param-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-usage-return-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-usage-type-bound.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-usage-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-val-def-inner-class-inner-class-owners-init.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-val-def-inner-class-inner-class-owners.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
+pos/inline-trait-y-equals-x-inlined-nowarn.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
 pos/inline-unapply.scala	accepts	
 pos/inline-val-constValue-1.scala	accepts	
 pos/inline-val-constValue-2.scala	accepts	
@@ -4548,7 +4549,7 @@ pos/localmodules.scala	accepts
 pos/lookuprefined.scala	accepts	
 pos/lookupswitch.scala	accepts	
 pos/looping-givens.scala	accepts	
-pos/looping-jsig.scala	accepts	
+pos/looping-jsig.scala	accepts		--source 3.2
 pos/macro-deprecate-dont-touch-backquotedidents.scala	accepts	
 pos/macro.scala	syntax	expected end of statement, found {}
 pos/main-method-scheme-class-based.scala	accepts	
@@ -4572,7 +4573,7 @@ pos/matches.scala	accepts
 pos/matchtype-unusedArg	accepts	
 pos/matchtype.scala	syntax	'erased' is not part of the supported Scala subset
 pos/matrixOps.scala	accepts	
-pos/matthias1.scala	accepts	
+pos/matthias1.scala	accepts		--source 3.2
 pos/matthias3.scala	accepts	
 pos/matthias4.scala	rejects	error overriding value A in trait _a of type _a.this.A: value A of type A has incompatible type
 pos/matthias5.scala	accepts	
@@ -4584,7 +4585,7 @@ pos/michel2.scala	accepts
 pos/michel3.scala	accepts	
 pos/michel4.scala	accepts	
 pos/michel5.scala	accepts	
-pos/michel6.scala	accepts	
+pos/michel6.scala	accepts		--source 3.2
 pos/mirror-implicit-scope.scala	rejects	value {} is not a member of {}
 pos/misc-unapply_pos.scala	accepts	
 pos/mixin-forwarder-clash1.scala	rejects	class Bar2 inherits concat as [Dummy](suffix: Int): Y and as (suffix: Int): X, which are both called concat$Int in the JavaScript output, since no ancestor declares the two together; declare the alternatives in one trait
@@ -4593,7 +4594,7 @@ pos/mixin-generic-extended-by-java	oos	java
 pos/mixins.scala	accepts	
 pos/modules.scala	accepts	
 pos/modules1.scala	accepts	
-pos/moduletrans.scala	accepts	
+pos/moduletrans.scala	accepts		--source 3.2
 pos/mt-deskolemize.scala	rejects	type mismatch
 pos/mt-redux-norm.perspective.scala	accepts	
 pos/mt-scrutinee-widen3.scala	accepts	
@@ -4685,15 +4686,15 @@ pos/packageobjs.scala	accepts
 pos/packagings.scala	accepts	
 pos/padTo.scala	rejects	method padTo overrides nothing
 pos/param-depmeth.scala	accepts	
-pos/parent-refinement.scala	oos	inheritance
+pos/parent-refinement.scala	oos	inheritance	--source future --language experimental.modularity
 pos/parents-cycle	rejects	type Hi is not a member of B3
-pos/parsercombinators-arrow.scala	std	is
-pos/parsercombinators-ctx-bounds.scala	syntax	expected identifier, found {}
-pos/parsercombinators-expanded.scala	syntax	expected {}, found {}
-pos/parsercombinators-givens-2.scala	rejects	type mismatch
-pos/parsercombinators-givens.scala	syntax	expected {}, found {}
-pos/parsercombinators-new-syntax.scala	std	is
-pos/parsercombinators-this.scala	rejects	a context bound needs a type constructor with one parameter
+pos/parsercombinators-arrow.scala	std	is	--source future --language experimental.modularity
+pos/parsercombinators-ctx-bounds.scala	syntax	expected identifier, found {}	--source future --language experimental.modularity
+pos/parsercombinators-expanded.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
+pos/parsercombinators-givens-2.scala	rejects	type mismatch	--source future --language experimental.modularity
+pos/parsercombinators-givens.scala	syntax	expected {}, found {}	--source future --language experimental.modularity
+pos/parsercombinators-new-syntax.scala	std	is	--source future --language experimental.modularity
+pos/parsercombinators-this.scala	rejects	a context bound needs a type constructor with one parameter	--source future --language experimental.modularity
 pos/partialApplications.scala	accepts	
 pos/partialfun.scala	accepts	
 pos/pat_gilles.scala	accepts	
@@ -4704,8 +4705,8 @@ pos/patmat-extract-tparam.scala	accepts
 pos/patmat.scala	syntax	expected {}, found {}
 pos/patmatSeq.scala	accepts	
 pos/patmatch-in-catch.scala	accepts	
-pos/patterns.scala	accepts	
-pos/patterns1.scala	accepts	
+pos/patterns.scala	accepts		--source 3.2
+pos/patterns1.scala	accepts		--source 3.2
 pos/patterns1213.scala	accepts	
 pos/patterns2.scala	std	String
 pos/patterns3.scala	accepts	
@@ -4721,7 +4722,7 @@ pos/pickleAlias.scala	std	Error
 pos/pickleSkolem.scala	accepts	
 pos/pickleTypes.scala	rejects	Refinements cannot introduce overloaded definitions
 pos/pickleinf.scala	accepts	
-pos/pmbug.scala	accepts	
+pos/pmbug.scala	accepts		--source 3.2
 pos/poly-erased-functions.scala	syntax	expected {}, found {}
 pos/poly-inheritance.scala	rejects	type mismatch
 pos/poly-override.scala	rejects	method a overrides nothing
@@ -4733,8 +4734,8 @@ pos/polytypes.scala	accepts
 pos/pos-bug1210.scala	accepts	
 pos/pos_valueclasses	oos	java
 pos/postconditions.scala	accepts	
-pos/precise-ctx-bound.scala	std	Precise
-pos/precise-indexof.scala	std	Precise
+pos/precise-ctx-bound.scala	std	Precise	--source future --language experimental.modularity
+pos/precise-indexof.scala	std	Precise	--source future --language experimental.modularity
 pos/precise-pattern-type.scala	rejects	value {} is not a member of {}
 pos/predef-runtimechecked-import.scala	rejects	cannot resolve import
 pos/prefix.scala	accepts	
@@ -4746,11 +4747,11 @@ pos/private-class-in-trait.scala	accepts
 pos/private-leak.scala	accepts	
 pos/private-this-future-migration.scala	accepts	
 pos/private-this.scala	accepts	
-pos/private-types-after-typer.scala	accepts	
+pos/private-types-after-typer.scala	accepts		--source 3.2
 pos/privates.scala	accepts	
 pos/product-to-tuple.scala	accepts	
 pos/profile-test.scala	accepts	
-pos/projection.scala	accepts	
+pos/projection.scala	accepts		--source 3.2
 pos/projections.scala	accepts	
 pos/propagate.scala	accepts	
 pos/protected-static	oos	java
@@ -4796,12 +4797,12 @@ pos/scoping3.scala	accepts
 pos/sealed-final.scala	accepts	
 pos/selectinalways.scala	accepts	
 pos/selfSym.scala	accepts	
-pos/selftails.scala	accepts	
+pos/selftails.scala	accepts		--source 3.2
 pos/selftypes.scala	accepts	
 pos/sepComp	accepts	
 pos/seq-ordering.scala	accepts	
 pos/seqliteral-union-singletons.scala	accepts	
-pos/seqtest2.scala	accepts	
+pos/seqtest2.scala	accepts		--source 3.2
 pos/sequence-argument	oos	java
 pos/sets-tc.scala	std	is
 pos/sets.scala	accepts	
@@ -4839,7 +4840,7 @@ pos/single-additional-import.scala	std	Annotation
 pos/single-case.scala	accepts	
 pos/single-unions.scala	accepts	
 pos/singlesubtypes.scala	accepts	
-pos/singleton-ctx-bound.scala	syntax	'erased' is not part of the supported Scala subset
+pos/singleton-ctx-bound.scala	syntax	'erased' is not part of the supported Scala subset	--source future --language experimental.modularity,experimental.erasedDefinitions
 pos/singleton-fun-types.scala	accepts	
 pos/singleton-ops-composition.scala	accepts	
 pos/singleton-ops-dispatch.scala	accepts	
@@ -4910,41 +4911,41 @@ pos/spec-traits.scala	accepts
 pos/spec-vector.scala	accepts	
 pos/spec.scala	accepts	
 pos/specialize10.scala	accepts	
-pos/specialized-trait-anonymous-class-as-param.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-body-macro	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-class-extends-specialized-trait.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-exhaustivity-check-3.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-exhaustivity-no-problem.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-function-takes-specialized-trait.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-inline-anonymous-class-defn-nowarn.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-inline-def-specialized.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-inlining-causes-implementation-required-loop-bad-manual-no-usage.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-inlining-causes-implementation-required-loop-bad.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-inlining-causes-implementation-required-loop-without-implementation-fine.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-inlining-causes-implementation-required.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-inlining-causes-specialization.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-multiple-stages-specialized-numeric.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-object-extends-specialized-trait.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-opaque-type.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-original-diamond.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-parameter-passing-as-named.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-partial-complete-specialization-with-return-type.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-partial-specialization-self-type.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-partial-specialization-with-argument-passing.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-partial-specialization-with-body.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-partial-specialization.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-processing-order-matters.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-question-mark-non-specialized-allowed.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-self-as-param.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-self-type.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-simplest-implicit-type-name.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-simplest.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-specialized-context-bound.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-supercall-non-overridden.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-val-parameter.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-var-parameter.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-very-specialized-list.scala	rejects	modifier inline is not allowed for this definition
-pos/specialized-trait-with-param.scala	rejects	modifier inline is not allowed for this definition
+pos/specialized-trait-anonymous-class-as-param.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-body-macro	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-class-extends-specialized-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-exhaustivity-check-3.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-exhaustivity-no-problem.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-function-takes-specialized-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-inline-anonymous-class-defn-nowarn.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-inline-def-specialized.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-inlining-causes-implementation-required-loop-bad-manual-no-usage.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-inlining-causes-implementation-required-loop-bad.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-inlining-causes-implementation-required-loop-without-implementation-fine.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-inlining-causes-implementation-required.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-inlining-causes-specialization.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-multiple-stages-specialized-numeric.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-object-extends-specialized-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-opaque-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-original-diamond.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-parameter-passing-as-named.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-partial-complete-specialization-with-return-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-partial-specialization-self-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-partial-specialization-with-argument-passing.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-partial-specialization-with-body.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-partial-specialization.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-processing-order-matters.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-question-mark-non-specialized-allowed.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-self-as-param.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-self-type.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-simplest-implicit-type-name.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-simplest.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-specialized-context-bound.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-supercall-non-overridden.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-val-parameter.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-var-parameter.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-very-specialized-list.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
+pos/specialized-trait-with-param.scala	rejects	modifier inline is not allowed for this definition	--language experimental.specializedTraits
 pos/specs2-failure.scala	rejects	type mismatch
 pos/spurious-overload.scala	std	App
 pos/staleSymbol.scala	accepts	
@@ -5684,7 +5685,7 @@ pos/tagging.scala	accepts
 pos/tailcall	std	App
 pos/tailrec-super.scala	rejects	recursive use of {} needs an explicit result type
 pos/tailrec-synchronized.scala	accepts	
-pos/tailrec.scala	std	Erased
+pos/tailrec.scala	std	Erased	--language experimental.erasedDefinitions
 pos/tangledCompanion.scala	accepts	
 pos/targetName-infer-result.scala	rejects	recursive use of {} needs an explicit result type
 pos/targetName-override	oos	java
@@ -5729,7 +5730,7 @@ pos/test-implicits2.scala	std	WrappedString
 pos/test-inliner2.scala	accepts	
 pos/test-pickler-private-this.scala	accepts	
 pos/test-typers.scala	accepts	
-pos/test.scala	accepts	
+pos/test.scala	accepts		--source 3.2
 pos/test1.scala	accepts	
 pos/test4.scala	accepts	
 pos/test4a.scala	accepts	
@@ -5758,7 +5759,7 @@ pos/tracked.scala	accepts
 pos/trailing-comma-pattern.scala	accepts	
 pos/trailingCommas	accepts	
 pos/trait-access.scala	accepts	
-pos/trait-extends-inline-trait.scala	rejects	modifier inline is not allowed for this definition
+pos/trait-extends-inline-trait.scala	rejects	modifier inline is not allowed for this definition	--language experimental.inlineTraits
 pos/trait-parents.scala	accepts	
 pos/traits.scala	accepts	
 pos/traits_1.scala	accepts	
@@ -5787,15 +5788,15 @@ pos/type-test-matchable.scala	accepts
 pos/type-test-syntesize.scala	accepts	
 pos/typealias_dubious.scala	accepts	
 pos/typealiases.scala	accepts	
-pos/typeclass-aggregates.scala	syntax	expected identifier, found {}
+pos/typeclass-aggregates.scala	syntax	expected identifier, found {}	--source future --language experimental.modularity
 pos/typeclass-encoding.scala	rejects	value {} is not a member of {}
 pos/typeclass-encoding3.scala	syntax	expected {}, found {}
 pos/typeclass-encoding3b.scala	rejects	value {} is not a member of {}
 pos/typeclass-scaling.scala	rejects	Maximal number of successive inlines (32) exceeded,
-pos/typeclasses-arrow.scala	std	is
+pos/typeclasses-arrow.scala	std	is	--source future --language experimental.modularity
 pos/typeclasses-arrow0.scala	accepts	
-pos/typeclasses-this.scala	std	is
-pos/typeclasses.scala	std	is
+pos/typeclasses-this.scala	std	is	--source future --language experimental.modularity
+pos/typeclasses.scala	std	is	--source future --language experimental.modularity
 pos/typedIdents	accepts	
 pos/typedapply.scala	accepts	
 pos/typeinferNull.scala	accepts	
@@ -5868,3 +5869,405 @@ pos/zipped.scala	rejects	value {} is not a member of {}
 pos/zipper.scala	accepts	
 pos/zoo.scala	accepts	
 pos/zoo2.scala	accepts	
+warn/12974.scala	silent	
+warn/14034b.scala	different	there were 7 deprecation warnings; re-run with -deprecation for details
+warn/15981.scala	silent	
+warn/17284.scala	rejects	value {} is not a member of {}
+warn/1828.scala	wording	the type test for S cannot be checked at runtime because it refers to a type parameter
+warn/18493.scala	silent	
+warn/21557.scala	silent	
+warn/21681.scala	silent	
+warn/21681b.scala	silent	
+warn/21681c.scala	silent	
+warn/21770.scala	silent	
+warn/3324b.scala	wording	the type test for T cannot be checked at runtime because it refers to a type parameter
+warn/3324f.scala	subset	1/2 diagnostics
+warn/3324g.scala	subset	1/2 diagnostics
+warn/IsInstanceOfClassTag2.scala	same	
+warn/JavaSeqLiteral.scala	silent	
+warn/alphanumeric-infix-operator-3.4.scala	silent	
+warn/alphanumeric-infix-operator.scala	silent	
+warn/annotation-secondary-constructor-deprecated.scala	same	
+warn/applied_constructor_types.scala	syntax	expected {}, found {}
+warn/avoid-warn-deprecation.scala	same	
+warn/better-fors-deprecated-flag.scala	options	invalid choice(s) for -language: experimental.betterFors	--language experimental.betterFors
+warn/better-fors-deprecated-import.scala	same	
+warn/better-match-type-extractors-deprecated-flag.scala	options	invalid choice(s) for -language: experimental.betterMatchTypeExtractors	--language experimental.betterMatchTypeExtractors
+warn/better-match-type-extractors-deprecated-import.scala	same	
+warn/catch.scala	same	
+warn/clause-interleaving-deprecated-flag.scala	options	invalid choice(s) for -language: experimental.clauseInterleaving	--language experimental.clauseInterleaving
+warn/clause-interleaving-deprecated-import.scala	same	
+warn/conditionalWarnings.scala	different	there was 1 feature warning; re-run with -feature for details
+warn/context-bounds-migration-3.4.scala	same		--source 3.4
+warn/conversion-lang-import.scala	rejects	cannot resolve import
+warn/convertible.scala	rejects	cannot resolve import
+warn/deprecated-origin-verbose.scala	different	there were 2 deprecation warnings; re-run with -deprecation for details
+warn/deprecated-origin.scala	different	there were 2 deprecation warnings; re-run with -deprecation for details
+warn/deprecated-override.scala	silent	
+warn/deprecatedName-symbol.scala	rejects	there is no parameter named {}
+warn/dollar-java	oos	java
+warn/enum-approx2.scala	subset	2/3 diagnostics
+warn/ext-override.scala	same	
+warn/feature-shadowing.scala	silent	
+warn/fewerbraces-deprecated-flag.scala	options	invalid choice(s) for -language: experimental.fewerBraces	--language experimental.fewerBraces
+warn/fewerbraces-deprecated-import.scala	same	
+warn/gadt-contradictory-pattern.scala	subset	1/3 diagnostics
+warn/gadt.scala	silent	
+warn/html.scala	wording	unreachable case
+warn/i10247.scala	different	there were 2 deprecation warnings; re-run with -deprecation for details
+warn/i10930.scala	silent	
+warn/i10994.scala	syntax	expected {}, found {}
+warn/i11022.scala	oos	pattern-defs
+warn/i11097.scala	silent	
+warn/i11178.scala	subset	3/4 diagnostics
+warn/i11333.scala	silent	
+warn/i11344.scala	silent	
+warn/i11963a.scala	silent	
+warn/i11963b.scala	silent	
+warn/i11963c.scala	silent	
+warn/i12253.scala	silent	
+warn/i12460.scala	silent	
+warn/i12597.scala	silent	
+warn/i13011.scala	silent	
+warn/i13433c	rejects	this type cannot be tested at runtime: Matcher[A]
+warn/i13440.scala	same	
+warn/i13542.scala	silent	
+warn/i14579.scala	wording	match may not be exhaustive.
+warn/i14705.scala	silent	
+warn/i14721.scala	silent	
+warn/i15226.scala	rejects	type mismatch
+warn/i15264.scala	silent	
+warn/i15474.scala	silent		--source 3.4
+warn/i15479.scala	silent		--source future
+warn/i15503a.scala	rejects	{} is not a member of the package
+warn/i15503b.scala	silent	
+warn/i15503c.scala	rejects	{} is not a member of the package	--source 3.3
+warn/i15503d.scala	different	unreachable case
+warn/i15503e.scala	silent	
+warn/i15503f.scala	syntax	expected {}, found {}
+warn/i15503g.scala	silent	
+warn/i15503h.scala	silent	
+warn/i15503i.scala	rejects	{} is not a member of the package
+warn/i15503j.scala	silent	
+warn/i15503k.scala	same	
+warn/i15503kb	same	
+warn/i15661.scala	wording	the type test for List[Int] cannot be checked at runtime because its type arguments can't be determined from List[Any]
+warn/i15662.scala	syntax	expected {}, found {}
+warn/i15893.min.scala	syntax	expected {}, found {}
+warn/i15893.scala	syntax	expected {}, found {}
+warn/i15967.scala	same	
+warn/i16072.scala	silent	
+warn/i16451.scala	superset	+1 diagnostics: the type test for Wrapper[(Color.Red : Color)] cannot be checked at runtime because its type arguments can't be determined from Wrapper[Color]
+warn/i16610.scala	silent	
+warn/i16639a.scala	silent		--source 3.3
+warn/i16639false-pos-on-trait.scala	same	
+warn/i16649-refutable.scala	superset	+3 diagnostics: pattern binding uses refutable extractor
+warn/i16723.scala	silent	
+warn/i16723a.scala	silent	
+warn/i16728.scala	silent	
+warn/i16743.scala	rejects	type mismatch
+warn/i16930.scala	silent	
+warn/i17230.min1.scala	same	
+warn/i17230.orig.scala	same	
+warn/i17266.scala	std	synchronized
+warn/i17314.scala	same	
+warn/i17314a.scala	same	
+warn/i17314b.scala	silent	
+warn/i17318.scala	same	
+warn/i17371.scala	silent	
+warn/i17429.scala	silent	
+warn/i17493.scala	silent	
+warn/i17612a.scala	silent		--source 3.3
+warn/i17613a.scala	silent	
+warn/i17667.scala	silent	
+warn/i17667b.scala	silent	
+warn/i17753.scala	same	
+warn/i17762.scala	silent	
+warn/i18234.scala	same		--source 3.9
+warn/i18313.scala	same	
+warn/i18341.scala	silent	
+warn/i18366.scala	rejects	method foo in trait Builder must be called with () argument
+warn/i18559a.scala	silent	
+warn/i18559b.scala	silent	
+warn/i18559c.scala	silent	
+warn/i18564.scala	silent	
+warn/i18661.scala	same	
+warn/i18722.scala	subset	3/4 diagnostics
+warn/i18862-3.4.scala	silent	
+warn/i18862-future-migration.scala	silent	
+warn/i18867-3.4.scala	silent	
+warn/i18867.scala	silent	
+warn/i19002.scala	silent	
+warn/i19013-a.scala	wording	the type test for E cannot be checked at runtime because it refers to a type parameter
+warn/i19013-b.scala	wording	the type test for E cannot be checked at runtime because it refers to a type parameter
+warn/i19031.ci-reg1.scala	same	
+warn/i19031.ci-reg2.scala	same	
+warn/i19031.scala	same	
+warn/i19031b.scala	same	
+warn/i19077.scala	rejects	there is no parameter named {}
+warn/i19252.scala	same	
+warn/i19275.scala	same	
+warn/i19302.scala	different	there were 7 deprecation warnings; re-run with -deprecation for details
+warn/i19359.scala	same	
+warn/i19416.scala	silent	
+warn/i19505.scala	silent	
+warn/i19506.scala	rejects	type mismatch	--source 3.4
+warn/i19657-mega.scala	silent	
+warn/i19657.scala	rejects	no given instance
+warn/i19687.scala	same	
+warn/i19687a.scala	wording	match may not be exhaustive.
+warn/i19687b.scala	same	
+warn/i19687c.scala	same	
+warn/i19913.scala	different	there were 2 deprecation warnings; re-run with -deprecation for details
+warn/i20105.scala	silent	
+warn/i20121.scala	different	Unreachable case except for null (if this is intentional, consider writing case null => instead).
+warn/i20122.scala	silent	
+warn/i20123.scala	silent	
+warn/i20128.scala	silent	
+warn/i20129.scala	silent	
+warn/i20130.scala	same	
+warn/i20131.scala	superset	+1 diagnostics: match may not be exhaustive.
+warn/i20132.alt.scala	same	
+warn/i20132.future-Left.scala	rejects	{} is not a member of the package
+warn/i20132.list-Seq.scala	same	
+warn/i20132.scala	silent	
+warn/i20132.stream-Tuple2.safeNulls.fixed.scala	superset	+1 diagnostics: unreachable case
+warn/i20132.stream-Tuple2.safeNulls.scala	silent	
+warn/i20132.stream-Tuple2.scala	same	
+warn/i20132.wo.scala	same	
+warn/i20146.scala	rejects	value {} is not a member of {}
+warn/i20372.scala	same	
+warn/i20420.scala	rejects	ambiguous given instances	--source 3.6-migration
+warn/i20520.scala	silent	
+warn/i20536.scala	silent	
+warn/i20561	oos	java
+warn/i20651.scala	std	getClass
+warn/i20860.scala	same	
+warn/i20951.scala	silent	
+warn/i21036a.scala	silent		--source 3.6
+warn/i21036b.scala	silent		--source 3.7-migration
+warn/i21036c.scala	same	
+warn/i21187.scala	rejects	missing parameter type
+warn/i21190.scala	rejects	type mismatch
+warn/i21207	oos	java	--source 3.0-migration
+warn/i21218.scala	same	
+warn/i21239.Frac.scala	silent	
+warn/i21258.scala	silent	
+warn/i21420.scala	same	
+warn/i21525.scala	superset	+3 diagnostics: the type test for a.C cannot be checked at runtime because it refers to an abstract type member
+warn/i21649.scala	wording	match expression in result of block will not be used to synthesize partial function
+warn/i21805.scala	rejects	cannot resolve import
+warn/i21809.scala	silent	
+warn/i21816.scala	rejects	{} needs to be abstract
+warn/i21845.orig.scala	superset	+1 diagnostics: match may not be exhaustive.
+warn/i21845.scala	same	
+warn/i21860.scala	same	
+warn/i21860.unenum.scala	same	
+warn/i21917.scala	silent	
+warn/i22051.scala	rejects	type mismatch
+warn/i22212	silent	
+warn/i22232.scala	silent	
+warn/i22233.scala	silent	
+warn/i22267.scala	silent	
+warn/i22279.scala	rejects	{} is not a member of the package
+warn/i22298_joint	oos	java
+warn/i22298_separ	oos	java
+warn/i22371.scala	same	
+warn/i22412.scala	wording	A try without catch or finally is equivalent to putting its body in a block; no exceptions are handled.
+warn/i22439.scala	subset	1/3 diagnostics
+warn/i22440.scala	same		--source 3.7
+warn/i22507.scala	same	
+warn/i22527.scala	syntax	expected {}, found {}
+warn/i22590.arity2.scala	same	
+warn/i22590.scala	same	
+warn/i22629.scala	same	
+warn/i22670-test.scala	same	
+warn/i22672	different	there were 2 deprecation warnings; re-run with -deprecation for details
+warn/i22681.scala	silent	
+warn/i22705.scala	rejects	Node cannot be instantiated
+warn/i22706.scala	rejects	N cannot be instantiated
+warn/i22727.scala	same	
+warn/i22731.scala	same	
+warn/i22742.scala	same	
+warn/i22744.scala	same	
+warn/i22746.scala	same	
+warn/i22787.scala	oos	extractors
+warn/i22795	silent	
+warn/i22896	oos	java
+warn/i22899.scala	std	a
+warn/i22969.scala	same	
+warn/i22971.scala	same	
+warn/i22981.scala	syntax	expected identifier, found {}
+warn/i22983.scala	same	
+warn/i23018.scala	std	FromDigits
+warn/i23033.scala	same	
+warn/i23047.scala	silent	
+warn/i23049.scala	same	
+warn/i23164.scala	same	
+warn/i23200.scala	silent	
+warn/i23250.scala	silent	
+warn/i23250b.scala	silent	
+warn/i23277.scala	rejects	recursive use of {} needs an explicit result type
+warn/i23323.scala	silent	
+warn/i2333.scala	different	there were 4 deprecation warnings; re-run with -deprecation for details
+warn/i23347.scala	silent	
+warn/i23349.scala	silent	
+warn/i23369.scala	superset	+1 diagnostics: match may not be exhaustive.
+warn/i23494.scala	same	
+warn/i23541.scala	silent	
+warn/i23620b.scala	silent	
+warn/i23621	wording	match may not be exhaustive.
+warn/i23651.scala	silent	
+warn/i23693.scala	silent	
+warn/i23694.scala	silent	
+warn/i23704.scala	silent	
+warn/i23758.scala	silent	
+warn/i23822.scala	silent	
+warn/i23905	different	there were 4 deprecation warnings; re-run with -deprecation for details
+warn/i24034	rejects	missing argument for parameter {}
+warn/i24082.scala	same	
+warn/i24246.scala	silent	
+warn/i24248	same	
+warn/i24263.scala	same	
+warn/i24265.scala	same	
+warn/i24280.scala	silent	
+warn/i24322.scala	silent	
+warn/i24457.scala	same	
+warn/i24459.scala	same	
+warn/i24466.scala	silent	
+warn/i24562.scala	rejects	value {} is not a member of {}
+warn/i24582.scala	silent	
+warn/i24633.scala	same	
+warn/i24646.scala	same	
+warn/i24665.scala	same	
+warn/i24698.scala	silent	
+warn/i24750.scala	silent	
+warn/i24825.scala	rejects	trait Y overrides nothing
+warn/i25004	same	
+warn/i25004b	same	
+warn/i25094.scala	silent	
+warn/i25100.scala	same		--language strictEquality
+warn/i25158.scala	silent	
+warn/i25227.scala	silent	
+warn/i25548.scala	syntax	expected {}, found {}
+warn/i25548b.scala	syntax	expected {}, found {}
+warn/i25553.scala	same	
+warn/i25595.scala	syntax	expected {}, found {}
+warn/i25928.scala	same	
+warn/i25929.scala	silent	
+warn/i25929b.scala	same	
+warn/i25929c.scala	same	
+warn/i25929d.scala	same	
+warn/i25929e.scala	same	
+warn/i25929f.scala	same	
+warn/i25965.scala	same	
+warn/i25977.scala	same	
+warn/i26431.scala	silent	
+warn/i26620-1.scala	same	
+warn/i26620-2.scala	silent	
+warn/i26620.scala	silent	
+warn/i2673.scala	silent	
+warn/i2673b.scala	silent	
+warn/i2673c.scala	silent	
+warn/i3323.scala	same	
+warn/i3324.scala	same	
+warn/i3561.scala	silent	
+warn/i4008.scala	silent	
+warn/i4297.scala	different	the type test for Some[Int] cannot be checked at runtime because its type arguments can't be determined from X
+warn/i4364.scala	std	ObjectOutputStream
+warn/i4812.scala	rejects	value {} is not a member of {}
+warn/i4936b.scala	silent	
+warn/i4986b.scala	silent	
+warn/i5013.scala	same	
+warn/i5013b.scala	silent	
+warn/i5077.scala	rejects	value {} is not a member of {}
+warn/i5422.scala	same	
+warn/i559.scala	std	App
+warn/i5826.scala	subset	1/5 diagnostics
+warn/i6190b.scala	same	
+warn/i7314.scala	different	unreachable case	--source future
+warn/i7821.scala	silent	
+warn/i7821b.scala	silent	
+warn/i8427.scala	silent	
+warn/i8781b.scala	silent	
+warn/i8922b.scala	same	
+warn/i8932.scala	subset	1/2 diagnostics
+warn/i9166.scala	silent	
+warn/i9241.scala	silent	
+warn/i9266.scala	syntax	expected a definition, found {}
+warn/i9408a.scala	rejects	type mismatch
+warn/i9740.scala	wording	unreachable case
+warn/i9740b.scala	silent	
+warn/i9740c.scala	silent	
+warn/i9740d.scala	silent	
+warn/i9751.scala	silent	
+warn/i9776.scala	silent	
+warn/i9880.scala	rejects	missing parameter type
+warn/implicit-conversions-old.scala	different	there were 3 feature warnings; re-run with -feature for details
+warn/implicit-conversions.scala	silent	
+warn/infer-or-type.scala	silent	
+warn/infix-named-args-migration.scala	rejects	operator {} cannot be applied	--source 3.7-migration
+warn/inline-givens.scala	silent	
+warn/into-as-mod.scala	syntax	expected a definition, found {}
+warn/into-deprecated-flag.scala	same		--language experimental.into
+warn/into-deprecated-import.scala	same	
+warn/looping-givens.scala	silent		--source 3.4
+warn/manifest-summoning-b.scala	std	manifest
+warn/matchable.scala	silent		--source future
+warn/named-tuples-deprecated-flag.scala	options	invalid choice(s) for -language: experimental.namedTuples	--language experimental.namedTuples
+warn/named-tuples-deprecated-import.scala	same	
+warn/newline-braces.scala	rejects	missing parameter type	--source 3.0-migration
+warn/nonunit-statement.scala	rejects	value {} is not a member of {}	--source 3.3
+warn/nowarn.scala	different	A try without catch or finally is equivalent to putting its body in a block; no exceptions are handled.
+warn/old-syntax.scala	rejects	a for expression needs a generator
+warn/opaque-match.scala	wording	the type test for T cannot be checked at runtime because it refers to an opaque type
+warn/or-type-trees.scala	silent	
+warn/ovlazy.scala	rejects	lazy value x may not override non-lazy value x in class A	--source 3.0-migration
+warn/package-object-values-deprecated-flag.scala	same		--language experimental.packageObjectValues
+warn/package-object-values-deprecated-import.scala	same	
+warn/patmat-exhaustive.scala	same	
+warn/patmat-nothing-exhaustive.scala	superset	+2 diagnostics: match may not be exhaustive.
+warn/patmat-type-member-nothing-exhaustive.scala	superset	+1 diagnostics: match may not be exhaustive.
+warn/private-this-3.4.scala	silent	
+warn/private-this-future-migration.scala	silent	
+warn/quote-simple-hole.scala	silent	
+warn/redundant-null.scala	subset	11/14 diagnostics
+warn/refined-types.scala	silent	
+warn/refinements-this.scala	silent	
+warn/relaxed-extension-imports-deprecated-flag.scala	options	invalid choice(s) for -language: experimental.relaxedExtensionImports	--language experimental.relaxedExtensionImports
+warn/relaxed-extension-imports-deprecated-import.scala	same	
+warn/rewrite-messages.scala	silent		--source future-migration
+warn/sip67-deprecated-flag.scala	accepts	scalac rejects	--language experimental.strictEqualityPatternMatching
+warn/sip67-deprecated-import.scala	accepts	scalac rejects
+warn/strict-pattern-bindings-3.2.scala	wording	pattern's type Int is more specialized than the right hand side expression's type Int
+warn/stringcontext-any-methods.scala	same	
+warn/sub-cases-exhaustivity.scala	syntax	expected {}, found {}
+warn/sub-cases-reachability.scala	syntax	expected {}, found {}
+warn/supertraits-b.scala	silent	
+warn/suppressed-type-test-warnings.scala	subset	2/3 diagnostics
+warn/switches.scala	different	match may not be exhaustive.
+warn/symbolic-packages.scala	rejects	a package clause after other definitions needs a body: `package p:` or `package p { ... }`
+warn/t10373.scala	same	
+warn/t11620.scala	rejects	type mismatch
+warn/t11681.scala	silent	
+warn/t13095.scala	same	
+warn/t2755.scala	different	the type test for Array[Int] cannot be checked at runtime because its type arguments can't be determined from Any
+warn/t3235-minimal.scala	silent	
+warn/t5830.scala	wording	unreachable case
+warn/tostring-interpolated.scala	silent	
+warn/tuple-exhaustivity.scala	superset	+1 diagnostics: match may not be exhaustive.
+warn/type-lambda.scala	silent	
+warn/type-test-paths-2.scala	superset	+2 diagnostics: the type test for Test.r2.Nat cannot be checked at runtime because it refers to an abstract type member
+warn/type-test-paths.scala	superset	+2 diagnostics: the type test for p2.Y cannot be checked at runtime because it refers to an abstract type member
+warn/type-test-syntesize-b.scala	superset	+1 diagnostics: the type test for Array[Int] cannot be checked at runtime because its type arguments can't be determined from Any
+warn/unary-minus.scala	silent	
+warn/uninitialized-3.4.scala	same	
+warn/uninitialized-future-migration.scala	same	
+warn/unused-can-equal.scala	rejects	values of types {} and {} cannot be compared
+warn/unused-erased.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
+warn/unused-locals.scala	silent	
+warn/unused-params.scala	rejects	method call overrides nothing
+warn/unused-privates.scala	rejects	{} is not a member of the package
+warn/warn-value-discard.scala	rejects	{} is not a member of the package
+warn/with-type-operator-3.4-migration.scala	same	
+warn/xfatalWarnings.scala	same	

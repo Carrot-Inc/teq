@@ -574,6 +574,12 @@ pub struct Symbols {
     /// where an exporter (`PrepJSExports.genExportDefs`) dispatches among the alternatives of one
     /// name. Few members have one, and the symbols' records are read by every lookup.
     pub js_export_names: crate::arena::Layered<SymId, Name>,
+    /// A context bound's evidence parameter (or a class's field of it), whose name the desugaring
+    /// made (dotty's `ContextBoundParamName`, pickled as a unique name of the separator
+    /// `evidence$`): explicit arguments for its clause migrate (`Migrations.contextBoundParams`). A
+    /// parameter written with the same name is not one. Few symbols are one, and the symbols'
+    /// records are read by every lookup.
+    pub context_bounds: crate::arena::Layered<SymId, ()>,
     /// Per file its place in the canonical order: a program file's id, and for the pseudo files
     /// of library bodies, which are made in the order they are demanded, the order of their
     /// keys (`Worker::rank_files`). Empty until the typer is done: what orders the output by file
@@ -791,6 +797,7 @@ impl Symbols {
             overloads: Arena::new(),
             dispatch_names: Default::default(),
             js_export_names: Default::default(),
+            context_bounds: Default::default(),
             file_ranks: Vec::new(),
             product_places: Default::default(),
             product_sources: Vec::new(),
@@ -837,6 +844,7 @@ impl Symbols {
             overloads: Arena::attach(self.overloads.shared_arc(), worker),
             dispatch_names: self.dispatch_names.attach(),
             js_export_names: self.js_export_names.attach(),
+            context_bounds: self.context_bounds.attach(),
             file_ranks: Vec::new(),
             product_places: Default::default(),
             product_sources: Vec::new(),

@@ -34,7 +34,27 @@ const TYPER_CAP: usize = 8;
 /// The parser threads for the std files the program names, parsed after the program's.
 pub const STD_WORKERS: usize = 4;
 
-type FileErrors = Vec<(Span, String)>;
+/// A file's lexical and syntax diagnostics: its errors and its warnings.
+#[derive(Clone, Debug, Default)]
+pub struct Syntactic {
+    pub errors: Vec<(Span, String)>,
+    pub warnings: Vec<parser::SyntaxWarning>,
+}
+
+impl Syntactic {
+    /// The diagnostics of `file`; a std file's warnings are no program's.
+    pub fn report(self, file: FileId, std: bool, diags: &mut Diagnostics) {
+        for (span, msg) in self.errors {
+            diags.error(file, span, msg);
+        }
+        if std {
+            return;
+        }
+        for w in self.warnings {
+            diags.syntax_warning(file, w.span, w.msg, w.migration, w.id);
+        }
+    }
+}
 
 /// A std file of the build before it is parsed.
 pub struct StdInput {
@@ -108,7 +128,7 @@ impl UsedNames {
 pub fn note_used_names(ast: &Ast, used: &mut UsedNames, interner: &Interner) {
     for e in &ast.exprs {
         match e {
-            Expr::Ident(n) | Expr::Select(_, n) | Expr::Infix(_, n, _) | Expr::Prefix(n, _) | Expr::NamedArg(n, _) => used.mark(*n, TERM),
+            Expr::Ident(n) | Expr::Select(_, n) | Expr::Infix(_, n, _, _) | Expr::Prefix(n, _) | Expr::NamedArg(n, _) => used.mark(*n, TERM),
             Expr::Interp(n, _, _) => {
                 used.mark(*n, TERM);
                 used.interpolation = true;
@@ -183,12 +203,16 @@ fn mark_type_prefix(ast: &Ast, t: TyExprId, used: &mut UsedNames) {
 /// The file's AST first, then one per `package p:` block. Where the grammar of an unclosed
 /// parenthesis or bracket fails at the first token of a line that its owning region holds
 /// (`LexResult::boundaries`), the file is lexed and parsed again with the delimiters closed
-/// before that line, at most `MAX_RELEXES` times.
-pub fn parse_one(text: &str, interner: &Interner, syntax: parser::Syntax) -> (Vec<Ast>, FileErrors) {
+/// before that line, at most `MAX_RELEXES` times, under the reading of `given` and `enum` the unit's
+/// source version import gave (`Parsed::keywords`, which the parser takes as it meets the import).
+pub fn parse_one(text: &str, interner: &Interner, syntax: parser::Syntax) -> (Vec<Ast>, Syntactic) {
     let mut closed: Vec<u32> = Vec::new();
+    let mut keywords = lexer::Keywords::of_setting(syntax.source);
     loop {
-        let mut lexed = lexer::lex_closing(text, interner, &closed);
+        let mut lexed = lexer::lex_with(text, interner, &closed, keywords);
         let parsed = parser::parse(text, &mut lexed, &closed, interner, syntax);
+        // A file lexed again for its delimiters keeps the reading its source import gave.
+        keywords = parsed.keywords;
         match parsed.boundary {
             Some(b) if closed.len() < lexer::MAX_RELEXES && !closed.contains(&b) => {
                 closed.push(b);
@@ -197,7 +221,10 @@ pub fn parse_one(text: &str, interner: &Interner, syntax: parser::Syntax) -> (Ve
             _ => {
                 let mut errors = lexed.errors;
                 errors.extend(parsed.errors);
-                return (parsed.asts, errors);
+                let mut warnings: Vec<parser::SyntaxWarning> =
+                    lexed.warnings.into_iter().map(|(span, msg)| parser::SyntaxWarning { span, msg, migration: true, id: crate::warnings::NO_ID }).collect();
+                warnings.extend(parsed.warnings);
+                return (parsed.asts, Syntactic { errors, warnings });
             }
         }
     }
@@ -267,9 +294,23 @@ pub fn threads_by_size(files: &[SourceFile]) -> usize {
     }
 }
 
+/// The setting of a file: the source version of the innermost of `roots` it is under (`--source-at`),
+/// else the build's.
+pub fn syntax_of(roots: &[(std::path::PathBuf, crate::source_version::SourceVersion)], path: &str, syntax: parser::Syntax) -> parser::Syntax {
+    if roots.is_empty() {
+        return syntax;
+    }
+    let Ok(canonical) = crate::source::canonicalize(path) else { return syntax };
+    match roots.iter().filter(|(r, _)| canonical.starts_with(r)).max_by_key(|(r, _)| r.as_os_str().len()) {
+        Some(&(_, source)) => parser::Syntax { source, ..syntax },
+        None => syntax,
+    }
+}
+
 /// Parses the files whose slot is empty among `todo` and fills it with the file's AST followed
 /// by one per `package p:` block; a slot already filled is a file parsed earlier and left
-/// alone. With `used`, the names the files refer to are recorded.
+/// alone. With `used`, the names the files refer to are recorded. A file under one of `roots`
+/// takes its source version (`syntax_of`).
 pub fn parse_files(
     files: &[SourceFile],
     todo: impl Iterator<Item = usize>,
@@ -280,15 +321,14 @@ pub fn parse_files(
     parallel: bool,
     max_workers: usize,
     syntax: parser::Syntax,
+    roots: &[(std::path::PathBuf, crate::source_version::SourceVersion)],
 ) {
     let todo: Vec<usize> = todo.filter(|&i| slots[i].is_none()).collect();
     let workers = crate::workers().min(todo.len()).min(max_workers);
     if !parallel || workers < 2 {
         for &i in &todo {
-            let (asts, errors) = parse_one(&files[i].text, interner, parser::Syntax { std: files[i].is_std, ..syntax });
-            for (span, msg) in errors {
-                diags.error(FileId(i as u32), span, msg);
-            }
+            let (asts, found) = parse_one(&files[i].text, interner, parser::Syntax { std: files[i].is_std, ..syntax_of(roots, &files[i].path, syntax) });
+            found.report(FileId(i as u32), files[i].is_std, diags);
             if let Some(used) = used.as_deref_mut() {
                 for ast in &asts {
                     note_used_names(ast, used, interner);
@@ -302,7 +342,7 @@ pub fn parse_files(
         order.sort_by_key(|&i| std::cmp::Reverse(files[i].text.len()));
         let next = AtomicUsize::new(0);
         let note = used.is_some();
-        let results: Vec<(Interner, UsedNames, Vec<(usize, Vec<Ast>, FileErrors)>)> = std::thread::scope(|scope| {
+        let results: Vec<(Interner, UsedNames, Vec<(usize, Vec<Ast>, Syntactic)>)> = std::thread::scope(|scope| {
             let handles: Vec<_> = (0..workers)
                 .map(|_| {
                     crate::alloc::spawn_in(scope, || {
@@ -312,7 +352,7 @@ pub fn parse_files(
                         loop {
                             let slot = next.fetch_add(1, Ordering::Relaxed);
                             let Some(&i) = order.get(slot) else { break };
-                            let (asts, errors) = parse_one(&files[i].text, &mut local, parser::Syntax { std: files[i].is_std, ..syntax });
+                            let (asts, errors) = parse_one(&files[i].text, &mut local, parser::Syntax { std: files[i].is_std, ..syntax_of(roots, &files[i].path, syntax) });
                             if note {
                                 for ast in &asts {
                                     note_used_names(ast, &mut local_used, &local);
@@ -335,9 +375,7 @@ pub fn parse_files(
                 for ast in &mut asts {
                     remap_names(ast, &map);
                 }
-                for (span, msg) in errors {
-                    diags.error(FileId(i as u32), span, msg);
-                }
+                errors.report(FileId(i as u32), files[i].is_std, diags);
                 slots[i] = Some(asts);
             }
         }
@@ -436,7 +474,7 @@ fn remap_names(ast: &mut Ast, map: &[Name]) {
     let m = |n: &mut Name| *n = map[n.0 as usize];
     for e in &mut ast.exprs {
         match e {
-            Expr::Ident(n) | Expr::Select(_, n) | Expr::NamedArg(n, _) | Expr::Infix(_, n, _)
+            Expr::Ident(n) | Expr::Select(_, n) | Expr::NamedArg(n, _) | Expr::Infix(_, n, _, _)
             | Expr::Prefix(n, _) | Expr::Interp(n, _, _) | Expr::Super(n) | Expr::QualThis(n) => m(n),
             _ => {}
         }
@@ -520,8 +558,8 @@ mod tests {
         let mut blocks_of = Vec::new();
         for (i, text) in texts.iter().enumerate() {
             files.push(SourceFile { path: format!("{}.scala", i), text: text.to_string(), is_std: false, key: format!("{}.scala", i) });
-            let (mut parsed, errors) = parse_one(text, &interner, parser::Syntax::default());
-            assert!(errors.is_empty(), "{:?}", errors);
+            let (mut parsed, found) = parse_one(text, &interner, parser::Syntax::default());
+            assert!(found.errors.is_empty(), "{:?}", found.errors);
             asts.push(parsed.remove(0));
             blocks_of.push(Vec::new());
             for block in parsed {
@@ -563,8 +601,8 @@ mod tests {
             object Use:\n  def f(x: Any): String =\n    import scala.language.postfixOps\n    x match\n      case Size(width = w) => w.toString\n      case ver\"v$rest\" => rest\n      case n: Int => (n: @switch) match\n        case 1 => \"one\"\n        case _ => \"other\"\n      case _ => (x.toString: @nowarn)\n";
         // A thread's interner and the build's, whose names other files took first.
         let local = Interner::new();
-        let (mut parsed, errors) = parse_one(text, &local, parser::Syntax::default());
-        assert!(errors.is_empty(), "{:?}", errors);
+        let (mut parsed, found) = parse_one(text, &local, parser::Syntax::default());
+        assert!(found.errors.is_empty(), "{:?}", found.errors);
         let build = Interner::new();
         for i in 0..40 {
             build.intern(&format!("taken{}", i));

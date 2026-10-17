@@ -333,7 +333,10 @@ impl<'a> Parser<'a> {
     fn parse_with_type(&mut self) -> TyExprId {
         let lhs = self.parse_simple_type();
         if self.at(Tok::KwWith) && !self.template_type && !matches!(self.kind_at(1), Tok::LBrace | Tok::Indent | Tok::ColonEol) {
-            self.bump();
+            let with = self.bump().span;
+            // `DeprecatedWithOperator`, by the version where the parser stands (`withTypeRest`).
+            let msg = format!("with as a type operator has been deprecated; use & instead{}", crate::source_version::rewrite_notice("This construct", "3.4-migration"));
+            self.migration(crate::source_version::Migration::WithOperator, with, msg, crate::warnings::id::DEPRECATED_WITH_OPERATOR);
             let rhs = self.parse_with_type();
             let span = self.ast.ty_spans[lhs.idx()].to(self.ast.ty_spans[rhs.idx()]);
             return self.ast.add_ty(TyExpr::Inter(lhs, rhs), span);

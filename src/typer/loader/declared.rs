@@ -1088,7 +1088,7 @@ impl<'a> Worker<'a> {
             .iter()
             .map(|c| {
                 let taken: Vec<ArgSrc> = args.by_ref().take(c.params.len()).collect();
-                ArgList { args: taken, using: c.is_using, span: first_span }
+                ArgList { args: taken, using: c.is_using, span: first_span, fun: ArgList::NO_FUN }
             })
             .collect()
     }

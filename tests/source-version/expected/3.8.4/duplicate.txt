@@ -1,0 +1,3 @@
+exit 1
+error 1:52
+  duplicate source version import

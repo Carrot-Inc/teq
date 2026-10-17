@@ -47,7 +47,7 @@ impl<'a> Worker<'a> {
         let (span, assigned) = match ast.expr(head) {
             // `x += e` of a `var x` the typer makes `x = x + e`: the target written, which the
             // operation's read of it is too, scalac's desugaring sharing the tree.
-            ast::Expr::Infix(lhs, _, _) if matches!(self.prog.expr(node), TExpr::Assign(..)) => {
+            ast::Expr::Infix(lhs, _, _, _) if matches!(self.prog.expr(node), TExpr::Assign(..)) => {
                 if let TExpr::Assign(l, _) = self.prog.expr(node) {
                     node = l;
                 }
@@ -124,7 +124,7 @@ impl<'a> Worker<'a> {
 
     /// Whether the operation `head` is an assignment's (`+=`, not `<=`).
     fn assign_op_target_name(&self, ast: &ast::Ast, head: ast::ExprId) -> bool {
-        let ast::Expr::Infix(_, op, _) = ast.expr(head) else { return false };
+        let ast::Expr::Infix(_, op, _, _) = ast.expr(head) else { return false };
         let text = self.name_ref(op);
         text.len() > 1 && text.ends_with('=') && !text.starts_with('=') && !matches!(text, "<=" | ">=" | "!=")
     }

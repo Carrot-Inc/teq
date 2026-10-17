@@ -137,6 +137,13 @@ impl Names {
         self.get(Key::Unique { separator, num, underlying })
     }
 
+    /// `<separator><num>` of no underlying name, as dotty's `UniqueNameKind(separator)` names a fresh
+    /// one (`ContextBoundParamName`, `evidence$1`).
+    pub fn unique_of(&mut self, separator: &str, num: u32) -> u32 {
+        let separator = self.simple(separator);
+        self.get(Key::Unique { separator, num, underlying: None })
+    }
+
     pub fn default_getter(&mut self, method: &str, index: u32) -> u32 {
         let u = self.simple(method);
         self.get(Key::DefaultGetter(u, index))

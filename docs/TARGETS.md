@@ -208,7 +208,8 @@ What it re-types: an edit that changed only bodies is compared with the old synt
 members, recursively), and the file's bodies alone are typed again against the existing symbol table; a val
 or def whose inferred type comes out the same is seen by no other file. An edit of an inline body expanded
 in other files types those files again too, and the answer's `retyped` names them. Everything else, a
-signature changed, an inferred type changed, a file added or removed, takes the full path in the same
+signature changed, an inferred type changed, a unit's source version changed (its source version import,
+which decides its signatures), a file added or removed, takes the full path in the same
 process with the unchanged files' syntax trees kept, and a watch build gives modules byte-identical to a
 fresh `teq compiler build --split`. A macro's own state lasts one build, as under scalac; an object that holds
 nothing but a cache is kept across retypes when `--cacheable-state a.b.Cache` names it.

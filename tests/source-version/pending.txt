@@ -1,0 +1,74 @@
+# The runs of runs.txt teq does not give as scalac yet, one name a line with its reason: each fails
+# tests/source-version.scala once it does, so that the list shrinks as the table's rows land.
+Scala2to3  the Scala 2 syntax 3.0-migration reads with a migration warning (procedure syntax and the row's other sites): piece (ii), Scala2to3's group
+Scala2to3@3.0-migration  the Scala 2 syntax 3.0-migration reads with a migration warning (procedure syntax and the row's other sites): piece (ii), Scala2to3's group
+Scala2to3@3.0  the Scala 2 syntax 3.0-migration reads with a migration warning (procedure syntax and the row's other sites): piece (ii), Scala2to3's group
+OverrideValParameter  RefChecks' check of an override of a val parameter, absent: piece (ii), the typer's checks
+OverrideValParameter@3.0  RefChecks' check of an override of a val parameter, absent: piece (ii), the typer's checks
+OverrideValParameter@future-migration  RefChecks' check of an override of a val parameter, absent: piece (ii), the typer's checks
+OverrideValParameter@future  RefChecks' check of an override of a val parameter, absent: piece (ii), the typer's checks
+NonLocalReturns@3.1  the transform's warning gated and worded as dotty's: piece (ii), the typer's checks
+NonLocalReturns@future-migration  the transform's warning gated and worded as dotty's: piece (ii), the typer's checks
+NonLocalReturns@future  the transform's warning gated and worded as dotty's: piece (ii), the typer's checks
+AscriptionAfterPattern  the ascribed pattern's grammar, absent: piece (ii), the grammar group
+AscriptionAfterPattern@3.2  the ascribed pattern's grammar, absent: piece (ii), the grammar group
+AscriptionAfterPattern@3.3  the ascribed pattern's grammar, absent: piece (ii), the grammar group
+AscriptionAfterPattern@future-migration  the ascribed pattern's grammar, absent: piece (ii), the grammar group
+AscriptionAfterPattern@future  the ascribed pattern's grammar, absent: piece (ii), the grammar group
+AlphanumericInfix  Checking.checkValidInfix, absent: piece (ii), the typer's checks (a warning at the default)
+AlphanumericInfix@3.4  Checking.checkValidInfix, absent: piece (ii), the typer's checks (a warning at the default)
+AlphanumericInfix@future-migration  Checking.checkValidInfix, absent: piece (ii), the typer's checks (a warning at the default)
+AlphanumericInfix@future  Checking.checkValidInfix, absent: piece (ii), the typer's checks (a warning at the default)
+ExplicitContextBoundArgument  at the default the evidence is a using clause, and teq's missing-given message and the error of the list applied to the result are its own (no given instance ... for parameter evidence$1): a task line, the typer's messages
+RemoveThisQualifier  the parser's diagnostic of private[this], absent: piece (ii), the parser's diagnostics (a warning at the default)
+RemoveThisQualifier@3.4  the parser's diagnostic of private[this], absent: piece (ii), the parser's diagnostics (a warning at the default)
+RemoveThisQualifier@future-migration  the parser's diagnostic of private[this], absent: piece (ii), the parser's diagnostics (a warning at the default)
+RemoveThisQualifier@future  the parser's diagnostic of private[this], absent: piece (ii), the parser's diagnostics (a warning at the default)
+VarargSpliceAscription  the parser's diagnostic of `: _*`, absent: piece (ii), the parser's diagnostics (a warning at the default)
+VarargSpliceAscription@3.4  the parser's diagnostic of `: _*`, absent: piece (ii), the parser's diagnostics (a warning at the default)
+VarargSpliceAscription@future-migration  the parser's diagnostic of `: _*`, absent: piece (ii), the parser's diagnostics (a warning at the default)
+VarargSpliceAscription@future  the parser's diagnostic of `: _*`, absent: piece (ii), the parser's diagnostics (a warning at the default)
+WildcardType@3.4  the parser's diagnostic of a `_` type argument, absent: piece (ii), the parser's diagnostics (a warning at the default)
+WildcardType  the parser's diagnostic of a `_` type argument, absent: piece (ii), the parser's diagnostics (a warning at the default)
+WildcardType@future-migration  the parser's diagnostic of a `_` type argument, absent: piece (ii), the parser's diagnostics (a warning at the default)
+WildcardType@future  the parser's diagnostic of a `_` type argument, absent: piece (ii), the parser's diagnostics (a warning at the default)
+FunctionUnderscore  the eta-expansion's diagnostic of `f _`, absent: piece (ii), the typer's checks (a warning at the default)
+FunctionUnderscore@3.4  the eta-expansion's diagnostic of `f _`, absent: piece (ii), the typer's checks (a warning at the default)
+FunctionUnderscore@future-migration  the eta-expansion's diagnostic of `f _`, absent: piece (ii), the typer's checks (a warning at the default)
+FunctionUnderscore@future  the eta-expansion's diagnostic of `f _`, absent: piece (ii), the typer's checks (a warning at the default)
+NonNamedArgumentInJavaAnnotation  Checking's check of a Java annotation's positional arguments, absent: piece (ii), the typer's checks (an error at the default)
+NonNamedArgumentInJavaAnnotation@3.6-migration  Checking's check of a Java annotation's positional arguments, absent: piece (ii), the typer's checks (an error at the default)
+NonNamedArgumentInJavaAnnotation@3.6  Checking's check of a Java annotation's positional arguments, absent: piece (ii), the typer's checks (an error at the default)
+ImportWildcard@future-migration  the parser's diagnostic of a `_` selector, absent: piece (ii), the parser's diagnostics
+ImportWildcard@future  the parser's diagnostic of a `_` selector, absent: piece (ii), the parser's diagnostics
+AmbiguousNamedTupleSyntax  the named-argument reading before 3.7 and the named tuples' gate (enablesNamedTuples): piece (ii), the named tuples' group
+AmbiguousNamedTupleSyntax@3.6  the named-argument reading before 3.7 and the named tuples' gate (enablesNamedTuples): piece (ii), the named tuples' group
+AmbiguousNamedTupleSyntax@future-migration  the named-argument reading before 3.7 and the named tuples' gate (enablesNamedTuples): piece (ii), the named tuples' group
+AmbiguousNamedTupleSyntax@future  the named-argument reading before 3.7 and the named tuples' gate (enablesNamedTuples): piece (ii), the named tuples' group
+AmbiguousNamedTupleSyntax@3.5  the named-argument reading before 3.7 and the named tuples' gate (enablesNamedTuples): piece (ii), the named tuples' group
+ImportRename@future-migration  the parser's diagnostic of `a => b`, absent: piece (ii), the parser's diagnostics
+ImportRename@future  the parser's diagnostic of `a => b`, absent: piece (ii), the parser's diagnostics
+ParameterEnclosedByParenthesis  the implicit lambda's grammar, absent: piece (ii), the grammar group
+ParameterEnclosedByParenthesis@3.9  the implicit lambda's grammar, absent: piece (ii), the grammar group
+ParameterEnclosedByParenthesis@future-migration  the implicit lambda's grammar, absent: piece (ii), the grammar group
+ParameterEnclosedByParenthesis@future  the implicit lambda's grammar, absent: piece (ii), the grammar group
+XmlLiteral  teq has no XML literals: out of the part, a task line
+XmlLiteral@3.9  teq has no XML literals: out of the part, a task line
+XmlLiteral@future-migration  teq has no XML literals: out of the part, a task line
+XmlLiteral@future  teq has no XML literals: out of the part, a task line
+GivenSyntax@future-migration  the old given syntax's diagnostics, absent: piece (ii), the parser's diagnostics
+GivenSyntax@future  the old given syntax's diagnostics, absent: piece (ii), the parser's diagnostics
+ImplicitParamsWithoutUsing@future-migration  Scala2Implicits' error at the `implicit` clause beside this row's: piece (ii), the parser's diagnostics
+ImplicitParamsWithoutUsing@future  Scala2Implicits' error at the `implicit` clause beside this row's: piece (ii), the parser's diagnostics
+Scala2Implicits@future-migration  the parser's and the typer's diagnostics of Scala 2 implicits, absent: piece (ii), the parser's diagnostics
+Scala2Implicits@future  the parser's and the typer's diagnostics of Scala 2 implicits, absent: piece (ii), the parser's diagnostics
+IdentifierDollars@3.9  the identifier's check (3.10.0's row), absent: piece (ii), the parser's diagnostics
+IdentifierDollars@future  the identifier's check (3.10.0's row), absent: piece (ii), the parser's diagnostics
+namedtuple_old@3.6  the named tuples' gate (enablesNamedTuples, 3.7): piece (ii), the named tuples' group
+import_310  teq leaves an import of scala.language unresolved (its std has no `language` object, its messages no did-you-mean): a task line
+forpat_run@3.1  the generator's lowering by version, run: piece (ii), the for comprehensions' group
+forpat_run@3.3  the generator's lowering by version, run: piece (ii), the for comprehensions' group
+empty_context  at the default the evidence is a using clause, and teq words the refusal as its own ("value apply is not a member of Int" for "method f in object P does not take more parameters"): a task line, the typer's messages
+empty_context@3.4  dotty issues a unit's warnings after its typer (Reporter's suspended messages), so the missing argument's error hides the row's warning at its place, where teq shows both, and teq words the missing argument as its own (MissingImplicitParameterInEmptyArguments): a finding and a task line
+empty_context@3.5  the missing argument's error stands at the place the row's error took, which scalac hides and teq shows (docs/internal/DIFFERENCES.md: an error is hidden only by the same error)
+bound_named@3.4  refused as scalac refuses it, in teq's words and place ("there is no parameter named evidence$1" at the list for "method f in object P: (implicit evidence$1: C[Int]): Int does not have a parameter evidence$1" at the argument) and with the clause's missing argument after it: a task line, the typer's messages

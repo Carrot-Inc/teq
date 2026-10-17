@@ -337,7 +337,7 @@ fn site_in(ast: &Ast, fake: Name, interner: &Interner) -> Option<Site> {
 
 /// Whether an operator expression's own name is the fake one (`a fo|` read as a postfix).
 fn expr_names(e: &Expr, fake: Name) -> bool {
-    matches!(*e, Expr::Infix(_, n, _) | Expr::Prefix(n, _) if n == fake)
+    matches!(*e, Expr::Infix(_, n, _, _) | Expr::Prefix(n, _) if n == fake)
 }
 
 /// The receiver as a path of names, `a.b.c`, where it is one; `super` as itself.

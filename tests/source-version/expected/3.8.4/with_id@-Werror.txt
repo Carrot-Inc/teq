@@ -1,0 +1,4 @@
+exit 1
+warning 2:23
+  with as a type operator has been deprecated; use & instead
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.

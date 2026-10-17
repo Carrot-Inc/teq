@@ -8,8 +8,9 @@ trait Base extends ScalaModule {
   def scalaVersion = Versions.scala
 }
 
-// a compiles against b (compileModuleDeps, not transitive); c depends on a and does not see b.
-object b extends Base
+// a compiles against b (compileModuleDeps, not transitive); c depends on a and does not see b. b names its source
+// version (scalac's -source, the lock's source of its configurations).
+object b extends Base { def scalacOptions = Seq("-source:3.9") }
 object a extends Base { def compileModuleDeps = Seq(b) }
 object c extends Base { def moduleDeps = Seq(a) }
 

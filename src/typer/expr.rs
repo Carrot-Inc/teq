@@ -1736,11 +1736,11 @@ impl<'a> Worker<'a> {
             Expr::QuoteType(t) => self.type_quote_type(t, span),
             Expr::Splice(inner) => self.type_splice(inner, span, expected),
             Expr::SplicePat(p) => self.type_pattern_hole(p, span, expected),
-            Expr::Infix(l, op, r) => {
+            Expr::Infix(l, op, r, op_end) => {
                 let part = self.body_part(super::profile::Part::Apply);
                 let typed = match ast.reader.as_deref() {
                     Some(_) => self.type_infix_placed(e, l, op, r, span, expected),
-                    None => self.type_infix(l, op, r, span, expected),
+                    None => self.type_infix(l, op, r, op_end, span, expected),
                 };
                 self.part_end(part);
                 typed
@@ -2389,9 +2389,9 @@ impl<'a> Worker<'a> {
                 self.lint_formatted_part(ty, i, parts);
                 typed.push(ArgSrc::Typed(te, ANY));
             }
-            ArgList { args: typed, using: false, span }
+            ArgList { args: typed, using: false, span, fun: ArgList::NO_FUN }
         } else {
-            ArgList { args: ast.expr_list(args).iter().map(|&a| ArgSrc::Ast(a)).collect(), using: false, span }
+            ArgList { args: ast.expr_list(args).iter().map(|&a| ArgSrc::Ast(a)).collect(), using: false, span, fun: ArgList::NO_FUN }
         };
         let Some(class) = self.string_context_class() else {
             self.error(span, "StringContext is missing from the standard library");
@@ -2458,7 +2458,9 @@ impl<'a> Worker<'a> {
         let outer_prefixed = std::mem::replace(&mut self.new_prefixed, prefixed || imported.is_some());
         let outer_new = std::mem::replace(&mut self.explicit_new, true);
         let journal = self.unused.journal_len();
-        let typed = self.type_new(ty, &[(args, false, span)], false, span, expected);
+        // The first list applies `New(T)`, which ends with the type (`Migrations.checkParentheses`).
+        let fun = super::apply::FunEnd::at(self.cur_ast().ty_end(ty));
+        let typed = self.type_new(ty, &[(args, false, span, fun)], false, span, expected);
         if self.unused.defs_on() {
             self.ignore_self_construction_args(typed.0, journal);
         }
@@ -2515,7 +2517,7 @@ impl<'a> Worker<'a> {
     pub fn type_new(
         &mut self,
         ty: TyExprId,
-        args: &[(ListRef, bool, Span)],
+        args: &[(ListRef, bool, Span, super::apply::FunEnd)],
         first_written: bool,
         span: Span,
         expected: Option<TypeId>,
@@ -2573,7 +2575,7 @@ impl<'a> Worker<'a> {
         ctor: TypeId,
         head: TyExprId,
         targs: Option<ListRef>,
-        args: &[(ListRef, bool, Span)],
+        args: &[(ListRef, bool, Span, super::apply::FunEnd)],
         first_written: bool,
         span: Span,
         expected: Option<TypeId>,
@@ -2656,11 +2658,11 @@ impl<'a> Worker<'a> {
             }
         };
         // `new AnyRef`, the plain object of a lock or a token.
-        if class == self.b.any_ref && args.iter().all(|(l, _, _)| l.is_empty()) {
+        if class == self.b.any_ref && args.iter().all(|(l, _, _, _)| l.is_empty()) {
             return (self.prog.add(TExpr::New(class, ListRef::EMPTY)), self.b.t_any_ref);
         }
         if class == self.b.array {
-            if let [(l, false, _)] = args {
+            if let [(l, false, _, _)] = args {
                 if let [len] = ast.expr_list(*l) {
                     return self.new_array(targs, *len, span, expected);
                 }
@@ -2670,7 +2672,7 @@ impl<'a> Worker<'a> {
         // (`new C(using q)(a)`, and a jar body's `new C(q)(a)` once its given list is
         // dropped): nothing is written for the first clause.
         let args = match args {
-            [(first, false, _), rest @ ..] if first.is_empty() && !rest.is_empty() && !first_written => {
+            [(first, false, _, _), rest @ ..] if first.is_empty() && !rest.is_empty() && !first_written => {
                 self.complete_class(class);
                 match self.syms.class(class).ctor.first() {
                     Some(clause) if clause.is_using && !clause.params.is_empty() => rest,
@@ -2681,10 +2683,11 @@ impl<'a> Worker<'a> {
         };
         let lists: Vec<ArgList> = args
             .iter()
-            .map(|&(l, using, span)| ArgList {
+            .map(|&(l, using, span, fun)| ArgList {
                 args: ast.expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(),
                 using,
                 span,
+                fun,
             })
             .collect();
         // `new String(chars, offset, count)`, `new Integer(1)` and the other constructors of a
@@ -2714,10 +2717,10 @@ impl<'a> Worker<'a> {
     }
 
     /// The written lists of a `new`, each with the span of its application (the `new` with the
-    /// lists up to it).
-    fn new_arg_lists(&self, args: &[(ListRef, bool, Span)], _span: Span) -> Vec<ArgList> {
+    /// lists up to it) and the function tree it applies.
+    fn new_arg_lists(&self, args: &[(ListRef, bool, Span, super::apply::FunEnd)], _span: Span) -> Vec<ArgList> {
         let ast = self.cur_ast();
-        args.iter().map(|&(l, using, span)| ArgList { args: ast.expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(), using, span }).collect()
+        args.iter().map(|&(l, using, span, fun)| ArgList { args: ast.expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(), using, span, fun }).collect()
     }
 
     /// `new Array[T](n)`: `n` elements holding the zero of `T`, through `scala.newArray`.
@@ -2738,7 +2741,7 @@ impl<'a> Worker<'a> {
             return made;
         }
         let zero = self.zero_of(elem).unwrap_or_else(|| self.prog.add(TExpr::Null));
-        let lists = vec![ArgList { args: vec![ArgSrc::Ast(len), ArgSrc::Typed(zero, elem)], using: false, span }];
+        let lists = vec![ArgList { args: vec![ArgSrc::Ast(len), ArgSrc::Typed(zero, elem)], using: false, span, fun: ArgList::NO_FUN }];
         let callee = super::apply::Callee::Method { recv: None, sym, owner_subst: Vec::new(), prefix: None, refined: None };
         self.apply_callee(callee, None, lists, span, expected)
     }
@@ -2967,7 +2970,7 @@ impl<'a> Worker<'a> {
             let (tf, fty) = self.type_expr(f, None);
             let mut items: Vec<ArgSrc> = ast.expr_list(args).iter().map(|&a| ArgSrc::Ast(a)).collect();
             items.push(ArgSrc::Ast(rhs));
-            let lists = vec![ArgList { args: items, using: false, span }];
+            let lists = vec![ArgList { args: items, using: false, span, fun: ArgList::NO_FUN }];
             return self.apply_member(tf, fty, names::UPDATE, None, lists, span, None);
         }
         let (tl, lty) = match ast.expr(lhs) {
@@ -5241,7 +5244,7 @@ impl<'a> Worker<'a> {
         let mut binder = ForBinder::Pat(pat);
         let mut filtered = filtering;
         if filtering {
-            let lists = vec![ArgList { args: vec![ArgSrc::ForLambda(binder, ForRest::Filter)], using: false, span }];
+            let lists = vec![ArgList { args: vec![ArgSrc::ForLambda(binder, ForRest::Filter)], using: false, span, fun: ArgList::NO_FUN }];
             let (r, t) = self.apply_member(recv, recv_ty, names::WITH_FILTER, None, lists, span, None);
             recv = r;
             recv_ty = t;
@@ -5254,6 +5257,7 @@ impl<'a> Worker<'a> {
                     args: vec![ArgSrc::ForLambda(binder, ForRest::Guard(g))],
                     using: false,
                     span,
+                    fun: ArgList::NO_FUN,
                 }];
                 let (r, t) = self.apply_member(recv, recv_ty, names::WITH_FILTER, None, lists, span, None);
                 recv = r;
@@ -5272,7 +5276,7 @@ impl<'a> Worker<'a> {
                 break;
             }
             let pack = ForRest::Pack { idx: next, end: val_end };
-            let lists = vec![ArgList { args: vec![ArgSrc::ForLambda(binder, pack)], using: false, span }];
+            let lists = vec![ArgList { args: vec![ArgSrc::ForLambda(binder, pack)], using: false, span, fun: ArgList::NO_FUN }];
             let (r, t) = self.apply_member(recv, recv_ty, names::MAP, None, lists, span, None);
             recv = r;
             recv_ty = t;
@@ -5287,7 +5291,7 @@ impl<'a> Worker<'a> {
             (true, false) => names::MAP,
         };
         let inner = ForRest::Rest { idx: next, end, body, is_yield };
-        let lists = vec![ArgList { args: vec![ArgSrc::ForLambda(binder, inner)], using: false, span }];
+        let lists = vec![ArgList { args: vec![ArgSrc::ForLambda(binder, inner)], using: false, span, fun: ArgList::NO_FUN }];
         let exp = if is_yield { expected } else { None };
         // Scala 3.8 leaves out a trailing `map` whose body is the generator's own pattern, or
         // `()` over `Unit` elements: the call is still typed, and the generator stands for it

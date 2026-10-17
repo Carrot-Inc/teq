@@ -369,6 +369,8 @@ pub struct Flags {
     pub wconf: Vec<String>,
     pub language: Vec<String>,
     pub java_output_version: Option<u32>,
+    /// `source`, scalac's `-source`: `--source <v>`, which teq checks as scalac does.
+    pub source: Option<String>,
 }
 
 impl Flags {
@@ -401,6 +403,9 @@ impl Flags {
         }
         if let (true, Some(n)) = (jvm, self.java_output_version) {
             args.extend(["--java-output-version".to_string(), n.to_string()]);
+        }
+        if let Some(v) = &self.source {
+            args.extend(["--source".to_string(), v.clone()]);
         }
         args
     }
@@ -1015,7 +1020,33 @@ impl Export {
         }
         args.extend(project.description.session_args());
         args.extend(conf.flags.args(jvm));
+        args.extend(self.source_args(key));
         Ok(args)
+    }
+
+    /// The source version of each source root of the closure (`--source-at <root> <version>`), where the
+    /// closure's configurations do not all share the configuration's own: the session types the closure as
+    /// one program, each unit by its own module's setting, as each of dotty's units reads its own
+    /// (`Feature.sourceVersion`). Every root is named, the configuration's own and those at the default
+    /// among them, so that a root nested in another module's takes its own module's version (the innermost
+    /// root's, `frontend::syntax_of`).
+    pub fn source_args(&self, key: &Key) -> Vec<String> {
+        let effective = |c: &Configuration| c.flags.source.clone().unwrap_or_else(|| crate::source_version::SourceVersion::default().name().to_string());
+        let Some(own) = self.configuration(key).map(effective) else { return Vec::new() };
+        let mut owned: Vec<(&String, String)> = Vec::new();
+        for k in self.closure(key) {
+            let Some(conf) = self.configuration(&k) else { continue };
+            let version = effective(conf);
+            for root in &conf.sources {
+                if !owned.iter().any(|(r, _)| *r == root) {
+                    owned.push((root, version.clone()));
+                }
+            }
+        }
+        if owned.iter().all(|(_, v)| *v == own) {
+            return Vec::new();
+        }
+        owned.into_iter().flat_map(|(root, version)| ["--source-at".to_string(), self.relative(&self.path(root)), version]).collect()
     }
 
     /// The inputs of a session of the configuration: the project's stand-ins, then the closure's
@@ -1524,6 +1555,7 @@ fn configuration(value: &Value) -> Result<Configuration, Refusal> {
         wconf: strings(f.get("wconf")),
         language: strings(f.get("language")),
         java_output_version: f.get("javaOutputVersion").and_then(Value::uint),
+        source: f.get("source").and_then(Value::str).map(str::to_string),
     });
     let parallelism = Parallelism::read(value.get("parallelism")).map_err(|why| Refusal::of(&["parallelism"], why))?;
     let test = value.get("frameworks").map(|_| TestContext {

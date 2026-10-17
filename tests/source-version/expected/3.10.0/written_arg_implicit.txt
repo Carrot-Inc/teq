@@ -1,0 +1,43 @@
+exit 0
+warning 3:15
+  Implicit parameters should be provided with a `using` clause.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"
+warning 4:15
+  Implicit parameters should be provided with a `using` clause.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"
+warning 5:16
+  Implicit parameters should be provided with a `using` clause.
+  This code can be rewritten automatically under -rewrite -source 3.7-migration.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"
+warning 6:13
+  Implicit parameters should be provided with a `using` clause.
+  This code can be rewritten automatically under -rewrite -source 3.7-migration.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"
+warning 7:16
+  Implicit parameters should be provided with a `using` clause.
+  This code can be rewritten automatically under -rewrite -source 3.7-migration.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"
+warning 8:16
+  Implicit parameters should be provided with a `using` clause.
+  This code can be rewritten automatically under -rewrite -source 3.7-migration.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"
+warning 9:13
+  Implicit parameters should be provided with a `using` clause.
+  This code can be rewritten automatically under -rewrite -source 3.7-migration.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"
+warning 10:13
+  Implicit parameters should be provided with a `using` clause.
+  This code can be rewritten automatically under -rewrite -source 3.7-migration.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"
+warning 11:12
+  Implicit parameters should be provided with a `using` clause.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"

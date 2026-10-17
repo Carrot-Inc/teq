@@ -1,0 +1,4 @@
+exit 1
+error 1:63
+  The syntax `x: _*` is no longer supported for vararg splices; use `x*` instead
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.

@@ -653,7 +653,7 @@ impl<'a> Worker<'a> {
         }
         let (name, span) = match ast.expr(head) {
             Expr::Ident(n) => (n, ast.expr_span(head)),
-            Expr::Select(_, n) | Expr::Infix(_, n, _) => match ast.name_span(head) {
+            Expr::Select(_, n) | Expr::Infix(_, n, _, _) => match ast.name_span(head) {
                 Some(s) => (n, s),
                 None => return,
             },
@@ -876,7 +876,7 @@ impl<'a> Worker<'a> {
                 let q = match *x {
                     Expr::Select(q, _) | Expr::Apply(q, _) | Expr::UsingApply(q, _) => q,
                     // A left-associative operator whose right operand stands in parentheses.
-                    Expr::Infix(l, op, r) if !interner.get(op).ends_with(':') => {
+                    Expr::Infix(l, op, r, _) if !interner.get(op).ends_with(':') => {
                         let op_end = ast.name_span(ExprId(i as u32)).map_or(ast.expr_span(l).end, |s| s.end);
                         if !parenthesised(text, op_end, ast.expr_span(r).start) {
                             continue;
@@ -1242,7 +1242,7 @@ impl<'a> Worker<'a> {
         let ast = self.cur_ast();
         let mut q = match ast.expr(head) {
             Expr::Select(q, _) => q,
-            Expr::Infix(l, op, r) => match self.name_ref(op).ends_with(':') {
+            Expr::Infix(l, op, r, _) => match self.name_ref(op).ends_with(':') {
                 true => r,
                 false => l,
             },
@@ -1330,7 +1330,7 @@ impl<'a> Worker<'a> {
     fn ascribed_qualifier(&self, ast: &ast::Ast, head: ExprId) -> Option<ExprId> {
         let mut q = match ast.expr(head) {
             Expr::Select(q, _) | Expr::Prefix(_, q) => q,
-            Expr::Infix(l, op, r) => match self.name_ref(op).ends_with(':') {
+            Expr::Infix(l, op, r, _) => match self.name_ref(op).ends_with(':') {
                 true => r,
                 false => l,
             },

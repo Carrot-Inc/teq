@@ -1,4 +1,4 @@
-use super::apply::{ArgList, ArgSrc, FrameKind, SelectionFrame};
+use super::apply::{ArgList, ArgSrc, FrameKind, FunEnd, SelectionFrame};
 use super::Worker;
 use crate::ast::{Expr, ExprId, ListRef};
 use crate::intern::Name;
@@ -34,6 +34,14 @@ enum OpClass {
 }
 
 /// The prefix operator a `unary_` method name stands for.
+/// Where the operator of the infix node `e` ends (`Expr::Infix`).
+fn infix_op_end(ast: &crate::ast::Ast, e: ExprId) -> u32 {
+    match ast.expr(e) {
+        Expr::Infix(_, _, _, op_end) => op_end,
+        _ => crate::ast::NO_END,
+    }
+}
+
 fn prefix_op_of(name: Name) -> Option<Name> {
     Some(match name {
         names::UNARY_MINUS => names::MINUS,
@@ -474,7 +482,7 @@ impl<'a> Worker<'a> {
         let declared = self.cur_ast().reader.as_deref().and_then(|t| super::apply::declaration_of(t, e));
         let typed = match declared {
             Some(d) => self.type_declared_infix(d, e, l, op, r, span, expected),
-            None => self.type_infix(l, op, r, span, expected),
+            None => self.type_infix(l, op, r, infix_op_end(self.cur_ast(), e), span, expected),
         };
         self.body_node = outer;
         typed
@@ -485,7 +493,7 @@ impl<'a> Worker<'a> {
     fn type_declared_infix(&mut self, d: crate::ast::DeclRef, e: ExprId, l: ExprId, op: Name, r: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let outer_took = self.declared_took.take();
         self.infix_declared = Some(d);
-        let (te, ty) = self.type_infix(l, op, r, span, expected);
+        let (te, ty) = self.type_infix(l, op, r, infix_op_end(self.cur_ast(), e), span, expected);
         self.infix_declared = None;
         let took = std::mem::replace(&mut self.declared_took, outer_took);
         if super::loader::declared::dump_path().is_some() {
@@ -494,9 +502,11 @@ impl<'a> Worker<'a> {
         (te, ty)
     }
 
-    pub fn type_infix(&mut self, l: ExprId, op: Name, r: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
+    /// `l op r`, the operator ending at `op_end` (`Expr::Infix`), where the function tree of a
+    /// left-associative operator's application ends (`Desugar.binop`'s `Select(l, op)`).
+    pub fn type_infix(&mut self, l: ExprId, op: Name, r: ExprId, op_end: u32, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         // The operands a deeper selection of the operator typed are the operation's alone.
-        let typed = self.type_infix_now(l, op, r, span, expected);
+        let typed = self.type_infix_now(l, op, r, op_end, span, expected);
         // A right-associative operator's selection is on its right operand.
         if !self.selection_typed.is_empty() {
             for operand in [l, r] {
@@ -508,7 +518,7 @@ impl<'a> Worker<'a> {
     }
 
     #[inline(always)]
-    fn type_infix_now(&mut self, l: ExprId, op: Name, r: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
+    fn type_infix_now(&mut self, l: ExprId, op: Name, r: ExprId, op_end: u32, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         // A library body's operator's declaration (`type_declared_infix`), this operator's
         // alone: taken before its operands are typed.
         let declared = self.infix_declared.take();
@@ -530,7 +540,7 @@ impl<'a> Worker<'a> {
             if let Expr::Apply(f, args) = ast.expr(l) {
                 let plain = ast.expr_list(args).iter().all(|&a| !matches!(ast.expr(a), Expr::NamedArg(..) | Expr::Typed(..)));
                 if plain && self.is_indexable(f) {
-                    return self.type_indexed_assign_op(f, args, op, base, r, span, expected);
+                    return self.type_indexed_assign_op(f, args, op, base, r, op_end, span, expected);
                 }
             }
         }
@@ -549,13 +559,13 @@ impl<'a> Worker<'a> {
             receiver => receiver,
         };
         if let (Some(base), Some(receiver)) = (base, receiver) {
-            if let Some(done) = self.assign_op_through_setter(tl, lty, receiver, op, base, r, span) {
+            if let Some(done) = self.assign_op_through_setter(tl, lty, receiver, op, base, r, op_end, span) {
                 return done;
             }
         }
-        let Some(d) = declared else { return self.assign_op_or_binop(tl, lty, op, base, r, span, expected) };
+        let Some(d) = declared else { return self.assign_op_or_binop(tl, lty, op, base, r, op_end, span, expected) };
         let outer = self.declared_call.replace((tl, op, d));
-        let typed = self.assign_op_or_binop(tl, lty, op, base, r, span, expected);
+        let typed = self.assign_op_or_binop(tl, lty, op, base, r, op_end, span, expected);
         self.declared_call = outer;
         typed
     }
@@ -587,11 +597,12 @@ impl<'a> Worker<'a> {
         l: ExprId,
         op: Name,
         r: ExprId,
+        op_end: u32,
         lists: Vec<ArgList>,
         span: Span,
         expected: Option<TypeId>,
     ) -> Option<(TExprId, TypeId)> {
-        let typed = self.type_infix_applied_now(l, op, r, lists, span, expected);
+        let typed = self.type_infix_applied_now(l, op, r, op_end, lists, span, expected);
         // A right-associative operator's selection is on its right operand.
         if !self.selection_typed.is_empty() {
             for operand in [l, r] {
@@ -608,6 +619,7 @@ impl<'a> Worker<'a> {
         l: ExprId,
         op: Name,
         r: ExprId,
+        op_end: u32,
         lists: Vec<ArgList>,
         span: Span,
         expected: Option<TypeId>,
@@ -640,13 +652,14 @@ impl<'a> Worker<'a> {
             return Some(self.apply_callee(super::apply::Callee::Value(te, self.b.t_boolean), None, lists, span, expected));
         }
         if (self.is_primitive(prim_lty) || prim_lty == self.b.t_string) && classify(op).is_some() {
-            let (te, ty) = self.binop_or_member(op, tl, prim_lty, widened, r, span, None);
+            let (te, ty) = self.binop_or_member(op, tl, prim_lty, widened, r, FunEnd::operand_at(op_end), span, None);
             let ty = self.const_folded(te, ty, tl, lty);
             return Some(self.apply_callee(super::apply::Callee::Value(te, ty), None, lists, span, expected));
         }
         let keeps_type = self.types.is_path(solved) || matches!(self.types.get(solved), Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Alias(..));
         let recv_ty = if keeps_type { solved } else { widened };
-        let mut all = vec![ArgList { args: self.infix_args(r), using: false, span }];
+        // The function tree `Desugar.binop` makes, `Select(l, op)`, ends with the operator.
+        let mut all = vec![ArgList { args: self.infix_args(r), using: false, span, fun: FunEnd::operand_at(op_end) }];
         all.extend(lists);
         Some(self.apply_member(tl, recv_ty, op, None, all, span, expected))
     }
@@ -654,7 +667,7 @@ impl<'a> Worker<'a> {
     /// `q.y op= r` where `y` is a method without parameters and `q` has a setter `y_=`: `q.y_=(q.y
     /// base r)`, `q` evaluated once, unless the value has an `op=` of its own. `receiver` is the
     /// typed `q` of `tl`.
-    fn assign_op_through_setter(&mut self, tl: TExprId, lty: TypeId, receiver: (TExprId, TypeId), op: Name, base: Name, r: ExprId, span: Span) -> Option<(TExprId, TypeId)> {
+    fn assign_op_through_setter(&mut self, tl: TExprId, lty: TypeId, receiver: (TExprId, TypeId), op: Name, base: Name, r: ExprId, op_end: u32, span: Span) -> Option<(TExprId, TypeId)> {
         let (tq, qty) = receiver;
         let TExpr::CallMethod(recv, getter, args) = self.prog.expr(tl) else { return None };
         if recv != tq || args.len != 0 || self.syms.sym(getter).kind != SymKind::Def || qty == ERROR {
@@ -677,8 +690,8 @@ impl<'a> Worker<'a> {
         let tq = if self.is_stable(tq) { tq } else { self.hoist(tq, qty, span) };
         let current = self.prog.add(TExpr::CallMethod(tq, getter, args));
         self.prog.set_type(current, lty);
-        let (value, vty) = self.binop_or_member(base, current, lty, lty, r, span, None);
-        let lists = vec![ArgList { args: vec![ArgSrc::Typed(value, vty)], using: false, span }];
+        let (value, vty) = self.binop_or_member(base, current, lty, lty, r, FunEnd::operand_at(op_end), span, None);
+        let lists = vec![ArgList { args: vec![ArgSrc::Typed(value, vty)], using: false, span, fun: ArgList::NO_FUN }];
         let (call, _) = self.apply_member(tq, qty, setter, None, lists, span, None);
         Some((self.wrap_hoisted(mark, call), self.b.t_unit))
     }
@@ -692,6 +705,7 @@ impl<'a> Worker<'a> {
         op: Name,
         base: Option<Name>,
         r: ExprId,
+        op_end: u32,
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
@@ -717,7 +731,7 @@ impl<'a> Worker<'a> {
                 if let Some(&super::HeldOf::Get(v)) = self.held_proxy_of.get(&g) {
                     if self.syms.sym(v).kind == SymKind::Var {
                         let Owner::Class(holder) = self.syms.sym(g).owner else { unreachable!("a proxy is a member") };
-                        let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, span, None);
+                        let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, FunEnd::operand_at(op_end), span, None);
                         let value = self.adapt(value, vty, lty, span);
                         return (self.held_write(holder, v, recv, value), self.b.t_unit);
                     }
@@ -726,7 +740,7 @@ impl<'a> Worker<'a> {
             if !has_member && target.map_or(false, |s| self.syms.sym(s).kind == SymKind::Var) {
                 let mark = self.hoisted.len();
                 let tl = self.field_target_once(tl, span);
-                let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, span, None);
+                let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, FunEnd::operand_at(op_end), span, None);
                 let value = self.adapt(value, vty, lty, span);
                 let assign = self.assignment(tl, value);
                 return (self.wrap_hoisted(mark, assign), self.b.t_unit);
@@ -736,7 +750,7 @@ impl<'a> Worker<'a> {
         // an intersection with a primitive (`n: Int & T` of a typed pattern) has the primitive's,
         // and a type parameter bounded by a primitive or `String` its bound's.
         let prim_lty = self.operator_type(widened);
-        let (te, ty) = self.binop_or_member(op, tl, prim_lty, lty, r, span, expected);
+        let (te, ty) = self.binop_or_member(op, tl, prim_lty, lty, r, FunEnd::operand_at(op_end), span, expected);
         (te, self.const_folded(te, ty, tl, own_ty))
     }
 
@@ -791,6 +805,7 @@ impl<'a> Worker<'a> {
         prim_lty: TypeId,
         lty: TypeId,
         r: ExprId,
+        fun: FunEnd,
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
@@ -826,7 +841,7 @@ impl<'a> Worker<'a> {
                 vec![ArgSrc::Typed(tr, rty)]
             }
         };
-        let lists = vec![ArgList { args, using: false, span }];
+        let lists = vec![ArgList { args, using: false, span, fun }];
         self.apply_member(tl, lty, op, None, lists, span, expected)
     }
 
@@ -881,7 +896,7 @@ impl<'a> Worker<'a> {
         let mark = self.attempt();
         if let Some(converted) = self.convert_to(tl, lty, rty, span, false) {
             if converted != tl {
-                let lists = vec![ArgList { args: vec![ArgSrc::Typed(tr, rty)], using: false, span }];
+                let lists = vec![ArgList { args: vec![ArgSrc::Typed(tr, rty)], using: false, span, fun: ArgList::NO_FUN }];
                 let applied = self.apply_member(converted, rty, op, None, lists, span, expected);
                 self.close(mark);
                 return Some(applied);
@@ -924,7 +939,9 @@ impl<'a> Worker<'a> {
                     a => a,
                 })
                 .collect();
-            let mut lists = vec![ArgList { args, using: false, span }];
+            // `Desugar.binop`'s `Select(r, op)` of a right-associative operator spans the operator and the right
+            // operand, which the left one, its argument, stands before.
+            let mut lists = vec![ArgList { args, using: false, span, fun: FunEnd::operand_tree(r) }];
             lists.extend(more);
             let (te, ty) = self.apply_member(tr, rty, op, None, lists, span, expected);
             return (self.wrap_hoisted(mark, te), ty);
@@ -935,14 +952,14 @@ impl<'a> Worker<'a> {
             self.type_args_for_errors(&more);
             return (self.prog.add(TExpr::Unit), ERROR);
         }
-        let mut first = vec![ArgList { args: vec![ArgSrc::Typed(tr, rty)], using: false, span }];
+        let mut first = vec![ArgList { args: vec![ArgSrc::Typed(tr, rty)], using: false, span, fun: ArgList::NO_FUN }];
         first.extend(more.iter().cloned());
         let mut lists = Some(first);
         if let Some(res) = self.try_extensions(tl, lty, rty, op, None, &mut lists, span, expected) {
             return res;
         }
         // `r` converted to something with the member (`LazyList`'s `#::` through `toDeferrer`).
-        let mut member_lists = vec![ArgList { args: vec![ArgSrc::Typed(tl, lty)], using: false, span }];
+        let mut member_lists = vec![ArgList { args: vec![ArgSrc::Typed(tl, lty)], using: false, span, fun: ArgList::NO_FUN }];
         member_lists.extend(more.iter().cloned());
         if let Some((te, ty)) = self.apply_through_conversion(tr, rty, op, None, &member_lists, span, expected) {
             return (self.wrap_hoisted(mark, te), ty);
@@ -962,13 +979,14 @@ impl<'a> Worker<'a> {
         op: Name,
         base: Name,
         r: ExprId,
+        op_end: u32,
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
         let mark = self.hoisted.len();
         let (tf, fty) = match self.indexed_target(f, args, span) {
             Ok(target) => target,
-            Err((tl, lty)) => return self.assign_op_or_binop(tl, lty, op, Some(base), r, span, expected),
+            Err((tl, lty)) => return self.assign_op_or_binop(tl, lty, op, Some(base), r, op_end, span, expected),
         };
         let fty = self.solve_in(fty);
         let tf = self.hoist(tf, fty, span);
@@ -979,7 +997,7 @@ impl<'a> Worker<'a> {
             let ta = self.hoist(ta, aty, span);
             index.push(ArgSrc::Typed(ta, aty));
         }
-        let lists = vec![ArgList { args: index.clone(), using: false, span }];
+        let lists = vec![ArgList { args: index.clone(), using: false, span, fun: ArgList::NO_FUN }];
         let (cur, cty) = self.apply_member(tf, fty, names::APPLY, None, lists, span, None);
         let cty = self.solve_in(cty);
         let cty = self.dealias(cty);
@@ -987,12 +1005,12 @@ impl<'a> Worker<'a> {
             return (self.wrap_hoisted(mark, cur), ERROR);
         }
         let (te, ty) = if self.find_member(cty, op).is_some() || self.has_lexical_extension_for(cty, op) {
-            let lists = vec![ArgList { args: self.infix_args(r), using: false, span }];
+            let lists = vec![ArgList { args: self.infix_args(r), using: false, span, fun: FunEnd::operand_at(op_end) }];
             self.apply_member(cur, cty, op, None, lists, span, expected)
         } else {
-            let (value, vty) = self.binop_or_member(base, cur, cty, cty, r, span, None);
+            let (value, vty) = self.binop_or_member(base, cur, cty, cty, r, FunEnd::operand_at(op_end), span, None);
             index.push(ArgSrc::Typed(value, vty));
-            let lists = vec![ArgList { args: index, using: false, span }];
+            let lists = vec![ArgList { args: index, using: false, span, fun: ArgList::NO_FUN }];
             self.apply_member(tf, fty, names::UPDATE, None, lists, span, None)
         };
         (self.wrap_hoisted(mark, te), ty)
@@ -1014,7 +1032,7 @@ impl<'a> Worker<'a> {
         };
         if method {
             let args = ast.expr_list(args).iter().map(|&a| ArgSrc::Ast(a)).collect();
-            let lists = vec![ArgList { args, using: false, span }];
+            let lists = vec![ArgList { args, using: false, span, fun: FunEnd::tree(f) }];
             return Err(self.apply_member(tq, qty, name, None, lists, span, None));
         }
         Ok(self.apply_member(tq, qty, name, None, Vec::new(), ast.expr_span(f), None))
@@ -1034,17 +1052,20 @@ impl<'a> Worker<'a> {
     /// The elements of a tuple literal are the arguments of an infix operation: `a op (b, c)`
     /// is `a.op(b, c)`. Which tuple they were is kept (`Worker::infix_tuples`) for a member's
     /// retry, where dotty applies a unary member to the tuple as written (`ApplyKind.InfixTuple`,
-    /// Desugar.scala 1780; `needsTupledDual`, Applications.scala 1671).
+    /// Desugar.scala 1780; `needsTupledDual`, Applications.scala 1671). An operand in parentheses
+    /// of its own is the one argument (`Desugar.binop`'s `Parens(arg)`, 1775): `a op ((b, c))`
+    /// passes the tuple.
     pub(super) fn infix_args(&mut self, operand: ExprId) -> Vec<ArgSrc> {
         let ast = self.cur_ast();
         match ast.expr(operand) {
             Expr::Tuple(elems) => {
                 let elems = ast.expr_list(elems);
                 if let [first, _, ..] = *elems {
-                    self.infix_tuples.insert((self.env.file, first), ());
+                    self.infix_tuples.insert((self.env.file, first), operand);
                 }
                 elems.iter().map(|&e| ArgSrc::Ast(e)).collect()
             }
+            Expr::Parens(inner) => vec![ArgSrc::Ast(inner)],
             _ => vec![ArgSrc::Ast(operand)],
         }
     }
@@ -1122,7 +1143,7 @@ impl<'a> Worker<'a> {
         if numeric.0.is_none() {
             let op = if negate { names::NEQ } else { names::EQEQ };
             if self.declares_equality_for(lty, op, rty) {
-                let lists = vec![ArgList { args: vec![ArgSrc::Typed(tr, rty)], using: false, span }];
+                let lists = vec![ArgList { args: vec![ArgSrc::Typed(tr, rty)], using: false, span, fun: ArgList::NO_FUN }];
                 return self.apply_member(tl, lty, op, None, lists, span, None);
             }
         }
@@ -1622,7 +1643,7 @@ impl<'a> Worker<'a> {
             let prim = if name == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
             return Some((self.prog.add(TExpr::Prim(prim, te, tr)), self.b.t_boolean));
         }
-        let (folded, fty) = self.binop_or_member(name, te, ty, ty, r, span, expected);
+        let (folded, fty) = self.binop_or_member(name, te, ty, ty, r, list.fun, span, expected);
         Some((folded, self.const_folded(folded, fty, te, ty)))
     }
 

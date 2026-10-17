@@ -343,7 +343,8 @@ private[teq] object Exported {
       Option.when(o.feature)("feature" -> Json.Bool(true)) ++
       Option.when(o.wtostringInterpolated)("wtostringInterpolated" -> Json.Bool(true)) ++
       Option.when(o.wconf.nonEmpty)("wconf" -> strings(o.wconf)) ++
-      Option.when(o.language.nonEmpty)("language" -> strings(o.language))
+      Option.when(o.language.nonEmpty)("language" -> strings(o.language)) ++
+      o.source.map(v => "source" -> Json.Str(v))
     (Json.Obj(fields), o.javaOutputVersion.filter(_ => !js))
   }
 

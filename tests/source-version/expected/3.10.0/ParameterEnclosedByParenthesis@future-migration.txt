@@ -1,0 +1,6 @@
+exit 0
+migration warning 1:22
+  `implicit` lambdas are no longer supported, use a lambda with `?=>` instead
+migration warning 1:31
+  This syntax is no longer supported; parameter needs to be enclosed in (...)
+  This construct can be rewritten automatically under -rewrite -source future-migration.

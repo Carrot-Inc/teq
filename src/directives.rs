@@ -1,7 +1,8 @@
 //! What a source file says before its code for the tools around the compiler: a script header
 //! (`#!/usr/bin/env -S teq interp`), which scalac skips, and Scala CLI's `//> using` directives, of
-//! which `teq interp` honours `file` and `files` (the sources a script includes) and leaves the
-//! others as the comments they are to scalac.
+//! which `teq interp` honours `file` and `files` (the sources a script includes) and the `-source`
+//! among the scalac options of `option`, `options`, `scalacOption` and `scalacOptions`, and leaves
+//! the others as the comments they are to scalac.
 
 /// The length of the script header that opens `text`, zero for none: scalac's rule
 /// (`ScriptSourceFile`): a text that starts with `#!` or `::#!` has a header that runs through the
@@ -37,12 +38,44 @@ pub struct UsingFiles {
     pub paths: Vec<String>,
 }
 
-/// The `file` and `files` directives among the directives that open `text`, as Scala CLI reads
-/// them: after the script header, the lines before the first code (blank lines and comments, a
-/// directive being one) are the header, and a directive past the first code is ignored. A value
-/// is a word or a double-quoted string (`\"` and `\\` escaped), values separated by white space or,
-/// as Scala CLI still accepts, commas.
+/// The `file` and `files` directives among the directives that open `text` (`directives`).
 pub fn using_files(text: &str) -> Vec<UsingFiles> {
+    directives(text)
+        .into_iter()
+        .filter(|(_, words)| matches!(words[0].as_str(), "file" | "files") && words.len() > 1)
+        .map(|(line, words)| UsingFiles { line, paths: words[1..].to_vec() })
+        .collect()
+}
+
+/// The source version the scalac options of the directives that open `text` name (`option`,
+/// `options`, `scalacOption`, `scalacOptions`): `-source:<v>` or `-source <v>`, the last of them,
+/// with the line it stands on.
+pub fn using_source(text: &str) -> Option<(usize, String)> {
+    let mut found = None;
+    for (line, words) in directives(text) {
+        if !matches!(words[0].as_str(), "option" | "options" | "scalacOption" | "scalacOptions") {
+            continue;
+        }
+        let mut values = words[1..].iter();
+        while let Some(v) = values.next() {
+            if let Some(version) = v.strip_prefix("-source:") {
+                found = Some((line, version.to_string()));
+            } else if v == "-source" {
+                if let Some(version) = values.next() {
+                    found = Some((line, version.clone()));
+                }
+            }
+        }
+    }
+    found
+}
+
+/// The directives that open `text`, as Scala CLI reads them, each with the line it stands on
+/// (1-based) and its words, its key first: after the script header, the lines before the first
+/// code (blank lines and comments, a directive being one) are the header, and a directive past the
+/// first code is ignored. A value is a word or a double-quoted string (`\"` and `\\` escaped),
+/// values separated by white space or, as Scala CLI still accepts, commas.
+fn directives(text: &str) -> Vec<(usize, Vec<String>)> {
     let mut out = Vec::new();
     let bytes = text.as_bytes();
     let mut pos = script_header(text);
@@ -64,10 +97,8 @@ pub fn using_files(text: &str) -> Vec<UsingFiles> {
         let comment = text[pos + 2..line_end].strip_suffix('\r').unwrap_or(&text[pos + 2..line_end]);
         if let Some(directive) = comment.strip_prefix("> using ").or_else(|| comment.strip_prefix(">using ")) {
             let words = values(directive);
-            if let Some((key, paths)) = words.split_first() {
-                if (key == "file" || key == "files") && !paths.is_empty() {
-                    out.push(UsingFiles { line: text[..pos].matches('\n').count() + 1, paths: paths.to_vec() });
-                }
+            if !words.is_empty() {
+                out.push((text[..pos].matches('\n').count() + 1, words));
             }
         }
         pos = line_end;
@@ -129,6 +160,14 @@ mod tests {
         assert_eq!(found.len(), 2);
         assert_eq!((found[0].line, found[0].paths.clone()), (6, vec!["../lib".to_string()]));
         assert_eq!((found[1].line, found[1].paths.clone()), (7, vec!["a b.scala".to_string(), "c.scala".to_string()]));
+    }
+
+    #[test]
+    fn the_source_of_the_options() {
+        let text = "//> using scala 3.8.4\n//> using options -deprecation -source:3.3\n//> using option -source 3.0-migration\nobject A\n//> using options -source:future\n";
+        assert_eq!(using_source(text), Some((3, "3.0-migration".to_string())));
+        assert_eq!(using_source("//> using scalacOptions -source:3.4\nobject A"), Some((1, "3.4".to_string())));
+        assert_eq!(using_source("//> using options -deprecation\nobject A"), None);
     }
 
     #[test]

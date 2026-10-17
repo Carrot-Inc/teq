@@ -1,0 +1,8 @@
+exit 0
+warning 2:18
+  The identifier `evidence$1` should not contain `$`, which is reserved for internal compiler use.
+warning 3:13
+  Implicit parameters should be provided with a `using` clause.
+  This code can be rewritten automatically under -rewrite -source 3.7-migration.
+  To disable the warning, please use the following option:
+  "-Wconf:msg=Implicit parameters should be provided with a `using` clause:s"

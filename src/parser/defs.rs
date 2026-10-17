@@ -406,9 +406,11 @@ impl<'a> Parser<'a> {
             } else if m & mods::MUTABLE != 0 && ty.is_some() && p.default_init_at(1) {
                 p.bump();
                 let span = p.bump().span;
-                if p.ast.source_future {
-                    p.error_at(span, "`= _` has been deprecated; use `= uninitialized` instead.");
-                }
+                let msg = format!(
+                    "`= _` has been deprecated; use `= uninitialized` instead.\n`uninitialized` can be imported with `scala.compiletime.uninitialized`.{}",
+                    crate::source_version::rewrite_notice("This construct", "3.4-migration")
+                );
+                p.migration(crate::source_version::Migration::UninitializedVars, span, msg, crate::warnings::NO_ID);
                 let init = p.uninitialized_path(span);
                 p.ast.default_inits.push(init);
                 Some(init)
@@ -857,10 +859,12 @@ impl<'a> Parser<'a> {
                 self.parse_type_args();
             }
             let mut args = Vec::new();
+            let mut ends = Vec::new();
             while self.at(Tok::LParen) {
                 args.push(self.parse_args());
+                ends.push(self.prev_span().end);
             }
-            parents.push(Parent { ty, args });
+            parents.push(Parent { ty, args, ends });
             if !self.eat(Tok::Comma) && !self.eat(Tok::KwWith) {
                 break;
             }
@@ -918,7 +922,19 @@ impl<'a> Parser<'a> {
         };
         let parents = self.parse_parents();
         let derives = self.parse_derives();
-        if !(self.at_header_end() || self.at_template_body()) {
+        // A `:` that ends the header's line with no indented body after it, where no line is indented
+        // further or indentation is not significant: dotty's `acceptIndent` past the colon (an end marker
+        // right after it ends an empty body, which the lexer gives).
+        let colon_alone = self.at(Tok::ColonEol) && self.kind_at(1) != Tok::Indent && self.text.as_bytes()[self.span().start as usize] == b':';
+        if colon_alone {
+            self.bump();
+            let t = self.tok();
+            let what = match t.kind {
+                Tok::Ident => format!("identifier {}", self.interner.get(t.name)),
+                k => k.describe().trim_matches('\'').to_string(),
+            };
+            self.error_at(t.span, format!("indented definitions expected, {} found", what));
+        } else if !(self.at_header_end() || self.at_template_body()) {
             // `class C(x: Int) extend B:`: what stands before the body on the header's line is
             // skipped to it.
             let (at, found) = self.found();
@@ -957,17 +973,19 @@ impl<'a> Parser<'a> {
 
     /// The rest of `new T(args) with U { ... }` after the first parent and its arguments: the
     /// definition of the anonymous class, whose name the typer makes up.
-    pub(super) fn parse_anon_class(&mut self, first: TyExprId, args: Vec<(ListRef, bool)>, start: Span) -> ExprId {
-        let mut parents = vec![Parent { ty: first, args }];
+    pub(super) fn parse_anon_class(&mut self, first: TyExprId, args: Vec<(ListRef, bool)>, ends: Vec<u32>, start: Span) -> ExprId {
+        let mut parents = vec![Parent { ty: first, args, ends }];
         while self.eat(Tok::KwWith) {
             self.template_type = true;
             let ty = self.parse_simple_type();
             self.template_type = false;
             let mut args = Vec::new();
+            let mut ends = Vec::new();
             while self.at(Tok::LParen) {
                 args.push(self.parse_args());
+                ends.push(self.prev_span().end);
             }
-            parents.push(Parent { ty, args });
+            parents.push(Parent { ty, args, ends });
         }
         self.parse_anon_class_with(parents, start)
     }
@@ -1788,10 +1806,12 @@ impl<'a> Parser<'a> {
             // def where it has): the given's class of its own extends `C`, which may be a trait
             // (`given QC()`), and the others the clause names.
             let mut args = Vec::new();
+            let mut ends = Vec::new();
             while self.at(Tok::LParen) {
                 args.push(self.parse_args());
+                ends.push(self.prev_span().end);
             }
-            parents.push(Parent { ty, args });
+            parents.push(Parent { ty, args, ends });
             // More parents after a comma under 3.6's syntax, after `with` otherwise
             // (`moreConstrApps`).
             while new_syntax && self.eat(Tok::Comma) {
@@ -1799,10 +1819,12 @@ impl<'a> Parser<'a> {
                 let pty = self.parse_simple_type();
                 self.template_type = false;
                 let mut pargs = Vec::new();
+                let mut ends = Vec::new();
                 while self.at(Tok::LParen) {
                     pargs.push(self.parse_args());
+                    ends.push(self.prev_span().end);
                 }
-                parents.push(Parent { ty: pty, args: pargs });
+                parents.push(Parent { ty: pty, args: pargs, ends });
             }
             while self.at(Tok::KwWith) && !matches!(self.kind_at(1), Tok::LBrace | Tok::Indent | Tok::Newline) {
                 self.bump();
@@ -1810,10 +1832,12 @@ impl<'a> Parser<'a> {
                 let pty = self.parse_simple_type();
                 self.template_type = false;
                 let mut pargs = Vec::new();
+                let mut ends = Vec::new();
                 while self.at(Tok::LParen) {
                     pargs.push(self.parse_args());
+                    ends.push(self.prev_span().end);
                 }
-                parents.push(Parent { ty: pty, args: pargs });
+                parents.push(Parent { ty: pty, args: pargs, ends });
             }
             // The body after `with` where 3.6's syntax is off or the given has no parameters,
             // after a colon or in braces otherwise (`Parsers.givenDef`'s `withTemplate` and

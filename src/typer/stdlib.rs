@@ -567,7 +567,8 @@ impl<'a> Worker<'a> {
         for &f in std::iter::once(&file).chain(&blocks) {
             self.files.set_text(f.0 as usize, text.to_string());
         }
-        for (span, msg) in errors {
+        // The std's own syntax warnings are no program's.
+        for (span, msg) in errors.errors {
             self.diags.error(file, span, msg);
         }
         for (ast, f) in asts.into_iter().zip(std::iter::once(file).chain(blocks)) {

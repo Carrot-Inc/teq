@@ -1,6 +1,8 @@
 // `A with B` in a type, the deprecated intersection scalac 3.8.4 reads as `A & B` (dotty's `withType`): an
 // operand of the infix types, binding tighter than `|` and associating to the right, in a cast, a parameter, a
-// type argument and a parent's type argument; `with` between parents and before a body stays the template's.
+// type argument and a parent's type argument; `with` between parents and before a body stays the template's. Its
+// warning (from 3.4, `MigrationVersion.WithOperator`), scalac's at the default version too, is silenced.
+// teq: --wconf msg=with.as.a.type.operator:s
 trait Named { def name: String = "named" }
 trait Sized { def size: Int = 2 }
 trait Tagged { def tag: String = "#" }

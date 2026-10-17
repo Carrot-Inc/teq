@@ -556,12 +556,12 @@ pub fn run(opts: &Options) -> ! {
         // The files parsed now have their syntax diagnostics replaced; a file whose tree was
         // kept keeps its own, and a file gone takes its own with it.
         let parsed_now: Vec<usize> = (n_std..files.len()).filter(|&f| slots[f].is_none()).collect();
-        frontend::parse_files(&files, n_std..files.len(), &mut slots, &mut interner, &mut diags, Some(&mut used), parallel, usize::MAX, opts.syntax);
+        frontend::parse_files(&files, n_std..files.len(), &mut slots, &mut interner, &mut diags, Some(&mut used), parallel, usize::MAX, opts.syntax, &opts.source_at);
         for &f in &parsed_now {
             syntax.remove(&entries[f - n_std].canonical);
         }
         for d in diags.items.drain(..) {
-            syntax.entry(entries[d.file.0 as usize - n_std].canonical.clone()).or_default().push((d.span, d.msg));
+            syntax.entry(entries[d.file.0 as usize - n_std].canonical.clone()).or_default().push(d);
         }
         syntax.retain(|c, _| canon.contains_key(c));
         // A file parsed for an earlier build of the session stays parsed: its names are known.
@@ -583,7 +583,7 @@ pub fn run(opts: &Options) -> ! {
         // The std's trees keep the names' spans where the index records them (`Syntax::index`).
         let std_syntax = crate::parser::Syntax { index: opts.index, ..Default::default() };
         let parsed_before: Vec<bool> = slots[..n_std].iter().map(Option::is_some).collect();
-        frontend::parse_files(&files, (0..n_std).filter(|&i| selected[i]), &mut slots, &mut interner, &mut diags, None, parallel, frontend::STD_WORKERS, std_syntax);
+        frontend::parse_files(&files, (0..n_std).filter(|&i| selected[i]), &mut slots, &mut interner, &mut diags, None, parallel, frontend::STD_WORKERS, std_syntax, &[]);
         if opts.index {
             for (slot, _) in slots[..n_std].iter_mut().zip(&parsed_before).filter(|(_, &before)| !before) {
                 slot.iter_mut().flatten().for_each(Ast::shrink_index_spans);
@@ -654,7 +654,6 @@ pub fn run(opts: &Options) -> ! {
             t.known_caches = !opts.no_known_caches;
             t.macro_state_per_worker = opts.macro_state_per_worker;
             t.dialect = opts.dialect;
-            t.source = opts.syntax.source;
             t.diags.policy = std::sync::Arc::new(opts.policy());
             // The unused imports: warnings under the flag, else a language server's hints.
             t.unused.mode = match (opts.wunused_imports, opts.index) {
@@ -996,8 +995,10 @@ pub fn run(opts: &Options) -> ! {
             // The parse diagnostics of the texts parsed, which replace the files' at the commit point.
             let mut parse_errors = Vec::new();
             for (i, text, mtime) in changed {
-                let (new_asts, errors) = frontend::parse_one(&text, t.interner, opts.syntax);
-                parse_errors.push((entries[i].canonical.clone(), errors));
+                let (new_asts, found) = frontend::parse_one(&text, t.interner, frontend::syntax_of(&opts.source_at, &entries[i].path, opts.syntax));
+                let mut errors = Diagnostics::default();
+                found.report(FileId(0), false, &mut errors);
+                parse_errors.push((entries[i].canonical.clone(), errors.items));
                 parsed.push((i, new_asts, text, mtime));
             }
             report.ms.parse = t_parse.elapsed();
@@ -1926,8 +1927,9 @@ fn finish_file(t: &mut Worker, sources: &Sources, file: &str, opts: &Options, re
     true
 }
 
-/// The lexical and parse diagnostics of the program's files, by canonical path.
-type Syntax = FxMap<PathBuf, Vec<(crate::source::Span, String)>>;
+/// The lexical and parse diagnostics of the program's files, by canonical path (their files' ids
+/// given where they are presented).
+type Syntax = FxMap<PathBuf, Vec<Diagnostic>>;
 
 /// Hands the typer's diagnostics the program's syntax diagnostics, which its answers then present
 /// with its own and count as errors (`Diagnostics::fails`), and the program's syntax state, by
@@ -1937,10 +1939,10 @@ fn present_syntax(t: &mut Worker, syntax: &Syntax, canon: &FxMap<PathBuf, usize>
     for (c, errors) in syntax {
         let Some(&i) = canon.get(c) else { continue };
         let file = FileId((n_std + i) as u32);
-        all.extend(errors.iter().map(|(span, msg)| Diagnostic::syntax(file, *span, msg.clone())));
+        all.extend(errors.iter().map(|d| Diagnostic { file, ..d.clone() }));
     }
     all.sort_by_key(|d| (d.file.0, d.span.start));
-    t.diags.syntax_errors = !all.is_empty();
+    t.diags.syntax_errors = all.iter().any(|d| !d.is_warning);
     t.diags.syntax = all;
 }
 

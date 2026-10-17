@@ -280,11 +280,6 @@ impl Diagnostic {
         Diagnostic { file, span, msg, is_warning, of_body, place: None, dependent: false, unknown: false, late: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, phase: 0, unplaced: false }
     }
 
-    /// A lexical or syntax error of a session's file (`Diagnostics::syntax`).
-    pub fn syntax(file: FileId, span: Span, msg: String) -> Diagnostic {
-        Diagnostic::plain(file, span, msg, false, false)
-    }
-
     /// What the reporting policy's filters read of the diagnostic.
     fn subject<'a>(&'a self, path: Option<&'a str>) -> crate::warnings::Subject<'a> {
         crate::warnings::Subject { msg: &self.msg, id: self.id, category: self.category, origin: self.origin.as_deref(), path }
@@ -487,6 +482,17 @@ impl Diagnostics {
         self.items.push(d);
     }
 
+    /// A warning of the syntax, a migration warning where `migration` says (`Category::Migration`), with
+    /// dotty's message's identity `id`.
+    pub fn syntax_warning(&mut self, file: FileId, span: Span, msg: impl Into<String>, migration: bool, id: u16) {
+        let mut d = Diagnostic::plain(file, span, msg.into(), true, false);
+        d.id = id;
+        if migration {
+            d.category = crate::warnings::Category::Migration;
+        }
+        self.items.push(d);
+    }
+
     pub fn warn(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
         self.items.push(Diagnostic::plain(file, span, msg.into(), true, self.of_bodies));
     }
@@ -531,7 +537,7 @@ impl Diagnostics {
     /// syntax diagnostics where the report is not `whole`.
     fn presented_from(&self, from: usize, whole: bool) -> impl Iterator<Item = &Diagnostic> {
         let syntax = self.syntax_errors;
-        let earlier = !self.syntax.is_empty() || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !(d.unknown && syntax));
+        let earlier = self.syntax.iter().any(|d| !d.is_warning) || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !(d.unknown && syntax));
         let hidden = self.hidden_inlined();
         self.syntax
             .iter()
@@ -582,7 +588,7 @@ impl Diagnostics {
     /// Whether a build with these diagnostics fails, as the policy presents them
     /// (`report`): an error, or under `--werror` a warning.
     pub fn fails(&self, files: &[SourceFile], werror: bool) -> bool {
-        !self.syntax.is_empty() || self.has_errors() || self.report(files).fails(werror)
+        self.syntax.iter().any(|d| !d.is_warning) || self.has_errors() || self.report(files).fails(werror)
     }
 
     pub fn has_errors(&self) -> bool {
@@ -723,7 +729,7 @@ impl Diagnostics {
         // The warnings of the report's end go through `-Wconf` alone.
         let mut late: Vec<Diagnostic> = Vec::new();
         let errors = shown.iter().filter(|s| s.level == Level::Error).count();
-        if whole && policy.unused.nowarn && errors == 0 && self.syntax.is_empty() {
+        if whole && policy.unused.nowarn && errors == 0 && !self.syntax.iter().any(|d| !d.is_warning) {
             for (i, sup) in self.suppressions.iter().enumerate() {
                 let duplicate = self.suppressions.iter().enumerate().any(|(j, other)| j != i && used[j] == 1 && other.file == sup.file && other.annot == sup.annot);
                 if used[i] != 1 && !duplicate && !sup.invalid() {
@@ -821,15 +827,18 @@ pub fn render_shown(shown: &[Shown], files: &[SourceFile], ranks: &[u32]) -> Str
     for s in items {
         let d = &*s.d;
         let severity = s.level.name();
+        // scalac's `Migration Warning` (`Diagnostic.MigrationWarning`) apart from its other warnings in the
+        // text; its record keeps the level, a migration warning's being a warning's.
+        let header = if s.level == Level::Warning && d.category == crate::warnings::Category::Migration { "migration warning" } else { severity };
         let start = out.len();
         if d.file == NO_FILE {
-            let _ = writeln!(out, "{}: {}", severity, d.msg);
+            let _ = writeln!(out, "{}: {}", header, d.msg);
             record_shown(severity, None, &d.msg, &out[start..]);
             continue;
         }
         if let Some(p) = &d.place {
             let place = p.render();
-            let _ = writeln!(out, "{}: {}: {}", place, severity, d.msg);
+            let _ = writeln!(out, "{}: {}: {}", place, header, d.msg);
             if let (Some(text), Some(col)) = (&p.line_text, p.col) {
                 let _ = writeln!(out, "  {}", text);
                 let _ = writeln!(out, "  {}^", " ".repeat((col as usize).saturating_sub(1)));
@@ -838,12 +847,12 @@ pub fn render_shown(shown: &[Shown], files: &[SourceFile], ranks: &[u32]) -> Str
             continue;
         }
         let Some(f) = files.get(d.file.0 as usize) else {
-            let _ = writeln!(out, "<library>: {}: {}", severity, d.msg);
+            let _ = writeln!(out, "<library>: {}: {}", header, d.msg);
             record_shown(severity, Some(("<library>", None)), &d.msg, &out[start..]);
             continue;
         };
         let (line, col, line_text) = locate(&f.text, d.span.start as usize);
-        let _ = writeln!(out, "{}:{}:{}: {}: {}", f.path, line, col, severity, d.msg);
+        let _ = writeln!(out, "{}:{}:{}: {}: {}", f.path, line, col, header, d.msg);
         let _ = writeln!(out, "  {}", line_text);
         let width = (d.span.end.saturating_sub(d.span.start) as usize)
             .clamp(1, line_text.len().saturating_sub(col - 1).max(1));

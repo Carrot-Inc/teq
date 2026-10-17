@@ -11,76 +11,14 @@ use crate::names;
 use crate::source::Span;
 use crate::token::{Tok, Token};
 
-/// scalac's source version (`-source`, dotty's `SourceVersion`): `3.0-migration` to `3.9`, then
-/// `future-migration` and `future`, in dotty's order, `3.8` by default (`defaultSourceVersion`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SourceVersion(u8);
-
-impl Default for SourceVersion {
-    fn default() -> Self {
-        SourceVersion::of(8, false)
-    }
-}
-
-impl SourceVersion {
-    const FUTURE_MIGRATION: u8 = 100;
-
-    /// `3.<minor>`, or its `-migration`, which comes first.
-    const fn of(minor: u8, migration: bool) -> SourceVersion {
-        SourceVersion(minor * 2 + !migration as u8)
-    }
-
-    /// The version a `-source` setting or a language import names (`3.6`, `3.0-migration`,
-    /// `future`).
-    pub fn parse(text: &str) -> Option<SourceVersion> {
-        let (base, migration) = match text.strip_suffix("-migration") {
-            Some(b) => (b, true),
-            None => (text, false),
-        };
-        if base == "future" {
-            return Some(SourceVersion(Self::FUTURE_MIGRATION + !migration as u8));
-        }
-        let minor: u8 = base.strip_prefix("3.")?.parse().ok().filter(|&m| m <= 9)?;
-        Some(SourceVersion::of(minor, migration))
-    }
-
-    /// `SourceVersion.enablesNewGivens`: the givens of 3.6's syntax (`given t: (n: Int) => C`,
-    /// a body after a colon). A migration version is compared as its stable one
-    /// (`isAtLeast` over `stable`): `3.6-migration` has them.
-    pub fn enables_new_givens(self) -> bool {
-        SourceVersion(self.0 | 1) >= SourceVersion::of(6, false)
-    }
-
-    /// `3.<minor>`, or `future` past them.
-    pub const fn release(minor: u8) -> SourceVersion {
-        SourceVersion::of(minor, false)
-    }
-
-    pub const FUTURE: SourceVersion = SourceVersion(Self::FUTURE_MIGRATION + 1);
-
-    /// `SourceVersion.isAtLeast`: a migration version is compared as its stable one.
-    pub fn is_at_least(self, other: SourceVersion) -> bool {
-        SourceVersion(self.0 | 1) >= other
-    }
-
-    /// Whether this is `other`'s migration version (`prevMigrating`), under which what `other`
-    /// makes an error is a migration warning (`report.errorOrMigrationWarning`).
-    pub fn migrates_to(self, other: SourceVersion) -> bool {
-        self.0 & 1 == 0 && self.0 + 1 == other.0
-    }
-
-    /// `Feature.migrateTo3`: `given` and `enum` are identifiers (`Scanners.toToken`'s
-    /// `handleMigration` over `scala3keywords`).
-    pub fn migrate_to_3(self) -> bool {
-        self == SourceVersion::of(0, true)
-    }
-}
+pub use crate::source_version::SourceVersion;
+use crate::source_version::TAG;
 
 /// Syntax that a scalac option turns on.
 #[derive(Clone, Copy, Default)]
 pub struct Syntax {
-    /// `-source`: the version the parser reads where an import of a version's language does not
-    /// name another (`Feature.sourceVersion`).
+    /// `-source`: the unit's version where its source version import names none
+    /// (`Feature.sourceVersion`).
     pub source: SourceVersion,
     /// `-Xkind-projector`: a `*` among the arguments of a type application stands for a
     /// parameter of a type lambda around it (`Either[String, *]`).
@@ -99,19 +37,42 @@ pub struct Syntax {
 }
 
 pub struct Parser<'a> {
-    /// The source version where the parser stands: the setting's, or the last import of a
-    /// version's language before it (`CompilationUnit.sourceVersion`).
+    /// The source version where the parser stands (`Feature.sourceVersion` while parsing): the
+    /// setting's, or the unit's source version import's once it is read.
     source: SourceVersion,
+    /// The version the unit's source version import names, once read (`CompilationUnit.sourceVersion`):
+    /// one per unit, at its top level (`Parsers.mkImport`).
+    unit_source: Option<SourceVersion>,
+    /// Where the version the import names takes effect for the scanner: past the tokens dotty's scanner
+    /// has fetched when the import expression ends (`Parser::fetched_end`).
+    source_switch: u32,
+    /// Whether a source version import here is the unit's (`outermost` of dotty's `topStatSeq`):
+    /// `Some(true)` among the unit's own top-level statements, `Some(false)` in a block, a body or a
+    /// package block, `None` in an export.
+    importing: Option<bool>,
+    /// The unit's top-level statements are its own, which a leading package object or package block
+    /// ends (`Parsers.compilationUnit`'s `topstats`).
+    outermost: bool,
+    /// No top-level statement was read yet.
+    leading: bool,
+    /// The warnings of the syntax: severity by the migration table (`report.errorOrMigrationWarning`).
+    pub warnings: Vec<SyntaxWarning>,
+    /// The lexer's diagnostics and its reading of the keywords, which a source import that changes the keywords
+    /// replaces with those of the text lexed again (`Parser::switch_keywords`). The parser holds the lexer's
+    /// result for the parse (`toks` and the rest), and gives it back at its end.
+    lex_errors: Vec<(Span, String)>,
+    lex_warnings: Vec<(Span, String)>,
+    lex_keywords: crate::lexer::Keywords,
     /// The lexer's tokens, one of which a single-line lambda's region replaces with its end
     /// while it is parsed (`Tok::EndLambda`), restored after.
-    toks: &'a mut [Token],
+    toks: Vec<Token>,
     syntax: Syntax,
     pos: usize,
     /// The token a block's expression statement starts at: a lambda there takes the rest of the
     /// block as its body (`parse_lambda`, dotty's `closureRest` in `Location.InBlock`).
     block_lambda_at: usize,
     text: &'a str,
-    end_markers: &'a [Span],
+    end_markers: Vec<Span>,
     pub ast: Ast,
     interner: &'a Interner,
     pub errors: Vec<(Span, String)>,
@@ -157,10 +118,10 @@ pub struct Parser<'a> {
     quote_pattern: bool,
     /// The lexer's boundaries (`LexResult::boundaries`) and the first of them a syntax error
     /// was found at, where the file is lexed again with the delimiters around it closed.
-    boundaries: &'a [u32],
+    boundaries: Vec<u32>,
     pub boundary: Option<u32>,
     /// The lines the lexer's case regions held (`LexResult::case_lines`).
-    case_lines: &'a [(u32, u32)],
+    case_lines: Vec<(u32, u32)>,
     /// The boundaries the delimiters were closed at, where the lexer's layout stands in front
     /// of a line's first token that scalac's scanner reads with no layout before it.
     closed: &'a [u32],
@@ -194,29 +155,45 @@ struct PendingDerives {
 
 /// What a file parses to: the file's AST first, then one per package block in source order;
 /// the syntax errors; the boundary of the lexer's a syntax error was found at, if any.
+/// A warning of the lexer or the parser: a migration warning (`Category::Migration`) or an ordinary one, with the
+/// identity of dotty's message where it has one (`ErrorMessageID`, which `-Wconf`'s `id` and `name` filter).
+#[derive(Clone, Debug)]
+pub struct SyntaxWarning {
+    pub span: Span,
+    pub msg: String,
+    pub migration: bool,
+    pub id: u16,
+}
+
 pub struct Parsed {
     pub asts: Vec<Ast>,
     pub errors: Vec<(Span, String)>,
+    pub warnings: Vec<SyntaxWarning>,
     pub boundary: Option<u32>,
+    /// Where `given` and `enum` are keywords as the unit's versions read them: the setting's, and the
+    /// version its source import names from where the scanner meets it (`Scanners.toToken`).
+    pub keywords: crate::lexer::Keywords,
 }
 
 pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Interner, syntax: Syntax) -> Parsed {
-    // Under `3.0-migration` the keywords Scala 3 added are identifiers, as dotty's scanner reads
-    // them (`Scanners.toToken`, `scala3keywords`).
-    if syntax.source.migrate_to_3() {
-        for t in lexed.tokens.iter_mut().filter(|t| matches!(t.kind, Tok::KwGiven | Tok::KwEnum)) {
-            t.name = interner.intern(if t.kind == Tok::KwGiven { "given" } else { "enum" });
-            t.kind = Tok::Ident;
-        }
-    }
+    let LexResult { keywords, tokens, errors, warnings, end_markers, boundaries, case_lines } = std::mem::replace(lexed, LexResult::empty());
     let mut p = Parser {
         source: syntax.source,
-        toks: &mut lexed.tokens,
+        unit_source: None,
+        source_switch: u32::MAX,
+        importing: None,
+        outermost: true,
+        leading: true,
+        warnings: Vec::new(),
+        lex_errors: errors,
+        lex_warnings: warnings,
+        lex_keywords: keywords,
+        toks: tokens,
         syntax,
         pos: 0,
         block_lambda_at: usize::MAX,
         text,
-        end_markers: &lexed.end_markers,
+        end_markers,
         ast: Ast::new(text.len()),
         interner,
         errors: Vec::new(),
@@ -239,9 +216,9 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         template_type: false,
         quote_level: 0,
         quote_pattern: false,
-        boundaries: &lexed.boundaries,
+        boundaries,
         boundary: None,
-        case_lines: &lexed.case_lines,
+        case_lines,
         closed,
         error_events: 0,
         quiet: false,
@@ -251,9 +228,16 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         dissolved: Vec::new(),
     };
     p.parse_file();
+    // Typing reads the unit's version, the import's wherever it stands (`Feature.sourceVersion`).
+    let unit = p.unit_source.unwrap_or(syntax.source);
+    let keywords = p.lex_keywords;
+    *lexed = LexResult { keywords, tokens: p.toks, errors: p.lex_errors, warnings: p.lex_warnings, end_markers: p.end_markers, boundaries: p.boundaries, case_lines: p.case_lines };
     let mut asts = vec![p.ast];
     asts.extend(p.package_blocks);
-    Parsed { asts, errors: p.errors, boundary: p.boundary }
+    for ast in &mut asts {
+        ast.source_version = unit;
+    }
+    Parsed { asts, errors: p.errors, warnings: p.warnings, boundary: p.boundary, keywords }
 }
 
 impl<'a> Parser<'a> {
@@ -1212,10 +1196,26 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_top_stmt(&mut self) {
+        let leading = std::mem::take(&mut self.leading);
         match self.kind() {
-            Tok::KwPackage if self.kind_at(1) == Tok::KwObject => self.parse_package_object(),
-            Tok::KwPackage => self.parse_package_block(),
-            Tok::KwImport => self.parse_import(),
+            // A package object's or block's statements are not the unit's own, and none after it is
+            // where it leads the unit (dotty's `topstats` reads them by `topStatSeq()`).
+            Tok::KwPackage => {
+                let outermost = std::mem::replace(&mut self.outermost, false);
+                if self.kind_at(1) == Tok::KwObject {
+                    self.parse_package_object();
+                } else {
+                    self.parse_package_block();
+                }
+                if !leading {
+                    self.outermost = outermost;
+                }
+            }
+            Tok::KwImport => {
+                self.importing = Some(self.outermost);
+                self.parse_import();
+                self.importing = None;
+            }
             Tok::KwExport => {
                 self.parse_export();
                 let clauses = self.export_scratch.drain(..);
@@ -1428,6 +1428,14 @@ impl<'a> Parser<'a> {
                 out.push(Import { path, sel: ImportSel::Name(n, rename), span, selector_span, bound: None, tree_start, qual_end, clause_end: selector_span.end });
                 break;
             }
+            // dotty's `mkImport`, as each import expression ends.
+            if let Some(outermost) = self.importing {
+                for k in clause..out.len() {
+                    if let Some((v, at)) = source_version_selector(&out[k], self.interner) {
+                        self.source_import(v, at, outermost);
+                    }
+                }
+            }
             if !self.eat(Tok::Comma) {
                 break;
             }
@@ -1443,25 +1451,98 @@ impl<'a> Parser<'a> {
             // A feature excluded (`strictEquality as _`) is not enabled.
             if matches!(out[i].sel, ImportSel::Name(names::STRICT_EQUALITY, r) if r != Some(names::WILDCARD)) {
                 self.ast.strict_equality = true;
-            } else if matches!(out[i].sel, ImportSel::Name(names::FUTURE, r) if r != Some(names::WILDCARD)) {
-                self.ast.source_future = true;
-                self.source = SourceVersion::parse("future").unwrap_or(self.source);
-                self.ast.source_import = Some(self.source);
             } else if matches!(out[i].sel, ImportSel::Name(names::POSTFIX_OPS, _)) {
                 self.syntax.postfix_ops = true;
             } else if let ImportSel::Name(n, _) = out[i].sel {
                 if self.interner.get(n) == "relaxedLambdaSyntax" && out[i].path.last().map_or(false, |&q| self.interner.get(q) == "experimental") {
                     self.ast.relaxed_lambdas = true;
-                } else if let Some(v) = SourceVersion::parse(self.interner.get(n)) {
-                    // `import scala.language.`3.6``: the version from here on (`Feature.sourceVersion`
-                    // of the unit, which the language import sets).
-                    self.source = v;
-                    self.ast.source_import = Some(v);
                 }
             }
             self.language_scratch.push(out[i].clone());
         }
         out.truncate(kept);
+    }
+
+    /// A diagnostic of a row of the migration table at the version where the parser stands
+    /// (`report.errorOrMigrationWarning`): nothing, a warning, a migration warning or an error.
+    /// `id` is dotty's message's (`warnings::id`), or `NO_ID` for a message of none.
+    pub(super) fn migration(&mut self, row: crate::source_version::Migration, at: Span, msg: impl Into<String>, id: u16) {
+        use crate::source_version::Outcome;
+        let migration = match row.outcome(self.source) {
+            Outcome::Silent => return,
+            Outcome::Warning => false,
+            Outcome::MigrationWarning => true,
+            Outcome::Error => return self.rule_error(at, msg),
+        };
+        self.warnings.push(SyntaxWarning { span: at, msg: msg.into(), migration, id });
+    }
+
+    /// An error of a rule the grammar holds to, not of the grammar: the recovery reads nothing of
+    /// it (`error_events`, `boundary`).
+    fn rule_error(&mut self, span: Span, msg: impl Into<String>) {
+        if !self.quiet {
+            self.errors.push((span, msg.into()));
+        }
+    }
+
+    /// A source version import (`Parsers.mkImport`): the unit's version from here, read once and at
+    /// the unit's top level, of the versions an import may name.
+    fn source_import(&mut self, v: SourceVersion, at: Span, outermost: bool) {
+        if !outermost {
+            self.rule_error(at, "source version import is only allowed at the toplevel");
+        } else if self.unit_source.is_some() {
+            self.rule_error(at, "duplicate source version import");
+        } else if let Some(msg) = v.illegal_import(TAG) {
+            self.rule_error(at, msg);
+        } else {
+            self.unit_source = Some(v);
+            self.source = v;
+            self.source_switch = self.fetched_end();
+            self.switch_keywords(v);
+        }
+    }
+
+    /// Where the import's version reads `given` and `enum` otherwise than the setting's, past the tokens dotty's
+    /// scanner holds (`fetched_end`), the text is lexed again with the switch and the parse goes on over the new
+    /// tokens, the ones it has read the same: what it parsed stays (dotty's scanner reads the version at each
+    /// token it fetches, `Scanners.toToken`). Nothing is lexed again for an import the unit ends with, or one no
+    /// `given` or `enum` follows.
+    fn switch_keywords(&mut self, v: SourceVersion) {
+        let at = self.source_switch;
+        let wanted = crate::lexer::Keywords { switch: Some((at, v.migrate_to_3())), ..crate::lexer::Keywords::of_setting(self.syntax.source) };
+        if v.migrate_to_3() == wanted.migrating || at == u32::MAX || self.lex_keywords == wanted {
+            return;
+        }
+        let interner = self.interner;
+        let named = |t: &Token| matches!(t.kind, Tok::KwGiven | Tok::KwEnum) || (t.kind == Tok::Ident && matches!(interner.get(t.name), "given" | "enum"));
+        if !self.toks[self.pos..].iter().any(|t| t.span.start >= at && named(t)) {
+            return;
+        }
+        let fresh = crate::lexer::lex_with(self.text, self.interner, self.closed, wanted);
+        debug_assert!(fresh.tokens.len() > self.pos && fresh.tokens[..=self.pos].iter().zip(&self.toks[..=self.pos]).all(|(a, b)| a.kind == b.kind && a.span == b.span));
+        self.toks = fresh.tokens;
+        self.end_markers = fresh.end_markers;
+        self.boundaries = fresh.boundaries;
+        self.case_lines = fresh.case_lines;
+        self.lex_errors = fresh.errors;
+        self.lex_warnings = fresh.warnings;
+        self.lex_keywords = wanted;
+    }
+
+    /// Where the tokens dotty's scanner holds when an import expression ends stop: the token after
+    /// it, and with a `;` the token past that too (`postProcessToken`'s `peekAhead`), as with a
+    /// line's end the token its `NEWLINE` is inserted before (`handleNewLine`). A version the import
+    /// names reads the tokens after (`Scanners.toToken`).
+    fn fetched_end(&self) -> u32 {
+        let t = self.toks[self.pos];
+        let fetched = match t.kind {
+            Tok::Semi | Tok::Newline => self.toks[self.pos + 1..].iter().find(|t| !matches!(t.kind, Tok::Newline | Tok::Indent | Tok::Outdent)),
+            _ => Some(&t),
+        };
+        match fetched {
+            Some(t) if t.kind != Tok::Eof => t.span.end,
+            _ => u32::MAX,
+        }
     }
 
     /// Also takes the Scala 2 forms `_`, `a => b` and `a => _`; `given T` imports the givens
@@ -1500,6 +1581,19 @@ fn starts_definition(k: Tok) -> bool {
             | Tok::KwGiven | Tok::KwPrivate | Tok::KwProtected | Tok::KwSealed | Tok::KwAbstract | Tok::KwFinal
             | Tok::KwLazy | Tok::KwOverride | Tok::KwImplicit | Tok::KwImport | Tok::KwExport | Tok::KwPackage
     )
+}
+
+/// The version a selector of `scala.language` names unrenamed, where it is a source version
+/// import (`allSourceVersionNames`, `languageImport`'s empty prefix): with the selector's place.
+fn source_version_selector(imp: &Import, interner: &Interner) -> Option<(SourceVersion, Span)> {
+    let path = match imp.path.as_slice() {
+        [names::ROOT, names::SCALA, rest @ ..] | [names::SCALA, rest @ ..] => rest,
+        rest => rest,
+    };
+    match (path, &imp.sel) {
+        ([names::LANGUAGE], &ImportSel::Name(n, None)) => SourceVersion::import_name(interner.get(n), TAG).map(|v| (v, imp.selector_span)),
+        _ => None,
+    }
 }
 
 fn is_language_import(imp: &Import) -> bool {

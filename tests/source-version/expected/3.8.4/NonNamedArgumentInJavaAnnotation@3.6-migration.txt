@@ -1,0 +1,7 @@
+exit 0
+migration warning 1:23
+  Named arguments are required for Java defined annotations
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 1:28
+  Named arguments are required for Java defined annotations
+  This can be rewritten automatically under -rewrite -source 3.6-migration.

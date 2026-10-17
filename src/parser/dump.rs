@@ -149,7 +149,7 @@ impl Dumper<'_> {
                 self.exprs(l, owner);
             }
             Expr::TypeApply(f, _) => self.expr(f, owner),
-            Expr::Infix(a, _, b) | Expr::While(a, b) | Expr::Assign(a, b) => {
+            Expr::Infix(a, _, b, _) | Expr::While(a, b) | Expr::Assign(a, b) => {
                 self.expr(a, owner);
                 self.expr(b, owner);
             }

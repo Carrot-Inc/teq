@@ -1,0 +1,3 @@
+exit 1
+error 1:67
+  No given instance of type C[Int] was found for a context parameter of method f in object P

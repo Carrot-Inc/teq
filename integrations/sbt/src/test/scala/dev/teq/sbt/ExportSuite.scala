@@ -339,6 +339,18 @@ class ExportSuite extends munit.FunSuite {
     assertEquals(flags("-language:strictEquality", "-language:postfixOps"), Seq("--strict-equality", "--language", "postfixOps"))
   }
 
+  test("scalac's -source reaches teq's --source in both its forms, the last given winning, and is no longer ignored") {
+    def flags(options: String*) = ScalacOptions(options).flags(jvm = false)
+    assertEquals(flags("-source", "3.9"), Seq("--source", "3.9"))
+    assertEquals(flags("-source:3.9"), Seq("--source", "3.9"))
+    assertEquals(flags("--source", "future"), Seq("--source", "future"))
+    assertEquals(flags("-source:3.3", "-feature", "-source", "3.0-migration"), Seq("--feature", "--source", "3.0-migration"))
+    assertEquals(ScalacOptions(Seq("-source:3.9", "-encoding", "utf8")).ignored, Seq("-encoding utf8"))
+    val (json, _) = Exported.flagsOf(Seq("-source", "3.0-migration"), js = false)
+    assertEquals(json("source"), Json.Str("3.0-migration"))
+    assertEquals(Exported.flagsOf(Seq("-feature"), js = false)._1("source"), Json.Null)
+  }
+
   test("dynamic versions") {
     for (version <- Seq("1.0.+", "latest.release", "[1.0,2.0)", "]1.0,)", "(,2.0]")) assert(Exported.isDynamic(version), version)
     for (version <- Seq("1.0", "1.0-SNAPSHOT", "0.4.3-M5", "0.1.0-pre.2")) assert(!Exported.isDynamic(version), version)

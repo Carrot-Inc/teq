@@ -1,0 +1,5 @@
+exit 1
+error 1:44
+  The trailing ` _` for eta-expansion is unnecessary;
+  the compiler performs eta-expansion automatically, so you can write the function value directly instead.
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.

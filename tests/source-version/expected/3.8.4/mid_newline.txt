@@ -1,0 +1,7 @@
+exit 0
+migration warning 3:16
+  given is now a keyword, write `given` instead of given to keep it as an identifier
+  This can be rewritten automatically under -rewrite -source 3.0-migration.
+migration warning 3:31
+  enum is now a keyword, write `enum` instead of enum to keep it as an identifier
+  This can be rewritten automatically under -rewrite -source 3.0-migration.

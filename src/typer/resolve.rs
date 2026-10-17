@@ -5147,7 +5147,10 @@ impl<'a> Worker<'a> {
             }
             out.push(sig);
         }
-        let mut evidence = ClauseSig { params: Vec::new(), is_using: true, is_implicit: false };
+        // `Desugar.elimContextBounds`: the evidence is a using clause from 3.6, an implicit one before
+        // (the unit's version), unless it joins the trailing clause of either kind.
+        let implicit = !ast.source_version.is_at_least(crate::source_version::SourceVersion::V3_6);
+        let mut evidence = ClauseSig { params: Vec::new(), is_using: true, is_implicit: implicit };
         for (index, (tp, &(_, id))) in tps.iter().zip(ids).enumerate() {
             for (i, &bound) in tp.context_bounds.iter().enumerate() {
                 let ctor = self.resolve_type_ctor(bound);
@@ -5164,7 +5167,8 @@ impl<'a> Worker<'a> {
                     }
                 }
                 // scalac's `evidence$1`, `evidence$2`, ... numbered within the definition.
-                let name = match tp.evidence_names.get(i).copied().filter(|&n| n != names::EMPTY) {
+                let written = tp.evidence_names.get(i).copied().filter(|&n| n != names::EMPTY);
+                let name = match written {
                     Some(written) => written,
                     None => {
                         let n = evidence.params.len() + 1;
@@ -5180,6 +5184,9 @@ impl<'a> Worker<'a> {
                     let mut s = self.syms.sym_mut(sym);
                     s.sig = Some(Arc::new(MethodSig::value(ty)));
                     s.state().set(Completion::Done);
+                }
+                if written.is_none() {
+                    self.syms.context_bounds.insert(sym, ());
                 }
                 if let Some(c) = class_owner {
                     self.syms.add_member(c, sym);

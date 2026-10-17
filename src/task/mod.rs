@@ -457,6 +457,7 @@ fn js_args(export: &Export, name: &str, verb: &str, options: &[String]) -> Resul
     if let Some(conf) = export.configuration(&compile) {
         args.extend(conf.flags.args(false));
     }
+    args.extend(export.source_args(&compile));
     if !names_output {
         let out = d.out.clone().unwrap_or_else(|| format!("{}/target/teq/out", project.base));
         args.extend(["--split".to_string(), out]);

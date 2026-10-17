@@ -72,7 +72,10 @@ pub enum Expr {
     UsingApply(ExprId, ListRef),
     NamedArg(Name, ExprId),
     TypeApply(ExprId, ListRef),
-    Infix(ExprId, Name, ExprId),
+    /// `l op r`, the operator's end last (`NO_END` in a tree read from TASTy): where the function
+    /// tree `Desugar.binop` makes of a left-associative operator (`Select(l, op)`) ends, which
+    /// `Migrations.checkParentheses` reads.
+    Infix(ExprId, Name, ExprId, u32),
     Prefix(Name, ExprId),
     /// Params live in `Ast::lambda_params`.
     Lambda(ListRef, ExprId),
@@ -424,7 +427,23 @@ pub struct Parent {
     pub ty: TyExprId,
     /// Constructor argument lists, each with whether it is a `using` list.
     pub args: Vec<(ListRef, bool)>,
+    /// Where each of `args` ends, its `)` (none in a tree read from TASTy).
+    pub ends: Vec<u32>,
 }
+
+impl Parent {
+    /// Where the function tree the `k`th argument list applies ends, dotty's `tree.span.end` of
+    /// `New(T)` or of the application of the lists before it (`Migrations.checkParentheses`).
+    pub fn fun_end(&self, ast: &Ast, k: usize) -> u32 {
+        match k {
+            0 => ast.ty_end(self.ty),
+            _ => self.ends.get(k - 1).copied().unwrap_or(NO_END),
+        }
+    }
+}
+
+/// No place in the source: a tree read from TASTy, an argument list the compiler made.
+pub const NO_END: u32 = u32::MAX;
 
 #[derive(Debug)]
 pub struct FunDef {
@@ -592,11 +611,16 @@ pub struct Ast {
     /// has its own copy of `e` (`parser/defs.rs`), typed in this order whichever is asked for
     /// first (`typer/check.rs`).
     pub val_copies: crate::intern::FxMap<DefId, DefId>,
-    /// `import scala.language.future`: the migration warnings of the next version are errors.
-    pub source_future: bool,
-    /// The source version a language import of the file names (`import scala.language.`3.6``,
-    /// `future`), the unit's from then on (`Feature.sourceVersion`), over the build's `--source`.
-    pub source_import: Option<crate::parser::SourceVersion>,
+    /// The expressions whose parentheses or brace block the parser collapsed (`(e)`, `{ e }`, a colon
+    /// argument's indented region), each with its span as written and with one level of parentheses
+    /// unwrapped: dotty's argument tree where the expression is an argument (`Migrations.implicitParams`'
+    /// `pt.args.head`), the second where it is an operator's operand, which `Desugar.binop` unwraps
+    /// (`P f ((1))`'s `(1)`, `P f { (1) }`'s block). By expression, ascending, as the parser completes
+    /// them: an expression's last entry is its outermost (`Ast::written_arg`).
+    pub written_args: Vec<(ExprId, Span, Span)>,
+    /// The unit's source version, which typing reads (`Feature.sourceVersion`): its source version
+    /// import's, else the setting's. A package block's is its file's.
+    pub source_version: crate::source_version::SourceVersion,
     /// `import language.experimental.relaxedLambdaSyntax` was met: a lambda after `:` may stand on
     /// the colon's line (dotty's `followingIsLambdaAfterColon`, case 1b).
     pub relaxed_lambdas: bool,
@@ -895,8 +919,8 @@ impl Ast {
             language_scopes: Vec::new(),
             default_inits: Vec::new(),
             val_copies: crate::intern::FxMap::default(),
-            source_future: false,
-            source_import: None,
+            written_args: Vec::new(),
+            source_version: Default::default(),
             relaxed_lambdas: false,
             top_level: Vec::new(),
             access_scopes: Vec::new(),
@@ -982,6 +1006,11 @@ impl Ast {
         Some(self.name_spans[i].1)
     }
 
+    /// Where the type tree `t` ends, `NO_END` where its tree records no span.
+    pub fn ty_end(&self, t: TyExprId) -> u32 {
+        self.ty_spans.get(t.idx()).map_or(NO_END, |s| s.end)
+    }
+
     pub fn ty_name_span(&self, id: TyExprId) -> Option<Span> {
         let i = self.ty_name_spans.binary_search_by_key(&id.0, |(t, _)| t.0).ok()?;
         Some(self.ty_name_spans[i].1)
@@ -1049,6 +1078,33 @@ impl Ast {
     pub fn is_braced(&self, e: ExprId) -> bool {
         let i = e.idx();
         self.braced.get(i / 64).is_some_and(|w| w >> (i % 64) & 1 != 0)
+    }
+
+    /// `e` collapsed out of the parentheses or the block written over `written` (`written_args`): for a
+    /// block both its spans, for parentheses that span and the one they enclose, an earlier entry's.
+    pub fn push_written(&mut self, e: ExprId, written: Span, parens: bool) {
+        let last = self.written_args.last().copied();
+        let inner = match last {
+            _ if !parens => written,
+            Some((x, outer, _)) if x == e => outer,
+            Some((x, ..)) if x > e => self.written_arg(e).map_or(self.expr_spans[e.idx()], |(outer, _)| outer),
+            _ => self.expr_spans[e.idx()],
+        };
+        // The parser completes the expression it keeps after those within it: an entry goes last, but where
+        // a tree was made out of that order.
+        match last {
+            Some((x, ..)) if x > e => {
+                let at = self.written_args.partition_point(|&(x, ..)| x <= e);
+                self.written_args.insert(at, (e, written, inner));
+            }
+            _ => self.written_args.push((e, written, inner)),
+        }
+    }
+
+    /// The span as written of `e` (`written_args`) and the one with a level of parentheses unwrapped.
+    pub fn written_arg(&self, e: ExprId) -> Option<(Span, Span)> {
+        let i = self.written_args.partition_point(|&(x, ..)| x <= e);
+        i.checked_sub(1).map(|i| self.written_args[i]).filter(|&(x, ..)| x == e).map(|(_, written, inner)| (written, inner))
     }
 
     /// `e` was written alone in braces.

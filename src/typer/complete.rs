@@ -2555,7 +2555,7 @@ fn children(ast: &Ast, e: ExprId) -> Vec<ExprId> {
     match ast.expr(e) {
         Expr::Select(q, _) | Expr::TypeApply(q, _) | Expr::NamedArg(_, q) | Expr::Prefix(_, q) => vec![q],
         Expr::Apply(f, args) | Expr::UsingApply(f, args) => std::iter::once(f).chain(list(args)).collect(),
-        Expr::Infix(a, _, b) | Expr::While(a, b) | Expr::Assign(a, b) => vec![a, b],
+        Expr::Infix(a, _, b, _) | Expr::While(a, b) | Expr::Assign(a, b) => vec![a, b],
         Expr::If(c, t, e) | Expr::InlineIf(c, t, e) => [Some(c), Some(t), e].into_iter().flatten().collect(),
         Expr::Tuple(items) | Expr::New(_, items) | Expr::SeqLit(items, _) => list(items),
         Expr::NamedTuple(_, values) => list(values),

@@ -717,7 +717,7 @@ impl<'a> Worker<'a> {
         let text = self.prog.add_str(&format!("index out of bounds: {}", i));
         let message = self.prog.add(TExpr::Str(text));
         let callee = super::apply::Callee::Method { recv: None, sym, owner_subst: Vec::new(), prefix: None, refined: None };
-        let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(message, self.b.t_string)], using: false, span };
+        let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(message, self.b.t_string)], using: false, span, fun: super::apply::ArgList::NO_FUN };
         Some(self.apply_callee(callee, None, vec![list], span, None))
     }
 
@@ -745,7 +745,7 @@ impl<'a> Worker<'a> {
             return self.prog.add(TExpr::Field(recv, fields[i]));
         }
         let index = self.prog.add(TExpr::Int(i as i32));
-        let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(index, self.b.t_int)], using: false, span };
+        let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(index, self.b.t_int)], using: false, span, fun: super::apply::ArgList::NO_FUN };
         let product = self.b.t_product;
         let (te, ty) = self.apply_member(recv, product, crate::names::PRODUCT_ELEMENT, None, vec![list], span, None);
         self.lower_cast(te, ty, elems[i], span).0
@@ -764,7 +764,7 @@ impl<'a> Worker<'a> {
         let l = self.prog.list(items);
         let array = self.prog.add(TExpr::ArrayLit(l));
         self.prog.set_type(array, array_ty);
-        let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(array, array_ty)], using: false, span };
+        let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(array, array_ty)], using: false, span, fun: super::apply::ArgList::NO_FUN };
         Some(self.apply_member(recv, recv_ty, name, None, vec![list], span, None).0)
     }
 

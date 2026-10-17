@@ -8,8 +8,8 @@
 # the class path (tests/support/jars.sh); without one of them in the coursier cache the program
 # is skipped. A `// jdk: none` line runs teq with no JDK to find (no JAVA_HOME, an empty PATH). Each program's exit and complete diagnostics go to out/errors-tests/<name>.out, and
 # the last line says whether every program was rejected as expected, with the counts of
-# tests/warnings/unused-imports.sh, tests/warnings/unused-kinds.sh, tests/warnings/matches.sh and
-# tests/warnings/policy.sh, which run after them.
+# tests/warnings/unused-imports.sh, tests/warnings/unused-kinds.sh, tests/warnings/matches.sh,
+# tests/warnings/policy.sh and tests/source-version.scala, which run after them.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 . tests/support/jars.sh
@@ -80,5 +80,11 @@ kinds=$(./tests/warnings/unused-kinds.sh 2>&1)
 [ $? -ne 0 ] && fail=1
 grep -v '^unused kinds: ' <<< "$kinds"
 kinds_summary=$(tail -1 <<< "$kinds")
-if [ $fail = 0 ]; then echo "error tests passed; $unused_summary; $kinds_summary; $matches_summary; $policy_summary"; else echo "error tests failed; $unused_summary; $kinds_summary; $matches_summary; $policy_summary"; fi
+# The source version against both scalacs' captures: settings, imports, directives, the migration table's rows
+# (its own script, under the binary it tests).
+source=$(TEQ=$TEQ ./teq interp tests/source-version.scala -- --teq "$TEQ" 2>&1)
+[ $? -ne 0 ] && fail=1
+grep -v '^source version: ' <<< "$source"
+source_summary=$(tail -1 <<< "$source")
+if [ $fail = 0 ]; then echo "error tests passed; $unused_summary; $kinds_summary; $matches_summary; $policy_summary; $source_summary"; else echo "error tests failed; $unused_summary; $kinds_summary; $matches_summary; $policy_summary; $source_summary"; fi
 exit $fail

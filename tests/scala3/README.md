@@ -13,6 +13,11 @@ tests/scala3/run.sh --update     # rewrite passing.txt from the tests that pass 
 tests/scala3/run.sh --only enum  # a subset, by regex over test names
 ```
 
+A test's options are read as `tests/scala3-typing/harness.py` reads them (its `scalac_options` and `teq_flags`):
+`-source` and `-language` reach teq as `--source` and `--language`, and the flags are recorded in `results.json`,
+in `summary.md`'s list of the tests run with flags, and after a tab in an allow-list's line; a test whose files
+name two source versions is left out (a compile error of the topic "conflicting options"), not compiled.
+
 Results go to `results.json` and `summary.md` next to this file (both are written on every run,
 so they show the state of the last run). `pending/` holds adapted tests that expose a difference
 between teq and scalac (`scala3_<original>.scala`, the difference named in the second line,

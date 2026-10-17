@@ -159,11 +159,18 @@ pub struct ArgList {
     pub args: Vec<ArgSrc>,
     pub using: bool,
     pub span: Span,
+    /// Where the function tree the list was written to ends (`FunEnd`), carried through adaptation to
+    /// `Migrations.checkParentheses`; `NO_FUN` for a list no written tree applies.
+    pub fun: FunEnd,
+}
+
+impl ArgList {
+    pub const NO_FUN: FunEnd = FunEnd::NONE;
 }
 
 impl Clone for ArgList {
     fn clone(&self) -> ArgList {
-        ArgList { args: self.args.clone(), using: self.using, span: self.span }
+        ArgList { args: self.args.clone(), using: self.using, span: self.span, fun: self.fun }
     }
 
     /// Into the list's own buffer, which a kept copy of a call's lists reuses.
@@ -171,6 +178,56 @@ impl Clone for ArgList {
         self.args.clone_from(&source.args);
         self.using = source.using;
         self.span = source.span;
+        self.fun = source.fun;
+    }
+}
+
+/// Where the function tree a written argument list applies ends, dotty's `tree.span.end`, from which
+/// `Migrations.checkParentheses` reads the text to the argument as written: a place (`New(T)`'s, a
+/// parent's list's, `Desugar.binop`'s `Select(l, op)`'s, the operator's end), or the tree itself whose
+/// span ends there (an application's function, the application of the lists before, the right operand a
+/// right-associative operator's `Select(r, op)` ends with), its place read only where the rule is
+/// applied (`FunEnd::end`); and whether the list is an operator's, whose operand `Desugar.binop` passes
+/// with one level of parentheses unwrapped (`Ast::written_arg`). A place or a node below 2^30, the top
+/// bit telling them apart and the next marking an operator's list.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct FunEnd(u32);
+
+impl FunEnd {
+    pub const NONE: FunEnd = FunEnd(u32::MAX);
+    const TREE: u32 = 1 << 31;
+    const OPERAND: u32 = 1 << 30;
+
+    /// The place `place`, none for `NO_END`.
+    pub fn at(place: u32) -> FunEnd {
+        FunEnd(place)
+    }
+
+    pub fn tree(e: ExprId) -> FunEnd {
+        FunEnd(Self::TREE | e.0)
+    }
+
+    /// A left-associative operator's list, the operator ending at `op_end`.
+    pub fn operand_at(op_end: u32) -> FunEnd {
+        if op_end == crate::ast::NO_END { Self::NONE } else { FunEnd(Self::OPERAND | op_end) }
+    }
+
+    /// A right-associative operator's list, its `Select(r, op)` ending with `r`.
+    pub fn operand_tree(r: ExprId) -> FunEnd {
+        FunEnd(Self::TREE | Self::OPERAND | r.0)
+    }
+
+    pub fn is_operand(self) -> bool {
+        self != Self::NONE && self.0 & Self::OPERAND != 0
+    }
+
+    pub fn end(self, ast: &crate::ast::Ast) -> Option<u32> {
+        let v = self.0 & !(Self::TREE | Self::OPERAND);
+        match self {
+            Self::NONE => None,
+            FunEnd(f) if f & Self::TREE != 0 => Some(ast.expr_span(ExprId(v)).end),
+            _ => Some(v),
+        }
     }
 }
 
@@ -229,7 +286,7 @@ enum Lexical {
 /// list's arguments are in the attempts' cache (`state::ArgCache`, dotty's `FunProto`).
 pub struct MemberCall {
     args: Vec<ArgSrc>,
-    lists: Vec<(u32, bool, Span)>,
+    lists: Vec<(u32, bool, Span, FunEnd)>,
     /// The depth of applications (`Worker::app_depth`) of the member's application, which the
     /// first application under it claims: an application nested in a later list's argument types
     /// its own later lists for their errors.
@@ -247,7 +304,7 @@ impl MemberCall {
         self.args.clear();
         self.lists.clear();
         for l in lists {
-            self.lists.push((self.args.len() as u32, l.using, l.span));
+            self.lists.push((self.args.len() as u32, l.using, l.span, l.fun));
             self.args.extend_from_slice(&l.args);
         }
         self.depth = 0;
@@ -257,9 +314,9 @@ impl MemberCall {
     /// The lists as written.
     fn written(&self) -> Vec<ArgList> {
         let mut out = Vec::with_capacity(self.lists.len());
-        for (i, &(start, using, span)) in self.lists.iter().enumerate() {
+        for (i, &(start, using, span, fun)) in self.lists.iter().enumerate() {
             let end = self.lists.get(i + 1).map_or(self.args.len(), |l| l.0 as usize);
-            out.push(ArgList { args: self.args[start as usize..end].to_vec(), using, span });
+            out.push(ArgList { args: self.args[start as usize..end].to_vec(), using, span, fun });
         }
         out
     }
@@ -744,27 +801,28 @@ impl<'a> Worker<'a> {
         // vectors' headers in stack memory across the loop, and profile-guided builds after
         // unrelated edits stalled on reloading them.
         let mut app = e;
-        let mut raw_lists: Vec<(ExprId, ListRef, bool)> = (0..applies)
+        let mut raw_lists: Vec<(ExprId, ListRef, bool, ExprId)> = (0..applies)
             .map(|_| {
                 let (f, args, using) = match ast.expr(app) {
                     Expr::Apply(f, args) => (f, args, false),
                     Expr::UsingApply(f, args) => (f, args, true),
                     _ => unreachable!("counted as an application above"),
                 };
-                let list = (app, args, using);
+                let list = (app, args, using, f);
                 app = f;
                 list
             })
             .collect();
         raw_lists.reverse();
+        // Each list's function tree is its application's (dotty's `tree`, `Migrations.checkParentheses`).
         let lists: Vec<ArgList> = raw_lists
             .iter()
-            .map(|&(app, args, using)| ArgList { args: ast.expr_list(args).iter().map(|&a| ArgSrc::Ast(a)).collect(), using, span: ast.expr_span(app) })
+            .map(|&(app, args, using, f)| ArgList { args: ast.expr_list(args).iter().map(|&a| ArgSrc::Ast(a)).collect(), using, span: ast.expr_span(app), fun: FunEnd::tree(f) })
             .collect();
         match ast.expr(head) {
-            Expr::Infix(l, op, r) if targs.is_none() => {
+            Expr::Infix(l, op, r, op_end) if targs.is_none() => {
                 let head_span = ast.expr_span(head);
-                if let Some(typed) = self.type_infix_applied(l, op, r, lists.clone(), head_span, expected) {
+                if let Some(typed) = self.type_infix_applied(l, op, r, op_end, lists.clone(), head_span, expected) {
                     return typed;
                 }
                 let (te, ty) = self.type_expr(head, None);
@@ -773,8 +831,7 @@ impl<'a> Worker<'a> {
             // `new C(a)(b)`: the further argument lists of the constructor, a class nested in a
             // class made with the enclosing instance its prefix gives, as with one list.
             Expr::New(ty, first) if targs.is_none() => {
-                let mut clauses = vec![(first, false, ast.expr_span(head))];
-                clauses.extend(raw_lists.iter().map(|&(app, args, using)| (args, using, ast.expr_span(app))));
+                let clauses = self.new_clauses(head, ty, first, &raw_lists);
                 let first_written = ast.new_empty_first.contains(&head);
                 // An explicit `new`, its constructor's signature its own (`type_new_expr`).
                 let prefixed = ast.new_outers.contains_key(&head);
@@ -1714,7 +1771,7 @@ impl<'a> Worker<'a> {
                 None => false,
             };
             if self.find_member(qty, setter).is_some() || exported(self) || self.has_lexical_extension_for(qty, setter) {
-                let lists = vec![ArgList { args: vec![ArgSrc::Ast(rhs)], using: false, span }];
+                let lists = vec![ArgList { args: vec![ArgSrc::Ast(rhs)], using: false, span, fun: ArgList::NO_FUN }];
                 let (te, _) = self.apply_member(tq, qty, setter, None, lists, span, None);
                 return Ok((te, self.b.t_unit));
             }
@@ -4347,7 +4404,7 @@ impl<'a> Worker<'a> {
         // A Java class has its constructors as alternatives only, each with a parameter list.
         let has_normal_clause = sig.clauses.iter().any(|c| !c.is_using) || (!secondaries.is_empty() && self.is_java_class(c));
         if lists.is_empty() && has_normal_clause && !as_function {
-            lists.push(ArgList { args: Vec::new(), using: false, span });
+            lists.push(ArgList { args: Vec::new(), using: false, span, fun: ArgList::NO_FUN });
         }
         // `Foo()` for a class declared without a parameter list.
         if !has_normal_clause && lists.first().map_or(false, |l| !l.using && l.args.is_empty()) {
@@ -4904,10 +4961,12 @@ impl<'a> Worker<'a> {
                 // is never such a pickled list.
                 let in_body = self.is_body_file(self.env.file);
                 let written = |l: &ArgList| l.args.iter().all(|a| matches!(a, ArgSrc::Ast(_) | ArgSrc::Named(..)));
-                if lists.peek().map_or(false, |l| l.using || ((clause.is_implicit || (in_body && written(l))) && !l.args.is_empty())) {
+                // An `implicit` clause takes a written list, an empty one too (`matchingApply`: a regular
+                // application matches an implicit method), which `explicit_implicit_args` migrates.
+                if lists.peek().map_or(false, |l| l.using || ((clause.is_implicit || (in_body && written(l))) && (!l.args.is_empty() || (clause.is_implicit && !in_body)))) {
                     let list = lists.next().unwrap();
                     if !list.using && !in_body {
-                        self.warn(list.span, "Implicit parameters should be provided with a `using` clause.");
+                        self.explicit_implicit_args(clause, &list, given_site);
                     }
                     given_site.end = list.span.end;
                     if self.index.is_some() && ctor.is_none() {
@@ -6390,7 +6449,7 @@ impl<'a> Worker<'a> {
                 _ => None,
             };
             match named {
-                Some((name, v)) => match clause.params.iter().position(|p| p.name == name) {
+                Some((name, v)) => match clause.params.iter().position(|p| self.takes_named(p, name)) {
                     Some(i) if slots[i].is_empty() => {
                         if let (true, ArgSrc::Ast(e)) = (self.index.is_some(), a) {
                             self.index_named_arg(*e, name, clause.params[i].sym);
@@ -6587,7 +6646,7 @@ impl<'a> Worker<'a> {
                 ArgSrc::Named(name, te, _) if self.prog.span_of(*te).is_some() => *name,
                 _ => continue,
             };
-            if let Some(i) = clause.params.iter().position(|p| p.name == name) {
+            if let Some(i) = clause.params.iter().position(|p| self.takes_named(p, name)) {
                 if i < results.len() && !named[i] {
                     named[i] = true;
                     self.capture_wrap(results[i], Wrap::Named(name));
@@ -8502,7 +8561,7 @@ impl<'a> Worker<'a> {
         }
         let key = self.prog.add_str(&self.name_str(name));
         let key = self.prog.add(TExpr::Str(key));
-        let mut dynamic_lists = vec![ArgList { args: vec![ArgSrc::Typed(key, self.b.t_string)], using: false, span }];
+        let mut dynamic_lists = vec![ArgList { args: vec![ArgSrc::Typed(key, self.b.t_string)], using: false, span, fun: ArgList::NO_FUN }];
         let mut lists = lists.into_iter().peekable();
         let mut typed: Vec<ArgSrc> = Vec::new();
         // Every list's arguments, a contextual one's resolved where the call gives none, as dotty's
@@ -8544,7 +8603,7 @@ impl<'a> Worker<'a> {
             let mut takes_classes = false;
             if let Some((set, _)) = self.find_member(recv_ty, names::APPLY_DYNAMIC) {
                 let mut call_lists = dynamic_lists.clone();
-                call_lists.push(ArgList { args: typed.clone(), using: false, span });
+                call_lists.push(ArgList { args: typed.clone(), using: false, span, fun: ArgList::NO_FUN });
                 if let Some((sym, owner_subst)) = self.selected_alternative(set, recv_ty, &mut call_lists) {
                     let classes_param = match &self.sig_of(sym).clauses[..] {
                         [first, ..] if first.params.len() == 2 && first.params[1].repeated => Some(first.params[1].ty),
@@ -8579,7 +8638,7 @@ impl<'a> Worker<'a> {
                     dynamic_lists[0].args.push(ArgSrc::Typed(class_of, class_ty));
                 }
             }
-            dynamic_lists.push(ArgList { args: typed, using: false, span });
+            dynamic_lists.push(ArgList { args: typed, using: false, span, fun: ArgList::NO_FUN });
             names::APPLY_DYNAMIC
         };
         let (te, _) = match selected {
@@ -9143,7 +9202,7 @@ impl<'a> Worker<'a> {
         let local = self.indexed_local("e", 0, rty, span);
         let arg = self.prog.add(TExpr::Local(local));
         self.prog.set_type(arg, rty);
-        let mut lists = vec![ArgList { args: vec![ArgSrc::Typed(arg, rty)], using: false, span }];
+        let mut lists = vec![ArgList { args: vec![ArgSrc::Typed(arg, rty)], using: false, span, fun: ArgList::NO_FUN }];
         let mark = self.attempt();
         let applied = self.apply_extension_of_instance(recv, recv_ty, name, None, &mut lists, span, result);
         if self.attempt_failed(&mark) {
@@ -9637,7 +9696,7 @@ impl<'a> Worker<'a> {
             };
             match named {
                 Some(name) => {
-                    if let Some(i) = clause.params.iter().position(|p| p.name == name) {
+                    if let Some(i) = clause.params.iter().position(|p| self.takes_named(p, name)) {
                         given[i] = true;
                         pos = pos.max(i + 1);
                     }
@@ -10290,7 +10349,7 @@ impl<'a> Worker<'a> {
             _ => return None,
         };
         let aty = self.solve_in(aty);
-        let mut swapped = vec![ArgList { args: vec![ArgSrc::Typed(q, recv_ty)], using: false, span: written[0].span }];
+        let mut swapped = vec![ArgList { args: vec![ArgSrc::Typed(q, recv_ty)], using: false, span: written[0].span, fun: ArgList::NO_FUN }];
         swapped.extend(written[1..].iter().cloned());
         let mut swapped = Some(swapped);
         self.try_extensions(ta, aty, recv_ty, name, targs, &mut swapped, span, expected)
@@ -10778,7 +10837,7 @@ impl<'a> Worker<'a> {
         }
         self.retry_typed.insert(te, ());
         let mut out = lists.to_vec();
-        out[at] = ArgList { args: vec![ArgSrc::Typed(te, ty)], using: false, span: list.span };
+        out[at] = ArgList { args: vec![ArgSrc::Typed(te, ty)], using: false, span: list.span, fun: list.fun };
         Boundary::Retry(out)
     }
 
@@ -11093,9 +11152,9 @@ impl<'a> Worker<'a> {
         let sel = self.sel(i);
         match sel.args {
             SelectionArgs::None => None,
-            SelectionArgs::Operand(r) => Some(ArgList { args: self.infix_args(r), using: false, span: sel.span }),
+            SelectionArgs::Operand(r) => Some(ArgList { args: self.infix_args(r), using: false, span: sel.span, fun: ArgList::NO_FUN }),
             SelectionArgs::List(l) => {
-                Some(ArgList { args: self.cur_ast().expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(), using: false, span: sel.span })
+                Some(ArgList { args: self.cur_ast().expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(), using: false, span: sel.span, fun: ArgList::NO_FUN })
             }
         }
     }
@@ -12905,4 +12964,70 @@ pub(in crate::typer) enum StaticPath {
     Callee(Callee),
     Missing(PkgId),
     NotStatic,
+}
+
+impl<'a> Worker<'a> {
+    /// Whether a named argument `name` names the parameter: dotty compares the names whole, their kinds with
+    /// them (`Applications` 716), so that a context bound's generated evidence (`ContextBoundParamName`) takes
+    /// no argument written `evidence$1 = …`, which a parameter written so does.
+    pub(super) fn takes_named(&self, p: &ParamSig, name: Name) -> bool {
+        takes_named(&self.syms, p, name)
+    }
+
+    /// The lists of `new C(a)(b)`, each with its application's span and its function tree: `New(C)` for
+    /// the first, the application before for each further one (`Migrations.checkParentheses`).
+    #[cold]
+    #[inline(never)]
+    fn new_clauses(&self, head: ExprId, ty: crate::ast::TyExprId, first: ListRef, raw_lists: &[(ExprId, ListRef, bool, ExprId)]) -> Vec<(ListRef, bool, Span, FunEnd)> {
+        let ast = self.cur_ast();
+        let mut clauses = vec![(first, false, ast.expr_span(head), FunEnd::at(ast.ty_end(ty)))];
+        clauses.extend(raw_lists.iter().map(|&(app, args, using, f)| (args, using, ast.expr_span(app), FunEnd::tree(f))));
+        clauses
+    }
+
+    /// Explicit arguments for an implicit clause, as dotty's `adaptToArgs` migrates them: to a
+    /// context bound's evidence (`Migrations.contextBoundParams`, a clause of `implicit` parameters
+    /// below 3.6) from 3.4, reported at the function, and to any `implicit` clause
+    /// (`Migrations.implicitParams`) from 3.7, at the first argument.
+    fn explicit_implicit_args(&mut self, clause: &ClauseSig, list: &ArgList, fun: Span) {
+        use crate::source_version::{rewrite_notice, Migration, SourceVersion};
+        let evidence = clause.params.first().is_some_and(|p| self.syms.context_bounds.contains_key(&p.sym));
+        if evidence && self.cur_ast().source_version.is_at_least(SourceVersion::V3_4) {
+            let notice = if list.args.is_empty() { String::new() } else { rewrite_notice("This code", "3.4-migration") };
+            let msg = format!("Context bounds will map to context parameters.\nA `using` clause is needed to pass explicit arguments to them.{}", notice);
+            self.migration(Migration::ExplicitContextBoundArgument, fun, msg, crate::warnings::NO_ID);
+        }
+        let ast = self.cur_ast();
+        if clause.is_implicit && !list.args.is_empty() && Migration::ImplicitParamsWithoutUsing.outcome(ast.source_version) != crate::source_version::Outcome::Silent {
+            // The first argument as written (`pt.args.head`): the parser's record of it where its tree holds less
+            // (a block, parentheses of its own, `Ast::written_arg`), an operator's operand with a level of
+            // parentheses unwrapped as `Desugar.binop` passes it; an operand tuple the one argument it makes
+            // of it (`ApplyKind.InfixTuple`, `Worker::infix_tuples`).
+            let (at, written) = match list.args[0] {
+                ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => match (ast.written_arg(e), self.infix_tuples.get(&(self.env.file, e))) {
+                    (Some((arg, unwrapped)), _) => (if list.fun.is_operand() { unwrapped } else { arg }, true),
+                    (None, Some(&tuple)) => (ast.expr_span(tuple), true),
+                    (None, None) => (ast.expr_spans[e.idx()], true),
+                },
+                _ => (list.span, false),
+            };
+            // The rewrite needs the arguments in parentheses: `checkParentheses` looks for a `(` in the text from the
+            // end of the function tree the list was written to (`ArgList::fun`) to the argument as written, none
+            // where the argument stands before it (the left operand of a right-associative operator).
+            let text = &self.source(self.env.file).text;
+            let between = list.fun.end(ast).filter(|_| written).and_then(|end| text.get(end as usize..at.start as usize));
+            let parenthesized = between.is_some_and(|s| s.contains('('));
+            let notice = if parenthesized { rewrite_notice("This code", "3.7-migration") } else { String::new() };
+            let msg = format!(
+                "Implicit parameters should be provided with a `using` clause.{}\nTo disable the warning, please use the following option:\n  \"-Wconf:msg=Implicit parameters should be provided with a `using` clause:s\"",
+                notice
+            );
+            self.migration(Migration::ImplicitParamsWithoutUsing, at, msg, crate::warnings::NO_ID);
+        }
+    }
+}
+
+/// `Worker::takes_named` over the symbols alone.
+pub(super) fn takes_named(syms: &Symbols, p: &ParamSig, name: Name) -> bool {
+    p.name == name && !(p.sym != SymId(u32::MAX) && syms.context_bounds.contains_key(&p.sym))
 }

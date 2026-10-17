@@ -1,0 +1,4 @@
+exit 1
+error 5:11
+  missing argument for parameter evidence$1 of method f in object P: (implicit evidence$1: C[Int]): Int
+  This code can be rewritten automatically under -rewrite -source 3.7-migration.
