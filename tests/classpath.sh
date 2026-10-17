@@ -303,5 +303,141 @@ echo replacement > "$work/handle"
 got=$(cd "$work" && timeout 120 "$teq" interp Args.scala -- @handle @absent 2>&1)
 if [ "$got" = "@handle|@absent" ]; then passed=$((passed + 1)); else echo "FAIL the program's @ arguments after -- (teq interp): $got"; fail=1; fi
 rm -rf "$work"
+# The scala-library jar a build takes from the coursier caches when --classpath names none
+# (src/scala_release.rs). tests/support/jars.sh's `scala_library_jar`, the suites' search, chooses in each layout of
+# tests/classpath/library/layouts.txt the jar the compiler's tests have it choose, over the roots it is given and
+# over the environment's. The compiler, the home caches emptied (HOME) and the jar cache its own, over caches holding
+# scala-library 3.8.4 and a jar the reader refuses (one entry whose header says 28.10, as 3.10.0's do), placed as
+# 3.10.0 and as a 3.8.5 that the newest first would take over the tracked release: tests/classpath/library/pair.scala
+# and what it prints under scalac 3.8.4 (pair.expected) on each target, `run_jvm` starting java with the jar the
+# suites' search takes there, over a cache named by its absolute path and by a relative one (its 3.8.4 linked from a
+# relative path); the refusals of caches without a jar and of caches holding only releases the reader
+# refuses; and the reader's refusal of that jar where --classpath names it, no jar of the caches put in its place.
+sl=$(jar_of scala-library)
+if [ -f "$sl" ]; then
+  work=$(cd "$(mktemp -d)" && pwd -P)
+  library=https/repo1.maven.org/maven2/org/scala-lang/scala-library
+  # put <root> <release> [<jar>]: the release's directory in the root, with the jar (a link to <jar> by its absolute
+  # path, which a relative COURSIER_CACHE does not give, else an empty file) unless the release is written `!<release>`.
+  put() {
+    local dir=$1/$library/${2#!}
+    mkdir -p "$dir"
+    [ "${2#!}" = "$2" ] || return 0
+    if [ -n "${3:-}" ]; then
+      ln -s "$(cd "$(dirname "$3")" && pwd -P)/${3##*/}" "$dir/scala-library-$2.jar"
+    else
+      : > "$dir/scala-library-$2.jar"
+    fi
+  }
+  # relative <path>: the path relative to the working directory, the repository's root.
+  relative() { python3 -c 'import os, sys; print(os.path.relpath(sys.argv[1]))' "$1"; }
+  while IFS='|' read -r name layout expected; do
+    name=$(echo $name) expected=$(echo $expected)
+    roots=()
+    i=0
+    IFS=';' read -r -a fields <<< "$layout"
+    [ ${#fields[@]} -gt 0 ] || fields=("")
+    for field in "${fields[@]}"; do
+      root=$work/layouts/$name/$i
+      mkdir -p "$root"
+      for release in $field; do put "$root" "$release"; done
+      roots+=("$root")
+      i=$((i + 1))
+    done
+    want=
+    case $expected in
+      none*) ;;
+      *) release=${expected%@*} want=${roots[${expected#*@}]}/$library/$release/scala-library-$release.jar ;;
+    esac
+    got=$(scala_library_jar --roots "${roots[@]}")
+    if [ "$got" = "$want" ]; then passed=$((passed + 1)); else
+      echo "FAIL the suites' search of scala-library in the layout $name: ${got:-nothing}, where ${want:-nothing} is expected"
+      fail=1
+    fi
+  done < <(grep -v '^#' tests/classpath/library/layouts.txt)
+  # The environment's roots: COURSIER_CACHE before the home caches, the first of two equal releases winning.
+  home=$work/home
+  put "$work/env" 3.8.4
+  put "$home/.cache/coursier/v1" 3.8.4
+  put "$home/.cache/coursier/v1" 3.8.3
+  mkdir -p "$work/none"
+  for probe in "env 3.8.4 $work/env" "none 3.8.4 $home/.cache/coursier/v1"; do
+    set -- $probe
+    got=$(HOME=$home COURSIER_CACHE=$work/$1 scala_library_jar)
+    if [ "$got" = "$3/$library/$2/scala-library-$2.jar" ]; then passed=$((passed + 1)); else
+      echo "FAIL the suites' search of scala-library with COURSIER_CACHE=$1 and a home cache: ${got:-nothing}"
+      fail=1
+    fi
+  done
+  rm -rf "$home"
+  mkdir -p "$home"
+  forged=$work/scala-library-3.10.0.jar
+  python3 - "$sl" "$forged" <<'PY'
+import sys, zipfile
+src, dst = sys.argv[1:]
+with zipfile.ZipFile(src) as zi, zipfile.ZipFile(dst, 'w') as zo:
+    b = bytearray(zi.read('scala/Equals.tasty'))
+    assert b[4:6] == b'\x9c\x88', b[:8].hex()  # TASTy 28.8
+    b[5] = 0x8a  # 28.10, the minor 3.10.0 writes
+    zo.writestr('scala/Equals.tasty', bytes(b))
+PY
+  put "$work/mixed" 3.8.4 "$sl"
+  put "$work/mixed" 3.10.0 "$forged"
+  put "$work/preferred" 3.8.4 "$sl"
+  put "$work/preferred" 3.8.5 "$forged"
+  put "$work/newer" 3.10.0 "$forged"
+  put "$work/relative" 3.8.4 "$(relative "$sl")"
+  put "$work/relative" 3.10.0 "$forged"
+  mkdir -p "$work/empty"
+  pair=tests/classpath/library/pair.scala
+  expected=tests/classpath/library/pair.expected
+  # in_cache <root> <command...>: the command over that cache alone, the jar cache the work directory's.
+  in_cache() { local root=$1; shift; HOME=$home COURSIER_CACHE=$root TEQ_CACHE_DIR=$work/cache "$@"; }
+  # runs <row> <command...>: the command prints what scalac prints, its stderr apart.
+  runs() {
+    local row=$1; shift
+    if "$@" > "$work/out" 2> "$work/err" && diff -q "$expected" "$work/out" > /dev/null; then passed=$((passed + 1)); else
+      echo "FAIL $row"
+      diff "$expected" "$work/out" | head -5
+      grep -v '^WARNING' "$work/err" | head -5
+      fail=1
+    fi
+  }
+  # refused <row> <code> <message> <command...>: the command exits with the code, its streams holding the line.
+  refused() {
+    local row=$1 code=$2 message=$3; shift 3
+    "$@" > "$work/out" 2>&1
+    local got=$?
+    if [ $got = "$code" ] && grep -qF -- "$message" "$work/out"; then passed=$((passed + 1)); else
+      echo "FAIL $row: exit $got, where $code and \"$message\" are expected"
+      head -5 "$work/out"
+      fail=1
+    fi
+  }
+  runs "a JVM build over the caches of 3.8.4 and 3.10.0" \
+    in_cache "$work/mixed" run_jvm 120 "$work/pair.jar" --build "$pair" --target jvm
+  runs "--std=scala-library over the caches of 3.8.4 and 3.10.0" \
+    in_cache "$work/mixed" run_js 120 "$work/pair.js" "$pair" --std=scala-library
+  runs "a JVM build over the caches of 3.8.4 and a 3.8.5 (the tracked release)" \
+    in_cache "$work/preferred" run_jvm 120 "$work/pair.jar" --build "$pair" --target jvm
+  runs "a JVM build over the caches of 3.8.4 and 3.10.0 named by a relative COURSIER_CACHE" \
+    in_cache "$(relative "$work/relative")" run_jvm 120 "$work/pair.jar" --build "$pair" --target jvm
+  runs "the interpreter over the caches of 3.8.4 and 3.10.0 (the lean std)" \
+    in_cache "$work/mixed" timeout 120 "$TEQ" interp "$pair"
+  runs "a JVM build naming 3.8.4 over the caches of 3.8.4 and 3.10.0" \
+    in_cache "$work/mixed" run_jvm 120 "$work/pair.jar" "$sl" --build "$pair" --target jvm --classpath "$sl"
+  refused "a JVM build over a cache of 3.10.0 alone" 2 "no readable scala-library jar: this reader accepts TASTy 28.0 to 28.8 (Scala release minor at most 3.8); found 3.10.0 in the coursier caches ($work/newer, $home/Library/Caches/Coursier/v1, $home/.cache/coursier/v1); fetch the tracked release with \`cs fetch org.scala-lang:scala-library:3.8.4\`, or name a readable library with --classpath" \
+    in_cache "$work/newer" timeout 120 "$TEQ" compiler build "$pair" --target jvm -o "$work/pair.jar"
+  refused "--std=scala-library over a cache of 3.10.0 alone" 2 "no readable scala-library jar" \
+    in_cache "$work/newer" timeout 120 "$TEQ" compiler build "$pair" --std=scala-library -o "$work/pair.js"
+  refused "a JVM build over empty caches" 2 "put a 3.x release in the coursier cache ($work/empty, $home/Library/Caches/Coursier/v1, $home/.cache/coursier/v1)" \
+    in_cache "$work/empty" timeout 120 "$TEQ" compiler build "$pair" --target jvm -o "$work/pair.jar"
+  refused "a JVM build naming 3.10.0" 1 "scala/Equals.tasty: TASTy version 28.10 is not supported" \
+    in_cache "$work/mixed" timeout 120 "$TEQ" compiler build "$pair" --target jvm --classpath "$forged" -o "$work/pair.jar"
+  rm -rf "$work"
+else
+  echo "skip the scala-library jar's search: scala-library 3.8.4 is not in the coursier cache"
+  skipped=$((skipped + 1))
+fi
 echo "classpath: $passed passed, $skipped skipped"
 exit $fail

@@ -61,37 +61,10 @@ fn built(target: &str, command: Command, work: &Path, bound: Duration) -> Result
     Ok(())
 }
 
-/// The scala-library jar a JVM build links against when its class path names none: the newest 3.x of
-/// the coursier caches, found as the compiler's `classpath::find_scala_library` finds it (and as
-/// tests/support/jars.sh's `scala_library_jar` does). The three must agree: a change of one is a
-/// change of all.
-fn scala_library() -> Result<String, String> {
-    let mut caches: Vec<PathBuf> = Vec::new();
-    if cfg!(windows) {
-        let var = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(PathBuf::from);
-        caches.extend(var("COURSIER_CACHE").or_else(|| var("LOCALAPPDATA").map(|d| d.join("Coursier").join("cache").join("v1"))));
-    } else {
-        let home = std::env::var("HOME").unwrap_or_default();
-        if let Ok(c) = std::env::var("COURSIER_CACHE") {
-            caches.push(PathBuf::from(c));
-        }
-        caches.push(Path::new(&home).join("Library/Caches/Coursier/v1"));
-        caches.push(Path::new(&home).join(".cache/coursier/v1"));
-    }
-    let mut best: Option<(Vec<u32>, PathBuf)> = None;
-    for cache in &caches {
-        let Ok(entries) = std::fs::read_dir(cache.join("https/repo1.maven.org/maven2/org/scala-lang/scala-library")) else { continue };
-        for entry in entries.flatten() {
-            let version = entry.file_name().to_string_lossy().to_string();
-            let Some(parts) = version.split('.').map(|p| p.parse().ok()).collect::<Option<Vec<u32>>>() else { continue };
-            let jar = entry.path().join(format!("scala-library-{version}.jar"));
-            if parts.first() == Some(&3) && jar.is_file() && best.as_ref().map_or(true, |(v, _)| parts > *v) {
-                best = Some((parts, jar));
-            }
-        }
-    }
-    best.map(|(_, jar)| jar.to_string_lossy().into_owned()).ok_or_else(|| "no scala-library 3.x jar in the coursier cache for the JVM target".to_string())
-}
+/// The search of the coursier caches for the scala-library jar a JVM build links against when its
+/// class path names none: the compiler's own file, as this crate cannot depend on the compiler.
+#[path = "../../src/scala_release.rs"]
+mod scala_release;
 
 fn lines_of(target: &str, command: Command, work: &Path, bound: Duration) -> Result<Lines, String> {
     let output = run(command, b"", bound, work).map_err(|problem| format!("{target}: {problem}"))?;
@@ -348,7 +321,7 @@ pub fn targets(text: &str, labels: &[String], work: &Path, root: &Path) -> Resul
         // As the raw `teq run --target jvm` started java: the std's stack, and the scala-library
         // jar the build itself linked against, from the coursier cache.
         let mut java = Command::new("java");
-        java.args(["-Xss512m", "-Xshare:auto", "-cp"]).arg(format!("out/classes:{}", scala_library()?)).arg("TeqMain");
+        java.args(["-Xss512m", "-Xshare:auto", "-cp"]).arg(format!("out/classes:{}", scala_release::find_scala_library()?)).arg("TeqMain");
         target("jvm", Some(&["--target", "jvm", "-o", "out/classes"]), Some(java), 60, &mut ran)?;
     }
     if !differences(&ran, labels).is_empty() {

@@ -31,6 +31,7 @@ mod planted;
 mod products;
 mod report;
 mod scala2;
+mod scala_release;
 mod shake;
 mod shape;
 mod shared;
@@ -1100,7 +1101,7 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
     };
     if o.std == StdMode::ScalaLibrary {
         if !o.classpath.iter().any(|p| classpath::is_scala_library_jar(p)) {
-            match classpath::find_scala_library() {
+            match scala_release::find_scala_library() {
                 Ok(jar) => o.classpath.insert(0, jar),
                 Err(e) => {
                     eprintln!("{}", e);

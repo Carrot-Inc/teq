@@ -93,11 +93,11 @@ pub fn cache_root() -> Option<PathBuf> {
 /// Coursier's cache: `$COURSIER_CACHE`, else `%LOCALAPPDATA%\Coursier\cache\v1` on Windows,
 /// `~/Library/Caches/Coursier/v1` on macOS and `~/.cache/coursier/v1` elsewhere.
 pub fn coursier_cache() -> Option<PathBuf> {
+    if cfg!(windows) {
+        return crate::scala_release::windows_cache(&|name| std::env::var_os(name));
+    }
     if let Some(dir) = var("COURSIER_CACHE") {
         return Some(dir);
-    }
-    if cfg!(windows) {
-        return var("LOCALAPPDATA").map(|d| d.join("Coursier").join("cache").join("v1"));
     }
     let home = var("HOME")?;
     Some(if cfg!(target_os = "macos") { home.join("Library/Caches/Coursier/v1") } else { home.join(".cache/coursier/v1") })

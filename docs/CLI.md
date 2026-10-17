@@ -29,7 +29,8 @@ teq compiler check src/                    # type check only
       --classpath a.jar:b.jar     # read the classes the program names from the jars' TASTy files
       --std=scala-library         # on JavaScript, scala-library as the std from its jar (default: lean,
                                   # teq's own); the JVM's std is always scala-library's jar, named
-                                  # with --classpath or taken from the coursier cache
+                                  # with --classpath or taken from the coursier cache: 3.8.4 where it
+                                  # is there, else the newest release teq reads (3.8 and older)
       --no-cache                  # read the jars without the jar cache
       --no-outline                # write each inline expansion at its site (docs/RUNTIME.md, "Bundle size")
       --exclude path              # leave out files whose path starts or ends with the text

@@ -123,8 +123,9 @@ java -cp out/main.jar:scala-library-3.8.4.jar TeqMain
 ```
 
 `--target jvm` lowers the same typed program to class files that link against scala-library's bytecode: the
-standard library is scala-library's jar, named with `--classpath` or taken from the coursier cache, never
-compiled or written, and `--std=lean` is refused. Nothing of any jar is converted or emitted; a call of a
+standard library is scala-library's jar, named with `--classpath` or taken from the coursier cache (which
+release: docs/LIBRARIES.md, `--std=scala-library`), never compiled or written, and `--std=lean` is refused.
+Nothing of any jar is converted or emitted; a call of a
 jar member goes to the jar's class file with the descriptor that file declares, and `java` runs the output
 beside the jars, as scalac's output runs (`teq run` passes them, and `-Xss512m`). The jar's manifest names
 the launcher `TeqMain`. Running needs `java` 21 or later. `--java-output-version N` is scalac's flag: class

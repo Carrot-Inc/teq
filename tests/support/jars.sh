@@ -1064,23 +1064,37 @@ maven_extras() {
     "$M2/io/github/cquiroz/scala-java-locales_sjs1_3/1.5.4/scala-java-locales_sjs1_3-1.5.4.jar" \
     "$M2/io/github/cquiroz/cldr-api_sjs1_3/4.5.0/cldr-api_sjs1_3-4.5.0.jar"
 }
-# The scala-library jar a JVM build links against when --classpath names none, for `run_jvm`: the newest 3.x
-# release of the coursier caches, found as the compiler's `classpath::find_scala_library` (src/classpath.rs) finds
-# it. The two must agree, so a change of either is a change of both: the caches COURSIER_CACHE when it is set (even
-# empty), ~/Library/Caches/Coursier/v1 and ~/.cache/coursier/v1, in that order (on Windows coursier's own,
-# `task::fetch::coursier_cache`: a non-empty COURSIER_CACHE, else %LOCALAPPDATA%/Coursier/cache/v1); a version
-# whose dot-separated parts all read as numbers (`u32`) and whose first is 3, with its jar a file; the greatest,
-# the first found on a tie. Nothing is printed when there is none, as the compiler then refuses the build.
+# The scala-library jar a JVM build links against when --classpath names none, for `run_jvm`: the jar the compiler
+# takes from the coursier caches by src/scala_release.rs's rule, whose tracked release and TASTy minor this reads
+# there, the two held to the layouts of tests/classpath/library/layouts.txt (tests/classpath.sh, which names the
+# roots: `scala_library_jar --roots <root>...`; else the environment's). The caches COURSIER_CACHE when it is set
+# (even empty), ~/Library/Caches/Coursier/v1 and ~/.cache/coursier/v1, in that order (on Windows coursier's own, a
+# non-empty COURSIER_CACHE, else %LOCALAPPDATA%/Coursier/cache/v1); of the versions whose dot-separated parts all
+# read as numbers (`u32`) with 3 the first and whose jar is a file, those of a minor at most the reader's; of them
+# the tracked release where there is one, else the greatest, the first found on a tie. Nothing is printed when there
+# is none, as the compiler then refuses the build.
 scala_library_jar() {
-  python3 - <<'PY'
-import os, re
+  python3 - "$@" <<'PY'
+import os, re, sys
+source = open("src/scala_release.rs").read()
+def constant(name, kind):
+    m = re.search(rf'^pub const {name}: {re.escape(kind)} = "?([0-9.]+)"?;$', source, re.M)
+    if not m:
+        sys.exit(f"scala_library_jar: no `pub const {name}: {kind}` in src/scala_release.rs")
+    return m.group(1)
+def numbers(version):
+    parts = version.split(".")
+    return [int(p) for p in parts] if all(re.fullmatch(r"\+?[0-9]+", p) and int(p) < 2 ** 32 for p in parts) else None
 env = os.environ
-if os.name == "nt":
+if sys.argv[1:2] == ["--roots"]:
+    caches = sys.argv[2:]
+elif os.name == "nt":
     cache = env.get("COURSIER_CACHE") or (os.path.join(env["LOCALAPPDATA"], "Coursier", "cache", "v1") if env.get("LOCALAPPDATA") else None)
     caches = [cache] if cache else []
 else:
     home = env.get("HOME", "")
     caches = ([env["COURSIER_CACHE"]] if "COURSIER_CACHE" in env else []) + [os.path.join(home, "Library/Caches/Coursier/v1"), os.path.join(home, ".cache/coursier/v1")]
+tracked, minor = numbers(constant("TRACKED", "&str")), int(constant("TASTY_MINOR", "u32"))
 best = None
 for cache in caches:
     d = os.path.join(cache, "https/repo1.maven.org/maven2/org/scala-lang/scala-library")
@@ -1089,13 +1103,13 @@ for cache in caches:
     except OSError:
         continue
     for version in entries:
-        parts = version.split(".")
-        if not all(re.fullmatch(r"\+?[0-9]+", p) and int(p) < 2 ** 32 for p in parts):
-            continue
-        parts = [int(p) for p in parts]
+        parts = numbers(version)
         jar = os.path.join(d, version, f"scala-library-{version}.jar")
-        if parts[0] == 3 and os.path.isfile(jar) and (best is None or parts > best[0]):
-            best = (parts, jar)
+        if parts is None or parts[0] != 3 or not os.path.isfile(jar) or (len(parts) > 1 and parts[1] > minor):
+            continue
+        rank = (parts == tracked, parts)
+        if best is None or rank > best[0]:
+            best = (rank, jar)
 if best:
     print(best[1])
 PY
