@@ -1,0 +1,17 @@
+# The layouts of the coursier caches that the search for scala-library's jar is held to, by
+# src/scala_release.rs's tests and by tests/classpath.sh for tests/support/jars.sh's `scala_library_jar`, under the tracked
+# release and the reader's minor there: a name, the roots in their order, separated by `;`, each the releases it
+# holds (`!` before one: its directory without the jar), and the jar chosen, `<release>@<root>` counting the roots
+# from 0, or `none` followed by the releases the reader cannot read, which the compiler's refusal names.
+mixed       | 3.8.4 3.10.0                    | 3.8.4@0
+patches     | 3.8.3 3.8.4                     | 3.8.4@0
+preferred   | 3.8.4 3.8.5                     | 3.8.4@0
+absent      | 3.8.2 3.8.3                     | 3.8.3@0
+minor       | 3.9.0 3.8.3                     | 3.8.3@0
+twice       | 3.8.4 ; 3.8.4                   | 3.8.4@0
+later       | 3.8.5 ; 3.8.4                   | 3.8.4@1
+split       | 3.8.3 ; 3.10.0 3.8.4            | 3.8.4@1
+newer       | 3.10.0                          | none 3.10.0
+newers      | 3.10.0 3.9.0 ; 3.10.0           | none 3.9.0 3.10.0
+others      | 2.13.16 3.8.0-RC1 !3.8.4 3.8.3  | 3.8.3@0
+empty       |                                 | none

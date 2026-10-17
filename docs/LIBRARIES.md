@@ -87,8 +87,10 @@ reported where a library body uses it, as
 a std definition's qualified name shadows it.
 
 **`--std=scala-library`** compiles the real scala-library from its jar instead, the one named on
-`--classpath` or else the newest 3.x in the coursier cache (nothing is downloaded; without one the
-build says which jar to name). Everything Scala-level comes from the jar, `Predef`, the collections,
+`--classpath` or else one of the coursier cache, as a JVM build takes it: 3.8.4, the release teq tracks,
+where the cache holds it, else the newest release whose TASTy teq reads, a minor of 3.8 or older (Scala 3.9
+and later write a TASTy the reader refuses, and a cache holding only those is refused with that reason).
+Nothing is downloaded; without a jar the build says which to name. Everything Scala-level comes from the jar, `Predef`, the collections,
 `Option`, `Ordering`, `Mirror`; what stays of teq's std is the builtin layer (`Int`, `Long`,
 `String`, `Array`, the tuples and functions, `Throwable`, `Class`, `ClassTag`) and the platform layer
 the library's bodies call into (`java.lang`, `java.util`). The output grows because a `List` of the

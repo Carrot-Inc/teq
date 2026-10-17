@@ -22,9 +22,9 @@ use std::ops::Range;
 pub type NameRef = u32;
 
 /// What this reader was written against (Scala 3.8.4). An older minor version of the same major
-/// reads the same way; a newer one may hold tags this reader does not know.
-pub const MAJOR_VERSION: u32 = 28;
-pub const MINOR_VERSION: u32 = 8;
+/// reads the same way; a newer one may hold tags this reader does not know. The constants live where
+/// the search of the coursier caches for scala-library's jar, which they bound, can share them.
+pub use crate::scala_release::{TASTY_MAJOR as MAJOR_VERSION, TASTY_MINOR as MINOR_VERSION};
 
 #[derive(Debug)]
 pub enum TName {
@@ -152,8 +152,8 @@ impl TastyFile {
         if major != MAJOR_VERSION || minor > MINOR_VERSION || experimental != 0 {
             let exp = if experimental != 0 { format!("-experimental-{}", experimental) } else { String::new() };
             return Err(format!(
-                "TASTy version {}.{}{} is not supported: this reader accepts {}.0 to {}.{} (Scala 3.0 to 3.8)",
-                major, minor, exp, MAJOR_VERSION, MAJOR_VERSION, MINOR_VERSION
+                "TASTy version {}.{}{} is not supported: this reader accepts {}.0 to {}.{} (Scala 3.0 to 3.{})",
+                major, minor, exp, MAJOR_VERSION, MAJOR_VERSION, MINOR_VERSION, MINOR_VERSION
             ));
         }
         let tooling_len = r.nat() as usize;

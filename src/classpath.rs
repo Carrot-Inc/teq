@@ -758,51 +758,6 @@ pub fn is_scala_library_jar(path: &str) -> bool {
     name.starts_with("scala-library-") && name.ends_with(".jar")
 }
 
-/// The newest scala-library 3.x jar of the coursier cache, for a JVM build or `--std=scala-library`
-/// without a `--classpath` that names one. Nothing is downloaded. On Windows the cache is the one
-/// `teq` fetches into (`task::fetch::coursier_cache`: `COURSIER_CACHE`, else
-/// `%LOCALAPPDATA%\Coursier\cache\v1`), with no `HOME` needed. The suites start `java` on a JVM
-/// build's output with the jar this finds: tests/support/jars.sh's `scala_library_jar` and
-/// proptests/src/targets.rs's `scala_library` search the same caches and choose the same jar, and
-/// a change here is a change of both.
-pub fn find_scala_library() -> Result<String, String> {
-    let mut caches: Vec<PathBuf> = Vec::new();
-    if cfg!(windows) {
-        caches.extend(crate::task::fetch::coursier_cache());
-    } else {
-        let home = std::env::var("HOME").unwrap_or_default();
-        if let Ok(c) = std::env::var("COURSIER_CACHE") {
-            caches.push(PathBuf::from(c));
-        }
-        caches.push(Path::new(&home).join("Library/Caches/Coursier/v1"));
-        caches.push(Path::new(&home).join(".cache/coursier/v1"));
-    }
-    let mut best: Option<(Vec<u32>, PathBuf)> = None;
-    for cache in &caches {
-        let dir = cache.join("https/repo1.maven.org/maven2/org/scala-lang/scala-library");
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for entry in entries.flatten() {
-            let version = entry.file_name().to_string_lossy().to_string();
-            let parts: Option<Vec<u32>> = version.split('.').map(|p| p.parse().ok()).collect();
-            let Some(parts) = parts else { continue };
-            if parts.first() != Some(&3) {
-                continue;
-            }
-            let jar = entry.path().join(format!("scala-library-{}.jar", version));
-            if jar.is_file() && best.as_ref().map_or(true, |(v, _)| parts > *v) {
-                best = Some((parts, jar));
-            }
-        }
-    }
-    match best {
-        Some((_, jar)) => Ok(jar.to_string_lossy().to_string()),
-        None => Err(format!(
-            "no scala-library jar: a JVM build links against scala-library-<3.x>.jar, as does --std=scala-library; name it with --classpath, or put a 3.x release in the coursier cache ({}), which `cs fetch org.scala-lang:scala-library:3.8.4` or any scala-cli run under -S 3.8.4 does",
-            caches.iter().map(|c| c.to_string_lossy().to_string()).collect::<Vec<_>>().join(", ")
-        )),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{canonical_lenient, is_compiler_library, Classpath, CpFile};
