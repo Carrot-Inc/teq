@@ -774,7 +774,46 @@ impl Diagnostics {
 
 }
 
-/// The shown diagnostics in the order of `ranks` over the files, a file without a rank by its id.
+/// Where a build run with `--diagnostics <file>` writes each diagnostic it shows, a JSON line a
+/// diagnostic in the order shown: its severity, its file, line and column where it has them, its
+/// whole message, and the lines shown for it (`shown`), so that a reader takes a diagnostic's
+/// extent from the build, never from the shown text, whose message may hold any line (dotty's
+/// `TestReporter` collects the `Diagnostic`s themselves). A macro's `report.info` is one of them
+/// (`info`), as dotty's `QuotesImpl` reports it through `report.echo`, an `Info` diagnostic.
+static RECORDS: std::sync::OnceLock<std::sync::Mutex<std::fs::File>> = std::sync::OnceLock::new();
+
+/// Opens `path` for the diagnostics' records (`RECORDS`): afresh, or after the records a verb
+/// wrote there first (`append`, `--diagnostics-append`: `teq build`'s generators').
+pub fn record_diagnostics_to(path: &str, append: bool) -> Result<(), String> {
+    let opened = if append { std::fs::OpenOptions::new().create(true).append(true).open(path) } else { std::fs::File::create(path) };
+    let file = opened.map_err(|e| format!("cannot write {}: {}", path, e))?;
+    let _ = RECORDS.set(std::sync::Mutex::new(file));
+    Ok(())
+}
+
+/// One shown diagnostic's record, where a file is open for them.
+pub(crate) fn record_shown(severity: &str, at: Option<(&str, Option<(usize, usize)>)>, message: &str, shown: &str) {
+    let Some(file) = RECORDS.get() else { return };
+    let mut line = String::from("{\"severity\":");
+    crate::watch::json_string(severity, &mut line);
+    if let Some((path, position)) = at {
+        line.push_str(",\"file\":");
+        crate::watch::json_string(path, &mut line);
+        if let Some((l, c)) = position {
+            let _ = write!(line, ",\"line\":{},\"col\":{}", l, c);
+        }
+    }
+    line.push_str(",\"message\":");
+    crate::watch::json_string(message, &mut line);
+    line.push_str(",\"shown\":");
+    crate::watch::json_string(shown, &mut line);
+    line.push_str("}\n");
+    let mut f = file.lock().unwrap_or_else(|e| e.into_inner());
+    let _ = std::io::Write::write_all(&mut *f, line.as_bytes());
+}
+
+/// The shown diagnostics in the order of `ranks` over the files, a file without a rank by its id,
+/// each recorded as it is shown (`record_shown`).
 pub fn render_shown(shown: &[Shown], files: &[SourceFile], ranks: &[u32]) -> String {
     let mut out = String::new();
     let mut items: Vec<&Shown> = shown.iter().collect();
@@ -782,20 +821,25 @@ pub fn render_shown(shown: &[Shown], files: &[SourceFile], ranks: &[u32]) -> Str
     for s in items {
         let d = &*s.d;
         let severity = s.level.name();
+        let start = out.len();
         if d.file == NO_FILE {
             let _ = writeln!(out, "{}: {}", severity, d.msg);
+            record_shown(severity, None, &d.msg, &out[start..]);
             continue;
         }
         if let Some(p) = &d.place {
-            let _ = writeln!(out, "{}: {}: {}", p.render(), severity, d.msg);
+            let place = p.render();
+            let _ = writeln!(out, "{}: {}: {}", place, severity, d.msg);
             if let (Some(text), Some(col)) = (&p.line_text, p.col) {
                 let _ = writeln!(out, "  {}", text);
                 let _ = writeln!(out, "  {}^", " ".repeat((col as usize).saturating_sub(1)));
             }
+            record_shown(severity, Some((&place, None)), &d.msg, &out[start..]);
             continue;
         }
         let Some(f) = files.get(d.file.0 as usize) else {
             let _ = writeln!(out, "<library>: {}: {}", severity, d.msg);
+            record_shown(severity, Some(("<library>", None)), &d.msg, &out[start..]);
             continue;
         };
         let (line, col, line_text) = locate(&f.text, d.span.start as usize);
@@ -804,6 +848,7 @@ pub fn render_shown(shown: &[Shown], files: &[SourceFile], ranks: &[u32]) -> Str
         let width = (d.span.end.saturating_sub(d.span.start) as usize)
             .clamp(1, line_text.len().saturating_sub(col - 1).max(1));
         let _ = writeln!(out, "  {}{}", " ".repeat(col - 1), "^".repeat(width));
+        record_shown(severity, Some((&f.path, Some((line, col)))), &d.msg, &out[start..]);
     }
     out
 }

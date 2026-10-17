@@ -20,12 +20,16 @@
 //           (bench/reference/oracle, which records every event of the run), each run's wall time, peak memory and its
 //           suites and cases against tests.json; --record rewrites tests.json, never from a run that executed nothing
 //           or failed
-// export    `sbt ++<scala>! teqExportAll` with the overlay (sbt-teq at TEQ_PLUGIN_VERSION, by default
-//           integrations/sbt/plugin-version.txt's), the lock copied to <out>; a lock recording a generator only sbt
-//           runs fails, and so does an export that compiled the build
+// export    `sbt ++<scala>! teqExportAll` with the overlay (sbt-teq at TEQ_PLUGIN_VERSION, by default the head's
+//           integrations/sbt published under a SNAPSHOT of its sources' digest into a repository beside <out>,
+//           `SbtPlugin`), the lock copied to <out>; a lock recording a generator only sbt runs fails, and so does an
+//           export that compiled the build
 // compile   `teq compile` of pin.json's projects over the export (--teq <binary>, by default ./target/release/teq),
 //           the daemon stopped, teq's outputs removed and the generators' outputs the lock names deleted before each
-//           run (--runs n): each run's wall time and the peak memory of its processes (`Reference.sampled`); the generated
+//           run (--runs n): each run's wall time and the peak memory of its processes (`Reference.sampled`), each run
+//           held to errors.txt (bench/reference/records.scala: every configuration compiled once, the run complete, its
+//           errors within the record's, a new one failing, one gone listed; --record writes a passing run's
+//           improvement, --baseline the first record, --migrate <reason> one over new inputs); the generated
 //           files back afterwards with the bytes the pin commits (`git status` of the checkout clean), the checkout
 //           put back at the pin where they are not
 // test      `teq test --verbose --events` of pin.json's projects: its suites and cases, each with its status and as
@@ -58,10 +62,11 @@ object ScalaJsPin:
   def sha256(bytes: Array[Byte]): String =
     MessageDigest.getInstance("SHA-256").digest(bytes).map(b => f"${b & 0xff}%02x").mkString
 
-// One Scala.js reference project, by its name (its directory under bench/) and the overlay's system properties'
-// prefix (`teq.<name>.overlay`, `teq.<name>.scripts`, which overlay/plugins.sbt and the generators read).
-final class ScalaJsReference(val name: String):
-  val here: Path = Paths.get("bench", name)
+// One Scala.js reference project, by its name (its directory under bench/, `here`, where a check of the verbs puts
+// a directory of its own) and the overlay's system properties' prefix (`teq.<name>.overlay`, `teq.<name>.scripts`,
+// which overlay/plugins.sbt and the generators read).
+final class ScalaJsReference(val name: String, val here: Path):
+  def this(name: String) = this(name, Paths.get("bench", name))
   if !Files.isRegularFile(here.resolve("pin.json")) then Log.die(s"bench/$name/$name.scala runs from the repository's root")
   val pin: ScalaJsPin = ScalaJsPin(Json.parse(Files.readString(here.resolve("pin.json"))))
 
@@ -185,17 +190,18 @@ final class ScalaJsReference(val name: String):
   def lockOf(dir: Path): Path = dir.resolve("target/teq/teq.lock")
 
   def exportLock(dir: Path, out: Path, teq: String): Unit =
-    val version = Option(System.getenv("TEQ_PLUGIN_VERSION")).filter(_.nonEmpty).getOrElse(Files.readString(Paths.get("integrations/sbt/plugin-version.txt")).trim)
+    val (version, repository) = SbtPlugin.forExport(out, javaHome)
     val overlay = here.resolve("overlay").toAbsolutePath.normalize
     val log = out.resolve("export.log")
     Files.deleteIfExists(lockOf(dir))
     Log.stamped(s"$name: teqExportAll with sbt-teq $version and the overlay, sbt's log $log")
     val (r, wall, peak) = sbt(dir, log,
-      Seq(s"-Dteq.$name.overlay=$overlay", s"-Dteq.$name.scripts=${here.toAbsolutePath.normalize}", s"-Dteq.plugin.version=$version", s"-addPluginSbtFile=${overlay.resolve("plugins.sbt")}"),
+      Seq(s"-Dteq.$name.overlay=$overlay", s"-Dteq.$name.scripts=${here.toAbsolutePath.normalize}", s"-Dteq.plugin.version=$version") ++
+        repository.map(r => s"-Dteq.plugin.repository=$r") :+ s"-addPluginSbtFile=${overlay.resolve("plugins.sbt")}",
       Seq(s"++${pin.scala}!", "teqExportAll"), Seq("TEQ" -> binary(teq)))
     if r.status != 0 then
       println(Files.readString(log).linesIterator.toVector.takeRight(20).mkString("\n"))
-      Log.die(s"$name: the export exits ${r.status}")
+      Log.die(s"$name: the export exits ${r.status}: ${SbtPlugin.missing(log).getOrElse(Log.cause(log))} (sbt's log $log)")
     val lock = lockOf(dir)
     Files.copy(lock, out.resolve("teq.lock"), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
     say(f"exported ${Files.size(lock)} bytes in $wall%.1f s (peak ${Reference.gigabytes(peak)}), copied to ${out.resolve("teq.lock")}")
@@ -250,92 +256,117 @@ final class ScalaJsReference(val name: String):
     for entry <- Files.list(teqDir).toArray.toList.map(_.asInstanceOf[Path]) if Files.isDirectory(entry) && entry.getFileName.toString != "generators" do
       Sh.remove(entry)
 
-  def compile(dir: Path, out: Path, teq: String, runs: Int): Unit =
+  // The generated files the lock's generators write against the bytes the pin commits: a file not written, or written
+  // with other bytes (with the digest of those bytes, so that other wrong bytes are another item), an item of the run's
+  // debt; the checkout put back at the pin after, for the verbs after this one.
+  def generatedDebt(dir: Path, lock: Path): Vector[String] =
+    val generated = generatedOutputs(lock)
+    val missing = generated.filterNot(g => Files.isRegularFile(dir.resolve(g)))
+    val changed = git(dir, "status", "--porcelain", "--untracked-files=no").out.linesIterator.filter(_.length > 3).map(l => (l.take(2).trim, l.drop(3))).toVector
+    def written(f: String): String =
+      val at = dir.resolve(f)
+      if Files.isRegularFile(at) then s"generated $f: ${ScalaJsPin.sha256(Files.readAllBytes(at))}, not the pin's bytes" else s"generated $f: not written"
+    val debt = (missing.map(g => s"generated $g: not written") ++ changed.filterNot((_, f) => missing.contains(f)).map((_, f) => written(f))).distinct
+    if changed.nonEmpty then git(dir, "checkout", "--", ".")
+    debt
+
+  def compile(dir: Path, out: Path, teq: String, runs: Int, mode: Mode): Unit =
     val lock = exported(dir)
     val bin = binary(teq)
+    val version = Sh(bin, "--version").timeout(30).check(false).run().out.trim
+    val roots = Roots.of(dir, dir, out)
     val generated = generatedOutputs(lock)
     var failed = false
+    val held = Vector.newBuilder[(String, Observation, String)]
     for i <- 1 to runs do
       Sh(bin, "stop").in(dir).timeout(120).check(false).run()
       coldOutputs(dir)
       generated.foreach(g => Files.deleteIfExists(dir.resolve(g)))
       val log = out.resolve(s"compile-$i.log")
+      // The builds' diagnostics as teq records them (`--diagnostics`), never read from the text.
+      val diagnostics = out.resolve(s"compile-$i.diagnostics")
+      Files.deleteIfExists(diagnostics)
       Log.stamped(s"$name: teq compile ${pin.projects.mkString(" ")}, run $i of $runs, its output $log")
       val started = System.nanoTime()
-      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh((bin +: "compile" +: pin.projects)*).in(dir).withEnv(mark).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh((Seq(bin, "compile", "--diagnostics", diagnostics.toString) ++ pin.projects)*).in(dir).withEnv(mark).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
-      val errors = Files.readString(log).linesIterator.count(_.contains(" error: "))
-      println(f"$name: compile run $i: exit ${r.status}, $wall%.1f s, peak ${Reference.gigabytes(peak)}, $errors errors")
-      if r.status != 0 then
-        Files.readString(log).linesIterator.filter(_.contains(" error: ")).take(20).foreach(l => println(s"  $l"))
-        failed = true
-      // The generators ran again and wrote the bytes the pin commits.
-      val missing = generated.filterNot(g => Files.isRegularFile(dir.resolve(g)))
-      if missing.nonEmpty then
-        val more = if missing.size > 3 then s" and ${missing.size - 3} more" else ""
-        fail(s"compile run $i: the generators did not write ${missing.take(3).mkString(", ")}$more")
-        failed = true
-      val changed = git(dir, "status", "--porcelain", "--untracked-files=no").out.trim
-      if changed.nonEmpty then
-        fail(s"compile run $i: the generated files differ from the pin's:\n$changed")
-        failed = true
-        // The checkout goes back to the pin, for the verbs after this one.
-        git(dir, "checkout", "--", ".")
-    if !failed then say(s"the ${generated.size} generated files written again as the pin commits them")
+      Files.writeString(log, Transcript.mark(r.status), java.nio.file.StandardOpenOption.APPEND)
+      val text = Files.readString(log)
+      // The generators ran again and wrote the bytes the pin commits: a file not written, or written with other bytes
+      // (with the digest of those bytes, so that other wrong bytes are another item), is a departure of the run's, an
+      // item of its debt beside teq's errors.
+      val generatedDebt = this.generatedDebt(dir, lock)
+      // Every compile configuration of the pin's projects the export holds sources for covered by the run.
+      val observed = Locks.hold(Transcript.withDebt(Transcript.compile(text, Transcript.recorded(diagnostics), roots), generatedDebt), lock, pin.projects)
+      println(f"$name: compile run $i: exit ${r.status}, $wall%.1f s, peak ${Reference.gigabytes(peak)}, ${observed.debt.size - generatedDebt.size} errors, ${generatedDebt.size} generated files not the pin's")
+      held += ((s"compile run $i", observed, roots(text)))
+    val seen = held.result()
+    if !Lines.hold(name, "compile", here, Shape.Compile, seen.map((n, o, _) => n -> o), seen.head._3, mode, version) then failed = true
+    if !failed then say(s"the ${generated.size} generated files held to the pin's bytes")
     Sh(bin, "stop").in(dir).timeout(120).check(false).run()
     Script.exit(if failed then 1 else 0)
 
-  def test(dir: Path, out: Path, teq: String, runs: Int, inventory: Path = here.resolve("tests.json")): Unit =
-    exported(dir)
+  def test(dir: Path, out: Path, teq: String, runs: Int, mode: Mode, inventory: Path = here.resolve("tests.json")): Unit =
+    val lock = exported(dir)
     val bin = binary(teq)
+    val version = Sh(bin, "--version").timeout(30).check(false).run().out.trim
+    val roots = Roots.of(dir, dir, out)
+    val held = Vector.newBuilder[(String, Observation, String)]
     // The oracle's inventory, which the run is held to: without one nothing would be checked.
     if !Files.isRegularFile(inventory) then Log.die(s"no inventory at $inventory: record it with the oracle (oracle --record)")
     val expected = Tests.read(inventory)
     if expected.suites.isEmpty || expected.cases == 0 then Log.die(s"the inventory $inventory holds no suite or no case")
-    val expectedFailures = expected.suites.values.exists(_.cases.exists(c => Tests.failed(c._2)))
     var failed = false
     for i <- 1 to runs do
       val log = out.resolve(s"test-$i.log")
+      val errLog = out.resolve(s"test-$i.err")
       val events = out.resolve(s"test-$i-events.txt")
+      val diagnostics = out.resolve(s"test-$i.diagnostics")
       Files.deleteIfExists(events)
+      Files.deleteIfExists(diagnostics)
       // The daemon the run uses is the one it starts, which carries the run's token (`Reference.sampled`).
       Sh(bin, "stop").in(dir).timeout(120).check(false).run()
-      Log.stamped(s"$name: teq test ${pin.projects.mkString(" ")}, run $i of $runs, its output $log")
+      Log.stamped(s"$name: teq test ${pin.projects.mkString(" ")}, run $i of $runs, its output $log, teq's stderr $errLog")
       val started = System.nanoTime()
       // The run's events (`--events`), each status as the framework reported it, are its inventory; verbose, the
-      // transcript names every test with its outcome.
-      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh((Seq(bin, "test", "--verbose", "--events", events.toString) ++ pin.projects)*).in(dir).withEnv(mark).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      // transcript names every test with its outcome. Its two channels are collected apart, teq's own lines (a build's
+      // diagnostics and count, the summaries) on stderr, the run's stream on stdout; the outcomes are the events'
+      // (`Transcript`).
+      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh((Seq(bin, "test", "--verbose", "--events", events.toString, "--diagnostics", diagnostics.toString) ++ pin.projects)*).in(dir).withEnv(mark).stdout(log).stderr(errLog).timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
+      Files.writeString(log, Transcript.mark(r.status), java.nio.file.StandardOpenOption.APPEND)
       val transcript = Files.readString(log)
-      val found = if Files.isRegularFile(events) then Tests.fromEvents(Files.readString(events)) else Tests(Map.empty)
+      val errText = if Files.isRegularFile(errLog) then Files.readString(errLog) else ""
+      val eventText = Option.when(Files.isRegularFile(events))(Files.readString(events))
+      val found = eventText.fold(Tests(Map.empty))(Tests.fromEvents)
       println(f"$name: test run $i: exit ${r.status}, $wall%.1f s, peak ${Reference.gigabytes(peak)}, ${found.suites.size} suites, ${found.cases} cases (${found.counts}); tests.json: ${expected.suites.size} suites, ${expected.cases} cases (${expected.counts})")
       val differences = Tests.compare(expected, found)
-      // An exit other than 0 is a failed case or a run that did not end as it should; where tests.json has no
-      // failed case the run must pass, a framework's abort included.
-      val exitWrong = r.status != 0 && !(r.status == 1 && expectedFailures)
-      if exitWrong || differences.nonEmpty then
-        fail(s"test run $i: the run is not tests.json's: exit ${r.status}, ${differences.size} differences")
+      if differences.nonEmpty then
+        say(s"test run $i: ${differences.size} differences from tests.json")
         differences.take(40).foreach(d => println(s"  $d"))
-        if differences.isEmpty then transcript.linesIterator.toVector.takeRight(20).foreach(l => println(s"  $l"))
-        failed = true
-      // The generators the run's compile ran wrote the bytes the pin commits; the checkout goes back to the pin
-      // where they did not, for the verbs after this one.
-      val changed = git(dir, "status", "--porcelain", "--untracked-files=no").out.trim
-      if changed.nonEmpty then
-        fail(s"test run $i: the generated files differ from the pin's:\n$changed")
-        git(dir, "checkout", "--", ".")
-        failed = true
+      // The run held to deviations.json by the records' one judgment of a test run (`Deviations.judge`, the same for
+      // every driver): the invocation's channels and events, the oracle's projects and cases; and the generators the
+      // run's compile ran wrote the bytes the pin commits, a file that departs an item as the compile's (the checkout
+      // goes back to the pin, for the verbs after this one).
+      val evidence = TestEvidence(Vector(Invocation(s"teq test ${pin.projects.mkString(" ")}", r.status, transcript, errText, Transcript.recorded(diagnostics), eventText)),
+        expected.heldSuites.map(_._1).distinct, expected.items, expected.heldSuites, debt = generatedDebt(dir, lock), owed = Locks.testUnits(lock, pin.projects), types = Locks.typesTests(lock))
+      val observed = Deviations.judge(evidence, roots)
+      if observed.problems.nonEmpty then Invocation.shown(transcript, errText).linesIterator.toVector.takeRight(20).foreach(l => println(s"  $l"))
+      held += ((s"test run $i", observed, roots(Invocation.shown(transcript, errText))))
     Sh(bin, "stop").in(dir).timeout(120).check(false).run()
+    val seen = held.result()
+    if !Lines.hold(name, "test", here, Shape.Tests, seen.map((n, o, _) => n -> o), seen.head._3, mode, version) then failed = true
     Script.exit(if failed then 1 else 0)
 
 object ScalaJsReference:
   // The verbs every Scala.js reference project has; `extra` names the project's own, which `other` runs.
   def main(name: String, argv: Seq[String], extra: Seq[String] = Nil)(own: (ScalaJsReference, String, Path, Path, String, Args) => Unit = (_, v, _, _, _, a) => a.fail(s"no verb $v")): Unit =
     val verbs = Seq("checkout", "oracle", "export", "compile", "test") ++ extra
-    val args = new Args(argv, s"bench/$name/$name.scala <${verbs.mkString("|")}> <checkout> <out> [--runs n] [--record] [--teq <binary>]")
+    val args = new Args(argv, s"bench/$name/$name.scala <${verbs.mkString("|")}> <checkout> <out> [--runs n] [--record | --baseline | --migrate <reason>] [--teq <binary>]")
     val teq = args.teq("./target/release/teq")
     val runs = args.option("runs").map(_.toInt).getOrElse(1)
-    val record = args.flag("record")
+    val mode = Mode.of(args)
+    val record = mode == Mode.Record
     val positionals = args.exactly(3)
     val (verb, checkoutArg, outArg) = (positionals(0), positionals(1), positionals(2))
     val project = new ScalaJsReference(name)
@@ -347,6 +378,7 @@ object ScalaJsReference:
     verb match
       case "checkout" => project.checkout(checkout)
       case "oracle" =>
+        if mode != Mode.Judge && mode != Mode.Record then args.fail("the oracle records its inventory with --record alone")
         project.atPin(checkout)
         project.oracle(checkout, out, runs, record)
       case "export" =>
@@ -354,10 +386,10 @@ object ScalaJsReference:
         project.exportLock(checkout, out, teq)
       case "compile" =>
         project.atPin(checkout)
-        project.compile(checkout, out, teq, runs)
+        project.compile(checkout, out, teq, runs, mode)
       case "test" =>
         project.atPin(checkout)
-        project.test(checkout, out, teq, runs)
+        project.test(checkout, out, teq, runs, mode)
       case other if extra.contains(other) =>
         project.atPin(checkout)
         own(project, other, checkout, out, teq, args)

@@ -1,0 +1,14 @@
+{
+ "note": "The services lila's lines run over, where the machine's environment (LILA_MONGOD, LILA_REDIS) and PATH have none: the releases bench/gate-projects/setup.scala fetches, holds to these digests and installs under its directory (Redis built from its source by make).",
+ "mongodb": {
+  "url": "https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu2404-8.0.15.tgz",
+  "sha256": "847953b176f30c185eb0aea1ac6576ef35c105deee10596dff94032459f96850",
+  "binary": "bin/mongod"
+ },
+ "redis": {
+  "url": "https://download.redis.io/releases/redis-7.4.6.tar.gz",
+  "sha256": "73b94484e00fb4c2440b490dc4021142fb0b6efc8b64c6329c10d24f0b531c99",
+  "binary": "src/redis-server",
+  "build": ["BUILD_TLS=no"]
+ }
+}

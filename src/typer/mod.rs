@@ -4223,7 +4223,9 @@ impl<'a> Worker<'a> {
 
     /// Prints the info messages the accepted attempt's runs gave, in the canonical order of
     /// their expansions (the files' ranks, then the positions, the message's number within its
-    /// run and its text), and prints the ones after it as they come.
+    /// run and its text), and prints the ones after it as they come; each is recorded as the
+    /// diagnostic it is (`source::record_shown`, `info`), as dotty's `QuotesImpl.report.info` is
+    /// `report.echo`, an `Info` through the reporter.
     pub fn flush_infos(&mut self) {
         let Some(mut infos) = self.infos.take() else { return };
         if infos.is_empty() {
@@ -4237,9 +4239,11 @@ impl<'a> Worker<'a> {
         infos.sort_by(|a, b| key(a).cmp(&key(b)).then_with(|| a.text.cmp(&b.text)));
         let mut out = String::new();
         for m in infos {
+            let start = out.len();
             out.push_str("info: ");
             out.push_str(&m.text);
             out.push('\n');
+            crate::source::record_shown("info", None, &m.text, &out[start..]);
         }
         eprint!("{}", out);
     }

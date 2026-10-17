@@ -12,6 +12,6 @@
  "tests": "tests.json",
  "overlay": {
   "LilaTeq.scala": "d5466f3b95add3855eb50dc5b957b240521673091dff385e39e304fc0cb7b83b",
-  "plugins.sbt": "0d7fd3686a688f8149780b5e3dba502128f5243fa3e746383bf3bdfa32906ba3"
+  "plugins.sbt": "cf8517c95d4fee238c48eb3c201d435189e9b0ea816f3f192bb330e784f71567"
  }
 }

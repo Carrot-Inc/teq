@@ -2,10 +2,15 @@
 // from a directory by node's own HTTP server and opened in headless Chrome over the DevTools protocol on a
 // pipe (`--remote-debugging-pipe`), nothing to install but node and Chrome. A scenario drives the page and
 // checks what it shows; the check fails on an exception the page throws, on a console error, on a request
-// that fails and on its time running out. It prints a line per step and one starting with `smoke:` or
-// `FAIL smoke:` at the end, and exits 0 or 1.
+// that fails and on its time running out. It prints a line per step, then a line per named assertion of the scenario,
+// `assert <name>: ok`, `assert <name>: FAIL <reason>` (the first one a failure leaves unchecked) or `assert <name>: not
+// reached` (those after it), which the run lines hold to their record (bench/reference/records.scala, run.json: a
+// known violation identified by its assertion's name), and one starting with `smoke:` or `FAIL smoke:` at the end,
+// and exits 0 or 1. With --assertions it prints the scenario's assertions, `assert <name>`, a line each, and exits 0:
+// what a run whose build failed did not check.
 //
 //   node bench/smoke.mjs <tyrian|indigo|webgl> <directory> [--seconds n] [--screenshots <dir>]
+//   node bench/smoke.mjs <tyrian|indigo|webgl> --assertions
 //
 // tyrian   the sandbox's page 2: "insert" makes a counter (Counter.scala), whose "+" adds one to the number
 //          it shows (Counter.scala 17-19)
@@ -29,6 +34,19 @@ const option = (name, fallback) => {
 }
 const seconds = Number(option("--seconds", "60"))
 const shots = option("--screenshots", null)
+// Each scenario's named assertions, in the order its steps check them.
+const assertions = {
+  tyrian: ["the app's page 2", "a counter after insert", "the counter one more after +", "no exception, console error or failed request"],
+  indigo: ["the game's canvas", "a frame drawn", "another frame after the scene-switch key", "no exception, console error or failed request"],
+  webgl: ["a WebGL2 context"],
+}[scenario]
+if (assertions && root === "--assertions") {
+  assertions.forEach((a) => console.log(`assert ${a}`))
+  process.exit(0)
+}
+let checked = 0
+// The next assertion holds: its step is reached and checked.
+const held = () => { checked++ }
 if (!["tyrian", "indigo", "webgl"].includes(scenario) || (scenario !== "webgl" && !root)) {
   console.error("usage: node bench/smoke.mjs <tyrian|indigo|webgl> <directory> [--seconds n] [--screenshots <dir>]")
   process.exit(2)
@@ -37,9 +55,17 @@ if (!["tyrian", "indigo", "webgl"].includes(scenario) || (scenario !== "webgl" &
 const started = Date.now()
 const problems = []
 let finished = false
-function finish(ok, line) {
+// A text of the page's (a message, a value, a failure's reason) on one line of the checker's, every line separator
+// escaped (LF, CR, CR LF, NEL, LS and PS, all that a reader's lines or a regex's `.` end at): the checker's own lines,
+// `assert <name>: <outcome>` and the verdict, which the records read (bench/reference/records.scala `Assertions`), are
+// never shaped by the page's text.
+const separators = { "\r\n": "\\r\\n", "\n": "\\n", "\r": "\\r", "\u0085": "\\u0085", "\u2028": "\\u2028", "\u2029": "\\u2029" }
+const oneLine = (s) => String(s).replace(/\r\n|[\n\r\u0085\u2028\u2029]/g, (c) => separators[c])
+function finish(ok, reason) {
   if (finished) return
   finished = true
+  const line = oneLine(reason)
+  assertions.forEach((a, i) => console.log(`assert ${a}: ${i < checked ? "ok" : i === checked && !ok ? `FAIL ${line}` : "not reached"}`))
   console.log(`${ok ? "" : "FAIL "}smoke: ${scenario} ${line} (${((Date.now() - started) / 1000).toFixed(1)} s)`)
   cleanup()
   process.exit(ok ? 0 : 1)
@@ -139,7 +165,7 @@ async function page(url) {
     } else if (m.method === "Runtime.consoleAPICalled" && m.params.type === "error") {
       problems.push(`console error: ${m.params.args.map((a) => a.value ?? a.description).join(" ").slice(0, 3000)}`)
     } else if (m.method === "Runtime.consoleAPICalled") {
-      console.log(`  page: ${m.params.args.map((a) => a.value ?? a.description).join(" ").slice(0, 200)}`)
+      console.log(`  page: ${oneLine(m.params.args.map((a) => a.value ?? a.description).join(" ").slice(0, 200))}`)
     } else if (m.method === "Log.entryAdded" && m.params.entry.level === "error") {
       problems.push(`log error: ${m.params.entry.text.slice(0, 300)}${m.params.entry.url ? " " + m.params.entry.url : ""}`)
     } else if (m.method === "Network.loadingFailed" && !m.params.canceled) {
@@ -168,7 +194,7 @@ async function until(p, what, expression, ms = 20000) {
     if (problems.length) throw new Error(`${problems[0]} (waiting for ${what})`)
     const v = await p.evaluate(expression)
     if (v) {
-      console.log(`  ${what}: ${typeof v === "string" ? v : "yes"}`)
+      console.log(`  ${what}: ${typeof v === "string" ? oneLine(v) : "yes"}`)
       return v
     }
     if (Date.now() > end) throw new Error(`no ${what} within ${ms / 1000} s`)
@@ -226,19 +252,24 @@ function canvasPicture(img, box) {
 async function tyrian() {
   const p = await page(`http://127.0.0.1:${server.address().port}/page2`)
   await until(p, "the app's page 2", `[...document.querySelectorAll("button")].some(b => b.textContent === "insert") && "insert and remove shown"`)
+  held()
   await p.evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent === "insert").click()`)
   const counter = `(() => { const plus = [...document.querySelectorAll("button")].find(b => b.textContent === "+"); return plus && plus.previousElementSibling ? plus.previousElementSibling.textContent : null })()`
   const before = await until(p, "a counter after insert", counter)
+  held()
   await p.evaluate(`[...document.querySelectorAll("button")].find(b => b.textContent === "+").click()`)
   const after = await until(p, "the counter after +", `(() => { const v = ${counter}; return v !== ${JSON.stringify(before)} ? v : null })()`)
   if (Number(after) !== Number(before) + 1) throw new Error(`the counter went from ${before} to ${after}, not ${Number(before) + 1}`)
+  held()
   if (problems.length) throw new Error(problems[0])
+  held()
   finish(true, `counter ${before} -> ${after} after a click on +`)
 }
 
 async function indigo() {
   const p = await page(`http://127.0.0.1:${server.address().port}/`)
   const box = JSON.parse(await until(p, "the game's canvas", `(() => { const c = document.querySelector("canvas"); if (!c || !c.width) return null; const r = c.getBoundingClientRect(); return JSON.stringify({ x: r.x, y: r.y, width: r.width, height: r.height }) })()`))
+  held()
   // A frame: the canvas shows more than one colour.
   let first = null
   const end = Date.now() + 20000
@@ -250,6 +281,7 @@ async function indigo() {
     else await sleep(250)
   }
   console.log(`  a frame: ${first.colours} colours on the canvas`)
+  held()
   await p.evaluate(`document.querySelector("canvas").focus(); window.focus(); true`)
   for (const type of ["keyDown", "keyUp"]) {
     await p.call("Input.dispatchKeyEvent", { type, key: "PageUp", code: "PageUp", windowsVirtualKeyCode: 33, nativeVirtualKeyCode: 33 })
@@ -263,7 +295,9 @@ async function indigo() {
     else if (Date.now() > end2) throw new Error("the canvas did not change within 20 s of the scene-switch key")
     else await sleep(250)
   }
+  held()
   if (problems.length) throw new Error(problems[0])
+  held()
   finish(true, `a frame of ${first.colours} colours, another (${switched.colours} colours) after the scene-switch key`)
 }
 
@@ -272,6 +306,7 @@ async function webgl() {
   const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true })
   const r = await send("Runtime.evaluate", { expression: `(() => { const g = document.createElement("canvas").getContext("webgl2"); return g ? g.getParameter(g.VERSION) : null })()`, returnByValue: true }, sessionId)
   if (!r.result.value) finish(false, "the browser makes no WebGL2 context")
+  held()
   finish(true, `the browser makes a WebGL2 context: ${r.result.value}`)
 }
 

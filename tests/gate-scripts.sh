@@ -34,11 +34,34 @@
 #            tests/support/pieces.py's merge summing counters, counting a whole suite's verdict and a failure any
 #            piece finds once, summing evidence before its check, and failing on a piece missing, doubled, unexpected,
 #            of another number, without its summary or failed; tests/all.sh running the four whole.
+#   records  the reference projects' records (bench/reference/records.scala) through bench/reference/ratchet.scala's
+#            verbs over a stand-in project in a repository of its own: a baseline from a transcript, its paths the
+#            checkout's and its evidence beside it, a rerun within it; an error outside the record failing, printed in
+#            full; one gone passing, listed; one twice where the record holds it once, and one fixed beside a new one
+#            of its message a line lower, failing; the same errors from another checkout's root passing; an empty or
+#            cut transcript, a timeout, a configuration not covered or covered twice, a panic, a daemon gone, a count
+#            or an exit not the diagnostics' each failing; a failed run's --record leaving the record as it was; a
+#            passing improvement recorded, staged and installed, the check against master's counting it; after it
+#            landed, the error reintroduced failing the run and the record widened back failing the check; a record
+#            widened beside the run that needs it passing the run and failing the check; a baseline over a record
+#            and a migration over unchanged inputs refused; new generated inputs failing the run until a migration,
+#            admitted with its reason and evidence; a record removed failing the check and its line, a deliberately
+#            empty one holding a clean run to none; a configuration whose build failed outright one item of its whole
+#            block (a generator's run under teq interp, its diagnostics among it), the next configuration's summary
+#            claiming its own, another explanation of the same first line failing; a crash, a panic and an error
+#            counted without its diagnostic recorded by no baseline or migration and failing a judged run; a baseline
+#            over a configuration covered twice recording nothing; a project's directory removed whole, its pin with
+#            its records, failing the check; a head forked before master stepped a record down refused against master
+#            until rebased onto it.
+#   setup    bench/gate-projects/setup.scala over a stand-in project in a copy of the tree: a machine made ready, its
+#            npm fixture deleted and installed again by a second run before the machine is ready again, a run whose
+#            checkout fails removing the ready mark.
 #   driver   tests/gate.sh over stand-in machines (tests/gate-agent; cargo and rustc stand-ins whose build writes a
 #            binary naming the revision asked for and running TEQ), on a copy of this tree in a repository of its
 #            own: the first shard's machine builds the head and the others take its binary, one whose
 #            copy is spoilt refuses it and builds; the machine whose pool line holds lila is left to the project
-#            lines, which fail there without the checkout, and fail as not run without such a machine; --record
+#            lines, which fail there without the checkout, and fail as not run without such a machine; the eighteen
+#            project lines run unnamed on the holder of the five projects, --without leaving one out; --record
 #            leaves tests/gate-times.txt as it was after a failing run and records the suites' times after a passing
 #            one; the last line is the gate's total; and with five machines the comparison (bench/pairs.py a stand-in
 #            in the landing) prepares three, each over the builder's binary, and measures its lines after the shards'
@@ -362,6 +385,263 @@ check "pieces: the merge sums counters, counts a whole suite's verdict once and 
 check "pieces: tests/all.sh runs the long suites whole" /dev/null eval \
   '[ "$(grep -c -E "^suite (lsp|jvm-watch|modules|split) +\./tests/(lsp|jvm-watch|modules|split)\.sh$" tests/all.sh)" = 4 ]'
 
+# The project records (bench/reference/records.scala) through bench/reference/ratchet.scala's verbs, the code the
+# compile verbs hold their runs with, in a repository of their own: a stand-in project p whose transcripts name the
+# errors a (an absolute path under the checkout, a message of two lines), a3 (a's message one line lower), b and c.
+rec=$work/records
+mkdir -p "$rec/bench/reference" "$rec/bench/p" "$rec/bench/q" "$rec/tools" "$rec/co" "$rec/co2" "$rec/out" &&
+  cp -R tools/script "$rec/tools/" && cp bench/reference/records.scala bench/reference/ratchet.scala "$rec/bench/reference/" &&
+  for p in p q; do echo '{"commit": "c0ffee"}' > "$rec/bench/$p/pin.json" && echo '{}' > "$rec/bench/$p/generated.json"; done &&
+  git -C "$rec" init -q || { echo "FAIL records: no repository in $rec"; fail=$((fail + 1)); }
+commit_records() { git -C "$rec" add -A && git -C "$rec" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "$1"; }
+diag() {
+  local co=${2:-$rec/co}
+  case $1 in
+    a) printf '%s\n' "$co/modules/a/A.scala:2:15: error: Found:    (\"bad\" : String)" 'Required: Int' '  val a: Int = "bad"' '               ^^^^^' ;;
+    a3) printf '%s\n' "$co/modules/a/A.scala:3:15: error: Found:    (\"bad\" : String)" 'Required: Int' '  val a: Int = "bad"' '               ^^^^^' ;;
+    b) printf '%s\n' 'modules/b/B.scala:9:3: error: Not found: y' '  y' '  ^' ;;
+    c) printf '%s\n' 'modules/c/C.scala:1:1: error: Not found: z' 'z' '^' ;;
+  esac
+}
+# transcript <file> <exit> <errors...>: teq compile's transcript, core/compile with those errors (a warning between
+# them), web/compile checked, the verb's end marker last.
+transcript_of() {
+  local f=$1 code=$2 d
+  shift 2
+  { echo "core/compile: ran"; for d in "$@"; do diag "$d" "${CO:-}"; printf '%s\n' 'modules/w/W.scala:1:1: warning: unused' 'w' '^'; done
+    if [ $# = 0 ]; then echo "core/compile: checked in 5 ms"; else echo "core/compile: $# error$([ $# = 1 ] || echo s)"; fi
+    echo "web/compile: 3 classes, 3 written in 4 ms"; echo "# exit $code"; } > "$f"
+}
+ratchet() { (cd "$rec" && timeout 120 "$TEQ" interp bench/reference/ratchet.scala -- "$@") > "$work/records.log" 2>&1; }
+# held <transcript> [<project>] [options]: the transcript through the ratchet's compile verb as teq writes it, its
+# builds' diagnostics recorded beside it (`<transcript>.out` and `.out.diagnostics`, tests/support/teq_channels.py).
+held() {
+  local t=$1 p=${2:-p}
+  shift
+  [ $# = 0 ] || shift
+  python3 -u tests/support/teq_channels.py --records "$t.out.diagnostics" < "$t" > "$t.out" 2>&1
+  ratchet compile "bench/$p" "$t.out" "${CWD:-$rec/co}" "$rec/co" "$rec/out" "$@"
+}
+transcript_of "$work/t-ab" 1 a b
+held "$work/t-ab" p --baseline --binary "teq 0.1.8 aaaaaaaaa" && held "$work/t-ab"
+code=$?
+check "records: a baseline from master's binary, its evidence beside it and its paths the checkout's, a rerun within it" "$work/records.log" eval '[ $code = 0 ] &&
+  grep -q -x "p: compile: 2 errors, within the record.s 2" "$work/records.log" && [ "$(grep -c "^error core/compile " "$rec/bench/p/errors.txt")" = 2 ] &&
+  grep -q -x "kind baseline" "$rec/bench/p/errors.txt" && grep -q "^error core/compile modules/a/A.scala:2:15: error: Found: " "$rec/bench/p/errors.txt" &&
+  ! grep -q -F "$rec" "$rec/bench/p/errors.txt" && [ -s "$rec/bench/p/errors.evidence.gz" ] && ! gzip -dc "$rec/bench/p/errors.evidence.gz" | grep -q -F "$rec" && grep -q -x "key web/compile" "$rec/bench/p/errors.txt"'
+commit_records "master: the baseline"
+transcript_of "$work/t-abc" 1 a b c
+held "$work/t-abc"
+code=$?
+check "records: an error outside the record fails the line, printed in full" "$work/records.log" eval '[ $code = 1 ] &&
+  grep -q -x "FAIL p: compile: 1 error new" "$work/records.log" && grep -q -x "  core/compile modules/c/C.scala:1:1: error: Not found: z" "$work/records.log" &&
+  grep -q -x "  z" "$work/records.log"'
+transcript_of "$work/t-b" 1 b
+held "$work/t-b"
+code=$?
+check "records: an error gone passes, listed" "$work/records.log" eval '[ $code = 0 ] &&
+  grep -q "^p: compile: gone 1 of the record.s 2" "$work/records.log" && grep -q "^  - core/compile modules/a/A.scala:2:15: " "$work/records.log" &&
+  grep -q -x "p: compile: 1 error, within the record.s 2, gone 1" "$work/records.log"'
+transcript_of "$work/t-aab" 1 a a b
+held "$work/t-aab"
+code=$?
+check "records: an error twice where the record holds it once fails (the multiset's count)" "$work/records.log" eval '[ $code = 1 ] && grep -q -x "FAIL p: compile: 1 error new" "$work/records.log"'
+transcript_of "$work/t-a3b" 1 a3 b
+held "$work/t-a3b"
+code=$?
+check "records: an error fixed beside a new one of the same message one line lower fails, the fixed one gone" "$work/records.log" eval '[ $code = 1 ] &&
+  grep -q -x "FAIL p: compile: 1 error new" "$work/records.log" && grep -q "^  core/compile modules/a/A.scala:3:15: " "$work/records.log" && grep -q "gone 1 of the record" "$work/records.log"'
+CO=$rec/co2 transcript_of "$work/t-ab2" 1 a b
+CWD=$rec/co2 held "$work/t-ab2"
+code=$?
+check "records: the same errors from another checkout's root are the record's" "$work/records.log" eval '[ $code = 0 ] && grep -q -x "p: compile: 2 errors, within the record.s 2" "$work/records.log"'
+# Runs that are no evidence: each fails whatever its errors.
+: > "$work/t-empty"
+grep -v '^# exit' "$work/t-ab" > "$work/t-cut"
+printf '%s\n' "core/compile: ran" "# exit 124" > "$work/t-timeout"
+grep -v '^web/compile' "$work/t-ab" > "$work/t-uncovered"
+{ grep -v '^web/compile\|^# exit' "$work/t-ab"; echo "teq: web/compile: the build's thread panicked"; echo "# exit 1"; } > "$work/t-panic"
+{ grep -v '^# exit' "$work/t-ab"; echo "teq: the daemon ended without an answer (see x)"; echo "# exit 2"; } > "$work/t-daemon"
+{ grep -v '^# exit' "$work/t-ab"; echo "web/compile: checked in 2 ms"; echo "# exit 1"; } > "$work/t-twice"
+sed 's/^core\/compile: 2 errors$/core\/compile: 3 errors/' "$work/t-ab" > "$work/t-count"
+sed 's/^# exit 1$/# exit 0/' "$work/t-ab" > "$work/t-exit"
+missing=
+for t in empty:"no end marker" cut:"no end marker" timeout:"teq timed out" uncovered:"web/compile: not covered" panic:"web/compile: teq crashed: the build's thread panicked" \
+  daemon:"teq.s daemon ended without an answer" twice:"web/compile: covered 2 times" count:"core/compile: 3 errors reported, 2 printed" exit:"teq exits 0, where its diagnostics give 1"; do
+  held "$work/t-${t%%:*}" && missing="$missing ${t%%:*}(passed)"
+  grep -q "^FAIL p: compile: .*${t#*:}" "$work/records.log" || missing="$missing ${t%%:*}(no '${t#*:}')"
+done
+check "records: an empty or cut transcript, a timeout, a configuration not covered or twice, a panic, a daemon gone, a count or an exit not the diagnostics' each fail" /dev/null eval '[ -z "$missing" ] || { echo "not as expected:$missing"; false; }'
+cp "$rec/bench/p/errors.txt" "$work/errors-1.txt"
+held "$work/t-abc" p --record
+code=$?
+check "records: a failed run records nothing" "$work/records.log" eval '[ $code = 1 ] && grep -q -x "FAIL p: compile: a failed run records nothing" "$work/records.log" &&
+  cmp -s "$rec/bench/p/errors.txt" "$work/errors-1.txt" && [ ! -e "$rec/bench/p/errors.txt.proposed" ]'
+held "$work/t-b" p --record --binary "teq 0.1.8 bbbbbbbbb" && ratchet check HEAD
+code=$?
+check "records: an improvement recorded from a passing run, staged and installed, the check counting it against master's" "$work/records.log" eval '[ $code = 0 ] &&
+  [ "$(grep -c "^error " "$rec/bench/p/errors.txt")" = 1 ] && grep -q -x "kind record" "$rec/bench/p/errors.txt" && [ ! -e "$rec/bench/p/errors.txt.proposed" ] &&
+  grep -q -x "records: bench/p/errors.txt: 1 error, 1 fewer than master.s 2" "$work/records.log"'
+commit_records "master: the improvement landed with its record"
+held "$work/t-ab"
+code=$?
+cp "$work/errors-1.txt" "$rec/bench/p/errors.txt" && sed -i 's/^kind baseline$/kind record/' "$rec/bench/p/errors.txt" && ratchet check HEAD
+code2=$?
+check "records: a resolved error reintroduced after its record landed fails the run, and the record widened back fails the check" "$work/records.log" eval '[ $code = 1 ] && [ $code2 = 1 ] &&
+  grep -q "^FAIL records: bench/p/errors.txt: the record widens the accepted one by 1:" "$work/records.log"'
+git -C "$rec" checkout -q bench/p/errors.txt
+transcript_of "$work/t-bc" 1 b c
+cp "$rec/bench/p/errors.txt" "$work/errors-2.txt"
+{ cat "$work/errors-2.txt"; echo "error core/compile modules/c/C.scala:1:1: error: Not found: z\\nz\\n^"; } > "$rec/bench/p/errors.txt"
+held "$work/t-bc"
+code=$?
+ratchet check HEAD
+code2=$?
+git -C "$rec" checkout -q bench/p/errors.txt
+check "records: a record widened beside the run that needs it passes the run and fails the check against master's" "$work/records.log" eval '[ $code = 0 ] && [ $code2 = 1 ] &&
+  grep -q "^FAIL records: bench/p/errors.txt: the record widens the accepted one by 1:" "$work/records.log" && grep -q "^  + core/compile modules/c/C.scala:1:1: " "$work/records.log"'
+held "$work/t-b" p --baseline
+code=$?
+held "$work/t-b" p --migrate "nothing moved"
+code2=$?
+check "records: a baseline over a record, and a migration over unchanged inputs, are refused" "$work/records.log" eval '[ $code = 1 ] && [ $code2 = 1 ] &&
+  grep -q "^FAIL p: compile: the migrate is refused: a migrate over the accepted record.s inputs" "$work/records.log" && git -C "$rec" diff --quiet &&
+  [ ! -e "$rec/bench/p/errors.txt.proposed" ]'
+echo '{"target/teq/p/compile/src_managed": "1234"}' > "$rec/bench/p/generated.json"
+held "$work/t-b"
+code=$?
+held "$work/t-ab" p --migrate "the generated sources moved" && ratchet check HEAD
+code2=$?
+check "records: new generated inputs fail the run until a migration, admitted with its reason and evidence" "$work/records.log" eval '[ $code = 1 ] && [ $code2 = 0 ] &&
+  grep -q -x "kind migrate" "$rec/bench/p/errors.txt" && grep -q -x "reason the generated sources moved" "$rec/bench/p/errors.txt" &&
+  grep -q -x "records: bench/p/errors.txt: 2 errors, a migration (the generated sources moved) from master.s 1" "$work/records.log"'
+git -C "$rec" checkout -q bench/p
+git -C "$rec" rm -q bench/p/errors.txt && ratchet check HEAD
+code=$?
+held "$work/t-b"
+code2=$?
+git -C "$rec" checkout -q HEAD -- bench/p/errors.txt
+transcript_of "$work/t-none" 0
+transcript_of "$work/t-c" 1 c
+held "$work/t-none" q --baseline && held "$work/t-none" q
+code3=$?
+held "$work/t-c" q
+code4=$?
+check "records: a record removed fails the check and its line, a deliberately empty one holds a clean run to none" "$work/records.log" eval '[ $code = 1 ] && [ $code2 = 1 ] && [ $code3 = 0 ] && [ $code4 = 1 ] &&
+  [ "$(grep -c "^error " "$rec/bench/q/errors.txt")" = 0 ]'
+# A configuration whose build failed outright: its whole block (a generator's run under teq interp, its own
+# diagnostics among the lines) is one item, the next configuration's summary claiming its own errors; a failure of the
+# same first line and another explanation is another item.
+mkdir -p "$rec/bench/f" && cp "$rec/bench/q/pin.json" "$rec/bench/q/generated.json" "$rec/bench/f/"
+failed_outright() {
+  { echo 'teq: core/compile: command generator 0 of core/compile: `teq interp gen.scala` failed (exit status: 3): package p'
+    printf '%s\n' "+> gen.scala:4:7: error: the constructor of $1 is private" '  new PrintStream(o)' '      ^' 'trait Generated'
+    diag b; echo "web/compile: 1 error"; echo "# exit 1"; } > "$2"
+}
+failed_outright PrintStream "$work/t-failed"
+failed_outright FileWriter "$work/t-failed-other"
+held "$work/t-failed" f --baseline && held "$work/t-failed" f
+code=$?
+held "$work/t-failed-other" f
+code2=$?
+check "records: a build failed outright is its whole block, the next configuration's summary claiming its own; another explanation fails" "$work/records.log" eval '[ $code = 0 ] && [ $code2 = 1 ] &&
+  grep -q -x "error core/compile teq: command generator 0 of core/compile: \`teq interp gen.scala\` failed (exit status: 3): package p\\\\ngen.scala:4:7: error: the constructor of PrintStream is private\\\\n  new PrintStream(o)\\\\n      ^\\\\ntrait Generated" "$rec/bench/f/errors.txt" &&
+  grep -q "^error web/compile modules/b/B.scala:9:3: error: Not found: y" "$rec/bench/f/errors.txt" && [ "$(grep -c "^error " "$rec/bench/f/errors.txt")" = 2 ] &&
+  grep -q -x "FAIL f: compile: 1 error new" "$work/records.log" && grep -q "the constructor of FileWriter is private" "$work/records.log"'
+# A crash of teq's and an error counted without its diagnostic are no outcome: neither a baseline nor a migration
+# records one, and a judged run fails on it whatever the record holds.
+mkdir -p "$rec/bench/k" && cp "$rec/bench/q/pin.json" "$rec/bench/q/generated.json" "$rec/bench/k/"
+printf '%s\n' "teq: core/compile: the build's thread panicked" "web/compile: checked in 2 ms" "# exit 1" > "$work/t-crash"
+printf '%s\n' "core/compile: 1 error" "web/compile: checked in 2 ms" "# exit 1" > "$work/t-uncounted"
+printf '%s\n' "core/compile: ran" "thread 'main' panicked at src/typer/mod.rs:1:1:" "core/compile: checked in 2 ms" "web/compile: checked in 2 ms" "# exit 1" > "$work/t-panicked"
+held "$work/t-crash" k --baseline; c1=$?
+held "$work/t-uncounted" k --baseline; c2=$?
+held "$work/t-panicked" k --baseline; c3=$?
+none=$([ ! -e "$rec/bench/k/errors.txt" ] && echo none)
+transcript_of "$work/t-k" 0
+held "$work/t-k" k --baseline && echo '{"x": "moved"}' > "$rec/bench/k/generated.json" && held "$work/t-crash" k --migrate "a crash moved in"; c4=$?
+grep -q -x "kind baseline" "$rec/bench/k/errors.txt" && migrated=no
+echo '{}' > "$rec/bench/k/generated.json"
+held "$work/t-uncounted" k; c5=$?
+check "records: a crash, a panic and an error without its diagnostic are recorded by no baseline or migration and fail a judged run" "$work/records.log" eval '[ $c1 = 1 ] && [ $c2 = 1 ] && [ $c3 = 1 ] && [ $c4 = 1 ] && [ $c5 = 1 ] &&
+  [ "$none" = none ] && [ "$migrated" = no ] && grep -q "^FAIL k: compile: core/compile: 1 errors reported without a diagnostic" "$work/records.log"'
+# Duplicate coverage is refused before a baseline is published: a configuration summarised twice records nothing.
+mkdir -p "$rec/bench/d" && cp "$rec/bench/q/pin.json" "$rec/bench/q/generated.json" "$rec/bench/d/"
+{ grep -v '^# exit' "$work/t-none"; echo "web/compile: checked in 2 ms"; echo "# exit 0"; } > "$work/t-twice-clean"
+held "$work/t-twice-clean" d --baseline
+code=$?
+check "records: a baseline over a configuration covered twice records nothing" "$work/records.log" eval '[ $code = 1 ] && [ ! -e "$rec/bench/d/errors.txt" ] &&
+  grep -q "web/compile: covered 2 times" "$work/records.log"'
+# A floor goes with neither its record nor its project: the check enumerates master's records as well as the head's,
+# so a project's directory removed whole (its pin and its records) fails it.
+rm -rf "$rec/bench/k" "$rec/bench/d" "$rec/bench/f"
+commit_records "master: records of f and q" && rm -rf "$rec/bench/q" && ratchet check HEAD
+code=$?
+git -C "$rec" checkout -q HEAD -- bench/q
+check "records: a project's directory removed with its pin and records fails the check" "$work/records.log" eval '[ $code = 1 ] &&
+  grep -q "^FAIL records: bench/q/errors.txt: the record is removed" "$work/records.log"'
+
+# The accepted records are master's as it is: a head forked before master stepped a record down is refused against
+# master until it contains that step, and passes once rebased onto it.
+git -C "$rec" branch -q -M master && git -C "$rec" checkout -q -b candidate && git -C "$rec" checkout -q master
+held "$work/t-none" p --record && commit_records "master: p's record stepped to none"
+code=$?
+git -C "$rec" checkout -q candidate
+ratchet check master
+code2=$?
+git -C "$rec" rebase -q master && ratchet check master
+code3=$?
+git -C "$rec" checkout -q master
+check "records: a head forked before master stepped a record down is refused against master, and passes rebased onto it" "$work/records.log" eval '[ $code = 0 ] && [ $code2 = 1 ] && [ $code3 = 0 ]'
+
+# The setup of the projects' checkouts (bench/gate-projects/setup.scala) over a stand-in project in a copy of the
+# tree, its driver a stand-in whose checkout installs the npm fixture and whose export refuses a checkout without it:
+# a run makes the machine ready; with the fixture deleted, a second run installs it again before calling the machine
+# ready; a run whose checkout fails removes the ready mark and writes no environment.
+st=$work/setup-tree
+mkdir -p "$st/bench/gate-projects" "$st/bench/airstream" "$st/tools" "$work/setup-bin" "$work/setup-jdk/bin" &&
+  cp -R tools/script "$st/tools/" && cp bench/gate-projects/setup.scala bench/gate-projects/services.json "$st/bench/gate-projects/" &&
+  cp bench/airstream/pin.json "$st/bench/airstream/" || { echo "FAIL setup: no tree in $st"; fail=$((fail + 1)); }
+cat > "$st/bench/airstream/airstream.scala" <<'SCALA'
+//> using file ../../tools/script
+// A stand-in of Airstream's script (tests/gate-scripts.sh): checkout installs the npm fixture, export needs it.
+import java.nio.file.{Files, Paths}
+@main def airstream(argv: String*): Unit = Script.run {
+  val args = new Args(argv, "stand-in")
+  args.teq("")
+  val Vector(verb, checkout, _) = args.exactly(3)
+  val co = Paths.get(checkout)
+  verb match
+    case "checkout" =>
+      if Files.exists(Paths.get("bench/airstream/fail-checkout")) then Log.die("airstream: the checkout fails (a stand-in)")
+      Files.createDirectories(co.resolve(".git"))
+      Files.createDirectories(co.resolve("node_modules/jsdom"))
+      println(s"airstream: $co at the pin, its npm fixture installed (a stand-in)")
+    case "export" =>
+      if !Files.isDirectory(co.resolve("node_modules/jsdom")) then Log.die(s"airstream: no npm fixture in $co: run the verb checkout")
+      Files.createDirectories(co.resolve("target/teq"))
+      Files.writeString(co.resolve("target/teq/teq.lock"), "projects:\n")
+      println("airstream: exported (a stand-in)")
+}
+SCALA
+for t in curl tar node npm sbt; do printf '#!/bin/sh\necho "%s stand-in"\n' "$t" > "$work/setup-bin/$t"; chmod +x "$work/setup-bin/$t"; done
+java_major=$(python3 -c "import json; print(json.load(open('bench/airstream/pin.json'))['java'])")
+printf '#!/bin/sh\necho %s >&2\n' "'openjdk version \"$java_major\" 2026-01-01'" > "$work/setup-jdk/bin/java"
+chmod +x "$work/setup-jdk/bin/java"
+setup_run() { (cd "$st" && PATH="$work/setup-bin:$PATH" JAVA_HOME="$work/setup-jdk" timeout 120 "$TEQ" interp bench/gate-projects/setup.scala -- "$work/sp" --projects airstream --teq "$TEQ") > "$1" 2>&1; }
+setup_run "$work/setup-1.log"
+code=$?
+rm -rf "$work/sp/airstream/node_modules"
+setup_run "$work/setup-2.log"
+code2=$?
+touch "$st/bench/airstream/fail-checkout"
+setup_run "$work/setup-3.log"
+code3=$?
+check "setup: a machine ready, its npm fixture deleted and installed again before it is ready again, a failed checkout leaving it not ready" "$work/setup-2.log" eval '[ $code = 0 ] && [ $code2 = 0 ] && [ $code3 = 1 ] &&
+  grep -q "setup: airstream-checkout: passed" "$work/setup-2.log" && grep -q "setup: airstream-export: passed" "$work/setup-2.log" &&
+  [ -d "$work/sp/airstream/node_modules/jsdom" ] && grep -q "FAIL setup: not ready: airstream" "$work/setup-3.log" && [ ! -e "$work/sp/ready" ] &&
+  grep -q -x "export GATE_AIRSTREAM_CHECKOUT=$work/sp/airstream" "$work/sp/gate-projects.env"'
+
 # The gate's driver over stand-in machines.
 agent=$work/agent
 mkdir -p "$agent/bin" "$agent/scala3/tests"
@@ -420,6 +700,8 @@ gate() {
   rm -rf "$agent/machines" "$agent/claims"
   printf '%s\n' "$pool" > "$agent/pool"
   for m in $(awk '{print $1}' "$agent/pool"); do mkdir -p "$agent/machines/$m"; echo "export SCALA3=$agent/scala3" > "$agent/machines/$m/env"; done
+  # a machine's own login assignments (a project's checkout), GATE_ENV_<machine>
+  for m in $(awk '{print $1}' "$agent/pool"); do v=GATE_ENV_$m; [ -z "${!v}" ] || echo "${!v}" >> "$agent/machines/$m/env"; done
   # the gate's own settings and the machine contract's variables of this machine's shell are not the stand-ins'
   (cd "$landing" && for v in $(compgen -e | grep -E '^(GATE_|LILA_|APP_|CHAIN_KNOWN$|SCALAC_KNOWN$|NODE$)' | grep -v '^GATE_AGENT_'); do unset "$v"; done &&
     env -u JOBS REMOTE_AGENT="$scripts" GATE_AGENT_ROOT="$agent" GATE_AGENT_TEQ="$TEQ" GATE_POLL_SECONDS=2 \
@@ -451,6 +733,131 @@ check "driver: a passing run records its suites' times" "$log" eval '[ $code = 0
   grep -q -x "fold $(row fold "m[12]" "$log" | awk "{print \$3}")" "$landing/tests/gate-times.txt" &&
   [ "$(echo "$times_before" | grep -v -E "^(parser|fold) ")" = "$(grep -v -E "^(parser|fold) " "$landing/tests/gate-times.txt")" ]'
 git -C "$landing" checkout -q tests/gate-times.txt
+# The projects' chains dealt over the machines holding them: two holding complementary projects each run their own,
+# neither taken by the shards; a project whose holder is busy and one no machine holds each fail as not run, saying
+# which; a holder busy at the first ask and free at a later one is left to its project; the eighteen project lines run
+# in every gate unnamed; --without leaves a line out, and a name it does not know is refused.
+gate "$work/driver-p1.log" "$(printf 'm1 free\nm2 free\nh1 free holds=lila,airstream,laminar\nh2 free holds=tyrian,indigo')" --only fold,lila-export,tyrian-export
+code=$?
+log=$work/driver-p1.log
+check "driver: complementary holders each run their projects' chains, the shards on the others" "$log" eval '[ $code = 1 ] &&
+  row lila-export h1 "$log" | grep -q "FAIL .*needs GATE_LILA_CHECKOUT" && row tyrian-export h2 "$log" | grep -q "FAIL .*needs GATE_TYRIAN_CHECKOUT" &&
+  row fold "m[12]" "$log" | grep -q " ok " && ! grep -q -E "^claim +h[12] " "$log" && grep -q "projects: h1 lila; h2 tyrian: by the recorded times" "$log"'
+gate "$work/driver-p2.log" "$(printf 'm1 free\nh1 busy holds=lila\nh2 free holds=tyrian')" --only fold,lila-export,tyrian-export,indigo-export
+code=$?
+log=$work/driver-p2.log
+check "driver: a project whose holder is busy, and one no machine holds, fail as not run, each saying which" "$log" eval '[ $code = 1 ] &&
+  row lila-export - "$log" | grep -q "FAIL .*not run: no free machine holds lila: the machines holding it were busy (h1(busy))" &&
+  row indigo-export - "$log" | grep -q "FAIL .*not run: no free machine holds indigo: no machine of the pool holds it" &&
+  row tyrian-export h2 "$log" | grep -q "FAIL .*needs GATE_TYRIAN_CHECKOUT" && row fold m1 "$log" | grep -q " ok "'
+# A holder busy at the projects' first ask and free at a later one stays theirs: the shards, which find no free machine
+# at their first ask and ask again once both are free, take the other.
+( sleep 3; printf '%s\n' "m1 free" "h1 free holds=lila" > "$agent/pool" ) &
+flip=$!
+gate "$work/driver-p8.log" "$(printf 'm1 busy\nh1 busy holds=lila')" --only parser,fold,lila-export
+code=$?
+wait $flip
+log=$work/driver-p8.log
+check "driver: a holder busy at the first ask and free at a later one is left to its project, the shards taking the other" "$log" eval '[ $code = 1 ] &&
+  row lila-export h1 "$log" | grep -q "FAIL .*needs GATE_LILA_CHECKOUT" && row parser m1 "$log" | grep -q " ok " && row fold m1 "$log" | grep -q " ok " &&
+  ! grep -q -E "^claim +h1 " "$log"'
+# The project lines run in every gate unnamed: every other line left out (--without, the names read from the gate's
+# own lists), the eighteen run on the machine holding the five projects; --without one of them leaves it out.
+others=$(python3 - "$landing/tests/gate.sh" <<'PY'
+import re, sys
+g = open(sys.argv[1]).read()
+names = re.findall(r'^\s*"(\S+) ', re.search(r"^machine=\(\n(.*?)^\)", g, re.M | re.S).group(1), re.M)
+for var in ("compare", "local_lines"):
+    names += re.search(rf'^{var}="([^"]*)"', g, re.M).group(1).split()
+print(",".join(names))
+PY
+)
+gate "$work/driver-p9.log" "h1 free holds=lila,airstream,laminar,tyrian,indigo" --without "$others"
+code=$?
+gate "$work/driver-p10.log" "h1 free holds=lila,airstream,laminar,tyrian,indigo" --without "$others,lila-run"
+code2=$?
+log=$work/driver-p9.log
+declared=$(sed -n 's/^project_lines="\(.*\)"$/\1/p' "$landing/tests/gate.sh" | tr ' ' '\n' | sort | tr '\n' ' ')
+check "driver: the eighteen project lines run in every gate unnamed, --without leaving one out" "$log" eval '[ $code = 1 ] && [ $code2 = 1 ] &&
+  [ "$(grep -E "^[0-9:]+ h1: " "$log" | sed "s/^[0-9:]* h1: //" | tr " " "\n" | sort | tr "\n" " ")" = "$declared" ] && [ "$(echo $declared | wc -w)" = 18 ] &&
+  [ "$(grep -c -E "^(lila|airstream|laminar|tyrian|indigo)-(export|compile|test|run) +h1 .* FAIL .*needs GATE_[A-Z]*_CHECKOUT" "$log")" = 18 ] &&
+  ! grep -q -E "^(airstream|laminar)-run " "$log" && ! grep -q "not a line of the gate.s" "$log" &&
+  [ "$(grep -c -E "^(lila|airstream|laminar|tyrian|indigo)-(export|compile|test|run) +h1 " "$work/driver-p10.log")" = 17 ] && ! grep -q "^lila-run " "$work/driver-p10.log"'
+gate "$work/driver-p3.log" "$(printf 'm1 free\nm2 free')" --only parser,fold --without fold
+code=$?
+log=$work/driver-p3.log
+gate "$work/driver-p3b.log" "$(printf 'm1 free')" --only fold --without nosuch
+code2=$?
+check "driver: --without leaves a line out after --only, and refuses a name it does not know" "$log" eval '[ $code = 0 ] && [ $code2 = 2 ] &&
+  row parser "m[12]" "$log" | grep -q " ok " && ! grep -q "^fold " "$log" && grep -q "^gate: no line named nosuch" "$work/driver-p3b.log"'
+# One holder or two, by the recorded times: chains that end after the shards on one machine are dealt over two,
+# chains that end within them stay on one, the other left to the shards.
+base=$(git -C "$landing" rev-parse HEAD)
+printf '%s\n' "lila-export 900" "tyrian-export 900" >> "$landing/tests/gate-times.txt"
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "chains past the shards on one machine"
+gate "$work/driver-p4.log" "$(printf 'm1 free\nh1 free holds=lila,tyrian\nh2 free holds=lila,tyrian')" --only fold,lila-export,tyrian-export
+code=$?
+log=$work/driver-p4.log
+git -C "$landing" reset -q --hard "$base"
+printf '%s\n' "lila-export 1" "tyrian-export 1" "fold 600" >> "$landing/tests/gate-times.txt"
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "chains within the shards on one machine"
+gate "$work/driver-p5.log" "$(printf 'm1 free\nh1 free holds=lila,tyrian\nh2 free holds=lila,tyrian')" --only fold,lila-export,tyrian-export
+code2=$?
+git -C "$landing" reset -q --hard "$base"
+check "driver: the projects over two holders when one would end them after the shards, over one when it would not" "$log" eval '[ $code = 1 ] && [ $code2 = 1 ] &&
+  [ "$(grep -E "^(lila|tyrian)-export " "$log" | awk "{print \$2}" | sort -u | tr "\n" " ")" = "h1 h2 " ] &&
+  [ "$(grep -E "^(lila|tyrian)-export " "$work/driver-p5.log" | awk "{print \$2}" | sort -u | tr "\n" " ")" = "h1 " ]'
+# --record: on a holder whose login environment names a TEQ_PLUGIN_VERSION, the lines run without it (their exports take
+# the head's sbt-teq); a chain whose compile passes within its record steps it, and the gate installs the step in the worktree
+# once every line passed (bench/reference/ratchet.scala install); a run whose compile shows an error the record lacks
+# fails and records nothing. lila's script is a stand-in in the landing whose compile holds a transcript of the
+# landing's to the record through bench/reference/records.scala, as the verbs do.
+base=$(git -C "$landing" rev-parse HEAD)
+cat > "$landing/bench/lila/lila.scala" <<'SCALA'
+//> using file ../../tools/script
+//> using file ../reference/records.scala
+// A stand-in of lila's script (tests/gate-scripts.sh): its compile holds bench/lila/stand-in.txt, its diagnostics'
+// records stand-in.txt.diagnostics, to errors.txt.
+import java.nio.file.{Files, Paths}
+@main def lila(argv: String*): Unit = Script.run {
+  val args = new Args(argv, "stand-in")
+  val mode = Mode.of(args)
+  args.teq("")
+  val Vector(verb, checkout, out) = args.exactly(3)
+  if verb == "compile" then
+    val here = Paths.get("bench/lila")
+    val text = Files.readString(here.resolve("stand-in.txt"))
+    val roots = Roots.of(Paths.get(checkout), Paths.get(checkout), Paths.get(out))
+    val records = Transcript.recorded(here.resolve("stand-in.txt.diagnostics"))
+    Script.exit(if Lines.hold("lila", "compile", here, Shape.Compile, Vector("compile" -> Transcript.compile(text, records, roots)), roots(text), mode, "teq stand-in") then 0 else 1)
+  println(s"lila: $verb, a stand-in, TEQ_PLUGIN_VERSION ${Option(System.getenv("TEQ_PLUGIN_VERSION")).getOrElse("unset")}")
+}
+SCALA
+{ diag b; diag c; echo "lila/test: 2 errors"; echo "# exit 1"; } | sed "s|$rec/co/||" > "$landing/bench/lila/stand-in.txt"
+python3 tests/support/teq_channels.py --records "$landing/bench/lila/stand-in.txt.diagnostics" < "$landing/bench/lila/stand-in.txt" > /dev/null 2>&1
+(cd "$landing" && rm -f bench/lila/errors.txt bench/lila/errors.evidence.gz && timeout 120 "$TEQ" interp bench/lila/lila.scala -- compile "$work" "$work/lila-out" --baseline) > "$work/stand-in-baseline.log" 2>&1
+{ diag b; echo "lila/test: 1 error"; echo "# exit 1"; } > "$landing/bench/lila/stand-in.txt"
+python3 tests/support/teq_channels.py --records "$landing/bench/lila/stand-in.txt.diagnostics" < "$landing/bench/lila/stand-in.txt" > /dev/null 2>&1
+git -C "$landing" add -A && git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "a stand-in of lila's script, its baseline of two errors and a run of one"
+GATE_ENV_h1="export GATE_LILA_CHECKOUT=$work TEQ_PLUGIN_VERSION=1.0.0-gate-SNAPSHOT" gate "$work/driver-p6.log" "$(printf 'm1 free\nh1 free holds=lila')" --only fold,lila-export,lila-compile --record
+code=$?
+log=$work/driver-p6.log
+recorded_errors=$(grep -c "^error " "$landing/bench/lila/errors.txt")
+recorded_kind=$(sed -n "s/^kind //p" "$landing/bench/lila/errors.txt")
+git -C "$landing" checkout -q bench/lila tests/gate-times.txt
+{ diag b; diag a3; echo "lila/test: 2 errors"; echo "# exit 1"; } | sed "s|$rec/co/||" > "$landing/bench/lila/stand-in.txt"
+python3 tests/support/teq_channels.py --records "$landing/bench/lila/stand-in.txt.diagnostics" < "$landing/bench/lila/stand-in.txt" > /dev/null 2>&1
+git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "a run of a new error"
+GATE_ENV_h1="export GATE_LILA_CHECKOUT=$work" gate "$work/driver-p7.log" "$(printf 'm1 free\nh1 free holds=lila')" --only fold,lila-export,lila-compile --record
+code2=$?
+errors_after=$(git -C "$landing" status --porcelain bench/lila)
+git -C "$landing" reset -q --hard "$base"
+check "driver: --record installs a passing chain's record step in the worktree, a failing run's records nothing" "$log" eval '[ $code = 0 ] && [ $code2 = 1 ] &&
+  row lila-compile h1 "$log" | grep -q " ok .*lila: compile: the record stepped to 1 error in bench/lila/errors.txt" &&
+  row lila-export h1 "$log" | grep -q " ok .*lila: export, a stand-in, TEQ_PLUGIN_VERSION unset" &&
+  grep -q "^gate: recorded bench/lila/errors.txt: records: bench/lila/errors.txt: 1 error installed (record)" "$log" &&
+  [ "$recorded_errors" = 1 ] && [ "$recorded_kind" = record ] &&
+  row lila-compile h1 "$work/driver-p7.log" | grep -q " FAIL " && grep -q "^gate: no times recorded, and no records" "$work/driver-p7.log" && [ -z "$errors_after" ]'
 # The comparison: three machines prepared beside the suites; with the recorded times the lines measure on one of
 # them, after the shards' suites; with times that one machine would end past thirty minutes, on as many as fit.
 gate "$work/driver-4.log" "$(printf 'm1 free\nm2 free\nm3 free\nm4 free\nm5 free')" --only parser,fold,budget,runtime,sentinel --master-rev HEAD

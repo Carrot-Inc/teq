@@ -1,5 +1,6 @@
 //> using file ../../tools/script
 //> using file ../reference/reference.scala
+//> using file ../reference/records.scala
 // lila, lichess's server (github.com/lichess-org/lila), as teq's public reference project: the pinned
 // revision checked out, built and tested under scalac 3.8.4 by its own sbt build (the oracle), exported with
 // sbt-teq through the overlay, then compiled and tested by teq against the oracle's results. Run from the
@@ -15,19 +16,28 @@
 //           fresh sbt disk cache under <out> each run (--runs n, default 1), each run's wall time, peak memory
 //           and its suites and cases (sbt's JUnit reports) against tests.json; --record rewrites tests.json
 // export    `sbt teqExportAll` with the overlay (overlay/plugins.sbt by sbt's -addPluginSbtFile, sbt-teq at
-//           TEQ_PLUGIN_VERSION, by default integrations/sbt/plugin-version.txt's; overlay/LilaTeq.scala declares the
+//           TEQ_PLUGIN_VERSION, by default the head's integrations/sbt published under a SNAPSHOT of its sources'
+//           digest into a repository beside <out> (`SbtPlugin`); overlay/LilaTeq.scala declares the
 //           generators teq runs in the place of sbt's: the routers and the translations), the lock copied to <out>;
 //           a lock recording a generator only sbt runs fails
 // compile   `teq compile` of every project over the export (--teq <binary>, by default ./target/release/teq), the
 //           daemon stopped and teq's class files removed before each run (--runs n), the generators' outputs kept:
-//           each run's wall time and the peak memory of teq's processes (sampled), then the generated inputs'
-//           digests against generated.json's (--record rewrites them)
-// test      `teq test` of every project: its suites and cases counted against tests.json, failing on fewer or on a
-//           failed case (--runs n)
+//           each run's wall time and the peak memory of teq's processes (sampled), each run held to errors.txt
+//           (bench/reference/records.scala: every configuration compiled once, the run complete, its errors within
+//           the record's, a new one failing, one gone listed; --record writes a passing run's improvement,
+//           --baseline the first record, --migrate <reason> one over new inputs), then the generated inputs' digests
+//           against generated.json's (--baseline and --migrate rewrite them from a run that is evidence)
+// test      `teq test --events` of every project: its suites and cases, as its events report each with its framework's
+//           status, against tests.json, the oracle's, each run's departures
+//           held to deviations.json (bench/reference/records.scala: every project of the oracle's run or blocked by
+//           its own build's failure, a case that departs, or is blocked, an item; --record writes a passing run's
+//           improvement, --baseline the first record, --migrate <reason> one over a new pin or inventory) (--runs n)
 // run       MongoDB and Redis (LILA_MONGOD and LILA_REDIS, else mongod and redis-server on the PATH) on lila's ports,
 //           `teq run lila` over the export, the home page within LILA_READY_SECONDS (default 600): its content
-//           (lila's title and an asset of the manifest) and that asset served; the start-up time to the home page
-//           (--runs n). lila's assets are built by its ui/build (public/compiled/manifest.json): a checkout without
+//           (lila's title and an asset of the manifest) and that asset served, each a named assertion held to
+//           run.json (bench/reference/records.scala: an assertion not held a violation by its name, a run whose build
+//           failed blocking every one; --record, --baseline, --migrate as compile's); the start-up time to the home
+//           page (--runs n). lila's assets are built by its ui/build (public/compiled/manifest.json): a checkout without
 //           them fails
 // measure   compile, test and run in turn (--runs n each), then the lines' admission: the three verbs' median
 //           wall times summed against the 120 s the gate may add, and the session's peak against 12 GB. The lines
@@ -50,10 +60,11 @@ import java.nio.file.{Files, Path, Paths}
 import java.security.MessageDigest
 
 @main def lila(argv: String*): Unit = Script.run {
-  val args = new Args(argv, "bench/lila/lila.scala <checkout|oracle|export|compile|test|run|measure> <checkout> <out> [--runs n] [--record] [--teq <binary>]")
+  val args = new Args(argv, "bench/lila/lila.scala <checkout|oracle|export|compile|test|run|measure> <checkout> <out> [--runs n] [--record | --baseline | --migrate <reason>] [--teq <binary>]")
   val teq = args.teq("./target/release/teq")
   val runs = args.option("runs").map(_.toInt).getOrElse(1)
-  val record = args.flag("record")
+  val mode = Mode.of(args)
+  val record = mode == Mode.Record
   val positionals = args.exactly(3)
   val (verb, checkoutArg, outArg) = (positionals(0), positionals(1), positionals(2))
   val here = Paths.get("bench/lila")
@@ -67,6 +78,7 @@ import java.security.MessageDigest
   verb match
     case "checkout" => Lila.checkout(pin, checkout)
     case "oracle" =>
+      if mode != Mode.Judge && mode != Mode.Record then args.fail("the oracle records its inventory with --record alone")
       Lila.atPin(pin, checkout)
       Lila.oracle(pin, here, checkout, out, runs, record)
     case "export" =>
@@ -74,13 +86,13 @@ import java.security.MessageDigest
       Lila.exportLock(pin, here, checkout, out)
     case "compile" =>
       Lila.atPin(pin, checkout)
-      Script.exit(if Lila.compile(pin, here, checkout, out, teq, runs, record).failed then 1 else 0)
+      Script.exit(if Lila.compile(pin, here, checkout, out, teq, runs, mode).failed then 1 else 0)
     case "test" =>
       Lila.atPin(pin, checkout)
-      Script.exit(if Lila.test(pin, here, checkout, out, teq, runs).failed then 1 else 0)
+      Script.exit(if Lila.test(pin, here, checkout, out, teq, runs, mode).failed then 1 else 0)
     case "run" =>
       Lila.atPin(pin, checkout)
-      Script.exit(if Lila.serve(pin, checkout, out, teq, runs).failed then 1 else 0)
+      Script.exit(if Lila.serve(pin, here, checkout, out, teq, runs, mode).failed then 1 else 0)
     case "measure" =>
       Lila.atPin(pin, checkout)
       Script.exit(if Lila.measure(pin, here, checkout, out, teq, runs) then 0 else 1)
@@ -197,15 +209,16 @@ object Lila:
     Script.exit(if failed then 1 else 0)
 
   def exportLock(pin: Pin, here: Path, dir: Path, out: Path): Unit =
-    val version = Option(System.getenv("TEQ_PLUGIN_VERSION")).filter(_.nonEmpty).getOrElse(Files.readString(Paths.get("integrations/sbt/plugin-version.txt")).trim)
+    val (version, repository) = SbtPlugin.forExport(out, javaHome(pin))
     val overlay = here.resolve("overlay").toAbsolutePath.normalize
     val log = out.resolve("export.log")
     Log.stamped(s"lila: teqExportAll with sbt-teq $version and the overlay, sbt's log $log")
     val (r, wall, peak) = sbt(pin, dir, log,
-      Seq(s"-Dteq.lila.overlay=$overlay", s"-Dteq.lila.scripts=${here.toAbsolutePath.normalize}", s"-Dteq.plugin.version=$version", s"-addPluginSbtFile=${overlay.resolve("plugins.sbt")}"), Seq("teqExportAll"))
+      Seq(s"-Dteq.lila.overlay=$overlay", s"-Dteq.lila.scripts=${here.toAbsolutePath.normalize}", s"-Dteq.plugin.version=$version") ++
+        repository.map(r => s"-Dteq.plugin.repository=$r") :+ s"-addPluginSbtFile=${overlay.resolve("plugins.sbt")}", Seq("teqExportAll"))
     if r.status != 0 then
       println(Files.readString(log).linesIterator.toVector.takeRight(20).mkString("\n"))
-      Log.die(s"lila: the export exits ${r.status}")
+      Log.die(s"lila: the export exits ${r.status}: ${SbtPlugin.missing(log).getOrElse(Log.cause(log))} (sbt's log $log)")
     val lock = dir.resolve("target/teq/teq.lock")
     Files.copy(lock, out.resolve("teq.lock"), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
     println(f"lila: exported ${Files.size(lock)} bytes in $wall%.1f s (peak ${Reference.gigabytes(peak)}), copied to ${out.resolve("teq.lock")}")
@@ -281,47 +294,67 @@ object Lila:
       o -> Pin.sha256(listing.getBytes(java.nio.charset.StandardCharsets.UTF_8))
     }.toMap
 
-  def compile(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int, record: Boolean): Measured =
-    exported(dir)
+  def compile(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int, mode: Mode): Measured =
+    val lock = exported(dir)
     val bin = binary(teq)
     describe(bin)
+    val version = Sh(bin, "--version").timeout(30).check(false).run().out.trim
+    val roots = Roots.of(dir, dir, out)
     var failed = false
     val (walls, peaks) = (Vector.newBuilder[Double], Vector.newBuilder[Option[Long]])
+    val seen = Vector.newBuilder[(Observation, String, Map[String, String])]
     val generatorsBefore = generatorState(dir)
     for i <- 1 to runs do
       Sh(bin, "stop").in(dir).timeout(120).check(false).run()
       coldOutputs(dir)
       val log = out.resolve(s"compile-$i.log")
+      // The builds' diagnostics as teq records them (`--diagnostics`), each its whole message, never read from the text.
+      val diagnostics = out.resolve(s"compile-$i.diagnostics")
+      Files.deleteIfExists(diagnostics)
       Log.stamped(s"lila: teq compile, run $i of $runs, its output $log")
       val started = System.nanoTime()
-      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh(bin, "compile").in(dir).withEnv(mark).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh(bin, "compile", "--diagnostics", diagnostics.toString).in(dir).withEnv(mark).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
-      val errors = Files.readString(log).linesIterator.count(_.contains(" error: "))
+      Files.writeString(log, Transcript.mark(r.status), java.nio.file.StandardOpenOption.APPEND)
+      val text = Files.readString(log)
+      // Every compile configuration the export holds sources for covered by the run (`Locks.hold`).
+      val observed = Locks.hold(Transcript.compile(text, Transcript.recorded(diagnostics), roots), lock)
       val (shown, unmeasured) = measuredLine(s"compile run $i", peak, wall)
-      println(f"lila: compile run $i: exit ${r.status}, $wall%.1f s, $shown, $errors errors")
+      println(f"lila: compile run $i: exit ${r.status}, $wall%.1f s, $shown, ${observed.debt.size} errors")
       walls += wall
       peaks += peak
-      if r.status != 0 || unmeasured then failed = true
+      // The generated inputs' digests as this run left them: each run's held apart, so that no later run hides an
+      // earlier one's bytes.
+      seen += ((observed, roots(text), generatedDigests(dir)))
+      if unmeasured then failed = true
     tellGenerators(generatorsBefore, generatorState(dir))
     Sh(bin, "stop").in(dir).timeout(120).check(false).run()
-    val digests = generatedDigests(dir)
-    if record then
-      Files.writeString(here.resolve("generated.json"), Json.write(Json.Obj(digests.toVector.sortBy(_._1).map((k, v) => k -> Json.str(v))), indent = 1) + "\n")
-      println(s"lila: recorded the digests of ${digests.size} generators' outputs in bench/lila/generated.json")
-    else
-      val recorded = Json.parse(Files.readString(here.resolve("generated.json"))).members.map((k, v) => k -> v.str).toMap
-      for (k, v) <- digests.toVector.sortBy(_._1) if !recorded.get(k).contains(v) do
-        println(s"FAIL lila: the generated $k differs from generated.json's")
-        failed = true
+    val runsSeen = seen.result()
+    // A baseline or a migration publishes the generated inputs' digests its first run left with its record, one
+    // recording, every run held to them; a run held to the record holds them to generated.json's. A generated input
+    // a run left with other bytes is an item of that run's debt with the digest it has (other bytes another item, so
+    // that a change of the generated bytes takes a migration).
+    val recording = mode match
+      case Mode.Baseline | Mode.Migrate(_) => true
+      case _ => false
+    val expected = if recording then runsSeen.head._3 else Json.parse(Files.readString(here.resolve("generated.json"))).members.map((k, v) => k -> v.str).toMap
+    val staged = if recording then Vector("generated.json" -> (Json.write(Json.Obj(expected.toVector.sortBy(_._1).map((k, v) => k -> Json.str(v))), indent = 1) + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8)) else Vector.empty
+    def generatedDebt(digests: Map[String, String]) = (digests.keySet ++ expected.keySet).toVector.sorted.filter(k => digests.get(k) != expected.get(k))
+      .map(k => s"generated $k: ${digests.getOrElse(k, "absent")}, generated.json has ${expected.getOrElse(k, "none")}")
+    val judged = runsSeen.zipWithIndex.map { case ((observed, _, digests), i) => s"compile run ${i + 1}" -> Transcript.withDebt(observed, generatedDebt(digests)) }
+    if !Lines.hold("lila", "compile", here, Shape.Compile, judged, runsSeen.head._2, mode, version, checked = !failed, staged) then failed = true
     val m = Measured(walls.result(), peaks.result(), failed)
     sessionPeak("compile", m)
     m
 
 
-  def test(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int): Measured =
-    exported(dir)
+  def test(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int, mode: Mode): Measured =
+    val lock = exported(dir)
     val bin = binary(teq)
     describe(bin)
+    val version = Sh(bin, "--version").timeout(30).check(false).run().out.trim
+    val roots = Roots.of(dir, dir, out)
+    val held = Vector.newBuilder[(String, Observation, String)]
     val (walls, peaks) = (Vector.newBuilder[Double], Vector.newBuilder[Option[Long]])
     val generatorsBefore = generatorState(dir)
     // The oracle's inventory, which the run is held to: without one nothing would be checked.
@@ -332,28 +365,49 @@ object Lila:
     var failed = false
     for i <- 1 to runs do
       val log = out.resolve(s"test-$i.log")
+      val errLog = out.resolve(s"test-$i.err")
       // The daemon the run uses is the one it starts, which carries the run's token (`Reference.sampled`).
       Sh(bin, "stop").in(dir).timeout(120).check(false).run()
-      Log.stamped(s"lila: teq test, run $i of $runs, its output $log")
+      Log.stamped(s"lila: teq test, run $i of $runs, its output $log, teq's stderr $errLog")
       val started = System.nanoTime()
-      // Verbose, the runner names every test with its outcome: the transcript is the run's inventory.
-      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh(bin, "test", "--verbose").in(dir).withEnv(mark).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      // The run's events (`--events`), each status as the framework reported it (an error apart from a failure, which
+      // the transcript's `[fail]` does not tell apart), are its inventory; verbose, the transcript names every test with
+      // its outcome, and holds each project's summary and each build that failed. Its two channels are collected apart,
+      // teq's own lines (a build's diagnostics and count, the summaries) on stderr, the run's stream on stdout; the
+      // outcomes are the events' (`Transcript`).
+      val events = out.resolve(s"test-$i-events.txt")
+      val diagnostics = out.resolve(s"test-$i.diagnostics")
+      Files.deleteIfExists(events)
+      Files.deleteIfExists(diagnostics)
+      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh(bin, "test", "--verbose", "--events", events.toString, "--diagnostics", diagnostics.toString).in(dir).withEnv(mark).stdout(log).stderr(errLog).timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
+      Files.writeString(log, Transcript.mark(r.status), java.nio.file.StandardOpenOption.APPEND)
       val transcript = Files.readString(log)
-      val counts = transcript.linesIterator.flatMap(l => Tests.summaryLine.findFirstMatchIn(l)).map(m => (m.group(2).toInt, m.group(3).toInt, m.group(4).toInt)).toVector
+      val errText = if Files.isRegularFile(errLog) then Files.readString(errLog) else ""
+      // The summaries as the records' scan reads them, past the builds' diagnostics (`Transcript.scan`).
+      val counts = Transcript.scan(errText, Transcript.recorded(diagnostics).fold(Vector.empty)(Transcript.shown), roots, test = true).summaries
+        .map((_, c) => (c.getOrElse("suites", 0), c.getOrElse("passed", 0), c.getOrElse("failed", 0)))
       val (suites, passed, failedCases) = (counts.map(_._1).sum, counts.map(_._2).sum, counts.map(_._3).sum)
       val (shown, unmeasured) = measuredLine(s"test run $i", peak, wall)
       println(f"lila: test run $i: exit ${r.status}, $wall%.1f s, $shown, $suites suites, $passed passed, $failedCases failed (tests.json: ${expected.suites.size} suites, ${expected.cases} cases)")
       walls += wall
       peaks += peak
       if unmeasured then failed = true
-      val differences = Tests.compare(expected, Tests.fromTranscript(transcript, expected))
-      if r.status != 0 || differences.nonEmpty then
-        println(s"FAIL lila: test run $i: the run is not tests.json's: exit ${r.status}, ${differences.size} differences")
+      // The run held to deviations.json by the records' one judgment of a test run (`Deviations.judge`, the same for
+      // every driver): the invocation's channels and events, the oracle's projects and cases.
+      val eventText = Option.when(Files.isRegularFile(events))(Files.readString(events))
+      val found = eventText.fold(Tests(Map.empty))(Tests.fromEvents)
+      val differences = Tests.compare(expected, found)
+      if differences.nonEmpty then
+        println(s"lila: test run $i: ${differences.size} differences from tests.json")
         differences.take(40).foreach(d => println(s"  $d"))
-        failed = true
+      val evidence = TestEvidence(Vector(Invocation("teq test", r.status, transcript, errText, Transcript.recorded(diagnostics), eventText)), expected.heldSuites.map(_._1).distinct,
+        expected.items, expected.heldSuites, owed = Locks.testUnits(lock), types = Locks.typesTests(lock))
+      held += ((s"test run $i", Deviations.judge(evidence, roots), roots(Invocation.shown(transcript, errText))))
     Sh(bin, "stop").in(dir).timeout(120).check(false).run()
     tellGenerators(generatorsBefore, generatorState(dir))
+    val seen = held.result()
+    if !Lines.hold("lila", "test", here, Shape.Tests, seen.map((n, o, _) => n -> o), seen.head._3, mode, version, checked = !failed) then failed = true
     val m = Measured(walls.result(), peaks.result(), failed)
     sessionPeak("test", m)
     m
@@ -382,10 +436,13 @@ object Lila:
     val r = Sh("curl", "-s", "-o", body.toString, "-w", "%{http_code}", "--max-time", "60", url).timeout(90).check(false).run()
     r.out.trim.toIntOption.getOrElse(0)
 
-  def serve(pin: Pin, dir: Path, out: Path, teq: String, runs: Int): Measured =
+  def serve(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int, mode: Mode): Measured =
     exported(dir)
     val bin = binary(teq)
     describe(bin)
+    val version = Sh(bin, "--version").timeout(30).check(false).run().out.trim
+    val roots = Roots.of(dir, dir, out)
+    val held = Vector.newBuilder[(String, Observation, String)]
     val manifest = dir.resolve("public/compiled/manifest.json")
     if !Files.isRegularFile(manifest) || !Files.readString(manifest).contains("\"js\"") then
       Log.die(s"no built assets at $manifest: build lila's ui (ui/build) in the checkout first")
@@ -406,24 +463,35 @@ object Lila:
       val log = out.resolve(s"run-$i.log")
       Log.stamped(s"lila: teq run lila, run $i of $runs, its output $log")
       Sh(bin, "stop").in(dir).timeout(120).check(false).run()
-      val ((ok, ready), peak) = Reference.sampled(out, teqSeconds + 600)(mark => serveOnce(bin, dir, out, log, mark))
+      val ((observed, ready), peak) = Reference.sampled(out, teqSeconds + 600)(mark => serveOnce(bin, dir, out, log, mark, roots))
       val (shown, unmeasured) = measuredLine(s"run $i", peak, ready)
-      println(f"lila: run $i: ${if ok then "served" else "failed"}, the home page in $ready%.1f s, $shown")
+      println(f"lila: run $i: ${if observed.debt.isEmpty then "served" else s"${observed.debt.size} assertions not held"}, the home page in $ready%.1f s, $shown")
       walls += ready
       peaks += peak
-      if !ok || unmeasured then failed = true
+      if unmeasured then failed = true
+      held += ((s"run $i", observed, roots(Files.readString(log))))
     cache.kill()
     mongo.kill()
     tellGenerators(generatorsBefore, generatorState(dir))
+    val seen = held.result()
+    if !Lines.hold("lila", "run", here, Shape.Run, seen.map((n, o, _) => n -> o), seen.head._3, mode, version, checked = !failed) then failed = true
     val m = Measured(walls.result(), peaks.result(), failed)
     sessionPeak("run", m)
     m
 
-  // One `teq run lila`: the home page within LILA_READY_SECONDS, lila's title on it and its first asset served;
-  // whether all held and the start-up time to the home page. The server and teq's daemon stopped after.
-  private def serveOnce(bin: String, dir: Path, out: Path, log: Path, mark: (String, String)): (Boolean, Double) =
+  // The run's named assertions (run.json, bench/reference/records.scala), in the order a run checks them.
+  val assertions = Vector("the home page within LILA_READY_SECONDS", "lila's title on the home page", "an asset named on the home page", "the asset served")
+
+  // One `teq run lila`: the home page within LILA_READY_SECONDS, lila's title on it and its first asset served, each a
+  // named assertion (`assert <name>: ok`, `FAIL <reason>`, `not reached`, printed); a run whose build failed in its own
+  // errors blocked, every assertion a violation. The run's observation and its start-up time to the home page; the
+  // server and teq's daemon stopped after (tests/support/lila_serve_verb.scala runs it over a serving program).
+  def serveOnce(bin: String, dir: Path, out: Path, log: Path, mark: (String, String), roots: Roots): (Observation, Double) =
     val started = System.nanoTime()
-    val server = Sh(bin, "run", "lila").in(dir).withEnv(mark).stdout(log).mergeErr.timeout(readySeconds + 600).spawn()
+    // The build's diagnostics as teq records them (`--diagnostics`), never read from the run's text.
+    val diagnostics = out.resolve(log.getFileName.toString.stripSuffix(".log") + ".diagnostics")
+    Files.deleteIfExists(diagnostics)
+    val server = Sh(bin, "run", "lila", "--diagnostics", diagnostics.toString).in(dir).withEnv(mark).stdout(log).mergeErr.timeout(readySeconds + 600).spawn()
     val home = out.resolve("home.html")
     Files.deleteIfExists(home)
     var status = 0
@@ -432,36 +500,53 @@ object Lila:
       // lila redirects a host other than its domain (net.domain, localhost:9663).
       status = if listening(9663) then fetch("http://localhost:9663/", home) else 0
     val ready = (System.nanoTime() - started) / 1e9
-    var failed = status != 200
-    if failed && !server.alive then println(s"FAIL lila: teq run ended before the home page answered (its output $log)")
-    else if failed then println(s"FAIL lila: the home page answered $status within ${readySeconds.toInt} s")
+    val outcomes = Vector.newBuilder[String]
+    def failing(reason: String): Unit =
+      val n = outcomes.result().size
+      outcomes += s"FAIL $reason"
+      for _ <- n + 1 until assertions.size do outcomes += "not reached"
+    // How `teq run` ended, where it did before the home page answered: 1 is a build failing on its errors.
+    val ended = Option.when(status != 200 && !server.alive)(server.await().status)
+    if status != 200 && !server.alive then failing(s"teq run ended before the home page answered (its output $log)")
+    else if status != 200 then failing(s"the home page answered $status within ${readySeconds.toInt} s")
     else
+      outcomes += "ok"
       val page = Files.readString(home)
-      val asset = "(?:href|src)=\"(?:http://localhost:9663)?(/assets/[^\"]+)\"".r.findFirstMatchIn(page).map(_.group(1))
-      if !page.contains("<title>") || !page.toLowerCase.contains("lichess") then
-        println("FAIL lila: the home page lacks lila's title")
-        failed = true
-      asset match
-        case None =>
-          println("FAIL lila: the home page names no asset")
-          failed = true
+      outcomes += (if page.contains("<title>") && page.toLowerCase.contains("lichess") then "ok" else "FAIL the home page lacks lila's title")
+      // The asset's path one token of the page's, so that the outcome naming it stays one line of the run's.
+      "(?:href|src)=\"(?:http://localhost:9663)?(/assets/[^\"\\s\u0085\u2028\u2029]+)\"".r.findFirstMatchIn(page).map(_.group(1)) match
+        case None => failing("the home page names no asset")
         case Some(a) =>
+          outcomes += "ok"
           val got = fetch(s"http://localhost:9663$a", out.resolve("asset.bin"))
           val size = if Files.isRegularFile(out.resolve("asset.bin")) then Files.size(out.resolve("asset.bin")) else 0L
-          if got != 200 || size == 0 then
-            println(s"FAIL lila: the asset $a answered $got with $size bytes")
-            failed = true
-          else println(f"lila: the home page in $ready%.1f s, with lila's title and the asset $a ($size bytes)")
+          outcomes += (if got != 200 || size == 0 then s"FAIL the asset $a answered $got with $size bytes" else "ok")
+          if got == 200 && size > 0 then println(f"lila: the home page in $ready%.1f s, with lila's title and the asset $a ($size bytes)")
     Sh(bin, "stop").in(dir).timeout(120).check(false).run()
     server.kill()
-    (!failed, ready)
+    val shown = assertions.zip(outcomes.result()).map((a, o) => s"assert $a: $o")
+    shown.foreach(println)
+    (observeRun(status, ended, Files.readString(log), Transcript.recorded(diagnostics), shown, roots), ready)
+
+  // A run's observation (`serveOnce`'s): the home page's status, how `teq run` ended where it did before the page
+  // answered (None when it still ran at LILA_READY_SECONDS), its output and the assertions as the run checked them. A
+  // run is blocked by its build only where `teq run` ended by exit 1 on that build's own errors, every assertion
+  // unexecuted; a run still running at the deadline never became ready and fails the readiness assertion, whatever it
+  // printed; another end of a run whose build printed errors (a signal, a crash) is no block a record holds. The
+  // build's errors, counts and crashes come from its records and the transcript teq alone wrote: a run whose program
+  // started (`Transcript.ran`) has its server's output in the transcript, which is never read for them.
+  def observeRun(status: Int, ended: Option[Int], text: String, records: Option[String], shown: Vector[String], roots: Roots): Observation =
+    val (errors, buildProblems) = RunEvidence.errors(text, records, roots)
+    // The build failed where `teq run` ended before the home page answered with its build's own errors printed.
+    val failedBuild = ended.filter(_ => status != 200 && errors.nonEmpty).map(e => (e, errors))
+    Assertions.judge(RunEvidence(assertions, "teq run lila", failedBuild, shown.mkString("\n"), Transcript.crashes(text, records, roots) ++ buildProblems))
 
   // The three verbs in turn and the lines' admission: the median wall times summed against the 120 s the gate may
   // add, the session's peak against 12 GB. Whether every run passed, was measured and fits.
   def measure(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int): Boolean =
-    val c = compile(pin, here, dir, out, teq, runs, record = false)
-    val t = test(pin, here, dir, out, teq, runs)
-    val r = serve(pin, dir, out, teq, runs)
+    val c = compile(pin, here, dir, out, teq, runs, Mode.Judge)
+    val t = test(pin, here, dir, out, teq, runs, Mode.Judge)
+    val r = serve(pin, here, dir, out, teq, runs, Mode.Judge)
     val added = c.median + t.median + r.median
     val peak = Seq(c.peak, t.peak, r.peak)
     val session = if peak.exists(_.isEmpty) then None else peak.flatten.maxOption

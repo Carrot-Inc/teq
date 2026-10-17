@@ -258,6 +258,10 @@ struct Request {
     /// Whether the client writes to a terminal.
     tty: bool,
     cwd: PathBuf,
+    /// `--diagnostics <file>`, any verb's: each diagnostic a build of the request shows, each failure
+    /// of a configuration's (`teq: <key>: <why>`, a generator's with its command's output) and what
+    /// each passing generator printed recorded there, a JSON line each (`record`).
+    diagnostics: Option<PathBuf>,
 }
 
 fn serve(state: &Arc<State>, stream: TcpStream) {
@@ -288,13 +292,34 @@ fn serve(state: &Arc<State>, stream: TcpStream) {
         Some(Json::Obj(fields)) => fields.iter().filter_map(|(k, v)| Some((k.clone(), v.str()?.to_string()))).collect(),
         _ => BTreeMap::new(),
     };
+    let cwd = PathBuf::from(json.get("cwd").and_then(Json::str).unwrap_or("/"));
+    // `--diagnostics <file>` taken out of any verb's arguments, the file made afresh.
+    let (mut args, mut diagnostics) = (Vec::new(), None);
+    let mut given = strings("args").into_iter();
+    while let Some(a) = given.next() {
+        if a != "--diagnostics" {
+            args.push(a);
+            continue;
+        }
+        let Some(file) = given.next() else {
+            reply.err("teq: --diagnostics needs a file\n");
+            return reply.exit(2);
+        };
+        let file = cwd.join(file);
+        if let Err(e) = std::fs::write(&file, "") {
+            reply.err(&format!("teq: cannot write {}: {}\n", file.display(), e));
+            return reply.exit(2);
+        }
+        diagnostics = Some(file);
+    }
     let request = Request {
         verb: json.get("verb").and_then(Json::str).unwrap_or("").to_string(),
-        args: strings("args"),
+        args,
         env: variables("env"),
         environment: variables("environment"),
         tty: json.get("tty").and_then(Json::bool) == Some(true),
-        cwd: PathBuf::from(json.get("cwd").and_then(Json::str).unwrap_or("/")),
+        cwd,
+        diagnostics,
     };
     log(&format!("{} {}", request.verb, request.args.join(" ")));
     match request.verb.as_str() {
@@ -563,7 +588,7 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
     let mut code = 0;
     for (key, answer, notes) in results {
         for note in notes {
-            reply.err(&format!("{}\n", note));
+            noted(request, &key, &note, reply);
         }
         match answer {
             Ok(a) => {
@@ -571,10 +596,10 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
                     reply.err(&format!("teq: {}: {}\n", key, n));
                 }
                 for w in &a.warnings {
-                    reply.err(&render(w, "warning", &export.root, &request.cwd));
+                    shown(request, &key, w, "warning", &export.root, reply);
                 }
                 for e in &a.errors {
-                    reply.err(&render(e, "error", &export.root, &request.cwd));
+                    shown(request, &key, e, "error", &export.root, reply);
                 }
                 let line = if a.ok {
                     let first = if a.fallback.as_deref() == Some("first build") { ", the first build" } else { "" };
@@ -592,7 +617,7 @@ fn compile(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &
                 }
             }
             Err(e) => {
-                reply.err(&format!("teq: {}: {}\n", key, e));
+                failed(request, &key, e, reply);
                 code = 1;
             }
         }
@@ -687,7 +712,7 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
     let patterns = Patterns::new(&words[usize::from(named.is_some())..]);
     let asked = TestRequest { keys, patterns, changed, list, verbose, events };
     if asked.keys.is_empty() && left_out.is_empty() {
-        reply.out("teq: no project with test frameworks\n");
+        reply.err("teq: no project with test frameworks\n");
         return 0;
     }
     // A run over several configurations (every project's, lila's 86) holds one resident and one
@@ -713,7 +738,7 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
             }
         }
     }
-    reply.out(&super::left_out(export, "test", &left_out));
+    reply.err(&super::left_out(export, "test", &left_out));
     super::with_left_out(code, &left_out)
 }
 
@@ -744,7 +769,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     // Held through the run, so that no other build rewrites the class files the run reads.
     let slot = slot(state, &owner);
     let mut resident = slot.lock().unwrap_or_else(|e| e.into_inner());
-    if !built(state, export, request, &owner, &mut resident, reply) {
+    if !built(state, export, request, &owner, &mut resident, reply, Summary::Err) {
         return 1;
     }
     let built_ms = started.elapsed().as_millis();
@@ -756,7 +781,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     let conf = export.configuration(key).expect("a test configuration");
     let context = conf.test.clone().unwrap_or_default();
     if context.frameworks.is_empty() {
-        reply.out(&format!("{}: no test framework\n", key));
+        reply.err(&format!("{}: no test framework\n", key));
         return 0;
     }
     let candidates = view.candidates(&conf.sources);
@@ -764,7 +789,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     // so (lila's 86 test configurations, most without a test).
     if candidates.is_empty() {
         if !asked.list {
-            reply.out(&format!("{}: no suite to run\n", key));
+            reply.err(&format!("{}: no suite to run\n", key));
         }
         if asked.patterns.is_empty() {
             state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
@@ -776,7 +801,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     let spec = match runner_spec(export, key, &context, &request.environment) {
         Ok(s) => s,
         Err(e) => {
-            reply.err(&format!("teq: {}: {}\n", key, e));
+            failed(request, key, e, reply);
             return 2;
         }
     };
@@ -812,7 +837,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         match start_runner(state, key, spec, &request.environment, &argfile, Some((reply, &finished))) {
             Ok(r) => *runner = Some(r),
             Err(e) => {
-                reply.err(&format!("teq: {}: {}\n", key, e));
+                failed(request, key, e, reply);
                 return 2;
             }
         }
@@ -851,7 +876,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     let every = asked.patterns.is_empty();
     if selected.is_empty() {
         let why = if asked.changed { "no suite depends on what changed" } else { "no suite to run" };
-        reply.out(&format!("{}: {}\n", key, why));
+        reply.err(&format!("{}: {}\n", key, why));
         if every && incomplete == 0 {
             state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
         }
@@ -861,17 +886,21 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     // A run of its own directory starts in it empty, as Mill's sandbox (`TestModuleUtil`) does.
     if context.sandbox {
         if let Err(e) = empty_directory(&export.sandbox_directory(key)) {
-            reply.err(&format!("teq: {}: {}\n", key, e));
+            failed(request, key, e, reply);
             return 2;
         }
     }
     let names: Vec<(usize, usize, String)> = selected.iter().map(|s| (s.framework, s.fingerprint, s.name.clone())).collect();
     let mut tally = Tally::default();
+    // The run's stream on stdout: what the suites, their frameworks and the runner's JVM print, and teq's report of
+    // each event, whose names and messages are the suites' (the run's outcomes are its events, `--events`); teq's own
+    // lines on stderr, a build's diagnostics and count, the run's summary or end, so that nothing of a run's reaches
+    // them.
     let result = r.run(&directories, &names, context.parallelism, asked.verbose, request.tty, &mut tally, &mut |line| reply.out(line));
     drop(finished);
     let stderr = r.drain_stderr();
     if !stderr.is_empty() {
-        reply.err(&stderr);
+        reply.out(&stderr);
     }
     match result {
         Ok(Ran::Failed(thrown)) => {
@@ -885,7 +914,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
                 reply.out(&events::fork_error(t, asked.verbose));
             }
             let why = thrown.as_ref().and_then(|t| t.text.lines().next()).unwrap_or("a fork error");
-            reply.out(&format!("{}: the run failed: {} (built in {} ms)\n", key, why, built_ms));
+            reply.err(&format!("{}: the run failed: {} (built in {} ms)\n", key, why, built_ms));
             write_events(asked, key, &tally, reply);
             1
         }
@@ -896,7 +925,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
             if every && incomplete == 0 {
                 state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
             }
-            reply.out(&summary(key, selected.len(), &tally, ms, built_ms));
+            reply.err(&summary(key, selected.len(), &tally, ms, built_ms));
             write_events(asked, key, &tally, reply);
             i32::from(tally.failed() > 0).max(incomplete)
         }
@@ -904,7 +933,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
             if let Some(r) = runner.take() {
                 r.stop();
             }
-            reply.err(&format!("teq: {}: {}\n", key, e));
+            failed(request, key, e, reply);
             1
         }
     }
@@ -913,7 +942,8 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
 /// The run's events appended to the `--events` file, if one was asked for.
 fn write_events(asked: &TestRequest, key: &Key, tally: &Tally, reply: &mut Reply) {
     let Some(file) = &asked.events else { return };
-    let text: String = tally.events.iter().map(|e| e.line(&key.project)).collect();
+    // Each case's line, then each suite's that ran (`Tally::ran_line`), a suite that sent no case among them.
+    let text: String = tally.events.iter().map(|e| e.line(&key.project)).chain(tally.ran.iter().map(|s| Tally::ran_line(&key.project, s))).collect();
     let written = std::fs::OpenOptions::new().append(true).open(file).and_then(|mut f| f.write_all(text.as_bytes()));
     if let Err(e) = written {
         reply.err(&format!("teq: cannot write {}: {}\n", file.display(), e));
@@ -942,13 +972,13 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
     let conf = export.configuration(key).expect("a test configuration");
     let context = conf.test.clone().unwrap_or_default();
     if context.frameworks.is_empty() {
-        reply.out(&format!("{}: no test framework\n", key));
+        reply.err(&format!("{}: no test framework\n", key));
         return 0;
     }
     let (module_kind, js_env) = match context.js_test() {
         Ok((kind, env)) => (kind, env.clone()),
         Err(why) => {
-            reply.err(&format!("teq: {}: {}\n", key, why));
+            failed(request, key, why, reply);
             return 2;
         }
     };
@@ -960,7 +990,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
     // build rewrites the link node reads.
     let slot = slot(state, key);
     let mut resident = slot.lock().unwrap_or_else(|e| e.into_inner());
-    if !built(state, export, request, key, &mut resident, reply) {
+    if !built(state, export, request, key, &mut resident, reply, Summary::Err) {
         return 1;
     }
     let built_ms = started.elapsed().as_millis();
@@ -999,17 +1029,19 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
     };
     if jsdom {
         if let Err(e) = jsdom::ready(export, &js_env, &request.environment, &|line| reply.sink().line(line)) {
-            reply.err(&format!("teq: {}: {}\n", key, e));
+            failed(request, key, e, reply);
             return 2;
         }
     }
     let candidates = view.candidates(&conf.sources);
+    // The run's stream on stdout: what the suites, their frameworks and node print, and teq's report of each event;
+    // teq's own lines on stderr.
     let out = reply.shared_out();
     let finished = Finished(Arc::new(AtomicBool::new(false)));
     let mut run = match jsrunner::JsRun::start(&env, &input, &request.environment, asked.verbose, out.clone()) {
         Ok(run) => run,
         Err(e) => {
-            reply.err(&format!("teq: {}: {}\n", key, e));
+            failed(request, key, e, reply);
             return 1;
         }
     };
@@ -1018,7 +1050,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
     let found = match run.detect(&classes) {
         Ok(found) => found,
         Err(e) => {
-            reply.err(&format!("teq: {}: {}\n", key, e));
+            failed(request, key, e, reply);
             return 1;
         }
     };
@@ -1052,7 +1084,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
         return match run.finish() {
             Ok(()) => 0,
             Err(e) => {
-                reply.err(&format!("teq: {}: {}\n", key, e));
+                failed(request, key, e, reply);
                 1
             }
         };
@@ -1084,7 +1116,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
     if selected.is_empty() {
         let _ = run.finish();
         let why = if asked.changed { "no suite depends on what changed" } else { "no suite to run" };
-        reply.out(&format!("{}: {}\n", key, why));
+        reply.err(&format!("{}: {}\n", key, why));
         if every {
             record(state);
         }
@@ -1112,12 +1144,12 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
             if every {
                 record(state);
             }
-            out(&summary(key, selected.len(), &tally, ms, built_ms));
+            reply.err(&summary(key, selected.len(), &tally, ms, built_ms));
             write_events(asked, key, &tally, reply);
             i32::from(tally.failed() > 0)
         }
         Err(e) => {
-            reply.err(&format!("teq: {}: {}\n", key, e));
+            failed(request, key, e, reply);
             1
         }
     }
@@ -1139,18 +1171,19 @@ fn summary(key: &Key, suites: usize, tally: &Tally, ms: u64, built_ms: u128) -> 
     )
 }
 
-/// The resident's build in its slot, held by the caller, its diagnostics and notes printed;
-/// whether it passed.
-fn built(state: &State, export: &Export, request: &Request, owner: &Key, resident: &mut Option<Resident>, reply: &mut Reply) -> bool {
+/// The resident's build in its slot, held by the caller, its diagnostics and notes printed, and a
+/// failed build's count where `summary` says (`test`'s on stderr beside its diagnostics, apart
+/// from the run's stream on stdout); whether it passed.
+fn built(state: &State, export: &Export, request: &Request, owner: &Key, resident: &mut Option<Resident>, reply: &mut Reply, summary: Summary) -> bool {
     let sink = reply.sink();
     let (answer, notes) = build_in(state, export, owner, &request.env, resident, &|line| sink.line(line));
     for note in notes {
-        reply.err(&format!("{}\n", note));
+        noted(request, owner, &note, reply);
     }
     let answer = match answer {
         Ok(a) => a,
         Err(e) => {
-            reply.err(&format!("teq: {}: {}\n", owner, e));
+            failed(request, owner, e, reply);
             return false;
         }
     };
@@ -1158,14 +1191,18 @@ fn built(state: &State, export: &Export, request: &Request, owner: &Key, residen
         reply.err(&format!("teq: {}: {}\n", owner, n));
     }
     for w in &answer.warnings {
-        reply.err(&render(w, "warning", &export.root, &request.cwd));
+        shown(request, owner, w, "warning", &export.root, reply);
     }
     if !answer.ok {
         for e in &answer.errors {
-            reply.err(&render(e, "error", &export.root, &request.cwd));
+            shown(request, owner, e, "error", &export.root, reply);
         }
         let n = answer.errors.len().max(1);
-        reply.out(&format!("{}: {} error{}\n", owner, n, if n == 1 { "" } else { "s" }));
+        let line = format!("{}: {} error{}\n", owner, n, if n == 1 { "" } else { "s" });
+        match summary {
+            Summary::Out => reply.out(&line),
+            Summary::Err => reply.err(&line),
+        }
         return false;
     }
     true
@@ -1224,7 +1261,7 @@ fn stage_project(state: &Arc<State>, export: &Arc<Export>, request: &Request, na
     let Some(owner) = plan(export, &running, std::slice::from_ref(&key)).into_iter().next() else { return 2 };
     let slot = slot(state, &owner);
     let mut resident = slot.lock().unwrap_or_else(|e| e.into_inner());
-    if !built(state, export, request, &owner, &mut resident, reply) {
+    if !built(state, export, request, &owner, &mut resident, reply, Summary::Out) {
         return 1;
     }
     let built_ms = started.elapsed().as_millis();
@@ -1529,6 +1566,56 @@ fn memory(key: &Key, resident: &Resident) -> String {
 /// The class directory a resident writes, which a `classDirectory` key of a generator names.
 fn resident_classes(export: &Export, key: &Key) -> PathBuf {
     export.path(&export.classes(key))
+}
+
+/// A diagnostic of `key`'s build shown on stderr (`render`), and recorded where the request names
+/// a file for them (`--diagnostics`): a JSON line, the configuration, the severity, the file (as the
+/// export has it), line and column, the whole message and the lines shown for it (`shown`), so that a
+/// reader takes the diagnostic's extent from the build, never from the shown text, whose message
+/// may hold any line.
+fn shown(request: &Request, key: &Key, d: &Json, severity: &str, root: &Path, reply: &mut Reply) {
+    let text = render(d, severity, root, &request.cwd);
+    reply.err(&text);
+    let mut fields = vec![("key", key.to_string().as_str().into()), ("severity", severity.into())];
+    for name in ["file", "line", "col"] {
+        if let Some(v) = d.get(name) {
+            fields.push((name, v.clone()));
+        }
+    }
+    fields.push(("message", d.get("message").and_then(Json::str).unwrap_or("").into()));
+    fields.push(("shown", text.as_str().into()));
+    record(request, fields, reply);
+}
+
+/// A failure of `key`'s, a build's or a run's (`teq: <key>: <why>`), shown on stderr and recorded
+/// whole where the request names a file for the records (`--diagnostics`, severity `failure`): a
+/// generator's carries its command's whole output, so that a reader takes the failure's extent
+/// from teq, never from the text, whose lines are the command's.
+fn failed(request: &Request, key: &Key, why: impl std::fmt::Display, reply: &mut Reply) {
+    let why = why.to_string();
+    let text = format!("teq: {}: {}\n", key, why);
+    reply.err(&text);
+    record(request, vec![("key", key.to_string().as_str().into()), ("severity", "failure".into()), ("message", why.as_str().into()), ("shown", text.as_str().into())], reply);
+}
+
+/// What a generator of `key`'s build printed as it passed (`generators::run`'s notes, one a
+/// generator), shown on stderr and recorded whole (`--diagnostics`, severity `note`): its text is
+/// the command's, never one of teq's own lines.
+fn noted(request: &Request, key: &Key, note: &str, reply: &mut Reply) {
+    let text = format!("{}\n", note);
+    reply.err(&text);
+    record(request, vec![("key", key.to_string().as_str().into()), ("severity", "note".into()), ("message", note.into()), ("shown", text.as_str().into())], reply);
+}
+
+/// One record appended to the request's `--diagnostics` file, a JSON line, where it names one.
+fn record(request: &Request, fields: Vec<(&str, Json)>, reply: &mut Reply) {
+    let Some(file) = &request.diagnostics else { return };
+    let mut line = Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect()).to_text();
+    line.push('\n');
+    let written = std::fs::OpenOptions::new().append(true).open(file).and_then(|mut f| f.write_all(line.as_bytes()));
+    if let Err(e) = written {
+        reply.err(&format!("teq: cannot write {}: {}\n", file.display(), e));
+    }
 }
 
 /// A diagnostic as a terminal shows it: the file relative to the client's directory when it lies

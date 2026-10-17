@@ -332,7 +332,10 @@ fetched with curl into teq's cache, each announced on stderr.
 `Compile / mainClass`), else the single main class among the project's own sources, as sbt's `run` does, and
 refuses where sbt would prompt; `teq run api server` runs an alias of `teqRunAliases` or a main class by
 its name. The program runs under `JAVA_HOME`'s `java`, else the first on the `PATH`, with the run block's
-options, variables and directory; Ctrl-C reaches it, and its exit code is the verb's.
+options, variables and directory; Ctrl-C reaches it, and its exit code is the verb's. With `--diagnostics <file>`
+the build's records are written there (below) and, once the build passed, the program's start (severity `run`): the
+program's output follows teq's own lines on the same channels, and a reader of the records never takes it for the
+build's.
 
 **Tests.** On the JVM the runner is a JVM over sbt's test interface for each run, as sbt forks a worker for each: the
 daemon launches the next one as a run ends, before it answers, with the frameworks to load, so that its JVM starts
@@ -395,6 +398,14 @@ linking would give its inputs. A Mill build's Scala.js projects run the same way
 `jsEnv` being Mill's (`moduleKind`, `jsEnvConfig`), which Mill's Scala.js worker runs through the same test
 adapter.
 
+`teq test` writes on stdout each run's stream: what the suites, their frameworks, the runner's JVM and node print, and
+its report of each event (`[success] ...`, `[fail] ...` with what was thrown, a fork error), whose names and messages
+are the suites'; and on stderr its own lines: a build's diagnostics and its count of errors, its notes and failures
+(`teq: <configuration>: ...`), each configuration's summary or its end with nothing to run. A run's outcomes and the
+suites that ran are its events (`--events`) and its builds' diagnostics their records (`--diagnostics`), so nothing a
+suite names, throws or prints, and nothing a diagnostic's message holds, is taken for one of teq's lines; `--list`
+prints the suites on stdout.
+
 Suites are found as sbt's `definedTests` finds them (`--list` prints them), against the fingerprints the
 frameworks give, and the patterns applied as `testOnly` applies them; `--changed` keeps the suites whose
 classes depend, transitively, on a class rewritten since the configuration's last full run (on Scala.js, on a
@@ -409,7 +420,18 @@ and the times; the exit code is 1 when anything failed. `--events <file>` writes
 each: the project, the event's name, its selector, its status and the first line of what it threw,
 tab-separated: on the JVM a suite whose task threw ends the run before its `Error` is reported, as a framework that
 fails does (above); under node a suite whose task or framework threw is an `Error` of a `TestSelector` of its name,
-as sbt reports one through sbt-scalajs.
+as sbt reports one through sbt-scalajs. After the events, a line for each suite whose task ran, a suite that reported
+no event too (an empty suite's): the project, the suite and `ran`, tab-separated. `--diagnostics <file>` (`compile`,
+`test` and `run` take it, and `teq compiler` with `build` and `check`, which `teq build` passes on) writes each
+diagnostic the builds show as well, a JSON line each in the order shown: the configuration (the daemon's verbs), the
+severity, the file, line and column where it has them, the whole message, and the lines shown for it (`shown`), so
+that a reader takes a diagnostic's extent from the build, never from the text, whose message may hold any line;
+a macro's `report.info` is one of them (severity `info`, its whole message), as dotty reports it (`report.echo`, an
+`Info` diagnostic). The daemon's verbs record beside them each failure of a configuration's as shown (`teq:
+<configuration>: ...`, severity `failure`), a generator's with its command's whole output, and what each passing
+generator printed, one record a generator (severity `note`), as `teq build` records its generators' before the
+compiler's records (`--diagnostics-append`); their text is the command's and never one of teq's own lines. What is
+shown does not change.
 Without a project every project's suites run, on either platform, those the export refuses named and the exit
 code 2.
 

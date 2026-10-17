@@ -1,5 +1,6 @@
 //> using file ../../tools/script
 //> using file ../../bench/reference/reference.scala
+//> using file ../../bench/reference/records.scala
 // The peak memory the reference verbs sample (tests/reference-test-verb.sh): a node the invocation starts, given its
 // token as a verb's command is, which holds a 256 MiB buffer and names no teq binary, counted in the sample, which
 // prints the child's resident set and the peak.

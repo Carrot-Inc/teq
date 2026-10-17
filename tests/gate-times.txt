@@ -4,6 +4,8 @@
 # or line missing here counts as 120. A suite the gate runs as pieces (`pieced` in tests/gate.sh) has a row for each
 # piece, `<suite>.<k>/<n>`, which --record writes, never the suite's own row (left as it was), whose time divided by n
 # a piece without a row of its own counts; a piece's row under another n of its suite goes at the next --record.
+# A project line's row is its time on the machine holding its checkout, which the gate's dealer reads for the projects'
+# chains (their first rows the longest of three runs of each chain on one holder, at host loads of 8 to 77).
 cases 224
 errors 140
 parser 3
@@ -57,3 +59,21 @@ mill-test-verb 1
 std-entered 0
 gate-coverage 0
 gate-scripts 251
+lila-export 24
+lila-compile 19
+lila-test 167
+lila-run 18
+airstream-export 5
+airstream-compile 3
+airstream-test 3
+laminar-export 6
+laminar-compile 1
+laminar-test 1
+tyrian-export 14
+tyrian-compile 1
+tyrian-test 6
+tyrian-run 1
+indigo-export 39
+indigo-compile 10
+indigo-test 3
+indigo-run 2

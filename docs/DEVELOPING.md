@@ -202,14 +202,17 @@ the scripts under `tests/` (its header has the lines, where each runs and their 
 `tests/all.sh`. The gate takes thirty minutes at most from its first command to its last, its builds, claims
 and transfers included: its last line is that total, and a gate over it is flagged to the owner at once and fixed
 at once, by running more at once or elsewhere, never by weakening a check (the owner's rule, 2026-10-14). Its
-lines run at once. The correctness suites, every suite of `tests/all.sh` but those its `excluded:` lines name
+lines run at once. `--only <lines>` limits it to the lines named, `--with <lines>` adds named ones to its own (the
+line it runs only when named, `app-scalac`), and `--without <lines>` leaves named ones out, whatever the others select;
+a name of no line is refused. The correctness suites, every suite of `tests/all.sh` but those its `excluded:` lines name
 (`tests/gate-coverage.sh` holds the list to `tests/all.sh`), are dealt to the free remote machines, which the
 scripts `REMOTE_AGENT` names reach, by their recorded times (`tests/gate-times.txt`, which `--record` rewrites
 from a run whose every line passed or whose only lines not passed are timing lines inconclusive, none over: their
 durations are not their verdicts'), the head's binary built once by the first of them and shipped to the
 others, each checking its digest and that it runs there; the timing lines measure after the suites, on a
-machine of their own (below); the project lines, when named, on the machine that holds the projects' checkouts
-("lila"); and the size, instruction, memory and application lines on the reference machine, where their budgets were recorded, at once
+machine of their own (below); the project lines, when named, on the machines that hold the projects' checkouts
+("lila"), each project's chain dealt to one of them, and every project's records held to master's by the line
+`records` ("The project records"); and the size, instruction, memory and application lines on the reference machine, where their budgets were recorded, at once
 but the application's end-to-end suite, the memory line and the asymptotic probes, which run alone after them (the
 suite's specs wait within the browser's timeouts, the memory line's growth rows and the probes' growth ratios
 depend on the machine's load; the probes run under the node `NODE` names there, node 22).
@@ -264,6 +267,79 @@ the cache `tests/support/jars.sh` keys or from Maven Central, the built ones han
 `bench/actions/jars.sh`), the scala3 checkout is fetched at the commit the harnesses' baselines name, and each
 job keeps its suites' output and times (`out/all/`) as an artifact. Its runners hold Temurin 21 and node 22.
 
+### The project records
+
+Each reference project's gate lines are held to records in its directory under `bench/`, beside the oracle's own
+(`tests.json`, the suites and cases the build's own test run passes under scalac 3.8.4, which stays the oracle's exact
+inventory, statuses and multiplicity whole): `errors.txt` (the compile line's), `deviations.json` (the test line's)
+and `run.json` (the run line's), each a floor a landing may only lower, never a licence (bench/reference/records.scala
+has the rules). A record holds its provenance (`baseline`, the first, from master's binary; `record`, a run's
+improvement; `migrate <reason>`, a new pin or new inputs; with the revision, the binary, the pin and the digest of the
+inputs it holds for: `pin.json` and `generated.json`, and for the deviations `tests.json`), its scope (the units the
+run covers, each exactly once: the compile's configurations, the test's projects, the run's named assertions) and its
+debt, a sorted multiset:
+
+- a compile's error is its whole block as teq prints it (the location, every line of the message, the source line and
+  the caret), keyed by the configuration that reports it, the checkout's root and the machine's paths normalised away;
+  a configuration whose build failed outright (a generator's run under `teq interp` among its causes) is one item of
+  its whole failure as teq records it (`--diagnostics`, a generator's with its command's whole output, whatever the
+  command printed); a generated input whose bytes are not the expected ones (`generated.json`'s, or the pin's for the
+  checked-in files of the Scala.js projects) an item with the digest of the bytes it has, so that other bytes take a
+  migration; each run's digests are its own;
+- a test's departure is a case whose statuses are not the oracle's, with what it showed and what the oracle has, as
+  many times as each side reports it (`<project>: <suite>: <case>: Failure (tests.json: Success)`, `...: did not run
+  (...)`, `...: Success x2 (...)`), so that a known departure that shows otherwise is another item and one that
+  disappears is gone only where the case ran as the oracle's; a project whose suites none ran while its own build
+  failed is one item of its own (`<project>: blocked by its build`), its cases none; a suite or a case the oracle
+  lacks is an item of its own;
+- a run's violation is a named assertion it did not hold (bench/smoke.mjs's, lila's run verb's), by its name, a run
+  whose build failed violating every one beside `blocked: <the build that failed>`.
+
+Every test line and every run line is judged by one function of its evidence, the same for lila's, the Scala.js
+projects' and Mill's drivers (`Deviations.judge` over a `TestEvidence`, `Assertions.judge` over a `RunEvidence`), each
+driver only gathering its invocations, transcripts and events, so that a rule holds for every driver alike. A test
+invocation's two channels are collected apart (`test-<n>.log` its stdout, `test-<n>.err` its stderr): `teq test`
+writes its own lines on stderr (a build's diagnostics and count, each summary) and the run's stream on stdout (what
+the suites print and its report of their events). The judgment reads a build's diagnostics from teq's records of them
+(`--diagnostics`: each its whole message and the lines shown for it, the producer's extent, which no message's text
+sets, a macro's info among them, beside each failure of a configuration's whole and what each passing generator
+printed), the counts and
+summaries from stderr past those lines (a one-shot build's `<n> errors found` claiming its errors, which may end its
+output uncounted, every record shown whole either way; a run whose program started, `teq run`'s record of it, has the
+program's output after teq's lines, which is never read for them), and the outcomes and the suites that ran from the events
+(`--events`, a suite that ran no case its own line), never from a stream a run's text shares, nor from a count
+(`Transcript`). Every
+build that failed counts (a unit of the oracle's blocked by its own, a configuration of no unit an item of its own),
+every executed case with its framework's status from teq's events (an invocation that wrote none, outcome lines after
+its last summary, a transcript and events counting a unit's outcomes otherwise, a unit's tests completing twice are
+problems), a unit blocked only where none of its cases ran, each invocation's exit explained, and a run blocked by its
+build only on teq's exit of 1 on that build's own errors. A line's verdict is the whole run: every unit of the scope covered once (a compile's coverage owed by the export, every
+configuration with sources of the projects asked for within those the run's summaries build on, never taken from a
+transcript), the transcript complete (the verb's end marker `# exit <status>` after teq's output, an exit the
+diagnostics give; a test's exit but 0 explained by a case that failed or a blocked build, a project's tests completed
+once, no outcome after the last summary), and the observed debt within the record's,
+an item outside it failing the line, printed in full (the first ten), an item gone passing and listed. A crash of
+teq's (a build's thread that panicked, a resident or the daemon that ended, a panic's message), an error counted
+without its diagnostic, a timeout, a cut transcript and a configuration covered twice are no outcome: no record holds
+one (dotty's vulpix keeps a compiler crash apart from a test's expected errors, `ParallelTesting.scala`'s
+`onComplete`). Each verb's `--record` steps its record from a run whose every run and every other check passed (the
+most each run showed of each item), `--baseline` makes the first, from a run that is evidence, with the run's
+normalised transcript as its evidence beside the record (`<record>.evidence.gz`), and `--migrate <reason>` makes one
+over new inputs, as a baseline does; a recording publishes its record, its evidence and its generated digests as
+one, staged beside them (`<file>.proposed`) and admitted against the record they replace first, and a failed one
+changes nothing. The landing persists an improvement: the gate's `--record` installs the record steps its project
+lines took in the worktree once every line passed (`bench/reference/ratchet.scala install`), for the landing to
+commit with the change that made them.
+
+Independently of any run, the gate's line `records` holds every record of the head against master's committed one
+(`bench/reference/ratchet.scala check <revision>`, the revision `--master-rev` names, by default master's head, a head
+that does not contain it refused until rebased), the records of either revision enumerated, so that a floor goes neither with its file nor with its
+project's directory: for the same inputs the head's scope is master's and its debt within master's; a first record is
+a baseline; new inputs take a migration with its reason and evidence; a record removed fails.
+`tests/gate-scripts.sh`'s `records` section proves the rules over stand-in transcripts through the ratchet's verbs,
+and `tests/lila-test-verb.sh`, `tests/reference-test-verb.sh` and `tests/mill-test-verb.sh` the verbs' own use of them
+over stand-in teq binaries.
+
 ### lila
 
 lila, lichess's server ([lichess-org/lila](https://github.com/lichess-org/lila)), is teq's public reference
@@ -278,25 +354,44 @@ serialised translations (`i18n.scala`, the JDK's bytes)), and the script `lila.s
 `checkout` (the pin into a blob-filtered clone, `conf/version.conf` written from the pin as lila's CI writes
 it), `oracle` (`clean;compile;testFull;stage` under sbt, `--runs n`, `--record`), `export`, `compile`, `test`
 and `run` (each with `--teq <binary>`). The pin, the inventory, the digests and the overlay move together:
-a later part moves the pin by running `checkout`, `oracle --record`, `export` and `compile --record` at the new
-commit.
+a later part moves the pin by running `checkout`, `oracle --record`, `export`, then `compile`, `test` and `run`
+with `--migrate <reason>` at the new commit. The export publishes the head's sbt-teq (`integrations/sbt`, both sbt
+lines by `^publish`) under a SNAPSHOT named by the digest of what the plugin is built from into a Maven repository of
+its own beside the line's directory, once for each digest, which the overlay's `plugins.sbt` adds as a resolver, so
+that an export takes the plugin under test and nothing reaches `~/.ivy2/local` (`TEQ_PLUGIN_VERSION` names another,
+published by its caller, by hand; the gate's lines and the setup program run without it, whatever a machine's login
+shell names, so that a holder needs nothing the setup did not make). An export that fails names its cause: a plugin
+in no repository sbt reads by its coordinates and the sbt it is for, another failure by the build tool's first error.
 
 The gate's lines `lila-export`, `lila-compile`, `lila-test` and `lila-run` take lila's checkout (`--lila`) and
 the binary under test, and are mandatory once named: a missing checkout, export, service (`LILA_MONGOD`,
-`LILA_REDIS`), built asset manifest or suite fails the line, never a skip. `lila-test` holds the run to the
-inventory: without `tests.json`, or with an empty one, it fails at the start, and it runs `teq test --verbose`,
-whose runner names every test with its outcome (`[success]`, `[skipped]`, `[fail]`), so that each suite of the
-inventory has to have run in its project with each of its cases passed (`tests/lila-test-verb.sh`), the lines of
-suites that ran at once on the runner's pool taken by their suites' names. They run only when `--only` or `--with` names
-them until their time and memory are measured within the gate's budget (two added minutes, 12 GB): the
-measurements of `lila.scala`'s `--runs 3` are the admission's record. They run, with the Airstream and Laminar
-lines, on the remote machine that holds the checkouts: its pool line carries `holds=lila,airstream,laminar` (or
-`GATE_LILA_MACHINE` names it), no shard or comparison takes it while a project line is selected, and its login
-shell gives the checkouts at the pins (`GATE_LILA_CHECKOUT`, `GATE_AIRSTREAM_CHECKOUT`, `GATE_LAMINAR_CHECKOUT`),
-lila's services (`LILA_MONGOD`, `LILA_REDIS`, its ports 27017, 6379 and 9663 its own), the pins' JDK
-(`JAVA_HOME`) and their jars; each checkout's lines run there one after another (export, compile, test, run). A
-line with no such machine free fails as not run; `--lila`, `--airstream` or `--laminar` naming a checkout runs
-that project's lines on the reference machine instead.
+`LILA_REDIS`), built asset manifest or suite fails the line, never a skip, and each is held to its project's
+records ("The project records"). `lila-test` holds the run to the inventory: without `tests.json`, or with an empty
+one, it fails at the start, and it runs `teq test --verbose`, whose runner names every test with its outcome
+(`[success]`, `[skipped]`, `[fail]`), so that each suite of the inventory has to have run in its project with each of
+its cases as the inventory has it, or be a departure `deviations.json` holds (`tests/lila-test-verb.sh`), the lines of
+suites that ran at once on the runner's pool taken by their suites' names. The project lines run in every gate, unnamed
+(the owner's ruling, 2026-10-16: every reference project in, the gate never weakened to make it faster), `--without`
+leaving named ones out; a gate past thirty minutes is answered with machines, never with fewer lines. A project's
+lines are a chain (export, compile,
+test, run, one after another) dealt to a free remote machine that holds its checkout: its pool line carries
+`holds=<project>,...` (or `GATE_LILA_MACHINE` names it, for every project), the fewest such machines that hold the
+projects wanted taken, and more of them while the projects would end after the shards by the recorded times, each
+reserved, no shard or comparison taking it, and a machine holding a project not yet dealt left to it across the
+polls; its login shell gives the checkouts at the pins (`GATE_<PROJECT>_CHECKOUT`), lila's services (`LILA_MONGOD`,
+`LILA_REDIS`, its ports 27017, 6379 and 9663 its own), the pins' JDK (`JAVA_HOME`) and their jars. A line with no free
+machine holding its project fails as not run after `GATE_CLAIM_WAIT` seconds, saying whether none of the pool holds
+it or those that do were busy; `--lila`, `--airstream` or `--laminar` naming a checkout runs that project's lines on
+the reference machine instead.
+
+The checkouts are made by `bench/gate-projects/setup.scala <dir> [--projects <p>,...]` under `teq interp` on the
+machine that is to hold them: the tools (git, node, npm, sbt, the pins' JDK, and for lila node 24 or later and pnpm
+12 or later, which it checks and does not install), lila's services (the environment's or the PATH's, else the
+releases `bench/gate-projects/services.json` pins, fetched, held to their digests and installed under `<dir>`, each
+started on its port and stopped), each project's `checkout` and `export` verbs into `<dir>/<project>`, lila's ui built
+(`ui/build`, every script its manifest names there) and Chrome's WebGL2 context; every stage runs again on each run,
+so that a product deleted since is made again, and `<dir>/ready` and `<dir>/gate-projects.env` (the variables the
+machine's login shell sources) are written only when every stage passed. It names no machine.
 
 ### Airstream and Laminar
 
@@ -334,10 +429,11 @@ binary, each with its descendants).
 
 The gate's lines `airstream-export`, `airstream-compile`, `airstream-test`, `laminar-export`, `laminar-compile`
 and `laminar-test` take the checkouts (`--airstream`, `--laminar`) and the binary under test, are mandatory once
-named, and run only when `--only` or `--with` names them. teq does not compile either project yet: their tests use
+named, run as lila's, and are held to their records. teq does not compile either project yet: their tests use
 `scala.compiletime.testing.typeCheckErrors` (scalatest's `assertTypeError`), Airstream's macros a `Type` of a type
 constructor (`AnyKind`), and Laminar overloads methods on `scala.Array` and `js.Array`, which teq's std makes one
-type; the export lines pass.
+type, and Laminar's DOM definitions do not generate under `teq interp` (its interpreter's std has no
+`PrintStream(OutputStream)`); the export lines pass and the others hold to their records.
 
 ### Tyrian and Indigo
 
@@ -350,7 +446,7 @@ munit suites, the JVM's modules beside Tyrian's. `bench/tyrian/` and `bench/indi
 overlay's digests, the run, and for Indigo the bootstrap of its own Mill plugin, which its engine build imports
 from a local repository: built from the commit's tree written to one path on every machine, since its class files
 and TASTy name their sources' absolute paths, and each artifact held to the digest of its entries), the oracle's inventory (`tests.json`: each module's scalac warnings and its suites and
-cases with their outcomes under scalac 3.8.4), the generated inputs' digests (`generated.json`), the overlay
+cases under the statuses its framework reported, as many times as each ran, under scalac 3.8.4), the generated inputs' digests (`generated.json`), the overlay
 (`build.mill.patch`, Scala 3.8.4 and no fatal warnings for the oracle's build and teq's alike; `teq.mill.json`,
 the generators teq runs in the place of Mill's, with the scripts they run beside it) and `run/`, the page's
 script the run serves. One script drives both, `bench/mill-reference.scala <tyrian|indigo> <verb> <checkout>
@@ -359,7 +455,8 @@ inventory read from Mill's `out/`, `--runs n`, `--record`), `export` (mill-teq p
 `integrations/mill` under a version of the run's own and imported by `mill --import`, no edit of the build),
 `compile`, `test` (the export's modules, whatever the inventory holds: each with a test configuration asked for
 its suites by `teq test --list` and run by `teq test --verbose` where it has one, its modules, suites and cases
-held to `tests.json` identity for identity both ways, `tests/mill-test-verb.sh` its scenarios) and `run`
+held to `tests.json` identity for identity both ways, each case under its framework's status as many times as it ran,
+its departures to `deviations.json`, `tests/mill-test-verb.sh` its scenarios) and `run`
 (the module the pin's `run` names built by `teq build`, served with its page by `bench/smoke.mjs`, which opens it
 in headless Chrome over the DevTools protocol on a pipe and drives it: Tyrian's sandbox counter clicked, Indigo's
 sandbox frame drawn and its scene switched; an exception, a console error, a failed request or the time running
@@ -384,8 +481,7 @@ The gate's lines `tyrian-export`, `tyrian-compile`, `tyrian-test`, `tyrian-run` 
 checkouts (`--tyrian`, `--indigo`) and the binary under test, and are mandatory once named: a missing checkout,
 export, browser or suite fails the line, never a skip; a run line first checks that Chrome (`CHROME` names
 another) makes a WebGL2 context (`node bench/smoke.mjs webgl`), which headless Chrome does through SwiftShader.
-They run only when `--only` names them, until their time and memory are measured within the gate's budget, as
-lila's.
+They run as lila's, held to their records; the run lines hold the smoke's named assertions to `run.json`.
 
 ## The timing lines on a machine
 

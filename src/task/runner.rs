@@ -431,6 +431,7 @@ impl Runner {
                         out(&lines);
                     }
                 }
+                "ran" => tally.ran(at(1)),
                 "done" => return Ok(Ran::Done(at(1).parse::<u64>().unwrap_or(0))),
                 _ => {}
             }

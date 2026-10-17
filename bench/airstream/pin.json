@@ -20,7 +20,7 @@
  "tests": "tests.json",
  "overlay": {
   "AirstreamTeq.scala": "a214441418e132f87767863b6c8e23e19b3be7a09cb9b4b34c8c70384883b705",
-  "plugins.sbt": "2bc2cff805e0bef2dde089b8ee6c3bbd538ad093f0e171345cdb7717367a9c33"
+  "plugins.sbt": "3d2b4583bf8c3fe4e68ec921d9c5616d0daf837833c67de6d01f6191b8c7a53e"
  },
  "head": {
   "commit": "aa6818b7f523244f5abab29e4b56136fcc31183b",

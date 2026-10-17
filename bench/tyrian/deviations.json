@@ -1,0 +1,23 @@
+{
+ "kind": "baseline",
+ "reason": "",
+ "revision": "355fe5e6e",
+ "binary": "teq 0.1.8 355fe5e6e",
+ "pin": "10da68e3119230d01821b720c5a9fe4d841bfdf4",
+ "inputs": "e047d47cc8bce77f241b633628754246abbb99a4c8250e5178db75cf29f8b8a9",
+ "projects": [
+  "sandbox-next.js",
+  "sandbox-ssr.jvm",
+  "sandbox-zio.js",
+  "sandbox.js",
+  "tyrian-htmx.js",
+  "tyrian-htmx.jvm",
+  "tyrian-io.js",
+  "tyrian-next.js",
+  "tyrian-tags.js",
+  "tyrian-tags.jvm",
+  "tyrian-zio.js",
+  "tyrian.js"
+ ],
+ "deviations": []
+}

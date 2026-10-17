@@ -8066,7 +8066,11 @@ fn install_context(it: &mut Table) {
         it.typer.note_info();
         match &mut it.typer.infos {
             Some(infos) => infos.push(crate::typer::InfoMessage { path, ordinal, text: msg.to_string() }),
-            None => eprintln!("info: {}", msg),
+            None => {
+                let shown = format!("info: {}\n", msg);
+                eprint!("{}", shown);
+                crate::source::record_shown("info", None, &msg, &shown);
+            }
         }
         Ok(Value::Unit)
     });

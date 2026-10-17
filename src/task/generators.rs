@@ -16,7 +16,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
-/// Runs the generators of a closure's configurations; what they printed is returned to be shown.
+/// Runs the generators of a closure's configurations; what each printed is returned to be
+/// shown, a note a generator.
 /// A configuration with a generator the build tool runs (kind `sbt` or `mill`) has none run here: its
 /// sources name the tool's own output directories, which hold what it last generated of them all, and
 /// the verbs that would need them run refuse first (`Export::refusals`). The runs of the build are serialised through `target/teq/generators.lock`: two residents
@@ -214,7 +215,7 @@ pub fn git_sha(env: &BTreeMap<String, String>, root: &Path) -> Result<String, St
 /// The first word `teq` is `teq`, the binary running (`std::env::current_exe()`): the launchers
 /// chose it, the lock's or `TEQ`'s, before the build tool ran, so it is never a `teq` of the
 /// `PATH` nor a launcher of the repository.
-fn command(export: &Export, key: &Key, index: usize, g: &Value, teq: &Result<PathBuf, String>) -> Result<Vec<String>, String> {
+fn command(export: &Export, key: &Key, index: usize, g: &Value, teq: &Result<PathBuf, String>) -> Result<Option<String>, String> {
     let run: Vec<&str> = g.get("run").map_or(&[][..], Value::items).iter().filter_map(Value::str).collect();
     let Some((program, args)) = run.split_first() else { return Err("no command to run".to_string()) };
     let cwd = export.path(g.get("cwd").and_then(Value::str).unwrap_or("."));
@@ -236,7 +237,7 @@ fn command(export: &Export, key: &Key, index: usize, g: &Value, teq: &Result<Pat
         None => outputs.iter().any(|o| !present(o)),
     };
     if same && !gone {
-        return Ok(Vec::new());
+        return Ok(None);
     }
     let before: Vec<(PathBuf, Vec<u8>, SystemTime)> = outputs
         .iter()
@@ -267,7 +268,10 @@ fn command(export: &Export, key: &Key, index: usize, g: &Value, teq: &Result<Pat
     }
     let made: Vec<&str> = listed.iter().copied().filter(|o| present(&export.path(o))).collect();
     let _ = std::fs::write(&record, format!("{}\nmade {}\n{}\n", fingerprint, made.len(), made.join("\n")));
-    Ok(printed.lines().filter(|l| !l.trim().is_empty()).map(|l| format!("{}: {}", key, l)).collect())
+    // What it printed is one note, its lines each in the configuration's name: the verb shows and
+    // records it whole (`noted`), so no line of the command's is read as one of teq's.
+    let lines: Vec<String> = printed.lines().filter(|l| !l.trim().is_empty()).map(|l| format!("{}: {}", key, l)).collect();
+    Ok((!lines.is_empty()).then(|| lines.join("\n")))
 }
 
 /// The generator's block, then the path, size and modification time of every file its inputs'
@@ -512,18 +516,18 @@ mod tests {
         let key = Key::new("p", "compile");
         let g = &export.configuration(&key).unwrap().generators[0];
         let none = Err("no teq here".to_string());
-        assert_eq!(command(&export, &key, 0, g, &none).unwrap(), ["p/compile: ran"]);
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p/compile: ran"));
         let out = dir.join("target/gen/Out.scala");
         assert_eq!(std::fs::read_to_string(&out).unwrap(), "ONE\n");
-        assert!(command(&export, &key, 0, g, &none).unwrap().is_empty(), "an unchanged fingerprint runs nothing");
+        assert!(command(&export, &key, 0, g, &none).unwrap().is_none(), "an unchanged fingerprint runs nothing");
         let old = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
         std::fs::File::options().write(true).open(&out).unwrap().set_modified(old).unwrap();
         // The script changed, its output did not: the output keeps its modification time.
         std::fs::write(dir.join("gen.sh"), "mkdir -p \"$2\" && tr a-z A-Z < \"$1\" > \"$2/Out.scala\" && echo again\n").unwrap();
-        assert_eq!(command(&export, &key, 0, g, &none).unwrap(), ["p/compile: again"]);
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p/compile: again"));
         assert_eq!(std::fs::metadata(&out).unwrap().modified().unwrap(), old);
         std::fs::remove_dir_all(dir.join("target/gen")).unwrap();
-        assert_eq!(command(&export, &key, 0, g, &none).unwrap(), ["p/compile: again"], "a missing output runs it");
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p/compile: again"), "a missing output runs it");
         std::fs::write(dir.join("labels.txt"), "three\n").unwrap();
         command(&export, &key, 0, g, &none).unwrap();
         assert_eq!(std::fs::read_to_string(&out).unwrap(), "THREE\n");
@@ -532,11 +536,11 @@ mod tests {
         std::fs::write(dir.join("teq.lock"), lock_of(&format!("projects:\n  p:\n    configurations:\n      compile:\n        generators:\n{}    platform: jvm\n", generator))).unwrap();
         let export = Export::read(&dir.join("teq.lock")).unwrap();
         let g = &export.configuration(&key).unwrap().generators[0];
-        assert_eq!(command(&export, &key, 0, g, &none).unwrap(), ["p/compile: again"], "the changed block runs it");
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p/compile: again"), "the changed block runs it");
         std::fs::create_dir_all(dir.join("target/managed")).unwrap();
-        assert!(command(&export, &key, 0, g, &none).unwrap().is_empty(), "an output left empty by the run does not run it again");
+        assert!(command(&export, &key, 0, g, &none).unwrap().is_none(), "an output left empty by the run does not run it again");
         std::fs::remove_dir_all(dir.join("target/gen")).unwrap();
-        assert_eq!(command(&export, &key, 0, g, &none).unwrap(), ["p/compile: again"], "an output the run made, gone, runs it");
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap().as_deref(), Some("p/compile: again"), "an output the run made, gone, runs it");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -565,21 +569,21 @@ mod tests {
         let teq = Ok(binary.clone());
         let missing = command(&export, &key, 0, g, &Err("gone".to_string())).unwrap_err();
         assert!(missing.contains("cannot find the running teq binary") && missing.contains("gone"), "{}", missing);
-        assert_eq!(command(&export, &key, 0, g, &teq).unwrap(), ["p/compile: ran interp"]);
+        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p/compile: ran interp"));
         let module = dir.join("app/assets/module.js");
         assert_eq!(std::fs::read_to_string(&module).unwrap(), "one\n");
-        assert!(command(&export, &key, 0, g, &teq).unwrap().is_empty(), "an unchanged fingerprint runs nothing");
+        assert!(command(&export, &key, 0, g, &teq).unwrap().is_none(), "an unchanged fingerprint runs nothing");
         std::fs::remove_file(&module).unwrap();
-        assert_eq!(command(&export, &key, 0, g, &teq).unwrap(), ["p/compile: ran interp"], "a listed file deleted alone runs it");
+        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p/compile: ran interp"), "a listed file deleted alone runs it");
         assert!(module.is_file());
         let old = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
         std::fs::File::options().write(true).open(&module).unwrap().set_modified(old).unwrap();
         // The script's modification alone: run again, the module's text the same and its time kept.
         std::fs::File::options().write(true).open(dir.join("scripts/gen.scala")).unwrap().set_modified(old).unwrap();
-        assert_eq!(command(&export, &key, 0, g, &teq).unwrap(), ["p/compile: ran interp"], "the script's edit runs it");
+        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p/compile: ran interp"), "the script's edit runs it");
         assert_eq!(std::fs::metadata(&module).unwrap().modified().unwrap(), old);
         std::fs::write(dir.join("scripts/gen.scala"), "two\n").unwrap();
-        assert_eq!(command(&export, &key, 0, g, &teq).unwrap(), ["p/compile: ran interp"]);
+        assert_eq!(command(&export, &key, 0, g, &teq).unwrap().as_deref(), Some("p/compile: ran interp"));
         assert_eq!(std::fs::read_to_string(&module).unwrap(), "two\n");
         let _ = std::fs::remove_dir_all(&dir);
     }

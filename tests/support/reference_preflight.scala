@@ -1,6 +1,7 @@
 //> using file ../../tools/script
 //> using file ../../bench/reference/reference.scala
 //> using file ../../bench/reference/scalajs.scala
+//> using file ../../bench/reference/records.scala
 // The preflight every verb of a Scala.js reference project runs (tests/reference-test-verb.sh): Airstream's
 // `ScalaJsReference.atPin` over the checkout <dir>, which refuses a directory whose name sbt makes another root
 // project of Airstream's build, which names none.

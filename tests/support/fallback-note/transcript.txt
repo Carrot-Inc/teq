@@ -1,0 +1,11 @@
+teq: alpha/test: no memory mapping for the type store's overlays; one worker types the build
+[debug] Create a test executor with a thread pool of 14 threads.
+Test run p.S started
+p.S: finished 0.051s
+Test run p.S finished: 0 failed, 0 ignored, 1 total 0.079s
+[success] p.S.x
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by scala.runtime.LazyVals$ (file:/home/user/.cache/coursier/v1/https/repo.maven.apache.org/maven2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar)
+WARNING: Please consider reporting this to the maintainers of class scala.runtime.LazyVals$
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+alpha/test: 1 suite, 1 passed, 0 failed in 285 ms (built in 253 ms)
