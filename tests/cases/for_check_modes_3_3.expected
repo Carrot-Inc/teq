@@ -1,0 +1,46 @@
+case guard
+filter true
+filter true
+map
+2
+case two guards
+filter true
+filter true
+filter true
+map
+2
+case identity
+filter true
+map
+1
+case guard identity
+filter true
+filter true
+map
+1
+guard identity
+filter true
+map
+1
+case stable id
+List(k)
+paren identity
+map
+1
+paren given
+map
+map
+2
+case guard alias generator
+filter true
+filter true
+map
+flatMap
+map
+1
+case alias guard
+filter true
+map
+filter true
+map
+2

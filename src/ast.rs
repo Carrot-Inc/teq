@@ -131,6 +131,9 @@ pub enum Expr {
     /// `${ p }` or `$x` inside a quote pattern: the code standing here is matched against `p`.
     SplicePat(PatId),
     Error,
+    /// `e _`, Scala 2's eta-expansion written out (dotty's `PostfixOp(e, Ident(_))`, typed by
+    /// `Migrations.typedAsFunction`).
+    AsFunction(ExprId),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -180,11 +183,37 @@ pub struct CaseClause {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Enumerator {
-    Gen(PatId, ExprId),
+    /// `pat <- e`, with what the version where the parser stood does to a pattern that may fail.
+    Gen(PatId, ExprId, GenMode),
     /// `case pat <- e`: elements the pattern does not match are filtered out.
     CaseGen(PatId, ExprId),
     Guard(ExprId),
     Val(PatId, ExprId),
+}
+
+/// What a generator without `case` does to a pattern that may fail to match (dotty's `GenCheckMode`,
+/// which `Parsers.generatorRest` picks by the version where the parser stands): before 3.2 the
+/// elements it does not match are filtered out unless its syntax shows it irrefutable
+/// (`FilterNow`); in 3.2 and 3.3 that, and the pattern checked against the elements' type
+/// (`CheckAndFilter`); from 3.4 it is checked alone (`Check`), and a failing match throws.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum GenMode {
+    FilterNow,
+    CheckAndFilter,
+    Check,
+}
+
+impl GenMode {
+    pub fn of(source: crate::source_version::SourceVersion) -> GenMode {
+        use crate::source_version::SourceVersion as V;
+        if source.is_at_least(V::V3_4) {
+            GenMode::Check
+        } else if source.is_at_least(V::V3_2) {
+            GenMode::CheckAndFilter
+        } else {
+            GenMode::FilterNow
+        }
+    }
 }
 
 /// Which of dotty's `makePatDef` optimizations a tuple pattern definition takes (`Ast::patdef_tuple`).
@@ -541,6 +570,30 @@ pub struct Import {
     pub clause_end: u32,
 }
 
+/// What the parser notes of the syntax where the migration table's checks read it, few files having any: kept
+/// apart from the tree's own tables.
+#[derive(Default, Debug)]
+pub struct SyntaxNotes {
+    /// The operators of the infix types and the infix extractor patterns written with an identifier
+    /// (`A Pair B`, `case a Cons b`; not `A | B`, `case h :: t`), ascending: the `Name` an infix type's
+    /// `Apply` applies and the path its `Ctor` names, which `Checking.checkValidInfix` reads as the
+    /// `InfixOp` the parser kept (`Typer.typedInfixOp`).
+    pub infix_type_ops: Vec<TyExprId>,
+    pub infix_pattern_ops: Vec<ExprId>,
+    /// `(a = 1)`: the named tuple of one element it is from 3.7, or the `Parens` node it is before
+    /// (dotty's `Parens(Assign(..))`), each with the assignment written and the span of its own
+    /// parentheses, ascending, which the typer reports (`Typer.checkDeprecatedAssignmentSyntax`).
+    pub assignment_tuples: Vec<(ExprId, ExprId, Span)>,
+    /// A named tuple of more than one element written as an infix operation's right operand, ascending,
+    /// with its elements as named arguments: what an operation of a method of more than one parameter
+    /// passes (`Applications.needsTupledDual` of `ApplyKind.InfixTuple`).
+    pub named_operands: Vec<(ExprId, ListRef)>,
+    /// The ends of the identifier tokens the scanner read backquoted (`BACKQUOTED_IDENT`, `LexResult::backquoted`),
+    /// ascending: `untpd.isBackquoted` of a name, the `Backquoted` attachment `Parsers.makeIdent` pushes. The unit's
+    /// record, which the parser installs on every AST it makes for the unit.
+    pub backquoted_idents: Vec<u32>,
+}
+
 pub struct Ast {
     /// The companion objects the parser made, in order: `Desugar.classDef`'s of a case class or
     /// of a class with a `derives` clause that the body writes none for.
@@ -575,6 +628,11 @@ pub struct Ast {
     /// The parameter names of a function type that writes them (`(c: Ctx) => c.T`), a list in
     /// `name_lists` parallel to its parameters.
     pub fun_param_names: Vec<(TyExprId, ListRef)>,
+    /// What the parser notes of the syntax for the migration table's checks (`SyntaxNotes`).
+    pub notes: Box<SyntaxNotes>,
+    /// An infix expression's operator was an identifier (`a max b`, not `a + b`): only then is one
+    /// checked as `Checking.checkValidInfix` does.
+    pub alpha_infix: bool,
     pub param_annots: Vec<Annot>,
     pub lambda_params: Vec<LambdaParam>,
     pub stmts: Vec<Stmt>,
@@ -639,10 +697,10 @@ pub struct Ast {
     /// The selectors of the matches a member's pattern definition makes (`val P = e`, dotty's
     /// `makePatDef` with `MatchCheck.IrrefutablePatDef`), whose case is checked to be irrefutable.
     pub patdef_scrutinees: std::collections::HashSet<ExprId, crate::intern::FxBuild>,
-    /// A typed pattern in parentheses of its own (`(h: Accept)`), and an annotated right side in
-    /// its own (`(e: @unchecked)`, `(e: @A)`): dotty's `makePatDef` reads the untyped trees, where
-    /// the parentheses are a node (`Ast::patdef_tuple`).
-    pub paren_typed_pats: std::collections::HashSet<PatId, crate::intern::FxBuild>,
+    /// A pattern in parentheses of its own (`(x)`, `(h: Accept)`, `((x: Int))` once), which the parser reads as the
+    /// pattern: dotty's `Parens` (`Parsers.simplePattern`'s `makeTupleOrParens`), a node of the untyped trees
+    /// `makePatDef` (`Ast::patdef_tuple`) and `makeFor`'s `isVarBinding` and `isIrrefutable` (`needs_no_filter`) read.
+    pub paren_pats: std::collections::HashSet<PatId, crate::intern::FxBuild>,
     /// The vals a member's pattern definition derives for its variables (dotty's `derivedValDef`
     /// with its `PatternVar` attachment): pattern variables to the unused check, never reported.
     pub patdef_components: std::collections::HashSet<DefId, crate::intern::FxBuild>,
@@ -900,6 +958,8 @@ impl Ast {
             lambda_bounds: Vec::new(),
             poly_lambda_bounds: Vec::new(),
             fun_param_names: Vec::new(),
+            notes: Box::default(),
+            alpha_infix: false,
             param_annots: Vec::new(),
             lambda_params: Vec::new(),
             stmts: Vec::new(),
@@ -928,7 +988,7 @@ impl Ast {
             new_outers: crate::intern::FxMap::default(),
             given_binds: Default::default(),
             patdef_scrutinees: Default::default(),
-            paren_typed_pats: Default::default(),
+            paren_pats: Default::default(),
             patdef_components: Default::default(),
             patdef_holders: Default::default(),
             paren_annotated: Default::default(),
@@ -1148,7 +1208,7 @@ impl Ast {
         for &p in pats {
             let span = self.pat_spans[p.idx()];
             let (inner, ty) = match self.pat(p) {
-                Pat::Typed(inner, t) if !self.paren_typed_pats.contains(&p) => (inner, Some(t)),
+                Pat::Typed(inner, t) if !self.paren_pats.contains(&p) => (inner, Some(t)),
                 Pat::Typed(..) => return None,
                 _ => (p, None),
             };

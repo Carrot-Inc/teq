@@ -7,6 +7,7 @@ abstract class Core:
   protected val limit: Int = 3
   def register(f: String => Unit): Unit = f("x")
 
+@annotation.nowarn("msg=eta-expansion")
 object Impl extends Core:
   handle("direct")
   println(tag(limit))

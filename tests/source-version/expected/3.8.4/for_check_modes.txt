@@ -1,0 +1,47 @@
+exit 0
+out case guard
+out filter true
+out filter true
+out filter true
+out map
+out 2
+out case two guards
+out filter true
+out filter true
+out filter true
+out filter true
+out filter true
+out map
+out 2
+out case identity
+out filter true
+out 1
+out case guard identity
+out filter true
+out filter true
+out filter true
+out 1
+out guard identity
+out filter true
+out map
+out 1
+out case stable id
+out List(k)
+out paren identity
+out 1
+out paren given
+out map
+out map
+out 2
+out case guard alias generator
+out filter true
+out filter true
+out filter true
+out flatMap
+out 1
+out case alias guard
+out filter true
+out map
+out filter true
+out map
+out 2

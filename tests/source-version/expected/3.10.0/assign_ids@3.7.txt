@@ -1,0 +1,11 @@
+exit 0
+migration warning 1:31
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 3}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+warning 1:90
+  Deprecated syntax: infix named arguments lists are deprecated; since 3.7 it is interpreted as a single named tuple argument.
+  To avoid this warning, either remove the argument names or use dotted selection.
+  This can be rewritten automatically under -rewrite -source 3.7-migration.

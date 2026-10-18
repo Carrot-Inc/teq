@@ -135,8 +135,10 @@ impl SourceVersion {
         })
     }
 
+    /// The `-migration` versions: every other one of the 3.x versions from `3.0-migration`, and
+    /// `future-migration` (`NAMES`).
     pub fn is_migrating(self) -> bool {
-        self.name().ends_with("-migration")
+        (self.0 < SourceVersion::SCALA2.0 && self.0 % 2 == 0) || self.0 == SourceVersion::FUTURE.0 - 1
     }
 
     /// `stable`: a migration version's own.
@@ -166,6 +168,12 @@ impl SourceVersion {
     /// `handleMigration` over `scala3keywords`), and Scala 2's syntax is read with a warning.
     pub fn migrate_to_3(self) -> bool {
         self == SourceVersion::V3_0_MIGRATION
+    }
+
+    /// `enablesNamedTuples`: `(a = 1)` and `(a = 1, b = 2)` are named tuples, not assignments in
+    /// parentheses, and `(a = p)` a named pattern.
+    pub fn enables_named_tuples(self) -> bool {
+        self.is_at_least(SourceVersion::V3_7)
     }
 
     /// `enablesNewGivens`: the givens of 3.6's syntax (`given t: (n: Int) => C`, a body after a colon).
@@ -289,6 +297,12 @@ impl Migration {
         }
     }
 
+    /// `MigrationVersion.needsPatch`: a migration version from `warnFrom` on, where `-rewrite` patches the
+    /// source and a row whose syntax changes meaning reads it as before (`Parsers.migrateInfixOp`).
+    pub fn needs_patch(self, version: SourceVersion) -> bool {
+        version.is_migrating() && version.is_at_least(self.thresholds(TAG).0)
+    }
+
     #[cfg(test)]
     pub fn name(self) -> String {
         format!("{:?}", self)
@@ -322,6 +336,13 @@ mod tests {
         assert_eq!(v("3.1-migration").illegal_import(Tag::V3_8_4).unwrap(), "`3.1-migration` is not a valid source version, did you mean language.`3.1`?");
         assert_eq!(SourceVersion::NEVER.illegal_import(Tag::V3_8_4).unwrap(), "`never` is not a valid source version, did you mean language.`never`?");
         assert_eq!(v("3.3").illegal_import(Tag::V3_8_4), None);
+    }
+
+    #[test]
+    fn the_migration_versions_by_their_names() {
+        for v in SourceVersion::all() {
+            assert_eq!(v.is_migrating(), v.name().ends_with("-migration"), "{}", v.name());
+        }
     }
 
     #[test]

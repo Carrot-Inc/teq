@@ -617,6 +617,9 @@ java.lang.ClassNotFoundException	toString	:java.lang.String
 java.lang.Cloneable	<init>	:java.lang.Cloneable
 java.lang.Comparable	<init>	[1]:java.lang.Comparable
 java.lang.Comparable	compareTo	java.lang.Object:scala.Int
+java.lang.Deprecated	annotationType	:java.lang.Class
+java.lang.Deprecated	forRemoval	:scala.Boolean
+java.lang.Deprecated	since	:java.lang.String
 java.lang.Double	<init>	scala.Double:java.lang.Double
 java.lang.Double	byteValue	:scala.Byte
 java.lang.Double	compareTo	java.lang.Double:scala.Int
@@ -710,6 +713,8 @@ java.lang.Float$	min	scala.Float,scala.Float:scala.Float
 java.lang.Float$	parseFloat	java.lang.String:scala.Float
 java.lang.Float$	toString	scala.Float:java.lang.String
 java.lang.Float$	valueOf	scala.Float:java.lang.Float
+java.lang.FunctionalInterface	<init>	:java.lang.FunctionalInterface
+java.lang.FunctionalInterface	annotationType	:java.lang.Class
 java.lang.IllegalArgumentException	<init>	:java.lang.IllegalArgumentException
 java.lang.IllegalArgumentException	<init>	java.lang.String,java.lang.Throwable:java.lang.IllegalArgumentException
 java.lang.IllegalArgumentException	<init>	java.lang.String:java.lang.IllegalArgumentException
@@ -1103,6 +1108,8 @@ java.lang.OutOfMemoryError	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.OutOfMemoryError	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.OutOfMemoryError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.OutOfMemoryError	toString	:java.lang.String
+java.lang.Override	<init>	:java.lang.Override
+java.lang.Override	annotationType	:java.lang.Class
 java.lang.Process	<init>	:java.lang.Process
 java.lang.Process	children	:java.util.stream.Stream
 java.lang.Process	descendants	:java.util.stream.Stream
@@ -1246,6 +1253,8 @@ java.lang.RuntimeException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.RuntimeException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.RuntimeException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.RuntimeException	toString	:java.lang.String
+java.lang.SafeVarargs	<init>	:java.lang.SafeVarargs
+java.lang.SafeVarargs	annotationType	:java.lang.Class
 java.lang.SecurityException	<init>	:java.lang.SecurityException
 java.lang.SecurityException	<init>	java.lang.String,java.lang.Throwable:java.lang.SecurityException
 java.lang.SecurityException	<init>	java.lang.String:java.lang.SecurityException
@@ -1416,6 +1425,8 @@ java.lang.StringIndexOutOfBoundsException	printStackTrace	java.io.PrintStream:sc
 java.lang.StringIndexOutOfBoundsException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.StringIndexOutOfBoundsException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.StringIndexOutOfBoundsException	toString	:java.lang.String
+java.lang.SuppressWarnings	annotationType	:java.lang.Class
+java.lang.SuppressWarnings	value	:java.lang.String[]
 java.lang.System	<init>	:java.lang.System
 java.lang.System$	arraycopy	java.lang.Object,scala.Int,java.lang.Object,scala.Int,scala.Int:scala.Unit
 java.lang.System$	currentTimeMillis	:scala.Long

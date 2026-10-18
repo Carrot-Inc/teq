@@ -1746,6 +1746,7 @@ impl<'a> Worker<'a> {
                 typed
             }
             Expr::Prefix(op, operand) => self.type_prefix(op, operand, span),
+            Expr::AsFunction(qual) => self.type_as_function(qual, span, expected),
             Expr::Lambda(params, body) => {
                 let part = self.body_part(super::profile::Part::Closure);
                 self.sites.owners.push(SiteOwner::Lambda(span));
@@ -1776,9 +1777,22 @@ impl<'a> Worker<'a> {
             Expr::Assign(lhs, rhs) => self.type_assign(lhs, rhs, span),
             Expr::Tuple(elems) => self.type_tuple(ast.expr_list(elems), expected),
             Expr::NamedTuple(names, values) => self.type_named_tuple(names, values, expected, span),
-            Expr::Parens(inner) => self.type_expr(inner, expected),
+            Expr::Parens(inner) => {
+                // `typedParens`'s `checkDeprecatedAssignmentSyntax` of `Parens(Assign(..))`.
+                if !ast.notes.assignment_tuples.is_empty() {
+                    self.check_assignment_syntax(e);
+                }
+                let typed = self.type_expr(inner, expected);
+                if self.denotation_marks.is_some() {
+                    self.mark_block_node(inner, typed.0);
+                }
+                typed
+            }
             Expr::Unchecked(inner) => {
                 let (te, ty) = self.type_expr(inner, expected);
+                if self.denotation_marks.is_some() {
+                    self.mark_block_node(inner, te);
+                }
                 *self.expr_marks.entry(te).or_default() |= super::MARK_UNCHECKED;
                 if self.capturing() {
                     self.capture_wrap(te, Wrap::Unchecked);
@@ -1813,6 +1827,9 @@ impl<'a> Worker<'a> {
                     // An array spread as it is written (`f(arr*)`): the sequence a conversion
                     // makes of it is the typer's, which a Java parameter takes as the array.
                     let (te, ty) = self.type_expr(inner, expected);
+                    if self.denotation_marks.is_some() {
+                        self.mark_block_node(inner, te);
+                    }
                     if self.array_element(ty).is_some() {
                         self.prog.mark_spread(te);
                     }
@@ -1829,6 +1846,9 @@ impl<'a> Worker<'a> {
                     if matches!(ast.ty(inner_ty), TyExpr::Wildcard) {
                         let real = classes.into_iter().any(|class| self.runtime_checked_annot(class));
                         let (te, tty) = self.type_expr(inner, expected);
+                        if self.denotation_marks.is_some() {
+                            self.mark_block_node(inner, te);
+                        }
                         if real && tty != ERROR {
                             let own = if self.selector_is_reference(inner, te) { self.path_of(te).unwrap_or(tty) } else { tty };
                             return (te, self.types.mk(Type::Annotated(own)));
@@ -1845,6 +1865,9 @@ impl<'a> Worker<'a> {
                     return typed;
                 }
                 let te = self.check_expr(inner, t);
+                if self.denotation_marks.is_some() {
+                    self.mark_block_node(inner, te);
+                }
                 if matches!(self.prog.expr(te), TExpr::Lambda(..)) && self.as_context_function(t).is_some() {
                     *self.expr_marks.entry(te).or_default() |= super::MARK_ASCRIBED_CLOSURE;
                 }
@@ -3027,6 +3050,12 @@ impl<'a> Worker<'a> {
             Some(s) => {
                 let msg = format!("reassignment to val {}", self.name_str(self.syms.sym(s).name));
                 self.error(span, msg);
+            }
+            // An erroneous target was reported where it was typed (`Typer.typedAssign` of an error tree,
+            // whose type is the error's).
+            None if lty == ERROR => {
+                let tr = self.check_expr(rhs, ERROR);
+                return (self.assignment(tl, tr), ERROR);
             }
             None => self.error(span, "this expression cannot be assigned to"),
         }
@@ -5224,6 +5253,226 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// `Typer.checkDeprecatedAssignmentSyntax` of `(a = v)`, the expression `e` where `SyntaxNotes::assignment_tuples`
+    /// holds it: a migration warning whatever the version (`report.migrationWarning`), of the assignment
+    /// in parentheses before 3.7 (`Parens(Assign(..))`), and of the named tuple of one element from 3.7
+    /// where the assignment would type without an error, which it is typed for and dropped.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn check_assignment_syntax(&mut self, e: ExprId) {
+        let ast = self.cur_ast();
+        let Ok(i) = ast.notes.assignment_tuples.binary_search_by_key(&e, |&(x, ..)| x) else { return };
+        let (_, assign, span) = ast.notes.assignment_tuples[i];
+        let Expr::Assign(lhs, value) = ast.expr(assign) else { return };
+        let Expr::Ident(name) = ast.expr(lhs) else { return };
+        if matches!(ast.expr(e), Expr::NamedTuple(..)) {
+            let mark = self.diags.items.len();
+            let vars = self.snapshot();
+            self.type_expr(assign, None);
+            let failed = self.diags.items[mark..].iter().any(|d| !d.is_warning);
+            self.drop_reported_since(mark);
+            self.rollback(vars);
+            if failed {
+                return;
+            }
+        }
+        // The untyped value as dotty's printer shows it (`DeprecatedAssignmentSyntax`'s `$value`).
+        let shown = super::tree_text::TreePrinter::new(ast, &self.source(self.env.file).text, self.interner).show(value);
+        let msg = format!(
+            "Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,\nnot as an assignment.\n\nTo assign a value, use curly braces: `{{{} = {}}}`.{}",
+            self.name_str(name),
+            shown,
+            crate::source_version::rewrite_notice("This", "3.6-migration")
+        );
+        let w = crate::source::Warning { id: crate::warnings::id::DEPRECATED_ASSIGNMENT_SYNTAX, category: crate::warnings::Category::Migration, ..crate::source::Warning::plain() };
+        self.warn_as(span, msg, w);
+    }
+
+    /// `e _` (`Migrations.typedAsFunction`): `e` typed against the expected function type, else against
+    /// one of any arity (`AnyFunctionProto`), so that a method expands to its function value, one of `()`
+    /// too. An `e` that does not expand and is no function is refused as Scala 2's syntax
+    /// (`OnlyFunctionsCanBeFollowedByUnderscore`, `MigrationVersion.Scala2to3`), and the `_` is reported
+    /// by the version (`FunctionUnderscore`), the same words whatever the arity.
+    #[cold]
+    #[inline(never)]
+    fn type_as_function(&mut self, qual: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
+        let function = expected.filter(|&t| {
+            let t = self.deref(t);
+            self.is_defn_function_n_type(t)
+        });
+        let qual_span = self.cur_ast().expr_span(qual);
+        let outer = std::mem::replace(&mut self.any_function, function.is_none().then_some(qual_span));
+        // dotty's nested typer state, which the patch of a version migrating from 3.0 replaces.
+        let mark = self.attempt();
+        let (te, ty) = self.type_expr(qual, function);
+        self.any_function = outer;
+        let closure = match self.prog.expr(te) {
+            TExpr::Lambda(..) => true,
+            TExpr::Block(_, last) => matches!(self.prog.expr(last), TExpr::Lambda(..)),
+            _ => false,
+        };
+        if closure {
+            self.close(mark);
+        } else {
+            // No closure: the nested state is held apart while the operand is typed again, exploring and
+            // without the function type (`recovered`), whose type, an erroneous one's included, is
+            // judged; the state is committed after the report, its diagnostics after it.
+            let nested = self.set_aside(mark);
+            let explore = self.attempt();
+            let (_, recovered) = self.type_expr(qual, None);
+            self.retract(explore);
+            let widened = self.widen_path(recovered);
+            let widened = self.widen_lit(widened);
+            let deref = self.deref(widened);
+            if !self.is_defn_function_type(deref) {
+                let shown = self.show(widened);
+                let msg = format!("Only function types can be followed by _ but the current expression has type {}", shown);
+                let row = crate::source_version::Migration::Scala2to3;
+                // `Scala2to3.needsPatch`: `x _` is typed as `() => x`, with or without `-rewrite`, the
+                // nested state dropped.
+                if row.needs_patch(self.cur_ast().source_version) {
+                    drop(nested);
+                    self.migration(row, span, msg, crate::warnings::id::ONLY_FUNCTIONS_CAN_BE_FOLLOWED_BY_UNDERSCORE);
+                    self.sites.owners.push(SiteOwner::Lambda(span));
+                    let typed = self.type_lambda(ListRef::EMPTY, qual, span, expected);
+                    self.sites.owners.pop();
+                    return typed;
+                }
+                self.migration(row, span, msg, crate::warnings::id::ONLY_FUNCTIONS_CAN_BE_FOLLOWED_BY_UNDERSCORE);
+            }
+            self.restore(nested);
+        }
+        let msg = format!(
+            "The trailing ` _` for eta-expansion is unnecessary;\nthe compiler performs eta-expansion automatically, so you can write the function value directly instead.{}",
+            crate::source_version::rewrite_notice("This construct", "3.4-migration")
+        );
+        self.migration(crate::source_version::Migration::FunctionUnderscore, span, msg, crate::warnings::NO_ID);
+        (te, ty)
+    }
+
+    /// `Definitions.isFunctionNType` (Definitions.scala 1851), `isNonRefinedFunction` of the type with an `apply`
+    /// refinement over a function type dropped (`Types.dropDependentRefinement`): `FunctionN` or `ContextFunctionN`
+    /// itself, through an alias, not a subclass of one (`=:=`, `<:<`), an intersection or another refinement
+    /// (`isRef(.., skipRefined = false)`). What `typedAsFunction` types `e _` against where it is expected.
+    fn is_defn_function_n_type(&mut self, t: TypeId) -> bool {
+        self.sync_arity_if_stale();
+        let mut t = self.deref_alias(t);
+        if let Some(parent) = self.named_fun_parent(t) {
+            t = self.deref_alias(parent);
+        }
+        matches!(self.types.get(t), Type::Class(c, _) if self.is_function_class(c) || self.is_context_function_class(c))
+    }
+
+    /// `Definitions.isFunctionType` (1859): `isFunctionNType`, or a type deriving from `PolyFunction`, a polymorphic
+    /// function type among them. What `typedAsFunction` takes an `e _` of where `e` expands to no closure.
+    fn is_defn_function_type(&mut self, t: TypeId) -> bool {
+        self.is_defn_function_n_type(t) || self.derives_poly_function_type(t)
+    }
+
+    /// `derivesFrom(defn.PolyFunctionClass)` (`Types.Type.derivesFrom`, Types.scala 283-316): its `loop` over the type
+    /// (`derives_poly_function_walk`), `cls` being `PolyFunction`.
+    fn derives_poly_function_type(&mut self, t: TypeId) -> bool {
+        let poly = self.std_class("PolyFunction");
+        self.derives_poly_function_walk(t, poly, &mut Vec::new())
+    }
+
+    /// `derivesFrom`'s `loop`: a polymorphic function type (`[A] => A => A`, dotty's `RefinedType` of `PolyFunction`, a
+    /// proxy whose `underlying` is the class) derives; a class by its base types (`ClassDenotation.derivesFrom`); a match
+    /// type by its bound or its reduction; an intersection by either side; a union by both, but a side that
+    /// `isLowerBottomType` leaves the other; an abstract type, an applied one and any other proxy by its `superType`
+    /// (`super_type`); anything else not. `path` holds the types the walk is within: one met again on it is a cyclic
+    /// bound, which dotty refuses where it is defined (`CyclicReference`) and which derives nothing.
+    fn derives_poly_function_walk(&mut self, t: TypeId, poly: Option<ClassId>, path: &mut Vec<TypeId>) -> bool {
+        let t = self.deref(t);
+        if path.contains(&t) {
+            return false;
+        }
+        path.push(t);
+        let derives = match self.types.get(t) {
+            Type::Poly(..) => true,
+            Type::Class(..) => poly.is_some_and(|c| self.base_type(t, c).is_some()),
+            Type::Match(..) => {
+                let bound = self.match_bound(t);
+                self.derives_poly_function_walk(bound, poly, path) || self.reduce_head(t).is_some_and(|r| self.derives_poly_function_walk(r, poly, path))
+            }
+            Type::Inter(a, b) => self.derives_poly_function_walk(a, poly, path) || self.derives_poly_function_walk(b, poly, path),
+            Type::Union(a, b, _) => {
+                if self.is_lower_bottom_type(a, poly) {
+                    self.derives_poly_function_walk(b, poly, path)
+                } else if self.is_lower_bottom_type(b, poly) {
+                    self.derives_poly_function_walk(a, poly, path)
+                } else {
+                    self.derives_poly_function_walk(a, poly, path) && self.derives_poly_function_walk(b, poly, path)
+                }
+            }
+            // A `TypeVar`'s `underlying`, its origin's bounds in the constraint: their intersection, a side each.
+            Type::Var(v) => self.upper_bounds_through_vars(v).into_iter().any(|u| self.derives_poly_function_walk(u, poly, path)),
+            _ => self.super_type(t).is_some_and(|u| self.derives_poly_function_walk(u, poly, path)),
+        };
+        path.pop();
+        derives
+    }
+
+    /// `isLowerBottomType` (Types.scala 285-288): `isBottomType`, and `Nothing` or a class `cls` that is neither
+    /// `Nothing` nor a value class (`PolyFunction`, unless the std declared it extending `AnyVal`).
+    fn is_lower_bottom_type(&mut self, t: TypeId, poly: Option<ClassId>) -> bool {
+        self.is_bottom_type(t) && (self.has_bottom_class(t, Bottom::Nothing, &mut Vec::new()) || !self.poly_function_is_value_class(poly))
+    }
+
+    /// `ClassDenotation.isValueClass` (SymDenotations.scala 2102) of `PolyFunction`: a class deriving from `AnyVal`.
+    fn poly_function_is_value_class(&mut self, poly: Option<ClassId>) -> bool {
+        let Some(c) = poly else { return false };
+        let ty = self.types.class(c, &[]);
+        self.base_type(ty, self.b.any_val).is_some()
+    }
+
+    /// `isBottomType` (Types.scala 273-275): without explicit nulls (`SafeNulls`), which teq has not,
+    /// `isBottomTypeAfterErasure` (277-279), `hasClassSymbol` of `Nothing` or of `Null`.
+    fn is_bottom_type(&mut self, t: TypeId) -> bool {
+        self.has_bottom_class(t, Bottom::Nothing, &mut Vec::new()) || self.has_bottom_class(t, Bottom::Null, &mut Vec::new())
+    }
+
+    /// `hasClassSymbol(cls)` (Types.scala 685-698) of `Nothing` or `Null`: a class reference by its symbol, an abstract
+    /// type and any other proxy by its `superType` (`super_type`), an intersection by either side, a union by both;
+    /// anything else not. A type met again on `path` is a cyclic bound, as in `derives_poly_function_walk`.
+    fn has_bottom_class(&mut self, t: TypeId, bottom: Bottom, path: &mut Vec<TypeId>) -> bool {
+        let t = self.deref(t);
+        if path.contains(&t) {
+            return false;
+        }
+        path.push(t);
+        let has = match (self.types.get(t), bottom) {
+            (Type::Nothing, Bottom::Nothing) => true,
+            (Type::Nothing, Bottom::Null) | (Type::Class(..), Bottom::Nothing) => false,
+            (Type::Class(c, _), Bottom::Null) => matches!(self.types.get(self.b.t_null), Type::Class(n, _) if n == c),
+            (Type::Inter(a, b), _) => self.has_bottom_class(a, bottom, path) || self.has_bottom_class(b, bottom, path),
+            (Type::Union(a, b, _), _) => self.has_bottom_class(a, bottom, path) && self.has_bottom_class(b, bottom, path),
+            (Type::Var(v), _) => self.upper_bounds_through_vars(v).into_iter().any(|u| self.has_bottom_class(u, bottom, path)),
+            _ => self.super_type(t).is_some_and(|u| self.has_bottom_class(u, bottom, path)),
+        };
+        path.pop();
+        has
+    }
+
+    /// dotty's `superType` of a type proxy (`TypeProxy.superType`, Types.scala 2193-2196: its `underlying`, the upper
+    /// bound where that is a `TypeBounds`; `AppliedType.superType` 4742: an applied class constructor itself, an applied
+    /// proxy's upper bound re-applied to the arguments), over teq's types: a type parameter's upper bound (a
+    /// `TypeParamRef`'s bounds), a higher-kinded one's re-applied (`app_param_upper`), an abstract member's upper bound
+    /// (a `TypeRef`'s `info`), an alias's expansion, a match type's bound (`MatchType.underlying`), a path's widening (a
+    /// `TermRef`'s info), a literal's class (`ConstantType`), a refinement's parent (`RefinedType`), a recursive type's
+    /// body (`RecType`), an annotated type's (`AnnotatedType`), a nested class's class. None of a type that is no proxy.
+    pub(super) fn super_type(&mut self, t: TypeId) -> Option<TypeId> {
+        match self.types.get(t) {
+            Type::Param(p) => Some(self.syms.tparam(p).upper),
+            Type::AppParam(p, args) => self.app_param_upper(p, args),
+            Type::Alias(a, args) => self.alias_expansion(a, args),
+            Type::Match(..) => Some(self.match_bound(t)),
+            Type::Annotated(inner) => Some(inner),
+            Type::Lit(_) => Some(self.widen_lit(t)),
+            _ => self.dependent_underlying(t),
+        }
+    }
+
     // ---- for comprehensions ----
 
     pub fn type_for(&mut self, rest: ForRest, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
@@ -5231,9 +5480,11 @@ impl<'a> Worker<'a> {
         let ForRest::Rest { idx, end, body, is_yield } = rest else {
             return (self.prog.add(TExpr::Unit), ERROR);
         };
-        let (pat, source, filtering) = match ast.enumerators[idx as usize] {
-            Enumerator::Gen(pat, source) => (pat, source, false),
-            Enumerator::CaseGen(pat, source) => (pat, source, true),
+        // The generator's `GenCheckMode` (`Parsers.generatorRest`'s by the version, a `case` generator's
+        // `FilterAlways`), which each selection on it reads (`Desugar.makeFor`'s `rhsSelect` and `makeLambda`).
+        let (pat, source, mut mode) = match ast.enumerators[idx as usize] {
+            Enumerator::Gen(pat, source, m) => (pat, source, CheckMode::of(m)),
+            Enumerator::CaseGen(pat, source) => (pat, source, CheckMode::FilterAlways),
             _ => {
                 self.error(span, "a for expression has to start with a generator");
                 return (self.prog.add(TExpr::Unit), ERROR);
@@ -5241,15 +5492,17 @@ impl<'a> Worker<'a> {
         };
         let (mut recv, mut recv_ty) = self.type_expr(source, None);
         let mut next = idx + 1;
-        let mut binder = ForBinder::Pat(pat);
-        let mut filtered = filtering;
-        if filtering {
-            let lists = vec![ArgList { args: vec![ArgSrc::ForLambda(binder, ForRest::Filter)], using: false, span, fun: ArgList::NO_FUN }];
-            let (r, t) = self.apply_member(recv, recv_ty, names::WITH_FILTER, None, lists, span, None);
-            recv = r;
-            recv_ty = t;
-            binder = ForBinder::CasePat(pat);
-        }
+        // `rhsSelect` of the first selection on the generator, whichever it is.
+        (recv, recv_ty) = self.for_rhs_select(recv, recv_ty, mode, pat, source, span);
+        let mut binder = lambda_binder(mode, pat);
+        // Scala 3.8's for comprehensions (`SourceVersion.enablesBetterFors`): aliases before a
+        // generator or the end go into the lambda that binds them, and a trailing `map` of the
+        // generator's own pattern is left out; before, every run of aliases is packed with the
+        // element by a `map` of its own (`makeFor`'s `TupleN(P, P_1, ... P_N)`).
+        let better = ast.source_version.is_at_least(crate::source_version::SourceVersion::V3_8);
+        // `TuplingMigrationForMap` (Desugar.scala 2345): the better path's application of a generator followed by
+        // more than one alias, which go into its lambda.
+        let tupling;
         loop {
             while next < end {
                 let Enumerator::Guard(g) = ast.enumerators[next as usize] else { break };
@@ -5262,8 +5515,15 @@ impl<'a> Worker<'a> {
                 let (r, t) = self.apply_member(recv, recv_ty, names::WITH_FILTER, None, lists, span, None);
                 recv = r;
                 recv_ty = t;
-                filtered = true;
                 next += 1;
+                // The guard's `GenFrom(pat, filtered, mode)` (Desugar.scala 2353-2363), whose next selection's
+                // `rhsSelect` filters the pattern again under `FilterAlways`; past packed aliases its pattern is
+                // their tuple's, which `Ignore` never filters.
+                mode = mode.after_guard(better);
+                if !matches!(binder, ForBinder::Unpack(_)) {
+                    binder = lambda_binder(mode, pat);
+                    (recv, recv_ty) = self.for_rhs_select(recv, recv_ty, mode, pat, source, span);
+                }
             }
             // Value definitions followed by a guard travel along with the element.
             let mut val_end = next;
@@ -5272,7 +5532,11 @@ impl<'a> Worker<'a> {
             }
             let guard_follows =
                 val_end > next && val_end < end && matches!(ast.enumerators[val_end as usize], Enumerator::Guard(_));
-            if !guard_follows {
+            // `makeFor`'s guard of the better path (Desugar.scala 2336-2338): no alias of a pattern that
+            // `isNestedGivenPattern`, which goes packed with the element as before 3.8.
+            let better_path = better && !nested_given_alias(ast, next..val_end);
+            if !guard_follows && (better_path || val_end == next) {
+                tupling = better_path && val_end - next > 1;
                 break;
             }
             let pack = ForRest::Pack { idx: next, end: val_end };
@@ -5281,6 +5545,8 @@ impl<'a> Worker<'a> {
             recv = r;
             recv_ty = t;
             binder = ForBinder::Unpack(self.for_packs.len() as u32 - 1);
+            // `GenFrom(makeTuple(allpats), rhs1, GenCheckMode.Ignore)` (Desugar.scala 2354).
+            mode = CheckMode::Ignore;
             next = val_end;
         }
         let has_more_generators = (next..end)
@@ -5296,31 +5562,263 @@ impl<'a> Worker<'a> {
         // Scala 3.8 leaves out a trailing `map` whose body is the generator's own pattern, or
         // `()` over `Unit` elements: the call is still typed, and the generator stands for it
         // when it has the call's type.
-        let last = method == names::MAP && next == end && !filtered;
-        let identity = last && matches!(binder, ForBinder::Pat(p) if self.expr_is_pattern(body, p));
-        if identity || (last && matches!(ast.expr(body), Expr::UnitLit)) {
+        // `markTrailingMap` (Desugar.scala 2313-2319): not after a guard's `Filtered`, whose `withFilter` result types differ.
+        let last = better && method == names::MAP && next == end && mode != CheckMode::Filtered;
+        // `deepEquals(gen.pat, body) || deepEquals(body, Tuple(Nil))` (Desugar.scala 2317), of the generator's
+        // pattern whatever its lambda; a packed tuple (`Unpack`) holds a nested given here, which no body equals.
+        let identity = last && matches!(binder, ForBinder::Pat(p) | ForBinder::CasePat(p) | ForBinder::Always(p) if deep_equals(ast, p, body));
+        let unit = last && unsplice(ast, body).is_some_and(|e| matches!(ast.expr(e), Expr::UnitLit));
+        if identity || unit || tupling {
+            let outer = self.for_map_watch.replace(Box::default());
             let (te, ty) = self.apply_member(recv, recv_ty, method, None, lists, span, exp);
-            let mark = self.snapshot();
-            let same = self.is_sub(recv_ty, ty);
-            self.rollback(mark);
-            return if same { (recv, recv_ty) } else { (te, ty) };
+            let watch = std::mem::replace(&mut self.for_map_watch, outer).unwrap_or_default();
+            if tupling {
+                self.warn_tupling_migration(te, recv, recv_ty, &watch, span);
+            }
+            if identity || unit {
+                // An inline `map` expands after the typing of its site (`expand_pending`), as dotty's after
+                // `DropForMap`'s phase reads the `Inlined` node (`transformInlined`): the call carries the mark.
+                if self.is_pending_call(te) {
+                    self.mark_pending_for_map(te, recv, recv_ty, watch);
+                    return (te, ty);
+                }
+                return self.drop_for_map(te, ty, recv, recv_ty, &watch).unwrap_or((te, ty));
+            }
+            return (te, ty);
         }
         self.apply_member(recv, recv_ty, method, None, lists, span, exp)
     }
 
-    /// Whether `e` spells the variables `p` binds: the variable itself or a tuple of them.
-    fn expr_is_pattern(&self, e: ExprId, p: ast::PatId) -> bool {
-        let ast = self.cur_ast();
-        match (ast.expr(e), ast.pat(p)) {
-            (Expr::Parens(inner), _) => self.expr_is_pattern(inner, p),
-            (Expr::Ident(n), Pat::Bind(m, None)) => n == m,
-            (Expr::Tuple(es), Pat::Tuple(ps)) => {
-                let (es, ps) = (ast.expr_list(es), ast.pat_list(ps));
-                es.len() == ps.len() && es.iter().zip(ps).all(|(&e, &p)| self.expr_is_pattern(e, p))
+    /// `DropForMap.transformApply`'s first part (DropForMap.scala 34-48), the consumer of `TuplingMigrationForMap`:
+    /// the application `te` stripped of its applications (`stripApplies`) to a selection `Select(coll, _)`, a
+    /// method's call on a receiver (an extension's call is an `Ident` or its object's selection, which teq's call
+    /// node does not tell apart: none); where `coll`'s members named `map` (`nonPrivateMember(nme.map)`: no private
+    /// one) are overloaded and their final result types (`finalResultType`) are not all the first's (`=:=`), the
+    /// warning at the application, with no message id.
+    fn warn_tupling_migration(&mut self, te: TExprId, recv: TExprId, recv_ty: TypeId, watch: &super::apply::ForMapWatch, span: Span) {
+        let TExpr::CallMethod(coll, sym, _) = self.prog.expr(te) else { return };
+        if self.syms.sym(sym).is_extension {
+            return;
+        }
+        let Some(coll_ty) = self.for_map_node_type(coll, recv, recv_ty, watch) else { return };
+        let Some((m, owner_ty)) = self.find_member(coll_ty, names::MAP) else { return };
+        let Some(alts) = self.syms.alternatives(m).map(|a| a.to_vec()) else { return };
+        let subst = self.owner_subst(owner_ty);
+        let mut finals: Vec<TypeId> = Vec::with_capacity(alts.len());
+        for a in alts {
+            if self.syms.sym(a).mods & mods::PRIVATE == 0 {
+                let ret = self.sig_of(a).ret;
+                finals.push(self.types.subst(ret, &subst));
             }
-            _ => false,
+        }
+        if finals.len() < 2 {
+            return;
+        }
+        let head = finals[0];
+        if !finals[1..].iter().all(|&t| self.is_same_type(t, head)) {
+            self.warn(span, "For comprehension with multiple val assignments may change result type in 3.8");
         }
     }
+
+    /// `DropForMap.transformApply` 49-60 and `transformInlined` 66-90, a trailing `map` that `markTrailingMap`
+    /// marks, decided where teq types it: the call `te` of type `ty`, `Unmapped`, gives the receiver `f` (an
+    /// extension's first argument, `args.head`) where `f.tpe.widen =:= tree.tpe`, else the argument `r` of `f`'s
+    /// conversion (`Converted`) where `r.tpe =:= tree.tpe`; otherwise none, the call kept. An expansion of an inline
+    /// `map` is `transform_inlined_map`'s. `f`'s and `r`'s types are those `type_for` and the conversions gave them
+    /// (`for_map_node_type`).
+    fn drop_for_map(&mut self, te: TExprId, ty: TypeId, recv: TExprId, recv_ty: TypeId, watch: &super::apply::ForMapWatch) -> Option<(TExprId, TypeId)> {
+        if let Some(inlined) = watch.inlined.iter().rev().find(|i| i.expansion == te) {
+            return self.transform_inlined_map(te, ty, inlined, recv, recv_ty, watch);
+        }
+        let (f0, sym, args) = match self.prog.expr(te) {
+            TExpr::CallMethod(r, s, a) => (Some(r), s, a),
+            TExpr::CallStatic(s, a) => (None, s, a),
+            _ => return None,
+        };
+        let args = self.prog.expr_list(args).to_vec();
+        let f = self.unmapped(f0, sym, &args)?;
+        if let Some(f_ty) = self.for_map_node_type(f, recv, recv_ty, watch) {
+            let widened = self.widen_type(f_ty);
+            if self.is_same_type(widened, ty) {
+                return Some((f, f_ty));
+            }
+        }
+        let r = self.converted(f)?;
+        let r_ty = self.for_map_node_type(r, recv, recv_ty, watch)?;
+        self.is_same_type(r_ty, ty).then_some((r, r_ty))
+    }
+
+    /// `DropForMap.transformInlined` (DropForMap.scala 66-90): the expansion `te` of the inline `map` call
+    /// `inlined`, its call `Unmapped`. Where `f.tpe.widen =:= expansion.tpe`, the first binding whose right side is
+    /// `f` (`sameTree`: teq binds the receiver's or the argument's node itself, `TStmt::Val(proxy, f)`), and a
+    /// reference to its proxy in the expansion (`find` of `Inlined(Thicket(Nil), Nil, Ident(vd.name))` of the
+    /// binding's symbol, teq's `TExpr::Local(proxy)`): the expansion replaced by that reference, the bindings kept.
+    /// The bindings and references are those teq's inliner makes, which keeps a once-referenced elideable binding
+    /// (`dropUnusedDefs` integrates it) and names the receiver's proxy alike for `this` and a member of it
+    /// (`inlinedFromOutside` wraps the first alone): the report's departures. Else `Converted(r)` with
+    /// `r.tpe =:= expansion.tpe`: the expansion replaced by `r`, the bindings kept. Any search failing, the
+    /// expansion stays (none).
+    pub(super) fn transform_inlined_map(
+        &mut self,
+        te: TExprId,
+        ty: TypeId,
+        inlined: &super::apply::ForMapInlined,
+        recv: TExprId,
+        recv_ty: TypeId,
+        watch: &super::apply::ForMapWatch,
+    ) -> Option<(TExprId, TypeId)> {
+        let f = self.unmapped(inlined.recv, inlined.sym, &inlined.args)?;
+        let (stmts, body) = match self.prog.expr(te) {
+            TExpr::Block(l, body) => (self.prog.stmt_list(l).to_vec(), body),
+            _ => (Vec::new(), te),
+        };
+        let same = self.for_map_node_type(f, recv, recv_ty, watch).is_some_and(|f_ty| {
+            let widened = self.widen_type(f_ty);
+            self.is_same_type(widened, ty)
+        });
+        let result = if same {
+            let proxy = stmts.iter().find_map(|&st| match st {
+                TStmt::Val(p, rhs) if rhs == f => Some(p),
+                _ => None,
+            })?;
+            let referenced = self.prog.descendants(body).any(|e| matches!(self.prog.expr(e), TExpr::Local(p) if p == proxy));
+            if !referenced {
+                return None;
+            }
+            self.prog.add(TExpr::Local(proxy))
+        } else {
+            let r = self.converted(f)?;
+            let r_ty = self.for_map_node_type(r, recv, recv_ty, watch)?;
+            if !self.is_same_type(r_ty, ty) {
+                return None;
+            }
+            r
+        };
+        if stmts.is_empty() {
+            return Some((result, ty));
+        }
+        let l = self.prog.stmts.push_slice(&stmts);
+        Some((self.prog.add(TExpr::Block(l, result)), ty))
+    }
+
+    /// `DropForMap.Unmapped` (DropForMap.scala 102-121) with `Lambda` and `MapCall` (123-139), over teq's call of
+    /// `sym` on `recv` with the flattened arguments `args`, by the clauses of `sym`'s signature: from the last, the
+    /// implicit and contextual ones passed over (an `Apply` whose method type `isImplicitMethod`); the next is the
+    /// lambda's, exactly one argument, a closure of exactly one parameter (`Lambda(_ :: Nil, _)`); the clauses
+    /// before it, leading using clauses among them, are `MapCall`'s. The receiver: an extension's (`Extension`) the
+    /// first argument of the innermost application (`args.head`), its first clause's, else the selection's
+    /// qualifier. teq's call is no method type (`MethodOrPoly`): a missing clause would have made a closure.
+    fn unmapped(&mut self, recv: Option<TExprId>, sym: SymId, args: &[TExprId]) -> Option<TExprId> {
+        let sig = self.sig_of(sym).clone();
+        if sig.clauses.iter().map(|c| c.params.len()).sum::<usize>() != args.len() {
+            return None;
+        }
+        let mut k = sig.clauses.len();
+        while k > 0 && (sig.clauses[k - 1].is_using || sig.clauses[k - 1].is_implicit) {
+            k -= 1;
+        }
+        let lambda_clause = k.checked_sub(1)?;
+        if sig.clauses[lambda_clause].params.len() != 1 {
+            return None;
+        }
+        let at: usize = sig.clauses[..lambda_clause].iter().map(|c| c.params.len()).sum();
+        if !matches!(self.prog.expr(args[at]), TExpr::Lambda(params, _) if params.len == 1) {
+            return None;
+        }
+        if self.syms.sym(sym).is_extension {
+            // `MapCall`'s `args`: the innermost application's, none where the lambda's clause is the first.
+            return if lambda_clause == 0 { None } else { args.first().copied() };
+        }
+        recv
+    }
+
+    /// `DropForMap.Converted` (DropForMap.scala 141-149): an application's innermost one (`Apply(fn @ Apply(_, _),
+    /// _)` walked inward), of exactly one argument `r`, whose method is `Implicit` (an implicit conversion, an
+    /// implicit class's, which teq writes as its class's `New`) or an `apply` of a class that derives from
+    /// `Conversion` (`derivesFrom(defn.ConversionClass)`).
+    fn converted(&mut self, f: TExprId) -> Option<TExprId> {
+        let (args, conversion) = match self.prog.expr(f) {
+            TExpr::CallStatic(c, a) | TExpr::CallMethod(_, c, a) => {
+                let first = self.sig_of(c).clauses.first().map(|cl| cl.params.len());
+                if first != Some(1) {
+                    return None;
+                }
+                let info = self.syms.sym(c);
+                let conversion = info.mods & mods::IMPLICIT != 0
+                    || (info.name == names::APPLY
+                        && match (info.owner, self.b.conversion) {
+                            (Owner::Class(o), Some(conv)) => self.derives_from(o, conv),
+                            _ => false,
+                        });
+                (a, conversion)
+            }
+            TExpr::New(class, a) => (a, self.syms.class(class).mods & mods::IMPLICIT != 0 && a.len == 1),
+            _ => return None,
+        };
+        if !conversion {
+            return None;
+        }
+        self.prog.expr_list(args).first().copied()
+    }
+
+    /// The type of a node of a comprehension's trailing application, its tree's (`tree.tpe`): a stable reference's
+    /// path (an `Ident`'s or `Select`'s `TermRef`, `path_of`), else the receiver as `type_for` typed it or a
+    /// conversion's application as it was committed (`ForMapWatch::conversions`); none of any other node, whose type
+    /// a build that records none does not keep.
+    fn for_map_node_type(&mut self, e: TExprId, recv: TExprId, recv_ty: TypeId, watch: &super::apply::ForMapWatch) -> Option<TypeId> {
+        if let Some(path) = self.path_of(e) {
+            return Some(path);
+        }
+        if e == recv {
+            return Some(recv_ty);
+        }
+        watch.conversions.iter().rev().find(|&&(c, _)| c == e).map(|&(_, t)| t)
+    }
+
+    /// `TypeComparer.isSameType` (TypeComparer.scala 2463-2481): `NoType` on the left none; one type itself; a pair
+    /// the outer comparisons from level 3 keep (`sames`); otherwise both subtype tests (teq's relation, `is_sub`)
+    /// under `rollbackConstraintsUnless`: the constraints of a success kept, a failure's rolled back. teq's GADT
+    /// facts are made by pattern typing alone, never by `is_sub`, so the trail holds what a comparison records.
+    pub(super) fn is_same_type(&mut self, a: TypeId, b: TypeId) -> bool {
+        if a == NO_TYPE {
+            return false;
+        }
+        if a == b {
+            return true;
+        }
+        if self.sames.as_ref().is_some_and(|m| m.get(&a) == Some(&b)) {
+            return true;
+        }
+        self.same_level += 1;
+        let saved = if self.same_level >= 3 { Some(self.sames.replace(FxMap::default())) } else { None }; // dotty's startSameTypeTrackingLevel
+        let mark = self.snapshot();
+        let res = self.is_sub(a, b) && self.is_sub(b, a);
+        if !res {
+            self.rollback(mark);
+        }
+        self.same_level -= 1;
+        if let Some(saved) = saved {
+            self.sames = saved;
+        }
+        if res {
+            if let Some(m) = self.sames.as_mut() {
+                m.insert(b, a);
+            }
+        }
+        res
+    }
+
+    /// `rhsSelect`'s right side (Desugar.scala 2302-2305): the receiver `recv` with the pattern filter
+    /// (`makePatFilter`, 2255-2260: `case pat => true; case _ => false`) where `needsNoFilter` does not hold of the
+    /// generator in `mode`.
+    fn for_rhs_select(&mut self, recv: TExprId, recv_ty: TypeId, mode: CheckMode, pat: ast::PatId, source: ExprId, span: Span) -> (TExprId, TypeId) {
+        if needs_no_filter_in(self.cur_ast(), mode, pat, source) {
+            return (recv, recv_ty);
+        }
+        let lists = vec![ArgList { args: vec![ArgSrc::ForLambda(ForBinder::Always(pat), ForRest::Filter)], using: false, span, fun: ArgList::NO_FUN }];
+        self.apply_member(recv, recv_ty, names::WITH_FILTER, None, lists, span, None)
+    }
+
 
     /// `y = rhs` in a for comprehension is a val named `y` to a macro in `rhs`.
     fn type_for_val(&mut self, pat: ast::PatId, value: ExprId) -> (TExprId, TypeId) {
@@ -5576,4 +6074,200 @@ impl ContextualOrder {
         let i = list.iter().position(|&(s, d, _)| s == start && d == depth)?;
         Some(1 + list[..i].iter().map(|&(_, _, n)| n).sum::<u32>())
     }
+}
+
+/// `Desugar.makeFor.deepEquals` (Desugar.scala 2307-2311) of the generator's pattern `p` and the body `e`, each
+/// `unsplice`d at every recursion: two identifiers by their names, whatever an identifier denotes (a variable, a
+/// stable identifier, a backquoted name, `_`); two tuples element by element; anything else not (a bind with a body, a
+/// typed pattern, a named argument, a block). A pattern's own parentheses are no node in teq's tree (`Ast::paren_pats`).
+fn deep_equals(ast: &ast::Ast, p: ast::PatId, e: ExprId) -> bool {
+    let Some(e) = unsplice(ast, e) else { return false };
+    match (ast.pat(p), ast.expr(e)) {
+        (Pat::Bind(n, None), Expr::Ident(m)) => n == m,
+        (Pat::StableId(path), Expr::Ident(m)) => matches!(ast.expr(path), Expr::Ident(n) if n == m),
+        (Pat::Wildcard, Expr::Ident(m)) => m == crate::names::WILDCARD,
+        (Pat::Tuple(ps), Expr::Tuple(es)) => {
+            let (ps, es) = (ast.pat_list(ps), ast.expr_list(es));
+            ps.len() == es.len() && ps.iter().zip(es).all(|(&p, &e)| deep_equals(ast, p, e))
+        }
+        _ => false,
+    }
+}
+
+/// `untpd.unsplice` (TreeInfo.scala 440-444) of `e`: through parentheses, a kept `Expr::Parens` and those the parser
+/// collapsed alike (`Ast::written_arg`); `None` for a block, which stays one (`Ast::is_braced`: a brace block the parser
+/// read as its one expression), beneath parentheses too. teq's source trees hold no `TypedSplice`.
+fn unsplice(ast: &ast::Ast, e: ExprId) -> Option<ExprId> {
+    let mut e = e;
+    loop {
+        if ast.is_braced(e) {
+            return None;
+        }
+        match ast.expr(e) {
+            Expr::Parens(inner) => e = inner,
+            _ => return Some(e),
+        }
+    }
+}
+
+/// dotty's `GenCheckMode` (untpd.scala 185-192): what a selection on a generator does to its pattern.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CheckMode {
+    /// Neither filter nor check: the pattern is trivially irrefutable (packed aliases' tuple), or a guard
+    /// before better fors filtered.
+    Ignore,
+    /// Neither filter nor check: a guard under better fors filtered before.
+    Filtered,
+    /// Checked to be irrefutable (from 3.4).
+    Check,
+    /// Checked and filtered (3.2 and 3.3).
+    CheckAndFilter,
+    /// Filtered where it may fail (before 3.2).
+    FilterNow,
+    /// Filtered always: the pattern is prefixed by `case`.
+    FilterAlways,
+}
+
+impl CheckMode {
+    fn of(m: ast::GenMode) -> CheckMode {
+        match m {
+            ast::GenMode::FilterNow => CheckMode::FilterNow,
+            ast::GenMode::CheckAndFilter => CheckMode::CheckAndFilter,
+            ast::GenMode::Check => CheckMode::Check,
+        }
+    }
+
+    /// The mode of the `GenFrom` a guard makes (Desugar.scala 2356-2361): under better fors `FilterAlways` kept and
+    /// any other `Filtered`; before them `Ignore`.
+    fn after_guard(self, better: bool) -> CheckMode {
+        match (better, self) {
+            (true, CheckMode::FilterAlways) => CheckMode::FilterAlways,
+            (true, _) => CheckMode::Filtered,
+            (false, _) => CheckMode::Ignore,
+        }
+    }
+}
+
+/// `needsNoFilter` (Desugar.scala 2293-2297): `FilterAlways` filters always; `FilterNow` and `CheckAndFilter` but where
+/// the pattern binds a variable or its syntax shows it irrefutable (`needs_no_filter`); `Check`, `Ignore` and
+/// `Filtered` never.
+fn needs_no_filter_in(ast: &ast::Ast, mode: CheckMode, pat: ast::PatId, rhs: ExprId) -> bool {
+    match mode {
+        CheckMode::FilterAlways => false,
+        CheckMode::FilterNow | CheckMode::CheckAndFilter => needs_no_filter(ast, pat, rhs),
+        CheckMode::Check | CheckMode::Ignore | CheckMode::Filtered => true,
+    }
+}
+
+/// `makeLambda`'s parameter (Desugar.scala 2178-2198): under `FilterAlways` a case lambda of the pattern, unchecked, an
+/// identifier in it a stable identifier pattern (`ForBinder::Always`); otherwise an `IdPattern` the function's
+/// parameter, any other pattern a case lambda, checked (`MatchCheck.IrrefutableGenFrom`) under `Check` and
+/// `CheckAndFilter` (`ForBinder::Pat`) and unchecked under the others (`ForBinder::CasePat`).
+fn lambda_binder(mode: CheckMode, pat: ast::PatId) -> ForBinder {
+    match mode {
+        CheckMode::FilterAlways => ForBinder::Always(pat),
+        CheckMode::Check | CheckMode::CheckAndFilter => ForBinder::Pat(pat),
+        CheckMode::FilterNow | CheckMode::Ignore | CheckMode::Filtered => ForBinder::CasePat(pat),
+    }
+}
+
+/// `TreeInfo.IdPattern` (TreeInfo.scala 517-524): an `Ident` but `_` (teq's variable `Bind` without a body, or a
+/// stable or backquoted name's `StableId`), or `Typed(id: Ident, tpt)`, a typed `_` among them. A pattern in parentheses
+/// of its own is a `Parens`, none (`Ast::paren_pats`), and so is a typed one whose identifier is in parentheses.
+pub(super) fn is_id_pattern(ast: &ast::Ast, p: ast::PatId) -> bool {
+    let ident = |p: ast::PatId| match ast.pat(p) {
+        Pat::Bind(_, None) => true,
+        Pat::StableId(e) => matches!(ast.expr(e), Expr::Ident(_)),
+        _ => false,
+    };
+    if ast.paren_pats.contains(&p) {
+        return false;
+    }
+    match ast.pat(p) {
+        Pat::Typed(inner, _) => !ast.paren_pats.contains(&inner) && (ident(inner) || matches!(ast.pat(inner), Pat::Wildcard)),
+        _ => ident(p),
+    }
+}
+
+/// Whether an alias among the enumerators `range` has a pattern that `isNestedGivenPattern` (Desugar.scala 2338).
+fn nested_given_alias(ast: &ast::Ast, range: std::ops::Range<u32>) -> bool {
+    range.into_iter().any(|i| matches!(ast.enumerators[i as usize], Enumerator::Val(p, _) if is_nested_given_pattern(ast, p)))
+}
+
+/// `isNestedGivenPattern` (Desugar.scala 2206-2208) over the untyped tree: a `Bind` by its body alone, so that a
+/// top-level `given T = x` (`Bind(name, Typed(_, T))` marked `Given`) nests none; any other pattern by `hasGivenBind`,
+/// a bind in parentheses of its own among them (dotty's `Parens(Bind(..))`, `Ast::paren_pats`). teq's `Bind` without
+/// a body is dotty's `Ident`.
+fn is_nested_given_pattern(ast: &ast::Ast, p: ast::PatId) -> bool {
+    match ast.pat(p) {
+        Pat::Bind(_, Some(body)) if !ast.paren_pats.contains(&p) => has_given_bind(ast, body),
+        _ => has_given_bind(ast, p),
+    }
+}
+
+/// `hasGivenBind` (Desugar.scala 2200-2203): a `Bind` marked `Given` anywhere in `p`, `p` itself included
+/// (`existsSubTree`), by the parser's record of those binds (`Ast::given_binds`).
+fn has_given_bind(ast: &ast::Ast, p: ast::PatId) -> bool {
+    if ast.given_binds.contains(&p) {
+        return true;
+    }
+    match ast.pat(p) {
+        Pat::Bind(_, Some(q)) | Pat::Typed(q, _) | Pat::NamedField(_, q) | Pat::Rest(q) => has_given_bind(ast, q),
+        Pat::Ctor(_, l) | Pat::Tuple(l) | Pat::Alt(l) | Pat::Interp(_, _, l) => ast.pat_list(l).iter().any(|&q| has_given_bind(ast, q)),
+        Pat::Wildcard | Pat::Bind(_, None) | Pat::Lit(_) | Pat::StableId(_) | Pat::Quote(_) | Pat::QuoteType(_) | Pat::Error => false,
+    }
+}
+
+/// The bottom class `hasClassSymbol` is asked of (`Worker::has_bottom_class`).
+#[derive(Clone, Copy)]
+enum Bottom {
+    Nothing,
+    Null,
+}
+
+/// `Desugar.makeFor`'s `needsNoFilter` of a generator that filters a pattern that may fail: the
+/// pattern binds a variable (`isVarBinding`: `x`, `X`, `x: T`, `_: T`, `given T`, none in parentheses), or its
+/// syntax shows it irrefutable against the right side's (`isIrrefutable`: a variable, `_`, a binder of one,
+/// through parentheses, a tuple of such against a tuple of as many, through parentheses, a block's result,
+/// both branches of an `if`, every case of a match and a `throw`). The decision is syntactic, over the
+/// parser's tree with its parentheses (`Ast::paren_pats`, dotty's `Parens`): a tuple pattern over a value of
+/// a tuple type is filtered, and so is `(x: Int)`.
+fn needs_no_filter(ast: &ast::Ast, pat: ast::PatId, rhs: ExprId) -> bool {
+    // `isVarBinding` (Desugar.scala 2288-2291): a `Bind` marked `Given` (`given T`, `Bind(name, Typed(Ident(_), T))`)
+    // is its inner pattern's, then `IdPattern` (TreeInfo.scala 518-524): an `Ident` but `_`, or `Typed(id: Ident, _)`.
+    // A pattern in parentheses is a `Parens`, neither.
+    fn var_binding(ast: &ast::Ast, p: ast::PatId) -> bool {
+        match ast.pat(p) {
+            Pat::Bind(_, Some(inner)) if !ast.paren_pats.contains(&p) && ast.given_binds.contains(&p) => var_binding(ast, inner),
+            _ => is_id_pattern(ast, p),
+        }
+    }
+    // `isIrrefutable` (2266-2283), its `Parens` unwrapped: teq's node is the pattern they enclose.
+    fn irrefutable(ast: &ast::Ast, p: ast::PatId, rhs: ExprId) -> bool {
+        match ast.pat(p) {
+            Pat::Bind(_, Some(inner)) => irrefutable(ast, inner, rhs),
+            Pat::Tuple(pats) => matches_tuple(ast, ast.pat_list(pats), rhs),
+            // `isVarPattern` (TreeInfo.scala 205-208): a lower-case name or `_`, not backquoted.
+            Pat::Bind(_, None) | Pat::Wildcard => true,
+            _ => false,
+        }
+    }
+    fn matches_tuple(ast: &ast::Ast, pats: &[ast::PatId], rhs: ExprId) -> bool {
+        match ast.expr(rhs) {
+            Expr::Tuple(items) => {
+                let items = ast.expr_list(items);
+                items.len() == pats.len() && pats.iter().zip(items).all(|(&p, &e)| irrefutable(ast, p, e))
+            }
+            Expr::Parens(inner) => matches_tuple(ast, pats, inner),
+            Expr::Block(stmts) => match ast.stmt_list(stmts).last() {
+                Some(&Stmt::Expr(last)) => matches_tuple(ast, pats, last),
+                _ => false,
+            },
+            Expr::If(_, t, Some(e)) => matches_tuple(ast, pats, t) && matches_tuple(ast, pats, e),
+            Expr::Match(_, cases) => ast.case_list(cases).iter().all(|c| matches_tuple(ast, pats, c.body)),
+            Expr::Throw(_) => true,
+            _ => false,
+        }
+    }
+    var_binding(ast, pat) || irrefutable(ast, pat, rhs)
 }

@@ -1,0 +1,21 @@
+exit 0
+warning 2:7
+  The identifier `x$y` should not contain `$`, which is reserved for internal compiler use.
+warning 6:9
+  The identifier `x$z` should not contain `$`, which is reserved for internal compiler use.
+warning 7:8
+  The identifier `p$q` should not contain `$`, which is reserved for internal compiler use.
+warning 8:66
+  The identifier `m$n` should not contain `$`, which is reserved for internal compiler use.
+warning 9:9
+  The identifier `C$D` should not contain `$`, which is reserved for internal compiler use.
+warning 9:13
+  The identifier `T$U` should not contain `$`, which is reserved for internal compiler use.
+warning 9:22
+  The identifier `k$l` should not contain `$`, which is reserved for internal compiler use.
+warning 10:8
+  The identifier `A$B` should not contain `$`, which is reserved for internal compiler use.
+warning 11:10
+  The identifier `O$P` should not contain `$`, which is reserved for internal compiler use.
+warning 13:7
+  The identifier `i$j` should not contain `$`, which is reserved for internal compiler use.

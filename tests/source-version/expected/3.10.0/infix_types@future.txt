@@ -1,0 +1,9 @@
+exit 1
+error 7:17
+  Alphanumeric type Pair is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Pair[...] or backticked identifier `Pair`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 9:17
+  Alphanumeric type Al is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Al[...] or backticked identifier `Al`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.

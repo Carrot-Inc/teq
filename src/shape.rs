@@ -363,6 +363,13 @@ impl<'a> Cmp<'a> {
 
     fn expr_eq(&mut self, a: ExprId, b: ExprId) -> bool {
         use Expr::*;
+        // The parser's records of what it collapsed, which the typer reads as dotty's trees (`Desugar.makeFor`'s
+        // `deepEquals` over `unsplice`: `(x)` is `x`, `{ x }` a block): a brace block (`is_braced`) and the kind of
+        // a collapsed written form (`written_arg`: parentheses, its span unwrapped, or a block) differ as the nodes.
+        let written = |ast: &Ast, e: ExprId| ast.written_arg(e).map(|(w, inner)| w == inner);
+        if self.old.is_braced(a) != self.new.is_braced(b) || written(self.old, a) != written(self.new, b) {
+            return false;
+        }
         match (self.old.expr(a), self.new.expr(b)) {
             (IntLit(x), IntLit(y)) | (LongLit(x), LongLit(y)) => x == y,
             (DoubleLit(x), DoubleLit(y)) => x.to_bits() == y.to_bits(),
@@ -377,8 +384,11 @@ impl<'a> Cmp<'a> {
             (Apply(e, l), Apply(f, k)) | (UsingApply(e, l), UsingApply(f, k)) => self.expr_eq(e, f) && self.exprs_eq(l, k),
             (NamedArg(n, e), NamedArg(m, f)) => n == m && self.expr_eq(e, f),
             (TypeApply(e, l), TypeApply(f, k)) => self.expr_eq(e, f) && self.tys_eq(l, k),
-            (Infix(e1, n, e2, _), Infix(f1, m, f2, _)) => n == m && self.expr_eq(e1, f1) && self.expr_eq(e2, f2),
+            (Infix(e1, n, e2, oe), Infix(f1, m, f2, fe)) => {
+                n == m && self.infix_syntax_eq((true, true), (oe, fe)) && self.expr_eq(e1, f1) && self.expr_eq(e2, f2)
+            }
             (Prefix(n, e), Prefix(m, f)) => n == m && self.expr_eq(e, f),
+            (AsFunction(e), AsFunction(f)) => self.expr_eq(e, f),
             (PolyLambda(l, e), PolyLambda(k, f)) => self.names_eq(l, k) && self.expr_eq(e, f),
             (Lambda(pl, e), Lambda(ql, f)) => {
                 let (pa, pb) = (&self.old.lambda_params[pl.range()], &self.new.lambda_params[ql.range()]);
@@ -398,8 +408,8 @@ impl<'a> Cmp<'a> {
                 y1 == y2
                     && ea.len() == eb.len()
                     && ea.iter().zip(eb).all(|(x, y)| match (x, y) {
-                        (Enumerator::Gen(p, e), Enumerator::Gen(q, f))
-                        | (Enumerator::CaseGen(p, e), Enumerator::CaseGen(q, f))
+                        (Enumerator::Gen(p, e, m), Enumerator::Gen(q, f, n)) => m == n && self.pat_eq(*p, *q) && self.expr_eq(*e, *f),
+                        (Enumerator::CaseGen(p, e), Enumerator::CaseGen(q, f))
                         | (Enumerator::Val(p, e), Enumerator::Val(q, f)) => self.pat_eq(*p, *q) && self.expr_eq(*e, *f),
                         (Enumerator::Guard(e), Enumerator::Guard(f)) => self.expr_eq(*e, *f),
                         _ => false,
@@ -483,16 +493,35 @@ impl<'a> Cmp<'a> {
 
     fn pat_eq(&mut self, a: PatId, b: PatId) -> bool {
         use Pat::*;
+        // A pattern in parentheses of its own is dotty's `Parens` (`Ast::paren_pats`), which `makeLambda`'s
+        // `IdPattern` and `isVarBinding` read: `K` and `(K)` differ.
+        if self.old.paren_pats.contains(&a) != self.new.paren_pats.contains(&b) {
+            return false;
+        }
         match (self.old.pat(a), self.new.pat(b)) {
             (Wildcard, Wildcard) | (Error, Error) => true,
             (Bind(n, p), Bind(m, q)) => n == m && self.opt(&p, &q, |t, x, y| t.pat_eq(x, y)),
             (Typed(p, t), Typed(q, u)) => self.pat_eq(p, q) && self.ty_eq(t, u),
             (Lit(e), Lit(f)) | (StableId(e), StableId(f)) => self.expr_eq(e, f),
-            (Ctor(e, l), Ctor(f, k)) => self.expr_eq(e, f) && self.pats_eq(l, k),
+            (Ctor(e, l), Ctor(f, k)) => {
+                let written = (self.old.notes.infix_pattern_ops.binary_search(&e).is_ok(), self.new.notes.infix_pattern_ops.binary_search(&f).is_ok());
+                let ends = (self.old.expr_span(e).end, self.new.expr_span(f).end);
+                self.infix_syntax_eq(written, ends) && self.expr_eq(e, f) && self.pats_eq(l, k)
+            }
             (Tuple(l), Tuple(k)) | (Alt(l), Alt(k)) => self.pats_eq(l, k),
             (Rest(p), Rest(q)) => self.pat_eq(p, q),
             _ => false,
         }
+    }
+
+    /// The syntax of an operator that `Checking.checkValidInfix` reads beside the tree, which the trees here leave out:
+    /// the `InfixOp` the parser keeps (`Pair[A, B]` is no infix type; `written`, from `SyntaxNotes::infix_type_ops` or
+    /// `infix_pattern_ops`) and `untpd.isBackquoted` of its operator (`SyntaxNotes::backquoted_idents`, by the token's
+    /// end, `ends`). The old and the new operator agree where both are written infix or neither, and, written infix,
+    /// both backquoted or neither: an edit of either is a signature's, which the check reads again.
+    fn infix_syntax_eq(&self, written: (bool, bool), ends: (u32, u32)) -> bool {
+        let backquoted = |ast: &Ast, end: u32| ast.notes.backquoted_idents.binary_search(&end).is_ok();
+        written.0 == written.1 && (!written.0 || backquoted(self.old, ends.0) == backquoted(self.new, ends.1))
     }
 
     fn ty_eq(&mut self, a: TyExprId, b: TyExprId) -> bool {
@@ -515,7 +544,11 @@ impl<'a> Cmp<'a> {
         match (self.old.ty(a), self.new.ty(b)) {
             (Name(n), Name(m)) => n == m,
             (Select(t, n), Select(u, m)) => n == m && self.ty_eq(t, u),
-            (Apply(t, l), Apply(u, k)) => self.ty_eq(t, u) && self.tys_eq(l, k),
+            (Apply(t, l), Apply(u, k)) => {
+                let written = (self.old.notes.infix_type_ops.binary_search(&t).is_ok(), self.new.notes.infix_type_ops.binary_search(&u).is_ok());
+                let ends = (self.old.ty_spans[t.idx()].end, self.new.ty_spans[u.idx()].end);
+                self.infix_syntax_eq(written, ends) && self.ty_eq(t, u) && self.tys_eq(l, k)
+            }
             (Fun(l, t), Fun(k, u)) | (CtxFun(l, t), CtxFun(k, u)) => {
                 let names_same = match (self.old.fun_param_names(a), self.new.fun_param_names(b)) {
                     (None, None) => true,

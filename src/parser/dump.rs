@@ -135,7 +135,7 @@ impl Dumper<'_> {
     fn expr(&mut self, e: ExprId, owner: &str) {
         let ast = self.ast;
         match ast.expr(e) {
-            Expr::Select(q, _) | Expr::NamedArg(_, q) | Expr::Prefix(_, q) | Expr::Lambda(_, q) | Expr::PolyLambda(_, q)
+            Expr::Select(q, _) | Expr::NamedArg(_, q) | Expr::Prefix(_, q) | Expr::AsFunction(q) | Expr::Lambda(_, q) | Expr::PolyLambda(_, q)
             | Expr::Parens(q) | Expr::Typed(q, _) | Expr::Unchecked(q) | Expr::Throw(q) | Expr::Quote(q) | Expr::Splice(q) => {
                 self.expr(q, owner)
             }
@@ -171,7 +171,7 @@ impl Dumper<'_> {
             Expr::For(l, body, _) => {
                 for en in &ast.enumerators[l.range()] {
                     match *en {
-                        Enumerator::Gen(_, x) | Enumerator::CaseGen(_, x) | Enumerator::Guard(x) | Enumerator::Val(_, x) => self.expr(x, owner),
+                        Enumerator::Gen(_, x, _) | Enumerator::CaseGen(_, x) | Enumerator::Guard(x) | Enumerator::Val(_, x) => self.expr(x, owner),
                     }
                 }
                 self.expr(body, owner);

@@ -1,0 +1,76 @@
+exit 0
+migration warning 6:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = new Object {
+  <empty>
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 7:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = new Object {
+  def f = 1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 8:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = new K(1) with T {
+  <empty>
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 9:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = new T { self =>
+  <empty>
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 10:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  import scala.math.*
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 11:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  import scala.math.{max, min as mn}
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 12:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  import scala.math.max
+  import scala.math.min
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 13:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  import O.given
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 14:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = ((1 + 2))}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.

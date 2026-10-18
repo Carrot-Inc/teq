@@ -107,7 +107,7 @@ impl<'a> Parser<'a> {
                 break;
             }
             let start = self.bump().span;
-            let pat = self.parse_inter_type();
+            let pat = self.within_match_pattern(Self::parse_inter_type);
             self.bind_case_variables(pat);
             let at = self.span().start;
             if !self.expect(Tok::Arrow) {
@@ -376,6 +376,9 @@ impl<'a> Parser<'a> {
                 (Tok::OpIdent, names::AMP) => TyExpr::Inter(lhs, top),
                 _ => {
                     let op_ty = self.ast.add_ty(TyExpr::Name(op.name), op.span);
+                    if op.kind == Tok::Ident {
+                        self.ast.notes.infix_type_ops.push(op_ty);
+                    }
                     TyExpr::Apply(op_ty, push_list(&mut self.ast.ty_lists, &[lhs, top]))
                 }
             };
@@ -448,9 +451,15 @@ impl<'a> Parser<'a> {
                 self.ast.add_ty(TyExpr::Name(names::THIS), start)
             }
             // `?` or the deprecated `_`, either with bounds (dotty's `simpleType`: `typeBounds()` after
-            // either token, `[>: Type] [<: Type]`, each bound once and the lower first).
+            // either token, `[>: Type] [<: Type]`, each bound once and the lower first); `_` outside
+            // a match pattern is reported by the version (`MigrationVersion.WildcardType`).
             Tok::Underscore | Tok::OpIdent if self.kind() == Tok::Underscore || self.tok().name == names::QMARK => {
-                self.bump();
+                let underscore = self.bump().kind == Tok::Underscore;
+                if underscore && !self.in_match_pattern {
+                    self.migration_with(crate::source_version::Migration::WildcardType, start, crate::warnings::NO_ID, || {
+                        format!("`_` is deprecated for wildcard arguments of types: use `?` instead{}", crate::source_version::rewrite_notice("This construct", "3.4-migration"))
+                    });
+                }
                 let lo = self.eat(Tok::Supertype).then(|| self.parse_type());
                 let hi = self.eat(Tok::Subtype).then(|| self.parse_type());
                 if lo.is_none() && hi.is_none() {
@@ -777,7 +786,9 @@ impl<'a> Parser<'a> {
             let (name, span) = if self.at(Tok::Underscore) {
                 (names::WILDCARD, self.bump().span)
             } else {
-                self.expect_ident()
+                let (n, s) = self.expect_ident();
+                self.check_dollar_name(n, s);
+                (n, s)
             };
             let (inner, inner_bounds, hk_variances) = if self.at(Tok::LBracket) { self.parse_hk_clause() } else { Default::default() };
             let arity = inner.len().min(u8::MAX as usize) as u8;
@@ -805,7 +816,15 @@ impl<'a> Parser<'a> {
                 let any = self.ast.add_ty(TyExpr::Resolved(crate::types::ANY), start);
                 tp.upper = Some(self.type_lambda(&inner, &inner_bounds, any, start));
             }
-            while self.eat(Tok::Colon) {
+            // A colon after a bound that braces do not enclose is reported by the version
+            // (`Parsers.contextBounds`, at the colon).
+            let mut after_bound = false;
+            while self.at(Tok::Colon) {
+                let colon = self.bump().span;
+                if after_bound {
+                    self.migration(crate::source_version::Migration::GivenSyntax, colon, "Multiple context bounds should be enclosed in `{ ... }`", crate::warnings::NO_ID);
+                }
+                after_bound = !self.at(Tok::LBrace);
                 if self.eat(Tok::LBrace) {
                     loop {
                         let b = self.parse_type();

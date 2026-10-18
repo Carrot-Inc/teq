@@ -23,11 +23,39 @@ pub enum ForRest {
     Filter,
 }
 
+/// What a comprehension's trailing `map` made while it was typed (`Worker::for_map_watch`): the conversions
+/// committed (`pick_conversion`), each node with its type, and the inline expansions (`expand_inline`), each with
+/// the call it expanded, dotty's `Inlined` node's `call`.
+#[derive(Default)]
+pub struct ForMapWatch {
+    pub conversions: Vec<(TExprId, TypeId)>,
+    pub inlined: Vec<ForMapInlined>,
+}
+
+/// A pending inline call that is a comprehension's trailing `map` (`Worker::mark_pending_for_map`): the receiver
+/// `type_for` typed and what the application made, read by `transform_inlined_map` once the call expands.
+pub struct ForMapMark {
+    pub recv: TExprId,
+    pub recv_ty: TypeId,
+    pub watch: Box<ForMapWatch>,
+}
+
+/// An inline expansion of a call: the expansion's node, the call's receiver, method and arguments.
+pub struct ForMapInlined {
+    pub expansion: TExprId,
+    pub recv: Option<TExprId>,
+    pub sym: SymId,
+    pub args: Vec<TExprId>,
+}
+
 #[derive(Clone, Copy)]
 pub enum ForBinder {
     Pat(PatId),
     /// The pattern of a `case` generator, which may fail; the filter has run before it.
     CasePat(PatId),
+    /// A case lambda of the pattern that names no parameter (`makePatFilter`'s, `makeLambda`'s under `FilterAlways`):
+    /// unchecked, an identifier in it a stable identifier pattern, not a variable.
+    Always(PatId),
     /// Variables restored from `Worker::for_packs`.
     Unpack(u32),
 }
@@ -44,6 +72,18 @@ pub enum ArgSrc {
     ForLambda(ForBinder, ForRest),
 }
 
+
+/// The typed nodes whose dotty tree has no symbol where teq's node is a reference (`Tree.symbol`, which only a
+/// denoting tree and a proxy tree have): a block's expression typed as an argument or beneath a proxy (`Block`,
+/// `mark_block_node`), a named argument's value (`NamedArg`, which `typedNamedArg` keeps), an inline expansion
+/// (`Inlined`), an inferred `using` argument (the constructor's parameter, which teq's one symbol for a parameter and
+/// its accessor conflates). `named` holds the values of the named arguments placed while the typing is under way,
+/// which `nodes` takes once typed.
+#[derive(Default)]
+pub struct DenotationMarks {
+    pub nodes: Vec<TExprId>,
+    named: Vec<ExprId>,
+}
 
 /// dotty's `SelectionProto` of a qualifier's typing (`Typer.typedSelect`'s `shallowSelectionProto`,
 /// Typer.scala 1081; an infix operation's left operand is one through `typedInfixOp`'s
@@ -3944,9 +3984,16 @@ impl<'a> Worker<'a> {
                             return (call, ret);
                         }
                     }
+                    let operand = self.infix_watch != u32::MAX && lists.first().is_some_and(|l| l.fun == FunEnd::operand_at(self.infix_watch));
                     self.poly_targs = Some(subst.iter().map(|&(_, t)| t).collect());
                     let mark = self.poly_pending.len();
                     let typed = self.apply_callee(Callee::Value(te, fun), None, lists, span, expected);
+                    // dotty's `f.apply[A](a)` over `PolyFunction { def apply .. }` selects the refinement's member, of no
+                    // symbol (`Types.goRefined`), which the watched operation is checked by in place of the `apply` of
+                    // the instance's function type (`Infixed::NoSymbol`).
+                    if operand {
+                        self.infix_called = None;
+                    }
                     // Inferred type arguments are fixed once every clause is typed, as a method's
                     // are: a curried function's later clauses settle them too.
                     let pending: Vec<(TExprId, Vec<TypeId>)> = self.poly_pending.drain(mark..).collect();
@@ -4036,6 +4083,9 @@ impl<'a> Worker<'a> {
                     }
                     let mut lists = lists;
                     let first = lists.remove(0);
+                    if self.infix_watch != u32::MAX && first.fun == FunEnd::operand_at(self.infix_watch) {
+                        self.note_infix_closure(ty);
+                    }
                     let applied = first.span;
                     let clause = self.closure_clause(ty, &ptys);
                     let mut args = Vec::new();
@@ -4080,6 +4130,20 @@ impl<'a> Worker<'a> {
                 self.apply_member(te, ty, names::APPLY, targs, lists, span, expected)
             }
         }
+    }
+
+    /// The watched operation's list applied to a function value of type `ty` (`c f 1` of a `val f: Int => Int`, dotty's
+    /// `c.f.apply(1)`): the application's symbol, its function class's `apply` (`Function1.apply`; a dependent function
+    /// type's refinement joined with that member, `Types.goRefined`), which `Typer.typedInfixOp` checks
+    /// (`Worker::infix_called`).
+    #[cold]
+    #[inline(never)]
+    fn note_infix_closure(&mut self, ty: TypeId) {
+        let mut t = self.deref_alias(ty);
+        if let Some(parent) = self.named_fun_parent(t) {
+            t = self.deref_alias(parent);
+        }
+        self.infix_called = self.find_member(t, names::APPLY).map(|(s, _)| s);
     }
 
     /// `((x, y) => b)(a, c)` for arguments that are paths or literals is `b` with the parameters
@@ -4473,7 +4537,12 @@ impl<'a> Worker<'a> {
         trial: bool,
     ) -> Option<(TExprId, TypeId)> {
         let outer_base = std::mem::replace(&mut self.app_base, self.tvars.len() as u32);
+        // The application an alphanumeric infix operation watches (`Worker::infix_watch`).
+        let watched = (self.infix_watch != u32::MAX && lists.first().is_some_and(|l| l.fun == FunEnd::operand_at(self.infix_watch))).then_some(call.sym);
         let r = self.apply_method_in(call, ctor, targs, lists, span, expected, trial);
+        if watched.is_some() {
+            self.infix_called = watched;
+        }
         self.app_base = outer_base;
         if self.app_depth == 0 && !self.mismatch_renders.is_empty() {
             self.render_mismatches(0);
@@ -5124,6 +5193,12 @@ impl<'a> Worker<'a> {
                         let p = plan.get_or_insert_with(|| self.call_plan(&ctor, call.sym, &sig));
                         self.elaborate_written(p, &mut call.recv, &mut args_out, clause_first, &written, clause, &subst, span);
                     }
+                    // The givens the search found: a reference to the constructor's parameter in dotty's tree.
+                    if self.denotation_marks.is_some() {
+                        for k in clause_first..args_out.len() {
+                            self.mark_no_denotation(args_out[k]);
+                        }
+                    }
                 }
                 continue;
             }
@@ -5208,7 +5283,9 @@ impl<'a> Worker<'a> {
                     for _ in 0..eta.len() {
                         exp_fn = exp_fn.and_then(|(_, ret)| self.as_function(ret));
                     }
-                    let bare = exp_fn.is_none() && clause.params.is_empty() && eta.is_empty() && explicit_lists == 0;
+                    // `f _` expands whatever the method takes (`AnyFunctionProto`).
+                    let forced = eta.is_empty() && self.any_function == Some(span);
+                    let bare = exp_fn.is_none() && clause.params.is_empty() && eta.is_empty() && explicit_lists == 0 && !forced;
                     let auto = if bare && ctor.is_none() { self.auto_applied(call.sym) } else { AutoApply::No };
                     let auto_applied = auto != AutoApply::No;
                     // The expansion's function evaluates the receiver and the arguments written
@@ -5350,7 +5427,7 @@ impl<'a> Worker<'a> {
                         self.error(span, "missing argument list for the constructor");
                     }
                     // A vararg method has no function type to expand to unless one is expected.
-                    if exp_fn.is_none() && ctor.is_none() && clause.params.iter().any(|p| p.repeated) {
+                    if exp_fn.is_none() && ctor.is_none() && clause.params.iter().any(|p| p.repeated) && !forced {
                         let msg = format!("missing argument list for method {}", self.method_description(call.sym));
                         self.error(span, msg);
                     }
@@ -5610,7 +5687,13 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        // The operand's list of an alphanumeric infix operation passed to the result's `apply` (`def f: Int => Int`'s
+        // `c f 1` is `c.f.apply(1)`): that `apply`'s application is the operation's (`Worker::infix_passed`).
+        let passes = self.infix_watch != u32::MAX && rest[0].fun == FunEnd::operand_at(self.infix_watch);
         let applied = self.apply_callee(Callee::Value(te, ty), None, rest, span, expected);
+        if passes {
+            self.infix_passed = Some((call.sym, self.infix_called));
+        }
         let widen_mark = self.pending_widenings.len();
         self.solve_application_vars(first_var, widen_mark, applied.1, expected, span);
         // The result the next list applies, which signature help reads at the span of the
@@ -6405,6 +6488,14 @@ impl<'a> Worker<'a> {
                 out.push(self.type_tupled_args(&clause.params[0], &elems, subst, list.span));
                 return false;
             }
+            // An infix operand's named tuple, which the operation untuples for a method of more than one
+            // parameter alone (`Applications.needsTupledDual`): one parameter takes the tuple.
+            if let Some(operand) = self.named_operand_of(&list.args) {
+                let pty = self.param_type(clause.params[0].ty, subst);
+                let te = self.type_arg(ArgSrc::Ast(operand), pty, list.span);
+                out.push(if clause.params[0].by_name { self.by_name_thunk(te) } else { te });
+                return false;
+            }
         }
         let plain = list.args.len() == n
             && !clause.params.iter().any(|p| p.repeated || p.by_name)
@@ -6460,6 +6551,9 @@ impl<'a> Worker<'a> {
                     Some(i) if slots[i].is_empty() => {
                         if let (true, ArgSrc::Ast(e)) = (self.index.is_some(), a) {
                             self.index_named_arg(*e, name, clause.params[i].sym);
+                        }
+                        if self.denotation_marks.is_some() {
+                            self.mark_named_value(v);
                         }
                         slots[i].push(v);
                         order.push(i);
@@ -6819,6 +6913,17 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The named tuple of an infix operation's right operand whose named arguments `args` are
+    /// (`SyntaxNotes::named_operands`, `Worker::infix_tuples`).
+    fn named_operand_of(&self, args: &[ArgSrc]) -> Option<ExprId> {
+        if self.cur_ast().notes.named_operands.is_empty() {
+            return None;
+        }
+        let ArgSrc::Ast(first) = *args.first()? else { return None };
+        let operand = *self.infix_tuples.get(&(self.env.file, first))?;
+        matches!(self.cur_ast().expr(operand), Expr::NamedTuple(..)).then_some(operand)
+    }
+
     /// None when an argument is named, spliced or already typed, which rules out auto-tupling.
     fn positional_args(&self, args: &[ArgSrc]) -> Option<Vec<ExprId>> {
         let ast = self.cur_ast();
@@ -7024,6 +7129,9 @@ impl<'a> Worker<'a> {
                         (te, ty, false) => (te, ty),
                     },
                 };
+                if self.denotation_marks.is_some() {
+                    self.mark_arg_denotation(e, te);
+                }
                 let arg_span = self.cur_ast().expr_span(e);
                 if self.interp_call.is_some() {
                     self.lint_interpolation_arg(ty, arg_span, spread);
@@ -7044,7 +7152,12 @@ impl<'a> Worker<'a> {
             ArgSrc::ForLambda(pat, rest) => {
                 let (te, ty) = self.type_for_lambda(pat, rest, pty, span);
                 self.note_erroneous_arg(ty);
-                self.adapt(te, ty, pty, span)
+                // The closure `makeLambda` writes spans its pattern and its body, the comprehension's end.
+                let at = match pat {
+                    ForBinder::Pat(p) | ForBinder::CasePat(p) | ForBinder::Always(p) => Span::new(self.cur_ast().pat_spans[p.idx()].start, span.end),
+                    ForBinder::Unpack(_) => span,
+                };
+                self.adapt(te, ty, pty, at)
             }
         }
     }
@@ -7176,12 +7289,63 @@ impl<'a> Worker<'a> {
         let typed = self.type_expr(e, Some(pty));
         self.unadapted_call = outer;
         let deferred = std::mem::replace(&mut self.unadapted_node, outer_node) == Some(typed.0);
+        if deferred && self.denotation_marks.is_some() {
+            self.mark_no_denotation(typed.0);
+        }
         match self.cache_arg(e, typed) {
             Cache::Kept => self.promote_end(retained),
             Cache::Failed => self.note_error_arg(e, written, false, pty, typed.1, diags),
             Cache::Not => {}
         }
         (typed.0, typed.1, deferred)
+    }
+
+    /// The typed node `te` is one whose dotty tree has no symbol (`Worker::denotation_marks`).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn mark_no_denotation(&mut self, te: TExprId) {
+        if let Some(marks) = self.denotation_marks.as_mut() {
+            marks.nodes.push(te);
+        }
+    }
+
+    /// The typing of `e`, which hands on as its own result the node `te` that `e` typed to: the argument's or a
+    /// `ProxyTree`'s (`Typed`, `Annotated`; `Parens` is no tree), whose symbol is its `forwardTo`'s (Trees.scala
+    /// 269-272). Where `e` was written alone in braces (`Ast::is_braced`), dotty's tree there is a `Block`
+    /// (`Typer.typedBlock`), which has none: the node is marked so. A proxy's result is its expression's node, so
+    /// the mark stands for every proxy above the block.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn mark_block_node(&mut self, e: ExprId, te: TExprId) {
+        if self.cur_ast().is_braced(e) {
+            self.mark_no_denotation(te);
+        }
+    }
+
+    /// The argument written `e`, typed `te`: dotty's typed tree is a `Block` where `e` is a block's expression
+    /// (`mark_block_node`), a `NamedArg` where it is a named argument's value placed for the call.
+    #[cold]
+    #[inline(never)]
+    fn mark_arg_denotation(&mut self, e: ExprId, te: TExprId) {
+        self.mark_block_node(e, te);
+        if self.denotation_marks.as_ref().is_some_and(|m| m.named.contains(&e)) {
+            self.mark_no_denotation(te);
+        }
+    }
+
+    /// A named argument's value `v` placed for the call, which `mark_arg_denotation` marks once typed.
+    #[cold]
+    #[inline(never)]
+    fn mark_named_value(&mut self, v: ArgSrc) {
+        match v {
+            ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => {
+                if let Some(marks) = self.denotation_marks.as_mut() {
+                    marks.named.push(e);
+                }
+            }
+            ArgSrc::Typed(te, _) => self.mark_no_denotation(te),
+            _ => {}
+        }
     }
 
     /// `type_arg_cached` of a named argument's value `e`: dotty's typing of the argument
@@ -7318,22 +7482,41 @@ impl<'a> Worker<'a> {
         };
         let open = self.deref(ptys[0]);
         let unknown = matches!(self.types.get(open), Type::Var(v) if self.tvars[v].lower.is_empty() && self.tvars[v].upper.is_empty());
-        // A tuple pattern of as many elements as the function expected takes parameters (dotty's
-        // `typedFunctionValue` turns the generator's `x$1 => x$1 match case (a1, .., aN) => e` into
-        // a function of N parameters): `for (a, b) <- xs.lazyZip(ys)` over `LazyZip2.foreach`. The
-        // pattern matches the tuple of the parameters, as `makeCaseLambda` with N parameters does.
+        // `typedFunctionValue` (Typer.scala 2010-2028): a case lambda of one case over a tuple of as many patterns as
+        // the expected function has parameters (`protoFormals.length > 1 && params.length == 1`) is a function of N
+        // parameters: `for (a, b) <- xs.lazyZip(ys)` over `LazyZip2.foreach`. A tuple in parentheses of its own is a
+        // `Parens`, no `Tuple`, and the filter's lambda (`makePatFilter`) has two cases: neither is converted. Each
+        // element's type is `protoFormal`'s, fully defined (`solve_if_var`).
         let untupled: Option<Vec<TypeId>> = match binder {
-            ForBinder::Pat(p) | ForBinder::CasePat(p) if ptys.len() > 1 => match self.cur_ast().pat(p) {
+            ForBinder::Pat(p) | ForBinder::CasePat(p) | ForBinder::Always(p) if ptys.len() > 1 && !matches!(rest, ForRest::Filter) && !self.cur_ast().paren_pats.contains(&p) => match self.cur_ast().pat(p) {
                 Pat::Tuple(elems) if elems.len as usize == ptys.len() => Some(ptys.iter().map(|&t| self.solve_if_var(t)).collect()),
                 _ => None,
             },
             _ => None,
         };
+        // `patternsToParams` (Desugar.scala 2060-2073): where every element is an identifier, `_` among them, or a
+        // typed one, the elements are the parameters (`cpy.Function(tree)(params1, rhs)`); otherwise
+        // `makeCaseLambda(cases, matchCheck, N)`, the tuple of `x$1`..`x$N` matched.
+        let direct = untupled.is_some() && match binder {
+            ForBinder::Pat(p) | ForBinder::CasePat(p) | ForBinder::Always(p) => match self.cur_ast().pat(p) {
+                Pat::Tuple(elems) => {
+                    let ast = self.cur_ast();
+                    ast.pat_list(elems).iter().all(|&e| super::expr::is_id_pattern(ast, e) || (matches!(ast.pat(e), Pat::Wildcard) && !ast.paren_pats.contains(&e)))
+                }
+                _ => false,
+            },
+            ForBinder::Unpack(_) => false,
+        };
         let elem = match &untupled {
             Some(tys) => self.tuple_type(tys),
             None => self.solve_if_var(ptys[0]),
         };
-        if unknown && ptys.len() == 1 && matches!(binder, ForBinder::Pat(_) | ForBinder::CasePat(_)) {
+        // A typed `IdPattern`'s parameter has its written type (`typedFunctionValue`'s declared parameter type).
+        let declared = match binder {
+            ForBinder::Pat(p) | ForBinder::CasePat(p) => matches!(self.cur_ast().pat(p), Pat::Typed(..)) && super::expr::is_id_pattern(self.cur_ast(), p),
+            _ => false,
+        };
+        if unknown && ptys.len() == 1 && !declared && matches!(binder, ForBinder::Pat(_) | ForBinder::CasePat(_) | ForBinder::Always(_)) {
             self.error(span, "cannot infer the element type of this generator");
         }
         // The rest is typed as a written lambda's body is (`type_lambda`): against the result its
@@ -7345,7 +7528,7 @@ impl<'a> Worker<'a> {
         let body_mark = self.tvars.len();
         let ast = self.cur_ast();
         let lambda_span = match binder {
-            ForBinder::Pat(p) | ForBinder::CasePat(p) => ast.pat_spans[p.idx()],
+            ForBinder::Pat(p) | ForBinder::CasePat(p) | ForBinder::Always(p) => ast.pat_spans[p.idx()],
             ForBinder::Unpack(_) => span,
         };
         if let Some(r) = ret_expected {
@@ -7357,7 +7540,10 @@ impl<'a> Worker<'a> {
         let pending = self.attempts.pending_len();
         self.for_bases.push(self.env.frames.len());
         self.push_scope();
-        let result = match binder {
+        // The closure's parameters and their types (`makeClosure`).
+        let mut params: Vec<SymId> = Vec::with_capacity(1);
+        let mut param_tys: Vec<TypeId> = Vec::with_capacity(1);
+        let (tb, bty) = match binder {
             ForBinder::Unpack(id) => {
                 let sym = self.fresh_local("u", ANY, span);
                 let vars = self.for_packs[id as usize].clone();
@@ -7388,65 +7574,92 @@ impl<'a> Worker<'a> {
                 if let Some(t) = tuple {
                     self.capture_form(unpacked, Form::Unpack(t));
                 }
-                (sym, unpacked, bty)
+                params.push(sym);
+                param_tys.push(elem);
+                (unpacked, bty)
             }
-            ForBinder::Pat(pat) | ForBinder::CasePat(pat) => match ast.pat(pat) {
-                // A generator's identifier is a variable, capitalised or not.
-                Pat::Bind(name, None) => {
-                    let sym = self.new_local(name, SymKind::Val, elem, span);
-                    if self.index.is_some() {
-                        self.index_local_at(sym, ast.pat_spans[pat.idx()]);
-                    }
-                    self.note_def_at(sym, ast.pat_spans[pat.idx()].start);
-                    self.bind_local(name, sym);
-                    let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
-                    (sym, tb, bty)
+            ForBinder::Pat(pat) | ForBinder::CasePat(pat) | ForBinder::Always(pat) if direct => {
+                let (Pat::Tuple(elems), Some(tys)) = (ast.pat(pat), untupled.as_ref()) else { unreachable!() };
+                for (&e, &t) in ast.pat_list(elems).to_vec().iter().zip(tys.clone().iter()) {
+                    let (sym, ty) = self.for_lambda_param(e, t, span);
+                    params.push(sym);
+                    param_tys.push(ty);
                 }
-                Pat::StableId(path) if matches!(ast.expr(path), Expr::Ident(_)) => {
-                    let Expr::Ident(name) = ast.expr(path) else { unreachable!() };
-                    let sym = self.new_local(name, SymKind::Val, elem, span);
-                    if self.index.is_some() {
-                        self.index_local_at(sym, ast.pat_spans[pat.idx()]);
+                self.type_for_rest(rest, span, rest_expected)
+            }
+            // `makeLambda`'s `IdPattern` but under `FilterAlways` (Desugar.scala 2178-2180): the function's parameter,
+            // `derivedValDef` at the pattern's span, of the written type where the pattern is typed (`(x: T) => body`,
+            // which the closure's adaptation to the expected function type checks: `x: String <- List(1)` is a type
+            // mismatch), else of the element's. `X`, `` `x` `` and `_: T` among them; `(x)` and `(K)` are none.
+            ForBinder::Pat(pat) | ForBinder::CasePat(pat) if super::expr::is_id_pattern(ast, pat) => {
+                let (sym, ty) = self.for_lambda_param(pat, elem, span);
+                params.push(sym);
+                param_tys.push(ty);
+                self.type_for_rest(rest, span, rest_expected)
+            }
+            // Any other pattern is a case lambda's (`makeCaseLambda`, Desugar.scala 1998-2002): `x$1 => x$1 match
+            // { case pat => body }`, its selector checked (`MatchCheck.IrrefutableGenFrom`, `ForBinder::Pat`) or
+            // `@unchecked` (`MatchCheck.None`: `CasePat`, `Always`, and the filter's lambda, `makePatFilter`).
+            ForBinder::Pat(pat) | ForBinder::CasePat(pat) | ForBinder::Always(pat) => {
+                let filter = matches!(rest, ForRest::Filter);
+                let checked = !filter && matches!(binder, ForBinder::Pat(_));
+                // The selector: `x$1`, whose path is the scrutinee's type the check reads (`sel.tpe`); under N
+                // parameters the tuple of `x$1`..`x$N` (`makeCaseLambda`'s `makeTuple`), of the tuple's type.
+                let (scrut, sty) = match &untupled {
+                    Some(tys) => {
+                        let xs: Vec<SymId> = tys.iter().enumerate().map(|(i, &t)| self.indexed_local("x", i as u32 + 1, t, span)).collect();
+                        let refs: Vec<TExprId> = xs.iter().map(|&x| self.prog.add(TExpr::Local(x))).collect();
+                        let l = self.prog.list(&refs);
+                        let class = self.tuple_class(tys.len());
+                        let tuple = self.prog.add(TExpr::New(class, l));
+                        self.prog.set_type(tuple, elem);
+                        params.extend(xs);
+                        param_tys.extend(tys.iter().copied());
+                        (tuple, elem)
                     }
-                    self.note_def_at(sym, ast.pat_spans[pat.idx()].start);
-                    self.bind_local(name, sym);
-                    let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
-                    (sym, tb, bty)
-                }
-                Pat::Wildcard => {
-                    let sym = self.fresh_local("w", elem, span);
-                    let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
-                    (sym, tb, bty)
-                }
-                _ => {
-                    let sym = self.fresh_local("p", elem, span);
-                    let filter = matches!(rest, ForRest::Filter);
-                    let checked = !filter && matches!(binder, ForBinder::Pat(_));
-                    let outer = std::mem::replace(&mut self.refutable_is_error, checked);
-                    let tp = self.type_pattern(pat, elem);
-                    self.refutable_is_error = outer;
-                    if checked {
-                        self.check_irrefutable(tp, pat, elem, None);
+                    None => {
+                        let sym = self.indexed_local("x", 1, elem, span);
+                        params.push(sym);
+                        param_tys.push(elem);
+                        (self.prog.add(TExpr::Local(sym)), self.types.mk(Type::Term(sym)))
                     }
-                    let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
-                    let scrut = self.prog.add(TExpr::Local(sym));
-                    let mut cases = vec![TCase { pat: tp, guard: None, body: tb }];
-                    if filter {
-                        let wildcard = self.prog.add_pat(TPat::Wildcard);
-                        let no = self.prog.add(TExpr::Bool(false));
-                        cases.push(TCase { pat: wildcard, guard: None, body: no });
-                    }
-                    let cases = self.prog.cases.push_slice(&cases);
-                    (sym, self.prog.add(TExpr::Match(scrut, cases)), bty)
+                };
+                // `makeSelector`'s `None` annotates the selector `@unchecked`, which silences the type tests made on
+                // it (`TypeTestsCasts.checkTypePattern`); the N parameters' tuple is a new selector, unannotated.
+                let selector_unchecked = untupled.is_none() && !checked;
+                let unchecked = self.unchecked_lambda_tests(pat, selector_unchecked);
+                let outer = std::mem::replace(&mut self.refutable_is_error, checked);
+                let tp = self.type_pattern(pat, elem);
+                self.refutable_is_error = outer;
+                for p in unchecked {
+                    self.unchecked_typed_pats.remove(&p);
                 }
-            },
+                // `typedMatch`'s `CheckIrrefutable` (Typer.scala 2254-2256): a generator's selector checked as
+                // `IrrefutableGenFrom`. The N parameters' match takes the selector's mode, and where that had none
+                // (`MatchCheck.None`) `IrrefutablePatDef` (Typer.scala 2024-2025): a pattern definition's check, its
+                // message at the selector, which starts at the pattern.
+                if checked {
+                    self.check_irrefutable(tp, pat, sty, None);
+                } else if untupled.is_some() {
+                    let at = ast.pat_spans[pat.idx()].start;
+                    self.check_irrefutable(tp, pat, sty, Some(Span::new(at, at)));
+                }
+                let (tb, bty) = self.type_for_rest(rest, span, rest_expected);
+                let mut cases = vec![TCase { pat: tp, guard: None, body: tb }];
+                if filter {
+                    let wildcard = self.prog.add_pat(TPat::Wildcard);
+                    let no = self.prog.add(TExpr::Bool(false));
+                    cases.push(TCase { pat: wildcard, guard: None, body: no });
+                }
+                let cases = self.prog.cases.push_slice(&cases);
+                (self.prog.add(TExpr::Match(scrut, cases)), bty)
+            }
         };
-        let (sym, tb, bty) = result;
         let (tb, bty) = match ret_expected {
             Some(_) => (tb, bty),
             None => self.adapt_open_body(tb, bty, Some(ret), lambda_span),
         };
-        let bty = self.lambda_body_closed(body_mark, bty, None, Some(ret), &[sym], lambda_span);
+        let bty = self.lambda_body_closed(body_mark, bty, None, Some(ret), &params, lambda_span);
         self.for_bases.pop();
         self.pop_scope();
         self.sites.owners.pop();
@@ -7458,27 +7671,86 @@ impl<'a> Worker<'a> {
                 self.index_yield_functions(body, tb, ret);
             }
         }
-        if let Some(tys) = untupled {
-            let xs: Vec<SymId> = tys.iter().enumerate().map(|(i, &t)| self.indexed_local("x", i as u32 + 1, t, span)).collect();
-            let refs: Vec<TExprId> = xs.iter().map(|&x| self.prog.add(TExpr::Local(x))).collect();
-            let l = self.prog.list(&refs);
-            let class = self.tuple_class(tys.len());
-            let tuple = self.prog.add(TExpr::New(class, l));
-            self.prog.set_type(tuple, elem);
-            let stmts = self.prog.stmts.push_slice(&[TStmt::Val(sym, tuple)]);
-            let body = self.prog.add(TExpr::Block(stmts, tb));
-            let params = self.prog.syms(&xs);
-            let ty = self.fun_type(&tys, bty);
-            return (self.prog.add(TExpr::Lambda(params, body)), ty);
-        }
-        let params = self.prog.syms(&[sym]);
-        let ty = self.fun_type(&[elem], bty);
+        let ty = self.fun_type(&param_tys, bty);
+        let params = self.prog.syms(&params);
         let lambda = self.prog.add(TExpr::Lambda(params, tb));
         // A macro its body defers reads the generator's closure as typed (`deferred_lambdas`).
         if self.attempts.pending_len() > pending {
             self.deferred_lambdas.insert((self.env.file.0, lambda_span.start, lambda_span.end), lambda);
         }
         (lambda, ty)
+    }
+
+    /// A parameter `makeLambda`'s `IdPattern` (`derivedValDef`) or `patternsToParams` makes of the pattern `p`: its
+    /// identifier's name (none for `_`), at the pattern's span, of the written type where `p` is typed, else `ty`.
+    fn for_lambda_param(&mut self, p: crate::ast::PatId, ty: TypeId, span: Span) -> (SymId, TypeId) {
+        let ast = self.cur_ast();
+        let (named, tpt) = match ast.pat(p) {
+            Pat::Typed(inner, t) => (inner, Some(t)),
+            _ => (p, None),
+        };
+        let name = match ast.pat(named) {
+            Pat::Bind(n, None) => Some(n),
+            Pat::StableId(path) => match ast.expr(path) {
+                Expr::Ident(n) => Some(n),
+                _ => None,
+            },
+            _ => None,
+        };
+        let ty = match tpt {
+            Some(t) => self.resolve_type(t),
+            None => ty,
+        };
+        // The body sees the parameter's wildcards captured; the function type keeps them.
+        let local_ty = if tpt.is_some() { self.capture_wildcards(ty) } else { ty };
+        let sym = match name {
+            Some(n) => {
+                let sym = self.new_local(n, SymKind::Val, local_ty, span);
+                if self.index.is_some() {
+                    self.index_local_at(sym, ast.pat_spans[named.idx()]);
+                }
+                self.note_def_at(sym, ast.pat_spans[p.idx()].start);
+                self.bind_local(n, sym);
+                sym
+            }
+            None => self.fresh_local("w", local_ty, span),
+        };
+        (sym, ty)
+    }
+
+    /// The typed patterns of a generator's case lambda whose type tests go unchecked, recorded for `type_pattern`'s
+    /// typed arm (`Worker::unchecked_typed_pats`) until the pattern is typed: under an `@unchecked` selector
+    /// (`selector_unchecked`) those tested on the selector itself, through binders and alternatives, as
+    /// `TypeTestsCasts.checkTypePattern` reads the tested expression's annotation; and in a tuple of more than
+    /// `MaxImplementedFunctionArity` elements each `Bind(name, Typed(id, tpt))` element's, its `tpt` annotated
+    /// `@unchecked` (Desugar.scala 2186-2195; a given bind, whose type test a `TupleXXL`'s `Any` element asks).
+    fn unchecked_lambda_tests(&mut self, pat: crate::ast::PatId, selector_unchecked: bool) -> Vec<crate::ast::PatId> {
+        fn on_selector(ast: &crate::ast::Ast, p: crate::ast::PatId, out: &mut Vec<crate::ast::PatId>) {
+            match ast.pat(p) {
+                Pat::Bind(_, Some(inner)) => on_selector(ast, inner, out),
+                Pat::Alt(l) => ast.pat_list(l).iter().for_each(|&a| on_selector(ast, a, out)),
+                Pat::Typed(..) => out.push(p),
+                _ => {}
+            }
+        }
+        let ast = self.cur_ast();
+        let mut out = Vec::new();
+        if selector_unchecked {
+            on_selector(ast, pat, &mut out);
+        }
+        if let Pat::Tuple(elems) = ast.pat(pat) {
+            if elems.len > 22 && !ast.paren_pats.contains(&pat) { // dotty's MaxImplementedFunctionArity
+                for &e in ast.pat_list(elems) {
+                    if let Pat::Bind(_, Some(t)) = ast.pat(e) {
+                        if matches!(ast.pat(t), Pat::Typed(..)) && !ast.paren_pats.contains(&t) {
+                            out.push(t);
+                        }
+                    }
+                }
+            }
+        }
+        out.retain(|&p| self.unchecked_typed_pats.insert(p));
+        out
     }
 
     pub fn apply_member(
@@ -7972,6 +8244,9 @@ impl<'a> Worker<'a> {
             lists
         };
         if let Some(r) = self.universal_member(recv, recv_ty, name, targs, &lists, span) {
+            if self.infix_watch != u32::MAX && lists.first().is_some_and(|l| l.fun == FunEnd::operand_at(self.infix_watch)) {
+                self.infix_universal = Some(name);
+            }
             return r;
         }
         if let Some(r) = self.prim_member(recv, recv_ty, name, &lists) {
@@ -9482,7 +9757,10 @@ impl<'a> Worker<'a> {
             let name = self.syms.sym(sym).name;
             return !self.lexical_extensions(name).into_iter().any(|e| self.is_parameterless_extension(e));
         };
-        clause_accepts(clause, list.args.len(), tupled)
+        let n = list.args.len();
+        // An infix operand's named tuple is the one parameter's (`type_clause_args_planned`).
+        clause_accepts(clause, n, tupled)
+            || (n > 1 && clause.params.len() == 1 && !clause.params[0].repeated && self.named_operand_of(&list.args).is_some())
     }
 
     /// Whether auto-tupling applies and the member's single parameter can hold such a tuple.

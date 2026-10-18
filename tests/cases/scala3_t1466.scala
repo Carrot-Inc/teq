@@ -1,4 +1,5 @@
 // Adapted from scala3 tests/run/t1466.scala (Apache-2.0, see tests/scala3/README.md); replaced: extends App.
+// teq: --wconf msg=Ignoring..this..qualifier:s
 object IOvervalueMyPrivacy {
   private[this] var i = 0
   def go = {

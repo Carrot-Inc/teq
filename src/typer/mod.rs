@@ -20,6 +20,7 @@ pub mod feature;
 pub mod exports;
 mod expr;
 mod implicits;
+mod infix;
 pub mod index;
 pub mod incremental;
 mod inline;
@@ -59,6 +60,7 @@ mod signature;
 pub(crate) mod site;
 mod space;
 mod state;
+mod tree_text;
 pub mod stdlib;
 mod subtype;
 mod suppress;
@@ -955,6 +957,28 @@ pub struct Worker<'a> {
     /// a try of it enters, one deeper, is the retry's own, which stopping at its first plain clause
     /// leaves the lists after it to the next try; one nested in its arguments is not.
     pub app_depth: u32,
+    /// The span of the `e` of an `e _` being typed against no function type (`Migrations.typedAsFunction`'s
+    /// `AnyFunctionProto`): the application there expands to a function value, a method of `()` and a
+    /// vararg one too.
+    pub any_function: Option<Span>,
+    /// The `unapply` (or `unapplySeq`) the extractor pattern typed last took, by the pattern's span,
+    /// which an infix extractor's check reads (`infix.rs`).
+    pub last_unapply: Option<(Span, SymId)>,
+    /// The end of the alphanumeric operator of the infix operation being typed (`type_infix`), whose
+    /// application, its function ending there, records its method in `infix_called` once its
+    /// arguments are typed, before an eta-expansion or an inline expansion: the symbol
+    /// `Typer.typedInfixOp` checks. `u32::MAX` for none.
+    pub infix_watch: u32,
+    pub infix_called: Option<SymId>,
+    /// The watched operation's method that passed the operand's list on to its result's `apply` (dotty's
+    /// `Apply(Select(f(..), apply), args)`), with what that `apply`'s application recorded: the operation's
+    /// method in its place.
+    pub infix_passed: Option<(SymId, Option<SymId>)>,
+    /// The universal member the watched operation's application took (`eq`, `equals`), which no symbol stands for.
+    pub infix_universal: Option<Name>,
+    /// While the forwarding check types a superclass call (`check.rs` `forwards_to_super_param`), what the
+    /// typing marks of the typed arguments whose dotty tree has no symbol where teq's node is a reference.
+    pub denotation_marks: Option<apply::DenotationMarks>,
     pub retry_depth: Option<u32>,
     /// Where the application a try of that retry makes, one deeper, applied its first plain list:
     /// the diagnostics' count and the error nodes' then. What it reports past that point (an
@@ -1787,6 +1811,15 @@ pub struct Worker<'a> {
     /// cannot be checked is a refutable part, which the irrefutability check reports as an error,
     /// before which scalac's pattern matcher, that warns of such a test, never runs.
     pub refutable_is_error: bool,
+    /// The typed patterns of the generator's case lambda being typed whose type tests go unchecked
+    /// (`Worker::unchecked_lambda_tests`): those on an `@unchecked` selector, and a long tuple's.
+    pub unchecked_typed_pats: std::collections::HashSet<crate::ast::PatId, crate::intern::FxBuild>,
+    /// While a comprehension's trailing `map` that `markTrailingMap` marks is typed: the nodes and types the
+    /// application's conversions and inline expansions made, which `DropForMap` reads (`Worker::drop_for_map`).
+    pub for_map_watch: Option<Box<apply::ForMapWatch>>,
+    /// `TypeComparer.isSameType`'s nesting (`sameLevel`) and the successes it keeps from level 3 (`sames`).
+    pub same_level: u32,
+    pub sames: Option<FxMap<TypeId, TypeId>>,
     /// The extension method the last extension application applied (`apply_extension`), which a
     /// right-associative selection reads to know which overload it took.
     pub applied_extension: Option<SymId>,
@@ -2594,6 +2627,13 @@ impl<'a> Worker<'a> {
             mismatch_renders: Vec::new(),
             logging: 0,
             app_depth: 0,
+            any_function: None,
+            last_unapply: None,
+            infix_watch: u32::MAX,
+            infix_called: None,
+            infix_passed: None,
+            infix_universal: None,
+            denotation_marks: None,
             retry_depth: None,
             retry_applied: None,
             retry_typed: FxMap::default(),
@@ -2881,6 +2921,10 @@ impl<'a> Worker<'a> {
             last_typed_pattern: None,
             pattern_alternatives: Vec::new(),
             refutable_is_error: false,
+            unchecked_typed_pats: Default::default(),
+            for_map_watch: None,
+            same_level: 0,
+            sames: None,
             applied_extension: None,
             quote: quoted::QuoteState::default(),
             macro_files: FxMap::default(),
@@ -2987,6 +3031,13 @@ impl<'a> Worker<'a> {
             mismatch_renders: Vec::new(),
             logging: 0,
             app_depth: 0,
+            any_function: None,
+            last_unapply: None,
+            infix_watch: u32::MAX,
+            infix_called: None,
+            infix_passed: None,
+            infix_universal: None,
+            denotation_marks: None,
             retry_depth: None,
             retry_applied: None,
             retry_typed: FxMap::default(),
@@ -3268,6 +3319,10 @@ impl<'a> Worker<'a> {
             last_typed_pattern: Default::default(),
             pattern_alternatives: Vec::new(),
             refutable_is_error: false,
+            unchecked_typed_pats: Default::default(),
+            for_map_watch: None,
+            same_level: 0,
+            sames: None,
             applied_extension: None,
             quote: self.quote.attach(),
             macro_files: self.macro_files.clone(),
@@ -4111,14 +4166,32 @@ impl<'a> Worker<'a> {
     /// under `Feature.sourceVersion`): nothing, a warning, a migration warning or an error.
     /// `id` is dotty's message's (`warnings::id`), or `NO_ID` for a message of none.
     pub fn migration(&mut self, row: crate::source_version::Migration, span: Span, msg: impl Into<String>, id: u16) {
+        self.migration_of_phase(row, span, id, 0, || msg.into());
+    }
+
+    /// `migration` from scalac's phase `phase` (`source::producer_rank`, 0 the typer's), the message made only
+    /// where the row reports: an error of a phase after the typer is a late one, which a typer that reported
+    /// one hides (`Phase.isRunnable`).
+    pub fn migration_of_phase(&mut self, row: crate::source_version::Migration, span: Span, id: u16, phase: u8, msg: impl FnOnce() -> String) {
         use crate::source_version::Outcome;
-        let plain = crate::source::Warning { id, ..crate::source::Warning::plain() };
+        let plain = crate::source::Warning { id, phase, ..crate::source::Warning::plain() };
         match row.outcome(self.cur_ast().source_version) {
             Outcome::Silent => {}
-            Outcome::Warning => self.warn_as(span, msg, plain),
-            Outcome::MigrationWarning => self.warn_as(span, msg, crate::source::Warning { category: crate::warnings::Category::Migration, ..plain }),
-            Outcome::Error => self.error(span, msg),
+            Outcome::Warning => self.warn_as(span, msg(), plain),
+            Outcome::MigrationWarning => self.warn_as(span, msg(), crate::source::Warning { category: crate::warnings::Category::Migration, ..plain }),
+            Outcome::Error if phase > crate::source::PHASE_TYPER && !self.source(self.env.file).is_std && !self.is_body_file(self.env.file) => {
+                let file = self.env.file;
+                self.diags.late_error_of(file, span, msg(), phase);
+            }
+            Outcome::Error => self.error(span, msg()),
         }
+    }
+
+    /// `migration_of_phase` at a place of the program's file `file`, by that unit's version.
+    pub fn migration_in(&mut self, file: FileId, row: crate::source_version::Migration, span: Span, id: u16, phase: u8, msg: impl FnOnce() -> String) {
+        let saved = std::mem::replace(&mut self.env.file, file);
+        self.migration_of_phase(row, span, id, phase, msg);
+        self.env.file = saved;
     }
 
     /// The source of a file: one of the program's, or the pseudo file of a library body.

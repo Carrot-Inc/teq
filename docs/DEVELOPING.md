@@ -243,7 +243,8 @@ publish that `TEQ_PLUGIN_VERSION` names): the API's main modules, class path, te
 (`APP_TEST_*`), whose class path names each main module's products by a line `@<project>/<configuration>`
 where sbt's has them; it refuses lists whose directories, expanded as teq expands them, are not exactly
 sbt's sources, and records each list's configuration and source count. `app-api` checks the main lists
-against master's diagnostics; `app-api-test` the test sources the same way, over each binary's own
+against master's diagnostics (a landing's intended difference, diagnostics it gives or stops giving where scalac
+3.8.4 does, named by a file of patterns `APP_API_DELTA` names: `bench/app/delta-source-version-2.txt`); `app-api-test` the test sources the same way, over each binary's own
 `--products` build of the main lists, the boundary sbt compiles the tests across (a macro body the
 products withhold fails there, not in one program); `app-chain` builds each main module over its
 upstreams' products and compares with the whole build, its permitted mismatches `CHAIN_KNOWN` (the format

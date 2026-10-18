@@ -1,0 +1,9 @@
+exit 0
+out Seq1(1)
+out map
+out Seq1(1, 2)
+out Seq1(1, 2)
+out any map
+out true
+out 7
+out one

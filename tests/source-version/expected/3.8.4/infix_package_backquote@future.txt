@@ -1,0 +1,13 @@
+exit 1
+error 6:17
+  Alphanumeric method f is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .f(...) or backticked identifier `f`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 9:16
+  Alphanumeric type Pair is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Pair[...] or backticked identifier `Pair`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 12:40
+  Alphanumeric extractor P2 is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax P2(...) or backticked identifier `P2`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.

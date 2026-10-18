@@ -405,7 +405,8 @@ impl Occupied {
 /// feature warnings, `@nowarn`'s filters), an inline expansion's late error (`Inlining`), a
 /// deprecation (`CrossVersionChecks`), a match's exhaustivity and reachability
 /// (`PatternMatcher`), an unused definition or import (`CheckUnused.PostPatMat`), an
-/// interpolation's lint (`StringInterpolatorOpt`), an unchecked type test (`Erasure`).
+/// interpolation's lint (`StringInterpolatorOpt`), an unchecked type test (`Erasure`), a non-local
+/// return (`NonLocalReturns`).
 fn producer_rank(d: &Diagnostic) -> u8 {
     use crate::warnings::{id, Category};
     if d.phase != 0 {
@@ -429,7 +430,10 @@ fn producer_rank(d: &Diagnostic) -> u8 {
 /// The phases `producer_rank` names.
 pub const PHASE_TYPER: u8 = 1;
 pub const PHASE_INLINING: u8 = 4;
+/// `RefChecks`, of the group `CrossVersionChecks` begins.
+pub const PHASE_REFCHECKS: u8 = 5;
 pub const PHASE_ERASURE: u8 = 10;
+pub const PHASE_NONLOCAL_RETURNS: u8 = 11;
 
 /// What a build presents (`Diagnostics::report`): the diagnostics, and how many errors and
 /// warnings are counted.
@@ -634,9 +638,14 @@ impl Diagnostics {
             place_rank[i] = r;
         }
         // Weighed in the order scalac's phases report them, the order made within one: of two at
-        // one place, the first reported takes it (`UniqueMessagePositions`).
+        // one place, the first reported takes it (`UniqueMessagePositions`). A unit's warnings of
+        // its parser and typer are issued once its typer is done (`Reporter.issueIfNotSuppressed`
+        // suspends them until `Run.Suppressions.reportSuspendedMessages`), after the errors of both.
         let mut by_producer: Vec<usize> = (0..candidates.len()).collect();
-        by_producer.sort_by_key(|&i| (producer_rank(candidates[i]), i));
+        by_producer.sort_by_key(|&i| {
+            let rank = producer_rank(candidates[i]);
+            (rank, rank == PHASE_TYPER && candidates[i].is_warning, i)
+        });
         let mut occupied = Occupied::default();
         for d in &self.items[..from.min(self.items.len())] {
             occupied.mark(d, if d.is_warning { Level::Warning } else { Level::Error });

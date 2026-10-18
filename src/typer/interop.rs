@@ -424,6 +424,10 @@ impl<'a> Worker<'a> {
         if def.annots.iter().any(|a| a.name == names::OBJECT_FUNCTION) {
             self.syms.class_mut(c).object_function = true;
         }
+        // The std's stand-in for a JDK annotation interface, which a class file marks `ACC_ANNOTATION`.
+        if def.annots.iter().any(|a| a.name == names::JAVA_ANNOTATION) && self.source(file).is_std {
+            self.syms.class_mut(c).mods |= crate::ast::mods::JAVA_ANNOTATION;
+        }
         let annots = self.js_annots(file, &def.annots, def.span);
         let kind = self.syms.class(c).kind;
         if let Some(a) = def.annots.iter().find(|a| a.name == names::JS_IMPORT || a.name == names::JS_EXPORT) {

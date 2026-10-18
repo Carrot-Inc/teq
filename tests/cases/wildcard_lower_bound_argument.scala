@@ -2,6 +2,7 @@
 // (`add` of a `JList[? >: Integer]`, a `Flow.Subscriber[_ >: Int]`'s `onNext`): typed and converted against the
 // wildcard's lower bound, as dotty's `asSeenFrom` approximates the wildcard in the parameter's contravariant
 // position (`AsSeenFromMap`'s ranges), so that `add(1)` converts the `Int` to an `Integer`.
+// teq: --wconf msg=is.deprecated.for.wildcard.arguments:s
 import java.util.{ArrayList, List as JList}
 
 trait Sink[T]:

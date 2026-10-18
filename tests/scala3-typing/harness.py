@@ -32,7 +32,8 @@ Categories, neg suite (scalac rejects; lines with `// error` are the expected er
   different   teq rejects, at least one line scalac does not report
   accepts     teq accepts the program: a soundness or strictness gap unless the construct is
               outside the subset
-  oos         teq fails on a construct left out on purpose (detail: which one)
+  oos         teq fails on a construct left out on purpose (detail: which one), or the test needs a file
+              compiled by an older scalac (`_c3.0.0`)
   syntax      teq fails while parsing (detail: message); syntax outside the subset or a parser gap
   std         teq cannot find a library name the test relies on (detail: name)
   crash/hang  teq exits with another code, panics or exceeds the time limit
@@ -250,15 +251,35 @@ def scalac_options(files):
     return options
 
 
+def wconf_read(rules):
+    """Whether teq reads every filter of the `-Wconf` rules (comma-separated, each `filter&...:action`): a
+    message's text (`msg=`), its id (`id=`) or its category (`cat=`)."""
+    for rule in rules.split(","):
+        if not rule:
+            continue
+        filters, sep, _action = rule.rpartition(":")
+        if not sep or not filters:
+            return False
+        if not all(f.split("=", 1)[0] in ("msg", "id", "cat") and "=" in f for f in filters.split("&")):
+            return False
+    return True
+
+
 def teq_flags(options):
     """`-source` and `-language` among scalac's options as teq's flags, in each form scalac takes (`-source 3.3`,
-    `-source:3.3`, `--source`), the language features in order, each once: (flags, conflict), where a conflict
-    names two source versions the options give."""
-    source, languages, conflict = None, [], None
+    `-source:3.3`, `--source`), the language features in order, each once, and each `-Wconf:<rules>` whose
+    filters teq reads (`wconf_read`) as `--wconf`: (flags, conflict), where a conflict names two source versions
+    the options give."""
+    source, languages, conflict, wconfs = None, [], None, []
     i = 0
     while i < len(options):
         o = options[i]
         i += 1
+        if o.startswith("-Wconf:"):
+            rules = o[len("-Wconf:"):]
+            if wconf_read(rules):
+                wconfs.append(rules)
+            continue
         name = o[1:] if o.startswith("--") else o
         value = None
         if ":" in name:
@@ -279,6 +300,8 @@ def teq_flags(options):
     flags = ["--source", source] if source else []
     if languages:
         flags += ["--language", ",".join(dict.fromkeys(languages))]
+    for rules in wconfs:
+        flags += ["--wconf", rules]
     return flags, conflict
 
 
@@ -369,6 +392,10 @@ def run_teq(test):
 def classify(test):
     if any(f.endswith(".java") for f in test.files):
         return "oos", "java", ""
+    # A file the corpus's framework compiles with an older scalac (`A_1_c3.0.0.scala`), whose TASTy a check
+    # of the group's sources from here cannot give (`Checking.checkValidInfix`'s `methCompiledBeforeDeprecation`).
+    if any(re.search(r"_c\d+\.\d+\.\d+\.scala$", f) for f in test.files):
+        return "oos", "an older scalac's file", ""
     if test.conflict:
         return "options", test.conflict, ""
     code, out, why = run_teq(test)

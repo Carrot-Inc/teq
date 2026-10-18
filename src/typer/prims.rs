@@ -506,7 +506,12 @@ impl<'a> Worker<'a> {
     /// left-associative operator's application ends (`Desugar.binop`'s `Select(l, op)`).
     pub fn type_infix(&mut self, l: ExprId, op: Name, r: ExprId, op_end: u32, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         // The operands a deeper selection of the operator typed are the operation's alone.
+        let watch = self.watch_infix(op, op_end);
         let typed = self.type_infix_now(l, op, r, op_end, span, expected);
+        if let Some(outer) = watch {
+            let of = self.unwatch_infix(outer);
+            self.check_infix_expr(op, r, op_end, of);
+        }
         // A right-associative operator's selection is on its right operand.
         if !self.selection_typed.is_empty() {
             for operand in [l, r] {
@@ -602,7 +607,14 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> Option<(TExprId, TypeId)> {
+        let watch = self.watch_infix(op, op_end);
         let typed = self.type_infix_applied_now(l, op, r, op_end, lists, span, expected);
+        if let Some(outer) = watch {
+            let of = self.unwatch_infix(outer);
+            if typed.is_some() {
+                self.check_infix_expr(op, r, op_end, of);
+            }
+        }
         // A right-associative operator's selection is on its right operand.
         if !self.selection_typed.is_empty() {
             for operand in [l, r] {
@@ -1066,6 +1078,15 @@ impl<'a> Worker<'a> {
                 elems.iter().map(|&e| ArgSrc::Ast(e)).collect()
             }
             Expr::Parens(inner) => vec![ArgSrc::Ast(inner)],
+            // A named tuple's elements as named arguments, re-tupled for a method of one parameter.
+            Expr::NamedTuple(..) if !ast.notes.named_operands.is_empty() => match ast.notes.named_operands.binary_search_by_key(&operand, |&(e, _)| e) {
+                Ok(i) => {
+                    let args = ast.expr_list(ast.notes.named_operands[i].1);
+                    self.infix_tuples.insert((self.env.file, args[0]), operand);
+                    args.iter().map(|&e| ArgSrc::Ast(e)).collect()
+                }
+                Err(_) => vec![ArgSrc::Ast(operand)],
+            },
             _ => vec![ArgSrc::Ast(operand)],
         }
     }

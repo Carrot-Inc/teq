@@ -1,0 +1,9 @@
+exit 0
+warning 8:12
+  Alphanumeric extractor Cp is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Cp(...) or backticked identifier `Cp`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+warning 14:12
+  Alphanumeric extractor Ex is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Ex(...) or backticked identifier `Ex`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.

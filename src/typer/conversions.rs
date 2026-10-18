@@ -1098,6 +1098,7 @@ impl<'a> Worker<'a> {
             if level.len() == 1 {
                 if let Some((te, ty)) = self.try_conversion(level[0], recv, recv_ty, span, accept, to_type) {
                     self.attribute_conversion(level[0], te);
+                    self.watch_for_map_conversion(te, ty);
                     return Some(Ok((level[0].0, te, ty)));
                 }
                 continue;
@@ -1147,9 +1148,19 @@ impl<'a> Worker<'a> {
             }
             let (te, ty) = (found[best].expr, found[best].ty);
             self.attribute_conversion((g, found[best].via), te);
+            self.watch_for_map_conversion(te, ty);
             return Some(Ok((g, te, ty)));
         }
         None
+    }
+
+    /// A committed conversion's node and type, kept while a comprehension's trailing `map` is typed
+    /// (`Worker::for_map_watch`), whose `DropForMap` compares the receiver it converted.
+    #[inline]
+    fn watch_for_map_conversion(&mut self, te: TExprId, ty: TypeId) {
+        if let Some(w) = self.for_map_watch.as_mut() {
+            w.conversions.push((te, ty));
+        }
     }
 
     /// The conversion `conv` was committed with the tree `te`: the import credited is one that

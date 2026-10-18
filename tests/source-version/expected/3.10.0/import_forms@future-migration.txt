@@ -1,0 +1,13 @@
+exit 0
+migration warning 2:21
+  `_` is no longer supported for a wildcard import; use `*` instead
+  This construct can be rewritten automatically under -rewrite -source future-migration.
+migration warning 2:36
+  The import renaming `a => b` is no longer supported ; use `a as b` instead
+  This construct can be rewritten automatically under -rewrite -source future-migration.
+migration warning 3:24
+  The export renaming `a => b` is no longer supported ; use `a as b` instead
+  This construct can be rewritten automatically under -rewrite -source future-migration.
+migration warning 3:40
+  `_` is no longer supported for a wildcard export; use `*` instead
+  This construct can be rewritten automatically under -rewrite -source future-migration.

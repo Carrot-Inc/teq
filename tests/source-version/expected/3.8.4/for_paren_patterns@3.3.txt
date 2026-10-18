@@ -1,0 +1,48 @@
+exit 0
+out (y: Int)
+out filter
+out map
+out 2
+out ((y: Int))
+out filter
+out map
+out 3
+out (_: Int)
+out filter
+out map
+out 0
+out (y)
+out map
+out 5
+out y: Int
+out map
+out 6
+out _: Int
+out map
+out 0
+out (X)
+out filter
+out map
+out 7
+out X
+out map
+out 8
+out (`x`)
+out filter
+out map
+out 9
+out (y): Int
+out filter
+out map
+out 11
+out ((y, z))
+out filter
+out map
+out 12
+out (y @ (z: Int))
+out filter
+out map
+out 24
+out given Int
+out map
+out 13

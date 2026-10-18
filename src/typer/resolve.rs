@@ -3408,6 +3408,50 @@ impl<'a> Worker<'a> {
     }
 
     /// Like `resolve_type` but leaves an unapplied generic class as a type constructor.
+    /// The operator `f` of an infix type, checked as `Typer.typedInfixOp` does by whatever it names: a
+    /// class, an alias or an abstract type member, a type parameter.
+    #[cold]
+    #[inline(never)]
+    fn infix_type_written(&mut self, f: TyExprId) {
+        use super::infix::Infixed;
+        let ast = self.cur_ast();
+        let TyExpr::Name(n) = ast.ty(f) else { return };
+        // What the name resolves to with the package it reaches it through (`TypeReach`, by `lookup`'s own
+        // precedence; no span, as the type's own lookup reported what it had to).
+        let reach = self.lookup::<TypeReach>(n, None);
+        let of = match reach.map(|r| r.r) {
+            // A std class at `scala` that stands for a scala-library class of another package (`STD_BINDINGS`) is,
+            // reached at `scala` or through `Predef`, scala-library's alias of it, owned by a Scala 2 object.
+            Some(TypeRef::Class(c)) if self.std_alias_at_scala(c) && reach.is_some_and(|r| r.pkg.is_none_or(|p| p == self.b.scala_pkg)) => Infixed::StdAlias,
+            Some(TypeRef::Class(c)) => Infixed::Class(c),
+            Some(TypeRef::Alias(a)) => Infixed::Alias(a),
+            Some(TypeRef::Param(_)) => Infixed::TypeParam,
+            // A member the class or one of its bases declares.
+            Some(TypeRef::Member(c, m)) => match self.typer_type_member(c, m) {
+                Some(a) => Infixed::Alias(a),
+                None => match self.inherited_inner_class(c, m) {
+                    Some(k) => Infixed::Class(k),
+                    None => return,
+                },
+            },
+            Some(TypeRef::ValueMember(v, m)) => match self.value_nested_class(v, m) {
+                Some(k) => Infixed::Class(k),
+                None => return,
+            },
+            None => return,
+        };
+        self.check_infix_type(f, n, of);
+    }
+
+    /// Whether `c` is a std class at package `scala` standing for a scala-library class of another package, which
+    /// a name at `scala` reaches as scala-library's alias of it (`scala.Map` of `Predef`, `scala.Either`).
+    fn std_alias_at_scala(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        info.owner == Owner::Package(self.b.scala_pkg)
+            && self.source(info.file).is_std
+            && super::loader::compile::STD_BINDINGS.iter().any(|&(_, n, to)| to == "scala" && n == self.interner.get(info.name))
+    }
+
     pub fn resolve_type_ctor(&mut self, id: TyExprId) -> TypeId {
         let ast = self.cur_ast();
         let span = ast.ty_spans[id.idx()];
@@ -3539,6 +3583,9 @@ impl<'a> Worker<'a> {
                     }
                 }
                 let ctor = self.resolve_type_ctor(f);
+                if !ast.notes.infix_type_ops.is_empty() && ast.notes.infix_type_ops.binary_search(&f).is_ok() {
+                    self.infix_type_written(f);
+                }
                 if let Type::Ctor(c) = self.types.get(ctor) {
                     if self.types.is_op_class(c) && Some(c) != self.b.cons_tuple {
                         return self.type_level_op(c, args);
@@ -7899,6 +7946,45 @@ impl Binding for TypeRef {
             TypeRef::ValueMember(v, _) => Some(t.syms.sym(t.import_values[v.0 as usize].0).file),
             TypeRef::Param(_) => None,
         }
+    }
+}
+
+/// A type's binding with the package the name reaches it through: a package of the file's chain or one an import
+/// selects from; none for a definition in scope, an object's member (`Predef`'s) or a value's. The infix check reads
+/// the owner of what it reaches by it (`Checking.checkValidInfix`'s `meth.maybeOwner`).
+#[derive(Clone, Copy)]
+pub(super) struct TypeReach {
+    pub r: TypeRef,
+    pub pkg: Option<PkgId>,
+}
+
+impl Binding for TypeReach {
+    fn in_frame(t: &mut Worker, frame: usize, innermost_class: bool, name: Name) -> Option<TypeReach> {
+        <TypeRef as Binding>::in_frame(t, frame, innermost_class, name).map(|r| TypeReach { r, pkg: None })
+    }
+
+    fn via_import(t: &mut Worker, imp: ResolvedImport, name: Name) -> Option<TypeReach> {
+        let pkg = match imp.target {
+            ImportTarget::PkgMember(p, _) | ImportTarget::PkgAll(p) => Some(p),
+            _ => None,
+        };
+        <TypeRef as Binding>::via_import(t, imp, name).map(|r| TypeReach { r, pkg })
+    }
+
+    fn in_pkg(t: &mut Worker, p: PkgId, name: Name) -> Option<TypeReach> {
+        t.pkg_type(p, name).map(|r| TypeReach { r, pkg: Some(p) })
+    }
+
+    fn root_package(_: &mut Worker, _: Name) -> Option<TypeReach> {
+        None
+    }
+
+    fn same(t: &mut Worker, a: TypeReach, b: TypeReach) -> bool {
+        <TypeRef as Binding>::same(t, a.r, b.r)
+    }
+
+    fn file(t: &Worker, r: TypeReach) -> Option<FileId> {
+        <TypeRef as Binding>::file(t, r.r)
     }
 }
 

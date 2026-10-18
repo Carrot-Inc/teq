@@ -120,6 +120,16 @@ pub struct Parser<'a> {
     quote_level: u32,
     /// Set while the body of a quote pattern is parsed, where a splice holds a pattern.
     quote_pattern: bool,
+    /// Set while a case clause's pattern or a match type case's pattern is parsed (dotty's
+    /// `inMatchPattern`, `withinMatchPattern`), where a `_` type argument is no deprecated wildcard.
+    in_match_pattern: bool,
+    /// Where the argument of an argument list being parsed starts (dotty's `Location.InArgs`): an
+    /// ascription there may splice a vararg.
+    arg_start: Option<u32>,
+    /// The parenthesized expression parsed last that, as an infix operation's right operand, reads as
+    /// named arguments (`infix_named_operand`): a named tuple, an assignment, a tuple of assignments of names;
+    /// its id, `u32::MAX` for none.
+    named_parens: u32,
     /// The lexer's boundaries (`LexResult::boundaries`) and the first of them a syntax error
     /// was found at, where the file is lexed again with the delimiters around it closed.
     boundaries: Vec<u32>,
@@ -185,7 +195,7 @@ pub struct Parsed {
 }
 
 pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Interner, syntax: Syntax) -> Parsed {
-    let LexResult { keywords, tokens, errors, warnings, end_markers, boundaries, case_lines } = std::mem::replace(lexed, LexResult::empty());
+    let LexResult { keywords, tokens, errors, warnings, end_markers, boundaries, case_lines, backquoted } = std::mem::replace(lexed, LexResult::empty());
     let mut p = Parser {
         source: syntax.source,
         unit_source: None,
@@ -225,6 +235,9 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         template_type: false,
         quote_level: 0,
         quote_pattern: false,
+        in_match_pattern: false,
+        arg_start: None,
+        named_parens: u32::MAX,
         boundaries,
         boundary: None,
         case_lines,
@@ -251,12 +264,15 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
     // Typing reads the unit's version, the import's wherever it stands (`Feature.sourceVersion`).
     let unit = p.unit_source.unwrap_or(syntax.source);
     let keywords = p.lex_keywords;
-    *lexed = LexResult { keywords, tokens: p.toks, errors: p.lex_errors, warnings: p.lex_warnings, end_markers: p.end_markers, boundaries: p.boundaries, case_lines: p.case_lines };
     let mut asts = vec![p.ast];
     asts.extend(p.package_blocks);
+    // The scanner's record of its backquoted identifiers is the unit's, the file's AST's and each package block's
+    // (`untpd.isBackquoted` of a token of the unit).
     for ast in &mut asts {
         ast.source_version = unit;
+        ast.notes.backquoted_idents.clone_from(&backquoted);
     }
+    *lexed = LexResult { keywords, tokens: p.toks, errors: p.lex_errors, warnings: p.lex_warnings, end_markers: p.end_markers, boundaries: p.boundaries, case_lines: p.case_lines, backquoted };
     Parsed { asts, errors: p.errors, warnings: p.warnings, boundary: p.boundary, keywords }
 }
 
@@ -1293,7 +1309,7 @@ impl<'a> Parser<'a> {
         let start = self.span();
         self.expect(Tok::KwImport);
         let mut imports = std::mem::take(&mut self.ast.imports);
-        self.parse_import_exprs(&mut imports, start.start);
+        self.parse_import_exprs(&mut imports, start.start, false);
         self.ast.imports = imports;
         if self.syntax.index {
             self.ast.import_ranges.push(start.to(self.prev_span()));
@@ -1346,7 +1362,7 @@ impl<'a> Parser<'a> {
         let keyword = self.span().start;
         self.expect(Tok::KwExport);
         let mut exports = std::mem::take(&mut self.export_scratch);
-        self.parse_import_exprs(&mut exports, keyword);
+        self.parse_import_exprs(&mut exports, keyword, true);
         self.export_scratch = exports;
     }
 
@@ -1359,7 +1375,7 @@ impl<'a> Parser<'a> {
     /// The part shared by `import` and `export`, after the keyword at `keyword`: one entry per
     /// selector is appended to `out`. `import scala.language.*` and its selectors switch on
     /// features of scalac and are dropped.
-    fn parse_import_exprs(&mut self, out: &mut Vec<Import>, keyword: u32) {
+    fn parse_import_exprs(&mut self, out: &mut Vec<Import>, keyword: u32, export: bool) {
         let mark = out.len();
         let mut first = true;
         loop {
@@ -1377,7 +1393,7 @@ impl<'a> Parser<'a> {
                     loop {
                         let sel_start = self.ast.import_names.len();
                         let from = self.span();
-                        let (sel, bound) = self.parse_import_selector();
+                        let (sel, bound) = self.parse_import_selector(export);
                         let span = start.to(self.prev_span());
                         let selector_span = from.to(self.prev_span());
                         self.note_import(sel_start, &path_spans, span);
@@ -1399,7 +1415,7 @@ impl<'a> Parser<'a> {
                 if self.at_op(names::STAR) || self.at(Tok::Underscore) || self.at(Tok::KwGiven) {
                     let sel_start = self.ast.import_names.len();
                     let from = self.span();
-                    let (sel, bound) = self.parse_import_selector();
+                    let (sel, bound) = self.parse_import_selector(export);
                     let span = start.to(self.prev_span());
                     let selector_span = from.to(self.prev_span());
                     self.note_import(sel_start, &path_spans, span);
@@ -1487,14 +1503,53 @@ impl<'a> Parser<'a> {
     /// (`report.errorOrMigrationWarning`): nothing, a warning, a migration warning or an error.
     /// `id` is dotty's message's (`warnings::id`), or `NO_ID` for a message of none.
     pub(super) fn migration(&mut self, row: crate::source_version::Migration, at: Span, msg: impl Into<String>, id: u16) {
+        self.migration_with(row, at, id, || msg.into());
+    }
+
+    /// 3.10.0's `Namer.checkDefName` and `Parsers.checkPatternName`: the name of a definition the source
+    /// writes (a val, a def, a class, a type, a parameter, a type parameter, a given, an enum case) or of a
+    /// pattern variable, holding `$`, reported by the version (`MigrationVersion.IdentifierDollars`, a warning
+    /// from 3.9, never an error), where the name: not backquoted (`isBackquoted`,
+    /// `alreadyBackquotedInSource`), not one character or `$$` (`isDollars`). What the parser makes up is
+    /// no definition the source writes (`tree.span.isSynthetic`, `Synthetic`), and a lambda's parameter is
+    /// one of a synthetic method's.
+    #[inline]
+    pub(super) fn check_dollar_name(&mut self, name: Name, span: Span) {
+        if self.source.is_at_least(SourceVersion::V3_9) {
+            self.check_dollar_name_now(name, span);
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn check_dollar_name_now(&mut self, name: Name, span: Span) {
+        let text = self.interner.get(name);
+        if !text.contains('$') || text.chars().count() == 1 || text == "$$" || self.text.as_bytes().get(span.start as usize) == Some(&b'`') {
+            return;
+        }
+        self.migration_with(crate::source_version::Migration::IdentifierDollars, span, crate::warnings::id::ILLEGAL_IDENTIFIER, || {
+            format!("The identifier `{}` should not contain `$`, which is reserved for internal compiler use.", self.interner.get(name))
+        });
+    }
+
+    /// `body` with `in_match_pattern` set (dotty's `withinMatchPattern`).
+    pub(super) fn within_match_pattern<T>(&mut self, body: impl FnOnce(&mut Self) -> T) -> T {
+        let saved = std::mem::replace(&mut self.in_match_pattern, true);
+        let out = body(self);
+        self.in_match_pattern = saved;
+        out
+    }
+
+    /// `migration`, the message made only where the row reports.
+    pub(super) fn migration_with(&mut self, row: crate::source_version::Migration, at: Span, id: u16, msg: impl FnOnce() -> String) {
         use crate::source_version::Outcome;
         let migration = match row.outcome(self.source) {
             Outcome::Silent => return,
             Outcome::Warning => false,
             Outcome::MigrationWarning => true,
-            Outcome::Error => return self.rule_error(at, msg),
+            Outcome::Error => return self.rule_error(at, msg()),
         };
-        self.warnings.push(SyntaxWarning { span: at, msg: msg.into(), migration, id });
+        self.warnings.push(SyntaxWarning { span: at, msg: msg(), migration, id });
     }
 
     /// An error of a rule the grammar holds to, not of the grammar: the recovery reads nothing of
@@ -1565,10 +1620,19 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Also takes the Scala 2 forms `_`, `a => b` and `a => _`; `given T` imports the givens
-    /// like `given` does, without the type as a filter, which comes back with it.
-    fn parse_import_selector(&mut self) -> (ImportSel, Option<crate::ast::TyExprId>) {
-        if self.eat_op(names::STAR) || self.eat(Tok::Underscore) {
+    /// Also takes the Scala 2 forms `_`, `a => b` and `a => _`, each reported by the version
+    /// (`Parsers.wildcardSelector`, `namedSelector`); `given T` imports the givens like `given`
+    /// does, without the type as a filter, which comes back with it.
+    fn parse_import_selector(&mut self, export: bool) -> (ImportSel, Option<crate::ast::TyExprId>) {
+        let clause = if export { "export" } else { "import" };
+        if self.at(Tok::Underscore) {
+            let at = self.bump().span;
+            self.migration_with(crate::source_version::Migration::ImportWildcard, at, crate::warnings::NO_ID, || {
+                format!("`_` is no longer supported for a wildcard {}; use `*` instead{}", clause, crate::source_version::rewrite_notice("This construct", "future-migration"))
+            });
+            return (ImportSel::Wildcard, None);
+        }
+        if self.eat_op(names::STAR) {
             return (ImportSel::Wildcard, None);
         }
         if self.eat(Tok::KwGiven) {
@@ -1581,7 +1645,12 @@ impl<'a> Parser<'a> {
         let (n, name_span) = self.expect_ident();
         self.note_selector_name(name_span);
         if self.at_soft(names::AS) || self.at(Tok::Arrow) {
-            self.bump();
+            let arrow = self.bump();
+            if arrow.kind == Tok::Arrow {
+                self.migration_with(crate::source_version::Migration::ImportRename, arrow.span, crate::warnings::NO_ID, || {
+                    format!("The {} renaming `a => b` is no longer supported ; use `a as b` instead{}", clause, crate::source_version::rewrite_notice("This construct", "future-migration"))
+                });
+            }
             if self.eat(Tok::Underscore) {
                 return (ImportSel::Name(n, Some(names::WILDCARD)), None);
             }

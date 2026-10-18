@@ -1,3 +1,4 @@
+// teq: --wconf msg=Ignoring..this..qualifier:s
 package ui.facade
 
 object IconSet:

@@ -1,0 +1,13 @@
+exit 1
+error 17:13
+  Alphanumeric method g is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .g(...) or backticked identifier `g`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 21:13
+  Alphanumeric method m is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .m(...) or backticked identifier `m`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 23:13
+  Alphanumeric method e2 is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .e2(...) or backticked identifier `e2`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.

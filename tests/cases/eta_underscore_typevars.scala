@@ -1,3 +1,4 @@
+// teq: --wconf msg=eta-expansion.is.unnecessary:s
 def f(x: Int): Int = x + 1
 def show(x: Any): String = x match
   case l: List[t] => s"list of ${l.size}"

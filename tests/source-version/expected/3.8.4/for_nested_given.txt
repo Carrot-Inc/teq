@@ -1,0 +1,20 @@
+exit 0
+out nested
+out map
+out map
+out 3
+out top
+out map
+out 2
+out bound
+out map
+out map
+out 7
+out before a generator
+out map
+out flatMap
+out map
+out 10
+out plain
+out map
+out 7

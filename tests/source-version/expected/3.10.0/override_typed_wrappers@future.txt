@@ -1,0 +1,9 @@
+exit 1
+error 4:22
+  cannot override val parameter value x in class A
+error 7:22
+  cannot override val parameter given instance x in class G
+error 9:23
+  cannot override val parameter given instance x in class G
+error 12:43
+  cannot override val parameter value y in class N

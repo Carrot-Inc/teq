@@ -230,7 +230,7 @@ impl<'a> Parser<'a> {
             let start = self.ast.local_imports.len() as u32;
             let mut imports = std::mem::take(&mut self.ast.local_imports);
             self.importing = Some(false);
-            self.parse_import_exprs(&mut imports, at);
+            self.parse_import_exprs(&mut imports, at, false);
             self.importing = None;
             self.ast.local_imports = imports;
             let language = std::mem::take(&mut self.language_scratch);
@@ -380,8 +380,12 @@ impl<'a> Parser<'a> {
     /// The parameters of a lambda up to and including its arrow.
     fn parse_lambda_params(&mut self) -> ListRef {
         let mut params: Vec<LambdaParam> = Vec::new();
-        // `implicit x => ...`, still legal in Scala 3.
-        let implicit = self.eat(Tok::KwImplicit);
+        // `implicit x => ...`, reported by the version (`Parsers.expr`, `blockStatSeq`).
+        let implicit = self.at(Tok::KwImplicit);
+        if implicit {
+            let at = self.bump().span;
+            self.migration(crate::source_version::Migration::Scala2Implicits, at, "`implicit` lambdas are no longer supported, use a lambda with `?=>` instead", crate::warnings::NO_ID);
+        }
         if self.eat(Tok::LParen) {
             let mut cut = false;
             while !self.at(Tok::RParen) && !self.at(Tok::Eof) {
@@ -502,10 +506,17 @@ impl<'a> Parser<'a> {
                     }
                     e = self.annotation_ascription(e, &annots, start);
                 }
-                // `xs: _*` is the Scala 2 spelling of `xs*`, which the argument list reads.
+                // `xs: _*` is the Scala 2 spelling of `xs*`, which the argument list reads; an
+                // argument's is reported by the version (`Parsers.ascription`: `location.inArgs &&
+                // followingIsVararg()`, at the `_`).
                 Tok::Colon if self.kind_at(1) == Tok::Underscore && self.spread_star_at(2) => {
                     self.bump();
-                    self.bump();
+                    let underscore = self.bump().span;
+                    if self.arg_start == Some(start.start) && self.following_is_vararg() {
+                        self.migration_with(crate::source_version::Migration::VarargSpliceAscription, underscore, crate::warnings::NO_ID, || {
+                            format!("The syntax `x: _*` is no longer supported for vararg splices; use `x*` instead{}", crate::source_version::rewrite_notice("This construct", "3.4-migration"))
+                        });
+                    }
                     return e;
                 }
                 Tok::Colon => {
@@ -702,7 +713,7 @@ impl<'a> Parser<'a> {
             }
             let case_at = self.bump().span.start;
             let mark = self.error_events;
-            let pat = self.parse_pattern();
+            let pat = self.within_match_pattern(Self::parse_pattern);
             let guard = if self.eat(Tok::KwIf) { Some(self.parse_infix_expr()) } else { None };
             if self.error_events != mark {
                 broken.push(cases.len() as u32);
@@ -806,7 +817,7 @@ impl<'a> Parser<'a> {
                 let pat = self.parse_pattern();
                 if self.eat(Tok::LArrow) {
                     let e = self.parse_expr();
-                    enums.push(if filtering { Enumerator::CaseGen(pat, e) } else { Enumerator::Gen(pat, e) });
+                    enums.push(if filtering { Enumerator::CaseGen(pat, e) } else { Enumerator::Gen(pat, e, GenMode::of(self.source)) });
                 } else {
                     if filtering {
                         self.error_at(self.span(), "expected '<-' after a case pattern");
@@ -910,8 +921,98 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// `l op r` whose right operand is a tuple or a parenthesized assignment (`Parsers.migrateInfixOp`,
+    /// `Desugar.binop`): an operand that reads as named arguments, a named tuple (from 3.7) or an
+    /// assignment in parentheses (before, and to a target other than a name from then), is reported by the version
+    /// (`DeprecatedInfixNamedArgumentSyntax`), but for the named tuple's own operators, and under a
+    /// migration version from 3.6 the operation is the application of those named arguments
+    /// (`needsPatch`). An assignment of a name stays one as a named argument (`assignToNamedArg`).
+    #[cold]
+    #[inline(never)]
+    fn infix_named_operand(&mut self, lhs: ExprId, op: Token, rhs: ExprId, start: Span) -> ExprId {
+        use crate::source_version::Migration;
+        let span = start.to(self.prev_span());
+        let named_assign = |p: &Self, e: ExprId| matches!(p.ast.expr(e), Expr::Assign(l, _) if matches!(p.ast.expr(l), Expr::Ident(_)));
+        let tuple_operator = matches!(op.name, names::EQEQ | names::NEQ | names::EQ | names::NE | names::ARROW_ASSOC)
+            || matches!(self.interner.get(op.name), "++" | "zip");
+        // dotty's `Tuple` of named arguments, or `Parens(Assign(..))` (`parse_parens` keeps the node).
+        let reads_named = match self.ast.expr(rhs) {
+            Expr::NamedTuple(..) => true,
+            Expr::Parens(inner) => matches!(self.ast.expr(inner), Expr::Assign(..)),
+            _ => false,
+        };
+        if reads_named && !tuple_operator {
+            let at = self.ast.written_arg(rhs).map_or(self.ast.expr_span(rhs), |(w, _)| w);
+            self.migration_with(Migration::AmbiguousNamedTupleSyntax, at, crate::warnings::id::DEPRECATED_INFIX_NAMED_ARGUMENT_SYNTAX, || {
+                format!(
+                    "Deprecated syntax: infix named arguments lists are deprecated; since 3.7 it is interpreted as a single named tuple argument.\nTo avoid this warning, either remove the argument names or use dotted selection.{}",
+                    crate::source_version::rewrite_notice("This", "3.7-migration")
+                )
+            });
+            if Migration::AmbiguousNamedTupleSyntax.needs_patch(self.source) {
+                let args: Vec<ExprId> = match self.ast.expr(rhs) {
+                    Expr::NamedTuple(names, values) => {
+                        let pairs: Vec<(Name, ExprId)> = self.ast.name_lists[names.range()].iter().copied().zip(self.ast.expr_list(values).iter().copied()).collect();
+                        pairs.into_iter().map(|(n, v)| self.ast.add_expr(Expr::NamedArg(n, v), self.ast.expr_span(v))).collect()
+                    }
+                    // `handle(assign :: Nil)`: the assignment itself, its parentheses dropped.
+                    Expr::Parens(assign) => vec![assign],
+                    _ => vec![rhs],
+                };
+                let select = self.ast.add_expr(Expr::Select(lhs, op.name), self.ast.expr_span(lhs).to(op.span));
+                let list = push_list(&mut self.ast.expr_lists, &args);
+                return self.ast.add_expr(Expr::Apply(select, list), span);
+            }
+        }
+        // A named tuple of more than one element is the named arguments of a method of more than one
+        // parameter (`Applications.needsTupledDual` of `ApplyKind.InfixTuple`).
+        if let Expr::NamedTuple(names, values) = self.ast.expr(rhs) {
+            if names.len > 1 {
+                let pairs: Vec<(Name, ExprId)> = self.ast.name_lists[names.range()].iter().copied().zip(self.ast.expr_list(values).iter().copied()).collect();
+                let args: Vec<ExprId> = pairs.into_iter().map(|(n, v)| self.ast.add_expr(Expr::NamedArg(n, v), self.ast.expr_span(v))).collect();
+                let list = push_list(&mut self.ast.expr_lists, &args);
+                self.ast.notes.named_operands.push((rhs, list));
+            }
+        }
+        // `binop`'s `Parens(arg)` and `assignToNamedArg`: an operand's assignment of a name in parentheses
+        // is a named argument.
+        let rhs = match self.ast.expr(rhs) {
+            Expr::Parens(assign) if named_assign(self, assign) => {
+                let Expr::Assign(l, v) = self.ast.expr(assign) else { unreachable!() };
+                let Expr::Ident(n) = self.ast.expr(l) else { unreachable!() };
+                let arg = self.ast.add_expr(Expr::NamedArg(n, v), self.ast.expr_span(assign));
+                self.ast.push_written(arg, self.ast.expr_span(rhs), true);
+                arg
+            }
+            Expr::Tuple(items) if self.ast.expr_list(items).iter().any(|&e| named_assign(self, e)) => {
+                let items: Vec<ExprId> = self.ast.expr_list(items).to_vec();
+                let named: Vec<ExprId> = items
+                    .into_iter()
+                    .map(|e| match self.ast.expr(e) {
+                        Expr::Assign(l, v) if matches!(self.ast.expr(l), Expr::Ident(_)) => {
+                            let Expr::Ident(n) = self.ast.expr(l) else { unreachable!() };
+                            self.ast.add_expr(Expr::NamedArg(n, v), self.ast.expr_span(e))
+                        }
+                        _ => e,
+                    })
+                    .collect();
+                let list = push_list(&mut self.ast.expr_lists, &named);
+                self.ast.add_expr(Expr::Tuple(list), self.ast.expr_span(rhs))
+            }
+            _ => rhs,
+        };
+        self.ast.add_expr(Expr::Infix(lhs, op.name, rhs, op.span.end), span)
+    }
+
     pub(super) fn parse_infix_expr(&mut self) -> ExprId {
         self.parse_infix_prec(0)
+    }
+
+    /// dotty's `followingIsVararg`: the current token is a `*` before the list's `)`, or before a
+    /// trailing comma and the `)` (multiple spreads are experimental).
+    pub(super) fn following_is_vararg(&self) -> bool {
+        self.at_op(names::STAR)
+            && (self.kind_at(1) == Tok::RParen || self.kind_at(1) == Tok::Comma && matches!(self.kind_at(2), Tok::RParen | Tok::Eof))
     }
 
     /// `*` closing an argument: the token at `n` is the star of `xs: _*` or `xs*`.
@@ -1006,6 +1107,7 @@ impl<'a> Parser<'a> {
             if prec < min_prec {
                 return lhs;
             }
+            self.ast.alpha_infix |= t.kind == Tok::Ident;
             self.bump();
             // The operand may follow on the next line, not past a blank one (dotc's `NEWLINES`).
             if self.at(Tok::Newline) {
@@ -1020,7 +1122,11 @@ impl<'a> Parser<'a> {
             } else {
                 self.parse_infix_prec(if right { prec } else { prec + 1 })
             };
-            lhs = self.ast.add_expr(Expr::Infix(lhs, t.name, rhs, t.span.end), start.to(self.prev_span()));
+            lhs = if self.named_parens == rhs.0 {
+                self.infix_named_operand(lhs, t, rhs, start)
+            } else {
+                self.ast.add_expr(Expr::Infix(lhs, t.name, rhs, t.span.end), start.to(self.prev_span()))
+            };
             self.note_name(lhs, t.span);
         }
     }
@@ -1422,6 +1528,34 @@ impl<'a> Parser<'a> {
                 if matches!(self.ast.expr(only), Expr::Unchecked(_)) || self.ast.annotation_only(only) {
                     self.ast.paren_annotated.insert(only);
                 }
+                // `(a = 1)`: a named tuple of one element from 3.7 (`maybeNamed`), dotty's `Parens(Assign(..))`
+                // before, kept as a node (an assignment to any other target too): `migrateInfixOp` and
+                // `binop`'s `assignToNamedArg` read that node as named arguments, the typer reports it
+                // (`checkDeprecatedAssignmentSyntax`). Parentheses around such a form, or around the
+                // parentheses kept so, are kept as dotty's `Parens` too (`((a = 1))` is
+                // `Parens(Parens(Assign(..)))`), which nothing reads as named.
+                if let Expr::Assign(lhs, rhs) = self.ast.expr(only) {
+                    if let Expr::Ident(n) = self.ast.expr(lhs) {
+                        if self.source.enables_named_tuples() {
+                            let nl = push_list(&mut self.ast.name_lists, &[n]);
+                            let vl = push_list(&mut self.ast.expr_lists, &[rhs]);
+                            let tuple = self.ast.add_expr(Expr::NamedTuple(nl, vl), span);
+                            self.ast.notes.assignment_tuples.push((tuple, only, span));
+                            self.named_parens = tuple.0;
+                            return tuple;
+                        }
+                        let parens = self.ast.add_expr(Expr::Parens(only), span);
+                        self.ast.notes.assignment_tuples.push((parens, only, span));
+                        self.named_parens = parens.0;
+                        return parens;
+                    }
+                    let parens = self.ast.add_expr(Expr::Parens(only), span);
+                    self.named_parens = parens.0;
+                    return parens;
+                }
+                if matches!(self.ast.expr(only), Expr::NamedTuple(..) | Expr::Parens(_)) {
+                    return self.ast.add_expr(Expr::Parens(only), span);
+                }
                 // The expression keeps no node of its parentheses: their span, for an argument as written.
                 self.ast.push_written(only, span, true);
                 only
@@ -1446,8 +1580,13 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        if names.is_empty() {
-            return self.ast.add_expr(Expr::Tuple(l), span);
+        // Before 3.7 the elements are assignments (`enablesNamedTuples`).
+        if names.is_empty() || !self.source.enables_named_tuples() {
+            let tuple = self.ast.add_expr(Expr::Tuple(l), span);
+            if !names.is_empty() {
+                self.named_parens = tuple.0;
+            }
+            return tuple;
         }
         if names.len() != items.len() {
             self.error_at(span, "Illegal combination of named and unnamed tuple elements");
@@ -1455,7 +1594,9 @@ impl<'a> Parser<'a> {
         }
         let nl = push_list(&mut self.ast.name_lists, &names);
         let vl = push_list(&mut self.ast.expr_lists, &values);
-        self.ast.add_expr(Expr::NamedTuple(nl, vl), span)
+        let tuple = self.ast.add_expr(Expr::NamedTuple(nl, vl), span);
+        self.named_parens = tuple.0;
+        tuple
     }
 
     /// Whether the `ColonEol` at the current token passes the indented block after it as an
@@ -1587,7 +1728,7 @@ impl<'a> Parser<'a> {
         let case_at = self.span().start;
         self.expect(Tok::KwCase);
         let mark = self.error_events;
-        let pat = self.parse_pattern();
+        let pat = self.within_match_pattern(Self::parse_pattern);
         let guard = if self.eat(Tok::KwIf) { Some(self.parse_infix_expr()) } else { None };
         let broken = self.error_events != mark;
         let at = self.span().start;
@@ -1695,18 +1836,28 @@ impl<'a> Parser<'a> {
                     let args = push_list(&mut self.ast.expr_lists, &[lambda]);
                     e = self.ast.add_expr(Expr::Apply(e, args), start.to(self.prev_span()));
                 }
-                // `f _` of Scala 2: the method is a function value on its own.
+                // `f _` of Scala 2: the method as a function value, kept for the typer
+                // (`Migrations.typedAsFunction`).
                 Tok::Underscore
                     if matches!(
                         self.kind_at(1),
                         Tok::RParen | Tok::RBracket | Tok::Comma | Tok::Newline | Tok::Semi | Tok::Outdent | Tok::Eof
                     ) =>
                 {
-                    self.bump();
+                    let underscore = self.bump().span;
+                    e = self.ast.add_expr(Expr::AsFunction(e), start.to(underscore));
                 }
                 _ => return e,
             }
         }
+    }
+
+    /// An argument's expression (dotty's `expr(Location.InArgs)`), where `xs: _*` splices.
+    fn parse_argument_expr(&mut self) -> ExprId {
+        let saved = self.arg_start.replace(self.span().start);
+        let value = self.parse_block_or_expr();
+        self.arg_start = saved;
+        value
     }
 
     /// An argument list, whether it is a `using` one. One whose recovery skipped tokens or
@@ -1729,7 +1880,7 @@ impl<'a> Parser<'a> {
                 let mark = self.placeholders.len();
                 let name_token = self.bump();
                 self.bump();
-                let value = self.parse_block_or_expr();
+                let value = self.parse_argument_expr();
                 if self.placeholders.len() > mark {
                     // `x = (_: T)`: the argument is an assignment its placeholder makes a function of, as
                     // dotty's `argumentExpr` takes `x = e` for a named argument only where `expr()` left it
@@ -1741,7 +1892,7 @@ impl<'a> Parser<'a> {
                     self.ast.add_expr(Expr::NamedArg(name_token.name, value), arg_start.to(self.prev_span()))
                 }
             } else {
-                let value = self.parse_block_or_expr();
+                let value = self.parse_argument_expr();
                 if self.at_op(names::STAR) {
                     let star = self.bump().span;
                     let wild = self.ast.add_ty(TyExpr::Wildcard, star);

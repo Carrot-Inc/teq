@@ -1927,6 +1927,11 @@ impl<'a> Worker<'a> {
                 poly_function || self.is_sub(x, b)
             }
             (Type::Poly(_, x), _) => self.is_sub(x, b),
+            // A type parameter, an abstract type, an alias, a path or any other proxy against a polymorphic function type,
+            // dotty's refinement of `PolyFunction`: its `superType` (`compareRefined`'s `|| fourthTry`, TypeComparer.scala
+            // 723, 975-990), so that a `N <: Null` conforms through `Null` (`isNullable`). A union and an intersection on
+            // the left were split before (`secondTry`, 499-530; `fourthTry`, 1075-1098).
+            (_, Type::Poly(..)) => self.super_type(a).is_some_and(|u| self.is_sub(u, b)),
             _ => false,
         }
     }

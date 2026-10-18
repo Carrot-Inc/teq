@@ -1,0 +1,21 @@
+exit 0
+warning 5:13
+  Alphanumeric method f is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .f(...) or backticked identifier `f`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+warning 7:13
+  Alphanumeric method g is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .g(...) or backticked identifier `g`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+warning 12:13
+  Alphanumeric method f is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .f(...) or backticked identifier `f`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+warning 15:15
+  Alphanumeric method concat is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .concat(...) or backticked identifier `concat`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+warning 16:13
+  Alphanumeric method f is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .f(...) or backticked identifier `f`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.

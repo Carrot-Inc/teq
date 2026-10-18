@@ -919,15 +919,37 @@ impl<'t> Registrar<'t> {
             }
             Expr::For(enums, body, _) => {
                 let enums = &ast.enumerators[enums.range()];
-                for (i, en) in enums.iter().enumerate() {
+                for en in enums.iter() {
                     match *en {
-                        // A generator's plain binder becomes a function literal's parameter, which
-                        // the comprehension makes (`ForArtifact`), but where a value definition
-                        // follows it: the desugaring tuples it into a case pattern's variable.
-                        ast::Enumerator::Gen(p, x) | ast::Enumerator::CaseGen(p, x) | ast::Enumerator::Val(p, x) => {
-                            let plain = matches!(ast.pat(p), Pat::Bind(_, None) | Pat::Wildcard);
-                            let tupled = matches!(en, ast::Enumerator::Gen(..) | ast::Enumerator::CaseGen(..)) && enums[i + 1..].iter().take_while(|e| !matches!(e, ast::Enumerator::Gen(..) | ast::Enumerator::CaseGen(..))).any(|e| matches!(e, ast::Enumerator::Val(..)));
-                            if !plain || tupled {
+                        // A generator's binder is a pattern variable whatever its lambda: `makeLambda`'s `IdPattern`
+                        // parameter is `derivedValDef`'s, marked `PatternVar` (Desugar.scala 2180, 1180-1186), which
+                        // `CheckUnused` takes as a pattern variable, a stable or backquoted name's among them; a case
+                        // lambda's is a `Bind`.
+                        ast::Enumerator::Gen(p, x, _) | ast::Enumerator::CaseGen(p, x) => {
+                            let id = matches!(en, ast::Enumerator::Gen(..)) && super::expr::is_id_pattern(ast, p);
+                            let named = match ast.pat(p) {
+                                Pat::Typed(inner, _) if id => inner,
+                                _ => p,
+                            };
+                            match ast.pat(named) {
+                                Pat::StableId(e) if id => {
+                                    if let Expr::Ident(n) = ast.expr(e) {
+                                        let name = self.names.get(n);
+                                        if name != "_" && !name.contains('$') {
+                                            let start = ast.pat_spans[p.idx()].start;
+                                            let at = self.name_at(ast.pat_spans[named.idx()].start, n);
+                                            self.reg(out, n, start, at, Kind::PatVar { member: false, allowed: false }, None, 0, false);
+                                        }
+                                    }
+                                }
+                                _ => self.pat(p, false, out),
+                            }
+                            self.expr(x, out);
+                        }
+                        // A value definition's pattern binds its variables; a plain binder is no pattern
+                        // variable here.
+                        ast::Enumerator::Val(p, x) => {
+                            if !matches!(ast.pat(p), Pat::Bind(_, None) | Pat::Wildcard) {
                                 self.pat(p, false, out);
                             }
                             self.expr(x, out);
@@ -949,7 +971,7 @@ impl<'t> Registrar<'t> {
                     self.stmts(&cls.body, Context::Member { anonymous: true }, out);
                 }
             }
-            Expr::Select(q, _) | Expr::TypeApply(q, _) | Expr::NamedArg(_, q) | Expr::Prefix(_, q) => self.expr(q, out),
+            Expr::Select(q, _) | Expr::TypeApply(q, _) | Expr::NamedArg(_, q) | Expr::Prefix(_, q) | Expr::AsFunction(q) => self.expr(q, out),
             Expr::Apply(f, args) | Expr::UsingApply(f, args) => {
                 self.expr(f, out);
                 for a in list(args) {

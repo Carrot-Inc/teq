@@ -1421,6 +1421,33 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// `Types.Type.widen` (Types.scala 1380-1396), with no cap, as dotty's: a path's underlying type widened, but a
+    /// `TermRef` whose denotation is overloaded (a symbol with alternatives) kept; a constant its class
+    /// (`ConstantType`'s `underlying`), `this` its class; an annotated type's parent widened where that widens, the
+    /// annotated type kept where it does not (`stripped`); a variable its instance's (`stripTypeVar`, through
+    /// `deref_keeping`). teq's values have no `ExprType`. A path whose underlying type is itself (an erroneous
+    /// cycle) is kept.
+    pub fn widen_type(&mut self, t: TypeId) -> TypeId {
+        let t = self.deref_keeping(t);
+        match self.types.get(t) {
+            Type::Term(s) | Type::Select(_, s) if self.syms.alternatives(s).is_some() => t,
+            Type::Term(_) | Type::Select(..) | Type::This(_) => {
+                let under = self.path_underlying(t);
+                if under == t {
+                    return t;
+                }
+                self.widen_type(under)
+            }
+            Type::Lit(_) => self.widen_lit(t),
+            Type::Annotated(inner) => {
+                let parent = self.deref_keeping(inner);
+                let widened = self.widen_type(parent);
+                if widened == parent { t } else { widened }
+            }
+            _ => t,
+        }
+    }
+
     /// The widened type of a path or member type: what a value of it is at run time.
     pub fn widen_path(&mut self, t: TypeId) -> TypeId {
         let mut t = self.deref(t);

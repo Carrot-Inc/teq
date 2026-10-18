@@ -1,0 +1,21 @@
+exit 1
+error 13:15
+  Alphanumeric method equals is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .equals(...) or backticked identifier `equals`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 14:15
+  Alphanumeric method synchronized is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .synchronized(...) or backticked identifier `synchronized`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 18:19
+  Alphanumeric method charAt is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .charAt(...) or backticked identifier `charAt`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 19:17
+  Alphanumeric method compareTo is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .compareTo(...) or backticked identifier `compareTo`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 20:19
+  Alphanumeric method concat is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .concat(...) or backticked identifier `concat`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.

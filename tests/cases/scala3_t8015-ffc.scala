@@ -1,4 +1,5 @@
 // Adapted from scala3 tests/run/t8015-ffc.scala (Apache-2.0, see tests/scala3/README.md); replaced: extends App.
+// teq: --wconf msg=is.not.declared.infix:s
 object Test {
   def main(args: Array[String]): Unit = ()
   val ms = s"""This is a long multiline interpolation

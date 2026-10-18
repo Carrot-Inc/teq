@@ -1,0 +1,13 @@
+exit 0
+warning 1:68
+  The syntax `x: _*` is no longer supported for vararg splices; use `x*` instead
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+warning 1:89
+  The syntax `x: _*` is no longer supported for vararg splices; use `x*` instead
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+warning 1:144
+  The syntax `x: _*` is no longer supported for vararg splices; use `x*` instead
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+warning 1:174
+  The syntax `x: _*` is no longer supported for vararg splices; use `x*` instead
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.

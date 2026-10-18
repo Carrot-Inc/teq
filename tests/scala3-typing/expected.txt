@@ -13,7 +13,7 @@ neg/17077.scala	same
 neg/17211.scala	same	
 neg/17305.scala	same	
 neg/17579.scala	subset	5/6 lines
-neg/18031.scala	accepts		--source future
+neg/18031.scala	subset	4/6 lines	--source future
 neg/19087.scala	syntax	expected a definition, found {}
 neg/19680.scala	same	
 neg/19680b.scala	same	
@@ -71,8 +71,8 @@ neg/NoneMatch.scala	same
 neg/OpaqueEscape.scala	superset	+1 lines: {} needs to be abstract
 neg/OrType.scala	same	
 neg/SummonFrom.scala	same	
-neg/abstract-givens-new.scala	std	is	--source future --language experimental.modularity
-neg/abstract-givens.scala	superset	+1 lines: given y cannot override final member given y in trait T
+neg/abstract-givens-new.scala	superset	+3 lines: This defines an abstract given, which is no longer supported. Use a `deferred` given instead.	--source future --language experimental.modularity
+neg/abstract-givens.scala	superset	+1 lines: given instance y cannot override final member given instance y in trait T
 neg/abstract-inline-val.scala	subset	1/2 lines
 neg/abstract-override.scala	same	
 neg/abstract-tracked-1.scala	syntax	expected end of statement, found {}
@@ -94,7 +94,7 @@ neg/anykind4.scala	std	AnyKind
 neg/applied_constructor_types.scala	syntax	expected {}, found {}
 neg/applydynamic_sip.scala	std	App
 neg/arg-eof.scala	syntax	expected an expression, found {}
-neg/assignments.scala	superset	+1 lines: this expression cannot be assigned to
+neg/assignments.scala	same	
 neg/autoTuplingTest.scala	accepts	
 neg/autoTuplingTestb.scala	accepts		--language noAutoTupling
 neg/autoUnit.scala	same	
@@ -411,7 +411,7 @@ neg/i11437.scala	std	error
 neg/i1145.scala	same	
 neg/i11457.scala	accepts	
 neg/i11466.scala	same	
-neg/i11487.scala	accepts	
+neg/i11487.scala	same	
 neg/i11544.scala	same	
 neg/i11561.scala	same	
 neg/i11565.gadt.scala	same	
@@ -542,7 +542,7 @@ neg/i14177c.scala	accepts
 neg/i14187.scala	same	
 neg/i1424.scala	accepts	
 neg/i1430.scala	same	
-neg/i14303	syntax	expected an expression, found {}
+neg/i14303	oos	an older scalac's file
 neg/i14363.scala	same	
 neg/i14367.scala	accepts	
 neg/i14386.scala	different	The start of this line does not match any of the previous indentation widths.
@@ -771,7 +771,7 @@ neg/i18734.scala	syntax	expected {}, found {}
 neg/i18737.scala	same	
 neg/i18750-format.scala	syntax	expected a pattern, found {}
 neg/i18750.scala	syntax	expected a pattern, found {}
-neg/i18862-future.scala	accepts	
+neg/i18862-future.scala	same	
 neg/i18884.scala	same	
 neg/i18922.scala	same	
 neg/i18933.scala	syntax	expected a definition, found {}
@@ -875,7 +875,7 @@ neg/i22357a.scala	same
 neg/i22367.scala	accepts	
 neg/i22423.scala	same	
 neg/i22439.scala	superset	+2 lines: missing argument for parameter {}
-neg/i22440.scala	subset	1/2 lines	--source future
+neg/i22440.scala	same		--source future
 neg/i22498.scala	accepts	
 neg/i22552.scala	superset	+1 lines: Context bounds are not allowed in this position
 neg/i22560.scala	subset	1/3 lines
@@ -890,7 +890,7 @@ neg/i22593a.scala	subset	1/2 lines
 neg/i22593b	subset	1/2 lines
 neg/i22620.scala	same	
 neg/i22660.scala	same	
-neg/i22670	accepts	
+neg/i22670	accepts		--wconf id=E222:e
 neg/i22671.scala	same	
 neg/i22721	same	
 neg/i22734.scala	same	
@@ -965,7 +965,7 @@ neg/i2492b.scala	same
 neg/i2494.scala	syntax	expected identifier, found {}
 neg/i24990.scala	std	Erased	--language experimental.erasedDefinitions
 neg/i24995.scala	std	Mop
-neg/i25077.scala	accepts	
+neg/i25077.scala	same		--wconf msg=multiple val:e
 neg/i25095.scala	accepts	
 neg/i2512.scala	syntax	expected identifier, found {}
 neg/i2514.scala	syntax	expected identifier, found {}
@@ -1357,7 +1357,7 @@ neg/i8841.scala	same
 neg/i8861.scala	superset	+3 lines: type mismatch
 neg/i8894.scala	subset	1/2 lines
 neg/i8896-a.scala	same	
-neg/i8896-b.scala	subset	1/2 lines
+neg/i8896-b.scala	same	
 neg/i8900-promote.scala	accepts	
 neg/i8900.scala	same	
 neg/i8925.scala	same	
@@ -1395,7 +1395,7 @@ neg/i9331.scala	syntax	expected a definition, found {}
 neg/i9332.scala	accepts	
 neg/i9344.scala	same	
 neg/i9408b	different	type mismatch
-neg/i941.scala	subset	1/3 lines
+neg/i941.scala	same	
 neg/i9432.scala	accepts	
 neg/i9434.scala	syntax	expected end of statement, found {}
 neg/i9436.scala	same	
@@ -1427,7 +1427,7 @@ neg/illegal-match-types.scala	different	type {} not found
 neg/illegal-refinements.scala	same	
 neg/impl-conv	accepts	
 neg/implicit-funs.scala	accepts	
-neg/implicit-migration.scala	accepts	
+neg/implicit-migration.scala	same	
 neg/implicit-package-object.scala	same	
 neg/implicit-params.scala	syntax	expected {}, found {}
 neg/implicitDefs.scala	same	
@@ -1441,10 +1441,10 @@ neg/indent.scala	syntax	expected end of statement, found {}
 neg/indentLeft.scala	syntax	expected {}, found {}
 neg/indentRight.scala	syntax	unmatched closing bracket
 neg/infer-tracked-explicit-witness.scala	std	is
-neg/infer-union-warning-id.scala	accepts	
-neg/infix-named-args.scala	superset	+3 lines: operator {} cannot be applied
+neg/infer-union-warning-id.scala	accepts		--wconf id=E225:error
+neg/infix-named-args.scala	same	
 neg/infix-then-complex-expr.scala	syntax	expected end of statement, found {}
-neg/infix.scala	accepts		--source future
+neg/infix.scala	same		--source future
 neg/inline-abstract.scala	superset	+1 lines: {} needs to be abstract
 neg/inline-error-pos.scala	same	
 neg/inline-foreach.scala	subset	1/2 lines
@@ -1645,7 +1645,7 @@ neg/nowarn-parser-error.scala	syntax	expected identifier, found {}
 neg/nowarn-typer-error.scala	same	
 neg/null-anyval.scala	same	
 neg/nullless.scala	different	several entry points: nullless.main, bar.main; choose one with --main	--source future
-neg/old-givens.scala	accepts		--source future
+neg/old-givens.scala	same		--source future
 neg/opaque-bounds-1.scala	superset	+1 lines: the underlying type String does not conform to the bound FlagSet
 neg/opaque-bounds.scala	different	the underlying type String does not conform to the bound FlagSet
 neg/opaque-id.scala	same	
@@ -1721,7 +1721,7 @@ neg/previewOverride.scala	different	{} is not a member of the package
 neg/print-infix-type.scala	same	
 neg/print-tuple-union.scala	superset	+1 lines: type argument A does not conform to upper bound Tuple
 neg/private-case-class-constr.scala	same	
-neg/private-this-future.scala	accepts	
+neg/private-this-future.scala	same	
 neg/privates.scala	same	
 neg/prod-mirror-inacessible-ctor.scala	same	
 neg/product-to-tuple.scala	same	
@@ -1860,7 +1860,7 @@ neg/t5063.scala	same
 neg/t5702-neg-bad-and-wild.scala	syntax	expected {}, found {}
 neg/t5702-neg-bad-brace.scala	syntax	expected {}, found {}
 neg/t5729.scala	same	
-neg/t6124.scala	subset	6/15 lines
+neg/t6124.scala	subset	7/15 lines
 neg/t6355b.scala	std	Dynamic
 neg/t6455.scala	same	
 neg/t6476.scala	superset	+3 lines: invalid escape sequence
@@ -2142,7 +2142,7 @@ pos/alias-new.scala	accepts
 pos/alias.scala	accepts	
 pos/aliasNew.scala	rejects	type mismatch
 pos/aliases.scala	accepts	
-pos/alphanumeric-infix-operator-compat	accepts	
+pos/alphanumeric-infix-operator-compat	oos	an older scalac's file
 pos/and-inf.scala	rejects	type mismatch
 pos/andtypes.scala	accepts	
 pos/annot-17242.scala	accepts	
@@ -2358,7 +2358,7 @@ pos/exhaust_2.scala	accepts
 pos/exhaust_alternatives.scala	accepts	
 pos/existential-java-case-class	oos	java
 pos/existentials-harmful.scala	rejects	method random must be called with () argument
-pos/existentials.scala	rejects	method f in class A must be called with () argument
+pos/existentials.scala	accepts	
 pos/expeimental-flag-with-lang-feature-2.scala	syntax	expected {}, found {}
 pos/experimental-erased-2.scala	std	Erased
 pos/experimental-erased.scala	std	Erased
@@ -3124,7 +3124,7 @@ pos/i17588.scala	accepts
 pos/i17631.scala	accepts	
 pos/i1765.scala	accepts	
 pos/i17735.scala	accepts	
-pos/i17735a.scala	accepts	
+pos/i17735a.scala	accepts		--wconf msg=non-Unit:s
 pos/i17741.scala	accepts	
 pos/i1776.scala	accepts	
 pos/i17763	oos	java
@@ -3400,7 +3400,7 @@ pos/i21390.zio.scala	accepts
 pos/i2140.scala	accepts	
 pos/i21402.scala	accepts	
 pos/i21405.scala	rejects	reference to IO is ambiguous: it is both imported by import o.* and imported subsequently by import p.*
-pos/i21413.scala	rejects	value {} is not a member of {}
+pos/i21413.scala	accepts	
 pos/i21415.scala	rejects	cannot resolve import	--source 3.4-migration
 pos/i21433.scala	accepts	
 pos/i2152.scala	accepts	
@@ -3450,7 +3450,7 @@ pos/i22070	rejects	value {} is not a member of {}
 pos/i2212.scala	accepts	
 pos/i22137.scala	accepts	
 pos/i2218.scala	accepts	
-pos/i22192.scala	rejects	name is not a field of Some[(name: String)]
+pos/i22192.scala	rejects	name is not a field of Some[(name : String)]
 pos/i22193.scala	rejects	value {} is not a member of {}
 pos/i22257.fixed.scala	rejects	illegal cyclic type reference: alias Node of type Node refers back to the type itself
 pos/i22257.orig.scala	rejects	illegal cyclic type reference: alias FP of type FP refers back to the type itself
@@ -3465,7 +3465,7 @@ pos/i2234.scala	rejects	no given instance
 pos/i2239.scala	accepts	
 pos/i22408.scala	accepts	
 pos/i22436	accepts	
-pos/i22440.scala	accepts	
+pos/i22440.scala	accepts		--wconf msg=Implicit parameters should be provided with a `using` clause:s
 pos/i22456.scala	syntax	expected {}, found {}
 pos/i22468.scala	accepts	
 pos/i22470.scala	accepts	
@@ -3615,7 +3615,7 @@ pos/i25164.scala	syntax	expected {}, found {}
 pos/i25164b.scala	syntax	expected {}, found {}
 pos/i25164c.scala	syntax	expected {}, found {}
 pos/i25185.scala	accepts	
-pos/i25240.scala	std	field1
+pos/i25240.scala	accepts	
 pos/i25250.scala	accepts	
 pos/i2527.scala	accepts	
 pos/i2527b.scala	accepts	
@@ -4615,7 +4615,7 @@ pos/named-tuples1.scala	accepts
 pos/named-typeargs.scala	syntax	expected {}, found {}
 pos/namedTypeParams.scala	syntax	expected {}, found {}
 pos/nameddefaults.scala	accepts	
-pos/namedtuple-src-incompat.scala	rejects	type mismatch
+pos/namedtuple-src-incompat.scala	accepts	
 pos/native-warning.scala	accepts	
 pos/needstypeearly.scala	accepts	
 pos/nested.scala	accepts	
@@ -4666,7 +4666,7 @@ pos/order-idempotency-list	accepts
 pos/outdent-dot.scala	accepts	
 pos/overload-disambiguation.scala	accepts	
 pos/overloaddefault.scala	accepts	
-pos/overloaded.scala	rejects	method g in object overloaded must be called with () argument
+pos/overloaded.scala	rejects	Ambiguous overload. The overloaded alternatives of method bar in object overloaded with types
 pos/overloadedAccess.scala	accepts	
 pos/overloaded_ho_fun.scala	accepts	
 pos/override-via-self.scala	rejects	method f overrides nothing
@@ -5876,17 +5876,17 @@ warn/17284.scala	rejects	value {} is not a member of {}
 warn/1828.scala	wording	the type test for S cannot be checked at runtime because it refers to a type parameter
 warn/18493.scala	silent	
 warn/21557.scala	silent	
-warn/21681.scala	silent	
-warn/21681b.scala	silent	
-warn/21681c.scala	silent	
-warn/21770.scala	silent	
+warn/21681.scala	same	
+warn/21681b.scala	same	
+warn/21681c.scala	same	
+warn/21770.scala	same	
 warn/3324b.scala	wording	the type test for T cannot be checked at runtime because it refers to a type parameter
 warn/3324f.scala	subset	1/2 diagnostics
 warn/3324g.scala	subset	1/2 diagnostics
 warn/IsInstanceOfClassTag2.scala	same	
 warn/JavaSeqLiteral.scala	silent	
-warn/alphanumeric-infix-operator-3.4.scala	silent	
-warn/alphanumeric-infix-operator.scala	silent	
+warn/alphanumeric-infix-operator-3.4.scala	same	
+warn/alphanumeric-infix-operator.scala	same	
 warn/annotation-secondary-constructor-deprecated.scala	same	
 warn/applied_constructor_types.scala	syntax	expected {}, found {}
 warn/avoid-warn-deprecation.scala	same	
@@ -5921,7 +5921,7 @@ warn/i11022.scala	oos	pattern-defs
 warn/i11097.scala	silent	
 warn/i11178.scala	subset	3/4 diagnostics
 warn/i11333.scala	silent	
-warn/i11344.scala	silent	
+warn/i11344.scala	same	
 warn/i11963a.scala	silent	
 warn/i11963b.scala	silent	
 warn/i11963c.scala	silent	
@@ -5975,7 +5975,7 @@ warn/i17314a.scala	same
 warn/i17314b.scala	silent	
 warn/i17318.scala	same	
 warn/i17371.scala	silent	
-warn/i17429.scala	silent	
+warn/i17429.scala	same	
 warn/i17493.scala	silent	
 warn/i17612a.scala	silent		--source 3.3
 warn/i17613a.scala	silent	
@@ -5983,7 +5983,7 @@ warn/i17667.scala	silent
 warn/i17667b.scala	silent	
 warn/i17753.scala	same	
 warn/i17762.scala	silent	
-warn/i18234.scala	same		--source 3.9
+warn/i18234.scala	superset	+59 diagnostics: The identifier `$startVal` should not contain `$`, which is reserved for internal compiler use.	--source 3.9
 warn/i18313.scala	same	
 warn/i18341.scala	silent	
 warn/i18366.scala	rejects	method foo in trait Builder must be called with () argument
@@ -5993,10 +5993,10 @@ warn/i18559c.scala	silent
 warn/i18564.scala	silent	
 warn/i18661.scala	same	
 warn/i18722.scala	subset	3/4 diagnostics
-warn/i18862-3.4.scala	silent	
-warn/i18862-future-migration.scala	silent	
-warn/i18867-3.4.scala	silent	
-warn/i18867.scala	silent	
+warn/i18862-3.4.scala	same	
+warn/i18862-future-migration.scala	same	
+warn/i18867-3.4.scala	same	
+warn/i18867.scala	same	
 warn/i19002.scala	silent	
 warn/i19013-a.scala	wording	the type test for E cannot be checked at runtime because it refers to a type parameter
 warn/i19013-b.scala	wording	the type test for E cannot be checked at runtime because it refers to a type parameter
@@ -6080,8 +6080,8 @@ warn/i22507.scala	same
 warn/i22527.scala	syntax	expected {}, found {}
 warn/i22590.arity2.scala	same	
 warn/i22590.scala	same	
-warn/i22629.scala	same	
-warn/i22670-test.scala	same	
+warn/i22629.scala	same		--wconf msg=set repeatedly:s
+warn/i22670-test.scala	same		--wconf id=E222:e
 warn/i22672	different	there were 2 deprecation warnings; re-run with -deprecation for details
 warn/i22681.scala	silent	
 warn/i22705.scala	rejects	Node cannot be instantiated
@@ -6094,7 +6094,7 @@ warn/i22746.scala	same
 warn/i22787.scala	oos	extractors
 warn/i22795	silent	
 warn/i22896	oos	java
-warn/i22899.scala	std	a
+warn/i22899.scala	rejects	a named pattern is only allowed in a tuple or constructor pattern
 warn/i22969.scala	same	
 warn/i22971.scala	same	
 warn/i22981.scala	syntax	expected identifier, found {}
@@ -6149,8 +6149,8 @@ warn/i25094.scala	silent
 warn/i25100.scala	same		--language strictEquality
 warn/i25158.scala	silent	
 warn/i25227.scala	silent	
-warn/i25548.scala	syntax	expected {}, found {}
-warn/i25548b.scala	syntax	expected {}, found {}
+warn/i25548.scala	syntax	expected {}, found {}	--wconf cat=deprecation:warning
+warn/i25548b.scala	syntax	expected {}, found {}	--wconf cat=deprecation&msg=bruh:warning
 warn/i25553.scala	same	
 warn/i25595.scala	syntax	expected {}, found {}
 warn/i25928.scala	same	
@@ -6182,7 +6182,7 @@ warn/i5013.scala	same
 warn/i5013b.scala	silent	
 warn/i5077.scala	rejects	value {} is not a member of {}
 warn/i5422.scala	same	
-warn/i559.scala	std	App
+warn/i559.scala	std	App	--wconf cat=deprecation:s
 warn/i5826.scala	subset	1/5 diagnostics
 warn/i6190b.scala	same	
 warn/i7314.scala	different	unreachable case	--source future
@@ -6206,7 +6206,7 @@ warn/i9880.scala	rejects	missing parameter type
 warn/implicit-conversions-old.scala	different	there were 3 feature warnings; re-run with -feature for details
 warn/implicit-conversions.scala	silent	
 warn/infer-or-type.scala	silent	
-warn/infix-named-args-migration.scala	rejects	operator {} cannot be applied	--source 3.7-migration
+warn/infix-named-args-migration.scala	rejects	value {} is not a member of {}	--source 3.7-migration
 warn/inline-givens.scala	silent	
 warn/into-as-mod.scala	syntax	expected a definition, found {}
 warn/into-deprecated-flag.scala	same		--language experimental.into
@@ -6228,25 +6228,25 @@ warn/package-object-values-deprecated-import.scala	same
 warn/patmat-exhaustive.scala	same	
 warn/patmat-nothing-exhaustive.scala	superset	+2 diagnostics: match may not be exhaustive.
 warn/patmat-type-member-nothing-exhaustive.scala	superset	+1 diagnostics: match may not be exhaustive.
-warn/private-this-3.4.scala	silent	
-warn/private-this-future-migration.scala	silent	
+warn/private-this-3.4.scala	same	
+warn/private-this-future-migration.scala	same	
 warn/quote-simple-hole.scala	silent	
 warn/redundant-null.scala	subset	11/14 diagnostics
 warn/refined-types.scala	silent	
 warn/refinements-this.scala	silent	
 warn/relaxed-extension-imports-deprecated-flag.scala	options	invalid choice(s) for -language: experimental.relaxedExtensionImports	--language experimental.relaxedExtensionImports
 warn/relaxed-extension-imports-deprecated-import.scala	same	
-warn/rewrite-messages.scala	silent		--source future-migration
+warn/rewrite-messages.scala	same		--source future-migration
 warn/sip67-deprecated-flag.scala	accepts	scalac rejects	--language experimental.strictEqualityPatternMatching
 warn/sip67-deprecated-import.scala	accepts	scalac rejects
-warn/strict-pattern-bindings-3.2.scala	wording	pattern's type Int is more specialized than the right hand side expression's type Int
+warn/strict-pattern-bindings-3.2.scala	wording	pattern's type 1 is more specialized than the right hand side expression's type Int
 warn/stringcontext-any-methods.scala	same	
 warn/sub-cases-exhaustivity.scala	syntax	expected {}, found {}
 warn/sub-cases-reachability.scala	syntax	expected {}, found {}
 warn/supertraits-b.scala	silent	
 warn/suppressed-type-test-warnings.scala	subset	2/3 diagnostics
 warn/switches.scala	different	match may not be exhaustive.
-warn/symbolic-packages.scala	rejects	a package clause after other definitions needs a body: `package p:` or `package p { ... }`
+warn/symbolic-packages.scala	rejects	a package clause after other definitions needs a body: `package p:` or `package p { ... }`	--wconf id=E222:w
 warn/t10373.scala	same	
 warn/t11620.scala	rejects	type mismatch
 warn/t11681.scala	silent	

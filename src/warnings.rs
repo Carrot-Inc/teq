@@ -70,10 +70,16 @@ pub mod id {
     pub const MATCH_CASE_UNREACHABLE: u16 = 30;
     pub const MATCH_CASE_ONLY_NULL: u16 = 121;
     pub const UNCHECKED_TYPE_PATTERN: u16 = 92;
+    pub const ONLY_FUNCTIONS_CAN_BE_FOLLOWED_BY_UNDERSCORE: u16 = 99;
     pub const PURE_EXPRESSION_IN_STATEMENT_POSITION: u16 = 129;
     pub const VALUE_DISCARDING: u16 = 175;
     pub const UNUSED_SYMBOL: u16 = 198;
+    pub const NON_NAMED_ARGUMENT_IN_JAVA_ANNOTATION: u16 = 201;
+    pub const DEPRECATED_ASSIGNMENT_SYNTAX: u16 = 203;
+    pub const DEPRECATED_INFIX_NAMED_ARGUMENT_SYNTAX: u16 = 204;
     pub const FORMAT_INTERPOLATION_ERROR: u16 = 209;
+    /// 3.10.0's (`IllegalIdentifierID`), past 3.8.4's numbers.
+    pub const ILLEGAL_IDENTIFIER: u16 = 230;
     pub const MATCH_IS_NOT_PARTIAL_FUNCTION: u16 = 211;
 }
 

@@ -509,7 +509,7 @@ impl<'a> Worker<'a> {
                         _ => eq,
                     };
                 }
-                let unchecked = type_unchecked(ast, ty);
+                let unchecked = type_unchecked(ast, ty) || (!self.unchecked_typed_pats.is_empty() && self.unchecked_typed_pats.contains(&p));
                 let binders = self.bind_pattern_type_vars(ty);
                 let reads = self.inline.tparam_reads.get();
                 let t = self.resolve_type(ty);
@@ -618,51 +618,23 @@ impl<'a> Worker<'a> {
                 };
                 self.prog.add_pat(TPat::Equals(te, strict))
             }
-            Pat::Ctor(path, subs) => {
-                let subs_list = ast.pat_list(subs).to_vec();
+            Pat::Ctor(path, subs) if !ast.notes.infix_pattern_ops.is_empty() && ast.notes.infix_pattern_ops.binary_search(&path).is_ok() => {
+                // An infix extractor (`a Cons b`), checked as `Typer.typedInfixOp` does what it matches.
+                self.last_unapply = None;
                 let class = self.pattern_class(path, false);
-                // `case Array(a, b)` of a value that is no array by its type takes an array of
-                // any kind, which the parameter of scala-library's `unapplySeq` cannot say.
-                if class == Some(self.b.array) && self.base_type(sty, self.b.array).is_none() {
-                    return self.seq_pattern(self.b.array, subs_list, sty, span);
-                }
-                // A class that is no case class may still have an `unapply` in its companion.
-                let is_case = class.map_or(false, |c| self.syms.class(c).mods & crate::ast::mods::CASE != 0 || self.syms.class(c).kind == ClassKind::EnumCase);
-                if !is_case {
-                    if let Some(p) = self.extractor_pattern(path, &subs_list, sty, span, None) {
-                        return p;
-                    }
-                }
-                // A case class's companion applies its own `unapply` where `select_unapply` takes
-                // it over the synthetic one, which reads the fields.
-                if let Some(c) = class.filter(|_| is_case) {
-                    match self.companion_own_unapply(c, path, sty, span) {
-                        Some(Some(chosen)) => {
-                            if let Some(p) = self.extractor_pattern(path, &subs_list, sty, span, Some(chosen)) {
-                                return p;
-                            }
-                        }
-                        Some(None) => {}
-                        None => {
-                            for &s in subs_list.iter() {
-                                self.type_pattern(s, ERROR);
-                            }
-                            return self.prog.add_pat(TPat::Wildcard);
-                        }
-                    }
-                }
-                let Some(c) = class.or_else(|| self.pattern_class(path, true)) else {
-                    for &s in subs_list.iter() {
-                        self.type_pattern(s, ERROR);
-                    }
-                    return self.prog.add_pat(TPat::Wildcard);
+                let is_case = class.is_some_and(|c| self.syms.class(c).mods & crate::ast::mods::CASE != 0 || self.syms.class(c).kind == ClassKind::EnumCase);
+                let tp = self.type_ctor_pattern(path, subs, sty, span);
+                // The `unapply` this pattern applies, else a case class's synthetic one.
+                let of = match self.last_unapply {
+                    Some((at, u)) if at == span => Some(super::infix::Infixed::Method(u)),
+                    _ => class.filter(|_| is_case).map(super::infix::Infixed::CaseClass),
                 };
-                if self.is_seq_pattern_class(c) {
-                    return self.seq_pattern(c, ast.pat_list(subs).to_vec(), sty, span);
+                if let (Some(of), Expr::Ident(op)) = (of, ast.expr(path)) {
+                    self.check_infix_pattern(path, op, of);
                 }
-                let written = self.pattern_prefix(path, c);
-                self.class_pattern_through(c, ast.pat_list(subs).to_vec(), sty, written, span)
+                tp
             }
+            Pat::Ctor(path, subs) => self.type_ctor_pattern(path, subs, sty, span),
             Pat::Rest(inner) => {
                 self.error(span, "a sequence wildcard can only end a sequence pattern");
                 self.type_pattern(inner, ERROR)
@@ -715,6 +687,54 @@ impl<'a> Worker<'a> {
                 self.prog.add_pat(TPat::Alt(l))
             }
         }
+    }
+
+    /// `C(p, q)` and `a C b`: a case class's, or an extractor's through its `unapply` (`Typer.typedUnApply`).
+    fn type_ctor_pattern(&mut self, path: ExprId, subs: crate::ast::ListRef, sty: TypeId, span: Span) -> TPatId {
+        let ast = self.cur_ast();
+        let subs_list = ast.pat_list(subs).to_vec();
+        let class = self.pattern_class(path, false);
+        // `case Array(a, b)` of a value that is no array by its type takes an array of
+        // any kind, which the parameter of scala-library's `unapplySeq` cannot say.
+        if class == Some(self.b.array) && self.base_type(sty, self.b.array).is_none() {
+            return self.seq_pattern(self.b.array, subs_list, sty, span);
+        }
+        // A class that is no case class may still have an `unapply` in its companion.
+        let is_case = class.map_or(false, |c| self.syms.class(c).mods & crate::ast::mods::CASE != 0 || self.syms.class(c).kind == ClassKind::EnumCase);
+        if !is_case {
+            if let Some(p) = self.extractor_pattern(path, &subs_list, sty, span, None) {
+                return p;
+            }
+        }
+        // A case class's companion applies its own `unapply` where `select_unapply` takes
+        // it over the synthetic one, which reads the fields.
+        if let Some(c) = class.filter(|_| is_case) {
+            match self.companion_own_unapply(c, path, sty, span) {
+                Some(Some(chosen)) => {
+                    if let Some(p) = self.extractor_pattern(path, &subs_list, sty, span, Some(chosen)) {
+                        return p;
+                    }
+                }
+                Some(None) => {}
+                None => {
+                    for &s in subs_list.iter() {
+                        self.type_pattern(s, ERROR);
+                    }
+                    return self.prog.add_pat(TPat::Wildcard);
+                }
+            }
+        }
+        let Some(c) = class.or_else(|| self.pattern_class(path, true)) else {
+            for &s in subs_list.iter() {
+                self.type_pattern(s, ERROR);
+            }
+            return self.prog.add_pat(TPat::Wildcard);
+        };
+        if self.is_seq_pattern_class(c) {
+            return self.seq_pattern(c, ast.pat_list(subs).to_vec(), sty, span);
+        }
+        let written = self.pattern_prefix(path, c);
+        self.class_pattern_through(c, ast.pat_list(subs).to_vec(), sty, written, span)
     }
 
     /// The class an alias of a library stands for (`scala.::` for `collection.immutable.::`).
@@ -774,16 +794,17 @@ impl<'a> Worker<'a> {
         }
         let sty = self.erased_named_tuple(sty);
         let at = self.cur_ast().pat_spans[pat.idx()];
-        let Some((pat_ty, part_sty, part_at, extractor)) = self.refutable_part(tp, sty, Some(pat), at) else { return };
+        let Some((pat_ty, part_sty, part_at, extractor, singleton)) = self.refutable_part(tp, sty, Some(pat), at) else { return };
         // dotty's `checkIrrefutable`: a refutable extractor, or a pattern whose type the right
         // side's does not conform to, with the fix for a definition or a generator.
         let message = match &extractor {
             Some(name) if name.is_empty() => "pattern binding uses refutable extractor".to_string(),
             Some(name) => format!("pattern binding uses refutable extractor `{}`", name),
             None => {
-                // The right side's type widened where the pattern's is no singleton
-                // (`reportedPt.widen`): `x` of `{ val x = o; x }` reads as its `Option[Int]`.
-                let part_sty = if matches!(self.types.get(pat_ty), Type::Term(_) | Type::Select(..) | Type::This(_)) { part_sty } else { self.widen_path(part_sty) };
+                // The right side's type widened where the pattern's is no singleton (`reportedPt.widen`): `x` of
+                // `{ val x = o; x }` reads as its `Option[Int]`, a generator's `x$1` as its element's type, and kept
+                // where it is (`(K : Int)`, `(1 : Int)`, `O.type`, `null`'s): `(x$1 : Int)`.
+                let part_sty = if singleton { part_sty } else { self.widen_type(part_sty) };
                 let mark = self.snapshot();
                 let narrows = self.is_sub(pat_ty, part_sty);
                 self.rollback(mark);
@@ -820,19 +841,15 @@ impl<'a> Worker<'a> {
     /// read off the written pattern `ast` where the typed one follows its shape (a binder, a
     /// typed pattern, whose type is its place, a tuple or a case class, alternatives), else the
     /// nearest enclosing one's place `at`.
-    fn refutable_part(&mut self, p: TPatId, sty: TypeId, ast: Option<PatId>, at: Span) -> Option<(TypeId, TypeId, Span, Option<String>)> {
+    /// The last field tells whether the pattern's type is a singleton (`isSingleton`), which the message reads.
+    fn refutable_part(&mut self, p: TPatId, sty: TypeId, ast: Option<PatId>, at: Span) -> Option<(TypeId, TypeId, Span, Option<String>, bool)> {
         // A component of the type `RuntimeCheckedAnnot` annotates cannot fail, as dotty's `recur`
         // tests `pt.hasAnnotation` on each component it carries (Checking.scala 1141-1144):
         // `unapply(x: Int): Tuple1[Option[Int] @RuntimeChecked]`'s `Some(n)`.
         if self.has_runtime_checked(sty) {
             return None;
         }
-        let conforms = |t: &mut Self, target: TypeId| {
-            let mark = t.snapshot();
-            let ok = t.is_sub(sty, target);
-            t.rollback(mark);
-            ok
-        };
+        let conforms = |t: &mut Self, target: TypeId| t.irrefutable_conforms(sty, target);
         let written = ast.map(|a| self.cur_ast().pat(a));
         let at = ast.map_or(at, |a| self.cur_ast().pat_spans[a.idx()]);
         let pat = self.prog.pats[p.idx()];
@@ -849,12 +866,15 @@ impl<'a> Worker<'a> {
                 if self.types.contains_error(t) {
                     return None;
                 }
+                // A typed pattern's test is of its type, its inner pattern the one written inside; any other test
+                // (a long tuple's `TupleXXL`, a class's) is of the written pattern itself, whose inner one it is.
                 let (written_inner, test_at) = match written {
                     Some(Pat::Typed(i, ty)) => (Some(i), self.cur_ast().ty_spans[ty.idx()]),
-                    _ => (None, at),
+                    _ => (ast, at),
                 };
                 if !conforms(self, t) {
-                    return Some((t, sty, test_at, None));
+                    let singleton = self.is_singleton(t);
+                    return Some((t, sty, test_at, None, singleton));
                 }
                 // A sequence's extractor over what passed the test (`List(a, b)`, the companion's
                 // `unapplySeq`) is checked against the tested type, its elements as written.
@@ -865,7 +885,7 @@ impl<'a> Worker<'a> {
             }
             TPat::Class(_, t, _, subs) => {
                 if !conforms(self, t) {
-                    return Some((t, sty, at, None));
+                    return Some((t, sty, at, None, false));
                 }
                 let subs = self.prog.pat_lists[subs.range()].to_vec();
                 let written: Vec<Option<PatId>> = match written {
@@ -881,26 +901,28 @@ impl<'a> Worker<'a> {
                 let fields = self.class_field_types(inferred).unwrap_or_default();
                 subs.iter().zip(fields).zip(written).find_map(|((&s, fty), w)| self.refutable_part(s, fty, w, at))
             }
-            // A literal against its own singleton type cannot fail (`val E(1) = x` for an
-            // `unapply` typed `Some[1]`).
-            TPat::Equals(e, _) if self.matches_own_singleton(e, sty) => None,
-            TPat::Equals(e, _) => Some((
-                match self.prog.expr(e) {
+            // A literal has its constant type (`Literal`'s `ConstantType`), a stable reference its path (an `Ident`'s
+            // or `Select`'s `TermRef`, an object its module): the pattern fails where the scrutinee's type does not
+            // conform to it (`check`). `val E(1) = x` for an `unapply` typed `Some[1]` cannot fail, nor can
+            // `for 1 <- List[1](1)`, whose `x$1` is a `(x$1 : 1)`.
+            TPat::Equals(e, _) => {
+                // `null`'s is `Null` (`pattern's type Null is more specialized than ... String`), no singleton.
+                let (pat_ty, singleton) = match self.prog.expr(e) {
                     TExpr::Unit => return None,
-                    TExpr::Int(_) => self.b.t_int,
-                    TExpr::Long(_) => self.b.t_long,
-                    TExpr::Double(_) => self.b.t_double,
-                    TExpr::Bool(_) => self.b.t_boolean,
-                    TExpr::Char(_) => self.b.t_char,
-                    TExpr::Str(_) => self.b.t_string,
-                    TExpr::Module(c) => self.types.class(c, &[]),
-                    TExpr::Static(s) => self.sig_of(s).ret,
-                    _ => sty,
-                },
-                sty,
-                at,
-                None,
-            )),
+                    TExpr::Null => (self.b.t_null, false),
+                    _ => match self.literal_of(e) {
+                        Some(value) => (self.types.lit(value), true),
+                        None => match self.path_of(e) {
+                            Some(path) => (path, true),
+                            None => (self.prog.type_of(e).unwrap_or(sty), false),
+                        },
+                    },
+                };
+                if conforms(self, pat_ty) {
+                    return None;
+                }
+                Some((pat_ty, sty, at, None, singleton))
+            }
             TPat::Alt(items) => {
                 let items = self.prog.pat_lists[items.range()].to_vec();
                 let written: Vec<Option<PatId>> = match written {
@@ -913,11 +935,11 @@ impl<'a> Worker<'a> {
             // A tuple pattern past 22 elements fails where one of its elements' patterns does.
             TPat::Unapply(_, call, inner) if self.irrefutable_pats.contains_key(&p) && self.xxl_tuple_elements(call, inner).is_some() => {
                 let items = self.xxl_tuple_elements(call, inner).unwrap_or_default();
-                let tuple_ty = self.dealias(sty);
-                let elems = match self.types.get(tuple_ty) {
-                    Type::Class(_, args) => self.types.items(args).to_vec(),
-                    _ => Vec::new(),
-                };
+                // Each element is checked against what the extraction gives it (`UnapplyArgs(fn.tpe.widen
+                // .finalResultType, ..).argTypes`): `TupleXXL.unapplySeq`'s sequence's element type, `Any`, whatever the
+                // tuple's components are (scalac refuses `(a1, .., a22, given T)` of a generator at 3.7).
+                let elem = self.unapply_seq_element(call);
+                let elems = vec![elem; items.len()];
                 let written: Vec<Option<PatId>> = match written {
                     Some(Pat::Tuple(l)) if self.cur_ast().pat_list(l).len() == items.len() => self.cur_ast().pat_list(l).iter().map(|&a| Some(a)).collect(),
                     _ => vec![None; items.len()],
@@ -941,6 +963,8 @@ impl<'a> Worker<'a> {
             // (`UnapplyArgs.argTypes`), the rest's too, which as `elem*` does not match it (scalac
             // warns of `val List(a, rest*) = xs`).
             TPat::Seq(items, rest) => {
+                // The selector's path widened: `x$1`'s element type is the sequence.
+                let sty = self.widen_type(sty);
                 let dealiased = self.dealias(sty);
                 let array_elem = match self.types.get(dealiased) {
                     Type::Class(c, args) if c == self.b.array && args != EMPTY_LIST => Some(self.types.items(args)[0]),
@@ -968,7 +992,7 @@ impl<'a> Worker<'a> {
                     return Some(found);
                 }
                 rest?;
-                Some((self.repeated_type(elem), elem, at, None))
+                Some((self.repeated_type(elem), elem, at, None, false))
             }
             // A refutable extractor (`checkIrrefutable`'s `RefutableExtractor`), by its qualifier as
             // written (`E` of `E(x)`).
@@ -980,8 +1004,50 @@ impl<'a> Worker<'a> {
                     }
                     _ => String::new(),
                 };
-                Some((sty, sty, at, Some(name)))
+                Some((sty, sty, at, Some(name), false))
             }
+        }
+    }
+
+    /// `checkIrrefutable`'s `conforms` (Checking.scala 1131-1134): the scrutinee's type, its names dropped
+    /// (`stripNamedTuple`), conforms to the pattern's, or its widening does (`pt.widen ne pt`), the path of a
+    /// generator's `x$1` to its element type. A long tuple's extraction (`isTupleXXLExtract`) is its own arm of
+    /// `refutable_part`. The comparison leaves no constraint.
+    fn irrefutable_conforms(&mut self, sty: TypeId, target: TypeId) -> bool {
+        let stripped = self.erased_named_tuple(sty);
+        let mark = self.snapshot();
+        let ok = self.is_sub(stripped, target);
+        self.rollback(mark);
+        if ok {
+            return true;
+        }
+        let widened = self.widen_type(sty);
+        widened != sty && self.irrefutable_conforms(widened, target)
+    }
+
+    /// `Type.isSingleton` (a `SingletonType` once dealiased): a path (`TermRef`, `ThisType`), a constant
+    /// (`ConstantType`), an object's module.
+    fn is_singleton(&mut self, t: TypeId) -> bool {
+        let t = self.deref(t);
+        let t = self.dealias(t);
+        match self.types.get(t) {
+            Type::Term(_) | Type::Select(..) | Type::This(_) | Type::Lit(_) => true,
+            Type::Class(c, _) => self.is_module_class(c),
+            _ => false,
+        }
+    }
+
+    /// The element type of the sequence an `unapplySeq` call's result holds (`Option[Seq[E]]`'s `E`, as
+    /// `UnapplyArgs.argTypes` reads its `finalResultType`); `Any` where the result is no such type.
+    fn unapply_seq_element(&mut self, call: TExprId) -> TypeId {
+        let (TExpr::CallMethod(_, s, _) | TExpr::CallStatic(s, _)) = self.prog.expr(call) else { return ANY };
+        let ret = self.sig_of(s).ret;
+        let ret = self.dealias(ret);
+        let Type::Class(_, args) = self.types.get(ret) else { return ANY };
+        let Some(&seq) = self.types.items(args).first() else { return ANY };
+        match self.seq_class().and_then(|sc| self.base_type(seq, sc)).map(|b| self.types.get(b)) {
+            Some(Type::Class(_, args)) if args != EMPTY_LIST => self.types.items(args)[0],
+            _ => ANY,
         }
     }
 
@@ -1007,17 +1073,18 @@ impl<'a> Worker<'a> {
         }
     }
 
-    fn matches_own_singleton(&mut self, e: TExprId, sty: TypeId) -> bool {
-        let value = match self.prog.expr(e) {
+    /// The constant a literal pattern's value is (`Constant`), a `Float` the `Double` node its type says it is.
+    fn literal_of(&mut self, e: TExprId) -> Option<LitVal> {
+        Some(match self.prog.expr(e) {
             TExpr::Int(n) => LitVal::Int(n),
             TExpr::Long(n) => LitVal::Long(n),
             TExpr::Double(d) if self.prog.type_of(e).is_some_and(|t| self.widen_lit(t) == self.b.t_float) => LitVal::Float((d as f32).to_bits()),
             TExpr::Double(d) => LitVal::Double(d.to_bits()),
             TExpr::Char(c) => LitVal::Char(c),
             TExpr::Bool(b) => LitVal::Bool(b),
-            _ => return false,
-        };
-        self.deref(sty) == self.types.lit(value)
+            TExpr::Str(r) => LitVal::Str(self.interner.intern(&self.prog.strings[r.idx()])),
+            _ => return None,
+        })
     }
 
     /// A `Char` scrutinee against `98` and an `Int` one against `'a'` compare as numbers in

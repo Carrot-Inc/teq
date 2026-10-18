@@ -1410,6 +1410,9 @@ impl<'w, 'a> P<'w, 'a> {
         if m & mods::OPEN != 0 {
             out.push(OPEN);
         }
+        if m & mods::INFIX != 0 {
+            out.push(INFIX);
+        }
         if m & mods::IMPLICIT != 0 {
             out.push(IMPLICIT);
         }
@@ -3825,6 +3828,9 @@ impl<'w, 'a> P<'w, 'a> {
             if m & mods::OVERRIDE != 0 {
                 flags.push(OVERRIDE);
             }
+            if m & mods::INFIX != 0 {
+                flags.push(INFIX);
+            }
         }
         // An export's type forwarder (dotty's `Exported | Final` alias, `Namer.addForwarder`).
         if info.exported {
@@ -3913,6 +3919,9 @@ impl<'w, 'a> P<'w, 'a> {
         let mut flags = Vec::new();
         self.access_flags(info.mods, &mut flags);
         flags.push(OPAQUE);
+        if info.mods & mods::INFIX != 0 {
+            flags.push(INFIX);
+        }
         self.write_flags(&flags);
         let span = self.def_span(info.file, info.def, info.span);
         self.position_def(addr, span, info.span.start, info.file, info.def);

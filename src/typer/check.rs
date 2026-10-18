@@ -2029,15 +2029,18 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// scalac's warning for a `return` that leaves a lambda or a by-name argument on its way
-    /// out of the method.
+    /// scalac's diagnostic of a `return` that leaves a lambda or a by-name argument on its way
+    /// out of the method, by the unit's version (`NonLocalReturns.transformReturn`).
     fn warn_nonlocal_returns(&mut self, body: TExprId, returns: &[(TExprId, crate::source::Span)]) {
         let mut found = Vec::new();
         self.nonlocal_returns(body, false, &mut found);
         for e in found {
             if let Some(&(_, span)) = returns.iter().find(|&&(r, _)| r == e) {
                 if !self.restrict_nonlocal_return(span) {
-                    self.warn(span, "Non local returns are no longer supported; use `boundary` and `boundary.break` in `scala.util` instead");
+                    // The phase after erasure that expands them.
+                    self.migration_of_phase(crate::source_version::Migration::NonLocalReturns, span, crate::warnings::NO_ID, crate::source::PHASE_NONLOCAL_RETURNS, || {
+                        "Non local returns are no longer supported; use `boundary` and `boundary.break` in `scala.util` instead".to_string()
+                    });
                 }
             }
         }
@@ -5264,8 +5267,96 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether `m` is a parameter of a `using` clause of its class's constructor, which dotty flags `Given`.
+    fn is_using_ctor_param(&self, m: SymId) -> bool {
+        let Owner::Class(c) = self.syms.sym(m).owner else { return false };
+        let info = self.syms.class(c);
+        info.ctor.iter().zip(&info.ctor_syms).any(|(clause, syms)| clause.is_using && syms.contains(&m))
+    }
+
     fn is_ctor_param(&self, c: ClassId, m: SymId) -> bool {
         self.syms.class(c).ctor_syms.iter().any(|clause| clause.contains(&m))
+    }
+
+    /// Whether `m`, a member of `c`, is a parameter accessor whose chain of like-named parameter
+    /// accessors in the superclasses reaches `p` (`RefChecks.isInheritedAccessor`, which follows
+    /// `ParamForwarding.inheritedAccessor` until it meets `p`): the superclass's own immutable parameter
+    /// accessor of the name, unless private, in which case one it passes to its superclass's like-named
+    /// parameter (`PostTyper.forwardParamAccessors`' `SuperParamAlias`) stands for the next.
+    fn is_inherited_accessor(&mut self, c: ClassId, m: SymId, p: SymId) -> bool {
+        if !self.is_ctor_param(c, m) {
+            return false;
+        }
+        let name = self.syms.sym(m).name;
+        let mut sup = self.syms.class(c).superclass;
+        while let Some(s) = sup {
+            let Some(candidate) = self.syms.class(s).ctor_syms.iter().flatten().copied().find(|&q| self.syms.sym(q).name == name) else { return false };
+            if self.syms.sym(candidate).kind != SymKind::Val {
+                return false;
+            }
+            if self.syms.sym(candidate).mods & mods::FIELD != 0 && !self.is_private(candidate) {
+                if candidate == p {
+                    return true;
+                }
+            } else if !self.forwards_to_super_param(s, candidate) {
+                return false;
+            }
+            sup = self.syms.class(s).superclass;
+        }
+        false
+    }
+
+    /// Whether the private parameter accessor `q` of the program's class `s` is an alias of its superclass's
+    /// like-named parameter, `PostTyper.forwardParamAccessors`' `SuperParamAlias`, read off the typed superclass
+    /// call as dotty reads it: the call, typed again here and dropped (`type_parent_ctor`), applies the primary
+    /// constructor (one resolved to a secondary constructor, `ParentCall::via`, makes no alias); its outermost
+    /// application is the constructor's last clause (but the `()` `normalizeIfConstructor` appends to one of `using`
+    /// clauses alone), the method type whose names `superParamNames` holds, and the
+    /// argument whose symbol (`Tree.symbol`) is `q` stands at a parameter of `q`'s name. A typed argument's symbol is
+    /// its reference's, none for any other node (a conversion's call, `int2long(x)`) and none for a node the typing
+    /// marked as dotty's `Block`, `NamedArg` or `Inlined` (`Worker::denotation_marks`). A by-name parameter is none
+    /// (`!sym.info.isInstanceOf[ExprType]`). A library class's alias (TASTy's `PARAMalias`) is not read.
+    fn forwards_to_super_param(&mut self, s: ClassId, q: SymId) -> bool {
+        let (file, def_id, sup) = {
+            let i = self.syms.class(s);
+            (i.file, i.def, i.superclass)
+        };
+        let (Some(def_id), Some(sup)) = (def_id, sup) else { return false };
+        if self.source(file).is_std || self.is_body_file(file) {
+            return false;
+        }
+        if self.syms.class(s).ctor.iter().flat_map(|cl| cl.params.iter()).any(|p| p.sym == q && p.by_name) {
+            return false;
+        }
+        // The constructor's method type as `NamerOps.normalizeIfConstructor` makes it: one of `using` clauses alone ends
+        // in an added `()`, the outermost application, which passes nothing (`superArgs.nonEmpty`).
+        let ctor = &self.syms.class(sup).ctor;
+        if ctor.iter().all(|cl| cl.is_using && !cl.is_implicit) {
+            return false;
+        }
+        let DefKind::Class(cls) = &self.ast(file).def(def_id).kind else { return false };
+        let clause = self.superclass_clause(s, &cls.parents);
+        let Some(names) = self.syms.class(sup).ctor.last().map(|cl| cl.params.iter().map(|p| p.name).collect::<Vec<_>>()) else { return false };
+        let Some(parent_ty) = self.base_type_of(s, sup) else { return false };
+        let outer = self.denotation_marks.replace(Default::default());
+        let mark = self.attempt();
+        let call = self.type_parent_ctor(s, clause, sup, Some(parent_ty), false).map(|(call, _)| call);
+        let marks = std::mem::replace(&mut self.denotation_marks, outer).map(|m| m.nodes).unwrap_or_default();
+        let aliased = call.is_some_and(|call| {
+            let args = self.prog.expr_list(call.args).to_vec();
+            if call.via.is_some() || args.len() < names.len() {
+                return false;
+            }
+            let symbol = |te: TExprId| match self.prog.expr(te) {
+                TExpr::Local(x) | TExpr::Field(_, x) if !marks.contains(&te) => Some(x),
+                _ => None,
+            };
+            // `superArgs.indexWhere(_.symbol == sym)`, then `superParamNames(idx) == stat.name`.
+            let outermost = &args[args.len() - names.len()..];
+            outermost.iter().position(|&te| symbol(te) == Some(q)).is_some_and(|i| names[i] == self.syms.sym(q).name)
+        });
+        self.retract(mark);
+        aliased
     }
 
     /// Whether `m` overrides `Any`'s member of its name (`any_member_agreement`).
@@ -5577,7 +5668,20 @@ impl<'a> Worker<'a> {
             // A case class's selector overrides as if marked (dotty's `RefChecks.autoOverride`).
             "{m} needs `override` modifier to override {p}"
         } else {
-            return !own || self.check_target_names(m, p);
+            if !own {
+                return true;
+            }
+            if self.declared_target_name(m) != self.declared_target_name(p) {
+                return self.check_target_names(m, p);
+            }
+            // (1.12) A val parameter is overridden by its inherited accessor alone, or by a
+            // member the version lets pass (`RefChecks.checkOverride` 626-632).
+            if p_kind == SymKind::Val && self.is_ctor_param(pb, p) && !self.is_inherited_accessor(c, m, p) {
+                let (file, span) = (self.syms.sym(m).file, self.syms.sym(m).span);
+                let msg = format!("cannot override val parameter {}", self.member_description(p, Some(pb)));
+                self.migration_in(file, crate::source_version::Migration::OverrideValParameter, span, crate::warnings::NO_ID, crate::source::PHASE_REFCHECKS, || msg);
+            }
+            return true;
         };
         let m_class = m_owner.and_then(|t| self.class_of(t));
         // An object is shown without its type (`infoString` of a module).
@@ -5887,7 +5991,7 @@ impl<'a> Worker<'a> {
     /// bases' in linearisation order but the mirror's traits it gets after typing
     /// (`ClassInfo::post_typer_bases`), a concrete one before an abstract one, as a member's
     /// denotation prefers it.
-    fn typer_type_member(&self, c: ClassId, name: Name) -> Option<AliasId> {
+    pub(super) fn typer_type_member(&self, c: ClassId, name: Name) -> Option<AliasId> {
         let info = self.syms.class(c);
         let post_typer = 1..1 + info.post_typer_bases as usize;
         let found: Vec<AliasId> = info.base_types.iter().enumerate().filter(|(i, _)| !post_typer.contains(i)).filter_map(|(_, &(b, _))| self.syms.class(b).type_aliases.get(&name).copied()).collect();
@@ -6162,15 +6266,18 @@ impl<'a> Worker<'a> {
 
     pub(super) fn member_description(&self, m: SymId, in_class: Option<ClassId>) -> String {
         let info = self.syms.sym(m);
+        // `PlainPrinter.kindString`: `Given` before `Lazy`, a given definition and a `using` clause's accessor
+        // (`class A(using val x: Int)`) alike.
         let kind = match info.kind {
             SymKind::Def | SymKind::Overloaded(_) => "method",
             SymKind::Val if self.inner_object_of_sym(m).is_some() => "object",
+            SymKind::Val if info.mods & mods::GIVEN != 0 || self.is_using_ctor_param(m) => "given instance",
             SymKind::Val if info.mods & mods::LAZY != 0 => "lazy value",
             SymKind::Val | SymKind::Param => "value",
             SymKind::Var => "variable",
             SymKind::Object(_) => "object",
             SymKind::EnumValue(_) => "case",
-            SymKind::Given => "given",
+            SymKind::Given => "given instance",
         };
         match in_class {
             Some(c) => format!("{} {} in {}", kind, self.name_str(info.name), self.class_description(c)),

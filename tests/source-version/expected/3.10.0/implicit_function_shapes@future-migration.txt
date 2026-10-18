@@ -1,0 +1,17 @@
+exit 0
+migration warning 2:16
+  `implicit` defs are no longer supported, use a `given` clause instead. Example:
+  
+  given f: [A] => Int = ...
+migration warning 3:16
+  `implicit` defs are no longer supported, use a `given` clause instead. Example:
+  
+  given g: () => String = ...
+migration warning 4:16
+  `implicit` defs are no longer supported, use a `given` clause instead. Example:
+  
+  given k: [A] => (a: A) => Int = ...
+migration warning 5:16
+  `implicit` defs are no longer supported, use a `given` clause instead. Example:
+  
+  given m: (s: String) => Int = ...

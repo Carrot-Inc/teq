@@ -1,0 +1,12 @@
+tests/classpath/jvm/trait_param_override.scala:9:16: warning: cannot override val parameter value x in trait T
+    override val x: Int = 9
+                 ^
+tests/classpath/jvm/trait_param_override.scala:14:16: warning: cannot override val parameter value o in trait Over
+    override val o: Int = 77
+                 ^
+tests/classpath/jvm/trait_param_override.scala:16:22: warning: cannot override val parameter value x in trait T
+  class P(override val x: Int) extends T(side("p"))
+                       ^
+tests/classpath/jvm/trait_param_override.scala:18:22: warning: cannot override val parameter value x in trait T
+    override final val x = 9
+                       ^

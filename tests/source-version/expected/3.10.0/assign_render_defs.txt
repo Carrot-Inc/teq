@@ -1,0 +1,124 @@
+exit 0
+migration warning 4:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  type U = Int
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 5:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  type F[X] = List[X]
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 6:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  class C(val x: Int) {}
+  new C(1)
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 7:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  class D[A](private[this] val x: A, var y: Int = 2) extends T {
+  def m = 1
+  }
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 8:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  final lazy given val n: Int = 1
+  2
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 9:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  final lazy given val: Int = 1
+  2
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 10:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  trait U {}
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 11:12
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  case class K(val i: Int) {}
+  K(1)
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 12:13
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  lazy val l = 1
+  l
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 13:13
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  def f[A](x: A)(using y: Int): A = x
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 14:13
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  class E {
+  def g = 1
+  }
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 15:13
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  class G(private val p: Int, protected var q: Int) {}
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 16:13
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  abstract class H {
+  def h: Int
+  }
+  1
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.

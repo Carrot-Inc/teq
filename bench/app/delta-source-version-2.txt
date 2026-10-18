@@ -1,0 +1,13 @@
+# The diagnostics source-version-2 gives where scalac 3.8.4 gives them at the default version (src/source_version.rs,
+# dotty's MigrationVersion rows from 3.4 and 3.6) or stops giving where scalac's suspended warnings fall under an
+# error at their place: bench/app/api-check.sh's APP_API_DELTA for that landing's app-api line.
+warning: `_` is deprecated for wildcard arguments of types: use `\?` instead
+warning: The syntax `x: _\*` is no longer supported for vararg splices; use `x\*` instead
+warning: Ignoring \[this\] qualifier\.
+warning: The trailing ` _` for eta-expansion is unnecessary;
+warning: Alphanumeric (method|type|extractor) [^ ]+ is not declared infix; it should not be used as infix operator\.
+warning: cannot override val parameter
+warning: Deprecated syntax: infix named arguments lists are deprecated;
+migration warning: Deprecated syntax: since 3\.7 this is interpreted as a named tuple with one element,
+error: Named arguments are required for Java defined annotations
+error: Only function types can be followed by _ but the current expression has type

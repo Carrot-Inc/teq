@@ -223,6 +223,8 @@ impl<'a> Worker<'a> {
                 lower != NOTHING && lower != t && self.null_conforms(lower)
             }
             Type::Refined(parent, _) => self.null_conforms(parent),
+            // A polymorphic function type, dotty's refinement of the trait `PolyFunction`, a reference type.
+            Type::Poly(..) => true,
             Type::Rec(body) => self.null_conforms(body),
             Type::Match(..) | Type::Alias(..) | Type::Nested(..) => match self.dependent_underlying(t) {
                 Some(u) => self.null_conforms(u),
@@ -396,6 +398,17 @@ impl<'a> Worker<'a> {
             },
             None => unapply,
         };
+        let pat = self.extractor_pattern_by(recv, rty, subs, sty, span, name, unapply, owner_ty, overloaded || chosen.is_some());
+        // The extractor the pattern applies, once its sub-patterns' are typed (`Typer.typedInfixOp`'s
+        // `app.symbol`), by the pattern's span.
+        self.last_unapply = Some((span, unapply));
+        pat
+    }
+
+    /// The extraction through `unapply`, a member `name` of the receiver's type `owner_ty`, `explicit`
+    /// where an overload or the caller selected it.
+    #[allow(clippy::too_many_arguments)]
+    fn extractor_pattern_by(&mut self, recv: TExprId, rty: TypeId, subs: &[crate::ast::PatId], sty: TypeId, span: Span, name: Name, unapply: SymId, owner_ty: TypeId, explicit: bool) -> Option<TPatId> {
         // A scrutinee wider than what `unapply` takes is tested against that type first.
         // The parameter is seen from the receiver's type (`m: Matcher[A, B]`).
         // The scrutinee goes to the first clause that is not a using clause: an extractor of a
@@ -451,7 +464,7 @@ impl<'a> Worker<'a> {
         self.prog.set_type(arg, narrowed);
         let lists = vec![ArgList { args: vec![ArgSrc::Typed(arg, narrowed)], using: false, span, fun: ArgList::NO_FUN }];
         // The alternative selected is applied, not resolved again for the narrowed scrutinee.
-        let (call, rty) = if overloaded || chosen.is_some() {
+        let (call, rty) = if explicit {
             let callee = self.member_callee_in(recv, rty, Some(owner_ty), unapply);
             self.apply_callee(callee, None, lists, span, None)
         } else {

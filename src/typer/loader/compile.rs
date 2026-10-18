@@ -928,6 +928,11 @@ pub(in crate::typer) mod body_crossings {
     }
 }
 
+/// Whether `pkg` is one of the Scala 3 library's packages whole (`SCALA3_LIBRARY`'s `*`).
+pub fn in_scala3_library_package(pkg: &str) -> bool {
+    SCALA3_LIBRARY.iter().any(|&(k, n)| n == "*" && (pkg == k || pkg.strip_prefix(k).map_or(false, |r| r.starts_with('.'))))
+}
+
 /// The classes of scala-library 3.8.4 whose TASTy lacks the `SCALA2STANDARDLIBRARY` attribute,
 /// the Scala 3 library's own, by package (`*` for every class of the package and those below);
 /// annotations, which have no methods to call, are left out.

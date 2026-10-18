@@ -1,0 +1,5 @@
+exit 1
+error 2:43
+  cannot override val parameter given instance x in class A
+error 4:22
+  cannot override val parameter given instance x in class A

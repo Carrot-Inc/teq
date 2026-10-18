@@ -2,6 +2,7 @@
 // operators of an infix pattern grouped by their precedence and associativity as terms are (dotty's
 // `infixPattern` over `infixOps`): `a ~ b ~ c` is `(a ~ b) ~ c`, `a :: b :: c` is `a :: (b :: c)`, and `::`
 // binds tighter than an alphanumeric extractor.
+// teq: --wconf msg=is.not.declared.infix:s
 object withKey:
   def unapply(p: (String, Int)): Some[(String, Int)] = Some(p)
 object ~ :

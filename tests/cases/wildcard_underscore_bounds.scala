@@ -1,5 +1,6 @@
 // A wildcard type argument written `_` with bounds (`_ >: Integer`, `_ <: Number`), deprecated in Scala 3 and
 // read by scalac 3.8.4 as `?` with the same bounds (dotty's `simpleType`: `typeBounds()` after `_`).
+// teq: --wconf msg=is.deprecated.for.wildcard.arguments:s
 import java.util.{ArrayList, List as JList}
 
 def addOne(xs: JList[_ >: Integer]): Unit = xs.add(Integer.valueOf(1))

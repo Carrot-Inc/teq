@@ -421,35 +421,69 @@ impl<'a> Worker<'a> {
             .map(|(x, y)| (x, self.types.mk(Type::Term(y))))
             .collect();
         let ret = if renamed.is_empty() { ret } else { self.subst_paths(ret, &renamed) };
-        ret == old.ret || self.same_up_to_refinement_params(ret, old.ret, 0)
+        self.same_up_to_binders(ret, old.ret)
     }
 
-    /// Whether `a` and `b` are one type written with other symbols for the parameters of the
-    /// methods their refinements declare, as a function type naming its parameters is each
-    /// time it is typed (`(x: C) => x.M` of `depmeth` eta-expanded), and for the members their
-    /// refinements stand for, as an anonymous class's are each time it is typed.
-    fn same_up_to_refinement_params(&mut self, a: TypeId, b: TypeId, depth: u32) -> bool {
+    /// Whether `a` and `b` are one type as dotty's structural equality has it (`Type.equals(that, bs)`, Types.scala
+    /// 2147-2153, each type's `iso`), with the binders of the two paired: what a type's resolution makes anew each time a
+    /// signature is typed. A polymorphic function type's type parameters (`LambdaType.iso`, 4058-4068) and a type
+    /// lambda's (`HKTypeLambda.iso`, 4468-4484) pair by position (`ParamRef.iso`, 4896-4899), their names and bounds the
+    /// same; the parameters of the methods a refinement declares likewise (a function type naming its parameters,
+    /// `(x: C) => x.M` of `depmeth` eta-expanded), and the members a refinement stands for, as an anonymous class's are
+    /// each time it is typed (`RefinedType.iso`, 3316-3320). A union and an intersection by their sides (`OrType.iso`
+    /// 3727-3729, `AndType.iso` 3577-3579), an applied class, alias or parameter by its arguments (`AppliedType.iso`,
+    /// 4853-4855), a recursive type and an annotated one by what they wrap (`RecType.iso`, 3423-3425); the rest by
+    /// identity, teq's types being hash-consed.
+    fn same_up_to_binders(&mut self, a: TypeId, b: TypeId) -> bool {
         if a == b {
             return true;
         }
-        if depth > 16 {
-            return false;
-        }
         match (self.types.get(a), self.types.get(b)) {
-            (Type::Class(c, xs), Type::Class(d, ys)) if c == d => {
-                let (xs, ys) = (self.types.items(xs).to_vec(), self.types.items(ys).to_vec());
-                xs.len() == ys.len() && xs.iter().zip(&ys).all(|(&x, &y)| self.same_up_to_refinement_params(x, y, depth + 1))
+            (Type::Class(c, xs), Type::Class(d, ys)) if c == d => self.same_lists(xs, ys),
+            (Type::Alias(c, xs), Type::Alias(d, ys)) if c == d => self.same_lists(xs, ys),
+            (Type::AppParam(p, xs), Type::AppParam(q, ys)) if p == q => self.same_lists(xs, ys),
+            (Type::Union(x1, y1, k1), Type::Union(x2, y2, k2)) => k1 == k2 && self.same_up_to_binders(x1, x2) && self.same_up_to_binders(y1, y2),
+            (Type::Inter(x1, y1), Type::Inter(x2, y2)) => self.same_up_to_binders(x1, x2) && self.same_up_to_binders(y1, y2),
+            (Type::Annotated(x), Type::Annotated(y)) => self.same_up_to_binders(x, y),
+            (Type::Poly(la, fa), Type::Poly(lb, fb)) => {
+                let (pa, pb) = (self.types.poly_params(la).to_vec(), self.types.poly_params(lb).to_vec());
+                let Some(renaming) = self.paired_binders(&pa, &pb) else { return false };
+                let (ba, bb) = (self.types.poly_bounds(la).to_vec(), self.types.poly_bounds(lb).to_vec());
+                ba.len() == bb.len()
+                    && ba.iter().zip(&bb).all(|(&x, &y)| {
+                        let x = self.types.subst(x, &renaming);
+                        self.same_up_to_binders(x, y)
+                    })
+                    && {
+                        let fa = self.types.subst(fa, &renaming);
+                        self.same_up_to_binders(fa, fb)
+                    }
+            }
+            (Type::Lambda(la, ra), Type::Lambda(lb, rb)) => {
+                let (pa, pb) = (self.types.items(la).to_vec(), self.types.items(lb).to_vec());
+                let Some(renaming) = self.paired_binders(&pa, &pb) else { return false };
+                let bounds_same = pa.iter().zip(&pb).all(|(&x, &y)| {
+                    let (Type::Param(p), Type::Param(q)) = (self.types.get(x), self.types.get(y)) else { return false };
+                    let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
+                    let (lo, hi) = (self.types.subst(lo, &renaming), self.types.subst(hi, &renaming));
+                    let (wlo, whi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
+                    self.same_up_to_binders(lo, wlo) && self.same_up_to_binders(hi, whi)
+                });
+                bounds_same && {
+                    let ra = self.types.subst(ra, &renaming);
+                    self.same_up_to_binders(ra, rb)
+                }
             }
             // A self-referential refinement (an anonymous class's bound, closed over its `this`).
-            (Type::Rec(x), Type::Rec(y)) => self.same_up_to_refinement_params(x, y, depth + 1),
+            (Type::Rec(x), Type::Rec(y)) => self.same_up_to_binders(x, y),
             (Type::Refined(pa, ra), Type::Refined(pb, rb)) => {
                 // A value's refinement by its name and type: its symbol stands for the member, which
                 // the retype entered again (an anonymous class's `val item`).
                 if let (Refinement::Val(na, _, ta), Refinement::Val(nb, _, tb)) = (self.types.refinement(ra), self.types.refinement(rb)) {
-                    return na == nb && self.same_up_to_refinement_params(ta, tb, depth + 1) && self.same_up_to_refinement_params(pa, pb, depth + 1);
+                    return na == nb && self.same_up_to_binders(ta, tb) && self.same_up_to_binders(pa, pb);
                 }
                 let (Refinement::Term(na, sa, la), Refinement::Term(nb, sb, lb)) = (self.types.refinement(ra), self.types.refinement(rb)) else {
-                    return ra == rb && self.same_up_to_refinement_params(pa, pb, depth + 1);
+                    return ra == rb && self.same_up_to_binders(pa, pb);
                 };
                 let (siga, sigb) = (self.sig_arc(sa), self.sig_arc(sb));
                 let shape = |s: &MethodSig| s.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>();
@@ -467,12 +501,35 @@ impl<'a> Worker<'a> {
                 xs.len() == ys.len()
                     && xs.iter().zip(&ys).all(|(&x, &y)| {
                         let x = self.subst_paths(x, &renamed);
-                        self.same_up_to_refinement_params(x, y, depth + 1)
+                        self.same_up_to_binders(x, y)
                     })
-                    && self.same_up_to_refinement_params(pa, pb, depth + 1)
+                    && self.same_up_to_binders(pa, pb)
             }
             _ => false,
         }
+    }
+
+    /// Two lists of types alike, element by element (`equalElements`, Types.scala 7308-7311).
+    fn same_lists(&mut self, xs: crate::types::TList, ys: crate::types::TList) -> bool {
+        let (xs, ys) = (self.types.items(xs).to_vec(), self.types.items(ys).to_vec());
+        xs.len() == ys.len() && xs.iter().zip(&ys).all(|(&x, &y)| self.same_up_to_binders(x, y))
+    }
+
+    /// The binders `xs` of one type paired with `ys` of the other by position (`SomeBinderPairs`), each pair of one
+    /// name (`paramNames.eqElements`): the renaming of the first's to the second's.
+    fn paired_binders(&mut self, xs: &[TypeId], ys: &[TypeId]) -> Option<Subst> {
+        if xs.len() != ys.len() {
+            return None;
+        }
+        let mut renaming = Subst::new();
+        for (&x, &y) in xs.iter().zip(ys) {
+            let (Type::Param(p), Type::Param(q)) = (self.types.get(x), self.types.get(y)) else { return None };
+            if self.syms.tparam(p).name != self.syms.tparam(q).name {
+                return None;
+            }
+            renaming.push((p, y));
+        }
+        Some(renaming)
     }
 }
 

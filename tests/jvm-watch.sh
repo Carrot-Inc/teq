@@ -13,7 +13,9 @@
 # missing until the next build; the representative shapes of a syntax error broken and fixed, in
 # both files in either order and under compaction, the class files a fresh build's after the
 # fix. Then the inline program
-# (tests/split/inline): an edit of an inline body types the files that expanded it again. Then
+# (tests/split/inline): an edit of an inline body types the files that expanded it again. Then a
+# signature's infix type under `future`, its operator's backquotes taken off and put back. Then a parent
+# argument's comprehension, its pattern put in parentheses and its body in braces. Then
 # the owned program (tests/split/owned): under `--own` the class files of one root are those of the whole
 # program's build. Then every program of tests/jvm-passing.txt, and the few that build without
 # printing scalac's output (`WATCH_ONLY`), gets a comment inserted and its first string literal
@@ -32,7 +34,7 @@ cd "$(dirname "$0")/.."
 WATCH_ONLY="extension_then_conversion indexed_seq_defaults inline_definition_gaps map_key_contract scala3_typeclass-derivation3 string_f_targ"
 RETYPES="entry reads facade roots state state_pair cacheable jar_state quotes"
 suite_units() {
-  printf '%s\n' scripted first-builds syntax inline owned owned-extensions owned-mirrors
+  printf '%s\n' scripted first-builds syntax inline infix-signature for-parens owned owned-extensions owned-mirrors
   for name in $(cat tests/jvm-passing.txt); do echo "passing/$name"; done
   for name in $WATCH_ONLY; do echo "watch-only/$name"; done
   for name in $RETYPES; do echo "retype/$name"; done
@@ -677,6 +679,62 @@ if piece_has inline; then
   expect "inline: condition edit" "$(field ok),$(field incremental),$(field changed)" 'true,true,["use/Sizes$.class"]'
   same_as_fresh "inline: condition edit" "$src" $PIN
   expect "inline: condition edit runs" "$(run_out app.Main | tr '\n' ' ')" "63 2 "
+  stop
+fi
+
+# --- An infix type's syntax -------------------------------------------------------------------
+# Under `future` an edit that takes the backquotes off a signature's infix type, or writes an applied type infix, types
+# the signature again (`shape::Cmp::infix_syntax_eq`, the syntax `Checking.checkValidInfix` reads) and reports the
+# operator; the backquotes put back, or the type applied by name, clear it, the class files a fresh build's.
+if piece_has infix-signature; then
+  piece_ran infix-signature
+  rm -rf "$work/out" "$src"
+  mkdir -p "$src"
+  printf 'class Pair[A, B]\ndef f(x: Int `Pair` String): Unit = ()\nobject M { def main(args: Array[String]): Unit = () }\n' > "$src/a.scala"
+  start "$src" --source future $PIN
+  expect "infix-signature: first build" "$(field ok)" 'true'
+  sed -i.bak 's/Int `Pair` String/Int Pair String/' "$src/a.scala"
+  build "$src/a.scala"
+  expect "infix-signature: the backquotes taken off" "$(field ok)" 'false'
+  if has 'Alphanumeric type Pair is not declared infix'; then ok; else bad "infix-signature: the operator reported: $RESULT"; fi
+  sed -i.bak 's/Int Pair String/Int `Pair` String/' "$src/a.scala"
+  build "$src/a.scala"
+  expect "infix-signature: the backquotes put back" "$(field ok)" 'true'
+  same_as_fresh "infix-signature: the backquotes put back" "$src" --source future $PIN
+  sed -i.bak 's/Int `Pair` String/Pair[Int, String]/' "$src/a.scala"
+  build "$src/a.scala"
+  expect "infix-signature: applied by name" "$(field ok)" 'true'
+  same_as_fresh "infix-signature: applied by name" "$src" --source future $PIN
+  sed -i.bak 's/Pair\[Int, String\]/Int Pair String/' "$src/a.scala"
+  build "$src/a.scala"
+  expect "infix-signature: written infix" "$(field ok)" 'false'
+  if has 'Alphanumeric type Pair is not declared infix'; then ok; else bad "infix-signature: the infix form reported: $RESULT"; fi
+  stop
+fi
+
+# --- A comprehension's written syntax -------------------------------------------------------------
+# A parent argument's comprehension edited (`shape::Cmp::pat_eq`, `expr_eq`, the records `Desugar.makeFor` reads): its
+# pattern in parentheses is a case lambda's stable identifier pattern, refutable at 3.8; its body in braces keeps the
+# trailing `map`, the class files a fresh build's.
+if piece_has for-parens; then
+  piece_ran for-parens
+  rm -rf "$work/out" "$src"
+  mkdir -p "$src"
+  printf 'val K = 1\nclass Base(val xs: List[Int])\nclass C extends Base(for K <- List(1, 2) yield K)\nobject M { def main(args: Array[String]): Unit = println(C().xs) }\n' > "$src/a.scala"
+  start "$src" --source 3.8 $PIN
+  expect "for-parens: first build" "$(field ok)" 'true'
+  sed -i.bak 's/for K <- List/for (K) <- List/' "$src/a.scala"
+  build "$src/a.scala"
+  expect "for-parens: the pattern in parentheses" "$(field ok)" 'false'
+  if has 'does not match the right hand side expression'; then ok; else bad "for-parens: the refutable pattern reported: $RESULT"; fi
+  sed -i.bak 's/for (K) <- List/for K <- List/' "$src/a.scala"
+  build "$src/a.scala"
+  expect "for-parens: the parentheses taken off" "$(field ok)" 'true'
+  same_as_fresh "for-parens: the parentheses taken off" "$src" --source 3.8 $PIN
+  sed -i.bak 's/yield K)/yield { K })/' "$src/a.scala"
+  build "$src/a.scala"
+  expect "for-parens: a braced body" "$(field ok)" 'true'
+  same_as_fresh "for-parens: a braced body" "$src" --source 3.8 $PIN
   stop
 fi
 

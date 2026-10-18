@@ -1,0 +1,7 @@
+exit 0
+migration warning 4:27
+  Only function types can be followed by _ but the current expression has type Int
+migration warning 5:11
+  Only function types can be followed by _ but the current expression has type Int
+migration warning 6:11
+  Only function types can be followed by _ but the current expression has type Int

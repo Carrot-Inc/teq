@@ -26,10 +26,16 @@ impl<'a> Parser<'a> {
         let start = self.span();
         let p = self.parse_infix_pattern();
         if self.at(Tok::Colon) && matches!(self.ast.pat(p), Pat::Wildcard | Pat::Bind(_, None)) {
-            // `rest: _*` is the Scala 2 spelling of `rest*`.
+            // `rest: _*` is the Scala 2 spelling of `rest*`; a pattern argument's is reported by the
+            // version (`Parsers.ascription` under `Location.InPatternArgs`, whose `inArgs` holds).
             if self.kind_at(1) == Tok::Underscore && self.spread_star_at(2) {
                 self.bump();
-                self.bump();
+                let underscore = self.bump().span;
+                if self.arg_start == Some(start.start) && self.following_is_vararg() {
+                    self.migration_with(crate::source_version::Migration::VarargSpliceAscription, underscore, crate::warnings::NO_ID, || {
+                        format!("The syntax `x: _*` is no longer supported for vararg splices; use `x*` instead{}", crate::source_version::rewrite_notice("This construct", "3.4-migration"))
+                    });
+                }
                 self.bump();
                 return self.ast.add_pat(Pat::Rest(p), start.to(self.prev_span()));
             }
@@ -185,6 +191,9 @@ impl<'a> Parser<'a> {
             stack.pop();
             let span = self.ast.pat_spans[lhs.idx()].to(self.ast.pat_spans[top.idx()]);
             let path = self.ast.add_expr(Expr::Ident(op.name), op.span);
+            if op.kind == crate::token::Tok::Ident {
+                self.ast.notes.infix_pattern_ops.push(path);
+            }
             let l = push_list(&mut self.ast.pat_lists, &[lhs, top]);
             top = self.ast.add_pat(Pat::Ctor(path, l), span);
         }
@@ -235,6 +244,7 @@ impl<'a> Parser<'a> {
                     && !matches!(self.kind_at(1), Tok::Dot | Tok::LParen);
                 if is_var {
                     self.bump();
+                    self.check_dollar_name(t.name, t.span);
                     if self.eat(Tok::At) {
                         let inner = self.parse_infix_pattern();
                         let span = start.to(self.prev_span());
@@ -285,9 +295,7 @@ impl<'a> Parser<'a> {
                     }
                     1 if !matches!(self.ast.pat(self.ast.pat_list(l)[0]), Pat::NamedField(..)) => {
                         let only = self.ast.pat_list(l)[0];
-                        if matches!(self.ast.pat(only), Pat::Typed(..)) {
-                            self.ast.paren_typed_pats.insert(only);
-                        }
+                        self.ast.paren_pats.insert(only);
                         only
                     }
                     _ => self.ast.add_pat(Pat::Tuple(l), span),
@@ -367,8 +375,10 @@ impl<'a> Parser<'a> {
         let mark = self.pat_scratch.len();
         let mut cut = false;
         while !self.at(Tok::RParen) && !self.at(Tok::Eof) {
-            // `name = pattern`, a field of a named tuple or a case class.
-            let p = if self.at(Tok::Ident) && self.kind_at(1) == Tok::Eq {
+            // A pattern argument (dotty's `Location.InPatternArgs`), where `rest: _*` splices.
+            let saved = self.arg_start.replace(self.span().start);
+            // `name = pattern`, a field of a named tuple or a case class, from 3.7 (`maybeNamed`).
+            let p = if self.at(Tok::Ident) && self.kind_at(1) == Tok::Eq && self.source.enables_named_tuples() {
                 let start = self.span();
                 let name = self.bump().name;
                 self.bump();
@@ -377,6 +387,7 @@ impl<'a> Parser<'a> {
             } else {
                 self.parse_pattern()
             };
+            self.arg_start = saved;
             self.pat_scratch.push(p);
             if !self.list_continues(Tok::RParen, &mut cut) {
                 break;

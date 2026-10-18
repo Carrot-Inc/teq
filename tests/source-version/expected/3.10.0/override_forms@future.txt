@@ -1,0 +1,5 @@
+exit 1
+error 2:37
+  cannot override val parameter value x in class A
+error 10:37
+  cannot override val parameter value y in class H

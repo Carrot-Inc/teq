@@ -1148,7 +1148,7 @@ impl<'a> Worker<'a> {
                 self.push_scope();
                 for en in &ast.enumerators[enums.range()] {
                     let (pat, rhs) = match *en {
-                        ast::Enumerator::Gen(p, x) | ast::Enumerator::CaseGen(p, x) | ast::Enumerator::Val(p, x) => (Some(p), x),
+                        ast::Enumerator::Gen(p, x, _) | ast::Enumerator::CaseGen(p, x) | ast::Enumerator::Val(p, x) => (Some(p), x),
                         ast::Enumerator::Guard(x) => (None, x),
                     };
                     // A generator's identifier is a variable, capitalised or not, as the typer
@@ -2553,7 +2553,7 @@ fn stmt_range(ast: &Ast, stmt: &Stmt) -> Span {
 fn children(ast: &Ast, e: ExprId) -> Vec<ExprId> {
     let list = |l: ast::ListRef| ast.expr_list(l).to_vec();
     match ast.expr(e) {
-        Expr::Select(q, _) | Expr::TypeApply(q, _) | Expr::NamedArg(_, q) | Expr::Prefix(_, q) => vec![q],
+        Expr::Select(q, _) | Expr::TypeApply(q, _) | Expr::NamedArg(_, q) | Expr::Prefix(_, q) | Expr::AsFunction(q) => vec![q],
         Expr::Apply(f, args) | Expr::UsingApply(f, args) => std::iter::once(f).chain(list(args)).collect(),
         Expr::Infix(a, _, b, _) | Expr::While(a, b) | Expr::Assign(a, b) => vec![a, b],
         Expr::If(c, t, e) | Expr::InlineIf(c, t, e) => [Some(c), Some(t), e].into_iter().flatten().collect(),

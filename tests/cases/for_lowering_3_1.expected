@@ -1,0 +1,19 @@
+filter
+map
+tuple 3
+map
+identity 7
+map
+flatMap
+map
+aliases 2
+map
+map
+trailing 3
+filter
+map
+guard 3
+filter
+map
+case 1
+List(1)

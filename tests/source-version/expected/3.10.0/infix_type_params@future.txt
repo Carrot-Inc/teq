@@ -1,0 +1,25 @@
+exit 1
+error 1:26
+  Alphanumeric type Pair is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Pair[...] or backticked identifier `Pair`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 2:36
+  Alphanumeric type Pair is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Pair[...] or backticked identifier `Pair`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 6:16
+  Alphanumeric type M is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax M[...] or backticked identifier `M`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 15:16
+  Alphanumeric type plain is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax plain[...] or backticked identifier `plain`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 17:16
+  Alphanumeric type Neither is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Neither[...] or backticked identifier `Neither`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 21:16
+  Alphanumeric type M is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax M[...] or backticked identifier `M`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.

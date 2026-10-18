@@ -1,0 +1,7 @@
+exit 1
+error 3:23
+  cannot override val parameter value x in class A1
+error 17:22
+  cannot override val parameter value x in class D
+error 19:22
+  cannot override val parameter value x in class D

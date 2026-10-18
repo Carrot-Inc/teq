@@ -1,0 +1,9 @@
+exit 1
+error 4:22
+  cannot override val parameter value x in class A
+error 7:23
+  cannot override val parameter value x in class A2
+error 10:23
+  cannot override val parameter value x in class A3
+error 15:44
+  cannot override val parameter value y in class A5

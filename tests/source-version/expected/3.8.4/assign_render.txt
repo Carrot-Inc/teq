@@ -1,0 +1,244 @@
+exit 0
+migration warning 3:10
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 1 + 2}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 4:10
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 1 + 2 * 3}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 5:10
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = (1 + 2) * 3}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 6:10
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = O.m(1)}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 7:10
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = O.p[Int](1)}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 8:10
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = -1}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 9:10
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = ! true}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 10:10
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = (x: Int) => x + 1}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 11:10
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = if true then 1 else 2}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 12:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = {
+  val b = 1
+  b
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 13:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = s"
+  x{
+  {
+  O.s
+  }
+  }
+  y"}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 14:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = (1, "s")}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 15:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = new O.Q(1)}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 16:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 1:Int}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 17:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 1L}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 18:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 1.5}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 19:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 2.0f}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 20:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 'c'}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 21:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = "q\"\n"}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 22:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = null}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 23:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 1 :: Nil}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 24:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = List(1, 2).map(_$1 => _$1 + 1)}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 25:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = true && false || true}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 26:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = O}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 27:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 1e10}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 28:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 0.1}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 29:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = (1)}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 30:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 1 match
+  {
+  case 1 =>
+  2
+  case _ =>
+  3
+  }}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 31:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = O.m}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 32:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = ()}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 33:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = classOf[String]}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 34:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = throw new Exception("e")}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 35:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 10}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 36:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 1000}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 37:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = Array[Int]()}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 38:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = (_$2 => O.m(_$2))}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 39:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 1.0e-5}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+migration warning 40:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 123456789.0}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.

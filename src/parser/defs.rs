@@ -4,6 +4,7 @@ use crate::intern::{FxMap, Name};
 use crate::names;
 use crate::source::Span;
 use crate::token::Tok;
+use crate::source_version::Migration;
 
 fn is_def_keyword(k: Tok) -> bool {
     matches!(
@@ -174,13 +175,27 @@ impl<'a> Parser<'a> {
         annots
     }
 
-    /// The `[pkg]` of `private[pkg]`; `private[this]` is plain private.
+    /// The `[pkg]` of `private[pkg]` after its modifier; `private[this]` is plain private, its
+    /// qualifier reported by the version (`Parsers.accessQualifierOpt`, over the brackets).
     fn parse_access_qualifier(&mut self) -> crate::intern::Name {
-        if !self.eat(Tok::LBracket) {
+        let private = self.pos > 0 && self.toks[self.pos - 1].kind == Tok::KwPrivate;
+        if !self.at(Tok::LBracket) {
             return names::EMPTY;
         }
-        let within = if self.eat(Tok::KwThis) { names::EMPTY } else { self.expect_ident().0 };
+        let open = self.bump().span;
+        let this = self.eat(Tok::KwThis);
+        let within = if this { names::EMPTY } else { self.expect_ident().0 };
         self.expect(Tok::RBracket);
+        if this {
+            let span = open.to(self.prev_span());
+            self.migration_with(crate::source_version::Migration::RemoveThisQualifier, span, crate::warnings::NO_ID, || {
+                let p = if private { "private" } else { "protected" };
+                format!(
+                    "Ignoring [this] qualifier.\nThe syntax `{p}[this]` will be deprecated in the future; just write `{p}` instead.\nSee: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html{}",
+                    crate::source_version::rewrite_notice("This construct", "3.4-migration")
+                )
+            });
+        }
         within
     }
 
@@ -375,6 +390,7 @@ impl<'a> Parser<'a> {
         let unnamed = self.at(Tok::Underscore) && (self.written_colon_at(1) || self.kind_at(1) == Tok::Eq);
         let (name, span, pat) = if simple {
             let (n, s) = self.expect_ident();
+            self.check_dollar_name(n, s);
             (n, s, None)
         } else if unnamed {
             let s = self.bump().span;
@@ -387,7 +403,9 @@ impl<'a> Parser<'a> {
         };
         let mut more_names = Vec::new();
         while simple && self.eat(Tok::Comma) {
-            more_names.push(self.expect_ident());
+            let (n, s) = self.expect_ident();
+            self.check_dollar_name(n, s);
+            more_names.push((n, s));
         }
         let rest_at = self.pos;
         let group_start = out.len();
@@ -501,7 +519,12 @@ impl<'a> Parser<'a> {
             if self.at_soft(names::USING) && self.kind_at(1) != Tok::Colon {
                 self.bump();
                 clause.is_using = true;
-            } else if self.eat(Tok::KwImplicit) {
+            } else if self.at(Tok::KwImplicit) {
+                // Reported by the version (`Parsers.paramMods`).
+                let at = self.bump().span;
+                self.migration_with(Migration::Scala2Implicits, at, crate::warnings::NO_ID, || {
+                    format!("`implicit` parameters are no longer supported, use a `using` clause instead{}", crate::source_version::rewrite_notice("This construct", "future-migration"))
+                });
                 clause.is_using = true;
                 clause.is_implicit = true;
             }
@@ -562,6 +585,7 @@ impl<'a> Parser<'a> {
                     (self.interner.intern(&format!("x${}", n)), self.span())
                 } else {
                     let ident = self.expect_ident();
+                    self.check_dollar_name(ident.0, ident.1);
                     match self.eat_annotation_colon() {
                         Some(r) => region = r,
                         None => {
@@ -676,6 +700,7 @@ impl<'a> Parser<'a> {
             return self.parse_secondary_ctor(m, annots);
         }
         let (name, span) = self.expect_ident();
+        self.check_dollar_name(name, span);
         let mark = self.error_events;
         let mut tparams = ext_tparams.to_vec();
         tparams.extend(self.parse_type_params());
@@ -755,6 +780,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_type_def(&mut self, m: Mods, annots: Vec<Annot>) -> DefId {
         self.expect(Tok::KwType);
         let (name, span) = self.expect_ident();
+        self.check_dollar_name(name, span);
         let mark = self.error_events;
         let tparams = self.parse_type_params();
         if let Some(tp) = tparams.iter().find(|tp| !tp.context_bounds.is_empty()) {
@@ -899,6 +925,7 @@ impl<'a> Parser<'a> {
             _ => ClassKind::Enum,
         };
         let (name, span) = self.expect_ident();
+        self.check_dollar_name(name, span);
         let mark = self.error_events;
         let tparams = self.parse_type_params();
         let mut m = m;
@@ -1575,6 +1602,7 @@ impl<'a> Parser<'a> {
         self.expect(Tok::KwCase);
         loop {
             let (name, span) = self.expect_ident();
+            self.check_dollar_name(name, span);
             let first = self.ast.defs.len();
             let mark = self.error_events;
             let tparams = self.parse_type_params();
@@ -1723,7 +1751,9 @@ impl<'a> Parser<'a> {
         let mark = self.error_events;
         let mut named = None;
         if self.given_has_name() {
-            named = Some(self.expect_ident());
+            let (n, s) = self.expect_ident();
+            self.check_dollar_name(n, s);
+            named = Some((n, s));
         }
         let has_signature = named.is_some()
             || (matches!(self.kind(), Tok::LBracket | Tok::LParen)
@@ -1732,6 +1762,9 @@ impl<'a> Parser<'a> {
         // turns 3.6's off for this given; and the source version's own rule (`newSyntaxAllowed`,
         // `SourceVersion.enablesNewGivens`).
         let old_syntax = if named.is_some() { matches!(self.kind(), Tok::LBracket | Tok::LParen) } else { has_signature };
+        if old_syntax {
+            self.migration(Migration::GivenSyntax, self.span(), "This old given syntax is no longer supported; use `=>` instead of `:`", crate::warnings::NO_ID);
+        }
         let new_syntax = self.source.enables_new_givens() && !old_syntax;
         let mut tparams = Vec::new();
         let mut clauses = Vec::new();
@@ -1870,6 +1903,7 @@ impl<'a> Parser<'a> {
             // `templateBodyOpt`).
             let with_template = !new_syntax || (self.at(Tok::KwWith) && tparams.is_empty() && clauses.is_empty());
             if with_template && !self.given_ends_here() {
+                self.given_with_template();
                 if !self.eat(Tok::KwWith) {
                     let msg = if self.at(Tok::ColonEol) { "'with' expected, but ':' found" } else { "'with' expected" };
                     self.error_at(self.span(), msg);
@@ -1908,6 +1942,8 @@ impl<'a> Parser<'a> {
             // (`Parsers.givenDef`'s `withTemplate`).
             if new_syntax && !(tparams.is_empty() && clauses.is_empty()) {
                 self.error_at(self.span(), "end of statement expected but 'with' found");
+            } else {
+                self.given_with_template();
             }
             self.bump();
             if self.eat(Tok::Indent) {
@@ -1933,12 +1969,33 @@ impl<'a> Parser<'a> {
         }
         self.end_annotation_region(region);
         if abstract_decl {
+            // Under 3.6's syntax the type alone is reported by the version, past it
+            // (`Parsers.givenDef`, 4597-4601).
+            if new_syntax {
+                let past = Span::new(self.prev_span().end, self.prev_span().end);
+                self.migration(
+                    Migration::GivenSyntax,
+                    past,
+                    "This defines an abstract given, which is no longer supported. Use a `deferred` given instead.\nOr, if you intend to define a concrete given, follow the type with `()` arguments.",
+                    crate::warnings::NO_ID,
+                );
+            }
             let fun = FunDef { tparams, clauses, ret: Some(ty), body: None, ext_tparams: 0, ext_clauses: 0, is_extension: false, ext_group: 0 };
             return self.ast.add_def(Def { name, span, mods: m | mods::GIVEN, annots, kind: DefKind::Fun(Box::new(fun)) });
         }
         let given = GivenDef { tparams, clauses, ty, alias, parents, body, self_alias };
         let m = if named.is_none() { m | mods::ANONYMOUS } else { m };
         self.ast.add_def(Def { name, span, mods: m, annots, kind: DefKind::Given(Box::new(given)) })
+    }
+
+    /// A given's body after `with`, reported by the version where it begins (`Parsers.withTemplate`).
+    fn given_with_template(&mut self) {
+        self.migration(
+            Migration::GivenSyntax,
+            self.span(),
+            "Given member definitions starting with `with` are no longer supported; use `{...}` or `:` followed by newline instead",
+            crate::warnings::NO_ID,
+        );
     }
 
     /// Whether nothing of the given follows: a statement's end.

@@ -1,0 +1,21 @@
+any map
+true
+conv map
+false
+1
+implicit def map
+false
+2
+true
+true
+true
+true
+inline map
+false
+5
+6
+MySome(())
+MySome(2)
+MySome((2,3))
+Map(43 -> 31)
+List(13, 14)

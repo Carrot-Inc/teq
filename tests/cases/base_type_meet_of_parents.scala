@@ -4,6 +4,7 @@
 // narrower or the intersection of the two, a contravariant one the wider; a subclass named in a parent's arguments,
 // not complete when the class is (zio's `ChunkLike[A] extends IndexedSeq[A] with IndexedSeqOps[A, Chunk, Chunk[A]]`),
 // taken from the parent written later, which is the meet.
+@annotation.nowarn("msg=wildcard arguments")
 trait Base[+Self[+_] <: Obs[_], +A]:
   def map[B](f: A => B): Self[B]
 trait Obs[+A] extends Base[Obs, A]
@@ -41,6 +42,7 @@ def opsOf(c: ChunkLike[Int]): Chunk[Int] = c.mapped
 
 def heldOf(h: Holder[Named & Sized]): String = h.held.name + h.held.size
 
+@annotation.nowarn("msg=wildcard arguments")
 def through[Self[+_] <: Obs[_], A](b: Base[Self, A]): Self[String] = b.map(_.toString + "!")
 
 @main def main(): Unit =

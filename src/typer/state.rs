@@ -165,6 +165,9 @@ struct PendingCall {
     /// Whether the expansion stands at the end of the call it completes (an inline given found
     /// by a search, `InlineState::site_at_end`).
     at_end: bool,
+    /// A comprehension's trailing `map` `markTrailingMap` marks (`Worker::mark_pending_for_map`), whose
+    /// expansion `DropForMap.transformInlined` reads.
+    for_map: Option<std::sync::Arc<super::apply::ForMapMark>>,
 }
 
 /// A node changed in place, with its value or its recorded type as it was; or the pending call
@@ -781,6 +784,7 @@ impl<'a> Worker<'a> {
             owners: self.sites.owners.clone(),
             bodies_in_progress: self.bodies_in_progress.clone(),
             at_end: self.inline.site_at_end,
+            for_map: None,
         };
         let len = self.attempts.pending.len();
         self.note_rare(Rare::Pending, len);
@@ -1049,6 +1053,14 @@ impl<'a> Worker<'a> {
         !self.attempts.pending.is_empty() && self.attempts.pending.iter().rev().any(|p| p.node == te && p.call.is_some())
     }
 
+    /// The pending inline call `te` is a comprehension's trailing `map` (`Desugar.makeFor`'s `TrailingForMap` on
+    /// the call dotty's `Inlined` node keeps), over the receiver `recv` of type `recv_ty`.
+    pub(super) fn mark_pending_for_map(&mut self, te: crate::tir::TExprId, recv: crate::tir::TExprId, recv_ty: crate::types::TypeId, watch: Box<super::apply::ForMapWatch>) {
+        if let Some(call) = self.attempts.pending.iter_mut().rev().find(|p| p.node == te).and_then(|p| p.call.as_mut()) {
+            call.for_map = Some(std::sync::Arc::new(super::apply::ForMapMark { recv, recv_ty, watch }));
+        }
+    }
+
     /// The type the typing gave `te`, a call still pending.
     pub(super) fn pending_type(&self, te: crate::tir::TExprId) -> Option<crate::types::TypeId> {
         if self.attempts.pending.is_empty() {
@@ -1139,7 +1151,7 @@ impl<'a> Worker<'a> {
         let bodies = std::mem::replace(&mut self.bodies_in_progress, p.bodies_in_progress);
         let arg_types: Vec<_> = p.arg_types.into_iter().map(|(e, t)| (e, self.zonk(t))).collect();
         let arg_types = std::mem::replace(&mut self.inline.arg_types, arg_types);
-        let (mut call, sig, args, span) = (p.call, p.sig, p.args, p.span);
+        let (mut call, sig, args, span, for_map) = (p.call, p.sig, p.args, p.span, p.for_map);
         call.owner_subst = call.owner_subst.iter().map(|&(q, t)| (q, self.zonk(t))).collect();
         let subst: crate::types::Subst = p.subst.iter().map(|&(q, t)| (q, self.zonk(t))).collect();
         let ret_ty = self.zonk(p.ret_ty);
@@ -1159,6 +1171,14 @@ impl<'a> Worker<'a> {
             eprintln!("flush {} at {:?}: {:?}", name, span, expanded.map(|(e, _)| self.prog.expr(e)));
         }
         let (expanded, ty) = expanded?;
+        // `DropForMap.transformInlined` of a trailing `map`'s expansion, its call kept as dotty's `Inlined` keeps it.
+        let (expanded, ty) = match &for_map {
+            Some(mark) => {
+                let inlined = super::apply::ForMapInlined { expansion: expanded, recv: call.recv, sym: call.sym, args: args.clone() };
+                self.transform_inlined_map(expanded, ty, &inlined, mark.recv, mark.recv_ty, &mark.watch).unwrap_or((expanded, ty))
+            }
+            None => (expanded, ty),
+        };
         {
             if expanded != node {
                 // A type the typing gave the call's node after it was typed (an `Int` widened to

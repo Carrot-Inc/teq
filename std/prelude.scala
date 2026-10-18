@@ -195,8 +195,10 @@ inline def valueOf[T](using vt: ValueOf[T]): T = vt.value
 @predef
 def implicitly[T](implicit x: T): T = x
 
-/** An implicit conversion: a given of this type converts a `T` where a `U` is needed. */
-trait Conversion[-T, +U] extends (T => U)
+/** An implicit conversion: a given of this type converts a `T` where a `U` is needed. Its `apply` is its own, as
+ *  scala-library's class declares it (`DropForMap.Converted` reads the owner of the `apply` a conversion calls). */
+trait Conversion[-T, +U] extends (T => U):
+  def apply(x: T): U
 
 @predef
 def identity[A](x: A): A = x

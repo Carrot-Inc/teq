@@ -1,0 +1,3 @@
+exit 1
+error 4:45
+  cannot override val parameter value x in class C

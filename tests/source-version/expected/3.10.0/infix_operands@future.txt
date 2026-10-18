@@ -1,0 +1,29 @@
+exit 1
+error 11:13
+  Alphanumeric method f is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .f(...) or backticked identifier `f`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 13:13
+  Alphanumeric method f is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .f(...) or backticked identifier `f`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 15:13
+  Alphanumeric method g is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .g(...) or backticked identifier `g`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 17:25
+  Alphanumeric method g is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .g(...) or backticked identifier `g`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 18:13
+  Alphanumeric method f is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .f(...) or backticked identifier `f`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 20:13
+  Alphanumeric method t is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .t(...) or backticked identifier `t`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 21:13
+  Alphanumeric method u is not declared infix; it should not be used as infix operator.
+  Instead, use method syntax .u(...) or backticked identifier `u`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.

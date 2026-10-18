@@ -72,8 +72,13 @@ impl<'a> Worker<'a> {
 
     /// `(a = x, b = y)`: the tuple of the values, typed as the named tuple; against an expected
     /// named tuple of the same names the values take its element types.
+    #[inline(never)]
     pub fn type_named_tuple(&mut self, names: ListRef, values: ListRef, expected: Option<TypeId>, span: Span) -> (TExprId, TypeId) {
         let ast = self.cur_ast();
+        // One of one element an assignment reads as (`check_assignment_syntax`), by its values.
+        if !ast.notes.assignment_tuples.is_empty() {
+            self.check_named_assignment(values);
+        }
         let names: Vec<Name> = ast.name_lists[names.range()].to_vec();
         let ids: Vec<ExprId> = ast.expr_list(values).to_vec();
         let expected_tuple = match expected.and_then(|e| self.concrete_expected(Some(e))) {
@@ -90,6 +95,15 @@ impl<'a> Worker<'a> {
         (te, ty)
     }
 
+    #[cold]
+    #[inline(never)]
+    fn check_named_assignment(&mut self, values: ListRef) {
+        let ast = self.cur_ast();
+        if let Some(&(e, ..)) = ast.notes.assignment_tuples.iter().find(|&&(e, a, _)| e != a && matches!(ast.expr(e), crate::ast::Expr::NamedTuple(_, v) if v == values)) {
+            self.check_assignment_syntax(e);
+        }
+    }
+
     /// `x.name` on a named tuple: the field of the tuple at the name's position.
     pub fn named_tuple_member(
         &mut self,
@@ -102,6 +116,10 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
     ) -> Option<(TExprId, TypeId)> {
         let (names, values) = self.named_tuple_parts(recv_ty)?;
+        // From 3.7 (`Typer.tryNamedTupleSelection` under `enablesNamedTuples`).
+        if !self.cur_ast().source_version.enables_named_tuples() {
+            return None;
+        }
         let i = names.iter().position(|&n| n == name)?;
         let tc = self.tuple_class(values.len());
         let fields = self.syms.class(tc).ctor_syms.concat();
@@ -263,8 +281,9 @@ impl<'a> Worker<'a> {
             if i > 0 {
                 text.push_str(", ");
             }
+            // `RefinedPrinter`'s `name : T`.
             text.push_str(self.interner.get(name));
-            text.push_str(": ");
+            text.push_str(" : ");
             self.show_into(t, &mut text, false);
         }
         text.push(')');

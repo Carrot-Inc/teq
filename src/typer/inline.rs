@@ -796,6 +796,14 @@ impl<'a> Worker<'a> {
             self.inline.last_binds = false;
         }
         let expanded = self.expand_inline_call(call, sig, subst, args, ret_ty, span, expected);
+        // dotty's `Inlined` keeps its `call`, which a comprehension's trailing `map` reads (`DropForMap.transformInlined`).
+        if let (Some(w), Some((e, _))) = (self.for_map_watch.as_mut(), expanded) {
+            w.inlined.push(super::apply::ForMapInlined { expansion: e, recv: call.recv, sym: call.sym, args: args.to_vec() });
+        }
+        // dotty's `Inlined`, which has no symbol (`Worker::denotation_marks`).
+        if let (Some((e, _)), true) = (expanded, self.denotation_marks.is_some()) {
+            self.mark_no_denotation(e);
+        }
         if self.capturing() {
             if let Some((e, _)) = expanded {
                 self.capture_inline(call, subst, args, span, e);

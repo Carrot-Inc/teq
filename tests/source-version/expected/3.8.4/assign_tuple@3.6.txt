@@ -1,0 +1,10 @@
+exit 0
+migration warning 5:11
+  Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,
+  not as an assignment.
+  
+  To assign a value, use curly braces: `{a = 3}`.
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+out ((),())
+out ((),0)
+out (3,2)

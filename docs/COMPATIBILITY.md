@@ -20,14 +20,40 @@ second token after the import), the typer for the whole unit, the definitions be
 The version decides, as scalac's migration table does, whether a construct the language deprecates is accepted
 silently, warned (from the version that deprecates it), warned as a migration (`migration warning`, at the
 `-migration` version just before it becomes an error) or refused. At the default version these are refused: a
-`for` generator whose pattern can fail without `case`, and explicit arguments for a context bound's parameters;
-scalac 3.8.4 also refuses positional arguments of a Java annotation but its `value`, which teq does not check yet.
-Scala 2's syntax (`given` and `enum` as identifiers among it) is read, with a migration warning, under
-`3.0-migration` alone. teq reports by the version `with` as a
-type operator, `var x: T = _`, explicit arguments for a context bound's or an implicit clause's parameters, a
-pattern that can fail in a pattern definition or in a `for` generator without `case` and, under `3.0-migration`,
-the Scala 3 keywords used as identifiers; the table's other rows are read as before (below). Below `3.4` such a
-generator is still lowered as from `3.4` (its value checked, a `MatchError` when it fails), where scalac's filters it.
+`for` generator whose pattern can fail without `case`, explicit arguments for a context bound's parameters, and
+positional arguments of a Java annotation of a definition, but a lone one where the annotation has a `value` (the
+std's `java.lang` annotations stand for the JDK's). Scala 2's syntax (`given` and `enum` as identifiers among it)
+is read, with a migration warning, under `3.0-migration` alone. teq reports by the version, at scalac's places and
+in its words: `with` as a type operator, `var x: T = _`, `_` as a type argument outside a match pattern,
+`private[this]` and `protected[this]`, an argument's `xs: _*`, `f _`, an override of a `val` parameter by another
+member than its inherited accessor, an alphanumeric method, type or extractor written infix and not declared
+`infix` (but a backquoted one, one followed by a block not in parentheses, and a member of a Scala 2 class, scala-library's among them,
+or of a library compiled before 3.4; a function value's `apply` is `Function1`'s, a polymorphic function value's
+exempts nothing, `eq` and `ne` are declared `infix`), a non-local `return`, `_` and `=>` in an import's or an export's selectors,
+the given syntax older than 3.6's, Scala 2's implicits (a clause, a definition, a lambda), an identifier holding `$`
+(3.10.0's row, from 3.9), an infix operand that reads as named arguments, an assignment in parentheses or the named
+tuple of one element it is from 3.7 (a migration warning at every version), explicit arguments for a context
+bound's or an implicit clause's parameters, a pattern that can fail in a pattern definition or in a `for` generator
+without `case` and, under `3.0-migration`, the Scala 3 keywords used as identifiers. A unit's warnings of its
+parser and its typer come after its typer's errors, as scalac issues them, so an error hides a warning at its place.
+
+The version changes what a program does where scalac's does: `f _` expands a method of any arity to its function
+value, a method of `()` included, and refuses a value of no function type (`FunctionN`, `ContextFunctionN` or a type
+that derives from `PolyFunction`, by its bound too; not a subclass of a function type, `=:=`) as Scala 2's syntax, which `3.0-migration` warns of and reads as
+`() => x`, evaluated at each call; a `for` generator's pattern that can fail
+is filtered before `3.4` unless its syntax shows it irrefutable (a tuple pattern over a value that is no tuple
+literal is filtered, and so is a typed pattern, a stable identifier or a backquoted name in parentheses of its own,
+`(x: Int)`) and checked from `3.4`; aliases are packed with the element by a `map` of their own before
+`3.8`, and from `3.8` where an alias's pattern holds a given of its own (`(given Int, y) = ..`, `(given Int) = ..`);
+from `3.8` a `case` generator's pattern is filtered again after each guard, and a trailing `map` of the generator's own
+pattern is left out but after a guard of a generator without `case`, and where the receiver's type is not the call's
+(a `map` typed `Any`, a conversion's receiver of another type) or an inline `map`'s expansion does not name its
+receiver's binding; a generator's pattern in parentheses of its own (`(x)`, `(K)`, a stable identifier pattern) or
+`_` is a case's whatever the version, and a typed identifier (`x: T`) the function's parameter at its type, a
+mismatch where the element is no `T`; `(a = 1, b = 2)` is a tuple of
+assignments before `3.7` and a named tuple from `3.7`, a named pattern and a named field's selection likewise; under a
+migration version from `3.6` an infix operand of named arguments, or an assignment in parentheses, is the application
+of them, without `-rewrite`.
 
 ## Not yet
 
@@ -149,12 +175,10 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   scalac's gives it a constant type. A cast between primitives that no conversion makes warns where it is
   written but not where an inline method's expansion makes one, so a build with `-Werror` passes here where
   scalac fails it.
-- The deprecated syntax scalac 3.8.4 reads with a warning at the default version is read here without one: `_` for
-  a wildcard type argument (`List[_ <: A]`), `private[this]`, `xs: _*`, `f _`, an override of a `val` parameter, and an
-  alphanumeric method or extractor written infix (`case a withKey b`) that is not declared `infix`; nor does a source
-  version reach Scala 2's procedure syntax, an ascription after a pattern, an implicit lambda, the old given syntax,
-  `_` and `=>` in import selectors or a `$` in an identifier, each of which scalac warns about or refuses by the
-  version (its `MigrationVersion` rows).
+- A source version does not reach Scala 2's procedure syntax, an ascription after a pattern, an implicit lambda's
+  parameter in parentheses or an XML literal, each of which scalac warns about or refuses by the version (its
+  `MigrationVersion` rows). A named tuple's duplicate element name is not refused, and a vararg splice of a named
+  argument (`f(x = xs*)`) is not read.
 
 ## Known differences
 

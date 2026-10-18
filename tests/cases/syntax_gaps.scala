@@ -1,3 +1,4 @@
+// teq: --wconf msg=vararg.splices:s
 import scala.language.implicitConversions
 import scala.language.{postfixOps, higherKinds}
 import scala.language.experimental.subCases

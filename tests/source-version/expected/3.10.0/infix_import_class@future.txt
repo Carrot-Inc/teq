@@ -1,0 +1,13 @@
+exit 1
+error 1:64
+  Alphanumeric type Map is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Map[...] or backticked identifier `Map`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 2:62
+  Alphanumeric type Map is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Map[...] or backticked identifier `Map`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 6:25
+  Alphanumeric type PartialFunction is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax PartialFunction[...] or backticked identifier `PartialFunction`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.

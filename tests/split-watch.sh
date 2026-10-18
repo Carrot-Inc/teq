@@ -23,7 +23,9 @@
 # tests/split/late_std_class, whose walk meets a std class the typer completes after its final
 # passes, by the names its members go by; and a
 # session over tests/split/given_memo that adds a local given to a body and removes it, and changes
-# a file's import of givens and changes it back, through the given search's kept memos.
+# a file's import of givens and changes it back, through the given search's kept memos; and a session under
+# `future` whose edits of a signature's infix type take its operator's backquotes off and put them back; and one
+# whose edits of a parent argument's comprehension put its pattern in parentheses and its body in braces.
 # Every session types its full builds at the automatic count and every fresh build it is compared
 # with by one worker (tests/support/sessions.sh); the last line says which sessions forked.
 # Then the representative shapes of
@@ -526,6 +528,58 @@ printf '// A line after the sites.\n' >> "$src/f1.scala"
 build "$src/f1.scala"
 expect "inline_names: retype after an edit after the sites" "$(field ok),$(field incremental)" 'true,true'
 same_as_fresh "inline_names: an edit after the sites" "$src"
+stop
+rm -rf "$work/out"
+
+# The syntax `Checking.checkValidInfix` reads beside a signature's tree, its operator's backquotes and its infix form,
+# is the signature's (`shape::Cmp::infix_syntax_eq`): under `future` an edit that takes the backquotes off a
+# parameter's infix type, or writes `Pair[Int, String]` infix, types the signature again and reports the operator as a
+# fresh build does; the backquotes put back, or the type applied by name, clear it.
+src=$work/infix_sig
+mkdir -p "$src"
+printf 'class Pair[A, B]\ndef f(x: Int `Pair` String): Unit = ()\nobject M { def main(args: Array[String]): Unit = () }\n' > "$src/a.scala"
+start "$src" --source future --split "$work/out"
+expect "infix_sig: first build" "$(field ok)" 'true'
+sed -i.bak 's/Int `Pair` String/Int Pair String/' "$src/a.scala"
+build "$src/a.scala"
+expect "infix_sig: the backquotes taken off" "$(field ok)" 'false'
+if has 'Alphanumeric type Pair is not declared infix'; then ok; else bad "infix_sig: the operator reported: $RESULT"; fi
+sed -i.bak 's/Int Pair String/Int `Pair` String/' "$src/a.scala"
+build "$src/a.scala"
+expect "infix_sig: the backquotes put back" "$(field ok)" 'true'
+same_as_fresh "infix_sig: the backquotes put back" "$src" --source future
+sed -i.bak 's/Int `Pair` String/Pair[Int, String]/' "$src/a.scala"
+build "$src/a.scala"
+expect "infix_sig: applied by name" "$(field ok)" 'true'
+same_as_fresh "infix_sig: applied by name" "$src" --source future
+sed -i.bak 's/Pair\[Int, String\]/Int Pair String/' "$src/a.scala"
+build "$src/a.scala"
+expect "infix_sig: written infix" "$(field ok)" 'false'
+if has 'Alphanumeric type Pair is not declared infix'; then ok; else bad "infix_sig: the infix form reported: $RESULT"; fi
+stop
+rm -rf "$work/out"
+
+# The parser's records a comprehension's lowering reads (`Desugar.makeFor`'s `IdPattern` over `Parens`, `deepEquals` over
+# `unsplice`) are a parent argument's (`shape::Cmp::pat_eq`, `expr_eq`): `K <-` written `(K) <-` is a case lambda's
+# stable identifier pattern, refutable at 3.8, and `yield { K }` keeps the trailing `map`, each typed again as a fresh
+# build types it.
+src=$work/for_parens
+mkdir -p "$src"
+printf 'val K = 1\nclass Base(val xs: List[Int])\nclass C extends Base(for K <- List(1, 2) yield K)\nobject M { def main(args: Array[String]): Unit = println(C().xs) }\n' > "$src/a.scala"
+start "$src" --source 3.8 --split "$work/out"
+expect "for_parens: first build" "$(field ok)" 'true'
+sed -i.bak 's/for K <- List/for (K) <- List/' "$src/a.scala"
+build "$src/a.scala"
+expect "for_parens: the pattern in parentheses" "$(field ok)" 'false'
+if has 'does not match the right hand side expression'; then ok; else bad "for_parens: the refutable pattern reported: $RESULT"; fi
+sed -i.bak 's/for (K) <- List/for K <- List/' "$src/a.scala"
+build "$src/a.scala"
+expect "for_parens: the parentheses taken off" "$(field ok)" 'true'
+same_as_fresh "for_parens: the parentheses taken off" "$src" --source 3.8
+sed -i.bak 's/yield K)/yield { K })/' "$src/a.scala"
+build "$src/a.scala"
+expect "for_parens: a braced body" "$(field ok)" 'true'
+same_as_fresh "for_parens: a braced body" "$src" --source 3.8
 stop
 rm -rf "$work/out"
 

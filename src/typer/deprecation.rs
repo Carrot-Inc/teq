@@ -223,6 +223,34 @@ impl<'a> Worker<'a> {
                 _ => continue,
             };
             self.check_deprecated_class(class, ast.expr_span(instance));
+            if self.syms.class(class).mods & mods::JAVA_ANNOTATION != 0 {
+                self.check_named_java_annotation_args(file, class, instance);
+            }
+        }
+    }
+
+    /// `Checking.checkNamedArgumentForJavaAnnotation`, of a definition's annotation whose class is a Java
+    /// annotation interface (`Namer.addAnnotations`): each argument without a name reported by the unit's
+    /// version (`MigrationVersion.NonNamedArgumentInJavaAnnotation`, an error from 3.6), but a lone one
+    /// where the interface declares `value`, which it stands for.
+    fn check_named_java_annotation_args(&mut self, file: crate::source::FileId, class: ClassId, instance: ast::ExprId) {
+        let ast = self.ast(file);
+        let ast::Expr::New(_, args) = ast.expr(instance) else { return };
+        let args = ast.expr_list(args);
+        let unnamed = |a: &ast::ExprId| !matches!(ast.expr(*a), ast::Expr::NamedArg(..));
+        if args.len() == 1 && unnamed(&args[0]) {
+            self.complete_class(class);
+            let value = self.interner.intern("value");
+            if self.syms.class(class).members.contains_key(&value) {
+                return;
+            }
+        }
+        for &a in args.iter().filter(|a| unnamed(a)) {
+            // The argument as written, its parentheses or braces included (the untyped `param`).
+            let span = ast.written_arg(a).map_or(ast.expr_span(a), |(w, _)| w);
+            self.migration_in(file, crate::source_version::Migration::NonNamedArgumentInJavaAnnotation, span, crate::warnings::id::NON_NAMED_ARGUMENT_IN_JAVA_ANNOTATION, 0, || {
+                format!("Named arguments are required for Java defined annotations{}", crate::source_version::rewrite_notice("This", "3.6-migration"))
+            });
         }
     }
 

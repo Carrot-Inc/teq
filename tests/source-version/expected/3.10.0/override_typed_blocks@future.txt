@@ -1,0 +1,15 @@
+exit 1
+error 4:23
+  cannot override val parameter value x in class A
+error 6:23
+  cannot override val parameter value x in class A
+error 8:23
+  cannot override val parameter value x in class A
+error 10:23
+  cannot override val parameter value x in class A
+error 12:23
+  cannot override val parameter value x in class A
+error 14:23
+  cannot override val parameter value x in class A
+error 16:23
+  cannot override val parameter value x in class A

@@ -1,0 +1,20 @@
+exit 0
+out map
+out tuple 3
+out map
+out identity 7
+out map
+out flatMap
+out map
+out aliases 2
+out map
+out map
+out trailing 3
+out filter
+out map
+out guard 3
+out filter
+out map
+out case 1
+out map
+out typed 4

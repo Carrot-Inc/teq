@@ -1,4 +1,5 @@
 // Adapted from scala3 tests/run/missingparams.scala (Apache-2.0, see tests/scala3/README.md); replaced: extends App, Scala 2 syntax of if.
+// teq: --wconf msg=is.not.declared.infix:s
 /** Tests the optimiser. */
 
 final class Foo(val x: Int) {

@@ -1,6 +1,7 @@
 // A method eta-expanded where a function with a `Unit` result is expected discards its value,
 // with or without the trailing `_` and for a local def, as scalac types the expansion's body
 // against `Unit` (Scala.js's test bridge attaches `runner.receiveMessage _`).
+// teq: --wconf msg=eta-expansion.is.unnecessary:s
 class Runner:
   var seen = List.empty[String]
   def receive(msg: String): Option[String] =

@@ -1,0 +1,47 @@
+(y: Int)
+filter
+map
+2
+((y: Int))
+filter
+map
+3
+(_: Int)
+filter
+map
+0
+(y)
+map
+5
+y: Int
+map
+6
+_: Int
+map
+0
+(X)
+filter
+map
+7
+X
+map
+8
+(`x`)
+filter
+map
+9
+(y): Int
+filter
+map
+11
+((y, z))
+filter
+map
+12
+(y @ (z: Int))
+filter
+map
+24
+given Int
+map
+13

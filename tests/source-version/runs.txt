@@ -220,3 +220,243 @@ rightassoc_implicit
 fun_end_implicit
 written_arg_implicit
 colon_implicit
+
+# The parser's sites under the guards dotty puts around them: a `_` type argument outside a match pattern alone
+# (`inMatchPattern`; a higher-kinded parameter is no type argument, at future too), an argument's vararg splice
+# (`location.inArgs && followingIsVararg`, through parentheses and a named argument), `protected[this]` and a
+# constructor's `private[this]`, the import and export selectors with their clause's word, the four sites of the old
+# given syntax (an abstract given, the embedded colon, a second context bound, a body after `with`), Scala 2's
+# implicits: the parameter clause in the parser, the definitions in the typer, and an implicit lambda in a block.
+wildcard_patterns
+wildcard_patterns -source:future
+splice_forms
+splice_forms -source:future
+splice_patterns
+splice_patterns -source:future
+this_qualifier
+import_forms -source:future-migration
+import_forms -source:future
+given_sites -source:3.5
+given_sites -source:future-migration
+given_sites -source:future
+implicit_sites
+implicit_sites -source:future-migration
+implicit_sites -source:future
+implicit_lambda_block -source:future-migration
+# The remedies show a parameter's whole type: a by-name one's `=> T`, a repeated one's `T*`.
+implicit_param_types -source:future-migration
+# `toFunctionStr` by the signature's structure: a polymorphic parameterless method is `[A] => T`, no `() =>`.
+implicit_function_shapes -source:future-migration
+
+# The typer's checks at their sites: an override of a val parameter by a member, not by its inherited accessor (the
+# superclass's like-named parameter, or the parameter a private one forwards to); a Java annotation's unnamed
+# arguments on a definition, a parameter, a type parameter and a local, a lone one standing for `value` where the
+# interface declares it, none on a type; @nowarn leaves the error.
+override_forms
+override_forms -source:future
+# The inherited accessor followed up the chain (`RefChecks.isInheritedAccessor` over `inheritedAccessor`): through a
+# public one, through a private parameter passed on, whatever the superclass call passes; a member that is no
+# parameter accessor refused, at each accessor of the chain it overrides.
+override_chain -source:future
+override_hidden -source:future
+# A private parameter forwards where the outermost application of the typed super call passes it
+# (`PostTyper.forwardParamAccessors`): the constructor's last clause, an inferred `using` clause stopping it, an
+# ascribed argument forwarding as its name does.
+override_clauses -source:future
+# Each argument's symbol as dotty's typed tree has it (`Tree.symbol`): a block (`{ x }`) none, ascriptions their
+# expression's however nested; a call the typer resolves to a secondary constructor no alias.
+override_typed_call -source:future
+# The typed argument's symbol: a widening's or a conversion's call has none, nor does a by-name parameter alias.
+override_typed_args -source:future
+# What dotty's typed super call keeps: a transparent wrapper's `Inlined`, a named argument's `NamedArg`, neither of a
+# symbol; an inferred `using` argument the constructor's parameter, an explicit `using x` the accessor, an alias.
+override_typed_wrappers -source:future
+# A block beneath a proxy: `Typed` and `Annotated` forward their expression's symbol, a `Block` has none, so
+# `({ x }: Int)`, `(({ x }: Int): Int)`, `({ x }): Int`, `({ x }: @unchecked)` and `{ x: Int }` alias nothing;
+# `(x: Int)`, `(x: @unchecked)` and `(x: @A)` alias `x`.
+override_typed_blocks -source:future
+# A given parameter's accessor shown as one (`kindString`'s `given instance`).
+override_given_kind -source:future
+java_ann_sites
+java_ann_sites -source:3.5
+java_ann_sites -source:3.6-migration
+java_ann_nowarn
+# The argument as written, its parentheses and braces included (the untyped `param` the check receives).
+java_ann_delimited
+java_ann_delimited -source:3.6-migration
+
+# `f _` typed as dotty's `typedAsFunction`: a method of each arity, of `()`, curried and vararg expanded, a function
+# value left as it is, each reported the same; a value, a parameterless method and a by-name parameter refused as
+# Scala 2's (`OnlyFunctionsCanBeFollowedByUnderscore`, a migration warning under 3.0-migration); the prefix evaluated
+# once, where the expansion stands.
+interp eta_forms
+eta_forms -source:3.3
+eta_refused
+eta_refused -source:3.0-migration
+# Under a version migrating from 3.0 (`Scala2to3.needsPatch`) the refused `x _` is typed as `() => x`, without
+# -rewrite: the expression evaluated at each call, none before.
+interp eta_patched -source:3.0-migration
+interp eta_patched -source:future-migration
+# An erroneous operand (`recovered` of an error type): E099 over `x _`, the operand's own error committed after it,
+# which scalac's reporter hides there; under 3.0-migration the warning under the error of the function's body.
+eta_missing
+eta_missing -source:3.0-migration
+interp eta_effects
+# A polymorphic function value is a function (`defn.isFunctionType` derives it from `PolyFunction`): `p _` is `p`, no
+# `() => p` under 3.0-migration, warned of from 3.4 as any function value.
+interp eta_poly_value -source:3.0-migration
+interp eta_poly_value -source:3.3
+interp eta_poly_value
+# A type that derives from `PolyFunction` as `Types.derivesFrom` walks it: a type parameter's and an abstract
+# member's bound, an alias, a match type's bound or its reduction, a higher-kinded parameter's bound, an intersection,
+# a union past `Null`, a path; run under 3.0-migration (no `() => f`), 3.3 and the default.
+interp eta_poly_bound -source:3.0-migration
+interp eta_poly_bound -source:3.3
+interp eta_poly_bound
+eta_poly_derived -source:3.3
+eta_poly_derived
+# A union with a side bounded by `Null` or `Nothing` (`isLowerBottomType` through `hasClassSymbol` of the bound, an
+# alias and a match type of `Null` too), a chain of forty-one bounds walked whole, `null` taken by a polymorphic
+# function type (`isNullable` of its `PolyFunction` parent); run, the result type written, under 3.0-migration (no
+# `() => f`), 3.3 and the default.
+eta_poly_bottoms -source:3.3
+eta_poly_bottoms
+interp eta_poly_null_bound -source:3.0-migration
+interp eta_poly_null_bound -source:3.3
+interp eta_poly_null_bound
+
+# An alphanumeric infix operation (`Checking.checkValidInfix`): a method's, a type's and an extractor's, each by its
+# kind and alternative; exempt where backquoted, an operator (`a_+` too), declared `infix` (a case class's for its
+# pattern), a member of a Scala 2 class (scala-library's, which the std stands for: `max`, `map`, not Java's
+# `concat`), or followed by a block (not a parenthesized match or lambda); an alias of scala-library's (`Either`,
+# `Map`) as its Scala 2 owner.
+infix_forms
+infix_forms -source:3.3
+infix_forms -source:future
+infix_types
+infix_types -source:future
+infix_patterns
+infix_patterns -source:future
+# The operand as written: a block in parentheses is dotty's `Parens`, not exempt; a curried method's operation is
+# checked as the method's, not the function its eta-expansion makes. An extractor checked by its own `unapply`, not
+# a nested pattern's: one declared `infix` in a case class's companion exempts it, a case class declared `infix`
+# exempts its synthetic one.
+infix_operands -source:future
+infix_extractors -source:future
+# The right operand by the tree dotty's parser leaves (`infixOKSinceFollowedBy`'s `Block` or `Match`): an indented
+# block after a colon, one expression or several, a parenthesized expression in it, a `{ case ... }` literal;
+# not one in parentheses.
+infix_colon_block -source:future
+# The application `typedInfixOp` checks is the one whose method takes the operand's list itself: a member whose
+# result takes it (a function value's or an object's `apply`) is checked by that `apply`.
+infix_function_results -source:future
+# A package block's operators, types and extractors written backquoted, exempt as anywhere in the unit (its scanner's
+# `BACKQUOTED_IDENT`), the same unquoted refused.
+infix_package_backquote -source:future
+# The symbol `typedInfixOp` checks, a polymorphic function value's `apply` that of its refinement, of no symbol:
+# a `val`, a `def` and one of two parameters refused, an `infix def` whose result it is exempt, a function value's
+# (`Function1.apply`) and a dependent function value's exempt.
+infix_poly_values -source:future
+interp infix_poly_values
+# The universal members by Definitions' flags (`eq`, `ne` declared `infix`; `equals`, `synchronized` not), the
+# evidence's `apply`, a context function's result's, `Array.apply` and scala-library's exempt, Java's refused.
+infix_application_symbols -source:future
+interp infix_application_symbols
+# A type operator checked by whatever it names: a type parameter of a definition or a class, an abstract type member
+# (`infix` exempting one), an alias and a class declared `infix` or not; at the default version warned of.
+infix_type_params
+infix_type_params -source:future
+# What the name reaches, with the package it reaches it through: an imported package member's class itself, owned by
+# its package, no Scala 2 owner; the root scopes' `Map`, `import scala.*`'s and a renamed `scala.Either` the aliases of
+# scala-library's `Predef` and `scala` package object; scala-library's own class at `scala` (`PartialFunction`)
+# owned by the package.
+infix_import_class
+infix_import_class -source:future
+
+# A literal pattern's own type in the warning (`pat.tpe`: `null`'s `Null`).
+for_null_pattern -source:3.3
+# A `given` generator binds a variable (`isVarBinding` unwraps the `Bind` marked `Given`): before 3.4 no
+# `withFilter`, which the generator's class need not have.
+for_given_generator -source:3.3
+# A pattern in parentheses is dotty's `Parens`, which `isVarBinding` does not unwrap and `isIrrefutable` does, to a
+# variable or `_` alone: before 3.4 `(x: Int)`, `((x: Int))`, `(_: Int)`, `(X)`, `(`x`)` and `(x): Int` filtered,
+# `(x)`, `x: Int`, `X` and `given Int` not; from 3.4 none.
+interp for_paren_patterns -source:3.1
+interp for_paren_patterns -source:3.3
+interp for_paren_patterns
+# Aliases with a nested given (`isNestedGivenPattern`: `(given Int, y) = ..`, `z @ (given Int, y) = ..`) packed with
+# the element by a `map` of their own from 3.8 too, before the end and before a generator; a top-level `given Int = x`
+# and a plain tuple go into the generator's lambda from 3.8.
+interp for_nested_given -source:3.3
+interp for_nested_given
+# The generator's modes (`GenCheckMode`) as `makeFor` moves them: a `case` generator filtered before every selection,
+# again after each guard from 3.8 (`FilterAlways`), not before (`Ignore`); a guard's `Filtered` keeping the trailing
+# `map`, which `FilterAlways` leaves out of an identity; `case K` matching `K`; `(given Int) = x` nested.
+interp for_check_modes -source:3.3
+interp for_check_modes
+# The trailing `map` by the version: every one called before 3.8; from 3.8 the identity's and the unit's left out where
+# the receiver's type is the call's (`DropForMap`), `case K` and `K` equal by name, `(x)` unwrapped and `{ x }` a block
+# (`deepEquals` over `unsplice`); a typed identifier the function's parameter, a literal pattern at its constant type.
+interp for_trailing_map -source:3.3
+interp for_trailing_map
+# The for comprehension's lowering by version, run: a tuple pattern filtered by its syntax before 3.4 (`FilterNow`,
+# `CheckAndFilter`), checked alone from 3.4; aliases packed with the element by a `map` of their own before 3.8, and a
+# trailing `map` of the pattern itself left out from 3.8 (`enablesBetterFors`), not after a guard.
+interp for_effects -source:3.1
+interp for_effects -source:3.3
+interp for_effects -source:3.4-migration
+interp for_effects -source:3.7
+interp for_effects
+
+# The named tuples from 3.7 (`enablesNamedTuples`): `(a = 1, b = 2)` a tuple of assignments before, `(a = 3)` an
+# assignment in parentheses, each warned of as a migration (`checkDeprecatedAssignmentSyntax`, `report.migrationWarning`
+# at every version; from 3.7 where the assignment would type); an infix operand that reads as named arguments
+# (`migrateInfixOp`): reported from 3.6 and, under a migration version, the application of the named arguments
+# without `-rewrite` (`needsPatch`), the named tuples' own operators exempt; a named pattern and a field's selection
+# from 3.7; the two messages' identities (E203, E204) for -Wconf.
+interp assign_tuple -source:3.6
+interp assign_tuple -source:3.7
+interp assign_tuple -source:future
+interp infix_named -source:3.5
+interp infix_named -source:3.6
+interp infix_named -source:3.6-migration
+interp infix_named -source:3.7-migration
+# An assignment in parentheses to a target other than a name (`migrateInfixOp`'s `Parens(Assign(..))`): reported,
+# and under 3.6-migration the operation's argument, an assignment still.
+interp infix_assign_target -source:3.6
+interp infix_assign_target -source:3.6-migration
+interp infix_assign_target -source:3.7
+# Parentheses around the named form (`Parens(Tuple(..))`, `Parens(Parens(Assign(..)))`): no named arguments to
+# report or apply, the tuple passed whole; E203 at the inner parentheses.
+interp infix_parens_nested -source:future
+interp infix_parens_nested -source:3.7-migration
+interp assign_parens_old -source:3.6
+# Three levels of parentheses: dotty's nested `Parens` (`Parens(Parens(Parens(Assign(..))))`), the innermost
+# alone read as an assignment in parentheses, its E203 there; an operand passing the tuple whole.
+parens_three_old -source:3.6
+parens_three_named -source:future
+# E203's remedy shows the value as dotty's printer shows the untyped tree: precedence, literals' digits, a
+# placeholder's fresh name, a block's and a match's lines, an interpolation's segments.
+assign_render
+# The printer's templates (`toTextTemplate` of `new`, an empty body's `<empty>`, parents, a self alias), imports
+# (`importText`: a clause a line, selectors bare or in braces, renames, `given`) and parentheses past a comment.
+assign_render_templates
+# Definitions printed whole, as the parser and `Namer` leave them: type aliases, classes with their parameters,
+# parents and bodies, given aliases desugared.
+assign_render_defs
+interp infix_named -source:future-migration
+infix_named
+interp named_eq
+named_fields -source:3.6
+named_fields -source:3.7
+named_patterns -source:3.6
+named_patterns -source:3.7
+assign_ids -source:3.7
+assign_ids -source:3.7 -Wconf:id=E203:s -Wconf:id=E204:s -Werror
+
+# 3.10.0's identifiers holding `$` (`Namer.checkDefName`, `Parsers.checkPatternName`): a val, a def, a parameter, a
+# class and its type parameter and field, a type, an object, pattern variables, never a backquoted name, `$` or
+# `$$`, or a lambda's parameter (a synthetic method's); a warning from 3.9, never an error.
+dollar_names -source:3.8
+dollar_names -source:3.9 => 3.10.0
+dollar_names -source:future => 3.10.0

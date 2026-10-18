@@ -3,8 +3,9 @@
 `harness.py` runs `tests/neg`, `tests/pos` and `tests/warn` of a scala3 checkout through `teq compiler check`
 and classifies every test (see the docstring for the categories). A test's options are read as dotty's test
 framework reads them (a `// scalac:` line among a file's first ten, the `//> using option(s)` directives of its
-header, the group's files joined), and its `-source` and `-language` reach teq as `--source` and `--language`
-(`scalac_options`, `teq_flags`; `tests/scala3/run.py` reads them with the same functions). A warn test is held to
+header, the group's files joined), and its `-source` and `-language` reach teq as `--source` and `--language`, a
+`-Wconf:<rules>` whose every filter teq reads (a message's text, `msg=`, its id, `id=`, its category, `cat=`) as
+`--wconf` (`scalac_options`, `teq_flags`, `wconf_read`; `tests/scala3/run.py` reads them with the same functions). A warn test is held to
 scalac 3.8.4's own diagnostics of it (`warn-oracle.jsonl`, which `--capture-warn` writes by running scala-cli over a
 copy of the test's files, its directives' options included): the multisets of severity (a migration warning
 apart), file, line, column and whole message. The corpus's `.check` files are its own commit's compiler's, not
@@ -525,3 +526,52 @@ and reported through `report.errorOrMigrationWarning`: `warn/strict-pattern-bind
 literal pattern's type `Int` for scalac's `(1 : Int)` and the extractor `Positive` for `Test.Positive`), and
 `warn/i16639a.scala` from `different` to `silent` (under `-source:3.3` teq no longer reports its pattern definition
 of a `Seq` as refutable; scalac's warnings there are `-Wunused:all`'s, an option teq is not given).
+
+## The migration table's rows (source-version-2, 2026-10-17)
+
+Fifteen rows of `MigrationVersion` reported at dotty's sites, `f _` typed as `Migrations.typedAsFunction`, the
+generators by `Parsers.generatorRest`'s mode, the named tuples from 3.7 and a unit's warnings issued after its typer's
+errors moved thirty-six tests against master's record (re-recorded on the part's head):
+
+- Twenty-six to `same`. Fifteen of `tests/warn`, from `silent`: an assignment in parentheses
+  (`21681.scala`, `21681b.scala`, `21681c.scala`, `21770.scala`: `checkDeprecatedAssignmentSyntax`, a migration
+  warning at every version), an override of a `val` parameter (`i11344.scala`, `RefChecks.checkOverride`'s 1.12), an
+  alphanumeric method written infix (`i17429.scala`, `alphanumeric-infix-operator.scala` and its `-3.4` sibling,
+  `checkValidInfix`), `xs: _*` (`i18862-3.4.scala`, `i18862-future-migration.scala`), `f _` (`i18867.scala`,
+  `i18867-3.4.scala`), `private[this]` (`private-this-3.4.scala`, `private-this-future-migration.scala`) and the
+  `future-migration` rows of `rewrite-messages.scala`. Eleven of `tests/neg`: under `future` an import's `_`
+  (`i11487.scala`), Scala 2's implicits (`implicit-migration.scala`), the old givens (`old-givens.scala`,
+  `i8896-b.scala` from `subset`), `private[this]` (`private-this-future.scala`), `xs: _*` (`i18862-future.scala`), an
+  alphanumeric infix (`infix.scala`), all from `accepts` but where noted; `x _` of a value and a by-name parameter
+  refused as Scala 2's (`i941.scala`, from `subset`); the implicit clause beside its argument (`i22440.scala`, from
+  `subset`: `Scala2Implicits` beside `ImplicitParamsWithoutUsing`); and from `superset` an assignment to an unresolved
+  target that no longer adds `this expression cannot be assigned to` (`assignments.scala`, the error tree's
+  `typedAssign`) and the named arguments of an infix operation (`infix-named-args.scala`, `migrateInfixOp`).
+- `neg/18031.scala` to `subset` (from `accepts`): four of its six lines are the rows' errors under `future`.
+- Four positive tests to `accepts`: `pos/existentials.scala` (from `rejects`: `f _` of a method of `()` expands, where
+  teq asked for the `()`), `pos/i21413.scala`, `pos/namedtuple-src-incompat.scala` (from `rejects`) and
+  `pos/i25240.scala` (from `std`): `(a = 1)` is a named tuple of one element from 3.7, no assignment.
+- `neg/abstract-givens-new.scala` to `superset` (from `std`): the abstract given of its line 7 is refused under
+  `future` as the test expects (`GivenSyntax`); its other lines are the `is` types of the experimental modularity,
+  which teq lacks.
+- `warn/i22899.scala` to `rejects` (from `std`): its named tuples of one element now type; it stops at named patterns
+  of an extractor (`ProductMatch_CaseClass(a = x1)`), which teq's typer refused before too, after them.
+- `warn/i18234.scala` to `superset` (from `same`): under `-source future` its 59 definitions named `$startVal` and the
+  like warn by 3.10.0's `IdentifierDollars` row, which the part holds to 3.10.0 (scalac 3.8.4 has no such row, so its
+  capture has none).
+- `pos/alphanumeric-infix-operator-compat` (from `accepts`) and `neg/i14303` (from `syntax`) to `oos`: the corpus's
+  framework compiles their `_c3.0.0`-style files with an older scalac, whose TASTy (before 3.4, which
+  `checkValidInfix` exempts) a check of the group's sources cannot give; the harness classifies such a test so.
+
+## A test's `-Wconf` (2026-10-18)
+
+The review of the source version's `1888ac4df` (the part's port of `DropForMap`) gave teq a test's `-Wconf` where teq
+reads every filter of its rules (`msg=`, `id=`, `cat=`; `wconf_read`), as `--wconf`. One test moved: `neg/i25077.scala`
+to `same` (from `accepts`), its `-Wconf:msg=multiple val:e` making `DropForMap`'s `TuplingMigrationForMap` warning the
+error the test expects. Ten record the flag and keep their category: `neg/i22670`, `neg/infer-union-warning-id.scala`
+and `pos/i17735a.scala`, `pos/i22440.scala` (`accepts`), `warn/i22629.scala` and `warn/i22670-test.scala` (`same`),
+`warn/i25548.scala` and `warn/i25548b.scala` (`syntax`), `warn/i559.scala` (`std`), `warn/symbolic-packages.scala`
+(`rejects`). `warn/strict-pattern-bindings-3.2.scala` keeps `wording`, its first difference now `pattern's type 1 is
+more specialized than the right hand side expression's type Int` (scalac's `(1 : Int)`): the same review gave a literal
+pattern its constant type, which teq's printer writes `1`, where the check took the widened `Int`. No test of `tests/run` names a
+`-Wconf`, so `tests/scala3/run.py`, which reads the options with the same functions, runs as before.

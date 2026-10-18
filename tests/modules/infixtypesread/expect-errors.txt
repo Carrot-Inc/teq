@@ -1,0 +1,14 @@
+tests/modules/infixtypesread/b/Use.scala:8:19: warning: Alphanumeric type plain is not declared infix; it should not be used as infix operator.
+Instead, use prefix syntax plain[...] or backticked identifier `plain`.
+The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+    def flat(x: Int plain String): Int = 3
+                    ^^^^^
+tests/modules/infixtypesread/b/Use.scala:9:20: error: type mismatch: found "no", required Int
+    val wrong: Int = "no"
+                     ^^^^
+tests/modules/infixtypesread/b/Use.scala:13:16: warning: Alphanumeric type M is not declared infix; it should not be used as infix operator.
+Instead, use prefix syntax M[...] or backticked identifier `M`.
+The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+    def m(x: Int M String): Int
+                 ^
+1 error found

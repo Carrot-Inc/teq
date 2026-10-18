@@ -1,6 +1,17 @@
 # Runs compared on their exit, severities and places, without their messages: the syntax errors of `given` and
-# `enum` read as keywords, which teq words as its own (docs/internal/DIFFERENCES.md, "The parser's recovery").
+# `enum` read as keywords, which teq words as its own (docs/internal/DIFFERENCES.md, "The parser's recovery"), and
+# runs whose subject is a typer error's place, which hides a row's warning there (scalac issues a unit's warnings
+# after its typer's errors) or stands where the version reads the syntax otherwise, the error in teq's words
+# (docs/internal/DIFFERENCES.md, "Diagnostics": a mismatch's `found (a: Int), required Int`, an unresolved name's
+# `not found: a`, a missing argument's `missing argument for parameter evidence$1`).
 given_ident
 given_ident@3.0
 renamed
 interp_directive@3.3
+AmbiguousNamedTupleSyntax
+namedtuple_old@3.6
+empty_context@3.4
+infix_named
+infix_named@3.6-migration
+named_patterns@3.6
+eta_missing@3.0-migration

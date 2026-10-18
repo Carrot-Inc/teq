@@ -76,12 +76,14 @@ pub struct LexResult {
     /// its pattern or guard ended at, before which the file is lexed again with the region closed
     /// (`lex_closing`), as dotty's parser leaves `InCase` where the pattern or guard ends.
     pub case_lines: Vec<(u32, u32)>,
+    /// The ends of the identifier tokens written backquoted, the scanner's `BACKQUOTED_IDENT`, ascending.
+    pub backquoted: Vec<u32>,
 }
 
 impl LexResult {
     /// No tokens: what a parse leaves while it holds the result (`parser::parse`).
     pub fn empty() -> LexResult {
-        LexResult { keywords: Keywords::default(), tokens: Vec::new(), errors: Vec::new(), warnings: Vec::new(), end_markers: Vec::new(), boundaries: Vec::new(), case_lines: Vec::new() }
+        LexResult { keywords: Keywords::default(), tokens: Vec::new(), errors: Vec::new(), warnings: Vec::new(), end_markers: Vec::new(), boundaries: Vec::new(), case_lines: Vec::new(), backquoted: Vec::new() }
     }
 }
 
@@ -137,6 +139,8 @@ struct Lexer<'a> {
     /// The indentation of the line being lexed.
     line_width: u32,
     case_lines: Vec<(u32, u32)>,
+    /// `LexResult::backquoted`.
+    backquoted: Vec<u32>,
     /// One past the index of the last `enum` token, 0 before any: `enum_header_before` scans
     /// no further back.
     last_enum: usize,
@@ -203,6 +207,7 @@ pub fn lex_with(text: &str, interner: &Interner, close_parens: &[u32], keywords:
             no_case_clauses: vec![false],
             line_width: 0,
             case_lines: Vec::new(),
+            backquoted: Vec::new(),
             last_enum: 0,
             keywords,
             warnings: Vec::new(),
@@ -235,6 +240,7 @@ pub fn lex_with(text: &str, interner: &Interner, close_parens: &[u32], keywords:
                     end_markers: lx.end_markers,
                     boundaries: lx.boundaries,
                     case_lines: lx.case_lines,
+                    backquoted: lx.backquoted,
                 }
             }
         }
@@ -1362,6 +1368,7 @@ impl<'a> Lexer<'a> {
                     span: Span::new(start as u32, self.pos as u32),
                     name,
                 });
+                self.backquoted.push(self.pos as u32);
             }
             b'0'..=b'9' => self.lex_number(),
             b'.' => self.lex_number(),

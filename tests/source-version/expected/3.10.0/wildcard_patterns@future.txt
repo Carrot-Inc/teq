@@ -1,0 +1,10 @@
+exit 1
+error 3:114
+  `_` is deprecated for wildcard arguments of types: use `?` instead
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+error 3:194
+  `_` is deprecated for wildcard arguments of types: use `?` instead
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+error 3:207
+  `_` is deprecated for wildcard arguments of types: use `?` instead
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.

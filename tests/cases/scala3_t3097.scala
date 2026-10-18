@@ -1,4 +1,5 @@
 // Adapted from scala3 tests/run/t3097.scala (Apache-2.0, see tests/scala3/README.md); replaced: extends App.
+// teq: --wconf msg=is.deprecated.for.wildcard.arguments:s
 sealed trait ISimpleValue
 
 sealed trait IListValue extends ISimpleValue

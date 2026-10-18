@@ -158,6 +158,7 @@ well_known! {
     TUPLED = "tupled",
     CURRIED = "curried",
     JAVA_DEFINED = "javaDefined",
+    JAVA_ANNOTATION = "javaAnnotation",
     ERASED = "erased",
     LANGUAGE = "language",
     STRICT_EQUALITY = "strictEquality",

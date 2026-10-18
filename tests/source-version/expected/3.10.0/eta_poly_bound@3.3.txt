@@ -1,0 +1,4 @@
+exit 0
+out 1
+out x
+out true

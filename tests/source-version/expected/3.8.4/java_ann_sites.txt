@@ -1,0 +1,25 @@
+exit 1
+error 1:13
+  Named arguments are required for Java defined annotations
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+error 1:18
+  Named arguments are required for Java defined annotations
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+error 2:13
+  Named arguments are required for Java defined annotations
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+error 5:21
+  Named arguments are required for Java defined annotations
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+error 5:26
+  Named arguments are required for Java defined annotations
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+error 5:94
+  Named arguments are required for Java defined annotations
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+error 7:34
+  Named arguments are required for Java defined annotations
+  This can be rewritten automatically under -rewrite -source 3.6-migration.
+error 7:39
+  Named arguments are required for Java defined annotations
+  This can be rewritten automatically under -rewrite -source 3.6-migration.

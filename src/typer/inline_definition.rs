@@ -226,7 +226,7 @@ impl<'a> Worker<'a> {
                     Expr::Ident(n) => names.push(n),
                     // A library body's reference its loader resolved (a parameter of the method).
                     Expr::SymRef(v) => out.push(self.types.mk(Type::Term(v))),
-                    Expr::Select(q, _) | Expr::NamedArg(_, q) | Expr::Parens(q) | Expr::Unchecked(q) | Expr::Prefix(_, q) => exprs.push(q),
+                    Expr::Select(q, _) | Expr::NamedArg(_, q) | Expr::Parens(q) | Expr::Unchecked(q) | Expr::Prefix(_, q) | Expr::AsFunction(q) => exprs.push(q),
                     Expr::TypeApply(q, l) => {
                         exprs.push(q);
                         tys.extend_from_slice(ast.ty_list(l));

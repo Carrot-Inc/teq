@@ -1,0 +1,23 @@
+exit 0
+migration warning 3:16
+  `implicit` conversion methods are no longer supported. They can usually be
+  replaced by given instances of class `Conversion`. Example:
+  
+  given Conversion[=> Int, String] = x => ...
+migration warning 4:16
+  `implicit` conversion methods are no longer supported. They can usually be
+  replaced by given instances of class `Conversion`. Example:
+  
+  given Conversion[Int*, String] = x => ...
+migration warning 5:18
+  `implicit` classes are no longer supported. They can usually be replaced
+  by extension methods. Example:
+  
+  extension (x: => Int)
+  // class methods go here, replace `this` by `x`
+  
+  Alternatively, convert to a regular class and define
+  a given `Conversion` instance into that class. Example:
+  
+  class W ...
+  given Conversion[=> Int, W] = W(x)

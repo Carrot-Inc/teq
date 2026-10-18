@@ -15,7 +15,10 @@
 # main products fails. With a master binary the check runs twice, each binary over its own products, and passes
 # when both complete with the same exit and the same diagnostics, which for the main lists today are one error:
 # the application's several entry points, which a check without --main cannot choose from. Without one it passes
-# when the check completes with exit 0.
+# when the check completes with exit 0. APP_API_DELTA names a file of the landing's intended difference (one extended
+# regular expression a line, `#` lines comments): the diagnostics a landing gives or stops giving where scalac 3.8.4
+# does (a migration row's warnings by the version), each matched by a line of it; with it the check passes when the
+# exits are the same and every diagnostic one gives and the other does not is matched, the rest the same.
 test=0
 [ "$1" = --test ] && { test=1; shift; }
 teq=$1
@@ -101,6 +104,25 @@ if [ $code != $mcode ]; then
   exit 1
 elif cmp -s "$tmp/landing" "$tmp/master"; then
   echo "api-check: the same diagnostics as master's (errors $(grep -c ': error: ' "$tmp/master"), warnings $(grep -c ': warning: ' "$tmp/master"))"
+elif [ -n "$APP_API_DELTA" ]; then
+  # The diagnostics' heads, a line each, apart from the source lines, carets and the summary their count moves.
+  heads() { grep -E '^[^ ].*:[0-9]+:[0-9]+: (error|warning|migration warning): ' "$1" | sort; }
+  heads "$tmp/master" > "$tmp/master.heads"
+  heads "$tmp/landing" > "$tmp/landing.heads"
+  patterns=$(grep -v '^#' "$APP_API_DELTA" | grep -v '^$')
+  [ -n "$patterns" ] || { echo "api-check: $APP_API_DELTA names no diagnostic"; exit 1; }
+  comm -3 "$tmp/master.heads" "$tmp/landing.heads" | sed 's/^\t//' > "$tmp/moved"
+  unmatched=$(grep -v -E -f <(echo "$patterns") "$tmp/moved")
+  if [ -n "$unmatched" ]; then
+    echo "api-check: the diagnostics differ from master's outside $APP_API_DELTA:"
+    echo "$unmatched" | head -40
+    exit 1
+  fi
+  echo "api-check: master's diagnostics but $(comm -13 "$tmp/master.heads" "$tmp/landing.heads" | wc -l) given and $(comm -23 "$tmp/master.heads" "$tmp/landing.heads" | wc -l) no longer given, each of $APP_API_DELTA"
+  while IFS= read -r pat; do
+    n=$(grep -c -E -- "$pat" "$tmp/moved")
+    [ "$n" = 0 ] || echo "api-check:   $n  $pat"
+  done <<< "$patterns"
 else
   echo "api-check: the diagnostics differ from master's:"
   diff "$tmp/master" "$tmp/landing" | head -40

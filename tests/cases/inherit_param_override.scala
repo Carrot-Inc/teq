@@ -1,3 +1,4 @@
+// teq: --wconf msg=cannot.override.val.parameter:s
 def side(n: Int): Int = { println("init " + n); n }
 trait Foo:
   val someField: Int = side(5)

@@ -1694,6 +1694,36 @@ package java.lang:
     protected def this() = this(null)
     final def getParent(): ClassLoader = parent
 
+  // The JDK's annotation interfaces of `java.lang`, which a definition may carry: their elements, which
+  // an argument names (`Checking.checkNamedArgumentForJavaAnnotation`, a lone one standing for `value`).
+  @javaDefined
+  @javaAnnotation
+  @jvmClass("java/lang/Deprecated")
+  trait Deprecated extends java.lang.annotation.Annotation:
+    def since(): String
+    def forRemoval(): scala.Boolean
+
+  @javaDefined
+  @javaAnnotation
+  @jvmClass("java/lang/SuppressWarnings")
+  trait SuppressWarnings extends java.lang.annotation.Annotation:
+    def value(): Array[String]
+
+  @javaDefined
+  @javaAnnotation
+  @jvmClass("java/lang/FunctionalInterface")
+  trait FunctionalInterface extends java.lang.annotation.Annotation
+
+  @javaDefined
+  @javaAnnotation
+  @jvmClass("java/lang/Override")
+  trait Override extends java.lang.annotation.Annotation
+
+  @javaDefined
+  @javaAnnotation
+  @jvmClass("java/lang/SafeVarargs")
+  trait SafeVarargs extends java.lang.annotation.Annotation
+
 package java.lang.ref:
   // Nothing collects a referent on JavaScript: a reference holds it until cleared.
   @javaDefined

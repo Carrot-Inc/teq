@@ -1,5 +1,6 @@
 // A member that takes several arguments as one tuple wins over a same-named extension, as in
 // scalac; the extension is used when the member's parameter cannot hold a tuple.
+// teq: --wconf msg=is.not.declared.infix:s
 
 final class Bag(val n: Int):
   def any(a: Any): String = "member any " + a.toString

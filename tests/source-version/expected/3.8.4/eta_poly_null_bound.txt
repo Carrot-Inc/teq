@@ -1,0 +1,11 @@
+exit 0
+warning 2:64
+  The trailing ` _` for eta-expansion is unnecessary;
+  the compiler performs eta-expansion automatically, so you can write the function value directly instead.
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+warning 3:69
+  The trailing ` _` for eta-expansion is unnecessary;
+  the compiler performs eta-expansion automatically, so you can write the function value directly instead.
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+out 1
+out b

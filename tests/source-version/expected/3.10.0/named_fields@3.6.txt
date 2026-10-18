@@ -1,0 +1,3 @@
+exit 1
+error 1:54
+  value a is not a member of (a : Int, b : Int)

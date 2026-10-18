@@ -1,0 +1,17 @@
+exit 1
+error 8:51
+  Alphanumeric extractor Outer is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Outer(...) or backticked identifier `Outer`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 9:41
+  Alphanumeric extractor Outer is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Outer(...) or backticked identifier `Outer`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 11:49
+  Alphanumeric extractor D is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax D(...) or backticked identifier `D`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.
+error 12:40
+  Alphanumeric extractor Outer is not declared infix; it should not be used as infix operator.
+  Instead, use prefix syntax Outer(...) or backticked identifier `Outer`.
+  The latter can be rewritten automatically under -rewrite -source 3.4-migration.

@@ -1,0 +1,10 @@
+class A(val x: Int)
+class B(x: Int) extends A({ x })
+class C(override val x: Int) extends B(x)
+class B2(x: Int) extends A(((x: Int): Int))
+class C2(override val x: Int) extends B2(x)
+class S(val x: Int) { def this(x: Int, y: Int) = this(x) }
+class T1(x: Int) extends S(x)
+class U1(override val x: Int) extends T1(x)
+class T2(x: Int) extends S(x, 1)
+class U2(override val x: Int) extends T2(x)

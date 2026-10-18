@@ -50,6 +50,8 @@ pub struct Loaded {
     /// The aliases a pickle flags `private` without a qualifier, which a subclass does not
     /// inherit (`Worker::private_alias`).
     pub private_aliases: SharedMap<AliasId, ()>,
+    /// The aliases a pickle flags `infix` (`SymUtils.isDeclaredInfix`, `infix.rs`).
+    pub infix_aliases: SharedMap<AliasId, ()>,
     /// The `@implicitNotFound` text of a jar's class (`Worker::implicit_not_found_message`).
     pub implicit_not_found: SharedMap<ClassId, String>,
     /// The `@implicitNotFound` text of a parameter of a jar's method
@@ -318,6 +320,7 @@ impl Loaded {
             jar_files,
             qualified_private_aliases: SharedMap::new(),
             private_aliases: SharedMap::new(),
+            infix_aliases: SharedMap::new(),
             implicit_not_found: SharedMap::new(),
             param_not_found: SharedMap::new(),
             access_within: SharedMap::new(),
@@ -1517,6 +1520,9 @@ impl<'a> Worker<'a> {
             self.loaded_mut().qualified_private_aliases.insert(aid, ());
         } else if e.flags.has(tags::PRIVATE) {
             self.loaded_mut().private_aliases.insert(aid, ());
+        }
+        if e.flags.has(tags::INFIX) {
+            self.loaded_mut().infix_aliases.insert(aid, ());
         }
         match owner {
             Owner::Package(p) => self.syms.enter_package_object(p, name).alias = Some(aid),
