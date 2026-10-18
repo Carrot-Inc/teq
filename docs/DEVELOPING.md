@@ -101,6 +101,7 @@ cargo build --profile checks     # release with debug assertions, target/checks/
 ./bench/pgo.sh                   # profile-guided, target/pgo/use/release/teq: what bench/budget.sh measures
 cargo test --release             # unit tests
 ./tests/rust-warnings.sh         # cargo check of every target, release and checks profiles, warnings denied
+./tests/no-caps.sh               # numeric cutoffs added to the typing paths since the base, each naming dotty's constant
 ./tests/all.sh [suite...]        # every suite, or the named ones, one summary line each
 ```
 

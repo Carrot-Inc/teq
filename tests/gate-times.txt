@@ -51,6 +51,7 @@ budget 140
 runtime 80
 sentinel 87
 rust-warnings 33
+no-caps 2
 task 134
 runner-classes 0
 lila-test-verb 35

@@ -243,7 +243,7 @@ pieced="lsp:4 jvm-watch:2 modules:2 split:2"
 # pieces_of <suite>: its number of pieces, nothing for a suite run whole.
 pieces_of() { local spec; for spec in $pieced; do [ "${spec%%:*}" != "$1" ] || echo "${spec#*:}"; done; }
 compare="budget runtime sentinel"
-local_lines="records size instructions instructions-derive app-api-time memory asymptotics app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
+local_lines="records no-caps size instructions instructions-derive app-api-time memory asymptotics app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
 project_lines="lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test tyrian-export tyrian-compile tyrian-test tyrian-run indigo-export indigo-compile indigo-test indigo-run"
 # The lines run only when --only or --with names them: the scalac oracle, at a release and nightly. The reference
 # projects' lines run in every gate (the owner's ruling, 2026-10-16: every reference project in, the gate never weakened
@@ -440,6 +440,12 @@ local_line() {
       code=$?
       result records local $(($(now) - s)) $code "$(tail -1 "$out/records.log")" "$file"
       ;;
+    no-caps)
+      # numeric cutoffs the head adds to the typing paths without dotty's constant named; needs the worktree's history
+      (cd "$wt" && timeout 120 ./tests/no-caps.sh) > "$out/no-caps.log" 2>&1
+      code=$?
+      result no-caps local $(($(now) - s)) $code "$(tail -1 "$out/no-caps.log")" "$file"
+      ;;
     size)
       # the minified column of the size budgets is esbuild's output, measured with this machine's esbuild
       (cd "$wt" && TEQ=$bin timeout 600 ./teq interp tests/size.scala) > "$out/size.log" 2>&1
@@ -634,6 +640,7 @@ local_half() {
     local_line instructions-derive &
   fi
   local_line records &
+  local_line no-caps &
   local_line size &
   { local_line app-export; local_line app-export-accept; } &
   local_line app-api &
