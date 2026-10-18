@@ -428,6 +428,34 @@ impl Levels {
     }
 }
 
+/// The types a covering-set walk has visited (`CoveringSetAccumulator.seen`): a list while a
+/// target has few parts, as most have, a hash set past them.
+#[derive(Default)]
+struct CoveringSeen {
+    few: Vec<TypeId>,
+    many: Option<std::collections::HashSet<TypeId, crate::intern::FxBuild>>,
+}
+
+impl CoveringSeen {
+    /// Whether `t` is new to the walk, which now holds it.
+    fn insert(&mut self, t: TypeId) -> bool {
+        if let Some(many) = &mut self.many {
+            return many.insert(t);
+        }
+        if self.few.contains(&t) {
+            return false;
+        }
+        if self.few.len() < 32 {
+            self.few.push(t);
+        } else {
+            let mut many: std::collections::HashSet<TypeId, crate::intern::FxBuild> = self.few.drain(..).collect();
+            many.insert(t);
+            self.many = Some(many);
+        }
+        true
+    }
+}
+
 /// A parameterized given whose using clauses are being resolved, with the type it was asked
 /// for measured as scalac does for its divergence check: the number of applied types in it,
 /// the classes it mentions and the type itself with its open variables blanked out.
@@ -4425,13 +4453,16 @@ impl<'a> Worker<'a> {
         ok
     }
 
-    /// The candidates of one search share its target, so the measure is taken once per target.
+    /// The candidates of one search share its target, so the measure is taken once per target
+    /// (dotty's `ptSize`, `ptCoveringSet` and `wildPt` of an `ImplicitSearch`), by three walks
+    /// each with its own rule.
     fn open_given(&mut self, g: SymId, target: TypeId) -> OpenGiven {
         let (size, classes, wild) = match self.measured_target {
             Some((t, size, classes, wild)) if t == target => (size, classes, wild),
             _ => {
-                let (mut size, mut classes) = (0, 0);
-                let wild = self.wild_approx(target, &mut size, &mut classes, 0);
+                let size = self.type_size(target, &mut Vec::new());
+                let classes = self.covering_classes(target, &mut Default::default());
+                let wild = self.wild_approx(target, &mut Vec::new());
                 self.measured_target = Some((target, size, classes, wild));
                 (size, classes, wild)
             }
@@ -4439,65 +4470,345 @@ impl<'a> Worker<'a> {
         OpenGiven { given: g, target, size, classes, wild, byname: self.search_byname, rec: None }
     }
 
-    /// The type with its open variables blanked out, counting on the way the applied types it
-    /// is made of and the classes it mentions, bounds of the variables included.
-    fn wild_approx(&mut self, t: TypeId, size: &mut u32, classes: &mut u64, depth: u32) -> TypeId {
+    /// dotty's `typeSize` (`Types.TypeSizeAccumulator`): the applied types and refinements the
+    /// type is made of, each counted where it occurs, a tuple as its nested pairs
+    /// (`toNestedPairs`, one application an element), a reducible match alias or type-level
+    /// operation by its reduction; an open variable once (`seen`), as the
+    /// larger of its two sides' bounds (`hiSize max loSize`), each narrowed as the constraint's
+    /// entry holds it (`narrowed_bounds`). The parts are visited in dotty's order (a refinement's
+    /// parent before its member, `foldOver`), which the shared `seen` makes observable.
+    fn type_size(&mut self, t: TypeId, seen: &mut Vec<TVarId>) -> u32 {
+        let t = self.deref(t);
+        // An applied match alias or type-level operation counts as what it reduces to (`tryNormalize`:
+        // `mt.reduced.normalized`, `tryCompiletimeConstantFold`), reduced under a snapshot so that
+        // the measure leaves the constraint as it found it.
+        if matches!(self.types.get(t), Type::Alias(..) | Type::Class(..)) && self.types.is_reducible(t) {
+            let mark = self.snapshot();
+            let reduced = self.normalize(t);
+            let size = (reduced != t).then(|| self.type_size(reduced, seen));
+            self.rollback(mark);
+            if let Some(size) = size {
+                return size;
+            }
+        }
+        let args_size = |w: &mut Self, args: TList, seen: &mut Vec<TVarId>| -> u32 {
+            let mut n = 0;
+            for i in 0..w.types.items(args).len() {
+                let a = w.types.items(args)[i];
+                n += w.type_size(a, seen);
+            }
+            n
+        };
+        match self.types.get(t) {
+            Type::Class(c, args) => {
+                let k = self.types.items(args).len() as u32;
+                match k {
+                    0 => 0,
+                    _ if self.is_tuple_class(c) => k + args_size(self, args, seen),
+                    _ => 1 + args_size(self, args, seen),
+                }
+            }
+            Type::Var(v) => self.var_size(v, seen),
+            Type::AppVar(v, args) => 1 + self.var_size(v, seen) + args_size(self, args, seen),
+            Type::AppParam(_, args) | Type::Alias(_, args) => 1 + args_size(self, args, seen),
+            Type::AppMember(m, args) => 1 + self.type_size(m, seen) + args_size(self, args, seen),
+            Type::Refined(parent, r) => {
+                let parent = self.type_size(parent, seen);
+                let info = match self.types.refinement(r) {
+                    Refinement::Alias(_, x) | Refinement::Val(_, _, x) => self.type_size(x, seen),
+                    Refinement::Bounds(_, lo, hi) if lo == hi => self.type_size(lo, seen),
+                    Refinement::Bounds(_, lo, hi) => self.type_size(lo, seen) + self.type_size(hi, seen),
+                    Refinement::Term(_, _, types) => args_size(self, types, seen),
+                };
+                1 + parent + info
+            }
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.type_size(a, seen) + self.type_size(b, seen),
+            Type::BoundedWild(lo, hi) if lo == hi => self.type_size(lo, seen),
+            Type::BoundedWild(lo, hi) => self.type_size(lo, seen) + self.type_size(hi, seen),
+            Type::Lambda(_, body) | Type::Rec(body) | Type::Select(body, _) | Type::Member(body, _) => self.type_size(body, seen),
+            Type::Nested(prefix, class) => self.type_size(prefix, seen) + self.type_size(class, seen),
+            // `[T] => (A, B) => C`: the refinement of `PolyFunction` by its method type.
+            Type::Poly(_, f) => match self.types.get(f) {
+                Type::Class(_, args) => 1 + args_size(self, args, seen),
+                _ => 1 + self.type_size(f, seen),
+            },
+            Type::Match(scrutinee, m) => {
+                let (bound, cases) = {
+                    let info = self.types.match_info(m);
+                    (info.bound, info.cases.clone())
+                };
+                let mut n = self.type_size(bound, seen) + self.type_size(scrutinee, seen);
+                for case in cases.iter() {
+                    n += 1 + self.type_size(case.pattern, seen) + self.type_size(case.body, seen);
+                }
+                n
+            }
+            _ => 0,
+        }
+    }
+
+    /// An open variable's size in `type_size`: the larger of its two sides', each the sum of
+    /// the parts of its narrowed bound (the union below it, the intersection above), lower
+    /// first, once a walk.
+    fn var_size(&mut self, v: TVarId, seen: &mut Vec<TVarId>) -> u32 {
+        if seen.contains(&v) {
+            return 0;
+        }
+        seen.push(v);
+        let mut side = |w: &mut Self, upper: bool| -> u32 {
+            let parts = w.narrowed_bounds(v, upper);
+            parts.into_iter().map(|b| w.type_size(b, seen)).sum()
+        };
+        let lo = side(self, false);
+        let hi = side(self, true);
+        lo.max(hi)
+    }
+
+    /// dotty's `coveringSet` (`Types.CoveringSetAccumulator`) as a mask of class indices: the
+    /// classes the type is made of, an open variable's narrowed bounds included, `Any` and
+    /// `Nothing` left out; every type once (`seen`, a type shared or repeated walked at its first
+    /// occurrence alone, which a union needs no more of).
+    fn covering_classes(&mut self, t: TypeId, seen: &mut CoveringSeen) -> u64 {
+        let t = self.deref(t);
+        if !seen.insert(t) {
+            return 0;
+        }
+        let args_classes = |w: &mut Self, args: TList, seen: &mut CoveringSeen| -> u64 {
+            let mut mask = 0;
+            for i in 0..w.types.items(args).len() {
+                let a = w.types.items(args)[i];
+                mask |= w.covering_classes(a, seen);
+            }
+            mask
+        };
+        match self.types.get(t) {
+            Type::Class(c, args) => 1 << (c.idx() % 64) | args_classes(self, args, seen),
+            Type::Ctor(c) => 1 << (c.idx() % 64),
+            Type::Var(v) => self.var_classes(v, seen),
+            Type::AppVar(v, args) => self.var_classes(v, seen) | args_classes(self, args, seen),
+            Type::AppParam(_, args) | Type::Alias(_, args) => args_classes(self, args, seen),
+            Type::AppMember(m, args) => self.covering_classes(m, seen) | args_classes(self, args, seen),
+            Type::Refined(parent, r) => {
+                let parent = self.covering_classes(parent, seen);
+                let info = match self.types.refinement(r) {
+                    Refinement::Alias(_, x) | Refinement::Val(_, _, x) => self.covering_classes(x, seen),
+                    Refinement::Bounds(_, lo, hi) => self.covering_classes(lo, seen) | self.covering_classes(hi, seen),
+                    Refinement::Term(_, _, types) => args_classes(self, types, seen),
+                };
+                parent | info
+            }
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) | Type::Nested(a, b) => {
+                self.covering_classes(a, seen) | self.covering_classes(b, seen)
+            }
+            Type::Lambda(_, body) | Type::Rec(body) | Type::Select(body, _) | Type::Member(body, _) | Type::Poly(_, body) => {
+                self.covering_classes(body, seen)
+            }
+            Type::Match(scrutinee, m) => {
+                let (bound, cases) = {
+                    let info = self.types.match_info(m);
+                    (info.bound, info.cases.clone())
+                };
+                let mut mask = self.covering_classes(bound, seen) | self.covering_classes(scrutinee, seen);
+                for case in cases.iter() {
+                    mask |= self.covering_classes(case.pattern, seen) | self.covering_classes(case.body, seen);
+                }
+                mask
+            }
+            _ => 0,
+        }
+    }
+
+    /// An open variable's classes in `covering_classes`: those of its narrowed bounds on both
+    /// sides (`TypeComparer.bounds`), the variable once as any type is.
+    fn var_classes(&mut self, v: TVarId, seen: &mut CoveringSeen) -> u64 {
+        let mut mask = 0;
+        for upper in [false, true] {
+            for b in self.narrowed_bounds(v, upper) {
+                mask |= self.covering_classes(b, seen);
+            }
+        }
+        mask
+    }
+
+    /// dotty's `wildApprox` (`ProtoTypes`) of a search's target: each open variable a wildcard
+    /// of its bounds, narrowed as the constraint holds them and approximated in their turn, a
+    /// variable met again on the way a plain wildcard (`seen`, a path's); every part of the type
+    /// mapped, a refinement's parent and member included; a type parameter kept, as a named type
+    /// or a lambda's own parameter is. `diverges` compares two of them as dotty's `=:=` does
+    /// (`wild_same`).
+    fn wild_approx(&mut self, t: TypeId, seen: &mut Vec<TVarId>) -> TypeId {
+        let t = self.deref(t);
+        let list = |w: &mut Self, args: TList, seen: &mut Vec<TVarId>| -> TList {
+            let items = w.types.items(args).to_vec();
+            let approx: Vec<TypeId> = items.into_iter().map(|a| w.wild_approx(a, seen)).collect();
+            w.types.list(&approx)
+        };
+        match self.types.get(t) {
+            Type::Var(v) => {
+                if seen.contains(&v) {
+                    return WILD;
+                }
+                seen.push(v);
+                let side = |w: &mut Self, upper: bool, seen: &mut Vec<TVarId>| -> TypeId {
+                    let parts = w.narrowed_bounds(v, upper);
+                    let approx: Vec<TypeId> = parts.into_iter().map(|p| w.wild_approx(p, seen)).collect();
+                    if upper { w.conj_of(&approx) } else { w.disj_of(&approx) }
+                };
+                let lo = side(self, false, seen);
+                let hi = side(self, true, seen);
+                seen.pop();
+                self.types.bounded_wild(lo, hi)
+            }
+            Type::AppVar(..) => WILD,
+            Type::Class(c, args) => {
+                if self.types.items(args).is_empty() {
+                    return t;
+                }
+                let items = self.types.items(args).to_vec();
+                let approx: Vec<TypeId> = items.into_iter().map(|a| self.wild_approx(a, seen)).collect();
+                self.types.class(c, &approx)
+            }
+            Type::AppParam(p, args) => {
+                let args = list(self, args, seen);
+                self.types.mk(Type::AppParam(p, args))
+            }
+            Type::Lambda(ps, body) => {
+                let body = self.wild_approx(body, seen);
+                self.types.mk(Type::Lambda(ps, body))
+            }
+            Type::Union(a, b, kind) => {
+                let (a, b) = (self.wild_approx(a, seen), self.wild_approx(b, seen));
+                self.types.union_as(kind, a, b)
+            }
+            Type::Inter(a, b) => {
+                let (a, b) = (self.wild_approx(a, seen), self.wild_approx(b, seen));
+                self.types.inter(a, b)
+            }
+            Type::Refined(parent, r) => {
+                let parent = self.wild_approx(parent, seen);
+                let member = match self.types.refinement(r) {
+                    Refinement::Alias(n, x) => Refinement::Alias(n, self.wild_approx(x, seen)),
+                    Refinement::Bounds(n, lo, hi) => Refinement::Bounds(n, self.wild_approx(lo, seen), self.wild_approx(hi, seen)),
+                    Refinement::Val(n, sym, x) => Refinement::Val(n, sym, self.wild_approx(x, seen)),
+                    Refinement::Term(n, sym, types) => Refinement::Term(n, sym, list(self, types, seen)),
+                };
+                let r = self.types.refine(member);
+                self.types.mk(Type::Refined(parent, r))
+            }
+            Type::AppMember(m, args) => {
+                let m = self.wild_approx(m, seen);
+                let args = list(self, args, seen);
+                self.types.mk(Type::AppMember(m, args))
+            }
+            Type::Alias(a, args) => {
+                let args = list(self, args, seen);
+                self.types.mk(Type::Alias(a, args))
+            }
+            Type::Nested(prefix, class) => {
+                let (prefix, class) = (self.wild_approx(prefix, seen), self.wild_approx(class, seen));
+                self.types.mk(Type::Nested(prefix, class))
+            }
+            Type::BoundedWild(lo, hi) => {
+                let (lo, hi) = (self.wild_approx(lo, seen), self.wild_approx(hi, seen));
+                self.types.bounded_wild(lo, hi)
+            }
+            _ => t,
+        }
+    }
+
+    /// dotty's `=:=` between two targets' approximations (`wildTp =:= wildPt`): a wildcard is the
+    /// same as a type within its bounds and two wildcards are the same when each one's lower
+    /// bound is below the other's upper (`TypeComparer`'s `WildcardType` cases, frozen); two
+    /// types of one constructor when their parts are; two without a wildcard when each conforms
+    /// to the other.
+    fn wild_same(&mut self, a: TypeId, b: TypeId) -> bool {
+        if a == b {
+            return true;
+        }
+        let bounds = |w: &Self, t: TypeId| match w.types.get(t) {
+            Type::Wild => Some((NOTHING, ANY)),
+            Type::BoundedWild(lo, hi) => Some((lo, hi)),
+            _ => None,
+        };
+        match (bounds(self, a), bounds(self, b)) {
+            (Some((l1, h1)), Some((l2, h2))) => return self.frozen_sub(l1, h2) && self.frozen_sub(l2, h1),
+            (Some((l, h)), None) => return self.frozen_sub(l, b) && self.frozen_sub(b, h),
+            (None, Some((l, h))) => return self.frozen_sub(l, a) && self.frozen_sub(a, h),
+            (None, None) => {}
+        }
+        let lists = |w: &mut Self, x: TList, y: TList| -> bool {
+            let n = w.types.items(x).len();
+            n == w.types.items(y).len()
+                && (0..n).all(|i| {
+                    let (p, q) = (w.types.items(x)[i], w.types.items(y)[i]);
+                    w.wild_same(p, q)
+                })
+        };
+        match (self.types.get(a), self.types.get(b)) {
+            (Type::Class(c1, x), Type::Class(c2, y)) if c1 == c2 => lists(self, x, y),
+            (Type::AppParam(p1, x), Type::AppParam(p2, y)) if p1 == p2 => lists(self, x, y),
+            (Type::Alias(a1, x), Type::Alias(a2, y)) if a1 == a2 => lists(self, x, y),
+            (Type::AppMember(m1, x), Type::AppMember(m2, y)) => self.wild_same(m1, m2) && lists(self, x, y),
+            (Type::Nested(p1, c1), Type::Nested(p2, c2)) => self.wild_same(p1, p2) && self.wild_same(c1, c2),
+            (Type::Union(a1, b1, _), Type::Union(a2, b2, _)) | (Type::Inter(a1, b1), Type::Inter(a2, b2)) => {
+                self.wild_same(a1, a2) && self.wild_same(b1, b2)
+            }
+            (Type::Lambda(p1, b1), Type::Lambda(p2, b2)) if p1 == p2 => self.wild_same(b1, b2),
+            (Type::Refined(p1, r1), Type::Refined(p2, r2)) => {
+                if !self.wild_same(p1, p2) {
+                    return false;
+                }
+                match (self.types.refinement(r1), self.types.refinement(r2)) {
+                    (Refinement::Alias(n1, x), Refinement::Alias(n2, y)) | (Refinement::Val(n1, _, x), Refinement::Val(n2, _, y)) => {
+                        n1 == n2 && self.wild_same(x, y)
+                    }
+                    (Refinement::Bounds(n1, l1, h1), Refinement::Bounds(n2, l2, h2)) => n1 == n2 && self.wild_same(l1, l2) && self.wild_same(h1, h2),
+                    (Refinement::Term(n1, _, x), Refinement::Term(n2, _, y)) => n1 == n2 && lists(self, x, y),
+                    _ => false,
+                }
+            }
+            _ => !self.types.has_wild(a) && !self.types.has_wild(b) && self.frozen_sub(a, b) && self.frozen_sub(b, a),
+        }
+    }
+
+    /// A signature's type with its type parameters and open variables blanked out, each a
+    /// wildcard without bounds: the shape `same_signature` compares two givens' declared types by.
+    fn blank_shape(&mut self, t: TypeId) -> TypeId {
         let t = self.deref(t);
         match self.types.get(t) {
             Type::Class(c, args) => {
-                *classes |= 1 << (c.idx() % 64);
                 let items = self.types.items(args);
                 if items.is_empty() {
                     return t;
                 }
-                *size += 1;
                 let items = items.to_vec();
-                let approx: Vec<TypeId> = items.iter().map(|&a| self.wild_approx(a, size, classes, depth)).collect();
+                let approx: Vec<TypeId> = items.iter().map(|&a| self.blank_shape(a)).collect();
                 self.types.class(c, &approx)
             }
-            Type::Ctor(c) => {
-                *classes |= 1 << (c.idx() % 64);
-                t
-            }
-            Type::Var(v) => {
-                if depth < 8 {
-                    let info = &self.tvars[v];
-                    let bounds: Vec<TypeId> = info.lower.iter().chain(&info.upper).copied().collect();
-                    for b in bounds {
-                        self.wild_approx(b, size, classes, depth + 1);
-                    }
-                }
-                WILD
-            }
-            Type::AppVar(_, args) => {
-                *size += 1;
-                for a in self.types.items(args).to_vec() {
-                    self.wild_approx(a, size, classes, depth);
-                }
-                WILD
-            }
-            Type::Param(_) | Type::AppParam(..) => WILD,
+            Type::Var(_) | Type::AppVar(..) | Type::Param(_) | Type::AppParam(..) => WILD,
             Type::Lambda(ps, body) => {
-                let b = self.wild_approx(body, size, classes, depth);
+                let b = self.blank_shape(body);
                 let blank = vec![WILD; self.types.items(ps).len()];
                 let ps = self.types.list(&blank);
                 self.types.mk(Type::Lambda(ps, b))
             }
             Type::Union(a, b, soft) => {
-                let (a, b) = (self.wild_approx(a, size, classes, depth), self.wild_approx(b, size, classes, depth));
+                let (a, b) = (self.blank_shape(a), self.blank_shape(b));
                 self.types.union_as(soft, a, b)
             }
             Type::Inter(a, b) => {
-                let (a, b) = (self.wild_approx(a, size, classes, depth), self.wild_approx(b, size, classes, depth));
+                let (a, b) = (self.blank_shape(a), self.blank_shape(b));
                 self.types.inter(a, b)
             }
             _ => t,
         }
     }
 
-    /// scalac's divergence rule: the request diverges when the same given, or a sibling of the
-    /// same signature, is already open for a type that is no smaller and made of the same
-    /// classes, unless that type is smaller than or unlike the one requested now.
+    /// scalac's divergence rule (`Implicits.checkDivergence`): the request diverges when the same
+    /// given, or a sibling of the same signature, is already open for a type made of the same
+    /// classes that is smaller than the one requested now, or as large and alike; an open one
+    /// larger, of other classes, or as large and unlike leaves the decision to those opened
+    /// before it (`loop(outer, ..)`).
     pub(super) fn diverges(&mut self, open: &OpenGiven) -> bool {
         for i in (0..self.given_stack.len()).rev() {
             let prev = &self.given_stack[i];
@@ -4508,12 +4819,13 @@ impl<'a> Worker<'a> {
             if size > open.size || classes != open.classes {
                 continue;
             }
-            let r = size < open.size || wild == open.wild;
-            if r && self.given_trace() {
-                let (t, w) = (self.show(open.target), self.show(prev_target));
-                eprintln!("diverges: {} under {} ({})", t, w, self.name_str(self.syms.sym(open.given).name));
+            if size < open.size || self.wild_same(wild, open.wild) {
+                if self.given_trace() {
+                    let (t, w) = (self.show(open.target), self.show(prev_target));
+                    eprintln!("diverges: {} under {} ({})", t, w, self.name_str(self.syms.sym(open.given).name));
+                }
+                return true;
             }
-            return r;
         }
         false
     }
@@ -4532,11 +4844,10 @@ impl<'a> Worker<'a> {
 
     /// The result and parameter types with every type parameter blanked out.
     fn declared_types(&mut self, sig: &MethodSig) -> Vec<TypeId> {
-        let (mut size, mut classes) = (0, 0);
-        let mut out = vec![self.wild_approx(sig.ret, &mut size, &mut classes, 0)];
+        let mut out = vec![self.blank_shape(sig.ret)];
         for clause in &sig.clauses {
             for p in &clause.params {
-                out.push(self.wild_approx(p.ty, &mut size, &mut classes, 0));
+                out.push(self.blank_shape(p.ty));
             }
         }
         out
@@ -4771,7 +5082,12 @@ impl<'a> Worker<'a> {
         }
         let Some((site, subst, sig)) = self.open_given_sig(given) else { return Attempt::Mismatch };
         // Measured before the target's variables are bound to parts of this given's type.
-        let open = (!sig.clauses.is_empty()).then(|| self.open_given(g, target.unwrap_or(sig.ret)));
+        let open = (!sig.clauses.is_empty()).then(|| {
+            let step = self.step(Step::Measure);
+            let open = self.open_given(g, target.unwrap_or(sig.ret));
+            self.step_end(step, Step::Measure);
+            open
+        });
         let mut ret = self.types.subst(sig.ret, &subst);
         // A result naming a using parameter's path (`fold.Out`) is matched with that member
         // open, as scalac approximates a dependent result by wildcards, and settled once the

@@ -11,6 +11,13 @@ on a remote machine (tests/gate.sh, docs/DEVELOPING.md "The timing lines on a ma
       bench/runtime-budgets.txt, every output checked against tests/cases; node and java are
       bench/runtime-machine.txt's, run by the paths it records whatever the PATH's order and checked
       first to be there with its versions
+  api <master teq> <head teq> [options]
+      the type phase of `teq compiler check --time` of an application's main modules, one row: the lists
+      bench/app/app-lists.sh writes (APP_ROOT the checkout, APP_MODULES and APP_CLASSPATH files, APP_FLAGS the
+      flags; bench/app/fixture-lists.scala writes them for the public corpus), every side with the same sources,
+      class path and flags (`--werror` left out, as the products' build leaves it), `--std scala-library --target
+      jvm --all-mains` and --threads N workers (default 8); each run has to complete with a type phase that is a
+      positive number and the diagnostics (their first lines and count) the same as the first run's, of either side
   judge <runs.jsonl> [options]
       the verdicts of recorded runs again, under other settings
   advance <runs.jsonl>
@@ -38,7 +45,7 @@ Options: --out <dir> (default out/pairs/<line>), --cycles N, --tolerance <pct>, 
 (per-row ceilings over the reference, bench/reference.txt), --limit <x>, --programs <a,b,..>,
 --start master|head, --reverse, --head-env NAME=VALUE (the head's runs and builds only),
 --no-rerun, --label <name>, --unpinned (the runtime line on a machine bench/runtime-machine.txt
-does not name, for runs by hand).
+does not name, for runs by hand), --threads N (the api line's workers).
 """
 import datetime
 import json
@@ -57,8 +64,8 @@ sys.path.insert(0, os.path.join(ROOT, "bench"))
 import runtime as harness  # noqa: E402
 
 CYCLES = 7
-TOLERANCE = {"budget": 8.0, "runtime": 15.0}
-LIMIT = {"budget": 1.30, "runtime": 1.30}
+TOLERANCE = {"budget": 8.0, "runtime": 15.0, "api": 8.0}
+LIMIT = {"budget": 1.30, "runtime": 1.30, "api": 1.30}
 # How a row's cycles are judged. "band": the median of the cycle means and its standard error, from their
 # median absolute deviation in logarithms; over when the median less BAND standard errors exceeds the
 # tolerance, within when the median plus them does not, inconclusive between. "range": inconclusive when the
@@ -80,6 +87,9 @@ def floor_class(cell, metric):
     return f"{cell.split('.')[1]} {metric}" if "." in cell else metric
 SIDES = ("master", "head")
 CHECK_TIMEOUT = 60
+API_TIMEOUT = 170
+# A diagnostic's first line and the count after them, which the api line compares apart from the timings.
+DIAGNOSTIC = re.compile(r"^\S.*:\d+:\d+: (error|warning|info)\b|^\d+ (errors?|warnings?) found")
 BUILD_TIMEOUT = 300
 RUN_TIMEOUT = 120
 RUNTIMES = (("teq-dev", "node"), ("teq-jvm", "java"))
@@ -92,19 +102,21 @@ def fail_setup(message):
 
 def parse_options(argv):
     opts = {"out": None, "cycles": None, "tolerance": None, "ceilings": None, "limit": None, "programs": None, "trim": None, "band": None,
-            "start": "master", "reverse": False, "head_env": {}, "rerun": True, "label": None, "unpinned": False}
+            "start": "master", "reverse": False, "head_env": {}, "rerun": True, "label": None, "unpinned": False, "threads": 8}
     rest = []
     i = 0
     while i < len(argv):
         a = argv[i]
         value = argv[i + 1] if i + 1 < len(argv) else None
-        if a in ("--out", "--cycles", "--tolerance", "--ceilings", "--limit", "--programs", "--start", "--head-env", "--label", "--trim", "--band"):
+        if a in ("--out", "--cycles", "--tolerance", "--ceilings", "--limit", "--programs", "--start", "--head-env", "--label", "--trim", "--band", "--threads"):
             if value is None:
                 fail_setup(f"pairs: {a} takes a value")
             if a == "--head-env":
                 name, _, val = value.partition("=")
                 opts["head_env"][name] = val
-            elif a in ("--cycles", "--trim"):
+            elif a in ("--cycles", "--trim", "--threads"):
+                if not value.isdigit() or (a == "--threads" and int(value) < 1):
+                    fail_setup(f"pairs: {a} takes a count, not {value}")
                 opts[a[2:]] = int(value)
             elif a in ("--tolerance", "--limit", "--band"):
                 opts[a[2:]] = float(value)
@@ -404,6 +416,49 @@ def budget_line(teqs, opts):
     return cells, [(c, "type") for c in cells], run_one
 
 
+def api_line(teqs, opts):
+    """The api line's one cell over the lists api-check.sh reads: refused (status 2) when one is unset or names what
+    is not there."""
+    missing = [k for k in ("APP_ROOT", "APP_MODULES", "APP_CLASSPATH") if not os.environ.get(k)]
+    if missing or "APP_FLAGS" not in os.environ:
+        fail_setup("pairs: the api line needs APP_ROOT, APP_MODULES, APP_CLASSPATH and APP_FLAGS (bench/app/app-lists.sh); unset: "
+                   + " ".join(missing + ([] if "APP_FLAGS" in os.environ else ["APP_FLAGS"])))
+    root = os.environ["APP_ROOT"]
+    for k in ("APP_MODULES", "APP_CLASSPATH"):
+        if not os.path.isfile(os.environ[k]):
+            fail_setup(f"pairs: {k} names no file: {os.environ[k]}")
+    sources = [w for l in open(os.environ["APP_MODULES"]) if not l.startswith("#") for w in l.split()]
+    jars = [os.path.expanduser(l.strip()) for l in open(os.environ["APP_CLASSPATH"]) if l.strip() and not l.startswith("#")]
+    absent = [w for w in sources if not os.path.exists(os.path.join(root, w))] + [j for j in jars if not os.path.exists(j)]
+    if not sources or absent:
+        fail_setup("pairs: the api line's inputs are not there: " + (" ".join(absent) if absent else "no sources in " + os.environ["APP_MODULES"]))
+    flags = [f for f in os.environ["APP_FLAGS"].split() if f != "--werror"]
+    args = sources + ["--classpath", ":".join(jars)] + flags + ["--std", "scala-library", "--target", "jvm", "--all-mains",
+                                                               "--threads", str(opts["threads"]), "--time"]
+    out_dir = opts["out"]
+    seen = {}
+
+    def run_one(side, cell):
+        cmd = [teqs[side], *compiler_words(teqs[side]), "check"] + args
+        try:
+            p = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=API_TIMEOUT, env=side_env(side, opts, out_dir))
+        except subprocess.TimeoutExpired:
+            return None, f"teq compiler check of the api timed out after {API_TIMEOUT} s"
+        text = p.stdout + p.stderr
+        if p.returncode != 0:
+            return None, f"teq compiler check of the api exited {p.returncode}: {text.strip()[-300:]}"
+        values = phases_of(text)
+        if values is None or not math.isfinite(values["type"]) or values["type"] <= 0:
+            return None, "no positive type phase in the output of teq compiler check --time"
+        diagnostics = "\n".join(l for l in text.splitlines() if DIAGNOSTIC.match(l))
+        first_side, first = seen.setdefault("first", (side, diagnostics))
+        if diagnostics != first:
+            return None, f"the diagnostics of a run of the {side}'s differ from the first run's, the {first_side}'s"
+        return {"type": values["type"]}, None
+
+    return ["app-api"], [("app-api", "type")], run_one
+
+
 def java_flags():
     text = open(os.path.join(ROOT, "bench/runtime.sh")).read()
     m = re.search(r'^teq_java_flags="([^"]*)"$', text, re.M)
@@ -585,6 +640,8 @@ def run_line(kind, master, head, opts):
     tools = None
     if kind == "budget":
         cells, rows, run_one = budget_line(teqs, opts)
+    elif kind == "api":
+        cells, rows, run_one = api_line(teqs, opts)
     else:
         cells, rows, run_one, tools = runtime_line(teqs, opts)
     header = {"line": label, "kind": kind, "master": version_of(teqs["master"]), "head": version_of(teqs["head"]),
@@ -742,12 +799,12 @@ def advance_line(path):
 
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("budget", "runtime", "judge", "calibrate", "advance", "floors"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("budget", "runtime", "api", "judge", "calibrate", "advance", "floors"):
         print(__doc__)
         return 2
     command = sys.argv[1]
     opts, rest = parse_options(sys.argv[2:])
-    if command in ("budget", "runtime"):
+    if command in ("budget", "runtime", "api"):
         if len(rest) != 2:
             fail_setup(f"usage: bench/pairs.py {command} <master teq> <head teq> [options]")
         return run_line(command, rest[0], rest[1], opts)

@@ -171,6 +171,65 @@ chmod +x "$work/nodes/node0"
 NODE=$work/nodes/node0 ASYMPTOTICS_BASE=100 timeout 300 tests/asymptotics.sh > "$work/asymptotics.log" 2>&1
 check "nodes: tests/asymptotics.sh runs the node NODE names" "$work/asymptotics.log" eval '[ -e "$work/nodes/ran" ] && tail -1 "$work/asymptotics.log" | grep -q "(node v0-stand-in)$"'
 
+# The API's type phase (bench/pairs.py api, the gate's app-api-time) over stand-ins of the two binaries: one command
+# line for both sides; within, over and inconclusive by the paired judge; a run that times out, prints no type phase
+# or a zero one, or changes the diagnostics fails the line; an input that is not there leaves it not run.
+mkdir -p "$work/api"
+python3 - "$work/api" > "$work/api.log" 2>&1 <<'PY'
+import os, sys
+sys.path.insert(0, "bench")
+import pairs
+d = sys.argv[1]
+os.makedirs(os.path.join(d, "app", "src"), exist_ok=True)
+open(os.path.join(d, "lib.jar"), "w").close()
+open(os.path.join(d, "modules.txt"), "w").write("# the stand-in's module\nsrc\n")
+open(os.path.join(d, "classpath.txt"), "w").write(os.path.join(d, "lib.jar") + "\n")
+os.environ.update(APP_ROOT=os.path.join(d, "app"), APP_MODULES=os.path.join(d, "modules.txt"),
+                  APP_CLASSPATH=os.path.join(d, "classpath.txt"), APP_FLAGS="--werror -Wall")
+def standin(name, ms, warning="w.scala:1:2: warning: a stand-in's", sleep=0, phases=True):
+    path = os.path.join(d, name)
+    report = f"phases\n  lines  1\n  read  1.00 ms\n  parse  2.00 ms\n  type  {ms} ms\n  total  9.00 ms\n" if phases else ""
+    open(path + ".err", "w").write(f"{warning}\n  x\n  ^\n1 warning found\nworkers\n  phase: fork  {sleep}.{ms} ms\n{report}")
+    open(path, "w").write("#!/bin/bash\n"
+        "[ \"$1\" = --version ] && { echo teq 0.1.8 stand-in; exit 0; }\n"
+        "[ \"$1 $2\" = 'compiler --help' ] && exit 0\n"
+        f"echo \"$*\" >> {path}.args\nsleep {sleep}\ncat {path}.err >&2\n")
+    os.chmod(path, 0o755)
+    return path
+def line(master, head, *options):
+    opts, _ = pairs.parse_options(["--out", os.path.join(d, "out"), "--cycles", "3", *options])
+    try:
+        return pairs.run_line("api", master, head, opts)
+    except SystemExit as e:
+        return f"exit {e.code}"
+m = standin("master", "100.00")
+results = {
+    "within": line(m, standin("same", "100.00")),
+    "over": line(m, standin("slow", "150.00")),
+    "inconclusive": line(m, standin("near", "108.00")),
+    "diagnostics": line(m, standin("other", "100.00", warning="w.scala:1:2: warning: another")),
+    "no phase": line(m, standin("bare", "100.00", phases=False)),
+    "zero": line(m, standin("zero", "0.00")),
+}
+pairs.API_TIMEOUT = 1
+results["timeout"] = line(m, standin("late", "100.00", sleep=3))
+pairs.API_TIMEOUT = 170
+os.environ["APP_MODULES"] = os.path.join(d, "nowhere.txt")
+results["no input"] = line(m, m)
+os.environ["APP_MODULES"] = os.path.join(d, "modules.txt")
+open(os.path.join(d, "classpath.txt"), "w").write(os.path.join(d, "gone.jar") + "\n")
+results["no jar"] = line(m, m)
+want = {"within": 0, "over": 1, "inconclusive": 3, "diagnostics": 1, "no phase": 1, "zero": 1, "timeout": 1, "no input": "exit 2", "no jar": "exit 2"}
+assert results == want, results
+args = {open(os.path.join(d, n + ".args")).read().splitlines()[0] for n in ("master", "same", "slow")}
+assert len(args) == 1, args
+words = args.pop().split()
+assert words[:2] == ["compiler", "check"] and "--werror" not in words and "-Wall" in words, words
+assert words[-8:] == ["--std", "scala-library", "--target", "jvm", "--all-mains", "--threads", "8", "--time"], words
+print("api: ok")
+PY
+check "api: the API's type phase is judged in pairs and fails closed" "$work/api.log" grep -q "^api: ok$" "$work/api.log"
+
 # The gate's want-of rule: what is skipped by design passes, what is skipped for want of something fails.
 source <(sed -n '/^skips=/,/^lacking()/p' tests/gate.sh)
 : > "$work/skips.log"

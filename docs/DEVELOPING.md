@@ -215,9 +215,14 @@ others, each checking its digest and that it runs there; the timing lines measur
 machine of their own (below); the project lines, when named, on the machines that hold the projects' checkouts
 ("lila"), each project's chain dealt to one of them, and every project's records held to master's by the line
 `records` ("The project records"); and the size, instruction, memory and application lines on the reference machine, where their budgets were recorded, at once
-but the application's end-to-end suite, the memory line and the asymptotic probes, which run alone after them (the
-suite's specs wait within the browser's timeouts, the memory line's growth rows and the probes' growth ratios
-depend on the machine's load; the probes run under the node `NODE` names there, node 22).
+but the application API's type phase, the application's end-to-end suite, the memory line and the asymptotic probes, which
+run alone after them (the type phase's pairs and the suite's specs are timed, the memory line's growth rows and the probes'
+growth ratios depend on the machine's load; the probes run under the node `NODE` names there, node 22). The type phase,
+`app-api-time`, is `bench/pairs.py api` over the lists the application lines read: the head's and master's
+`--time --all-mains` checks of the API at eight workers in balanced pairs, judged as the budget line judges (8%, an
+inconclusive row not a pass), every run complete with a positive type phase and the first run's diagnostics (their first
+lines and count);
+`bench/app/fixture-lists.scala` writes those lists for the public corpus, to run it on any machine.
 The longest suites run as pieces, so that the machines' half shrinks with their number: `tests/lsp.sh`,
 `tests/jvm-watch.sh`, `tests/modules.sh` and `tests/split.sh` take `--piece <k>/<n>`, which runs the k-th of n parts
 of the units they list (a scenario, a program with its checks, a section of sessions; `--pieces <n>` prints the

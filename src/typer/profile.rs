@@ -290,6 +290,9 @@ pub enum Step {
     TryAmbiguous,
     /// A conversion method instantiated as the value of a function type.
     Conversion,
+    /// The divergence check's measure of a search's target (`open_given`): its size, the classes
+    /// it is made of and its shape with the open variables blanked out.
+    Measure,
     Divergence,
     Choose,
     Keep,
@@ -300,7 +303,7 @@ pub enum Step {
     ExtCollect,
 }
 
-pub const N_STEPS: usize = 24;
+pub const N_STEPS: usize = 25;
 
 impl Step {
     const ALL: [Step; N_STEPS] = [
@@ -321,6 +324,7 @@ impl Step {
         Step::TryIncomplete,
         Step::TryAmbiguous,
         Step::Conversion,
+        Step::Measure,
         Step::Divergence,
         Step::Choose,
         Step::Keep,
@@ -350,6 +354,7 @@ impl Step {
             Step::TryIncomplete => "instantiated: a using parameter unresolved",
             Step::TryAmbiguous => "instantiated: a using parameter ambiguous",
             Step::Conversion => "conversion method instantiated",
+            Step::Measure => "divergence checks' measure of the target",
             Step::Divergence => "divergence checks",
             Step::Choose => "choice among successes",
             Step::Keep => "memo keep",
@@ -2363,10 +2368,11 @@ impl<'a> Worker<'a> {
         let shape = sum(&[Step::FitShapeYes, Step::FitShapeNo, Step::FitConversion]);
         let tried = sum(&[Step::TryOk, Step::TryMismatch, Step::TryIncomplete, Step::TryAmbiguous, Step::Conversion]);
         let choose = sum(&[Step::Choose]);
-        let diverge = sum(&[Step::Divergence]);
+        let diverge = sum(&[Step::Measure, Step::Divergence]);
+        let measure = sum(&[Step::Measure]);
         let _ = writeln!(
             out,
-            "  time: finding candidates {} ({:.1}%), shape checks {} ({:.1}%, {} run, {} not kept as the candidate reads the scope), instantiating them {} ({:.1}%, nested searches, expansions and divergence checks excluded), choosing {} ({:.1}%), divergence check {} ({:.1}%)",
+            "  time: finding candidates {} ({:.1}%), shape checks {} ({:.1}%, {} run, {} not kept as the candidate reads the scope), instantiating them {} ({:.1}%, nested searches, expansions and divergence checks excluded), choosing {} ({:.1}%), divergence check {} ({:.1}%, the target's measure {})",
             ms(find),
             share(find),
             ms(shape),
@@ -2378,7 +2384,8 @@ impl<'a> Worker<'a> {
             ms(choose),
             share(choose),
             ms(diverge),
-            share(diverge)
+            share(diverge),
+            ms(measure)
         );
         let _ = writeln!(out, "  result memo, by what it did for a search (count, self time of the searches, inclusive):");
         let all: Vec<(About, u16, u64, u64, Memo, Keep)> = self.profile.events.iter().filter(|e| e.kind == Kind::Given).map(|e| (e.about, e.nested, e.incl, e.child, e.memo, e.keep)).collect();
@@ -2533,7 +2540,7 @@ impl<'a> Worker<'a> {
             ("memo", &[Step::Applicable, Step::Lookup, Step::Replay, Step::Keep]),
             ("collect", &[Step::Levels]),
             ("fits", &[Step::FitMemo, Step::FitClass, Step::FitHead, Step::FitShapeYes, Step::FitShapeNo, Step::FitConversion]),
-            ("tries", &[Step::TryOk, Step::TryMismatch, Step::TryIncomplete, Step::TryAmbiguous, Step::Conversion, Step::Divergence]),
+            ("tries", &[Step::TryOk, Step::TryMismatch, Step::TryIncomplete, Step::TryAmbiguous, Step::Conversion, Step::Measure, Step::Divergence]),
             ("order+choose", &[Step::Order, Step::Choose]),
             ("synth", &[Step::Synthesis]),
             ("lazy", &[Step::Lazy]),

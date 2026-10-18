@@ -98,7 +98,10 @@
 # kernel's); and with --app, which names the application's export build file, the export's identity against master's
 # saved build (bench/app/export-identity.sh), the API check against master's diagnostics (bench/app/api-check.sh,
 # app-api) and the check of the API's test configuration over each binary's own build of the main lists' products,
-# against master's the same way (api-check.sh --test, app-api-test), all reading the application's checkout and the jars
+# against master's the same way (api-check.sh --test, app-api-test), the API's type phase against master's binary's
+# (bench/pairs.py api: `--time --all-mains` at eight workers, the binaries in balanced pairs, both plain builds,
+# every run completed with a positive type phase and the first run's diagnostics, their first lines and count; over 8% fails,
+# inconclusive is not a pass, app-api-time), all reading the application's checkout and the jars
 # its sbt build resolved into the reference machine's coursier cache (the lists bench/app/app-lists.sh writes: the API's
 # module list and class path the files APP_MODULES and APP_CLASSPATH name, its flags APP_FLAGS, the test configuration's
 # APP_TEST_MODULES, APP_TEST_CLASSPATH and APP_TEST_FLAGS, all kept outside the repository); with --export-manifest as
@@ -113,7 +116,8 @@
 # (tests/scalac-oracle.sh, then bench/app/api-scalac-diff.sh with the lists' scalacOptions APP_SCALAC_OPTIONS and
 # APP_TEST_SCALAC_OPTIONS, both into the attempt's directory), which fails on a difference the list SCALAC_KNOWN does
 # not list or a line of it that names no difference (no rows when it is unset, which the line's result says). These
-# lines run at once, the export's acceptance after its identity, and then the end-to-end suite alone, the memory line
+# lines run at once, the export's acceptance after its identity, and then the API's type phase alone, its pairs
+# measured on a machine no other line of this half loads, the end-to-end suite alone, the memory line
 # alone, its growth rows depending on the machine's load (tests/watch-memory.sh), and the asymptotic probes alone
 # (tests/asymptotics.sh as the line asymptotics, under the node NODE names there, node 22): their growth ratios at 10^6
 # elements are the load's too, a shard's machine at a host load of 40 to 60 having taken the map's lookups past their
@@ -238,7 +242,7 @@ pieced="lsp:4 jvm-watch:2 modules:2 split:2"
 # pieces_of <suite>: its number of pieces, nothing for a suite run whole.
 pieces_of() { local spec; for spec in $pieced; do [ "${spec%%:*}" != "$1" ] || echo "${spec#*:}"; done; }
 compare="budget runtime sentinel"
-local_lines="records size instructions instructions-derive memory asymptotics app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
+local_lines="records size instructions instructions-derive app-api-time memory asymptotics app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
 project_lines="lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test tyrian-export tyrian-compile tyrian-test tyrian-run indigo-export indigo-compile indigo-test indigo-run"
 # The lines run only when --only or --with names them: the scalac oracle, at a release and nightly. The reference
 # projects' lines run in every gate (the owner's ruling, 2026-10-16: every reference project in, the gate never weakened
@@ -336,8 +340,8 @@ mfull=
 if [ -n "$master" ]; then
   mversion=$("$master" --version 2> /dev/null) || { echo "gate: $master does not run" >&2; exit 2; }
   mhash=$(echo "$mversion" | awk '{print $3}')
-  if selected instructions || selected instructions-derive; then
-    [ -z "$(kind "$mversion")" ] || { echo "gate: $master is $mversion, not a plain build; the instruction comparison is of two plain builds (cargo build --release)" >&2; exit 2; }
+  if selected instructions || selected instructions-derive || { [ -n "$app" ] && selected app-api-time; }; then
+    [ -z "$(kind "$mversion")" ] || { echo "gate: $master is $mversion, not a plain build; the instruction comparison and the API's type phase are of two plain builds (cargo build --release)" >&2; exit 2; }
   fi
   mfull=$(git -C "$wt" rev-parse --verify -q "$mhash^{commit}") || { echo "gate: $master names $mhash, which $wt does not know" >&2; exit 2; }
   git -C "$wt" merge-base --is-ancestor "$mfull" "$full" || echo "gate: warning: master's binary ($mhash) is not an ancestor of the head"
@@ -487,6 +491,17 @@ local_line() {
         result app-export-accept local $(($(now) - s)) $code "$(tail -1 "$out/app-export-accept.log")" "$file"
       fi
       ;;
+    app-api-time)
+      if [ -z "$app" ] || [ -z "$master" ]; then
+        result $1 local 0 skip "needs --app and --master" "$file"
+      elif [ -n "$(kind "$version")" ]; then
+        result $1 local 0 1 "$bin is $version, not a plain build; the API's type phase is compared between two plain builds" "$file"
+      else
+        APP_ROOT=$(app_root) timeout 1500 python3 "$root/bench/pairs.py" api "$master" "$bin" --out "$out/app-api-time" > "$out/$1.log" 2>&1
+        code=$?
+        result $1 local $(($(now) - s)) $code "$(tail -1 "$out/$1.log")" "$file"
+      fi
+      ;;
     app-api | app-api-test)
       if [ -z "$app" ] || [ -z "$master" ]; then
         result $1 local 0 skip "needs --app and --master" "$file"
@@ -626,6 +641,7 @@ local_half() {
   local_line app-scalac &
   for p in $here_projects; do local_project $p & done
   wait
+  local_line app-api-time
   local_line app-cypress
   local_line memory
   local_line asymptotics

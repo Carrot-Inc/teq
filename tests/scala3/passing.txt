@@ -444,6 +444,7 @@ mixins
 multi-apply
 named-patmatch
 named-tuples-strictEquality	--language strictEquality
+nats
 nested-object-implements-val
 no-init-enclosing-static-objects
 non-jvm-sam-non-apply

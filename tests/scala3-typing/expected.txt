@@ -3043,7 +3043,7 @@ pos/i16544c.scala	std	Dynamic
 pos/i16544d.scala	std	Dynamic
 pos/i16562.scala	accepts	
 pos/i16590.scala	accepts	
-pos/i16596.more.scala	rejects	no given instance
+pos/i16596.more.scala	accepts	
 pos/i16596.orig.scala	accepts	
 pos/i16596.scala	accepts	
 pos/i16603.scala	accepts	
@@ -4075,7 +4075,7 @@ pos/i7516.scala	accepts
 pos/i7525	oos	java
 pos/i7532.scala	accepts	
 pos/i7575.scala	std	Dynamic	--language dynamics
-pos/i7586.scala	rejects	no given instance
+pos/i7586.scala	rejects	Cannot prove that (m4_2 : S[S[S[Nat]]]) <:< S[S[S[S[Z]]]].
 pos/i7602.scala	accepts	
 pos/i7648.scala	accepts	
 pos/i7650	rejects	Test and Test produce classes that overwrite one another

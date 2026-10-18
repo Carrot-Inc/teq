@@ -1,0 +1,9 @@
+rotated(rotated(base))
+grow(grow(base))
+pair(ps(int, int)) wrapped(ps(pair(ps(int, int)), int))
+nest(gold)
+list(tree)
+exact
+general(int)
+rotated(rotated(base))
+grow(grow(base))

@@ -1,0 +1,3 @@
+nest(base)
+nest(nest(base))
+sum after 3 steps

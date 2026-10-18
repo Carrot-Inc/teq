@@ -567,6 +567,121 @@ impl<'a> Worker<'a> {
         (0..n).all(|k| self.tvars[v].lower.get(k).copied().map_or(true, |l| self.is_sub(l, b)))
     }
 
+    /// The parts of `v`'s bound on one side as dotty's constraint holds it: the bound its type
+    /// parameter declares, then each bound added after it, through the variables it is ordered
+    /// against, met with the bound so far as `addOneBound` meets them (`hi & bound`, `lo | bound`:
+    /// `TypeComparer.glb` and `lub`, their operands dropped where the other covers them, frozen) —
+    /// the operands of the intersection above it or of the union below it; none for `Any` above
+    /// and `Nothing` below.
+    pub(super) fn narrowed_bounds(&mut self, v: TVarId, upper: bool) -> Vec<TypeId> {
+        let (declared_lower, declared_upper) = self.tvars[v].declared();
+        let mut bounds = vec![if upper { declared_upper } else { declared_lower }];
+        bounds.extend(self.bounds_through_vars(v, upper));
+        let mut parts: Vec<TypeId> = Vec::new();
+        for b in bounds {
+            let mut operands = Vec::new();
+            self.bound_operands(b, upper, &mut operands);
+            parts = if upper { self.glb_bound_parts(parts, operands) } else { self.lub_bound_parts(parts, operands) };
+        }
+        parts
+    }
+
+    /// The operands of `t` as a bound on one side: an intersection's above, a union's below,
+    /// left to right; none of `Any` above or `Nothing` below, and none an open variable (dotty's
+    /// `stripParams` keeps those in the ordering).
+    fn bound_operands(&mut self, t: TypeId, upper: bool, out: &mut Vec<TypeId>) {
+        let t = self.deref(t);
+        match self.types.get(t) {
+            Type::Inter(a, b) if upper => {
+                self.bound_operands(a, upper, out);
+                self.bound_operands(b, upper, out);
+            }
+            Type::Union(a, b, _) if !upper => {
+                self.bound_operands(a, upper, out);
+                self.bound_operands(b, upper, out);
+            }
+            Type::Var(_) => {}
+            _ if t == if upper { ANY } else { NOTHING } => {}
+            _ => out.push(t),
+        }
+    }
+
+    /// The intersection of the operands, `Any` for none.
+    pub(super) fn conj_of(&mut self, parts: &[TypeId]) -> TypeId {
+        parts.iter().copied().reduce(|a, b| self.types.inter(a, b)).unwrap_or(ANY)
+    }
+
+    /// The union of the operands, `Nothing` for none.
+    pub(super) fn disj_of(&mut self, parts: &[TypeId]) -> TypeId {
+        parts.iter().copied().reduce(|a, b| self.types.union_as(UnionKind::Soft, a, b)).unwrap_or(NOTHING)
+    }
+
+    /// dotty's `glb` of two intersections given by their operands (`mergedGlb`): the first's
+    /// operands above the whole second dropped (`dropIfSuper`), and if none was, the second's
+    /// above the whole first; then their operands together, the first's before the second's.
+    fn glb_bound_parts(&mut self, a: Vec<TypeId>, b: Vec<TypeId>) -> Vec<TypeId> {
+        if a == b || b.is_empty() || a == [NOTHING] {
+            return a;
+        }
+        if a.is_empty() || b == [NOTHING] {
+            return b;
+        }
+        let whole_b = self.conj_of(&b);
+        let mut kept = Vec::with_capacity(a.len());
+        for &o in &a {
+            if !self.frozen_sub(whole_b, o) {
+                kept.push(o);
+            }
+        }
+        if kept.len() != a.len() {
+            return self.glb_bound_parts(kept, b);
+        }
+        let whole_a = self.conj_of(&a);
+        let mut kept = Vec::with_capacity(b.len());
+        for &o in &b {
+            if !self.frozen_sub(whole_a, o) {
+                kept.push(o);
+            }
+        }
+        if kept.len() != b.len() {
+            return self.glb_bound_parts(a, kept);
+        }
+        let mut both = a;
+        both.extend(b);
+        both
+    }
+
+    /// dotty's `lub` of two unions given by their operands (`mergedLub`): the second's operands
+    /// below the whole first dropped (`dropIfSub`), then the first's below what remains of the
+    /// second; their operands together, the first's before the second's.
+    fn lub_bound_parts(&mut self, a: Vec<TypeId>, b: Vec<TypeId>) -> Vec<TypeId> {
+        if a == b || b.is_empty() || a == [ANY] {
+            return a;
+        }
+        if a.is_empty() || b == [ANY] {
+            return b;
+        }
+        let whole_a = self.disj_of(&a);
+        let mut b_final = Vec::with_capacity(b.len());
+        for &o in &b {
+            if !self.frozen_sub(o, whole_a) {
+                b_final.push(o);
+            }
+        }
+        if b_final.is_empty() {
+            return a;
+        }
+        let whole_b = self.disj_of(&b_final);
+        let mut a_final = Vec::with_capacity(a.len());
+        for &o in &a {
+            if !self.frozen_sub(o, whole_b) {
+                a_final.push(o);
+            }
+        }
+        a_final.extend(b_final);
+        a_final
+    }
+
     /// Whether two open variables can be made one: neither is being solved or stands for the
     /// join of an `if`'s branches (`guide`).
     fn unifiable(&self, v: TVarId, w: TVarId) -> bool {
@@ -607,19 +722,30 @@ impl<'a> Worker<'a> {
     /// `A` of `Some(x)` for `orElse[B >: A]`'s argument against an `Option[CashFee]` is below
     /// `B`, which is below `CashFee`.
     pub fn upper_bounds_through_vars(&mut self, v: TVarId) -> Vec<TypeId> {
+        self.bounds_through_vars(v, true)
+    }
+
+    /// The bounds of `v` on one side that are no open variables, through the variables it is
+    /// ordered against on that side: dotty's `nonParamBounds`, which `addLess` keeps transitive
+    /// (each variable below `p2` takes its upper bound, each above `p1` its lower one) where
+    /// `add_upper` keeps the pair of variables.
+    pub fn bounds_through_vars(&mut self, v: TVarId, upper: bool) -> Vec<TypeId> {
         let mut seen = vec![v];
         let mut out = Vec::new();
         let mut i = 0;
         while i < seen.len() {
             let w = seen[i];
             i += 1;
-            for j in 0..self.tvars[w].upper.len() {
-                let u = self.tvars[w].upper[j];
-                let u = self.deref(u);
-                match self.types.get(u) {
+            fn side(info: &TVarInfo, upper: bool) -> &[TypeId] {
+                if upper { &info.upper } else { &info.lower }
+            }
+            for j in 0..side(&self.tvars[w], upper).len() {
+                let b = side(&self.tvars[w], upper)[j];
+                let b = self.deref(b);
+                match self.types.get(b) {
                     Type::Var(x) if !seen.contains(&x) => seen.push(x),
                     Type::Var(_) => {}
-                    _ => out.push(u),
+                    _ => out.push(b),
                 }
             }
         }
