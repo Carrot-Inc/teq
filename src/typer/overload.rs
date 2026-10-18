@@ -525,7 +525,7 @@ impl<'a> Worker<'a> {
             // A value beside another of its name goes by its target name, one without by its own.
             _ if value_alternative => None,
             Owner::Package(p) => {
-                let entry = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term);
+                let entry = self.syms.package_object_entry(p, name).and_then(|e| e.term);
                 let overloaded = entry.map_or(false, |e| self.syms.alternatives(e).is_some());
                 overloaded.then(|| self.suffixed_name(m, entry.unwrap()))
             }
@@ -2135,7 +2135,22 @@ impl<'a> Worker<'a> {
             let n = self.cur_ast().ty_list(l).len();
             if alts.iter().filter(|a| a.sig.tparams.len() == n).count() > 0 {
                 alts.retain(|a| a.sig.tparams.len() == n);
+            } else if alts.iter().all(|a| a.ctor.is_none() && !a.sig.clauses.is_empty()) && self.written_targs(targs) {
+                // None of the methods takes them: none applies (`resolveOverloaded` of a `PolyProto`, which
+                // keeps the alternatives that `canInstantiate`), and the qualifier's adaptation has its turn.
+                self.app_base = outer_base;
+                return Err(self.type_arguments_unmatched(set, &alts, l, lists, left_out));
             }
+        }
+        // A using application keeps the methods whose clause is contextual (`resolveOverloaded` of an
+        // `ApplyKind.Using` prototype); with none, no adaptation of the qualifier is tried.
+        if lists.first().is_some_and(|l| l.using) && alts.iter().all(|a| a.ctor.is_none()) && !self.is_body_file(self.env.file) {
+            let contextual = |a: &Alt| a.sig.clauses.first().is_some_and(|c| c.is_using || c.is_implicit);
+            if !alts.iter().any(contextual) {
+                self.app_base = outer_base;
+                return Err(self.using_unmatched(set, &alts, lists, left_out));
+            }
+            alts.retain(contextual);
         }
         let mut lists = lists;
         // A library body carries the arguments scalac inferred for a using clause as a plain
@@ -2232,7 +2247,7 @@ impl<'a> Worker<'a> {
                 if let Some(written) = written {
                     self.index_failed_args(&written, &lists);
                 }
-                let msg = self.overload_failure(set, &alts, &failure, &lists, &infos, expected, selection);
+                let msg = self.overload_failure(set, &alts, &failure, &lists, &infos, expected, selection, &[]);
                 Err(Unresolved { msg, lists, none_applicable: matches!(failure, Failure::NoneApplicable), dependent: left_out })
             }
         };
@@ -2328,7 +2343,7 @@ impl<'a> Worker<'a> {
             Err(failure) => {
                 self.type_plain_args(&mut lists);
                 let first = alts.first().map_or(SymId(u32::MAX), |a| a.sym);
-                let msg = self.overload_failure(first, &alts, &failure, &lists, &infos, expected, None);
+                let msg = self.overload_failure(first, &alts, &failure, &lists, &infos, expected, None, &[]);
                 self.report_unresolved(Unresolved { msg, lists, none_applicable: false, dependent: false }, span)
             }
         };
@@ -2450,7 +2465,7 @@ impl<'a> Worker<'a> {
         let failure = first_failure.unwrap_or(Failure::NoneApplicable);
         let dummy = self.prog.add(TExpr::Unit);
         let lists = vec![ArgList { args: vec![ArgSrc::Typed(dummy, sty)], using: false, span, fun: ArgList::NO_FUN }];
-        let msg = self.overload_failure(set, &alts, &failure, &lists, &[], None, None);
+        let msg = self.overload_failure(set, &alts, &failure, &lists, &[], None, None, &[]);
         self.error(span, msg);
         None
     }
@@ -2636,7 +2651,7 @@ impl<'a> Worker<'a> {
             Err(failure) => {
                 self.type_plain_args(lists);
                 let set = alts[0].sym;
-                Err(self.overload_failure(set, &alts, &failure, lists, &infos, expected, None))
+                Err(self.overload_failure(set, &alts, &failure, lists, &infos, expected, None, &[]))
             }
         };
         lists.remove(0);
@@ -4099,6 +4114,40 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The failure of an overloaded member none of whose methods takes the type arguments `targs`: scalac's
+    /// E134 naming them, with the arguments' types.
+    #[cold]
+    #[inline(never)]
+    fn type_arguments_unmatched(&mut self, set: SymId, alts: &[Alt], targs: ListRef, mut lists: Vec<ArgList>, dependent: bool) -> Unresolved {
+        let written = self.cur_ast().ty_list(targs).to_vec();
+        let explicit: Vec<TypeId> = written.into_iter().map(|t| self.resolve_type_ctor(t)).collect();
+        self.type_plain_args(&mut lists);
+        let msg = self.overload_failure(set, alts, &Failure::NoneApplicable, &lists, &[], None, None, &explicit);
+        Unresolved { msg, lists, none_applicable: true, dependent }
+    }
+
+    /// The failure of a using application of an overloaded member none of whose methods is contextual: a
+    /// method of an empty clause misses its arguments (dotty's `tryParameterless`, then `missingArgs`), and
+    /// otherwise none of them matches the arguments (E134), reported as they stand.
+    #[cold]
+    #[inline(never)]
+    fn using_unmatched(&mut self, set: SymId, alts: &[Alt], mut lists: Vec<ArgList>, dependent: bool) -> Unresolved {
+        let msg = match alts.iter().find(|a| a.sig.clauses.first().is_some_and(|c| c.params.is_empty())) {
+            Some(a) => format!("Missing arguments for {}", self.method_description_of(a.sym)),
+            None => {
+                let mut shown = lists.clone();
+                for l in &mut shown {
+                    l.using = false;
+                }
+                self.type_plain_args(&mut shown);
+                let msg = self.overload_failure(set, alts, &Failure::NoneApplicable, &shown, &[], None, None, &[]);
+                lists = shown;
+                msg
+            }
+        };
+        Unresolved { msg, lists, none_applicable: false, dependent }
+    }
+
     /// scalac's E134 and E051.
     fn overload_failure(
         &mut self,
@@ -4109,6 +4158,7 @@ impl<'a> Worker<'a> {
         infos: &[Option<ListInfo>],
         expected: Option<TypeId>,
         selection: Option<Name>,
+        explicit: &[TypeId],
     ) -> String {
         let listed: Vec<usize> = match failure {
             Failure::NoneApplicable => (0..alts.len()).collect(),
@@ -4154,6 +4204,11 @@ impl<'a> Worker<'a> {
             Failure::Ambiguous(among) if among.len() == 2 => "both match ",
             Failure::Ambiguous(_) => "all match ",
         });
+        // Type arguments none of the alternatives takes (`NoMatchingOverload` of a `PolyProto`).
+        if !explicit.is_empty() {
+            let shown: Vec<String> = explicit.iter().map(|&t| self.show(t)).collect();
+            out.push_str(&format!("type arguments [{}] and ", shown.join(", ")));
+        }
         match lists.iter().position(|l| !l.using) {
             Some(li) => {
                 let mut described: Vec<String> = Vec::new();

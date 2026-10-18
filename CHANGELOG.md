@@ -5,6 +5,36 @@ support, and the platforms the binaries run on. The newest release comes first; 
 notes of its GitHub release, which carries the binaries (`teq-<version>-<classifier>`, the Windows one with `.exe`) beside their
 `SHA256SUMS`.
 
+## Unreleased
+
+- `teq interp` runs a program's threads, `java.lang.Thread`, `synchronized`, `Object.wait` and `notify`, and
+  `java.util.concurrent`'s executors, locks, queues, latches, futures and atomics, taking turns on one OS thread;
+  zio's runtime runs on them, and a program's signal handlers (`sun.misc.Signal`) run as the JDK runs them
+  ([`teq interp`](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
+- `teq interp` runs Scala CLI scripts (`.sc`) as Scala CLI wraps them, the arguments after `--` their `args`, a
+  script of a directory in the package of its subdirectories.
+- A script's `//> using dep` lines resolve through the lock of the build it is in: the classpath of the
+  configuration that owns the sources the script includes, or of `--module`, and the sources of the configurations
+  whose products that classpath holds. Under `--classpath` the lock still
+  checks each inside such a project, and outside one each is checked against the jars it names.
+- sbt-teq records in `teq.lock` each dependency a build declares at a version its resolution evicted, so that a
+  script asking that version runs on the one chosen ([the lockfile](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
+
+<details>
+<summary>Conformance with scalac and the JDK</summary>
+
+- `teq interp` gives a program more of the JDK: `Files.walkFileTree` and basic file attributes, a file's byte
+  channel and the streams over it, `BufferedOutputStream`, `Class.getDeclaredMethod`, `MethodHandles` and
+  `Proxy` as far as a library finds a constructor or a static method and installs a handler through them,
+  `java.util.logging`'s loggers, and `java.time`'s `LocalTime`, `Month`, `DayOfWeek`, `OffsetDateTime` and ISO
+  formatters, with a pattern's parsing.
+- A `scala.collection.Seq` extractor's pattern binds its elements at the sequence's element type, and on the JVM and
+  in the interpreter matches a mutable sequence, its rest an immutable one, as scalac's does.
+- A condition's signal and an interrupt of its waiter are arbitrated as the JDK's `ConditionObject` arbitrates
+  them, and a sleeper's deadline is kept when another wait's timer was cancelled before it.
+
+</details>
+
 ## 0.1.8 (2026-10-09)
 
 - A build file git ignores, such as Metals' `project/metals.sbt`, no longer makes `teq.lock` stale: the warning

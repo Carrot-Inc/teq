@@ -65,25 +65,68 @@ teq tasty --body lib.jar a.b.C.m  # a definition with its body in Scala-like syn
 - A first line `#!/usr/bin/env -S teq interp` is skipped, as scalac skips it (with scalac's `!#` closing a longer
   header), so that the same file runs under scala-cli. A script runs as `teq interp x.scala`, not by its path:
   `env` finds no `teq` on a plain `PATH`, and a project's launcher there would run that project's release.
+- A Scala CLI script, `x.sc`, runs as Scala CLI 1.17.1 runs it: its statements, in their order, are the body of
+  an object named after the file (`x_sc`, over the class `x$_`, as Scala CLI's `ClassCodeWrapper` writes them),
+  `args` is the arguments after `--`, and an error points at the script's own line. A directory named or included
+  brings its `.sc` files with its `.scala` ones, under `teq compiler check` too, each wrapped alike; the first script
+  named is the one that runs.
+- A directive is a line among the comments that open a file starting `//> using` exactly, its words apart by blanks
+  (a tab as a space), a backtick-quoted word its identifier (`` `dep` `` is `dep`), a double-quoted one decoded
+  (`\n`, `\t`, `\r`, `\\`, `\"`, `\u` and four hexadecimal digits, any other escaped character itself), as Scala
+  CLI 1.17.1's lexer reads them. `//>using` is none and ends the directives there, `//>  using` ends them after
+  its line with Scala CLI's warning. A block comment whose closing line holds more than blanks, another comment
+  included, is code, and a directive after code is ignored with Scala CLI's warning. A key that is no identifier
+  (a string, an empty or unterminated backtick-quoted word) or no key, an unterminated string and an invalid
+  unicode escape stop the run (status 1) with Scala CLI's error.
 - `//> using file <path>` and `//> using files <path> <path>...` among the comments that open a file bring other
-  sources in: each path relative to the file that names it, quoted or not; a directory, the `.scala` files below
-  it, hidden ones left out; each file once. A path that names nothing stops the run (status 2) with the file and
-  the line. An included file's own directives are followed, which scala-cli (1.17.1) refuses. The `-source` among
-  the scalac options of `//> using options` (`option`, `scalacOptions`), `-source:<v>` or `-source <v>`, is the
+  sources in: each path relative to the file that names it, quoted or not; a directory, the `.scala` (and `.sc`)
+  files below it, hidden ones left out; each file once. A path that names nothing stops the run (status 2) with the
+  file and the line. An included file's own directives are followed, which scala-cli (1.17.1) refuses. The `-source`
+  among the scalac options of `//> using options` (`option`, `scalacOptions`), `-source:<v>` or `-source <v>`, is the
   program's source version unless the command line names one, as scala-cli puts the command line's options after
-  the directives'; the first file's in the program's order where several name one. Every other `using` key stays a
-  comment, as it is to scalac.
-- `teq compiler` and the language server read no directive and see a script alone: a check names what the
-  script includes, `teq compiler check tools/script scripts/x.scala`.
+  the directives'; the first file's in the program's order where several name one. Every other `using` key but the
+  dependencies' stays a comment, as it is to scalac.
+- `//> using dep <organization>::<name>:<version>` (`::` the Scala suffix, `:::` the full Scala version,
+  `,classifier=<c>` a classifier, quoted or not: a comma before no white space is the value's, as Scala CLI's
+  lexer keeps it; another parameter, which the lock cannot check, stops the run), and every other key whose jars
+  Scala CLI's run puts on the classpath (`deps`, `dependency`, `dependencies`, the deprecated `lib` and `libs` with
+  its warning, `compileOnly.dep` and its like; `test.dep` and `scalafix.dep` have no part in a run), resolves through the lock of
+  the build the script is in, since teq resolves no
+  dependency itself: `teq.lock`, or `target/teq/teq.lock`, at or above the script's directory (`sbt teqExportAll`
+  writes it). The script runs on the classpath of the build's JVM configuration that owns the sources it includes
+  (its `//> using file` lines), or of `--module <project>` (`<project>/<configuration>`), in the export's order,
+  its jars fetched as the build's verbs fetch them. The configurations whose products that classpath holds (its
+  product closure) run with it from their sources, as the build's verbs type them, each at its
+  configuration's source version (the `-source` the lock records), less the files `--exclude` leaves out, which
+  are neither typed nor read for their directives; a closure its build keeps
+  apart (`transitive: false`, a configuration that does not see another) or whose sources wait for a generator
+  the build tool runs stops the run (status 2). Each coordinate must be on that classpath at the version asked,
+  or at the one the lock records the build's resolution chose in its place (`evictions`, docs/TOOLING.md). A
+  coordinate the lock does not hold, a version it does not, sources two configurations own alike, none owned, and
+  a script outside every build stop the run (status 2) with a sentence naming what to do. With `--classpath` the jars
+  are those it names. Inside a project (a configuration owning the sources, or `--module`) the lock still validates
+  every coordinate, its version and evictions as without it, and sources two configurations own still stop the run.
+  Outside one (no build, or one owning none of the sources and no `--module`) each coordinate must name one of the
+  given jars by its artifact and version (a `<name>-<version>.jar`, or one under `<name>/<version>/`), and one that
+  names none stops the run alike, `--classpath ""` included. The artifact is the run's platform's: where the given
+  jars hold Scala.js artifacts the run is Scala.js's, and `org::name:1.0` names `name_sjs1_3`, as Scala CLI names
+  it on Scala.js; otherwise it names the JVM's `name_3`. A lock's coordinates are the JVM's whatever
+  `//> using platform` says, since the interpreter runs a build's JVM artifacts.
+- `teq compiler` and the language server read no directive and see a script alone (a `.sc` one wrapped as above):
+  a check names what the script includes, `teq compiler check tools/script scripts/x.scala`.
 - In a project the launcher runs its scripts (`./teq interp scripts/x.scala`), so the release `teq.lock` pins
   interprets them as it compiles the project, the same on every machine; `TEQ` names another binary.
 
 The interpreter gives a script the JDK it needs: processes (`ProcessBuilder`, `Process`, `ProcessHandle`), their
-streams and the program's stdin, `java.nio.file.Files`, TCP sockets, zip and gzip archives, `MessageDigest`,
-`Thread.sleep`, shutdown hooks, `System.getProperty`'s platform values and the clock (`Instant`,
-`ZonedDateTime`, `DateTimeFormatter.ofPattern`), each as the JDK behaves; it has no threads, and runs a shutdown
-hook on its one thread when the program ends: at the end of its main, at `System.exit`, at an uncaught exception,
-or at SIGINT, SIGTERM or SIGHUP (status 128 plus the signal's number).
+streams and the program's stdin, `java.nio.file.Files` and a file's byte channel, TCP sockets, zip and gzip
+archives, `MessageDigest`, `System.getProperty`'s platform values and the clock (`Instant`, `ZonedDateTime`,
+`DateTimeFormatter`), threads (`java.lang.Thread`, `synchronized`, `Object.wait` and `notify`, and
+`java.util.concurrent`'s executors, locks, queues, latches, futures and atomics) and shutdown hooks, each as the
+JDK behaves; zio's runtime runs on them. The threads take turns on one OS thread (docs/RUNTIME.md, "The
+interpreter"). The program ends when its main has returned and no thread but daemons is alive; then, at
+`System.exit`, at an exception main does not catch, or at SIGINT, SIGTERM or SIGHUP (status 128 plus the signal's
+number), its shutdown hooks run one after another on the main thread while the other threads go on, and then every
+thread stops. A second signal ends the program at once.
 
 An argument `@file` stands for the file's lines, one argument per line, up to the first `--`
 (what follows a `--` is the program's, as written): `teq @build.args`. teq's own tools start teq

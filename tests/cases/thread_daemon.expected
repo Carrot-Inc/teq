@@ -1,0 +1,5 @@
+daemon true, alive true
+setDaemon on a started thread: java.lang.IllegalThreadStateException
+inherits daemon: false
+main ends
+the last non-daemon thread ends

@@ -154,7 +154,7 @@ pub fn plugin_file() -> Result<PathBuf, String> {
 #[cfg(unix)]
 extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
-    fn signal(sig: i32, handler: extern "C" fn(i32)) -> usize;
+    fn signal(sig: i32, handler: usize) -> usize;
     fn _exit(code: i32) -> !;
 }
 #[cfg(unix)]
@@ -192,7 +192,7 @@ pub fn end_exports_on_termination() {
     // SAFETY: installs a handler that only signals process groups and exits.
     #[cfg(unix)]
     unsafe {
-        signal(SIGTERM, on_termination);
+        signal(SIGTERM, on_termination as extern "C" fn(i32) as usize);
     }
 }
 

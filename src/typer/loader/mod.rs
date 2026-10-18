@@ -680,7 +680,7 @@ impl<'a> Worker<'a> {
             let mut p = ROOT_PKG;
             for seg in path.split('/').filter(|s| !s.is_empty()) {
                 let name = self.interner.intern(&package_segment(seg));
-                p = self.syms.sub_pkg(p, name);
+                p = self.syms.sub_pkg(self.interner, p, name);
             }
             if loaded.pkg_slots.len() <= p.idx() {
                 loaded.pkg_slots.resize(p.idx() + 1, NONE);
@@ -831,7 +831,7 @@ impl<'a> Worker<'a> {
             }
         }
         let objects = self.enter_pkg_objects(p);
-        let defined = self.syms.pkg(p).entries.get(&name).map_or(false, |e| e.term.is_some() || e.class.is_some() || e.alias.is_some() || e.pkg.is_some());
+        let defined = self.syms.has_named(self.interner, p, name);
         if objects && defined {
             return true;
         }
@@ -994,16 +994,16 @@ impl<'a> Worker<'a> {
             let n = self.syms.sym(s).name;
             self.demand_std(pkg, n, crate::stdindex::TERM | crate::stdindex::TYPE);
         }
-        let entries = &mut self.syms.pkgs[pkg.idx()].entries;
         for (n, c) in nested {
-            let e = entries.entry(n).or_default();
+            let e = self.syms.enter_scoped(self.interner, pkg, n);
             if e.class.is_none() {
                 e.class = Some(c);
             }
         }
         for (n, a) in aliases {
-            let e = entries.entry(n).or_default();
-            if e.class.is_none() && e.alias.is_none() {
+            let class = self.syms.scoped(self.interner, pkg, n).and_then(|e| e.class);
+            let e = self.syms.enter_package_object(pkg, n);
+            if class.is_none() && e.alias.is_none() {
                 e.alias = Some(a);
             }
         }
@@ -1012,15 +1012,15 @@ impl<'a> Worker<'a> {
             let entry = self.syms.class(obj).members[&name];
             // `val Right = scala.util.Right` of `scala.package` names the companion of a class
             // the std defines itself, whose constructor the name means there.
-            let std_class = self.syms.pkg(pkg).entries.get(&name).and_then(|e| e.class).map_or(false, |c| !self.in_jar(self.syms.class(c).file));
-            let e = self.syms.pkgs[pkg.idx()].entries.entry(name).or_default();
+            let std_class = self.syms.scoped(self.interner, pkg, name).and_then(|e| e.class).map_or(false, |c| !self.in_jar(self.syms.class(c).file));
+            let e = self.syms.enter_package_object(pkg, name);
             if e.term.is_none() && !std_class {
                 e.term = Some(entry);
             }
         }
         for s in &extensions {
             let name = self.syms.sym(*s).name;
-            self.syms.pkgs[pkg.idx()].entries.entry(name).or_default().extensions.push(*s);
+            self.syms.enter_package_object(pkg, name).extensions.push(*s);
         }
         self.syms.pkgs[pkg.idx()].givens.extend(givens);
         // Where a product's bodies are converted, its file's top-level definitions are the
@@ -1084,7 +1084,7 @@ impl<'a> Worker<'a> {
         // A member the std defines as an extension on the builtin (`andThen`, `swap`,
         // `length`) is the std's: the builtin's value has no such method.
         let scala = self.b.scala_pkg;
-        let shadowed: Vec<Name> = self.syms.pkg(scala).entries.iter().filter(|(_, e)| !e.extensions.is_empty()).map(|(&n, _)| n).collect();
+        let shadowed: Vec<Name> = self.syms.extension_names(scala).collect();
         for n in shadowed {
             self.syms.class_mut(lib).members.remove(&n);
         }
@@ -1211,7 +1211,7 @@ impl<'a> Worker<'a> {
                 let name = self.lname(&tasty, e.name);
                 if given_objects.contains(&name) {
                     let sym = match owner {
-                        Owner::Package(p) => self.syms.pkg(p).entries.get(&name).and_then(|x| x.term),
+                        Owner::Package(p) => self.syms.scoped(self.interner, p, name).and_then(|x| x.term),
                         Owner::Class(c) => self.syms.class(c).members.get(&name).copied(),
                         Owner::Local => None,
                     };
@@ -1303,7 +1303,7 @@ impl<'a> Worker<'a> {
         let taken = match owner {
             Owner::Package(p) => {
                 self.demand_std(p, name, crate::stdindex::TYPE | crate::stdindex::TERM);
-                let entry = self.syms.pkg(p).entries.get(&name);
+                let entry = self.syms.entry_named(self.interner, p, name);
                 if is_object {
                     entry.and_then(|e| e.term).is_some()
                 } else {
@@ -1323,7 +1323,7 @@ impl<'a> Worker<'a> {
         if taken && !shadowed {
             // The file's own references to a class a builtin stands for mean the builtin.
             if let Owner::Package(p) = owner {
-                if let Some(b) = self.syms.pkg(p).entries.get(&name).and_then(|e| e.class).filter(|&b| self.syms.class(b).kind == ClassKind::Builtin) {
+                if let Some(b) = self.syms.scoped(self.interner, p, name).and_then(|e| e.class).filter(|&b| self.syms.class(b).kind == ClassKind::Builtin) {
                     self.loaded_mut().tables[file as usize].classes.insert(e.addr, b);
                 }
             }
@@ -1385,7 +1385,7 @@ impl<'a> Worker<'a> {
         } else if shadowed {
         } else {
             match owner {
-                Owner::Package(p) => self.syms.pkgs[p.idx()].entries.entry(name).or_default().class = Some(cid),
+                Owner::Package(p) => self.syms.enter_scoped(self.interner, p, name).class = Some(cid),
                 Owner::Class(_) if inner_object && companion_class => {}
                 Owner::Class(c) => {
                     self.syms.class_mut(c).nested.insert(name, cid);
@@ -1442,7 +1442,7 @@ impl<'a> Worker<'a> {
         let taken = match owner {
             Owner::Package(p) => {
                 self.demand_std(p, name, crate::stdindex::TYPE);
-                self.syms.pkg(p).entries.get(&name).map_or(false, |e| e.class.is_some() || e.alias.is_some())
+                self.syms.entry_named(self.interner, p, name).map_or(false, |e| e.class.is_some() || e.alias.is_some())
             }
             // An object's class takes no type name: `final type AggregationFramework =
             // AggregationFramework.type` beside `object AggregationFramework` is a type member,
@@ -1484,7 +1484,7 @@ impl<'a> Worker<'a> {
                 self.syms.class_mut(cid).tparams = ids;
             }
             match owner {
-                Owner::Package(p) => self.syms.pkgs[p.idx()].entries.entry(name).or_default().class = Some(cid),
+                Owner::Package(p) => self.syms.enter_scoped(self.interner, p, name).class = Some(cid),
                 Owner::Class(c) => {
                     self.syms.class_mut(c).nested.insert(name, cid);
                     crate::symbols::type_member_written(name);
@@ -1519,7 +1519,7 @@ impl<'a> Worker<'a> {
             self.loaded_mut().private_aliases.insert(aid, ());
         }
         match owner {
-            Owner::Package(p) => self.syms.pkgs[p.idx()].entries.entry(name).or_default().alias = Some(aid),
+            Owner::Package(p) => self.syms.enter_package_object(p, name).alias = Some(aid),
             Owner::Class(c) => {
                 // A type forwarder's class has exports, whose aliases a lookup of a class's
                 // companion as a term reads (`class_exported_alias_term`).
@@ -1553,7 +1553,7 @@ impl<'a> Worker<'a> {
             return None;
         }
         self.demand_std(p, name, crate::stdindex::TERM);
-        let sym = self.syms.pkg(p).entries.get(&name)?.term?;
+        let sym = self.syms.scoped(self.interner, p, name)?.term?;
         match self.syms.sym(sym).kind {
             SymKind::Object(c) if !self.in_jar(self.syms.class(c).file) => Some(c),
             _ => None,
@@ -2134,8 +2134,12 @@ impl<'a> Worker<'a> {
                 _ => (pt, None),
             };
             let Type::Class(pc, pargs) = self.types.get(class_pt) else { continue };
-            // A Java class that only a signature named stays unread until a member is asked of it.
-            if !self.is_java_placeholder(pc) {
+            // A Java class that only a signature named stays unread until a member is asked of it,
+            // but for one of the class path's, outside the JDK's packages: a library's Scala class
+            // extends that class's own parents through it (zio's `RingBuffer` its Java padding
+            // classes), as dotty's base classes complete every parent (`ClassDenotation.baseClasses`).
+            let jdk_placeholder = self.loaded.as_ref().and_then(|l| l.java.placeholder(pc)).is_some_and(|(p, _)| self.jdk_rooted(p));
+            if !jdk_placeholder {
                 self.complete_class(pc);
             }
             let pinfo = self.syms.class(pc);
@@ -2608,7 +2612,7 @@ impl<'a> Worker<'a> {
         let mut p = ROOT_PKG;
         for seg in dir.split('/').filter(|s| !s.is_empty()) {
             let name = self.interner.intern(&package_segment(seg));
-            p = self.syms.sub_pkg(p, name);
+            p = self.syms.sub_pkg(self.interner, p, name);
         }
         let Some(slot) = self.loaded.as_ref().and_then(|l| l.slot(p)) else { return Vec::new() };
         if stem == "package" || stem.ends_with("$package") {
@@ -3138,7 +3142,7 @@ impl<'a> Worker<'a> {
             let mut p = ROOT_PKG;
             for seg in path.split('/').filter(|s| !s.is_empty()) {
                 let name = self.interner.intern(&package_segment(seg));
-                p = self.syms.sub_pkg(p, name);
+                p = self.syms.sub_pkg(self.interner, p, name);
             }
             for f in files {
                 if self.file_entered(f) {
@@ -3285,7 +3289,7 @@ pub fn with_everything_loaded(paths: &[String], f: impl FnOnce(&mut Worker) -> S
         let mut p = ROOT_PKG;
         for seg in path.split('/').filter(|s| !s.is_empty()) {
             let name = typer.interner.intern(&package_segment(seg));
-            p = typer.syms.sub_pkg(p, name);
+            p = typer.syms.sub_pkg(typer.interner, p, name);
         }
         let mut seen = std::collections::HashSet::new();
         for f in files {

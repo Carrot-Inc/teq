@@ -668,6 +668,14 @@ impl Classpath {
         })
     }
 
+    /// The bytes of a resource of the source numbered `jar` (its `META-INF/MANIFEST.MF`).
+    pub fn resource_in(&self, jar: u16, path: &str) -> Option<Vec<u8>> {
+        match self.sources.get(jar as usize)? {
+            Source::Jar(zip) => zip.find(path).and_then(|i| zip.read(i).ok()),
+            Source::Dir { root, .. } => std::fs::read(root.join(path)).ok(),
+        }
+    }
+
     /// The class file of a binary name (`scala/Tuple2`, `scala/Predef$`), the first on the class
     /// path as `java -cp` finds it.
     pub fn class_named(&self, binary: &str) -> Option<CpFile> {

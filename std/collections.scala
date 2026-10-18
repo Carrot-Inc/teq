@@ -832,6 +832,17 @@ object Array:
       i += 1
     arrayLike(out, original)
   def ofDim[T](n: Int)(implicit ct: scala.reflect.ClassTag[T]): Array[T] = ct.newArray(n)
+  // scala-library's: one array of the tag's class, the arrays' elements in their order.
+  def concat[T](xss: Array[? <: T]*)(implicit ct: scala.reflect.ClassTag[T]): Array[T] =
+    var length = 0
+    xss.foreach(xs => length += xs.length)
+    val out = ct.newArray(length)
+    var at = 0
+    xss.foreach { xs =>
+      copy(xs, 0, out, at, xs.length)
+      at += xs.length
+    }
+    out
   // scala-library's: the outer array by the tag of the element's array (`wrap`), each inner one by
   // the element's, the deeper ones by `tabulate`.
   def ofDim[T](n1: Int, n2: Int)(implicit ct: scala.reflect.ClassTag[T]): Array[Array[T]] =

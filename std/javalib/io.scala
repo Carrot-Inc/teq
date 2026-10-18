@@ -30,6 +30,11 @@ package java.io:
   def streamClose(id: Int): Unit
   @js("$fail(\"UnsupportedOperationException\", \"streams are not available on JavaScript\")")
   def streamStdin(): Int
+  // A file stream's position and length (`Files.newByteChannel`'s channel).
+  @js("$fail(\"UnsupportedOperationException\", \"streams are not available on JavaScript\")")
+  def streamSeek(id: Int, position: Long): Unit
+  @js("$fail(\"UnsupportedOperationException\", \"streams are not available on JavaScript\")")
+  def streamTruncate(id: Int, size: Long): Unit
   // A file's stream, `plain` for `FileInputStream`'s exceptions rather than `Files`'.
   @js("$fail(\"UnsupportedOperationException\", \"streams are not available on JavaScript\")")
   def streamOpenRead(path: String, plain: Boolean): Int

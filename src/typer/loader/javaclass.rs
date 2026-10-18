@@ -256,6 +256,18 @@ impl<'a> Worker<'a> {
         self.loaded.as_ref().map_or(false, |l| l.java.placeholder(c).is_some())
     }
 
+    /// The class path's source that a Java class (or the object of its statics) was read from.
+    pub fn java_class_source(&self, c: ClassId) -> Option<u16> {
+        let l = self.loaded.as_ref()?;
+        let class = l.java.classes.get(&c)?;
+        let k = class.companion_of.unwrap_or(c);
+        let source = if k == c { class.source } else { l.java.classes.get(&k).map_or(class.source, |j| j.source) };
+        match source {
+            JSource::Cp(f) => Some(f.jar),
+            _ => None,
+        }
+    }
+
     pub fn is_java_class(&self, c: ClassId) -> bool {
         self.loaded.as_ref().map_or(false, |l| l.java.classes.contains_key(&c))
     }
@@ -387,7 +399,7 @@ impl<'a> Worker<'a> {
             let mut p = ROOT_PKG;
             for seg in path.split('/').filter(|s| !s.is_empty()) {
                 let n = self.interner.intern(seg);
-                p = self.syms.sub_pkg(p, n);
+                p = self.syms.sub_pkg(self.interner, p, n);
             }
             self.java_mut().jdk_pkgs.insert(p, i as u32);
         }
@@ -587,6 +599,9 @@ impl<'a> Worker<'a> {
     /// stands for the class already is read when it is completed, and the lookup of its term
     /// side (the companion) completes it here.
     pub(super) fn load_java_pkg_member(&mut self, p: PkgId, name: Name) -> bool {
+        // A Java class or package has an identifier's name, its own key (`Symbols::entry_at`): a name encoding
+        // changes names none of them.
+        let key = name;
         // The std is written against itself; `java.lang.String` and `Object` are the builtins.
         // On the JVM a class of the JavaScript layer alone, and a JDK class no std file defines
         // (`java.time.Instant`, which JavaScript takes from scala-java-time's jar), are the JDK's
@@ -604,10 +619,10 @@ impl<'a> Worker<'a> {
         // An object the std defines under the name (`scala.runtime.Statics`) stands for the
         // Java class.
         self.demand_std(p, name, crate::stdindex::TYPE | crate::stdindex::TERM);
-        if self.syms.pkg(p).entries.get(&name).map_or(false, |e| e.term.is_some() && e.class.is_none()) {
+        if self.syms.entry_at(p, key).map_or(false, |e| e.term.is_some() && e.class.is_none()) {
             return false;
         }
-        let existing = self.syms.pkg(p).entries.get(&name).and_then(|e| e.class);
+        let existing = self.syms.entry_at(p, key).and_then(|e| e.class);
         if let Some(c) = existing {
             if self.is_java_placeholder(c) {
                 self.complete_class(c);
@@ -629,7 +644,7 @@ impl<'a> Worker<'a> {
             eprintln!("open jdk for {}", self.dotted(p, Some(&text)));
         }
         if !self.java().jdk_open() && self.jdk_rooted(p) && self.open_jdk(&self.dotted(p, Some(&text))) {
-            if self.syms.pkg(p).entries.get(&name).map_or(false, |e| e.pkg.is_some()) {
+            if self.syms.entry_at(p, key).map_or(false, |e| e.pkg.is_some()) {
                 return true;
             }
         }
@@ -648,7 +663,7 @@ impl<'a> Worker<'a> {
         if self.source(file).is_std && !self.in_jar(file) {
             return true;
         }
-        let java_lang = self.syms.pkg(ROOT_PKG).entries.get(&names::JAVA).and_then(|e| e.pkg).and_then(|j| self.syms.pkg(j).entries.get(&names::LANG).and_then(|e| e.pkg));
+        let java_lang = self.syms.entry_at(ROOT_PKG, names::JAVA).and_then(|e| e.pkg).and_then(|j| self.syms.entry_at(j, names::LANG).and_then(|e| e.pkg));
         if Some(p) == java_lang && (name == names::STRING || self.interner.get(name) == "Object") {
             return true;
         }
@@ -656,7 +671,7 @@ impl<'a> Worker<'a> {
             return false;
         }
         self.demand_std(p, name, crate::stdindex::TYPE | crate::stdindex::TERM);
-        if let Some(e) = self.syms.pkg(p).entries.get(&name) {
+        if let Some(e) = self.syms.entry_at(p, name) {
             if e.term.is_some() && e.class.is_none() {
                 return true;
             }
@@ -762,7 +777,7 @@ impl<'a> Worker<'a> {
             self.java_mut().placeholder_read(c);
         } else {
             match owner {
-                Owner::Package(p) => self.syms.pkgs[p.idx()].entries.entry(name).or_default().class = Some(c),
+                Owner::Package(p) => self.syms.enter_scoped(self.interner, p, name).class = Some(c),
                 Owner::Class(o) => {
                     self.syms.class_mut(o).nested.insert(name, c);
                     if let Some(oc) = self.syms.class(o).companion {
@@ -792,7 +807,7 @@ impl<'a> Worker<'a> {
         self.syms.class_mut(c).companion = Some(obj);
         // A std object of the name (`java.util.AbstractMap`'s entries) stands for the statics.
         let std_object = match term_owner {
-            Owner::Package(p) => self.syms.pkg(p).entries.get(&name).and_then(|e| e.term).map_or(false, |t| self.source(self.syms.sym(t).file).is_std && !self.in_jar(self.syms.sym(t).file)),
+            Owner::Package(p) => self.syms.entry_named(self.interner, p, name).and_then(|e| e.term).map_or(false, |t| self.source(self.syms.sym(t).file).is_std && !self.in_jar(self.syms.sym(t).file)),
             _ => false,
         };
         if !std_object {
@@ -961,7 +976,7 @@ impl<'a> Worker<'a> {
 
     /// The JDK class that a class of the std's platform layer stands for, named by its
     /// `@jvmClass` annotation.
-    pub(super) fn std_jvm_class(&self, c: ClassId) -> Option<String> {
+    pub(crate) fn std_jvm_class(&self, c: ClassId) -> Option<String> {
         let info = self.syms.class(c);
         if !self.source(info.file).is_std || self.in_jar(info.file) {
             return None;
@@ -1105,7 +1120,7 @@ impl<'a> Worker<'a> {
         let mut pkg = ROOT_PKG;
         for seg in pkg_path.split('/').filter(|s| !s.is_empty()) {
             let n = self.interner.intern(seg);
-            match self.syms.pkg(pkg).entries.get(&n).and_then(|e| e.pkg) {
+            match self.syms.entry_at(pkg, n).and_then(|e| e.pkg) {
                 Some(p) => pkg = p,
                 None => return false,
             }
@@ -1249,7 +1264,7 @@ impl<'a> Worker<'a> {
                 let name = self.interner.intern(&m.name);
                 self.demand_std(scala, name, crate::stdindex::TERM);
             }
-            own.extend(self.syms.pkg(scala).entries.iter().filter(|(_, e)| !e.extensions.is_empty()).map(|(&n, _)| n));
+            own.extend(self.syms.extension_names(scala));
         }
         let statics = c == self.b.string && self.syms.class(c).companion.is_none();
         for (i, m) in cf.methods.iter().enumerate() {
@@ -1286,7 +1301,7 @@ impl<'a> Worker<'a> {
                 info.state().set(Completion::Done);
             }
             self.syms.class_mut(c).companion = Some(obj);
-            self.syms.pkgs[scala.idx()].entries.entry(name).or_default().term = Some(sym);
+            self.syms.enter_scoped(self.interner, scala, name).term = Some(sym);
             self.java_mut().classes.replace(obj, JClass { source, cf: cf.clone(), companion_of: Some(c), inner: false });
             for (i, m) in cf.methods.iter().enumerate() {
                 if !visible(m.access) || m.access & ACC_STATIC == 0 {
@@ -1303,8 +1318,9 @@ impl<'a> Worker<'a> {
     }
 
     fn java_lang_pkg_id(&mut self) -> PkgId {
-        let java = self.syms.sub_pkg(ROOT_PKG, names::JAVA);
-        self.syms.sub_pkg(java, names::LANG)
+        // Identifiers, their own scope keys (`Symbols::sub_pkg_at`).
+        let java = self.syms.sub_pkg_at(ROOT_PKG, names::JAVA, names::JAVA);
+        self.syms.sub_pkg_at(java, names::LANG, names::LANG)
     }
 
     /// What a member lookup on `c` that found nothing may still get from Java: the members
@@ -1581,9 +1597,10 @@ impl<'a> Worker<'a> {
         }
         let (pkg_path, simple) = split_binary(binary);
         let mut p = ROOT_PKG;
+        // A binary name's segments are in the scope's key form already (`Symbols::sub_pkg_at`).
         for seg in pkg_path.split('/').filter(|s| !s.is_empty()) {
             let n = self.interner.intern(seg);
-            p = self.syms.sub_pkg(p, n);
+            p = self.syms.sub_pkg_at(p, n, n);
         }
         let name = self.interner.intern(simple);
         // A class nested in one the std stands in for is the std's (`Map$Entry`, nested in its
@@ -1592,7 +1609,7 @@ impl<'a> Worker<'a> {
         let first = simple.split('$').find(|s| !s.is_empty())?;
         let first_name = self.interner.intern(first);
         let in_std = first.len() < simple.len()
-            && self.syms.pkg(p).entries.get(&first_name).and_then(|e| e.class).map_or(false, |o| self.std_jvm_class(o).is_some());
+            && self.syms.scoped(self.interner, p, first_name).and_then(|e| e.class).map_or(false, |o| self.std_jvm_class(o).is_some());
         if !in_std {
             if let Some(c) = self.java_top_level(p, name, simple, read, arity) {
                 return Some(c);
@@ -1628,7 +1645,7 @@ impl<'a> Worker<'a> {
             return Some(c);
         }
         if self.load_java_pkg_member(p, name) {
-            return self.syms.pkg(p).entries.get(&name).and_then(|e| e.class);
+            return self.syms.scoped(self.interner, p, name).and_then(|e| e.class);
         }
         if let Some(c) = self.scala_pkg_class(p, name) {
             return Some(c);
@@ -1655,7 +1672,7 @@ impl<'a> Worker<'a> {
         if !self.load_pkg_member(p, name) {
             return None;
         }
-        self.syms.pkg(p).entries.get(&name).and_then(|e| e.class)
+        self.syms.scoped(self.interner, p, name).and_then(|e| e.class)
     }
 }
 

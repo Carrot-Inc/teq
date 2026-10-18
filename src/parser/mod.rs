@@ -34,6 +34,10 @@ pub struct Syntax {
     /// a reference resolves one (`Worker::package_term`), not where they are read, so that a
     /// program that names none pays no check (`typer::deprecation::possible`).
     pub std: bool,
+    /// A Scala CLI script's text with its wrapper appended (`script::wrap`): where the wrapper starts.
+    /// The file is read from the wrapper, whose class reads the script's statements, from the file's
+    /// start, at its `` `<script>` `` statement (`Parser::parse_script_body`).
+    pub script: Option<u32>,
 }
 
 pub struct Parser<'a> {
@@ -142,6 +146,11 @@ pub struct Parser<'a> {
     /// a line, innermost last: scalac opens none there, so each is dropped where it comes
     /// (`Parser::eat_annotation_colon`).
     dissolved: Vec<usize>,
+    /// A script's: the token its wrapper starts at, which the script's statements end before, until
+    /// the wrapper's class has read them (`parse_script_body`); `usize::MAX` otherwise.
+    script_end: usize,
+    /// The name of the wrapper's placeholder statement, `<script>`.
+    script_body: Name,
 }
 
 struct PendingDerives {
@@ -226,7 +235,18 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         body_at: usize::MAX,
         last_skip: None,
         dissolved: Vec::new(),
+        script_end: usize::MAX,
+        script_body: crate::names::EMPTY,
     };
+    // A script is read from its wrapper, past its own tokens and the layout that closes them.
+    if let Some(at) = syntax.script {
+        let end = p.toks.iter().position(|t| t.span.start >= at && !matches!(t.kind, Tok::Newline | Tok::Indent | Tok::Outdent));
+        if let Some(end) = end {
+            p.script_end = end;
+            p.script_body = interner.intern(crate::script::BODY);
+            p.pos = end;
+        }
+    }
     p.parse_file();
     // Typing reads the unit's version, the import's wherever it stands (`Feature.sourceVersion`).
     let unit = p.unit_source.unwrap_or(syntax.source);

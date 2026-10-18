@@ -206,6 +206,38 @@ package java.io:
       flush()
       out.close()
 
+  // The JDK's: bytes gathered in the buffer until it is full or flushed, a write as long as the
+  // buffer straight through once the buffer is flushed.
+  @javaDefined
+  @jvmClass("java/io/BufferedOutputStream")
+  class BufferedOutputStream(out: OutputStream, size: Int) extends FilterOutputStream(out):
+    if size <= 0 then throw new IllegalArgumentException("Buffer size <= 0")
+    protected var buf: Array[Byte] = new Array[Byte](size)
+    protected var count: Int = 0
+    def this(out: OutputStream) = this(out, 8192)
+    private def flushBuffer(): Unit =
+      if count > 0 then
+        out.write(buf, 0, count)
+        count = 0
+    @jvm("invokevirtual java/io/BufferedOutputStream.write(I)V")
+    override def write(b: Int): Unit =
+      if count >= buf.length then flushBuffer()
+      buf(count) = b.toByte
+      count += 1
+    @jvm("invokevirtual java/io/BufferedOutputStream.write([BII)V")
+    override def write(b: Array[Byte], off: Int, len: Int): Unit =
+      if len >= buf.length then
+        flushBuffer()
+        out.write(b, off, len)
+      else
+        if len > buf.length - count then flushBuffer()
+        System.arraycopy(b, off, buf, count, len)
+        count += len
+    @jvm("invokevirtual java/io/BufferedOutputStream.flush()V")
+    override def flush(): Unit =
+      flushBuffer()
+      out.flush()
+
   // The primitives as the JDK writes them: big-endian, a string in modified UTF-8 after its
   // length in two bytes (what Scala.js's test bridge frames its messages with).
   @javaDefined
@@ -1205,6 +1237,55 @@ package java.util:
     override def hashCode: Int = System.identityHashCode(key.asInstanceOf[AnyRef]) ^ System.identityHashCode(getValue.asInstanceOf[AnyRef])
 
   // A set over the keys of a map, whose `add` puts `true` under the element.
+  private class SynchronizedCollection[E](c: Collection[E]) extends Collection[E]:
+    def size(): Int = synchronized(c.size())
+    override def isEmpty(): Boolean = synchronized(c.isEmpty())
+    override def contains(o: Any): Boolean = synchronized(c.contains(o))
+    override def add(e: E): Boolean = synchronized(c.add(e))
+    override def remove(o: Any): Boolean = synchronized(c.remove(o))
+    override def addAll(other: Collection[? <: E]): Boolean = synchronized(c.addAll(other))
+    override def removeAll(other: Collection[?]): Boolean = synchronized(c.removeAll(other))
+    override def retainAll(other: Collection[?]): Boolean = synchronized(c.retainAll(other))
+    override def containsAll(other: Collection[?]): Boolean = synchronized(c.containsAll(other))
+    override def removeIf(test: java.util.function.Predicate[? >: E]): Boolean = synchronized(c.removeIf(test))
+    override def clear(): Unit = synchronized(c.clear())
+    override def toArray(): Array[AnyRef] = synchronized(c.toArray())
+    // The underlying collection's, which the caller traverses holding the view's monitor.
+    def iterator(): Iterator[E] = c.iterator()
+    override def toString: String = synchronized(c.toString)
+
+  private final class SynchronizedSet[E](s: Set[E]) extends SynchronizedCollection[E](s), Set[E]:
+    override def equals(o: Any): Boolean = (o.asInstanceOf[AnyRef] eq this) || synchronized(s.equals(o))
+    override def hashCode: Int = synchronized(s.hashCode)
+
+  private final class SynchronizedList[E](l: List[E]) extends SynchronizedCollection[E](l), List[E]:
+    def get(index: Int): E = synchronized(l.get(index))
+    override def set(index: Int, element: E): E = synchronized(l.set(index, element))
+    override def add(index: Int, element: E): Unit = synchronized(l.add(index, element))
+    override def remove(index: Int): E = synchronized(l.remove(index))
+    override def indexOf(o: Any): Int = synchronized(l.indexOf(o))
+    override def lastIndexOf(o: Any): Int = synchronized(l.lastIndexOf(o))
+    override def equals(o: Any): Boolean = (o.asInstanceOf[AnyRef] eq this) || synchronized(l.equals(o))
+    override def hashCode: Int = synchronized(l.hashCode)
+
+  private final class SynchronizedMap[K, V](m: Map[K, V]) extends Map[K, V]:
+    def size(): Int = synchronized(m.size())
+    override def isEmpty(): Boolean = synchronized(m.isEmpty())
+    def get(key: Any): V = synchronized(m.get(key))
+    def containsKey(key: Any): Boolean = synchronized(m.containsKey(key))
+    override def containsValue(value: Any): Boolean = synchronized(m.containsValue(value))
+    def put(key: K, value: V): V = synchronized(m.put(key, value))
+    def remove(key: Any): V = synchronized(m.remove(key))
+    override def putAll(other: Map[? <: K, ? <: V]): Unit = synchronized(m.putAll(other))
+    override def clear(): Unit = synchronized(m.clear())
+    override def putIfAbsent(key: K, value: V): V = synchronized(m.putIfAbsent(key, value))
+    def keySet(): Set[K] = synchronized(new SynchronizedSet(m.keySet()))
+    def values(): Collection[V] = synchronized(new SynchronizedCollection(m.values()))
+    def entrySet(): Set[Map.Entry[K, V]] = synchronized(new SynchronizedSet(m.entrySet()))
+    override def equals(o: Any): Boolean = (o.asInstanceOf[AnyRef] eq this) || synchronized(m.equals(o))
+    override def hashCode: Int = synchronized(m.hashCode)
+    override def toString: String = synchronized(m.toString)
+
   private final class SetFromMap[E](map: Map[E, java.lang.Boolean]) extends AbstractSet[E]:
     def size(): Int = map.size()
     override def contains(o: Any): Boolean = map.containsKey(o)
@@ -1281,8 +1362,16 @@ package java.util:
     def emptyList[T](): List[T] = new ArrayList[T]()
     def emptySet[T](): Set[T] = new HashSet[T]()
     def emptyMap[K, V](): Map[K, V] = new HashMap[K, V]()
-    def emptyIterator[T](): Iterator[T] = new ArrayIterator(newArray[T])
+    // An empty list's iterator: no element, `next` the JDK's `NoSuchElementException`, `remove` its
+    // `IllegalStateException`.
+    def emptyIterator[T](): Iterator[T] = new ArrayList[T]().iterator()
     def newSetFromMap[E](map: Map[E, java.lang.Boolean]): Set[E] = new SetFromMap(map)
+    // The JDK's synchronized views: each operation of the collection under the view's monitor, which a
+    // traversal takes itself (`synchronized (view)`), as the JDK says it must.
+    def synchronizedCollection[T](c: Collection[T]): Collection[T] = new SynchronizedCollection(Objects.requireNonNull(c))
+    def synchronizedSet[T](s: Set[T]): Set[T] = new SynchronizedSet(Objects.requireNonNull(s))
+    def synchronizedList[T](l: List[T]): List[T] = new SynchronizedList(Objects.requireNonNull(l))
+    def synchronizedMap[K, V](m: Map[K, V]): Map[K, V] = new SynchronizedMap(Objects.requireNonNull(m))
     @jvm("rt $1:L $2:L rtcall collectionsAddAll(Ljava/lang/Object;Ljava/lang/Object;)Z")
     def addAll[T](c: Collection[? >: T], elements: T*): Boolean =
       var changed = false

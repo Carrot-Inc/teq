@@ -490,7 +490,7 @@ impl<'a> Cx<'a> {
             let given = match info.owner {
                 Owner::Class(o) if syms.class(o).kind == ClassKind::Object && self.statically_placed(o) => syms.class(o).members.get(&info.name).copied(),
                 Owner::Class(o) if instance => syms.class(o).members.get(&info.name).copied(),
-                Owner::Package(p) => syms.pkg(p).entries.get(&info.name).and_then(|e| e.term),
+                Owner::Package(p) => syms.package_object_entry(p, info.name).and_then(|e| e.term),
                 _ => None,
             };
             let Some(g) = given.filter(|&g| syms.sym(g).kind == SymKind::Given && syms.sym(g).impl_class == Some(c)) else { continue };
@@ -1159,7 +1159,7 @@ pub fn interpolators(typer: &mut crate::typer::Worker, runtime: PkgId) -> Vec<(S
     for (member, helper) in [("s", "interpolateS"), ("raw", "interpolateRaw")] {
         let (m, h) = (typer.interner.intern(member), typer.interner.intern(helper));
         typer.demand_std(runtime, h, crate::stdindex::TERM);
-        let found = typer.syms.class(c).members.get(&m).copied().zip(typer.syms.pkg(runtime).entries.get(&h).and_then(|e| e.term));
+        let found = typer.syms.class(c).members.get(&m).copied().zip(typer.syms.entry_named(typer.interner, runtime, h).and_then(|e| e.term));
         if let Some((m, h)) = found {
             let alts: Vec<SymId> = typer.syms.alternatives(m).map_or_else(|| vec![m], |a| a.to_vec());
             out.extend(alts.into_iter().filter(|&a| typer.syms.sym(a).kind == SymKind::Def).map(|a| (a, h)));

@@ -919,7 +919,7 @@ pub(super) fn bare_package_sym_text(syms: &Symbols, interner: &Interner, naming:
     }
     // The conversion of a top-level `implicit class` shares the class's name.
     let class_named_alike =
-        info.kind == SymKind::Def && matches!(info.owner, Owner::Package(p) if syms.pkg(p).entries.get(&info.name).map_or(false, |e| e.class.is_some()));
+        info.kind == SymKind::Def && matches!(info.owner, Owner::Package(p) if syms.scoped(interner, p, info.name).map_or(false, |e| e.class.is_some()));
     if class_named_alike {
         name.push_str("$f");
     }

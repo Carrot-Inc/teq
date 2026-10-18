@@ -298,7 +298,7 @@ impl<'a> Worker<'a> {
         }
         for parent in ["NonEmptyTuple", "Tuple", "Product", "Equals"] {
             let name = self.interner.intern(parent);
-            if let Some(p) = self.syms.pkg(scala).entries.get(&name).and_then(|e| e.class) {
+            if let Some(p) = self.syms.scoped(self.interner, scala, name).and_then(|e| e.class) {
                 let pt = self.types.class(p, &[]);
                 base_types.push((p, pt));
             }
@@ -779,7 +779,7 @@ impl<'a> Worker<'a> {
 
     pub(super) fn tuple_xxl_module(&mut self) -> Option<ClassId> {
         let runtime = self.interner.intern("runtime");
-        let p = self.syms.pkg(self.b.scala_pkg).entries.get(&runtime).and_then(|e| e.pkg)?;
+        let p = self.syms.entry_at(self.b.scala_pkg, runtime).and_then(|e| e.pkg)?;
         let name = self.interner.intern("TupleXXL");
         let sym = match self.demand_term(p, name) {
             Some(s) => s,
@@ -822,7 +822,7 @@ impl<'a> Worker<'a> {
         self.note_arity_class(n, c, table);
         let name = self.syms.class(c).name;
         self.arity_classes.insert(name, c);
-        self.syms.pkgs[self.b.scala_pkg.idx()].entries.entry(name).or_default().class = Some(c);
+        self.syms.enter_scoped(self.interner, self.b.scala_pkg, name).class = Some(c);
         self.check_class(c);
         if self.loaded.is_some() {
             self.link_library_class(c);

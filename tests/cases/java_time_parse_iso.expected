@@ -1,0 +1,38 @@
+10:15
+10:15:30.500
+10:15:00
+10:15:30.5
+03:45 PM
+09:05:07.123
+10:15 10:15:30.123 15:45
+10 15 true 00:00 36900
+bad time: DateTimeParseException Text '25:00' could not be parsed: Invalid value for HourOfDay (valid values 0 - 23): 25 @0
+1 DECEMBER MAY 12
+2024-02-29 FEBRUARY THURSDAY 4 SUNDAY
+MONDAY
+2024-03-05
+2024-03-05
+2024-03-05
+2024-03-05
+2023-02-28
+strict: DateTimeParseException Text '2023-02-30' could not be parsed: Invalid date 'FEBRUARY 30' @0
+index: DateTimeParseException Text '2024-3-05' could not be parsed at index 5 @5
+trailing: DateTimeParseException Text '2024-03-05x' could not be parsed, unparsed text found at index 10 @10
+name: DateTimeParseException Text 'Marc 05, 2024' could not be parsed at index 0 @0
+2024-02-29 2024-02-29
+2024-02-29T00:00:00Z
+2024-03-05T14:07:00
+2024-03-05T14:07
+Tue March 05, 2024
+2024-03-05T10:15:30Z 2024-03-05T10:15:30.250Z 2024-03-05T10:15:30Z
+2024-03-05T00:00:00Z 2024-03-05T10:00:00Z
+2024-03-05T07:15:30Z 2024-03-07T10:15:30Z 2024-03-05T08:45:30Z
+2024-03-05 2024-03-04
+months: UnsupportedTemporalTypeException Unsupported unit: Months
+truncate: UnsupportedTemporalTypeException Unit is too large to be used for truncation
+bad instant: DateTimeParseException Text '2024-03-05 10:15:30Z' could not be parsed at index 10 @10
+365
+9
+0
+22
+1 2 5

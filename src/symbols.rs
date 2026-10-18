@@ -1,6 +1,6 @@
 use crate::arena::Arena;
 use crate::ast::{mods, DefId, Mods};
-use crate::intern::{FxMap, Name};
+use crate::intern::{FxMap, Interner, Name};
 use crate::arena::{CellRef, Cells};
 use crate::source::{FileId, Span};
 use crate::types::*;
@@ -529,6 +529,13 @@ pub struct PkgEntry {
     pub alias: Option<AliasId>,
     pub pkg: Option<PkgId>,
     pub extensions: Vec<SymId>,
+}
+
+impl PkgEntry {
+    /// Whether the entry holds a term, a class, an alias or a package.
+    pub fn any(&self) -> bool {
+        self.term.is_some() || self.class.is_some() || self.alias.is_some() || self.pkg.is_some()
+    }
 }
 
 #[derive(Clone)]
@@ -1092,8 +1099,17 @@ impl Symbols {
         self.pkgs.get(p.0)
     }
 
-    pub fn sub_pkg(&mut self, parent: PkgId, name: Name) -> PkgId {
-        if let Some(p) = self.pkgs[parent.idx()].entries.get(&name).and_then(|e| e.pkg) {
+    /// The package `name` of `parent`, made where it is not yet: entered under its scope's key (`scope_key`), the
+    /// package keeping `name`, which messages show.
+    pub fn sub_pkg(&mut self, interner: &Interner, parent: PkgId, name: Name) -> PkgId {
+        let key = self.scope_key(interner, parent, name);
+        self.sub_pkg_at(parent, key, name)
+    }
+
+    /// `sub_pkg` under `key`, a name already in the scope's key form: a scope key, or a class file's binary
+    /// package name, which encoding leaves as it is (dotty's `mangled` of a mangled name).
+    pub fn sub_pkg_at(&mut self, parent: PkgId, key: Name, name: Name) -> PkgId {
+        if let Some(p) = self.entry_at(parent, key).and_then(|e| e.pkg) {
             return p;
         }
         let id = PkgId(self.pkgs.push(PkgInfo {
@@ -1106,9 +1122,182 @@ impl Symbols {
             forwarders: Vec::new(),
             package_object: None,
         }));
-        self.pkgs[parent.idx()].entries.entry(name).or_default().pkg = Some(id);
+        self.enter_at(parent, key).pkg = Some(id);
         id
     }
+    /// The key of package `p`'s scope that a class, an object or a package named `name` stands under, the one
+    /// policy every entry of one and every lookup of one goes through (`scoped`, `entry_named`, `type_named`,
+    /// `has_named`, `sub_pkg`, `enter_scoped`). Where the scope encodes its keys (`encodes_keys`) it is the encoded
+    /// name, as dotty keeps the entries of a package its class path loads, and looks them up, by `name.mangled`
+    /// (`SymbolLoaders.PackageScope`, SymbolLoaders.scala 250–263; `SimpleName.mangle` encodes and never decodes):
+    /// `` `x-y` `` and `x$minusy` are one entry, `$u0041` is no other than its own. Elsewhere it is `name` itself.
+    /// A top-level value, method, given or type alias is the package object's member in dotty, whose scope keeps
+    /// the spelling: it stands under `name` whatever its package. Each name's encoded form is read once
+    /// (`Interner::encoded`), so a key is a load and an entry one lookup.
+    #[inline(always)]
+    pub fn scope_key(&self, interner: &Interner, p: PkgId, name: Name) -> Name {
+        if !Self::encodes_keys(p) {
+            return name;
+        }
+        interner.encoded(name)
+    }
+
+    /// Whether package `p`'s scope keys its classes, objects and packages by their encoded names: the root
+    /// package's, which holds the empty package's members too. dotty keys every package its class path loads so
+    /// (SymbolLoaders.scala 347, 384); teq's other packages keep the spelling, a package defined in source alone
+    /// as dotty's plain scope does.
+    #[inline(always)]
+    fn encodes_keys(p: PkgId) -> bool {
+        p == ROOT_PKG
+    }
+
+    /// The entry of package `p` under `key`, a name already in the scope's key form: a scope key (`scope_key`), or
+    /// a class file's binary name, which encoding leaves as it is.
+    #[inline(always)]
+    pub fn entry_at(&self, p: PkgId, key: Name) -> Option<&PkgEntry> {
+        self.pkg(p).entries.get(&key)
+    }
+
+    /// Whether package `p` has a member named `name` in either scope (`entry_named`), read without a merged view.
+    #[inline(always)]
+    pub fn has_named(&self, interner: &Interner, p: PkgId, name: Name) -> bool {
+        if !Self::encodes_keys(p) {
+            return self.entry_at(p, name).is_some_and(PkgEntry::any);
+        }
+        let key = self.scope_key(interner, p, name);
+        self.entry_at(p, key).is_some_and(PkgEntry::any) || (key != name && self.entry_at(p, name).is_some_and(PkgEntry::any))
+    }
+
+    /// The class or the type alias named `name` of package `p`, each from its scope (`entry_named`), read without
+    /// a merged view.
+    #[inline(always)]
+    pub fn type_named(&self, interner: &Interner, p: PkgId, name: Name) -> (Option<ClassId>, Option<AliasId>) {
+        let key = self.scope_key(interner, p, name);
+        let keyed = self.entry_at(p, key);
+        if key == name {
+            return keyed.map_or((None, None), |e| (e.class, e.alias));
+        }
+        (keyed.and_then(|e| e.class), self.entry_at(p, name).and_then(|e| e.alias))
+    }
+
+    /// The entry of package `p` that holds its top-level value, method, given, type alias or extensions named
+    /// `name`: the package object's scope, which keeps the spelling (`scope_key`).
+    #[inline(always)]
+    pub fn package_object_entry(&self, p: PkgId, name: Name) -> Option<&PkgEntry> {
+        self.pkg(p).entries.get(&name)
+    }
+
+    /// The entry of package `p` that holds its class, object or package named `name` (`scope_key`).
+    #[inline(always)]
+    pub fn scoped(&self, interner: &Interner, p: PkgId, name: Name) -> Option<&PkgEntry> {
+        self.entry_at(p, self.scope_key(interner, p, name))
+    }
+
+    /// The members of package `p` named `name`, each from the scope it stands in: its class, object and package
+    /// under the scope's key (`scope_key`); its top-level value, method, given, type alias and extensions under
+    /// `name`. One entry where the key is the name.
+    #[inline(always)]
+    pub fn entry_named(&self, interner: &Interner, p: PkgId, name: Name) -> Option<std::borrow::Cow<'_, PkgEntry>> {
+        let key = self.scope_key(interner, p, name);
+        if key == name {
+            return self.entry_at(p, name).map(std::borrow::Cow::Borrowed);
+        }
+        self.entry_merged(p, name, key)
+    }
+
+    /// The entry of package `p` under `key` to write, made where it is not yet: `entry_at`'s.
+    #[inline(always)]
+    pub fn enter_at(&mut self, p: PkgId, key: Name) -> &mut PkgEntry {
+        self.pkgs[p.idx()].entries.entry(key).or_default()
+    }
+
+    /// The entry of package `p` under `key` to write, where there is one: `entry_at`'s.
+    #[inline(always)]
+    pub fn entry_at_mut(&mut self, p: PkgId, key: Name) -> Option<&mut PkgEntry> {
+        self.pkgs[p.idx()].entries.get_mut(&key)
+    }
+
+    /// The entry of package `p` to enter its class, object or package named `name` in, made where it is not yet:
+    /// `scoped`'s.
+    #[inline(always)]
+    pub fn enter_scoped(&mut self, interner: &Interner, p: PkgId, name: Name) -> &mut PkgEntry {
+        let key = self.scope_key(interner, p, name);
+        self.enter_at(p, key)
+    }
+
+    /// The entry of package `p` to enter its top-level value, method, given, type alias or extension named `name`
+    /// in, made where it is not yet: `package_object_entry`'s.
+    #[inline(always)]
+    pub fn enter_package_object(&mut self, p: PkgId, name: Name) -> &mut PkgEntry {
+        self.enter_at(p, name)
+    }
+
+    /// `package_object_entry`'s entry to write, where there is one.
+    #[inline(always)]
+    pub fn package_object_entry_mut(&mut self, p: PkgId, name: Name) -> Option<&mut PkgEntry> {
+        self.entry_at_mut(p, name)
+    }
+
+    /// The members of package `p` by their names, as dotty lists a scope's symbols: each entry under its key,
+    /// which is its members' spelling, but for an entry of the root package whose class, object or package is
+    /// keyed by an encoded name not its own (`scope_key`): that member under its spelling, and the package
+    /// object's members the entry holds, spelt as the key, under the key apart (`members_split`). What lists a
+    /// package's members by name reads them so: completions, wildcard exports, the jar's shapes.
+    pub fn members(&self, p: PkgId) -> impl Iterator<Item = (Name, std::borrow::Cow<'_, PkgEntry>)> + '_ {
+        self.pkg(p).entries.iter().flat_map(move |(&key, e)| {
+            let spelt = if Self::encodes_keys(p) { self.scope_spelling(e).filter(|&n| n != key) } else { None };
+            match spelt {
+                None => [Some((key, std::borrow::Cow::Borrowed(e))), None],
+                Some(n) => self.members_split(key, n, e),
+            }
+            .into_iter()
+            .flatten()
+        })
+    }
+
+    /// The names of package `p`'s top-level extensions: members of the package object, whose scope keeps the
+    /// spelling (`package_object_entry`), so each entry's key is their name.
+    pub fn extension_names(&self, p: PkgId) -> impl Iterator<Item = Name> + '_ {
+        self.pkg(p).entries.iter().filter(|(_, e)| !e.extensions.is_empty()).map(|(&n, _)| n)
+    }
+
+    /// The name entry `e`'s class, object or package was entered by, the package scope's member of it.
+    fn scope_spelling(&self, e: &PkgEntry) -> Option<Name> {
+        let object = e.term.filter(|&t| matches!(self.sym(t).kind, SymKind::Object(_)));
+        e.class.map(|c| self.class(c).name).or(e.pkg.map(|q| self.pkg(q).name)).or(object.map(|t| self.sym(t).name))
+    }
+
+    /// `members` of an entry keyed by `key`, the encoded form of its class's, object's or package's name `spelt`.
+    #[cold]
+    #[inline(never)]
+    fn members_split<'s>(&'s self, key: Name, spelt: Name, e: &PkgEntry) -> [Option<(Name, std::borrow::Cow<'s, PkgEntry>)>; 2] {
+        let object = e.term.filter(|&t| matches!(self.sym(t).kind, SymKind::Object(_)));
+        let scope = PkgEntry { term: object, class: e.class, alias: None, pkg: e.pkg, extensions: Vec::new() };
+        let own = PkgEntry { term: e.term.filter(|_| object.is_none()), class: None, alias: e.alias, pkg: None, extensions: e.extensions.clone() };
+        let any = own.term.is_some() || own.alias.is_some() || !own.extensions.is_empty();
+        [Some((spelt, std::borrow::Cow::Owned(scope))), any.then(|| (key, std::borrow::Cow::Owned(own)))]
+    }
+
+    /// `entry_named` where the key is not the name: the two entries' members merged.
+    #[cold]
+    #[inline(never)]
+    fn entry_merged(&self, p: PkgId, name: Name, key: Name) -> Option<std::borrow::Cow<'_, PkgEntry>> {
+        let spelt = self.entry_at(p, name);
+        let keyed = self.entry_at(p, key);
+        if spelt.is_none() && keyed.is_none() {
+            return None;
+        }
+        let object = keyed.and_then(|e| e.term).filter(|&t| matches!(self.sym(t).kind, SymKind::Object(_)));
+        Some(std::borrow::Cow::Owned(PkgEntry {
+            term: spelt.and_then(|e| e.term).or(object),
+            class: keyed.and_then(|e| e.class),
+            alias: spelt.and_then(|e| e.alias),
+            pkg: keyed.and_then(|e| e.pkg),
+            extensions: spelt.map_or_else(Vec::new, |e| e.extensions.clone()),
+        }))
+    }
+
+
 
     pub fn new_class(
         &mut self,
@@ -1298,7 +1487,7 @@ impl Symbols {
         }
         let Owner::Package(p) = owner else { return None };
         let name = interner.lookup(&format!("{}$main", interner.get(info.name)))?;
-        self.pkg(p).entries.get(&name).and_then(|e| e.term)
+        self.package_object_entry(p, name).and_then(|e| e.term)
     }
 
     /// The given whose one instance the class `c` is where that instance is a static module:
@@ -1313,7 +1502,7 @@ impl Symbols {
         }
         let mut at = info.owner;
         let given = match info.owner {
-            Owner::Package(p) => self.pkg(p).entries.get(&info.name).and_then(|e| e.term),
+            Owner::Package(p) => self.package_object_entry(p, info.name).and_then(|e| e.term),
             Owner::Class(o) => self.class(o).members.get(&info.name).copied(),
             Owner::Local => None,
         }?;

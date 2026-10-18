@@ -858,7 +858,7 @@ impl<'a> Worker<'a> {
             let alias = rename.unwrap_or(n);
             let taken = match home {
                 Home::Class(c) => self.syms.class(c).members.contains_key(&alias),
-                Home::File(p, _) => self.syms.pkg(p).entries.get(&alias).is_some_and(|e| e.term.is_some()),
+                Home::File(p, _) => self.syms.entry_named(self.interner, p, alias).is_some_and(|e| e.term.is_some()),
             };
             if self.name_str(alias) == "_" || taken {
                 continue;
@@ -887,7 +887,7 @@ impl<'a> Worker<'a> {
                     self.syms.class_mut(c).extensions.push(s);
                     self.syms.note_member_name(c, name);
                 }
-                Home::File(p, _) => self.syms.pkgs[p.idx()].entries.entry(name).or_default().extensions.push(s),
+                Home::File(p, _) => self.syms.enter_package_object(p, name).extensions.push(s),
             }
             return;
         }
@@ -1035,7 +1035,7 @@ impl<'a> Worker<'a> {
     /// package enters where they are first asked for (`pkg_term`).
     fn package_members(&mut self, p: PkgId, name: Name) -> Vec<SymId> {
         let _ = self.pkg_term(p, name);
-        let Some(e) = self.syms.pkg(p).entries.get(&name) else { return Vec::new() };
+        let Some(e) = self.syms.entry_named(self.interner, p, name) else { return Vec::new() };
         let mut out: Vec<SymId> = match e.term {
             Some(t) => self.syms.alternatives(t).map_or_else(|| vec![t], |a| a.to_vec()),
             None => Vec::new(),
@@ -1052,7 +1052,7 @@ impl<'a> Worker<'a> {
     /// files' top-level definitions and objects, public, its givens for `given` alone, by name.
     fn package_forwardable_names(&mut self, p: PkgId, givens: bool) -> Vec<Name> {
         let mut out: Vec<Name> = Vec::new();
-        for (&name, e) in &self.syms.pkg(p).entries {
+        for (name, e) in self.syms.members(p) {
             let alts: Vec<SymId> = match e.term {
                 Some(t) => self.syms.alternatives(t).map_or_else(|| vec![t], |a| a.to_vec()),
                 None => Vec::new(),
@@ -1079,7 +1079,7 @@ impl<'a> Worker<'a> {
     fn forwardable_type_names(&mut self, vp: &ValuePath) -> Vec<Name> {
         if let Some(p) = vp.pkg {
             let mut out: Vec<Name> = Vec::new();
-            for (&n, e) in &self.syms.pkg(p).entries {
+            for (n, e) in self.syms.members(p) {
                 let class = e.class.is_some_and(|k| {
                     let info = self.syms.class(k);
                     info.kind != ClassKind::Object && info.mods & mods::PRIVATE == 0
@@ -1151,8 +1151,8 @@ impl<'a> Worker<'a> {
                 (info.type_aliases.contains_key(&alias), info.nested.get(&alias).copied())
             }
             Home::File(p, _) => {
-                let e = self.syms.pkg(p).entries.get(&alias);
-                (e.is_some_and(|e| e.alias.is_some()), e.and_then(|e| e.class))
+                let e = self.syms.entry_named(self.interner, p, alias);
+                (e.as_ref().is_some_and(|e| e.alias.is_some()), e.as_ref().and_then(|e| e.class))
             }
         };
         let existing = match (alias_taken, nested) {
@@ -1178,7 +1178,7 @@ impl<'a> Worker<'a> {
                 self.syms.class_mut(c).type_aliases.insert(alias, a);
                 crate::symbols::type_member_written(alias);
             }
-            Home::File(p, _) => self.syms.pkgs[p.idx()].entries.entry(alias).or_default().alias = Some(a),
+            Home::File(p, _) => self.syms.enter_package_object(p, alias).alias = Some(a),
         }
         true
     }
@@ -1190,8 +1190,8 @@ impl<'a> Worker<'a> {
     fn forwarded_type(&mut self, vp: &ValuePath, name: Name) -> Option<TypeId> {
         let static_class = match vp.pkg {
             Some(p) => {
-                let e = self.syms.pkg(p).entries.get(&name);
-                if let Some(a) = e.and_then(|e| e.alias) {
+                let e = self.syms.entry_named(self.interner, p, name);
+                if let Some(a) = e.as_ref().and_then(|e| e.alias) {
                     return Some(self.alias_reference(a));
                 }
                 match e.and_then(|e| e.class) {
@@ -1321,7 +1321,7 @@ impl<'a> Worker<'a> {
     /// JavaScript type; false for a class member.
     fn forwarded_alias_js(&mut self, vp: &ValuePath, name: Name) -> bool {
         if let Some(p) = vp.pkg {
-            let Some(a) = self.syms.pkg(p).entries.get(&name).and_then(|e| e.alias) else { return false };
+            let Some(a) = self.syms.package_object_entry(p, name).and_then(|e| e.alias) else { return false };
             self.complete_alias(a);
             return self.syms.aliases[a.idx()].js;
         }

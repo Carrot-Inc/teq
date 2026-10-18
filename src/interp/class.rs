@@ -99,11 +99,14 @@ impl<'a, 't> Interp<'a, 't> {
     // ---- modules ----
 
     pub(super) fn module(&mut self, c: ClassId) -> R {
+        // While another thread initialises it, the running thread waits for the end and looks again
+        // (JLS 12.4.2's step 2): made, or failed and the running thread's to make.
+        while super::threads::initialising(self) && super::threads::wait_init(self, &super::threads::InitKey::Module(c))? {}
         if let Some(o) = self.made.module(c) {
             return Ok(Value::Obj(o.clone()));
         }
         // Read while its superclass constructors run: not published yet.
-        if self.unpublished.iter().any(|&(k, _)| k == c) {
+        if self.exec.unpublished.iter().any(|&(k, _)| k == c) {
             return Ok(Value::Null);
         }
         if self.syms().class(c).js_binding.is_some() {
@@ -131,19 +134,24 @@ impl<'a, 't> Interp<'a, 't> {
             born: Cell::new(0),
             made: Cell::new(super::made_now()),
         });
-        // The statics of a Java class: its members are the natives the interpreter has for them.
+        // The statics of a Java class: its members are the natives the interpreter has for them,
+        // and its static initialiser the one it knows for that class, if any (`java_statics`).
         if java_statics {
             let classes = self.syms().classes.len();
             self.made.set_module(c, obj.clone(), self.records.runs, classes);
             super::leave_epoch(outer);
+            super::natives::java_statics(self, c, &obj)?;
             return Ok(Value::Obj(obj));
         }
         // Published once the superclass constructors return, before the body runs (`construct`),
-        // as the JVM's `<clinit>` stores `MODULE$` after the super call and then runs the body.
-        self.unpublished.push((c, obj.clone()));
+        // as the JVM's `<clinit>` stores `MODULE$` after the super call and then runs the body. Other
+        // threads wait until the body ends, as for a class the JVM initialises on another.
+        self.exec.unpublished.push((c, obj.clone()));
+        let init = super::threads::InitKey::Module(c);
+        super::threads::begin_init(self, init, &Value::Obj(obj.clone()));
         let r = self.enter().and_then(|_| {
             let r = self.construct(&obj, c, Vec::new());
-            self.depth -= 1;
+            self.exec.depth -= 1;
             r
         });
         self.publish_module(c, &obj);
@@ -153,8 +161,10 @@ impl<'a, 't> Interp<'a, 't> {
         // builds it again rather than reading its absent fields.
         if let Err(f) = r {
             self.made.clear_module(c);
+            super::threads::end_init(self, &init);
             return Err(f);
         }
+        super::threads::end_init(self, &init);
         Ok(Value::Obj(obj))
     }
 
@@ -530,7 +540,7 @@ impl<'a, 't> Interp<'a, 't> {
         }
         self.enter()?;
         let r = self.construct(&obj, case, Vec::new());
-        self.depth -= 1;
+        self.exec.depth -= 1;
         r?;
         if stateful {
             self.made.insert_static(sym, v.clone(), self.records.runs);
@@ -598,7 +608,7 @@ impl<'a, 't> Interp<'a, 't> {
         let prof = self.prof_ctor(c);
         let r = self.construct(&obj, c, args);
         self.prof_exit(prof);
-        self.depth -= 1;
+        self.exec.depth -= 1;
         r?;
         Ok(Value::Obj(obj))
     }
@@ -611,7 +621,7 @@ impl<'a, 't> Interp<'a, 't> {
         let obj = Rc::new(Object { class: c, fields: RefCell::new(Vec::new()), env: None, name: None, ordinal: Cell::new(0), hash: Cell::new(0), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(super::made_now()) });
         self.enter()?;
         let r = self.construct_via(&obj, via, args);
-        self.depth -= 1;
+        self.exec.depth -= 1;
         r?;
         Ok(Value::Obj(obj))
     }
@@ -751,8 +761,8 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// Publishes the module `obj` of `c` made by `module`, if it is one still unpublished.
     fn publish_module(&mut self, c: ClassId, obj: &Rc<Object>) {
-        if let Some(i) = self.unpublished.iter().position(|(k, o)| *k == c && Rc::ptr_eq(o, obj)) {
-            self.unpublished.remove(i);
+        if let Some(i) = self.exec.unpublished.iter().position(|(k, o)| *k == c && Rc::ptr_eq(o, obj)) {
+            self.exec.unpublished.remove(i);
             let classes = self.syms().classes.len();
             self.made.set_module(c, obj.clone(), self.records.runs, classes);
         }
@@ -2223,6 +2233,26 @@ impl<'a, 't> Interp<'a, 't> {
                 if !matches!(v, Value::Absent) {
                     return Ok(v);
                 }
+                // `LazyVals.mkThreadSafeDef`'s states over the logical threads: while another thread
+                // evaluates it (`Evaluating`, `Waiting`) the running one waits for the end and reads
+                // again, the value, or after a failure (the state null again) its own to evaluate.
+                let at = match &recv {
+                    Value::Obj(o) => Some(super::threads::InitKey::Lazy(Rc::as_ptr(o) as *const u8 as usize, key)),
+                    _ => None,
+                };
+                if let Some(k) = &at {
+                    let mut waited = false;
+                    while super::threads::initialising(self) && super::threads::wait_init(self, k)? {
+                        waited = true;
+                    }
+                    if waited {
+                        let v = self.read_slot(&recv, key);
+                        if !matches!(v, Value::Absent) {
+                            return Ok(v);
+                        }
+                    }
+                    super::threads::begin_init(self, *k, &recv);
+                }
                 let env = match &recv {
                     Value::Obj(o) => o.env.clone(),
                     _ => None,
@@ -2242,7 +2272,7 @@ impl<'a, 't> Interp<'a, 't> {
                 // module's making does, where the JVM's thread waits on its own latch.
                 let v = self.enter().and_then(|_| {
                     let v = self.eval(init, &frame, &cx);
-                    self.depth -= 1;
+                    self.exec.depth -= 1;
                     v
                 });
                 drop(context);
@@ -2254,6 +2284,9 @@ impl<'a, 't> Interp<'a, 't> {
                     super::stamp(v, born);
                 }
                 super::leave_epoch(outer);
+                if let Some(k) = &at {
+                    super::threads::end_init(self, k);
+                }
                 v
             }
             Member::Module(c) => self.module(c),
@@ -2295,6 +2328,17 @@ impl<'a, 't> Interp<'a, 't> {
                     Value::Obj(o) => self.runtime_class_name(o.class),
                     other => Rc::from(self.type_name(other)),
                 };
+                // A proxy's method (`java.lang.reflect.Proxy.newProxyInstance`): its handler's `invoke`
+                // with the method of that name and the arguments, none an absent array, as the JDK's.
+                if &*class == "java.lang.reflect.ProxyInstance" {
+                    let handler = self.call_by_name(recv.clone(), "handler", Vec::new())?;
+                    let Some(method) = self.typer.class_at(&["java", "lang", "reflect", "Method"]) else {
+                        return self.unsupported("java.lang.reflect.Method is missing from the standard library");
+                    };
+                    let m = self.construct_new(method, vec![Value::string(self.name(name).to_string()), Value::Null], &Frame::new(None))?;
+                    let array = if args.is_empty() { Value::Null } else { Value::array(args) };
+                    return self.call_by_name(handler, "invoke", vec![recv, m, array]);
+                }
                 let n = self.name(name).to_string();
                 if let Value::Obj(o) = &recv {
                     if self.typer.is_java_class(o.class) {
@@ -2415,6 +2459,16 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// `a.b.`: a package's path as the JVM names it, each name encoded (`x$minusy.` for a directory
+    /// `x-y`).
+    fn binary_package_path(&self, p: crate::types::PkgId) -> String {
+        let info = self.syms().pkg(p);
+        match info.parent {
+            Some(parent) => format!("{}{}.", self.binary_package_path(parent), crate::jvm::names::encode_name(self.name(info.name))),
+            None => String::new(),
+        }
+    }
+
     /// `a.b.C.D`: the path of a class with dots throughout, as builtins are keyed.
     pub(super) fn class_path(&self, c: ClassId) -> String {
         let info = self.syms().class(c);
@@ -2426,11 +2480,13 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     /// The name `getClass.getName` gives: packages joined with dots, the enclosing classes
-    /// with `$`, an object with a `$` after it.
+    /// with `$`, an object with a `$` after it, each name encoded as the JVM's class is named,
+    /// packages' included (`NameTransformer.encode`, dotty's `javaClassName` of
+    /// `fullName.mangledString`).
     pub(super) fn runtime_class_name(&self, c: ClassId) -> Rc<str> {
         let info = self.syms().class(c);
         let mut s = match info.owner {
-            Owner::Package(p) => self.package_path(p),
+            Owner::Package(p) => self.binary_package_path(p),
             Owner::Class(o) => {
                 let mut outer = self.runtime_class_name(o).to_string();
                 if !outer.ends_with('$') {
@@ -2440,7 +2496,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             Owner::Local => String::new(),
         };
-        s.push_str(self.name(info.name));
+        s.push_str(&crate::jvm::names::encode_name(self.name(info.name)));
         if info.kind == ClassKind::Object {
             s.push('$');
         }
@@ -2526,7 +2582,7 @@ impl<'a, 't> Interp<'a, 't> {
             let mut at = Some(crate::symbols::ROOT_PKG);
             for seg in path {
                 let seg_name = self.typer.interner.intern(seg);
-                at = at.and_then(|p| self.syms().pkg(p).entries.get(&seg_name).and_then(|e| e.pkg));
+                at = at.and_then(|p| self.syms().entry_at(p, seg_name).and_then(|e| e.pkg));
             }
             pkgs.extend(at);
         }

@@ -1,0 +1,1 @@
+tests/interp-script/fixture/scripts/no-sources.sc: its `//> using dep` lines resolve through the configuration of <repo>/tests/interp-script/fixture/teq.lock whose sources the script includes, and it includes none: name one with --module <project>

@@ -145,7 +145,7 @@ pub fn var_of_setter(syms: &Symbols, interner: &Interner, setter: SymId) -> Opti
     match info.owner {
         Owner::Class(c) => own_var(syms, c, name),
         Owner::Package(p) => {
-            let v = syms.pkg(p).entries.get(&name)?.term?;
+            let v = syms.package_object_entry(p, name)?.term?;
             (syms.sym(v).kind == SymKind::Var && syms.sym(v).owner == Owner::Package(p)).then_some(v)
         }
         Owner::Local => None,

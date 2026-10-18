@@ -1,0 +1,5 @@
+declared: greet hello you
+declared, no parameters: bare
+inherited: java.lang.NoSuchMethodException: Greeter.toString()
+other parameters: java.lang.NoSuchMethodException: Greeter.greet()
+more parameters: java.lang.NoSuchMethodException: Greeter.bare(java.lang.String,int)

@@ -645,6 +645,14 @@ mod os {
         fn mmap(addr: *mut c_void, len: usize, prot: i32, flags: i32, fd: i32, offset: i64) -> *mut c_void;
         fn munmap(addr: *mut c_void, len: usize) -> i32;
         fn madvise(addr: *mut c_void, len: usize, advice: i32) -> i32;
+        #[cfg(feature = "threads")]
+        fn mprotect(addr: *mut c_void, len: usize, prot: i32) -> i32;
+    }
+
+    /// The first `len` bytes from `at` made inaccessible (a stack's guard), whether they are.
+    #[cfg(feature = "threads")]
+    pub unsafe fn protect_none(at: *mut u8, len: usize) -> bool {
+        mprotect(at as *mut c_void, len, 0) == 0
     }
 
     /// The advice that takes the pages off the process's footprint: Linux drops them on
@@ -733,6 +741,22 @@ pub fn zeroed_pages(len: usize) -> *mut u8 {
         unsafe { os::map(len) }
     } else {
         unsafe { System.alloc_zeroed(Layout::from_size_align_unchecked(len, SMALL_STEP)) }
+    }
+}
+
+/// A coroutine's stack (`interp/threads.rs`): `len` bytes of address space mapped without a reservation
+/// of swap, each page the system's as the stack first touches it, the lowest `guard` bytes inaccessible;
+/// null where the system refuses the mapping (a limit of the address space). Given back by
+/// `free_zeroed_pages`.
+#[cfg(all(feature = "threads", any(target_os = "macos", target_os = "linux")))]
+pub fn stack_pages(len: usize, guard: usize) -> *mut u8 {
+    unsafe {
+        let at = os::map(len);
+        if at.is_null() || os::protect_none(at, guard) {
+            return at;
+        }
+        os::unmap(at, len);
+        std::ptr::null_mut()
     }
 }
 

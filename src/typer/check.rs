@@ -883,12 +883,13 @@ impl<'a> Worker<'a> {
     /// The class `java` runs for the entry point `sym`, by its qualified name: the object's
     /// (`app.Main`), the one a `@main` method makes in its package (`app.run`, the method's name
     /// encoded as the class's: `hello$minusworld`), or, for a package's own `main`, its file's
-    /// `<stem>$package`.
+    /// `<stem>$package`; every name of the path encoded, its packages' included (dotty's
+    /// `javaClassName`, `fullName.mangledString`).
     pub(crate) fn entry_point_class(&self, sym: SymId, object: Option<ClassId>) -> String {
         let info = self.syms.sym(sym);
-        let in_package = |t: &Self, p: PkgId, name: &str| if p == ROOT_PKG { name.to_string() } else { format!("{}.{}", t.pkg_description(p), name) };
+        let in_package = |t: &Self, p: PkgId, name: &str| if p == ROOT_PKG { name.to_string() } else { format!("{}.{}", t.binary_package(p), name) };
         match (object, info.owner) {
-            (Some(c), _) => self.class_path(c),
+            (Some(c), _) => self.binary_path(c),
             (None, Owner::Class(c)) if info.is_main => {
                 let mut owner = Owner::Class(c);
                 while let Owner::Class(k) = owner {
@@ -900,13 +901,41 @@ impl<'a> Worker<'a> {
                 };
                 in_package(self, p, &crate::jvm::names::encode(&self.name_str(info.name)))
             }
-            (None, Owner::Class(c)) => self.class_path(c),
+            (None, Owner::Class(c)) => self.binary_path(c),
             (None, Owner::Package(p)) if info.is_main => in_package(self, p, &crate::jvm::names::encode(&self.name_str(info.name))),
             (None, Owner::Package(p)) => {
                 let stem = crate::tasty::write::file_stem(&self.source(info.file).path);
                 in_package(self, p, &format!("{}$package", crate::jvm::names::encode(&stem)))
             }
             (None, Owner::Local) => self.name_str(info.name),
+        }
+    }
+
+    /// An entry point's object by its class path with each name encoded as the JVM's class is named
+    /// (`a$minusb` for an object `` `a-b` ``, dotty's `javaClassName` of `Name.mangledString`).
+    fn binary_path(&self, c: ClassId) -> String {
+        let info = self.syms.class(c);
+        let name = crate::jvm::names::encode(&self.name_str(info.name));
+        match info.owner {
+            Owner::Package(p) if p == ROOT_PKG => name,
+            Owner::Package(p) => format!("{}.{}", self.binary_package(p), name),
+            Owner::Class(o) => format!("{}.{}", self.binary_path(o), name),
+            Owner::Local => name,
+        }
+    }
+
+    /// A package's path with each name encoded, as `Names.mangledString` mangles a qualified name's
+    /// every part and the JVM target places the package's classes (`x$minusy` for a directory `x-y`);
+    /// empty for the root.
+    pub(super) fn binary_package(&self, p: PkgId) -> String {
+        if p == ROOT_PKG {
+            return String::new();
+        }
+        let info = self.syms.pkg(p);
+        let name = crate::jvm::names::encode(&self.name_str(info.name));
+        match info.parent.filter(|&parent| parent != ROOT_PKG) {
+            Some(parent) => format!("{}.{}", self.binary_package(parent), name),
+            None => name,
         }
     }
 
@@ -1058,7 +1087,7 @@ impl<'a> Worker<'a> {
             owner = self.syms.class(c).owner;
         }
         let Owner::Package(p) = owner else { return None };
-        let entry = self.syms.pkg(p).entries.get(&info.name)?;
+        let entry = self.syms.scoped(self.interner, p, info.name)?;
         let n = self.name_str(info.name);
         match (entry.class, entry.term.map(|t| self.syms.sym(t).kind)) {
             (Some(c), _) if self.syms.class(c).kind != ClassKind::Object => Some(format!("{n} is already defined as class {n}")),

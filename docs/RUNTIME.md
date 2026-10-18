@@ -72,6 +72,14 @@ at a hundredth of the sizes. Its speed shows in macros, where those collections'
 application benchmark's 64k-line frontend runs 5,300 macro expansions, each validating tailwind classes
 through lookups and small `groupBy`s, and with the collections interpreted instead the check cost 2.7 times.
 
+A program's threads are logical: each `java.lang.Thread` is a coroutine with a stack of its own (256 MiB reserved,
+the main thread's 1 GiB) on the interpreter's one OS thread, which runs one of them at a time. A thread gives way
+at a blocking wait (a monitor or a lock taken, a condition, `sleep`, `park`, `join`) and, running on, every 2^20
+evaluation steps, so that a busy loop lets the others and the timers run; the scheduler wakes a sleeper at its
+deadline. A program runs as on the JVM, on one core: its threads interleave at those points only. A build of teq
+without the Cargo feature `threads` (every released binary has it) refuses, with status 3, a program that starts
+a thread.
+
 ## Bundle size
 
 The output holds what the program reaches, readable as it is in the browser's inspector (classes for

@@ -695,7 +695,8 @@ if client sjsapp/test && has_output "Passed: Total 2, Failed 0"; then echo "scal
 cp target-core.bak $core
 rm -f target-core.bak $core.bak
 failing="browserdemo/testOnly demo.FailingThemeSpec demo.FailingThemeSuite demo.FailingThemeTests"
-if ! client "set browserdemo / demoFailing := true; $failing" && has_output "FailingThemeSpec.scala:10" && has_output "Dark(1) was not equal to Light" && has_output "FailingThemeSuite.scala:7" && has_output "values are not the same" && has_output "X demo.FailingThemeTests.the light theme goes back to light" && has_output "Failed: Total 3, Failed 3" && has_output "demo.FailingThemeTests"; then
+# zio-test renders the values as under scalac, a case's fields by their names (`Dark(level = 1)`, `Light()`).
+if ! client "set browserdemo / demoFailing := true; $failing" && has_output "FailingThemeSpec.scala:10" && has_output "Dark(level = 1) was not equal to Light()" && has_output "FailingThemeSuite.scala:7" && has_output "values are not the same" && has_output "X demo.FailingThemeTests.the light theme goes back to light" && has_output "Failed: Total 3, Failed 3" && has_output "demo.FailingThemeTests"; then
   echo "scalajs tests: failing suites are reported by their frameworks, with their positions, and fail the task"
 else
   echo "FAIL scalajs tests: failing suites (see $sbtlog)"

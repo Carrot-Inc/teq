@@ -541,6 +541,8 @@ pub fn table() -> Rc<Table> {
                 super::quoted::install(&mut table);
                 super::files::install(&mut table);
                 super::process::install(&mut table);
+                super::threads::install(&mut table);
+                super::natives::install_atomics(&mut table);
                 Rc::new(table)
             })
             .clone()
@@ -550,6 +552,8 @@ pub fn table() -> Rc<Table> {
 fn install_core(it: &mut Table) {
     // One thread: a fence orders nothing.
     reg!(it, "scala.runtime.Statics.releaseFence", |_it, _a| Ok(Value::Unit));
+    // The box of `()`, which the interpreter's `()` is (zio's `Exit.unit` reads it).
+    reg!(it, "scala.runtime.BoxedUnit.UNIT", |_it, _a| Ok(Value::Unit));
     reg!(it, "scala.printlnImpl", |it, a| {
         if it.pure {
             return it.impure("println");
@@ -701,6 +705,80 @@ fn install_core(it: &mut Table) {
         };
         let types = if classes.is_some() { types } else { Value::Null };
         it.construct_new(method, vec![Value::string(name), types], &Frame::new(None))
+    });
+    // `getDeclaredMethod`: a method the class itself declares, whatever its access, of the name and
+    // the parameters' classes given (none given, none taken), as the JDK's; any other, and any of a
+    // class the program does not define (a function's `writeReplace`, which the interpreter's
+    // functions do not have), a `NoSuchMethodException` named as the JDK names it.
+    reg!(it, "java.lang.Class.getDeclaredMethod", |it, a| {
+        let Value::Class(c) = arg(a, 0) else { return Ok(Value::Null) };
+        let name = it.to_str(&arg(a, 1))?;
+        let types = if a.len() > 2 { arg(a, 2) } else { Value::Null };
+        let classes: Vec<String> = match &types {
+            Value::Null => Vec::new(),
+            v => it.elements_of(v)?.iter().map(|c| match c {
+                Value::Class(c) => c.qname.to_string(),
+                _ => String::new(),
+            }).collect(),
+        };
+        let found = match (c.class, it.typer.interner.lookup(&name)) {
+            (Some(k), Some(n)) => match it.syms().class(k).members.get(&n).copied() {
+                Some(entry) => {
+                    let alts: Vec<crate::types::SymId> = it.syms().alternatives(entry).map_or_else(|| vec![entry], |alts| alts.to_vec());
+                    alts.into_iter().any(|alt| it.typer.reflective_sig(alt, crate::typer::Naming::Jvm).is_some_and(|sig| sig.classes == classes))
+                }
+                None => false,
+            },
+            _ => false,
+        };
+        if !found {
+            return it.throw_named("NoSuchMethodException", &format!("{}.{}({})", c.qname, name, classes.join(",")));
+        }
+        let Some(method) = it.typer.class_at(&["java", "lang", "reflect", "Method"]) else {
+            return it.unsupported("java.lang.reflect.Method is missing from the standard library");
+        };
+        it.construct_new(method, vec![Value::string(name), types], &Frame::new(None))
+    });
+    // `MethodHandles.Lookup`'s finds (std/javalib/invoke.scala): whether the class's primary constructor
+    // (`name` null) or its object's method takes the parameters' classes, as `getMethod` matches them.
+    reg!(it, "java.lang.invoke.handleFound", |it, a| {
+        let Value::Class(c) = arg(a, 0) else { return Ok(Value::Bool(false)) };
+        let Some(k) = c.class else { return Ok(Value::Bool(false)) };
+        let classes: Vec<String> = it.elements_of(&arg(a, 2))?.iter().map(|c| match c {
+            Value::Class(c) => c.qname.to_string(),
+            _ => String::new(),
+        }).collect();
+        let found = match arg(a, 1) {
+            Value::Null => it.typer.constructor_classes(k, crate::typer::Naming::Jvm) == classes,
+            name => {
+                let name = it.to_str(&name)?;
+                match it.syms().class(k).companion {
+                    Some(m) => {
+                        it.typer.complete_class(m);
+                        it.signature_member(m, &name, &classes).is_some()
+                    }
+                    None => false,
+                }
+            }
+        };
+        Ok(Value::Bool(found))
+    });
+    reg!(it, "java.lang.invoke.handleNew", |it, a| {
+        let Value::Class(c) = arg(a, 0) else { return it.throw_named("NullPointerException", "refc") };
+        let Some(k) = c.class else { return it.unsupported(format!("a constructor of {} by a method handle", c.qname)) };
+        let args = it.elements_of(&arg(a, 1))?;
+        it.construct_new(k, args, &Frame::new(None))
+    });
+    reg!(it, "java.lang.invoke.handleStatic", |it, a| {
+        let Value::Class(c) = arg(a, 0) else { return it.throw_named("NullPointerException", "refc") };
+        let name = it.to_str(&arg(a, 1))?;
+        let args = it.elements_of(&arg(a, 2))?;
+        let Some(m) = c.class.and_then(|k| it.syms().class(k).companion) else {
+            return it.unsupported(format!("a static method of {} by a method handle", c.qname));
+        };
+        let module = it.module(m)?;
+        let n = it.typer.interner.intern(&name);
+        it.call_named(module, n, args)
     });
     reg!(it, "java.lang.Class.getField", |it, a| {
         let name = it.to_str(&arg(a, 1))?;
@@ -2418,6 +2496,15 @@ impl Interp<'_, '_> {
     /// primitive or of a class the same lookup finds (`[I`, `[LPresent;`).
     fn for_name(&mut self, a: A, initialize: bool) -> R {
         let name = text(self, a, 1)?;
+        // A JDK class the std stands for (its `@jvmClass`), as the JDK's loader finds its own.
+        if !name.contains(['$', '[']) {
+            let path: Vec<&str> = name.split('.').collect();
+            if let Some(c) = self.typer.class_at(&path) {
+                if self.typer.std_jvm_class(c).is_some_and(|j| j == name.replace('.', "/")) {
+                    return Ok(self.class_value_of(c));
+                }
+            }
+        }
         match self.typer.class_for_name(&name) {
             Some((_, true)) => return Ok(self.class_value_named(&name)),
             Some((c, false)) => {

@@ -141,7 +141,10 @@ build's remote Maven ones and their credentials hosts; `jars`, every jar a class
 files' version; and `projects`, each with its platform, Scala version and configurations (the roots, the full
 ordered classpath, the flags (the scalac options teq honours, `source` the configuration's `-source`, under which a
 session of a closure types that configuration's roots, `--source-at`), the generators, the declared main classes and the test context of `compile`,
-`runtime` and `test`, a JVM test context's `parallelism` among it, "Tests." below), the `run`, `dev` and `stage`
+`runtime` and `test`, a JVM test context's `parallelism` among it, "Tests." below; and `compile`'s `evictions`,
+absent where there is none: each dependency the build declares at a version its resolution did not choose, by its
+key, with the key of the jar chosen in its place, which a script's `//> using dep` of the declared version resolves
+to under `teq interp`), the `run`, `dev` and `stage`
 blocks the verbs read, and the description the plugin's own tasks build from. A Mill build's configurations say
 more (below, "The export of a Mill build"): `transitive: false`, the classpath's products the whole of what the
 sources see; a test configuration's `runtimeClasspath`, what its suites run on where that is not its classpath,
@@ -187,7 +190,9 @@ or directories under the build's root the program writes besides that directory,
 assets say, which `teq` checks as it checks the directory and whose unchanged files keep their times; an output
 the run leaves empty (that directory, for a command writing elsewhere) is not waited for. The
 first word `teq` is the build's own binary, sbt's `teqResolvedBinary` and under `teq` the one running, never
-a `teq` of the `PATH`: a Scala script runs through `teq interp`, with no JVM and no other tool on any machine.
+a `teq` of the `PATH`: a Scala script runs through `teq interp`, with no JVM and no other tool on any machine. A
+Scala CLI script (`.sc`) runs there as well, its `//> using dep` lines resolved through the build's lock rather
+than fetched (docs/CLI.md, "teq interp").
 
 ```scala
 Compile / teqGenerators += TeqCommand(Seq("teq", "interp", "scripts/images.scala", "--", "app"),

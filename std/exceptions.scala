@@ -189,6 +189,9 @@ package java.lang:
   @jvmClass("java/lang/InterruptedException")
   class InterruptedException(message: String = null) extends Exception(message)
 
+  @jvmClass("java/lang/IllegalMonitorStateException")
+  class IllegalMonitorStateException(message: String = null) extends RuntimeException(message)
+
   @jvmClass("java/lang/InstantiationException")
   class InstantiationException(message: String = null) extends Exception(message)
 

@@ -50,6 +50,10 @@ package java.nio.file:
   def fileKind(path: String, follow: Boolean): Int
   @js("$fail(\"UnsupportedOperationException\", \"the file system is not available on JavaScript\")")
   def fileSize(path: String): Long
+  // The kind (as `fileKind`), the size, then the last modification, the last access and the creation,
+  // each its seconds and nanoseconds since the epoch; the exception when the file cannot be read.
+  @js("$fail(\"UnsupportedOperationException\", \"the file system is not available on JavaScript\")")
+  def fileStat(path: String, follow: Boolean): Array[Long]
   @js("$fail(\"UnsupportedOperationException\", \"the file system is not available on JavaScript\")")
   def fileSetModified(path: String, millis: Long): Unit
   @js("$fail(\"UnsupportedOperationException\", \"the file system is not available on JavaScript\")")
@@ -159,6 +163,7 @@ package java.nio.file:
     if i >= root then i else -1
 
   final case class Path(text: String) extends Comparable[Path], java.lang.Iterable[Path]:
+    def getFileSystem(): FileSystem = FileSystems.getDefault()
     def getParent: Path =
       val t = pathTrimmed(text)
       val root = pathRoot(t)
@@ -283,6 +288,75 @@ package java.nio.file:
     def get(first: String): Path = Path.of(first)
     def get(first: String, more: String*): Path = Path.of(first, more*)
 
+  // The machine's file system, the one every path of the std is on (`Path.getFileSystem`); os-lib tells a
+  // path of another apart by it.
+  abstract class FileSystem extends java.io.Closeable:
+    def getPath(first: String, more: String*): Path
+    def getSeparator(): String
+    def isOpen(): Boolean = true
+    def isReadOnly(): Boolean = false
+
+  private[file] object DefaultFileSystem extends FileSystem:
+    def getPath(first: String, more: String*): Path = Path.of(first, more*)
+    def getSeparator(): String = if windowsPaths then "\\" else "/"
+    def close(): Unit = throw new UnsupportedOperationException()
+
+  object FileSystems:
+    def getDefault(): FileSystem = DefaultFileSystem
+
+  // `Files.newByteChannel`'s channel, over a native stream of the file.
+  private[file] final class FileByteChannel(id: Int, path: Path, writing: Boolean, start: Long) extends java.nio.channels.SeekableByteChannel:
+    private var open = true
+    private var pos = start
+    private def check(): Unit = if !open then throw new java.nio.channels.ClosedChannelException()
+    def isOpen(): Boolean = open
+    def write(src: java.nio.ByteBuffer): Int =
+      check()
+      if !writing then throw new java.nio.channels.NonWritableChannelException()
+      val n = src.remaining()
+      val bytes = new Array[Byte](n)
+      src.get(bytes, 0, n)
+      java.io.streamWriteFrom(id, bytes, 0, n)
+      pos += n
+      n
+    def read(dst: java.nio.ByteBuffer): Int =
+      check()
+      if writing then throw new java.nio.channels.NonReadableChannelException()
+      val n = dst.remaining()
+      if n == 0 then 0
+      else
+        val bytes = new Array[Byte](n)
+        val r = java.io.streamReadInto(id, bytes, 0, n)
+        if r > 0 then
+          dst.put(bytes, 0, r)
+          pos += r
+        r
+    def position(): Long =
+      check()
+      pos
+    def position(newPosition: Long): java.nio.channels.SeekableByteChannel =
+      check()
+      if newPosition < 0L then throw new IllegalArgumentException()
+      if newPosition != pos then
+        java.io.streamSeek(id, newPosition)
+        pos = newPosition
+      this
+    def size(): Long =
+      check()
+      if writing then java.io.streamFlush(id)
+      fileSize(path.toString)
+    def truncate(size: Long): java.nio.channels.SeekableByteChannel =
+      check()
+      if size < 0L then throw new IllegalArgumentException("Negative size")
+      if !writing then throw new java.nio.channels.NonWritableChannelException()
+      java.io.streamTruncate(id, size)
+      if pos > size then position(size)
+      this
+    def close(): Unit =
+      if open then
+        open = false
+        java.io.streamClose(id)
+
   trait OpenOption
   trait CopyOption
 
@@ -297,6 +371,31 @@ package java.nio.file:
 
   enum FileVisitOption:
     case FOLLOW_LINKS
+
+  enum FileVisitResult:
+    case CONTINUE, TERMINATE, SKIP_SUBTREE, SKIP_SIBLINGS
+
+  trait FileVisitor[T]:
+    def preVisitDirectory(dir: T, attrs: attribute.BasicFileAttributes): FileVisitResult
+    def visitFile(file: T, attrs: attribute.BasicFileAttributes): FileVisitResult
+    def visitFileFailed(file: T, exc: java.io.IOException): FileVisitResult
+    def postVisitDirectory(dir: T, exc: java.io.IOException): FileVisitResult
+
+  // The JDK's: every step continues, a failure is thrown.
+  class SimpleFileVisitor[T] protected () extends FileVisitor[T]:
+    def preVisitDirectory(dir: T, attrs: attribute.BasicFileAttributes): FileVisitResult =
+      if dir == null || attrs == null then throw new NullPointerException()
+      FileVisitResult.CONTINUE
+    def visitFile(file: T, attrs: attribute.BasicFileAttributes): FileVisitResult =
+      if file == null || attrs == null then throw new NullPointerException()
+      FileVisitResult.CONTINUE
+    def visitFileFailed(file: T, exc: java.io.IOException): FileVisitResult =
+      if file == null then throw new NullPointerException()
+      throw exc
+    def postVisitDirectory(dir: T, exc: java.io.IOException): FileVisitResult =
+      if dir == null then throw new NullPointerException()
+      if exc != null then throw exc
+      FileVisitResult.CONTINUE
 
   // A directory's entries as `Files.newDirectoryStream` gives them, read once.
   trait DirectoryStream[T] extends java.lang.Iterable[T], java.io.Closeable
@@ -427,6 +526,28 @@ package java.nio.file:
       while it.hasNext do sb.append(it.next()).append(System.lineSeparator())
       writeString(path, sb.toString, options*)
     def newInputStream(path: Path, options: OpenOption*): java.io.InputStream = new java.io.NativeInputStream(java.io.streamOpenRead(path.toString, false))
+    // A channel of the file: written with WRITE or APPEND (opened as `newOutputStream` opens it, CREATE
+    // and CREATE_NEW and TRUNCATE_EXISTING as given), else read; its position moved and its size cut as
+    // the JDK's `FileChannelImpl` moves and cuts them.
+    def newByteChannel(path: Path, options: OpenOption*): java.nio.channels.SeekableByteChannel =
+      val writing = options.contains(StandardOpenOption.WRITE) || options.contains(StandardOpenOption.APPEND)
+      if options.contains(StandardOpenOption.READ) && writing then
+        throw new UnsupportedOperationException("teq interp opens a byte channel for reading or for writing, not both")
+      if writing then
+        if options.contains(StandardOpenOption.APPEND) && options.contains(StandardOpenOption.TRUNCATE_EXISTING) then
+          throw new IllegalArgumentException("READ + APPEND not allowed")
+        var flags = 0
+        if options.contains(StandardOpenOption.CREATE) then flags |= 1
+        if options.contains(StandardOpenOption.CREATE_NEW) then flags |= 2
+        if options.contains(StandardOpenOption.APPEND) then flags |= 4
+        if options.contains(StandardOpenOption.TRUNCATE_EXISTING) then flags |= 8
+        val id = java.io.streamOpenWrite(path.toString, flags, false)
+        new FileByteChannel(id, path, true, if options.contains(StandardOpenOption.APPEND) then fileSize(path.toString) else 0L)
+      else new FileByteChannel(java.io.streamOpenRead(path.toString, false), path, false, 0L)
+    def newByteChannel(path: Path, options: java.util.Set[? <: OpenOption], attrs: attribute.FileAttribute[?]*): java.nio.channels.SeekableByteChannel =
+      val all = new scala.collection.mutable.ArrayBuffer[OpenOption]()
+      options.forEach(o => all += o)
+      newByteChannel(path, all.toSeq*)
     def newOutputStream(path: Path, options: OpenOption*): java.io.OutputStream =
       new java.io.NativeOutputStream(java.io.streamOpenWrite(path.toString, openFlags(options), false))
     // A reader whose decoder reports malformed input (`MalformedInputException`), as the JDK's
@@ -440,6 +561,21 @@ package java.nio.file:
       new java.io.BufferedWriter(new java.io.OutputStreamWriter(newOutputStream(path, options*), cs))
     def createDirectory(dir: Path): Path =
       fileCreateDirectory(dir.toString)
+      dir
+    // With attributes: the POSIX permissions an attribute names set once the directory is made (where the
+    // JDK hands them to mkdir, which the umask then narrows).
+    def createDirectory(dir: Path, attrs: attribute.FileAttribute[?]*): Path =
+      createDirectory(dir)
+      permitted(dir, attrs)
+    def createDirectories(dir: Path, attrs: attribute.FileAttribute[?]*): Path =
+      createDirectories(dir)
+      permitted(dir, attrs)
+    private def permitted(dir: Path, attrs: Seq[attribute.FileAttribute[?]]): Path =
+      attrs.foreach { a =>
+        if a.name() == "posix:permissions" then
+          setPosixFilePermissions(dir, a.value().asInstanceOf[java.util.Set[attribute.PosixFilePermission]])
+        else throw new UnsupportedOperationException("'" + a.name() + "' not supported as initial attribute")
+      }
       dir
     // The JDK's: the directory made, or there; else, from the nearest ancestor of the absolute path
     // that is there, each name below it made in turn. A file in the place of the directory is its
@@ -540,6 +676,75 @@ package java.nio.file:
       if maxDepth < 0 then throw new IllegalArgumentException("'maxDepth' is negative")
       val tree = new FileTree(start, maxDepth, options.contains(FileVisitOption.FOLLOW_LINKS))
       java.util.stream.Pipes.iterated(tree).onClose(() => tree.close())
+    // A file's basic attributes, read when asked (the JDK's `UnixFileAttributes`); a link is read as
+    // itself under NOFOLLOW_LINKS.
+    def readAttributes[A <: attribute.BasicFileAttributes](path: Path, kind: Class[A], options: LinkOption*): A =
+      if kind == null then throw new NullPointerException()
+      val follow = follows(options)
+      new attribute.BasicAttributes(fileStat(path.toString, follow), path.toString, follow).asInstanceOf[A]
+    def walkFileTree(start: Path, visitor: FileVisitor[? >: Path]): Path =
+      walkFileTree(start, new java.util.HashSet[FileVisitOption](), Int.MaxValue, visitor)
+    // The JDK's `walkFileTree` over its FileTreeWalker: the start's event, then each step's, depth
+    // first and each directory's entries in the order the system lists them, a directory listed when
+    // the walk reaches it; a directory below `maxDepth` is `preVisitDirectory`, its entries, then
+    // `postVisitDirectory`, anything else `visitFile`, and a file whose attributes cannot be read (a
+    // followed link that names nothing read as the link) or a directory that cannot be listed
+    // `visitFileFailed`, as is, with FOLLOW_LINKS, a directory that is its own ancestor
+    // (`FileSystemLoopException`). SKIP_SUBTREE and SKIP_SIBLINGS from `preVisitDirectory` leave
+    // the directory unlisted, SKIP_SIBLINGS then the rest of its parent's entries too; TERMINATE
+    // ends the walk.
+    def walkFileTree(start: Path, options: java.util.Set[FileVisitOption], maxDepth: Int, visitor: FileVisitor[? >: Path]): Path =
+      if maxDepth < 0 then throw new IllegalArgumentException("'maxDepth' is negative")
+      val follow = options.contains(FileVisitOption.FOLLOW_LINKS)
+      val stack = new java.util.ArrayList[OpenDirectory]()
+      def attributes(file: Path): attribute.BasicFileAttributes =
+        try readAttributes(file, classOf[attribute.BasicFileAttributes], (if follow then Nil else List(LinkOption.NOFOLLOW_LINKS))*)
+        catch case e: java.io.IOException if follow => readAttributes(file, classOf[attribute.BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+      def visit(file: Path): FileVisitResult =
+        var attrs: attribute.BasicFileAttributes = null
+        var failure: java.io.IOException = null
+        try attrs = attributes(file)
+        catch case e: java.io.IOException => failure = e
+        if failure != null then visitor.visitFileFailed(file, failure)
+        else if stack.size >= maxDepth || !attrs.isDirectory() then visitor.visitFile(file, attrs)
+        else
+          val key = if follow then fileKey(file.toString, true) else null
+          var ancestor = false
+          if follow then stack.forEach(d => if d.key == key then ancestor = true)
+          if ancestor then visitor.visitFileFailed(file, new FileSystemLoopException(file.toString))
+          else
+            var names: Array[String] = null
+            try names = fileEntries(file.toString)
+            catch case e: java.io.IOException => failure = e
+            if failure != null then visitor.visitFileFailed(file, failure)
+            else
+              stack.add(new OpenDirectory(file, key, names))
+              val result = visitor.preVisitDirectory(file, attrs)
+              if result == FileVisitResult.SKIP_SUBTREE || result == FileVisitResult.SKIP_SIBLINGS then stack.remove(stack.size - 1)
+              result
+      var result = visit(start)
+      var done = false
+      while !done do
+        if result == null then throw new NullPointerException()
+        if result == FileVisitResult.TERMINATE then done = true
+        else
+          if result == FileVisitResult.SKIP_SIBLINGS && !stack.isEmpty then stack.get(stack.size - 1).skipped = true
+          if stack.isEmpty then done = true
+          else
+            val top = stack.get(stack.size - 1)
+            if !top.skipped && top.at < top.names.length then
+              top.at += 1
+              result = visit(top.dir.resolve(top.names(top.at - 1)))
+            else
+              stack.remove(stack.size - 1)
+              result = visitor.postVisitDirectory(top.dir, null)
+              if result == FileVisitResult.SKIP_SIBLINGS then result = FileVisitResult.CONTINUE
+      start
+
+  // A directory `walkFileTree` is in: its entries and how far it has come through them.
+  private final class OpenDirectory(val dir: Path, val key: String, val names: Array[String]):
+    var at = 0
+    var skipped = false
 
   // A directory stream's entries, none left once it is closed.
   private final class DirectoryEntries(dir: Path, names: Array[String]) extends java.util.Iterator[Path]:
@@ -735,6 +940,33 @@ package java.nio.file.attribute:
       new FileTime(value, unit)
     def fromMillis(value: Long): FileTime = new FileTime(value, java.util.concurrent.TimeUnit.MILLISECONDS)
 
+  trait BasicFileAttributes:
+    def lastModifiedTime(): FileTime
+    def lastAccessTime(): FileTime
+    def creationTime(): FileTime
+    def isRegularFile(): Boolean
+    def isDirectory(): Boolean
+    def isSymbolicLink(): Boolean
+    def isOther(): Boolean
+    def size(): Long
+    def fileKey(): Object
+
+  // `fileStat`'s reading of a file; a time of whole seconds is in seconds, any other in nanoseconds,
+  // as `UnixFileAttributes.toFileTime` makes it. The key is the one `fileKey` gives, read when asked.
+  private[file] final class BasicAttributes(stat: Array[Long], path: String, follow: Boolean) extends BasicFileAttributes:
+    private def time(at: Int): FileTime =
+      if stat(at + 1) == 0 then FileTime.from(stat(at), java.util.concurrent.TimeUnit.SECONDS)
+      else FileTime.from(stat(at) * 1000000000L + stat(at + 1), java.util.concurrent.TimeUnit.NANOSECONDS)
+    def lastModifiedTime(): FileTime = time(2)
+    def lastAccessTime(): FileTime = time(4)
+    def creationTime(): FileTime = time(6)
+    def isRegularFile(): Boolean = stat(0) == 0
+    def isDirectory(): Boolean = stat(0) == 1
+    def isSymbolicLink(): Boolean = stat(0) == 2
+    def isOther(): Boolean = stat(0) == 3
+    def size(): Long = stat(1)
+    def fileKey(): Object = java.nio.file.fileKey(path, follow)
+
   trait FileAttribute[T]:
     def name(): String
     def value(): T
@@ -745,6 +977,11 @@ package java.nio.file.attribute:
   // `rwxr-x---` and the sets of permissions, in the JDK's order of the bits.
   object PosixFilePermissions:
     private val letters = "rwxrwxrwx"
+    def asFileAttribute(perms: java.util.Set[PosixFilePermission]): FileAttribute[java.util.Set[PosixFilePermission]] =
+      val copy = new java.util.HashSet[PosixFilePermission](perms)
+      new FileAttribute[java.util.Set[PosixFilePermission]]:
+        def name(): String = "posix:permissions"
+        def value(): java.util.Set[PosixFilePermission] = java.util.Collections.unmodifiableSet(copy)
     def toString(perms: java.util.Set[PosixFilePermission]): String =
       val sb = new java.lang.StringBuilder()
       PosixFilePermission.values.foreach(p => sb.append(if perms.contains(p) then letters.charAt(p.ordinal) else '-'))

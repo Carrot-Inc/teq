@@ -1,0 +1,2 @@
+accept
+no accept(Arg-X): Receiver.accept(Arg$minusX)

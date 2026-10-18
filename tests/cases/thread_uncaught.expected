@@ -1,0 +1,4 @@
+main continues, worker alive false
+handler: own handled
+default: plain by default
+main ends

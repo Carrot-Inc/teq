@@ -218,6 +218,7 @@ machine=(
   "jvm ./tests/run_jvm.sh"
   "jvm-21 ./tests/run_jvm.sh --java-output-version=21"
   "interp ./tests/run_interp.sh"
+  "interp-script ./tests/interp-script.sh"
   "fold ./tests/fold.sh"
   "planted ./tests/planted.sh"
   "workers ./tests/workers.sh"

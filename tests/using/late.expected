@@ -1,1 +1,4 @@
+tests/using/late.scala:5:1: warning: Ignoring using directive found after Scala code: //> using file lib/Absent.scala
+  //> using file lib/Absent.scala
+  ^
 no inclusion after the code

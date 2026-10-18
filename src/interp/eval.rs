@@ -11,10 +11,10 @@ use crate::types::{Type, EMPTY_LIST};
 impl<'a, 't> Interp<'a, 't> {
     #[inline]
     pub(super) fn step(&mut self) -> R<()> {
-        if self.steps == 0 {
+        if self.exec.steps == 0 {
             return self.steps_out();
         }
-        self.steps -= 1;
+        self.exec.steps -= 1;
         Ok(())
     }
 
@@ -23,11 +23,12 @@ impl<'a, 't> Interp<'a, 't> {
     #[cold]
     #[inline(never)]
     fn steps_out(&mut self) -> R<()> {
-        if self.reserve > 0 && !self.halted {
-            let n = self.reserve.min(SIGNAL_SLICE);
-            self.reserve -= n;
-            self.steps = n - 1;
-            return super::process::check_signal(self);
+        if self.exec.reserve > 0 && !self.halted {
+            let n = self.exec.reserve.min(SIGNAL_SLICE);
+            self.exec.reserve -= n;
+            self.exec.steps = n - 1;
+            super::process::check_signal(self)?;
+            return super::threads::quantum(self);
         }
         Err(Control::Fail(if self.halted { Failure::Withheld } else { Failure::Budget }))
     }
@@ -721,7 +722,7 @@ impl<'a, 't> Interp<'a, 't> {
             _ => self.eval(d, &frame, &cx),
         };
         self.release_frame(frame);
-        self.depth -= 1;
+        self.exec.depth -= 1;
         r
     }
 
@@ -826,6 +827,22 @@ impl<'a, 't> Interp<'a, 't> {
     #[cold]
     #[inline(never)]
     fn init_lazy_local(&mut self, e: TExprId, s: SymId, init: TExprId, c: Rc<Closure>, fr: &Rc<Frame>) -> R {
+        // `LazyVals.transformLocalDef`'s holder, its initialiser run synchronized on it: while another thread
+        // runs it the running one waits for the end and reads the local again, the value, or after a failure
+        // its own to run.
+        let k = super::threads::InitKey::Local(Rc::as_ptr(&c) as *const u8 as usize);
+        let mut waited = false;
+        while super::threads::initialising(self) && super::threads::wait_init(self, &k)? {
+            waited = true;
+        }
+        if waited {
+            match self.lookup(e, s, fr) {
+                Some(Value::Fun(f)) if matches!(f.kind, ClosureKind::Lazy(_)) => {}
+                Some(v) => return Ok(v),
+                None => {}
+            }
+        }
+        super::threads::begin_init(self, k, &Value::Fun(c.clone()));
         let cx2 = Ctx { this: c.this.clone(), def_key: c.def_key, class: c.class, tail: None };
         let env = c.env.clone();
         let born = env.born.get();
@@ -838,6 +855,7 @@ impl<'a, 't> Interp<'a, 't> {
             super::stamp(v, born);
         }
         super::leave_epoch(outer);
+        super::threads::end_init(self, &k);
         value
     }
 
@@ -1151,10 +1169,10 @@ impl<'a, 't> Interp<'a, 't> {
             }
         }
         self.enter()?;
-        if self.trace && self.depth < self.trace_depth {
+        if self.trace && self.exec.depth < self.trace_depth {
             let sym = self.prog().funs[f.idx()].sym;
             let name = self.qualified_name(sym);
-            eprintln!("{}call {}", "  ".repeat(self.depth as usize), name);
+            eprintln!("{}call {}", "  ".repeat(self.exec.depth as usize), name);
         }
         let key = self.fresh_key();
         // The unit's code for a call passing every proxy, else the incoming layout read off the
@@ -1200,7 +1218,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
         };
         self.prof_exit(prof);
-        self.depth -= 1;
+        self.exec.depth -= 1;
         result
     }
 
@@ -1259,7 +1277,7 @@ impl<'a, 't> Interp<'a, 't> {
         if self.typer.withheld_met != self.withheld_seen {
             self.withheld_seen = self.typer.withheld_met;
             self.halted = true;
-            self.steps = 0;
+            self.exec.steps = 0;
         }
     }
 
@@ -1278,7 +1296,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// Stops the run where it reaches a withheld body (`typer::WITHHELD_TEMPLATE`).
     pub(super) fn withheld_reached(&mut self) -> R {
         self.halted = true;
-        self.steps = 0;
+        self.exec.steps = 0;
         Err(Control::Fail(Failure::Withheld))
     }
 
@@ -1295,10 +1313,10 @@ impl<'a, 't> Interp<'a, 't> {
 
     #[inline]
     pub(super) fn enter(&mut self) -> R<()> {
-        if self.depth >= self.max_depth || self.depth & 63 == 63 {
+        if self.exec.depth >= self.exec.max_depth || self.exec.depth & 63 == 63 {
             return self.enter_checked();
         }
-        self.depth += 1;
+        self.exec.depth += 1;
         Ok(())
     }
 
@@ -1308,20 +1326,20 @@ impl<'a, 't> Interp<'a, 't> {
     #[cold]
     #[inline(never)]
     fn enter_checked(&mut self) -> R<()> {
-        let deep = self.depth & 63 == 63 && !self.throwing_overflow && self.stack_base.saturating_sub(super::stack_address()) > super::STACK_BUDGET;
-        if self.depth >= self.max_depth || deep {
+        let deep = self.exec.depth & 63 == 63 && !self.exec.throwing_overflow && self.exec.stack_base.saturating_sub(super::stack_address()) > self.exec.stack_budget;
+        if self.exec.depth >= self.exec.max_depth || deep {
             // The exception's constructor needs a few levels of its own.
-            self.max_depth += 64;
-            let outer = std::mem::replace(&mut self.throwing_overflow, true);
+            self.exec.max_depth += 64;
+            let outer = std::mem::replace(&mut self.exec.throwing_overflow, true);
             let e = self.throw_named::<Value>("StackOverflowError", "");
-            self.throwing_overflow = outer;
-            self.max_depth -= 64;
+            self.exec.throwing_overflow = outer;
+            self.exec.max_depth -= 64;
             return match e {
                 Err(Control::Throw(v)) => Err(Control::Throw(v)),
                 _ => Err(Control::Fail(Failure::Depth)),
             };
         }
-        self.depth += 1;
+        self.exec.depth += 1;
         Ok(())
     }
 
@@ -1371,7 +1389,7 @@ impl<'a, 't> Interp<'a, 't> {
                 };
                 self.prof_exit(prof);
                 self.release_frame(frame);
-                self.depth -= 1;
+                self.exec.depth -= 1;
                 r
             }
             ClosureKind::LocalDef(f) => self.call_fun(*f, c.this.clone(), args, Some(c.env.clone()), c.class),
@@ -2361,7 +2379,7 @@ impl<'a, 't> Interp<'a, 't> {
             Some(sym) => self.qualified_name(sym).to_string(),
             None => self.prog().strings[s.idx()].to_string(),
         };
-        eprintln!("{}tmpl {}", "  ".repeat(self.depth as usize), name);
+        eprintln!("{}tmpl {}", "  ".repeat(self.exec.depth as usize), name);
     }
 
     /// A template call once its template is resolved and no withheld body stopped the run.
@@ -2371,7 +2389,7 @@ impl<'a, 't> Interp<'a, 't> {
                 // A quote renames the locals of its body before its holes are evaluated, so
                 // that a quoted reference to one of them inside a hole names the same run.
                 let quote = self.prog().strings[s.idx()] == "$quote";
-                if self.trace && self.depth < self.trace_depth {
+                if self.trace && self.exec.depth < self.trace_depth {
                     self.trace_template(s);
                 }
                 if quote {
@@ -2393,9 +2411,19 @@ impl<'a, 't> Interp<'a, 't> {
                     Err(e) => Err(e),
                 };
                 if quote {
-                    self.quote_renames.pop();
+                    self.exec.quote_renames.pop();
                 }
                 result
+            }
+            Template::Monitor => {
+                let (recv, body) = (self.prog().expr_lists[args.start as usize], self.prog().expr_lists[args.start as usize + 1]);
+                let v = self.eval(recv, fr, cx)?;
+                let held = super::threads::monitor_enter(self, &v)?;
+                let r = self.eval(body, fr, cx);
+                if let Some(k) = held {
+                    super::threads::monitor_exit(self, &k);
+                }
+                r
             }
             Template::Body(sym, member) => {
                 let mut vals = self.eval_args(Some(sym), args, fr, cx)?;
@@ -2508,6 +2536,7 @@ impl<'a, 't> Interp<'a, 't> {
             None => {
                 let text = self.prog().strings[s.idx()].clone();
                 match self.builtins.get(&text) {
+                    _ if &*text == "$synchronized($0, $1)" => Template::Monitor,
                     Some(b) => Template::Builtin(b.clone()),
                     None => Template::Missing(Rc::from(format!("the template {}", text))),
                 }

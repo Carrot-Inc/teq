@@ -53,7 +53,7 @@ impl<'a> Worker<'a> {
             out.push((c, self.register_call("$forNameClass($0, $1, $2)", &name, c, load)));
             // The class of static forwarders scalac gives a top-level object without a companion class,
             // which initialises nothing.
-            if let Some(mirror) = self.mirror_name(c) {
+            if let Some(mirror) = self.mirror_name(c, Naming::ScalaJs) {
                 let class = self.prog.add_str(&format!("$classNamed({:?})", mirror));
                 let class = self.prog.add(TExpr::Js(class, crate::ast::ListRef::EMPTY));
                 let template = self.prog.add_str("$forNameClass($0, $1, $2)");
@@ -68,11 +68,17 @@ impl<'a> Worker<'a> {
     }
 
     /// The name of the mirror class scalac's backend gives a top-level object without a companion
-    /// class: the object's own, holding its members' static forwarders.
-    pub(crate) fn mirror_name(&self, c: ClassId) -> Option<String> {
+    /// class: the object's own, holding its members' static forwarders, the object's binary name without
+    /// its `$` (dotty's `mirrorClassBTypeFromSymbol`, `javaBinaryName.stripSuffix(MODULE_SUFFIX)`) as the
+    /// target names it: the JVM's encoded (`a$minusb`), or Scala.js's as written.
+    pub(crate) fn mirror_name(&self, c: ClassId, naming: Naming) -> Option<String> {
         let info = self.syms.class(c);
         let alone = info.companion.map_or(true, |k| k == c || self.syms.class(k).kind == ClassKind::Object);
-        (info.kind == ClassKind::Object && matches!(info.owner, Owner::Package(_)) && alone).then(|| self.binary_name(c).trim_end_matches('$').to_string())
+        let name = || match naming {
+            Naming::Jvm => self.encoded_binary_name(c),
+            Naming::ScalaJs => self.binary_name(c),
+        };
+        (info.kind == ClassKind::Object && matches!(info.owner, Owner::Package(_)) && alone).then(|| name().trim_end_matches('$').to_string())
     }
 
     /// Whether `Class.forName` finds `c`: a class, trait or object of the program a path names.
@@ -98,10 +104,12 @@ impl<'a> Worker<'a> {
     /// and whether the name is its object's mirror class's (`mirror_name`).
     pub(crate) fn class_for_name(&self, name: &str) -> Option<(ClassId, bool)> {
         (0..self.syms.classes.len() as u32).map(ClassId).filter(|&c| self.found_by_name(c)).find_map(|c| {
-            if self.binary_name(c) == name {
+            // The name as written, which Scala.js's reflection keys a class by, or each name encoded
+            // as the JVM's class is named (`getClass.getName` under `teq interp`).
+            if self.binary_name(c) == name || self.encoded_binary_name(c) == name {
                 Some((c, false))
             } else {
-                self.mirror_name(c).filter(|m| m == name).map(|_| (c, true))
+                [Naming::ScalaJs, Naming::Jvm].into_iter().find_map(|naming| self.mirror_name(c, naming).filter(|m| m == name)).map(|_| (c, true))
             }
         })
     }
@@ -453,7 +461,34 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The name the JVM and Scala.js give the class: `p.Outer$Inner`, `p.Obj$` for an object.
+    /// The name the JVM gives the class, `binary_name` with each name encoded (`NameTransformer.encode`),
+    /// its packages' included (dotty's `javaClassName`, `fullName.mangledString`): `getName`'s,
+    /// `Class.forName`'s and a reflective signature's.
+    fn encoded_binary_name(&self, c: ClassId) -> String {
+        let info = self.syms.class(c);
+        let mut s = match info.owner {
+            Owner::Package(p) => {
+                let path = self.binary_package(p);
+                if path.is_empty() { path } else { path + "." }
+            }
+            Owner::Class(o) => {
+                let mut outer = self.encoded_binary_name(o);
+                if !outer.ends_with('$') {
+                    outer.push('$');
+                }
+                outer
+            }
+            Owner::Local => String::new(),
+        };
+        s.push_str(&crate::jvm::names::encode_name(self.interner.get(info.name)));
+        if info.kind == ClassKind::Object {
+            s.push('$');
+        }
+        s
+    }
+
+    /// The name Scala.js's reflection registers the class under, written as the source spells it:
+    /// `p.Outer$Inner`, `p.Obj$` for an object.
     pub(crate) fn binary_name(&self, c: ClassId) -> String {
         let info = self.syms.class(c);
         let mut s = match info.owner {
@@ -542,6 +577,15 @@ impl<'a> Worker<'a> {
 
 type FxMapBool = crate::intern::FxMap<ClassId, bool>;
 
+/// Whose names a reflective signature's classes take: the JVM's, encoded (`NameTransformer.encode`, dotty's
+/// `javaClassName`), as `getClass.getName` gives them under `teq interp`; or Scala.js's, written as the source spells
+/// them, as the JavaScript output's class metadata holds them and its runtime builds a dynamic lookup's key.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Naming {
+    Jvm,
+    ScalaJs,
+}
+
 /// A method's signature as a reflective call names it, and the adaptation its reflective proxy
 /// makes: the run-time names of the classes of its parameters' erasures, as scala-library's
 /// `Selectable` looks a method up (`getMethod(name, paramTypes*)`) and Scala.js names a reflective
@@ -563,7 +607,7 @@ impl<'a> Worker<'a> {
     /// its underlying type's, the unit `BoxedUnit`, as the JVM's method takes them. The one
     /// erasure the call's classes (`erased_parameter_classes`), the interpreter's lookup and the
     /// output's proxies read.
-    pub fn reflective_sig(&mut self, m: SymId) -> Option<ReflectiveSig> {
+    pub fn reflective_sig(&mut self, m: SymId, naming: Naming) -> Option<ReflectiveSig> {
         if !matches!(self.syms.sym(m).kind, SymKind::Def | SymKind::Val | SymKind::Var) {
             return None;
         }
@@ -578,12 +622,31 @@ impl<'a> Worker<'a> {
                 classes.push("scala.collection.immutable.Seq".to_string());
                 boxes.push(None);
             } else {
-                classes.push(self.erased_parameter_name(p.ty, 0));
+                classes.push(self.erased_parameter_name(p.ty, 0, naming));
                 boxes.push(self.value_class_of_type(p.ty));
             }
         }
         let unbox = self.value_class_of_type(sig.ret).and_then(|v| self.syms.class(v).ctor.first().and_then(|cl| cl.params.first()).map(|p| p.sym));
         Some(ReflectiveSig { classes, boxes, unbox })
+    }
+
+    /// The run-time names of the classes the primary constructor of `c` takes, its lists joined, as
+    /// `reflective_sig` names a method's (a `MethodHandles.Lookup.findConstructor`'s match).
+    pub fn constructor_classes(&mut self, c: ClassId, naming: Naming) -> Vec<String> {
+        self.complete_class(c);
+        let params: Vec<(TypeId, bool, bool)> = self.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| (p.ty, p.by_name, p.repeated))).collect();
+        params
+            .into_iter()
+            .map(|(ty, by_name, repeated)| {
+                if by_name {
+                    "scala.Function0".to_string()
+                } else if repeated {
+                    "scala.collection.immutable.Seq".to_string()
+                } else {
+                    self.erased_parameter_name(ty, 0, naming)
+                }
+            })
+            .collect()
     }
 
     /// The value class `t` is an instance of, through aliases.
@@ -598,7 +661,7 @@ impl<'a> Worker<'a> {
     /// The run-time name of the erasure of a method's parameter of type `t`: `stable_erasure`'s,
     /// a value class through its underlying type, the unit its box, a type parameter or an
     /// abstract type through its bound (`TypeErasure`'s `TypeParamRef` and `TypeBounds` cases).
-    fn erased_parameter_name(&mut self, t: TypeId, depth: u32) -> String {
+    fn erased_parameter_name(&mut self, t: TypeId, depth: u32, naming: Naming) -> String {
         const OBJECT: &str = "java.lang.Object";
         if depth > 16 {
             return OBJECT.to_string();
@@ -613,23 +676,23 @@ impl<'a> Worker<'a> {
                 if let Some(under) = info.ctor.first().and_then(|cl| cl.params.first()).map(|p| p.ty) {
                     let subst: crate::types::Subst = info.tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
                     let under = self.types.subst(under, &subst);
-                    return self.erased_parameter_name(under, depth + 1);
+                    return self.erased_parameter_name(under, depth + 1, naming);
                 }
             }
         }
         match self.stable_erasure(t) {
-            Some(super::site::Erased::Of(c, dims)) => self.class_literal_name(c, dims),
-            Some(super::site::Erased::Null(dims)) => self.class_literal_name(self.b.null, dims),
+            Some(super::site::Erased::Of(c, dims)) => self.class_literal_name(c, dims, naming),
+            Some(super::site::Erased::Null(dims)) => self.class_literal_name(self.b.null, dims, naming),
             // `Nothing`'s runtime class has no class literal here; `Object`'s stands for it, at
             // the call as here.
-            Some(super::site::Erased::Nothing(dims)) => self.class_literal_name(self.b.any_ref, dims),
+            Some(super::site::Erased::Nothing(dims)) => self.class_literal_name(self.b.any_ref, dims, naming),
             None => match {
                 let d = self.deref(t);
                 self.types.get(d)
             } {
                 Type::Param(p) | Type::AppParam(p, _) => {
                     let upper = self.syms.tparam(p).upper;
-                    self.erased_parameter_name(upper, depth + 1)
+                    self.erased_parameter_name(upper, depth + 1, naming)
                 }
                 _ => OBJECT.to_string(),
             },
@@ -637,53 +700,26 @@ impl<'a> Worker<'a> {
     }
 
     /// `Class.getName` of `classOf` of the class `c`, or of the array of `dims` dimensions of it
-    /// (`TExpr::ClassOf`): `int`, `java.lang.String`, `[I`.
-    pub fn class_literal_name(&self, c: ClassId, dims: u8) -> String {
+    /// (`TExpr::ClassOf`): `int`, `java.lang.String`, `[I`, a class's name the one the target's run-time
+    /// classes carry (`naming`), so that the erased signatures of a reflective lookup compare with them: the
+    /// JVM's, encoded (`encoded_binary_name`), or Scala.js's, written (`binary_name`).
+    pub fn class_literal_name(&self, c: ClassId, dims: u8, naming: Naming) -> String {
         let info = self.syms.class(c);
         let scala_object = matches!(self.interner.get(info.name), "Matchable" | "Singleton") && matches!(info.owner, Owner::Package(p) if p == self.b.scala_pkg);
         let element = match crate::emit::class_of_name(&self.syms, &self.interner, c) {
             Some(n) => n,
             None if c == self.b.any_ref || c == self.b.any_val || scala_object => "java.lang.Object".to_string(),
-            None => self.runtime_class_name_of(c),
+            None if naming == Naming::Jvm => self.encoded_binary_name(c),
+            None => self.binary_name(c),
         };
         if dims == 0 { element } else { crate::emit::array_class_name(&element, dims) }
     }
 
-    /// `Class.getName` of a class: its packages joined with dots, an enclosing class with `$`.
-    fn runtime_class_name_of(&self, c: ClassId) -> String {
-        let info = self.syms.class(c);
-        let mut s = match info.owner {
-            Owner::Package(p) => {
-                let mut path = Vec::new();
-                let mut at = Some(p);
-                while let Some(k) = at.filter(|&k| k != ROOT_PKG) {
-                    path.push(self.interner.get(self.syms.pkg(k).name).to_string());
-                    at = self.syms.pkg(k).parent;
-                }
-                path.reverse();
-                path.into_iter().map(|p| p + ".").collect::<String>()
-            }
-            Owner::Class(o) => {
-                let mut outer = self.runtime_class_name_of(o);
-                if !outer.ends_with('$') {
-                    outer.push('$');
-                }
-                outer
-            }
-            Owner::Local => String::new(),
-        };
-        s.push_str(self.interner.get(info.name));
-        if info.kind == ClassKind::Object {
-            s.push('$');
-        }
-        s
-    }
-
     /// The classes a reflective call names, its class literals' (`TExpr::ClassOf`); none where one
     /// is not a class literal.
-    pub fn reflective_call_classes(&self, literals: &[crate::tir::TExprId]) -> Option<Vec<String>> {
+    pub fn reflective_call_classes(&self, literals: &[crate::tir::TExprId], naming: Naming) -> Option<Vec<String>> {
         literals.iter().map(|&e| match self.prog.expr(e) {
-            crate::tir::TExpr::ClassOf(c, dims) => Some(self.class_literal_name(c, dims)),
+            crate::tir::TExpr::ClassOf(c, dims) => Some(self.class_literal_name(c, dims, naming)),
             _ => None,
         }).collect()
     }

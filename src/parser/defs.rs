@@ -1194,6 +1194,30 @@ impl<'a> Parser<'a> {
         body
     }
 
+    /// Whether the parser stands at the placeholder of a script's statements in its wrapper class's body.
+    fn at_script_body(&self) -> bool {
+        self.script_end != usize::MAX && self.at(Tok::Ident) && self.tok().name == self.script_body
+    }
+
+    /// The script's statements, read from the file's start to its wrapper as the wrapper class's
+    /// body at the placeholder (`script::wrap`), so that every position in them is the script's own.
+    fn parse_script_body(&mut self, body: &mut Vec<Stmt>) {
+        let (resume, end) = (self.pos + 1, self.script_end);
+        self.script_end = usize::MAX;
+        let wrapper = self.toks[end];
+        self.toks[end].kind = Tok::Eof;
+        self.pos = 0;
+        self.statements(RecoverySite::TemplateBody, |p| {
+            if p.at(Tok::KwExport) {
+                p.parse_export();
+            } else {
+                p.parse_block_stmt(body);
+            }
+        });
+        self.toks[end] = wrapper;
+        self.pos = resume;
+    }
+
     fn parse_template_body_scoped(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
         let mut body = Vec::new();
         let patdefs_mark = self.pattern_vals;
@@ -1233,6 +1257,8 @@ impl<'a> Parser<'a> {
                 }
             } else if p.at(Tok::KwExport) {
                 p.parse_export();
+            } else if p.at_script_body() {
+                p.parse_script_body(&mut body);
             } else {
                 p.parse_block_stmt(&mut body);
             }

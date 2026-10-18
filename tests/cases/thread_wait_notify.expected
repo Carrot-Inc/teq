@@ -1,0 +1,5 @@
+consumer got the value
+handed over
+wait: java.lang.IllegalMonitorStateException: current thread is not owner
+notify: java.lang.IllegalMonitorStateException: current thread is not owner
+timed wait returned

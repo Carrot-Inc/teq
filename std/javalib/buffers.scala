@@ -162,6 +162,14 @@ package java.nio:
         i += 1
       pos += src.length
       this
+    @jvm("invokevirtual java/nio/ByteBuffer.put([BII)Ljava/nio/ByteBuffer;")
+    def put(src: Array[Byte], off: Int, len: Int): ByteBuffer =
+      var i = 0
+      while i < len do
+        buf(offset + pos + i) = src(off + i)
+        i += 1
+      pos += len
+      this
     @jvm("invokevirtual java/nio/ByteBuffer.put(Ljava/nio/ByteBuffer;)Ljava/nio/ByteBuffer;")
     def put(src: ByteBuffer): ByteBuffer =
       while src.hasRemaining() do put(src.get())

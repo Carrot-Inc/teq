@@ -1286,7 +1286,7 @@ impl<'a> Worker<'a> {
             }
         };
         let siblings: Vec<SymId> = match scope.owner {
-            Owner::Package(p) => match self.syms.pkg(p).entries.get(&name) {
+            Owner::Package(p) => match self.syms.package_object_entry(p, name) {
                 Some(e) => e.extensions.iter().copied().filter(|&s| is_sibling(self, s)).collect(),
                 None => return None,
             },
@@ -2045,7 +2045,7 @@ impl<'a> Worker<'a> {
                 // A JDK package is entered when the JDK is first opened, which a program's
                 // first `java.time.X` path does here.
                 if self.sees_classpath() && self.jdk_rooted(p) && (self.load_pkg_member(p, n) || self.forked) {
-                    return self.syms.pkg(p).entries.get(&n).and_then(|e| e.pkg);
+                    return self.syms.scoped(self.interner, p, n).and_then(|e| e.pkg);
                 }
                 None
             }
@@ -5170,8 +5170,11 @@ impl<'a> Worker<'a> {
                         self.retry_applied = Some((self.diags.items.len() as u32, self.error_nodes));
                     }
                 }
-                Some(list) => {
-                    self.error(list.span, "unexpected using clause");
+                // A using list where the clause is a plain one: no application of the method (dotty's
+                // `matchingApply`), which misses its arguments (`Typer.adapt`'s `missingArgs`).
+                Some(_) => {
+                    let msg = format!("Missing arguments for {}", self.method_description_of(call.sym));
+                    self.error(span, msg);
                 }
                 None => {
                     // Missing argument list: eta-expand over this clause and the ones after it.
@@ -6046,7 +6049,7 @@ impl<'a> Worker<'a> {
         let name = self.interner.intern("ofDimKnown");
         let scala = self.b.scala_pkg;
         self.demand_std(scala, name, crate::stdindex::TERM);
-        let Some(first) = self.syms.pkg(scala).entries.get(&name).and_then(|e| e.term) else { return };
+        let Some(first) = self.syms.entry_named(self.interner, scala, name).and_then(|e| e.term) else { return };
         let alternatives = self.syms.alternatives(first).map_or(vec![first], |a| a.to_vec());
         let Some(helper) = alternatives.into_iter().find(|&a| self.sig_of(a).clauses.iter().map(|c| c.params.len()).sum::<usize>() == args.len() + 1) else { return };
         let mut items = vec![recv];
@@ -6146,6 +6149,10 @@ impl<'a> Worker<'a> {
             }
         }
         let info = self.syms.sym(call.sym);
+        // `Object`'s own members (`object_members`), selected and applied as any member is.
+        if info.owner == Owner::Class(self.b.any_ref) {
+            return self.object_monitor_call(call, args);
+        }
         if let Some(import) = info.js_import {
             return self.build_import_call(call.sym, TExpr::JsImport(import), args);
         }
@@ -7927,6 +7934,11 @@ impl<'a> Worker<'a> {
                 }
                 _ => {}
             }
+            // Type arguments that a method of no type parameters cannot take: dotty never applies it
+            // (`Applications.typedTypeApply`), and the qualifier's adaptation takes the call.
+            if targs.is_some() && !declared && self.written_targs(targs) && self.monomorphic_method(sym) {
+                return self.member_without_type_params(sym, recv, resolved_ty, name, targs, lists, span, expected, converted);
+            }
             let fits = || lists.iter().all(|l| l.args.is_empty());
             let (te, ty) = if declared || self.written_targs(targs) || without_lists || (fits() && self.member_accepts(sym, &lists, false, expected)) {
                 self.apply_callee(callee, targs, lists, span, expected)
@@ -8503,6 +8515,51 @@ impl<'a> Worker<'a> {
         }
         let failed = super::overload::Unresolved { msg, lists: lists.unwrap_or_default(), none_applicable, dependent };
         self.report_unresolved(failed, span)
+    }
+
+    /// Whether `sym` is a method of parameter clauses and no type parameters, which no type argument
+    /// selects (`PolyProto.canInstantiate`); a parameterless one applies its result's `apply` to them.
+    fn monomorphic_method(&mut self, sym: SymId) -> bool {
+        let info = self.syms.sym(sym);
+        if info.kind != SymKind::Def || info.is_extension {
+            return false;
+        }
+        let sig = self.sig_of(sym);
+        sig.tparams.is_empty() && !sig.clauses.is_empty()
+    }
+
+    /// The member `sym` given type arguments it takes none of (`monomorphic_method`): an extension of
+    /// the name or a conversion of the receiver takes the call (`Typer.tryInsertImplicitOnQualifier`),
+    /// or scalac's refusal stands.
+    #[cold]
+    #[inline(never)]
+    #[allow(clippy::too_many_arguments)]
+    fn member_without_type_params(
+        &mut self,
+        sym: SymId,
+        recv: TExprId,
+        recv_ty: TypeId,
+        name: Name,
+        targs: Option<ListRef>,
+        lists: Vec<ArgList>,
+        span: Span,
+        expected: Option<TypeId>,
+        converted: bool,
+    ) -> (TExprId, TypeId) {
+        let mut lists = Some(lists);
+        if let Some(r) = self.try_extensions_or_conversion(recv, recv_ty, name, targs, &mut lists, span, expected, converted) {
+            return r;
+        }
+        let lists = lists.unwrap_or_default();
+        if !converted {
+            if let Some(r) = self.apply_through_conversion(recv, recv_ty, name, targs, &lists, span, expected) {
+                return r;
+            }
+        }
+        let msg = format!("method {} does not take type parameters", self.method_description(sym));
+        self.error(span, msg);
+        self.type_args_for_errors(&lists);
+        (self.prog.add(TExpr::Unit), ERROR)
     }
 
     /// A member that only a refinement of the receiver's type declares (`T { def m(x: Int): String }`):
@@ -9165,7 +9222,9 @@ impl<'a> Worker<'a> {
                     ClassKind::Object => "object",
                     _ => "class",
                 };
-                format!("{} in {} {}", self.name_str(info.name), kind, self.name_str(self.syms.class(c).name))
+                // `AnyRef` is dotty's alias of the class `Object`, which a message names.
+                let class = if c == self.b.any_ref { "Object".to_string() } else { self.name_str(self.syms.class(c).name) };
+                format!("{} in {} {}", self.name_str(info.name), kind, class)
             }
             _ => self.name_str(info.name),
         }
@@ -9987,7 +10046,7 @@ impl<'a> Worker<'a> {
         }
         let scala_pkg = self.b.scala_pkg;
         self.demand_std(scala_pkg, name, crate::stdindex::TERM);
-        self.syms.pkg(scala_pkg).entries.get(&name).map(|e| e.extensions.clone()).unwrap_or_default()
+        self.syms.package_object_entry(scala_pkg, name).map(|e| e.extensions.clone()).unwrap_or_default()
     }
 
     /// Whether the std extension `sym` is the builtin `t`'s own member: the JDK's or one of
@@ -10016,7 +10075,7 @@ impl<'a> Worker<'a> {
         let scala_pkg = self.b.scala_pkg;
         self.demand_std(scala_pkg, name, crate::stdindex::TERM);
         let candidates: Vec<SymId> =
-            self.syms.pkg(scala_pkg).entries.get(&name).map(|e| e.extensions.clone()).unwrap_or_default();
+            self.syms.package_object_entry(scala_pkg, name).map(|e| e.extensions.clone()).unwrap_or_default();
         candidates.into_iter().any(|sym| {
             let mark = self.snapshot();
             let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
@@ -10677,7 +10736,7 @@ impl<'a> Worker<'a> {
     /// Whether a call names type arguments the source wrote, which dotc's
     /// `tryInsertImplicitOnQualifier` takes for no extension's or conversion's (scalac's own,
     /// in a library body, are inferred ones).
-    fn written_targs(&self, targs: Option<ListRef>) -> bool {
+    pub(super) fn written_targs(&self, targs: Option<ListRef>) -> bool {
         let Some(l) = targs else { return false };
         let ast = self.cur_ast();
         !self.in_converted_body() || ast.ty_list(l).iter().any(|t| ast.inferred_types.binary_search(&t.0).is_err())

@@ -2,7 +2,7 @@ echoed: first line
 echoed: second, é
 after the close: null
 cat: 0
-write after the end: java.io.IOException: Stream closed
+write after the end: refused, true
 both outputs: 200000 and 300000
 then stdin: the answer
 big: 0

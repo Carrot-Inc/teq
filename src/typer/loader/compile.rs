@@ -145,7 +145,7 @@ impl<'a> Worker<'a> {
         let mut pkg = ROOT_PKG;
         for seg in to.split('.') {
             let n = self.interner.intern(seg);
-            pkg = self.syms.pkg(pkg).entries.get(&n).and_then(|e| e.pkg)?;
+            pkg = self.syms.entry_at(pkg, n).and_then(|e| e.pkg)?;
         }
         Some((pkg, name))
     }
@@ -189,7 +189,7 @@ impl<'a> Worker<'a> {
     pub(in crate::typer) fn std_bound_type(&mut self, p: PkgId, name: Name) -> Option<TypeRef> {
         let (pkg, name) = self.std_binding(p, name)?;
         self.demand_std(pkg, name, crate::stdindex::TYPE);
-        let e = self.syms.pkg(pkg).entries.get(&name)?;
+        let e = self.syms.entry_named(self.interner, pkg, name)?;
         if let Some(c) = e.class.filter(|&c| !self.in_jar(self.syms.class(c).file)) {
             return Some(TypeRef::Class(c));
         }
@@ -200,7 +200,7 @@ impl<'a> Worker<'a> {
     pub(in crate::typer) fn std_bound_term(&mut self, p: PkgId, name: Name) -> Option<TermRef> {
         let (pkg, name) = self.std_binding(p, name)?;
         self.demand_std(pkg, name, crate::stdindex::TERM);
-        let e = self.syms.pkg(pkg).entries.get(&name)?;
+        let e = self.syms.entry_named(self.interner, pkg, name)?;
         if let Some(s) = e.term.filter(|&s| !self.in_jar(self.syms.sym(s).file)) {
             return Some(TermRef::Global(s));
         }

@@ -1437,11 +1437,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
         if self.t.syms.class(c).mods & mods::CASE != 0 {
             return None;
         }
-        let seq = self.t.seq_class()?;
-        match self.t.base_type(t, seq).map(|b| self.t.types.get(b)) {
-            Some(Type::Class(_, args)) => self.t.types.items(args).first().copied(),
-            _ => None,
-        }
+        self.t.seq_element_type(t)
     }
 
     /// An extractor typed as a `Some` (`->`) covers its scrutinee where the pattern matched

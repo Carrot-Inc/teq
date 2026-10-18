@@ -1,0 +1,67 @@
+backticked-main
+dirs-package
+echo-args
+echo-args-none
+excluded excluded-directive
+excluded excluded-directive-dot
+excluded excluded-typed
+excluded excluded-typed-dot
+exit-status-0
+exit-status-3
+exit-status-fail
+fixture add-api
+fixture add-web
+fixture block-comment-code
+fixture classifier-quoted
+fixture classifier-unquoted
+fixture dep-unicode-escape
+fixture evicted
+fixture init
+fixture list
+fixture log
+fixture no-sources-module
+fixture probe
+fixture race
+fixture teardown
+fixture usage
+hyphen-main
+hyphen-mirror
+hyphen-object-reference
+hyphen-package-main
+hyphen-package-merge
+hyphen-package-raw-reference
+hyphen-package-reference
+main-object
+nested-app
+nested-main
+parenthesised-main
+products product-closure
+products product-source
+reads-other-args
+refusal ambiguous
+refusal ambiguous-classpath
+refusal compile-only-version
+refusal dep-parameter
+refusal dep-unicode-invalid
+refusal key-empty
+refusal key-missing
+refusal key-quoted
+refusal key-unclosed
+refusal lib-version
+refusal missing-dep
+refusal missing-dep-classpath
+refusal missing-dep-platform-js
+refusal no-sources
+refusal no-sources-classpath
+refusal outside
+refusal outside-classpath
+refusal product-wrong-version
+refusal queue-version
+refusal source-after-lexer
+refusal wrong-version
+refusal wrong-version-backtick
+refusal wrong-version-classpath
+refusal wrong-version-tab
+script-paths
+script-paths-dir
+uses-defs

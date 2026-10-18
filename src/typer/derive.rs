@@ -102,7 +102,7 @@ impl<'a> Worker<'a> {
         // name them (`mirror_parent`) whether or not the program names a mirror.
         let pkg = |t: &mut Self, path: [&str; 2]| {
             let mut names = path.map(|n| t.interner.intern(n)).into_iter();
-            names.try_fold(ROOT_PKG, |p, n| match t.syms.pkg(p).entries.get(&n).and_then(|e| e.pkg) {
+            names.try_fold(ROOT_PKG, |p, n| match t.syms.entry_at(p, n).and_then(|e| e.pkg) {
                 Some(sub) => Some(sub),
                 None if library => match t.pkg_term(p, n) {
                     Some(resolve::TermRef::Package(p)) => Some(p),
@@ -114,7 +114,7 @@ impl<'a> Worker<'a> {
         let (Some(deriving), Some(runtime)) = (pkg(self, ["scala", "deriving"]), pkg(self, ["scala", "runtime"])) else { return };
         let class = |t: &mut Self, p: PkgId, name: &str| {
             let name = t.interner.intern(name);
-            if let Some(c) = t.syms.pkg(p).entries.get(&name).and_then(|e| e.class) {
+            if let Some(c) = t.syms.entry_at(p, name).and_then(|e| e.class) {
                 return Some(c);
             }
             if !library {
@@ -544,8 +544,8 @@ impl<'a> Worker<'a> {
     pub(super) fn entered_scala_reflect_class(&mut self, name: &str) -> Option<ClassId> {
         let reflect = self.interner.intern("reflect");
         let name = self.interner.intern(name);
-        let pkg = self.syms.pkg(self.b.scala_pkg).entries.get(&reflect).and_then(|e| e.pkg)?;
-        self.syms.pkg(pkg).entries.get(&name).and_then(|e| e.class)
+        let pkg = self.syms.entry_at(self.b.scala_pkg, reflect).and_then(|e| e.pkg)?;
+        self.syms.entry_at(pkg, name).and_then(|e| e.class)
     }
 
     /// A member of `Product` on a tuple, which the lean std's tuple traits do not extend;

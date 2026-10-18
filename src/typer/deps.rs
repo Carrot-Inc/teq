@@ -1048,7 +1048,7 @@ impl<'c, 'a> Collector<'c, 'a> {
         let mut seg = 0;
         for &end in &ast.package_clauses {
             while seg < end as usize {
-                match self.w.syms.pkg(p).entries.get(&ast.package[seg]).and_then(|e| e.pkg) {
+                match self.w.syms.scoped(self.w.interner, p, ast.package[seg]).and_then(|e| e.pkg) {
                     Some(q) => p = q,
                     None => return out,
                 }
@@ -1125,7 +1125,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             let next = match prefix {
                 ImportPrefix::Pkg(p) => {
                     // The class path's packages and objects are entered where something asks for them.
-                    let entry = self.w.syms.pkg(p).entries.get(&seg).cloned().unwrap_or_default();
+                    let entry = self.w.syms.entry_named(self.w.interner, p, seg).map(|e| e.into_owned()).unwrap_or_default();
                     if let Some(sub) = entry.pkg.or_else(|| if entry.term.is_none() { self.w.demand_pkg(p, seg) } else { None }) {
                         Some(self.import_package(sub))
                     } else {
@@ -1173,7 +1173,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             Some(r) => r.sym().and_then(|t| self.import_term(t)),
             None => {
                 let p = packages.iter().copied().find(|&q| self.package_has(q, head)).unwrap_or(ROOT_PKG);
-                let entry = self.w.syms.pkg(p).entries.get(&head).cloned().unwrap_or_default();
+                let entry = self.w.syms.entry_named(self.w.interner, p, head).map(|e| e.into_owned()).unwrap_or_default();
                 match entry.pkg.or_else(|| if entry.term.is_none() { self.w.demand_pkg(p, head) } else { None }) {
                     Some(sub) => Some(self.import_package(sub)),
                     None => entry.term.or_else(|| self.w.pkg_term(p, head).and_then(|r| r.sym())).and_then(|t| self.import_term(t)),
@@ -1204,7 +1204,7 @@ impl<'c, 'a> Collector<'c, 'a> {
 
     /// Whether a package has a member or a subpackage `n`, of the build or of the class path.
     fn package_has(&mut self, p: PkgId, n: Name) -> bool {
-        let entry = self.w.syms.pkg(p).entries.get(&n).cloned().unwrap_or_default();
+        let entry = self.w.syms.entry_named(self.w.interner, p, n).map(|e| e.into_owned()).unwrap_or_default();
         entry.pkg.is_some() || entry.term.is_some() || self.w.pkg_term(p, n).is_some() || self.w.demand_pkg(p, n).is_some()
     }
 
@@ -1245,7 +1245,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                 }
             }
             ImportPrefix::Pkg(p) => {
-                let entry = self.w.syms.pkg(p).entries.get(&n).cloned().unwrap_or_default();
+                let entry = self.w.syms.entry_named(self.w.interner, p, n).map(|e| e.into_owned()).unwrap_or_default();
                 if let Some(t) = entry.term {
                     self.member_ref(t);
                 }
@@ -1929,7 +1929,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                 }
                 let mut q = ROOT_PKG;
                 for &seg in &self.w.ast(file).package {
-                    match self.w.syms.pkg(q).entries.get(&seg).and_then(|e| e.pkg) {
+                    match self.w.syms.scoped(self.w.interner, q, seg).and_then(|e| e.pkg) {
                         Some(sub) => {
                             own.insert(sub, ());
                             q = sub;

@@ -995,7 +995,8 @@ pub fn run(opts: &Options) -> ! {
             // The parse diagnostics of the texts parsed, which replace the files' at the commit point.
             let mut parse_errors = Vec::new();
             for (i, text, mtime) in changed {
-                let (new_asts, found) = frontend::parse_one(&text, t.interner, frontend::syntax_of(&opts.source_at, &entries[i].path, opts.syntax));
+                let syntax = crate::parser::Syntax { script: crate::script::suffix_at(&entries[i].path, &text), ..frontend::syntax_of(&opts.source_at, &entries[i].path, opts.syntax) };
+                let (new_asts, found) = frontend::parse_one(&text, t.interner, syntax);
                 let mut errors = Diagnostics::default();
                 found.report(FileId(0), false, &mut errors);
                 parse_errors.push((entries[i].canonical.clone(), errors.items));
@@ -1959,9 +1960,9 @@ fn diag_files(t: &Worker, sources: &Sources) -> Vec<SourceFile> {
 /// that a plain `build` reads it again, or the file on disk.
 fn read_file(canonical: &PathBuf, path: &str, overlays: &Overlays) -> std::io::Result<(String, Option<SystemTime>)> {
     if let Some(text) = overlays.get(canonical) {
-        return Ok((text.clone(), None));
+        return Ok((crate::script::loaded(path, text.clone()), None));
     }
-    let text = std::fs::read_to_string(path)?;
+    let text = crate::script::loaded(path, std::fs::read_to_string(path)?);
     Ok((text, std::fs::metadata(path).and_then(|m| m.modified()).ok()))
 }
 

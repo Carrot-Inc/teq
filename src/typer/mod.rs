@@ -35,7 +35,7 @@ mod members;
 mod namedtuple;
 mod namer;
 mod overload;
-pub use reflective::{reflective_proxy_name, ReflectiveSig};
+pub use reflective::{reflective_proxy_name, Naming, ReflectiveSig};
 mod pat;
 pub mod prep;
 pub mod prims;
@@ -2091,6 +2091,42 @@ pub fn overlays_measured() -> bool {
     crate::types::overlays_wanted()
 }
 
+/// The members `java.lang.Object` declares beyond `Any`'s (`universal_member`'s): `wait`'s three
+/// overloads, `notify` and `notifyAll`, final, as dotty reads them from the class file, parameters
+/// `x$0` and `x$1`, `wait`'s alternatives in the order dotty lists them, the latest first; called
+/// with their `()`, which dotty's `isAutoApplied` does not leave out for them (E100). Every
+/// reference type has them (`find_class_member`); a call typed to one is lowered (`build_call`).
+fn object_members(syms: &mut Symbols, interner: &Interner, any_ref: ClassId, (long, int, unit): (TypeId, TypeId, TypeId)) {
+    let owner = Owner::Class(any_ref);
+    let method = |syms: &mut Symbols, name: Name, types: &[TypeId]| {
+        let params = types
+            .iter()
+            .enumerate()
+            .map(|(i, &ty)| {
+                let name = interner.intern(&format!("x${}", i));
+                let p = syms.new_sym(name, SymKind::Param, 0, Owner::Local, FileId(0), None, Span::default());
+                syms.sym_mut(p).sig = Some(std::sync::Arc::new(MethodSig::value(ty)));
+                syms.sym_mut(p).state().set(Completion::Done);
+                ParamSig { name, ty, by_name: false, repeated: false, has_default: false, sym: p }
+            })
+            .collect();
+        let m = syms.new_sym(name, SymKind::Def, crate::ast::mods::FINAL, owner, FileId(0), None, Span::default());
+        let sig = MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params, is_using: false, is_implicit: false }], ret: unit, declared: crate::tir::NO_TYPE };
+        let mut info = syms.sym_mut(m);
+        info.sig = Some(std::sync::Arc::new(sig));
+        info.state().set(Completion::Done);
+        m
+    };
+    let waits = vec![method(syms, crate::names::WAIT, &[long, int]), method(syms, crate::names::WAIT, &[long]), method(syms, crate::names::WAIT, &[])];
+    let wait = syms.new_overloaded(waits[0], owner, waits);
+    let notify = method(syms, crate::names::NOTIFY, &[]);
+    let notify_all = method(syms, crate::names::NOTIFY_ALL, &[]);
+    let members = &mut syms.classes[any_ref.idx()].members;
+    members.insert(crate::names::WAIT, wait);
+    members.insert(crate::names::NOTIFY, notify);
+    members.insert(crate::names::NOTIFY_ALL, notify_all);
+}
+
 impl<'a> Typer<'a> {
     pub fn new(asts: &'a Asts, files: &'a Sources, interner: &'a Interner) -> Typer<'a> {
         Typer { w: Worker::new(asts, files, interner), threads: 1 }
@@ -2362,7 +2398,7 @@ impl<'a> Worker<'a> {
     pub fn new(asts: &'a Asts, files: &'a Sources, interner: &'a Interner) -> Worker<'a> {
         let mut syms = Symbols::new();
         let types = TypeStore::new();
-        let scala_pkg = syms.sub_pkg(ROOT_PKG, crate::names::SCALA);
+        let scala_pkg = syms.sub_pkg(interner, ROOT_PKG, crate::names::SCALA);
         let builtin = |name: Name, syms: &mut Symbols| {
             let c = syms.new_class(
                 name,
@@ -2374,7 +2410,7 @@ impl<'a> Worker<'a> {
                 Span::default(),
             );
             syms.class(c).state().set(Completion::Done);
-            syms.pkgs[scala_pkg.idx()].entries.entry(name).or_default().class = Some(c);
+            syms.enter_scoped(interner, scala_pkg, name).class = Some(c);
             c
         };
         use crate::names as n;
@@ -2400,6 +2436,7 @@ impl<'a> Worker<'a> {
             let self_ty = types.class(c, &targs);
             syms.classes[c.idx()].base_types.push((c, self_ty));
         }
+        object_members(&mut syms, interner, any_ref, (types.class(long, &[]), types.class(int, &[]), types.class(unit, &[])));
         let mut num_rank = [NO_RANK; NUM_RANK_TABLE];
         for (c, rank) in [
             (byte, prims::R_BYTE),
@@ -4420,6 +4457,17 @@ impl<'a> Worker<'a> {
     /// each accessor enters the class's std file on the first ask; a file another worker entered
     /// first is found, and the std's classes are found again in this worker's table, which the
     /// entering worker's finding (`find_std_classes`) did not fill.
+    /// The element type of a sequence an `unapplySeq` gives, which dotty's `unapplySeqTypeElemTp`
+    /// reads off its `apply(i: Int)`: the argument of its `scala.collection.Seq` base, of which the
+    /// std's `Seq` is one (that class entered where the sequence is one of its).
+    pub fn seq_element_type(&mut self, t: TypeId) -> Option<TypeId> {
+        let seq = self.entered_class_at(&["scala", "collection", "Seq"]).or_else(|| self.seq_class())?;
+        match self.base_type(t, seq).map(|b| self.types.get(b)) {
+            Some(Type::Class(_, args)) if args != EMPTY_LIST => self.types.items(args).first().copied(),
+            _ => None,
+        }
+    }
+
     pub fn seq_class(&mut self) -> Option<ClassId> {
         if self.b.seq.is_none() {
             self.refresh_std_if_stale();
@@ -4524,13 +4572,13 @@ impl<'a> Worker<'a> {
 
     /// The package `scala.scalajs.js` of the Scala.js library, when it is compiled in.
     pub fn scalajs_pkg(&self) -> Option<PkgId> {
-        let scalajs = self.syms.pkg(self.b.scala_pkg).entries.get(&crate::names::SCALAJS).and_then(|e| e.pkg)?;
-        self.syms.pkg(scalajs).entries.get(&crate::names::JS).and_then(|e| e.pkg)
+        let scalajs = self.syms.entry_at(self.b.scala_pkg, crate::names::SCALAJS).and_then(|e| e.pkg)?;
+        self.syms.entry_at(scalajs, crate::names::JS).and_then(|e| e.pkg)
     }
 
     fn scalajs_class(&self, name: Name) -> Option<ClassId> {
         let js = self.scalajs_pkg()?;
-        self.syms.pkg(js).entries.get(&name).and_then(|e| e.class)
+        self.syms.scoped(self.interner, js, name).and_then(|e| e.class)
     }
 
     pub fn java_lang_pkg(&self) -> Option<PkgId> {
@@ -4542,8 +4590,8 @@ impl<'a> Worker<'a> {
     }
 
     fn java_sub_pkg(&self, name: Name) -> Option<PkgId> {
-        let java = self.syms.pkg(ROOT_PKG).entries.get(&crate::names::JAVA).and_then(|e| e.pkg)?;
-        self.syms.pkg(java).entries.get(&name).and_then(|e| e.pkg)
+        let java = self.syms.entry_at(ROOT_PKG, crate::names::JAVA).and_then(|e| e.pkg)?;
+        self.syms.scoped(self.interner, java, name).and_then(|e| e.pkg)
     }
 
     /// Whether the macro runs' changes of the state of object `c` are a cache's: `c` declared
@@ -4656,29 +4704,29 @@ impl<'a> Worker<'a> {
     /// The class `name` of package `p`, entering the std file that defines it when none of the
     /// entered ones does.
     pub fn demand_class(&mut self, p: PkgId, name: Name) -> Option<ClassId> {
-        if let Some(c) = self.syms.pkg(p).entries.get(&name).and_then(|e| e.class) {
+        if let Some(c) = self.syms.scoped(self.interner, p, name).and_then(|e| e.class) {
             return Some(c);
         }
         if self.demand_std(p, name, crate::stdindex::TYPE) {
-            return self.syms.pkg(p).entries.get(&name).and_then(|e| e.class);
+            return self.syms.scoped(self.interner, p, name).and_then(|e| e.class);
         }
         None
     }
 
     /// The term `name` of package `p`, entering the std file that defines it when needed.
     pub fn demand_term(&mut self, p: PkgId, name: Name) -> Option<SymId> {
-        if let Some(s) = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term) {
+        if let Some(s) = self.syms.entry_named(self.interner, p, name).and_then(|e| e.term) {
             return Some(s);
         }
         if self.demand_std(p, name, crate::stdindex::TERM) {
-            return self.syms.pkg(p).entries.get(&name).and_then(|e| e.term);
+            return self.syms.entry_named(self.interner, p, name).and_then(|e| e.term);
         }
         None
     }
 
     /// The package `name` under `p`, which a locked std layer may bring with it.
     pub fn demand_pkg(&mut self, p: PkgId, name: Name) -> Option<PkgId> {
-        if let Some(sub) = self.syms.pkg(p).entries.get(&name).and_then(|e| e.pkg) {
+        if let Some(sub) = self.syms.scoped(self.interner, p, name).and_then(|e| e.pkg) {
             return Some(sub);
         }
         self.demand_std_package(p, name)
@@ -4693,7 +4741,7 @@ impl<'a> Worker<'a> {
     pub(super) fn entered_java_lang_class(&mut self, name: &str) -> Option<ClassId> {
         let name = self.interner.intern(name);
         let lang = self.java_lang_pkg()?;
-        self.syms.pkg(lang).entries.get(&name).and_then(|e| e.class)
+        self.syms.scoped(self.interner, lang, name).and_then(|e| e.class)
     }
 
     pub(super) fn java_lang_object(&mut self, name: &str) -> Option<ClassId> {
@@ -4709,14 +4757,14 @@ impl<'a> Worker<'a> {
     /// A class of teq's own `js` package.
     fn js_class(&mut self, name: &str) -> Option<ClassId> {
         let name = self.interner.intern(name);
-        let js = self.syms.pkg(ROOT_PKG).entries.get(&crate::names::JS).and_then(|e| e.pkg)?;
+        let js = self.syms.entry_at(ROOT_PKG, crate::names::JS).and_then(|e| e.pkg)?;
         self.demand_class(js, name)
     }
 
     fn entered_js_class(&mut self, name: &str) -> Option<ClassId> {
         let name = self.interner.intern(name);
-        let js = self.syms.pkg(ROOT_PKG).entries.get(&crate::names::JS).and_then(|e| e.pkg)?;
-        self.syms.pkg(js).entries.get(&name).and_then(|e| e.class)
+        let js = self.syms.entry_at(ROOT_PKG, crate::names::JS).and_then(|e| e.pkg)?;
+        self.syms.scoped(self.interner, js, name).and_then(|e| e.class)
     }
 
     /// A term of package `scala` as the standard library defines it: a def, a val or an object.
@@ -4747,7 +4795,7 @@ impl<'a> Worker<'a> {
 
     fn entered_std_class(&mut self, name: &str) -> Option<ClassId> {
         let name = self.interner.intern(name);
-        if let Some(c) = self.syms.pkg(self.b.scala_pkg).entries.get(&name).and_then(|e| e.class) {
+        if let Some(c) = self.syms.scoped(self.interner, self.b.scala_pkg, name).and_then(|e| e.class) {
             return Some(c);
         }
         if !self.scala_library_std() {
@@ -4803,7 +4851,7 @@ impl<'a> Worker<'a> {
         let mut pkg = ROOT_PKG;
         for seg in ["scala", "collection", "immutable"] {
             let n = self.interner.intern(seg);
-            pkg = self.syms.pkg(pkg).entries.get(&n).and_then(|e| e.pkg)?;
+            pkg = self.syms.entry_at(pkg, n).and_then(|e| e.pkg)?;
         }
         let name = self.interner.intern("ArraySeq");
         let resolve::TermRef::Global(sym) = self.pkg_term(pkg, name)? else { return None };
@@ -5126,7 +5174,7 @@ impl<'a> Worker<'a> {
             t.name == o.name && t.owner == o.owner
         });
         opaque
-            || self.syms.pkg(p).entries.get(&o.name).and_then(|e| e.alias).map_or(false, |a| {
+            || self.syms.package_object_entry(p, o.name).and_then(|e| e.alias).map_or(false, |a| {
                 let a = self.syms.alias(a);
                 a.file == file && a.owner == o.owner
             })

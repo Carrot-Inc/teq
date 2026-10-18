@@ -576,7 +576,7 @@ impl<'c> Meet for Recorder<'c> {
                     TExpr::SeqLit(items) => Some(prog.expr_list(items)),
                     _ => None,
                 };
-                strings.extend(literals.and_then(|l| cx.typer.reflective_call_classes(l)).into_iter().flatten().map(Some));
+                strings.extend(literals.and_then(|l| cx.typer.reflective_call_classes(l, crate::typer::Naming::ScalaJs)).into_iter().flatten().map(Some));
             }
         }
         self.events.push(Event::Template(text.clone(), strings));

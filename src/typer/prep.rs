@@ -137,7 +137,7 @@ impl<'a> Worker<'a> {
         match info.owner {
             Owner::Package(p) => {
                 let pkg = self.syms.pkg(p);
-                let entry = |n: Name| pkg.entries.get(&n);
+                let entry = |n: Name| self.syms.scoped(self.interner, p, n);
                 if p == self.b.scala_pkg && self.arity_classes.get(&info.name) == Some(&c) {
                     return Ok(('a', info.name));
                 }
@@ -224,8 +224,8 @@ impl<'a> Worker<'a> {
         };
         let (owner, at) = match info.owner {
             Owner::Package(p) => {
-                let entry = self.syms.pkg(p).entries.get(&info.name);
-                let at = place(entry.and_then(|e| e.term), entry.map_or(&[][..], |e| &e.extensions[..]));
+                let entry = self.syms.entry_named(self.interner, p, info.name);
+                let at = place(entry.as_ref().and_then(|e| e.term), entry.as_ref().map_or(&[][..], |e| &e.extensions[..]));
                 (format!("{}|", self.pkg_path(p)), at)
             }
             Owner::Class(c) => {
@@ -316,10 +316,10 @@ impl<'a> Worker<'a> {
 
     /// The term `name` of package `p`, entered on the way.
     fn prep_pkg_term(&mut self, p: PkgId, name: Name) -> Option<SymId> {
-        if self.syms.pkg(p).entries.get(&name).and_then(|e| e.term).is_none() {
+        if self.syms.entry_named(self.interner, p, name).and_then(|e| e.term).is_none() {
             self.load_pkg_member(p, name);
         }
-        self.syms.pkg(p).entries.get(&name).and_then(|e| e.term).or_else(|| self.demand_term(p, name))
+        self.syms.entry_named(self.interner, p, name).and_then(|e| e.term).or_else(|| self.demand_term(p, name))
     }
 
     /// The entry `s` or the first of its alternatives `f` answers.
@@ -347,10 +347,10 @@ impl<'a> Worker<'a> {
             let object = |w: &Self, s: SymId| w.object_of(s);
             let found = match (owner, letter) {
                 (None, "c") => {
-                    if self.syms.pkg(p).entries.get(&name).is_none() {
+                    if self.syms.entry_named(self.interner, p, name).is_none() {
                         self.load_pkg_member(p, name);
                     }
-                    self.syms.pkg(p).entries.get(&name).and_then(|e| e.class).or_else(|| self.demand_class(p, name))
+                    self.syms.scoped(self.interner, p, name).and_then(|e| e.class).or_else(|| self.demand_class(p, name))
                 }
                 (None, "o") => self.prep_pkg_term(p, name).and_then(|s| self.prep_find(s, object)),
                 (None, "g") => {
@@ -389,7 +389,7 @@ impl<'a> Worker<'a> {
         let (entry, extensions) = if let Some(pkg) = owner.strip_suffix('|') {
             let p = self.prep_pkg(pkg).ok_or_else(|| format!("no package {}", pkg))?;
             let entry = self.prep_pkg_term(p, name);
-            (entry, self.syms.pkg(p).entries.get(&name).map(|e| e.extensions.clone()).unwrap_or_default())
+            (entry, self.syms.package_object_entry(p, name).map(|e| e.extensions.clone()).unwrap_or_default())
         } else {
             let c = self.prep_class_why(owner).map_err(|e| format!("owner: {}", e))?;
             self.complete_class(c);
@@ -482,7 +482,7 @@ impl<'a> Worker<'a> {
                         Some(p) => {
                             let name = self.interner.intern(&name_of_key(name));
                             self.load_pkg_member(p, name);
-                            self.syms.pkg(p).entries.contains_key(&name)
+                            self.syms.entry_named(self.interner, p, name).is_some()
                         }
                         None => false,
                     },

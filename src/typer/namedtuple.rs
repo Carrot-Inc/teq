@@ -16,7 +16,7 @@ impl<'a> Worker<'a> {
     pub(super) fn find_named_tuple(&mut self) -> Option<ClassId> {
         let name = self.interner.intern("NamedTuple");
         let scala = self.b.scala_pkg;
-        let term = match self.syms.pkg(scala).entries.get(&name).and_then(|e| e.term) {
+        let term = match self.syms.entry_named(self.interner, scala, name).and_then(|e| e.term) {
             Some(t) => t,
             // scala-library's, which the class path holds.
             None if self.loaded.is_some() => match self.pkg_term(scala, name)? {

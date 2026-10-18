@@ -463,8 +463,8 @@ impl<'a> Worker<'a> {
             ImportTarget::PkgAll(p) => {
                 let pkg = self.syms.pkg(p);
                 let exports = pkg.has_exports();
-                let known = pkg.entries.contains_key(&member)
-                    || (self.demand_std(p, member, crate::stdindex::TYPE | crate::stdindex::TERM) && self.syms.pkg(p).entries.contains_key(&member))
+                let known = self.syms.entry_named(self.interner, p, member).is_some()
+                    || (self.demand_std(p, member, crate::stdindex::TYPE | crate::stdindex::TERM) && self.syms.entry_named(self.interner, p, member).is_some())
                     || ((self.loaded.is_some() || self.syms.pkg(p).package_object.is_some() || exports) && {
                         // An export table still being built may hold the member.
                         let blocks = self.export_blocks;
@@ -954,7 +954,7 @@ impl<'a> Worker<'a> {
         let mut seg = 0;
         for &end in &ast.package_clauses {
             while seg < end as usize {
-                p = self.syms.pkg(p).entries[&ast.package[seg]].pkg.expect("the namer created the package");
+                p = self.syms.scoped(self.interner, p, ast.package[seg]).and_then(|e| e.pkg).expect("the namer created the package");
                 seg += 1;
             }
             out.push(p);
@@ -1240,13 +1240,11 @@ impl<'a> Worker<'a> {
     #[inline]
     pub fn pkg_type(&mut self, p: PkgId, name: Name) -> Option<TypeRef> {
         self.complete_package_forwarders(p, name);
-        let pkg = self.syms.pkg(p);
-        let defined =
-            pkg.entries.get(&name).and_then(|e| e.class.map(TypeRef::Class).or(e.alias.map(TypeRef::Alias)));
-        if let Some(found) = defined {
+        let (class, alias) = self.syms.type_named(self.interner, p, name);
+        if let Some(found) = class.map(TypeRef::Class).or(alias.map(TypeRef::Alias)) {
             return self.visible_pkg_type(p, found);
         }
-        if pkg.has_exports() {
+        if self.syms.pkg(p).has_exports() {
             if let Some(&r) = self.pkg_exports_of(p).as_ref().and_then(|e| e.types.get(&name)) {
                 return Some(r);
             }
@@ -1258,10 +1256,9 @@ impl<'a> Worker<'a> {
         }
         // The std file defining the name enters first; then the jars and the JDK are asked.
         if self.demand_std(p, name, crate::stdindex::TYPE) {
-            if let Some(e) = self.syms.pkg(p).entries.get(&name) {
-                if let Some(found) = e.class.map(TypeRef::Class).or(e.alias.map(TypeRef::Alias)) {
-                    return self.visible_pkg_type(p, found);
-                }
+            let (class, alias) = self.syms.type_named(self.interner, p, name);
+            if let Some(found) = class.map(TypeRef::Class).or(alias.map(TypeRef::Alias)) {
+                return self.visible_pkg_type(p, found);
             }
             if let Some(&r) = self.pkg_exports_of(p).as_ref().and_then(|e| e.types.get(&name)) {
                 return Some(r);
@@ -1280,7 +1277,8 @@ impl<'a> Worker<'a> {
             if self.load_pkg_member(p, name) || self.forked {
                 // An object of the jar names no type: the package object's alias of the same name
                 // (`zio.Trace`) is the type.
-                let loaded = self.syms.pkg(p).entries.get(&name).and_then(|e| e.class.map(TypeRef::Class).or(e.alias.map(TypeRef::Alias)));
+                let (class, alias) = self.syms.type_named(self.interner, p, name);
+                let loaded = class.map(TypeRef::Class).or(alias.map(TypeRef::Alias));
                 if loaded.is_some() {
                     return loaded;
                 }
@@ -1391,11 +1389,10 @@ impl<'a> Worker<'a> {
     pub fn pkg_term(&mut self, p: PkgId, name: Name) -> Option<TermRef> {
         self.complete_package_forwarders(p, name);
         let lone_extension = self.extension_call_head || self.in_jar(self.env.file);
-        let pkg = self.syms.pkg(p);
         // The entry's alias, an export's type forwarder of a class standing for the class's
         // companion where nothing else of the name is a term.
         let mut alias = None;
-        let defined = pkg.entries.get(&name).and_then(|e| {
+        let defined = self.syms.entry_named(self.interner, p, name).and_then(|e| {
             let lone_extension = match e.extensions.as_slice() {
                 [s] if lone_extension => Some(self.package_term(*s)),
                 _ => None,
@@ -1417,7 +1414,7 @@ impl<'a> Worker<'a> {
             // (`DayOfWeek` from `getDayOfWeek`) is read for its statics when a term names it
             // (`DayOfWeek.MONDAY`).
             if matches!(found, TermRef::Class(c) if self.syms.class(c).kind == ClassKind::Builtin) && self.demand_std(p, name, crate::stdindex::TERM) {
-                if let Some(s) = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term) {
+                if let Some(s) = self.syms.entry_named(self.interner, p, name).and_then(|e| e.term) {
                     return Some(self.package_term(s));
                 }
             }
@@ -1427,7 +1424,7 @@ impl<'a> Worker<'a> {
                 // another worker may have entered the name since, which the loader then has
                 // nothing to enter for, and the entries are read again.
                 if self.load_pkg_member(p, name) || self.forked {
-                    if let Some(s) = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term) {
+                    if let Some(s) = self.syms.entry_named(self.interner, p, name).and_then(|e| e.term) {
                         return Some(if placeholder { self.package_term(s) } else { TermRef::Global(s) });
                     }
                 }
@@ -1446,8 +1443,7 @@ impl<'a> Worker<'a> {
             }
         }
         if self.demand_std(p, name, crate::stdindex::TERM) {
-            let pkg = self.syms.pkg(p);
-            let found = pkg.entries.get(&name).and_then(|e| {
+            let found = self.syms.entry_named(self.interner, p, name).and_then(|e| {
                 let lone_extension = match e.extensions.as_slice() {
                     [s] if lone_extension => Some(self.package_term(*s)),
                     _ => None,
@@ -1478,7 +1474,7 @@ impl<'a> Worker<'a> {
             // it included (`inlined.into`, which `dsl`'s export forwards to); with several
             // workers, what another worker entered since the entries were read above.
             if self.load_pkg_member(p, name) || self.forked {
-                if let Some(e) = self.syms.pkg(p).entries.get(&name) {
+                if let Some(e) = self.syms.entry_named(self.interner, p, name) {
                     let lone_extension = match e.extensions.as_slice() {
                         [s] if lone_extension => Some(self.package_term(*s)),
                         _ => None,
@@ -1509,7 +1505,7 @@ impl<'a> Worker<'a> {
     /// HtmlTagOf`), a lookup inside the forwarder's own completion.
     fn exported_alias_pkg_term(&mut self, p: PkgId, name: Name, a: AliasId) -> Option<TermRef> {
         if (self.sees_classpath() || self.std_bridges_into(p)) && (self.load_pkg_member(p, name) || self.forked) {
-                let own = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term.map(|s| self.package_term(s)).or(e.class.map(TermRef::Class)).or(e.pkg.map(TermRef::Package)));
+                let own = self.syms.entry_named(self.interner, p, name).and_then(|e| e.term.map(|s| self.package_term(s)).or(e.class.map(TermRef::Class)).or(e.pkg.map(TermRef::Package)));
             if own.is_some() {
                 return own;
             }
@@ -1560,7 +1556,7 @@ impl<'a> Worker<'a> {
     fn pkg_extensions(&mut self, p: PkgId, name: Name, out: &mut Vec<SymId>) {
         self.demand_std(p, name, crate::stdindex::TERM);
         let pkg = self.syms.pkg(p);
-        if let Some(e) = pkg.entries.get(&name) {
+        if let Some(e) = self.syms.package_object_entry(p, name) {
             out.extend(e.extensions.iter().copied());
         }
         if let Some(obj) = pkg.package_object {
@@ -7615,7 +7611,9 @@ impl<'a> Worker<'a> {
             ClassKind::Anon => "anonymous class",
             _ => "class",
         };
-        format!("{} {}", kind, self.name_str(info.name))
+        // `AnyRef` is dotty's alias of the class `Object`, which a message names.
+        let name = if c == self.b.any_ref { "Object".to_string() } else { self.name_str(info.name) };
+        format!("{} {}", kind, name)
     }
 }
 

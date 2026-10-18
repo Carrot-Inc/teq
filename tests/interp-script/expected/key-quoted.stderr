@@ -1,0 +1,1 @@
+tests/interp-script/fixture/scripts/key-quoted.sc:1:11: error: Expected a key after `using`, found: StringLit

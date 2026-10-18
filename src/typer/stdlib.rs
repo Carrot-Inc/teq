@@ -232,7 +232,7 @@ impl<'a> Worker<'a> {
         let mut p = ROOT_PKG;
         for seg in path.split('.') {
             let n = self.interner.lookup(seg)?;
-            p = self.syms.pkg(p).entries.get(&n).and_then(|e| e.pkg)?;
+            p = self.syms.entry_at(p, n).and_then(|e| e.pkg)?;
         }
         Some(p)
     }
@@ -319,7 +319,7 @@ impl<'a> Worker<'a> {
         let mut p = ROOT_PKG;
         for seg in path.split('.') {
             let n = self.interner.intern(seg);
-            p = self.syms.sub_pkg(p, n);
+            p = self.syms.sub_pkg(self.interner, p, n);
         }
         p
     }
@@ -408,7 +408,7 @@ impl<'a> Worker<'a> {
             return None;
         }
         self.unlock_scalajs();
-        self.syms.pkg(parent).entries.get(&name).and_then(|e| e.pkg)
+        self.syms.scoped(self.interner, parent, name).and_then(|e| e.pkg)
     }
 
     fn unlock_scalajs(&mut self) {

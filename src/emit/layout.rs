@@ -594,7 +594,7 @@ fn sym_kind_rank(k: SymKind) -> u8 {
 pub fn extension_rank(syms: &Symbols, interner: &Interner, s: SymId) -> usize {
     let info = syms.sym(s);
     let Owner::Package(p) = info.owner else { return 0 };
-    let Some(entry) = syms.pkg(p).entries.get(&info.name) else { return 0 };
+    let Some(entry) = syms.package_object_entry(p, info.name) else { return 0 };
     // An inline extension is expanded where it is called and never written: it takes no place.
     let written = |e: SymId| syms.sym(e).mods & crate::ast::mods::INLINE == 0;
     entry.extensions.iter().filter(|&&e| written(e) && compare_syms(syms, interner, e, s) == Ordering::Less).count()

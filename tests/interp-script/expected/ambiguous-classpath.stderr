@@ -1,0 +1,1 @@
+tests/interp-script/fixture/scripts/ambiguous.sc: the sources the script includes belong to alpha/compile and beta/compile of <repo>/tests/interp-script/fixture/teq.lock: name one with --module <project>

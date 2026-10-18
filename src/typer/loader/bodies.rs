@@ -2013,7 +2013,7 @@ impl<'a> Worker<'a> {
             }
         }
         for &name in names.iter().rev() {
-            match self.syms.pkg(pkg).entries.get(&name).and_then(|e| e.pkg) {
+            match self.syms.scoped(self.interner, pkg, name).and_then(|e| e.pkg) {
                 Some(p) => pkg = p,
                 None => return false,
             }
@@ -2036,7 +2036,7 @@ impl<'a> Worker<'a> {
                     let mut pkg = ROOT_PKG;
                     for seg in text.split('.').filter(|s| !s.is_empty() && !matches!(*s, "_root_" | "<root>" | "<empty>")) {
                         let n = t.interner.lookup(seg)?;
-                        pkg = t.syms.pkg(pkg).entries.get(&n).and_then(|e| e.pkg)?;
+                        pkg = t.syms.scoped(t.interner, pkg, n).and_then(|e| e.pkg)?;
                     }
                     Some(pkg)
                 }
@@ -2044,7 +2044,7 @@ impl<'a> Worker<'a> {
                 TType::TermRef(prefix, n) => {
                     let parent = walk(t, cv, prefix)?;
                     let name = t.conv_name(cv, *n);
-                    t.syms.pkg(parent).entries.get(&name).and_then(|e| e.pkg)
+                    t.syms.scoped(t.interner, parent, name).and_then(|e| e.pkg)
                 }
                 _ => None,
             }
@@ -2119,7 +2119,7 @@ impl<'a> Worker<'a> {
         let path: Vec<&str> = rest[i..].iter().copied().chain(std::iter::once(top)).collect();
         let n = self.interner.intern(path[0].trim_end_matches('$'));
         self.load_pkg_member(p, n);
-        let entry = self.syms.pkg(p).entries.get(&n)?;
+        let entry = self.syms.entry_named(self.interner, p, n)?;
         let mut owner = match path[0].ends_with('$') {
             true => match self.syms.sym(entry.term?).kind {
                 SymKind::Object(k) => k,
@@ -2363,7 +2363,7 @@ impl<'a> Worker<'a> {
         // The object enters with its package's files, which this reference may be the first to
         // open.
         self.enter_pkg_objects(p);
-        let object = self.syms.pkg(p).entries.get(&n).and_then(|e| e.term).and_then(|s| match self.syms.sym(s).kind {
+        let object = self.syms.scoped(self.interner, p, n).and_then(|e| e.term).and_then(|s| match self.syms.sym(s).kind {
             SymKind::Object(c) => Some(c),
             _ => None,
         });
@@ -2378,7 +2378,7 @@ impl<'a> Worker<'a> {
         let n = self.interner.intern(&cv.tasty.name(cv.tasty.source_name(n)));
         self.enter_pkg_objects(p);
         self.load_pkg_member(p, n);
-        self.syms.pkg(p).entries.get(&n).and_then(|e| e.term).is_none()
+        self.syms.entry_named(self.interner, p, n).and_then(|e| e.term).is_none()
     }
 
     fn conv_path(&mut self, cv: &mut Conv, t: &TType) -> ExprId {
@@ -2762,6 +2762,10 @@ impl<'a> Worker<'a> {
                 self.adapted(cv, e, "Java's `()` the source did not write, left out");
                 e
             }
+            // A signature-polymorphic call (`MethodHandle.invoke`, dotty's `@PolymorphicSignature`), whose
+            // pickle gives the call site's method type: the std's `invoke` takes its arguments as a
+            // varargs list, so the call reads as written.
+            TermKind::ApplySigPoly(f, _, args) => self.conv_apply(cv, f, args),
             TermKind::Apply(f, args) => match self
                 .conv_quoted(cv, f, args)
                 .or_else(|| self.conv_interpolation(cv, f, args))
@@ -4140,8 +4144,16 @@ impl<'a> Worker<'a> {
                     let this = cv.expr(Expr::This);
                     return cv.expr(Expr::Apply(this, l));
                 }
-                // `x.synchronized(body)` is the body on JavaScript.
-                (_, Some("synchronized")) if items.len() == 1 => return items[0],
+                // `x.synchronized(body)` is the body on JavaScript; under `teq interp`, whose threads
+                // hold monitors, the call the typer makes a monitor of (`universal_member`).
+                (_, Some("synchronized")) if items.len() == 1 => {
+                    if !self.interp {
+                        return items[0];
+                    }
+                    let recv = self.conv_expr(cv, q);
+                    let select = cv.expr(Expr::Select(recv, names::SYNCHRONIZED));
+                    return cv.expr(Expr::Apply(select, l));
+                }
                 // `TupleN.apply(args)` is the tuple.
                 (TermKind::Path(TType::TermRef(prefix, tn)), Some("apply")) if self.is_scala_tuple_path(cv, prefix, *tn) => {
                     return cv.expr(Expr::Tuple(l));
@@ -4453,7 +4465,7 @@ impl<'a> Worker<'a> {
                 let mut pkg = ROOT_PKG;
                 for seg in text.split('.').filter(|s| !s.is_empty()) {
                     let n = self.interner.intern(seg);
-                    pkg = self.syms.pkg(pkg).entries.get(&n).and_then(|e| e.pkg)?;
+                    pkg = self.syms.scoped(self.interner, pkg, n).and_then(|e| e.pkg)?;
                 }
                 Some(PathScope::Pkg(pkg))
             }

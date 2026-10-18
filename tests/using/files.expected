@@ -1,1 +1,4 @@
+tests/using/files.scala:4:33: warning: Use of commas as separators is deprecated. Only whitespace is necessary.
+  //> using files lib/Helper.scala, "lib/deep/Other.scala"
+                                  ^
 the helper, the other

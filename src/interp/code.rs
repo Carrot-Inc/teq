@@ -1944,7 +1944,7 @@ impl<'a, 't> Interp<'a, 't> {
         debug_assert!(!(start == 0 && top) || code.entry_id == 0 || fr.desc == code.entry_id, "a unit entered in a frame of another layout");
         let mut st = self.take_vec(4);
         let mut cur = fr.clone();
-        let (chains, quotes) = (self.concats.len(), self.quote_renames.len());
+        let (chains, quotes) = (self.exec.concats.len(), self.exec.quote_renames.len());
         let r = self.run(code, start, &mut cur, &mut st, cx, top);
         // What an exit by a throw or a return left goes before the frames it left open: the operands
         // abandoned on the stack, the chains of `+` under way with the operands they keep, and the
@@ -1952,11 +1952,11 @@ impl<'a, 't> Interp<'a, 't> {
         // `r`'s). An abandoned operand (a closure over a block's frame) would otherwise keep
         // `leave_block` from cutting the cycle of that frame's local defs.
         self.recycle_vec(st);
-        if self.concats.len() > chains {
-            self.concats.truncate(chains);
+        if self.exec.concats.len() > chains {
+            self.exec.concats.truncate(chains);
         }
-        if self.quote_renames.len() > quotes {
-            self.quote_renames.truncate(quotes);
+        if self.exec.quote_renames.len() > quotes {
+            self.exec.quote_renames.truncate(quotes);
         }
         if !Rc::ptr_eq(&cur, fr) {
             self.unwind_frames(cur, fr);
@@ -1978,8 +1978,8 @@ impl<'a, 't> Interp<'a, 't> {
 
     #[inline]
     fn charge(&mut self, n: u32) -> R<()> {
-        if self.steps >= n as u64 {
-            self.steps -= n as u64;
+        if self.exec.steps >= n as u64 {
+            self.exec.steps -= n as u64;
             return Ok(());
         }
         self.charge_slowly(n)
@@ -2177,7 +2177,7 @@ impl<'a, 't> Interp<'a, 't> {
                     let args = self.args_of(st, argc);
                     let r = self.js_call(s, args);
                     if quote {
-                        self.quote_renames.pop();
+                        self.exec.quote_renames.pop();
                     }
                     st.push(r?);
                 }
@@ -2399,23 +2399,23 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 Op::ConcatBegin => {
                     self.prof_alloc(|a| a.strings += 1);
-                    self.concats.push((String::new(), Vec::new()));
+                    self.exec.concats.push((String::new(), Vec::new()));
                 }
                 Op::ConcatRender(conv) => {
                     let v = st.pop().expect("an operand");
-                    let (mut out, mut late) = self.concats.pop().expect("a chain");
+                    let (mut out, mut late) = self.exec.concats.pop().expect("a chain");
                     let r = if v.renders_by_value() {
                         self.render(conv.kind(), &v, &mut out, &late)
                     } else {
                         late.push((out.len(), v));
                         Ok(())
                     };
-                    self.concats.push((out, late));
+                    self.exec.concats.push((out, late));
                     r?;
                 }
                 Op::ConcatPlain => {
                     let v = st.pop().expect("an operand");
-                    let (mut out, late) = self.concats.pop().expect("a chain");
+                    let (mut out, late) = self.exec.concats.pop().expect("a chain");
                     let r = match &v {
                         Value::Str(s) => {
                             push_text(&mut out, &late, s);
@@ -2423,11 +2423,11 @@ impl<'a, 't> Interp<'a, 't> {
                         }
                         v => self.render(StrKind::Generic, v, &mut out, &late),
                     };
-                    self.concats.push((out, late));
+                    self.exec.concats.push((out, late));
                     r?;
                 }
                 Op::ConcatEnd => {
-                    let (out, late) = self.concats.pop().expect("a chain");
+                    let (out, late) = self.exec.concats.pop().expect("a chain");
                     let out = if late.is_empty() { out } else { self.render_late(&out, late)? };
                     st.push(Value::string(out));
                 }
@@ -2648,7 +2648,7 @@ impl<'a, 't> Interp<'a, 't> {
         let resolved = self.resolve_template(s);
         self.halt_on_withheld()?;
         if let Template::Builtin(_) = resolved {
-            if self.trace && self.depth < self.trace_depth {
+            if self.trace && self.exec.depth < self.trace_depth {
                 self.trace_template(s);
             }
             // A quote renames the locals of its body before its holes are evaluated.

@@ -41,6 +41,21 @@ regression.
 - `proposed-cases/` are programs scalac accepts and teq rejects, with the output of
   `scala-cli run -S 3.8.4` as `.expected`, in the format of `tests/cases`.
 
+## The interpreter's threads and a Scala CLI script's libraries (2026-10-16)
+
+Seven tests moved, against master's record, with the interp-env-script branch, each through a class the std gains:
+
+- Five positive tests moved to `accepts`: `pos/i14807` (`java.time.Month`), `pos/i19001.case1`
+  (`CompletionStage`), `pos/i20335` (`OffsetDateTime`), `pos/i22713` (`ScheduledExecutorService`) and `pos/t287`
+  (`java.io.BufferedOutputStream`).
+- `neg/i25531` moved from `std` to `same`: `FileVisitor` is the std's, and the error is scalac's.
+- `neg/t9419.zio-http` moved from `different` to `accepts`: `java.util.concurrent.Future` is the std's, and the test
+  now reaches a rule teq lacks, dotty's refusal of a by-name argument with wildcard arguments
+  (`ProtoTypes.checkNoWildcardCaptureForCBN`), which needs capture conversion.
+
+`pos/java-futures` stays `rejects`, on a member of the futures the std does not have yet. `neg/i5313` keeps its
+row: `System.wait()` is not lowered as a value's `wait`, since `System` stands for a Java class's statics.
+
 ## Tyrian's and Indigo's fixes (2026-10-12)
 
 Thirty-two tests moved, against master's record, with the tyrian-indigo branch:

@@ -15,7 +15,7 @@
 # with scalactic and scala-xml 2.1.0 (scalatest-core-sjs, scalactic-sjs, scala-xml-sjs); junit 4.13.2; the JVM `_3` artifacts of the ZIO runtime's
 # set (zio-jvm, zio-stacktracer-jvm, zio-internal-macros-jvm, izumi-reflect-jvm,
 # izumi-reflect-boopickle-jvm, scala-collection-compat-jvm, zio-test-jvm, zio-interop-cats-jvm, zio-interop-tracer-jvm), chimney-jvm and chimney-macro-commons-jvm, tapir-core-jvm (1.13.29) with magnolia123-jvm,
-# sttp-model-core-jvm, sttp-shared-core-jvm and sttp-shared-ws-jvm; abi-callbacks-lib,
+# sttp-model-core-jvm, sttp-shared-core-jvm and sttp-shared-ws-jvm; the interp-script fixture's lock jars its script reaches, named so that the actions cache holds them (decline-jvm, geny-jvm, os-lib-jvm, os-zip-jvm, magnolia1318-jvm, sttp-client4-core-jvm, sttp-client4-zio-jvm, sttp-shared-zio-jvm, sttp-model-core-1717-jvm, zio-interop-reactivestreams-jvm, zio-managed-jvm, jline-jdk8-jvm, reactive-streams-jvm, scodec-bits-jvm, algebra-jvm, cats-collections-core-jvm, idna4s-core-jvm); abi-callbacks-lib,
 # tests/support/abi_callbacks_lib.scala compiled by scalac (scala-cli) into a jar; typetest-lib,
 # tests/support/typetest_lib.scala compiled the same way; predef-lib,
 # tests/support/predef_lib.scala compiled the same way; depfun-lib, tests/support/depfun_lib.scala
@@ -854,6 +854,23 @@ jar_of() {
     places-lib-nosrc) places_lib_nosrc_jar ;;
     places-decl) places_decl_jar ;;
     zio-jvm) echo "$M2/dev/zio/zio_3/2.1.26/zio_3-2.1.26.jar" ;;
+    decline-jvm) echo "$M2/com/monovore/decline_3/2.6.2/decline_3-2.6.2.jar" ;;
+    geny-jvm) echo "$M2/com/lihaoyi/geny_3/1.1.1/geny_3-1.1.1.jar" ;;
+    os-lib-jvm) echo "$M2/com/lihaoyi/os-lib_3/0.11.8/os-lib_3-0.11.8.jar" ;;
+    os-zip-jvm) echo "$M2/com/lihaoyi/os-zip/0.11.8/os-zip-0.11.8.jar" ;;
+    magnolia1318-jvm) echo "$M2/com/softwaremill/magnolia1_3/magnolia_3/1.3.18/magnolia_3-1.3.18.jar" ;;
+    sttp-client4-core-jvm) echo "$M2/com/softwaremill/sttp/client4/core_3/4.0.26/core_3-4.0.26.jar" ;;
+    sttp-client4-zio-jvm) echo "$M2/com/softwaremill/sttp/client4/zio_3/4.0.26/zio_3-4.0.26.jar" ;;
+    sttp-shared-zio-jvm) echo "$M2/com/softwaremill/sttp/shared/zio_3/1.5.2/zio_3-1.5.2.jar" ;;
+    sttp-model-core-1717-jvm) echo "$M2/com/softwaremill/sttp/model/core_3/1.7.17/core_3-1.7.17.jar" ;;
+    zio-interop-reactivestreams-jvm) echo "$M2/dev/zio/zio-interop-reactivestreams_3/2.0.2/zio-interop-reactivestreams_3-2.0.2.jar" ;;
+    zio-managed-jvm) echo "$M2/dev/zio/zio-managed_3/2.1.23/zio-managed_3-2.1.23.jar" ;;
+    jline-jdk8-jvm) echo "$M2/org/jline/jline/3.27.1/jline-3.27.1-jdk8.jar" ;;
+    reactive-streams-jvm) echo "$M2/org/reactivestreams/reactive-streams/1.0.4/reactive-streams-1.0.4.jar" ;;
+    scodec-bits-jvm) echo "$M2/org/scodec/scodec-bits_3/1.2.4/scodec-bits_3-1.2.4.jar" ;;
+    algebra-jvm) echo "$M2/org/typelevel/algebra_3/2.13.0/algebra_3-2.13.0.jar" ;;
+    cats-collections-core-jvm) echo "$M2/org/typelevel/cats-collections-core_3/0.9.10/cats-collections-core_3-0.9.10.jar" ;;
+    idna4s-core-jvm) echo "$M2/org/typelevel/idna4s-core_3/0.1.0/idna4s-core_3-0.1.0.jar" ;;
     zio-stacktracer-jvm) echo "$M2/dev/zio/zio-stacktracer_3/2.1.26/zio-stacktracer_3-2.1.26.jar" ;;
     zio-internal-macros-jvm) echo "$M2/dev/zio/zio-internal-macros_3/2.1.26/zio-internal-macros_3-2.1.26.jar" ;;
     izumi-reflect-jvm) echo "$M2/dev/zio/izumi-reflect_3/3.0.9/izumi-reflect_3-3.0.9.jar" ;;
@@ -1020,19 +1037,45 @@ jars_of() {
   done
   JARS_CP=${JARS_CP#:}
 }
+# The JVM jars of a test's `//> using dep` coordinates in the coursier cache, which `teq interp` checks the
+# directives against under --classpath (src/scriptdeps.rs): `org::name:version` (and `org::name::version`) the
+# `_3` artifact, `org:name:version` the artifact as written. DEPS_CP their paths, DEPS_MISSING those not in the
+# cache, DEPS_SCALA2 those of Scala 2 (`_2.13`, `_2.12`), whose classes the interpreter reads none of.
+deps_jars_of() {
+  DEPS_CP="" DEPS_MISSING="" DEPS_SCALA2=""
+  local c org rest name version path
+  for c in $(grep -h -o '^//> using deps\{0,1\} .*' "$1" "$1"/*.scala 2> /dev/null | sed 's|^//> using deps\{0,1\} ||'); do
+    case $c in
+      *::*) org=${c%%::*}; rest=${c#*::}; name=${rest%%:*}_3 ;;
+      *) org=${c%%:*}; rest=${c#*:}; name=${rest%%:*} ;;
+    esac
+    version=${rest##*:}
+    path="$M2/${org//.//}/$name/$version/$name-$version.jar"
+    [ -e "$path" ] || DEPS_MISSING="$DEPS_MISSING $c"
+    case $name in *_2.1[0-9]) DEPS_SCALA2="$DEPS_SCALA2 $c" ;; esac
+    DEPS_CP="$DEPS_CP:$path"
+  done
+  DEPS_CP=${DEPS_CP#:}
+}
 # The Maven files the suites read beside the jars jar_of names, which bench/actions/jars.sh fetch fetches as it fetches
 # those (every quoted `$M2/...` path of this file): the sources jars tests/lsp.sh's libraries scenario reads beside
 # sourcecode's two versions and scala-library's; scala3-library, which tests/task.sh's export pins; and the class
 # path of the example's jvmapp tests (integrations/sbt/example/teq.lock's), over which tests/task.sh runs munit's
 # suites; and the Scala.js test frameworks' jars of tests/task.sh's export of tests/scalajs-test (munit 1.3.4 and
 # 1.2.1, scalatest 3.2.20's modules, utest, the zio runtime's), which it reads from the coursier cache; and sbt
-# 2.0.8's forked test worker with the gson it shades, which tests/task.sh holds teq's test runner to.
+# 2.0.8's forked test worker with the gson it shades, which tests/task.sh holds teq's test runner to; and the JVM jar
+# of scala-java-locales 1.5.4, which tests/run_interp.sh gives the Scala.js cases that name it (deps_jars_of), and
+# zio 2.1.25's, over which tests/interp-script.sh's queue-version is refused.
 maven_extras() {
   printf '%s\n' \
     "$M2/com/lihaoyi/sourcecode_3/0.4.2/sourcecode_3-0.4.2-sources.jar" \
     "$M2/com/lihaoyi/sourcecode_3/0.4.4/sourcecode_3-0.4.4-sources.jar" \
     "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4-sources.jar" \
     "$M2/org/scala-lang/scala3-library_3/3.8.4/scala3-library_3-3.8.4.jar" \
+    "$M2/io/github/cquiroz/scala-java-locales_3/1.5.4/scala-java-locales_3-1.5.4.jar" \
+    "$M2/dev/zio/zio_3/2.1.25/zio_3-2.1.25.jar" \
+    "$M2/dev/zio/zio-internal-macros_3/2.1.25/zio-internal-macros_3-2.1.25.jar" \
+    "$M2/dev/zio/zio-stacktracer_3/2.1.25/zio-stacktracer_3-2.1.25.jar" \
     "$M2/org/scalameta/munit_3/1.3.4/munit_3-1.3.4.jar" \
     "$M2/org/scalameta/munit-diff_3/1.3.4/munit-diff_3-1.3.4.jar" \
     "$M2/org/scalameta/junit-interface/1.3.4/junit-interface-1.3.4.jar" \

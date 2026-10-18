@@ -1,0 +1,10 @@
+interrupted
+finalizer ran
+interrupted exit: true
+loser interrupted
+winner fast
+timeout None
+acquire a
+acquire b
+release b
+release a

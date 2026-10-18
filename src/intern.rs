@@ -66,9 +66,15 @@ pub struct Name(pub u32);
 /// The names, interned once: shared by reference across the parallel typer's workers
 /// (`shared.rs`), whose reads take no lock and whose inserts take one unless one thread owns
 /// the interner (`set_exclusive`).
+/// A name's text, and its encoded form once read (`Interner::encoded`): the encoded name's id plus one, 0 before.
+struct Slot {
+    text: &'static str,
+    encoded: std::sync::atomic::AtomicU32,
+}
+
 pub struct Interner {
     serial: Serial,
-    strs: SlabVec<&'static str>,
+    strs: SlabVec<Slot>,
     index: Table,
     chunk: UnsafeCell<String>,
     full_chunks: UnsafeCell<Vec<String>>,
@@ -106,7 +112,7 @@ impl Interner {
 
     #[inline]
     fn find(&self, h: u64, s: &str) -> Option<Name> {
-        self.index.find(h, #[inline(always)] |i| *self.strs.get(i as usize) == s).map(Name)
+        self.index.find(h, #[inline(always)] |i| self.strs.get(i as usize).text == s).map(Name)
     }
 
     pub fn intern(&self, s: &str) -> Name {
@@ -133,9 +139,34 @@ impl Interner {
             chunk.push_str(s);
             &*(&chunk[start..] as *const str)
         };
-        let n = self.strs.push(stored) as u32;
+        let n = self.strs.push(Slot { text: stored, encoded: std::sync::atomic::AtomicU32::new(0) }) as u32;
         self.index.insert(h, n);
         Name(n)
+    }
+
+    /// The encoded form of `n` (`NameTransformer.encode`, dotty's `SimpleName.mangle`), `n` itself where encoding
+    /// leaves it as it is: read the first time a name is asked, a load beside its text after.
+    #[inline(always)]
+    pub fn encoded(&self, n: Name) -> Name {
+        match self.strs.get(n.0 as usize).encoded.load(std::sync::atomic::Ordering::Relaxed) {
+            0 => self.encoded_now(n),
+            v => Name(v - 1),
+        }
+    }
+
+    /// `encoded`'s first read of `n`, kept in its slot under the writer's lock. A growth of the slots copies them
+    /// byte for byte, the writer's, under that lock: a store beside it would race the copy, or land in the buffer it
+    /// retires. The slot is found after the lock is taken, in the buffer the last growth published.
+    #[cold]
+    #[inline(never)]
+    fn encoded_now(&self, n: Name) -> Name {
+        let encoded = match crate::jvm::names::encode_name(self.get(n)) {
+            std::borrow::Cow::Owned(e) if e != self.get(n) => self.intern(&e),
+            _ => n,
+        };
+        let _held = self.serial.hold();
+        self.strs.get(n.0 as usize).encoded.store(encoded.0 + 1, std::sync::atomic::Ordering::Relaxed);
+        encoded
     }
 
     pub fn len(&self) -> usize {
@@ -157,7 +188,7 @@ impl Interner {
 
     #[inline]
     pub fn get(&self, n: Name) -> &str {
-        self.strs.get(n.0 as usize)
+        self.strs.get(n.0 as usize).text
     }
 }
 
@@ -168,6 +199,41 @@ mod tests {
     /// The hash of teq's maps, a pin of its algorithm: the order an `FxMap` is walked in follows
     /// it, and a walk that reaches an output makes it part of the output. rustc-hash 1.1.0, whose
     /// word step this is, reads a tail by 4, 2 and 1 bytes and gives `c360d75917ea8923` here.
+    /// The encoded-name cache written while another worker interns: the interner filled to the slab's capacity
+    /// (32,768 slots), its names encoded by two threads while a third interns 40,000 more, which grows the slab
+    /// twice. Every name's cached form is its encoding. Under ThreadSanitizer, with a std built by it, the run
+    /// reports no race: `RUSTC_BOOTSTRAP=1 RUSTFLAGS=-Zsanitizer=thread cargo test -Zbuild-std
+    /// --target x86_64-unknown-linux-gnu --target-dir <dir> encoded_cache_beside_growth`.
+    #[test]
+    fn encoded_cache_beside_growth() {
+        let interner = Interner::new();
+        interner.set_exclusive(false);
+        let mut k = 0;
+        while interner.len() < 32_768 {
+            interner.intern(&format!("n{k}-x"));
+            k += 1;
+        }
+        let existing: Vec<Name> = (0..32_768u32).map(Name).collect();
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                for j in 0..40_000 {
+                    interner.intern(&format!("m{j}"));
+                }
+            });
+            for t in 0..2 {
+                let (interner, existing) = (&interner, &existing);
+                s.spawn(move || {
+                    for &n in existing.iter().skip(t).step_by(2) {
+                        interner.encoded(n);
+                    }
+                });
+            }
+        });
+        for &n in &existing {
+            assert_eq!(interner.get(interner.encoded(n)), crate::jvm::names::encode_name(interner.get(n)));
+        }
+    }
+
     #[test]
     fn fx_hasher_reads_a_tail_padded_with_zeros() {
         let mut h = FxHasher::default();

@@ -382,7 +382,7 @@ impl<'a> Typing<'a> for Worker<'a> {
     }
 
     fn reflective_sigs(&mut self, members: &[SymId]) -> Vec<Option<crate::typer::ReflectiveSig>> {
-        members.iter().map(|&m| self.reflective_sig(m)).collect()
+        members.iter().map(|&m| self.reflective_sig(m, crate::typer::Naming::ScalaJs)).collect()
     }
 
     fn complete_overridden(&mut self, classes: &[ClassId]) {
@@ -1066,7 +1066,7 @@ pub const TEMPLATE_FAILURES: [(&[&str], &str, &[&str]); 3] = [
 
 fn runtime_exceptions(typer: &mut Worker) -> Vec<ClassId> {
     let mut out = Vec::with_capacity(RUNTIME_THROWN.len());
-    let js = typer.syms.pkg(ROOT_PKG).entries.get(&names::JS).and_then(|e| e.pkg);
+    let js = typer.syms.entry_at(ROOT_PKG, names::JS).and_then(|e| e.pkg);
     let pkgs = [typer.java_lang_pkg(), typer.java_util_pkg(), Some(typer.b.scala_pkg), js];
     for name in RUNTIME_THROWN {
         let n = typer.interner.intern(name);
@@ -1122,23 +1122,23 @@ impl JvmHelpers {
                 .map(|info| info.def.and_then(|d| typer.asts[info.file.0 as usize].defs.get(d.idx())).map_or(false, |d| d.annots.iter().any(|a| a.name == crate::names::JVM_CLASS)))
                 .collect(),
         };
-        let Some(pkg) = typer.syms.pkg(typer.b.scala_pkg).entries.get(&runtime).and_then(|e| e.pkg) else { return out };
-        for (name, entry) in &typer.syms.pkg(pkg).entries {
+        let Some(pkg) = typer.syms.entry_at(typer.b.scala_pkg, runtime).and_then(|e| e.pkg) else { return out };
+        for (name, entry) in typer.syms.members(pkg) {
             if let Some(s) = entry.term {
-                out.terms.insert(typer.interner.get(*name).to_string(), s);
+                out.terms.insert(typer.interner.get(name).to_string(), s);
             }
             if let Some(c) = entry.class {
-                out.classes.insert(typer.interner.get(*name).to_string(), c);
+                out.classes.insert(typer.interner.get(name).to_string(), c);
             }
         }
         let term = |name: &str| {
             let n = typer.interner.intern(name);
-            typer.syms.pkg(pkg).entries.get(&n).and_then(|e| e.term)
+            typer.syms.entry_named(typer.interner, pkg, n).and_then(|e| e.term)
         };
         out.always = ["equal", "anyHash", "mix", "finalizeHash"].iter().filter_map(|n| term(n)).collect();
         out.seq_pattern = term("seqPattern");
         let n = typer.interner.intern("PartialFunctionImpl");
-        out.partial_function = typer.syms.pkg(pkg).entries.get(&n).and_then(|e| e.class);
+        out.partial_function = typer.syms.scoped(typer.interner, pkg, n).and_then(|e| e.class);
         if typer.link_mode() {
             out.interpolators = crate::jvm::interpolators(typer, pkg);
         }
@@ -3460,7 +3460,7 @@ impl Meet for Walker {
                     TExpr::SeqLit(items) => Some(prog.expr_list(items)),
                     _ => None,
                 };
-                let call = literals.and_then(|l| cx.typer.reflective_call_classes(l));
+                let call = literals.and_then(|l| cx.typer.reflective_call_classes(l, crate::typer::Naming::ScalaJs));
                 let text = &prog.strings[k.idx()];
                 if let (Some(call), Some(literals)) = (&call, literals) {
                     let key = literals.iter().filter_map(|&e| match prog.expr(e) {

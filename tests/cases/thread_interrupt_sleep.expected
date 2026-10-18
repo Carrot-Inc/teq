@@ -1,0 +1,7 @@
+interrupted: sleep interrupted, flag false
+true
+at once: sleep interrupted
+false
+true
+false
+join interrupted: null

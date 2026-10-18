@@ -979,7 +979,7 @@ neg/i2539.scala	same
 neg/i25442	accepts	
 neg/i25456.scala	same	
 neg/i25500.scala	same	
-neg/i25531.scala	std	FileVisitor
+neg/i25531.scala	same	
 neg/i25531b.scala	accepts	
 neg/i25548.scala	syntax	expected {}, found {}
 neg/i25571.scala	accepts	
@@ -1882,7 +1882,7 @@ neg/t8006.scala	superset	+1 lines: value {} is not a member of {}
 neg/t8300-overloading.scala	std	App
 neg/t8764.scala	std	App
 neg/t9419.scala	accepts	
-neg/t9419.zio-http.scala	different	{} is not a member of the package
+neg/t9419.zio-http.scala	accepts	
 neg/tagging.scala	same	
 neg/tailrec-2.scala	different	TailRec optimisation not applicable, method f contains no recursive calls
 neg/tailrec-3.scala	different	Cannot rewrite recursive call: it is not in tail position
@@ -2055,7 +2055,7 @@ pos/22219.scala	accepts
 pos/22219b.scala	accepts	
 pos/23056.scala	rejects	value {} is not a member of {}
 pos/24707	oos	java
-pos/25198	rejects	exception in macro: scala.MatchError: List(List()) (of class scala.::) (called by foo in object Macros)
+pos/25198	rejects	exception in macro: scala.MatchError: List(List()) (of class scala.$colon$colon) (called by foo in object Macros)
 pos/26211.scala	accepts	
 pos/26238-min.scala	accepts	
 pos/26238.scala	rejects	cannot resolve import
@@ -2126,7 +2126,7 @@ pos/SI-7100.scala	accepts
 pos/SI-7638.scala	accepts	
 pos/SI-7638a.scala	accepts	
 pos/StringContext.scala	syntax	expected {}, found {}
-pos/Transactions.scala	std	wait
+pos/Transactions.scala	accepts	
 pos/Tuple.Drop.scala	accepts	
 pos/Tuple.Elem.scala	accepts	
 pos/TupleReverse.scala	std	Reverse
@@ -2849,7 +2849,7 @@ pos/i14776-patmat.scala	accepts
 pos/i14776.scala	accepts	
 pos/i14782.scala	accepts	
 pos/i14783.scala	rejects	type mismatch
-pos/i14807.scala	std	Month
+pos/i14807.scala	accepts	
 pos/i14821.scala	accepts	
 pos/i14830.scala	rejects	type mismatch
 pos/i14832.scala	accepts	
@@ -3225,7 +3225,7 @@ pos/i1891.scala	accepts
 pos/i18918.scala	accepts	
 pos/i18927.scala	accepts	
 pos/i18933.scala	accepts	
-pos/i19001.case1.scala	rejects	{} is not a member of the package
+pos/i19001.case1.scala	accepts	
 pos/i19001.case2.scala	accepts	
 pos/i19001.case3.scala	accepts	
 pos/i19006a.scala	accepts	
@@ -3338,7 +3338,7 @@ pos/i20288.scala	accepts
 pos/i20296.scala	accepts	
 pos/i20297.scala	rejects	type mismatch
 pos/i20300.scala	accepts	
-pos/i20335.scala	rejects	{} is not a member of the package
+pos/i20335.scala	accepts	
 pos/i20342.scala	accepts	
 pos/i20344.scala	accepts	
 pos/i20377.scala	rejects	cannot resolve import
@@ -3488,7 +3488,7 @@ pos/i22645a.scala	rejects	value {} is not a member of {}
 pos/i22645b.scala	rejects	value {} is not a member of {}
 pos/i22648.scala	accepts	
 pos/i22676.scala	accepts	
-pos/i22713.scala	rejects	{} is not a member of the package
+pos/i22713.scala	accepts	
 pos/i22724.scala	accepts	
 pos/i2278.scala	accepts	
 pos/i22833-unroll-final-class.scala	accepts	
@@ -4511,7 +4511,7 @@ pos/itay.scala	accepts
 pos/iterator-traversable-mix.scala	accepts	
 pos/java-annot	oos	java
 pos/java-annotated-wildcards	oos	java
-pos/java-futures.scala	rejects	{} is not a member of the package
+pos/java-futures.scala	rejects	value {} is not a member of {}
 pos/java-inherited-type	oos	java
 pos/java-inherited-type1	oos	java
 pos/java-override	oos	java
@@ -5222,7 +5222,7 @@ pos/t2797.scala	accepts
 pos/t2799.scala	accepts	
 pos/t2809.scala	accepts	
 pos/t284-pos.scala	syntax	expected end of statement, found {}
-pos/t287.scala	std	BufferedOutputStream
+pos/t287.scala	accepts	
 pos/t289.scala	accepts	
 pos/t2910.scala	rejects	not found: {}
 pos/t2913.scala	rejects	missing argument for parameter {}
@@ -5941,7 +5941,7 @@ warn/i15474.scala	silent		--source 3.4
 warn/i15479.scala	silent		--source future
 warn/i15503a.scala	rejects	{} is not a member of the package
 warn/i15503b.scala	silent	
-warn/i15503c.scala	rejects	{} is not a member of the package	--source 3.3
+warn/i15503c.scala	silent		--source 3.3
 warn/i15503d.scala	different	unreachable case
 warn/i15503e.scala	silent	
 warn/i15503f.scala	syntax	expected {}, found {}
@@ -6028,7 +6028,7 @@ warn/i20129.scala	silent
 warn/i20130.scala	same	
 warn/i20131.scala	superset	+1 diagnostics: match may not be exhaustive.
 warn/i20132.alt.scala	same	
-warn/i20132.future-Left.scala	rejects	{} is not a member of the package
+warn/i20132.future-Left.scala	same	
 warn/i20132.list-Seq.scala	same	
 warn/i20132.scala	silent	
 warn/i20132.stream-Tuple2.safeNulls.fixed.scala	superset	+1 diagnostics: unreachable case

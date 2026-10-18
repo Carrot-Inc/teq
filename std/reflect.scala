@@ -50,6 +50,14 @@ package java.lang:
     @js("$fail(\"UnsupportedOperationException\", \"reflection is not available on JavaScript\")")
     def getMethods: Array[java.lang.reflect.Method]
 
+    // A method the class itself declares, by its name and its parameters' classes, for a library
+    // that asks one reflectively: the interpreter looks among the class's own members, JavaScript
+    // has no reflection, and the JVM calls the JDK's, the classes its varargs array.
+    @javaDefined
+    @js("$fail(\"UnsupportedOperationException\", \"reflection is not available on JavaScript\")")
+    @jvm("$0 $1 rt $2:L rtcall classArray(Ljava/lang/Object;)[Ljava/lang/Class; invokevirtual java/lang/Class.getDeclaredMethod(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;")
+    def getDeclaredMethod(name: String, parameterTypes: Class[?]*): java.lang.reflect.Method
+
     // A public field by name, which a class of the program never has (its vals are private
     // fields behind their getters): scala-library's `Selectable.selectDynamic` goes on to the getter.
     @javaDefined

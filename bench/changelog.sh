@@ -1,7 +1,9 @@
 # bench/changelog.sh, sourced: CHANGELOG.md's sections (docs/DEVELOPING.md, "Releases"), for bench/release.sh and
 # bench/github-release.sh. CHANGELOG.md, at the root, holds a section per release, the newest first, its heading
 # `## <version> (<yyyy-mm-dd>)` over bullets that say what the release changes for a user; the section is the
-# notes of the release's GitHub release. Public words: none of the work's process (changelog_words, "pass" among
+# notes of the release's GitHub release. An unreleased section, `## Unreleased`, may stand first, the changes
+# landed since the last release, which the release renames `## <version> (<yyyy-mm-dd>)`: it is no version's
+# section, may stand nowhere else, and the newest-first check reads the first versioned heading. Public words: none of the work's process (changelog_words, "pass" among
 # them even where it would name a compiler's: write "phase"), no internal file (changelog_files), and none of the
 # names a machine lists, one a line, in ~/.config/teq/private-names (TEQ_PRIVATE_NAMES; matched as words, case
 # and runs of blanks aside), which the tree never holds; all read in the text the notes show, a bullet's lines
@@ -22,7 +24,13 @@ changelog_join() {
 changelog_notes() {
   local file=$1 version=$2 headings heading text joined found f
   [ -f "$file" ] || { echo "no $file" >&2; return 1; }
+  [ "$version" != Unreleased ] || { echo "'## Unreleased' is no version's section: the release renames it '## <version> (<yyyy-mm-dd>)'" >&2; return 1; }
   headings=$(grep '^## ' "$file")
+  if grep -qx '## Unreleased' <<< "$headings"; then
+    [ "$(head -1 <<< "$headings")" = '## Unreleased' ] && [ "$(grep -cx '## Unreleased' <<< "$headings")" -eq 1 ] ||
+      { echo "$file's '## Unreleased' is not its first heading, the one place it may stand" >&2; return 1; }
+    headings=$(tail -n +2 <<< "$headings")
+  fi
   heading=$(awk -v v="$version" '$1 == "##" && $2 == v' <<< "$headings")
   [ -n "$heading" ] || { echo "$file has no section for $version: '## $version (<yyyy-mm-dd>)' and its bullets, the newest first" >&2; return 1; }
   [ "$(wc -l <<< "$heading")" -eq 1 ] || { echo "$file has $(wc -l <<< "$heading") sections for $version" >&2; return 1; }

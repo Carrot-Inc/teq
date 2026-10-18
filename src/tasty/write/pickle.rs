@@ -1889,7 +1889,7 @@ impl<'w, 'a> P<'w, 'a> {
     fn scala_trait(&mut self, name: &str) -> Option<TypeId> {
         let scala = self.w.b.scala_pkg;
         let n = self.w.interner.intern(name);
-        let c = self.w.syms.pkg(scala).entries.get(&n).and_then(|e| e.class)?;
+        let c = self.w.syms.scoped(self.w.interner, scala, n).and_then(|e| e.class)?;
         Some(self.w.types.class(c, &[]))
     }
 
@@ -3458,7 +3458,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let k = match info.owner {
             Owner::Class(o) => self.w.syms.class(o).nested.get(&info.name).copied(),
-            Owner::Package(p) => self.w.syms.pkg(p).entries.get(&info.name).and_then(|e| e.class),
+            Owner::Package(p) => self.w.syms.scoped(self.w.interner, p, info.name).and_then(|e| e.class),
             Owner::Local => None,
         }?;
         let ki = self.w.syms.class(k);
@@ -5636,7 +5636,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// Whether `name` of package `p` names an opaque type's companion (`opaque_companion_package`).
     fn opaque_companion_named(&self, p: PkgId, name: &str) -> bool {
         let n = self.w.interner.lookup(name);
-        n.and_then(|n| self.w.syms.pkg(p).entries.get(&n)).and_then(|e| e.term).is_some_and(|s| match self.w.syms.sym(s).kind {
+        n.and_then(|n| self.w.syms.scoped(self.w.interner, p, n)).and_then(|e| e.term).is_some_and(|s| match self.w.syms.sym(s).kind {
             SymKind::Object(o) => self.opaque_companion_package(o) == Some(p),
             _ => false,
         })

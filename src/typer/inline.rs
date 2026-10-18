@@ -641,7 +641,7 @@ impl<'a> Worker<'a> {
             return cached;
         }
         let name = self.interner.intern("compiletime");
-        let found = self.syms.pkg(self.b.scala_pkg).entries.get(&name).and_then(|e| e.pkg);
+        let found = self.syms.scoped(self.interner, self.b.scala_pkg, name).and_then(|e| e.pkg);
         self.inline.compiletime = Some(found);
         found
     }

@@ -14,8 +14,8 @@ A program teq compiles for JavaScript or runs in its interpreter carries the par
 uses, which may include the adaptations from Scala.js, the Scala standard library, scalajs-dom and
 scala-java-locales named below and the character tables made from the Unicode Character Database; a build with
 --hot carries the react-refresh runtime. Those entries' notices accompany a distribution of a program that
-contains them. The entries for the test programs, the Zed extension's files and the compiler's hash algorithm
-concern teq itself, not the programs it compiles.
+contains them. The entries for the test programs, the Zed extension's files, the compiler's hash algorithm and
+the Rust crates linked into teq's binary concern teq itself, not the programs it compiles.
 
 This product includes test programs adapted from the Scala 3 compiler
 (https://github.com/scala/scala3), Copyright 2012-2026 EPFL and
@@ -170,6 +170,20 @@ This product includes the hash algorithm of rustc-hash 1.1.0
 (https://github.com/rust-lang/rustc-hash), Copyright 2015 The Rust Project Developers,
 licensed under the Apache License, Version 2.0 or the MIT License at the user's option, here
 under the Apache License, Version 2.0: the FxHasher of src/intern.rs.
+
+This product includes, linked into its binary, the Rust crate corosensei 0.3.4
+(https://github.com/Amanieu/corosensei), by Amanieu d'Antras, which gives the
+interpreter's threads their stacks and switches between them, and the crates it
+builds on: cfg-if 1.0.5 (https://github.com/rust-lang/cfg-if), Copyright (c) 2014
+Alex Crichton; scopeguard 1.2.0 (https://github.com/bluss/scopeguard), Copyright
+(c) 2016-2019 Ulrik Sverdrup "bluss" and scopeguard developers; on Unix libc
+0.2.190 (https://github.com/rust-lang/libc), Copyright (c) The Rust Project
+Developers; and on Windows windows-sys 0.59.0, windows-targets 0.52.6 and its
+windows_* crates (https://github.com/microsoft/windows-rs), Copyright (c)
+Microsoft Corporation. autocfg 1.5.1 (https://github.com/cuviper/autocfg),
+Copyright (c) 2018 Josh Stone, runs at the build alone. Each is licensed under the
+Apache License, Version 2.0 or the MIT License at the user's option, here under
+the Apache License, Version 2.0.
 
 This product includes data of the Unicode Character Database, version 16.0.0
 (https://www.unicode.org/ucd/), as JDK 24's java.lang.Character carries it, licensed under

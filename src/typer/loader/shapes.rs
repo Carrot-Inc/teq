@@ -101,7 +101,7 @@ impl<'a> Worker<'a> {
         for &(from, name, to) in STD_BINDINGS {
             let (Some(from_pkg), Some(to_pkg)) = (self.pkg_by_path(from), self.pkg_by_path(to)) else { continue };
             let n = self.interner.intern(name);
-            let Some(c) = self.syms.pkg(to_pkg).entries.get(&n).and_then(|e| e.class) else { continue };
+            let Some(c) = self.syms.entry_at(to_pkg, n).and_then(|e| e.class) else { continue };
             if !self.in_jar(self.syms.class(c).file) {
                 out.push((c, from_pkg, n));
             }
@@ -109,7 +109,7 @@ impl<'a> Worker<'a> {
         for i in 0..self.syms.pkgs.len() {
             let p = PkgId(i as u32);
             let Some(slot) = self.loaded.as_ref().unwrap().slot(p) else { continue };
-            let classes: Vec<(Name, ClassId)> = self.syms.pkg(p).entries.iter().filter_map(|(&n, e)| e.class.map(|c| (n, c))).collect();
+            let classes: Vec<(Name, ClassId)> = self.syms.members(p).filter_map(|(n, e)| e.class.map(|c| (n, c))).collect();
             for (n, c) in classes {
                 let info = self.syms.class(c);
                 if self.in_jar(info.file) || matches!(info.kind, ClassKind::Builtin | ClassKind::Object) || out.iter().any(|&(k, _, _)| k == c) {
@@ -127,7 +127,7 @@ impl<'a> Worker<'a> {
         let mut pkg = ROOT_PKG;
         for seg in path.split('.') {
             let n = self.interner.intern(seg);
-            pkg = self.syms.pkg(pkg).entries.get(&n).and_then(|e| e.pkg)?;
+            pkg = self.syms.entry_at(pkg, n).and_then(|e| e.pkg)?;
         }
         Some(pkg)
     }

@@ -773,7 +773,7 @@ impl<'a> Worker<'a> {
         for i in 1..self.syms.pkgs.len() {
             let p = PkgId(i as u32);
             let owner = self.pkg_path(p);
-            let entries: Vec<(Name, Option<SymId>, Option<ClassId>, Option<AliasId>)> = self.syms.pkg(p).entries.iter().map(|(&n, e)| (n, e.term, e.class, e.alias)).collect();
+            let entries: Vec<(Name, Option<SymId>, Option<ClassId>, Option<AliasId>)> = self.syms.members(p).map(|(n, e)| (n, e.term, e.class, e.alias)).collect();
             for (n, term, class, alias) in entries {
                 let name = self.name_str(n);
                 if !importable(&name) {
@@ -1382,7 +1382,7 @@ impl<'a> Worker<'a> {
                 note(&mut names, n, if i == 0 { Rank::Package } else { Rank::Root });
             }
         }
-        let root: Vec<Name> = self.syms.pkg(ROOT_PKG).entries.iter().filter(|(_, e)| e.pkg.is_some()).map(|(&n, _)| n).collect();
+        let root: Vec<Name> = self.syms.members(ROOT_PKG).filter(|(_, e)| e.pkg.is_some()).map(|(n, _)| n).collect();
         for n in root {
             note(&mut names, n, Rank::Root);
         }
@@ -1521,7 +1521,7 @@ impl<'a> Worker<'a> {
     /// prefix, or with `catalogue` (a wildcard import of the package), what the std's index and
     /// the class path hold there that no lookup entered yet.
     fn package_names(&mut self, p: PkgId, types: bool, prefix: &str, catalogue: bool) -> Vec<Name> {
-        let mut out: Vec<Name> = self.syms.pkg(p).entries.iter().filter(|(_, e)| if types { e.class.is_some() || e.alias.is_some() || e.pkg.is_some() } else { e.term.is_some() || e.class.is_some() || e.pkg.is_some() || !e.extensions.is_empty() }).map(|(&n, _)| n).collect();
+        let mut out: Vec<Name> = self.syms.members(p).filter(|(_, e)| if types { e.class.is_some() || e.alias.is_some() || e.pkg.is_some() } else { e.term.is_some() || e.class.is_some() || e.pkg.is_some() || !e.extensions.is_empty() }).map(|(n, _)| n).collect();
         if let Some(obj) = self.syms.pkg(p).package_object {
             out.extend(self.module_names(obj, types));
         }
@@ -1794,7 +1794,7 @@ impl<'a> Worker<'a> {
             TermRef::Package(p) => {
                 let mut names = self.package_names(p, types, prefix, true);
                 if !types {
-                    names.extend(self.syms.pkg(p).entries.iter().filter(|(_, e)| e.pkg.is_some()).map(|(&n, _)| n));
+                    names.extend(self.syms.members(p).filter(|(_, e)| e.pkg.is_some()).map(|(n, _)| n));
                 }
                 names.sort_by_key(|n| n.0);
                 names.dedup();
@@ -2281,7 +2281,7 @@ impl<'a> Worker<'a> {
     /// The spellings of the extension methods a package defines, those its std files and its
     /// package object hold included.
     fn package_extension_names(&mut self, p: PkgId, prefix: &str) -> Vec<Name> {
-        let mut out: Vec<Name> = self.syms.pkg(p).entries.iter().filter(|(_, e)| !e.extensions.is_empty()).map(|(&n, _)| n).collect();
+        let mut out: Vec<Name> = self.syms.extension_names(p).collect();
         if let Some(obj) = self.syms.pkg(p).package_object {
             out.extend(self.syms.class_raw(obj).extensions.iter().map(|&s| self.syms.sym(s).name));
         }

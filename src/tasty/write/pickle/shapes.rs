@@ -231,10 +231,10 @@ impl<'w, 'a> P<'w, 'a> {
         let mut at = ROOT_PKG;
         for seg in pkg.split('.') {
             let n = self.w.interner.lookup(seg)?;
-            at = self.w.syms.pkg(at).entries.get(&n)?.pkg?;
+            at = self.w.syms.entry_at(at, n)?.pkg?;
         }
         let n = self.w.interner.lookup(class)?;
-        self.w.syms.pkg(at).entries.get(&n)?.class
+        self.w.syms.scoped(self.w.interner, at, n)?.class
     }
 
     /// Whether scala-library resolves the key, without withholding the body where it does not.

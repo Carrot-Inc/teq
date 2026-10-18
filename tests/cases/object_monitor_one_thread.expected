@@ -1,0 +1,7 @@
+receiver notify
+receiver notifyAll
+receiver wait
+argument
+receiver wait2
+nanos
+done

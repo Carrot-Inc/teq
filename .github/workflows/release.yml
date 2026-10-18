@@ -184,12 +184,13 @@ jobs:
           retention-days: 30
 
   # The Linux x86-64 binary: the x86-64 trainer and its training when the release trains its profiles, the guided
-  # build and its suite (whose outputs and built jars the Linux aarch64 suite compares with and takes).
+  # build and its suite (whose outputs and built jars the Linux aarch64 suite compares with and takes), and the check
+  # of the build without the `threads` feature (bench/ship.sh's no-threads).
   build-linux-x64:
     needs: [admit, profiles]
     if: needs.admit.outputs.go == 'true' && needs.admit.outputs.mode == 'fresh'
     runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
-    timeout-minutes: 245
+    timeout-minutes: 260
     permissions:
       contents: read
       packages: read
@@ -225,9 +226,9 @@ jobs:
       - run: timeout 300 bench/actions/toolchain.sh check
       - run: timeout 1200 bench/actions/jars.sh fetch
       - if: needs.profiles.outputs.train == 'true'
-        run: bench/actions/step.sh pgo-gen,pgo-train,pgo-use out/actions/carry out/actions/carry-build-linux-x64.tar
+        run: bench/actions/step.sh pgo-gen,pgo-train,pgo-use,no-threads out/actions/carry out/actions/carry-build-linux-x64.tar
       - if: needs.profiles.outputs.train != 'true'
-        run: bench/actions/step.sh pgo-use out/actions/carry out/actions/carry-build-linux-x64.tar out/actions/in/carry-profiles.tar
+        run: bench/actions/step.sh pgo-use,no-threads out/actions/carry out/actions/carry-build-linux-x64.tar out/actions/in/carry-profiles.tar
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: carry-build-linux-x64

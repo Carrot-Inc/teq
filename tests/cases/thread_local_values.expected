@@ -1,0 +1,4 @@
+t: other, null, from main
+t after set: t's
+main: main, main's, from main
+after remove: null

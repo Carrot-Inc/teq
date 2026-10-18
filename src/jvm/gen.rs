@@ -1875,7 +1875,7 @@ impl<'a> Gen<'a> {
         if info.is_extension {
             let siblings: &[SymId] = match info.owner {
                 Owner::Class(c) => &syms.class(c).extensions,
-                Owner::Package(p) => syms.pkg(p).entries.get(&info.name).map_or(&[], |e| &e.extensions),
+                Owner::Package(p) => syms.package_object_entry(p, info.name).map_or(&[], |e| &e.extensions),
                 Owner::Local => &[],
             };
             let mine = self.erased_param_types(s);

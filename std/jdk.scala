@@ -45,6 +45,13 @@ package scala.collection:
     implicit def asJavaIteratorConverter[A](i: Iterator[A]): AsJava[java.util.Iterator[A]] = new AsJava(new scala.collection.convert.IteratorAsJava(i))
     implicit def asScalaBufferConverter[A](l: java.util.List[A]): AsScala[scala.collection.mutable.Buffer[A]] =
       new AsScala(scala.collection.convert.bufferOver(l))
+    implicit def asJavaIterableConverter[A](i: Iterable[A]): AsJava[java.lang.Iterable[A]] = new AsJava(new scala.collection.convert.IterableAsJava(i))
+    implicit def setAsJavaSetConverter[A](s: Set[A]): AsJava[java.util.Set[A]] = new AsJava(new scala.collection.convert.SetAsJava(s))
+    implicit def mutableSetAsJavaSetConverter[A](s: scala.collection.mutable.Set[A]): AsJava[java.util.Set[A]] = new AsJava(new scala.collection.convert.SetAsJava(s))
+    implicit def mapAsJavaMapConverter[K, V](m: Map[K, V]): AsJava[java.util.Map[K, V]] = new AsJava(scala.jdk.CollectionConverters.MapHasAsJava(m).asJava)
+    implicit def collectionAsScalaIterableConverter[A](c: java.util.Collection[A]): AsScala[Iterable[A]] = new AsScala(scala.jdk.CollectionConverters.CollectionHasAsScala(c).asScala)
+    implicit def iterableAsScalaIterableConverter[A](i: java.lang.Iterable[A]): AsScala[Iterable[A]] = new AsScala(scala.jdk.CollectionConverters.IterableHasAsScala(i).asScala)
+    implicit def mapAsScalaMapConverter[K, V](m: java.util.Map[K, V]): AsScala[scala.collection.mutable.Map[K, V]] = new AsScala(scala.jdk.CollectionConverters.MapHasAsScala(m).asScala)
     final class AsJavaCollection[A](i: Iterable[A]):
       def asJavaCollection: java.util.Collection[A] = new scala.collection.convert.IterableAsJava(i)
     final class AsJava[A](op: => A):
@@ -74,6 +81,15 @@ package scala.collection.convert:
     def get(index: Int): A =
       if index < 0 || index >= underlying.length then throw new IndexOutOfBoundsException(index.toString)
       underlying(index)
+
+  // A Scala set as a Java one, a view: scala-library's `SetWrapper`, whose `contains` of an element of
+  // another type is false.
+  final class SetAsJava[A](underlying: scala.collection.Set[A]) extends java.util.AbstractSet[A]:
+    def size(): Int = underlying.size
+    def iterator(): java.util.Iterator[A] = new IteratorAsJava(underlying.iterator)
+    override def contains(o: Any): Boolean =
+      try underlying.contains(o.asInstanceOf[A])
+      catch case _: ClassCastException => false
 
   final class EnumerationAsJava[A](underlying: java.util.Enumeration[A]) extends java.util.Iterator[A]:
     def hasNext: Boolean = underlying.hasMoreElements()

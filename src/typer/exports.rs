@@ -1416,8 +1416,8 @@ impl<'a> Worker<'a> {
             let _ = self.pkg_term(p, name);
             let _ = self.pkg_type(p, name);
         }
-        let found = match self.syms.pkg(p).entries.get(&name) {
-            Some(entry) => self.export_pkg_entry(entry, alias, true, &mut build.scope),
+        let found = match self.syms.entry_named(self.interner, p, name) {
+            Some(entry) => self.export_pkg_entry(&entry, alias, true, &mut build.scope),
             None => false,
         };
         if found {
@@ -1460,9 +1460,9 @@ impl<'a> Worker<'a> {
                 }
             }
         } else {
-            for (&name, entry) in &pkg.entries {
+            for (name, entry) in self.syms.members(p) {
                 if !hidden.contains(&name) {
-                    self.export_pkg_entry(entry, name, false, scope);
+                    self.export_pkg_entry(&entry, name, false, scope);
                 }
             }
         }

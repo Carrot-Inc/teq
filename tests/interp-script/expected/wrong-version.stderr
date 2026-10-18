@@ -1,0 +1,1 @@
+tests/interp-script/fixture/scripts/wrong-version.sc:2: using dep dev.zio::zio:2.1.25: the script asks dev.zio:zio_3 at 2.1.25, and <repo>/tests/interp-script/fixture/teq.lock's tools/compile resolved dev.zio:zio_3:2.1.26, which the lock records no eviction of: ask dev.zio:zio_3:2.1.26 or export the build again (sbt teqExportAll) for the lock to record it

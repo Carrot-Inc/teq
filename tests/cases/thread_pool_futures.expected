@@ -1,0 +1,7 @@
+1,4,9,16,25
+call 1,call 2,call 3
+true
+ExecutionException: java.lang.IllegalArgumentException: bad
+true
+DONE
+42

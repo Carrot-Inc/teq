@@ -284,7 +284,7 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     fn prof_enter(&mut self, row: u32) -> usize {
-        let steps = self.steps;
+        let steps = self.exec.steps;
         let p = self.prof.as_mut().unwrap();
         p.open.push(Open { row, start: ticks(), child_ticks: 0, steps_at_entry: steps, child_steps: 0 });
         p.open.len() - 1
@@ -300,7 +300,7 @@ impl<'a, 't> Interp<'a, 't> {
     #[cold]
     #[inline(never)]
     fn prof_exit_slow(&mut self, i: usize) {
-        let steps = self.steps;
+        let steps = self.exec.steps;
         let Some(p) = self.prof.as_mut() else { return };
         if p.open.len() != i + 1 {
             return;

@@ -11,7 +11,8 @@
 # tests/interp-passing.txt lists the tests that pass; a listed test that fails is a regression and
 # fails the script, an unlisted one that passes is reported so that it can be added
 # (`--update` rewrites the list). Failures are classified:
-#   unsupported the interpreter reported an IR shape or a builtin it lacks (exit code 3)
+#   unsupported the interpreter reported an IR shape or a builtin it lacks (exit code 3), or the test depends
+#               on a Scala 2 artifact, whose classes the interpreter does not read
 #   compile     any other compile failure
 #   exception   the program threw
 #   output      the program ran and printed something else
@@ -60,6 +61,7 @@ run_one() {
   name=$(basename "$src" .scala)
   out=out/interp-tests
   expected="tests/cases/$name.expected"
+  sjs=
   if other_os "$src"; then
     echo "skip $name" > "$out/$name.result"
     echo "$name" > "$out/$name.otheros"
@@ -85,6 +87,20 @@ run_one() {
   flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
   . tests/support/jars.sh
   jars_of "$src"
+  # A Scala.js program's `//> using dep` lines name Scala.js's artifacts, which teq interp checks as the JVM's
+  # against --classpath (src/scriptdeps.rs): the run takes those coordinates' JVM jars (deps_jars_of). A test
+  # whose dependency is a Scala 2 artifact (Scala.js's test runtimes) is unsupported, not run: the interpreter
+  # reads none of its classes, which would stand where the std's ports of them do.
+  grep -q -h '^//> using platform js' "$src" "$src"/*.scala 2>/dev/null && sjs=1
+  if [ -n "$sjs" ] && grep -q -h '^//> using dep' "$src" "$src"/*.scala 2>/dev/null; then
+    deps_jars_of "$src"
+    if [ -n "$DEPS_SCALA2" ]; then
+      echo "unsupported $name" > "$out/$name.result"
+      return
+    fi
+    JARS_MISSING="$JARS_MISSING$DEPS_MISSING"
+    JARS_CP="${JARS_CP:+$JARS_CP:}$DEPS_CP"
+  fi
   if [ -n "$JARS_MISSING" ]; then
     echo "pass $name" > "$out/$name.result"
     echo "$name" > "$out/$name.nojar"
@@ -144,6 +160,12 @@ exit_out=$(timeout 30 "$TEQ" interp tests/cases/sys_exit_status.scala -- exit 2>
 exit_code=$?
 if [ $exit_code != 2 ] || [ "$exit_out" != "before the exit" ] || [ "$(cat "$out/sys_exit_status.exit.err")" != "usage: sys_exit_status" ]; then
   echo "EXIT STATUS: sys_exit_status with an argument exited $exit_code, not 2, printing \"$exit_out\" and \"$(cat "$out/sys_exit_status.exit.err")\""
+  status=1
+fi
+# An exception a thread does not catch is reported on stderr as the JDK reports it (its stack's lines
+# aside), the program going on: thread_uncaught's worker.
+if grep -qx 'thread_uncaught' "$out/passing.txt" && ! grep -qx 'Exception in thread "worker" java.lang.IllegalStateException: boom' "$out/thread_uncaught.err"; then
+  echo "UNCAUGHT: thread_uncaught printed \"$(head -1 "$out/thread_uncaught.err")\" on stderr"
   status=1
 fi
 # The cases whose expectation holds one run alone run again, with arguments (and stdin): the status

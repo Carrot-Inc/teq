@@ -25,6 +25,7 @@ pub mod quoted;
 pub(crate) mod regex;
 pub mod registry;
 mod runtime;
+mod threads;
 pub mod value;
 
 use crate::intern::{FxMap, Name};
@@ -208,6 +209,9 @@ enum Template {
     /// A reflective call by signature, which reads the types of its class literals
     /// (`Interp::call_by_signature`).
     Reflective,
+    /// `x.synchronized(body)` under `teq interp`: the body run holding `x`'s monitor
+    /// (`threads::monitor_enter`).
+    Monitor,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -1277,24 +1281,16 @@ pub struct Interp<'a, 't> {
     pub typer: &'a mut Worker<'t>,
     /// `registry::on()`, read once.
     resident: bool,
-    steps: u64,
-    /// The budget past `steps`, granted a slice at a time when the run watches for signals.
-    reserve: u64,
+    /// What the logical thread running on this interpreter has of its own (`threads::Exec`): its
+    /// step slice, its depth and native stack, the modules and concatenations it has under way.
+    exec: threads::Exec,
+    /// The logical threads of a program's run under `teq interp` (`threads::Sched`), shared by them;
+    /// `None` in a compile-time run, which has one thread and starts none.
+    sched: Option<Box<threads::Sched>>,
     /// The typer's count of withheld bodies met when the run last looked (`note_withheld`), and
     /// whether one stopped the run.
     withheld_seen: u32,
     halted: bool,
-    /// The address of the stack where the interpreter started, against which `enter` measures
-    /// the native stack its recursion takes (`STACK_BUDGET`).
-    stack_base: usize,
-    /// Whether the `StackOverflowError` the budget threw is being made.
-    throwing_overflow: bool,
-    /// The modules being made whose superclass constructors have not returned: a read of one
-    /// is `null`, as `MODULE$` is on the JVM until the super call returns (`BCodeSkelBuilder`),
-    /// rather than a second instance made in a recursion.
-    unpublished: Vec<(ClassId, Rc<Object>)>,
-    depth: u32,
-    max_depth: u32,
     next_key: u64,
     /// How many names `Symbol.freshName` made in this run.
     pub(super) fresh_names: u32,
@@ -1361,9 +1357,6 @@ pub struct Interp<'a, 't> {
     next_hash: i32,
     /// The macro expansion this interpreter runs, which `scala.quoted` reads the call site from.
     pub macro_ctx: Option<Rc<MacroCtx>>,
-    /// The binders of the quotes being run, innermost last, each with the fresh local of that
-    /// run: what a quote of a reference to one of them (`'y`) resolves to.
-    pub(crate) quote_renames: Vec<FxMap<SymId, SymId>>,
     /// The classes of `scala.quoted.Reflect` by name, once looked up.
     reflect_classes: FxMap<&'static str, Option<ClassId>>,
     /// The classes the quoted layer names by their path (`java.nio.file.Path`), once looked up.
@@ -1402,9 +1395,6 @@ pub struct Interp<'a, 't> {
     /// The descriptors of `codes`' frames by id (`Frame::desc`).
     descs: code::Descs,
     code_bytes: usize,
-    /// The chains of `+` the lowered code under way builds (`Op::ConcatBegin`): each one's text and
-    /// the operands kept to render at their places.
-    concats: Vec<(String, Vec<(usize, Value)>)>,
     /// Per function whether a macro's run reached it, for `Worker::macro_files`.
     macro_seen: crate::arena::Dense<bool>,
     macro_classes: crate::arena::Dense<bool>,
@@ -1433,6 +1423,8 @@ pub struct Interp<'a, 't> {
     val_type_refs: FxMap<crate::types::SymId, crate::types::TypeId>,
     /// The names the natives call members by, interned once.
     names: FxMap<&'static str, Name>,
+    /// Per class of an atomic, the key of its field `value` (`natives.rs`, atomics).
+    atomic_fields: FxMap<ClassId, Option<FieldKey>>,
     walk_hint: usize,
     trace: bool,
     /// The call depth the trace prints down to: `TEQ_INTERP_TRACE=<depth>`, 40 otherwise.
@@ -1449,15 +1441,10 @@ impl<'a, 't> Interp<'a, 't> {
         Interp {
             typer,
             resident: registry::on(),
-            steps: limits.steps,
-            reserve: 0,
+            exec: threads::Exec::new(&limits),
+            sched: None,
             withheld_seen,
             halted: false,
-            unpublished: Vec::new(),
-            stack_base: stack_address(),
-            throwing_overflow: false,
-            depth: 0,
-            max_depth: limits.depth,
             next_key: 1,
             fresh_names: 0,
             coerce: crate::arena::Dense::new(value::K_UNKNOWN),
@@ -1501,7 +1488,6 @@ impl<'a, 't> Interp<'a, 't> {
             next_hash: 1,
             macro_ctx: None,
             records: Records::default(),
-            quote_renames: Vec::new(),
             reflect_classes: FxMap::default(),
             path_classes: FxMap::default(),
             prof: None,
@@ -1520,7 +1506,6 @@ impl<'a, 't> Interp<'a, 't> {
             codes: Vec::new(),
             descs: code::Descs::new(),
             code_bytes: 0,
-            concats: Vec::new(),
             macro_seen: crate::arena::Dense::new(false),
             macro_classes: crate::arena::Dense::new(false),
             frame_pool: Vec::new(),
@@ -1539,6 +1524,7 @@ impl<'a, 't> Interp<'a, 't> {
             rec_binders: FxMap::default(),
             val_type_refs: FxMap::default(),
             names: FxMap::default(),
+            atomic_fields: FxMap::default(),
             walk_hint: 0,
             trace: std::env::var_os("TEQ_INTERP_TRACE").is_some(),
             trace_depth: std::env::var("TEQ_INTERP_TRACE").ok().and_then(|v| v.parse().ok()).unwrap_or(40),
@@ -1781,8 +1767,8 @@ impl<'a, 't> Interp<'a, 't> {
 
     #[allow(dead_code)]
     pub fn set_limits(&mut self, limits: Limits) {
-        self.steps = limits.steps;
-        self.max_depth = limits.depth;
+        self.exec.steps = limits.steps;
+        self.exec.max_depth = limits.depth;
     }
 
     /// Whether a run's failure is the call depth's limit: `Failure::Depth`, or an uncaught
@@ -1797,15 +1783,15 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     pub fn steps_left(&self) -> u64 {
-        self.steps + self.reserve
+        self.exec.steps + self.exec.reserve
     }
 
     /// Has the run see a signal to `teq interp` (`process::handle_signals`) between slices of its
     /// budget, so that a loop that calls no native stops too.
     pub fn watch_signals(&mut self) {
-        let total = self.steps + self.reserve;
-        self.steps = total.min(SIGNAL_SLICE);
-        self.reserve = total - self.steps;
+        let total = self.exec.steps + self.exec.reserve;
+        self.exec.steps = total.min(SIGNAL_SLICE);
+        self.exec.reserve = total - self.exec.steps;
     }
 
     /// The end of `teq interp`'s run, whatever ended it: the shutdown hooks the program registered
@@ -1867,14 +1853,14 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     fn eval_in(&mut self, e: TExprId, frame: &Rc<Frame>, ctx: &Ctx) -> R {
-        self.depth = 0;
+        self.exec.depth = 0;
         self.eval(e, frame, ctx)
     }
 
     /// Calls a def, a method (its receiver first among the arguments) or a val by its symbol.
     #[allow(dead_code)]
     pub fn call(&mut self, sym: SymId, mut args: Vec<Value>) -> Result<Value, Failure> {
-        self.depth = 0;
+        self.exec.depth = 0;
         let info = self.syms().sym(sym);
         let r = match (info.kind, info.owner) {
             (SymKind::Def | SymKind::Given, Owner::Class(_)) if !args.is_empty() && !info.is_extension => {
@@ -1889,7 +1875,7 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// The instance of an object, created on first use.
     pub fn module_value(&mut self, c: ClassId) -> Result<Value, Failure> {
-        self.depth = 0;
+        self.exec.depth = 0;
         let r = self.module(c);
         self.finish(r)
     }
@@ -1901,7 +1887,7 @@ impl<'a, 't> Interp<'a, 't> {
 
     #[allow(dead_code)]
     pub fn call_method(&mut self, recv: Value, sym: SymId, args: Vec<Value>) -> Result<Value, Failure> {
-        self.depth = 0;
+        self.exec.depth = 0;
         let r = self.invoke(recv, sym, args);
         self.finish(r)
     }

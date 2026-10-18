@@ -1574,7 +1574,7 @@ impl<'a> Worker<'a> {
         }
         let ast::ImportSel::Name(member, _) = imp.sel else { return };
         let found = match target {
-            super::ImportTarget::PkgMember(p, _) => self.syms.pkg(p).entries.get(&member).and_then(|e| {
+            super::ImportTarget::PkgMember(p, _) => self.syms.entry_named(self.interner, p, member).and_then(|e| {
                 e.class.map(Target::Class).or(e.term.map(Target::Sym)).or(e.alias.map(Target::Alias))
             }),
             super::ImportTarget::ClassMember(c, _) => {

@@ -1646,8 +1646,13 @@ package java.lang:
     @jvm("invokevirtual java/lang/StringBuffer.toString()Ljava/lang/String;")
     override def toString: String = s
 
-  // A thread-local is one slot on JavaScript, which has one thread; `DynamicVariable`, and
-  // through it `Console`, keeps its value in one.
+  // The type of no value, which a `CompletableFuture[Void]` completes with (`null`).
+  @jvmClass("java/lang/Void")
+  final class Void private ()
+
+  // A thread-local is one slot on JavaScript, which has one thread, and in a compile-time run;
+  // `DynamicVariable`, and through it `Console`, keeps its value in one. Under `teq interp` each logical
+  // thread has its own value (`get`, `set` and `remove` are natives there, src/interp/threads.rs).
   @javaDefined
   @jvmClass("java/lang/ThreadLocal")
   class ThreadLocal[T]:
@@ -1663,11 +1668,23 @@ package java.lang:
     def remove(): Unit =
       value = null.asInstanceOf[T]
       present = false
+    // Whether a thread started inherits the value (an `InheritableThreadLocal`).
+    private[lang] def inheritable: scala.Boolean = false
+    protected def childValue(parentValue: T): T = throw new UnsupportedOperationException()
+
+  @javaDefined
+  @jvmClass("java/lang/ThreadLocal")
+  object ThreadLocal:
+    def withInitial[S](supplier: java.util.function.Supplier[? <: S]): ThreadLocal[S] =
+      if supplier == null then throw new NullPointerException()
+      new ThreadLocal[S]:
+        override protected def initialValue(): S = supplier.get()
 
   @javaDefined
   @jvmClass("java/lang/InheritableThreadLocal")
   class InheritableThreadLocal[T] extends ThreadLocal[T]:
-    protected def childValue(parentValue: T): T = parentValue
+    override protected def childValue(parentValue: T): T = parentValue
+    override private[lang] def inheritable: scala.Boolean = true
 
   // What a test framework is handed for loading its suites, which on JavaScript loads nothing
   // (Scala.js's javalib has the class alone; `scala.scalajs.reflect` finds the classes).
@@ -1742,6 +1759,27 @@ package java.lang.reflect:
     @js("new Array($2).fill(null)")
     @jvm("invokestatic java/lang/reflect/Array.newInstance(Ljava/lang/Class;I)Ljava/lang/Object;")
     def newInstance(componentType: Class[?], length: Int): AnyRef
+
+  // What a reflective call of a proxy's method hands its handler (`Proxy.newProxyInstance`).
+  @jvmClass("java/lang/reflect/InvocationHandler")
+  trait InvocationHandler:
+    def invoke(proxy: Any, method: Method, args: Array[AnyRef]): AnyRef
+
+  // The JDK's proxies, under `teq interp`: an instance of `ProxyInstance` for the interfaces named, whose
+  // every method the interpreter hands its handler with the method's name and the arguments (a member its
+  // class lacks, `Interp::invoke_member`). Its `equals`, `hashCode` and `toString` are an object's own, where
+  // the JDK hands those to the handler too.
+  @jvmClass("java/lang/reflect/Proxy")
+  object Proxy:
+    def newProxyInstance(loader: ClassLoader, interfaces: scala.Array[Class[?]], h: InvocationHandler): AnyRef =
+      java.util.Objects.requireNonNull(h)
+      new ProxyInstance(interfaces.clone(), h)
+    def isProxyClass(cl: Class[?]): scala.Boolean = cl == classOf[ProxyInstance]
+    def getInvocationHandler(proxy: Any): InvocationHandler = proxy match
+      case p: ProxyInstance => p.handler
+      case _ => throw new IllegalArgumentException("not a proxy instance")
+
+  final class ProxyInstance private[reflect] (val interfaces: scala.Array[Class[?]], val handler: InvocationHandler)
 
 package scala.math:
   // The Java class behind `BigInt` and `BigDecimal`.

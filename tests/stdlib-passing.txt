@@ -321,6 +321,7 @@ else_between_widths_brace_lambda
 empty_args_ext_apply
 empty_args_given_apply
 empty_failures
+encoded_package_macro
 end_markers
 enum_cases
 enum_category
@@ -386,6 +387,7 @@ extension_siblings
 extension_siblings_typeclass
 extension_then_conversion
 extension_then_conversion_option
+extension_type_arguments_over_member
 extension_using_skip
 extension_widening
 extractor_abstract_input
@@ -974,6 +976,7 @@ number_boxes
 numeric
 object_inherited_protected
 object_member
+object_monitor_one_thread
 objects_deep_equals
 objects_equals_identity
 objects_java_equality
@@ -1371,6 +1374,8 @@ template_arguments_throwing
 template_pattern_vals
 this_rooted_type_path
 this_type_intersection
+thread_wait_argument_widening
+thread_wait_named_argument
 throwable_init_cause
 toplevel_init_cycle_a
 toplevel_init_cycle_b
@@ -1538,6 +1543,9 @@ view_open_upper_variable
 view_operations
 view_receiver_open_variable
 view_sizes_sorted
+wait_extension_fallback
+wait_extension_type_arguments
+wait_notify_eta
 widened_double_text
 wildcard_bounds
 wildcard_lower_bound

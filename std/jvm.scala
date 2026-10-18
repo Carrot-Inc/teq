@@ -123,7 +123,7 @@ def classNameOf(x: Any): String
 def matchErrorMessage(obj: Any): String = stringOf(obj) + " (of class " + classNameOf(obj) + ")"
 
 // The first `n` elements of a sequence behind a `true`, then the rest of it when `rest` is set;
-// empty when the sequence is shorter, or longer without `rest`.
+// empty when the sequence is shorter, or longer without `rest`; any sequence's rest immutable (`UnapplySeqWrapper.drop`).
 def seqPattern(x: Any, n: Int, rest: Boolean): Array[Any] =
   val out = new Array[Any](if rest then n + 2 else n + 1)
   out(0) = true
@@ -138,7 +138,7 @@ def seqPattern(x: Any, n: Int, rest: Boolean): Array[Any] =
           i += 1
         if rest then out(n + 1) = arrayRest(arr, n, len)
         out
-    case seq: Seq[?] =>
+    case seq: scala.collection.Seq[?] =>
       val it = seq.iterator
       var ok = true
       var i = 0
@@ -147,7 +147,7 @@ def seqPattern(x: Any, n: Int, rest: Boolean): Array[Any] =
         i += 1
       if !ok then new Array[Any](0)
       else if rest then
-        out(n + 1) = seq.drop(n)
+        out(n + 1) = seq.drop(n).toSeq
         out
       else if it.hasNext then new Array[Any](0)
       else out
@@ -670,6 +670,16 @@ def arraysEquals[T](a: Array[T], b: Array[T]): Boolean =
 def arraysHashCode[T](a: Array[T]): Int =
   if isNull(a) then 0
   else a.foldLeft(1)((h, e) => 31 * h + (if isNull(e) then 0 else e.hashCode))
+// The array of classes a Java varargs parameter takes, from the sequence the call gives (`Class.getDeclaredMethod`).
+def classArray[T](xs: Any): Array[Class[T]] =
+  val classes = xs.asInstanceOf[scala.collection.Seq[Class[T]]]
+  val out = new Array[Class[T]](classes.length)
+  var i = 0
+  classes.foreach { c =>
+    out(i) = c
+    i += 1
+  }
+  out
 def arraysAsList(xs: Any): Any =
   val out = new java.util.ArrayList[Any]()
   xs.asInstanceOf[Seq[Any]].foreach(x => out.add(x))

@@ -152,14 +152,14 @@ impl<'a, 't> Interp<'a, 't> {
             let fresh = self.typer.clone_local(b);
             renames.insert(b, fresh);
         }
-        self.quote_renames.push(renames);
+        self.exec.quote_renames.push(renames);
         Ok(())
     }
 
     /// The renames of every quote being run, innermost first.
     fn active_renames(&self) -> FxMap<SymId, SymId> {
         let mut out = FxMap::default();
-        for map in &self.quote_renames {
+        for map in &self.exec.quote_renames {
             for (&k, &v) in map {
                 out.insert(k, v);
             }

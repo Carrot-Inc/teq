@@ -39,13 +39,76 @@ impl<'a> Worker<'a> {
             }
             self.enter_file_defs(file);
         }
+        self.check_root_scope_conflicts();
+    }
+
+    /// dotty's `Namer.checkNoConflict` across the root package's two scopes, once every file is entered. A
+    /// top-level value, method, given or type alias is the package object's member, which dotty enters after the
+    /// package's classes, objects and packages and checks against the package's scope by the mangled name
+    /// (Namer.scala 166–177): beside a class, an object or a package keyed alike in the root package
+    /// (`Symbols::scope_key`), whatever the order of the source, it is "already defined", at the value or the
+    /// alias. A class, an object or a package of the program is checked so, a package wherever it comes from.
+    /// A definition whose spelling is its key meets them in one entry, which the registration checks.
+    fn check_root_scope_conflicts(&mut self) {
+        let mut found: Vec<(FileId, crate::source::Span, String)> = Vec::new();
+        let names: Vec<crate::intern::Name> = self.syms.pkg(ROOT_PKG).entries.keys().copied().collect();
+        for name in names {
+            let key = self.syms.scope_key(self.interner, ROOT_PKG, name);
+            if key == name {
+                continue;
+            }
+            let (spelt, keyed) = {
+                match (self.syms.package_object_entry(ROOT_PKG, name), self.syms.entry_at(ROOT_PKG, key)) {
+                    (Some(s), Some(k)) => (s.clone(), k.clone()),
+                    _ => continue,
+                }
+            };
+            let object = keyed.term.filter(|&t| matches!(self.syms.sym(t).kind, SymKind::Object(_)) && self.program_file(self.syms.sym(t).file));
+            if let Some(term) = spelt.term.filter(|&t| !matches!(self.syms.sym(t).kind, SymKind::Object(_))) {
+                let terms: Vec<SymId> = self.syms.alternatives(term).map_or_else(|| vec![term], |a| a.to_vec());
+                let terms: Vec<SymId> = terms.into_iter().filter(|&t| self.program_file(self.syms.sym(t).file)).collect();
+                for t in terms {
+                    let (file, span) = (self.syms.sym(t).file, self.syms.sym(t).span);
+                    self.env.file = file;
+                    let msg = match (object, keyed.pkg) {
+                        (Some(o), _) => self.already_defined(name, o),
+                        (None, Some(p)) => {
+                            let n = self.name_str(name);
+                            format!("{n} is already defined as package {}", self.name_str(self.syms.pkg(p).name))
+                        }
+                        (None, None) => continue,
+                    };
+                    found.push((file, span, msg));
+                }
+            }
+            let class = keyed.class.filter(|&c| self.program_file(self.syms.class(c).file));
+            if let (Some(a), Some(c)) = (spelt.alias, class) {
+                let (file, def) = (self.syms.aliases[a.idx()].file, self.syms.aliases[a.idx()].def);
+                if let (true, Some(d)) = (self.program_file(file), def) {
+                    let span = self.ast(file).def(d).span;
+                    let info = self.syms.class(c);
+                    let kind = match info.kind {
+                        ClassKind::Trait => "trait",
+                        _ => "class",
+                    };
+                    let elsewhere = if info.file != file { format!(" in {}", self.source(info.file).path) } else { String::new() };
+                    let msg = format!("{} is already defined as {kind} {}{elsewhere}", self.name_str(name), self.name_str(info.name));
+                    found.push((file, span, msg));
+                }
+            }
+        }
+        found.sort_by_key(|&(file, span, _)| (file.0, span.start));
+        for (file, span, msg) in found {
+            self.env.file = file;
+            self.error(span, msg);
+        }
     }
 
     pub(super) fn enter_file_defs(&mut self, file: FileId) {
         let ast = self.ast(file);
         let mut pkg = ROOT_PKG;
         for &n in &ast.package {
-            pkg = self.syms.sub_pkg(pkg, n);
+            pkg = self.syms.sub_pkg(self.interner, pkg, n);
         }
         self.file_pkgs[file.0 as usize] = pkg;
         if !ast.top_exports.is_empty() {
@@ -81,8 +144,13 @@ impl<'a> Worker<'a> {
             let s = self.syms.sym(sym);
             (s.name, s.span, s.file)
         };
+        // An object stands under its package's scope key (`Symbols::scope_key`), a def or a val under its name.
+        let key = match owner {
+            Owner::Package(p) if matches!(self.syms.sym(sym).kind, SymKind::Object(_)) => self.syms.scope_key(self.interner, p, name),
+            _ => name,
+        };
         let old = match owner {
-            Owner::Package(p) => self.syms.pkg(p).entries.get(&name).and_then(|e| e.term),
+            Owner::Package(p) => self.syms.entry_at(p, key).and_then(|e| e.term),
             Owner::Class(c) => self.syms.class(c).members.get(&name).copied(),
             Owner::Local => None,
         };
@@ -109,7 +177,7 @@ impl<'a> Worker<'a> {
         // companion otherwise.
         if let (Owner::Package(p), None, true) = (owner, old, self.source(file).is_std) {
             let program_type = {
-                let e = self.syms.pkg(p).entries.get(&name);
+                let e = self.syms.entry_at(p, key);
                 e.and_then(|e| e.class).map(|c| self.syms.class(c).file).or_else(|| e.and_then(|e| e.alias).map(|a| self.syms.aliases[a.idx()].file))
             };
             if program_type.map_or(false, |f| !self.source(f).is_std) {
@@ -122,7 +190,7 @@ impl<'a> Worker<'a> {
             }
         }
         let old = match owner {
-            Owner::Package(p) => self.syms.pkg(p).entries.get(&name).and_then(|e| e.term),
+            Owner::Package(p) => self.syms.entry_at(p, key).and_then(|e| e.term),
             _ => old,
         };
         if let Some(old) = old.filter(|&o| self.overloads(o, sym)) {
@@ -140,7 +208,7 @@ impl<'a> Worker<'a> {
                     self.syms.class_mut(c).replaced = true;
                 }
                 if replaced.map_or(true, |c| self.syms.sym(sym).kind != SymKind::Object(c)) {
-                    self.syms.pkgs[p.idx()].entries.entry(name).or_default().term = Some(sym);
+                    self.syms.enter_at(p, key).term = Some(sym);
                 }
                 old.is_some() && replaced.is_none()
             }
@@ -180,8 +248,13 @@ impl<'a> Worker<'a> {
             }
             self.syms.pkgs[p.idx()].givens.retain(|&g| g != s);
         }
-        let _ = (file, def, kind);
-        if let Some(e) = self.syms.pkgs[p.idx()].entries.get_mut(&name) {
+        let _ = (file, def);
+        // An object stands under the scope's key, any other term under its name (`Symbols::scope_key`).
+        let key = match kind {
+            SymKind::Object(_) => self.syms.scope_key(self.interner, p, name),
+            _ => name,
+        };
+        if let Some(e) = self.syms.entry_at_mut(p, key) {
             e.term = None;
         }
     }
@@ -236,7 +309,7 @@ impl<'a> Worker<'a> {
         } else {
             let set = self.syms.new_overloaded(old, owner, vec![old, sym]);
             match owner {
-                Owner::Package(p) => self.syms.pkgs[p.idx()].entries.get_mut(&name).unwrap().term = Some(set),
+                Owner::Package(p) => self.syms.package_object_entry_mut(p, name).unwrap().term = Some(set),
                 Owner::Class(c) => {
                     self.syms.class_mut(c).members.insert(name, set);
                 }
@@ -266,7 +339,10 @@ impl<'a> Worker<'a> {
             }
             _ => String::new(),
         };
-        format!("{n} is already defined as {kind} {n}{elsewhere}")
+        // The definition there by its own spelling, which another spelling of one encoded name may meet in the root
+        // package (`Symbols::scope_key`): `x$minusy_sc is already defined as object x-y_sc`, as scalac names it.
+        let old_name = self.name_str(info.name);
+        format!("{n} is already defined as {kind} {old_name}{elsewhere}")
     }
 
     /// Which of two same-named package members is a `@javaDefined` definition of the standard
@@ -282,7 +358,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    fn java_stand_in(&self, c: ClassId) -> bool {
+    pub(super) fn java_stand_in(&self, c: ClassId) -> bool {
         let info = self.syms.class(c);
         self.source(info.file).is_std
             && info
@@ -297,6 +373,10 @@ impl<'a> Worker<'a> {
             let c = self.syms.class(cid);
             (c.name, c.span, c.file)
         };
+        let key = match owner {
+            Owner::Package(p) => self.syms.scope_key(self.interner, p, name),
+            _ => name,
+        };
         let duplicate = match owner {
             Owner::Package(p) => {
                 // The compiler's own types are no classes, so nothing else reports them taken.
@@ -305,9 +385,9 @@ impl<'a> Worker<'a> {
                     self.error(span, msg);
                     return true;
                 }
-                let old = self.syms.pkg(p).entries.get(&name).and_then(|e| e.class);
+                let old = self.syms.entry_at(p, key).and_then(|e| e.class);
                 let taken = old.filter(|&o| self.syms.class(o).kind != ClassKind::Builtin).map(|o| self.syms.class(o).file);
-                let taken = taken.or_else(|| self.syms.pkg(p).entries.get(&name).and_then(|e| e.alias).map(|a| self.syms.aliases[a.idx()].file));
+                let taken = taken.or_else(|| self.syms.entry_at(p, key).and_then(|e| e.alias).map(|a| self.syms.aliases[a.idx()].file));
                 match taken.and_then(|old_file| self.shadowing(old_file, file)) {
                     Some(true) => {
                         self.note_shadowed(owner, name, file);
@@ -323,7 +403,7 @@ impl<'a> Worker<'a> {
                 }
                 self.retire_std_companion_term(p, name, file);
                 let (old, has_alias) = {
-                    let e = self.syms.pkg(p).entries.get(&name);
+                    let e = self.syms.entry_at(p, key);
                     (e.and_then(|e| e.class), e.map_or(false, |e| e.alias.is_some()))
                 };
                 // A Java class that a signature named before the std defined it (the platform
@@ -334,7 +414,7 @@ impl<'a> Worker<'a> {
                     self.syms.class_mut(c).replaced = true;
                 }
                 if replaced != Some(cid) {
-                    self.syms.pkgs[p.idx()].entries.entry(name).or_default().class = Some(cid);
+                    self.syms.enter_at(p, key).class = Some(cid);
                 }
                 (old.is_some() && replaced.is_none()) || has_alias
             }
@@ -355,7 +435,7 @@ impl<'a> Worker<'a> {
     /// A std term named like a program class entering package `p` is retired with it: the
     /// program's class and object of one name are one pair.
     fn retire_std_companion_term(&mut self, p: PkgId, name: crate::intern::Name, file: FileId) {
-        let Some(o) = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term) else { return };
+        let Some(o) = self.syms.entry_named(self.interner, p, name).and_then(|e| e.term) else { return };
         let old_file = self.syms.sym(o).file;
         if self.shadowing(old_file, file) == Some(false) {
             self.note_shadowed(Owner::Package(p), name, old_file);
@@ -366,8 +446,10 @@ impl<'a> Worker<'a> {
     /// Takes a std class or alias out of its package's entries when a definition of the
     /// program takes its name.
     fn retire_std_type(&mut self, p: PkgId, name: crate::intern::Name) {
-        let Some(e) = self.syms.pkgs[p.idx()].entries.get_mut(&name) else { return };
-        let (class, alias) = (e.class.take(), e.alias.take());
+        // The class under the scope's key, the alias under its name (`Symbols::scope_key`).
+        let key = self.syms.scope_key(self.interner, p, name);
+        let class = self.syms.entry_at_mut(p, key).and_then(|e| e.class.take());
+        let alias = self.syms.package_object_entry_mut(p, name).and_then(|e| e.alias.take());
         if let Some(c) = class {
             self.syms.class_mut(c).replaced = true;
             self.std_mut().shadowed_classes.insert(c, ());
@@ -387,7 +469,7 @@ impl<'a> Worker<'a> {
 
     pub(super) fn existing_object(&self, owner: Owner, name: crate::intern::Name) -> Option<ClassId> {
         let term = match owner {
-            Owner::Package(p) => self.syms.pkg(p).entries.get(&name).and_then(|e| e.term),
+            Owner::Package(p) => self.syms.scoped(self.interner, p, name).and_then(|e| e.term),
             Owner::Class(c) => self.syms.class(c).members.get(&name).copied(),
             Owner::Local => None,
         }?;
@@ -400,7 +482,7 @@ impl<'a> Worker<'a> {
 
     pub(super) fn existing_class(&self, owner: Owner, name: crate::intern::Name) -> Option<ClassId> {
         match owner {
-            Owner::Package(p) => self.syms.pkg(p).entries.get(&name).and_then(|e| e.class),
+            Owner::Package(p) => self.syms.scoped(self.interner, p, name).and_then(|e| e.class),
             Owner::Class(c) => self.syms.class(c).nested.get(&name).copied(),
             Owner::Local => None,
         }
@@ -549,8 +631,11 @@ impl<'a> Worker<'a> {
                     self.def_aliases.insert(file.0 as usize, id, aid);
                     let duplicate = match owner {
                         Owner::Package(p) => {
+                            // The alias's own entry, the package object's, under its name: a class keyed alike stands
+                            // in it; one under another key is checked once every file is entered
+                            // (`check_root_scope_conflicts`).
                             let taken = {
-                                let e = self.syms.pkg(p).entries.get(&def.name);
+                                let e = self.syms.package_object_entry(p, def.name);
                                 e.and_then(|e| e.class).filter(|&c| self.syms.class(c).kind != ClassKind::Builtin).map(|c| self.syms.class(c).file)
                                     .or_else(|| e.and_then(|e| e.alias).map(|a| self.syms.aliases[a.idx()].file))
                             };
@@ -566,7 +651,7 @@ impl<'a> Worker<'a> {
                                 }
                                 None => {}
                             }
-                            let e = self.syms.pkgs[p.idx()].entries.entry(def.name).or_default();
+                            let e = self.syms.enter_package_object(p, def.name);
                             let dup = e.alias.is_some() || e.class.is_some();
                             e.alias = Some(aid);
                             dup
@@ -706,7 +791,7 @@ impl<'a> Worker<'a> {
 
     fn names_given(&self, owner: Owner, name: crate::intern::Name) -> bool {
         let term = match owner {
-            Owner::Package(p) => self.syms.pkg(p).entries.get(&name).and_then(|e| e.term),
+            Owner::Package(p) => self.syms.package_object_entry(p, name).and_then(|e| e.term),
             Owner::Class(c) => self.syms.class(c).members.get(&name).copied(),
             Owner::Local => None,
         };

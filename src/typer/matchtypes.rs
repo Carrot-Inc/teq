@@ -1093,7 +1093,7 @@ impl<'a> Worker<'a> {
         }
         let Some(compiletime) = self.compiletime_pkg() else { return };
         let ops = self.interner.intern("ops");
-        let Some(ops) = self.syms.pkg(compiletime).entries.get(&ops).and_then(|e| e.pkg) else { return };
+        let Some(ops) = self.syms.entry_at(compiletime, ops).and_then(|e| e.pkg) else { return };
         let modules: Vec<ClassId> = self
             .syms
             .pkg(ops)

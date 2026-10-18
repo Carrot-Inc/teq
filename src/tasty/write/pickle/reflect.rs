@@ -46,11 +46,11 @@ impl<'w, 'a> P<'w, 'a> {
         'walk: {
             for seg in ["scala", "quoted"] {
                 let Some(n) = self.w.interner.lookup(seg) else { break 'walk };
-                let Some(sub) = self.w.syms.pkg(p).entries.get(&n).and_then(|e| e.pkg) else { break 'walk };
+                let Some(sub) = self.w.syms.entry_at(p, n).and_then(|e| e.pkg) else { break 'walk };
                 p = sub;
             }
             let Some(n) = self.w.interner.lookup("Reflect") else { break 'walk };
-            found = match self.w.syms.pkg(p).entries.get(&n).and_then(|e| e.term).map(|s| self.w.syms.sym(s).kind) {
+            found = match self.w.syms.scoped(self.w.interner, p, n).and_then(|e| e.term).map(|s| self.w.syms.sym(s).kind) {
                 Some(SymKind::Object(c)) => Some(c),
                 _ => None,
             };

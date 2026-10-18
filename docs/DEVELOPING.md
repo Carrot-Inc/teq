@@ -3,7 +3,8 @@
 How the repository is laid out, how teq is built and tested, what a change passes before it merges (the
 landing gate and its timing lines), the conventions of the property-based tests and the launchers, and how a
 release is made: its changes, its GitHub release and the workflow that publishes it. teq
-is a Scala 3 compiler in Rust with no dependencies; the documents under `docs/` are the ones the README's
+is a Scala 3 compiler in Rust whose one dependency is corosensei, the coroutines of the interpreter's threads
+(the Cargo feature `threads`, on for every shipped target); the documents under `docs/` are the ones the README's
 table names. Every script under
 `tests/` and `bench/` opens with a header that says what it checks or measures, its flags and its
 environment variables: read it before running the script. This file names the entry points and the rules
@@ -510,7 +511,7 @@ that a machine names its node 22 there and each suite that needs one node names 
 
 ## Property-based tests
 
-`proptests/` is a crate on Hegel, apart from the compiler (which keeps no dependencies); its README has
+`proptests/` is a crate on Hegel, apart from the compiler (whose one dependency is corosensei); its README has
 the properties, the settings and how a run is replayed. `./tests/prop.sh` runs them (100 cases, seed 1);
 `tests/all.sh` runs it as the `prop` suite, outside the gate's groups. A failing run prints the shrunk
 history and a `#[hegel::reproduce_failure("...")]` line; put under the test's attribute, it replays that
@@ -611,7 +612,8 @@ the keys, which the Scala test invokes. Today that is the `pty.spawn` call in `c
 **The changes.** `CHANGELOG.md` has a section per release, the newest first, `## <version> (<yyyy-mm-dd>)`
 over a bullet per change a user meets in the compiler, the build tool, the plugin, the editor or the
 binaries' platforms, in public words: no application's name, no word of the work's process, no internal
-file. The section is committed before the version bump, which `bench/release.sh` refuses without it
+file. What landed since the last release stands first as `## Unreleased`, which the release renames to its
+version and date; `bench/changelog.sh` takes it there alone and reads no version's notes from it. The section is committed before the version bump, which `bench/release.sh` refuses without it
 (`bench/changelog.sh` reads it), and it is the notes of the release's GitHub release.
 
 **The GitHub release** is the publication of the binaries, `bench/github-release.sh` in three verbs, whose
@@ -699,8 +701,9 @@ pinned by its commit. The order:
    (`bench/ship-manifest.sh`: the training's trainer and environment, the suite's line and environment). Each job's summary has its steps' times, its peak memory, its disk, its cores and
    its architecture; the products go from job to job as artifacts. Every long command of a job carries its bound,
    and a job's limit is their sum and twenty minutes for a cold setup (`tests/release-actions.sh` checks it; below). The jars of the corpus are fetched by their
-   coordinates and cached by `tests/support/jars.sh`; zig's cache is cached; the toolchain is the image's; teq has
-   no dependency for a registry cache to hold.
+   coordinates and cached by `tests/support/jars.sh`; zig's cache is cached; the toolchain is the image's; teq's
+   crates, corosensei and the few it builds on, are fetched from crates.io at each build, too few for a registry
+   cache to hold. The ship's `no-threads` step checks the build without the `threads` feature.
 3. **The qualification**, each binary on its platform as soon as its build made it (`bench/actions/qualify.sh`
    on the build's own products; the five builds are jobs of their own, `build-linux-x64`, `build-linux-arm64`,
    `build-macos-arm64`, `build-macos-x64` and `build-windows`, each uploading its binary with its manifest):

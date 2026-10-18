@@ -25,15 +25,15 @@ impl Helpers {
         let interner = cx.input.interner;
         let mut out = Helpers::default();
         let sub = |p: PkgId, name: &str| {
-            syms.pkg(p).entries.iter().find(|(n, e)| e.pkg.is_some() && interner.get(**n) == name).and_then(|(_, e)| e.pkg)
+            syms.members(p).find(|(n, e)| e.pkg.is_some() && interner.get(*n) == name).and_then(|(_, e)| e.pkg)
         };
         let Some(runtime) = sub(ROOT_PKG, "scala").and_then(|s| sub(s, "runtime")) else { return out };
-        for (name, entry) in &syms.pkg(runtime).entries {
+        for (name, entry) in syms.members(runtime) {
             if let Some(s) = entry.term {
-                out.defs.insert(interner.get(*name).to_string(), s);
+                out.defs.insert(interner.get(name).to_string(), s);
             }
             if let Some(c) = entry.class {
-                out.classes.insert(interner.get(*name).to_string(), c);
+                out.classes.insert(interner.get(name).to_string(), c);
             }
         }
         out

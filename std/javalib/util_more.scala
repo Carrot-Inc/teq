@@ -606,40 +606,126 @@ package java.util.concurrent:
   @js("null")
   def absent[V]: V
 
+  // The map's operations whole under threads: the JDK's own defaults, which `java.util.Map` has.
+  @jvmClass("java/util/concurrent/ConcurrentMap")
+  trait ConcurrentMap[K, V] extends java.util.Map[K, V]
+
+  // Whether logical threads run: `teq interp`'s program run (`threads.rs`); none on JavaScript or in a macro's
+  // run. In this package, which the std's every mode has, where `java.lang`'s own is the JDK's on the JVM.
+  @js("false")
+  private[concurrent] def logicalThreads(): Boolean
+  // A `ConcurrentHashMap` writer's wait, in the map's monitor, for a key another thread's remapping holds,
+  // and that remapping's end waking the writers (`threads.rs`): as a writer blocks on the JDK's bin lock, an
+  // interrupt does not end the wait. Only a run with logical threads waits; JavaScript has none.
+  @js("void 0")
+  private[concurrent] def binWait(map: AnyRef): Unit
+  @js("void 0")
+  private[concurrent] def binNotifyAll(map: AnyRef): Unit
+
   // A hash map with Java's protocol: `null` for a missing key, `compute` over the old value, over a
-  // `java.util.HashMap`'s store; one thread runs, so nothing locks. Its key set, values and entries
-  // are the store's views, as the JDK's are: a removal through one, or through its iterator, is the
-  // map's, and a view taken earlier sees later changes.
+  // `java.util.HashMap`'s store. Its key set, values and entries are the store's views, as the JDK's
+  // are: a removal through one, or through its iterator, is the map's, and a view taken earlier sees
+  // later changes.
   @jvmClass("java/util/concurrent/ConcurrentHashMap")
-  final class ConcurrentHashMap[K, V]() extends java.util.AbstractMap[K, V]:
+  final class ConcurrentHashMap[K, V]() extends java.util.AbstractMap[K, V], ConcurrentMap[K, V]:
     def this(initialCapacity: Int) = this()
     def this(m: java.util.Map[? <: K, ? <: V]) =
       this()
       putAll(m)
     private val held = new java.util.HashMap[K, V]()
-    def get(key: Any): V = held.get(key)
-    def put(key: K, value: V): V = held.put(key, value)
-    override def putIfAbsent(key: K, value: V): V =
+    // The store's reads and writes under the map's monitor, briefly, which under `teq interp`'s threads makes
+    // each whole; JavaScript's one thread takes none. A remapping runs outside it, its key claimed by its
+    // thread (`busy`), as JDK 24's `compute` locks the key's bin alone: a read proceeds, seeing the value
+    // before the remapping's until it is published, and a write of that key waits for the remapping's end.
+    // Made at the first claim, which only a run with logical threads makes.
+    private var busy: java.util.HashMap[Any, java.lang.Thread] = null
+    // Whether logical threads run, `teq interp`'s program run, whose monitors threads take; a macro's run and
+    // JavaScript have one thread, and the map runs over its store alone. A run is the one or the other
+    // throughout, so the map asks once, as it is made, and its operations read a field.
+    private val threaded: Boolean = logicalThreads()
+    // Whether another thread's remapping holds `key`.
+    private def claimedByOther(key: Any): Boolean =
+      val t = if busy == null then null else busy.get(key)
+      t != null && (t ne java.lang.Thread.currentThread())
+    // Waits, under the monitor, until no other thread's remapping holds `key`.
+    private def awaitFree(key: Any): Unit = while claimedByOther(key) do binWait(this)
+    // The key claimed for the current thread's remapping: false where it holds it already (a remapping's
+    // own nested update of the key).
+    private def claim(key: Any): Boolean = synchronized:
+      awaitFree(key)
+      if busy == null then busy = new java.util.HashMap[Any, java.lang.Thread]()
+      if busy.containsKey(key) then false
+      else
+        busy.put(key, java.lang.Thread.currentThread())
+        true
+    // The key released, and the threads waiting for it woken (a claim is a threaded run's alone).
+    private def release(key: Any, claimed: Boolean): Unit =
+      if claimed then synchronized:
+        busy.remove(key)
+        binNotifyAll(this)
+    def get(key: Any): V = synchronized(held.get(key))
+    def put(key: K, value: V): V = synchronized:
+      awaitFree(key)
+      held.put(key, value)
+    override def putIfAbsent(key: K, value: V): V = synchronized:
+      awaitFree(key)
       if held.containsKey(key) then held.get(key)
       else
         held.put(key, value)
         absent[V]
-    def containsKey(key: Any): Boolean = held.containsKey(key)
-    override def getOrDefault(key: Any, default: V): V = if held.containsKey(key) then held.get(key) else default
-    def remove(key: Any): V = held.remove(key)
+    def containsKey(key: Any): Boolean = synchronized(held.containsKey(key))
+    override def getOrDefault(key: Any, default: V): V = synchronized(if held.containsKey(key) then held.get(key) else default)
+    def remove(key: Any): V = synchronized:
+      awaitFree(key)
+      held.remove(key)
     override def compute(key: K, remapping: java.util.function.BiFunction[? >: K, ? >: V, ? <: V]): V =
-      val next: V = remapping.asInstanceOf[java.util.function.BiFunction[K, V, V]].apply(key, get(key))
-      if js.isNull(next) then held.remove(key) else held.put(key, next)
-      next
-    override def computeIfAbsent(key: K, mapping: java.util.function.Function[? >: K, ? <: V]): V =
-      if held.containsKey(key) then held.get(key)
+      val f = remapping.asInstanceOf[java.util.function.BiFunction[K, V, V]]
+      // Without logical threads none can read or write meanwhile: the remapping runs over the store.
+      if !threaded then
+        val next: V = f.apply(key, held.get(key))
+        if js.isNull(next) then held.remove(key) else held.put(key, next)
+        next
       else
-        val v: V = mapping.asInstanceOf[java.util.function.Function[K, V]].apply(key)
-        if !js.isNull(v) then held.put(key, v)
-        v
-    def size(): Int = held.size()
-    override def isEmpty(): Boolean = held.isEmpty()
-    def clear(): Unit = held.clear()
+        val claimed = claim(key)
+        try
+          val next: V = f.apply(key, get(key))
+          synchronized(if js.isNull(next) then held.remove(key) else held.put(key, next))
+          next
+        finally release(key, claimed)
+    override def computeIfAbsent(key: K, mapping: java.util.function.Function[? >: K, ? <: V]): V =
+      val f = mapping.asInstanceOf[java.util.function.Function[K, V]]
+      if !threaded then
+        if held.containsKey(key) then held.get(key)
+        else
+          val v: V = f.apply(key)
+          if !js.isNull(v) then held.put(key, v)
+          v
+      else
+        val present = get(key)
+        if !js.isNull(present) then present
+        else
+          val claimed = claim(key)
+          try
+            val again = get(key)
+            if !js.isNull(again) then again
+            else
+              val v: V = f.apply(key)
+              if !js.isNull(v) then synchronized(held.put(key, v))
+              v
+          finally release(key, claimed)
+    def size(): Int = synchronized(held.size())
+    override def isEmpty(): Boolean = synchronized(held.isEmpty())
+    def clear(): Unit = synchronized:
+      awaitNoRemapping()
+      held.clear()
+    // Waits, under the monitor, until no other thread's remapping holds a key, as the JDK's `clear` waits for
+    // each bin's lock.
+    private def awaitNoRemapping(): Unit = while otherRemapping() do binWait(this)
+    private def otherRemapping(): Boolean =
+      val it = if busy == null then java.util.Collections.emptyIterator[java.lang.Thread]() else busy.values().iterator()
+      var other = false
+      while !other && it.hasNext do other = it.next() ne java.lang.Thread.currentThread()
+      other
     def keySet(): ConcurrentHashMap.KeySetView[K, V] = new ConcurrentHashMap.KeySetView(this, absent[V])
     def keySet(mappedValue: V): ConcurrentHashMap.KeySetView[K, V] =
       java.util.Objects.requireNonNull(mappedValue)
@@ -712,6 +798,14 @@ package java.util.concurrent:
     def toMinutes(duration: Long): Long = TimeUnit.cvt(duration, 60000000000L, scale)
     def toHours(duration: Long): Long = TimeUnit.cvt(duration, 3600000000000L, scale)
     def toDays(duration: Long): Long = TimeUnit.cvt(duration, 86400000000000L, scale)
+    def sleep(timeout: Long): Unit =
+      if timeout > 0L then
+        val ns = toNanos(timeout)
+        java.lang.Thread.sleep(ns / 1000000L, (ns % 1000000L).toInt)
+    def timedJoin(thread: java.lang.Thread, timeout: Long): Unit =
+      if timeout > 0L then
+        val ns = toNanos(timeout)
+        thread.join(ns / 1000000L, (ns % 1000000L).toInt)
 
   @javaDefined
   @jvmClass("java/util/concurrent/TimeUnit")
@@ -754,3 +848,66 @@ package java.util.concurrent:
     def valueOf(name: String): TimeUnit = all.find(_.name() == name) match
       case Some(u) => u
       case None => throw new IllegalArgumentException("No enum constant java.util.concurrent.TimeUnit." + name)
+
+package java.util.logging:
+  // The JDK's logging as far as a library logs through it (zio's `Signal`): a logger by name, its level the
+  // root's, INFO, unless set, and a record at that level or above printed on System.err as the root's
+  // `ConsoleHandler` and its `SimpleFormatter` print it ("%1$tb %1$td, %1$tY %1$tl:%1$tM:%1$tS %1$Tp %2$s%n%4$s:
+  // %5$s%6$s%n"), the source the logger's name: the caller's class and method, which the JDK finds on its stack,
+  // are not known.
+  @jvmClass("java/util/logging/Level")
+  class Level protected (name: String, value: Int):
+    @javaDefined
+    def getName(): String = name
+    @javaDefined
+    def intValue(): Int = value
+    override def toString: String = name
+
+  @jvmClass("java/util/logging/Level")
+  object Level:
+    val OFF: Level = new Level("OFF", Int.MaxValue)
+    val SEVERE: Level = new Level("SEVERE", 1000)
+    val WARNING: Level = new Level("WARNING", 900)
+    val INFO: Level = new Level("INFO", 800)
+    val CONFIG: Level = new Level("CONFIG", 700)
+    val FINE: Level = new Level("FINE", 500)
+    val FINER: Level = new Level("FINER", 400)
+    val FINEST: Level = new Level("FINEST", 300)
+    val ALL: Level = new Level("ALL", Int.MinValue)
+
+  @jvmClass("java/util/logging/Logger")
+  class Logger protected (name: String, resourceBundleName: String):
+    private var level: Level = null
+    @javaDefined
+    def getName(): String = name
+    @javaDefined
+    def getLevel(): Level = level
+    def setLevel(newLevel: Level): Unit = level = newLevel
+    def isLoggable(l: Level): Boolean =
+      val bar = if level == null then Level.INFO else level
+      l.intValue() >= bar.intValue() && bar.intValue() != Level.OFF.intValue()
+    def log(l: Level, msg: String): Unit = if isLoggable(l) then Logger.publish(this, l, msg)
+    def severe(msg: String): Unit = log(Level.SEVERE, msg)
+    def warning(msg: String): Unit = log(Level.WARNING, msg)
+    def info(msg: String): Unit = log(Level.INFO, msg)
+    def config(msg: String): Unit = log(Level.CONFIG, msg)
+    def fine(msg: String): Unit = log(Level.FINE, msg)
+    def finer(msg: String): Unit = log(Level.FINER, msg)
+    def finest(msg: String): Unit = log(Level.FINEST, msg)
+
+  @jvmClass("java/util/logging/Logger")
+  object Logger:
+    val GLOBAL_LOGGER_NAME: String = "global"
+    private val loggers = new java.util.HashMap[String, Logger]()
+    def getLogger(name: String): Logger = synchronized {
+      var l = loggers.get(name)
+      if l == null then
+        l = new Logger(name, null)
+        loggers.put(name, l)
+      l
+    }
+    @javaDefined
+    def getGlobal(): Logger = getLogger(GLOBAL_LOGGER_NAME)
+    private[logging] def publish(l: Logger, level: Level, msg: String): Unit =
+      val stamp = java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy h:mm:ss a").format(java.time.LocalDateTime.now())
+      System.err.println(stamp + " " + l.getName() + "\n" + level.getName() + ": " + msg)

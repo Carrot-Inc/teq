@@ -174,12 +174,21 @@ pub struct Configuration {
     /// The classpath its suites run on where it is not `classpath` (`runtimeClasspath`, Mill's test
     /// module, compiled against its compile classpath and run on its run classpath).
     pub runtime_classpath: Option<Vec<Entry>>,
+    /// The jars the build asked for at a version its resolution evicted, by the key asked, each with
+    /// the key of the jar the classpath holds in its place (`evictions`, none when absent): what a
+    /// script's `//> using dep` of the version asked resolves to (`scriptdeps.rs`).
+    pub evictions: BTreeMap<String, String>,
 }
 
 impl Configuration {
     /// The classpath the configuration's code runs on: `runtimeClasspath`, else `classpath`.
     pub fn run_classpath(&self) -> &[Entry] {
         self.runtime_classpath.as_deref().unwrap_or(&self.classpath)
+    }
+
+    /// The source version its sources are compiled at: its `-source` (`flags.source`), else the default.
+    pub fn source_version(&self) -> String {
+        self.flags.source.clone().unwrap_or_else(|| crate::source_version::SourceVersion::default().name().to_string())
     }
 }
 
@@ -729,6 +738,58 @@ impl Export {
         closure.iter().filter_map(|k| Some((k, self.configuration(k)?))).flat_map(|(k, c)| c.generators.iter().filter(|g| by_build_tool(g)).map(move |g| (k.clone(), g))).collect()
     }
 
+    /// Why the closure of `resident` cannot be typed as one program, each line ending with `remedy`:
+    /// what a resident's one program shows a configuration typed in it that its build tool keeps out of
+    /// its sight (`transitive: false`): the resident's sources and class path are one union, so such a
+    /// configuration sees a prerequisite of one it names that its class path leaves out (Mill's
+    /// `compileModuleDeps` of an upstream), and it is typed without every jar
+    /// of its own class path whose module the resident's does not name at all (Mill's `compileMvnDeps`
+    /// of an upstream module, which its dependents' class paths leave out): scalac compiles the two
+    /// apart, each against its own. Refused until configurations have compilation scopes of their own.
+    /// What sbt's one program shows its configurations is not: a configuration of the closure none it
+    /// names builds on (a sibling), a jar of the resident's class path its own does not name (a
+    /// dependent's library, a test's framework) and a module the resident names at another version
+    /// (the dependent's resolution evicting the upstream's), which sbt's configurations, typed in
+    /// their dependents' residents, see as well.
+    pub fn one_program_refusals(&self, resident: &Key, remedy: &str) -> Vec<String> {
+        let Some(union) = self.configuration(resident) else { return Vec::new() };
+        let mut out: Vec<String> = Vec::new();
+        let mut add = |line: String| {
+            if !out.contains(&line) {
+                out.push(line);
+            }
+        };
+        let closure = self.closure(resident);
+        let union_jars = jars_of(&union.classpath);
+        let union_modules: Vec<Option<&str>> = union_jars.iter().map(|j| artifact_module(j)).filter(Option::is_some).collect();
+        for key in closure.iter().filter(|k| self.configuration(k).is_some_and(|c| !c.transitive)) {
+            let conf = self.configuration(key).expect("present");
+            let named = products(&conf.classpath);
+            let builds_on_it = |k: &Key| k != key && self.closure(k).contains(key);
+            // A prerequisite of a configuration it names that its class path leaves out (an
+            // upstream's `compileModuleDeps`); a configuration none of them builds on (a sibling
+            // under the resident's project) it sees as an sbt configuration sees its siblings.
+            for hidden in closure.iter().filter(|k| *k != key && !named.contains(k) && !builds_on_it(k)) {
+                let Some(through) = named.iter().find(|n| self.closure(n).contains(hidden)) else { continue };
+                add(format!("{} does not see {}, which {} builds on: teq types {} as one program with every configuration it builds on, where {} would be seen; {}", key, hidden, through, resident, hidden, remedy));
+            }
+            let own = jars_of(&conf.classpath);
+            let lacking: Vec<&String> = own.iter().filter(|j| !union_jars.contains(*j) && !union_modules.contains(&artifact_module(j))).collect();
+            if let Some(first) = lacking.first() {
+                let more = match lacking.len() {
+                    1 => String::new(),
+                    2 => format!(" and {}", lacking[1]),
+                    n => format!(", {} and {} more", lacking[1], n - 2),
+                };
+                add(format!(
+                    "{} is typed inside {}, whose class path lacks {}{}, which {}'s names: teq types a configuration with those that build on it as one program until configurations have compilation scopes of their own; {}",
+                    key, resident, first, more, key, remedy
+                ));
+            }
+        }
+        out
+    }
+
     /// Why a verb cannot run a project, as the export records it: the generators the build tool runs of the
     /// configurations the verb types (their sources) or runs (their resources too), and what the
     /// project's export says the verb cannot reproduce; every reason of the projects involved,
@@ -780,47 +841,9 @@ impl Export {
             }
         }
         let tool = self.exporter.name();
-        // What a resident's one program shows a configuration typed in it that its build tool keeps out of
-        // its sight (`transitive: false`): the resident's sources and class path are one union, so such a
-        // configuration sees a prerequisite of one it names that its class path leaves out (Mill's
-        // `compileModuleDeps` of an upstream), and it is typed without every jar
-        // of its own class path whose module the resident's does not name at all (Mill's `compileMvnDeps`
-        // of an upstream module, which its dependents' class paths leave out): scalac compiles the two
-        // apart, each against its own. Refused until configurations have compilation scopes of their own.
-        // What sbt's one program shows its configurations is not: a configuration of the closure none it
-        // names builds on (a sibling), a jar of the resident's class path its own does not name (a
-        // dependent's library, a test's framework) and a module the resident names at another version
-        // (the dependent's resolution evicting the upstream's), which sbt's configurations, typed in
-        // their dependents' residents, see as well.
         for resident in typed.iter().filter(|k| k.configuration != "runtime") {
-            let Some(union) = self.configuration(resident) else { continue };
-            let closure = self.closure(resident);
-            let union_jars = jars_of(&union.classpath);
-            let union_modules: Vec<Option<&str>> = union_jars.iter().map(|j| artifact_module(j)).filter(Option::is_some).collect();
-            for key in closure.iter().filter(|k| self.configuration(k).is_some_and(|c| !c.transitive)) {
-                let conf = self.configuration(key).expect("present");
-                let named = products(&conf.classpath);
-                let builds_on_it = |k: &Key| k != key && self.closure(k).contains(key);
-                // A prerequisite of a configuration it names that its class path leaves out (an
-                // upstream's `compileModuleDeps`); a configuration none of them builds on (a sibling
-                // under the resident's project) it sees as an sbt configuration sees its siblings.
-                for hidden in closure.iter().filter(|k| *k != key && !named.contains(k) && !builds_on_it(k)) {
-                    let Some(through) = named.iter().find(|n| self.closure(n).contains(hidden)) else { continue };
-                    add(format!("{} does not see {}, which {} builds on: teq types {} as one program with every configuration it builds on, where {} would be seen; {} {} with {}", key, hidden, through, resident, hidden, verb, resident.project, tool));
-                }
-                let own = jars_of(&conf.classpath);
-                let lacking: Vec<&String> = own.iter().filter(|j| !union_jars.contains(*j) && !union_modules.contains(&artifact_module(j))).collect();
-                if let Some(first) = lacking.first() {
-                    let more = match lacking.len() {
-                        1 => String::new(),
-                        2 => format!(" and {}", lacking[1]),
-                        n => format!(", {} and {} more", lacking[1], n - 2),
-                    };
-                    add(format!(
-                        "{} is typed inside {}, whose class path lacks {}{}, which {}'s names: teq types a configuration with those that build on it as one program until configurations have compilation scopes of their own; {} {} with {}",
-                        key, resident, first, more, key, verb, resident.project, tool
-                    ));
-                }
+            for line in self.one_program_refusals(resident, &format!("{} {} with {}", verb, resident.project, tool)) {
+                add(line);
             }
         }
         // The products a run needs that no build of the verb's makes: those of the classpath the suites
@@ -884,6 +907,11 @@ impl Export {
     /// sbt-teq's `teqClasspath` takes them; the artifacts that neither cache holds fetched together
     /// (`fetch::resolve_all`), `progress` told of each transfer as it starts.
     pub fn jars_with(&self, key: &Key, progress: &(dyn Fn(&str) + Sync)) -> Result<Vec<PathBuf>, String> {
+        Ok(self.jars_keyed(key, progress)?.into_iter().map(|(p, _)| p).collect())
+    }
+
+    /// `jars_with`, each jar with the key of the table's artifact it is, none for a file of the tree.
+    pub fn jars_keyed(&self, key: &Key, progress: &(dyn Fn(&str) + Sync)) -> Result<Vec<(PathBuf, Option<String>)>, String> {
         let Some(project) = self.projects.get(&key.project) else { return Err(format!("no project {}", key.project)) };
         let Some(conf) = project.configurations.get(&key.configuration) else { return Err(format!("{} has no configuration {}", key.project, key.configuration)) };
         let mut entries = Vec::new();
@@ -902,7 +930,13 @@ impl Export {
         }
         let artifacts: Vec<fetch::Wanted> = entries.iter().filter_map(|e| if let Entry::Artifact(k) = e { Some(self.wanted(k)) } else { None }).collect();
         let mut fetched = fetch::resolve_all(&artifacts, progress)?.into_iter();
-        entries.into_iter().map(|e| if let Entry::Artifact(_) = e { Ok(fetched.next().expect("a file per artifact")) } else { self.resolve(e) }).collect()
+        entries
+            .into_iter()
+            .map(|e| match e {
+                Entry::Artifact(k) => Ok((fetched.next().expect("a file per artifact"), Some(k.clone()))),
+                _ => self.resolve(e).map(|p| (p, None)),
+            })
+            .collect()
     }
 
     /// A jar of the table as the fetch takes it.
@@ -1031,22 +1065,28 @@ impl Export {
     /// among them, so that a root nested in another module's takes its own module's version (the innermost
     /// root's, `frontend::syntax_of`).
     pub fn source_args(&self, key: &Key) -> Vec<String> {
-        let effective = |c: &Configuration| c.flags.source.clone().unwrap_or_else(|| crate::source_version::SourceVersion::default().name().to_string());
-        let Some(own) = self.configuration(key).map(effective) else { return Vec::new() };
+        let Some(own) = self.configuration(key).map(Configuration::source_version) else { return Vec::new() };
+        let owned = self.root_versions(&self.closure(key));
+        if owned.iter().all(|(_, v)| *v == own) {
+            return Vec::new();
+        }
+        owned.into_iter().flat_map(|(root, version)| ["--source-at".to_string(), self.relative(&self.path(root)), version]).collect()
+    }
+
+    /// The source roots of the configurations `keys`, in their order and each once, with the source version of
+    /// the configuration that names it first (`Configuration::source_version`).
+    pub fn root_versions(&self, keys: &[Key]) -> Vec<(&String, String)> {
         let mut owned: Vec<(&String, String)> = Vec::new();
-        for k in self.closure(key) {
-            let Some(conf) = self.configuration(&k) else { continue };
-            let version = effective(conf);
+        for k in keys {
+            let Some(conf) = self.configuration(k) else { continue };
+            let version = conf.source_version();
             for root in &conf.sources {
                 if !owned.iter().any(|(r, _)| *r == root) {
                     owned.push((root, version.clone()));
                 }
             }
         }
-        if owned.iter().all(|(_, v)| *v == own) {
-            return Vec::new();
-        }
-        owned.into_iter().flat_map(|(root, version)| ["--source-at".to_string(), self.relative(&self.path(root)), version]).collect()
+        owned
     }
 
     /// The inputs of a session of the configuration: the project's stand-ins, then the closure's
@@ -1595,6 +1635,7 @@ fn configuration(value: &Value) -> Result<Configuration, Refusal> {
         test,
         transitive: value.get("transitive").and_then(Value::bool) != Some(false),
         runtime_classpath,
+        evictions: string_map(value.get("evictions")),
     })
 }
 
@@ -2438,6 +2479,11 @@ projects:
         let hidden = "c/compile does not see b/compile, which a/compile builds on: teq types c/compile as one program with every configuration it builds on, where b/compile would be seen; compile c with mill";
         assert_eq!(export.refusals("compile", "c"), [hidden]);
         assert!(export.refusals("compile", "a").is_empty());
+        // A script over c's sources runs as the same one program (`scriptdeps::product_inputs`), refused alike.
+        assert_eq!(
+            export.one_program_refusals(&Key::new("c", "compile"), "run the script with mill"),
+            [hidden.replace("compile c with mill", "run the script with mill")]
+        );
         assert_eq!(
             export.refusals("test", "c"),
             [

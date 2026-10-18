@@ -6,11 +6,16 @@ license = "Apache-2.0"
 description = "A fast compiler for a subset of Scala 3 that emits JavaScript"
 
 [dependencies]
+# Logical threads under `teq interp`, each a stackful coroutine on the interpreter's thread (src/interp/threads.rs),
+# behind the `threads` feature; a build without it refuses a program that starts a thread.
+corosensei = { version = "=0.3.4", optional = true }
 
 # The system's allocator in the place of src/alloc.rs, for the system's tools to see every
 # block (`leaks`, `heap`, `vmmap` on macOS); never the build that is distributed.
 [features]
+default = ["threads"]
 system-alloc = []
+threads = ["dep:corosensei"]
 
 # Cold builds on the reference machine, `cargo build --profile <p>` into an empty target directory, twice
 # each: release 37 and 36 s, ship 113 and 106 s, profiling 48 and 49 s. A release build keeps no

@@ -1,0 +1,36 @@
+walk: true
+events: file a/b/deep.txt, file a/f.txt, file top.txt, post ., post a, post a/b, pre ., pre a, pre a/b
+order: true true true true true
+skip subtree: file top.txt, post ., pre ., pre a
+skip siblings: pre a, pre a/b, post a
+terminate: 1 0
+depth 1: dir a, file top.txt, post ., pre .
+depth 0: dir .
+negative depth: java.lang.IllegalArgumentException: 'maxDepth' is negative
+absent: failed NoSuchFileException absent
+absent, simple: java.nio.file.NoSuchFileException: target/files_tree_visitor/absent
+link: link a/up
+loop: failed FileSystemLoopException a/up/a, file a/up/top.txt, post a/up, pre a/up
+attributes: 3 true false false false 2020-01-02T03:04:05Z
+directory attributes: true
+link attributes: true true
+absent attributes: java.nio.file.NoSuchFileException: target/files_tree_visitor/absent
+out range: java.lang.IndexOutOfBoundsException: Range [1, 1 + 2) out of bounds for length 2
+channel written: hello
+!
+available: 7
+read: 104
+read some: 6 ello
+!
+read at the end: -1 -1 0
+channel position: 4 7
+truncated: 3 3
+channel rewritten: heX
+closed channel: java.nio.channels.ClosedChannelException: null
+read-only channel: java.nio.channels.NonWritableChannelException: null
+buffered: 0
+buffer full: ab
+past the buffer: abcdefghij
+flushed: abcdefghijk
+no buffer: java.lang.IllegalArgumentException: Buffer size <= 0
+removed: false

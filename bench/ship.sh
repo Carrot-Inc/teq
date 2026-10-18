@@ -32,9 +32,9 @@
 # kept when a step fails, and nothing of a failed step is staged or published.
 #
 # --step runs the steps it names alone, in the ship's order whatever the order named: cross-arm, cross-use, pgo-gen,
-# pgo-train, pgo-use, cross-intel, cross-linux-arm, linux-arm-build, linux-arm-suite, cross-windows, and stage (the
-# trainings' corpora compared, the five staged by one invocation, those bench/ship-qualified.txt does not publish
-# held back, the set checked), each
+# pgo-train, pgo-use, no-threads, cross-intel, cross-linux-arm, linux-arm-build, linux-arm-suite, cross-windows, and
+# stage (the trainings' corpora compared, the five staged by one invocation, those bench/ship-qualified.txt does not
+# publish held back, the set checked), each
 # from the products of the steps before it, which <dir> carries between runs on one machine or several (the jobs of
 # .github/workflows/release.yml, docs/DEVELOPING.md, "Releases"). Before the steps every product <dir> holds of a step
 # not named is copied into the tree at its place; after them each product of the steps that ran goes into <dir> at
@@ -77,7 +77,7 @@ done
 [ -z "$plugin_release" ] || [ -n "$publish" ] || { echo "ship: --plugin goes with --publish"; exit 2; }
 # The steps in the ship's order, and what each leaves for the steps after it: paths in the tree, but stage's,
 # which are the checkout's.
-ship_steps="cross-arm cross-use pgo-gen pgo-train pgo-use cross-intel cross-linux-arm linux-arm-build linux-arm-suite cross-windows stage"
+ship_steps="cross-arm cross-use pgo-gen pgo-train pgo-use no-threads cross-intel cross-linux-arm linux-arm-build linux-arm-suite cross-windows stage"
 ship_products() {
   case $1 in
     cross-arm) echo target/cross/arm.profdata target/cross/arm.training ;;
@@ -271,6 +271,10 @@ wanted pgo-train && step pgo-train "$train_bound" bench/pgo.sh ship train
 # use: zig (420), the guided build (1200), the suite (300), the copy and the floor (120); then the jars its suite
 # built packed for the Linux aarch64 suite on another machine (600).
 wanted pgo-use && step pgo-use $(( 420 + 1200 + 300 + 120 + 600 )) bash -c 'bench/pgo.sh ship use && timeout 600 bench/actions/jars.sh pack out/tests-jars.tgz'
+# no-threads: the build without the `threads` feature, which every shipped target keeps on, checked: the crates
+# fetched (300 s), the check (600); all of teq but the interpreter's logical threads compiles without the coroutine
+# crate (Cargo.toml, `[features]`).
+wanted no-threads && step no-threads $(( 300 + 600 )) cargo check --locked --no-default-features --profile ship
 # intel: the std target (600 s), zig (420), the profile translated (300), the build (1200), the metadata probe (300).
 wanted cross-intel && step cross-intel $(( 600 + 420 + 300 + 1200 + 300 )) bench/cross-ship.sh intel
 # linux-arm: the std target (600 s), zig (420), the sysroot and qemu-user fetched (420 + 720), the profile

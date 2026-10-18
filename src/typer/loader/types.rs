@@ -783,7 +783,7 @@ impl<'a> Worker<'a> {
         let mut target = ROOT_PKG;
         for seg in to.split('.') {
             let n = self.interner.intern(seg);
-            target = self.syms.pkg(target).entries.get(&n).and_then(|e| e.pkg)?;
+            target = self.syms.entry_at(target, n).and_then(|e| e.pkg)?;
         }
         match self.pkg_type(target, name)? {
             TypeRef::Class(c) if !self.in_jar(self.syms.class(c).file) => Some(target),
@@ -1338,7 +1338,7 @@ impl<'a> Worker<'a> {
         let mut info = self.syms.class_mut(c);
         info.tparams = tparams;
         info.base_types.push((c, self_ty));
-        self.syms.pkgs[pkg.idx()].entries.entry(name).or_default().class = Some(c);
+        self.syms.enter_scoped(self.interner, pkg, name).class = Some(c);
         self.loaded_mut().java.add_placeholder(c, pkg, name);
         Some(c)
     }
@@ -1362,7 +1362,7 @@ impl<'a> Worker<'a> {
             // hide the layer's definitions from every later lookup.
             p = match self.demand_std_package(p, name) {
                 Some(sub) => sub,
-                None => self.syms.sub_pkg(p, name),
+                None => self.syms.sub_pkg(self.interner, p, name),
             };
         }
         self.loaded_tables_mut(cx).packages.insert(n, p);
@@ -1486,7 +1486,7 @@ impl<'a> Worker<'a> {
                                 _ => None,
                             };
                         }
-                        None => return Some(Scope::Pkg(self.syms.sub_pkg(p, name))),
+                        None => return Some(Scope::Pkg(self.syms.sub_pkg(self.interner, p, name))),
                     }
                 }
                 let c = self.object_in(cx, prefix, name)?;

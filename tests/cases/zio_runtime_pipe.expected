@@ -1,0 +1,3 @@
+read 42
+cancelled read interrupted: true
+after close -1

@@ -1,0 +1,1 @@
+<outside>/outside.sc:1: using dep dev.zio::zio:2.1.26: teq resolves a script's dependencies through the lock of the build it is in (teq.lock, or target/teq/teq.lock, at or above <outside>), and there is none: export the build (sbt teqExportAll) or give the jars with --classpath

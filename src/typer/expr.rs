@@ -2733,7 +2733,7 @@ impl<'a> Worker<'a> {
             }
         };
         let name = self.interner.intern("newArray");
-        let Some(sym) = self.syms.pkg(self.b.scala_pkg).entries.get(&name).and_then(|e| e.term) else {
+        let Some(sym) = self.syms.entry_named(self.interner, self.b.scala_pkg, name).and_then(|e| e.term) else {
             self.error(span, "Array cannot be instantiated without the standard library");
             return (self.prog.add(TExpr::Unit), ERROR);
         };

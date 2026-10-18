@@ -1,0 +1,12 @@
+SIGUSR1 USR1
+the default replaced: true
+handled SIGUSR1 on SIGUSR1 handler, daemon true
+seen: true
+the handler replaced: true
+INT handled, no shutdown: true
+QUIT: Signal already used by VM or OS: SIGQUIT
+SEGV: Signal already used by VM or OS: SIGSEGV
+KILL: Signal already used by VM or OS: SIGKILL
+SIGINT: Unknown signal: SIGINT
+NOPE: Unknown signal: NOPE
+done

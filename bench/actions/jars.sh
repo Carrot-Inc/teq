@@ -19,7 +19,7 @@ fail() { echo "jars: $*" >&2; exit 1; }
 
 fetch() {
   local path file got want missing=0 fetched=0 failed=
-  for path in $(grep -o '"\$M2/[^"]*"' tests/support/jars.sh | sed 's|^"\$M2/||; s|"$||' | LC_ALL=C sort -u); do
+  for path in $(grep -o '"\$M2/[^"$]*"' tests/support/jars.sh | sed 's|^"\$M2/||; s|"$||' | LC_ALL=C sort -u); do
     file=$M2/$path
     [ -f "$file" ] && continue
     missing=$((missing + 1))

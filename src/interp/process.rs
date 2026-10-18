@@ -35,11 +35,66 @@ const BUFFER: usize = 8192;
 /// negated): the shutdown that follows it waits on no second one.
 static SIGNAL: AtomicI32 = AtomicI32::new(0);
 
+/// The handler each signal has (`sun.misc.Signal.handle`): 0 the system's default, 1 ignored, 2 the
+/// program's, which `dispatch_signal` runs, 3 the shutdown's (`on_signal`), which INT, TERM and HUP have
+/// from the start, as the JVM's `Terminator` installs it.
+static KINDS: [AtomicI32; 65] = [const { AtomicI32::new(0) }; 65];
+
+/// The signals whose program handler has not been dispatched yet, a bit each.
+static PENDING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 /// Has SIGINT, SIGTERM and SIGHUP (Ctrl-C, Ctrl-Break and the console's closing on Windows) stop
 /// the program at its next step or blocking native, as the JVM's handlers start its shutdown. A
 /// second signal ends the process with its status at once.
 pub fn handle_signals() {
+    for n in os::SHUTDOWN_SIGNALS {
+        KINDS[n as usize].store(3, Ordering::SeqCst);
+    }
     os::handle_signals();
+}
+
+/// A signal the program handles, seen: its handler waits to be dispatched (async-signal-safe).
+fn on_program_signal(sig: i32) {
+    if (1..64).contains(&sig) {
+        PENDING.fetch_or(1 << sig, Ordering::SeqCst);
+    }
+}
+
+/// `sun.misc.Signal.handle`'s installation: the kind replaced, -1 for a signal the VM or the system keeps
+/// (`os::kept`).
+fn install_signal(n: i32, kind: i32) -> i32 {
+    if !(1..64).contains(&n) || os::kept(n) {
+        return -1;
+    }
+    let old = KINDS[n as usize].swap(kind, Ordering::SeqCst);
+    os::install(n, kind);
+    old
+}
+
+/// Whether a signal the program handles waits to be dispatched.
+pub(super) fn program_signal_pending() -> bool {
+    PENDING.load(Ordering::Relaxed) != 0
+}
+
+/// The signals the program handles that were seen since the last call, in their numbers' order.
+pub(super) fn take_program_signals() -> Vec<i32> {
+    let bits = PENDING.swap(0, Ordering::SeqCst);
+    (1..64).filter(|n| bits & (1 << n) != 0).collect()
+}
+
+/// The JVM's dispatch of a signal the program handles: the std's `sun.misc.Signal.dispatch`, which
+/// starts the handler's thread, run on the thread calling (`threads.rs`'s dispatcher, as the VM's
+/// "Signal Dispatcher").
+pub(super) fn dispatch_signal(it: &mut Interp, n: i32) -> R<()> {
+    let Some(c) = it.typer.class_at(&["sun", "misc", "Signal"]) else {
+        return it.unsupported("sun.misc.Signal is missing from the standard library");
+    };
+    let Some(m) = it.syms().class(c).companion else {
+        return it.unsupported("sun.misc.Signal has no object");
+    };
+    let signal = it.module(m)?;
+    it.call_by_name(signal, "dispatch", vec![Value::Int(n)])?;
+    Ok(())
 }
 
 fn on_signal(sig: i32) {
@@ -48,13 +103,63 @@ fn on_signal(sig: i32) {
     }
 }
 
-/// The program's stop when a signal came: `Failure::Exit(128 + n)`, the JVM's status for it, once.
+/// What a signal does at a point where the evaluator may stop (the end of a slice of steps, a
+/// builtin's return): with the program's threads the shutdown begins and the thread goes on, as the
+/// JVM's threads go on while its hooks run (`threads.rs`); alone, main stops as `System.exit(128 + n)`
+/// stops it, the JVM's status for the signal. Once.
+#[inline]
 pub(super) fn check_signal(it: &mut Interp) -> R<()> {
+    // What every builtin's return and every slice's end pays: two loads, the rest out of line.
+    if PENDING.load(Ordering::Relaxed) != 0 || SIGNAL.load(Ordering::Relaxed) > 0 {
+        return signal_arrived(it);
+    }
+    Ok(())
+}
+
+/// `check_signal` where a signal arrived.
+#[cold]
+#[inline(never)]
+fn signal_arrived(it: &mut Interp) -> R<()> {
+    // Without the threads' scheduler, which dispatches them, a handled signal is dispatched here, on
+    // main: the handler's thread then refuses to start, as every thread does in that build.
+    if program_signal_pending() && !it.pure && !super::threads::threaded(it) {
+        for n in take_program_signals() {
+            dispatch_signal(it, n)?;
+        }
+    }
     let sig = SIGNAL.load(Ordering::Relaxed);
     if sig > 0 && !it.pure && SIGNAL.compare_exchange(sig, -sig, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+        if super::threads::threaded(it) {
+            super::threads::begin_shutdown(it, 128 + sig);
+            return Ok(());
+        }
         return Err(Control::Fail(Failure::Exit(128 + sig)));
     }
     Ok(())
+}
+
+/// What a signal does to a native that blocks the OS thread (a child's wait, a read of a pipe): its
+/// thread stops as at `System.exit(128 + n)`, for the hooks to run, the shutdown begun. Once.
+pub(super) fn check_signal_blocking(it: &mut Interp) -> R<()> {
+    let sig = SIGNAL.load(Ordering::Relaxed);
+    if sig > 0 && !it.pure && SIGNAL.compare_exchange(sig, -sig, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+        super::threads::begin_shutdown(it, 128 + sig);
+        return Err(Control::Fail(Failure::Exit(128 + sig)));
+    }
+    Ok(())
+}
+
+/// The status of a signal not yet seen, which the scheduler takes when no thread runs.
+#[cfg_attr(not(feature = "threads"), allow(dead_code))]
+pub(super) fn take_signal() -> Option<i32> {
+    let sig = SIGNAL.load(Ordering::Relaxed);
+    (sig > 0 && SIGNAL.compare_exchange(sig, -sig, Ordering::SeqCst, Ordering::SeqCst).is_ok()).then_some(128 + sig)
+}
+
+/// Ends the process at once with `code`.
+#[cfg_attr(not(feature = "threads"), allow(dead_code))]
+pub(super) fn exit_now(code: i32) -> ! {
+    os::exit_now(code)
 }
 
 /// What a native that blocks does first: refuse a compile-time run, flush the program's output,
@@ -64,21 +169,7 @@ fn blocking(it: &mut Interp, what: &str) -> R<()> {
         return it.impure(what);
     }
     it.flush();
-    check_signal(it)
-}
-
-/// `Thread.sleep`: the time in slices, a signal seen between them.
-fn sleep(it: &mut Interp, millis: i64, nanos: i64) -> R<()> {
-    blocking(it, "sleeping")?;
-    let end = Instant::now() + Duration::from_millis(millis.max(0) as u64) + Duration::from_nanos(nanos.max(0) as u64);
-    loop {
-        let now = Instant::now();
-        if now >= end {
-            return Ok(());
-        }
-        std::thread::sleep((end - now).min(SLICE));
-        check_signal(it)?;
-    }
+    check_signal_blocking(it)
 }
 
 // ---- shutdown hooks ----
@@ -159,7 +250,7 @@ fn wait_child(it: &mut Interp, child: usize, deadline: Option<Instant>) -> R<Opt
         if !guard.iter().any(|&(k, _)| k == key) {
             let _ = ENDED.wait_timeout(guard, slice);
         }
-        check_signal(it)?;
+        check_signal_blocking(it)?;
     }
 }
 
@@ -667,13 +758,13 @@ fn read_more(it: &mut Interp, s: &mut Stream) -> R<bool> {
                     s.read.extend_from_slice(&chunk[..n]);
                     return Ok(n > 0);
                 }
-                Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted) => check_signal(it)?,
+                Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted) => check_signal_blocking(it)?,
                 Err(e) => return io_error(it, &reason(&e)),
             }
         }
     }
     while !s.readable(SLICE) {
-        check_signal(it)?;
+        check_signal_blocking(it)?;
     }
     loop {
         match s.read_some(&mut chunk) {
@@ -681,7 +772,7 @@ fn read_more(it: &mut Interp, s: &mut Stream) -> R<bool> {
                 s.read.extend_from_slice(&chunk[..n]);
                 return Ok(n > 0);
             }
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => check_signal(it)?,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => check_signal_blocking(it)?,
             // A pipe whose writer ended, on Windows.
             Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => return Ok(false),
             Err(e) => return io_error(it, &reason(&e)),
@@ -872,7 +963,7 @@ fn flush_stream(it: &mut Interp, s: &mut Stream) -> R<()> {
                         break;
                     }
                     Ok(n) => at += n,
-                    Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted) => check_signal(it)?,
+                    Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted) => check_signal_blocking(it)?,
                     Err(e) => {
                         r = Err(e);
                         break;
@@ -883,7 +974,7 @@ fn flush_stream(it: &mut Interp, s: &mut Stream) -> R<()> {
         }
         Io::Stdin | Io::Closed => Ok(()),
     };
-    check_signal(it)?;
+    check_signal_blocking(it)?;
     match r {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe && s.child.is_some() => stream_closed(it),
@@ -1068,6 +1159,31 @@ pub(super) fn io_error<T>(it: &mut Interp, message: &str) -> R<T> {
 }
 
 pub(super) fn install(it: &mut Table) {
+    // `sun.misc.Signal` (std/javalib/invoke.scala): a name's number, a handler's installation, a raise.
+    reg!(it, "sun.misc.signalNumber", |it, a| {
+        let name = it.str_arg(a, 0)?;
+        Ok(Value::Int(os::signal_number(&name)))
+    });
+    reg!(it, "sun.misc.signalInstall", |it, a| {
+        if it.pure {
+            return it.impure("a signal handler");
+        }
+        let (n, kind) = (int(it, a, 0)?, int(it, a, 1)?);
+        Ok(Value::Int(install_signal(n, kind)))
+    });
+    reg!(it, "sun.misc.signalRaise", |it, a| {
+        if it.pure {
+            return it.impure("a signal");
+        }
+        let n = int(it, a, 0)?;
+        match KINDS.get(n as usize).map(|k| k.load(Ordering::SeqCst)) {
+            Some(2) => on_program_signal(n),
+            Some(1) => {}
+            Some(3) => on_signal(n),
+            _ => os::raise(n),
+        }
+        Ok(Value::Unit)
+    });
     reg!(it, "java.lang.processStart", |it, a| {
         let Some(command) = strings(it, a, 0)? else { return it.throw_named("NullPointerException", "") };
         let dir = match a.get(1) {
@@ -1171,12 +1287,6 @@ pub(super) fn install(it: &mut Table) {
             None => it.throw_named("IllegalStateException", "Shutdown in progress"),
             Some(r) => Ok(Value::Bool(r)),
         }
-    });
-    reg!(it, "java.lang.threadSleep", |it, a| {
-        let millis = long(it, a, 0)?;
-        let nanos = long(it, a, 1)?;
-        sleep(it, millis, nanos)?;
-        Ok(Value::Unit)
     });
     // The machine's processors under `teq interp`, as the JVM counts them; one in a macro, whose
     // expansion may not depend on the machine, and none to a folded constant.
@@ -1293,6 +1403,49 @@ pub(super) fn install(it: &mut Table) {
         let plain = matches!(a.get(1), Some(Value::Bool(true)));
         open_read(it, &path, plain)
     });
+    // A file stream's position moved (`SeekableByteChannel.position`): what its buffers hold written or
+    // dropped first.
+    reg!(it, "java.io.streamSeek", |it, a| {
+        let id = int(it, a, 0)?;
+        let position = long(it, a, 1)?;
+        with_stream(it, id, |it, s| {
+            if s.closed {
+                return refused(it, s);
+            }
+            flush_stream(it, s)?;
+            s.read.clear();
+            s.at = 0;
+            match &mut s.io {
+                Io::File(f) => match std::io::Seek::seek(f, std::io::SeekFrom::Start(position.max(0) as u64)) {
+                    Ok(_) => Ok(Value::Unit),
+                    Err(e) => io_error(it, &reason(&e)),
+                },
+                _ => it.unsupported("a position of a stream that is no file's"),
+            }
+        })
+    });
+    // A file stream's file cut to `size` bytes (`SeekableByteChannel.truncate`), its buffer written first.
+    reg!(it, "java.io.streamTruncate", |it, a| {
+        let id = int(it, a, 0)?;
+        let size = long(it, a, 1)?;
+        with_stream(it, id, |it, s| {
+            if s.closed {
+                return refused(it, s);
+            }
+            flush_stream(it, s)?;
+            match &s.io {
+                Io::File(f) => match f.metadata().map(|m| m.len()) {
+                    Ok(len) if (size as u64) < len => match f.set_len(size.max(0) as u64) {
+                        Ok(()) => Ok(Value::Unit),
+                        Err(e) => io_error(it, &reason(&e)),
+                    },
+                    Ok(_) => Ok(Value::Unit),
+                    Err(e) => io_error(it, &reason(&e)),
+                },
+                _ => it.unsupported("a truncation of a stream that is no file's"),
+            }
+        })
+    });
     reg!(it, "java.io.streamOpenWrite", |it, a| {
         if it.pure {
             return it.impure("writing a file");
@@ -1345,7 +1498,7 @@ pub(super) fn set_stream_timeout(id: i32, millis: i32) {
 }
 
 pub(super) fn signal_seen(it: &mut Interp) -> R<()> {
-    check_signal(it)
+    check_signal_blocking(it)
 }
 
 
@@ -1387,7 +1540,7 @@ mod os {
 
     extern "C" {
         fn kill(pid: c_int, sig: c_int) -> c_int;
-        fn signal(sig: c_int, handler: extern "C" fn(c_int)) -> usize;
+        fn signal(sig: c_int, handler: usize) -> usize;
         fn waitid(idtype: c_int, id: u32, infop: *mut c_void, options: c_int) -> c_int;
         fn poll(fds: *mut PollFd, nfds: NFds, timeout: c_int) -> c_int;
         fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
@@ -1398,12 +1551,90 @@ mod os {
         super::on_signal(sig);
     }
 
+    extern "C" fn on_program_signal(sig: c_int) {
+        super::on_program_signal(sig);
+    }
+
+    extern "C" {
+        #[link_name = "raise"]
+        fn raise_signal(sig: c_int) -> c_int;
+    }
+
+    pub const SHUTDOWN_SIGNALS: [c_int; 3] = [SIGINT, SIGTERM, SIGHUP];
+
+    /// The signals the JVM keeps (`JVM_RegisterSignal`): the VM's own SEGV, BUS, FPE, ILL and QUIT, and
+    /// KILL and STOP, which no process handles.
+    pub fn kept(n: c_int) -> bool {
+        [SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGQUIT, SIGKILL, SIGSTOP].contains(&n)
+    }
+
+    pub fn install(n: c_int, kind: i32) {
+        // SAFETY: sets a disposition the kinds name: the default, ignored, or a handler that stores the
+        // signal (async-signal-safe).
+        unsafe {
+            match kind {
+                0 => {
+                    signal(n, 0);
+                }
+                1 => {
+                    signal(n, 1);
+                }
+                2 => {
+                    signal(n, on_program_signal as extern "C" fn(c_int) as usize);
+                }
+                _ => {
+                    signal(n, on_signal as extern "C" fn(c_int) as usize);
+                }
+            }
+        }
+    }
+
+    pub fn raise(n: c_int) {
+        // SAFETY: raises a signal in this process, as `Signal.raise` does.
+        unsafe {
+            raise_signal(n);
+        }
+    }
+
+    /// The number of a signal by its short name, as the JVM's `os::get_signal_number` finds it.
+    pub fn signal_number(name: &str) -> c_int {
+        SIGNAL_NAMES.iter().find(|(n, _)| *n == name).map_or(-1, |&(_, k)| k)
+    }
+
+    const SIGQUIT: c_int = 3;
+    const SIGILL: c_int = 4;
+    const SIGFPE: c_int = 8;
+    const SIGSEGV: c_int = 11;
+    #[cfg(target_os = "linux")]
+    const SIGBUS: c_int = 7;
+    #[cfg(not(target_os = "linux"))]
+    const SIGBUS: c_int = 10;
+    #[cfg(target_os = "linux")]
+    const SIGSTOP: c_int = 19;
+    #[cfg(not(target_os = "linux"))]
+    const SIGSTOP: c_int = 17;
+
+    #[cfg(target_os = "linux")]
+    const SIGNAL_NAMES: [(&str, c_int); 33] = [
+        ("HUP", 1), ("INT", 2), ("QUIT", 3), ("ILL", 4), ("TRAP", 5), ("ABRT", 6), ("IOT", 6), ("BUS", 7), ("FPE", 8),
+        ("KILL", 9), ("USR1", 10), ("SEGV", 11), ("USR2", 12), ("PIPE", 13), ("ALRM", 14), ("TERM", 15), ("STKFLT", 16),
+        ("CHLD", 17), ("CONT", 18), ("STOP", 19), ("TSTP", 20), ("TTIN", 21), ("TTOU", 22), ("URG", 23), ("XCPU", 24),
+        ("XFSZ", 25), ("VTALRM", 26), ("PROF", 27), ("WINCH", 28), ("IO", 29), ("POLL", 29), ("PWR", 30), ("SYS", 31),
+    ];
+    #[cfg(not(target_os = "linux"))]
+    const SIGNAL_NAMES: [(&str, c_int); 32] = [
+        ("HUP", 1), ("INT", 2), ("QUIT", 3), ("ILL", 4), ("TRAP", 5), ("ABRT", 6), ("IOT", 6), ("EMT", 7), ("FPE", 8),
+        ("KILL", 9), ("BUS", 10), ("SEGV", 11), ("SYS", 12), ("PIPE", 13), ("ALRM", 14), ("TERM", 15), ("URG", 16),
+        ("STOP", 17), ("TSTP", 18), ("CONT", 19), ("CHLD", 20), ("TTIN", 21), ("TTOU", 22), ("IO", 23), ("XCPU", 24),
+        ("XFSZ", 25), ("VTALRM", 26), ("PROF", 27), ("WINCH", 28), ("INFO", 29), ("USR1", 30), ("USR2", 31),
+    ];
+
     pub fn handle_signals() {
         // SAFETY: installs a handler that stores the signal or ends the process.
         unsafe {
-            signal(SIGINT, on_signal);
-            signal(SIGTERM, on_signal);
-            signal(SIGHUP, on_signal);
+            signal(SIGINT, on_signal as extern "C" fn(c_int) as usize);
+            signal(SIGTERM, on_signal as extern "C" fn(c_int) as usize);
+            signal(SIGHUP, on_signal as extern "C" fn(c_int) as usize);
         }
     }
 
@@ -1698,12 +1929,52 @@ mod os {
     }
 
     unsafe extern "system" fn on_event(event: u32) -> i32 {
-        // Ctrl-C, Ctrl-Break, the console closed, the session's end: the JVM's INT and TERM.
-        match event {
-            0 | 1 => super::on_signal(2),
-            _ => super::on_signal(15),
+        // Ctrl-C, Ctrl-Break, the console closed, the session's end: the JVM's INT, BREAK and TERM, each to
+        // its handler (`super::KINDS`), the shutdown's by default.
+        let n = match event {
+            0 => SIGINT,
+            1 => SIGBREAK,
+            _ => SIGTERM,
+        };
+        match super::KINDS[n as usize].load(std::sync::atomic::Ordering::SeqCst) {
+            2 => super::on_program_signal(n),
+            1 => {}
+            _ => super::on_signal(if n == SIGBREAK { SIGINT } else { n }),
         }
         1
+    }
+
+    const SIGINT: i32 = 2;
+    const SIGTERM: i32 = 15;
+    const SIGBREAK: i32 = 21;
+    const SIGABRT: i32 = 22;
+    pub const SHUTDOWN_SIGNALS: [i32; 3] = [SIGINT, SIGTERM, SIGBREAK];
+
+    /// The signals a program may handle on Windows, as the JVM's: INT, TERM, BREAK and ABRT.
+    pub fn kept(n: i32) -> bool {
+        ![SIGINT, SIGTERM, SIGBREAK, SIGABRT].contains(&n)
+    }
+
+    /// The console's events reach their handler through `on_event`, which reads the kinds.
+    pub fn install(_n: i32, _kind: i32) {}
+
+    /// A raised signal no handler takes: the default's end of the process.
+    pub fn raise(n: i32) {
+        exit_now(128 + n)
+    }
+
+    /// The number of a signal by its short name, as the JVM's Windows table has them.
+    pub fn signal_number(name: &str) -> i32 {
+        match name {
+            "ABRT" => SIGABRT,
+            "FPE" => 8,
+            "SEGV" => 11,
+            "INT" => SIGINT,
+            "TERM" => SIGTERM,
+            "BREAK" => SIGBREAK,
+            "ILL" => 4,
+            _ => -1,
+        }
     }
 
     pub fn handle_signals() {

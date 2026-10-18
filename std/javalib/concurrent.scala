@@ -1,31 +1,170 @@
-// The queues, threads and executors of the JDK that library bodies name on JavaScript, which has
-// one thread: Scala.js's javalib shapes, over the JS arrays of `java.util`'s store. The current
-// thread is the one thread, named "main"; the runtime has one processor.
+// The queues, threads and executors of the JDK that library bodies name. On JavaScript, which has one
+// thread, Scala.js's javalib shapes over the JS arrays of `java.util`'s store: the current thread is the
+// one thread, named "main", which a thread made can never join, and the runtime has one processor. Under
+// `teq interp` the threads are the interpreter's logical threads (src/interp/threads.rs), started, joined,
+// slept, interrupted and parked as the JDK's: the defs with a `@js` template below are the layer's
+// natives there, and on JavaScript the template's one thread.
 package java.lang:
 
-  // A thread can be made but not started: `start` is the JDK's, which JavaScript has no
-  // implementation of (a Scala.js program that starts one does not link).
+  // A thread: started under `teq interp`, where `start` makes a logical thread that runs `run`; on
+  // JavaScript it can be made but not started (`start` is the JDK's, which JavaScript has no
+  // implementation of: a Scala.js program that starts one does not link). `tid` is the interpreter's
+  // number of the thread once started, -1 before (main's is 0).
   @jvmClass("java/lang/Thread")
-  class Thread private (private var threadName: String, target: Runnable) extends Runnable:
-    def this() = this("Thread-0", null)
-    def this(target: Runnable) = this("Thread-0", target)
-    def this(name: String) = this(name, null)
-    def this(target: Runnable, name: String) = this(name, target)
-    private var interruptedState = false
-    def run(): Unit = if target != null then target.run()
-    def interrupt(): Unit = interruptedState = true
-    def isInterrupted(): scala.Boolean = interruptedState
-    final def getName(): String = threadName
-    final def setName(name: String): Unit = threadName = name
-    def getId(): scala.Long = 1L
-    final def isDaemon(): scala.Boolean = false
-    final def isAlive(): scala.Boolean = true
-    def getStackTrace(): Array[StackTraceElement] = new Array[StackTraceElement](0)
-    // The one thread runs; another was never started.
-    def getState(): Thread.State = if this eq Thread.currentThread() then Thread.State.RUNNABLE else Thread.State.NEW
+  class Thread private (private var threadName: String, target: Runnable, group: ThreadGroup, private var tid: Int) extends Runnable:
+    def this() = this(Thread.autoName(), null, null, -1)
+    def this(target: Runnable) = this(Thread.autoName(), target, null, -1)
+    def this(name: String) = this(name, null, null, -1)
+    def this(target: Runnable, name: String) = this(name, target, null, -1)
+    def this(group: ThreadGroup, target: Runnable) = this(Thread.autoName(), target, group, -1)
+    def this(group: ThreadGroup, name: String) = this(name, null, group, -1)
+    def this(group: ThreadGroup, target: Runnable, name: String) = this(name, target, group, -1)
+    def this(group: ThreadGroup, target: Runnable, name: String, stackSize: scala.Long) = this(name, target, group, -1)
+    // What a thread takes from the one that makes it, as the JDK's: its group, its daemon status, its
+    // priority (at most the group's).
+    private val parent: Thread = Thread.maker()
+    private val threadGroup: ThreadGroup =
+      if group != null then group else parent.getThreadGroup()
+    private var daemon: scala.Boolean = parent != null && parent.isDaemon()
+    private var priority: Int =
+      if parent == null then Thread.NORM_PRIORITY else Math.min(parent.getPriority(), threadGroup.getMaxPriority())
+    private var handler: Thread.UncaughtExceptionHandler = null
+    // The interrupt where no logical thread holds it: JavaScript's, a compile-time run's, a thread's not
+    // started yet.
+    private var interruptFlag = false
+    private val ident: scala.Long = Thread.nextIdent()
+    // The maker's `InheritableThreadLocal` values, each through `childValue`, taken as the JDK's
+    // constructor takes them (`ThreadLocal.createInheritedMap`) and the thread's at its start. Main takes
+    // none: the JDK attaches it, a constructor that inherits nothing.
+    private val inheritedLocals: AnyRef = if Thread.makingMain then null else threadInherited()
+    if threadName == null then throw new NullPointerException("'name' is null")
 
+    def run(): Unit = if target != null then target.run()
+
+    def start(): Unit =
+      if tid >= 0 then throw new IllegalThreadStateException()
+      tid = threadStart(this, daemon, interruptFlag, inheritedLocals)
+
+    def interrupt(): Unit =
+      if tid < 0 || !threadsRun() then interruptFlag = true else threadInterrupt(tid)
+    def isInterrupted(): scala.Boolean =
+      if tid < 0 || !threadsRun() then interruptFlag else threadInterrupted(tid, false)
+    // The interpreter's number of the thread, -1 before it starts (`LockSupport.unpark`).
+    private[java] def nativeId: Int = tid
+    final def getName(): String = threadName
+    final def setName(name: String): Unit =
+      if name == null then throw new NullPointerException("'name' is null")
+      threadName = name
+    @deprecated def getId(): scala.Long = ident
+    final def threadId(): scala.Long = ident
+    final def isDaemon(): scala.Boolean = daemon
+    final def setDaemon(on: scala.Boolean): Unit =
+      if isAlive() then throw new IllegalThreadStateException()
+      daemon = on
+    final def getPriority(): Int = priority
+    final def setPriority(newPriority: Int): Unit =
+      if newPriority > Thread.MAX_PRIORITY || newPriority < Thread.MIN_PRIORITY then
+        throw new IllegalArgumentException()
+      if isAlive() || tid < 0 then priority = Math.min(newPriority, threadGroup.getMaxPriority())
+    // The group, `null` once the thread ended.
+    final def getThreadGroup(): ThreadGroup = if getState() eq Thread.State.TERMINATED then null else threadGroup
+    final def isAlive(): scala.Boolean = tid >= 0 && (!threadsRun() || threadState(tid) != 5)
+    def getState(): Thread.State =
+      if tid < 0 then Thread.State.NEW
+      else if !threadsRun() then Thread.State.RUNNABLE
+      else Thread.State.values()(threadState(tid))
+    final def join(): Unit = join(0L)
+    final def join(millis: scala.Long): Unit =
+      if millis < 0L then throw new IllegalArgumentException("timeout value is negative")
+      joinNanos(millis * 1000000L)
+    final def join(millis: scala.Long, nanos: Int): Unit =
+      if millis < 0L then throw new IllegalArgumentException("timeout value is negative")
+      if nanos < 0 || nanos > 999999 then throw new IllegalArgumentException("nanosecond timeout value out of range")
+      joinNanos(millis * 1000000L + nanos)
+    private def joinNanos(nanos: scala.Long): Unit =
+      if tid >= 0 && threadJoin(tid, nanos) == 2 then throw new InterruptedException()
+    def getStackTrace(): Array[StackTraceElement] = new Array[StackTraceElement](0)
+    def getUncaughtExceptionHandler(): Thread.UncaughtExceptionHandler =
+      if handler != null then handler else if getState() eq Thread.State.TERMINATED then null else threadGroup
+    def setUncaughtExceptionHandler(h: Thread.UncaughtExceptionHandler): Unit = handler = h
+    def getContextClassLoader(): ClassLoader = null
+    def setContextClassLoader(cl: ClassLoader): Unit = ()
+    def checkAccess(): Unit = ()
+    final def isVirtual(): scala.Boolean = false
+    // What the thread's end does with an exception its `run` did not catch (the JDK's
+    // `dispatchUncaughtException`, which the interpreter calls).
+    private[lang] def dispatchUncaughtException(e: Throwable): Unit =
+      getUncaughtExceptionHandler().uncaughtException(this, e)
+    override def toString: String =
+      val g = getThreadGroup()
+      "Thread[#" + ident + "," + threadName + "," + priority + "," + (if g != null then g.getName() else "") + "]"
+
+  // The logical threads' natives under `teq interp` (src/interp/threads.rs); JavaScript's one thread.
+  @js("$fail(\"UnsupportedOperationException\", \"Thread.start is not available on JavaScript\")")
+  private[lang] def threadStart(t: Thread, daemon: scala.Boolean, interrupted: scala.Boolean, locals: AnyRef): Int
+  @js("null")
+  private[lang] def threadInherited(): AnyRef
+  @js("null")
+  private[lang] def threadCurrent(): Thread
+  @js("false")
+  private[java] def threadsRun(): scala.Boolean
+  @js("false")
+  private[lang] def threadInterrupted(tid: Int, clear: scala.Boolean): scala.Boolean
+  @js("void 0")
+  private[lang] def threadInterrupt(tid: Int): Unit
+  @js("1")
+  private[lang] def threadState(tid: Int): Int
+  @js("$fail(\"UnsupportedOperationException\", \"Thread.join is not available on JavaScript\")")
+  private[lang] def threadJoin(tid: Int, nanos: scala.Long): Int
+  @js("void 0")
+  private[lang] def threadYield(): Unit
+  @js("false")
+  private[lang] def holdsLock(o: Object): scala.Boolean
   @js("$fail(\"UnsupportedOperationException\", \"Thread.sleep is not available on JavaScript\")")
   private[lang] def threadSleep(millis: scala.Long, nanos: scala.Long): Unit
+  @js("false")
+  private[lang] def monitorWait(o: Object, millis: scala.Long, nanos: scala.Long): scala.Boolean
+  @js("void 0")
+  private[lang] def monitorNotify(o: Object, all: scala.Boolean): Unit
+
+  // `Object.wait`'s three overloads, `notify` and `notifyAll` of any reference, which a call typed to the
+  // member is lowered to (`object_monitor_call`): under `teq interp` the waits and signals of the object's monitor,
+  // which the thread has to hold (`IllegalMonitorStateException`); on JavaScript, which has one thread,
+  // nothing, as Scala.js's; on the JVM the JDK's methods. A null receiver throws first, as the JVM's
+  // `invokevirtual` does once the arguments are evaluated, then JDK 24's checks of the times.
+  @js("void 0")
+  @jvm("$0:L invokevirtual java/lang/Object.wait()V")
+  def objectWait0(o: Object): Unit =
+    monitorReceiver(o, "Object.wait()")
+    monitorWaitMillis(o, 0L)
+  @js("void 0")
+  @jvm("$0:L $1:J invokevirtual java/lang/Object.wait(J)V")
+  def objectWait1(o: Object, timeoutMillis: scala.Long): Unit =
+    monitorReceiver(o, "Object.wait(long)")
+    monitorWaitMillis(o, timeoutMillis)
+  @js("void 0")
+  @jvm("$0:L $1:J $2:I invokevirtual java/lang/Object.wait(JI)V")
+  def objectWait(o: Object, timeoutMillis: scala.Long, nanos: Int): Unit =
+    monitorReceiver(o, "Object.wait(long, int)")
+    if timeoutMillis < 0L then throw new IllegalArgumentException("timeoutMillis value is negative")
+    if nanos < 0 || nanos > 999999 then throw new IllegalArgumentException("nanosecond timeout value out of range")
+    monitorWaitMillis(o, if nanos > 0 && timeoutMillis < java.lang.Long.MAX_VALUE then timeoutMillis + 1L else timeoutMillis)
+  // `wait(long)`'s body.
+  private def monitorWaitMillis(o: Object, timeoutMillis: scala.Long): Unit =
+    if timeoutMillis < 0L then throw new IllegalArgumentException("timeout value is negative")
+    if monitorWait(o, timeoutMillis, 0L) then throw new InterruptedException()
+  private def monitorReceiver(o: Object, method: String): Unit =
+    if o == null then throw new NullPointerException("Cannot invoke \"" + method + "\" because the value is null")
+  @js("void 0")
+  @jvm("$0:L invokevirtual java/lang/Object.notify()V")
+  def objectNotify(o: Object): Unit =
+    monitorReceiver(o, "Object.notify()")
+    monitorNotify(o, false)
+  @js("void 0")
+  @jvm("$0:L invokevirtual java/lang/Object.notifyAll()V")
+  def objectNotifyAll(o: Object): Unit =
+    monitorReceiver(o, "Object.notifyAll()")
+    monitorNotify(o, true)
   @js("$fail(\"UnsupportedOperationException\", \"shutdown hooks are not available on JavaScript\")")
   private[lang] def hookAdd(hook: Thread): Unit
   @js("$fail(\"UnsupportedOperationException\", \"shutdown hooks are not available on JavaScript\")")
@@ -33,10 +172,38 @@ package java.lang:
 
   @jvmClass("java/lang/Thread")
   object Thread:
-    private val single = new Thread("main", null)
-    def currentThread(): Thread = single
-    // The one thread waits: under `teq interp` for the time (a signal stops it), with the output
-    // so far flushed; JavaScript cannot wait.
+    final val MIN_PRIORITY = 1
+    final val NORM_PRIORITY = 5
+    final val MAX_PRIORITY = 10
+    private var autoNumber = 0
+    private var idents = 0L
+    private var defaultHandler: UncaughtExceptionHandler = null
+    private var systemGroup: ThreadGroup = null
+    private var main: Thread = null
+    private var makingMain = false
+    private[lang] def autoName(): String =
+      val n = autoNumber
+      autoNumber += 1
+      "Thread-" + n
+    private[lang] def nextIdent(): scala.Long =
+      idents += 1L
+      idents
+    // The thread making another: the current one, none while main itself is made.
+    private[lang] def maker(): Thread = if makingMain then null else currentThread()
+    def currentThread(): Thread =
+      val t = threadCurrent()
+      if t != null then t
+      else
+        if main == null then
+          // Main's group, "main" in "system", made with it.
+          makingMain = true
+          systemGroup = new ThreadGroup(null, "system", true)
+          main = new Thread("main", null, new ThreadGroup(systemGroup, "main"), 0)
+          makingMain = false
+        main
+    // The current thread waits: under `teq interp` for the time, an interrupt ending it with
+    // `InterruptedException` (a signal stops it), with the output so far flushed; JavaScript cannot
+    // wait.
     def sleep(millis: scala.Long): Unit =
       if millis < 0L then throw new IllegalArgumentException("timeout value is negative")
       threadSleep(millis, 0L)
@@ -45,10 +212,22 @@ package java.lang:
       if nanos < 0 || nanos > 999999 then throw new IllegalArgumentException("nanosecond timeout value out of range")
       threadSleep(millis, nanos.toLong)
     def interrupted(): scala.Boolean =
-      val was = single.interruptedState
-      single.interruptedState = false
-      was
-    def onSpinWait(): Unit = ()
+      val t = currentThread()
+      if threadsRun() then threadInterrupted(-2, true)
+      else
+        val was = t.interruptFlag
+        t.interruptFlag = false
+        was
+    def `yield`(): Unit = threadYield()
+    def onSpinWait(): Unit = threadYield()
+    def holdsLock(obj: Object): scala.Boolean =
+      if obj == null then throw new NullPointerException()
+      java.lang.holdsLock(obj)
+    def getDefaultUncaughtExceptionHandler(): UncaughtExceptionHandler = defaultHandler
+    def setDefaultUncaughtExceptionHandler(h: UncaughtExceptionHandler): Unit = defaultHandler = h
+    def activeCount(): Int = 1
+    def dumpStack(): Unit = new Exception("Stack trace").printStackTrace()
+
     trait UncaughtExceptionHandler:
       def uncaughtException(t: Thread, e: Throwable): Unit
 
@@ -73,6 +252,38 @@ package java.lang:
       def valueOf(name: String): State =
         if name == null then throw new NullPointerException("Name is null")
         values().find(_.name() == name).getOrElse(throw new IllegalArgumentException("No enum constant java.lang.Thread.State." + name))
+
+  // A group of threads, as the JDK's: a name, a parent, a maximum priority, and the handler of the
+  // exceptions its threads do not catch, which reports them as the JDK's does when no default handler is
+  // set.
+  @jvmClass("java/lang/ThreadGroup")
+  class ThreadGroup private[lang] (parent: ThreadGroup, name: String, root: scala.Boolean) extends Thread.UncaughtExceptionHandler:
+    def this(parent: ThreadGroup, name: String) =
+      this(if parent != null then parent else throw new NullPointerException(), name, false)
+    def this(name: String) = this(Thread.currentThread().getThreadGroup(), name)
+    private var maxPriority = if parent == null then Thread.MAX_PRIORITY else parent.getMaxPriority()
+    private var daemon = parent != null && parent.isDaemon()
+    final def getName(): String = name
+    final def getParent(): ThreadGroup = parent
+    final def getMaxPriority(): Int = maxPriority
+    final def setMaxPriority(pri: Int): Unit =
+      if pri >= Thread.MIN_PRIORITY && pri <= Thread.MAX_PRIORITY then
+        maxPriority = if parent != null then Math.min(pri, parent.getMaxPriority()) else pri
+    @deprecated final def isDaemon(): scala.Boolean = daemon
+    @deprecated final def setDaemon(on: scala.Boolean): Unit = daemon = on
+    final def parentOf(g: ThreadGroup): scala.Boolean =
+      var c = g
+      while c != null && (c ne this) do c = c.getParent()
+      c != null
+    def uncaughtException(t: Thread, e: Throwable): Unit =
+      if parent != null then parent.uncaughtException(t, e)
+      else
+        val h = Thread.getDefaultUncaughtExceptionHandler()
+        if h != null then h.uncaughtException(t, e)
+        else
+          System.err.print("Exception in thread \"" + t.getName() + "\" ")
+          e.printStackTrace(System.err)
+    override def toString: String = "java.lang.ThreadGroup[name=" + name + ",maxpri=" + maxPriority + "]"
 
   @jvmClass("java/lang/Runtime")
   class Runtime private ():
@@ -299,7 +510,8 @@ package java.util.concurrent:
 
   class CancellationException(message: String = null) extends IllegalStateException(message)
 
-  class ExecutionException(message: String = null, cause: Throwable = null) extends Exception(message, cause)
+  class ExecutionException(message: String = null, cause: Throwable = null) extends Exception(message, cause):
+    def this(cause: Throwable) = this(if cause == null then null else cause.toString, cause)
 
   class TimeoutException(message: String = null) extends Exception(message)
 
@@ -310,27 +522,29 @@ package java.util.concurrent:
     def this(c: java.util.Collection[? <: E]) =
       this(java.util.newArray[E])
       addAll(c.asInstanceOf[java.util.Collection[E]])
-    def size(): Int = items.length
-    override def isEmpty(): Boolean = items.length == 0
+    // Each operation under the queue's monitor, which under `teq interp`'s threads makes it whole;
+    // JavaScript's one thread takes none.
+    def size(): Int = synchronized(items.length)
+    override def isEmpty(): Boolean = synchronized(items.length == 0)
     def offer(e: E): Boolean =
       if e == null then throw new NullPointerException()
-      java.util.arrayPush(items, e)
+      synchronized(java.util.arrayPush(items, e))
       true
-    def poll(): E =
+    def poll(): E = synchronized:
       if items.length == 0 then null.asInstanceOf[E]
       else
         val e = items(0)
         java.util.arrayRemove(items, 0)
         e
-    def peek(): E = if items.length == 0 then null.asInstanceOf[E] else items(0)
-    override def remove(o: Any): Boolean =
+    def peek(): E = synchronized(if items.length == 0 then null.asInstanceOf[E] else items(0))
+    override def remove(o: Any): Boolean = synchronized:
       var i = 0
       while i < items.length && !java.util.Objects.equals(items(i), o) do i += 1
       if i < items.length then
         java.util.arrayRemove(items, i)
         true
       else false
-    override def clear(): Unit = java.util.arrayClear(items)
+    override def clear(): Unit = synchronized(java.util.arrayClear(items))
     def iterator(): java.util.Iterator[E] = new java.util.DequeIterator(items, false)
 
   // java.util.Random's generator, as Scala.js's `ThreadLocalRandom` extends it.

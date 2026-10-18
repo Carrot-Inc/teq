@@ -32,6 +32,8 @@ mod products;
 mod report;
 mod scala2;
 mod scala_release;
+mod script;
+mod scriptdeps;
 mod shake;
 mod shape;
 mod shared;
@@ -178,13 +180,14 @@ const DOM_STD_FILES: &str = "<std>/scalajs/dom";
 /// `Class.getField` declares): the JVM takes the JDK's own from `ct.sym`, which this one would hide.
 const JDK_FACADE_FILES: [&str; 1] = ["<std>/scalajs/javalib_reflect.scala"];
 
-/// Whether a Scala.js jar is on the classpath, which unlocks the facades layer.
-fn scalajs_jar(classpath: &[String]) -> bool {
+/// Whether a Scala.js jar is on the classpath, which unlocks the facades layer, and names a script's
+/// `//> using dep` artifacts for Scala.js outside a project (`scriptdeps::check_given`).
+pub(crate) fn scalajs_jar(classpath: &[String]) -> bool {
     classpath.iter().any(|p| p.contains("_sjs1_"))
 }
 
 /// The platform layer written for JavaScript alone: the JVM has the JDK's own classes.
-const JS_ONLY_LAYER: [&str; 15] = [
+const JS_ONLY_LAYER: [&str; 19] = [
     "<std>/concurrent.scala",
     "<std>/javalib/process.scala",
     "<std>/javalib/io.scala",
@@ -200,6 +203,10 @@ const JS_ONLY_LAYER: [&str; 15] = [
     "<std>/javalib/optional.scala",
     "<std>/javalib/text.scala",
     "<std>/javalib/concurrent.scala",
+    "<std>/javalib/locks.scala",
+    "<std>/javalib/executors.scala",
+    "<std>/javalib/pipes.scala",
+    "<std>/javalib/invoke.scala",
 ];
 
 /// Whether `name` of the package `pkg()` is a class, or an object of its statics, that only the
@@ -275,6 +282,7 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/compiletime_ops.scala", include_str!("../std/compiletime_ops.scala")),
     ("<std>/namedtuple.scala", include_str!("../std/namedtuple.scala")),
     ("<std>/javalib/lang.scala", include_str!("../std/javalib/lang.scala")),
+    ("<std>/javalib/invoke.scala", include_str!("../std/javalib/invoke.scala")),
     ("<std>/javalib/serializable.scala", include_str!("../std/javalib/serializable.scala")),
     ("<std>/javalib/comparator.scala", include_str!("../std/javalib/comparator.scala")),
     ("<std>/javalib/util.scala", include_str!("../std/javalib/util.scala")),
@@ -297,6 +305,9 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/javalib/text.scala", include_str!("../std/javalib/text.scala")),
     ("<std>/javalib/net.scala", include_str!("../std/javalib/net.scala")),
     ("<std>/javalib/concurrent.scala", include_str!("../std/javalib/concurrent.scala")),
+    ("<std>/javalib/locks.scala", include_str!("../std/javalib/locks.scala")),
+    ("<std>/javalib/executors.scala", include_str!("../std/javalib/executors.scala")),
+    ("<std>/javalib/pipes.scala", include_str!("../std/javalib/pipes.scala")),
     ("<std>/jdk.scala", include_str!("../std/jdk.scala")),
     ("<std>/buffer.scala", include_str!("../std/buffer.scala")),
     ("<std>/numeric_range.scala", include_str!("../std/numeric_range.scala")),
@@ -380,6 +391,7 @@ pub(crate) const SCALA_LIBRARY_LAYER: &[(&str, &str)] = &[
     ("<std>/value_of.scala", include_str!("../std/value_of.scala")),
     ("<std>/js.scala", include_str!("../std/js.scala")),
     ("<std>/javalib/lang.scala", include_str!("../std/javalib/lang.scala")),
+    ("<std>/javalib/invoke.scala", include_str!("../std/javalib/invoke.scala")),
     ("<std>/javalib/serializable.scala", include_str!("../std/javalib/serializable.scala")),
     ("<std>/javalib/comparator.scala", include_str!("../std/javalib/comparator.scala")),
     ("<std>/javalib/util.scala", include_str!("../std/javalib/util.scala")),
@@ -445,6 +457,9 @@ pub(crate) struct Options {
     pub module_per_file: Vec<String>,
     pub hot: bool,
     pub main: Option<String>,
+    /// `teq interp --module <project>[/<configuration>]`: the configuration of the build's lock a script's
+    /// `//> using dep` lines resolve through, where its sources do not name one (`scriptdeps.rs`).
+    pub module: Option<String>,
     /// `--cacheable-state a.B` and the `cacheable-state` of the `teq.toml`: the objects a watch
     /// session keeps across its builds, declared by the macros' author to hold nothing but a cache.
     pub cacheable_state: Vec<String>,
@@ -482,6 +497,9 @@ pub(crate) struct Options {
     /// `teq interp`: the program runs under the interpreter, without an output file.
     pub interp: bool,
     pub classpath: Vec<String>,
+    /// `--classpath` was given: under `teq interp` its jars are the ones a script's `//> using dep` lines run
+    /// on, and outside a project the ones they are checked against (`scriptdeps::classpath`).
+    pub classpath_given: bool,
     pub std: StdMode,
     pub release: bool,
     /// The JDK release read from `ct.sym`, its newest by default.
@@ -698,13 +716,18 @@ const INTERP_USAGE: &str = "usage: teq interp <files or directories...> [options
          program's (the status it gives sys.exit, 1 for an exception it did not catch or an error met\n\
          on the way, 3 for what the interpreter does not execute). The compiler writes nothing; the\n\
          program has its process's working directory, environment and files, as on the JVM, through\n\
-         java.nio.file. No node or JVM is needed.\n\
+         java.nio.file. No node or JVM is needed. A word before -- is a source path. A Scala CLI script\n\
+         (.sc) runs as Scala CLI wraps it, the first one named; its //> using dep lines resolve through\n\
+         the lock of the build it is in (docs/CLI.md, \"teq interp\").\n\
          \n\
          --main name   runs the @main method or the object of that name when the program has several\n\
+         --module p[/c]  the build's configuration a script's using dep lines resolve through, where the\n\
+         \x20         sources the script includes do not tell it (compile when no configuration is named)\n\
          --exclude path  leaves out the files whose path starts with or ends with the text (repeatable)\n\
          --classpath  jars and class directories whose TASTy and class files supply the classes the\n\
-         \x20         program names; the JDK is read from its lib/ct.sym at its newest release unless\n\
-         \x20         --release <n> says\n\
+         \x20         program names, a script's using dep lines checked by its project's lock, outside\n\
+         \x20         one against them; the JDK is read\n\
+         \x20         from its lib/ct.sym at its newest release unless --release <n> says\n\
          --release [n]  with a number, the JDK release read from ct.sym; alone, the production mode a\n\
          \x20         program observes through LinkingInfo.productionMode\n\
          --no-cache   reads the jars without the jar cache (TEQ_NO_CACHE=1 does the same)\n\
@@ -839,6 +862,7 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
         module_per_file: Vec::new(),
         hot: false,
         main: None,
+        module: None,
         cacheable_state: Vec::new(),
         no_known_caches: false,
         macro_state_per_worker: false,
@@ -859,6 +883,7 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
         jvm: false,
         interp,
         classpath: Vec::new(),
+        classpath_given: false,
         std: StdMode::Lean,
         release: false,
         jdk_release: None,
@@ -936,7 +961,10 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
             },
             "--all-mains" => o.all_mains = true,
             "--classpath" => match args.next() {
-                Some(list) => o.classpath.extend(list.split(classpath::SEPARATOR).filter(|p| !p.is_empty()).map(str::to_string)),
+                Some(list) => {
+                    o.classpath_given = true;
+                    o.classpath.extend(list.split(classpath::SEPARATOR).filter(|p| !p.is_empty()).map(str::to_string))
+                }
                 None => usage_for(command),
             },
             "--std" => match args.next().and_then(|m| StdMode::parse(&m)) {
@@ -952,6 +980,7 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
                 std::process::exit(2);
             }
             "--main" => o.main = args.next(),
+            "--module" if interp => o.module = args.next(),
             "--strict-equality" => flags.push(dialect::STRICT_EQUALITY.to_string()),
             "--max-inlines" => match args.next().and_then(|n| n.parse::<u32>().ok()) {
                 Some(n) if n > 0 => max_inlines = Some(n),
@@ -1210,9 +1239,11 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
     o
 }
 
-/// The `.scala` files under `path`, or `path` itself: each with whether a directory listing
-/// gave it, which spells it as the file system does.
-fn collect_files(opts: &Options, path: &str, listed: bool, out: &mut Vec<(String, bool)>) {
+/// The `.scala` files under `path` (and under `teq interp` its Scala CLI scripts, `.sc`, as Scala CLI
+/// takes a directory's), or `path` itself: each with whether a directory listing gave it, which spells
+/// it as the file system does.
+/// Each script a listing found is recorded in `roots` with the directory listed, `root`.
+fn collect_files(opts: &Options, path: &str, listed: bool, out: &mut Vec<(String, bool)>, root: &str, roots: &mut intern::FxMap<String, String>) {
     let p = std::path::Path::new(path);
     if p.is_dir() {
         let mut entries: Vec<_> = match std::fs::read_dir(p) {
@@ -1226,21 +1257,54 @@ fn collect_files(opts: &Options, path: &str, listed: bool, out: &mut Vec<(String
         for e in entries {
             let s = e.to_string_lossy().to_string();
             let hidden = e.file_name().map_or(false, |n| n.to_string_lossy().starts_with('.'));
-            if s.ends_with(".scala") || (!hidden && e.is_dir()) {
-                collect_files(opts, &s, true, out);
+            // A directory's scripts are its sources beside its `.scala` files under `teq interp` and the compiler's
+            // check, one preprocessing for both (Scala CLI's `ElementsUtils.singleFilesFromDirectory`).
+            let scripts = opts.interp || opts.command == "check";
+            if s.ends_with(".scala") || (scripts && s.ends_with(".sc")) || (!hidden && e.is_dir()) {
+                collect_files(opts, &s, true, out, root, roots);
             }
         }
     } else {
+        if listed && script::is_script(path) {
+            roots.insert(path.to_string(), root.to_string());
+        }
         out.push((path.to_string(), listed));
+    }
+}
+
+/// `teq interp`'s sources of the configurations whose products a script's configuration's classpath holds
+/// (`scriptdeps::classpath`): the `.scala` files under those inputs, the hidden ones left out as a
+/// directory's are, each not among the program's files already (a script's `//> using file` names some).
+fn add_product_sources(opts: &Options, inputs: &[String], program: &mut Vec<SourceFile>) {
+    let mut found: Vec<(String, bool)> = Vec::new();
+    let mut roots = intern::FxMap::default();
+    for input in inputs {
+        collect_files(opts, input, true, &mut found, input, &mut roots);
+    }
+    let mut seen: std::collections::HashSet<String> = program.iter().map(|f| file_identity(&f.path)).collect();
+    let paths: Vec<String> = found.into_iter().map(|(p, _)| p).filter(|p| p.ends_with(".scala") && seen.insert(file_identity(p))).collect();
+    let keys = program_keys(opts, paths.iter().map(String::as_str));
+    for (path, key) in paths.into_iter().zip(keys) {
+        match std::fs::read_to_string(&path) {
+            Ok(text) => {
+                let text = planted::plant_clock(text, program.len());
+                program.push(SourceFile { path, text, is_std: false, key });
+            }
+            Err(e) => {
+                eprintln!("cannot read {}: {}", path, e);
+                answer_failure(opts);
+                std::process::exit(2);
+            }
+        }
     }
 }
 
 /// `teq interp`'s sources that a source's header names (`//> using file` and `//> using files`,
 /// Scala CLI's inclusion; `src/directives.rs`): each path relative to the file that names it, a
-/// directory the `.scala` files under it but the hidden ones, as Scala CLI takes them. An included
+/// directory the `.scala` and `.sc` files under it but the hidden ones, as Scala CLI takes them. An included
 /// file's own directives are followed, which Scala CLI does not do, each file once. A path that
 /// names nothing ends the command with the directive's place.
-fn include_using_files(opts: &Options, paths: &mut Vec<(String, bool)>) {
+fn include_using_files(opts: &Options, paths: &mut Vec<(String, bool)>, roots: &mut intern::FxMap<String, String>) {
     let mut seen: std::collections::HashSet<String> = paths.iter().map(|(p, _)| file_identity(p)).collect();
     let mut i = 0;
     while i < paths.len() {
@@ -1256,6 +1320,11 @@ fn include_using_files(opts: &Options, paths: &mut Vec<(String, bool)>) {
                 let mut found = Vec::new();
                 if target.is_dir() {
                     included_sources(&target, &mut found);
+                    for (file, _) in &found {
+                        if script::is_script(file) {
+                            roots.entry(file.clone()).or_insert_with(|| shown.clone());
+                        }
+                    }
                 } else if target.is_file() {
                     found.push((shown, false));
                 } else {
@@ -1272,6 +1341,35 @@ fn include_using_files(opts: &Options, paths: &mut Vec<(String, bool)>) {
     }
 }
 
+/// A script's package: the directories between the directory a listing found it in and itself.
+fn script_package(path: &str, root: Option<&str>) -> Vec<String> {
+    let Some(root) = root else { return Vec::new() };
+    let dir = std::path::Path::new(path).parent().unwrap_or(std::path::Path::new(""));
+    match dir.strip_prefix(root) {
+        Ok(rel) => rel.components().filter_map(|c| match c {
+            std::path::Component::Normal(s) => Some(s.to_string_lossy().into_owned()),
+            _ => None,
+        }).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// A script's `scriptPath`, as Scala CLI's inputs give it (`inputArgPath.getOrElse(subPath.toString)`): the
+/// argument a script named on the command line was given by; for one a directory listing found, its path
+/// below that directory (`Directory.singleFilesFromDirectory`'s `subRelativeTo`); for a file a `//> using file`
+/// line names, its name (`resolveInputsFromPath`'s `Script(dir, subPath, None)`).
+fn script_path(opts: &Options, path: &str, root: Option<&str>) -> String {
+    if let Some(root) = root {
+        if let Ok(rel) = std::path::Path::new(path).strip_prefix(root) {
+            return rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/");
+        }
+    }
+    if let Some(given) = opts.inputs.iter().find(|i| i.as_str() == path || file_identity(i) == file_identity(path)) {
+        return given.clone();
+    }
+    std::path::Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned())
+}
+
 /// The `.scala` files under a directory a directive names, in the order of their paths, hidden
 /// files and directories left out.
 fn included_sources(dir: &std::path::Path, out: &mut Vec<(String, bool)>) {
@@ -1284,7 +1382,7 @@ fn included_sources(dir: &std::path::Path, out: &mut Vec<(String, bool)>) {
         }
         if e.is_dir() {
             included_sources(&e, out);
-        } else if e.extension().is_some_and(|x| x == "scala") {
+        } else if e.extension().is_some_and(|x| x == "scala" || x == "sc") {
             out.push((e.to_string_lossy().into_owned(), true));
         }
     }
@@ -1302,23 +1400,47 @@ pub(crate) fn print_profile(typer: &mut typer::Worker, type_phase: std::time::Du
     }
 }
 
+/// Whether `--exclude` leaves out the file at `path`: its path starts or ends with one of the texts given.
+pub(crate) fn excluded(excludes: &[String], path: &str) -> bool {
+    excludes.iter().any(|x| path.starts_with(x.as_str()) || path.ends_with(x.as_str()))
+}
+
 /// The program's files: those of the inputs, in order, minus the excluded ones.
 /// The program's files in the order of their identities (`program_keys`): a build's bytes do not
 /// depend on the order the inputs are given in.
 pub(crate) fn collect_program_paths(opts: &Options) -> Vec<String> {
+    collect_program_paths_with_roots(opts).0
+}
+
+/// What `--exclude` left out of the program's files, by their identities (`file_identity`): the product closure
+/// of a script leaves out the same files, whatever spelling of the path excluded them (`scriptdeps::product_sources`).
+pub(crate) type Excluded = std::collections::HashSet<String>;
+
+/// `collect_program_paths`, with the directory each script a listing found came from: an input
+/// directory, or one a `using file` names (Scala CLI's input `subPath`, whose directories are the
+/// script's package).
+pub(crate) fn collect_program_paths_with_roots(opts: &Options) -> (Vec<String>, intern::FxMap<String, String>, Excluded) {
     let mut paths = Vec::new();
+    let mut roots = intern::FxMap::default();
     for input in &opts.inputs {
-        collect_files(opts, input, false, &mut paths);
+        collect_files(opts, input, false, &mut paths, input, &mut roots);
     }
     if opts.interp {
-        include_using_files(opts, &mut paths);
+        include_using_files(opts, &mut paths, &mut roots);
     }
-    paths.retain(|(p, _)| !opts.excludes.iter().any(|x| p.starts_with(x.as_str()) || p.ends_with(x.as_str())));
+    let mut left_out = Excluded::default();
+    paths.retain(|(p, _)| {
+        let out = excluded(&opts.excludes, p);
+        if out {
+            left_out.insert(file_identity(p));
+        }
+        !out
+    });
     let paths = one_entry_per_file(paths);
     let keys = program_keys(opts, paths.iter().map(String::as_str));
     let mut order: Vec<usize> = (0..paths.len()).collect();
     order.sort_by(|&a, &b| keys[a].cmp(&keys[b]).then(paths[a].cmp(&paths[b])));
-    order.into_iter().map(|i| paths[i].clone()).collect()
+    (order.into_iter().map(|i| paths[i].clone()).collect(), roots, left_out)
 }
 
 /// A file given twice, given with a directory that holds it, reached through a link or, on a
@@ -1351,7 +1473,7 @@ fn one_entry_per_file(paths: Vec<(String, bool)>) -> Vec<String> {
 
 /// What tells one file from another on the file system: its device and inode where the system
 /// has them, else its resolved path.
-fn file_identity(path: &str) -> String {
+pub(crate) fn file_identity(path: &str) -> String {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
@@ -1650,19 +1772,49 @@ fn compile() -> i32 {
     let t_start = Instant::now();
     answer_start(t_start);
     let mut program: Vec<SourceFile> = Vec::new();
-    let paths = collect_program_paths(&opts);
+    let (paths, roots, left_out) = collect_program_paths_with_roots(&opts);
     if opts.products.is_some() && paths.is_empty() {
         manifest_only(&opts);
     }
     let keys = program_keys(&opts, paths.iter().map(String::as_str));
     for (path, key) in paths.into_iter().zip(keys) {
         match std::fs::read_to_string(&path) {
-            Ok(text) => program.push(SourceFile { path, text: planted::plant_clock(text, program.len()), is_std: false, key }),
+            Ok(text) => {
+                let root = roots.get(&path).map(String::as_str);
+                let package = script_package(&path, root);
+                let text = script::loaded_as(&path, planted::plant_clock(text, program.len()), &package, &script_path(&opts, &path, root));
+                program.push(SourceFile { path, text, is_std: false, key })
+            }
             Err(e) => {
                 eprintln!("cannot read {}: {}", path, e);
                 answer_failure(&opts);
                 std::process::exit(2);
             }
+        }
+    }
+    // The directives of a script's files, the script's first, and what Scala CLI reports of them before any is used
+    // (`ExtractedDirectives.from`): its lexer's errors, which fail the run, and a deprecated key's warning.
+    let directed = opts.interp.then(|| {
+        let texts: Vec<(String, String)> = program.iter().map(|f| (f.path.clone(), f.text.clone())).collect();
+        let first = opts.inputs.first().and_then(|i| texts.iter().position(|(p, _)| p == i || file_identity(p) == file_identity(i)));
+        let mut ordered = texts;
+        if let Some(i) = first {
+            let script = ordered.remove(i);
+            ordered.insert(0, script);
+        }
+        ordered
+    });
+    if let Some(ordered) = &directed {
+        let mut errors = 0;
+        for (path, text) in ordered {
+            for p in directives::problems(text) {
+                eprint!("{}", p.render(path));
+                errors += usize::from(p.error);
+            }
+        }
+        if errors > 0 {
+            eprintln!("{} error{} found", errors, if errors == 1 { "" } else { "s" });
+            std::process::exit(1);
         }
     }
     // A script's `//> using options -source:<v>`, which `--source` overrides as scala-cli's command line
@@ -1675,6 +1827,25 @@ fn compile() -> i32 {
                     eprintln!("{}:{}: error: {}", file, line, e);
                     std::process::exit(2);
                 }
+            }
+        }
+    }
+    // A script's `//> using dep` lines, resolved through the lock of the build it is in, or checked
+    // against the jars `--classpath` names.
+    if let Some(ordered) = directed {
+        let given = opts.classpath_given.then(|| opts.classpath.clone());
+        match scriptdeps::classpath(&ordered, opts.module.as_deref(), given.as_deref(), &opts.excludes, &left_out) {
+            Ok(resolved) => {
+                opts.classpath.extend(resolved.jars);
+                // The product closure's roots at their configurations' versions, as the build's verbs type them
+                // (`--source-at`); one the command line names takes its own (`frontend::syntax_of`, the last of
+                // the innermost roots).
+                opts.source_at.splice(0..0, resolved.source_at);
+                add_product_sources(&opts, &resolved.sources, &mut program);
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+                std::process::exit(2);
             }
         }
     }
@@ -1692,7 +1863,7 @@ fn compile() -> i32 {
     }
     if opts.dump_defs {
         for f in &program {
-            let (asts, found) = frontend::parse_one(&f.text, &interner, opts.syntax);
+            let (asts, found) = frontend::parse_one(&f.text, &interner, parser::Syntax { script: script::suffix_at(&f.path, &f.text), ..opts.syntax });
             print!("file\t{}\n{}", f.path, parser::dump::dump(&asts, &found.errors, &interner));
         }
         std::process::exit(0);
@@ -1732,8 +1903,11 @@ fn compile() -> i32 {
     let p = typer.phase(typer::profile::Phase::Classpath);
     open_classpath(&opts, &mut typer, cp, jar_files, jdk_file);
     typer.phase_end(p);
+    // `--main`, else the script run, the first of the inputs (Scala CLI runs the script named).
     if let Some(main) = &opts.main {
         typer.set_main_name(main);
+    } else if let Some(run) = opts.inputs.iter().find(|i| script::is_script(i)) {
+        typer.set_main_name(&script::main_object(run));
     }
     typer.cacheable_state = opts.cacheable_state.clone();
     typer.known_caches = !opts.no_known_caches;
@@ -3120,27 +3294,7 @@ fn run_interp(opts: &Options, mut typer: typer::Worker, lines: usize, t: [Instan
     interp.content_hashes = false;
     interp::process::handle_signals();
     interp.watch_signals();
-    let result = interp.run_main(&opts.program_args);
-    interp.flush();
-    let mut code = match result {
-        Ok(()) => 0,
-        // A program's own status passes through, as the JVM's process exits with it, and so does
-        // a signal's (128 + its number).
-        Err(interp::Failure::Exit(status)) => status,
-        Err(f) => {
-            let message = interp.describe(&f);
-            eprintln!("{}", message);
-            match f {
-                interp::Failure::Thrown(_) | interp::Failure::Withheld => 1,
-                _ => 3,
-            }
-        }
-    };
-    // The shutdown hooks, after an uncaught exception's report as the JVM runs them after its
-    // main thread ended.
-    if let Some(status) = interp.shut_down() {
-        code = status;
-    }
+    let mut code = interp.run_program(&opts.program_args);
     interp.flush();
     if std::env::var_os("TEQ_INTERP_TRACE").is_some() {
         eprintln!("interp: {} steps", u64::MAX - interp.steps_left());

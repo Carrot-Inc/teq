@@ -451,7 +451,7 @@ impl<'a, 't> Interp<'a, 't> {
             Some(crate::tir::TExpr::SeqLit(items)) => Some(self.prog().expr_list(items).to_vec()),
             _ => None,
         };
-        let call = literals.and_then(|l| self.typer.reflective_call_classes(&l));
+        let call = literals.and_then(|l| self.typer.reflective_call_classes(&l, crate::typer::Naming::Jvm));
         let vals = self.eval_list(args, fr, cx)?;
         let [recv, name, classes, call_args, fail] = &vals[..] else { return self.unsupported("a reflective call of other arguments".to_string()) };
         let (recv, fail) = (recv.clone(), fail.clone());
@@ -504,7 +504,7 @@ impl<'a, 't> Interp<'a, 't> {
             };
             for alt in alts {
                 // A val is its getter, a method of no parameters.
-                match self.typer.reflective_sig(alt) {
+                match self.typer.reflective_sig(alt, crate::typer::Naming::Jvm) {
                     Some(sig) if sig.classes == classes => return Some((alt, sig)),
                     _ => {}
                 }
@@ -534,7 +534,9 @@ impl<'a, 't> Interp<'a, 't> {
     // ---- sequences ----
 
     /// The first `n` elements of a sequence, with the rest of it behind them when `rest` is
-    /// set; `None` when the sequence is shorter, or longer without `rest`.
+    /// set; `None` when the sequence is shorter, or longer without `rest`. The rest is dotty's
+    /// `PatternMatcher.unapplySeqPlan`'s: the sequence's `toSeq` where the pattern has no element
+    /// before it, else its `drop(n)` as that returns it, a library wrapper's conversion its own.
     pub(super) fn seq_pattern(&mut self, v: &Value, n: usize, rest: bool) -> R<Option<Vec<Value>>> {
         if let Value::Array(a) = v {
             let items = a.borrow().clone();
@@ -558,7 +560,9 @@ impl<'a, 't> Interp<'a, 't> {
             }
             out.push(self.call_by_name(iterator.clone(), "next", Vec::new())?);
         }
-        if rest {
+        if rest && n == 0 {
+            out.push(self.call_by_name(v.clone(), "toSeq", Vec::new())?);
+        } else if rest {
             out.push(self.call_by_name(v.clone(), "drop", vec![Value::Int(n as i32)])?);
         } else if self.call_by_name(iterator, "hasNext", Vec::new())?.as_bool().unwrap_or(false) {
             return Ok(None);

@@ -107,6 +107,7 @@ suite std-entered   ./tests/std-entered.sh
 suite jvm           ./tests/run_jvm.sh
 suite jvm-21        ./tests/run_jvm.sh --java-output-version=21
 suite interp        ./tests/run_interp.sh
+suite interp-script ./tests/interp-script.sh
 suite fold          ./tests/fold.sh
 suite planted       ./tests/planted.sh
 suite scala3-run    tests/scala3/run.sh

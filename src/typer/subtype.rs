@@ -1486,7 +1486,7 @@ impl<'a> Worker<'a> {
         }
         let g = match info.owner {
             Owner::Class(o) => self.syms.class(o).members.get(&info.name).copied(),
-            Owner::Package(p) => self.syms.pkg(p).entries.get(&info.name).and_then(|e| e.term),
+            Owner::Package(p) => self.syms.package_object_entry(p, info.name).and_then(|e| e.term),
             Owner::Local => None,
         }?;
         let s = self.syms.sym(g);
@@ -4779,6 +4779,10 @@ impl<'a> Worker<'a> {
             Some((bc, sym, bt)) if bc != c && self.syms.class(c).meets_in_bases => (bc, sym, self.base_type_of(c, bc).unwrap_or(bt)),
             Some(f) => f,
             None => {
+                // `Object`'s own members, which no base of a reference class gives it.
+                if matches!(name, crate::names::WAIT | crate::names::NOTIFY | crate::names::NOTIFY_ALL) {
+                    return self.object_member(c, name);
+                }
                 // A member of `Any` is `universal_member`'s: reading a Java class for it
                 // would give a std class the JDK's members where the JDK is open alone.
                 if self.loaded.is_some() && !self.bare_lookup && !crate::names::ANY_MEMBERS.contains(&self.interner.get(name)) && self.java_member_miss(c) {
@@ -4806,6 +4810,22 @@ impl<'a> Worker<'a> {
             .zip(self.types.items(args).iter().copied())
             .collect();
         Some((sym, self.types.subst(bt, &subst)))
+    }
+
+    /// The member `name` of `Object` (`object_members`) where `c` is a reference class: not a value
+    /// class, `AnyVal`'s, `Null`'s or an opaque type's, nor a Java class's statics, which the std's
+    /// `@javaDefined` objects stand for and which are no value (dotty's `checkValue`).
+    #[cold]
+    #[inline(never)]
+    fn object_member(&mut self, c: ClassId, name: Name) -> Option<(SymId, TypeId)> {
+        let b = &self.b;
+        let info = self.syms.class(c);
+        let values = [b.int, b.long, b.double, b.byte, b.short, b.float, b.boolean, b.char, b.unit, b.any_val, b.null];
+        if values.contains(&c) || info.value_class || info.kind == ClassKind::Opaque || (info.kind == ClassKind::Object && self.java_stand_in(c)) {
+            return None;
+        }
+        let sym = *self.syms.class(self.b.any_ref).members.get(&name)?;
+        Some((sym, self.b.t_any_ref))
     }
 
     /// The concrete member an inherited one meets further down `c`'s linearisation, where the

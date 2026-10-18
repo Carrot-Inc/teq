@@ -1,0 +1,1 @@
+tests/interp-script/fixture/scripts/source-after-lexer.sc:2:15: error: Lexer error: Unterminated string literal

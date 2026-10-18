@@ -3738,10 +3738,18 @@ async function leanStdComplete() {
     const item = await c.result("textDocument/prepareCallHierarchy", at_(app, "nanoTime()"))
     const callers = item?.[0] && (await c.result("callHierarchy/incomingCalls", { item: item[0] }))
     const named = (callers ?? []).map((i) => [i.from?.name, fileURLToPath(i.from?.uri ?? "file:///"), i.fromRanges]).sort((a, b) => a[0].localeCompare(b[0]))
+    // Every std caller, the threads' layer's (`javalib/locks.scala`, `javalib/executors.scala`) among them: files
+    // the program never entered, as duration.scala.
+    const locks = std("javalib/locks.scala")
+    const executors = std("javalib/executors.scala")
     const expected = [
+      ["awaitNanos", locks, [at(locks, "System.nanoTime() + nanosTimeout", 0, 7, 8).range, at(locks, "deadline - System.nanoTime()", 0, 18, 8).range]],
+      ["getDelay", executors, [at(executors, "time - System.nanoTime(), TimeUnit", 0, 14, 8).range]],
       ["isOverdue", std("duration.scala"), [at(std("duration.scala"), "System.nanoTime() < 0", 0, 7, 8).range]],
       ["now", std("duration.scala"), [at(std("duration.scala"), "FiniteDuration(System.nanoTime(), NANOSECONDS)", 0, 22, 8).range]],
+      ["run", executors, [at(executors, "else System.nanoTime() - period", 0, 12, 8).range]],
       ["stamp", app, [at(app, "nanoTime()", 0, 0, 8).range]],
+      ["triggerTime", executors, [at(executors, "System.nanoTime() + Math.max(unit.toNanos(delay)", 0, 7, 8).range]],
     ]
     check("lean std: incoming calls of a std method from the app, the bodies of a std file the program never entered included", same(named, expected), { found: named, expected })
     // A pipe and a link at std documents' paths: never read nor replaced, no location, each

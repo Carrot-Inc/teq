@@ -781,11 +781,7 @@ impl<'a> Worker<'a> {
     /// The patterns against the elements of a sequence of type `value`, `rest*` included.
     pub(super) fn seq_elements_pattern(&mut self, value: TypeId, subs: &[crate::ast::PatId]) -> TPatId {
         let value = self.dealias(value);
-        let seq_base = self.seq_class().and_then(|seq| self.base_type(value, seq));
-        let elem = match seq_base.map(|t| self.types.get(t)) {
-            Some(Type::Class(_, args)) if args != EMPTY_LIST => self.types.items(args)[0],
-            _ => ANY,
-        };
+        let elem = self.seq_element_type(value).unwrap_or(ANY);
         let ast = self.cur_ast();
         let (fixed, rest) = match subs.split_last() {
             Some((&last, fixed)) => match ast.pat(last) {

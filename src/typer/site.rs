@@ -91,7 +91,7 @@ impl<'a> Worker<'a> {
         let mut i = 0;
         while i + 1 < path.len() {
             let name = self.interner.intern(path[i]);
-            let sub = if demand { self.demand_pkg(p, name) } else { self.syms.pkg(p).entries.get(&name).and_then(|e| e.pkg) };
+            let sub = if demand { self.demand_pkg(p, name) } else { self.syms.scoped(self.interner, p, name).and_then(|e| e.pkg) };
             match sub {
                 Some(sub) => {
                     p = sub;
@@ -105,12 +105,12 @@ impl<'a> Worker<'a> {
             self.demand_std(p, name, crate::stdindex::TYPE | crate::stdindex::TERM);
             // A class of the classpath enters when first named, as `pkg_type` enters it: a build
             // over scala-library has its `scala.reflect.TypeTest` from the jar.
-            let entered = self.syms.pkg(p).entries.get(&name).is_some_and(|e| e.class.is_some() || e.term.is_some());
+            let entered = self.syms.entry_named(self.interner, p, name).is_some_and(|e| e.class.is_some() || e.term.is_some());
             if !entered && self.sees_classpath() {
                 self.load_pkg_member(p, name);
             }
         }
-        let entry = self.syms.pkg(p).entries.get(&name)?;
+        let entry = self.syms.entry_named(self.interner, p, name)?;
         let mut class = entry.class.or_else(|| match entry.term.map(|s| self.syms.sym(s).kind) {
             Some(SymKind::Object(c)) => Some(c),
             _ => None,

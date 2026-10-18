@@ -177,6 +177,31 @@ pub(super) const NATIVES: &[(&str, Native)] = &[
     ("scala.quoted.Reflect.TreeMethods.Tree.asExpr", tree_as_expr),
     ("scala.quoted.Reflect.TreeMethods.Tree.asExprOf", tree_as_expr_of),
     ("scala.quoted.Quotes.Expr.asExprOf", expr_as_expr_of),
+    // A thread-local's value under `teq interp` is the running logical thread's (src/interp/threads.rs).
+    ("java.lang.ThreadLocal.get", |it, this, _a| super::threads::local_get(it, this)),
+    ("java.lang.ThreadLocal.set", |it, this, a| Ok(super::threads::local_set(it, this, Some(arg(a, 0))))),
+    ("java.lang.ThreadLocal.remove", |it, this, _a| Ok(super::threads::local_set(it, this, None))),
+        // The atomics' indivisible read-modify-writes (std/javalib/atomic.scala): under `teq interp` a
+    // logical thread may be switched out between two steps of a body, never inside a native.
+    ("java.util.concurrent.atomic.AtomicInteger.compareAndSet", atomic_compare_and_set),
+    ("java.util.concurrent.atomic.AtomicInteger.getAndSet", atomic_get_and_set),
+    ("java.util.concurrent.atomic.AtomicLong.compareAndSet", atomic_compare_and_set),
+    ("java.util.concurrent.atomic.AtomicLong.getAndSet", atomic_get_and_set),
+    ("java.util.concurrent.atomic.AtomicBoolean.compareAndSet", atomic_compare_and_set),
+    ("java.util.concurrent.atomic.AtomicBoolean.getAndSet", atomic_get_and_set),
+    ("java.util.concurrent.atomic.AtomicReference.compareAndSet", atomic_compare_and_set),
+    ("java.util.concurrent.atomic.AtomicReference.getAndSet", atomic_get_and_set),
+    ("java.util.concurrent.atomic.AtomicInteger.getAndAdd", atomic_get_and_add),
+    ("java.util.concurrent.atomic.AtomicLong.getAndAdd", atomic_get_and_add),
+    ("java.util.concurrent.atomic.LongAdder.add", long_adder_add),
+    ("java.util.concurrent.atomic.AtomicIntegerArray.compareAndSet", atomic_array_compare_and_set),
+    ("java.util.concurrent.atomic.AtomicIntegerArray.getAndSet", atomic_array_get_and_set),
+    ("java.util.concurrent.atomic.AtomicLongArray.compareAndSet", atomic_array_compare_and_set),
+    ("java.util.concurrent.atomic.AtomicLongArray.getAndSet", atomic_array_get_and_set),
+    ("java.util.concurrent.atomic.AtomicReferenceArray.compareAndSet", atomic_array_compare_and_set),
+    ("java.util.concurrent.atomic.AtomicReferenceArray.getAndSet", atomic_array_get_and_set),
+    ("java.util.concurrent.atomic.AtomicIntegerArray.getAndAdd", atomic_array_get_and_add),
+    ("java.util.concurrent.atomic.AtomicLongArray.getAndAdd", atomic_array_get_and_add),
 ];
 
 fn arg(a: &[Value], i: usize) -> Value {
@@ -680,7 +705,7 @@ impl<'a, 't> Interp<'a, 't> {
         };
         self.prof_exit(prof);
         self.release_frame(frame);
-        self.depth -= 1;
+        self.exec.depth -= 1;
         r
     }
 
@@ -2359,5 +2384,250 @@ mod tests {
         for &(bytes, wait) in cases {
             assert_eq!(utf8_underflow(bytes), wait, "{:02x?}", bytes);
         }
+    }
+}
+
+// ---- atomics ----
+//
+// The read-modify-writes of `java.util.concurrent.atomic` that every other operation of an atomic goes
+// through: each reads and writes the atomic's field (`value`) or element as its Scala body does, with no
+// step of the evaluator between, so that no other logical thread (src/interp/threads.rs) comes between
+// the read and the write. A receiver of another shape, or an index out of the array, runs the body.
+
+impl<'a, 't> Interp<'a, 't> {
+    /// The key of the field `value` of the std's atomic class the receiver is one of (or extends).
+    fn atomic_field(&mut self, this: &Value) -> Option<FieldKey> {
+        let Value::Obj(o) = this else { return None };
+        if let Some(&k) = self.atomic_fields.get(&o.class) {
+            return k;
+        }
+        let value = self.typer.interner.intern("value");
+        let mut found = None;
+        let bases: Vec<ClassId> = std::iter::once(o.class).chain(self.syms().class(o.class).base_types.iter().map(|&(b, _)| b)).collect();
+        for class in bases {
+            if self.class_path(class).starts_with("java.util.concurrent.atomic.") {
+                if let Some(&sym) = self.syms().class(class).members.get(&value) {
+                    found = Some(self.field_key(sym));
+                }
+                break;
+            }
+        }
+        self.atomic_fields.insert(o.class, found);
+        found
+    }
+}
+
+fn atomic_compare_and_set(it: &mut Interp, this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let Some(key) = it.atomic_field(this) else { return Ok(None) };
+    let current = it.read_slot(this, key);
+    if matches!(current, Value::Absent) {
+        return Ok(None);
+    }
+    let swapped = current.same(&arg(a, 0));
+    if swapped {
+        it.write_slot(this, key, arg(a, 1));
+    }
+    Ok(Some(Value::Bool(swapped)))
+}
+
+fn atomic_get_and_set(it: &mut Interp, this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let Some(key) = it.atomic_field(this) else { return Ok(None) };
+    let old = it.read_slot(this, key);
+    if matches!(old, Value::Absent) {
+        return Ok(None);
+    }
+    it.write_slot(this, key, arg(a, 0));
+    Ok(Some(old))
+}
+
+/// The sum of an atomic number and a delta of its kind, wrapping as the JVM's.
+fn added(x: &Value, delta: &Value) -> Option<Value> {
+    Some(match (x, delta) {
+        (Value::Int(x), Value::Int(d)) => Value::Int(x.wrapping_add(*d)),
+        (Value::Long(x), Value::Long(d)) => Value::Long(x.wrapping_add(*d)),
+        (Value::Long(x), Value::Int(d)) => Value::Long(x.wrapping_add(*d as i64)),
+        _ => return None,
+    })
+}
+
+fn atomic_get_and_add(it: &mut Interp, this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let Some(key) = it.atomic_field(this) else { return Ok(None) };
+    let old = it.read_slot(this, key);
+    let Some(new) = added(&old, &arg(a, 0)) else { return Ok(None) };
+    it.write_slot(this, key, new);
+    Ok(Some(old))
+}
+
+fn long_adder_add(it: &mut Interp, this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let Some(key) = it.atomic_field(this) else { return Ok(None) };
+    let old = it.read_slot(this, key);
+    let Some(new) = added(&old, &arg(a, 0)) else { return Ok(None) };
+    it.write_slot(this, key, new);
+    Ok(Some(Value::Unit))
+}
+
+/// The array of an atomic array (its field `array`) and the index `i`, when it is within it.
+fn atomic_array(it: &mut Interp, this: &Value, i: &Value) -> Option<(Rc<ArrayCell>, usize)> {
+    let Value::Obj(o) = this else { return None };
+    let Value::Int(i) = i else { return None };
+    let slot = it.field_slot_named(o.class, "array")?;
+    let Some(Value::Array(cell)) = o.fields.borrow().get(slot as usize).cloned() else { return None };
+    let len = cell.borrow().len();
+    (*i >= 0 && (*i as usize) < len).then_some((cell, *i as usize))
+}
+
+fn atomic_array_compare_and_set(it: &mut Interp, this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let Some((cell, i)) = atomic_array(it, this, &arg(a, 0)) else { return Ok(None) };
+    let swapped = cell.borrow()[i].same(&arg(a, 1));
+    if swapped {
+        cell.write()[i] = arg(a, 2);
+    }
+    Ok(Some(Value::Bool(swapped)))
+}
+
+fn atomic_array_get_and_set(it: &mut Interp, this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let Some((cell, i)) = atomic_array(it, this, &arg(a, 0)) else { return Ok(None) };
+    let old = std::mem::replace(&mut cell.write()[i], arg(a, 1));
+    Ok(Some(old))
+}
+
+fn atomic_array_get_and_add(it: &mut Interp, this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let Some((cell, i)) = atomic_array(it, this, &arg(a, 0)) else { return Ok(None) };
+    let old = cell.borrow()[i].clone();
+    let Some(new) = added(&old, &arg(a, 1)) else { return Ok(None) };
+    cell.write()[i] = new;
+    Ok(Some(old))
+}
+
+/// The key of the field `name` of `obj`'s class or one of its bases, which a field updater names: a
+/// Scala field's own key, and for a Java class's field, which no Scala code reaches in the interpreter
+/// but through its updater, a slot of its own name.
+fn field_by_name(it: &mut Interp, obj: &Value, name: &Value) -> Option<FieldKey> {
+    let (Value::Obj(o), Value::Str(name)) = (obj, name) else { return None };
+    let n = it.typer.interner.intern(name);
+    let bases: Vec<ClassId> = std::iter::once(o.class).chain(it.syms().class(o.class).base_types.iter().map(|&(b, _)| b)).collect();
+    match bases.into_iter().find_map(|c| it.syms().class(c).members.get(&n).copied()) {
+        Some(sym) => Some(it.field_key(sym)),
+        None => Some(FieldKey(n, u32::MAX - 1)),
+    }
+}
+
+/// The natives of the field updaters (`AtomicLongFieldUpdater`): the field read, written and
+/// compared-and-set as one step each, a field nothing wrote reading as `null` (the zero its updater
+/// unboxes).
+pub(super) fn install_atomics(table: &mut super::builtins::Table) {
+    use super::builtins::reg;
+    reg!(table, "java.util.concurrent.atomic.fieldGet", |it, a| {
+        let Some(key) = field_by_name(it, &arg(a, 0), &arg(a, 1)) else { return it.unsupported("a field updater's field is not the object's") };
+        Ok(match it.read_slot(&arg(a, 0), key) {
+            Value::Absent => Value::Null,
+            v => v,
+        })
+    });
+    reg!(table, "java.util.concurrent.atomic.fieldSet", |it, a| {
+        let Some(key) = field_by_name(it, &arg(a, 0), &arg(a, 1)) else { return it.unsupported("a field updater's field is not the object's") };
+        it.write_slot(&arg(a, 0), key, arg(a, 2));
+        Ok(Value::Unit)
+    });
+    reg!(table, "java.util.concurrent.atomic.fieldCompareAndSet", |it, a| {
+        let Some(key) = field_by_name(it, &arg(a, 0), &arg(a, 1)) else { return it.unsupported("a field updater's field is not the object's") };
+        let current = match it.read_slot(&arg(a, 0), key) {
+            Value::Absent | Value::Null => Value::Long(0),
+            v => v,
+        };
+        let swapped = current.same(&arg(a, 2));
+        if swapped {
+            it.write_slot(&arg(a, 0), key, arg(a, 3));
+        }
+        Ok(Value::Bool(swapped))
+    });
+}
+
+// ---- the static initialisers of library Java classes ----
+//
+// A Java class's body does not run in the interpreter (`Interp::construct`); where a library's class
+// keeps state its Scala code reads in its static fields, the interpreter knows that class's
+// initialiser exactly, at the version it was written from, and runs it when the class's statics are
+// first read. A class of the name whose fields are not that version's is refused, naming it.
+
+/// zio 2.1.26's `zio.internal.MutableQueueFieldsPadding` (`MutableQueueFieldsPadding.java`, lines 86-88):
+/// `headUpdater` and `tailUpdater`, `AtomicLongFieldUpdater.newUpdater(HeadPadding.class, "headCounter")`
+/// and `newUpdater(TailPadding.class, "tailCounter")`. The class is that version's when its statics are
+/// those two fields of that type.
+/// The verified artifact a Java class of the class path came from, as `(organization, name, version)`,
+/// the name without its Scala suffix: the lock's coordinate of its jar where the run's jars are a lock's
+/// (`scriptdeps::locked_coordinate`), else the jar's manifest (`Implementation-Vendor-Id`, `-Title`,
+/// `-Version`); with the jar's path.
+fn artifact_of(it: &Interp, c: ClassId) -> (Option<(String, String, String)>, String) {
+    let Some(jar) = it.typer.java_class_source(c) else { return (None, "no jar".to_string()) };
+    let Some(cp) = it.typer.loaded.as_ref().map(|l| &l.cp) else { return (None, "no jar".to_string()) };
+    let path = cp.paths.get(jar as usize).cloned().unwrap_or_default();
+    if let Some(key) = crate::scriptdeps::locked_coordinate(&path) {
+        let parts: Vec<&str> = key.split(':').collect();
+        if let [org, name, version, ..] = parts.as_slice() {
+            let name = name.strip_suffix("_3").unwrap_or(name);
+            return (Some((org.to_string(), name.to_string(), version.to_string())), path);
+        }
+    }
+    let manifest = cp.resource_in(jar, "META-INF/MANIFEST.MF").map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();
+    let field = |key: &str| manifest.lines().find_map(|l| l.strip_prefix(key).and_then(|v| v.strip_prefix(':')).map(|v| v.trim().to_string()));
+    match (field("Implementation-Vendor-Id"), field("Implementation-Title"), field("Implementation-Version")) {
+        (Some(org), Some(name), Some(version)) => (Some((org, name, version)), path),
+        _ => (None, path),
+    }
+}
+
+fn zio_queue_padding(it: &mut Interp, c: ClassId, statics: &Rc<Object>) -> R<()> {
+    // The initialiser is zio 2.1.26's: the class of another artifact or version is one the interpreter
+    // has no initialiser for.
+    let (artifact, jar) = artifact_of(it, c);
+    if artifact.as_ref().map(|(o, n, v)| (o.as_str(), n.as_str(), v.as_str())) != Some(("dev.zio", "zio", "2.1.26")) {
+        let of = match artifact {
+            Some((o, n, v)) => format!("{}:{}:{}'s", o, n, v),
+            None => "an unknown artifact's".to_string(),
+        };
+        return it.unsupported(format!(
+            "zio.internal.MutableQueueFieldsPadding is a Java class whose static initialiser the interpreter knows as zio 2.1.26 has it, and this one is {} ({}): run zio 2.1.26",
+            of, jar
+        ));
+    }
+    let names = [("headUpdater", "headCounter"), ("tailUpdater", "tailCounter")];
+    let mut fields = Vec::new();
+    for (updater, counter) in names {
+        let n = it.typer.interner.intern(updater);
+        let field = it.syms().class(c).members.get(&n).copied();
+        let typed = field.and_then(|sym| it.syms().sym(sym).sig.as_ref().map(|sig| sig.ret)).map(|t| it.typer.dealias(t));
+        let is_updater = match typed.map(|t| it.typer.types.get(t)) {
+            Some(crate::types::Type::Class(k, _)) => it.class_path(k) == "java.util.concurrent.atomic.AtomicLongFieldUpdater",
+            _ => false,
+        };
+        match field {
+            Some(sym) if is_updater && it.syms().class(c).members.len() == 2 => fields.push((sym, counter)),
+            _ => {
+                return it.unsupported(format!(
+                    "zio.internal.MutableQueueFieldsPadding is a Java class whose static initialiser the interpreter knows as zio 2.1.26 has it, two `AtomicLongFieldUpdater` fields `headUpdater` and `tailUpdater`; this class path's differs"
+                ))
+            }
+        }
+    }
+    // `newUpdater`'s updater (std/javalib/atomic.scala).
+    let Some(updater_class) = it.typer.class_at(&["java", "util", "concurrent", "atomic", "LongFieldUpdater"]) else {
+        return it.unsupported("java.util.concurrent.atomic.LongFieldUpdater is not in the std");
+    };
+    let this = Value::Obj(statics.clone());
+    for (sym, counter) in fields {
+        let updater = it.construct_new(updater_class, vec![Value::str(counter)], &Frame::new(None))?;
+        let key = it.field_key(sym);
+        it.write_slot(&this, key, updater);
+    }
+    Ok(())
+}
+
+/// Runs the static initialiser the interpreter knows for the Java class `c`, if any.
+pub(super) fn java_statics(it: &mut Interp, c: ClassId, statics: &Rc<Object>) -> R<()> {
+    let path = it.class_path(c);
+    match path.as_str() {
+        "zio.internal.MutableQueueFieldsPadding" => zio_queue_padding(it, c, statics),
+        _ => Ok(()),
     }
 }

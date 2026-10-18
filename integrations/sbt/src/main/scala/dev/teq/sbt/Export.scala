@@ -237,6 +237,7 @@ private[sbt] object Export {
     scalacOptions: Seq[String],
     generators: Seq[Task[Seq[File]]],
     resourceGenerators: Seq[Task[Seq[File]]],
+    evictions: Seq[(String, String)],
   )
 
   private def config(c: Configuration): Def.Initialize[Task[Config]] = Def.task {
@@ -249,8 +250,37 @@ private[sbt] object Export {
       (c / scalacOptions).value,
       (c / sourceGenerators).value,
       (c / resourceGenerators).value,
+      evictionsOf(update.value, (c / classpathConfiguration).value, libraryDependencies.value, scalaVersion.value, scalaBinaryVersion.value),
     )
   }
+
+  /** The dependencies the build declares for a configuration's classpath at a version its resolution did not
+    * choose, each by its key (`organization:name:version`, the name with its Scala suffix) with the key of the
+    * jar chosen in its place: what a script's `//> using dep` of the version declared resolves to under
+    * `teq interp`. Read against the update report's modules, which coursier's resolution reports the chosen
+    * versions alone in. */
+  private def evictionsOf(report: UpdateReport, c: Configuration, declared: Seq[ModuleID], scala: String, binary: String): Seq[(String, String)] = {
+    val chosen: Map[(String, String), String] = report.configurations.find(_.configuration.name == c.name).toSeq
+      .flatMap(_.modules.map(_.module))
+      .map(m => (m.organization, m.name) -> m.revision)
+      .toMap
+    // A dependency of no configuration is compile's; provided and optional ones are on its classpath too.
+    val compileScope = Set("compile", "provided", "optional")
+    declared.filter(m => m.configurations.forall(cs => cs.split(";").exists(x => compileScope(x.trim.takeWhile(_ != '-')))))
+      .flatMap { m =>
+        val name = CrossVersion(m.crossVersion, scala, binary).fold(m.name)(f => f(m.name))
+        chosen.get((m.organization, name)).filter(_ != m.revision).map { version =>
+          s"${m.organization}:$name:${m.revision}" -> s"${m.organization}:$name:$version"
+        }
+      }
+      .distinct
+      .sortBy(_._1)(using utf8)
+  }
+
+  /** A configuration's `evictions`, written only where the resolution evicted a jar. */
+  private def evictionsField(c: Config): Map[String, Json.Value] =
+    if (c.evictions.isEmpty) Map.empty
+    else Map("evictions" -> Json.Obj(c.evictions.map { case (asked, chosen) => asked -> (Json.Str(chosen): Json.Value) }.toMap))
 
   /** sbt-native-packager's plugins whose Docker stage the export carries. */
   private val Packaging = Seq("com.typesafe.sbt.packager.archetypes.JavaAppPackaging", "com.typesafe.sbt.packager.docker.DockerPlugin")
@@ -499,7 +529,7 @@ private[sbt] object Export {
           "flags" -> compileFlags,
           "generators" -> Json.Arr(compileGenerators),
           "mainClasses" -> strings(mainClasses),
-        ) ++ generatorFields(Nil, resourceGeneratorsOf(compile))),
+        ) ++ generatorFields(Nil, resourceGeneratorsOf(compile)) ++ evictionsField(compile)),
         "runtime" -> Json.Obj(Map(
           "sources" -> strings(Nil),
           "resources" -> strings(Nil),

@@ -217,6 +217,35 @@ pub(super) fn install(it: &mut Table) {
             Err(_) => -1,
         }))
     });
+    // `Files.readAttributes(path, BasicFileAttributes.class)`: the kind as `fileKind` numbers it, the
+    // size, then the last modification, the last access and the creation as seconds and nanoseconds
+    // (the creation the modification where the system keeps none, as the JDK's `UnixFileAttributes`
+    // reads it); the error when the file cannot be read.
+    reg!(it, "java.nio.file.fileStat", |it, a| {
+        let path = host_path(it, a, 0)?;
+        let follow = matches!(a.get(1), Some(Value::Bool(true)));
+        let meta = match if follow { std::fs::metadata(os(&path)) } else { std::fs::symlink_metadata(os(&path)) } {
+            Ok(meta) => meta,
+            Err(e) => return fail(it, &e, &path),
+        };
+        let kind = if meta.file_type().is_symlink() {
+            2
+        } else if meta.is_dir() {
+            1
+        } else if meta.is_file() {
+            0
+        } else {
+            3
+        };
+        let modified = meta.modified().ok();
+        let mut out = vec![Value::Long(kind), Value::Long(meta.len() as i64)];
+        for t in [modified, meta.accessed().ok().or(modified), meta.created().ok().or(modified)] {
+            let (secs, nanos) = epoch_parts(t.unwrap_or(std::time::UNIX_EPOCH));
+            out.push(Value::Long(secs));
+            out.push(Value::Long(nanos));
+        }
+        Ok(Value::array(out))
+    });
     reg!(it, "java.nio.file.fileSize", |it, a| {
         let path = host_path(it, a, 0)?;
         match std::fs::metadata(os(&path)) {
@@ -578,6 +607,18 @@ fn accessible(path: &str, mode: &str) -> bool {
 /// source read as the operation reads it, the target not followed.
 fn same_file(src: &str, follow: bool, dst: &str) -> bool {
     matches!((file_key(os(src), follow), file_key(os(dst), false)), (Ok(a), Ok(b)) if a == b)
+}
+
+/// A time as seconds since the epoch and the nanoseconds past them, the seconds floored.
+fn epoch_parts(t: std::time::SystemTime) -> (i64, i64) {
+    match t.duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => (d.as_secs() as i64, d.subsec_nanos() as i64),
+        Err(e) => {
+            let d = e.duration();
+            let (s, n) = (-(d.as_secs() as i64), d.subsec_nanos() as i64);
+            if n == 0 { (s, 0) } else { (s - 1, 1_000_000_000 - n) }
+        }
+    }
 }
 
 fn file_key(path: &str, follow: bool) -> std::io::Result<String> {

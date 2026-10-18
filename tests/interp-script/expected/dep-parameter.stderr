@@ -1,0 +1,1 @@
+tests/interp-script/fixture/scripts/dep-parameter.sc:1: using dep org.jline:jline:3.27.1,intransitive: the parameter `intransitive` is none the lock can check, as it records a coordinate's classifier alone (`,classifier=<name>`): leave it out

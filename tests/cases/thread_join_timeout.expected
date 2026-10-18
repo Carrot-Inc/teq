@@ -1,0 +1,6 @@
+NEW
+after join(30): alive true, TIMED_WAITING
+slept
+after join(): alive false, TERMINATED
+start again: java.lang.IllegalThreadStateException
+join of an ended thread returns

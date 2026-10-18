@@ -2285,10 +2285,19 @@ impl<'a> Worker<'a> {
                 }
                 Some((te, self.b.t_string))
             }
-            // `AnyRef.synchronized`: the one thread holds every monitor, so the body runs as
-            // it is, after the receiver.
+            // `AnyRef.synchronized`: on JavaScript the one thread holds every monitor, so the body
+            // runs as it is, after the receiver (and so in the JVM's output, which takes no monitor).
             names::SYNCHRONIZED if one_arg && !matches!(self.is_numeric(recv_class), Some(_)) => {
                 let (body, ty) = self.type_expr(arg(0)?, None);
+                // Under `teq interp`, whose threads hold monitors, the body runs holding the
+                // receiver's (src/interp/threads.rs).
+                if self.interp {
+                    let s = self.prog.add_str("$synchronized($0, $1)");
+                    let l = self.prog.list(&[recv, body]);
+                    let te = self.prog.add(TExpr::Js(s, l));
+                    self.end_chain(te, ty);
+                    return Some((self.builtin_member(te, name), ty));
+                }
                 let l = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
                 let te = self.prog.add(TExpr::Block(l, body));
                 self.end_chain(te, ty);
@@ -2563,6 +2572,40 @@ impl<'a> Worker<'a> {
                 let te = self.prog.add(TExpr::Js(s, l));
                 Some((self.builtin_member(te, name), self.b.t_int))
             }
+            _ => None,
+        }
+    }
+
+    /// A call of `Object.wait`, `notify` or `notifyAll` (`object_members`), typed as any member's
+    /// is: the std's `java.lang.objectWait0` and its like on the receiver
+    /// (std/javalib/concurrent.scala), the JDK's methods on the JVM, the receiver evaluated before
+    /// the arguments. Where the std has no such def (`--std=scala-library`), the member's call.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn object_monitor_call(&mut self, call: &super::apply::MethodCall, args: ListRef) -> TExprId {
+        let Some(recv) = call.recv else { return self.prog.add(TExpr::CallStatic(call.sym, args)) };
+        let Some(def) = self.object_monitor_def(call.sym) else { return self.prog.add(TExpr::CallMethod(recv, call.sym, args)) };
+        let items: Vec<TExprId> = std::iter::once(recv).chain(self.prog.expr_list(args).iter().copied()).collect();
+        let l = self.prog.list(&items);
+        // Built as any call of the def is, so that its target's template stands for it.
+        let call = super::apply::MethodCall { recv: None, sym: def, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
+        self.build_call(&call, l)
+    }
+
+    /// The std's def that a call of `Object`'s member `sym` is lowered to.
+    fn object_monitor_def(&mut self, sym: SymId) -> Option<SymId> {
+        let arity = self.syms.sym(sym).sig.as_ref().map_or(0, |sig| sig.clauses.first().map_or(0, |c| c.params.len()));
+        let def = match (self.syms.sym(sym).name, arity) {
+            (names::WAIT, 0) => "objectWait0",
+            (names::WAIT, 1) => "objectWait1",
+            (names::WAIT, _) => "objectWait",
+            (names::NOTIFY, _) => "objectNotify",
+            _ => "objectNotifyAll",
+        };
+        let p = self.java_lang_pkg()?;
+        let def = self.interner.intern(def);
+        match self.pkg_term(p, def) {
+            Some(super::resolve::TermRef::Global(def)) => Some(def),
             _ => None,
         }
     }

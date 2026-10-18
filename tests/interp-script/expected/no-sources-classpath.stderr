@@ -1,0 +1,1 @@
+tests/interp-script/fixture/scripts/no-sources.sc:1: using dep dev.zio::zio:2.1.26: no jar --classpath names is dev.zio:zio_3:2.1.26 (a zio_3-2.1.26.jar, or a zio_3.jar under zio_3/2.1.26/): add its jar to --classpath, or name the configuration with --module <project> for the lock to resolve it

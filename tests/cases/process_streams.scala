@@ -29,7 +29,9 @@ object Main:
     out.close()
     show("after the close")(in.readLine())
     show("cat")(cat.waitFor())
-    show("write after the end")({ out.write(1); out.flush(); "written" })
+    // The JDK refuses it with FileOutputStream's `Stream Closed` until the exit handler that woke `waitFor` swaps the
+    // pipe for ProcessBuilder.NullOutputStream (ProcessImpl's `processExited`), whose message is `Stream closed`.
+    show("write after the end")(try { out.write(1); out.flush(); "written" } catch case e: java.io.IOException => "refused, " + e.getMessage.equalsIgnoreCase("Stream closed"))
     // Both outputs filled past a pipe's capacity before the child reads its stdin.
     val big = sh("head -c 200000 /dev/zero; head -c 300000 /dev/zero >&2; read line; printf '%s' \"$line\"")
     val (o, e) = (big.getInputStream, big.getErrorStream)

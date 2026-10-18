@@ -1,0 +1,1 @@
+tests/interp-script/fixture/scripts/missing-dep.sc:2: using dep com.lihaoyi::upickle:4.0.0: com.lihaoyi:upickle_3:4.0.0 is not on the classpath of <repo>/tests/interp-script/fixture/teq.lock's tools/compile: add it to the build and export it again (sbt teqExportAll)
