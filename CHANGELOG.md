@@ -35,6 +35,80 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 </details>
 
+## 0.1.9 (2026-10-18)
+
+- scalac's `-source` is teq's source version: the setting from the command line, `teq.lock`, a script's directives
+  or the sbt and Mill plugins, then a unit's `import scala.language.3.x`; the migration table's diagnostics report
+  by that version (`given` and `enum` as identifiers under `3.0-migration`, `with` as a type operator, implicit
+  parameters without `using`, `x _`, alphanumeric infix operators, `import a._` and `a => b`, a `this` qualifier,
+  vararg splices and wildcard types, non-local returns); a for comprehension's filter and the better fors follow the
+  version, as do named tuples ([CLI](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
+- A JVM build without a classpath takes the standard library the TASTy reader can read from the coursier caches,
+  3.8.4 first; a cache holding only newer releases is refused with a message naming them
+  ([libraries](https://github.com/Carrot-Inc/teq/blob/master/docs/LIBRARIES.md)).
+- `teq interp` runs Scala CLI scripts: a `.sc` file wrapped as Scala CLI wraps it, its `//> using dep` resolved
+  through the build's lock or the given `--classpath`; and programs with threads: `java.lang.Thread` is a logical
+  thread of the interpreter with the JDK's park, interruption and monitors, `java.util.concurrent`'s locks, queues,
+  executors and futures over it, zio's runtime among the programs that run ([runtime](https://github.com/Carrot-Inc/teq/blob/master/docs/RUNTIME.md)).
+- `teq test` runs a build's suites on a pool as sbt's forked test worker does, one runner JVM per run; a Scala.js
+  project's suites run under node or jsdom through the test bridge ([tooling](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
+- A Mill build exports its lock through mill-teq; sbt-teq is built for sbt 1 as well as sbt 2
+  ([tooling](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
+- On Windows the daemon starts with a hidden console, so `teq compile` no longer opens a blank console window for
+  each resident, generator and test runner.
+- Warnings and deprecations are reported as scalac reports them: `-Wconf`, `@nowarn`, `-deprecation`, `-feature`
+  and the `-Wunused` kinds ([CLI](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
+- The language server's completion and signature help follow the presentation compiler's, and its index finds
+  members as dotty does ([tooling](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
+- `teq interp` runs a hot loop or a repeatedly called body as flat instructions over an operand stack.
+- `teq.cmd` reads the lock and maps coursier's cache as the POSIX launcher does; a download is retried with GET
+  where a HEAD is refused.
+- Every change is checked against lichess lila, Laminar, Airstream, Tyrian and Indigo, held to their recorded
+  outcomes.
+- A given search's divergence check measures its target as dotty does, so a program with wide typelevel tuple joins
+  (tapir's endpoints) types a quarter faster than in 0.1.8 at eight workers and a third faster at one.
+
+<details>
+<summary>Conformance with scalac and the JDK</summary>
+
+- A given's open type parameter stays open through a chained call until the expected type fixes it; a contextual
+  lambda's result and an interpolated variable inside an enclosing instance stay open as dotty leaves them.
+- A pattern definition's refutability is decided as `Checking.checkIrrefutable` decides it, so `val List(x) = ..`
+  no longer warns; `Base64`'s MIME encoder and `UUID.nameUUIDFromBytes` on JavaScript.
+- Givens are dotty's: searched through its contextual levels, an opaque type's companion in its implicit scope, a
+  given object published before its body, `NotGiven` negated as `negateIfNot`, a trait's implicit object reached
+  through an extending object, a member retried on its qualifier over dotty's argument cache.
+- Inline: a library's inline bodies typed from its products, inline matches and erased values reduced as
+  `InlineReducer`, an expansion's bindings counted as `Inliner.countRefs`, a written type tree kept apart from an
+  inferred one in the pickle.
+- Types and inference as dotty's: refinements as `RecType`, intersection members as `findMember`, nested classes'
+  types through their prefixes, a literal typed by its constant type and widened by interpolation, an anonymous
+  class's bound refined by its inherited alternatives, exhaustivity searched depth first in dotty's order, an
+  erasure view kept beside the semantic type.
+- Syntax and definitions as dotty's: constructor proxies through prefixes, copy and pattern holders as Desugar's,
+  a case's pattern lexed in dotty's case region, an infix operand typed under its operator's selection, calls with
+  defaults, using clauses and inline getters elaborated as one plan, local traits given their block's values as
+  leading parameters and local enums their lifetime.
+- The migration diagnostics as dotty's: an inherited accessor followed as `RefChecks.isInheritedAccessor`, infix
+  checks as `Checking.checkValidInfix` on the resolved method, `x _` typed as `Migrations.typedAsFunction`, and a
+  unit's warnings issued after its errors as the reporter's suspended messages.
+- Checks as dotty's: members, access and patterns (E024, E120, E177 and their kin), exports through values and
+  top-level forwarders, placeholders, conversions and overloads at lila's shapes, an inherited extension's
+  parameter class seen from the receiver's prefix.
+- Case classes and enums synthesized as dotty's; synthesized mirrors and companions written as scalac's
+  `Synthesizer`; a nested class's constructor default getters in its companion; a quoted class's copy keeps every
+  member in a module's products.
+- The JVM target laid out, linked and erased as scalac's: case-class selectors and `canEqual` as members, `Any`'s
+  members in the override checks, nullary methods; a member reference names the qualifier's class as the
+  invocation's owner (JLS 13.1), so a package-private superclass of a jar's class works.
+- The standard library follows scala-library's and the JDK's designs for views, partial functions, `ClassTag`s,
+  `Objects`, regexes, reflection, fractional equality through the receiver's box, `BigDecimal.decimal` and
+  `NumericRange`; it gained `java.nio`'s file channels and `walkFileTree`, `java.time`'s formatters,
+  `JavaConverters`' decorators and `Class.getDeclaredMethod`; a sequence extractor's element type is read as
+  `unapplySeqTypeElemTp` reads it ([compatibility](https://github.com/Carrot-Inc/teq/blob/master/docs/COMPATIBILITY.md)).
+
+</details>
+
 ## 0.1.8 (2026-10-09)
 
 - A build file git ignores, such as Metals' `project/metals.sbt`, no longer makes `teq.lock` stale: the warning
