@@ -43,18 +43,15 @@ programs() {
   done | LC_ALL=C sort | if [ -n "${IDENTITY_PROGRAMS:-}" ]; then grep -E "^[a-z]+ ($IDENTITY_PROGRAMS) "; else cat; fi
 }
 # run_case <dir> <args...>: the binary on the arguments, bounded, its output, exit code and products in <dir> (a jar
-# unpacked into classes/), the times left out of the log.
+# listed as entries.txt, its entries' digests and names), the times left out of the log.
 run_case() {
   local dir=$1
   shift
   mkdir -p "$dir"
   COURSIER_CACHE=$work/no-cache timeout 60 "$bin" "$@" > "$dir/log" 2>&1
   echo "exit $?" >> "$dir/log"
-  if [ -f "$dir/out.jar" ]; then
-    mkdir -p "$dir/classes" && "$py" -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$dir/out.jar" "$dir/classes" &&
-      rm -f -- "$dir/out.jar"
-  fi
-  grep -v -E '^(checked|built|ran) .* in |^  (read|parse|type|reach|emit|write) ' "$dir/log" > "$dir/log.cmp"
+  [ ! -f "$dir/out.jar" ] || jar_entries "$dir/out.jar" "$dir/entries.txt"
+  compare_form "$dir/log" "$dir/log.cmp"
   rm -f -- "$dir/log"
 }
 # invalid <exit code>: a run that is no evidence: a timeout, a command not run, a signal.

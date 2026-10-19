@@ -597,7 +597,7 @@ if [ "$1" != "--update" ]; then
     # The places' library (below), whose shared tree reads in the source its target's switch names.
     places_lib_build
     mkdir -p "$pos_tmp/cp/pl"
-    cp "$scratch"-places/lib/pl/*.tasty "$scratch"-places/decl-v1/pl/PlBox* "$pos_tmp/cp/pl/" 2> /dev/null
+    cp "$scratch"/places/lib/pl/*.tasty "$scratch"/places/decl-v1/pl/PlBox* "$pos_tmp/cp/pl/" 2> /dev/null
     printf '%s\n' cp/pl/Places.tasty cp/pl/Helpers.tasty cp/pl/PlBox.tasty >> "$pos_tmp/requested.txt"
     LC_ALL=C sort -o "$pos_tmp/requested.txt" "$pos_tmp/requested.txt"
     sjs=$(ls "$M2"/org/scala-js/scalajs-library_2.13/*/scalajs-library_2.13-*.jar 2> /dev/null | grep -v sources | tail -1)

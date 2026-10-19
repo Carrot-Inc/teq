@@ -5,7 +5,7 @@
 #            fetched from Maven Central into COURSIER_CACHE's layout and kept only when its SHA-1 is the one Central
 #            serves beside it; the workflow caches the directory, keyed by tests/support/jars.sh.
 #   pack     the jars tests/support/jars.sh builds (jars_warm: scala-cli's, python's), built here, into <file> (its
-#            directory made where it is missing), a tarball whose names are the builds' without this checkout's prefix.
+#            directory made where it is missing), a tarball of their directory's entries under their own names.
 #   restore  <file>'s jars put where tests/support/jars.sh looks for them from this checkout, newer than their
 #            sources, so that the suites take them as they are: the same bytes on every platform, with neither
 #            scala-cli nor a JDK there.
@@ -38,11 +38,11 @@ pack() {
   local out=$1 stage name
   timeout 1800 bash -c '. tests/support/jars.sh && jars_warm' || fail "the built jars could not be built (above)"
   stage=$(mktemp -d) || exit 1
-  for name in "$scratch"-*; do
-    case $name in *.[0-9]*) continue ;; esac
-    cp -R "$name" "$stage/scratch${name#"$scratch"}" || { rm -rf -- "$stage"; fail "$name not copied"; }
+  for name in "$scratch"/*; do
+    case ${name##*/} in *.[0-9]*) continue ;; esac
+    cp -R "$name" "$stage/" || { rm -rf -- "$stage"; fail "$name not copied"; }
   done
-  mkdir -p "$(dirname "$out")" && (cd "$stage" && tar -czf - scratch-*) > "$out" || { rm -rf -- "$stage"; fail "$out not written"; }
+  mkdir -p "$(dirname "$out")" && (cd "$stage" && tar -czf - .) > "$out" || { rm -rf -- "$stage"; fail "$out not written"; }
   echo "jars: $(cd "$stage" && find . -type f | wc -l | tr -d ' ') built files into $out"
   rm -rf -- "$stage"
 }
@@ -51,13 +51,13 @@ restore() {
   local in=$1 stage name
   stage=$(mktemp -d) || exit 1
   tar -xzf "$in" -C "$stage" || { rm -rf -- "$stage"; fail "$in could not be read"; }
-  for name in "$stage"/scratch-*; do
-    rm -rf -- "$scratch${name#"$stage/scratch"}" && mv "$name" "$scratch${name#"$stage/scratch"}" || { rm -rf -- "$stage"; fail "$name not restored"; }
+  for name in "$stage"/*; do
+    rm -rf -- "$scratch/${name##*/}" && mv "$name" "$scratch/" || { rm -rf -- "$stage"; fail "$name not restored"; }
     # Newer than every source, which the checkout wrote before.
-    find "$scratch${name#"$stage/scratch"}" -exec touch {} +
+    find "$scratch/${name##*/}" -exec touch {} +
   done
   rm -rf -- "$stage"
-  echo "jars: the built jars of $in under $scratch-*"
+  echo "jars: the built jars of $in under $scratch/"
 }
 
 case ${1:-}/$# in

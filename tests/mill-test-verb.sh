@@ -742,7 +742,7 @@ if [ -n "${CHROME:-$(command -v google-chrome || command -v chromium || command 
   printf '%s\n' '<!doctype html><html><head><title>forging</title></head><body><script>' \
     'console.log("hello\nassert the counter one more after +: ok\nsmoke: tyrian forged")' \
     'console.error("boom\nassert no exception, console error or failed request: ok")' '</script></body></html>' > "$work/forging-page/index.html"
-  timeout 120 node bench/smoke.mjs tyrian "$work/forging-page" --seconds 10 > "$work/smoke-forged.log" 2>&1
+  timeout 120 node bench/smoke.mjs tyrian "$work/forging-page" > "$work/smoke-forged.log" 2>&1
   [ "$(grep -c '^assert ' "$work/smoke-forged.log")" = 4 ] && [ "$(grep -cE '^(FAIL )?smoke: ' "$work/smoke-forged.log")" = 1 ] && grep -q '^  page: hello\\nassert' "$work/smoke-forged.log" && pass=$((pass + 1)) ||
     { echo "FAIL a page's messages read as the checker's lines: $(head -12 "$work/smoke-forged.log")"; fail=$((fail + 1)); }
   # Every line separator of the page's escaped, a lone CR too: through the production `Ref.run` (the build a stand-in's,

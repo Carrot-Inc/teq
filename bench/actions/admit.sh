@@ -16,6 +16,8 @@
 #   - the release's commit is on master and bumped the version (its parent names another), and its files agree on
 #     the version (bench/ship-release.sh's release_version); CHANGELOG.md has its section when bench/changelog.sh is
 #     there;
+#   - the release's commit tracks nothing under out/ (a landing that added a brief or a probe there is refused:
+#     the tree publishes none of the work's files);
 #   - the tag v<version> must not exist, but on a resume (TEQ_RESUME_RUN, the id of the earlier run of this
 #     workflow whose record and binaries the run takes up, bench/ship-publish.sh's record, which
 #     bench/actions/release-step.sh checks against the binaries),
@@ -122,6 +124,8 @@ fi
 if [ -f "$tree/bench/changelog.sh" ]; then
   (. "$tree/bench/changelog.sh" && changelog_notes "$tree/CHANGELOG.md" "$version" > /dev/null) || refuse "CHANGELOG.md has no section for $version to be the release's notes (above)"
 fi
+tracked_out=$(git ls-tree -r --name-only "$commit" -- out | head -3 | tr '\n' ' ')
+[ -z "$tracked_out" ] || refuse "${commit:0:12} tracks files under out/ ($tracked_out): nothing of the work's files (briefs, probes, records) is published"
 
 # The tag, and a release done already.
 tag=v$version

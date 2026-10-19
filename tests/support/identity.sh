@@ -1,7 +1,8 @@
 #!/bin/bash
 # tests/support/identity.sh <reference teq> <teq> <out dir> [kinds]: every program of tests/cases and tests/errors
 # built by both binaries and compared byte for byte, a kind at a time: `js` (the single JavaScript file of `teq compiler build`),
-# `jvm` (the class files of `--target jvm`, each jar unpacked, linked against scala-library's jar, given as
+# `jvm` (the class files of `--target jvm`, each jar's entries listed with their digests, never unpacked: a file
+# system that folds case merges `Run.class` and `run.class`; linked against scala-library's jar, given as
 # `--std=scala-library` so that a binary from before the lean JVM mode's retirement links too; `link` is its old
 # name), `diags` (what `teq compiler check` prints, the times left out) and `flagged` (the diagnostics with
 # FLAGGED_REF and FLAGGED_NEW added: a base from before the definition's diagnostics were the default runs with
@@ -27,13 +28,33 @@
 # compares as identical. Either mode refuses a binary whose version names neither the checkout's commit nor one with
 # the checkout's compiler sources (the outputs would be another compiler's). Both run
 # from the root of the checkout on the same relative paths (out/identity/: the sources, the jars, the outputs), with
-# COURSIER_CACHE an empty directory, so that nothing of a machine's paths or caches reaches an output; the times of
-# `check` are left out, as above, and nothing else is normalised. One run of either mode at a time in a checkout:
+# COURSIER_CACHE an empty directory, so that nothing of a machine's paths or caches reaches an output; every time is
+# left out (the phase lines of `check` and `build`, the figures of the jar report a failed build prints, an analysis
+# answer's `ms`), the jar cache is left unused (its rows would say which run warmed it), and nothing else is
+# normalised. One run of either mode at a time in a checkout:
 # each holds out/identity.lock (its pid) until it exits, a second is refused at once, and a lock whose run is gone
 # is taken over. --compare copies the outputs and a report into <out dir>. IDENTITY_PROGRAMS, an extended regular expression, restricts both to the programs whose names it
 # matches whole, for a check of this script. Runs under macOS's bash 3.2; needs GNU timeout and python3 (or python).
 case ${1:-} in --produce | --compare) across=${1#--}; shift ;; *) across= ;; esac
 absolute() { case $1 in /*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }
+# compare_form <log> <out>: the log without its times: the phase lines of `check` and `build`, the `ms` object of
+# an analysis answer, and in the rows of the jar report a failed build prints (two spaces, a label, columns of
+# figures) the `<n> ms` figures with the padding that aligns the columns to them.
+compare_form() {
+  grep -v -E '^(checked|built|ran) .* in |^  (read|parse|type|reach|emit|write) ' "$1" |
+    sed -E 's/"ms":[{][^}]*[}]/"ms":{}/g; /^  [A-Za-z].*  +[0-9]/{ s/ +[0-9]+\.[0-9]+ ms//g; s/ {2,}/ /g; }' > "$2"
+}
+export -f compare_form
+# jar_entries <jar> <out>: the jar's entries, each its SHA-256 and name, in the names' order; the jar removed.
+jar_entries() {
+  "$(command -v python3 || command -v python)" -c 'import hashlib, sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+for name in sorted(z.namelist()):
+    print(hashlib.sha256(z.read(name)).hexdigest(), name)' "$1" > "$2" && rm -f -- "$1"
+}
+export -f jar_entries
+# The jar cache left unused: its rows in that report (caches written, files read from it) say which run warmed it.
+export TEQ_NO_CACHE=1
 [ -z "$across" ] || . "$(dirname "$0")/identity-across.sh"
 [ $# -ge 3 ] || { echo "usage: tests/support/identity.sh <reference teq> <teq> <out dir> [js,jvm,diags,flagged] | --produce <teq> <bundle dir> [kinds] | --compare <bundle dir> <teq> <out dir>" >&2; exit 2; }
 ref=$(absolute "$1") new=$(absolute "$2") out=$(absolute "$3")
@@ -84,11 +105,11 @@ one() {
       js) timeout 60 "$bin" $(compiler_words "$bin") build "$src" $flags $own -o "$dir/out.js" > "$dir/log" 2>&1 ;;
       jvm)
         timeout 60 "$bin" $(compiler_words "$bin") build "$src" $flags $own --target jvm -o "$dir/out.jar" > "$dir/log" 2>&1
-        [ -f "$dir/out.jar" ] && (cd "$dir" && mkdir -p classes && cd classes && unzip -q -o ../out.jar && rm ../out.jar) ;;
+        [ -f "$dir/out.jar" ] && jar_entries "$dir/out.jar" "$dir/entries.txt" ;;
       diags | flagged) timeout 60 "$bin" $(compiler_words "$bin") check "$src" $flags $own > "$dir/log" 2>&1 ;;
     esac
     echo "exit $?" >> "$dir/log"
-    grep -v -E '^(checked|built|ran) .* in |^  (read|parse|type|reach|emit|write) ' "$dir/log" > "$dir/log.cmp"
+    compare_form "$dir/log" "$dir/log.cmp"
     rm "$dir/log"
   done
   if ! diff -rq "$out/$kind/ref/$name" "$out/$kind/new/$name" > /dev/null 2>&1; then

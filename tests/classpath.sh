@@ -14,7 +14,7 @@ with_scala_library() {
 # And the fixtures' class files after the TASTy-only fixtures jar, which the JVM runs.
 with_fixture_classes() {
   case ":$1:" in
-    *-fixtures.jar:*) echo "$1" | sed "s|\([^:]*-fixtures\.jar\)|\1:$(jar_of fixtures-jvm)|" ;;
+    */fixtures.jar:*) echo "$1" | sed "s|\([^:]*/fixtures\.jar\)|\1:$(jar_of fixtures-jvm)|" ;;
     *) echo "$1" ;;
   esac
 }

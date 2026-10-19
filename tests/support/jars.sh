@@ -59,15 +59,17 @@
 # scala-parser-combinators 2.4.0, lichess' (lila's) JVM `_3` jars. maven_extras lists the other Maven files the suites
 # read (sources jars, the example's test class path), which bench/actions/jars.sh fetch fetches with these.
 M2=${COURSIER_CACHE:-$HOME/Library/Caches/Coursier/v1}/https/repo1.maven.org/maven2
-# The jars built here are named for the checkout, so that the suites of two worktrees running at
-# once do not rewrite each other's.
+# The jars built here live in a directory named for the checkout, so that the suites of two worktrees running
+# at once do not rewrite each other's, under names that are the same in every checkout: the compiler names what
+# it makes of a library's bodies by the jar's file name, so a jar named otherwise gives other output.
 scratch=${TMPDIR:-/tmp}/teq-$(printf %s "$PWD" | cksum | cut -d' ' -f1)
+mkdir -p "$scratch"
 # Each jar is written beside its path and renamed into it in one step, and each build runs in a
 # directory of its own process, so that a suite of a parallel job reads the whole jar or the
 # earlier one, never a jar being written.
 # The fixtures of tests/tasty as a jar, in the packages their sources declare.
 fixtures_jar() {
-  local jar=$scratch-fixtures.jar
+  local jar=$scratch/fixtures.jar
   python3 - "$jar.$$" <<'PY' && mv -f "$jar.$$" "$jar"
 import os, sys, zipfile
 members = {'Container', 'Holder', 'Registry', 'UsesRegistry'}
@@ -111,7 +113,7 @@ PY
 # The declarations of tests/tasty/src/reader_decl.scala and reader_java.scala, which the fixtures
 # jar leaves out: the bodies of fix.reader reach them in a jar of their own.
 fixtures_rdecl_jar() {
-  local jar=$scratch-fixtures-rdecl.jar
+  local jar=$scratch/fixtures-rdecl.jar
   python3 - "$jar.$$" <<'PY' && mv -f "$jar.$$" "$jar"
 import os, sys, zipfile
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
@@ -126,7 +128,7 @@ PY
 }
 # The second copies of tests/tasty/fixtures-shadow, in fix.shadow as in the fixtures jar.
 fixtures_shadow_jar() {
-  local jar=$scratch-fixtures-shadow.jar
+  local jar=$scratch/fixtures-shadow.jar
   python3 - "$jar.$$" <<'PY' && mv -f "$jar.$$" "$jar"
 import os, sys, zipfile
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
@@ -141,7 +143,7 @@ PY
 # fix.rdecl and fix.rjava; fix.reader against reader_decl_v1.scala and reader_java_v1.scala), with
 # tests/classfile/fixtures' Java classes they reach. Built when missing or older than a source.
 fixtures_jvm_jar() {
-  local jar=$scratch-fixtures-jvm.jar dir=$scratch-fixtures-jvm.$$ src=tests/tasty/src f stale=0
+  local jar=$scratch/fixtures-jvm.jar dir=$scratch/fixtures-jvm.$$ src=tests/tasty/src f stale=0
   local main="cake.scala cake3.scala cake4.scala guard.scala retain.scala runtime.scala targetname.scala wave6.scala shadow.scala reader_decl.scala reader_java.scala casts.scala icdefaults.scala overacc.scala"
   [ -f "$jar" ] || stale=1
   for f in $main reader.scala reader_decl_v1.scala reader_java_v1.scala; do [ "$src/$f" -nt "$jar" ] && stale=1; done
@@ -169,7 +171,7 @@ PY
 }
 # The class files of tests/classfile/fixtures (javac's, see tests/classfile/README) as a jar.
 javafix_jar() {
-  local jar=$scratch-javafix.jar
+  local jar=$scratch/javafix.jar
   python3 - "$jar.$$" <<'PY' && mv -f "$jar.$$" "$jar"
 import os, sys, zipfile
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
@@ -197,8 +199,8 @@ PY
 # a public subclass inherits, reached from another package through the subclass alone.
 hidden_owner_jar() {
   local src=tests/support/hidden_owner/hidden
-  local jar=$scratch-hiddenowner-lib.jar
-  local work=$scratch-hiddenowner-lib.$$
+  local jar=$scratch/hiddenowner-lib.jar
+  local work=$scratch/hiddenowner-lib.$$
   if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
     rm -rf "$work" && mkdir -p "$work"
     timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/*.java > /dev/null 2>&1 \
@@ -211,8 +213,8 @@ hidden_owner_jar() {
 # Java class implementing it compiled by javac against them.
 bridge_trait_jar() {
   local src=tests/support/hidden_owner/bridge
-  local jar=$scratch-bridgetrait-lib.jar
-  local work=$scratch-bridgetrait-lib.$$
+  local jar=$scratch/bridgetrait-lib.jar
+  local work=$scratch/bridgetrait-lib.$$
   if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java' -o -newer "$jar" -name '*.scala')" ]; then
     rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
     cp "$src/Trait.scala" "$work/src/"
@@ -227,8 +229,8 @@ bridge_trait_jar() {
 # public one that inherits a member (v1) or declares it (v2), for a client built against v1 and run on v2.
 inline_abi_jar() {
   local src=tests/support/hidden_owner/inlineabi/$1
-  local jar=$scratch-inlineabi-$1.jar
-  local work=$scratch-inlineabi-$1.$$
+  local jar=$scratch/inlineabi-$1.jar
+  local work=$scratch/inlineabi-$1.$$
   if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
     rm -rf "$work" && mkdir -p "$work"
     timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/inlineabi/*.java > /dev/null 2>&1 \
@@ -240,8 +242,8 @@ inline_abi_jar() {
 # tests/support/hidden_owner/throwsclone's Scala trait compiled by scalac into a jar, its class file and TASTy.
 throws_clone_jar() {
   local src=tests/support/hidden_owner/throwsclone
-  local jar=$scratch-throwsclone-lib.jar
-  local work=$scratch-throwsclone-lib.$$
+  local jar=$scratch/throwsclone-lib.jar
+  local work=$scratch/throwsclone-lib.$$
   if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.scala')" ]; then
     rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
     cp "$src/ThrowsClone.scala" "$work/src/"
@@ -254,8 +256,8 @@ throws_clone_jar() {
 # tests/support/hidden_owner/javadefault's Java interface and annotation compiled by javac into a jar.
 java_default_jar() {
   local src=tests/support/hidden_owner/javadefault
-  local jar=$scratch-javadefault-lib.jar
-  local work=$scratch-javadefault-lib.$$
+  local jar=$scratch/javadefault-lib.jar
+  local work=$scratch/javadefault-lib.$$
   if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
     rm -rf "$work" && mkdir -p "$work"
     timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/jann/*.java > /dev/null 2>&1 \
@@ -267,8 +269,8 @@ java_default_jar() {
 # tests/support/hidden_owner/<name>'s trait G.scala compiled by scalac into a jar, its class file and TASTy.
 scalac_trait_jar() {
   local src=tests/support/hidden_owner/$1
-  local jar=$scratch-$1-lib.jar
-  local work=$scratch-$1-lib.$$
+  local jar=$scratch/$1-lib.jar
+  local work=$scratch/$1-lib.$$
   if [ ! -f "$jar" ] || [ "$src/G.scala" -nt "$jar" ]; then
     rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
     cp "$src/G.scala" "$work/src/"
@@ -282,8 +284,8 @@ scalac_trait_jar() {
 # one jar.
 param_meta_jar() {
   local src=tests/support/hidden_owner/parammeta
-  local jar=$scratch-parammeta-lib.jar
-  local work=$scratch-parammeta-lib.$$
+  local jar=$scratch/parammeta-lib.jar
+  local work=$scratch/parammeta-lib.$$
   if [ ! -f "$jar" ] || [ "$src/G.scala" -nt "$jar" ] || [ "$src/pm/Tag.java" -nt "$jar" ]; then
     rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
     cp "$src/G.scala" "$work/src/"
@@ -300,8 +302,8 @@ scalac_use_jar() {
   local name=$1 lib
   lib=$(jar_of "$2")
   local src=tests/support/hidden_owner/$name/Use.scala
-  local jar=$scratch-$name-scalac.jar
-  local work=$scratch-$name-scalac.$$
+  local jar=$scratch/$name-scalac.jar
+  local work=$scratch/$name-scalac.$$
   if [ -f "$lib" ] && { [ ! -f "$jar" ] || [ "$src" -nt "$jar" ] || [ "$lib" -nt "$jar" ]; }; then
     rm -rf "$work" && mkdir -p "$work/src" "$work/classes"
     cp "$src" "$work/src/"
@@ -314,7 +316,7 @@ scalac_use_jar() {
 # The scalac side of the ABI probes, compiled by scala-cli when missing or older than its source.
 # The properties file of tests/support/bundle as a jar, a resource bundle on the class path.
 bundle_jar() {
-  local jar=$scratch-bundle-lib.jar
+  local jar=$scratch/bundle-lib.jar
   python3 - "$jar.$$" tests/support/bundle <<'PY' && mv -f "$jar.$$" "$jar"
 import os, sys, zipfile
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
@@ -326,8 +328,8 @@ PY
 
 abi_callbacks_jar() {
   local src=tests/support/abi_callbacks_lib.scala
-  local jar=$scratch-abi-callbacks-lib.jar
-  local dir=$scratch-abi-callbacks-lib.$$
+  local jar=$scratch/abi-callbacks-lib.jar
+  local dir=$scratch/abi-callbacks-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/abi_callbacks_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -338,8 +340,8 @@ abi_callbacks_jar() {
 }
 typetest_lib_jar() {
   local src=tests/support/typetest_lib.scala
-  local jar=$scratch-typetest-lib.jar
-  local dir=$scratch-typetest-lib.$$
+  local jar=$scratch/typetest-lib.jar
+  local dir=$scratch/typetest-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/typetest_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -352,7 +354,7 @@ typetest_lib_jar() {
 # file named like the standard library's, which they are not.
 state_lib_jar() {
   local src=tests/support/state_lib.scala
-  local dir=$scratch-state-lib
+  local dir=$scratch/state-lib
   local jar=$dir/scala-library-tools/scala-library-tools-1.0.jar
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     local work=$dir.$$
@@ -366,7 +368,7 @@ state_lib_jar() {
 # tests/support/universal_lib.scala compiled by scalac, as universal-lib.
 universal_lib_jar() {
   local src=tests/support/universal_lib.scala
-  local jar=$scratch-universal-lib.jar
+  local jar=$scratch/universal-lib.jar
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     local work=$jar.$$.d
     mkdir -p "$work" && cp "$src" "$work/"
@@ -378,8 +380,8 @@ universal_lib_jar() {
 }
 reflect_lib_jar() {
   local src=tests/support/reflect_lib.scala
-  local jar=$scratch-reflect-lib.jar
-  local dir=$scratch-reflect-lib.$$
+  local jar=$scratch/reflect-lib.jar
+  local dir=$scratch/reflect-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/reflect_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -390,8 +392,8 @@ reflect_lib_jar() {
 }
 erasure_lib_jar() {
   local src=tests/support/erasure_lib.scala
-  local jar=$scratch-erasure-lib.jar
-  local dir=$scratch-erasure-lib.$$
+  local jar=$scratch/erasure-lib.jar
+  local dir=$scratch/erasure-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/erasure_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -402,8 +404,8 @@ erasure_lib_jar() {
 }
 vctraits_lib_jar() {
   local src=tests/support/vctraits_lib.scala
-  local jar=$scratch-vctraits-lib.jar
-  local dir=$scratch-vctraits-lib.$$
+  local jar=$scratch/vctraits-lib.jar
+  local dir=$scratch/vctraits-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/vctraits_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -416,8 +418,8 @@ vctraits_lib_jar() {
 # kind, which a class of another build implements.
 traitfields_lib_jar() {
   local src=tests/support/traitfields_lib.scala
-  local jar=$scratch-traitfields-lib.jar
-  local dir=$scratch-traitfields-lib.$$
+  local jar=$scratch/traitfields-lib.jar
+  local dir=$scratch/traitfields-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/traitfields_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -430,8 +432,8 @@ traitfields_lib_jar() {
 # givens, which a class of another build implements.
 deferred_lib_jar() {
   local src=tests/support/deferred_lib.scala
-  local jar=$scratch-deferred-lib.jar
-  local dir=$scratch-deferred-lib.$$
+  local jar=$scratch/deferred-lib.jar
+  local dir=$scratch/deferred-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/deferred_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -444,8 +446,8 @@ deferred_lib_jar() {
 # scalac's name for its outer accessor.
 outer_lib_jar() {
   local src=tests/support/outer_lib.scala
-  local jar=$scratch-outer-lib.jar
-  local dir=$scratch-outer-lib.$$
+  local jar=$scratch/outer-lib.jar
+  local dir=$scratch/outer-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/outer_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -458,8 +460,8 @@ outer_lib_jar() {
 # mark, which its class file's name keeps.
 unicode_lib_jar() {
   local src=tests/support/unicode_lib.scala
-  local jar=$scratch-unicode-lib.jar
-  local dir=$scratch-unicode-lib.$$
+  local jar=$scratch/unicode-lib.jar
+  local dir=$scratch/unicode-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     # The class file's name holds the mark: scalac writes it only under a UTF-8 locale.
@@ -473,8 +475,8 @@ unicode_lib_jar() {
 # getters scalac's.
 defaults_lib_jar() {
   local src=tests/support/defaults_lib.scala
-  local jar=$scratch-defaults-lib.jar
-  local dir=$scratch-defaults-lib.$$
+  local jar=$scratch/defaults-lib.jar
+  local dir=$scratch/defaults-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/defaults_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -486,8 +488,8 @@ defaults_lib_jar() {
 # tests/support/lazyorder_lib.scala compiled by scalac into a jar: an object's lazy vals.
 lazyorder_lib_jar() {
   local src=tests/support/lazyorder_lib.scala
-  local jar=$scratch-lazyorder-lib.jar
-  local dir=$scratch-lazyorder-lib.$$
+  local jar=$scratch/lazyorder-lib.jar
+  local dir=$scratch/lazyorder-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/lazyorder_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -500,8 +502,8 @@ lazyorder_lib_jar() {
 # the template defines before them.
 ctorinit_lib_jar() {
   local src=tests/support/ctorinit_lib.scala
-  local jar=$scratch-ctorinit-lib.jar
-  local dir=$scratch-ctorinit-lib.$$
+  local jar=$scratch/ctorinit-lib.jar
+  local dir=$scratch/ctorinit-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/ctorinit_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -513,8 +515,8 @@ ctorinit_lib_jar() {
 # tests/support/depfun_lib.scala compiled by scalac into a jar: dependent function types in TASTy.
 depfun_lib_jar() {
   local src=tests/support/depfun_lib.scala
-  local jar=$scratch-depfun-lib.jar
-  local dir=$scratch-depfun-lib.$$
+  local jar=$scratch/depfun-lib.jar
+  local dir=$scratch/depfun-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/depfun_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -526,8 +528,8 @@ depfun_lib_jar() {
 # tests/support/lazyval_lib.scala compiled by scalac into a jar: vals of a class a subclass overrides.
 lazyval_lib_jar() {
   local src=tests/support/lazyval_lib.scala
-  local jar=$scratch-lazyval-lib.jar
-  local dir=$scratch-lazyval-lib.$$
+  local jar=$scratch/lazyval-lib.jar
+  local dir=$scratch/lazyval-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/lazyval_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -540,8 +542,8 @@ lazyval_lib_jar() {
 # defaults in bodies.
 bodycasts_lib_jar() {
   local src=tests/support/body_casts_lib.scala
-  local jar=$scratch-bodycasts-lib.jar
-  local dir=$scratch-bodycasts-lib.$$
+  local jar=$scratch/bodycasts-lib.jar
+  local dir=$scratch/bodycasts-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/body_casts_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -556,8 +558,8 @@ bodycasts_lib_jar() {
 regroup_jar() {
   local name=$1 src=tests/support/regroup/$1.scala
   shift
-  local jar=$scratch-regroup-$name.jar
-  local dir=$scratch-regroup-$name.$$
+  local jar=$scratch/regroup-$name.jar
+  local dir=$scratch/regroup-$name.$$
   local deps=()
   for d in "$@"; do deps+=(--jar "$(regroup_jar "$d")"); done
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
@@ -572,8 +574,8 @@ regroup_jar() {
 # one name in an object (scalacheck's `Seed`).
 companion_method_lib_jar() {
   local src=tests/support/companion_method_lib.scala
-  local jar=$scratch-companionmethod-lib.jar
-  local dir=$scratch-companionmethod-lib.$$
+  local jar=$scratch/companionmethod-lib.jar
+  local dir=$scratch/companionmethod-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/companion_method_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -586,8 +588,8 @@ companion_method_lib_jar() {
 # traits whose companions the traits' bodies apply, run by a macro (chimney's shape).
 nestedcompanion_lib_jar() {
   local src=tests/support/nestedcompanion_lib.scala
-  local jar=$scratch-nestedcompanion-lib.jar
-  local dir=$scratch-nestedcompanion-lib.$$
+  local jar=$scratch/nestedcompanion-lib.jar
+  local dir=$scratch/nestedcompanion-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/nestedcompanion_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -600,8 +602,8 @@ nestedcompanion_lib_jar() {
 # package that is no JDK class's.
 javareview_lib_jar() {
   local src=tests/support/javareview_lib.scala
-  local jar=$scratch-javareview-lib.jar
-  local dir=$scratch-javareview-lib.$$
+  local jar=$scratch/javareview-lib.jar
+  local dir=$scratch/javareview-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/javareview_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -614,8 +616,8 @@ javareview_lib_jar() {
 # definition's typing read from scalac's pickles.
 inline_bodies_lib_jar() {
   local src=tests/support/inline_bodies_lib.scala
-  local jar=$scratch-inline-bodies-lib.jar
-  local dir=$scratch-inline-bodies-lib.$$
+  local jar=$scratch/inline-bodies-lib.jar
+  local dir=$scratch/inline-bodies-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/inline_bodies_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -628,8 +630,8 @@ inline_bodies_lib_jar() {
 # a worker holds its own equivalent (the parallel typer's views).
 view_lib_jar() {
   local src=tests/support/view_lib.scala
-  local jar=$scratch-view-lib.jar
-  local dir=$scratch-view-lib.$$
+  local jar=$scratch/view-lib.jar
+  local dir=$scratch/view-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/view_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -642,8 +644,8 @@ view_lib_jar() {
 # PartialFunction and ClassTag, and its view results.
 extend_lib_jar() {
   local src=tests/support/extend_lib.scala
-  local jar=$scratch-extend-lib.jar
-  local dir=$scratch-extend-lib.$$
+  local jar=$scratch/extend-lib.jar
+  local dir=$scratch/extend-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/extend_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -655,8 +657,8 @@ extend_lib_jar() {
 # tests/support/predef_lib.scala compiled by scalac into a jar: bodies through scala-library's Predef.
 predef_lib_jar() {
   local src=tests/support/predef_lib.scala
-  local jar=$scratch-predef-lib.jar
-  local dir=$scratch-predef-lib.$$
+  local jar=$scratch/predef-lib.jar
+  local dir=$scratch/predef-lib.$$
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/predef_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
@@ -669,7 +671,7 @@ predef_lib_jar() {
 # no TASTy), as a jar.
 scala2_lib_jar() {
   local src=tests/support/scala2_lib
-  local jar=$scratch-scala2-lib.jar
+  local jar=$scratch/scala2-lib.jar
   if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.scala')" ]; then
     timeout 200 scala-cli --power package --library -S 2.13.16 "$src"/*.scala --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
       && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
@@ -679,7 +681,7 @@ scala2_lib_jar() {
 # tests/support/scala2_traits/, a Scala 2.13 library of traits alone (no module class), as a jar.
 scala2_traits_jar() {
   local src=tests/support/scala2_traits
-  local jar=$scratch-scala2-traits.jar
+  local jar=$scratch/scala2-traits.jar
   if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.scala')" ]; then
     timeout 200 scala-cli --power package --library -S 2.13.16 "$src"/*.scala --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
       && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
@@ -691,7 +693,7 @@ scala2_traits_jar() {
 scala2_traits_padded_jar() {
   local traits pad=tests/support/scala2_traits_pad
   traits=$(scala2_traits_jar)
-  local jar=$scratch-scala2-traits-padded.jar
+  local jar=$scratch/scala2-traits-padded.jar
   [ -f "$traits" ] || { echo "$jar"; return; }
   if [ ! -f "$jar" ] || [ "$traits" -nt "$jar" ] || [ -n "$(find "$pad" -newer "$jar" -name '*.java')" ]; then
     local work=$jar.$$.d
@@ -719,7 +721,7 @@ PY
 scala2_traits_mixed_jar() {
   local padded src=tests/support/scala2_traits_pad/Other.scala
   padded=$(scala2_traits_padded_jar)
-  local jar=$scratch-scala2-traits-mixed.jar
+  local jar=$scratch/scala2-traits-mixed.jar
   [ -f "$padded" ] || { echo "$jar"; return; }
   if [ ! -f "$jar" ] || [ "$padded" -nt "$jar" ] || [ "$src" -nt "$jar" ]; then
     local work=$jar.$$.d
@@ -750,7 +752,7 @@ PY
 # read the library against.
 places_lib_build() {
   local src=tests/support/places_lib
-  local dir=$scratch-places
+  local dir=$scratch/places
   local stamp=$dir/built
   if [ ! -f "$stamp" ] || [ -n "$(find "$src" -newer "$stamp" -name '*.scala')" ]; then
     local work=$dir.$$
@@ -784,15 +786,15 @@ PY
 }
 places_lib_jar() {
   places_lib_build
-  echo "$scratch-places/with-sources/places-lib-1.0.jar"
+  echo "$scratch/places/with-sources/places-lib-1.0.jar"
 }
 places_lib_nosrc_jar() {
   places_lib_build
-  echo "$scratch-places/without-sources/places-lib-1.0.jar"
+  echo "$scratch/places/without-sources/places-lib-1.0.jar"
 }
 places_decl_jar() {
   places_lib_build
-  echo "$scratch-places/places-decl-1.0.jar"
+  echo "$scratch/places/places-decl-1.0.jar"
 }
 jar_of() {
   case $1 in
@@ -1220,7 +1222,7 @@ jars_warm() {
   for name in $(sed -n 's/^    \([a-z0-9-]*\)) [a-z0-9_]*_jar ;;$/\1/p' "${BASH_SOURCE[0]}"); do
     path=$(jar_of "$name") && [ -e "$path" ] || failed="$failed $name"
   done
-  local deps=$scratch-deps.$$
+  local deps=$scratch/deps.$$
   mkdir -p "$deps" && printf 'object Deps\n' > "$deps/Deps.scala" &&
     (cd "$deps" && timeout 300 scala-cli --power compile -S 3.8.4 --jvm system --server=false -q \
       --dep junit:junit:4.13.2 --dep org.scala-lang::scala3-tasty-inspector:3.8.4 Deps.scala > deps.log 2>&1) ||

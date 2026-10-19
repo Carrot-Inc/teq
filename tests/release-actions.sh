@@ -749,8 +749,13 @@ case $verb in
       *.jar) python3 -c 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1], "w"); z.writestr("A.class", sys.argv[2]); z.close()' "$out" "$sum" ;;
       *) echo "// $sum" > "$out" ;;
     esac
+    # The jar report of a failed build, its figures another every run, as the compiler's are.
+    printf 'classpath\n  jars opened                   2   0.%s ms\n  files read                   88   3.%s ms  636.3 KB\n  JDK ct.sym opened                 1.%s ms  release 20, package index 0.%s ms\n' $RANDOM $RANDOM $RANDOM $RANDOM
     echo "built $src in 3 ms" ;;
-  check) echo "checked $src in 4 ms"; echo "$src: $sum"; [ "${src#tests/errors/}" = "$src" ] || exit 1 ;;
+  check)
+    echo "checked $src in 4 ms"; echo "$src: $sum"
+    echo "{\"ok\":true,\"diagnostics\":[],\"ms\":{\"read\":0.$RANDOM,\"type\":7.$RANDOM,\"total\":9.$RANDOM}}"
+    [ "${src#tests/errors/}" = "$src" ] || exit 1 ;;
 esac
 EOF
 chmod +x "$work/teq-standin"
@@ -922,6 +927,14 @@ printf '{"before": "%s"}' "$a" > "$work/event.json"
 admit push "$c"
 check "admit: a push holding a release below its head" "$?" 1
 has "admit: says to dispatch it" "$work/admit.out" "is not its release commit"
+(cd "$co" && git_ checkout -q -b tracked "$a" && mkdir -p out/briefs && echo brief > out/briefs/brief-x.md && git_ add -f out/briefs/brief-x.md && git_ commit -q -m "Track a brief" && git_ cherry-pick "$b" > /dev/null && git_ push -q origin HEAD:refs/heads/master -f && git_ checkout -q master) || exit 1
+t=$(cd "$co" && git rev-parse tracked)
+printf '{"before": "%s"}' "$a" > "$work/event.json"
+admit push "$t"
+check "admit: a release commit tracking a file under out/" "$?" 1
+has "admit: names the file" "$work/admit.out" "tracks files under out/ (out/briefs/brief-x.md"
+(cd "$co" && git_ push -q origin "$c:refs/heads/master" -f)
+printf '{"before": "%s"}' "$a" > "$work/event.json"
 admit push "$b" GITHUB_REPOSITORY=someone/teq
 check "admit: a fork's push" "$?" 1
 admit push "$b" GITHUB_REF=refs/heads/feature
@@ -1518,14 +1531,14 @@ check "before-landing: GitHub ahead by another commit" "$?" 1
 land
 check "before-landing: the two diverged" "$?" 1
 
-# --- The built jars restored under another checkout's prefix, newer than their sources.
-mkdir -p "$work/jars-in/scratch-dir" && echo j > "$work/jars-in/scratch-x.jar" && echo k > "$work/jars-in/scratch-dir/y.jar"
-tar -czf "$work/jars.tgz" -C "$work/jars-in" scratch-x.jar scratch-dir
-prefix=$(TMPDIR=$work/tmp bash -c '. tests/support/jars.sh && echo "$scratch"')
+# --- The built jars restored under another checkout's directory, newer than their sources.
+mkdir -p "$work/jars-in/dir" && echo j > "$work/jars-in/x.jar" && echo k > "$work/jars-in/dir/y.jar"
+tar -czf "$work/jars.tgz" -C "$work/jars-in" .
 mkdir -p "$work/tmp"
+built=$(TMPDIR=$work/tmp bash -c '. tests/support/jars.sh && echo "$scratch"')
 TMPDIR=$work/tmp timeout 60 bench/actions/jars.sh restore "$work/jars.tgz" > /dev/null
-check "jars restore" "$(cat "$prefix-x.jar" "$prefix-dir/y.jar" 2> /dev/null | tr '\n' ' ')" "j k "
-check "jars restore: newer than the sources" "$([ "$prefix-x.jar" -nt tests/support/jars.sh ] && echo newer)" newer
+check "jars restore" "$(cat "$built/x.jar" "$built/dir/y.jar" 2> /dev/null | tr '\n' ' ')" "j k "
+check "jars restore: newer than the sources" "$([ "$built/x.jar" -nt tests/support/jars.sh ] && echo newer)" newer
 
 # --- The credentials, with a key made for this run and a tree whose signing key it is.
 k=$work/keys

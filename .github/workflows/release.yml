@@ -764,7 +764,7 @@ jobs:
     needs: [admit, build-macos-arm64, reference]
     if: "!cancelled() && needs.admit.outputs.mode == 'fresh' && needs.build-macos-arm64.result == 'success' && needs.reference.result == 'success'"
     runs-on: ${{ vars.TEQ_RUNNER_MACOS_ARM64 || 'macos-15' }}
-    timeout-minutes: 190
+    timeout-minutes: 215
     permissions:
       contents: read
     steps:
@@ -780,8 +780,11 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: GNU coreutils (timeout)
+        # The image's Homebrew can lag the bottle API (coreutils' openssl dependency brought a ca-certificates
+        # bottle whose tab it could not read): an install that fails is tried again after Homebrew updates itself.
         run: |
-          command -v gtimeout > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 perl -e 'alarm 900; exec @ARGV' brew install coreutils
+          command -v gtimeout > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 perl -e 'alarm 900; exec @ARGV' brew install coreutils ||
+            { perl -e 'alarm 600; exec @ARGV' brew update --quiet && HOMEBREW_NO_AUTO_UPDATE=1 perl -e 'alarm 900; exec @ARGV' brew install coreutils; }
           echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -814,7 +817,7 @@ jobs:
     needs: [admit, build-macos-x64, reference]
     if: "!cancelled() && needs.admit.outputs.mode == 'fresh' && needs.build-macos-x64.result == 'success' && needs.reference.result == 'success'"
     runs-on: ${{ vars.TEQ_RUNNER_MACOS_X64 || 'macos-15-intel' }}
-    timeout-minutes: 190
+    timeout-minutes: 215
     permissions:
       contents: read
     steps:
@@ -830,8 +833,11 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: GNU coreutils (timeout)
+        # The image's Homebrew can lag the bottle API (coreutils' openssl dependency brought a ca-certificates
+        # bottle whose tab it could not read): an install that fails is tried again after Homebrew updates itself.
         run: |
-          command -v gtimeout > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 perl -e 'alarm 900; exec @ARGV' brew install coreutils
+          command -v gtimeout > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 perl -e 'alarm 900; exec @ARGV' brew install coreutils ||
+            { perl -e 'alarm 600; exec @ARGV' brew update --quiet && HOMEBREW_NO_AUTO_UPDATE=1 perl -e 'alarm 900; exec @ARGV' brew install coreutils; }
           echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
