@@ -8,7 +8,13 @@ description = "A fast compiler for a subset of Scala 3 that emits JavaScript"
 [dependencies]
 # Logical threads under `teq interp`, each a stackful coroutine on the interpreter's thread (src/interp/threads.rs),
 # behind the `threads` feature; a build without it refuses a program that starts a thread.
-corosensei = { version = "=0.3.4", optional = true }
+corosensei = { version = "=0.3.4", optional = true, default-features = false, features = ["unwind"] }
+
+# Its default stack (libc's and windows-sys's mappings) where the thread runtime has no page mapping of its
+# own (src/interp/threads.rs): Windows. Linux and macOS map their stacks themselves, and the libc crate would
+# make the macOS link ask for iconv, which the ship's SDK-less link has not.
+[target.'cfg(windows)'.dependencies]
+corosensei = { version = "=0.3.4", optional = true, features = ["default-stack"] }
 
 # The system's allocator in the place of src/alloc.rs, for the system's tools to see every
 # block (`leaks`, `heap`, `vmmap` on macOS); never the build that is distributed.

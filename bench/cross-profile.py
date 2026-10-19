@@ -342,7 +342,8 @@ def translate(src, dst, target=DARWIN):
             unmapped.update((n, d) for n, d in roots if (n, d) not in known)
             lines[i] = new + tail
         # A std crate under an id no source names would keep its records from every function.
-        stray = {(n, i): c for (n, i), c in unmapped.items() if n in darwin}
+        own = own_crates()
+        stray = {(n, i): c for (n, i), c in unmapped.items() if n in darwin and n not in own}
         if stray:
             sys.exit("cross-profile: std crates under ids of no installed target: " + ", ".join(f"{n} {i} ({c} names)" for (n, i), c in stray.items()))
         open(f"{d}/out.proftext", "w").write("\n".join(lines))
@@ -350,7 +351,14 @@ def translate(src, dst, target=DARWIN):
     print(f"cross-profile: {', '.join(f'{s} ({cores[core_of[s]]})' for s in sources)} to {target}: {stats['names']} names, {stats['changed']} rewritten, "
           f"{stats['unchanged']} as they were, {stats['unreadable']} unreadable")
     top = ", ".join(f"{n} {d} ({c})" for (n, d), c in unmapped.most_common(6))
-    print(f"cross-profile: crate roots outside the std map (teq's own and the allocator shim's are expected): {top}")
+    print(f"cross-profile: crate roots outside the std map (teq's own, its dependencies' and the allocator shim's are expected): {top}")
+
+
+def own_crates():
+    """the build's own crates (Cargo.lock's packages) by the names their symbols carry: one under a std
+    crate's name (libc, cfg_if) is the build's, under cargo's id for it, not the std's"""
+    lock = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Cargo.lock")).read()
+    return {n.replace("-", "_") for n in re.findall(r'^name = "([^"]+)"', lock, re.M)}
 
 
 def crate_ids_core(target):

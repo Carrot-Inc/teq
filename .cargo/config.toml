@@ -4,3 +4,9 @@
 # profile-guided builds keep the default.
 [build]
 rustflags = ["-C", "llvm-args=-import-instr-limit=250"]
+
+# The Windows ship is linked by zig (bench/zig.sh), whose dynamic-only search cannot take the import library
+# windows-targets ships for its system calls (`libwindows.<version>.a`, named as a dynamic library); under
+# this cfg windows-targets declares them as raw-dylib imports, which rustc links without an import library.
+[target.x86_64-pc-windows-gnullvm]
+rustflags = ["-C", "llvm-args=-import-instr-limit=250", "--cfg", "windows_raw_dylib"]
