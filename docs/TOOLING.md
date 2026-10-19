@@ -17,10 +17,10 @@ setting `teqCompiler`; the plugin fetches the compiler for the machine's platfor
 
 ```scala
 // project/plugins.sbt
-addSbtPlugin("build.teq" % "sbt-teq" % "1.0.0")
+addSbtPlugin("build.teq" % "sbt-teq" % "1.0.1")
 
 // build.sbt
-teqVersion := "0.1.8"
+teqVersion := "0.1.9"
 teqCompiler := true
 ```
 

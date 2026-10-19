@@ -8,4 +8,4 @@ addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.11.7")
 // version of its own instead (a branch's `sbt --batch 'set version := "0.1.1-<branch>-SNAPSHOT"; publishLocal'`),
 // so that a branch's plugin never stands in for a release other builds resolve; check.sh and check-export.sh read
 // the pin the same way.
-addSbtPlugin("build.teq" % "sbt-teq" % sys.env.getOrElse("TEQ_PLUGIN_VERSION", "1.0.0"))
+addSbtPlugin("build.teq" % "sbt-teq" % sys.env.getOrElse("TEQ_PLUGIN_VERSION", "1.0.1"))
