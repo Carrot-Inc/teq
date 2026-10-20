@@ -232,7 +232,7 @@ neg/erased-class.scala	std	Erased
 neg/erased-def-rhs.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/erased-if-else.scala	syntax	'erased' is not part of the supported Scala subset	--language experimental.erasedDefinitions
 neg/erased-in-tuples.scala	syntax	expected {}, found {}	--language experimental.erasedDefinitions
-neg/erased-inline-unrealizable-path.scala	different	type mismatch
+neg/erased-inline-unrealizable-path.scala	accepts	
 neg/erased-lazy-given.scala	std	Erased
 neg/erased-lazy-val.scala	syntax	'erased' is not part of the supported Scala subset
 neg/erased-machine-state-encoding-with-inline.scala	same		--language experimental.erasedDefinitions
@@ -362,7 +362,7 @@ neg/i10268.scala	same
 neg/i10295.scala	same	
 neg/i10369.scala	std	PolyFunction
 neg/i1050.scala	different	type mismatch	--source future
-neg/i1050a.scala	different	type mismatch
+neg/i1050a.scala	accepts	
 neg/i1050c.scala	subset	4/7 lines
 neg/i10511.scala	same	
 neg/i10546.scala	syntax	expected end of statement, found {}
@@ -598,7 +598,7 @@ neg/i15377.scala	accepts
 neg/i15381.scala	same	
 neg/i15414.scala	std	apply
 neg/i15448.scala	same	
-neg/i15468.scala	std	x
+neg/i15468.scala	superset	+1 lines: value {} is not a member of {}
 neg/i15474b.scala	accepts	
 neg/i15507.scala	subset	6/10 lines
 neg/i15525.scala	std	element0
@@ -1004,14 +1004,14 @@ neg/i2770.scala	subset	3/4 lines
 neg/i2771.scala	syntax	expected {}, found {}
 neg/i2771a.scala	subset	1/2 lines
 neg/i2771b.scala	subset	1/2 lines
-neg/i2771c.scala	same	
+neg/i2771c.scala	subset	1/2 lines
 neg/i2778.scala	same	
 neg/i280.scala	same	
 neg/i2808.scala	same	
 neg/i2871.scala	same	
-neg/i2887a.scala	different	type mismatch
+neg/i2887a.scala	same	
 neg/i2887b.scala	syntax	expected identifier, found {}
-neg/i2887c.scala	different	type mismatch
+neg/i2887c.scala	same	
 neg/i2901.scala	same	
 neg/i2928.scala	accepts	
 neg/i2950.scala	same	
@@ -1359,7 +1359,7 @@ neg/i8894.scala	subset	1/2 lines
 neg/i8896-a.scala	same	
 neg/i8896-b.scala	same	
 neg/i8900-promote.scala	accepts	
-neg/i8900.scala	same	
+neg/i8900.scala	subset	1/2 lines
 neg/i8925.scala	same	
 neg/i8976.scala	accepts	
 neg/i8984.scala	accepts	
