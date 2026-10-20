@@ -177,6 +177,67 @@ impl std::ops::Index<usize> for Sources {
 /// The file of a diagnostic that belongs to no file: one of the build's options.
 pub const NO_FILE: FileId = FileId(u32::MAX);
 
+/// The completion whose typing reported a diagnostic (`Diagnostic::owner`): by its file and
+/// where it stands there, a member's name or a top-level definition's start, so that it is the
+/// same on every worker. A member's signature and its body are two completions at one place, the
+/// signature's marked (`DiagOwner::SIG`), as dotty's completer types a declared result apart from
+/// the body `typedDefDef` types. Equality and hashing ignore it: one problem two workers report
+/// from two bodies is one diagnostic (`Diagnostics::absorb`).
+#[derive(Clone, Copy, Debug)]
+pub struct DiagOwner {
+    pub file: u32,
+    pub place: u32,
+}
+
+impl DiagOwner {
+    /// No definition's typing: a pass over the whole program, the driver's.
+    pub const NONE: DiagOwner = DiagOwner { file: u32::MAX, place: 0 };
+
+    /// The mark of a signature's completion on its definition's place.
+    pub const SIG: u32 = 1 << 31;
+
+    pub fn new(file: FileId, place: u32) -> DiagOwner {
+        DiagOwner { file: file.0, place }
+    }
+
+    /// The completion of the signature of the definition at `place` (`Namer.Completer.complete`).
+    pub fn sig(file: FileId, place: u32) -> DiagOwner {
+        DiagOwner { file: file.0, place: place | DiagOwner::SIG }
+    }
+
+    /// Where the owner stands in its file, a signature's at its definition's place.
+    pub fn at(self) -> u32 {
+        self.place & !DiagOwner::SIG
+    }
+
+    pub fn is_none(self) -> bool {
+        self.file == u32::MAX
+    }
+
+    /// The owner as a key of the typer's tables, which do compare it.
+    pub fn key(self) -> (u32, u32) {
+        (self.file, self.place)
+    }
+}
+
+impl Default for DiagOwner {
+    fn default() -> DiagOwner {
+        DiagOwner::NONE
+    }
+}
+
+impl PartialEq for DiagOwner {
+    fn eq(&self, _: &DiagOwner) -> bool {
+        true
+    }
+}
+
+impl Eq for DiagOwner {}
+
+impl std::hash::Hash for DiagOwner {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Diagnostic {
     pub file: FileId,
@@ -187,6 +248,10 @@ pub struct Diagnostic {
     /// One of a signature, a parent, an import or an export is reported once, when that is
     /// resolved, and stays with the file while its bodies are edited.
     pub of_body: bool,
+    /// The definition whose typing reported it, the innermost one in progress on the worker
+    /// that did (`Diagnostics::owner`): what a unit's suspension at typing keeps of it is decided
+    /// by its owner (`Worker::take_typing_suspended`).
+    pub owner: DiagOwner,
     /// Where a diagnostic of a library body's pseudo file stands in the library's source, which
     /// it is rendered at in the place of the pseudo file's line.
     pub place: Option<Box<Place>>,
@@ -277,7 +342,7 @@ impl Place {
 impl Diagnostic {
     /// A diagnostic of nothing but its place, message and severity.
     pub fn plain(file: FileId, span: Span, msg: String, is_warning: bool, of_body: bool) -> Diagnostic {
-        Diagnostic { file, span, msg, is_warning, of_body, place: None, dependent: false, unknown: false, late: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, phase: 0, unplaced: false }
+        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, phase: 0, unplaced: false }
     }
 
     /// What the reporting policy's filters read of the diagnostic.
@@ -416,7 +481,7 @@ fn producer_rank(d: &Diagnostic) -> u8 {
         return PHASE_TYPER;
     }
     if d.category == Category::Deprecation {
-        return 5;
+        return PHASE_FIRST_TRANSFORM;
     }
     match d.id {
         id::PATTERN_MATCH_EXHAUSTIVITY | id::MATCH_CASE_UNREACHABLE => 7,
@@ -430,10 +495,17 @@ fn producer_rank(d: &Diagnostic) -> u8 {
 /// The phases `producer_rank` names.
 pub const PHASE_TYPER: u8 = 1;
 pub const PHASE_INLINING: u8 = 4;
+/// The group of `FirstTransform`, after `Inlining`: `CrossVersionChecks`, `InlineVals`, `RefChecks`.
+pub const PHASE_FIRST_TRANSFORM: u8 = 5;
 /// `RefChecks`, of the group `CrossVersionChecks` begins.
 pub const PHASE_REFCHECKS: u8 = 5;
-pub const PHASE_ERASURE: u8 = 10;
-pub const PHASE_NONLOCAL_RETURNS: u8 = 11;
+/// `TupleOptimizations`, before `Erasure`.
+pub const PHASE_TUPLE_OPTIMIZATIONS: u8 = 10;
+pub const PHASE_ERASURE: u8 = 11;
+/// `TailRec`, after `Erasure`.
+pub const PHASE_TAILREC: u8 = 12;
+/// `NonLocalReturns`, of `TailRec`'s group, after it.
+pub const PHASE_NONLOCAL_RETURNS: u8 = 13;
 
 /// What a build presents (`Diagnostics::report`): the diagnostics, and how many errors and
 /// warnings are counted.
@@ -466,6 +538,9 @@ pub struct Diagnostics {
     /// Whether what is reported now comes of typing bodies, which a watch session's retype of
     /// the file does again: set by the typer around what it is doing.
     pub of_bodies: bool,
+    /// The definition being typed, whose the diagnostics reported now are (`Diagnostic::owner`):
+    /// set by the typer around an item and each member's body it types.
+    pub owner: DiagOwner,
     /// Whether the program has a lexical or syntax error (`Diagnostic::unknown`): set by the
     /// driver for what it presents.
     pub syntax_errors: bool,
@@ -475,13 +550,21 @@ pub struct Diagnostics {
 }
 
 impl Diagnostics {
+    /// A diagnostic of the definition being typed (`owner`).
+    fn made(&self, file: FileId, span: Span, msg: String, is_warning: bool, of_body: bool) -> Diagnostic {
+        let mut d = Diagnostic::plain(file, span, msg, is_warning, of_body);
+        d.owner = self.owner;
+        d
+    }
+
     pub fn error(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
-        self.items.push(Diagnostic::plain(file, span, msg.into(), false, self.of_bodies));
+        let d = self.made(file, span, msg.into(), false, self.of_bodies);
+        self.items.push(d);
     }
 
     /// An error that depends on malformed syntax (`Diagnostic::dependent`).
     pub fn dependent_error(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
-        let mut d = Diagnostic::plain(file, span, msg.into(), false, self.of_bodies);
+        let mut d = self.made(file, span, msg.into(), false, self.of_bodies);
         d.dependent = true;
         self.items.push(d);
     }
@@ -489,7 +572,7 @@ impl Diagnostics {
     /// A warning of the syntax, a migration warning where `migration` says (`Category::Migration`), with
     /// dotty's message's identity `id`.
     pub fn syntax_warning(&mut self, file: FileId, span: Span, msg: impl Into<String>, migration: bool, id: u16) {
-        let mut d = Diagnostic::plain(file, span, msg.into(), true, false);
+        let mut d = self.made(file, span, msg.into(), true, false);
         d.id = id;
         if migration {
             d.category = crate::warnings::Category::Migration;
@@ -498,13 +581,14 @@ impl Diagnostics {
     }
 
     pub fn warn(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
-        self.items.push(Diagnostic::plain(file, span, msg.into(), true, self.of_bodies));
+        let d = self.made(file, span, msg.into(), true, self.of_bodies);
+        self.items.push(d);
     }
 
     /// A warning with its identity (`Diagnostic::id`), depending on malformed syntax where
     /// `dependent` says.
     pub fn warn_as(&mut self, file: FileId, span: Span, msg: impl Into<String>, w: Warning, dependent: bool) {
-        let mut d = Diagnostic::plain(file, span, msg.into(), true, self.of_bodies);
+        let mut d = self.made(file, span, msg.into(), true, self.of_bodies);
         d.dependent = dependent;
         d.id = w.id;
         d.category = w.category;
@@ -516,7 +600,7 @@ impl Diagnostics {
 
     /// A selector no name resolved through (`typer::unused`): a warning, or a hint.
     pub fn unnecessary(&mut self, file: FileId, span: Span, msg: impl Into<String>, hint: bool, origin: Option<Box<str>>) {
-        let mut d = Diagnostic::plain(file, span, msg.into(), true, true);
+        let mut d = self.made(file, span, msg.into(), true, true);
         d.hint = hint;
         d.unnecessary = true;
         d.id = crate::warnings::id::UNUSED_SYMBOL;

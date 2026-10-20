@@ -549,7 +549,7 @@ impl<'a, 't> Interp<'a, 't> {
         match t {
             TreeRef::Expr(e) => mix(1, self.span_key(self.prog().span_of(e))),
             TreeRef::Class(c) | TreeRef::Ctor(c) => mix(2, self.class_key(c)),
-            TreeRef::Def(s) => mix(3, self.sym_place(s)),
+            TreeRef::Def(s) | TreeRef::Member(s) => mix(3, self.sym_place(s)),
             _ => 4,
         }
     }

@@ -136,7 +136,7 @@ OOS_MESSAGES = [
     ("arity", "tuples of this size are not supported"),
     ("arity", "functions with this many parameters are not supported"),
     ("pattern-defs", "pattern definitions are only supported inside blocks"),
-    ("exports", "exports are only supported in the body"),
+    ("exports", "exports are only allowed from objects and classes"),
     ("exports", "export clauses are not supported in a given"),
     ("package-object", "a package object"),
     ("partial-application", "partial application over several parameter lists"),

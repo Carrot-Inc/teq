@@ -262,7 +262,7 @@ fn applied_in(ast: &Ast, fake: Name) -> bool {
 /// The site of the node that names `fake` in `ast`, if one does.
 fn site_in(ast: &Ast, fake: Name, interner: &Interner) -> Option<Site> {
     let path = |names: &[Name]| -> Vec<String> { names.iter().map(|&n| interner.get(n).to_string()).collect() };
-    for imp in ast.imports.iter().chain(&ast.local_imports).chain(&ast.exports).chain(&ast.top_exports).chain(&ast.language_imports) {
+    for imp in ast.imports.iter().chain(&ast.local_imports).chain(&ast.exports).chain(&ast.top_exports) {
         if let Some(i) = imp.path.iter().position(|&n| n == fake) {
             return Some(Site::Import { path: path(&imp.path[..i]) });
         }

@@ -357,6 +357,26 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.end_length(l);
     }
 
+    /// The typer's expansion `e` of `quotes(using q)` (the given `q` itself, the body's parameter
+    /// reference) as scalac's pickle has it: `q` in the call-less `INLINED` of the parameter's
+    /// proxy (`Inliner.inlinedFromOutside`), inside the `INLINED` whose call is scala-library's
+    /// `Quotes$package` (`(inlined(Quotes$package.type) inlined q)`).
+    pub(super) fn quotes_expansion(&mut self, e: TExprId, rest: &crate::tir::capture::NodeRecords) {
+        let l = self.open(INLINED);
+        self.term_at(Some(e));
+        let inner = self.open(INLINED);
+        self.within(Some(e), |p| p.node(e, rest));
+        self.buf.end_length(inner);
+        self.mark_tree();
+        self.buf.byte(IDENTTPT);
+        let n = self.names.object_class("Quotes$package");
+        self.buf.nat(n as u64);
+        self.buf.byte(TYPEREF);
+        self.buf.nat(n as u64);
+        self.package_path("scala.quoted");
+        self.buf.end_length(l);
+    }
+
     /// A type test of a class of the reflection API (`case l: Literal`), an unchecked test of an
     /// abstract type in scala-library: the `TypeTest` given's extractor scalac selects,
     /// `q.reflect.LiteralTypeTest(l)`, against the scrutinee's type.

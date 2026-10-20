@@ -634,7 +634,9 @@ impl<'a> Worker<'a> {
                         Some(&super::apply::ArgSrc::Ast(e) | &super::apply::ArgSrc::Hoisted(e)) => self.cur_ast().expr_span(e),
                         _ => span,
                     };
-                    self.error(at, format!("index out of bounds: {}", i));
+                    // `TupleOptimizations`' error, after `Inlining`: late, holding back no expansion.
+                    let file = self.env.file;
+                    self.diags.late_error_of(file, at, tuple_index_message(i), crate::source::PHASE_TUPLE_OPTIMIZATIONS);
                     return Some((recv, ERROR));
                 };
                 if !pending {
@@ -714,8 +716,11 @@ impl<'a> Worker<'a> {
             super::resolve::TermRef::Global(s) | super::resolve::TermRef::ModuleMember(_, s) => s,
             _ => return None,
         };
-        let text = self.prog.add_str(&format!("index out of bounds: {}", i));
+        let text = self.prog.add_str(&tuple_index_message(i));
         let message = self.prog.add(TExpr::Str(text));
+        // The call stands for `TupleOptimizations`' check, which its message's mark tells at the
+        // expansion (`Program::tuple_index_bits`), whatever a program writes as a message.
+        self.prog.mark_tuple_index(message);
         let callee = super::apply::Callee::Method { recv: None, sym, owner_subst: Vec::new(), prefix: None, refined: None };
         let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(message, self.b.t_string)], using: false, span, fun: super::apply::ArgList::NO_FUN };
         Some(self.apply_callee(callee, None, vec![list], span, None))
@@ -829,3 +834,9 @@ impl<'a> Worker<'a> {
         }
     }
 }
+
+/// `TupleOptimizations`' message of a constant index past a tuple's elements.
+fn tuple_index_message(i: i32) -> String {
+    format!("index out of bounds: {}", i)
+}
+

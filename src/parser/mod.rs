@@ -1261,6 +1261,9 @@ impl<'a> Parser<'a> {
                 let mut out = Vec::new();
                 self.parse_def(&mut out);
                 self.ast.top_level.extend(out);
+                // The export clauses of a top-level extension group are the package object's.
+                let clauses = self.export_scratch.drain(..);
+                self.ast.top_exports.extend(clauses);
             }
             _ => {
                 let (at, found) = self.found();
@@ -1373,8 +1376,10 @@ impl<'a> Parser<'a> {
     }
 
     /// The part shared by `import` and `export`, after the keyword at `keyword`: one entry per
-    /// selector is appended to `out`. `import scala.language.*` and its selectors switch on
-    /// features of scalac and are dropped.
+    /// selector is appended to `out`. A clause that looks like a language import
+    /// (`TreeInfo.languageImport`, by its written path) switches on the features its selectors
+    /// name (`Ast::language_scopes`, dotty's `ImportInfo.isLanguageImport`), and stays an import
+    /// the typer resolves and checks (`Checking.checkLegalImportPath`).
     fn parse_import_exprs(&mut self, out: &mut Vec<Import>, keyword: u32, export: bool) {
         let mark = out.len();
         let mut first = true;
@@ -1387,6 +1392,16 @@ impl<'a> Parser<'a> {
             let mut path_spans: Vec<Span> = Vec::new();
             let qual_end = |path_spans: &[Span]| path_spans.last().map_or(start.start, |s| s.end);
             loop {
+                // An import or export clause is a qualifier, a `.` and its selectors (`Parsers.importExpr`):
+                // a brace, a wildcard or a `given` where the qualifier should be is scalac's syntax
+                // error, the qualifier the error name (`path`'s `termIdent`, `Ident(nme.ERROR)`),
+                // which resolves to nothing and binds nothing; the selectors are read as written,
+                // and the typer runs on the clause as scalac's does (`TyperPhase.isRunnable`).
+                if path.is_empty() && (self.at(Tok::LBrace) || self.at(Tok::Underscore) || self.at(Tok::KwGiven)) {
+                    let (at, found) = self.found();
+                    self.error_at(at, format!("expected an identifier, found {}", found));
+                    path.push(names::ERROR);
+                }
                 if self.at(Tok::LBrace) {
                     self.bump();
                     let mut cut = false;
@@ -1412,7 +1427,8 @@ impl<'a> Parser<'a> {
                     }
                     break;
                 }
-                if self.at_op(names::STAR) || self.at(Tok::Underscore) || self.at(Tok::KwGiven) {
+                // A `*` where the qualifier should be is an identifier (`import *` wants its `.`).
+                if (self.at_op(names::STAR) && !path.is_empty()) || self.at(Tok::Underscore) || self.at(Tok::KwGiven) {
                     let sel_start = self.ast.import_names.len();
                     let from = self.span();
                     let (sel, bound) = self.parse_import_selector(export);
@@ -1441,6 +1457,20 @@ impl<'a> Parser<'a> {
                     path.push(n);
                     path_spans.push(name_span);
                     continue;
+                }
+                // A name without its `.` (`importSelection`'s `accept(DOT)`): the name is the
+                // qualifier, the selector the error name (`namedSelector(termIdent())` at the
+                // token after it), which binds nothing; the typer checks the qualifier.
+                if path.is_empty() && !self.at_soft(names::AS) {
+                    let (at, found) = self.found();
+                    self.error_at(at, format!("expected '.', found {}", found));
+                    path.push(n);
+                    path_spans.push(name_span);
+                    let span = start.to(self.prev_span());
+                    let selector_span = self.prev_span();
+                    let qual_end = qual_end(&path_spans);
+                    out.push(Import { path, sel: ImportSel::Name(names::ERROR, None), span, selector_span, bound: None, tree_start, qual_end, clause_end: selector_span.end });
+                    break;
                 }
                 let sel_start = self.ast.import_names.len();
                 self.note_selector_name(name_span);
@@ -1476,12 +1506,9 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        let mut kept = mark;
         self.language_scratch.clear();
         for i in mark..out.len() {
-            if !is_language_import(&out[i]) {
-                out.swap(kept, i);
-                kept += 1;
+            if !crate::ast::is_language_import(&out[i]) {
                 continue;
             }
             // A feature excluded (`strictEquality as _`) is not enabled.
@@ -1496,7 +1523,6 @@ impl<'a> Parser<'a> {
             }
             self.language_scratch.push(out[i].clone());
         }
-        out.truncate(kept);
     }
 
     /// A diagnostic of a row of the migration table at the version where the parser stands
@@ -1682,18 +1708,6 @@ fn source_version_selector(imp: &Import, interner: &Interner) -> Option<(SourceV
     match (path, &imp.sel) {
         ([names::LANGUAGE], &ImportSel::Name(n, None)) => SourceVersion::import_name(interner.get(n), TAG).map(|v| (v, imp.selector_span)),
         _ => None,
-    }
-}
-
-fn is_language_import(imp: &Import) -> bool {
-    let path = match imp.path.split_first() {
-        Some((&names::SCALA, rest)) => rest,
-        _ => &imp.path[..],
-    };
-    match path.first() {
-        Some(&names::LANGUAGE) => true,
-        None => matches!(imp.sel, ImportSel::Name(names::LANGUAGE, _)),
-        _ => false,
     }
 }
 

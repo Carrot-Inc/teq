@@ -37,6 +37,7 @@ teq compiler check src/                    # type check only
       --strict-equality           # scalac's -language:strictEquality
       --kind-projector            # scalac's -Xkind-projector: `Either[String, *]` as a type lambda
       --max-inlines n             # scalac's -Xmax-inlines (32 by default)
+      --max-inlined-trees n       # scalac's -Xmax-inlined-trees (2000000 by default)
       --dialect no-overloading,.. # turn costly constructs off, or `strict` for all (docs/SPEED.md)
       --werror                    # warnings fail the build
       --wunused imports,privates  # scalac's -Wunused, with its kinds

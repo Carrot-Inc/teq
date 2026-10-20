@@ -716,7 +716,7 @@ impl<'a> Worker<'a> {
         let file = self.file_at(&ids, site);
         let facts = self.facts(&ids, file, &call);
         let binders = self.binders(file);
-        let base = Env { file, frames: Vec::new(), imports: Vec::new() };
+        let base = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
         let answer = self.in_query(base, |w| {
             w.enter_scope_at(file, site, &binders);
             let at = Span::new(site, site);

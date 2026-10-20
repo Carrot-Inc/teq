@@ -737,6 +737,37 @@ thread_local! {
 /// The threads' measurements by worker, in the order they were flushed.
 static FLUSHED: Mutex<Vec<(usize, Stats)>> = Mutex::new(Vec::new());
 
+/// The forked inlining phase's workers' measurements, by worker, apart from the body phase's.
+static FLUSHED_PHASE: Mutex<Vec<(usize, Stats)>> = Mutex::new(Vec::new());
+
+/// What a thread measured before its part of the forked inlining phase (the main worker's body
+/// phase), set aside until the part ends.
+pub struct SetAside(Stats);
+
+/// This thread's part of the forked inlining phase begins as worker `worker`: its waits and holds
+/// are counted from here, apart from the body phase's (`phase_work_end`).
+pub fn phase_work_begin(worker: usize) -> Option<SetAside> {
+    if !on() {
+        return None;
+    }
+    let aside = STATS.with(|s| std::mem::take(&mut *s.borrow_mut()));
+    work_begin(worker);
+    Some(SetAside(aside))
+}
+
+/// This thread's part of the forked inlining phase ends: its measurements go to the phase's
+/// workers' rows, what was set aside comes back.
+pub fn phase_work_end(worker: usize, aside: Option<SetAside>) {
+    let Some(SetAside(aside)) = aside else { return };
+    work_end();
+    let stats = STATS.with(|s| std::mem::replace(&mut *s.borrow_mut(), aside));
+    let mut f = FLUSHED_PHASE.lock().unwrap_or_else(|e| e.into_inner());
+    match f.iter_mut().find(|(w, _)| *w == worker) {
+        Some((_, s)) => s.absorb(stats),
+        None => f.push((worker, stats)),
+    }
+}
+
 /// Hands this thread's measurements over as worker `worker`'s: at the end of its part of the body
 /// phase, and on the typing thread at the end of the type phase.
 pub fn flush(worker: usize) {
@@ -859,6 +890,11 @@ fn report_counters(report: &mut crate::report::Report, attempt: bool, parts: &[(
     }
     let sorted: Vec<(usize, Stats)> = workers.iter().map(|(w, s)| (*w, s.counts())).collect();
     report_workers(report.section(if attempt { "the attempt's waits and holds" } else { "waits and holds" }), &sorted);
+    let mut phase: Vec<(usize, Stats)> = FLUSHED_PHASE.lock().unwrap_or_else(|e| e.into_inner()).iter().map(|(w, s)| (*w, s.counts())).collect();
+    phase.sort_by_key(|(w, _)| *w);
+    if !phase.is_empty() {
+        report_workers(report.section(if attempt { "the attempt's inlining phase's waits and holds" } else { "the inlining phase's waits and holds" }), &phase);
+    }
     report_types(report, &sorted);
 }
 

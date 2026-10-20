@@ -70,7 +70,7 @@ object Promise extends Object:
 
 @js.native
 @JSGlobal("Date")
-class Date(value: Double = js.native) extends Object:
+class Date(value: Double = native) extends Object:
   def getTime(): Double = js.native
   def getFullYear(): Int = js.native
   def getHours(): Int = js.native
@@ -80,7 +80,7 @@ class Date(value: Double = js.native) extends Object:
 @JSGlobal("Date")
 object Date extends Object:
   def now(): Double = js.native
-  def UTC(year: Int, month: Int, date: Int = js.native, hours: Int = js.native): Double = js.native
+  def UTC(year: Int, month: Int, date: Int = native, hours: Int = native): Double = js.native
 
 @js.native
 @JSGlobal("JSON")

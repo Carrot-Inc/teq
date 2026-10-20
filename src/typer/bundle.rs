@@ -202,6 +202,23 @@ impl<'a> Worker<'a> {
         self.fault_after_entry(fun.and_then(|f| self.prog.funs.raw(f.0).body).or(init));
     }
 
+    /// Publishes, outside the loader's lock, the classes this worker made since its last
+    /// publication, their inherited merges settled first, as a body's publication does
+    /// (`publish_body_bundle`): for the inlining phase's worker after each unit, whose expansions
+    /// make classes no body publishes, and whose other publications (a library body a macro's run
+    /// types) are made inside a hold, which settles nothing and leaves them to scan again.
+    pub(super) fn publish_made_classes(&mut self) {
+        if !self.forked || crate::shared::lock_depth() > 0 {
+            return;
+        }
+        self.settle_registered_merges();
+        if self.pending_exports() {
+            return self.with_loader_for(crate::measure::Hold::Publication, |w| w.publish_class_bodies());
+        }
+        self.publish_side_tables();
+        self.publish_bundle_classes();
+    }
+
     /// Publishes, outside the loader's lock, the check of the shared class `c` this worker made
     /// into its own chunk: its `TClass` and the classes made since the last publication, then the
     /// check done. Under a hold, or with a variance registration to export, the hold's release does.

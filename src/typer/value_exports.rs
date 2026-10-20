@@ -50,6 +50,10 @@ pub(super) struct ValuePath {
     /// members are its classes, its aliases and its files' top-level definitions, named
     /// statically: no value (`Forward::STATIC`), `path` unread.
     pkg: Option<PkgId>,
+    /// The companion extension method an export clause inside an extension group names (dotty's
+    /// `pathMethod`, `Namer.exportPathSym`): `path` is its result type, `value` none
+    /// (`Forward::STATIC`), the forwarders extension methods over its parameters.
+    path_method: Option<SymId>,
 }
 
 /// The qualifier of an export clause that is no value: an object or a package.
@@ -111,8 +115,15 @@ impl<'a> Worker<'a> {
     /// a local val, an imported value's member, then the stable vals and objects selected on it.
     /// Its errors are reported; `None` for a path that is no value's.
     pub(super) fn value_export_path(&mut self, path: &[Name], span: Span) -> Option<ValuePath> {
-        match self.resolve_qualifier(path, span, true)? {
-            super::ImportTarget::ValueAll(value) => Some(ValuePath { value, path: self.import_value_type(value), object: false, pkg: None }),
+        let target = self.resolve_qualifier(path, span, true)?;
+        // `checkLegalExportPath`'s `checkLegalImportOrExportPath` of the typed path, once per
+        // clause (a clause a completion held back is typed again where that ends).
+        let file = self.env.file;
+        if self.checked_imports.insert((file.0, span.start), ()).is_none() {
+            self.check_import_target(target, path, span, "export");
+        }
+        match target {
+            super::ImportTarget::ValueAll(value) => Some(ValuePath { value, path: self.import_value_type(value), object: false, pkg: None, path_method: None }),
             _ => None,
         }
     }
@@ -192,7 +203,7 @@ impl<'a> Worker<'a> {
         let m = self.syms.class(o).module_sym?;
         let value = self.with_loader(|w| ValueImport(w.import_values.push((m, None, None)) as u32));
         let path = if self.static_object(o) { self.types.class(o, &[]) } else { self.import_value_type(value) };
-        Some(ValuePath { value, path, object: true, pkg: None })
+        Some(ValuePath { value, path, object: true, pkg: None, path_method: None })
     }
 
     /// The path of package `p`'s package object, whose members are the package's.
@@ -203,7 +214,7 @@ impl<'a> Worker<'a> {
 
     /// The path of a package as a qualifier: its members named statically.
     fn package_value_path(&mut self, p: PkgId) -> ValuePath {
-        ValuePath { value: ValueImport(Forward::STATIC), path: crate::types::ANY, object: false, pkg: Some(p) }
+        ValuePath { value: ValueImport(Forward::STATIC), path: crate::types::ANY, object: false, pkg: Some(p), path_method: None }
     }
 
     /// Whether an export clause goes through a value, the clauses `value_export_path` resolves and
@@ -652,6 +663,12 @@ impl<'a> Worker<'a> {
             self.diags.error(file, clause[0].span, "an export needs a qualifier, as in `export obj.member`".to_string());
             return None;
         }
+        // A clause inside an extension group: through its companion extension method
+        // (`processExports`' `ExtMethods` case).
+        let file = self.home_file(home);
+        if let Some(header) = self.ast(file).extension_export_at(clause[0].span.start).cloned() {
+            return self.extension_clause_forwarders(home, clause, &header);
+        }
         let through_value = self.export_scope(|t| t.export_path_through_value(&clause[0].path));
         // A class's export of an object forwards its term members as a value's, as dotty makes
         // forwarders of every clause (`Namer.exportForwarders`): they are members of the class,
@@ -671,13 +688,31 @@ impl<'a> Worker<'a> {
         let vp = match (through_value, object) {
             (true, _) => self.value_export_path(&clause[0].path, clause[0].span),
             (false, Some(StaticPath::Object(o))) => self.object_value_path(o),
-            (false, Some(StaticPath::Package(p))) => Some(self.package_value_path(p)),
+            (false, Some(StaticPath::Package(p))) => {
+                // `checkLegalExportPath`: a package's members are no wildcard export's, which
+                // incremental compilation could not follow (zinc's #226); a `given` selector is a
+                // wildcard (`ImportSelector.isWildcard`). The forwarders are made all the same, as
+                // dotty's `exportForwarders` goes on.
+                if clause.iter().any(|imp| matches!(imp.sel, ImportSel::Wildcard | ImportSel::Given)) {
+                    let file = self.home_file(home);
+                    let msg = format!("Implementation restriction: package {} is not a valid prefix for a wildcard export, as it is a package", self.pkg_path(p));
+                    // The completer's report (`Namer.processExports`): the class's or the clause's.
+                    let owner = match home {
+                        Home::Class(c) => self.class_owner(c),
+                        Home::File(..) => self.top_export_owner(file, clause[0].span.start),
+                    };
+                    let owner = owner.unwrap_or(self.diags.owner);
+                    let outer = std::mem::replace(&mut self.diags.owner, owner);
+                    self.diags.error(file, clause[0].span, msg);
+                    self.diags.owner = outer;
+                }
+                Some(self.package_value_path(p))
+            }
             // No object, package or value: the qualifier's resolution reports what it misses
             // (dotty's `typedAheadExpr` of the qualifier, `Not found`, `is not a member`).
             (false, None) => self.value_export_path(&clause[0].path, clause[0].span),
         };
         let Some(vp) = vp else { return None };
-        let file = self.home_file(home);
         // A path whose type is in error, an error already reported in its initializer, has a
         // member of every name, of the error type (dotty's `findMember` gives an error symbol,
         // `newErrorSymbol`): each named selector forwards to it silently, a wildcard to nothing.
@@ -714,11 +749,77 @@ impl<'a> Worker<'a> {
             Some(_) => {}
             None => self.complete_forwarders_of_type(vp.path),
         }
+        self.clause_selectors(home, &vp, clause);
+        None
+    }
+
+    /// `Namer.exportPathSym` and the forwarders of an export clause inside an extension group:
+    /// the qualifier a simple name of one of the group's methods with the group's parameters
+    /// alone (a "parameterless companion extension method"), the members those of its result
+    /// type, each forwarder an extension method over the method's parameters
+    /// (`exportForwarders` with `pathMethod`).
+    fn extension_clause_forwarders(&mut self, home: Home, clause: &[Import], header: &crate::ast::ExtensionExport) -> Option<ClassId> {
+        let file = self.home_file(home);
+        let span = clause[0].span;
+        let pm = match clause[0].path.as_slice() {
+            [name] => {
+                let name = *name;
+                let candidates: Vec<crate::ast::DefId> = {
+                    let ast = self.ast(file);
+                    header
+                        .methods
+                        .iter()
+                        .copied()
+                        .filter(|&d| {
+                            let def = ast.def(d);
+                            def.name == name && matches!(&def.kind, DefKind::Fun(f) if f.tparams.len() == header.tparams.len() && f.clauses.len() == header.clauses.len())
+                        })
+                        .collect()
+                };
+                match candidates.as_slice() {
+                    [d] => match self.def_syms.get(file.0 as usize, d).copied() {
+                        Some(s) => s,
+                        None => return None,
+                    },
+                    [] => {
+                        let msg = format!("export qualifier {} is not a parameterless companion extension method", self.name_str(name));
+                        self.diags.error(file, span, msg);
+                        return None;
+                    }
+                    _ => {
+                        let msg = format!("export qualifier {} cannot be overloaded", self.name_str(name));
+                        self.diags.error(file, span, msg);
+                        return None;
+                    }
+                }
+            }
+            _ => {
+                self.diags.error(file, span, "export qualifier must be a simple reference to a companion extension method".to_string());
+                return None;
+            }
+        };
+        let path = self.sig_of(pm).ret;
+        if self.types.contains_error(path) {
+            self.error_forwarders(home, clause);
+            return None;
+        }
+        let vp = Arc::new(ValuePath { value: ValueImport(Forward::STATIC), path, object: false, pkg: None, path_method: Some(pm) });
+        self.complete_forwarders_of_type(path);
+        self.clause_selectors(home, &vp, clause);
+        None
+    }
+
+    /// The forwarders of a clause's selectors on its path.
+    fn clause_selectors(&mut self, home: Home, vp: &Arc<ValuePath>, clause: &[Import]) {
+        let file = self.home_file(home);
         // The names the clause's other selectors take, which its wildcard leaves out.
         let named: Vec<Name> = clause.iter().filter_map(|imp| if let ImportSel::Name(n, _) = imp.sel { Some(n) } else { None }).collect();
         let mut targets: Vec<Name> = Vec::new();
         for imp in clause {
             match imp.sel {
+                // The error selector of a malformed clause: dotty's "no eligible member <error>" stands
+                // at the syntax error's place, which its reporter hides.
+                ImportSel::Name(n, _) if n == crate::names::ERROR => continue,
                 ImportSel::Name(n, rename) => {
                     let alias = rename.unwrap_or(n);
                     if self.name_str(alias) == "_" {
@@ -727,13 +828,13 @@ impl<'a> Worker<'a> {
                     let at = self.selector_span(imp);
                     // The type of the name and the term (dotty's `addForwardersNamed` looks up
                     // `name` and `name.toTypeName`), in error only when neither is forwarded.
-                    let typed = self.forward_type(home, &vp, n, alias, at);
-                    if let Err(why) = self.forward_member(home, &vp, n, alias, at, imp.span, &mut targets, Selected::Named) {
+                    let typed = self.forward_type(home, vp, n, alias, at);
+                    if let Err(why) = self.forward_member(home, vp, n, alias, at, imp.span, &mut targets, Selected::Named) {
                         if typed {
                             targets.push(alias);
                             continue;
                         }
-                        let path = self.path_text(&vp, &clause[0].path);
+                        let path = self.path_text(vp, &clause[0].path);
                         let mut msg = format!("no eligible member {} at {}", self.name_str(n), path);
                         if let Some(why) = why {
                             msg.push_str(&format!("\n{}.{} cannot be exported because it {}", path, self.name_str(n), why));
@@ -743,31 +844,30 @@ impl<'a> Worker<'a> {
                 }
                 ImportSel::Wildcard => {
                     let at = self.selector_span(imp);
-                    for n in self.forwardable_names(&vp, false) {
+                    for n in self.forwardable_names(vp, false) {
                         if !named.contains(&n) {
-                            let _ = self.forward_member(home, &vp, n, n, at, imp.span, &mut targets, Selected::Wildcard);
+                            let _ = self.forward_member(home, vp, n, n, at, imp.span, &mut targets, Selected::Wildcard);
                         }
                     }
-                    let types = self.forwardable_type_names(&vp);
+                    let types = self.forwardable_type_names(vp);
                     for n in types {
                         // A name another selector of the clause took clashes, which the wildcard
                         // passes over (dotty's `canForward`: `targets.contains(alias)`).
                         if !named.contains(&n) && !targets.contains(&n) {
-                            self.forward_type(home, &vp, n, n, at);
+                            self.forward_type(home, vp, n, n, at);
                         }
                     }
                 }
                 ImportSel::Given => {
                     let at = self.selector_span(imp);
-                    for n in self.forwardable_names(&vp, true) {
+                    for n in self.forwardable_names(vp, true) {
                         if !named.contains(&n) {
-                            let _ = self.forward_member(home, &vp, n, n, at, imp.span, &mut targets, Selected::Givens);
+                            let _ = self.forward_member(home, vp, n, n, at, imp.span, &mut targets, Selected::Givens);
                         }
                     }
                 }
             }
         }
-        None
     }
 
     /// Whether `name` of class `b` is one of dotty's `caseClassSynthesized`: `hashCode`, `equals`
@@ -904,6 +1004,29 @@ impl<'a> Worker<'a> {
         let names = path.iter().map(|&n| self.name_str(n)).collect::<Vec<_>>().join(".");
         if vp.pkg.is_some() {
             return names;
+        }
+        // The companion extension method as its `TermRef` prints, under its owners (`O.O2.cm`).
+        if let Some(pm) = vp.path_method {
+            let mut parts = vec![self.name_str(self.syms.sym(pm).name).to_string()];
+            let mut owner = self.syms.sym(pm).owner;
+            loop {
+                match owner {
+                    Owner::Class(c) => {
+                        parts.push(self.name_str(self.syms.class(c).name).to_string());
+                        owner = self.syms.class(c).owner;
+                    }
+                    Owner::Package(p) if p != crate::symbols::ROOT_PKG => match self.syms.pkg(p).parent {
+                        Some(parent) => {
+                            parts.push(self.name_str(self.syms.pkg(p).name).to_string());
+                            owner = Owner::Package(parent);
+                        }
+                        None => break,
+                    },
+                    _ => break,
+                }
+            }
+            parts.reverse();
+            return parts.join(".");
         }
         let mut head = vp.value;
         while let (_, _, Some(prev)) = self.import_values[head.0 as usize] {
@@ -1137,6 +1260,11 @@ impl<'a> Worker<'a> {
     /// has a type of the name, its own or an earlier clause's forwarder, keeps it, the clause in
     /// error (`checkNoConflict`, E161). False where the path has no such member to forward.
     fn forward_type(&mut self, home: Home, vp: &ValuePath, name: Name, alias: Name, span: Span) -> bool {
+        // Through a companion extension method a type is no forwarder's (`canForward`:
+        // `pathMethod.exists && mbr.isType`).
+        if vp.path_method.is_some() {
+            return false;
+        }
         // A library's package enters the type where it is first asked for.
         if let Some(p) = vp.pkg {
             let _ = self.pkg_type(p, name);
@@ -1171,7 +1299,7 @@ impl<'a> Worker<'a> {
         let js = self.forwarded_alias_js(vp, name);
         let a = AliasId(self.syms.aliases.len() as u32);
         let owner = self.home_owner(home);
-        self.syms.aliases.push(AliasInfo { name: alias, owner, file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js, exported: true, declared_rhs: crate::tir::NO_TYPE });
+        self.syms.aliases.push(AliasInfo { name: alias, owner, file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js, exported: true, declared_rhs: crate::tir::NO_TYPE, completion_noted: false });
         self.syms.alias_cells.set(a.0, Completion::Done);
         match home {
             Home::Class(c) => {
@@ -1381,6 +1509,11 @@ impl<'a> Worker<'a> {
             }
         };
         if alts.is_empty() {
+            // Through a companion extension method a type member is named but forwarded by no
+            // extension method (`canForward`: `pathMethod.exists && mbr.isType`).
+            if vp.path_method.is_some() && self.forwardable_type_names(vp).contains(&name) {
+                return Err(Some("is a type, so it cannot be exported as extension method".to_string()));
+            }
             return Err(None);
         }
         // `targets` holds the named selectors' aliases alone (dotty's `seen`): a wildcard and a
@@ -1409,6 +1542,12 @@ impl<'a> Worker<'a> {
                 (info.mods, info.name, info.owner)
             };
             if m_name == crate::names::INIT {
+                continue;
+            }
+            // Through a companion extension method, a member that is an extension method itself
+            // (`canForward`: `pathMethod.exists && sym.is(ExtensionMethod)`).
+            if vp.path_method.is_some() && self.syms.sym(m).is_extension {
+                reason = Some("is already an extension method, cannot be exported into another one".to_string());
                 continue;
             }
             // A package's member is a top-level definition of one of its files, which no class
@@ -1542,6 +1681,66 @@ impl<'a> Worker<'a> {
         };
         let sig = self.sig_of(m).clone();
         let file = self.home_file(home);
+        // Through a companion extension method (`pathMethod`), the forwarder's leading type
+        // parameters and clauses are the method's, fresh (`addPathMethodParams`: the method's
+        // type wrapped around the member's), and what the member's signature names of the
+        // method's parameters is renamed to them (`pm_subst`, `pm_terms`).
+        let pm_sig = vp.path_method.map(|pm| self.sig_of(pm).clone());
+        let mut pm_tparams: Vec<TParamId> = Vec::new();
+        let mut pm_subst: Subst = Vec::new();
+        let mut pm_clauses: Vec<ClauseSig> = Vec::new();
+        let mut pm_terms: Vec<(SymId, TypeId)> = Vec::new();
+        if let Some(pm_sig) = &pm_sig {
+            pm_tparams = pm_sig
+                .tparams
+                .iter()
+                .map(|&p| {
+                    let info = self.syms.tparam(p);
+                    let (n, variance, arity) = (info.name, info.variance, info.arity);
+                    let q = self.syms.new_tparam(n, variance);
+                    self.syms.tparams[q.idx()].arity = arity;
+                    q
+                })
+                .collect();
+            pm_subst = pm_sig.tparams.iter().zip(&pm_tparams).map(|(&p, &q)| (p, self.types.param(q))).collect();
+            for (&p, &q) in pm_sig.tparams.iter().zip(&pm_tparams) {
+                let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
+                self.syms.tparams[q.idx()].lower = self.types.subst(lo, &pm_subst);
+                self.syms.tparams[q.idx()].upper = self.types.subst(hi, &pm_subst);
+            }
+            let fresh: Vec<SymId> = pm_sig.clauses.iter().flat_map(|cl| cl.params.iter()).map(|p| self.syms.new_sym(p.name, SymKind::Param, 0, Owner::Local, file, None, span)).collect();
+            pm_terms = pm_sig.clauses.iter().flat_map(|cl| cl.params.iter()).zip(&fresh).map(|(p, &q)| (p.sym, self.types.mk(Type::Term(q)))).collect();
+            let mut next = fresh.iter().copied();
+            pm_clauses = pm_sig
+                .clauses
+                .iter()
+                .map(|cl| ClauseSig {
+                    params: cl
+                        .params
+                        .iter()
+                        .map(|p| {
+                            let ty = self.types.subst(p.ty, &pm_subst);
+                            let ty = self.subst_paths(ty, &pm_terms);
+                            let local_ty = match (p.repeated, self.seq_class()) {
+                                (true, Some(seq)) => self.types.class(seq, &[ty]),
+                                _ => ty,
+                            };
+                            let q = next.next().expect("a fresh parameter per parameter");
+                            let retained = self.syms.sym(p.sym).mods & (mods::GIVEN | mods::IMPLICIT | mods::INLINE);
+                            {
+                                let mut info = self.syms.sym_mut(q);
+                                info.mods |= retained;
+                                info.sig = Some(Arc::new(MethodSig::value(local_ty)));
+                                info.state().set(Completion::Done);
+                                info.by_name = p.by_name;
+                            }
+                            ParamSig { ty, sym: q, ..*p }
+                        })
+                        .collect(),
+                    ..*cl
+                })
+                .collect();
+        }
         // The member's own type parameters, fresh ones whose bounds are seen from the path too
         // (dotty's forwarder takes `mbr.info` as the path sees it): `narrow[B <: A]` of an
         // `Impl[A]` exported through an `Impl[String]` is `narrow[B <: String]`.
@@ -1552,12 +1751,15 @@ impl<'a> Worker<'a> {
                 let info = self.syms.tparam(p);
                 self.types.has_paths(info.lower) || self.types.has_paths(info.upper)
             });
-        let tparams: Vec<TParamId> = if sig.tparams.is_empty() || (subst.is_empty() && !path_bounds) {
+        let tparams: Vec<TParamId> = if sig.tparams.is_empty() || (subst.is_empty() && !path_bounds && pm_sig.is_none()) {
             sig.tparams.clone()
         } else {
             let fresh: Vec<TParamId> = sig.tparams.iter().map(|&p| {
                 let info = self.syms.tparam(p);
                 let (n, variance, arity) = (info.name, info.variance, info.arity);
+                // A name one of the method's type parameters has is freshened
+                // (`addPathMethodParams`' `avoidNameClashes`).
+                let n = if pm_tparams.iter().any(|&t| self.syms.tparam(t).name == n) { self.interner.intern(&format!("{}$1", self.name_str(n))) } else { n };
                 let q = self.syms.new_tparam(n, variance);
                 self.syms.tparams[q.idx()].arity = arity;
                 q
@@ -1567,16 +1769,24 @@ impl<'a> Worker<'a> {
                 let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
                 let (lo, hi) = (self.types.subst(lo, &subst), self.types.subst(hi, &subst));
                 let owner = owner.expect("a class's member, whose owner's parameters the path gives");
-                self.syms.tparams[q.idx()].lower = self.as_seen_from(lo, vp.path, owner);
-                self.syms.tparams[q.idx()].upper = self.as_seen_from(hi, vp.path, owner);
+                let (lo, hi) = (self.as_seen_from(lo, vp.path, owner), self.as_seen_from(hi, vp.path, owner));
+                let (lo, hi) = if pm_subst.is_empty() { (lo, hi) } else { (self.types.subst(lo, &pm_subst), self.types.subst(hi, &pm_subst)) };
+                self.syms.tparams[q.idx()].lower = lo;
+                self.syms.tparams[q.idx()].upper = hi;
             }
             fresh
         };
         let seen = |t: &mut Self, ty: TypeId| {
             let ty = t.types.subst(ty, &subst);
-            match owner {
+            let ty = match owner {
                 Some(owner) => t.as_seen_from(ty, vp.path, owner),
                 None => ty,
+            };
+            if pm_subst.is_empty() && pm_terms.is_empty() {
+                ty
+            } else {
+                let ty = t.types.subst(ty, &pm_subst);
+                t.subst_paths(ty, &pm_terms)
             }
         };
         // A stable public member through a path that refers to nothing private gives its forwarder
@@ -1589,7 +1799,7 @@ impl<'a> Worker<'a> {
             SymKind::Object(k) => Some(k),
             _ => None,
         };
-        let stable = sig.tparams.is_empty() && sig.clauses.is_empty() && (module.is_some() || self.is_stable_path_member(m)) && self.syms.sym(m).mods & (mods::PRIVATE | mods::PROTECTED) == 0 && !self.path_refers_to_private(vp.value);
+        let stable = vp.path_method.is_none() && sig.tparams.is_empty() && sig.clauses.is_empty() && (module.is_some() || self.is_stable_path_member(m)) && self.syms.sym(m).mods & (mods::PRIVATE | mods::PROTECTED) == 0 && !self.path_refers_to_private(vp.value);
         // Through an object, the member's path as teq types a selection of it there (`Term` of a
         // member of an object, `object_member_path`), so that the two singletons are one type.
         // The forwarder's own parameters, which the member's later parameter types and its result
@@ -1653,24 +1863,36 @@ impl<'a> Worker<'a> {
             (false, _) => rebind(self, sig.ret),
         };
         let target = self.syms.sym(m);
-        let (is_extension, ext_tparams, ext_clauses) = (target.is_extension, target.ext_tparams, target.ext_clauses);
+        // Through a companion extension method the forwarder is an extension method over the
+        // method's parameters (`mbrFlags |= ExtensionMethod`).
+        let (is_extension, ext_tparams, ext_clauses) = match &pm_sig {
+            Some(ps) => (true, ps.tparams.len() as u8, ps.clauses.len() as u8),
+            None => (target.is_extension, target.ext_tparams, target.ext_clauses),
+        };
         // dotty's `RetainedExportTermFlags`: an inline member's forwarder is inline, its body the
         // member's call on the path, stored as an inline method's (`inline_forwarder_body`).
         let mut retained = target.mods & (mods::GIVEN | mods::IMPLICIT | mods::INFIX | mods::EXTENSION | mods::INLINE | mods::TRANSPARENT);
         if target.kind == SymKind::Given {
             retained |= mods::GIVEN;
         }
+        if pm_sig.is_some() {
+            retained |= mods::EXTENSION;
+        }
+        let mut all_tparams = pm_tparams;
+        all_tparams.extend(tparams);
+        let mut all_clauses = pm_clauses;
+        all_clauses.extend(clauses);
         let s = self.syms.new_sym(alias, SymKind::Def, mods::FINAL | retained, self.home_owner(home), file, None, span);
         {
             let mut info = self.syms.sym_mut(s);
-            info.sig = Some(Arc::new(MethodSig { tparams, clauses, ret, declared: crate::tir::NO_TYPE }));
+            info.sig = Some(Arc::new(MethodSig { tparams: all_tparams, clauses: all_clauses, ret, declared: crate::tir::NO_TYPE }));
             info.state().set(Completion::Done);
             info.is_extension = is_extension;
             info.ext_tparams = ext_tparams;
             info.ext_clauses = ext_clauses;
             info.stable = stable;
         }
-        let fwd = Arc::new(Forward { path: vp.value.0, target: m, clause, alt });
+        let fwd = Arc::new(Forward { path: vp.value.0, target: m, clause, alt, path_method: vp.path_method });
         let given = retained & (mods::GIVEN | mods::IMPLICIT) != 0;
         match home {
             Home::Class(c) => {
@@ -1751,13 +1973,22 @@ impl<'a> Worker<'a> {
     fn forwarder_fun(&mut self, s: SymId, fwd: &Forward) -> Option<crate::tir::FunId> {
         let span = self.syms.sym(s).span;
         let sig = self.sig_of(s).clone();
-        let path = self.forward_receiver(fwd, span)?;
-        let target = fwd.target;
         let params: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
+        // Through a companion extension method, the receiver is the method's call on the
+        // forwarder's leading parameters (`path.appliedToArgss(pathRefss)`), the member's
+        // arguments the parameters after them (`methRefss`).
+        let (path, lead, lead_t) = match fwd.path_method {
+            Some(pm) => {
+                let (recv, lead, lead_t) = self.path_method_receiver(pm, &sig, &params, span)?;
+                (Some(recv), lead, lead_t)
+            }
+            None => (self.forward_receiver(fwd, span)?, 0, 0),
+        };
+        let target = fwd.target;
         let body = if self.is_method_sym(target) {
             // A repeated parameter's sequence goes to the member's as it is, `xs*` (dotty's
             // `adaptForwarderParams`, `seqToRepeated`), typed as the sequence it is.
-            let params_flat: Vec<ParamSig> = sig.clauses.iter().flat_map(|cl| cl.params.iter().cloned()).collect();
+            let params_flat: Vec<ParamSig> = sig.clauses.iter().flat_map(|cl| cl.params.iter().cloned()).skip(lead).collect();
             let args: Vec<TExprId> = params_flat
                 .iter()
                 .map(|p| {
@@ -1790,7 +2021,7 @@ impl<'a> Worker<'a> {
             let te = self.build_call(&call, list);
             self.prog.set_type(te, sig.ret);
             // The pickle's call names its type arguments, the forwarder's own parameters.
-            let targs: Vec<TypeId> = sig.tparams.iter().map(|&t| self.types.param(t)).collect();
+            let targs: Vec<TypeId> = sig.tparams.iter().skip(lead_t).map(|&t| self.types.param(t)).collect();
             if self.capturing() && !targs.is_empty() {
                 self.capture_call_targs(te, &targs);
             }
@@ -1830,18 +2061,31 @@ impl<'a> Worker<'a> {
                     continue;
                 }
                 // A package's member's getter is a top-level definition too, called with no
-                // receiver.
-                let Some(path) = self.forward_receiver(fwd, span) else { continue };
+                // receiver; through a companion extension method, the method's call on the
+                // leading parameters, the member's getter applied to the ones after them.
+                let (path, lead) = match fwd.path_method {
+                    Some(pm) => match self.path_method_receiver(pm, sig, params, span) {
+                        Some((recv, lead, _)) => (Some(recv), lead),
+                        None => continue,
+                    },
+                    None => match self.forward_receiver(fwd, span) {
+                        Some(path) => (path, 0),
+                        None => continue,
+                    },
+                };
+                if i < lead {
+                    continue;
+                }
                 let before: usize = sig.clauses[..ci].iter().map(|cl| cl.params.len()).sum();
                 let mut items: Vec<TExprId> = path.iter().map(|&(r, _)| r).collect();
-                for k in 0..before {
+                for k in lead..before {
                     let e = self.prog.add(TExpr::Local(params[k]));
                     self.prog.set_type(e, flat[k].1);
                     items.push(e);
                 }
                 let l = self.prog.list(&items);
                 let receiver = if path.is_some() { crate::tir::DEFAULT_RECEIVER } else { 0 };
-                let d = self.prog.add(TExpr::Default(crate::tir::DefaultOf::Method(target), i as u32 | receiver, l));
+                let d = self.prog.add(TExpr::Default(crate::tir::DefaultOf::Method(target), (i - lead) as u32 | receiver, l));
                 self.prog.set_type(d, ty);
                 defaults[i] = Some(d);
             }
@@ -1881,10 +2125,53 @@ impl<'a> Worker<'a> {
     /// The forwarder's qualifier as a tree: the path its clause's qualifier is typed as, read
     /// where the forwarder stands; none for a package's member, named statically.
     pub(super) fn forward_receiver(&mut self, fwd: &Forward, span: Span) -> Option<Option<(TExprId, TypeId)>> {
+        // Through a companion extension method the receiver is built over the forwarder's
+        // parameters (`path_method_receiver`), which this has not.
+        if fwd.path_method.is_some() {
+            return None;
+        }
         if fwd.is_static() {
             return Some(None);
         }
         self.import_value_ref(ValueImport(fwd.path), span).map(Some)
+    }
+
+    /// The receiver of a forwarder through the companion extension method `pm`
+    /// (`path.appliedToArgss(pathRefss)` in `Namer.exportForwarders`): the method called on the
+    /// forwarder's leading parameters, its result type with the method's type parameters the
+    /// forwarder's leading ones; with how many parameters and type parameters lead.
+    fn path_method_receiver(&mut self, pm: SymId, sig: &MethodSig, params: &[SymId], span: Span) -> Option<((TExprId, TypeId), usize, usize)> {
+        let pm_sig = self.sig_arc(pm);
+        let lead_t = pm_sig.tparams.len();
+        let lead: usize = sig.clauses.iter().take(pm_sig.clauses.len()).map(|cl| cl.params.len()).sum();
+        let types: Vec<TypeId> = sig.clauses.iter().take(pm_sig.clauses.len()).flat_map(|cl| cl.params.iter().map(|p| p.ty)).collect();
+        let args: Vec<TExprId> = params[..lead]
+            .iter()
+            .zip(&types)
+            .map(|(&p, &ty)| {
+                let e = self.prog.add(TExpr::Local(p));
+                self.prog.set_type(e, ty);
+                e
+            })
+            .collect();
+        let r = match self.syms.sym(pm).owner {
+            Owner::Class(c) => super::TermRef::This(c, pm),
+            Owner::Package(_) => super::TermRef::Global(pm),
+            Owner::Local => super::TermRef::Local(pm),
+        };
+        let name = self.syms.sym(pm).name;
+        let super::apply::Callee::Method { recv, sym, owner_subst, prefix, refined } = self.term_callee(r, name, span)? else { return None };
+        let call = super::apply::MethodCall { recv, sym, owner_subst, ext_recv: None, prefix, refined };
+        let list = self.prog.list(&args);
+        let te = self.build_call(&call, list);
+        let targs: Vec<TypeId> = sig.tparams.iter().take(lead_t).map(|&t| self.types.param(t)).collect();
+        let subst: Subst = pm_sig.tparams.iter().copied().zip(targs.iter().copied()).collect();
+        let ty = self.types.subst(pm_sig.ret, &subst);
+        self.prog.set_type(te, ty);
+        if self.capturing() && !targs.is_empty() {
+            self.capture_call_targs(te, &targs);
+        }
+        Some(((te, ty), lead, lead_t))
     }
 
     /// The forwarder's call of its member: on the path, the owner's type parameters as the path
@@ -1911,12 +2198,23 @@ impl<'a> Worker<'a> {
     pub(super) fn inline_forwarder_body(&mut self, s: SymId, fwd: &Forward, sig: &MethodSig) -> (Option<TExprId>, TypeId, Vec<Option<TExprId>>) {
         let span = self.syms.sym(s).span;
         let nparams = sig.clauses.iter().map(|cl| cl.params.len()).sum();
-        let Some(path) = self.forward_receiver(fwd, span) else { return (None, sig.ret, vec![None; nparams]) };
+        let all_params: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
+        let (path, lead) = match fwd.path_method {
+            Some(pm) => match self.path_method_receiver(pm, sig, &all_params, span) {
+                Some((recv, lead, _)) => (Some(recv), lead),
+                None => return (None, sig.ret, vec![None; nparams]),
+            },
+            None => match self.forward_receiver(fwd, span) {
+                Some(path) => (path, 0),
+                None => return (None, sig.ret, vec![None; nparams]),
+            },
+        };
         let target = fwd.target;
         let args: Vec<TExprId> = sig
             .clauses
             .iter()
             .flat_map(|cl| cl.params.iter())
+            .skip(lead)
             .map(|p| {
                 let e = self.prog.add(TExpr::Local(p.sym));
                 self.prog.set_type(e, p.ty);

@@ -1,0 +1,8 @@
+Group(List(1),And)
+ci
+Group(List(),Or)
+Group(List(2),And)
+Key(a,1,None,false)
+Key(b,2,None,true)
+Run(List(3),Fast)
+cimi

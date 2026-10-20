@@ -1,0 +1,3 @@
+ByColor(Some(2),None)
+ByColor(None,None)
+ByColor(Some(3),None)

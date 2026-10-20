@@ -816,6 +816,16 @@ impl<'a> Parser<'a> {
         }
         // The receiver is part of each method's header.
         let m = if self.error_events == mark { m } else { m | mods::INCOMPLETE };
+        // The group's methods, which an export clause among them names its companion extension
+        // method among (`ExtensionExport::methods`).
+        let headers_mark = self.ast.extension_exports.len();
+        let mut methods: Vec<DefId> = Vec::new();
+        // An export clause as the group's one member (`Parsers.extension`: `if in.token == EXPORT
+        // then exportClause()`).
+        if self.at(Tok::KwExport) {
+            self.parse_extension_export(&tparams, &clauses);
+            return;
+        }
         if matches!(self.kind(), Tok::At | Tok::KwDef) || is_hard_modifier(self.kind()) || self.soft_modifier_at(0).is_some() {
             let annots = self.parse_annots();
             let (fm, within) = self.parse_ext_method_mods(m);
@@ -837,6 +847,11 @@ impl<'a> Parser<'a> {
         }
         self.statements(RecoverySite::Extension, |p| {
             let (start, first) = (p.span().start, p.ast.defs.len());
+            // `ExtMethods ::= ExtMethod | ...`, `ExtMethod ::= ... 'def' DefDef | Export`.
+            if p.at(Tok::KwExport) {
+                p.parse_extension_export(&tparams, &clauses);
+                return;
+            }
             let annots = p.parse_annots();
             let (fm, within) = p.parse_ext_method_mods(m);
             if p.at(Tok::KwDef) {
@@ -844,11 +859,25 @@ impl<'a> Parser<'a> {
                 p.note_access_scope(d, within);
                 p.push_named(out, d);
                 p.close_def_ranges(first, start);
+                methods.push(d);
             } else {
                 p.error_at(p.span(), "only defs are allowed in an extension");
             }
         });
         self.end_region();
+        for h in &mut self.ast.extension_exports[headers_mark..] {
+            h.methods = methods.clone();
+        }
+    }
+
+    /// An export clause inside an extension group: parsed as any export clause of the enclosing
+    /// body, its clauses noted with the group's header (`Ast::extension_exports`).
+    fn parse_extension_export(&mut self, tparams: &[TypeParam], clauses: &[ParamClause]) {
+        let mark = self.export_scratch.len();
+        self.parse_export();
+        let mut starts: Vec<u32> = self.export_scratch[mark..].iter().map(|imp| imp.span.start).collect();
+        starts.dedup();
+        self.ast.extension_exports.push(ExtensionExport { starts, tparams: tparams.to_vec(), clauses: clauses.to_vec(), methods: Vec::new() });
     }
 
     /// The modifiers of an extension method, after the extension's own `m`.

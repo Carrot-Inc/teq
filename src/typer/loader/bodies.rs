@@ -2117,6 +2117,17 @@ impl<'a> Worker<'a> {
         }
         self.enter_pkg_objects(p);
         let path: Vec<&str> = rest[i..].iter().copied().chain(std::iter::once(top)).collect();
+        let name = self.interner.intern(&c.name);
+        // A top-level definition's owner is its file's package object (`<file>$package$`), which
+        // the standard library and a library compiled from source have as the package's own
+        // members (`Desugar.packageDef`): the method among the package's entries.
+        if path.len() == 1 && path[0].ends_with("$package$") {
+            self.load_pkg_member(p, name);
+            let entry = self.syms.entry_named(self.interner, p, name)?;
+            let term = entry.term?;
+            let found: Vec<SymId> = self.syms.alternatives(term).map_or_else(|| vec![term], |a| a.to_vec());
+            return self.product_callee_among(c, found);
+        }
         let n = self.interner.intern(path[0].trim_end_matches('$'));
         self.load_pkg_member(p, n);
         let entry = self.syms.entry_named(self.interner, p, n)?;
@@ -2146,6 +2157,12 @@ impl<'a> Worker<'a> {
         } else {
             self.syms.class(owner).members.get(&name).copied().into_iter().collect()
         };
+        self.product_callee_among(c, found)
+    }
+
+    /// The one method among `found` (each with its alternatives) the callee record names: the one
+    /// where it is one, else the one of the record's signature.
+    fn product_callee_among(&mut self, c: &crate::tasty::origins::Callee, found: Vec<SymId>) -> Option<SymId> {
         let alternatives: Vec<SymId> = found.iter().flat_map(|&s| self.syms.alternatives(s).map_or(vec![s], |a| a.to_vec())).collect();
         match alternatives.as_slice() {
             [s] => Some(*s),

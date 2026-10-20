@@ -1,5 +1,5 @@
-// A candidate given up whose expansion typed `H.helperW` on demand, which warned, drops what it
-// reported and leaves no promoted range behind (`state::diags_cut_at`): the first extension
+// A candidate given up whose expansion typed `H.helperW` on demand leaves no promoted range behind
+// (`state::diags_cut_at`), its body's plain call kept for the inlining phase: the first extension
 // alternative's mismatch is its failure, and the second applies, `i 0`, as scalac and master print.
 import scala.compiletime.summonInline
 class Missing

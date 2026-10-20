@@ -304,6 +304,9 @@ pub struct TypeStore {
     /// Whether the merge gave the overlays back (`reclaim_overlays`): an overlay's entry read
     /// after it is refused in the assertion-enabled builds.
     reclaimed: AtomicBool,
+    /// The thread freeing the overlays the merge gave back, whose pages a later fork's overlays
+    /// take again (`refork_overlays` waits for it).
+    reclaiming: std::sync::Mutex<Option<std::thread::JoinHandle<()>>>,
     serial: Serial,
     types: SlabVec<Type>,
     type_index: Table,
@@ -398,6 +401,7 @@ impl TypeStore {
             apart: UnsafeCell::new(None),
             overlaid: AtomicBool::new(false),
             reclaimed: AtomicBool::new(false),
+            reclaiming: std::sync::Mutex::new(None),
         };
         assert_eq!(s.mk(Type::Any), ANY);
         assert_eq!(s.mk(Type::Nothing), NOTHING);
@@ -2353,6 +2357,7 @@ impl TypeStore {
             apart: UnsafeCell::new(None),
             overlaid: AtomicBool::new(false),
             reclaimed: AtomicBool::new(false),
+            reclaiming: std::sync::Mutex::new(None),
         };
         let retired = self.blocked_found(RETIRED);
         for i in 0..self.types.len() {
@@ -2503,6 +2508,35 @@ impl TypeStore {
         self.blocked.adopt(next(), own);
         self.refinements.adopt(next(), own);
         self.matches.adopt(next(), own);
+        self.make_overlays(workers);
+    }
+
+    /// The overlays again for a later fork of the same build (the inlining phase's, after the
+    /// body phase's merge): the vectors keep the mappings the first fork adopted, which hold a
+    /// region per worker, and each worker's overlay starts anew in its region, the one before
+    /// it reclaimed by the merge. `false` where the first fork had no overlays or room for fewer
+    /// workers.
+    pub fn refork_overlays(&self, workers: usize) -> bool {
+        let entries = LOCAL_BASE as usize + workers * WORKER_SPAN as usize;
+        if !self.types.is_mapped() || self.overlays_on() || self.types.mapped_entries() < entries {
+            return false;
+        }
+        // The last fork's overlays, given back at its merge, free their pages before the new
+        // overlays write the same pages (a region's drop gives them back to the system).
+        let freeing = self.reclaiming.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(freeing) = freeing {
+            let _ = freeing.join();
+        }
+        self.make_overlays(workers);
+        self.reclaimed.store(false, Ordering::Release);
+        self.note_routes();
+        self.note_memory("the fork");
+        true
+    }
+
+    /// The overlays for `workers` workers over the store's mapped vectors.
+    #[cold]
+    fn make_overlays(&self, workers: usize) {
         let bounds = [self.types.len(), self.lists.len(), self.lits.len(), self.blocked.len(), self.refinements.len(), self.matches.len()].map(|n| n as u32);
         let frozen = crate::measure::types_wanted().then(|| {
             std::array::from_fn(|i| {
@@ -2602,11 +2636,16 @@ impl TypeStore {
     pub fn reclaim_overlays(&self) {
         debug_assert!(!self.overlaid.load(Ordering::Relaxed), "the overlays reclaimed before the join");
         let apart = unsafe { (*self.apart.get()).take() };
-        if apart.is_some() {
+        if let Some(apart) = apart {
             self.reclaimed.store(true, Ordering::Release);
             // Nothing refers to the overlays from here: their entries and pages are freed off the
-            // merge's main thread.
-            crate::crew::give_back(crate::crew::Unshared(apart));
+            // merge's main thread, by a thread a later fork over the same pages waits for.
+            if crate::measure::memory_wanted() {
+                return drop(apart);
+            }
+            let apart = crate::crew::Unshared(apart);
+            let freeing = crate::alloc::spawn(move || drop(apart));
+            *self.reclaiming.lock().unwrap_or_else(|e| e.into_inner()) = Some(freeing);
         }
     }
 

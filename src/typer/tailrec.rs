@@ -21,7 +21,7 @@ impl<'a> Worker<'a> {
                 "TailRec optimisation not applicable, method {} is neither private nor final so can be overridden",
                 name
             );
-            self.error(span, msg);
+            self.tailrec_error(span, msg);
             return;
         }
         let fun = &self.prog.funs[f.idx()];
@@ -31,9 +31,16 @@ impl<'a> Worker<'a> {
         let calls = self.prog.descendants(body).without_local_defs().filter(|&e| is_self_call(&self.prog.expr(e))).count();
         if calls == 0 {
             let msg = format!("TailRec optimisation not applicable, method {} contains no recursive calls", name);
-            self.error(span, msg);
+            self.tailrec_error(span, msg);
         } else if calls > self.prog.tail_self_calls(sym, arity, body).0 {
-            self.error(span, "Cannot rewrite recursive call: it is not in tail position");
+            self.tailrec_error(span, "Cannot rewrite recursive call: it is not in tail position");
         }
+    }
+
+    /// An error of scalac's `TailRec`, which runs after `Inlining` and `Erasure`: late, holding back
+    /// no expansion, presented where the build has no other error.
+    fn tailrec_error(&mut self, span: Span, msg: impl Into<String>) {
+        let file = self.env.file;
+        self.diags.late_error_of(file, span, msg, crate::source::PHASE_TAILREC);
     }
 }

@@ -30,6 +30,7 @@ static CHECKS: AtomicU8 = AtomicU8::new(0);
 const DEPRECATED: u8 = 1;
 const UNUSED_DEFS: u8 = 2;
 
+
 /// A deprecated definition was entered or loaded.
 pub fn note_deprecated() {
     if CHECKS.load(Ordering::Relaxed) & DEPRECATED == 0 {
@@ -41,6 +42,7 @@ pub fn note_deprecated() {
 pub fn note_unused_defs() {
     CHECKS.fetch_or(UNUSED_DEFS, Ordering::Relaxed);
 }
+
 
 /// Whether any definition seen so far is deprecated: until one is, nothing is checked.
 #[inline]

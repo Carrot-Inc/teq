@@ -86,6 +86,10 @@ of them, without `-rewrite`.
   `Inlined(call, bindings, expansion)` node, a case class's `apply` is `new C(..)` and a mirror is made in place
   rather than bound to a proxy, so a macro matching those shapes fails (ultraviolet's `toGLSL`, which compiles
   Indigo's shaders: `ShaderError`s from `CreateShaderAST`).
+- Plain inline calls expand in an inlining phase once the whole program is typed without an error, as
+  scalac's: a program the typer reports an error in reports no expansion's, and a macro reading another
+  member's definition sees its declaration (`--retain-trees`, scalac's `-Yretain-trees`, gives its typed
+  right-hand side, the call unexpanded).
 - Types carry no annotations (`AnnotatedType(t, annot)` is `t`, the type tree of a `T*` parameter is
   `Seq[T]`, so Magnolia's `repeated` answers `false`).
 - An inline method of a library is expanded from its body as the library's TASTy holds it, checked once

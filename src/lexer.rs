@@ -961,9 +961,11 @@ impl<'a> Lexer<'a> {
     fn open_brace(&mut self) {
         let p = self.pos;
         let last = self.tokens.last().map_or(Tok::Eof, |t| t.kind);
-        // Import selectors and sets of context bounds (`T: {A, B}`) are not blocks; a refinement
-        // written alone as a type (`x: { def m: Int }`) is a block of declarations.
-        if matches!(last, Tok::Dot | Tok::Colon) && !(last == Tok::Colon && self.declaration_follows(p + 1)) {
+        // Import selectors (after the qualifier's `.`, or right after the keyword where the
+        // qualifier is missing, `Parsers.importExpr`) and sets of context bounds (`T: {A, B}`) are
+        // not blocks; a refinement written alone as a type (`x: { def m: Int }`) is a block of
+        // declarations.
+        if matches!(last, Tok::Dot | Tok::Colon | Tok::KwImport | Tok::KwExport) && !(last == Tok::Colon && self.declaration_follows(p + 1)) {
             return self.open(Tok::LBrace, b'}');
         }
         // After an operator the brace is a block argument (`a + { .. }`), unless the operator

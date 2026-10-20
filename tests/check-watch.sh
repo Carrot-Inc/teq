@@ -278,8 +278,9 @@ stop
 
 # A unit's source version decides its signatures: a context bound's evidence is an `implicit` clause below 3.6
 # and a using clause from it (`Desugar.elimContextBounds`), which a client's explicit argument list fits or not.
-# A source version import changed, whose import `imports` does not hold, takes the full path either way, whose
-# answer is a fresh check's: the client refused under the library's 3.8, accepted again under its 3.3.
+# A source version import changed (an import like any other, dotty's `Import` tree, the version it sets named
+# before the imports' difference) takes the full path either way, whose answer is a fresh check's: the client
+# refused under the library's 3.8, accepted again under its 3.3.
 vdir=$work/version
 mkdir -p "$vdir"
 printf 'import scala.language.`3.3`\ntrait C[T]\nobject Lib { def f[T: C](): Int = 1 }\n' > "$vdir/Lib.scala"

@@ -70,12 +70,15 @@ pub enum Reserved {
 }
 
 /// The body phase's queue: the files in `Worker::file_order`, each
-/// with its items in source order. A worker takes whole files from the front, one at a time, and
+/// with its items in the order dotty's typer meets them (`Worker::items_of`). A worker takes whole files from the front, one at a time, and
 /// types their items from the head; a worker without a file takes single items from the tail of a
 /// file another worker holds, so that the holder still meets its file's definitions in order.
 pub struct Queue {
     /// The files and how many items each has.
     pub files: Vec<(FileId, u32)>,
+    /// Per file, its items' indices in that order where it is not the written one
+    /// (`super::inlining::desugared_order`).
+    orders: Vec<Option<Vec<u32>>>,
     next_file: std::sync::atomic::AtomicUsize,
     /// Per file, the head and the tail of the items not taken yet, packed as `head | tail << 32`.
     cursors: Vec<std::sync::atomic::AtomicU64>,
@@ -89,7 +92,13 @@ impl Queue {
     pub fn new(w: &Worker, order: &[FileId]) -> Queue {
         let files: Vec<(FileId, u32)> = order.iter().copied().filter(|&f| !w.walk.passed(f)).map(|f| (f, w.ast(f).top_level.len() as u32)).collect();
         let cursors = files.iter().map(|&(_, n)| std::sync::atomic::AtomicU64::new((n as u64) << 32)).collect();
-        Queue { files, next_file: std::sync::atomic::AtomicUsize::new(0), cursors, stolen: std::sync::atomic::AtomicUsize::new(0) }
+        let orders = files.iter().map(|&(f, _)| w.desugared_items(f)).collect();
+        Queue { files, orders, next_file: std::sync::atomic::AtomicUsize::new(0), cursors, stolen: std::sync::atomic::AtomicUsize::new(0) }
+    }
+
+    /// The index among its file's top-level definitions of the item at `i` of the file's order.
+    pub fn item_index(&self, fi: usize, i: u32) -> u32 {
+        self.orders[fi].as_ref().map_or(i, |o| o[i as usize])
     }
 
     /// `TEQ_QUEUE_SHAPE=<file>`, a diagnostic of the count at the fork:
@@ -405,6 +414,44 @@ impl<'a> Worker<'a> {
     /// Types the items of the queue as one of its workers: whole files
     /// while there are files, then single items from the tail of the files other workers hold.
     pub fn work(&mut self, q: &Queue, first: Option<Reserved>) {
+        self.begin_work();
+        crate::measure::work_begin(self.worker);
+        self.walk.started = true;
+        let mut first = first;
+        loop {
+            crate::shake::point(crate::shake::Point::Item);
+            if self.serial.is_needed() {
+                break;
+            }
+            match first.take().or_else(|| q.reserve(self.worker)) {
+                Some(Reserved::File(fi, first)) => {
+                    let file = q.files[fi].0;
+                    self.walk.take(file);
+                    let mut next = first;
+                    while let Some(i) = next {
+                        self.check_queued(file, q.item_index(fi, i));
+                        if self.serial.is_needed() {
+                            break;
+                        }
+                        next = q.take_head(fi);
+                    }
+                }
+                Some(Reserved::Item(fi, i)) => {
+                    if std::env::var_os("TEQ_MERGE_TRACE").is_some_and(|v| v == "print") {
+                        eprintln!("merge check: worker {} steals item {} of {}", self.worker, i, self.source(q.files[fi].0).path);
+                    }
+                    self.check_queued(q.files[fi].0, q.item_index(fi, i));
+                }
+                None => break,
+            }
+        }
+        self.walk.done = true;
+        self.end_work();
+    }
+
+    /// What a worker's thread sets before it types for its worker: its arena ids, its overlay of
+    /// the type store, its views of the shared records.
+    pub(super) fn begin_work(&mut self) {
         crate::arena::set_thread_worker(self.worker);
         self.types.enter_overlay(self.worker);
         crate::types::view::worker_entered(&self.types);
@@ -420,37 +467,10 @@ impl<'a> Worker<'a> {
                 self.prog.expr_types.shared_reads = Some(crate::types::expr_type_noted);
             }
         }
-        crate::measure::work_begin(self.worker);
-        self.walk.started = true;
-        let mut first = first;
-        loop {
-            crate::shake::point(crate::shake::Point::Item);
-            if self.serial.is_needed() {
-                break;
-            }
-            match first.take().or_else(|| q.reserve(self.worker)) {
-                Some(Reserved::File(fi, first)) => {
-                    let file = q.files[fi].0;
-                    self.walk.take(file);
-                    let mut next = first;
-                    while let Some(i) = next {
-                        self.check_queued(file, i);
-                        if self.serial.is_needed() {
-                            break;
-                        }
-                        next = q.take_head(fi);
-                    }
-                }
-                Some(Reserved::Item(fi, i)) => {
-                    if std::env::var_os("TEQ_MERGE_TRACE").is_some_and(|v| v == "print") {
-                        eprintln!("merge check: worker {} steals item {} of {}", self.worker, i, self.source(q.files[fi].0).path);
-                    }
-                    self.check_queued(q.files[fi].0, i);
-                }
-                None => break,
-            }
-        }
-        self.walk.done = true;
+    }
+
+    /// What a worker's thread undoes as its work ends (`begin_work`).
+    pub(super) fn end_work(&mut self) {
         // The views and the signatures' copies are the worker's reads' alone: they go with its
         // work, the first worker's too, whose tables the merge goes on with.
         if crate::types::noting() {
@@ -478,8 +498,9 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Types the item `i` of `file` and records the own records it made (`ItemRange`), which the
-    /// merge places in the order of the sources, by the file and the item.
+    /// Types the item `i` of `file` (its index among the file's top-level definitions) and records
+    /// the own records it made (`ItemRange`), which the merge places in the order of the sources,
+    /// by the file and the item.
     fn check_queued(&mut self, file: FileId, i: u32) {
         // `TEQ_SERIAL_ITEMS=1` types one item at a time across the workers, the assignment
         // of items to workers unchanged: a failure that stays is one of state, one that goes
@@ -776,10 +797,22 @@ impl<'a> Worker<'a> {
         self.mixins_bound = (self.prog.classes.len(), calls);
     }
 
-    /// The work items of a file, in source order.
+    /// The work items of `file` in the order dotty's typer meets them: the file's classes and objects,
+    /// then the members of its `<file>$package` (`super::inlining::desugared_order`).
     pub fn items_of(&self, file: FileId) -> impl Iterator<Item = Item> + 'a {
-        let top: &'a [DefId] = &self.ast(file).top_level;
-        top.iter().map(move |&def| Item { file, def })
+        let ast: &'a crate::ast::Ast = self.ast(file);
+        let order = self.desugared_items(file);
+        (0..ast.top_level.len()).map(move |i| Item { file, def: ast.top_level[order.as_ref().map_or(i, |o| o[i] as usize)] })
+    }
+
+    /// The order of `file`'s items where it is not the written one (`items_of`): a file of the
+    /// program's, whose typing a macro of the run may suspend; the std's and a library's bodies'
+    /// are typed in their written order, which nothing observes.
+    pub(super) fn desugared_items(&self, file: FileId) -> Option<Vec<u32>> {
+        if !self.program_file(file) {
+            return None;
+        }
+        super::inlining::desugared_order(self.ast(file))
     }
 
     /// Types the items of a file, in order.
@@ -791,11 +824,42 @@ impl<'a> Worker<'a> {
 
     /// Types one work item: the whole of a top-level definition (`Item`).
     pub fn check_item(&mut self, item: Item) {
+        // A unit suspended at typing is typed no further in this run (`TyperPhase.typeCheck`'s
+        // `!unit.suspended`): its items after the one its typing was cut in, in the order dotty's
+        // typer meets them (`super::inlining::top_level_key`). One before it, which another
+        // worker's cut found untyped, is typed: dotty's traversal reached it first.
+        if !self.inlining.typing_suspended.is_empty() && self.inlining.typing_suspended.contains(&item.file.0) {
+            let key = super::inlining::top_level_key(self.ast(item.file), item.def);
+            if self.inlining.typing_cuts.iter().any(|c| c.file == item.file.0 && c.key < key) {
+                return;
+            }
+        }
         let pkg = self.file_pkgs[item.file.0 as usize];
         self.env.file = item.file;
+        // The file's imports in scope: those before a class or object (`typedStats`), every one
+        // for a member of the package object (`Env::import_limit`).
+        self.env.import_limit = if super::inlining::wrapped_top_level(self.ast(item.file), item.def) { None } else { Some((item.file, self.ast(item.file).def(item.def).span.start)) };
+        self.env.visible_imports = None;
+        self.inlining.item_place = self.ast(item.file).def(item.def).span.start;
+        let owner = crate::source::DiagOwner::new(item.file, self.inlining.item_place);
+        let outer_demands = std::mem::replace(&mut self.inlining.item_demands, self.inlining.demands.len());
+        let outer_owner = self.enter_owner(owner);
+        self.inlining.in_item += 1;
         let frame = self.var_frame_begin();
+        // The file's import statements before the item, which dotty's traversal reaches first.
+        self.reach_file_imports(item.file, item.def);
         self.check_top_def(item.file, Owner::Package(pkg), item.def);
+        // Those after the file's last item, reached after it.
+        if !self.ast(item.file).imports.is_empty() && self.items_of(item.file).last().map(|i| i.def) == Some(item.def) {
+            self.reach_trailing_file_imports(item.file);
+        }
         self.var_frame_end(frame);
+        self.inlining.in_item -= 1;
+        self.leave_owner(outer_owner, false);
+        self.inlining.item_demands = outer_demands;
+        if self.inlining.in_item == 0 {
+            self.inlining.unwinding = false;
+        }
     }
 
     /// A `@main` method wins over `main(args: Array[String])` methods of objects; among several
@@ -1177,10 +1241,26 @@ impl<'a> Worker<'a> {
                     self.register_top_fun(f);
                 }
             }
-            DefKind::TypeAlias { .. } => {}
+            DefKind::TypeAlias { .. } => self.reach_alias(file, id),
         }
         if self.capturing() && !matches!(def.kind, DefKind::Class(_)) {
             self.capture_def_annotations(file, owner, id, true);
+        }
+    }
+
+    /// The traversal reaches the type alias defined at `id` where it stands
+    /// (`Typer.typedStats` → `typedTypeDef`): its completion, done or suspended, is one the
+    /// definition being typed reached (`complete_alias`), as dotty completes it there.
+    fn reach_alias(&mut self, file: FileId, id: DefId) {
+        // A std alias is completed where a program names it (as the std's vals are,
+        // `defers_top_val`): dotty's package lookup completes a library member by its name
+        // (`SymDenotations.computeMembersNamed`), and the prelude's deprecated `Traversable` or
+        // `Stream` enters no file of a program that does not name it.
+        if self.std_source(file) {
+            return;
+        }
+        if let Some(&a) = self.def_aliases.get(file.0 as usize, &id) {
+            self.complete_alias(a);
         }
     }
 
@@ -1190,6 +1270,9 @@ impl<'a> Worker<'a> {
     /// with type or term parameters is a def making an instance per call (dotty's
     /// `Parsers.givenDef`).
     fn check_given(&mut self, sym: SymId) {
+        if self.unwinding_from(sym) {
+            return;
+        }
         let parameterless = {
             let sig = self.sig_of(sym);
             sig.clauses.is_empty() && sig.tparams.is_empty()
@@ -1451,10 +1534,15 @@ impl<'a> Worker<'a> {
             return self.completed_sig_hooked(sym);
         }
         if self.syms.sym_cells.get(sym.0) == Completion::Done {
+            // A read of a completion is a demand of the one in progress (`demand_sig_read`).
+            if self.inlining.track_demands {
+                self.demand_sig_read(sym);
+            }
             return self.syms.sym(sym).info.sig.as_ref();
         }
         self.uncompleted_sig(sym)
     }
+
 
     /// `completed_sig` with its reads hooked: counted under `--profile` and noted as the routes'
     /// crossings (`TEQ_WORKERS_TYPES=1`). With the overlays on the table's read is the reader's
@@ -1469,6 +1557,9 @@ impl<'a> Worker<'a> {
             self.types.count_sig_read(|c| c.reads += 1);
         }
         if self.syms.sym_cells.get(sym.0) == Completion::Done {
+            if self.inlining.track_demands {
+                self.demand_sig_read(sym);
+            }
             return self.syms.sym(sym).info.sig.as_ref();
         }
         self.uncompleted_sig(sym)
@@ -1518,7 +1609,7 @@ impl<'a> Worker<'a> {
         // outside the lock, a claimed one is waited for.
         if self.forked && self.shared_sym(sym) && state != Completion::Done && crate::shared::lock_depth() == 0 && !self.program_file(file) {
             if state == Completion::InProgress {
-                self.wait_cell(CellKey::new(CELL_SIG, sym.0), |w| w.syms.sym(sym).state() == Completion::Done);
+                self.wait_cell(CellKey::new(CELL_SIG, sym.0), |w| w.syms.sym(sym).state().get().is_complete());
             } else {
                 self.with_loader_for(crate::measure::Hold::Signature, |w| {
                     w.uncompleted_sig(sym);
@@ -1531,13 +1622,24 @@ impl<'a> Worker<'a> {
         // signature, unless the wait would close a cycle, which reads as the recursion it is on one
         // thread.
         let state = match state {
+            // An inferred one the unwinding typer of its suspended unit would start stays for its
+            // readers (`unwinding_from`), and so does a default's getter, whose result its default
+            // infers (`Desugar.defaultGetters` leaves its type to a `TypeTree()`); a declared one
+            // types no body, and a class checked on the way reads its parents' (`Namer`'s
+            // completers complete them alike).
+            Completion::NotStarted if self.unwinding_from(sym) && (self.result_inferred(file, def_id, owner, kind) || self.getters.link.contains_key(&sym)) => return None,
             Completion::NotStarted if self.syms.sym_cells.claim(sym.0) => Completion::NotStarted,
             Completion::NotStarted => Completion::InProgress,
             other => other,
         };
         match state {
             Completion::Done => {}
-            Completion::InProgress if !self.syms.sym(sym).state().mine() && self.wait_cell(CellKey::new(CELL_SIG, sym.0), |w| w.syms.sym(sym).state() == Completion::Done) => {}
+            Completion::Suspended => return self.read_suspended_sig(sym),
+            Completion::InProgress if !self.syms.sym(sym).state().mine() && self.wait_cell(CellKey::new(CELL_SIG, sym.0), |w| w.syms.sym(sym).state().get().is_complete()) => {
+                if self.syms.sym(sym).state() == Completion::Suspended {
+                    return self.read_suspended_sig(sym);
+                }
+            }
             Completion::InProgress => {
                 if !self.syms.sym(sym).sig.as_ref().is_some_and(|sig| sig.ret != ERROR) {
                     // Which member of the cycle reports it is the member the walk met first,
@@ -1566,9 +1668,48 @@ impl<'a> Worker<'a> {
                 let p = self.phase_split(Phase::Signature, Phase::LibrarySignature, |t| t.is_library_member(sym));
                 self.complete_sig(sym, file, def_id, owner, kind, span);
                 self.phase_end(p);
+                if self.syms.sym(sym).state() == Completion::Suspended {
+                    if self.inlining.track_demands {
+                        self.demand_sig_read(sym);
+                    }
+                    return None;
+                }
             }
         }
+        // The completion this read made or waited for, or found made, is a demand of the one in
+        // progress (`demand_sig_read`).
+        if self.inlining.track_demands {
+            self.demand_sig_read(sym);
+        }
         self.syms.sym(sym).info.sig.as_ref()
+    }
+
+    /// A read of the signature of `sym`, suspended by a macro of the run (`read_suspended`): its
+    /// reader depends on what the suspended completion reported before it suspended.
+    #[cold]
+    fn read_suspended_sig(&mut self, sym: SymId) -> Option<&Arc<MethodSig>> {
+        if self.inlining.track_demands {
+            self.demand_sig_read(sym);
+        }
+        self.read_suspended()
+    }
+
+    /// A read of a signature whose inference met a macro of the run at typing time
+    /// (`Completion::Suspended`): the reader's unit suspends, and every signature being inferred
+    /// around the read with it (`suspend_at_typing`), as dotty's `SuspendCompleter` suspends the
+    /// unit that completes the definition again and its exception leaves every completer on the
+    /// way, and reads an error value; in the inlining phase the expansion under way is given up,
+    /// its file typed again (`suspended_hit`).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn read_suspended(&mut self) -> Option<&Arc<MethodSig>> {
+        if !self.inlining.running {
+            let unit = self.inline.sites.first().map_or(self.env.file, |s| s.file);
+            self.suspend_at_typing(unit);
+        } else if self.inlining.suspending {
+            self.hit_suspension();
+        }
+        None
     }
 
     fn complete_sig(&mut self, sym: SymId, file: FileId, def_id: Option<DefId>, owner: Owner, kind: SymKind, span: Span) -> Arc<MethodSig> {
@@ -1581,6 +1722,11 @@ impl<'a> Worker<'a> {
             self.diags.of_bodies = inferred;
         }
         let mark = self.failure_mark();
+        let reader = self.inline.sites.first().map_or(self.env.file, |s| s.file);
+        // Any completion that met a suspension is suspended, a declared signature's too (a
+        // parameter's `x.type` of a val suspended), as dotty's completer installs a
+        // `SuspendCompleter` on any `SuspendException` (`Namer.Completer.complete`).
+        self.inlining.sig_marks.push(Some(self.inlining.typing_suspensions));
         let promoted = self.promote_begin(sym);
         // A signature of the std or a library is completed under the loader's lock, into the
         // shared region; a program member's outside it, into this
@@ -1593,6 +1739,14 @@ impl<'a> Worker<'a> {
         };
         if inferred && self.failed_since(mark) {
             self.inference_failed.insert(sym, ());
+        }
+        // An inferred type across a macro of the run met at typing time (`typing_suspends`) stands
+        // for none: published `Suspended` (`publish_sig`), its reader's unit suspends, and so does
+        // each later reader's (`read_suspended`), as dotty's `SuspendCompleter` in place of the
+        // completer that suspended (`Namer.Completer.complete`).
+        self.inlining.sig_marks.pop();
+        if self.syms.sym(sym).state() == Completion::Suspended {
+            self.suspend_at_typing(reader);
         }
         self.promote_end(promoted);
         self.diags.of_bodies = outer;
@@ -1627,6 +1781,14 @@ impl<'a> Worker<'a> {
     }
 
     fn complete_sig_inner(&mut self, sym: SymId, file: FileId, def_id: Option<DefId>, owner: Owner, kind: SymKind, span: Span) -> Arc<MethodSig> {
+        // A default's getter, a member of its own (`super::getters`).
+        if let Some(&(of, index)) = self.getters.link.get(&sym) {
+            let (sig, noted) = self.complete_getter(sym, of, index);
+            let sig = Arc::new(sig);
+            self.publish_sig_noted(sym, sig.clone(), noted);
+            self.outermost_completion_done();
+            return sig;
+        }
         let Some(def_id) = def_id else {
             match (kind, owner) {
                 (SymKind::EnumValue(c), _) => self.complete_class(c),
@@ -1658,6 +1820,13 @@ impl<'a> Worker<'a> {
         if let Owner::Class(c) = owner {
             self.complete_class(c);
         }
+        // What the completion reports and demands is the signature's own (`DiagOwner::sig`): its
+        // type parameters, its parameters, its written result, the overridden members an
+        // inferred result reads and the body it is inferred from (`Namer.valOrDefDefSig`,
+        // `defDefSig`, `inferredResultType`).
+        let sig_owner = self.sig_owner(sym);
+        let outer_owner = sig_owner.map(|o| self.enter_owner(o));
+        let marks = (self.inlining.demands.len(), self.diags.items.len());
         let def = self.ast(file).def(def_id);
         let sig = if owner == Owner::Local {
             self.compute_sig(sym, def)
@@ -1672,8 +1841,13 @@ impl<'a> Worker<'a> {
                 self.outside_inline(|t| t.with_env(env, |t| t.compute_sig(sym, def)))
             }
         };
+        let mut noted = false;
+        if let Some(outer) = outer_owner {
+            noted = self.inlining.demands.len() > marks.0 || self.diags.items.len() > marks.1;
+            self.leave_owner(outer, false);
+        }
         let sig = Arc::new(sig);
-        self.publish_sig(sym, sig.clone());
+        self.publish_sig_noted(sym, sig.clone(), noted);
         // What waited for the outermost completion runs once this signature is done.
         self.outermost_completion_done();
         sig
@@ -1697,6 +1871,12 @@ impl<'a> Worker<'a> {
     /// A type variable this worker instantiated is replaced by its instance first: another
     /// worker cannot follow it (`TVars`).
     fn publish_sig(&mut self, sym: SymId, sig: Arc<MethodSig>) {
+        self.publish_sig_noted(sym, sig, false)
+    }
+
+    /// `publish_sig`, with whether the completion recorded a demand or a report
+    /// (`SymInfo::completion_noted`), published with the signature.
+    fn publish_sig_noted(&mut self, sym: SymId, sig: Arc<MethodSig>, noted: bool) {
         let sig = if self.forked && self.shared_sym(sym) { self.zonked_sig(sig) } else { sig };
         #[cfg(debug_assertions)]
         if self.forked && self.shared_sym(sym) && crate::types::view::probing() {
@@ -1714,16 +1894,33 @@ impl<'a> Worker<'a> {
             if crate::shared::lock_depth() == 0 {
                 crate::shake::point(crate::shake::Point::Computed);
             }
+            let done = self.completion_done();
             self.with_loader_for(crate::measure::Hold::Publication, |w| {
                 let sig = w.published_sig(sig, "a shared symbol's signature (publish_sig)");
                 w.syms.sym_mut(sym).sig = Some(sig);
+                if noted {
+                    w.syms.sym_mut(sym).completion_noted = true;
+                }
                 w.publish_class_bodies();
-                w.syms.sym(sym).state().set(Completion::Done);
+                w.syms.sym(sym).state().set(done);
             });
         } else {
+            let done = self.completion_done();
             let mut s = self.syms.sym_mut(sym);
             s.sig = Some(sig);
-            s.state().set(Completion::Done);
+            if noted {
+                s.completion_noted = true;
+            }
+            s.state().set(done);
+        }
+    }
+
+    /// The state a signature being completed is published in: `Suspended` where its inference met
+    /// a macro of the run at typing time (`typing_suspends`), `Done` otherwise.
+    pub(super) fn completion_done(&self) -> Completion {
+        match self.inlining.sig_marks.last() {
+            Some(&Some(mark)) if mark != self.inlining.typing_suspensions => Completion::Suspended,
+            _ => Completion::Done,
         }
     }
 
@@ -1868,12 +2065,13 @@ impl<'a> Worker<'a> {
             let nested_local = outer != 0 && self.syms.sym(sym).owner == Owner::Local;
             if !nested_local {
                 let erased_mark = self.erased_values.len();
-                self.flush_pending_since(pending);
+                let file = self.syms.sym(sym).file;
+                self.end_unit(pending, file);
                 // What the expansions made that the body still holds is used
                 // (`Erasure.checkNotErased`), as the body's own typing's is (`type_body`).
                 if self.erased_values.len() > erased_mark {
                     let roots: Vec<TExprId> = self.fun_of_sym.get(&sym).and_then(|&f| self.prog.funs[f.idx()].body).into_iter().chain(self.val_init.get(&sym).copied()).collect();
-                    self.report_erased_values(erased_mark, &roots);
+                    self.unit_erased_values(erased_mark, &roots, file);
                 }
             }
         }
@@ -2247,7 +2445,18 @@ impl<'a> Worker<'a> {
     /// body cell says whether another worker has it already, in which
     /// case its function is taken from the cell.
     pub fn walk_body(&mut self, sym: SymId) {
+        if self.unwinding_from(sym) {
+            return;
+        }
+        // A body typed before the walk reaches it (a completion another definition demanded) is
+        // one the walk demands all the same (`note_reached`).
         if self.fun_of_sym.contains_key(&sym) || self.val_init.contains_key(&sym) {
+            // The traversal reads the signature where it reaches the definition
+            // (`typedValDef`, `typedDefDef`), a demand of it, and a suspended one suspends the
+            // walk's unit (`read_suspended`).
+            self.sig_of(sym);
+            self.note_reached(sym);
+            self.reach_getters(crate::tir::DefaultOf::Method(sym));
             return;
         }
         if self.forked && self.syms.sym(sym).impl_class.is_some() && self.syms.sym(sym).kind == SymKind::Given {
@@ -2258,6 +2467,8 @@ impl<'a> Worker<'a> {
         // inline is typed here as well, as a method of its class.
         if self.is_inline_callee(sym) {
             self.check_inline_definition(sym);
+            self.note_reached(sym);
+            self.reach_getters(crate::tir::DefaultOf::Method(sym));
             if !self.is_retained_inline(sym) {
                 self.type_inline_getters(sym);
                 return;
@@ -2269,6 +2480,9 @@ impl<'a> Worker<'a> {
         // Kept for the body's typing below.
         let sig = self.sig_arc(sym);
         if self.fun_of_sym.contains_key(&sym) || self.val_init.contains_key(&sym) {
+            self.note_reached(sym);
+            self.reach_getters(crate::tir::DefaultOf::Method(sym));
+            self.fill_own_getters(sym);
             return;
         }
         if self.syms.sym(sym).owner == Owner::Local {
@@ -2284,6 +2498,10 @@ impl<'a> Worker<'a> {
             return;
         }
         self.type_member_body_with(sym, sig);
+        // The traversal reaches the method's getters after it (`Desugar.addDefaultGetters`'s
+        // `Thicket`), their trees its record's before the record is every worker's.
+        self.reach_getters(crate::tir::DefaultOf::Method(sym));
+        self.fill_own_getters(sym);
         if self.shared_sym(sym) {
             self.publish_body(sym);
         }
@@ -2360,7 +2578,7 @@ impl<'a> Worker<'a> {
 
     /// Makes the body of the shared symbol `sym` every worker's, then its cell done: off the
     /// loader's lock as a bundle, or by the release of a hold.
-    fn publish_body(&mut self, sym: SymId) {
+    pub(super) fn publish_body(&mut self, sym: SymId) {
         self.publish_body_bundle(sym);
         self.syms.sym(sym).body().set(Completion::Done);
     }
@@ -2368,11 +2586,22 @@ impl<'a> Worker<'a> {
     /// Enters the parameters of `sig` into the locals frame `frame` clause by clause while the
     /// defaults are typed: a default sees the earlier clauses, as in scalac, so `size = size`
     /// names the enclosing member. Returns the typed defaults, one slot per parameter.
-    pub(super) fn enter_params(&mut self, sig: &MethodSig, default_exprs: &[Option<ast::ExprId>], frame: usize) -> Vec<Option<TExprId>> {
+    pub(super) fn enter_params(&mut self, sig: &MethodSig, default_exprs: &[Option<ast::ExprId>], frame: usize, getters: Option<crate::tir::DefaultOf>, record: bool) -> Vec<Option<TExprId>> {
         let mut defaults: Vec<Option<TExprId>> = Vec::new();
         for clause in &sig.clauses {
             for p in &clause.params {
                 let default = default_exprs.get(defaults.len()).copied().flatten();
+                // A program member's default is its getter's, a completion of its own, never its
+                // method's body's (`Desugar.addDefaultGetters`): a function's slot holds its tree
+                // where it is complete, filled in later otherwise (`fill_getters`); an inline
+                // method's record (`record`) holds the body alone, as the inliner reads it, a call's
+                // omission being the getter's application among the arguments (`Inliner`).
+                if let (Some(of), Some(_)) = (getters, default) {
+                    if self.getter_of(of, defaults.len()).is_some() {
+                        defaults.push(if record { None } else { self.getter_tree(of, defaults.len()) });
+                        continue;
+                    }
+                }
                 defaults.push(default.map(|e| {
                     // A default is checked with the method's own type parameters open, as
                     // scalac's default getter is; `def f[T](x: T = "abc")` fixes `T` at the call.
@@ -2418,7 +2647,7 @@ impl<'a> Worker<'a> {
             _ => false,
         };
         if declared && !declared_constant && !in_body {
-            self.error(span, "inline value must have a literal constant type");
+            self.inline_val_error(span, "inline value must have a literal constant type");
             return ty;
         }
         // `inline val k = (0: Int)` is an `Int`, no constant, as scalac types the ascription, and
@@ -2438,7 +2667,7 @@ impl<'a> Worker<'a> {
             // expansion checks it.
             if !in_body && !self.is_pure_value(init) {
                 let msg = format!("inline value must be pure but was: {}", self.code_of_tree(init));
-                self.error(span, msg);
+                self.inline_val_error(span, msg);
             }
             if in_body && !self.is_pure_value(init) {
                 return self.widen_lit(ty);
@@ -2450,13 +2679,20 @@ impl<'a> Worker<'a> {
         }
         let t = self.deref(ty);
         if t == self.b.t_unit {
-            self.error(span, "`inline val` of type `Unit` is not supported.\n\nTo inline a `Unit` consider using `inline def`");
+            self.inline_val_error(span, "`inline val` of type `Unit` is not supported.\n\nTo inline a `Unit` consider using `inline def`");
         } else if t == self.b.t_string || self.is_primitive(t) {
-            self.error(span, "inline value must have a literal constant type");
+            self.inline_val_error(span, "inline value must have a literal constant type");
         } else {
-            self.error(span, "inline value must contain a literal constant value.\n\nTo inline more complex types consider using `inline def`");
+            self.inline_val_error(span, "inline value must contain a literal constant value.\n\nTo inline more complex types consider using `inline def`");
         }
         ty
+    }
+
+    /// An error of scalac's `InlineVals`, which runs after `Inlining` (`Compiler.transformPhases`):
+    /// late, so that it holds back no expansion, presented where the build has no other error.
+    pub(super) fn inline_val_error(&mut self, span: Span, msg: impl Into<String>) {
+        let file = self.env.file;
+        self.diags.late_error_of(file, span, msg, crate::source::PHASE_FIRST_TRANSFORM);
     }
 
     /// `def this(params) = { this(args); stmts }`: the self call is typed as a constructor call
@@ -2489,14 +2725,10 @@ impl<'a> Worker<'a> {
         // constructor called first (dotty's `ExplicitOuter`, `OuterOps.args` of a `This`), and in
         // the defaults, whose getters are the companion's (`Desugar.classDef`), read with no
         // instance of the class.
-        let outer_param = self.outer_class(c).map(|o| {
-            let name = self.interner.intern("$outer");
-            let p = self.new_local(name, SymKind::Param, self.syms.this_type(o), span);
-            (o, p)
-        });
+        let outer_param = self.outer_class(c).map(|o| (o, self.ctor_outer_param(sym, o)));
         let outer_ctor = std::mem::replace(&mut self.ctor_outer, outer_param);
         let default_exprs: Vec<Option<ast::ExprId>> = f.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.default)).collect();
-        let defaults = self.enter_params(&sig, &default_exprs, frame);
+        let defaults = self.enter_params(&sig, &default_exprs, frame, Some(crate::tir::DefaultOf::Method(sym)), false);
         let mut params: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
         if let Some((_, p)) = outer_param {
             params.insert(0, p);
@@ -2627,6 +2859,11 @@ impl<'a> Worker<'a> {
         let promoted = self.promote_begin(sym);
         let erased_mark = self.erased_values.len();
         let pending = self.attempts.pending_len();
+        // The unboxings the demanding unit's expansions wait for are that unit's, applied at its
+        // own end; the body's unit (its typing and its end) applies its own alone: a std body an
+        // inlining phase's worker demands is typed under the loader's lock, which would publish
+        // the worker's records with its own types.
+        let outer_unboxes = (!self.inline_unboxes.is_empty()).then(|| std::mem::take(&mut self.inline_unboxes));
         let p = self.body_prof(sym);
         // A member's body is typed as the walk types it, whichever expansion or search
         // demanded it: the anonymous classes it makes are named by their own sites, not by the
@@ -2643,17 +2880,22 @@ impl<'a> Worker<'a> {
         if self.unused.on() {
             self.unused.settle_since(marks);
         }
-        // A body is a unit of its own, published when typed: its plain inline calls expand at its
-        // end, what they write its definition's; the body of a member whose type is inferred
-        // expands them once the type is set (`infer_body_then_expand`).
+        // A body is a unit of its own, published when typed: its plain inline calls are kept for
+        // the inlining phase at its end (`end_unit`); the body of a member whose type is inferred
+        // keeps them once the type is set (`infer_body_then_expand`).
+        let file = self.syms.sym(sym).file;
         if self.inferring_depth != self.body_depth {
-            self.flush_pending_since(pending);
+            self.end_unit(pending, file);
         }
         if self.erased_values.len() > erased_mark {
             let roots: Vec<TExprId> = self.fun_of_sym.get(&sym).and_then(|&f| self.prog.funs[f.idx()].body).into_iter().chain(self.val_init.get(&sym).copied()).collect();
-            self.report_erased_values(erased_mark, &roots);
+            self.unit_erased_values(erased_mark, &roots, file);
         }
         self.promote_end(promoted);
+        if let Some(outer) = outer_unboxes {
+            let left = std::mem::replace(&mut self.inline_unboxes, outer);
+            self.inline_unboxes.extend(left);
+        }
         self.body_depth -= 1;
         ty
     }
@@ -2800,6 +3042,8 @@ impl<'a> Worker<'a> {
         }
         let owners_depth = self.sites.owners.len();
         self.sites.owners.push(SiteOwner::Sym(sym));
+        // What the body's typing reports is its own (`Diagnostic::owner`).
+        let outer_owner = self.entered_body(sym);
         self.bodies_in_progress.push(sym);
         let var_frame = self.var_frame_begin();
         let pending = self.attempts.pending_len();
@@ -2837,7 +3081,7 @@ impl<'a> Worker<'a> {
             ),
             _ => (None, Vec::new()),
         };
-        let defaults = self.enter_params(sig, &default_exprs, frame);
+        let defaults = self.enter_params(sig, &default_exprs, frame, Some(crate::tir::DefaultOf::Method(sym)), false);
         let is_method = matches!(def.kind, DefKind::Fun(_)) || given_def;
         // The interpreter runs the body of a templated def where it has no builtin for it.
         let has_intrinsic = (self.syms.sym(sym).intrinsic.is_some() || self.body_is_native(sym)) && !((self.interp || self.for_interpreter) && body.is_some());
@@ -2932,9 +3176,15 @@ impl<'a> Worker<'a> {
                 self.fun_of_sym.insert(sym, f);
                 if def.annots.iter().any(|a| a.name == names::TAILREC) {
                     // The check reads the calls the body's plain inline calls expand to, as
-                    // scalac's runs after its `Inlining` phase.
-                    self.flush_pending_since(pending);
-                    self.check_tailrec(sym, f, def.span);
+                    // scalac's `TailRec` runs after its `Inlining`: after the phase where the body
+                    // keeps calls for it.
+                    let file = self.syms.sym(sym).file;
+                    if self.attempts.pending_len() > pending && self.program_file(file) {
+                        self.inlining.tailrec.push((sym, f, self.env.file, def.span));
+                    } else {
+                        self.flush_pending_since(pending);
+                        self.check_tailrec(sym, f, def.span);
+                    }
                 }
             }
         } else if let Some(e) = typed {
@@ -2944,6 +3194,7 @@ impl<'a> Worker<'a> {
             }
             self.val_init.insert(sym, e);
         }
+        self.left_body(outer_owner);
         result_ty
     }
 
@@ -2970,6 +3221,7 @@ impl<'a> Worker<'a> {
                 // shared class) or with what reached it (another worker's own).
                 Completion::Done if self.forked => return self.entered_done(c),
                 Completion::Done => break,
+                Completion::Suspended => unreachable!("only a signature suspends"),
                 Completion::InProgress => {
                     // A wait the graph refuses would close a cycle, reported by the wait: the
                     // check returns as one that asks for its own class does.
@@ -3170,6 +3422,12 @@ impl<'a> Worker<'a> {
             }
         }
         let Some(def_id) = def_id else {
+            // The companion the namer made (an enum case's, a nested class's): its template is its
+            // class's constructor getters (`Desugar.classDef`'s `companionMembers`), reached here
+            // as a written companion's are below, their trees the class's record's at `fill_getters`.
+            if let Some(k) = self.syms.class(c).companion.filter(|&k| self.syms.class(k).kind != ClassKind::Object) {
+                self.reach_class_getters(k);
+            }
             // A companion an enum made holds its values, and the outer accessor its cases read
             // their enum's enclosing instance through.
             let values = self.instance_enum_values(c);
@@ -3201,6 +3459,9 @@ impl<'a> Worker<'a> {
                 self.exports_of(c);
             }
         }
+        // A call of the class's header (a parent's arguments, a parameter's default) and of each
+        // statement is the inlining phase's at that place, as `InliningTreeMap` walks the template.
+        let statement = std::mem::replace(&mut self.inlining.statement_place, Some((c, super::inlining::StatementPlace::At(def.span.start))));
         let parent_call = match &def.kind {
             DefKind::Class(cls) if kind == ClassKind::EnumCase => self.check_enum_parent_args(c, cls),
             _ => self.check_parent_args(c, parents),
@@ -3214,6 +3475,15 @@ impl<'a> Worker<'a> {
             tclass.retracted_unapply = self.synthetic_unapply_retracted(c);
         }
         self.selector_bodies(c, &mut tclass);
+        // A companion object's template begins with its class's constructor getters
+        // (`Desugar.classDef`'s `companionMembers`, merged before its own statements): a
+        // top-level or nested object's, and an inner object's (one nested in a class, whose class
+        // is an inner class with its module val, `inner_object`).
+        if self.syms.class(c).kind == ClassKind::Object || self.syms.class(c).inner_object.is_some() {
+            if let Some(k) = self.syms.class(c).companion.filter(|&k| self.syms.class(k).kind != ClassKind::Object && self.syms.class(k).inner_object.is_none()) {
+                self.reach_class_getters(k);
+            }
+        }
         let env = self.env_at(file, Owner::Class(c), def.span.start);
         self.with_env(env, |t| {
             let imports_scope = t.env.imports.len();
@@ -3232,6 +3502,14 @@ impl<'a> Worker<'a> {
             for clause in clauses {
                 for p in &clause.params {
                     if let Some(d) = p.default {
+                        // A program class's default is its getter's, completed at its companion's
+                        // template (`Desugar.classDef`'s `companionMembers`), never here: its tree
+                        // where it is complete, filled in later otherwise (`fill_getters`).
+                        if t.getter_of(crate::tir::DefaultOf::Ctor(c), i).is_some() {
+                            tclass.ctor_defaults[lead + i] = t.getter_tree(crate::tir::DefaultOf::Ctor(c), i);
+                            i += 1;
+                            continue;
+                        }
                         let (ty, by_name) = param_types[i];
                         let te = t.check_expr(d, ty);
                         tclass.ctor_defaults[lead + i] =
@@ -3252,6 +3530,11 @@ impl<'a> Worker<'a> {
             }
             let outer_return = t.return_to.take();
             for stmt in body {
+                t.inlining.statement_place = Some((c, match *stmt {
+                    Stmt::Expr(e) => super::inlining::StatementPlace::Expr(file, e),
+                    Stmt::Def(d) => super::inlining::StatementPlace::Def(file, d),
+                    Stmt::Import(_) => super::inlining::StatementPlace::At(def.span.start),
+                }));
                 match *stmt {
                     Stmt::Expr(e) => {
                         let mark = t.failure_mark();
@@ -3278,6 +3561,7 @@ impl<'a> Worker<'a> {
             t.sites.owners.truncate(owners_depth);
             t.return_to = outer_return;
         });
+        self.inlining.statement_place = statement;
         if kind != ClassKind::Trait {
             self.implement_deferred_givens(c, &mut tclass);
         }
@@ -3346,20 +3630,49 @@ impl<'a> Worker<'a> {
         let values = self.instance_enum_values(c);
         tclass.init.splice(0..0, values);
         // The class's `TClass` is published once pushed: the plain inline calls of its statements
-        // expand first.
-        self.flush_pending_since(pending);
+        // are kept for the inlining phase first.
+        self.end_unit(pending, file);
         if self.erased_values.len() > erased_mark {
             let roots: Vec<TExprId> = tclass.init.iter().filter_map(|i| match *i {
                 TInit::Field(_, e) | TInit::Stmt(e) => Some(e),
                 TInit::Parent(..) => None,
             }).chain(tclass.parent_args.iter().flat_map(|&l| self.prog.expr_list(l).to_vec())).collect();
-            self.report_erased_values(erased_mark, &roots);
+            self.unit_erased_values(erased_mark, &roots, file);
+        }
+        // A class whose companion is the one desugaring makes (the parser's synthetic one, or the
+        // namer's without a definition, an enum case's or a nested class's, which no walk checks)
+        // has its constructor getters there, right after the class (`Desugar.classDef`'s
+        // `companionDefs`); their trees are the record's before it is published.
+        let made = |t: &Self, k: ClassId| t.syms.class(k).synthetic_companion || (t.syms.class(k).made_companion && t.syms.class(k).def.is_none());
+        if self.syms.class(c).kind != ClassKind::Object && self.syms.class(c).companion.map_or(true, |k| made(self, k)) {
+            self.reach_class_getters(c);
+            let lead = tclass.captures;
+            for i in 0..tclass.ctor_defaults.len().saturating_sub(lead) {
+                if tclass.ctor_defaults[lead + i].is_none() {
+                    if let Some(tree) = self.getter_tree(crate::tir::DefaultOf::Ctor(c), i) {
+                        tclass.ctor_defaults[lead + i] = Some(tree);
+                    }
+                }
+            }
+            for &f in &tclass.ctors {
+                let ctor = self.prog.funs[f.idx()].sym;
+                for i in 0..self.prog.funs[f.idx()].defaults.len() {
+                    if self.prog.funs[f.idx()].defaults[i].is_none() {
+                        if let Some(tree) = self.getter_tree(crate::tir::DefaultOf::Method(ctor), i) {
+                            self.prog.funs[f.idx()].defaults[i] = Some(tree);
+                        }
+                    }
+                }
+            }
         }
         self.push_class_body(tclass);
         // A local trait's members take the values of the block they read, which the classes
-        // mixing it in pass (`proxies.rs`).
+        // mixing it in pass (`proxies.rs`): after the inlining phase where its trees hold calls
+        // kept for it (`defer_trait_lifting`), as dotty's `LambdaLift` runs after `Inlining`.
         if kind == ClassKind::Trait {
-            self.lift_trait_proxies(c);
+            if !self.defer_trait_lifting(c) {
+                self.lift_trait_proxies(c);
+            }
         } else {
             self.add_trait_forwarders(c);
         }
@@ -4129,7 +4442,7 @@ impl<'a> Worker<'a> {
             let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
             let applied = self.with_env(outside.clone(), |t| {
                 let outer = t.parent_args_of.replace(c);
-                let r = t.apply_method(call, Some((b, sig.clone())), None, lists, span, None, false);
+                let r = t.apply_method(call, Some((b, sig.clone(), None)), None, lists, span, None, false);
                 t.parent_args_of = outer;
                 r
             });
@@ -4359,7 +4672,7 @@ impl<'a> Worker<'a> {
             self.syms.class(parent).ctors.iter().copied().filter(|&s| Some(s) != self.excluded_ctor && self.ctor_callable_here(s)).collect();
         if secondaries.is_empty() {
             let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
-            return self.apply_method(call, Some((parent, sig)), None, lists, span, None, false).unwrap();
+            return self.apply_method(call, Some((parent, sig, prefix)), None, lists, span, None, false).unwrap();
         }
         // Every alternative, the primary included, takes the parent's type arguments.
         // `sig` is seen from the prefix already, a secondary constructor's own signature not.
@@ -4389,7 +4702,7 @@ impl<'a> Worker<'a> {
             let fixed = fix(self, own, true);
             alts.push((s, fixed));
         }
-        self.construct_overloaded(parent, primary, alts, None, lists, span, None)
+        self.construct_overloaded(parent, primary, alts, prefix, None, lists, span, None)
     }
 
     fn check_member(&mut self, file: FileId, d: DefId, tclass: &mut TClass) {
@@ -4524,7 +4837,7 @@ impl<'a> Worker<'a> {
                     tclass.methods.push(f);
                 }
             }
-            DefKind::TypeAlias { .. } => {}
+            DefKind::TypeAlias { .. } => self.reach_alias(file, d),
         }
     }
 

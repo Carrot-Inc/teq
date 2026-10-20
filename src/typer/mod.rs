@@ -20,11 +20,14 @@ pub mod feature;
 pub mod exports;
 mod expr;
 mod implicits;
+pub(crate) mod getters;
+mod import_check;
 mod infix;
 pub mod index;
 pub mod incremental;
 mod inline;
 mod inline_definition;
+pub mod inlining;
 mod substitution;
 mod interop;
 pub mod loader;
@@ -47,7 +50,7 @@ mod resolve;
 pub use apply::{ArgList, ArgSrc};
 pub use expr::WITHHELD_TEMPLATE;
 pub(crate) use expr::ContextualOrder;
-pub use inline::MAX_INLINES;
+pub use inline::{MAX_INLINED_TREES, MAX_INLINES};
 pub use measured::reach_mode_error;
 pub use proxies::HeldOf;
 pub use resolve::{TermRef, TypeRef};
@@ -342,7 +345,7 @@ pub const MARK_ASCRIBED_CLOSURE: u8 = 32;
 /// type parameter's type erases to `Object` and keeps the box (`Option(m.get(k))` is `None`).
 pub const MARK_ERASED_SOLVED: u8 = 64;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Frame {
     Locals {
         names: Vec<(Name, SymId)>,
@@ -366,7 +369,7 @@ impl Frame {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Env {
     pub file: FileId,
     pub frames: Vec<Frame>,
@@ -374,6 +377,15 @@ pub struct Env {
     /// wildcards come first, in source order: lookups go backwards, so a named import wins over
     /// a wildcard and a later import is met before an earlier one.
     pub imports: Vec<ResolvedImport>,
+    /// Which of the file's import statements are in scope: those that start before this limit.
+    /// dotty's `typedStats` gives an import to the context of the statements after it, so a
+    /// class or object sees the file's imports written before it, and a member of the file's
+    /// package object, placed after every top-level statement (`Desugar.packageDef`'s `topStats
+    /// :+ grouped`), sees them all (`u32::MAX`).
+    pub import_limit: Option<(FileId, u32)>,
+    /// The indexes of the visible file imports in the resolved list's order, computed once per
+    /// limit (`Worker::import_count`); none where every one is visible.
+    pub visible_imports: Option<(usize, std::sync::Arc<Vec<u32>>)>,
 }
 
 impl Env {
@@ -428,16 +440,66 @@ pub struct TVars {
     /// merge keeps what its records reach of them (`keep_others`).
     others: Vec<Vec<TVarInfo>>,
     kept: Option<FxMap<u32, TVarInfo>>,
+    /// The variables of the typing before the inlining phase's fork, which every worker of the
+    /// phase reads and none changes (`Inherited`); a worker's change to one is its own
+    /// (`written`), dropped with the worker as a change to another worker's variable is.
+    inherited: Option<std::sync::Arc<Inherited>>,
+    written: FxMap<u32, TVarInfo>,
+}
+
+/// The merged table the inlining phase's workers read (`TVars::into_phase`): the merging
+/// worker's own variables, tagged 0, the signature phase's `prefix` of them, and the other
+/// workers' it kept.
+pub struct Inherited {
+    own: Vec<TVarInfo>,
+    prefix: u32,
+    kept: Option<FxMap<u32, TVarInfo>>,
 }
 
 impl TVars {
     pub fn new() -> TVars {
-        TVars { own: Vec::new(), tag: 0, base: 0, prefix: 0, dummy: TVarInfo::default(), others: Vec::new(), kept: None }
+        TVars { own: Vec::new(), tag: 0, base: 0, prefix: 0, dummy: TVarInfo::default(), others: Vec::new(), kept: None, inherited: None, written: FxMap::default() }
     }
 
-    /// Worker `tag`'s table over the signature phase's `prefix` variables of `main`.
+    /// Worker `tag`'s table over the signature phase's `prefix` variables of `main`; in the
+    /// inlining phase's fork, over the table `main` inherited, tagged after `main`'s tag.
     pub fn attach(main: &TVars, tag: u32, prefix: u32) -> TVars {
-        TVars { own: main.own[..prefix as usize].to_vec(), tag, base: TVarId::tagged(tag, 0).0, prefix, dummy: TVarInfo::default(), others: Vec::new(), kept: None }
+        match &main.inherited {
+            Some(inherited) => TVars { inherited: Some(inherited.clone()), ..TVars::tagged(main.tag + tag) },
+            None => TVars { own: main.own[..prefix as usize].to_vec(), prefix, ..TVars::tagged(tag) },
+        }
+    }
+
+    fn tagged(tag: u32) -> TVars {
+        TVars { tag, base: TVarId::tagged(tag, 0).0, ..TVars::new() }
+    }
+
+    /// The merged table handed to the inlining phase's fork, read by every worker of it, this
+    /// one's variables of the phase made under `tag` from here (`out_of_phase` takes them back).
+    pub fn into_phase(&mut self, tag: u32) {
+        debug_assert!(self.others.is_empty() && self.inherited.is_none());
+        let inherited = Inherited { own: std::mem::take(&mut self.own), prefix: self.prefix, kept: self.kept.take() };
+        *self = TVars { inherited: Some(std::sync::Arc::new(inherited)), ..TVars::tagged(tag) };
+    }
+
+    /// The table after the inlining phase's merge: the merged table it inherited, with the
+    /// variables of the phase this worker made and those of the others the merge kept
+    /// (`keep_others`) among the kept ones by their ids. The changes to inherited variables go.
+    pub fn out_of_phase(&mut self) {
+        let Some(inherited) = self.inherited.take() else { return };
+        let inherited = std::sync::Arc::try_unwrap(inherited).unwrap_or_else(|_| panic!("the inlining phase's workers still read the variables"));
+        let mut kept = inherited.kept.unwrap_or_default();
+        kept.extend(self.kept.take().unwrap_or_default());
+        let tag = self.tag;
+        for (i, info) in std::mem::take(&mut self.own).into_iter().enumerate() {
+            kept.insert(TVarId::tagged(tag, i).0, info);
+        }
+        *self = TVars { own: inherited.own, prefix: inherited.prefix, kept: Some(kept), ..TVars::new() };
+    }
+
+    /// How many inherited variables this worker changed (`written`): changes the merge drops.
+    pub fn inherited_written(&self) -> usize {
+        self.written.len()
     }
 
     /// The instance of `v`, when it has one: this worker's variable or, after the merge,
@@ -507,15 +569,43 @@ impl TVars {
     #[cold]
     #[inline(never)]
     fn other(&self, v: TVarId) -> &TVarInfo {
+        if let Some(inherited) = &self.inherited {
+            if let Some(info) = self.written.get(&v.0) {
+                return info;
+            }
+            if let Some(info) = Self::inherited_info(inherited, v) {
+                return info;
+            }
+        }
         match &self.kept {
             Some(kept) => kept.get(&v.0).unwrap_or(&self.dummy),
             None => self.others.get(v.tag() as usize).and_then(|t| t.get(v.index())).unwrap_or(&self.dummy),
         }
     }
 
+    /// An inherited variable (`Inherited`): the merged worker's own by its index, another's kept.
+    fn inherited_info(inherited: &Inherited, v: TVarId) -> Option<&TVarInfo> {
+        if v.tag() == 0 {
+            inherited.own.get(v.index())
+        } else {
+            inherited.kept.as_ref().and_then(|k| k.get(&v.0))
+        }
+    }
+
     #[cold]
     #[inline(never)]
     fn other_mut(&mut self, v: TVarId) -> &mut TVarInfo {
+        if let Some(inherited) = &self.inherited {
+            if !self.written.contains_key(&v.0) {
+                if let Some(info) = Self::inherited_info(inherited, v) {
+                    let info = info.clone();
+                    self.written.insert(v.0, info);
+                }
+            }
+            if let Some(info) = self.written.get_mut(&v.0) {
+                return info;
+            }
+        }
         let found = match &mut self.kept {
             Some(kept) => kept.get_mut(&v.0),
             None => self.others.get_mut(v.tag() as usize).and_then(|t| t.get_mut(v.index())),
@@ -746,7 +836,7 @@ pub enum Redo {
     DropDeps(TVarId),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct ResolvedImport {
     pub name: Option<Name>,
     pub target: ImportTarget,
@@ -782,7 +872,7 @@ pub struct ValueImport(pub u32);
 
 impl crate::arena::Record for Option<std::sync::Arc<Vec<ResolvedImport>>> {}
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum ImportTarget {
     PkgMember(PkgId, Name),
     PkgAll(PkgId),
@@ -847,11 +937,28 @@ pub struct Worker<'a> {
     pub dropped_deps: Vec<Vec<(TVarId, u8)>>,
     /// The attempts under way (`state.rs`).
     pub attempts: state::Attempts,
+    /// The plain inline calls kept for the inlining phase, with what reads their expansions.
+    pub inlining: inlining::Inlining,
     /// The argument caches of the applications several attempts apply (`state::ArgCache`), and
     /// the spare buffers of closed ones.
     attempt_caches: Vec<state::ArgCache>,
     cache_buffers: Vec<Vec<state::CachedArg>>,
     pub fun_of_sym: crate::arena::Layered<SymId, FunId>,
+    /// The program's default getters (`getters::GetterTable`), entered before the bodies.
+    pub(crate) getters: std::sync::Arc<getters::GetterTable>,
+    /// The members a path's realizability found stable and realizable this run (dotty's
+    /// `StableRealizable` written by `CheckRealizable`).
+    pub(crate) stable_realizable: FxMap<SymId, ()>,
+    /// The type variables standing for a default getter's prototype wildcards (`wildApprox`),
+    /// while its default is typed (`getters::expected_default_arg_type`).
+    pub(crate) proto_vars: Vec<TVarId>,
+    /// The file import statements this worker's walk reached and checked (`reach_file_imports`),
+    /// by file and the statement's start.
+    pub(crate) checked_imports: FxMap<(u32, u32), ()>,
+    /// The qualifier of an import or export clause typed as an expression where it is no
+    /// stable path (`typedImportQualifier`), by the clause's file and start, for the check at
+    /// the statement (`import_check::check_import_target`).
+    pub(crate) import_heads: FxMap<(u32, u32), import_check::ImportHead>,
     /// The string concatenations that are interpolations, which scalac does not fold.
     pub interpolations: FxMap<TExprId, ()>,
     /// The members whose bodies are being typed, innermost last: a macro that asks for the
@@ -1185,6 +1292,13 @@ pub struct Worker<'a> {
     /// intersection of open types conforms through either part, and when both do, only what both
     /// imply is kept, as dotc's `necessaryEither` under `Mode.ConstrainResult`.
     pub necessary_either: bool,
+    /// The next `is_sub` compares a stable path's type as the path's: an alias at its head stays
+    /// the bound of a variable it meets, as a `TermRef` bound widens to the path's declared type
+    /// when the variable is instantiated (`widenInferred`'s `widenSingletons`); any other alias
+    /// compared with a variable is its underlying type there (`TypeComparer.secondTry`'s
+    /// `TypeAlias` case). Consumed at `is_sub`'s entry, so that the arguments under the head are
+    /// compared as types.
+    pub alias_bound_as_path: bool,
     /// How many signature, alias or class completions are under way: a definition completes
     /// in its own scope, whatever inline expansion asked for it.
     pub completing: u32,
@@ -1257,7 +1371,7 @@ pub struct Worker<'a> {
     /// file (for the innermost clause, which holds the file's imports), and wanted class
     /// (`implicits::LevelList`): kept per worker where its inputs are settled, cleared by a
     /// retype.
-    pub package_levels: FxMap<(PkgId, u32, u8, u32), std::sync::Arc<implicits::LevelList>>,
+    pub package_levels: FxMap<(PkgId, u32, u32, u8, u32), std::sync::Arc<implicits::LevelList>>,
     /// The result of the last search of a target under a lexical context, with the words of
     /// that context (`context_key`), which a hit compares in full; a use copies the tree.
     /// Cleared by a retype, since a changed file's symbols move. `given_context` holds the
@@ -1559,6 +1673,10 @@ pub struct Worker<'a> {
     pub body_node: Option<BodyNode>,
     /// Locals standing for the `this` of a class inside the anonymous classes nested in it.
     pub outer_this: crate::arena::Layered<ClassId, SymId>,
+    /// The parameter that stands for the enclosing instance in a secondary constructor of a class
+    /// nested in a class and in that constructor's default getters (`ExplicitOuter`'s outer
+    /// parameter): one per constructor, shared as `outer_this` is (`ctor_outer_param`).
+    pub ctor_outer_params: crate::arena::Layered<SymId, SymId>,
     /// The member of a class nested in a class that returns its enclosing instance.
     pub outer_accessors: crate::arena::Layered<ClassId, SymId>,
     /// A `new p.C(..)` is typed, whose prefix `p` gives `C` its enclosing instance.
@@ -2205,6 +2323,9 @@ impl<'a> Typer<'a> {
             crate::interp::watch(threads > 1 || census);
             w.infos = Some(Vec::new());
             crate::measure::phases_begin();
+            // The demands are recorded from the signature phase on: an alias or a signature it
+            // completes is a completion a later reader depends on (`Inlining::demands`).
+            w.begin_demands();
             w.signature_phase();
             w.resolve_cacheable_state();
             crate::measure::phase_done("signatures");
@@ -2378,6 +2499,8 @@ impl<'a> Typer<'a> {
                     prep::capture(false);
                     return;
                 }
+                // The inlining phase expands over as many workers (its second queue).
+                w.inlining.workers = threads;
             } else {
                 w.check_files();
                 crate::measure::phase_done("walk");
@@ -2388,6 +2511,23 @@ impl<'a> Typer<'a> {
                     crate::measure::phase_done("merge");
                 }
                 w.complete_pending_sealed_files();
+            }
+            // The members' records take the trees of the getters completed after them, by a call
+            // or on another worker (`fill_getters`).
+            w.fill_getters();
+            // The inlining phase, over the merged program: after a typer that reported no error,
+            // before what reads the expansions (dotty's `Inlining` after `PostTyper`).
+            w.inlining_phase();
+            crate::measure::phase_done("inlining");
+            // A worker of the phase gave the build to one worker (`need_serial`), or the phase's
+            // merge refused the merged program.
+            if w.serial.is_needed() {
+                crate::interp::watch(false);
+                return;
+            }
+            if w.merge_failed {
+                prep::capture(false);
+                return;
             }
             w.define_top_value_forwarders();
             w.register_late_methods();
@@ -2568,7 +2708,7 @@ impl<'a> Worker<'a> {
             diags: Diagnostics::default(),
             prog: Program { file_tags: crate::arena::FileVec::from_vec(crate::source::file_tags(files.as_slice().iter().map(|f| f.key.as_str())).into_iter().map(u64::from).collect()), ..Program::default() },
             b,
-            env: Env { file: FileId(0), frames: Vec::new(), imports: Vec::new() },
+            env: Env { file: FileId(0), frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None },
             def_syms: crate::arena::FileMaps::new(n_files),
             def_classes: crate::arena::FileMaps::new(n_files),
             def_aliases: crate::arena::FileMaps::new(n_files),
@@ -2583,9 +2723,15 @@ impl<'a> Worker<'a> {
             trail: Vec::new(),
             dropped_deps: Vec::new(),
             attempts: Default::default(),
+            inlining: Default::default(),
             attempt_caches: Vec::new(),
             cache_buffers: Vec::new(),
             fun_of_sym: Default::default(),
+            getters: Default::default(),
+            stable_realizable: FxMap::default(),
+            proto_vars: Vec::new(),
+            checked_imports: FxMap::default(),
+            import_heads: FxMap::default(),
             interpolations: FxMap::default(),
             bodies_in_progress: Vec::new(),
             var_frames: Vec::new(),
@@ -2699,6 +2845,7 @@ impl<'a> Worker<'a> {
             lub_in_progress: Vec::new(),
             join_wild: false,
             necessary_either: false,
+            alias_bound_as_path: false,
             soft_lub: false,
             completing: 0,
             pending_library_names: Vec::new(),
@@ -2834,6 +2981,7 @@ impl<'a> Worker<'a> {
             anon_sites: FxMap::default(),
             body_node: None,
             outer_this: Default::default(),
+            ctor_outer_params: Default::default(),
             outer_accessors: Default::default(),
             new_prefixed: false,
             explicit_new: false,
@@ -2958,7 +3106,7 @@ impl<'a> Worker<'a> {
     /// `worker`'s ids, and `merge_workers` takes them back after the bodies.
     pub fn attach(&self, worker: usize) -> Worker<'a> {
         assert!(self.forked && worker < crate::arena::MAX_WORKERS);
-        Worker {
+        let mut w = Worker {
             asts: self.asts,
             interner: self.interner,
             syms: self.syms.attach(worker),
@@ -2966,7 +3114,7 @@ impl<'a> Worker<'a> {
             diags: Default::default(),
             prog: self.prog.attach(worker),
             b: self.b.clone(),
-            env: Env { file: FileId(0), frames: Vec::new(), imports: Vec::new() },
+            env: Env { file: FileId(0), frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None },
             def_syms: self.def_syms.attach(),
             def_classes: self.def_classes.attach(),
             def_aliases: self.def_aliases.attach(),
@@ -2981,9 +3129,15 @@ impl<'a> Worker<'a> {
             trail: Default::default(),
             dropped_deps: Default::default(),
             attempts: Default::default(),
+            inlining: Default::default(),
             attempt_caches: Vec::new(),
             cache_buffers: Vec::new(),
             fun_of_sym: self.fun_of_sym.attach(),
+            getters: self.getters.clone(),
+            stable_realizable: FxMap::default(),
+            proto_vars: Vec::new(),
+            checked_imports: FxMap::default(),
+            import_heads: FxMap::default(),
             // The navigation index's tables the typing reads, its records the worker's own,
             // which the merge joins in the work items' order (`merge_workers`).
             index: self.index.as_ref().map(|ix| Box::new(ix.attach())),
@@ -3104,6 +3258,7 @@ impl<'a> Worker<'a> {
             join_wild: Default::default(),
             soft_lub: Default::default(),
             necessary_either: Default::default(),
+            alias_bound_as_path: false,
             completing: Default::default(),
             pending_library_names: Default::default(),
             class_base_memo: FxMap::default(),
@@ -3222,6 +3377,7 @@ impl<'a> Worker<'a> {
             anon_sites: self.anon_sites.clone(),
             body_node: None,
             outer_this: self.outer_this.attach(),
+            ctor_outer_params: self.ctor_outer_params.attach(),
             outer_accessors: self.outer_accessors.attach(),
             new_prefixed: Default::default(),
             explicit_new: false,
@@ -3350,7 +3506,12 @@ impl<'a> Worker<'a> {
             tclass_settling_scopes: 0,
             tclasses_in_checks: Vec::new(),
             pending_shared: Vec::new(),
-        }
+        };
+        // The worker types bodies as the main one does: what they report a retype reports again
+        // (`Diagnostics::of_bodies`), and its typing's demands are recorded (`Worker::begin_demands`).
+        w.diags.of_bodies = self.diags.of_bodies;
+        w.inlining.track_demands = self.inlining.track_demands;
+        w
     }
 
     /// A typing whose variables are numbered in its own order for their display from here
@@ -3364,10 +3525,11 @@ impl<'a> Worker<'a> {
     /// The typing `var_frame_begin` began is done: what it made is the enclosing frame's to leave
     /// out of its own numbering.
     pub fn var_frame_end(&mut self, frame: usize) {
-        // The end of an item: its pending plain inline calls are expanded, inside its frame
-        // (`state::flush_pending_inline`).
+        // The end of an item: its pending plain inline calls are kept for the inlining phase,
+        // inside its frame (`state::end_unit`).
         if frame == 1 && self.attempts.flushes_at_item_end() {
-            self.flush_pending_inline();
+            let file = self.env.file;
+            self.end_unit(0, file);
         }
         if frame == 1 && !self.inline_unboxes.is_empty() && self.attempts.closed() {
             self.apply_inline_unboxes();
@@ -3475,6 +3637,10 @@ impl<'a> Worker<'a> {
         let lock = self.lock.clone();
         lock.lock();
         let outermost = crate::shared::lock_depth() == 1;
+        // What a hold types (a library's or the std's body, a class the interpreter reaches) is a
+        // unit of its own, published at the release: the unboxings the holder's own unit waits for
+        // are that unit's, applied at its end outside the lock with its own records.
+        let held_unboxes = if outermost { Some(std::mem::take(&mut self.inline_unboxes)) } else { None };
         if outermost {
             crate::measure::hold_begin();
             let _measured = crate::measure::hold_for(crate::measure::Hold::Entry);
@@ -3482,6 +3648,10 @@ impl<'a> Worker<'a> {
             self.lock_taken();
         }
         let r = f(self);
+        if let Some(held) = held_unboxes {
+            let left = std::mem::replace(&mut self.inline_unboxes, held);
+            self.inline_unboxes.extend(left);
+        }
         if outermost {
             // A shared class's mirror parent left pending by a completion under the lock is
             // decided in the same hold, its claim never outliving the lock (`complete_class_uncompleted`).
@@ -4036,8 +4206,7 @@ impl<'a> Worker<'a> {
     /// could bind it (`ImportTarget::Unresolved`, a wildcard but for the names its clause leaves
     /// out), as scalac resolves it through the import to its error.
     pub(super) fn not_found_error(&mut self, name: crate::intern::Name, span: Span, msg: String) {
-        let file_imports = self.file_imports[self.env.file.0 as usize].as_ref().map_or(0, |l| l.len());
-        let unknown = (0..self.env.imports.len() + file_imports).any(|i| {
+        let unknown = (0..self.import_count()).any(|i| {
             let imp = self.import_at(i);
             matches!(imp.target, ImportTarget::Unresolved) && imp.name.map_or_else(|| !self.import_hides(imp, name), |n| n == name)
         });
@@ -4433,6 +4602,7 @@ impl<'a> Worker<'a> {
         self.wildcards_used.store(wildcards, std::sync::atomic::Ordering::Release);
         let p = self.phase(profile::Phase::Enter);
         self.enter_all();
+        self.enter_getters();
         self.phase_end(p);
         self.entering_done = true;
         let p = self.phase(profile::Phase::StdClasses);
@@ -5148,9 +5318,15 @@ impl<'a> Worker<'a> {
             at = info.span.start;
             o = info.owner;
         }
+        // The file's imports in scope for the definition: those before its outermost class or
+        // object; every one for a member of the file's package object (`Env::import_limit`).
+        let import_limit = match (chain.last(), o) {
+            (Some(&(c, _)), Owner::Package(_)) => Some((file, self.syms.class(c).span.start)),
+            _ => None,
+        };
         let mut env = match chain.last() {
             Some(&(c, _)) if o == Owner::Local => self.anon_env(c),
-            _ => Env { file, frames: Vec::with_capacity(chain.len() + 4), imports: Vec::new() },
+            _ => Env { file, frames: Vec::with_capacity(chain.len() + 4), imports: Vec::new(), import_limit, visible_imports: None },
         };
         for &(c, at) in chain.iter().rev() {
             env.frames.push(Frame::Class(c));

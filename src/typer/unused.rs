@@ -1151,8 +1151,8 @@ impl<'a> Worker<'a> {
     }
 
     /// A retype of `file` types its bodies again: the marks their typing made go, those of what
-    /// is resolved once move to where the edit left their selectors.
-    pub(super) fn forget_unused(&mut self, file: FileId, remap: &crate::shape::Remap) {
+    /// is resolved once move to where the edit left their selectors, or stay without an edit.
+    pub(super) fn forget_unused(&mut self, file: FileId, remap: Option<&crate::shape::Remap>) {
         if !self.unused.on() && !self.unused.defs_on() {
             return;
         }
@@ -1167,12 +1167,13 @@ impl<'a> Worker<'a> {
             // A selector moves with its import, the file's import of `scala.compiletime.testing`
             // being one of its once-resolved imports; a definition with its name, where it stands
             // outside the bodies.
-            let moved = match key {
-                Key::Sel(sel) if sel.span == TESTING => Some(Key::Sel(sel)),
-                Key::Sel(sel) => remap.moved.get(&sel.span).map(|&span| Key::Sel(Sel { file, span })),
-                Key::Read(_, at) => remap.spans.get(&at).map(|s| Key::Read(file, s.start)),
-                Key::Assign(_, at) => remap.spans.get(&at).map(|s| Key::Assign(file, s.start)),
-                Key::Default(_, at) => remap.spans.get(&at).map(|s| Key::Default(file, s.start)),
+            let moved = match (key, remap) {
+                (_, None) => Some(key),
+                (Key::Sel(sel), _) if sel.span == TESTING => Some(Key::Sel(sel)),
+                (Key::Sel(sel), Some(remap)) => remap.moved.get(&sel.span).map(|&span| Key::Sel(Sel { file, span })),
+                (Key::Read(_, at), Some(remap)) => remap.spans.get(&at).map(|s| Key::Read(file, s.start)),
+                (Key::Assign(_, at), Some(remap)) => remap.spans.get(&at).map(|s| Key::Assign(file, s.start)),
+                (Key::Default(_, at), Some(remap)) => remap.spans.get(&at).map(|s| Key::Default(file, s.start)),
             };
             if let Some(key) = moved {
                 *self.unused.marks.entry(key).or_default() |= kept;
@@ -1183,7 +1184,7 @@ impl<'a> Worker<'a> {
         self.unused.quiet.remove(&file);
         // The file's imports stay resolved across the retype: their selectors' keys move with the
         // edit, so that the bodies typed again mark the selectors where they now stand.
-        if let Some(list) = self.file_imports[file.0 as usize].clone() {
+        if let (Some(remap), Some(list)) = (remap, self.file_imports[file.0 as usize].clone()) {
             let mut list = (*list).clone();
             for imp in list.iter_mut() {
                 let Some((sel, bound)) = self.sel_of(*imp) else { continue };
@@ -1275,7 +1276,9 @@ impl<'a> Worker<'a> {
                     .filter(|r| *r != crate::ast::NO_RANGE)
                     .collect();
                 let in_inline = |s: Span| inline_defs.iter().any(|r| r.start <= s.start && s.end <= r.end);
-                selectors.extend(ast.imports.iter().chain(ast.local_imports.iter().filter(|imp| !in_inline(imp.span))));
+                // A language import is registered by no check (`CheckUnused`'s `languageImport(imp.expr).isEmpty`),
+                // nor is the error selector of a malformed clause.
+                selectors.extend(ast.imports.iter().chain(ast.local_imports.iter().filter(|imp| !in_inline(imp.span))).filter(|imp| !crate::ast::is_language_import(imp) && !matches!(imp.sel, ast::ImportSel::Name(crate::names::ERROR, _))));
             }
             selectors.sort_by_key(|imp| (imp.selector_span.start, imp.span.start));
             selectors.dedup_by_key(|imp| imp.span);

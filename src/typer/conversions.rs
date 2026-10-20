@@ -534,6 +534,11 @@ impl<'a> Worker<'a> {
             if p == self.b.scala_pkg && level.iter().any(|&g| self.b.predef_names.contains(&self.syms.sym(g).name)) && self.predef_unimported() {
                 level.retain(|&g| !self.b.predef_names.contains(&self.syms.sym(g).name));
             }
+            // The root import of `Predef` leaves the deprecated `any2stringadd` conversion out
+            // (`ImportInfo`'s `any2stringadd as _` on `rootImport`): an explicit import brings it.
+            if p == self.b.scala_pkg {
+                level.retain(|&g| self.syms.sym(g).name != crate::names::ANY2STRINGADD);
+            }
             if i == 0 {
                 let mut scope: Vec<(ConvRef, u8)> = level.drain(..).map(|g| ((g, Via::Scope), PREC_DEFINITION)).collect();
                 let mut values: Vec<(ConvRef, u8)> = Vec::new();
@@ -556,6 +561,8 @@ impl<'a> Worker<'a> {
         // `scala.Predef` of a classpath is a level of its own outside the package clauses.
         if let Some(predef) = self.loaded.as_ref().and_then(|l| l.predef).filter(|_| !self.predef_unimported()) {
             self.class_conversions(predef, pick, &mut level);
+            // The root import leaves `any2stringadd` out here too (`ImportInfo`'s `rootImport`).
+            level.retain(|&g| self.syms.sym(g).name != crate::names::ANY2STRINGADD);
             if !level.is_empty() {
                 levels.push(scoped(&mut level));
             }
@@ -767,6 +774,9 @@ impl<'a> Worker<'a> {
         let singleton_from = matches!(self.types.get(from_head), Type::Term(_) | Type::Select(..));
         let widened = self.snapshot();
         let mut recv = recv;
+        // The receiver is the view's argument, a path's type compared as the path's
+        // (`inferView`'s `argument.tpe`).
+        self.alias_bound_as_path = self.is_stable_path(recv);
         if !self.is_sub(recv_ty, from) {
             self.rollback(widened);
             // The receiver is the conversion's argument, and a receiver of a numeric constant type

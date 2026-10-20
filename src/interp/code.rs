@@ -308,11 +308,27 @@ impl Walk {
 
 impl<'a, 't> Interp<'a, 't> {
     /// The executable body of `f`: what `call_fun` runs and `tail_info` reads, the one accessor the
-    /// interpreter takes a function's body through. The reflection reads the typed view
+    /// interpreter takes a function's body through (`call_fun` takes a unit's code, lowered from the
+    /// body this gave, without it). The reflection reads the typed view
     /// (`TreeRef::Fun`, `ensure_body`, `val_init_of`), never this.
     #[inline]
-    pub(super) fn exec_body(&self, f: FunId) -> Option<TExprId> {
+    pub(super) fn exec_body(&mut self, f: FunId) -> Option<TExprId> {
+        // Its plain inline calls expanded first, where the inlining phase keeps some still
+        // (`Worker::prepare_fun`); a unit the run's unit waits for stops the run.
+        if !self.typer.prepare_fun(f) {
+            self.note_withheld();
+        }
         self.prog().funs[f.idx()].body
+    }
+
+    /// `exec_body`'s preparation for a call that finds no unit's code (`call_fun`), off the path
+    /// of the calls that find it.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn prepare_unlowered(&mut self, f: FunId) {
+        if !self.typer.prepare_fun(f) {
+            self.note_withheld();
+        }
     }
 
     /// The layout of the unit of function `f`'s body, its lambdas and local defs included, for the

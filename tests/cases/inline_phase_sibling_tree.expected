@@ -1,0 +1,3 @@
+d1:other:lazy val d1: scala.Predef.String
+d2:other:lazy val d2: scala.Predef.String
+d3:other:lazy val d3: scala.Predef.String

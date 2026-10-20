@@ -2295,6 +2295,7 @@ impl<'a> Worker<'a> {
         c: ClassId,
         primary: Option<(SymId, Arc<MethodSig>)>,
         secondaries: Vec<(SymId, Arc<MethodSig>)>,
+        prefix: Option<TypeId>,
         targs: Option<ListRef>,
         lists: Vec<ArgList>,
         span: Span,
@@ -2326,7 +2327,7 @@ impl<'a> Worker<'a> {
                 let r = match alt.ctor {
                     Some(_) => {
                         let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
-                        self.apply_method(call, Some((c, alt.sig.clone())), targs, lists, span, expected, false).unwrap()
+                        self.apply_method(call, Some((c, alt.sig.clone(), prefix)), targs, lists, span, expected, false).unwrap()
                     }
                     None => {
                         self.check_access(alt.sym, None, span);
@@ -3798,6 +3799,21 @@ impl<'a> Worker<'a> {
                 let Some(ty) = info.types[j] else { continue };
                 if !self.is_compatible(ty, pty) && !info.literals.get(j).copied().flatten().map_or(false, |lit| self.is_compatible(lit, pty)) {
                     return false;
+                }
+            }
+            // The clause's arguments matched: a parameter left to its default has its getter read
+            // (`tryDefault`'s `defaultArg.tpe.widen`, in a test application too), which completes
+            // it; an alternative an argument rejected never reaches it (`tryDefault`'s `!success`).
+            if !self.getters.of.is_empty() {
+                let of = alt.ctor.map_or(crate::tir::DefaultOf::Method(alt.sym), crate::tir::DefaultOf::Ctor);
+                let start: usize = alt.sig.clauses.iter().take(k).map(|c| c.params.len()).sum();
+                let filled: Vec<usize> = (0..info.shapes.len()).map(|j| mapping.param(j)).collect();
+                for (i, p) in clause.params.iter().enumerate() {
+                    if p.has_default && !filled.contains(&i) {
+                        if let Some(g) = self.getter_of(of, start + i) {
+                            self.sig_of(g);
+                        }
+                    }
                 }
             }
         }

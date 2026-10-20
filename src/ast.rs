@@ -540,11 +540,45 @@ pub struct Def {
     pub kind: DefKind,
 }
 
+/// An `extension` group's export clauses (`Namer.processExports`' `ExtMethods` case): the starts of
+/// their clauses (`Import::span`), the group's type parameters and leading parameter clauses, and
+/// the group's methods, among which the qualifier names the companion extension method
+/// (`exportPathSym`).
+#[derive(Clone, Debug)]
+pub struct ExtensionExport {
+    pub starts: Vec<u32>,
+    pub tparams: Vec<TypeParam>,
+    pub clauses: Vec<ParamClause>,
+    pub methods: Vec<DefId>,
+}
+
+impl Ast {
+    /// The extension group whose export clause starts at `start`, where one does.
+    pub fn extension_export_at(&self, start: u32) -> Option<&ExtensionExport> {
+        self.extension_exports.iter().find(|e| e.starts.contains(&start))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum ImportSel {
     Wildcard,
     Given,
     Name(Name, Option<Name>),
+}
+
+/// Whether the clause looks like a language import (dotty's `TreeInfo.languageImport`, by the
+/// written path alone): `language`, `scala.language` or `_root_.scala.language`, or one of their
+/// `experimental` and `deprecated` members, as the qualifier; or `scala.language` itself named.
+pub fn is_language_import(imp: &Import) -> bool {
+    let path = match imp.path.as_slice() {
+        [crate::names::ROOT, crate::names::SCALA, rest @ ..] | [crate::names::SCALA, rest @ ..] => rest,
+        rest => rest,
+    };
+    match path {
+        [crate::names::LANGUAGE] => true,
+        [crate::names::LANGUAGE, sub] => *sub == crate::names::EXPERIMENTAL || *sub == crate::names::DEPRECATED,
+        _ => false,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -654,6 +688,10 @@ pub struct Ast {
     pub exports: Vec<Import>,
     /// Package-level `export` clauses.
     pub top_exports: Vec<Import>,
+    /// The `export` clauses written inside `extension` groups (`Parsers.extension`, an `Export`
+    /// among the `ExtMethods`), each group's with its header: the clauses themselves stand among
+    /// the enclosing body's (`ClassDef::exports`, `top_exports`).
+    pub extension_exports: Vec<ExtensionExport>,
     /// `import language.strictEquality` was written in the file.
     pub strict_equality: bool,
     /// The file's top-level imports of `scala.language`, which the parser takes out of
@@ -974,6 +1012,7 @@ impl Ast {
             import_stmts: Vec::new(),
             exports: Vec::new(),
             top_exports: Vec::new(),
+            extension_exports: Vec::new(),
             strict_equality: false,
             language_imports: Vec::new(),
             language_scopes: Vec::new(),

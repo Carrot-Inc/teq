@@ -4,7 +4,7 @@
 // expect: 38:5: error: reference to x is ambiguous: it is both defined in an enclosing scope and imported by name subsequently by import P.x
 // expect: 43:5: error: reference to a is ambiguous: it is both imported by name by import Q.a and imported subsequently by import R.*
 // expect: 47:11: error: reference to top is ambiguous: it is both defined in package <empty> and imported subsequently by import P.*
-// expect: 48:8: error: s1 is imported twice on the same import line
+// expect: 48:15: error: s1 is imported twice on the same import line.
 // expect: 49:8: error: named imports cannot follow wildcard imports
 // expect: 8 errors found
 object Q:

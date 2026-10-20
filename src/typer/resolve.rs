@@ -83,6 +83,13 @@ pub enum TermRef {
     SelfAlias(ClassId),
 }
 
+/// What an import's qualifier typed as an expression opens (`Worker::import_head_step`).
+pub(super) enum HeadStep {
+    Target(ImportTarget),
+    Value((SymId, Option<ClassId>, Option<ValueImport>)),
+    Stop,
+}
+
 impl TermRef {
     pub fn sym(self) -> Option<SymId> {
         match self {
@@ -105,6 +112,52 @@ pub(super) struct ImportAlternative {
 impl<'a> Worker<'a> {
     // ---- imports ----
 
+    /// The import statements of `file` the traversal reaches before the definition `d`
+    /// (`Typer.typedStats` over the package definition: the imports stay among the classes and
+    /// objects in source order, the package object's members come last, `Desugar.packageDef`'s
+    /// `topStats :+ grouped`): every one written before `d`, every one for a member of the package
+    /// object, each checked once on this worker as `typedImport` checks it (`check_import_target`),
+    /// resolved first where no lookup went through it yet.
+    pub(super) fn reach_file_imports(&mut self, file: FileId, d: ast::DefId) {
+        if self.ast(file).imports.is_empty() {
+            return;
+        }
+        let limit = if super::inlining::wrapped_top_level(self.ast(file), d) { u32::MAX } else { self.ast(file).def(d).span.start };
+        self.reach_file_imports_to(file, limit);
+    }
+
+    /// The import statements of `file` after its last definition, which `typedStats` reaches
+    /// after it: checked with the file's last item.
+    pub(super) fn reach_trailing_file_imports(&mut self, file: FileId) {
+        if self.ast(file).imports.is_empty() {
+            return;
+        }
+        self.reach_file_imports_to(file, u32::MAX);
+    }
+
+    fn reach_file_imports_to(&mut self, file: FileId, limit: u32) {
+        let outer_file = std::mem::replace(&mut self.env.file, file);
+        self.import_count();
+        let Some(resolved) = self.file_imports[file.0 as usize].clone() else {
+            self.env.file = outer_file;
+            return;
+        };
+        let mut stmts: Vec<u32> = resolved.iter().map(|r| r.stmt).filter(|&s| s != u32::MAX && s < limit).collect();
+        stmts.sort_unstable();
+        stmts.dedup();
+        for stmt in stmts {
+            if self.checked_imports.insert((file.0, stmt), ()).is_some() {
+                continue;
+            }
+            let Some(target) = resolved.iter().find(|r| r.stmt == stmt).map(|r| r.target) else { continue };
+            let clause = self.ast(file).imports.iter().find(|a| a.span.start == stmt).map(|a| (a.path.clone(), a.span));
+            if let Some((path, span)) = clause {
+                self.check_import_target(target, &path, span, "import");
+            }
+        }
+        self.env.file = outer_file;
+    }
+
     /// How many imports are visible: those of the enclosing blocks and bodies, then the file's,
     /// which are resolved on first use.
     #[inline]
@@ -113,7 +166,29 @@ impl<'a> Worker<'a> {
         if self.file_imports[file.0 as usize].is_none() {
             self.resolve_file_imports(file);
         }
-        self.env.imports.len() + self.file_imports[file.0 as usize].as_ref().map_or(0, |v| v.len())
+        let all = self.file_imports[file.0 as usize].as_ref().map_or(0, |v| v.len());
+        match self.env.import_limit {
+            // A limit is a place in the environment's file: none for another file's list.
+            Some((f, limit)) if f == file => self.env.imports.len() + self.visible_file_imports(all, limit),
+            _ => self.env.imports.len() + all,
+        }
+    }
+
+    /// The file imports in scope under the environment's limit (`Env::import_limit`), computed
+    /// once per limit and list: how many, with their indexes kept for `import_at`.
+    #[cold]
+    fn visible_file_imports(&mut self, all: usize, limit: u32) -> usize {
+        if let Some((over, v)) = &self.env.visible_imports {
+            // Kept while the list is the one it was computed over.
+            if *over == all {
+                return v.len();
+            }
+        }
+        let list = self.file_imports[self.env.file.0 as usize].clone().unwrap_or_default();
+        let visible: Vec<u32> = (0..list.len() as u32).filter(|&i| list[i as usize].stmt == u32::MAX || list[i as usize].stmt < limit).collect();
+        let n = visible.len();
+        self.env.visible_imports = Some((all, std::sync::Arc::new(visible)));
+        n
     }
 
     /// The visible imports from the innermost scope outwards; a scope lists its named imports
@@ -123,7 +198,13 @@ impl<'a> Worker<'a> {
         let local = &self.env.imports;
         match local.len().checked_sub(i + 1) {
             Some(at) => local[at],
-            None => self.file_imports[self.env.file.0 as usize].as_ref().unwrap()[i - local.len()],
+            None => {
+                let list = self.file_imports[self.env.file.0 as usize].as_ref().unwrap();
+                match (&self.env.visible_imports, self.env.import_limit) {
+                    (Some((_, v)), Some((f, _))) if f == self.env.file => list[v[i - local.len()] as usize],
+                    _ => list[i - local.len()],
+                }
+            }
         }
     }
 
@@ -140,14 +221,14 @@ impl<'a> Worker<'a> {
     /// source has them.
     pub fn file_import_clauses(&mut self, file: FileId) -> Vec<(Span, ResolvedImport)> {
         let clauses = &self.ast(file).imports;
-        let env = Env { file, frames: Vec::new(), imports: Vec::new() };
+        let env = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
         self.once(|t| t.with_env(env, |t| clauses.iter().filter_map(|imp| t.resolve_import(imp, clauses).map(|r| (imp.span, r))).collect()))
     }
 
     fn resolve_file_imports(&mut self, file: FileId) {
         self.file_imports[file.0 as usize] = Some(std::sync::Arc::new(Vec::new()));
         let clauses = &self.ast(file).imports;
-        let env = Env { file, frames: Vec::new(), imports: Vec::new() };
+        let env = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
         self.importing_files.push(file);
         self.once(|t| {
             t.with_env(env, |t| {
@@ -175,6 +256,7 @@ impl<'a> Worker<'a> {
         // What a block of a captured body imports the capture keeps too (`capture_block_imports`).
         let keeping = noting || self.capturing();
         let mut entered = Vec::new();
+        let mut last_checked: Option<u32> = None;
         for imp in clauses {
             // An inline expansion's imports are its definition's, recorded where it is typed.
             if self.deps.is_some() && self.inline.depth == 0 {
@@ -191,8 +273,13 @@ impl<'a> Worker<'a> {
                 if self.inline.depth > 0 {
                     let frame = self.env.frames.len() - 1;
                     self.inline.body_imports.push((frame, resolved));
-                } else if matches!(imp.sel, ImportSel::Name(..)) {
-                    self.check_value_selector(resolved.target, imp.selector_span);
+                } else {
+                    // The statement reached (`typedImport`): its path and its selectors checked,
+                    // once per clause.
+                    if last_checked != Some(imp.span.start) {
+                        last_checked = Some(imp.span.start);
+                        self.check_import_target(resolved.target, &imp.path, imp.span, "import");
+                    }
                 }
                 if keeping {
                     entered.push(resolved);
@@ -333,56 +420,20 @@ impl<'a> Worker<'a> {
         let clauses = self.cur_ast().import_stmt(stmt);
         let (Some(first), Some(last)) = (clauses.first(), clauses.last()) else { return };
         let (from, to) = (first.span.start, last.span.start);
+        let mut checked: Vec<u32> = Vec::new();
         for &(start, imp) in self.class_imports(c).iter() {
             if start >= from && start <= to {
                 self.env.push_import(scope, imp);
-                // A named selector through a value is checked against what the value has, found
-                // in the statement's clauses only then.
-                if let ImportTarget::ValueMember(_, member) = imp.target {
-                    let selector = self.cur_ast().import_stmt(stmt).iter().find(|a| a.span.start == start && matches!(a.sel, ImportSel::Name(m, _) if m == member)).map(|a| a.selector_span);
-                    if let Some(at) = selector {
-                        self.check_value_selector(imp.target, at);
+                // The statement reached: its path checked (`typedImport`), once per clause.
+                if !checked.contains(&start) {
+                    checked.push(start);
+                    let clause = self.cur_ast().import_stmt(stmt).iter().find(|a| a.span.start == start).map(|a| (a.path.clone(), a.span));
+                    if let Some((path, span)) = clause {
+                        self.check_import_target(imp.target, &path, span, "import");
                     }
                 }
             }
         }
-    }
-
-    /// A named selector of an import through a value names a member of the value's type, a term
-    /// or a type (dotty's `Checking.checkImportSelectors`, `checkIdent`, which `typedImport` runs
-    /// whether or not the name is read): "value x is not a member of T" otherwise. Checked where
-    /// the import's statement is typed, as the class's or the block's.
-    pub(super) fn check_value_selector(&mut self, target: ImportTarget, at: Span) {
-        let ImportTarget::ValueMember(v, member) = target else { return };
-        let ty = self.import_value_ret(v);
-        let ty = self.zonk(ty);
-        if ty == ERROR || self.types.contains_error(ty) || matches!(self.types.get(ty), Type::Var(_)) {
-            return;
-        }
-        // Only a class's own type has members this lookup knows all of; anything else is taken
-        // as the import was before, its names read where they are used: a builtin type's members
-        // are the typer's primitives (`n.toLong`), an opaque type's its underlying type's, and a
-        // type parameter's, an intersection's or a refinement's go through bounds and parts.
-        let shape = self.deref_alias(ty);
-        let Type::Class(c, _) = self.types.get(shape) else { return };
-        if matches!(self.syms.class(c).kind, ClassKind::Builtin | ClassKind::Opaque) || self.is_builtin_type(shape) {
-            return;
-        }
-        let extension = self.class_of(ty).is_some_and(|c| {
-            self.complete_class(c);
-            let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
-            bases.into_iter().any(|b| self.syms.class(b).extensions.iter().any(|&s| self.syms.sym(s).name == member))
-        });
-        // The members every value has, which no class declares here (`Any`'s and `AnyRef`'s).
-        let universal = matches!(
-            self.name_str(member).as_str(),
-            "==" | "!=" | "##" | "asInstanceOf" | "isInstanceOf" | "equals" | "hashCode" | "toString" | "getClass" | "eq" | "ne" | "synchronized" | "notify" | "notifyAll" | "wait"
-        );
-        if universal || self.find_member(ty, member).is_some() || self.has_member_or_std_extension(ty, member) || extension || self.value_has_type(v, member) || self.value_export_term(ty, member).is_some() {
-            return;
-        }
-        let msg = format!("value {} is not a member of {}", self.name_str(member), self.show(self.widen_lit(ty)));
-        self.error(at, msg);
     }
 
     /// What the wildcard `imp` leaves out: the names its clause's other selectors take.
@@ -417,7 +468,7 @@ impl<'a> Worker<'a> {
             };
             return Some(ResolvedImport { name, target: ImportTarget::Unresolved, hidden, bound: None, depth: 0, stmt: imp.span.start, unimports_predef: None, sel: self.sel_ref(sel, None) });
         };
-        if self.index.is_some() {
+        if self.index.is_some() && !matches!(imp.sel, ImportSel::Name(names::ERROR, _)) {
             self.index_import(imp, target);
         }
         if let (true, ImportTarget::PkgAll(p)) = (self.unused.on(), target) {
@@ -448,9 +499,20 @@ impl<'a> Worker<'a> {
             ImportSel::Name(_, Some(names::WILDCARD)) if unimports_predef.is_some() => {
                 return Some(ResolvedImport { name: None, target: ImportTarget::UnimportPredef, hidden: ast::ListRef::EMPTY, bound: None, depth: 0, stmt: imp.span.start, unimports_predef, sel: self.sel_ref(sel, None) });
             }
-            ImportSel::Name(_, Some(names::WILDCARD)) => return None,
             ImportSel::Name(n, alias) => {
                 self.check_selector_order(imp, clause, n);
+                // An unimport (`x as _`) binds nothing (`ImportInfo.forwardMapping` has no entry
+                // for it): an import of no name, kept so that the statement is reached and its
+                // selectors checked (`check_import_selectors_at`).
+                if alias == Some(names::WILDCARD) {
+                    let target = match target {
+                        ImportTarget::PkgAll(p) => ImportTarget::PkgMember(p, names::ERROR),
+                        ImportTarget::ClassAll(c) => ImportTarget::ClassMember(c, names::ERROR),
+                        ImportTarget::ValueAll(v) => ImportTarget::ValueMember(v, names::ERROR),
+                        _ => return None,
+                    };
+                    return Some(ResolvedImport { name: Some(names::ERROR), target, hidden: ast::ListRef::EMPTY, bound: None, depth: 0, stmt: imp.span.start, unimports_predef, sel: super::unused::SelRef::NONE });
+                }
                 (alias.unwrap_or(n), n)
             }
         };
@@ -460,25 +522,7 @@ impl<'a> Worker<'a> {
             && clause.iter().any(|other| other.span.start == imp.span.start && matches!(other.sel, ImportSel::Wildcard | ImportSel::Given));
         let bound = renamed_beside_wildcard.then_some(NOTHING);
         let target = match target {
-            ImportTarget::PkgAll(p) => {
-                let pkg = self.syms.pkg(p);
-                let exports = pkg.has_exports();
-                let known = self.syms.entry_named(self.interner, p, member).is_some()
-                    || (self.demand_std(p, member, crate::stdindex::TYPE | crate::stdindex::TERM) && self.syms.entry_named(self.interner, p, member).is_some())
-                    || ((self.loaded.is_some() || self.syms.pkg(p).package_object.is_some() || exports) && {
-                        // An export table still being built may hold the member.
-                        let blocks = self.export_blocks;
-                        self.pkg_term(p, member).is_some()
-                            || self.pkg_type(p, member).is_some()
-                            || self.pkg_exports_of(p).map_or(false, |e| e.extensions.contains_key(&member))
-                            || self.export_blocks != blocks
-                    });
-                if !known {
-                    let msg = format!("{} is not a member of the package", self.name_str(member));
-                    self.diags.error(file, imp.span, msg);
-                }
-                ImportTarget::PkgMember(p, member)
-            }
+            ImportTarget::PkgAll(p) => ImportTarget::PkgMember(p, member),
             ImportTarget::ClassAll(c) => ImportTarget::ClassMember(c, member),
             ImportTarget::ValueAll(v) => ImportTarget::ValueMember(v, member),
             t => t,
@@ -518,23 +562,218 @@ impl<'a> Worker<'a> {
         })
     }
 
-    /// The selectors before `imp` on the same import line: none may name `n` again, and a
-    /// wildcard has to be the last of them.
+    /// The selectors before `imp` on the same import line: a wildcard has to be the last of them
+    /// (`Parsers.importSelector`'s `idOK`).
     #[cold]
-    fn check_selector_order(&mut self, imp: &ast::Import, clause: &[ast::Import], n: Name) {
+    fn check_selector_order(&mut self, imp: &ast::Import, clause: &[ast::Import], _n: Name) {
         let mut earlier = clause.iter().filter(|other| other.span.start == imp.span.start);
         for other in earlier.by_ref() {
             if std::ptr::eq(other, imp) {
                 break;
             }
-            let msg = match other.sel {
-                ImportSel::Name(m, _) if m == n => format!("{} is imported twice on the same import line", self.name_str(n)),
-                ImportSel::Wildcard | ImportSel::Given => "named imports cannot follow wildcard imports".to_string(),
-                _ => continue,
-            };
-            self.error(imp.span, msg);
+            if matches!(other.sel, ImportSel::Wildcard | ImportSel::Given) {
+                self.error(imp.span, "named imports cannot follow wildcard imports".to_string());
+                return;
+            }
+        }
+    }
+
+    /// `Checking.checkImportSelectors` of the import statement at `span`, run where
+    /// `typedImport` runs it, the statement reached (`check_import_target`): each named selector
+    /// of the clause against the qualifier `target` resolved to, whose members are complete by then.
+    pub(super) fn check_import_selectors_at(&mut self, target: ImportTarget, span: Span) {
+        let base = match target {
+            ImportTarget::PkgMember(p, _) | ImportTarget::PkgAll(p) | ImportTarget::PkgGivens(p) => ImportTarget::PkgAll(p),
+            ImportTarget::ClassMember(c, _) | ImportTarget::ClassAll(c) | ImportTarget::ClassGivens(c) => ImportTarget::ClassAll(c),
+            ImportTarget::ValueMember(v, _) | ImportTarget::ValueAll(v) | ImportTarget::ValueGivens(v) => ImportTarget::ValueAll(v),
+            _ => return,
+        };
+        let file = self.env.file;
+        let ast = self.ast(file);
+        let clause: Vec<ast::Import> = ast.imports.iter().chain(ast.local_imports.iter()).filter(|i| i.span.start == span.start).cloned().collect();
+        for i in 0..clause.len() {
+            if let ImportSel::Name(n, alias) = clause[i].sel {
+                self.check_import_selector(&clause[i], &clause, base, n, alias);
+            }
+        }
+    }
+
+    /// `Checking.checkImportSelectors` for the named selector `n` (renamed `alias`, `_` an
+    /// unimport) of `imp`: the name is a member of the qualifier (`NotAMember`, at the name), an
+    /// unimport of a name an earlier selector imported is "unimported and imported", or twice
+    /// (`UnimportedAndImported`), and a name an earlier selector's target already takes is
+    /// imported twice (`ImportedTwice`, at the rename). The error name of a malformed clause is
+    /// no selector (`sel.name != nme.ERROR`).
+    #[cold]
+    fn check_import_selector(&mut self, imp: &ast::Import, clause: &[ast::Import], target: ImportTarget, n: Name, alias: Option<Name>) {
+        if n == names::ERROR {
             return;
         }
+        let file = self.env.file;
+        let sel = imp.selector_span;
+        let name_len = self.name_str(n).len() as u32;
+        let name_span = Span::new(sel.start, (sel.start + name_len).min(sel.end.max(sel.start)));
+        if let Some(msg) = self.import_member_missing(imp, target, n) {
+            self.diags.error(file, name_span, msg);
+        }
+        let unimport = alias == Some(names::WILDCARD);
+        let rename = alias.filter(|&a| a != names::WILDCARD).unwrap_or(n);
+        let mut originals: Vec<Name> = Vec::new();
+        let mut targets: Vec<Name> = Vec::new();
+        for other in clause.iter().filter(|other| other.span.start == imp.span.start) {
+            if std::ptr::eq(other, imp) {
+                break;
+            }
+            if let ImportSel::Name(m, r) = other.sel {
+                originals.push(m);
+                if r != Some(names::WILDCARD) {
+                    targets.push(r.unwrap_or(m));
+                }
+            }
+        }
+        if unimport {
+            if originals.contains(&n) {
+                let other = if targets.contains(&n) { "and imported" } else { "twice" };
+                let msg = format!("{} is unimported {} on the same import line.", self.name_str(n), other);
+                self.diags.error(file, name_span, msg);
+            }
+        } else if targets.contains(&rename) {
+            let at = match alias {
+                Some(r) => {
+                    let len = self.name_str(r).len() as u32;
+                    Span::new(sel.end.saturating_sub(len).max(sel.start), sel.end)
+                }
+                None => name_span,
+            };
+            let msg = format!("{} is imported twice on the same import line.", self.name_str(rename));
+            self.diags.error(file, at, msg);
+        }
+    }
+
+    /// `NotAMember` for an import's named selector: the message where `member` is no member of
+    /// the qualifier `target` (`qualType.member(name)`, the term or the type), which is what no
+    /// lookup through the selector could bind: a term, a type or an extension method (teq keeps
+    /// extensions apart from the members), each by the lookup the import itself makes
+    /// (`Binding::via_import`, `import_extensions`). A package's members are its entries, a
+    /// package object's and its exports'. A qualifier typed as an expression whose type is not its
+    /// symbol's (a transparent method's expansion that is no path, a method's eta-expansion) is
+    /// checked against no type: another worker reading the import knows the symbol alone.
+    fn import_member_missing(&mut self, imp: &ast::Import, target: ImportTarget, member: Name) -> Option<String> {
+        let program = self.program_file(self.env.file);
+        // The members every value has, which no class declares here (`Any`'s and `AnyRef`'s, found
+        // through a type's bases by `qualType.member`; a package has none).
+        let universal = matches!(
+            self.name_str(member).as_str(),
+            "==" | "!=" | "##" | "asInstanceOf" | "isInstanceOf" | "equals" | "hashCode" | "toString" | "getClass" | "eq" | "ne" | "synchronized" | "notify" | "notifyAll" | "wait" | "clone" | "finalize"
+        );
+        let (probe_target, shown) = match target {
+            ImportTarget::PkgAll(p) => (ImportTarget::PkgMember(p, member), None),
+            ImportTarget::ClassAll(_) | ImportTarget::ValueAll(_) if universal => return None,
+            ImportTarget::ClassAll(c) if program => {
+                let ty = self.types.class(c, &[]);
+                (ImportTarget::ClassMember(c, member), Some(self.show(ty)))
+            }
+            // A qualifier typed as an expression (a method's call, a transparent method's
+            // expansion) is checked by the tree's type (`qualType.member(name)`), the method's
+            // declared result here: `value noSuchMember is not a member of C` for an `import
+            // p.noSuchMember` over a `def p: C`.
+            ImportTarget::ValueAll(v) if program => {
+                let ty = self.import_value_ret(v);
+                let ty = self.zonk(ty);
+                if ty == ERROR || self.types.contains_error(ty) || matches!(self.types.get(ty), Type::Var(_)) {
+                    return None;
+                }
+                // Only a class's own type has members this lookup knows all of; anything else is
+                // taken as the import was before, its names read where they are used: an opaque
+                // type's members are its underlying type's, and a type parameter's, an
+                // intersection's or a refinement's go through bounds and parts. A builtin type's
+                // members are the typer's primitives (`n.toLong`, `n + 1`) and the std's extensions
+                // that stand for scala-library's members (`builtin_member_exists`).
+                let shape = self.deref_alias(ty);
+                let Type::Class(c, _) = self.types.get(shape) else { return None };
+                if self.syms.class(c).kind == ClassKind::Opaque {
+                    return None;
+                }
+                if self.syms.class(c).kind == ClassKind::Builtin || self.is_builtin_type(shape) {
+                    if self.builtin_member_exists(shape, member) {
+                        return None;
+                    }
+                    let shown = self.widen_lit(ty);
+                    return Some(format!("value {} is not a member of {}", self.name_str(member), self.show(shown)));
+                }
+                if self.has_member_or_std_extension(ty, member) || self.value_export_term(ty, member).is_some() {
+                    return None;
+                }
+                let shown = self.widen_lit(ty);
+                (ImportTarget::ValueMember(v, member), Some(self.show(shown)))
+            }
+            _ => return None,
+        };
+        let probe = ResolvedImport {
+            name: Some(member),
+            target: probe_target,
+            hidden: ast::ListRef::EMPTY,
+            bound: None,
+            depth: 0,
+            stmt: imp.span.start,
+            unimports_predef: None,
+            sel: super::unused::SelRef::NONE,
+        };
+        if <TermRef as Binding>::via_import(self, probe, member).is_some() || <TypeRef as Binding>::via_import(self, probe, member).is_some() {
+            return None;
+        }
+        let mut extensions = Vec::new();
+        self.import_extensions(probe, member, &mut extensions);
+        if !extensions.is_empty() {
+            return None;
+        }
+        match (target, shown) {
+            (ImportTarget::PkgAll(p), _) => {
+                let pkg = self.syms.pkg(p);
+                let exports = pkg.has_exports();
+                let known = self.syms.entry_named(self.interner, p, member).is_some()
+                    || (self.demand_std(p, member, crate::stdindex::TYPE | crate::stdindex::TERM) && self.syms.entry_named(self.interner, p, member).is_some())
+                    || ((self.loaded.is_some() || self.syms.pkg(p).package_object.is_some() || exports) && {
+                        // An export table still being built may hold the member.
+                        let blocks = self.export_blocks;
+                        self.pkg_exports_of(p).map_or(false, |e| e.extensions.contains_key(&member)) || self.export_blocks != blocks
+                    });
+                (!known).then(|| format!("{} is not a member of the package", self.name_str(member)))
+            }
+            (_, Some(shown)) => Some(format!("value {} is not a member of {}", self.name_str(member), shown)),
+            _ => None,
+        }
+    }
+
+    /// Whether the builtin type `t` has the member `name` as scala-library's class has it
+    /// (`qualType.member(name)` there): `Any`'s members; a number's conversions
+    /// (`prims::NUMERIC_CONVERSIONS`), its arithmetic, comparison, and for an integral one its
+    /// bitwise and shift operators (`prims::classify`), and its unary `-`, `+` and `~`; a
+    /// boolean's `!`, `&`, `|`, `^`, `&&` and `||`; and what the std's extensions stand for
+    /// (`builtin_member_like`: the JDK's `String` methods, `Array`'s members).
+    fn builtin_member_exists(&mut self, t: TypeId, name: Name) -> bool {
+        let text = self.name_ref(name).to_string();
+        if matches!(text.as_str(), "==" | "!=" | "##" | "asInstanceOf" | "isInstanceOf" | "equals" | "hashCode" | "toString" | "getClass" | "eq" | "ne") {
+            return true;
+        }
+        if let Some(rank) = self.is_numeric(t) {
+            if super::prims::NUMERIC_CONVERSIONS.contains(&text.as_str()) {
+                return true;
+            }
+            let integral = rank <= super::prims::R_LONG;
+            match super::prims::classify(name) {
+                Some(super::prims::OpClass::Arith | super::prims::OpClass::Compare) => return true,
+                Some(super::prims::OpClass::Bits | super::prims::OpClass::Shift) if integral => return true,
+                _ => {}
+            }
+            if text == "unary_-" || text == "unary_+" || (integral && text == "unary_~") {
+                return true;
+            }
+        }
+        if t == self.b.t_boolean && matches!(text.as_str(), "unary_!" | "&" | "|" | "^" | "&&" | "||") {
+            return true;
+        }
+        self.builtin_member_like(t, name)
     }
 
     /// Whether the given a name resolves to through the `given` selector `imp` conforms to the
@@ -665,7 +904,31 @@ impl<'a> Worker<'a> {
                         if static_val.is_some() {
                             continue;
                         }
-                        self.import_value_head(seg).map(Err)
+                        // A term that is no stable value: the qualifier typed as an expression
+                        // (`typedImportQualifier`'s `typedExpr(expr, AnySelectionProto)`), a
+                        // transparent method's its expansion, the members its type's; checked
+                        // at the statement (`check_import_target`).
+                        match head.and_then(|r| r.sym().map(|s| (r, s))) {
+                            Some((r, s)) if self.import_checked_term(s) => {
+                                // The path before the member: its object, or the enclosing
+                                // instance it is read on (`Test.q`, `Use.this.d`).
+                                let prefix: Vec<super::import_check::PathStep> = match r {
+                                    TermRef::ModuleMember(c, _) => vec![super::import_check::PathStep::Object(c)],
+                                    TermRef::This(c, _) if self.syms.class(c).kind == ClassKind::Object => vec![super::import_check::PathStep::Object(c)],
+                                    TermRef::This(c, _) => vec![super::import_check::PathStep::This(c)],
+                                    _ => Vec::new(),
+                                };
+                                match self.import_head_step(r, s, &prefix, seg, span, export) {
+                                    HeadStep::Target(t) => Some(Ok(t)),
+                                    HeadStep::Value(v) => {
+                                        static_val = Some(v);
+                                        continue;
+                                    }
+                                    HeadStep::Stop => return None,
+                                }
+                            }
+                            _ => self.import_value_head(seg).map(Err),
+                        }
                     }
                 },
                 (Some(ImportTarget::PkgAll(p)), _) => match self.import_step_pkg(p, seg) {
@@ -685,7 +948,24 @@ impl<'a> Worker<'a> {
                         if static_val.is_some() {
                             continue;
                         }
-                        None
+                        // An object's member that is no stable value (`A.bad`): the qualifier
+                        // typed as an expression, checked at the statement (`import_head_step`).
+                        if self.syms.class(c).kind == ClassKind::Object {
+                            if let Some((r, m)) = self.module_term(c, seg).and_then(|r| r.sym().map(|m| (r, m))).filter(|&(_, m)| self.import_checked_term(m)) {
+                                match self.import_head_step(r, m, &[super::import_check::PathStep::Object(c)], seg, span, export) {
+                                    HeadStep::Target(t) => Some(Ok(t)),
+                                    HeadStep::Value(v) => {
+                                        static_val = Some(v);
+                                        continue;
+                                    }
+                                    HeadStep::Stop => return None,
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
                     }
                 },
                 _ => None,
@@ -697,6 +977,11 @@ impl<'a> Worker<'a> {
                 }
                 Some(Err(ty)) => value = Some(ty),
                 None => {
+                    // The error name a malformed clause's qualifier is (`Ident(nme.ERROR)`):
+                    // resolved to nothing without a report, as `typedIdent` types it.
+                    if seg == names::ERROR {
+                        return None;
+                    }
                     if let (None, Some(TermRef::Local(s))) = (target, self.lookup_term(seg)) {
                         if self.syms.sym(s).kind == SymKind::Var {
                             let ty = self.sig_of(s).ret;
@@ -713,12 +998,21 @@ impl<'a> Worker<'a> {
                     };
                     let problem = if is_value { "is not an object or a package" } else { "not found" };
                     let msg = format!("cannot resolve {}: {} {}", word, self.name_str(seg), problem);
-                    self.error(span, msg);
+                    // A head found nowhere may be a name an unresolved import in scope would bind
+                    // (`import demo.implicits._; import demo._`): an error type through that import,
+                    // without a report of its own.
+                    if target.is_none() && !is_value {
+                        self.not_found_error(seg, span, msg);
+                    } else {
+                        self.error(span, msg);
+                    }
                     return None;
                 }
             }
         }
         if let Some(value) = static_val {
+            // The value path checked as dotty checks the typed path (`checkLegalImportOrExportPath`):
+            // a lazy val's realizability among it.
             let id = self.with_loader(|w| ValueImport(w.import_values.push(value) as u32));
             return Some(ImportTarget::ValueAll(id));
         }
@@ -735,6 +1029,140 @@ impl<'a> Worker<'a> {
             return None;
         }
         target.or(Some(ImportTarget::PkgAll(ROOT_PKG)))
+    }
+
+    /// The typed path of an import's value (`static_import_val`'s chain): each value selected on
+    /// the one before it, the first on its object or enclosing instance.
+    pub(super) fn import_value_steps(&self, value: (SymId, Option<ClassId>, Option<ValueImport>)) -> Vec<super::import_check::PathStep> {
+        let mut out = Vec::new();
+        let mut at = Some(value);
+        while let Some((s, module, prev)) = at {
+            out.push(super::import_check::PathStep::Term(s));
+            match prev {
+                Some(v) => at = Some(self.import_values[v.0 as usize]),
+                None => {
+                    // The member's object, or the enclosing instance it is read on (`Use.this.d`).
+                    if let Some(c) = module {
+                        out.push(if self.syms.class(c).kind == ClassKind::Object { super::import_check::PathStep::Object(c) } else { super::import_check::PathStep::This(c) });
+                    }
+                    at = None;
+                }
+            }
+        }
+        out.reverse();
+        out
+    }
+
+    /// A term an import's path reaches that the importer does not take as a stable value: a
+    /// method, a given with clauses, a var, whose path `checkLegalImportOrExportPath` checks
+    /// (`import_check`).
+    fn import_checked_term(&mut self, s: SymId) -> bool {
+        match self.syms.sym(s).kind {
+            SymKind::Def => !self.is_stable_forwarder(s),
+            SymKind::Var => true,
+            SymKind::Given => self.is_given_with_clauses(s),
+            _ => false,
+        }
+    }
+
+    /// The qualifier `r`, the term `s` that is no stable path, typed as an expression
+    /// (`Typer.typedImportQualifier`: `typedExpr(imp.expr, AnySelectionProto)`), as dotty's
+    /// `Namer.importSym` types it ahead for a lookup through the import: a parameterless method's
+    /// call, one applied to its givens, a transparent method's expansion (`Typer.adapt`'s
+    /// `Inlines.inlineCall`), an error reported. What the import opens is the typed tree's
+    /// type: an object, a stable path's value, or the members of the type. The tree is kept for
+    /// the checks at the statement (`check_import_target`); a bare reference's are the
+    /// `TermRef`'s (`prefix` then `Term(s)`).
+    fn import_head_step(&mut self, r: TermRef, s: SymId, prefix: &[super::import_check::PathStep], seg: Name, span: Span, export: bool) -> HeadStep {
+        use super::import_check::{ImportHead, PathStep};
+        let Some(callee) = self.term_callee(r, seg, span) else { return HeadStep::Stop };
+        let mark = self.failure_mark();
+        // An import's qualifier is typed with the import symbol as owner, and an implicit search
+        // under it starts at the first enclosing context whose scope or owner differs
+        // (`Implicits.inferImplicit`, i12802): the givens of the block the import stands in are
+        // not candidates, an enclosing block's and a method's parameters are. An export's path is
+        // the class completer's (`exportForwarders`), under no such rule.
+        let block_givens = match (export, self.env.frames.last_mut()) {
+            (false, Some(Frame::Locals { givens, .. })) => Some(std::mem::take(givens)),
+            _ => None,
+        };
+        let (te, ty) = self.apply_callee(callee, None, Vec::new(), span, None);
+        if let (Some(saved), Some(Frame::Locals { givens, .. })) = (block_givens, self.env.frames.last_mut()) {
+            *givens = saved;
+        }
+        let ty = self.zonk(ty);
+        // A transparent inline method's tree is its expansion (`Typer.adapt`'s `Inlines.inlineCall`),
+        // whose type the checks read (`C is not a valid import prefix` for a `transparent inline def
+        // p: C = new C`), never the method's `TermRef`.
+        let transparent = self.syms.sym(s).mods & (mods::TRANSPARENT | mods::INLINE) == (mods::TRANSPARENT | mods::INLINE);
+        let bare = !transparent
+            && match self.prog.expr(te) {
+                crate::tir::TExpr::Static(x) | crate::tir::TExpr::Local(x) | crate::tir::TExpr::Field(_, x) => x == s,
+                crate::tir::TExpr::CallStatic(x, l) | crate::tir::TExpr::CallMethod(_, x, l) => x == s && l.len == 0,
+                _ => false,
+            };
+        // A qualifier whose typing failed resolves nothing more (`errorTree`).
+        if self.failed_since(mark) || self.types.contains_error(ty) {
+            return HeadStep::Stop;
+        }
+        // Kept for the checks at the statement (`check_import_target`): a bare reference as the
+        // `TermRef` it is (its stability its info's, its purity the reference's), any other tree
+        // by its type and purity.
+        let (steps, shown) = if bare {
+            let mut steps = prefix.to_vec();
+            steps.push(PathStep::Term(s));
+            let shown = steps.iter().map(|&st| self.step_shown(st)).collect::<Vec<_>>().join(".");
+            (steps, shown)
+        } else {
+            (Vec::new(), String::new())
+        };
+        self.import_heads.insert((self.env.file.0, span.start), ImportHead { te, ty, steps, shown });
+        let module = match r {
+            TermRef::ModuleMember(c, _) | TermRef::This(c, _) => Some(c),
+            _ => None,
+        };
+        match self.types.get(ty) {
+            Type::Class(c, args) if self.types.items(args).is_empty() && self.syms.class(c).kind == ClassKind::Object => HeadStep::Target(ImportTarget::ClassAll(c)),
+            Type::Term(t) if matches!(self.syms.sym(t).kind, SymKind::Object(_)) => match self.syms.sym(t).kind {
+                SymKind::Object(c) => HeadStep::Target(ImportTarget::ClassAll(c)),
+                _ => unreachable!(),
+            },
+            Type::Term(_) | Type::Select(..) => match self.value_import_of_path(ty) {
+                Some(v) => HeadStep::Value(v),
+                // The members of the path's type, read on the qualifier (`import_entry_ret`).
+                None => HeadStep::Value((s, module, None)),
+            },
+            // The members of the expression's type, the import's value the qualifier itself
+            // (dotty's `ImportInfo` over the typed expression), its legality checked at the
+            // statement.
+            _ => HeadStep::Value((s, module, None)),
+        }
+    }
+
+    /// The stable path `ty` as the value an import opens (`static_import_val`'s chain): each
+    /// member on the value before it.
+    fn value_import_of_path(&mut self, ty: TypeId) -> Option<(SymId, Option<ClassId>, Option<ValueImport>)> {
+        match self.types.get(ty) {
+            Type::Term(s) => {
+                let r = match self.syms.sym(s).owner {
+                    Owner::Local => TermRef::Local(s),
+                    Owner::Package(_) => TermRef::Global(s),
+                    Owner::Class(c) if self.syms.class(c).kind == ClassKind::Object => TermRef::ModuleMember(c, s),
+                    Owner::Class(c) => TermRef::This(c, s),
+                };
+                self.static_import_val(r)
+            }
+            Type::Select(p, s) => {
+                let prev = self.value_import_of_path(p)?;
+                if !self.is_stable_path_member(s) {
+                    return None;
+                }
+                let v = ValueImport(self.import_values.len() as u32);
+                self.import_values.push(prev);
+                Some((s, None, Some(v)))
+            }
+            _ => None,
+        }
     }
 
     /// A val of a package or an object, a local val or parameter, or a val of an enclosing
@@ -767,6 +1195,14 @@ impl<'a> Worker<'a> {
         let info = self.syms.sym(s);
         let (kind, mods) = (info.kind, info.mods);
         let known = info.sig.is_some() || self.completing == 0 || self.declares_type(s);
+        // With the member's type at hand the qualifier is typed as an expression
+        // (`typedImportQualifier`), a transparent inline method's as its expansion, and the
+        // statement checks the typed tree (`import_head_step`, `check_import_target`): its
+        // stability, its realizability, and the selectors against its type (`value noSuchMember
+        // is not a member of C`).
+        if known {
+            return false;
+        }
         let parameterless = kind == SymKind::Def && (!known || self.sig_of(s).clauses.is_empty()) && !self.is_stable_forwarder(s);
         let final_member = mods & (mods::FINAL | mods::PRIVATE) != 0 || self.syms.class(c).kind == ClassKind::Object || self.syms.class(c).mods & mods::FINAL != 0;
         let lazy = kind == SymKind::Val && mods & mods::LAZY != 0 && !final_member;
@@ -1003,9 +1439,11 @@ impl<'a> Worker<'a> {
                 return Some(TypeRef::Class(n));
             }
         }
-        // A type member of the self type is in scope, path-dependent through `c.this`.
-        if self.self_type_member_class(c, name).is_some() {
-            return Some(TypeRef::Member(c, name));
+        // A type member of the self type is in scope through `c.this`, whose underlying type is
+        // the class's self type (`findRef` on `thisType`, `ClassInfo.selfType`): an abstract type
+        // or alias of a class of the self type, path-dependent, or a class nested in one.
+        if let Some(r) = self.self_type_type_member(c, name) {
+            return Some(r);
         }
         if let Some(r) = self.exports_of(c).and_then(|e| e.types.get(&name).copied()) {
             return Some(r);
@@ -1014,6 +1452,38 @@ impl<'a> Worker<'a> {
         // & AssetHelper =>`, naming the `Translate` that `I18nHelper` exports), a member of the
         // self type as dotty's `findRef` finds it through `this`.
         self.self_type_export(c, |e| e.types.get(&name).copied())
+    }
+
+    /// The type member `name` of a class of `c`'s self type, as `c.this` reaches it: an alias or
+    /// abstract type of the class or its bases through `c.this` (`TypeRef::Member`), a class
+    /// nested in it as its subclasses inherit it (`inherited_type_member`'s shapes).
+    fn self_type_type_member(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
+        let declared = self.syms.class(c).declared_self?;
+        let mut parts = vec![declared];
+        while let Some(t) = parts.pop() {
+            let t = self.deref_alias(t);
+            match self.types.get(t) {
+                Type::Inter(a, b) => parts.extend([a, b]),
+                Type::Class(k, _) if k != c => {
+                    self.complete_class(k);
+                    if self.syms.class(k).base_types.iter().any(|&(b, _)| self.syms.class(b).type_aliases.contains_key(&name)) {
+                        return Some(TypeRef::Member(c, name));
+                    }
+                    let object = self.syms.class(k).kind == ClassKind::Object;
+                    if let Some(&n) = self.syms.class(k).nested.get(&name) {
+                        return Some(if !object && self.is_inner_class(n) { TypeRef::Member(c, name) } else { TypeRef::Class(n) });
+                    }
+                    if let Some(r) = self.inherited_type_member(k, name) {
+                        return Some(match r {
+                            TypeRef::Member(_, n) => TypeRef::Member(c, n),
+                            other => other,
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     /// What `pick` takes of the export table of a class of `c`'s self type, the first that has it.
@@ -1174,6 +1644,7 @@ impl<'a> Worker<'a> {
         let info = self.syms.class(c);
         match info.state().get() {
             Completion::Done => false,
+            Completion::Suspended => unreachable!("only a signature suspends"),
             Completion::InProgress => true,
             Completion::NotStarted => {
                 let (file, owner, span) = (info.file, info.owner, info.span);
@@ -2036,7 +2507,7 @@ impl<'a> Worker<'a> {
     }
 
     /// ` in <owner>` of dotty's `showLocated`, a class's or a package's.
-    fn located_in(&self, owner: Owner) -> String {
+    pub(super) fn located_in(&self, owner: Owner) -> String {
         match owner {
             Owner::Class(k) => format!(" in {}", self.class_description(k)),
             Owner::Package(p) if p != ROOT_PKG => format!(" in package {}", self.package_display(p)),
@@ -2121,6 +2592,11 @@ impl<'a> Worker<'a> {
             // in package `scala`.
             let mut found = None;
             if p == self.b.scala_pkg {
+                // The root import of `Predef` leaves `any2stringadd` out (`ImportInfo`'s
+                // `any2stringadd as _` on `rootImport`): an explicit import brings it.
+                if name == names::ANY2STRINGADD {
+                    continue;
+                }
                 let predef_member = self.b.predef_names.contains(&name);
                 let jar_predef = self.loaded.as_ref().map_or(false, |l| l.predef.is_some());
                 let unimported = (predef_member || jar_predef) && self.predef_unimported();
@@ -2736,7 +3212,10 @@ impl<'a> Worker<'a> {
     /// What an alias whose right-hand side is a match type is used as: its application by
     /// name, as a lambda over its parameters when it has any.
     pub(super) fn match_alias_ctor(&mut self, a: AliasId) -> TypeId {
-        if self.syms.alias(a).state() == Completion::NotStarted {
+        // Read through the completion's boundary (`complete_alias`: a demand, a suspension, a
+        // wait for another worker's completion), but for the alias this worker is completing,
+        // whose own cases name it.
+        if !(self.syms.alias(a).state() == Completion::InProgress && self.syms.alias(a).state().mine()) {
             self.complete_alias(a);
         }
         let tparams = self.syms.aliases[a.idx()].tparams.clone();
@@ -4535,7 +5014,7 @@ impl<'a> Worker<'a> {
                     let (file, transparent) = (self.env.file, self.transparent.clone());
                     let of_body = self.diags.of_bodies;
                     self.note_rare(super::state::Rare::DeferredBounds, self.deferred_bounds.len());
-                    self.deferred_bounds.push(DeferredBound { arg: a, upper: Some(u), lower: None, span, file, transparent, of_body, definition: None });
+                    self.deferred_bounds.push(DeferredBound { arg: a, upper: Some(u), lower: None, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
                 }
                 continue;
             }
@@ -4570,7 +5049,7 @@ impl<'a> Worker<'a> {
             if !self.is_body_file(file) {
                 let of_body = self.diags.of_bodies;
                 self.note_rare(super::state::Rare::DeferredBounds, self.deferred_bounds.len());
-                self.deferred_bounds.push(DeferredBound { arg: a, upper, lower, span, file, transparent, of_body, definition: None });
+                self.deferred_bounds.push(DeferredBound { arg: a, upper, lower, span, file, transparent, of_body, owner: self.diags.owner, definition: None });
             }
         }
     }
@@ -4693,9 +5172,11 @@ impl<'a> Worker<'a> {
     #[cold]
     pub(super) fn check_deferred_bounds(&mut self) {
         let outer = self.diags.of_bodies;
+        let outer_owner = self.diags.owner;
         for check in std::mem::take(&mut self.deferred_bounds) {
             self.transparent = check.transparent;
             self.diags.of_bodies = check.of_body;
+            self.diags.owner = check.owner;
             if let Some(u) = check.upper {
                 if !self.is_sub(check.arg, u) {
                     let msg = format!("type argument {} does not conform to upper bound {}", self.show(check.arg), self.show(u));
@@ -4710,6 +5191,7 @@ impl<'a> Worker<'a> {
             }
         }
         self.diags.of_bodies = outer;
+        self.diags.owner = outer_owner;
         self.transparent.clear();
     }
 
@@ -4884,6 +5366,10 @@ impl<'a> Worker<'a> {
             return self.this_prefix(c);
         }
         match self.type_path(path) {
+            // The path is typed as an expression (`Typer.typedSingletonTypeTree`): its term's
+            // signature is read, which completes it, as `checkStable` reads the info of the
+            // `TermRef` (`Types.isStable`, `isStableMember`).
+            Some(Ok(p)) if matches!(self.types.get(p), Type::Term(_) | Type::Select(..)) && self.reads_path_term(p) => self.singleton_type_read(p),
             // A local object stands for itself as its class type, as a top-level one does.
             Some(Ok(p)) => match self.types.get(p) {
                 Type::Term(s) => match self.local_module_of_sym(s) {
@@ -4899,6 +5385,26 @@ impl<'a> Worker<'a> {
                     ERROR
                 }
             },
+        }
+    }
+
+    /// Whether the path's term is a definition whose signature typing the path reads: a val, a
+    /// given or a stable def, a parameter's own is known.
+    fn reads_path_term(&self, p: TypeId) -> bool {
+        let (Type::Term(s) | Type::Select(_, s)) = self.types.get(p) else { return false };
+        matches!(self.syms.sym(s).kind, SymKind::Val | SymKind::Var | SymKind::Given | SymKind::Def) && self.syms.sym(s).def.is_some()
+    }
+
+    /// The singleton type of the path `p`, its term's signature read first.
+    fn singleton_type_read(&mut self, p: TypeId) -> TypeId {
+        let (Type::Term(s) | Type::Select(_, s)) = self.types.get(p) else { return p };
+        self.sig_of(s);
+        match self.types.get(p) {
+            Type::Term(s) => match self.local_module_of_sym(s) {
+                Some(c) => self.types.class(c, &[]),
+                None => p,
+            },
+            _ => p,
         }
     }
 
@@ -5260,11 +5766,20 @@ impl<'a> Worker<'a> {
     pub fn complete_alias(&mut self, a: AliasId) {
         let state = self.syms.alias(a).state().get();
         if state == Completion::Done {
+            // A read of a completion is a demand of the one in progress (`demand_alias_read`).
+            if self.inlining.track_demands {
+                self.demand_alias_read(a);
+            }
             return;
         }
+        // A suspended completion suspends each reader's unit, as a `SuspendCompleter` does
+        // (`Namer.Completer.complete`), a type completer's too.
+        if state == Completion::Suspended {
+            return self.read_suspended_alias(a);
+        }
         if state == Completion::InProgress && !self.syms.alias(a).state().mine() {
-            self.wait_cell(crate::shared::CellKey::new(super::check::CELL_ALIAS, a.0), |w| w.syms.alias(a).state() == Completion::Done);
-            return;
+            self.wait_cell(crate::shared::CellKey::new(super::check::CELL_ALIAS, a.0), |w| w.syms.alias(a).state().get().is_complete());
+            return self.alias_read_done(a);
         }
         let p = self.phase(super::profile::Phase::Alias);
         self.completing += 1;
@@ -5288,6 +5803,52 @@ impl<'a> Worker<'a> {
         self.leave_completion();
         self.phase_end(p);
         self.outermost_completion_done();
+        self.alias_read_done(a);
+    }
+
+    /// A read of the alias `a` once its completion is over, whoever completed it: a demand of the
+    /// completion in progress, or the reader's suspension where it was suspended.
+    pub(super) fn alias_read_done(&mut self, a: AliasId) {
+        if self.syms.alias(a).state() == Completion::Suspended {
+            return self.read_suspended_alias(a);
+        }
+        if self.inlining.track_demands {
+            self.demand_alias_read(a);
+        }
+    }
+
+    /// A read of the alias `a`, whose completion met a macro of the run at typing time: the
+    /// reader depends on what it reported before, and the reader's unit suspends
+    /// (`read_suspended`).
+    #[cold]
+    pub(super) fn read_suspended_alias(&mut self, a: AliasId) {
+        if self.inlining.track_demands {
+            self.demand_alias_read(a);
+        }
+        self.read_suspended();
+    }
+
+    /// The completion of the alias `a` (`DiagOwner`, at its definition): a program member's.
+    pub(super) fn alias_owner(&self, a: AliasId) -> Option<crate::source::DiagOwner> {
+        let info = self.syms.alias(a);
+        let d = info.def?;
+        if info.owner == Owner::Local || !self.program_file(info.file) {
+            return None;
+        }
+        Some(crate::source::DiagOwner::new(info.file, self.ast(info.file).def(d).span.start))
+    }
+
+    /// A read of the alias `a`: where its completion recorded a demand or a report
+    /// (`AliasInfo::completion_noted`), the completion in progress demanded it, as for a
+    /// signature (`demand_sig_read`).
+    #[inline]
+    pub(super) fn demand_alias_read(&mut self, a: AliasId) {
+        if !self.syms.alias(a).completion_noted || self.diags.owner.is_none() {
+            return;
+        }
+        if let Some(to) = self.alias_owner(a) {
+            self.note_demand(self.diags.owner, to);
+        }
     }
 
     fn complete_alias_now(&mut self, a: AliasId) {
@@ -5295,8 +5856,19 @@ impl<'a> Worker<'a> {
             let i = self.syms.alias(a);
             (i.state().get(), i.file, i.def, i.owner)
         };
+        // A member's completion completes its owner first where the owner is a type not yet
+        // being completed (`TypeDefCompleter.needsCompletion`); a program class is complete
+        // already (`complete_program`).
+        if let (Completion::NotStarted, Owner::Class(c)) = (state, owner) {
+            if self.syms.class(c).state() == Completion::NotStarted {
+                self.complete_class(c);
+                if self.syms.alias(a).state() != Completion::NotStarted {
+                    return;
+                }
+            }
+        }
         match state {
-            Completion::Done => return,
+            Completion::Done | Completion::Suspended => return,
             Completion::InProgress => {
                 let span = def_id.map_or(Span::default(), |d| self.ast(file).def(d).span);
                 let name = self.name_str(self.syms.aliases[a.idx()].name);
@@ -5333,9 +5905,36 @@ impl<'a> Worker<'a> {
             self.finish_alias(a, ids, ty, bounds);
             return;
         }
+        // What the completion reports and demands is the alias's own (`alias_owner`), and a
+        // suspension met in it suspends the alias (`finish_alias`).
+        let alias_owner = self.alias_owner(a);
+        let outer_owner = alias_owner.map(|o| self.enter_owner(o));
+        let marks = (self.inlining.demands.len(), self.diags.items.len(), self.inlining.typing_suspensions);
         let env = self.env_at(file, owner, def.span.start);
         let (ids, ty, bounds) = self.with_env(env, |t| t.resolve_alias_def(a, tparams, *rhs, *lower, *upper));
+        let mut noted = false;
+        if let Some(outer) = outer_owner {
+            noted = self.inlining.demands.len() > marks.0 || self.diags.items.len() > marks.1;
+            self.leave_owner(outer, false);
+        }
+        if noted {
+            self.syms.alias_mut(a).completion_noted = true;
+        }
+        if self.inlining.typing_suspensions != marks.2 {
+            return self.suspend_alias(a, ids);
+        }
         self.finish_alias(a, ids, ty, bounds);
+    }
+
+    /// The alias `a`'s completion met a macro of the run at typing time, or read a completion
+    /// suspended by one: it stands for no type, and each reader's unit suspends
+    /// (`read_suspended_alias`), as dotty's `SuspendCompleter` in place of the type completer.
+    #[cold]
+    fn suspend_alias(&mut self, a: AliasId, ids: Vec<(Name, TParamId)>) {
+        let mut info = self.syms.alias_mut(a);
+        info.tparams = ids.iter().map(|&(_, p)| p).collect();
+        info.rhs = ERROR;
+        info.state().set(Completion::Suspended);
     }
 
     /// `TEQ_ALIAS_ORDER`'s readers' side: a worker asking for the member while it is unstarted
@@ -5391,7 +5990,7 @@ impl<'a> Worker<'a> {
             let mode = std::mem::take(&mut self.unused.mode);
             let index = self.index.take();
             let scope = b.imports_scope.min(imports.len());
-            let mut env = Env { file: b.file, frames: frames.clone(), imports: imports.clone() };
+            let mut env = Env { file: b.file, frames: frames.clone(), imports: imports.clone(), import_limit: None, visible_imports: None };
             for i in pending {
                 let clauses = self.ast(b.file).import_stmt(i);
                 let resolved: Vec<ResolvedImport> = self.with_env(env.clone(), |t| clauses.iter().filter_map(|imp| t.resolve_import(imp, clauses)).collect());
@@ -5404,7 +6003,7 @@ impl<'a> Worker<'a> {
             self.index = index;
             imports = env.imports;
         }
-        Some(Env { file: b.file, frames, imports })
+        Some(Env { file: b.file, frames, imports, import_limit: None, visible_imports: None })
     }
 
     /// A type alias local to a block, entered in the block's scope where the block's definitions
@@ -5431,6 +6030,7 @@ impl<'a> Worker<'a> {
             js: false,
             declared_rhs: crate::tir::NO_TYPE,
             exported: false,
+            completion_noted: false,
         });
         self.syms.alias_cells.set(a.0, Completion::NotStarted);
         if let Some(b) = self.local_blocks.last() {
@@ -5488,6 +6088,7 @@ impl<'a> Worker<'a> {
             js: false,
             declared_rhs: crate::tir::NO_TYPE,
             exported: false,
+            completion_noted: false,
         });
         self.syms.alias_cells.set(a.0, Completion::InProgress);
         let depth = self.env.frames.len();
@@ -5726,6 +6327,29 @@ impl<'a> Worker<'a> {
     pub fn complete_class(&mut self, c: ClassId) {
         if self.syms.class_cells.get(c.0) != Completion::Done {
             self.complete_class_uncompleted(c);
+        } else if self.inlining.track_demands && self.syms.class(c).completion_noted {
+            // A read of a completion is a demand of the one in progress (`Denotation.info`), as a
+            // signature's read is (`demand_sig_read`).
+            self.demand_class_read(c);
+        }
+    }
+
+    /// The completion of the class `c`, a program class's with a definition: a completer's
+    /// (`Namer.ClassCompleter`), owned at the definition as a signature's is (`sig_owner`), apart
+    /// from the body the walk types under the definition's own owner (`check_item`).
+    pub(super) fn class_owner(&self, c: ClassId) -> Option<crate::source::DiagOwner> {
+        let info = self.syms.class(c);
+        if info.def.is_none() || info.owner == Owner::Local || !self.program_file(info.file) || self.in_lifted_class(info.owner) {
+            return None;
+        }
+        Some(crate::source::DiagOwner::sig(info.file, info.span.start))
+    }
+
+    /// A read of the class `c` whose completion recorded a demand or a report: the completion in
+    /// progress demanded it (`Denotation.info`).
+    fn demand_class_read(&mut self, c: ClassId) {
+        if let Some(to) = self.class_owner(c) {
+            self.note_demand(self.diags.owner, to);
         }
     }
 
@@ -5750,9 +6374,20 @@ impl<'a> Worker<'a> {
         // The completion cell: claimed by the first thread to find it
         // unclaimed; another thread finding it claimed waits for the completion, unless the wait
         // would close a cycle, in which case it reads the class as far as it is, as one thread would.
+        // A completion a macro of the run suspended suspends each reader's unit, as a
+        // `SuspendCompleter` does (`Namer.Completer.complete`), a class completer's too.
+        if state == Completion::Suspended {
+            self.read_suspended();
+            return;
+        }
         if state == Completion::InProgress || !self.syms.class_cells.claim(c.0) {
             if !self.syms.class(c).state().mine() {
-                self.wait_cell(crate::shared::CellKey::new(super::check::CELL_CLASS, c.0), |w| w.syms.class(c).state() == Completion::Done);
+                self.wait_cell(crate::shared::CellKey::new(super::check::CELL_CLASS, c.0), |w| w.syms.class(c).state().get().is_complete());
+                if self.syms.class(c).state() == Completion::Suspended {
+                    self.read_suspended();
+                } else if self.inlining.track_demands && self.syms.class(c).completion_noted {
+                    self.demand_class_read(c);
+                }
             }
             return;
         }
@@ -5760,6 +6395,11 @@ impl<'a> Worker<'a> {
             let p = self.phase_split(super::profile::Phase::Complete, super::profile::Phase::LibraryComplete, |t| t.is_library_class(c));
             self.complete_class_now(c);
             self.phase_end(p);
+            // A completion published `Suspended` (`complete_class_inner`): its reader's unit
+            // suspends, as a signature's reader does (`read_suspended`).
+            if self.syms.class(c).state() == Completion::Suspended {
+                self.read_suspended();
+            }
             if self.value_forwarders_made && self.syms.class(c).has_exports {
                 self.late_value_forwarders(c);
             } else if self.forwarders_on_completion && self.syms.class(c).has_exports {
@@ -5915,6 +6555,13 @@ impl<'a> Worker<'a> {
             Owner::Local => self.anon_env(c),
             _ => self.env_at(file, owner, def.span.start),
         };
+        // What the completion reports and demands is the class's own (`class_owner`): its
+        // parents, its constructor, its bounds; a suspension met in it suspends the completion,
+        // published `Suspended` for its readers (`completion_done`), as a `SuspendCompleter`
+        // replaces any completer that met one (`Namer.Completer.complete`).
+        let outer_owner = self.class_owner(c).map(|o| self.enter_owner(o));
+        let marks = (self.inlining.demands.len(), self.diags.items.len());
+        self.inlining.sig_marks.push(Some(self.inlining.typing_suspensions));
         self.with_env(env, |t| match &def.kind {
             DefKind::Class(cls) => {
                 t.complete_class_def(c, kind, cls, owner);
@@ -5955,9 +6602,23 @@ impl<'a> Worker<'a> {
             }
             _ => {}
         });
+        let done = self.completion_done();
+        self.inlining.sig_marks.pop();
+        if let Some(outer) = outer_owner {
+            if self.inlining.demands.len() > marks.0 || self.diags.items.len() > marks.1 {
+                self.syms.class_mut(c).info.completion_noted = true;
+            }
+            self.leave_owner(outer, false);
+        }
+        // `NoInits` of the class's own template (`setNoInitsFlags`), recorded with the class for the
+        // emitters, which read no source (`elaborate::no_inits`).
+        if self.program_file(file) || !self.in_jar(file) {
+            let own = self.class_no_inits(c);
+            self.syms.class_mut(c).info.no_inits_recorded = if own { 1 } else { 2 };
+        }
         // A companion whose mirror parent waits stays in progress (`set_deferred_mirror_parent`).
         if !self.pending_mirror_parents.iter().any(|&(p, _)| p == c) {
-            self.syms.class_mut(c).state().set(Completion::Done);
+            self.syms.class_mut(c).state().set(done);
         }
     }
 
@@ -7681,6 +8342,10 @@ pub struct DeferredBound {
     /// Whether the type application stands in a body (`Diagnostics::of_bodies` when it was
     /// resolved), as what the check reports then does.
     of_body: bool,
+    /// The completion that resolved the type application (`Diagnostics::owner`), which owns what
+    /// the check reports and decides whether it stands where a unit suspends at typing
+    /// (`Worker::keep_typing_reports`).
+    pub(super) owner: crate::source::DiagOwner,
     /// As `DeferredMatch::definition`.
     pub(super) definition: Option<SymId>,
 }

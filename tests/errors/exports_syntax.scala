@@ -1,4 +1,4 @@
-// expect: exports are only supported in the body of an object, trait or class
+// expect: exports are only allowed from objects and classes, they can not belong to local blocks
 // expect: export clauses are not supported in a given
 
 trait Show[A]:

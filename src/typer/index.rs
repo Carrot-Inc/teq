@@ -1574,9 +1574,12 @@ impl<'a> Worker<'a> {
         }
         let ast::ImportSel::Name(member, _) = imp.sel else { return };
         let found = match target {
-            super::ImportTarget::PkgMember(p, _) => self.syms.entry_named(self.interner, p, member).and_then(|e| {
-                e.class.map(Target::Class).or(e.term.map(Target::Sym)).or(e.alias.map(Target::Alias))
-            }),
+            super::ImportTarget::PkgMember(p, _) => {
+                // The member's definition, entered by the name that asks for it where it is the
+                // std's (`demand_std`), as `qualType.member(name)` completes a library's class.
+                self.demand_std(p, member, crate::stdindex::TERM | crate::stdindex::TYPE);
+                self.syms.entry_named(self.interner, p, member).and_then(|e| e.class.map(Target::Class).or(e.term.map(Target::Sym)).or(e.alias.map(Target::Alias)))
+            }
             super::ImportTarget::ClassMember(c, _) => {
                 let info = self.syms.class(c);
                 info.members.get(&member).map(|&s| Target::Sym(s)).or(info.nested.get(&member).map(|&k| Target::Class(k))).or(info.type_aliases.get(&member).map(|&a| Target::Alias(a)))

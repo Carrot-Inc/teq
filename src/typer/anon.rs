@@ -482,6 +482,9 @@ impl<'a> Worker<'a> {
         let repeat = self.anon_sites.entry((file, span.start, site)).or_insert(0);
         *repeat += 1;
         let repeat = *repeat;
+        if let Some(log) = self.inlining.anon_log.as_mut() {
+            log.push((file, span.start, site));
+        }
         let enclosing = match self.innermost_class() {
             Some(c) => self.name_str(self.syms.class(c).name),
             None => {
@@ -510,6 +513,9 @@ impl<'a> Worker<'a> {
         let repeat = self.anon_sites.entry((file, span.start, site)).or_insert(0);
         *repeat += 1;
         let repeat = *repeat;
+        if let Some(log) = self.inlining.anon_log.as_mut() {
+            log.push((file, span.start, site));
+        }
         let mut text = self.name_str(name);
         if let Some((site_file, site_start)) = site {
             text.push_str(&format!("${}", self.prog.position(site_file, site_start)));
@@ -623,7 +629,7 @@ impl<'a> Worker<'a> {
     pub fn anon_env(&self, c: ClassId) -> Env {
         match self.anon_envs.get(&c) {
             Some(env) => (**env).clone(),
-            None => Env { file: self.syms.class(c).file, frames: Vec::new(), imports: Vec::new() },
+            None => Env { file: self.syms.class(c).file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None },
         }
     }
 
@@ -648,6 +654,7 @@ impl<'a> Worker<'a> {
                 captures.push(s);
             }
         }
+        self.note_lifted(c, visible);
         captures
     }
 
@@ -1879,9 +1886,11 @@ impl<'a> Worker<'a> {
         };
         self.pop_scope();
         self.env.frames.pop();
-        // Published once pushed, as a checked class is, and its captures read off the method's
-        // nodes: its plain inline calls are expanded first.
-        self.flush_pending_since(pending);
+        // Published once pushed, as a checked class is: its plain inline calls are kept for the
+        // inlining phase first, its captures read off the method's nodes as typed, the calls'
+        // arguments among them, and completed after the phase (`settle_lifted_captures`).
+        let file = self.env.file;
+        self.end_unit(pending, file);
         self.sam_class_body(c, msym, param_syms, tb, first_expr)
     }
 
@@ -1976,7 +1985,7 @@ impl<'a> Worker<'a> {
         self.syms.check_cells.set(c.0, Completion::Done);
         for &(alias, rhs) in types {
             let a = AliasId(self.syms.aliases.len() as u32);
-            self.syms.aliases.push(AliasInfo { name: alias, owner: Owner::Class(c), file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js: false, declared_rhs: crate::tir::NO_TYPE, exported: false });
+            self.syms.aliases.push(AliasInfo { name: alias, owner: Owner::Class(c), file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js: false, declared_rhs: crate::tir::NO_TYPE, exported: false, completion_noted: false });
             self.syms.alias_cells.set(a.0, Completion::Done);
             self.syms.class_mut(c).type_aliases.insert(alias, a);
         }
@@ -2183,6 +2192,12 @@ impl<'a> Worker<'a> {
             }
             Some((None, _)) if self.syms.class(c).kind == ClassKind::Object => return self.prog.add(TExpr::Module(c)),
             _ => {}
+        }
+        // `O.this` where the constructor's outer parameter stands for it (`ctor_outer`: a
+        // secondary constructor's body, a constructor default's getter in the companion's scope
+        // inside `O`), whatever frame reaches it.
+        if let Some((_, p)) = self.ctor_outer.filter(|&(o, _)| o == c) {
+            return self.prog.add(TExpr::Local(p));
         }
         if let Some(e) = self.through_outer_accessor(c) {
             return e;
@@ -2480,6 +2495,32 @@ impl<'a> Worker<'a> {
     /// accessor it then defines for `c` as well.
     fn superclass_mixes_in(&self, c: ClassId, b: ClassId) -> bool {
         self.syms.class(c).superclass.is_some_and(|s| !self.is_library_class(s) && self.syms.class(s).base_types.iter().any(|&(x, _)| x == b))
+    }
+
+    /// The parameter that stands for the enclosing instance `o` in the secondary constructor
+    /// `ctor` of a class nested in a class, and in its default getters (dotty's `ExplicitOuter`
+    /// outer parameter, the companion's outer where the getters are): one per constructor, a cell
+    /// when the constructor is every worker's, since its typing and a getter's completion may run
+    /// on different workers, and the emitters bind the getter's parameter to this one symbol.
+    pub(super) fn ctor_outer_param(&mut self, ctor: SymId, o: ClassId) -> SymId {
+        if let Some(&p) = self.ctor_outer_params.get(&ctor) {
+            return p;
+        }
+        if self.shared_sym(ctor) {
+            return self.with_loader(|w| w.ctor_outer_param_unlocked(ctor, o));
+        }
+        self.ctor_outer_param_unlocked(ctor, o)
+    }
+
+    fn ctor_outer_param_unlocked(&mut self, ctor: SymId, o: ClassId) -> SymId {
+        if let Some(&p) = self.ctor_outer_params.get(&ctor) {
+            return p;
+        }
+        let name = self.interner.intern("$outer");
+        let span = self.syms.sym(ctor).span;
+        let p = self.new_local(name, SymKind::Param, self.syms.this_type(o), span);
+        self.ctor_outer_params.insert(ctor, p);
+        p
     }
 
     /// The local that stands for `C.this` in the classes nested in `c`: one per class, a cell

@@ -663,6 +663,8 @@ pub fn run(opts: &Options) -> ! {
             };
             t.unused.defs = crate::typer::unused::DefKinds::of(&t.diags.policy.unused);
             t.inline.max_depth = opts.max_inlines;
+            t.inline.max_trees = opts.max_inlined_trees;
+            t.inline.retain_trees = opts.retain_trees;
             t.inline.production = opts.release;
             // A JVM session writes every entry point's class, as `--all-mains` does.
             let js = matches!(target, Target::Js(_) | Target::JsFile(_));
@@ -1348,7 +1350,7 @@ fn finish_jvm(
     let product_inits = t.loaded.as_ref().map(|l| l.get_mut().cp.product_inits.clone()).unwrap_or_default();
     let before_emit = t_emit.elapsed();
     let output = crate::typer::thread::run(|| {
-        let Worker { prog, syms, types, tvars, interner, file_pkgs, loaded, entry_points, jvm_volatile, .. } = &mut *t;
+        let Worker { prog, syms, types, tvars, interner, file_pkgs, loaded, entry_points, jvm_volatile, getters, .. } = &mut *t;
         // A JVM build always reads the class path: scala-library is on it.
         let crate::typer::loader::Loaded { cp, classes, java, target_names, product_target_names, volatile, .. } = loaded.as_ref().expect("a JVM build reads its class path").get_mut();
         let input = jvm::Input {
@@ -1362,6 +1364,7 @@ fn finish_jvm(
             sources: &all_sources,
             file_pkgs: file_pkgs.own(),
             asts,
+            getters: Some(&**getters),
             java: Some(&*java),
             target_names: Some(&*target_names),
             source_target_names: Some(&source_target_names),

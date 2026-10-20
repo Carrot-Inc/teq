@@ -70,14 +70,15 @@ impl<'a> Cmp<'a> {
         if o.package != n.package || o.package_clauses != n.package_clauses {
             return differ("package clause");
         }
-        if !self.imports_eq(&o.imports, &n.imports) {
-            return differ("imports");
-        }
-        // The unit's version, which a source version import sets and `imports` does not hold, decides
-        // its signatures (a context bound's evidence an `implicit` clause below 3.6,
-        // `Desugar.elimContextBounds`) and how its consumers are typed against them.
+        // The unit's version, which a source version import sets (one of `imports`, as dotty's
+        // `Import` tree it is: `ast::is_language_import`), decides its signatures (a context bound's
+        // evidence an `implicit` clause below 3.6, `Desugar.elimContextBounds`) and how its consumers
+        // are typed against them: the more specific reason, named before the imports'.
         if o.source_version != n.source_version {
             return differ("source version changed");
+        }
+        if !self.imports_eq(&o.imports, &n.imports) {
+            return differ("imports");
         }
         if !self.imports_eq(&o.top_exports, &n.top_exports) {
             return differ("export clauses");

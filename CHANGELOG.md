@@ -7,6 +7,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- Non-transparent inline calls expand in a phase after the whole program is typed, as scalac's: an expansion's
+  error is reported only when the typer reports none, a unit that meets a macro of its own build is typed again in
+  a later round, and `--retain-trees` and `--max-inlined-trees` are scalac's `-Yretain-trees` and `-Xmax-inlined-trees`
+  ([Macros, inline and derivation](https://github.com/Carrot-Inc/teq/blob/master/docs/COMPATIBILITY.md#macros-inline-and-derivation)).
 - `teq interp` runs a program's threads, `java.lang.Thread`, `synchronized`, `Object.wait` and `notify`, and
   `java.util.concurrent`'s executors, locks, queues, latches, futures and atomics, taking turns on one OS thread;
   zio's runtime runs on them, and a program's signal handlers (`sun.misc.Signal`) run as the JDK runs them

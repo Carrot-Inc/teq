@@ -100,6 +100,10 @@ pub struct Capture {
     /// of its own then does it there too.
     pub published: std::sync::Arc<std::sync::RwLock<Published>>,
     pub publishing: bool,
+    /// The nodes whose records a worker of the inlining phase took from the main worker's when
+    /// it took the unit holding them (`adopt`): the calls its expansions rewrite, whose records
+    /// its own then are whole, which the merge puts in the place of the main worker's (`absorb`).
+    pub adopted: FxMap<TExprId, ()>,
 }
 
 /// The records of the quotes' bodies, published by the worker that typed each body once it is
@@ -701,6 +705,43 @@ impl Capture {
         self.changed_by(unit, prior);
     }
 
+    /// The records of the node `e` the main worker holds, which a worker of the inlining phase
+    /// takes as its own before it rewrites the node (`own_records`).
+    pub fn own_records_of(&self, e: TExprId) -> NodeRecords {
+        self.own_records(e)
+    }
+
+    /// The records `r` of the node `e`, another worker's, made this one's whole: a worker of the
+    /// inlining phase about to rewrite a kept call's node (`moved`), whose records the merge then
+    /// takes from it in the place of the main worker's, those the rewrite dropped included.
+    pub fn adopt(&mut self, e: TExprId, r: NodeRecords) {
+        if let Some(l) = r.targs {
+            self.targs.insert(e, l);
+        }
+        if let Some(f) = r.form {
+            self.forms.insert(e, f);
+        }
+        if !r.wraps.is_empty() {
+            self.wraps.insert(e, r.wraps);
+        }
+        if !r.inline_calls.is_empty() {
+            self.inline_calls.insert(e, r.inline_calls);
+        }
+        if let Some(b) = r.builtin {
+            self.builtin_calls.insert(e, b);
+        }
+        if let Some(x) = r.receiver {
+            self.receivers.insert(e, x);
+        }
+        if !r.evidence.is_empty() {
+            self.evidence.insert(e, r.evidence);
+        }
+        if let Some(t) = r.tree {
+            self.trees.insert(e, t);
+        }
+        self.adopted.insert(e, ());
+    }
+
     fn own_records(&self, e: TExprId) -> NodeRecords {
         NodeRecords {
             targs: self.targs.get(&e).copied(),
@@ -997,6 +1038,17 @@ impl Capture {
 
     /// Takes over another worker's records, whose ids the merge renumbers after.
     pub fn absorb(&mut self, o: &mut Capture) {
+        // The nodes another worker adopted: its records of them are whole (`adopt`).
+        for (e, ()) in o.adopted.drain() {
+            self.targs.remove(&e);
+            self.forms.remove(&e);
+            self.wraps.remove(&e);
+            self.inline_calls.remove(&e);
+            self.builtin_calls.remove(&e);
+            self.receivers.remove(&e);
+            self.evidence.remove(&e);
+            self.trees.remove(&e);
+        }
         self.pending.append(&mut o.pending);
         self.targs.extend(o.targs.drain());
         self.forms.extend(o.forms.drain());

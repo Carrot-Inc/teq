@@ -90,7 +90,11 @@ impl Program {
             spread_bits,
             ascribed_bits,
             setter_assign_bits,
+            tuple_index_bits,
+            kept_bits,
             shifts: _,
+            build_start: _,
+            runs: _,
             lifted_funs: _,
             block_class_traits: _,
         } = self;
@@ -149,6 +153,8 @@ impl Program {
             + spread_bits.held()
             + ascribed_bits.held()
             + setter_assign_bits.held()
+            + tuple_index_bits.held()
+            + kept_bits.held()
             + capture.as_ref().map_or(0, |c| c.held())
     }
 

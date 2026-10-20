@@ -538,7 +538,10 @@ impl<'a> Worker<'a> {
     /// Whether the table of `owner` is published, so that what was built over it can be kept.
     pub fn exports_settled(&self, owner: ExportOwner) -> bool {
         match owner {
-            ExportOwner::Class(c) => matches!(self.class_exports.get(&c), Some(ExportSlot::Ready(_) | ExportSlot::Empty)),
+            // A class with plainly no exports (no clause, no parent with a table) has its empty
+            // table without a build: the level that reads through an import of it is settled, as
+            // dotty's `ImportInfo.importedImplicits` is computed once per import.
+            ExportOwner::Class(c) => matches!(self.class_exports.get(&c), Some(ExportSlot::Ready(_) | ExportSlot::Empty)) || self.plainly_no_exports(c),
             ExportOwner::Pkg(p) => {
                 !self.syms.pkg(p).has_exports()
                     || matches!(self.pkg_exports.get(&p), Some(ExportSlot::Ready(_) | ExportSlot::Empty))
@@ -711,9 +714,18 @@ impl<'a> Worker<'a> {
             awaited: Vec::new(),
             pending: Vec::new(),
         };
+        // A class's clauses are its completer's (`Namer.processExports`): what resolving them
+        // reports and demands is the class completion's, whichever reader builds the table.
+        let outer_owner = match owner {
+            ExportOwner::Class(c) => self.class_owner(c).map(|o| self.enter_owner(o)),
+            ExportOwner::Pkg(_) => None,
+        };
         match owner {
             ExportOwner::Class(c) => self.fill_class_exports(c, &mut build),
             ExportOwner::Pkg(p) => self.fill_pkg_exports(p, &mut build),
+        }
+        if let Some(outer) = outer_owner {
+            self.leave_owner(outer, false);
         }
         if let Some(frame) = self.export_stack.pop() {
             build.errors.extend(frame.cycles);
@@ -736,9 +748,17 @@ impl<'a> Worker<'a> {
             Some(scope) => ExportSlot::Ready(scope.clone()),
             None => ExportSlot::Empty,
         };
+        // Each under the completion that owns its clause: the class's, or a top-level clause's
+        // (`top_export_owner`).
+        let outer = self.diags.owner;
         for (file, span, msg) in errors {
+            self.diags.owner = match owner {
+                ExportOwner::Class(c) => self.class_owner(c).unwrap_or(outer),
+                ExportOwner::Pkg(_) => self.top_export_owner(file, span.start).unwrap_or(outer),
+            };
             self.diags.error(file, span, msg);
         }
+        self.diags.owner = outer;
         (scope, SourceState::Complete)
     }
 
@@ -769,7 +789,7 @@ impl<'a> Worker<'a> {
             }
             build.file = file;
             let clauses: &'a [Import] = &self.ast(file).top_exports;
-            let targets = self.resolve_export_paths(clauses, Env { file, frames: Vec::new(), imports: Vec::new() }, build);
+            let targets = self.resolve_export_paths(clauses, Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None }, build);
             self.add_named_exports(clauses, &targets, build);
             self.add_wildcard_exports(clauses, &targets, build);
             self.add_pending_exports(clauses, build);
@@ -986,7 +1006,14 @@ impl<'a> Worker<'a> {
     ) -> Vec<Option<ImportTarget>> {
         self.with_env(env, |t| {
             let mut targets: Vec<Option<ImportTarget>> = Vec::with_capacity(clauses.len());
+            let outer_owner = t.diags.owner;
             for (i, imp) in clauses.iter().enumerate() {
+                // A top-level export clause is a member of the file's package object
+                // (`Desugar.isTopLevelDef`), whose completion owns what its path reports
+                // (`top_export_owner`); a class's clause is the class completion's (`build_table`).
+                if matches!(t.export_stack.last().map(|f| f.owner), Some(ExportOwner::Pkg(_))) {
+                    t.diags.owner = crate::source::DiagOwner::sig(build.file, imp.span.start);
+                }
                 let same_path = i.checked_sub(1).filter(|&prev| clauses[prev].path == imp.path);
                 let target = match same_path {
                     Some(prev) => {
@@ -1019,6 +1046,7 @@ impl<'a> Worker<'a> {
                 }
                 targets.push(target);
             }
+            t.diags.owner = outer_owner;
             targets
         })
     }

@@ -290,7 +290,7 @@ impl<'a> Worker<'a> {
         let file = self.file_at(&ids, offset);
         let (at, before, after) = import_insertion(self.ast(file), self.ast(first), text, offset);
         let segments: Vec<String> = name.split('.').map(decode).collect();
-        let base = Env { file, frames: Vec::new(), imports: Vec::new() };
+        let base = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
         let checked = self.in_query(base, |w| w.import_check(&segments));
         let Some(rooted) = checked else {
             let warning = format!("completion: the import of {} does not resolve, or leaves its name ambiguous, in {}", name, path.display());
@@ -495,7 +495,7 @@ impl<'a> Worker<'a> {
         });
         let callee_recv = cx.arg.as_ref().filter(|_| term).and_then(|a| a.recv).and_then(|r| self.index_node_at(ids, r)).and_then(|te| self.prog.type_of(te));
         let mut function = false;
-        let base = Env { file, frames: Vec::new(), imports: Vec::new() };
+        let base = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
         let offset = cx.insert.start;
         let prefix = cx.prefix.to_lowercase();
         let mut out = self.in_query(base, |w| {
@@ -581,7 +581,7 @@ impl<'a> Worker<'a> {
         if let (Some(types), true, false) = (types, prefix.chars().count() >= 2, self.std_file(file)) {
             let catalogue = self.catalogue();
             let program = self.program_entries();
-            let base = Env { file, frames: Vec::new(), imports: Vec::new() };
+            let base = Env { file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
             let new = matches!(cx.site, Site::New { .. });
             let mut more = self.in_query(base, |w| {
                 w.enter_scope_at(file, offset, &binders);

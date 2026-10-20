@@ -177,9 +177,23 @@ impl<'a> Parser<'a> {
         let lambda = self.at_lambda_start().then(|| (self.span(), self.parse_lambda_params()));
         let mut stmts: Vec<Stmt> = Vec::new();
         let language = self.language_open.len();
+        let exports_mark = self.export_scratch.len();
         self.statements(RecoverySite::Block, |p| p.parse_block_stmt(&mut stmts));
         self.end_region();
         self.close_language(language);
+        // An extension group's export clauses in the block (`Typer.typedExport` of a clause
+        // outside a template), each at its tree; a template's own are drained with its body.
+        if self.export_scratch.len() > exports_mark {
+            let spans: Vec<Span> = self.export_scratch[exports_mark..].iter().map(|imp| Span::new(imp.tree_start, imp.span.end)).collect();
+            let mut seen: Vec<u32> = Vec::new();
+            for sp in spans {
+                if !seen.contains(&sp.start) {
+                    seen.push(sp.start);
+                    self.error_at(sp, "exports are only allowed from objects and classes, they can not belong to local blocks");
+                }
+            }
+            self.export_scratch.truncate(exports_mark);
+        }
         // A block's case classes and `derives` clauses have their companions in the block, each
         // right after its class (`Desugar.classDef`'s `companionDefs`, a local object of the
         // block); none reaches an outer body.
@@ -239,7 +253,8 @@ impl<'a> Parser<'a> {
             out.push(Stmt::Import(self.ast.import_stmts.len() as u32));
             self.ast.import_stmts.push(ListRef { start, len });
         } else if self.at(Tok::KwExport) {
-            self.error_at(self.span(), "exports are only supported in the body of an object, trait or class");
+            // `Typer.typedExport` of a clause outside a template.
+            self.error_at(self.span(), "exports are only allowed from objects and classes, they can not belong to local blocks");
             let mark = self.export_scratch.len();
             self.parse_export();
             self.export_scratch.truncate(mark);

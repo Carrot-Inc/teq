@@ -97,6 +97,17 @@ pub enum Completion {
     NotStarted,
     InProgress,
     Done,
+    /// A signature whose inference met a macro of the run at typing time: each reader suspends its
+    /// own unit and reads an error value, as dotty's `SuspendCompleter` (`Worker::uncompleted_sig`).
+    Suspended,
+}
+
+impl Completion {
+    /// Whether the completion is over, its signature published or suspended.
+    #[inline]
+    pub fn is_complete(self) -> bool {
+        matches!(self, Completion::Done | Completion::Suspended)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -258,6 +269,13 @@ pub struct ClassInfo {
     /// finds its `NoInits`: no statement, and each of its terms a method, deferred or lazy (a
     /// module's val is); a class of a source reads its definition instead.
     pub read_no_inits: bool,
+    /// `NoInits` as the typer decided it at the class's completion (`Worker::class_no_inits`:
+    /// `TreeInfo.parentsKind` and `defKind` over its source, `TreeUnpickler.indexStats` over its
+    /// pickle), for the emitters: 0 undecided, 1 none, 2 initialises.
+    pub no_inits_recorded: u8,
+    /// Whether the class's completion recorded a demand or a report (`Worker::complete_class`),
+    /// as a signature's does (`SymInfo::completion_noted`).
+    pub completion_noted: bool,
     /// A `@javaDefined` stand-in of the standard library that a definition of the same name in
     /// package `scala` took the place of; it is left out of the program.
     pub replaced: bool,
@@ -425,6 +443,11 @@ pub struct SymInfo {
     /// Whether the method has a name of its own in the output, which `Symbols::dispatch_names`
     /// holds: an alternative of an overloaded name.
     pub dispatch: Dispatch,
+    /// Whether the completion of the signature recorded a demand of another completion or a
+    /// report of its own (`DiagOwner::sig`): a later reader depends on what it demanded, as a
+    /// reader of a completed denotation does on its completer's work (`Worker::demand_sig_read`).
+    /// Written before the signature is published.
+    pub completion_noted: bool,
 }
 
 /// What a value export's forwarder reaches: its qualifier, the path the clause's qualifier is
@@ -439,6 +462,11 @@ pub struct Forward {
     /// (`value_exports::selector_span`): a body edit moves it with the clause.
     pub clause: crate::source::Span,
     pub alt: u32,
+    /// The companion extension method of an export clause inside an extension group (dotty's
+    /// `pathMethod`): the forwarder is an extension method whose leading parameters are the
+    /// method's, its receiver the method's call on them (`Namer.exportForwarders`); `path` is
+    /// `STATIC`.
+    pub path_method: Option<SymId>,
 }
 
 impl Forward {
@@ -513,6 +541,10 @@ pub struct AliasInfo {
     /// it names a class whose companion no term of the name forwards, that class's companion as
     /// a term of its owner (`NamerOps.typeConstructorCompanion`).
     pub exported: bool,
+    /// Whether the completion recorded a demand of another completion or a report of its own
+    /// (`Worker::complete_alias_now`): a later reader depends on what it demanded, as for a
+    /// signature (`SymInfo::completion_noted`). Written before the alias is published.
+    pub completion_noted: bool,
 }
 
 impl AliasInfo {
@@ -1354,6 +1386,8 @@ impl Symbols {
             has_imports: false,
             has_statements: false,
             read_no_inits: false,
+            no_inits_recorded: 0,
+            completion_noted: false,
             replaced: false,
             synthetic_companion: false,
             js: JsKind::Scala,
@@ -1423,6 +1457,7 @@ impl Symbols {
             alternative: false,
             synthetic: false,
             dispatch: Dispatch::Unknown,
+            completion_noted: false,
         }))
     }
 
@@ -1980,7 +2015,7 @@ mod tests {
             let c = syms.new_class(Name(1), ClassKind::Class, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
             let p = syms.new_tparam(Name(2), 0);
             let s = syms.new_sym(Name(5), SymKind::Def, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
-            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false, exported: false, declared_rhs: crate::tir::NO_TYPE }));
+            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false }));
             syms.syms.fork();
             syms.classes.fork();
             syms.tparams.fork();

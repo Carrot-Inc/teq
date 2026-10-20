@@ -830,26 +830,28 @@ impl<'a> Worker<'a> {
                 MemberInfo::Bounds(lo, self.types.inter(x, hi))
             }
             Some(MemberInfo::Bounds(lo2, hi2)) => {
+                // `TypeBounds.&` (Types.scala), as `Denotations.infoMeet` meets two members'
+                // bounds: the pair that lies within the other, frozen (`frozen_<:<`), else the
+                // lower bounds joined and the upper bounds met; bounds that conflict
+                // (`X >: String` with `X <: Int`) stay as they are, which `CheckRealizable`
+                // reports (`HasProblemBounds`).
+                let mark = self.trail.len();
+                let that_within = (lo == NOTHING || self.is_sub(lo, lo2)) && (hi == ANY || self.is_sub(hi2, hi));
+                self.rollback(mark);
+                if that_within {
+                    return MemberInfo::Bounds(lo2, hi2);
+                }
+                let this_within = (lo2 == NOTHING || self.is_sub(lo2, lo)) && (hi2 == ANY || self.is_sub(hi, hi2));
+                self.rollback(mark);
+                if this_within {
+                    return MemberInfo::Bounds(lo, hi);
+                }
                 let met_lo = if lo == NOTHING { lo2 } else if lo2 == NOTHING || lo2 == lo { lo } else { self.types.union(lo, lo2) };
                 let met_hi = if hi == ANY { hi2 } else if hi2 == ANY || hi2 == hi { hi } else { self.types.inter(hi, hi2) };
-                // Bounds shown to conflict (`L <: Nothing` and `L >: Any`, ground types) are no
-                // type scalac lets a value have; the first side's stand. Bounds over parameters
-                // or members meet, whether or not they can be compared here.
-                let mark = self.trail.len();
-                if met_lo == NOTHING || met_hi == ANY || !self.is_ground(met_lo) || !self.is_ground(met_hi) || self.is_sub(met_lo, met_hi) {
-                    MemberInfo::Bounds(met_lo, met_hi)
-                } else {
-                    self.rollback(mark);
-                    MemberInfo::Bounds(lo, hi)
-                }
+                MemberInfo::Bounds(met_lo, met_hi)
             }
             None => MemberInfo::Bounds(lo, hi),
         }
-    }
-
-    /// A type without parameters, variables or paths: one a comparison decides.
-    fn is_ground(&mut self, t: TypeId) -> bool {
-        !self.types.has_vars(t) && !self.types.has_paths(t) && !self.mentions_param(t)
     }
 
     fn alias_within(&mut self, x: TypeId, lo: TypeId, hi: TypeId) -> bool {
@@ -1026,7 +1028,7 @@ impl<'a> Worker<'a> {
         let rhs = self.alias_body(a);
         let d = AliasId(self.syms.aliases.len() as u32);
         let js = self.syms.aliases[a.idx()].js;
-        self.syms.aliases.push(AliasInfo { name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated, js, exported: false, declared_rhs: crate::tir::NO_TYPE });
+        self.syms.aliases.push(AliasInfo { name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated, js, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false });
         self.syms.alias_cells.set(d.0, Completion::Done);
         self.derived_aliases.insert((a, prefix), d);
         let seen = |t: &mut Self, ty: TypeId| -> TypeId {
@@ -1448,17 +1450,18 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The widened type of a path or member type: what a value of it is at run time.
+    /// The widened type of a path or member type: what a value of it is at run time, followed to
+    /// its end as `Types.widen` recurses on a `TermRef`'s info; a cycle ends at the completion in
+    /// progress it reads, which reads as an error (`CyclicReference`).
     pub fn widen_path(&mut self, t: TypeId) -> TypeId {
         let mut t = self.deref(t);
-        for _ in 0..MAX_DEPTH {
+        loop {
             match self.types.get(t) {
                 Type::This(_) | Type::Term(_) | Type::Select(..) => t = self.path_underlying(t),
                 _ => return t,
             }
             t = self.deref(t);
         }
-        t
     }
 
     /// `t` as seen from `prefix`, an instance of `c`: `C.this` of `c` and of its ancestors

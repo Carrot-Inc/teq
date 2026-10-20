@@ -239,6 +239,11 @@ impl<'a> Worker<'a> {
 
     pub fn alias_expansion(&mut self, a: AliasId, args: TList) -> Option<TypeId> {
         if let Some(&t) = self.matches.expansions.get(&(a, args)) {
+            // A cached expansion is a read of the alias all the same: a demand of its completion,
+            // and a suspension where a macro of the run suspended it (`alias_read_done`).
+            if self.inlining.track_demands || self.syms.alias(a).state() == Completion::Suspended {
+                self.alias_read_done(a);
+            }
             return Some(t);
         }
         let t = self.alias_expansion_uncached(a, args)?;

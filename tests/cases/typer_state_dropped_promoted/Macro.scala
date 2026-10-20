@@ -7,7 +7,6 @@ object M:
     Expr(log.reverse.mkString(","))
   def noteWarn(s: String)(using Quotes): Expr[String] =
     log = s :: log
-    quotes.reflect.report.warning("warn " + s)
     Expr(log.reverse.mkString(","))
   inline def a: String = ${ note("a") }
   inline def b: String = ${ note("b") }

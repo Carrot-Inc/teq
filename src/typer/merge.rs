@@ -335,6 +335,69 @@ impl Tables {
 /// file's id, which is its place in the one-worker walk (`check::file_order` without
 /// `TEQ_FILE_ORDER`), then the definition's index in the file; the queue's order, which above one
 /// worker is the largest files first, is the schedule's and no part of it.
+/// The copies of shared expressions, and their recorded types, the inlining phase's workers
+/// changed outside the loader's lock (`Arena::owned`, `Parallel::owned`): each worker the owner of
+/// its units' trees, the merge writes the copies over the shared records. Appended past the
+/// merged records in the order of their ids, they are walked and renumbered with the rest, and
+/// then moved to their places (`write_back`), the appended places dropped.
+#[derive(Default)]
+struct OwnedCopies {
+    exprs: Vec<(u32, Option<TExpr>, Option<TypeId>)>,
+}
+
+impl OwnedCopies {
+    fn take<'a>(w: &mut Worker<'a>, others: &mut [Option<Worker<'a>>]) -> OwnedCopies {
+        let mut by_id: crate::intern::FxMap<u32, (Option<TExpr>, Option<TypeId>)> = Default::default();
+        for p in std::iter::once(&mut w.prog).chain(others.iter_mut().flatten().map(|o| &mut o.prog)) {
+            for (i, e) in p.exprs.take_owned() {
+                let slot = by_id.entry(i).or_default();
+                debug_assert!(slot.0.is_none(), "two workers changed expression {}", i);
+                slot.0 = Some(*e);
+            }
+            for (i, t) in p.expr_types.take_owned() {
+                by_id.entry(i).or_default().1 = Some(t);
+            }
+            p.exprs.owning = false;
+            p.expr_types.owning = false;
+        }
+        let mut exprs: Vec<(u32, Option<TExpr>, Option<TypeId>)> = by_id.into_iter().map(|(i, (e, t))| (i, e, t)).collect();
+        exprs.sort_unstable_by_key(|e| e.0);
+        OwnedCopies { exprs }
+    }
+
+    /// The copies appended past the merged records; where they start.
+    fn append(&self, p: &mut Program) -> usize {
+        let at = p.exprs.len();
+        for &(i, e, t) in &self.exprs {
+            let record = e.unwrap_or_else(|| p.exprs[i as usize]);
+            let copy = p.add(record);
+            if let Some(t) = t.or_else(|| p.expr_types.get(i)) {
+                p.expr_types.set(copy.0, t);
+            }
+        }
+        at
+    }
+
+    /// The renumbered copies at `at` written over their records, the appended places dropped.
+    fn write_back(&self, p: &mut Program, at: usize) {
+        if self.exprs.is_empty() {
+            return;
+        }
+        for (k, &(i, _, _)) in self.exprs.iter().enumerate() {
+            let copy = (at + k) as u32;
+            let record = p.exprs[copy as usize];
+            p.exprs[i as usize] = record;
+            if let Some(t) = p.expr_types.get(copy) {
+                p.expr_types.set(i, t);
+            }
+        }
+        p.exprs.truncate(at);
+        if p.expr_types.own().len() > at {
+            p.expr_types.truncate(at);
+        }
+    }
+}
+
 pub struct ItemRange {
     pub key: (u32, u32),
     pub start: Prefix,
@@ -1344,7 +1407,7 @@ impl Remap {
             *t = self.test(*t);
         }
         self.syms_in(&mut d.hoisted);
-        for e in d.widened.iter_mut().chain(d.opaque.iter_mut()).chain(d.spread.iter_mut()).chain(d.ascribed.iter_mut()).chain(d.erased.iter_mut()) {
+        for e in d.widened.iter_mut().chain(d.opaque.iter_mut()).chain(d.spread.iter_mut()).chain(d.ascribed.iter_mut()).chain(d.tuple_index.iter_mut()).chain(d.erased.iter_mut()) {
             *e = self.expr(*e);
         }
         for tc in &mut d.classes {
@@ -1361,7 +1424,7 @@ impl Remap {
         }
         for i in &mut d.imports {
             i.block = self.expr(i.block);
-            let mut env = Env { file: FileId(0), frames: Vec::new(), imports: vec![i.import] };
+            let mut env = Env { file: FileId(0), frames: Vec::new(), imports: vec![i.import], import_limit: None, visible_imports: None };
             self.env(&mut env);
             i.import = env.imports[0];
         }
@@ -1435,6 +1498,10 @@ impl Remap {
         }
         w.b.repeated = w.b.repeated.map(|c| self.class(c));
         w.quote.remap(self);
+        self.inlining(w);
+        self.promote_in_order(w.lambda_results.iter().map(|(&k, &t)| (k, [t])));
+        self.map(&mut w.lambda_results, |_, k| k, |r, t| *t = r.ty(*t));
+        self.map(&mut w.deferred_lambdas, |_, k| k, |r, e| *e = r.expr(*e));
         // The classes the bodies made on first use, which the builtins name.
         let b = &mut w.b;
         for c in b.functions.iter_mut().chain(b.context_functions.iter_mut()).chain(b.tuples.iter_mut()) {
@@ -1477,6 +1544,124 @@ impl Remap {
         w.prog.partial_function = w.prog.partial_function.map(|c| self.class(c));
         w.prog.throwable = w.prog.throwable.map(|c| self.class(c));
         w.prog.js_exception = w.prog.js_exception.map(|c| self.class(c));
+    }
+
+    /// The calls kept for the inlining phase and what reads their expansions, under the new ids,
+    /// their types promoted in the walk's order of the calls.
+    fn inlining(&mut self, w: &mut Worker) {
+        let kept = &mut w.inlining.kept;
+        self.promote_in_order(kept.iter().enumerate().map(|(i, k)| {
+            let mut types = vec![k.typed_as];
+            if let Some(c) = &k.call {
+                types.extend(c.call.owner_subst.iter().map(|&(_, t)| t));
+                types.extend(c.call.ext_recv.map(|(_, t)| t));
+                types.extend(c.call.prefix);
+                types.extend(c.subst.iter().map(|&(_, t)| t));
+                types.extend(c.arg_types.iter().map(|&(_, t)| t));
+                types.push(c.ret_ty);
+                types.extend(c.expected);
+                types.extend(c.recv_type);
+                types.extend(c.env.imports.iter().filter_map(|i| i.bound));
+            }
+            ((k.at.clone(), i), types)
+        }));
+        // An environment kept calls share is renumbered once and shared again.
+        w.inlining.last_env = None;
+        let mut envs: FxMap<*const Env, Arc<Env>> = FxMap::default();
+        for k in kept.iter_mut() {
+            k.node = self.expr(k.node);
+            k.at.unit = match k.at.unit {
+                super::inlining::Unit::Member(s) => super::inlining::Unit::Member(self.sym(s)),
+                super::inlining::Unit::Template(c) => super::inlining::Unit::Template(self.class(c)),
+                super::inlining::Unit::Item => super::inlining::Unit::Item,
+            };
+            k.typed_as = self.ty(k.typed_as);
+            let Some(c) = k.call.as_mut() else { continue };
+            c.call.recv = c.call.recv.map(|e| self.expr(e));
+            c.call.sym = self.sym(c.call.sym);
+            for (p, t) in c.call.owner_subst.iter_mut().chain(c.subst.iter_mut()) {
+                *p = self.tparam(*p);
+                *t = self.ty(*t);
+            }
+            c.call.ext_recv = c.call.ext_recv.map(|(e, t)| (self.expr(e), self.ty(t)));
+            c.call.prefix = c.call.prefix.map(|t| self.ty(t));
+            if let Some(refined) = c.call.refined.as_mut() {
+                self.sig(refined);
+            }
+            self.sig(&mut c.sig);
+            for a in c.args.iter_mut() {
+                *a = self.expr(*a);
+            }
+            for (a, t) in c.arg_types.iter_mut() {
+                *a = self.expr(*a);
+                *t = self.ty(*t);
+            }
+            c.ret_ty = self.ty(c.ret_ty);
+            c.expected = c.expected.map(|t| self.ty(t));
+            c.recv_type = c.recv_type.map(|t| self.ty(t));
+            let key = Arc::as_ptr(&c.env);
+            if let Some(done) = envs.get(&key) {
+                c.env = done.clone();
+            } else {
+                if records::env_moves(&*self, &c.env) || c.env.imports.iter().any(|i| i.bound.is_some_and(|t| self.ty(t) != t)) {
+                    let mut env = (*c.env).clone();
+                    records::env(&*self, &mut env);
+                    c.env = Arc::new(env);
+                }
+                envs.insert(key, c.env.clone());
+            }
+            for locals in c.outer_locals.iter_mut() {
+                for s in locals.iter_mut() {
+                    *s = self.sym(*s);
+                }
+            }
+            for o in c.owners.iter_mut() {
+                *o = match *o {
+                    super::site::SiteOwner::Sym(s) => super::site::SiteOwner::Sym(self.sym(s)),
+                    super::site::SiteOwner::Dummy(cl) => super::site::SiteOwner::Dummy(self.class(cl)),
+                    other => other,
+                };
+            }
+        }
+        for f in w.inlining.fold_later.iter_mut() {
+            *f = (self.expr(f.0), self.expr(f.1));
+        }
+        for f in w.inlining.index_later.iter_mut() {
+            *f = (self.expr(f.0), self.expr(f.1), self.expr(f.2));
+        }
+        for e in w.inlining.erased.iter_mut() {
+            e.0 = self.expr(e.0);
+        }
+        self.promote_in_order(w.inlining.unboxes.iter().map(|&(e, t)| (self.expr(e), [t])));
+        for u in w.inlining.unboxes.iter_mut() {
+            *u = (self.expr(u.0), self.ty(u.1));
+        }
+        for t in w.inlining.tailrec.iter_mut() {
+            t.0 = self.sym(t.0);
+            t.1 = self.fun(t.1);
+        }
+        if !w.inlining.journal.is_empty() {
+            let journal = std::mem::take(&mut w.inlining.journal);
+            w.inlining.journal = journal
+                .into_iter()
+                .map(|(e, (mut record, t))| {
+                    records::texpr(&*self, &mut record);
+                    (self.expr(e), (record, t.map(|t| self.ty(t))))
+                })
+                .collect();
+        }
+        for l in w.inlining.lifted.iter_mut() {
+            l.class = self.class(l.class);
+            l.member = l.member.map(|m| self.sym(m));
+            for s in l.visible.iter_mut() {
+                *s = self.sym(*s);
+            }
+        }
+        for d in w.inlining.deferred_traits.iter_mut() {
+            d.class = self.class(d.class);
+            d.member = d.member.map(|m| self.sym(m));
+        }
+        w.inlining.reindex();
     }
 
     /// The quote state's renumbering, called from `quoted.rs` with its private tables.
@@ -1638,8 +1823,8 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
     let (held_proxies, held_proxy_of) = (&mut w.held_proxies, &mut w.held_proxy_of);
     tasks.push(Box::new(move |m| {
         map(m, class_imports, |r, c| r.class(c), |r, imports| {
-            if imports.iter().any(|(_, i)| records::env_moves(r, &Env { file: FileId(0), frames: Vec::new(), imports: vec![*i] })) {
-                let mut env = Env { file: FileId(0), frames: Vec::new(), imports: imports.iter().map(|(_, i)| *i).collect() };
+            if imports.iter().any(|(_, i)| records::env_moves(r, &Env { file: FileId(0), frames: Vec::new(), imports: vec![*i], import_limit: None, visible_imports: None })) {
+                let mut env = Env { file: FileId(0), frames: Vec::new(), imports: imports.iter().map(|(_, i)| *i).collect(), import_limit: None, visible_imports: None };
                 records::env(r, &mut env);
                 let renumbered: Vec<(u32, ResolvedImport)> = imports.iter().zip(env.imports).map(|(&(at, _), i)| (at, i)).collect();
                 *imports = Arc::from(renumbered);
@@ -2062,6 +2247,11 @@ impl<'a> Worker<'a> {
         self.syms.js_export_names.absorb(o.syms.js_export_names.take_local());
         self.syms.context_bounds.absorb(o.syms.context_bounds.take_local());
         self.quote.absorb(&mut o.quote);
+        self.inlining.absorb(&mut o.inlining);
+        // The lambdas around the calls kept for the inlining phase, which a macro's
+        // `Symbol.tree` of its splice's owner reads there.
+        union(&mut self.deferred_lambdas, &mut o.deferred_lambdas);
+        union(&mut self.lambda_results, &mut o.lambda_results);
         fn union<K: Copy + Eq + std::hash::Hash, V>(mine: &mut FxMap<K, V>, theirs: &mut FxMap<K, V>) {
             for (k, v) in std::mem::take(theirs) {
                 mine.entry(k).or_insert(v);
@@ -2309,6 +2499,7 @@ impl<'a> Worker<'a> {
         let p = self.phase(super::profile::Phase::Merge);
         let mut clock = Clock::start(true);
         self.overlays_joined();
+        let owned = OwnedCopies::take(self, &mut others);
         let types_at_join = self.types.len().0 as u32;
         // The work items, by worker in the order each typed them, and their canonical order by
         // their keys (`ItemRange`), a key, a worker and an index each, sorted: a tie of keys keeps
@@ -2429,9 +2620,10 @@ impl<'a> Worker<'a> {
         prog.expr_types.place(expr_numbering, crew);
         prog.expr_spans.place(expr_numbering, crew);
         // The bit sets, a task of the crew each.
-        let bits: Vec<std::sync::Mutex<&mut crate::arena::Bits>> = [&mut prog.expansion_bits, &mut prog.leaf_bits, &mut prog.chain_end_bits, &mut prog.taken_then_bits, &mut prog.taken_else_bits, &mut prog.widened_bits, &mut prog.opaque_bits, &mut prog.spread_bits, &mut prog.ascribed_bits, &mut prog.setter_assign_bits].into_iter().map(std::sync::Mutex::new).collect();
+        let bits: Vec<std::sync::Mutex<&mut crate::arena::Bits>> = [&mut prog.expansion_bits, &mut prog.leaf_bits, &mut prog.chain_end_bits, &mut prog.taken_then_bits, &mut prog.taken_else_bits, &mut prog.widened_bits, &mut prog.opaque_bits, &mut prog.spread_bits, &mut prog.ascribed_bits, &mut prog.setter_assign_bits, &mut prog.kept_bits, &mut prog.tuple_index_bits].into_iter().map(std::sync::Mutex::new).collect();
         crew.each(bits.len(), &|i| bits[i].lock().unwrap_or_else(|e| e.into_inner()).place(expr_numbering));
         drop(bits);
+        let owned_at = owned.append(&mut self.prog);
         clock.part("placement of the side tables");
         let table = |new: Vec<Vec<u32>>| Table::of(LOCAL_BASE, new);
         let mut remap = Remap {
@@ -2552,6 +2744,7 @@ impl<'a> Worker<'a> {
         if crate::measure::types_wanted() {
             crate::measure::merge_part("walk: of it inside the promotion (TEQ_WORKERS_TYPES=1)", remap.promoted.get_mut().interning);
         }
+        owned.write_back(&mut self.prog, owned_at);
         self.note_merge_memory("the promotion and the renumbering", remap.held());
         if crate::measure::on() && crate::measure::types_wanted() {
             self.types_escaping(remap.types_from, |t| remap.promoted_of(t), types_at_join);
@@ -2815,6 +3008,7 @@ mod tests {
             erased: Vec::new(),
             spread: Vec::new(),
             ascribed: Vec::new(),
+            tuple_index: Vec::new(),
             hoisted: Vec::new(),
             imports: Vec::new(),
             node_types: FxMap::default(),
