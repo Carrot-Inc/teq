@@ -773,6 +773,24 @@ def floors(paths):
     return 0
 
 
+def sources_key(rev):
+    """The gate's key of what a binary is built from (tests/gate.sh's sources): the hash of the compiler's trees at the revision."""
+    try:
+        tree = subprocess.run(["git", "-C", ROOT, "ls-tree", rev, "--", "src", "std", "runtime", "build.rs", "Cargo.toml",
+                               "Cargo.lock", ".cargo", "rust-toolchain.toml"], capture_output=True, text=True, check=True).stdout
+        return subprocess.run(["git", "-C", ROOT, "hash-object", "--stdin"], input=tree, capture_output=True, text=True, check=True).stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+
+def same_sources(a, b):
+    """a names b, or both revisions build the same compiler sources (a binary labelled with a commit a rewrite of master renamed)."""
+    if a.startswith(b) or b.startswith(a):
+        return True
+    ka, kb = sources_key(a), sources_key(b)
+    return ka is not None and ka == kb
+
+
 def advance_line(path):
     """Printed only from a whole comparison: every row bench/reference.txt names with all its cycles, the old
     side the reference the file names, the new side a plain build of a named revision."""
@@ -781,7 +799,7 @@ def advance_line(path):
     wanted = next((l.split()[1:] for l in open(reference_file) if l.startswith("rows ")), [])
     old, new = header["master"].split(), header["head"].split()
     current = reference_of(reference_file)
-    if len(old) != 3 or not current or not (old[2].startswith(current) or current.startswith(old[2])):
+    if len(old) != 3 or not current or not same_sources(old[2], current):
         fail_setup(f"pairs: the old side is {header['master']}, not the reference {current} that bench/reference.txt names")
     if len(new) != 3:
         fail_setup(f"pairs: the new side is {header['head']}, not a plain build of a named revision")
