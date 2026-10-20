@@ -16,6 +16,72 @@ use crate::typer::site::SiteOwner;
 use crate::typer::{ArgList, ArgSrc, TypeRef};
 use crate::types::*;
 
+/// The answers of reflection's queries while the inlining phase runs, by symbol or type pair: the
+/// typed program is frozen then (`Worker::typed_body` reads it as typed), so a query answers the
+/// same in every run of the phase. A memo keeps what makes no record of the program (the trees a
+/// query hands over are the typed view's own records, which a unit makes for itself), and counts
+/// the queries and those it answered (`TEQ_INLINE_COUNTS`).
+#[derive(Default)]
+pub struct ReflectMemo {
+    /// The forked phase's workers' memo of the answers every worker gives alike.
+    pub shared: Option<std::sync::Arc<SharedReflectMemo>>,
+    conforms: FxMap<(TypeId, TypeId), bool>,
+    fields: FxMap<(ClassId, bool), Vec<SymId>>,
+    members: FxMap<(ClassId, bool), Vec<SymId>>,
+    vals: FxMap<TreeRef, SymId>,
+    trees: FxMap<SymRef, TreeRef>,
+    names: FxMap<(SymRef, bool), String>,
+    pub asked: u64,
+    pub answered: u64,
+}
+
+/// The answers of `ReflectMemo` the forked phase's workers share: those whose query and answer
+/// name only records made before the fork (`arena::LOCAL_BASE`), which every worker finds alike,
+/// so that a query one worker answered is no other's to answer again.
+#[derive(Default)]
+pub struct SharedReflectMemo {
+    conforms: std::sync::RwLock<FxMap<(TypeId, TypeId), bool>>,
+    fields: std::sync::RwLock<FxMap<(ClassId, bool), Vec<SymId>>>,
+    members: std::sync::RwLock<FxMap<(ClassId, bool), Vec<SymId>>>,
+    names: std::sync::RwLock<FxMap<(SymRef, bool), String>>,
+}
+
+/// Whether `id` names a record made before the phase's fork.
+fn before_fork(id: u32) -> bool {
+    id < crate::arena::LOCAL_BASE
+}
+
+/// Whether the symbol `s` stands for a record made before the phase's fork, the same for every
+/// worker (no run's own entry).
+fn shared_sym_ref(s: SymRef) -> bool {
+    match s {
+        SymRef::Term(t) => before_fork(t.0),
+        SymRef::Class(c) | SymRef::Ctor(c) | SymRef::Default(c, _) => before_fork(c.0),
+        SymRef::Pkg(p) | SymRef::PkgClass(p) => before_fork(p.0),
+        SymRef::TParam(t) => before_fork(t.0),
+        SymRef::Alias(a) => before_fork(a.0),
+        _ => false,
+    }
+}
+
+fn read<K: std::hash::Hash + Eq, V: Clone>(map: &std::sync::RwLock<FxMap<K, V>>, k: &K) -> Option<V> {
+    map.read().unwrap_or_else(|e| e.into_inner()).get(k).cloned()
+}
+
+fn write<K: std::hash::Hash + Eq, V>(map: &std::sync::RwLock<FxMap<K, V>>, k: K, v: V) {
+    map.write().unwrap_or_else(|e| e.into_inner()).insert(k, v);
+}
+
+impl ReflectMemo {
+    /// A query asked: what `look` finds of it, counted.
+    fn hit<T>(&mut self, look: impl FnOnce(&Self) -> Option<T>) -> Option<T> {
+        self.asked += 1;
+        let found = look(self);
+        self.answered += found.is_some() as u64;
+        found
+    }
+}
+
 /// The macro expansion an interpreter runs: what `scala.quoted` reads the call site from.
 pub struct MacroCtx {
     /// The innermost inline call, where the trees and symbols the macro makes stand and its
@@ -1787,10 +1853,16 @@ impl<'a, 't> Interp<'a, 't> {
                     (fun.sym, fun.params.clone(), fun.body)
                 };
                 let clauses = self.param_clauses(sym, &params);
+                // The definition as typed, a call the inlining phase expanded still the call
+                // (`Worker::typed_body`), as dotty's `defTree` keeps it.
+                let body = body.map(|b| self.typer.typed_body(b));
                 View::DefDef(sym, clauses, body.map(TreeRef::Expr))
             }
             TreeRef::Class(c) => View::ClassDef(c),
-            TreeRef::Def(s) => {
+            // A member that keeps no tree has no right-hand side, none typed for it
+            // (`FromSymbol.defDefFromSym`, `valDefFromSym`: `tpd.DefDef(sym)`, `tpd.ValDef(sym)`).
+            TreeRef::Def(s) if !self.retains_tree(s) => self.bodyless_def(s),
+            TreeRef::Def(s) | TreeRef::Member(s) => {
                 let kind = self.syms().sym(s).kind;
                 match kind {
                     SymKind::Def | SymKind::Given if kind == SymKind::Def || self.takes_arguments(s) => {
@@ -1808,7 +1880,7 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                     SymKind::Object(_) => View::ValDef(s, None),
                     _ => {
-                        let init = self.val_init_of(s);
+                        let init = self.val_init_of(s).map(|e| self.typer.typed_body(e));
                         View::ValDef(s, init.map(TreeRef::Expr))
                     }
                 }
@@ -2601,7 +2673,7 @@ impl<'a, 't> Interp<'a, 't> {
                     PendingKind::Operator(_, method, _) => method,
                 }
             }
-            TreeRef::Def(s) => self.typer.sig_of(s).ret,
+            TreeRef::Def(s) | TreeRef::Member(s) => self.typer.sig_of(s).ret,
             TreeRef::Type(ty) => ty,
             TreeRef::Class(c) => self.typer.types.class(c, &[]),
             TreeRef::LambdaDef(e) | TreeRef::LambdaClosure(e) | TreeRef::LambdaRef(e) => return self.tree_type(TreeRef::Expr(e)),
@@ -2687,7 +2759,7 @@ impl<'a, 't> Interp<'a, 't> {
             },
             TreeRef::Fun(_) => "DefDef",
             TreeRef::Class(_) => "ClassDef",
-            TreeRef::Def(s) => {
+            TreeRef::Def(s) | TreeRef::Member(s) => {
                 let kind = self.syms().sym(s).kind;
                 match kind {
                     SymKind::Def => "DefDef",
@@ -2931,7 +3003,7 @@ impl<'a, 't> Interp<'a, 't> {
             },
             TreeRef::Fun(f) => SymRef::Term(self.prog().funs[f.idx()].sym),
             TreeRef::Class(c) => SymRef::Class(c),
-            TreeRef::Def(s) => SymRef::Term(s),
+            TreeRef::Def(s) | TreeRef::Member(s) => SymRef::Term(s),
             TreeRef::Pat(p) => match self.prog().pats[p.idx()] {
                 TPat::Bind(s, _) => SymRef::Term(s),
                 _ => SymRef::None,
@@ -3520,7 +3592,7 @@ impl<'a, 't> Interp<'a, 't> {
             items.push(match s {
                 TreeRef::Stmt(i) => self.prog().stmts[i as usize],
                 TreeRef::Fun(f) => TStmt::Fun(f),
-                TreeRef::Def(v) => match self.val_init_of(v) {
+                TreeRef::Def(v) | TreeRef::Member(v) => match self.val_init_of(v) {
                     Some(init) => TStmt::Val(v, init),
                     None => return self.unsupported("a definition without a right-hand side in a block"),
                 },
@@ -3564,7 +3636,7 @@ fn install_trees(it: &mut Table) {
         let t = it.tree_arg(a, 0)?;
         let ctx = it.macro_ctx()?;
         let pos = match t {
-            TreeRef::Def(s) => {
+            TreeRef::Def(s) | TreeRef::Member(s) => {
                 let info = it.syms().sym(s);
                 Value::Pos(info.file, info.span.start, info.span.end)
             }
@@ -4901,7 +4973,135 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// `Symbol.tree` of `s`: a definition that keeps no tree stands for its declaration
+    /// (`bodyless_def`), a method's for its function, a class's for its body.
+    fn symbol_tree(&mut self, s: SymRef) -> TreeRef {
+        match s {
+            SymRef::Term(sym) if !self.retains_tree(sym) => TreeRef::Def(sym),
+            SymRef::Term(sym) => {
+                let kind = self.syms().sym(sym).kind;
+                match kind {
+                    SymKind::Def | SymKind::Given => {
+                        self.typer.ensure_body(sym);
+                        match self.typer.fun_of_sym.get(&sym).copied() {
+                            Some(f) => TreeRef::Fun(f),
+                            None => TreeRef::Def(sym),
+                        }
+                    }
+                    _ => TreeRef::Def(sym),
+                }
+            }
+            SymRef::Class(c) => TreeRef::Class(c),
+            other => self.sym_tree(other),
+        }
+    }
+
+    /// `Symbol.name` (or with `full`, `fullName`) of `s`, by the phase's memo (`ReflectMemo`).
+    fn memo_name(&mut self, s: SymRef, full: bool) -> String {
+        if let Some(n) = self.typer.reflect_memo().and_then(|m| m.hit(|m| m.names.get(&(s, full)).cloned().or_else(|| m.shared.as_ref().and_then(|sh| read(&sh.names, &(s, full)))))) {
+            return n;
+        }
+        let n = if full { self.symbol_full_name(s) } else { self.symbol_name(s) };
+        if let Some(m) = self.typer.reflect_memo() {
+            m.names.insert((s, full), n.clone());
+            if let Some(sh) = m.shared.as_ref().filter(|_| shared_sym_ref(s)) {
+                write(&sh.names, (s, full), n.clone());
+            }
+        }
+        n
+    }
+
+    /// The fields of `c` (with `inherited`, its members' too), as `declaredFields` and
+    /// `fieldMembers` read them, by the phase's memo (`ReflectMemo`).
+    fn memo_fields(&mut self, c: ClassId, inherited: bool) -> Vec<SymId> {
+        if let Some(v) = self.typer.reflect_memo().and_then(|m| m.hit(|m| m.fields.get(&(c, inherited)).cloned().or_else(|| m.shared.as_ref().and_then(|sh| read(&sh.fields, &(c, inherited)))))) {
+            return v;
+        }
+        let v: Vec<SymId> = self.class_members(c, inherited).into_iter().filter(|&m| self.is_field_sym(m)).collect();
+        let shareable = before_fork(c.0) && v.iter().all(|s| before_fork(s.0));
+        if let Some(m) = self.typer.reflect_memo() {
+            m.fields.insert((c, inherited), v.clone());
+            if let Some(sh) = m.shared.as_ref().filter(|_| shareable) {
+                write(&sh.fields, (c, inherited), v.clone());
+            }
+        }
+        v
+    }
+
+    /// The members of `c` (with `inherited`, its bases' too), as `declarations` reads them, by the
+    /// phase's memo (`ReflectMemo`).
+    fn memo_members(&mut self, c: ClassId, inherited: bool) -> Vec<SymId> {
+        if let Some(v) = self.typer.reflect_memo().and_then(|m| m.hit(|m| m.members.get(&(c, inherited)).cloned().or_else(|| m.shared.as_ref().and_then(|sh| read(&sh.members, &(c, inherited)))))) {
+            return v;
+        }
+        let v = self.class_members(c, inherited);
+        let shareable = before_fork(c.0) && v.iter().all(|s| before_fork(s.0));
+        if let Some(m) = self.typer.reflect_memo() {
+            m.members.insert((c, inherited), v.clone());
+            if let Some(sh) = m.shared.as_ref().filter(|_| shareable) {
+                write(&sh.members, (c, inherited), v.clone());
+            }
+        }
+        v
+    }
+
+    /// The symbol and right-hand side of `t` where its view is a val's (a macro's own val, none),
+    /// as `ValDef.tpt` and `ValDef.rhs` read them, by the phase's memo (`ReflectMemo`) where the
+    /// val has no right-hand side (a member's, read bodyless): a retained one is the reading unit's
+    /// typed copy (`Worker::typed_body`), made by each unit for itself. `Err` for a tree that is no
+    /// val, refused as `what` of it.
+    fn memo_val(&mut self, t: TreeRef, what: &str) -> R<Option<(SymId, Option<TreeRef>)>> {
+        if let Some(v) = self.typer.reflect_memo().and_then(|m| m.hit(|m| m.vals.get(&t).copied())) {
+            return Ok(Some((v, None)));
+        }
+        let v = match self.view(t)? {
+            View::ValDef(s, rhs) => Some((s, rhs)),
+            View::MacroVal => None,
+            _ => return self.unsupported(format!("{} of a tree that is no val", what)),
+        };
+        if let (Some((s, None)), Some(m)) = (v, self.typer.reflect_memo()) {
+            m.vals.insert(t, s);
+        }
+        Ok(v)
+    }
+
     /// The name, the parents as type trees and the members of a class.
+    /// The definition of `s` without its right-hand side.
+    fn bodyless_def(&mut self, s: SymId) -> View {
+        let kind = self.syms().sym(s).kind;
+        if kind == SymKind::Def || kind == SymKind::Given && self.takes_arguments(s) {
+            let sig = self.typer.sig_of(s);
+            let params: Vec<SymId> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
+            let clauses = self.param_clauses(s, &params);
+            return View::DefDef(s, clauses, None);
+        }
+        View::ValDef(s, None)
+    }
+
+    /// Whether the definition of `s` keeps its tree, as dotty's `Symbols.retainsDefTree`:
+    /// `-Yretain-trees`, a local definition (its owner a term), an inline one, or a member of a
+    /// local class, whose `ClassDef` is the typed tree; else `Symbol.tree` and a class's body
+    /// give the definition without its right-hand side (`FromSymbol`), and a macro never reads
+    /// another member's body (macwire's eligible values read their declared types).
+    pub(super) fn retains_tree(&self, s: SymId) -> bool {
+        if self.typer.inline.retain_trees {
+            return true;
+        }
+        let info = self.syms().sym(s);
+        if info.mods & crate::ast::mods::INLINE != 0 {
+            return true;
+        }
+        // Its owner a term (`denot.owner.isTerm`): a definition of a block; a member of a class of
+        // a block is the class's, whose own tree is retained (`TreeRef::Member` in it).
+        info.owner == Owner::Local
+    }
+
+    /// Whether the tree of the class `c` is retained, and its members' definitions with their
+    /// right-hand sides in it: its owner a term, or `--retain-trees`.
+    fn retains_class_tree(&self, c: ClassId) -> bool {
+        self.typer.inline.retain_trees || self.syms().class(c).owner == Owner::Local
+    }
+
     fn class_parts(&mut self, c: ClassId) -> R<(String, Value, Value)> {
         self.typer.complete_class(c);
         let (name, parents, members) = {
@@ -4915,7 +5115,7 @@ impl<'a, 't> Interp<'a, 't> {
             if matches!(info.kind, SymKind::Overloaded(_)) || info.def.is_none() && !self.typer.is_library_member(m) {
                 continue;
             }
-            body.push(Value::Tree(TreeRef::Def(m)));
+            body.push(Value::Tree(if self.retains_class_tree(c) { TreeRef::Member(m) } else { TreeRef::Def(m) }));
         }
         let body = self.make_list(body)?;
         Ok((name, parents, body))
@@ -5608,7 +5808,19 @@ fn install_types(it: &mut Table) {
     });
     q!(it, "Reflect.TypeReprMethods.TypeRepr.<:<", |it, a| {
         let (x, y) = (it.type_arg(a, 0)?, it.type_arg(a, 1)?);
-        Ok(Value::Bool(it.conforms(x, y)))
+        if let Some(b) = it.typer.reflect_memo().and_then(|m| m.hit(|m| m.conforms.get(&(x, y)).copied().or_else(|| m.shared.as_ref().and_then(|sh| read(&sh.conforms, &(x, y)))))) {
+            return Ok(Value::Bool(b));
+        }
+        let b = it.conforms(x, y);
+        // A type with variables or an unshared path is the worker's to read.
+        let shareable = [x, y].iter().all(|&t| before_fork(t.0) && !it.typer.types.has_vars(t) && !it.typer.types.is_unshared(t));
+        if let Some(m) = it.typer.reflect_memo() {
+            m.conforms.insert((x, y), b);
+            if let Some(sh) = m.shared.as_ref().filter(|_| shareable) {
+                write(&sh.conforms, (x, y), b);
+            }
+        }
+        Ok(Value::Bool(b))
     });
     q!(it, "Reflect.TypeReprMethods.TypeRepr.widen", |it, a| {
         let t = it.type_arg(a, 0)?;
@@ -7473,11 +7685,11 @@ fn install_symbols(it: &mut Table) {
     q!(it, "Reflect.SymbolMethods.Symbol.protectedWithin", |it, _a| it.make_none());
     q!(it, "Reflect.SymbolMethods.Symbol.name", |it, a| {
         let s = it.sym_arg(a, 0)?;
-        Ok(Value::string(it.symbol_name(s)))
+        Ok(Value::string(it.memo_name(s, false)))
     });
     q!(it, "Reflect.SymbolMethods.Symbol.fullName", |it, a| {
         let s = it.sym_arg(a, 0)?;
-        Ok(Value::string(it.symbol_full_name(s)))
+        Ok(Value::string(it.memo_name(s, true)))
     });
     q!(it, "Reflect.SymbolMethods.Symbol.pos", |it, a| {
         let s = it.sym_arg(a, 0)?;
@@ -7507,23 +7719,14 @@ fn install_symbols(it: &mut Table) {
     });
     q!(it, "Reflect.SymbolMethods.Symbol.tree", |it, a| {
         let s = it.sym_arg(a, 0)?;
-        Ok(Value::Tree(match s {
-            SymRef::Term(sym) => {
-                let kind = it.syms().sym(sym).kind;
-                match kind {
-                    SymKind::Def | SymKind::Given => {
-                        it.typer.ensure_body(sym);
-                        match it.typer.fun_of_sym.get(&sym).copied() {
-                            Some(f) => TreeRef::Fun(f),
-                            None => TreeRef::Def(sym),
-                        }
-                    }
-                    _ => TreeRef::Def(sym),
-                }
-            }
-            SymRef::Class(c) => TreeRef::Class(c),
-            other => it.sym_tree(other),
-        }))
+        if let Some(t) = it.typer.reflect_memo().and_then(|m| m.hit(|m| m.trees.get(&s).copied())) {
+            return Ok(Value::Tree(t));
+        }
+        let t = it.symbol_tree(s);
+        if let Some(m) = it.typer.reflect_memo() {
+            m.trees.insert(s, t);
+        }
+        Ok(Value::Tree(t))
     });
     q!(it, "Reflect.SymbolMethods.Symbol.hasAnnotation", |it, a| {
         let s = it.sym_arg(a, 0)?;
@@ -7647,7 +7850,7 @@ fn install_symbols(it: &mut Table) {
     q!(it, "Reflect.SymbolMethods.Symbol.declaredFields", |it, a| {
         let s = it.sym_arg(a, 0)?;
         let Some(c) = it.member_holder(s) else { return it.make_list(Vec::new()) };
-        let members: Vec<SymRef> = it.class_members(c, false).into_iter().filter(|&m| it.is_field_sym(m)).map(SymRef::Term).collect();
+        let members: Vec<SymRef> = it.memo_fields(c, false).into_iter().map(SymRef::Term).collect();
         it.sym_values(members)
     });
     q!(it, "Reflect.SymbolMethods.Symbol.fieldMember", |it, a| {
@@ -7661,7 +7864,7 @@ fn install_symbols(it: &mut Table) {
     q!(it, "Reflect.SymbolMethods.Symbol.fieldMembers", |it, a| {
         let s = it.sym_arg(a, 0)?;
         let Some(c) = it.lookup_holder(s) else { return it.make_list(Vec::new()) };
-        let members: Vec<SymRef> = it.class_members(c, true).into_iter().filter(|&m| it.is_field_sym(m)).map(SymRef::Term).collect();
+        let members: Vec<SymRef> = it.memo_fields(c, true).into_iter().map(SymRef::Term).collect();
         it.sym_values(members)
     });
     q!(it, "Reflect.SymbolMethods.Symbol.declaredMethod", |it, a| {
@@ -7750,7 +7953,7 @@ fn install_symbols(it: &mut Table) {
     q!(it, "Reflect.SymbolMethods.Symbol.declarations", |it, a| {
         let s = it.sym_arg(a, 0)?;
         let Some(c) = it.member_holder(s) else { return it.make_list(Vec::new()) };
-        let mut out: Vec<SymRef> = it.class_members(c, false).into_iter().map(SymRef::Term).collect();
+        let mut out: Vec<SymRef> = it.memo_members(c, false).into_iter().map(SymRef::Term).collect();
         out.extend(it.syms().class(c).nested.values().map(|&k| SymRef::Class(k)));
         it.sym_values(out)
     });
@@ -8403,7 +8606,14 @@ impl<'a, 't> Interp<'a, 't> {
                 self.show_tree_into(b, out, indent)?;
             }
             View::ValDef(s, rhs) => {
+                // The modifiers `SourceCode.printTree` writes before a `ValDef`.
                 let info = self.syms().sym(s);
+                use crate::ast::mods;
+                for (flag, word) in [(mods::IMPLICIT, "implicit "), (mods::OVERRIDE, "override "), (mods::FINAL, "final "), (mods::PROTECTED, "protected "), (mods::PRIVATE, "private "), (mods::LAZY, "lazy ")] {
+                    if info.mods & flag != 0 && !(flag == mods::PRIVATE && info.mods & mods::PROTECTED != 0) {
+                        out.push_str(word);
+                    }
+                }
                 out.push_str(if info.kind == SymKind::Var { "var " } else { "val " });
                 out.push_str(&self.symbol_name(SymRef::Term(s)));
                 out.push_str(": ");
@@ -9073,18 +9283,15 @@ impl<'a, 't> Interp<'a, 't> {
 fn install_definition_parts(it: &mut Table) {
     q!(it, "Reflect.ValDefMethods.ValDef.tpt", |it, a| {
         let t = it.tree_arg(a, 0)?;
-        match it.view(t)? {
-            View::ValDef(s, _) => Ok(Value::Tree(TreeRef::Type(it.typer.sig_of(s).ret))),
-            _ => it.unsupported("tpt of a tree that is no val"),
+        match it.memo_val(t, "tpt")? {
+            Some((s, _)) => Ok(Value::Tree(TreeRef::Type(it.typer.sig_of(s).ret))),
+            None => it.unsupported("tpt of a tree that is no val"),
         }
     });
     q!(it, "Reflect.ValDefMethods.ValDef.rhs", |it, a| {
         let t = it.tree_arg(a, 0)?;
-        match it.view(t)? {
-            View::ValDef(_, rhs) => it.opt_tree(rhs),
-            View::MacroVal => it.opt_tree(None),
-            _ => it.unsupported("rhs of a tree that is no val"),
-        }
+        let rhs = it.memo_val(t, "rhs")?.and_then(|(_, rhs)| rhs);
+        it.opt_tree(rhs)
     });
     q!(it, "Reflect.DefDefMethods.DefDef.rhs", |it, a| {
         let t = it.tree_arg(a, 0)?;

@@ -89,7 +89,7 @@ impl Wanted {
 //   before the accessibility filter, with whether one is restricted and whether all are
 //   accessible from anywhere; kept across a retype.
 // - `package_levels`: a package clause's level per package, file (for the innermost clause, which
-//   holds the file's imports) and wanted class, before the accessibility filter
+//   holds the file's imports), the file imports' limit at the level and wanted class, before the accessibility filter
 //   (`package_level`); kept where every index it read is settled and no import reads a value,
 //   neither read nor kept under a local import at depth 0, cleared by a retype.
 // The accessibility filter and the restricted marking run per search over these.
@@ -972,7 +972,7 @@ impl<'a> Worker<'a> {
                 let ty = self.import_value_ret(v);
                 let ty = self.zonk(ty);
                 if let Some((s, _)) = self.find_member(ty, n) {
-                    if self.syms.is_given(s) {
+                    if self.syms.is_given(s) && self.import_candidate_wanted(s, wanted) {
                         out.push((s, GivenScope::Value(v)));
                     }
                 }
@@ -991,6 +991,29 @@ impl<'a> Worker<'a> {
             }
             _ => {}
         }
+    }
+
+    /// Whether a given an import names by itself is a candidate of what the search wants, as the
+    /// indexes decide it for the givens they hold: for an extension method of a name, one whose
+    /// type has an extension method of that name (`Implicits.hasExtMethod`:
+    /// `tp.memberBasedOnFlags(selName, required = ExtensionMethod).exists`, inherited members
+    /// among them), so that `import scala.language.implicitConversions` offers its feature value
+    /// to no extension lookup; a type whose classes are not all known may provide one.
+    fn import_candidate_wanted(&mut self, g: SymId, wanted: Wanted) -> bool {
+        let Wanted::Extension(name) = wanted else { return true };
+        let head = self.candidate_head_type(g);
+        let mut classes = Vec::new();
+        if !self.inter_classes_known(head, &mut classes) {
+            return true;
+        }
+        classes.into_iter().any(|c| {
+            self.complete_class(c);
+            let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+            std::iter::once(c).chain(bases).any(|k| {
+                self.complete_class(k);
+                self.syms.class(k).extensions.iter().any(|&e| self.syms.sym(e).name == name)
+            })
+        })
     }
 
     pub(super) fn import_givens(&mut self, imp: ResolvedImport, wanted: Wanted, out: &mut Vec<GivenRef>) {
@@ -1098,7 +1121,7 @@ impl<'a> Worker<'a> {
             ImportTarget::PkgGivens(p) => self.given_index(p).select(wanted, GivenScope::Lexical, out),
             ImportTarget::ClassMember(c, n) => {
                 if let Some(s) = self.module_term(c, n).and_then(|r| r.sym()) {
-                    if self.syms.is_given(s) {
+                    if self.syms.is_given(s) && self.import_candidate_wanted(s, wanted) {
                         out.push((s, GivenScope::Lexical));
                     }
                 }
@@ -1107,7 +1130,7 @@ impl<'a> Worker<'a> {
             ImportTarget::UnimportPredef | ImportTarget::Unresolved => {}
             ImportTarget::PkgMember(p, n) => {
                 if let Some(s) = self.pkg_term(p, n).and_then(|r| r.sym()) {
-                    if self.syms.is_given(s) {
+                    if self.syms.is_given(s) && self.import_candidate_wanted(s, wanted) {
                         out.push((s, GivenScope::Lexical));
                     }
                 }
@@ -1150,7 +1173,13 @@ impl<'a> Worker<'a> {
         }
         let (tag, id) = wanted.key();
         let file = if with_imports { self.env.file.0 } else { u32::MAX };
-        let key = (p, file, tag, id);
+        // The file's imports in scope at the level are those before the definition's outermost
+        // class (`Env::import_limit`), an input of the level: a key per limit.
+        let limit = match self.env.import_limit {
+            Some((f, at)) if with_imports && f == self.env.file => at,
+            _ => u32::MAX,
+        };
+        let key = (p, file, limit, tag, id);
         let list = match self.package_levels.get(&key) {
             Some(list) => list.clone(),
             None => {
@@ -5036,7 +5065,7 @@ impl<'a> Worker<'a> {
             }
             if !left.is_empty() {
                 let order: Vec<usize> = (0..n).filter(|k| !left.contains(k)).collect();
-                let written = super::elaborate::ClauseArgs { inherit: None, omitted: left, order };
+                let written = super::elaborate::ClauseArgs { inherit: None, getters: None, omitted: left, order, ..Default::default() };
                 // The clause's own arguments end the slice: the later clauses are elaborated in
                 // their turn, one using clause at a time.
                 self.elaborate_clause(&mut plan, &mut receiver, &mut all[offset..offset + first + n], first, &written, &types, span);

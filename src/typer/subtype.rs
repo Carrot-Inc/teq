@@ -339,6 +339,13 @@ impl<'a> Worker<'a> {
                 let (za, zb) = (self.zonk(a), self.zonk(b));
                 self.types.inter(za, zb)
             }
+            // A join's wildcard over variables (`wild_join`), one type again where its bounds are
+            // one instance: a signature published with the variables (`publish_sig`) would hold
+            // them open for every other worker, who reads them open and unbounded (`TVars`).
+            Type::BoundedWild(lo, hi) => {
+                let (zl, zh) = (self.zonk(lo), self.zonk(hi));
+                self.types.bounded_wild(zl, zh)
+            }
             Type::Select(p, s) => {
                 let zp = self.zonk(p);
                 self.types.mk(Type::Select(zp, s))
@@ -563,8 +570,18 @@ impl<'a> Worker<'a> {
         self.note_bound_deps(v, b, -1);
         // The lower bounds as they stand, by index (dotty's `addOneBound` compares the entry it
         // narrowed, copying no list); a comparison only records bounds after them.
+        // A variable below `v` takes the bound as recorded (`addUpperBound`'s
+        // `constraint.lower(param).forall(addOneBound(_, bound, isUpper = true))`).
         let n = self.tvars[v].lower.len();
-        (0..n).all(|k| self.tvars[v].lower.get(k).copied().map_or(true, |l| self.is_sub(l, b)))
+        (0..n).all(|k| {
+            self.tvars[v].lower.get(k).copied().map_or(true, |l| {
+                let ld = self.deref(l);
+                match self.types.get(ld) {
+                    Type::Var(w) => self.add_upper(w, b),
+                    _ => self.is_sub(l, b),
+                }
+            })
+        })
     }
 
     /// The parts of `v`'s bound on one side as dotty's constraint holds it: the bound its type
@@ -714,8 +731,19 @@ impl<'a> Worker<'a> {
         self.trail.push(Undo::Lower(v));
         self.note_bound_deps(v, a, 1);
         // The upper bounds as they stand, by index, as `add_upper` reads the lower ones.
+        // A variable above `v` takes the bound as recorded (`ConstraintHandling.addLowerBound`:
+        // `constraint.upper(param).forall(addOneBound(_, bound, isUpper = false))`), a path's
+        // alias among them.
         let n = self.tvars[v].upper.len();
-        (0..n).all(|k| self.tvars[v].upper.get(k).copied().map_or(true, |u| self.is_sub(a, u)))
+        (0..n).all(|k| {
+            self.tvars[v].upper.get(k).copied().map_or(true, |u| {
+                let ud = self.deref(u);
+                match self.types.get(ud) {
+                    Type::Var(w) => self.add_lower(w, a),
+                    _ => self.is_sub(a, u),
+                }
+            })
+        })
     }
 
     /// The upper bounds of `v` that are no open variables, through the variables among them:
@@ -752,6 +780,26 @@ impl<'a> Worker<'a> {
         out
     }
 
+    /// An alias's underlying type where `t` is one at its head (dotty's `dealias` of a
+    /// `TypeRef` whose info is a `TypeAlias`): a named union is the written union, hard; an
+    /// alias kept by name is what it stands for, through aliases of aliases.
+    fn alias_underlying(&mut self, t: TypeId) -> TypeId {
+        let mut t = t;
+        loop {
+            match self.types.get(t) {
+                Type::Union(x, y, UnionKind::Named) => return self.types.union_as(UnionKind::Hard, x, y),
+                Type::Alias(..) => {
+                    let u = self.deref_alias(t);
+                    if u == t {
+                        return t;
+                    }
+                    t = u;
+                }
+                _ => return t,
+            }
+        }
+    }
+
     /// `a <: b`, keeping the constraints only when it holds.
     pub fn conforms_or_rollback(&mut self, a: TypeId, b: TypeId) -> bool {
         let mark = self.snapshot();
@@ -770,6 +818,7 @@ impl<'a> Worker<'a> {
     }
 
     pub fn is_sub(&mut self, a: TypeId, b: TypeId) -> bool {
+        let alias_path = std::mem::take(&mut self.alias_bound_as_path);
         let a = self.deref(a);
         let b = self.deref(b);
         // An unknown type argument is read as `Any` and written as `Nothing`; two of them
@@ -891,8 +940,26 @@ impl<'a> Worker<'a> {
             (Type::Error, _) | (_, Type::Error) => return true,
             // A library type of an unsupported shape is known to nothing.
             (Type::Blocked(_), _) | (_, Type::Blocked(_)) => return false,
-            (Type::Var(v), _) => return self.add_upper(v, b),
-            (_, Type::Var(v)) => return self.add_lower(v, a),
+            // An alias meets a variable as its underlying type (`TypeComparer.firstTry`'s and
+            // `secondTry`'s `TypeAlias` cases recur on the alias), so `AssetType <: ?K` for a
+            // `type AssetType = "sound" | "image"` bounds `K` by the written union, which widens
+            // to `String` with the instance; a stable path's type keeps the alias
+            // (`alias_bound_as_path`), as the path's `TermRef` widens to its declared type.
+            (Type::Var(v), _) => {
+                if self.tvars[v].upper.contains(&b) {
+                    return true;
+                }
+                let b = self.alias_underlying(b);
+                return self.add_upper(v, b);
+            }
+            (_, Type::Var(v)) => {
+                // A bound recorded already (a path's alias) is not narrowed by its underlying type.
+                if self.tvars[v].lower.contains(&a) {
+                    return true;
+                }
+                let a = if alias_path { a } else { self.alias_underlying(a) };
+                return self.add_lower(v, a);
+            }
             (_, Type::Any) | (Type::Nothing, _) => return true,
             (Type::Union(x, y, _), _) => return self.is_sub(x, b) && self.is_sub(y, b),
             (_, Type::Inter(x, y)) => return self.is_sub(a, x) && self.is_sub(a, y),
@@ -1138,6 +1205,10 @@ impl<'a> Worker<'a> {
                         continue;
                     }
                     if let (true, Type::BoundedWild(lo, hi)) = (bounded, self.types.get(ys[i])) {
+                        // `TypeComparer.isSubArg` of a `TypeBounds` argument: `lo <: arg1 <: hi`, the
+                        // argument compared with each bound, so a type variable there is bounded by
+                        // the wildcard's bounds and not by the wildcard (`Map.empty` against
+                        // `Map[String, ? <: Int => Unit]` takes `V := Int => Unit`).
                         let (xlo, xhi) = match self.types.wild_bounds(xs[i]) {
                             // A wildcard argument is bounded by its parameter's declared bounds too
                             // (`TypeComparer.isSubArg`: `tp1 & paramBounds(tparam)`).
@@ -3537,7 +3608,7 @@ impl<'a> Worker<'a> {
     /// `v` instantiated from its lower bounds (teq's solver, which widens as `instanceType` does;
     /// `Nothing` where nothing bounds it below) or from its upper ones (their intersection, `Any`
     /// without any).
-    fn instantiate_from(&mut self, v: TVarId, from_below: bool, tp: TypeId) -> bool {
+    pub(super) fn instantiate_from(&mut self, v: TVarId, from_below: bool, tp: TypeId) -> bool {
         if from_below {
             if !self.has_lower_bound(v) {
                 self.instantiate(v, NOTHING);
@@ -3759,7 +3830,7 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether something other than `Nothing` bounds `v` below (`TypeVar.hasLowerBound`).
-    fn has_lower_bound(&mut self, v: TVarId) -> bool {
+    pub(super) fn has_lower_bound(&mut self, v: TVarId) -> bool {
         let info = &self.tvars[v];
         let mut heads = false;
         for &l in &info.lower {

@@ -238,13 +238,25 @@ memory above the first. `--threads n`, or `TEQ_THREADS=n`, types with `n` worker
 `--threads 1` on one without the fork; in sbt, `teqThreads := Some(n)`. A session types its full builds at
 that count and its retypes on one worker.
 
-A macro whose run changes state other runs share gives the parallel attempt to one worker, which types the
-build again in scalac's order: the output is the same, the attempt's time is lost (11 to 22% on the
-benchmark application), and the build says so in one line. `--cacheable-state` declares a module that holds
-nothing but a cache, after which its changes no longer give the build away, `--macro-state per-worker` keeps
-each run's change to its worker, and `--threads 1` skips the attempt. On the 64k-line frontend the type
-phase takes 3.2 s at one worker and 1.06 s at eight on a 16-core machine, the 51k-line API 5.5 and 1.4 s;
-the memory is 1.23 GB at one worker and 2.42 GB at eight.
+A transparent macro, which the typer expands, whose run changes state other runs share gives the parallel
+attempt to one worker, which types the build again in scalac's order: the output is the same, the attempt's
+time is lost (11 to 22% on the benchmark application), and the build says so in one line. `--cacheable-state`
+declares a module that holds nothing but a cache, after which its changes no longer give the build away,
+`--macro-state per-worker` keeps each run's change to its worker, and `--threads 1` skips the attempt. A plain
+inline call, a macro's among them, expands in the inlining phase after the merge: where the build types on
+several workers and keeps 256 such calls or more, over the workers again, each taking a member's or a class
+statement's calls whole (a file whose calls may reach a macro of the run, the file's calls whole) and the
+records merged in the order one worker's walk makes, a plain macro's runs watched there as a transparent
+one's are in the bodies' phase; otherwise on one worker. A file whose expansion meets
+a macro of the run (one the program itself defines, in a later round one of a file still waiting), whose
+macro's run reaches a definition of a file still waiting, or whose typing meets one (a transparent macro's,
+on any worker), is typed again from its source on the main worker after the other files, its transparent
+macros run again, and goes through the phase in a round of its own after their merge, as scalac compiles
+such a unit again in a later run, so that the macro's run finds what it reaches already expanded and its
+local classes lifted; a file reading a value whose inferred type such a macro gives waits with it; the rounds
+repeat while files suspend, and a round in which every file suspends again is scalac's cyclic macro
+dependency error. A program's own transparent macro therefore runs on no worker of the bodies' phase: one
+whose state the workers share is an upstream module's.
 
 ## The `--time` report
 

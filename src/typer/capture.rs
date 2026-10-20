@@ -996,6 +996,7 @@ impl super::merge::Remap {
         moved(self, &mut c.locals, |s| self.map_sym(s), |l| l.ty = l.ty.map(t));
         moved(self, &mut c.inline_calls, e, |calls| calls.iter_mut().for_each(|call| self.inline_call(types, call)));
         moved(self, &mut c.expansion_classes, |k| self.map_class(k), |_| {});
+        moved(self, &mut c.adopted, e, |_| {});
         moved(self, &mut c.block_classes, e, |v| v.iter_mut().for_each(|k| *k = self.map_class(*k)));
         moved(self, &mut c.block_stmts, |k| k, |stmts| {
             use crate::tir::capture::BlockStmt;

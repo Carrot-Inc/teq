@@ -532,7 +532,7 @@ impl<'a> Worker<'a> {
     /// Checks the files of a std slot entered after the walk over the files passed their
     /// slots, in the state the walk would have had.
     fn check_std_files_now(&mut self, files: &[FileId]) {
-        let env = std::mem::replace(&mut self.env, super::Env { file: files[0], frames: Vec::new(), imports: Vec::new() });
+        let env = std::mem::replace(&mut self.env, super::Env { file: files[0], frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None });
         let transparent = std::mem::take(&mut self.transparent);
         let ext_scope = self.ext_scope.take();
         let defining = self.defining.take();

@@ -686,6 +686,9 @@ impl<'a> Worker<'a> {
         }
         let actual = self.capture_wildcards_in(te, actual);
         let mark = self.snapshot();
+        // A stable path is compared as the path (`tree.tpe` a `TermRef`): an alias at the head
+        // of its type stays a variable's bound.
+        self.alias_bound_as_path = self.is_stable_path(te);
         if self.is_sub(actual, expected) {
             return (te, actual);
         }
@@ -1237,6 +1240,12 @@ impl<'a> Worker<'a> {
     }
 
     pub fn type_expr(&mut self, e: ExprId, expected: Option<TypeId>) -> (TExprId, TypeId) {
+        // The rest of an item whose unit suspended is not typed (`Inlining::unwinding`), and a
+        // completion that reaches its code is suspended with it, as the exception would leave it.
+        if self.inlining.unwinding && self.unwinding_in(self.env.file) {
+            self.inlining.typing_suspensions += 1;
+            return (self.prog.add(TExpr::Unit), ERROR);
+        }
         if let Some(exp) = expected {
             if let Some((ptys, ret)) = self.as_context_function(exp) {
                 if !self.is_contextual_lambda(e) {
@@ -1540,6 +1549,12 @@ impl<'a> Worker<'a> {
         self.check_curried_dependent(expected, span);
         self.push_scope();
         let mut syms = Vec::with_capacity(ptys.len());
+        // A parameter whose type holds a wildcard (a default getter's prototype, `wildApprox` of
+        // `T ?=> Int`) is given none: its type is inferred from the body, as
+        // `Typer.makeContextualFunction` gives such a parameter an empty `TypeTree` (`pos/i7778b`).
+        let has_wild = ptys.iter().any(|&t| self.mentions_proto_var(t));
+        let ptys: Vec<TypeId> = if has_wild { ptys.iter().map(|_| self.fresh_var()).collect() } else { ptys.to_vec() };
+        let ptys = &ptys[..];
         for (i, &t) in ptys.iter().enumerate() {
             let sym = self.indexed_local("contextual", i as u32 + 1, t, span);
             self.bind_given(sym);
@@ -3216,7 +3231,16 @@ impl<'a> Worker<'a> {
         let mut fn_param_tys: Vec<TypeId> = Vec::new();
         if let Some((ptys, _)) = &exp_fn {
             if ptys.len() == 1 && lps.len() > 1 {
-                let pt = self.solve_if_var(ptys[0]);
+                // The one formal's lower bound, fully defined from below where it is a variable
+                // bounded there (`Typer.typedFunctionValue`: `protoFormals.head.loBound`,
+                // `Applications.ptIsCorrectProduct`'s `isFullyDefined(formal, ForceDegree.flipBottom)`):
+                // cats-mtl's `allow: body .rescue: (code, msg) =>`, whose `E` the body bounds below by
+                // `(Int, String)` through a contravariant `Raise[F, E]`.
+                let formal = self.deref(ptys[0]);
+                let pt = match self.types.get(formal) {
+                    Type::Var(_) => self.lambda_param_type(ptys[0]),
+                    _ => self.solve_if_var(ptys[0]),
+                };
                 if let Type::Class(c, args) = self.types.get(pt) {
                     let elems = self.types.items(args).to_vec();
                     if self.is_tuple_class(c) && elems.len() == lps.len() {
@@ -3536,8 +3560,17 @@ impl<'a> Worker<'a> {
         let act = self.deref(ty);
         let act = self.widen_lit(act);
         let mark = self.snapshot();
+        // The body is adapted to the expected result (`typedFunctionValue`: the closure's result
+        // type tree is the expected `?B`, the body typed against it): a stable path's type is
+        // compared as the path's, and the bound an alias at its head records stays, as the
+        // `TermRef` bound does (`xs.map(c => c)` over a `List[GamePhase]` keeps the alias).
+        let path = self.is_stable_path(te);
+        let alias_head = matches!(self.types.get(act), Type::Union(_, _, UnionKind::Named) | Type::Alias(..));
+        self.alias_bound_as_path = path;
         let fits = self.is_sub(ty, exp);
-        self.rollback(mark);
+        if !(fits && path && alias_head) {
+            self.rollback(mark);
+        }
         if fits {
             if !self.jvm && self.is_primitive_type_id(act) && self.is_erased_result(te) {
                 *self.expr_marks.entry(te).or_default() |= super::MARK_ERASED_SOLVED;
@@ -4106,7 +4139,7 @@ impl<'a> Worker<'a> {
         self.maximize_bottom(vars);
     }
 
-    fn maximize_bottom(&mut self, vars: Vec<TVarId>) {
+    pub(super) fn maximize_bottom(&mut self, vars: Vec<TVarId>) {
         for w in vars {
             let info = &self.tvars[w];
             if info.inst.is_some() || !info.lower.is_empty() {

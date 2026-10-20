@@ -1,16 +1,16 @@
-// expect: Maximal number of successive inlines (32) exceeded
-// expect: Cannot reduce `inline if` because its condition is not a constant value: n > 0
-// expect: cannot reduce inline match with
-// expect: patterns :  case 1
-// expect: inline value must contain a literal constant value.
-// expect: inline value must have a literal constant type
 // expect: inline if can only be used in an inline method
 // expect: inline match can only be used in an inline method
 // expect: No explicit return allowed from inlineable method early
-// expect: Int is not a constant type; cannot take constValue
-// expect: No given instance of type Ordering[Shape] was found.
-// expect: unknown shape
-// expect: expected a constant value but found
+// expect: 3 errors found
+// absent: Maximal number of successive inlines
+// absent: Cannot reduce `inline if`
+// absent: cannot reduce inline match with
+// absent: inline value must
+// absent: cannot take constValue
+// absent: No given instance of type Ordering[Shape]
+// absent: unknown shape
+// absent: expected a constant value but found
+// The typer's errors alone, as scalac's: the expansions' are the inlining phase's (inline_errors_expansion)
 import scala.compiletime.{constValue, error, requireConst, summonInline}
 
 trait Shape

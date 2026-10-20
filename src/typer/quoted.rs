@@ -1462,6 +1462,111 @@ impl<'a> Worker<'a> {
         expanded
     }
 
+    /// Whether the macro of `callee` whose splice runs `code`, met while the typer expands a
+    /// transparent call, names a definition of the round's run (`splice_names_program`, dotty's
+    /// `macroDependencies`) where no error was reported: the unit of the call suspends, a
+    /// dependency in its own source reported first, typed again for the phase's next round, as
+    /// dotty's later run types its units (a signature inferred across it suspends its readers,
+    /// `Worker::complete_sig`); each worker lists its units, merged with the rest of the phase's
+    /// state (`Inlining::absorb`).
+    fn typing_suspends(&mut self, code: TExprId, callee: SymId, unit_file: crate::source::FileId, unit_span: Span) -> bool {
+        let file = self.syms.sym(callee).file;
+        // dotty's typer expands a transparent call alone (`Inlines.needsInlining`): a plain one teq
+        // expands ahead of the phase holds what it reports for the phase, its macro run as before.
+        let transparent = self.inline.sites.first().is_some_and(|s| self.syms.sym(s.callee).mods & crate::ast::mods::TRANSPARENT != 0);
+        let errors = |d: &crate::source::Diagnostic| !d.is_warning;
+        if !transparent || !self.program_file(file) || self.diags.items.iter().any(errors) || self.inlining.suspension_reports.iter().any(errors) || !self.splice_names_program(code, file) {
+            return false;
+        }
+        // What it reports outlives the unit's typing, as the phase's suspension's does.
+        let mark = self.diags.items.len();
+        self.macro_dependencies_elsewhere(code, unit_file, unit_span);
+        let reported = self.diags.items.split_off(mark);
+        self.inlining.suspension_reports.extend(reported);
+        self.suspend_at_typing(unit_file);
+        true
+    }
+
+    /// Whether a macro's run for the unit `unit_file` may suspend it where its execution reaches a
+    /// definition of a unit its round has not completed (`Worker::run_suspends`): in the phase,
+    /// where the expansion's file is recorded (`Worker::expand_suspending`); at typing, where a
+    /// transparent call's unit of the program would suspend on a macro of the run
+    /// (`typing_suspends`).
+    pub(super) fn run_may_suspend(&self, unit_file: crate::source::FileId) -> bool {
+        if self.inlining.running {
+            return self.inlining.suspending;
+        }
+        // Whatever was reported before: dotty's interpreter suspends on a class of the current run
+        // missing from its loader (`suspendOnMissing`) where `expandMacro`'s check, which an error
+        // reported skips, did not.
+        let transparent = self.inline.sites.first().is_some_and(|s| self.syms.sym(s.callee).mods & crate::ast::mods::TRANSPARENT != 0);
+        transparent && self.program_file(unit_file)
+    }
+
+    /// The unit `file` suspended at typing (`Inlining::typing_suspended`): each signature being
+    /// inferred is suspended with it (`typing_suspensions`, which `publish_sig` reads), and inside
+    /// an item the item's typing unwinds (`Inlining::unwinding`), as dotty's `SuspendException`
+    /// leaves every completion under way and the unit's typer; where it leaves them is recorded
+    /// (`cut_typing`).
+    pub(super) fn suspend_at_typing(&mut self, file: crate::source::FileId) {
+        self.inlining.typing_suspensions += 1;
+        // The eager signature phase has no reader whose unit a suspension leaves: the completion
+        // that met it is published suspended (`completion_done`, `finish_alias`) and each reader's
+        // unit suspends when it reads it, as a `SuspendCompleter` suspends every reader's; the
+        // traversal reaches each definition, so dotty's first reader is among them.
+        if !self.bodies_started {
+            return;
+        }
+        if self.inlining.in_item > 0 {
+            self.inlining.unwinding = true;
+        }
+        if !self.inlining.typing_suspended.contains(&file.0) {
+            self.inlining.typing_suspended.push(file.0);
+        }
+        self.cut_typing(file);
+    }
+
+    /// Where the suspension leaves the unit `file`'s typing on this worker
+    /// (`super::inlining::TypingCut`): its completions in progress here, outermost first
+    /// (`Inlining::completing`: the item being walked, then the signatures, bodies, aliases and
+    /// getters completed inside it, a completion it demanded among them), the item the outermost
+    /// is in, and what they had reported and demanded by then. A cut in an item at or after one
+    /// this worker cut the unit in already records nothing: dotty's traversal stopped at that one.
+    fn cut_typing(&mut self, file: crate::source::FileId) {
+        let mut owners: Vec<(u32, u32)> = Vec::new();
+        for o in &self.inlining.completing {
+            if o.file == file.0 && !owners.contains(&o.key()) {
+                owners.push(o.key());
+            }
+        }
+        let key = owners.first().map_or(0, |&(f, place)| self.desugared_key(crate::source::FileId(f), place));
+        if self.inlining.typing_cuts.iter().any(|c| c.file == file.0 && c.key <= key) {
+            return;
+        }
+        let reported = self.diags.items.iter().filter(|d| !d.owner.is_none() && owners.contains(&d.owner.key())).cloned().collect();
+        // What they demanded is listed from where the item being typed began, a cut outside an
+        // item reading the whole list.
+        let from = if self.inlining.in_item > 0 { self.inlining.item_demands.min(self.inlining.demands.len()) } else { 0 };
+        let demanded = self.inlining.demands[from..].iter().filter(|(by, _)| owners.contains(&by.key())).map(|&(_, to)| to).collect();
+        self.inlining.typing_cuts.push(super::inlining::TypingCut { file: file.0, key, reported, demanded });
+    }
+
+    /// Whether the walk of an item unwinding from its unit's suspension meets the definition `sym`
+    /// of that unit, which it does not walk or complete: dotty's `SuspendException` leaves the
+    /// unit's typer at once, and a later definition stays a lazy completer, which another unit's
+    /// read completes as any other (`Namer.Completer.complete`), where completing it here would
+    /// publish it `Suspended`.
+    pub(super) fn unwinding_from(&self, sym: SymId) -> bool {
+        self.inlining.unwinding && self.unwinding_in(self.syms.sym(sym).file)
+    }
+
+    /// Whether code of the unit `file` is typed while an item unwinds from that unit's
+    /// suspension (`Inlining::unwinding`): the code the exception would leave. Another
+    /// definition's typing on the way (a library body or a signature it reads) is its own.
+    pub(super) fn unwinding_in(&self, file: crate::source::FileId) -> bool {
+        self.inlining.unwinding && self.inlining.typing_suspended.contains(&file.0)
+    }
+
     /// scalac runs a macro's code compiled, so what the splice names outside its quotes cannot
     /// come from the file being expanded: each such definition is "Cannot call macro m defined
     /// in the same source file" at the call, in the order scalac collects them.
@@ -1639,6 +1744,29 @@ impl<'a> Worker<'a> {
         // The file being compiled is the one of the outermost inline call, where the expansion
         // lands however deep the macro is nested in inline methods.
         let (unit_file, unit_span) = self.inline.sites.first().map_or((site_file, site_span), |s| (s.file, s.span));
+        // The typer meets a macro of the run as the phase does (`Inliner.expandMacro`, a transparent
+        // call's at typing): its unit suspends, typed again once the macro's file is through the
+        // phase and the lifting (`Worker::typing_suspends`); a unit unwinding runs no macro.
+        if !self.inlining.running && (self.unwinding_in(unit_file) || self.typing_suspends(te, callee, unit_file, unit_span)) {
+            return (self.prog.add(TExpr::Unit), ERROR);
+        }
+        // The inlining phase gives up the expansion of a macro that names a definition of the
+        // round's run, its file suspended (`Worker::expand_suspending`), and runs no macro after it;
+        // as dotty's `Inliner.expandMacro`, only where no error was reported, a dependency in the
+        // unit's own source reported first, which outlives the file's round.
+        if self.inlining.suspending
+            && (self.inlining.suspended_hit
+                || (self.inlining.splices_name_run && !self.inlining.reached_other && !self.diags.items.iter().any(|d| !d.is_warning) && self.splice_names_program(te, self.syms.sym(callee).file)))
+        {
+            if !self.inlining.suspended_hit {
+                let mark = self.diags.items.len();
+                self.macro_dependencies_elsewhere(te, unit_file, unit_span);
+                let reported = self.diags.items.split_off(mark);
+                self.inlining.suspension_reports.extend(reported);
+            }
+            self.hit_suspension();
+            return (self.prog.add(TExpr::Unit), ERROR);
+        }
         if !self.macro_dependencies_elsewhere(te, unit_file, unit_span) {
             return (self.prog.add(TExpr::Unit), ERROR);
         }
@@ -1673,7 +1801,37 @@ impl<'a> Worker<'a> {
             }
         }
         let prof = self.prof(Kind::Macro, span, About::Sym(callee));
-        let receivers = self.inline.this.clone();
+        // The receivers the splice names: its `this` or a proxy the expander bound. A splice is a
+        // call of a static method, its qualifier a static module at most (dotty's
+        // `Splicer.checkValidMacroBody`), whose interpreter loads that module alone
+        // (`Splicer.Interpreter.interpretedStaticMethodCall`): the receiver of an expansion under
+        // way that the splice does not name is not made for the run.
+        let mut receivers: Vec<(ClassId, Option<SymId>)> = self.inline.this.iter().map(|&(c, proxy, _)| (c, proxy)).collect();
+        if !receivers.is_empty() {
+            let mut named = vec![false; receivers.len()];
+            let mut left = receivers.len();
+            for e in self.prog.descendants(te) {
+                let read = match self.prog.expr(e) {
+                    TExpr::This => None,
+                    TExpr::Local(s) => Some(s),
+                    _ => continue,
+                };
+                for (i, &(_, proxy)) in receivers.iter().enumerate() {
+                    if !named[i] && proxy == read {
+                        named[i] = true;
+                        left -= 1;
+                    }
+                }
+                if left == 0 {
+                    break;
+                }
+            }
+            let mut i = 0;
+            receivers.retain(|_| {
+                i += 1;
+                named[i - 1]
+            });
+        }
         let mut inline_path: Vec<(FileId, u32, u32)> = self.inline.sites.iter().map(|s| (s.file, s.span.start, s.span.end)).collect();
         if inline_path.is_empty() {
             inline_path.push((site_file, site_span.start, site_span.end));
@@ -1719,12 +1877,18 @@ impl<'a> Worker<'a> {
             crate::interp::name_epoch(|| format!("the run of the macro {}", name));
         }
         let run_guard = crate::interp::enter_run();
+        // A run that reaches a definition of a unit its round has not completed suspends the
+        // unit of the outermost run that may suspend (`Worker::run_suspends`).
+        let owns_run = interp.typer.inlining.run_consumer.is_none() && interp.typer.run_may_suspend(unit_file);
+        if owns_run {
+            interp.typer.inlining.run_consumer = Some(unit_file);
+        }
         let result = interp.module_value(quotes_impl).and_then(|quotes_value| {
             let mut vals = vec![(q, quotes_value)];
             let mut ctx = crate::interp::Ctx::plain();
             // The receivers of the expansions under way: an object is its instance, which the
             // splice may name through `this` or the proxy the expander bound.
-            for &(c, proxy, _) in receivers.iter().rev() {
+            for &(c, proxy) in receivers.iter().rev() {
                 let value = interp.module_value(c)?;
                 match proxy {
                     Some(p) => vals.push((p, value)),
@@ -1738,6 +1902,9 @@ impl<'a> Worker<'a> {
             interp.eval_expr(te, Some(&env))
         });
         let hashes = crate::interp::run_hashes();
+        if owns_run {
+            interp.typer.inlining.run_consumer = None;
+        }
         drop(run_guard);
         crate::interp::leave_epoch(outer_epoch);
         let shared = crate::interp::take_touched();
@@ -1768,6 +1935,8 @@ impl<'a> Worker<'a> {
             Err(Failure::Depth) => Err(format!("the macro exceeded the interpreter's call depth of {}", MACRO_DEPTH)),
             Err(Failure::Stale(msg)) => Err(msg),
             Err(Failure::Withheld) => Err(interp.describe(&Failure::Withheld)),
+            // Taken as the unit's suspension below.
+            Err(Failure::Suspended) => Err(String::new()),
             Err(f @ Failure::Exit(_)) => Err(interp.describe(&f)),
             Err(Failure::Unsupported(msg)) => Err(match msg.strip_prefix("no builtin for scala.quoted.") {
                 Some(rest) => format!("not supported yet: scala.quoted {}", rest.trim_end_matches(" (a @js template without a Scala body)")),
@@ -1790,6 +1959,21 @@ impl<'a> Worker<'a> {
                 self.profile.note_macro(callee, pre_ns, run, h);
             }
             self.profile.exit(p, if outcome.is_ok() { Outcome::Found } else { Outcome::NotFound });
+        }
+        // The run stopped at a definition its unit waits for, whatever it failed with on the way:
+        // no expansion and nothing reported, the unit suspended by the outermost run, as dotty's
+        // `suspendOnMissing` throws the unit's `SuspendException` through the interpreter.
+        if self.inlining.run_suspended {
+            if owns_run {
+                self.inlining.run_suspended = false;
+                if self.inlining.running {
+                    self.hit_suspension();
+                } else {
+                    self.suspend_at_typing(unit_file);
+                }
+            }
+            self.quote.copied_deferred.truncate(deferred_mark);
+            return (self.prog.add(TExpr::Unit), ERROR);
         }
         match outcome {
             Ok(tree) => {
@@ -1918,6 +2102,17 @@ impl<'a> Worker<'a> {
                 _ => continue,
             };
             let call = super::apply::MethodCall { recv, sym: d.sym, owner_subst: d.owner_subst.clone(), ext_recv: None, prefix: d.prefix, refined: None };
+            // A transparent macro's result keeps a plain call as a call for the inlining phase,
+            // as `InlineTyper` types the result it retypes (`Inlines.needsInlining` in the typer).
+            if self.defers_in_expansion(d.sym) {
+                let typed_as = self.normalize(d.ret_ty);
+                self.defer_plain_inline(e, &call, &d.sig, &d.subst, &args, Vec::new(), d.ret_ty, typed_as, site, d.expected);
+                if self.prog.owns_expr(e) {
+                    self.prog.set_type(e, typed_as);
+                }
+                self.inline.outer_locals.pop();
+                continue;
+            }
             self.inline.site_at_end = d.at_end;
             let expanded = match self.inline.site_env.clone() {
                 Some(env) => {
@@ -3060,6 +3255,7 @@ impl<'c> Copier<'c> {
         copy.js = info.js;
         copy.has_overloads = info.has_overloads;
         copy.has_statements = info.has_statements;
+        copy.no_inits_recorded = info.no_inits_recorded;
         copy.read_no_inits = info.read_no_inits;
         copy.stateful = info.stateful;
         copy.desugared_parents = info.desugared_parents;

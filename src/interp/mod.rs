@@ -36,7 +36,7 @@ use crate::typer::Worker;
 use crate::types::{ClassId, LitVal, SymId};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-pub use quoted::MacroCtx;
+pub use quoted::{MacroCtx, ReflectMemo, SharedReflectMemo};
 pub use value::{Object, TreeRef, Value};
 
 /// One scope of locals. A def call, a block that declares something, a case with bindings and
@@ -155,6 +155,10 @@ pub enum Failure {
     /// The typing of what the run reached met a body withheld from its products, an error the
     /// diagnostics name; the run stops before anything runs on past it.
     Withheld,
+    /// A macro's run reached a definition of a unit its round has not completed (the round's run,
+    /// `Worker::run_suspends`): the unit of the expansion that runs it is suspended, nothing
+    /// reported, as dotty's interpreter suspends it on `MissingClassValidInCurrentRun`.
+    Suspended,
     /// The program called `System.exit` (`sys.exit`) with the status: it stops there, no `finally`
     /// running, as the JVM halts; `teq interp` exits with the status.
     Exit(i32),
@@ -164,6 +168,14 @@ impl From<Failure> for Control {
     fn from(f: Failure) -> Control {
         Control::Fail(f)
     }
+}
+
+/// The macro class loader a run of the build (`Program::runs`, the runs after the first) has in
+/// dotty: the first and second runs take the one `Driver.setup` made, and each later run a new one
+/// (`Driver.finish` makes the next run's under `MacroClassLoader.init` only after compiling the
+/// second), which loads the classpath's classes again as well as the program's (`forget_made`).
+fn loader_generation(runs: u32) -> u32 {
+    runs.saturating_sub(1)
 }
 
 /// The native stack the interpreter's recursion may take, measured from where it started: the
@@ -1178,6 +1190,8 @@ pub struct InterpCaches {
     prof_state: Option<Box<profile::ProfState>>,
     /// `Program::shifts` when the caches were put away.
     shifts: u32,
+    /// `Program::runs` then.
+    runs: u32,
     /// How many holders the last walk of the cacheable state marked: the size the next
     /// walk's table starts at.
     walk_hint: usize,
@@ -1259,6 +1273,7 @@ impl InterpCaches {
             rec_binders: _,
             prof_state: _,
             shifts: _,
+            runs: _,
             walk_hint: _,
         } = self;
         let mut out: Vec<Value> = made.modules.iter().flatten().map(|o| Value::Obj(o.clone())).collect();
@@ -1291,6 +1306,8 @@ pub struct Interp<'a, 't> {
     /// whether one stopped the run.
     withheld_seen: u32,
     halted: bool,
+    /// Whether what stopped the run is a suspension of its unit (`Failure::Suspended`).
+    suspended: bool,
     next_key: u64,
     /// How many names `Symbol.freshName` made in this run.
     pub(super) fresh_names: u32,
@@ -1445,6 +1462,7 @@ impl<'a, 't> Interp<'a, 't> {
             sched: None,
             withheld_seen,
             halted: false,
+            suspended: false,
             next_key: 1,
             fresh_names: 0,
             coerce: crate::arena::Dense::new(value::K_UNKNOWN),
@@ -1598,6 +1616,7 @@ impl<'a, 't> Interp<'a, 't> {
             names: self.names,
             prof_state: self.prof_state,
             shifts: self.typer.prog.shifts,
+            runs: self.typer.prog.runs,
             walk_hint: self.walk_hint,
         }
     }
@@ -1670,8 +1689,14 @@ impl<'a, 't> Interp<'a, 't> {
         if c.shifts != self.typer.prog.shifts {
             self.forget_units();
             self.forget_positions();
+        }
+        if c.shifts < self.typer.prog.build_start {
             self.records.next_build();
             self.forget_made();
+        } else if loader_generation(c.runs) != loader_generation(self.typer.prog.runs) {
+            self.forget_made();
+        } else if c.runs != self.typer.prog.runs {
+            self.forget_made_of_program();
         }
     }
 
@@ -1706,7 +1731,8 @@ impl<'a, 't> Interp<'a, 't> {
         kept
     }
 
-    /// At the first run of a retype, which is a build of its own: the objects and top-level values
+    /// At the first run of a retype, which is a build of its own, and at a build's run of a new
+    /// macro class loader (`loader_generation`): the objects and top-level values
     /// of the program's own files, and of every jar but the standard library's, are not made yet,
     /// as under scalac, whose macro class loader is made anew for every compiler run, a changed
     /// file's alone included, and finds only the compiler's own classes in its parent loader. A
@@ -1733,6 +1759,29 @@ impl<'a, 't> Interp<'a, 't> {
         made.static_made.retain(|s, _| statics.contains_key(s));
         for (f, done) in made.file_done.iter_mut().enumerate() {
             if own(FileId(f as u32)) {
+                *done = false;
+            }
+        }
+    }
+
+    /// A later run of the build in its macro class loader's generation (`loader_generation`): the
+    /// program's objects and statics made anew at their next use, the classpath's kept. Dotty's
+    /// first and second runs share the loader its setup made (`Driver.setup`); the earlier run's
+    /// output is first loaded in the second, the classpath's classes stay where the first loaded them.
+    fn forget_made_of_program(&mut self) {
+        let typer = &*self.typer;
+        let made = &mut self.made;
+        for (c, module) in made.modules.iter_mut_indexed() {
+            if module.is_some() && typer.program_file(typer.syms.class(ClassId(c as u32)).file) {
+                *module = None;
+            }
+        }
+        made.statics.retain(|&s, _| !typer.program_file(typer.syms.sym(s).file));
+        let statics = &made.statics;
+        made.static_runs.retain(|s, _| statics.contains_key(s));
+        made.static_made.retain(|s, _| statics.contains_key(s));
+        for (f, done) in made.file_done.iter_mut().enumerate() {
+            if typer.program_file(FileId(f as u32)) {
                 *done = false;
             }
         }
@@ -1945,6 +1994,7 @@ impl<'a, 't> Interp<'a, 't> {
             Failure::Depth => "the interpreter's call depth ran out".to_string(),
             Failure::Unsupported(s) | Failure::Stale(s) => s.clone(),
             Failure::Withheld => "the run needs a body withheld from its products and stops (the error below)".to_string(),
+            Failure::Suspended => "the run needs a definition of a unit its round has not completed".to_string(),
             Failure::Exit(status) => format!("the program called System.exit({})", status),
             Failure::Thrown(v) => {
                 let text = match self.to_str(v) {

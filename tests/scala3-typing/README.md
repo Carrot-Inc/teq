@@ -57,6 +57,72 @@ Seven tests moved, against master's record, with the interp-env-script branch, e
 `pos/java-futures` stays `rejects`, on a member of the futures the std does not have yet. `neg/i5313` keeps its
 row: `System.wait()` is not lowered as a value's `wait`, since `System` stands for a Java class's statics.
 
+## Plain inline calls expand in an inlining phase (2026-10-15)
+
+Three tests moved, against master's record, with the inlining-phase branch, whose typer keeps a plain inline
+call and expands it in a phase after a typer that reported no error (`transform/Inlining.scala`):
+
+- `neg/compiletime-const` moved from `superset` to `same`: `requireConst` is a plain inline method of
+  `scala.compiletime`, checked where its call expands (`Inlines.scala`'s `expand`, the argument's
+  `ConstantValue`), now in the phase over the typed argument, so `requireConst(g(1))` and `requireConst(g(b))`,
+  whose arguments have the constant types `1` and `2` through `g`'s `n.type`, pass as scalac's.
+- `neg/specialized-trait-infinite-inline` moved from `superset` to `different`: specialized and inline traits are
+  not in 3.8.4, whose scalac rejects `inline trait` and does not find `Specialized` (three errors, teq's three),
+  and reports no expansion's error after them; master's typer expanded `x.a(100)` and reported the inline
+  limit beside them, the line the test expects of a later compiler.
+- `pos/givenFallback` moved from `rejects` to `std`: `InlineVals`' errors are a phase's after the typer, reported
+  only where the typer reported none, so the first error is the std's missing `App`. teq's typing of an inline
+  val overriding a `def` (`inline val x = 1` against `def x: Int`, typed `Int` where dotty keeps `1`) still
+  rejects it after that, a typer gap.
+
+Four details moved within their categories. `neg/i4196`, `pos/i4196` and `neg/i5397` lead with another error
+since `TailRec`'s are a phase's after the typer too. `pos/typeclass-scaling` no longer reports the inline limit
+(three `Maximal number of successive inlines` errors on master), its derivations being the phase's and the typer
+having reported the std's gaps; the test raises the limit with `-Xmax-inlines 40`, which the harness does not pass,
+and teq checks the program clean with `--max-inlines 40` once those gaps are taken out (16 cases of
+`derives Eq` exceed the default 32 in scalac 3.8.4 and in teq alike).
+
+## lila's typer errors, reduced (2026-10-16)
+
+`proposed-cases/lila_*.scala` are the causes of the errors teq reports on lila (`bench/lila`) that scalac 3.8.4
+does not, one program per cause, each mimicking the libraries' shapes without them (`lila_tasty_java_nested_class`
+alone needs play-ws's jars, `lila_dynamic_object_in_trait` the scala-library std), the inlining-phase part's
+classification; the causes are the typer's (the lila part's task lines), none an inline expansion's or the phase's.
+
+Three more (2026-10-17), the positions where the gate's lila record (`bench/lila/errors.txt`, master's text at
+`355fe5e6e`) reads another text than the branch: `lila_eta_dependent_given` (`StormSelector.scala:90`),
+`lila_eta_result_conversion` (`Fishnet.scala:80`) and `lila_literal_union_arrow` (`AccuracyPercent.scala:136`).
+Master and the branch reject each reduced program with the text the branch reports in lila; the causes are the
+typer's: an eta-expansion typed from the method's signature where dotty types a closure against the expected
+function (`EtaExpansion.etaExpand` leaves the parameters to the prototype and the body adapts to its result), and a
+declared union of literal types widened where dotty widens a soft union and a singleton.
+
+## Two more of the inlining-phase review's and gate's probes (2026-10-18)
+
+- `proposed-errors/classof_macro_cycle/` (with its `.check`): a macro whose run resolves a class of the run at run
+  time (`classOf[H]`), called from H's own file. scalac 3.8.4 reports the cyclic macro dependency (the class is
+  missing from the macro class loader in every run, `Interpreter.suspendOnMissing`); teq resolves `classOf`
+  without the run's readiness check and accepts it, on master too (the macro runtime's part).
+- `proposed-cases/enum_java_compatible_singleton_mirror.scala`: a Scala enum that extends `java.lang.Enum` gives
+  every value `Mirror.Singleton` as any enum does (`DesugarEnums.enumValueCreator`, `SyntheticMembers.addMirrorSupport`),
+  a source enum's and scala-java-time's `DayOfWeek` and `Month` read from the jar alike; scalac prints `true` for
+  every value tested. teq, on master too (the mirrors' part), gives the parent to no value of the source enum and to
+  one value of each enum read from TASTy, the one the program reaches first (`SUNDAY`, `JANUARY`). Which value that
+  is in the application's export follows what reaches the enum first, so master and this branch may name different
+  ones (`java.time.mjs` on the gate's inputs). Each value is tested as `Any`: on the enum's own type scalac folds the
+  test to `false` at compile time, with a warning.
+
+## An import's prefix through a method, and the typer's order of a file's items (2026-10-18)
+
+`neg/i19413.scala` moved from `superset` to `same` with the inlining-phase branch's review of `b7cfe4e7e`. Its
+`import hello.bla.*` names a plain `def hello: kla.type`. scalac rejects the prefix ("import prefix is not a pure
+expression", `Checking.checkLegalImportOrExportPath`: a method's call is no idempotent expression unless it is
+inlined). teq rejected it only by the accident of its typing order: the import was resolved while `hello`'s
+signature was being completed, which reported a recursive use beside it. Typed in the order dotty's typer meets a
+file's definitions (`object kla` first, `Desugar.packageDef` placing `hello` in the file's package object), teq read
+`hello`'s complete signature and accepted the import. It now reports scalac's error whatever the order, teq's std
+`quotes` (a plain method standing for scala-library's transparent inline one) excepted.
+
 ## Tyrian's and Indigo's fixes (2026-10-12)
 
 Thirty-two tests moved, against master's record, with the tyrian-indigo branch:

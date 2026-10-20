@@ -26,7 +26,7 @@ pub(super) enum CastLowering {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum OpClass {
+pub(super) enum OpClass {
     Arith,
     Compare,
     Bits,
@@ -63,7 +63,7 @@ pub(super) fn unary_of(op: Name) -> Option<Name> {
     })
 }
 
-fn classify(op: Name) -> Option<OpClass> {
+pub(super) fn classify(op: Name) -> Option<OpClass> {
     Some(match op {
         names::PLUS | names::MINUS | names::STAR | names::SLASH | names::PERCENT => OpClass::Arith,
         names::LT | names::LE | names::GT | names::GE => OpClass::Compare,
@@ -386,6 +386,13 @@ impl<'a> Worker<'a> {
         let mut waiting = Vec::new();
         let outer = std::mem::replace(&mut self.unboxing_after, true);
         for (e, ty) in entries {
+            // One of a call the inlining phase expands waits with the phase's records, which the
+            // merge carries (`Inlining::unboxes`).
+            if self.inlining.holds(e) {
+                let ty = self.zonk(ty);
+                self.inlining.unboxes.push((e, ty));
+                continue;
+            }
             if self.is_pending_call(e) {
                 waiting.push((e, ty));
                 continue;
@@ -1439,13 +1446,17 @@ impl<'a> Worker<'a> {
     /// Whether `t` names a type parameter: any one, or one of `tps` when given.
     pub fn mentions_tparam_of(&self, t: TypeId, tps: Option<&[TParamId]>) -> bool {
         match self.types.get(t) {
-            Type::Param(p) | Type::AppParam(p, _) => tps.map_or(true, |tps| tps.contains(&p)),
-            Type::Class(_, args) => self.types.items(args).iter().any(|&a| self.mentions_tparam_of(a, tps)),
-            Type::Lambda(_, b) => self.mentions_tparam_of(b, tps),
-            Type::Union(a, b, _) | Type::Inter(a, b) => {
-                self.mentions_tparam_of(a, tps) || self.mentions_tparam_of(b, tps)
+            Type::Param(p) => tps.map_or(true, |tps| tps.contains(&p)),
+            Type::AppParam(p, args) => {
+                tps.map_or(true, |tps| tps.contains(&p)) || self.types.items(args).iter().any(|&a| self.mentions_tparam_of(a, tps))
             }
-            _ => false,
+            // Through every part of the type (a refinement's, a path's prefix, an annotation's
+            // parent, a match type's cases), as dotty's `existsPart` walks it.
+            _ => {
+                let mut parts = Vec::new();
+                self.types.parts(t, &mut parts);
+                parts.into_iter().any(|part| self.mentions_tparam_of(part, tps))
+            }
         }
     }
 

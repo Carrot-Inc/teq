@@ -976,7 +976,7 @@ impl<'a> Gen<'a> {
             self.super_accessor_declarations(c);
             if !cx.ctor_defaults_on_companion(c) {
                 let clauses = cx.input.syms.class(c).ctor.clone();
-                self.ctor_default_getters(Some(c), &tc.ctor_params, &tc.ctor_defaults, &clauses);
+                self.ctor_default_getters(Some(c), Some(crate::tir::DefaultOf::Ctor(c)), &tc.ctor_params, &tc.ctor_defaults, &clauses);
             }
         } else {
             self.constructor(tc, &fields, &super_name, enum_class.or(superclass), superclass.is_some(), is_value_case, is_object || given_module, is_anon);
@@ -1597,7 +1597,7 @@ impl<'a> Gen<'a> {
 
         if !cx.ctor_defaults_on_companion(tc.id) && !cx.ctor_defaults_on_inner_companion(tc.id) && !cx.ctor_defaults_on_local_companion(tc.id) {
             let clauses = cx.input.syms.class(tc.id).ctor.clone();
-            self.ctor_default_getters(Some(tc.id), &tc.ctor_params, &tc.ctor_defaults, &clauses);
+            self.ctor_default_getters(Some(tc.id), Some(crate::tir::DefaultOf::Ctor(tc.id)), &tc.ctor_params, &tc.ctor_defaults, &clauses);
         }
     }
 
@@ -1643,7 +1643,7 @@ impl<'a> Gen<'a> {
         self.end_method(ACC_PUBLIC, "<init>", &method_desc(&types, &JType::V));
         if !self.this_class.map_or(false, |c| cx.ctor_defaults_on_companion(c) || cx.ctor_defaults_on_inner_companion(c) || cx.ctor_defaults_on_local_companion(c)) {
             let clauses: Vec<ClauseSig> = cx.input.syms.sym(fun.sym).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone());
-            self.ctor_default_getters(None, &fun.params, &fun.defaults, &clauses);
+            self.ctor_default_getters(None, Some(crate::tir::DefaultOf::Method(fun.sym)), &fun.params, &fun.defaults, &clauses);
         }
     }
 
@@ -1652,7 +1652,7 @@ impl<'a> Gen<'a> {
     /// the parameters of the clauses before the default's own, as a companion's getter does.
     /// The static getters of a class's constructor defaults (`class`'s, a local class taking
     /// what it captures first, as its constructor does: a `var` as its cell).
-    fn ctor_default_getters(&mut self, class: Option<ClassId>, params: &[SymId], defaults: &[Option<TExprId>], clauses: &[ClauseSig]) {
+    fn ctor_default_getters(&mut self, class: Option<ClassId>, of: Option<crate::tir::DefaultOf>, params: &[SymId], defaults: &[Option<TExprId>], clauses: &[ClauseSig]) {
         let declared: usize = clauses.iter().map(|c| c.params.len()).sum();
         let captures = params.len().saturating_sub(declared);
         let captured: Vec<SymId> = match class {
@@ -1667,7 +1667,14 @@ impl<'a> Gen<'a> {
             let upto = captures + super::gen::clause_shape(clauses, i - captures).0;
             let mut before: Vec<(Option<SymId>, JType)> = captured.iter().map(|&p| (Some(p), self.anon_capture_type(p))).collect();
             before.extend(params[captures..upto.min(i)].iter().map(|&p| (Some(p), self.sym_type(p))));
-            let ret = self.sym_type(params[i]);
+            // The getter's type as the typer completed it (`Namer.inferredResultType`), the
+            // parameter's where nothing refers to the class's type parameters.
+            let declared_ty = clauses.iter().flat_map(|c| c.params.iter()).nth(i - captures).map(|p| p.ty);
+            let own = of.and_then(|of| self.cx.input.getters.and_then(|t| crate::typer::getters::getter_type(t, self.cx.input.syms, of, i - captures))).filter(|&t| Some(t) != declared_ty);
+            let ret = match own {
+                Some(t) => self.erase(t),
+                None => self.sym_type(params[i]),
+            };
             let by_name = super::gen::clause_shape(clauses, i - captures).1.is_some();
             self.begin_method(true, false, &before, ret.clone(), &[d]);
             for &s in &captured {

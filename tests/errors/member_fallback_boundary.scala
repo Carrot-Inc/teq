@@ -1,7 +1,7 @@
 // A member that applies to its first argument list keeps its errors past that boundary: an
 // extension of the name takes over only from a member that cannot take the arguments, as scalac's
-// `tryInsertImplicitOnQualifier` has it. A missing given, an inline expansion's `error`, a
-// lambda's body, a later argument list, a block ending in a lambda typed against the parameter, a
+// `tryInsertImplicitOnQualifier` has it. A missing given, an inline expansion's `error` (the
+// inlining phase's, not run after these errors: member_fallback_inline_error), a lambda's body, a later argument list, a block ending in a lambda typed against the parameter, a
 // literal of an untyped parameter, which is its shape alone to the test (`x => "text"`). A
 // method's type parameter is a variable to the test (`Box[A]` takes a `Box[Int]`), type arguments
 // written leave no extension the call, and an argument typed against its parameter with an error
@@ -15,14 +15,14 @@
 // qualifier whose application fails opens no
 // conversion search.
 // expect: 88:19: error: no given instance of type Evidence was found for parameter x$2
-// expect: 89:11: error: member refused
+// absent: 89:11: error: member refused
 // expect: 90:22: error: value toLowerCase is not a member of Int
 // expect: 91:20: error: type mismatch: found "s", required Int
 // expect: 92:55: error: type mismatch: found String, required Int
 // expect: 93:22: error: type mismatch: found "text", required Int
 // expect: 94:30: error: no given instance of type Evidence was found
 // expect: 95:31: error: type mismatch: found "x", required Int
-// expect: 96:11: error: member refused
+// absent: 96:11: error: member refused
 // expect: 97:22: error: type mismatch: found "x", required Int
 // expect: 98:18: error: type mismatch: found "x", required Int
 // expect: 99:21: error: type mismatch: found "x"

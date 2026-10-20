@@ -1534,6 +1534,7 @@ mod tests {
         ("src/task/resident.rs", 2, "alloc::spawn for the thread that drains the resident's stderr; the other starts the resident"),
         ("src/task/runner.rs", 3, "alloc::spawn for the threads that drain the test runner's stderr and a retired runner's stdout; the other starts the runner's JVM"),
         ("src/typer/thread.rs", 1, "a builder for the stack's size; alloc::enter is the first statement of the closure"),
+        ("src/typer/inlining.rs", 1, "a builder for the inlining phase's workers' stack size, alloc::enter the first statement of each worker's closure"),
         ("src/typer/mod.rs", 2, "a builder for the stack's size, alloc::enter the first statement of each worker's closure; the merge's free of the other workers' variables' tables through spawn"),
         ("src/typer/loader/bodies.rs", 1, "a builder for the stack's size, alloc::enter the first statement of the closure"),
         ("src/watch.rs", 1, "alloc::spawn for the relay of a stdin that cannot be peeked, on Windows"),

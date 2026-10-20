@@ -21,6 +21,9 @@ use std::sync::Arc;
 
 /// scalac's default `-Xmax-inlines`; `--max-inlines` raises it.
 pub const MAX_INLINES: u32 = 32;
+
+/// scalac's default `-Xmax-inlined-trees`; `--max-inlined-trees` sets it.
+pub const MAX_INLINED_TREES: i64 = 2_000_000;
 /// The interpreter's budget for folding one argument.
 const FOLD_STEPS: u64 = 50_000;
 
@@ -30,6 +33,8 @@ impl InlineState {
     pub fn worker(main: &InlineState) -> InlineState {
         InlineState {
             max_depth: main.max_depth,
+            max_trees: main.max_trees,
+            retain_trees: main.retain_trees,
             production: main.production,
             outlines: main.outlines,
             es_modules: main.es_modules,
@@ -38,7 +43,7 @@ impl InlineState {
     }
 
     pub fn new() -> InlineState {
-        InlineState { max_depth: MAX_INLINES, ..Default::default() }
+        InlineState { max_depth: MAX_INLINES, max_trees: MAX_INLINED_TREES, ..Default::default() }
     }
 }
 
@@ -61,8 +66,21 @@ pub struct InlineState {
     /// How many expansions by substitution are under way, for the count of the calls a walk
     /// hands to the retype path (`substitution::counts`).
     pub walks: u32,
+    /// How many `Mode.ForceInline` positions enclose the typing or the walk under way (an `inline
+    /// if`'s condition, an `inline match`'s scrutinee), where a plain inline call met in a
+    /// transparent expansion expands in the typer (`Worker::defers_in_expansion`).
+    pub forcing: u32,
     /// The nesting limit, `MAX_INLINES` unless `--max-inlines` says otherwise.
     pub max_depth: u32,
+    /// The limit of the trees an outermost call's expansions inline, `MAX_INLINED_TREES` unless
+    /// `--max-inlined-trees` says otherwise (scalac's `-Xmax-inlined-trees`).
+    pub max_trees: i64,
+    /// The trees the expansions of the outermost call under way inlined (dotty's `InlinedTrees`
+    /// counter, a fresh one for each outermost call: `tpd.inlineContext`).
+    trees: i64,
+    /// `--retain-trees`, scalac's `-Yretain-trees`: a macro's `Symbol.tree` of a member of a class
+    /// or a package keeps its right-hand side (`Symbols.retainsDefTree`).
+    pub retain_trees: bool,
     /// The build's answers to Scala.js's link-time properties: `--release` and `--split`.
     pub production: bool,
     /// The build writes JavaScript, whose emitter outlines expansions of one shape: the typer
@@ -247,6 +265,8 @@ pub struct Expanding {
     erased: Option<TExprId>,
     retained: u32,
     checking: u32,
+    forcing: u32,
+    trees: i64,
     notes: Vec<super::inline_definition::Notes>,
     counting: u32,
     type_trees: Vec<(TExprId, TypeId)>,
@@ -290,6 +310,8 @@ impl InlineState {
             erased,
             retained,
             checking,
+            forcing,
+            trees,
             notes,
             counting,
             type_trees,
@@ -303,6 +325,8 @@ impl InlineState {
             arg_types,
             // The build's settings.
             max_depth: _,
+            max_trees: _,
+            retain_trees: _,
             production: _,
             outlines: _,
             es_modules: _,
@@ -350,6 +374,7 @@ impl InlineState {
             && *walks == 0
             && *retained == 0
             && *checking == 0
+            && *forcing == 0
             && notes.is_empty()
             && *counting == 0
             && type_trees.is_empty()
@@ -407,6 +432,8 @@ impl InlineState {
             erased: take(erased),
             retained: take(retained),
             checking: take(checking),
+            forcing: take(forcing),
+            trees: take(trees),
             notes: take(notes),
             counting: take(counting),
             type_trees: take(type_trees),
@@ -445,6 +472,8 @@ impl InlineState {
         self.erased = outer.erased;
         self.retained = outer.retained;
         self.checking = outer.checking;
+        self.forcing = outer.forcing;
+        self.trees = outer.trees;
         self.notes = outer.notes;
         self.counting = outer.counting;
         self.type_trees = outer.type_trees;
@@ -527,6 +556,15 @@ pub enum Intrinsic {
     TypeChecks,
     LinkTimeProperty,
     ConstructorOf,
+}
+
+impl Intrinsic {
+    /// Whether scalac 3.8.4 declares the method a plain `inline def` (`scala/compiletime/package.scala`),
+    /// whose call its typer leaves for `Inlining`: the others are transparent there, or no inline
+    /// method, or teq's own.
+    pub(super) fn is_plain_inline(self) -> bool {
+        matches!(self, Intrinsic::Error | Intrinsic::RequireConst | Intrinsic::ConstValueTuple | Intrinsic::SummonAll)
+    }
 }
 
 /// What `Worker::bind_inline_call` bound for one expansion, which `unbind_inline_call` undoes.
@@ -843,9 +881,24 @@ impl<'a> Worker<'a> {
                 return Some(self.failed_call(sym, ty));
             }
         }
-        if self.inline.depth >= self.inline.max_depth {
-            let msg = format!("Maximal number of successive inlines ({}) exceeded,\nMaybe this is caused by a recursive inline method?", self.inline.max_depth);
+        // An outermost call takes a counter of its own; a nested one is refused once the trees its
+        // root's expansions inlined pass the limit (`reachedInlinedTreesLimit`, `Inlines.scala` 183).
+        if self.inline.depth == 0 {
+            self.inline.trees = 0;
+        }
+        let trees_reached = self.inline.depth > 0 && self.inline.trees > self.inline.max_trees;
+        if self.inline.depth >= self.inline.max_depth || trees_reached {
+            let msg = if trees_reached {
+                format!("Maximal number of inlined trees ({}) exceeded,\nMaybe this is caused by a recursive inline method?", self.inline.max_trees)
+            } else {
+                format!("Maximal number of successive inlines ({}) exceeded,\nMaybe this is caused by a recursive inline method?", self.inline.max_depth)
+            };
             self.error(span, msg);
+            // At the outermost call (`(tree :: enclosingInlineds).last.srcPos`), each root's own:
+            // another root's overflow through the same inlined place is no repeat of it.
+            if let Some(d) = self.diags.items.last_mut() {
+                d.at_expansion = true;
+            }
             return Some((self.prog.add(TExpr::Unit), ERROR));
         }
         if checked.is_none() && self.syms.sym(sym).def.is_some() && self.is_abstract_member(sym) {
@@ -877,7 +930,10 @@ impl<'a> Worker<'a> {
             _ => {}
         }
         let body = self.inline_body(sym)?;
-        self.restrict_inline_call(sym, span);
+        // A call the inlining phase expands was refused where it was typed (`defer_plain_inline`).
+        if !(self.inlining.running && self.inline.depth == 0) {
+            self.restrict_inline_call(sym, span);
+        }
         self.inline.expansions += 1;
         // An inline forwarder's body is its export clause's, which an edit changes only through a
         // full build (`shape`): the expansion depends on the body of the member it forwards to, not
@@ -990,6 +1046,11 @@ impl<'a> Worker<'a> {
         }
         self.inline.sites.pop();
         self.inline.depth -= 1;
+        // What the expansion inlined counts towards its root's limit (`addInlinedTrees`,
+        // `Inliner.scala` 810), by 3.8.4's `treeSize` (765–779), which sums its children's sizes
+        // and counts no node of its own: 0 for every tree, so a limit of 0 or more never trips
+        // and a negative one trips at the first nested call, as scalac's does.
+        self.inline.trees += 0;
         self.truncate_tparams(tparam_mark);
         self.inline.outer_scopes.truncate(givens_mark);
         self.inline.body_imports = outer_imports;
@@ -1009,7 +1070,7 @@ impl<'a> Worker<'a> {
 
     /// The file of the member an inline forwarder `s` forwards to, through the forwarders it
     /// relays; none for what is no inline forwarder.
-    fn inline_forwarded_file(&self, s: SymId) -> Option<FileId> {
+    pub(super) fn inline_forwarded_file(&self, s: SymId) -> Option<FileId> {
         let mut at = s;
         for _ in 0..16 {
             if !self.is_inline_forwarder(at) {
@@ -1738,13 +1799,29 @@ impl<'a> Worker<'a> {
 
     /// `SymDenotation.isNoInitsRealClass`: a class or a module's, no trait, of which every base
     /// class runs no initialiser (`NoInits`).
-    fn no_inits_real_class(&mut self, c: ClassId) -> bool {
+    pub(super) fn no_inits_real_class(&mut self, c: ClassId) -> bool {
         if self.syms.class(c).kind == ClassKind::Trait {
             return false;
+        }
+        if self.is_assured_no_inits(c) {
+            return true;
         }
         self.complete_class(c);
         let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
         bases.into_iter().all(|b| self.class_no_inits(b))
+    }
+
+    /// `Definitions.isAssuredNoInits`: `Some`, a tuple class, and an object whose companion is one.
+    fn is_assured_no_inits(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        let assured = |k: ClassId| {
+            let path = self.class_path(k);
+            path == "scala.Some" || path.strip_prefix("scala.Tuple").is_some_and(|n| n.parse::<u32>().is_ok_and(|n| (1..=22).contains(&n))) // dotty's `Definitions.MaxTupleArity`, `isTupleClass`
+        };
+        if info.kind == ClassKind::Object {
+            return info.companion.is_some_and(|k| self.syms.class(k).kind != ClassKind::Object && assured(k));
+        }
+        assured(c)
     }
 
     /// Whether `b` runs no initialiser of its own (`NoInits`): `Any`, `AnyRef` and the parents a
@@ -1755,7 +1832,7 @@ impl<'a> Worker<'a> {
     /// `Namer` sets `NoInits` from the written body, which `Deriving`'s givens are not part of); a
     /// class read from a pickle as its template runs (`ClassInfo::read_no_inits`); any other class
     /// of a library is taken to run one.
-    fn class_no_inits(&self, b: ClassId) -> bool {
+    pub(super) fn class_no_inits(&self, b: ClassId) -> bool {
         let info = self.syms.class(b);
         if info.kind == ClassKind::Builtin || b == self.b.any_ref || self.is_desugared_parent(b) {
             return true;
@@ -1764,18 +1841,39 @@ impl<'a> Worker<'a> {
         if self.in_jar(info.file) {
             return info.read_no_inits;
         }
-        let Some(def) = info.def else { return false };
+        // An enum's companion holds the enum's value cases as vals (`Desugar.enumDef`'s `$new`
+        // vals and the `$values` array), whichever definition of its own it has (the derived
+        // givens' of a `derives` clause, a written one's): with a value case it runs them.
+        if info.kind == ClassKind::Object {
+            if let Some(e) = info.companion.filter(|&e| self.syms.class(e).kind == ClassKind::Enum) {
+                if self.syms.class(e).children.iter().any(|&k| self.syms.class(k).singleton.is_some()) {
+                    return false;
+                }
+            }
+        }
+        // A class with no definition of its own (a case class's companion `Desugar.classDef`
+        // makes, its `apply` and `unapply` alone) as its records hold it.
+        let Some(def) = info.def else { return super::elaborate::class_no_inits_recorded(&self.syms, b) };
         let ast = self.ast(info.file);
-        let crate::ast::DefKind::Class(cls) = &ast.def(def).kind else { return false };
+        let crate::ast::DefKind::Class(cls) = &ast.def(def).kind else { return super::elaborate::class_no_inits_recorded(&self.syms, b) };
         cls.parents.iter().all(|p| p.args.iter().all(|&(l, _)| l.len == 0))
             && cls.body.iter().all(|st| match st {
                 crate::ast::Stmt::Import(_) => true,
                 crate::ast::Stmt::Expr(_) => false,
                 crate::ast::Stmt::Def(d) => match &ast.def(*d).kind {
                     crate::ast::DefKind::Fun(_) | crate::ast::DefKind::TypeAlias { .. } => true,
-                    crate::ast::DefKind::Class(k) => k.kind != crate::ast::ClassKind::Object,
+                    crate::ast::DefKind::Class(k) => match k.kind {
+                        crate::ast::ClassKind::Object => false,
+                        // An enum's value case is a val of the companion's template
+                        // (`Desugar.enumDef`: `val And = $new(0, "And")`, with the `$values`
+                        // array), which initialises the companion, not the enum class.
+                        crate::ast::ClassKind::EnumCase if k.clauses.is_empty() => info.kind != ClassKind::Object,
+                        _ => true,
+                    },
                     crate::ast::DefKind::Val { rhs, .. } => rhs.is_none(),
-                    crate::ast::DefKind::Given(_) => ast.derived_givens.binary_search(d).is_ok(),
+                    // A given with parameters is a method (`Parsers.givenDef`); one without, a lazy
+                    // val with a right-hand side (`defKind`'s `ValDef`).
+                    crate::ast::DefKind::Given(g) => !g.clauses.is_empty() || ast.derived_givens.binary_search(d).is_ok(),
                 },
             })
     }
@@ -1892,7 +1990,7 @@ impl<'a> Worker<'a> {
     }
 
     /// The locals the frames of the current scope bind.
-    fn env_locals(&self) -> Vec<SymId> {
+    pub(super) fn env_locals(&self) -> Vec<SymId> {
         let mut out = Vec::new();
         for frame in &self.env.frames {
             if let Frame::Locals { names, givens, .. } = frame {
@@ -2294,17 +2392,22 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        // The typed view's copy (`Worker::typed_body`): each node as the typing left it, a call
+        // the phase expanded the call (`Inlining::journal`), and no call expanded for it.
+        let typed_view = self.inlining.typed_view;
         // A typed tree copied outside every expansion has its pending plain calls expanded first,
         // so that no copy keeps a call of an inline method; inside one,
         // the expansion's arguments were (`expand_pending_in`).
-        if self.inline.depth == 0 && self.attempts.pending_len() != 0 && !self.attempts.copying {
+        if !typed_view && self.inline.depth == 0 && self.attempts.pending_len() != 0 && !self.attempts.copying {
             self.attempts.copying = true;
             self.expand_pending_in(&[e]);
             self.attempts.copying = false;
         }
-        let ty = self.prog.expr_types.get(e.0).unwrap_or(NO_TYPE);
+        let journaled = typed_view && self.inlining.journal.contains_key(&e);
+        let ty = if typed_view { self.typed_type_of(e).unwrap_or(NO_TYPE) } else { self.prog.expr_types.get(e.0).unwrap_or(NO_TYPE) };
+        let record = if typed_view { self.typed_expr(e) } else { self.prog.expr(e) };
         let mut carries_chain = false;
-        let copied = match self.prog.expr(e) {
+        let copied = match record {
             TExpr::Int(_)
             | TExpr::Long(_)
             | TExpr::Double(_)
@@ -2320,7 +2423,7 @@ impl<'a> Worker<'a> {
             | TExpr::ClassOf(..)
             | TExpr::JsImport(_)
             | TExpr::JsGlobal(..)
-            | TExpr::Null => self.prog.expr(e),
+            | TExpr::Null => record,
             TExpr::Field(r, s) => TExpr::Field(self.copy_expr(r), s),
             TExpr::CallStatic(s, args) => TExpr::CallStatic(s, self.copy_list(args)),
             TExpr::CallMethod(r, s, args) => {
@@ -2413,6 +2516,10 @@ impl<'a> Worker<'a> {
             (Some((from, to)), Some(at)) if at == from => self.prog.set_span(id, to.0, to.1),
             _ => self.prog.copy_span(e, id),
         }
+        // A call the phase expanded carries the expansion's marks, which its typed record has not.
+        if journaled {
+            return id;
+        }
         if self.inline.evaluated.contains_key(&e) {
             self.inline.evaluated.insert(id, ());
         }
@@ -2439,6 +2546,13 @@ impl<'a> Worker<'a> {
         }
         if self.prog.is_ascribed(e) {
             self.prog.mark_ascribed(id);
+        }
+        if self.prog.is_tuple_index(e) {
+            self.prog.mark_tuple_index(id);
+        }
+        // The typed view's copy is reflection's to read, no part of the program.
+        if typed_view {
+            return id;
         }
         // A pending call's copy in an expansion is pending in its turn (`pend_copy`).
         if self.inline.depth > 0 && self.attempts.pending_len() != 0 && self.is_pending_call(e) {
@@ -3150,7 +3264,10 @@ impl<'a> Worker<'a> {
         if self.inline.depth == 0 && !retained {
             self.error(span, "inline if can only be used in an inline method");
         }
+        // The condition is typed under `Mode.ForceInline` (`InlineTyper.typedIf`).
+        self.inline.forcing += 1;
         let (raw, cond_ty) = self.type_expr(c, Some(self.b.t_boolean));
+        self.inline.forcing -= 1;
         let tc = self.adapt(raw, cond_ty, self.b.t_boolean, self.cur_ast().expr_span(c));
         // scalac reduces on a condition of a literal type too (`valueOf[debug]`), keeping the
         // condition before the branch it selects.
@@ -3228,7 +3345,10 @@ impl<'a> Worker<'a> {
             return self.type_match(scrut, cases, span, expected);
         }
         let ast = self.cur_ast();
+        // The scrutinee is typed under `Mode.ForceInline` (`InlineTyper.typedMatchFinish`).
+        self.inline.forcing += 1;
         let (ts, sty) = self.type_expr(scrut, None);
+        self.inline.forcing -= 1;
         let sty = self.solve_in(sty);
         let constant = self.fold_constant(ts).or_else(|| self.fold_type(sty));
         // A scrutinee with an `erasedValue` anywhere in it is erased (`existsSubTree(_.symbol.isErased)`).
@@ -3785,6 +3905,9 @@ impl<'a> Worker<'a> {
                 let r = self.prog.add_str(&text);
                 Some((self.prog.add(TExpr::Str(r)), self.b.t_string))
             }
+            // scalac's `requireConst` is a plain inline method: a call the typer keeps is checked
+            // where the inlining phase expands it (`defers_plain_inline`).
+            Intrinsic::RequireConst if self.inline.depth == 0 && self.defers_plain_inline(sym) => None,
             Intrinsic::RequireConst => {
                 let (te, _) = self.type_expr(arg, None);
                 // A plain call it holds pending is expanded for the check.
@@ -4036,6 +4159,30 @@ impl<'a> Worker<'a> {
         (self.prog.add(TExpr::Unit), ERROR)
     }
 
+    /// The environment of the place an expansion under way stands at, over the outermost call's
+    /// site `env`: the scopes the expanded bodies open around it nearer than the site's, each with
+    /// the givens it defines and the imports it holds, as the block that holds them does
+    /// (`{ given Int = 7; summonInline[Int] }` is 7 wherever it expands, `{ import V.*; given Int
+    /// = 8; summonInline[Int] }` ambiguous where `V` has an implicit `Int`); and those scopes.
+    pub(super) fn expansion_site_env(&mut self, env: &Env) -> (Env, Vec<BodyScope>) {
+        let mut env = env.clone();
+        let mut scopes = self.inline.outer_scopes.clone();
+        scopes.extend(self.body_scopes());
+        // The expanded code is the site's owner's, as scalac's inlined trees are.
+        let site_owner = env.frames.last().map_or(0, |f| match f {
+            Frame::Locals { owner, .. } => *owner,
+            Frame::Class(_) => u32::MAX,
+        });
+        for scope in &scopes {
+            env.frames.push(Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: scope.givens.clone(), classes: Vec::new(), aliases: Vec::new(), owner: site_owner });
+            let at = env.imports.len();
+            for &imp in &scope.imports {
+                env.push_import(at, imp);
+            }
+        }
+        (env, scopes)
+    }
+
     /// A given for `t` found where the outermost inline call stands, which is where scalac
     /// expands the body and runs its searches.
     pub fn summon_at_site(&mut self, t: TypeId, span: Span) -> Option<(TExprId, TypeId)> {
@@ -4053,26 +4200,7 @@ impl<'a> Worker<'a> {
         let found = match self.inline.site_env.clone() {
             Some(env) => {
                 let site_span = self.inline.sites.first().map_or(span, |s| s.span);
-                let mut env = (*env).clone();
-                // The scopes the expanded bodies open around the call stand nearer than the
-                // site's, each with the givens it defines and the imports it holds, as the
-                // block that holds them does: `{ given Int = 7; summonInline[Int] }` is 7
-                // wherever it expands, `{ import V.*; given Int = 8; summonInline[Int] }`
-                // ambiguous where `V` has an implicit `Int`.
-                let mut scopes = self.inline.outer_scopes.clone();
-                scopes.extend(self.body_scopes());
-                // The expanded code is the site's owner's, as scalac's inlined trees are.
-                let site_owner = env.frames.last().map_or(0, |f| match f {
-                    Frame::Locals { owner, .. } => *owner,
-                    Frame::Class(_) => u32::MAX,
-                });
-                for scope in &scopes {
-                    env.frames.push(Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: scope.givens.clone(), classes: Vec::new(), aliases: Vec::new(), owner: site_owner });
-                    let at = env.imports.len();
-                    for &imp in &scope.imports {
-                        env.push_import(at, imp);
-                    }
-                }
+                let (env, scopes) = self.expansion_site_env(&env);
                 // An expansion the search makes (an inline given) stands in those scopes too,
                 // which the search's environment holds rather than the body's frames.
                 let outer_scopes = std::mem::replace(&mut self.inline.outer_scopes, scopes);
@@ -4405,7 +4533,16 @@ impl<'a> Worker<'a> {
                             .first()
                             .map_or((self.env.file, span), |s| (s.file, if s.at_end { Span { start: s.span.end, end: s.span.end } } else { s.span }));
                         let late = self.reports_late();
-                        self.diags.error(file, at, msg);
+                        // The call a definition's check made of a literal index past a tuple's
+                        // elements (`deferred_index_error`) stands for `TupleOptimizations`' check,
+                        // after `Inlining`, which the index typed where it is written reports late:
+                        // told by its message's mark (`Program::tuple_index_bits`), which a copy
+                        // keeps, not by the message.
+                        if arg.is_some_and(|a| self.prog.is_tuple_index(a)) {
+                            self.diags.late_error_of(file, at, msg, crate::source::PHASE_TUPLE_OPTIMIZATIONS);
+                        } else {
+                            self.diags.error(file, at, msg);
+                        }
                         if late {
                             self.note_late();
                         }

@@ -611,6 +611,9 @@ pub struct InlineDefinition {
     pub spread: Vec<TExprId>,
     /// The body's ascriptions `Program::ascribed_bits` marks, which its copies keep.
     pub ascribed: Vec<TExprId>,
+    /// The messages of the body's checks of a tuple's index `Program::tuple_index_bits` marks,
+    /// which its copies keep.
+    pub tuple_index: Vec<TExprId>,
     /// The body's calls of `erasedValue`, scala-library's a plain method: each copy an expansion
     /// makes is an erased value as the call is (`Erasure.checkNotErased`), which the unit's end
     /// reports where the trees keep it (`Worker::erased_values`).
@@ -1178,6 +1181,14 @@ pub struct Program {
     /// call written `c.x_=(v)` is an application (dotty's `Typer.typedAssign`), which the trees a
     /// macro sees, the pickle and the dependencies tell apart.
     pub setter_assign_bits: Bits,
+    /// The messages of the `compiletime.error` calls a definition's check makes of a literal index
+    /// past a tuple's elements (`Worker::deferred_index_error`), as bits by expression, which their
+    /// copies keep: what reports such a call's error as `TupleOptimizations`', after `Inlining`.
+    pub tuple_index_bits: Bits,
+    /// The plain inline calls the typer kept for the inlining phase, as bits by expression,
+    /// published with their records: what tells another worker's interpreter that a body it is
+    /// about to run holds a call no expansion replaced yet (`Worker::prepare_executable`).
+    pub kept_bits: Bits,
     /// What an expansion took from its call site rather than from the body, as bits by
     /// expression: the arguments bound to the parameters, the receiver, the constants of
     /// `constValue` and the givens found. Where such an expression does not name a local of the
@@ -1195,6 +1206,15 @@ pub struct Program {
     /// behind them moves down and the file's are typed onto the end, so a position or a count
     /// over these lists from before is stale while the lengths are what they were.
     pub shifts: u32,
+    /// `shifts` where the build under way began (a session's retype, `retype_files`): the shifts
+    /// after it are the inlining phase's retypes of the build's own suspended files.
+    pub build_start: u32,
+    /// The runs the inlining phase made after the build's first (`Worker::inlining_phase`'s rounds):
+    /// a macro's first run in a later one makes the program's objects anew, and from the third run
+    /// on the classpath's too, as dotty's third and each later run take a macro class loader of
+    /// their own over the classpath and the earlier runs' output (`Driver.finish`,
+    /// `MacroClassLoader.init`; `interp::loader_generation`).
+    pub runs: u32,
     /// Whether a function is a local trait's lifted member (`TFun::lifted`), shared with the
     /// workers' programs: the interpreter looks for one at a call only then.
     pub lifted_funs: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -1336,6 +1356,8 @@ impl Program {
         self.spread_bits.fork();
         self.ascribed_bits.fork();
         self.setter_assign_bits.fork();
+        self.tuple_index_bits.fork();
+        self.kept_bits.fork();
         self.file_tags.fork();
         #[cfg(debug_assertions)]
         self.follow_escapes();
@@ -1351,7 +1373,7 @@ impl Program {
             let own_base = self.exprs.own_base();
             self.expr_types.follow_escapes(marks.clone(), own_base);
             self.expr_spans.follow_escapes(marks.clone(), own_base);
-            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.setter_assign_bits] {
+            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.setter_assign_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
                 bits.follow_escapes(marks.clone(), own_base);
             }
         }
@@ -1406,6 +1428,8 @@ impl Program {
             get_class_units: Vec::new(),
             local_enum_names: Vec::new(),
             shifts: 0,
+            build_start: 0,
+            runs: 0,
             lifted_funs: self.lifted_funs.clone(),
             block_class_traits: self.block_class_traits.clone(),
             template_syms: self.template_syms.attach(),
@@ -1426,6 +1450,8 @@ impl Program {
             spread_bits: Bits::attach(self.spread_bits.shared_arc(), worker),
             ascribed_bits: Bits::attach(self.ascribed_bits.shared_arc(), worker),
             setter_assign_bits: Bits::attach(self.setter_assign_bits.shared_arc(), worker),
+            tuple_index_bits: Bits::attach(self.tuple_index_bits.shared_arc(), worker),
+            kept_bits: Bits::attach(self.kept_bits.shared_arc(), worker),
             leaf_bits: Bits::attach(self.leaf_bits.shared_arc(), worker),
             leaf_tests: FxMap::default(),
             stored_tests: FxMap::default(),
@@ -1509,6 +1535,8 @@ impl Default for Program {
             get_class_units: Vec::new(),
             local_enum_names: Vec::new(),
             shifts: 0,
+            build_start: 0,
+            runs: 0,
             lifted_funs: Default::default(),
             block_class_traits: Default::default(),
             template_syms: Default::default(),
@@ -1529,6 +1557,8 @@ impl Default for Program {
             spread_bits: Bits::default(),
             ascribed_bits: Bits::default(),
             setter_assign_bits: Bits::default(),
+            tuple_index_bits: Bits::default(),
+            kept_bits: Bits::default(),
             leaf_bits: Bits::default(),
             leaf_tests: FxMap::default(),
             stored_tests: FxMap::default(),
@@ -1840,6 +1870,26 @@ impl Program {
     #[inline(always)]
     pub fn is_setter_assign(&self, e: TExprId) -> bool {
         self.setter_assign_bits.has(e.0)
+    }
+
+    /// Marks `e` as `tuple_index_bits` says.
+    pub fn mark_tuple_index(&mut self, e: TExprId) {
+        self.tuple_index_bits.set(e.0);
+    }
+
+    #[inline(always)]
+    pub fn is_tuple_index(&self, e: TExprId) -> bool {
+        self.tuple_index_bits.has(e.0)
+    }
+
+    /// Marks `e` as a plain inline call kept for the inlining phase (`kept_bits`).
+    pub fn mark_kept(&mut self, e: TExprId) {
+        self.kept_bits.set(e.0);
+    }
+
+    #[inline(always)]
+    pub fn is_kept(&self, e: TExprId) -> bool {
+        self.kept_bits.has(e.0)
     }
 
     /// Whether `e` is an operand of its own where it heads a chain of `+`.

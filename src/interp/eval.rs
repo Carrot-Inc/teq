@@ -30,7 +30,16 @@ impl<'a, 't> Interp<'a, 't> {
             super::process::check_signal(self)?;
             return super::threads::quantum(self);
         }
-        Err(Control::Fail(if self.halted { Failure::Withheld } else { Failure::Budget }))
+        Err(Control::Fail(if self.halted { self.halt_failure() } else { Failure::Budget }))
+    }
+
+    /// Why a halted run stopped: a withheld body, or its unit's suspension.
+    pub(super) fn halt_failure(&self) -> Failure {
+        if self.suspended {
+            Failure::Suspended
+        } else {
+            Failure::Withheld
+        }
     }
 
     /// The numeric kind the static type of `e` asks for, where the typer left a widening
@@ -542,6 +551,9 @@ impl<'a, 't> Interp<'a, 't> {
                     let tc = &self.prog().classes[ti];
                     (tc.ctor_params.clone(), tc.ctor_defaults.get(tc.captures + index).copied().flatten(), tc.captures)
                 };
+                // A getter completed after the class's record was made, on another worker or by a
+                // call, read from the getter itself (`Worker::default_tree`).
+                let default = default.or_else(|| self.typer.default_tree(DefaultOf::Ctor(c), index));
                 let Some(d) = default else {
                     let name = self.class_path(c);
                     return self.unsupported(format!("{} has no default for its parameter {}", name, index + 1));
@@ -566,6 +578,7 @@ impl<'a, 't> Interp<'a, 't> {
                     let fun = &self.prog().funs[f.idx()];
                     (fun.params.clone(), fun.defaults.get(index).copied().flatten())
                 };
+                let default = default.or_else(|| self.typer.default_tree(DefaultOf::Method(s), index));
                 let Some(d) = default else {
                     let name = self.qualified_name(s);
                     return self.unsupported(format!("{} has no default for its parameter {}", name, index + 1));
@@ -599,7 +612,8 @@ impl<'a, 't> Interp<'a, 't> {
                 self.default_target(s, index, recv, on_super, fr, cx)?
             }
         };
-        let Some(d) = self.prog().funs[f.idx()].defaults.get(from).copied().flatten() else {
+        let own = self.prog().funs[f.idx()].sym;
+        let Some(d) = self.prog().funs[f.idx()].defaults.get(from).copied().flatten().or_else(|| self.typer.default_tree(DefaultOf::Method(own), from)) else {
             let name = self.qualified_name(self.prog().funs[f.idx()].sym);
             return self.unsupported(format!("{} has no default for its parameter {}", name, from + 1));
         };
@@ -1147,7 +1161,9 @@ impl<'a, 't> Interp<'a, 't> {
             return self.withheld_reached();
         }
         self.halt_on_withheld()?;
-        let Some(body) = self.exec_body(f) else {
+        // The body its unit's code was lowered from, which `exec_body` prepared first; a call that
+        // finds no code prepares it below (`prepare_unlowered`).
+        let Some(body) = self.prog().funs[f.idx()].body else {
             let sym = self.prog().funs[f.idx()].sym;
             let name = self.qualified_name(sym);
             return self.unsupported(format!("{} is abstract", name));
@@ -1182,7 +1198,10 @@ impl<'a, 't> Interp<'a, 't> {
                 let (tail, proxied) = (c.tail, c.proxies != 0);
                 (Some(c), tail, 0, proxied)
             }
-            None => self.unit_miss(f, body, &args),
+            None => {
+                self.prepare_unlowered(f);
+                self.unit_miss(f, body, &args)
+            }
         };
         let mut cx = Ctx { this, def_key: key, class, tail };
         let mut args = args;
@@ -1257,7 +1276,9 @@ impl<'a, 't> Interp<'a, 't> {
                 continue;
             }
             if let Value::Absent = v {
-                v = match self.prog().funs[f.idx()].defaults[i] {
+                let own = self.prog().funs[f.idx()].sym;
+                let d = self.prog().funs[f.idx()].defaults[i].or_else(|| self.typer.default_tree(DefaultOf::Method(own), i));
+                v = match d {
                     Some(d) => self.eval(d, &frame, cx)?,
                     None => Value::Unit,
                 };
@@ -1276,6 +1297,13 @@ impl<'a, 't> Interp<'a, 't> {
     pub(super) fn note_withheld(&mut self) {
         if self.typer.withheld_met != self.withheld_seen {
             self.withheld_seen = self.typer.withheld_met;
+            self.halted = true;
+            self.exec.steps = 0;
+        }
+        // A definition of a unit its round has not completed stops the run as well
+        // (`Worker::run_suspends`).
+        if self.typer.inlining.run_suspended && !self.suspended {
+            self.suspended = true;
             self.halted = true;
             self.exec.steps = 0;
         }
@@ -1306,7 +1334,7 @@ impl<'a, 't> Interp<'a, 't> {
     pub(super) fn halt_on_withheld(&mut self) -> R<()> {
         self.note_withheld();
         if self.halted {
-            return Err(Control::Fail(Failure::Withheld));
+            return Err(Control::Fail(self.halt_failure()));
         }
         Ok(())
     }

@@ -1,0 +1,7 @@
+(List(1, 2),None)
+(List(),Some(NOT A NUMBER: X))
+List(1)
+List(y, x)
+None
+3
+Any

@@ -429,6 +429,23 @@ pub(super) fn declaration_of(tables: &crate::ast::ReaderTables, e: ExprId) -> Op
     tables.decls.get(&e).copied()
 }
 
+/// A step of the view a member's signature is seen through from the call's receiver, recorded as
+/// `apply_method_in_now` takes it and replayed for a default getter's signature (`replay_sig_view`):
+/// `Applications.tryDefault` selects the getter on the same qualifier (`TermRef(qual.tpe,
+/// getterName)`), so `asSeenFrom` applies to its type as to the member's.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ViewStep {
+    /// A nested class's constructor through the prefix of its creation (`ctor_sig_through`).
+    Through(TypeId, ClassId),
+    /// Seen from the receiver's prefix, with the stand-in inserted (`sig_seen_as`).
+    SeenAs(TypeId, TypeId, SymId),
+    /// An inner class's member: the enclosing class's `this` seen from the outer instance
+    /// (`sig_seen_from_outer`).
+    Outer(TypeId, ClassId),
+    /// A leftover `Outer.this` seen from the enclosing instance (`sig_seen_from_enclosing`).
+    Enclosing,
+}
+
 #[derive(Clone)]
 pub struct MethodCall {
     pub recv: Option<TExprId>,
@@ -4486,10 +4503,10 @@ impl<'a> Worker<'a> {
                     })
                 })
                 .collect();
-            return self.construct_overloaded(c, primary, secondaries, targs, lists, span, expected);
+            return self.construct_overloaded(c, primary, secondaries, prefix, targs, lists, span, expected);
         }
         let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
-        let (mut te, precise) = self.apply_method(call, Some((c, sig)), targs, lists, span, expected, false).unwrap();
+        let (mut te, precise) = self.apply_method(call, Some((c, sig, prefix)), targs, lists, span, expected, false).unwrap();
         if self.syms.class(c).js == JsKind::Native {
             if let TExpr::New(_, args) = self.prog.expr(te) {
                 let args = self.native_ctor_args(c, args);
@@ -4512,6 +4529,20 @@ impl<'a> Worker<'a> {
         (te, widened)
     }
 
+    /// The signature `sig` seen through the steps `view` (`ViewStep`), as the call's member's was.
+    pub(super) fn replay_sig_view(&mut self, sig: Arc<MethodSig>, view: &[ViewStep]) -> Arc<MethodSig> {
+        let mut sig = sig;
+        for &step in view {
+            sig = match step {
+                ViewStep::Through(prefix, c) => self.ctor_sig_through(sig, prefix, c),
+                ViewStep::SeenAs(prefix, inserted, member) => self.sig_seen_as(sig, prefix, inserted, member),
+                ViewStep::Outer(path, outer) => self.sig_seen_from_outer(sig, path, outer),
+                ViewStep::Enclosing => self.sig_seen_from_enclosing(sig),
+            };
+        }
+        sig
+    }
+
     /// A constructor's signature for an instance of the inner class `c` made through `prefix`
     /// (`new o.I(a)`): its parameters and its result seen from the prefix, the constructor of
     /// dotty's `o.I` (`outer_seen_from`).
@@ -4529,7 +4560,7 @@ impl<'a> Worker<'a> {
     pub fn apply_method(
         &mut self,
         call: MethodCall,
-        ctor: Option<(ClassId, Arc<MethodSig>)>,
+        ctor: Option<(ClassId, Arc<MethodSig>, Option<TypeId>)>,
         targs: Option<ListRef>,
         lists: Vec<ArgList>,
         span: Span,
@@ -4629,7 +4660,7 @@ impl<'a> Worker<'a> {
     fn apply_method_in(
         &mut self,
         call: MethodCall,
-        ctor: Option<(ClassId, Arc<MethodSig>)>,
+        ctor: Option<(ClassId, Arc<MethodSig>, Option<TypeId>)>,
         targs: Option<ListRef>,
         lists: Vec<ArgList>,
         span: Span,
@@ -4662,9 +4693,9 @@ impl<'a> Worker<'a> {
     /// The plan of an application of `sym`, or of the constructor `ctor` names.
     #[cold]
     #[inline(never)]
-    fn call_plan(&self, ctor: &Option<(ClassId, Arc<MethodSig>)>, sym: SymId, sig: &Arc<MethodSig>) -> super::elaborate::CallPlan {
+    fn call_plan(&self, ctor: &Option<(ClassId, Arc<MethodSig>, Option<TypeId>)>, sym: SymId, sig: &Arc<MethodSig>) -> super::elaborate::CallPlan {
         let of = match ctor {
-            Some((c, _)) => DefaultOf::Ctor(*c),
+            Some((c, _, _)) => DefaultOf::Ctor(*c),
             None => DefaultOf::Method(sym),
         };
         super::elaborate::CallPlan::new(of, sig.clone(), self.annotation_args)
@@ -4673,7 +4704,7 @@ impl<'a> Worker<'a> {
     fn apply_method_in_now(
         &mut self,
         call: MethodCall,
-        ctor: Option<(ClassId, Arc<MethodSig>)>,
+        ctor: Option<(ClassId, Arc<MethodSig>, Option<TypeId>)>,
         targs: Option<ListRef>,
         lists: Vec<ArgList>,
         span: Span,
@@ -4689,11 +4720,21 @@ impl<'a> Worker<'a> {
             }
         }
         let mut stand_in: Option<(TParamId, TypeId)> = None;
+        // The steps the member's signature is seen through, replayed for a default getter's
+        // (`ViewStep`).
+        let mut view: Vec<ViewStep> = Vec::new();
         let sig = match &ctor {
             // The constructor of a class nested in a class names the outer class's `this`,
             // the enclosing instance deriving from it where it is constructed or extended.
-            Some((c, s)) if self.loaded.is_some() && self.class_in_class(*c) => self.sig_seen_from_enclosing(s.clone()),
-            Some((_, s)) => s.clone(),
+            Some((c, s, p)) if self.loaded.is_some() && self.class_in_class(*c) => {
+                view.extend(p.map(|p| ViewStep::Through(p, *c)));
+                view.push(ViewStep::Enclosing);
+                self.sig_seen_from_enclosing(s.clone())
+            }
+            Some((c, s, p)) => {
+                view.extend(p.map(|p| ViewStep::Through(p, *c)));
+                s.clone()
+            }
             None if call.refined.is_some() => call.refined.clone().expect("the refined signature"),
             None => match call.prefix {
                 Some(prefix) => {
@@ -4709,12 +4750,17 @@ impl<'a> Worker<'a> {
                         }
                         None => prefix,
                     };
+                    view.push(ViewStep::SeenAs(prefix, inserted, call.sym));
                     let sig = self.sig_seen_as(sig, prefix, inserted, call.sym);
                     if self.member_of_inner_class(call.sym) {
                         let sig = match call.recv.and_then(|r| self.outer_prefixes.get(&r).cloned()) {
-                            Some(steps) => steps.into_iter().fold(sig, |sig, (outer, path)| self.sig_seen_from_outer(sig, path, outer)),
+                            Some(steps) => steps.into_iter().fold(sig, |sig, (outer, path)| {
+                                view.push(ViewStep::Outer(path, outer));
+                                self.sig_seen_from_outer(sig, path, outer)
+                            }),
                             None => sig,
                         };
+                        view.push(ViewStep::Enclosing);
                         self.sig_seen_from_enclosing(sig)
                     } else {
                         sig
@@ -4867,13 +4913,16 @@ impl<'a> Worker<'a> {
         } else {
             None
         };
-        if let (Some(idx), Some((_, recv_ty))) = (recv_clause, call.ext_recv) {
+        if let (Some(idx), Some((recv, recv_ty))) = (recv_clause, call.ext_recv) {
             let pty = self.types.subst(sig.clauses[idx].params[0].ty, &subst);
             // Through a leading using parameter the receiver's type is open until that given is
             // found (`receiver_param_type`).
             let leading: Vec<SymId> = sig.clauses[..idx].iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
             let pty = self.approx_paths(pty, &leading, &mut Vec::new());
             let mark = self.snapshot();
+            // The receiver is the extension's first argument, a path's type compared as the
+            // path's (`extMethodApply`'s `receiver`).
+            self.alias_bound_as_path = self.is_stable_path(recv);
             if !self.is_sub(recv_ty, pty) {
                 self.rollback(mark);
                 if trial {
@@ -5045,7 +5094,7 @@ impl<'a> Worker<'a> {
                     let outer = std::mem::replace(&mut self.note_paths, dependent);
                     let is_java = self.is_java_method(call.sym);
                     let java = std::mem::replace(&mut self.java_varargs, is_java);
-                    let mut written = super::elaborate::ClauseArgs { inherit: ctor.is_none().then_some((call.sym, first_arg)), ..Default::default() };
+                    let mut written = super::elaborate::ClauseArgs { inherit: ctor.is_none().then_some((call.sym, first_arg)), getters: Some((ctor.as_ref().map_or(DefaultOf::Method(call.sym), |(c, _, _)| DefaultOf::Ctor(*c)), first_arg)), view: view.clone(), ..Default::default() };
                     self.type_clause_args_planned(clause, list, &subst, &mut args_out, Some(&mut written), false);
                     self.java_varargs = java;
                     if written.planned() {
@@ -5165,7 +5214,7 @@ impl<'a> Worker<'a> {
                                 let tag_at_call = missing_tag.is_some() && ctor.is_none() && self.syms.sym(call.sym).jvm_evidence;
                                 let target = self.solve_bounded_in(target);
                                 let msg = self.given_ambiguity.take().or(missing_tag);
-                                let msg = msg.or_else(|| self.param_not_found_message(call.sym, ctor.as_ref().map(|&(c, _)| c), p.sym, p.name, &subst));
+                                let msg = msg.or_else(|| self.param_not_found_message(call.sym, ctor.as_ref().map(|&(c, _, _)| c), p.sym, p.name, &subst));
                                 let msg = match msg.or_else(|| self.implicit_not_found_message(target)) {
                                     Some(m) => m,
                                     None => format!("no given instance of type {} was found for parameter {}", self.show(target), self.name_str(p.name)),
@@ -5189,7 +5238,7 @@ impl<'a> Worker<'a> {
                     }
                     if !defaulted.is_empty() {
                         let order: Vec<usize> = (0..clause.params.len()).filter(|k| !defaulted.contains(k)).collect();
-                        let written = super::elaborate::ClauseArgs { inherit: None, omitted: defaulted, order };
+                        let written = super::elaborate::ClauseArgs { inherit: None, getters: None, omitted: defaulted, order, ..Default::default() };
                         let p = plan.get_or_insert_with(|| self.call_plan(&ctor, call.sym, &sig));
                         self.elaborate_written(p, &mut call.recv, &mut args_out, clause_first, &written, clause, &subst, span);
                     }
@@ -5223,7 +5272,7 @@ impl<'a> Worker<'a> {
                     let before = self.diags.items.len();
                     let is_java = self.is_java_method(call.sym);
                     let java = std::mem::replace(&mut self.java_varargs, is_java);
-                    let mut written = super::elaborate::ClauseArgs { inherit: ctor.is_none().then_some((call.sym, first_arg)), ..Default::default() };
+                    let mut written = super::elaborate::ClauseArgs { inherit: ctor.is_none().then_some((call.sym, first_arg)), getters: Some((ctor.as_ref().map_or(DefaultOf::Method(call.sym), |(c, _, _)| DefaultOf::Ctor(*c)), first_arg)), view: view.clone(), ..Default::default() };
                     self.type_clause_args_planned(clause, list, &subst, &mut args_out, Some(&mut written), false);
                     self.java_varargs = java;
                     if written.planned() {
@@ -5487,11 +5536,30 @@ impl<'a> Worker<'a> {
         // the call's type arguments): `p.tail` of scala-library's `tail[This >: this.type]`.
         // Named so, an inline one has no interpolation of its own either: its type arguments are
         // defined fully under `ForceDegree.flipBottom` (`Inliner`), one nothing bounds below taking
-        // its upper bound (`meth[R <: Int]: R` expected an `Int` is `meth[Int]`, i7798).
+        // its upper bound (`meth[R <: Int]: R` expected an `Int` is `meth[Int]`, i7798). A plain one
+        // the typer keeps for the inlining phase is an ordinary call until it expands there
+        // (`Inlines.needsInlining` false in the typer): its variables stay open for the trees
+        // around, as cats-mtl's `allow[E]: AdHocSyntaxWired[E]` takes `E` from the body applied to it,
+        // but one its type does not name, which the interpolation of the call's tree instantiates
+        // from above where nothing bounds it below (`Inferencing.instantiateTypeVars`, variance 0:
+        // `fromBelow = tvar.hasLowerBound`), the expansion's type argument.
         let poly_ref = normal_clauses == 0 && ctor.is_none() && sig.clauses.is_empty() && !sig.tparams.is_empty();
-        if poly_ref && inline_callee {
+        let kept_inline = poly_ref
+            && inline_callee
+            && !self.keeps_inline_calls()
+            && self.unadapted_call != Some((self.env.file, span))
+            && self.defers_plain_inline(call.sym)
+            && !self.types.contains_error(ret_ty);
+        if poly_ref && inline_callee && !kept_inline {
             self.maximize_bottom_from(first_var);
         } else if poly_ref {
+            if kept_inline {
+                let mut named = Vec::new();
+                let ret = self.zonk(ret_ty);
+                self.collect_vars(ret, &mut named);
+                let absent: Vec<TVarId> = (first_var..self.tvars.len()).map(|i| self.tvars.id(i)).filter(|v| !named.contains(v)).collect();
+                self.maximize_bottom(absent);
+            }
             self.leave_vars_open(first_var, ret_ty);
             self.unsimplified = true;
         }
@@ -5502,7 +5570,7 @@ impl<'a> Worker<'a> {
         let mut ty = ret_ty;
         self.inline.record_args = outer_recording;
         let mut te = match &ctor {
-            Some((c, _)) => self.new_instance(*c, l, span),
+            Some((c, _, _)) => self.new_instance(*c, l, span),
             None if inline_callee && self.keeps_inline_calls() => {
                 self.inline.arg_types = outer_arg_types;
                 let te = self.build_call(&call, l);
@@ -5963,20 +6031,40 @@ impl<'a> Worker<'a> {
     /// typed, kept only where it holds; the open variable an expected variable is, for the
     /// bounds to conform to once the arguments are in. A result that holds only with its
     /// wildcards captured becomes the captured type.
+    /// `ProtoTypes.normalize`'s last case for a result compared with a prototype: a context
+    /// function type is followed to its result where the prototype is no context function type
+    /// (`followIFT = !defn.isContextFunctionType(pt)`), as `constrainResult`'s
+    /// `necessarilyCompatible` normalizes the result before `necessarySubType`: cats-mtl's
+    /// `allow: prepare(x)` has `prepare(x): Raise[Fu, E] ?=> Fu[A]` against the body's `?F[?A]`,
+    /// which binds `F` to `Fu`; the application to the givens is the adaptation's
+    /// (`adaptNoArgsOther`), in the scope of the contextual lambda that wraps the argument.
+    fn normalized_for_proto(&mut self, ret: TypeId, pt: TypeId) -> TypeId {
+        if self.as_context_function(pt).is_some() {
+            return ret;
+        }
+        let mut t = ret;
+        while let Some((_, r)) = self.as_context_function(t) {
+            t = r;
+        }
+        t
+    }
+
     fn constrain_result_by_expected(&mut self, ret: &mut TypeId, expected: Option<TypeId>) -> Option<TVarId> {
         let ret_ty = *ret;
         if let Some(exp) = self.concrete_expected(expected) {
             if exp != self.b.t_unit && exp != ANY {
                 let mark = self.snapshot();
                 let outer = std::mem::replace(&mut self.necessary_either, true);
-                let mut ok = self.is_sub(ret_ty, exp);
+                let compared = self.normalized_for_proto(ret_ty, exp);
+                let mut ok = self.is_sub(compared, exp);
                 if !ok && self.types.has_vars(exp) {
                     // A wildcard argument of the result (`Collector[T, ?, List[T]]` against an
                     // enclosing call's `Collector[? >: String, A, R]`) relates captured, as
                     // dotty's argument check captures it (`Applications.captureWildcardsCompat`).
                     self.rollback(mark);
                     let captured = self.capture_wildcards(ret_ty);
-                    ok = captured != ret_ty && self.is_sub(captured, exp);
+                    let compared = self.normalized_for_proto(captured, exp);
+                    ok = captured != ret_ty && self.is_sub(compared, exp);
                     if ok {
                         *ret = captured;
                     }
@@ -5990,7 +6078,8 @@ impl<'a> Worker<'a> {
         }
         let exp = self.deref(expected?);
         if let Type::Var(v) = self.types.get(exp) {
-            self.conform_to_bounds(ret_ty, v, true);
+            let compared = self.normalized_for_proto(ret_ty, exp);
+            self.conform_to_bounds(compared, v, true);
             return Some(v);
         }
         if exp != ERROR && self.types.has_vars(ret_ty) {
@@ -5998,7 +6087,8 @@ impl<'a> Worker<'a> {
             // its type arguments to the result: `List(Column(_.name))` against a
             // `List[Column[?T]]` makes the lambda's parameter a `?T`.
             let mark = self.snapshot();
-            if !self.is_sub(ret_ty, exp) {
+            let compared = self.normalized_for_proto(ret_ty, exp);
+            if !self.is_sub(compared, exp) {
                 self.rollback(mark);
             }
         }
@@ -6693,6 +6783,32 @@ impl<'a> Worker<'a> {
                     if let Some(pl) = plan.as_deref_mut() {
                         pl.omitted.push(i);
                     }
+                    // The argument is the getter's application, of the getter's type seen as the
+                    // member's signature is (`replay_sig_view`), which the parameter's type takes as
+                    // an argument's (`tryDefault`'s `addTyped`): it constrains the call's type
+                    // variables, or does not conform.
+                    if let Some((of, first)) = plan.as_deref().and_then(|pl| pl.getters) {
+                        // The program's getter, or a library's read from its pickle
+                        // (`findDefaultGetter`: `DefaultGetterName(meth, n)` among the owner's members).
+                        let ret = match self.getter_of(of, first + i) {
+                            Some(g) => Some(self.sig_of(g).ret),
+                            None => self.library_getter_type(of, first + i),
+                        };
+                        if let Some(ret) = ret {
+                            if ret != ERROR {
+                                let view = plan.as_deref().map(|pl| pl.view.clone()).unwrap_or_default();
+                                let seen = self.replay_sig_view(Arc::new(MethodSig::value(ret)), &view).ret;
+                                let given = self.param_type(seen, subst);
+                                if !self.is_sub(given, pty) {
+                                    let msg = format!("type mismatch: found {}, required {}", self.show(given), self.show(pty));
+                                    self.error(list.span, msg);
+                                }
+                                if let Some(pl) = plan.as_deref_mut() {
+                                    pl.getter_types.push((i, given));
+                                }
+                            }
+                        }
+                    }
                 }
                 results[i] = Some(self.prog.add(TExpr::Unit));
                 continue;
@@ -6815,50 +6931,29 @@ impl<'a> Worker<'a> {
     /// dotty's `isPureExpr` (`exprPurity` at `Pure` or above): a pure path, a lambda, or a
     /// construction of pure arguments that `isPureApply` takes as pure, a class's whose instance
     /// runs no initialisation (a case class's synthetic `apply` included, `isNoInitsRealClass`).
-    fn is_pure_expr(&self, e: TExprId) -> bool {
+    fn is_pure_expr(&mut self, e: TExprId) -> bool {
         if self.is_pure_path(e) {
             return true;
         }
         match self.prog.expr(e) {
             TExpr::Lambda(..) => true,
-            TExpr::New(c, args) => self.no_inits_class(c) && self.prog.expr_list(args).iter().all(|&a| self.is_pure_expr(a)),
+            TExpr::New(c, args) => {
+                let args = self.prog.expr_list(args).to_vec();
+                self.no_inits_class(c) && args.into_iter().all(|a| self.is_pure_expr(a))
+            }
             _ => false,
         }
     }
 
-    /// Whether constructing `c` runs no initialisation of its own: a class (no trait, no local or
-    /// anonymous one) whose template holds only definitions and constructor fields, dotty's
-    /// `NoInits` (`Namer`'s `isNoInitMember`: a def, a type, a lazy val, a val without a
-    /// right-hand side), read from the source or, for a library's, from its members.
-    fn no_inits_class(&self, c: ClassId) -> bool {
+    /// Whether constructing `c` runs no initialisation: a class's constructor that is a stable
+    /// member (`setStableConstructor`: `isNoInitsRealClass`); a block's or a value class's is
+    /// lifted all the same, as teq's lifting of a call's arguments keeps their own order.
+    fn no_inits_class(&mut self, c: ClassId) -> bool {
         let info = self.syms.class(c);
         if info.kind != ClassKind::Class || info.owner == Owner::Local || info.value_class {
             return false;
         }
-        match info.def {
-            Some(d) => {
-                let ast = self.ast(info.file);
-                let crate::ast::DefKind::Class(cls) = &ast.def(d).kind else { return false };
-                cls.body.iter().all(|st| match *st {
-                    crate::ast::Stmt::Import(_) => true,
-                    crate::ast::Stmt::Expr(_) => false,
-                    crate::ast::Stmt::Def(m) => match &ast.def(m).kind {
-                        crate::ast::DefKind::Fun(_) | crate::ast::DefKind::TypeAlias { .. } => true,
-                        // A nested class or trait is a type; an object a val it initialises.
-                        crate::ast::DefKind::Class(k) => matches!(k.kind, crate::ast::ClassKind::Class | crate::ast::ClassKind::Trait),
-                        crate::ast::DefKind::Val { rhs, .. } => rhs.is_none() || ast.def(m).mods & crate::ast::mods::LAZY != 0,
-                        _ => false,
-                    },
-                })
-            }
-            None => {
-                let ctor: Vec<SymId> = info.ctor_syms.iter().flatten().copied().collect();
-                info.members.values().all(|&m| {
-                    let s = self.syms.sym(m);
-                    !matches!(s.kind, SymKind::Val | SymKind::Var) || s.mods & crate::ast::mods::LAZY != 0 || ctor.contains(&m)
-                })
-            }
-        }
+        self.no_inits_real_class(c)
     }
 
     /// Binds `e`, unless it is stable, to a temporary of its recorded type placed at `at` among
@@ -9860,7 +9955,7 @@ impl<'a> Worker<'a> {
         let outer_prefixed = self.new_prefixed;
         self.new_prefixed |= inner;
         self.copy_application = true;
-        let applied = self.apply_method(call, Some((c, sig)), targs, lists, span, expected, false);
+        let applied = self.apply_method(call, Some((c, sig, None)), targs, lists, span, expected, false);
         self.copy_application = false;
         self.new_prefixed = outer_prefixed;
         let (te, ty) = applied.unwrap();
@@ -10048,6 +10143,50 @@ impl<'a> Worker<'a> {
             }
         }
         given
+    }
+
+    /// The type of the getter of the default of parameter `index` of `of` where the getter is a
+    /// library's member read from its pickle (`Applications.findDefaultGetter`:
+    /// `DefaultGetterName(meth, n)` among the method's owner's members, `<init>$default$n` among
+    /// the class's companion's for a constructor's): its result type as scalac pickled it
+    /// (`Namer.inferredResultType`, the default's type where the parameter's names the method's
+    /// type parameters), over the method's type parameters where the getter repeats them.
+    fn library_getter_type(&mut self, of: DefaultOf, index: usize) -> Option<TypeId> {
+        let (owner, name, tparams) = match of {
+            DefaultOf::Method(m) => {
+                let info = self.syms.sym(m);
+                if !self.in_jar(info.file) {
+                    return None;
+                }
+                let Owner::Class(c) = info.owner else { return None };
+                let name = format!("{}$default${}", self.name_str(info.name), index + 1);
+                (c, self.interner.intern(&name), self.sig_of(m).tparams.clone())
+            }
+            DefaultOf::Ctor(c) => {
+                if !self.in_jar(self.syms.class(c).file) {
+                    return None;
+                }
+                let k = self.syms.class(c).companion?;
+                (k, self.interner.intern(&format!("$lessinit$greater$default${}", index + 1)), self.syms.class(c).tparams.to_vec())
+            }
+        };
+        let own: Vec<TypeId> = self.syms.class(owner).tparams.iter().map(|&p| self.types.param(p)).collect();
+        let owner_ty = self.types.class(owner, &own);
+        let (g, _) = self.find_member(owner_ty, name)?;
+        let (ret, own_tparams) = {
+            let sig = self.sig_of(g);
+            (sig.ret, sig.tparams.clone())
+        };
+        if ret == ERROR {
+            return None;
+        }
+        // The getter's own type parameters stand for the method's (`Desugar.defaultGetters`
+        // copies them): the method's, which the call's substitution knows.
+        if own_tparams.len() == tparams.len() && !tparams.is_empty() {
+            let pairs: crate::types::Subst = own_tparams.iter().zip(tparams.iter()).map(|(&g, &m)| (g, self.types.param(m))).collect();
+            return Some(self.types.subst(ret, &pairs));
+        }
+        Some(ret)
     }
 
     /// The getter `name`, `m$default$n`, selected on a receiver of type `recv_ty` in a library
@@ -13167,7 +13306,12 @@ impl<'a> Worker<'a> {
             return false;
         }
         match self.receiver_param_type(call, true) {
-            Some(pty) => self.is_sub(recv_ty, pty),
+            Some(pty) => {
+                // The receiver is the extension's first argument, a path's type compared as the
+                // path's (`extMethodApply`'s `receiver`).
+                self.alias_bound_as_path = call.ext_recv.is_some_and(|(r, _)| self.is_stable_path(r));
+                self.is_sub(recv_ty, pty)
+            }
             None => false,
         }
     }

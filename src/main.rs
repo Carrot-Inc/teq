@@ -238,6 +238,7 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/view.scala", include_str!("../std/view.scala")),
     ("<std>/ordering.scala", include_str!("../std/ordering.scala")),
     ("<std>/compat.scala", include_str!("../std/compat.scala")),
+    ("<std>/language.scala", include_str!("../std/language.scala")),
     ("<std>/javalib/string.scala", include_str!("../std/javalib/string.scala")),
     ("<std>/javalib/charset.scala", include_str!("../std/javalib/charset.scala")),
     ("<std>/strings.scala", include_str!("../std/strings.scala")),
@@ -493,6 +494,10 @@ pub(crate) struct Options {
     pub dialect: dialect::Dialect,
     /// `--max-inlines` or the `max-inlines` of the `teq.toml`: scalac's `-Xmax-inlines`.
     pub max_inlines: u32,
+    /// `--max-inlined-trees`: scalac's `-Xmax-inlined-trees`.
+    pub max_inlined_trees: i64,
+    /// `--retain-trees`: scalac's `-Yretain-trees`.
+    pub retain_trees: bool,
     pub jvm: bool,
     /// `teq interp`: the program runs under the interpreter, without an output file.
     pub interp: bool,
@@ -660,6 +665,10 @@ const COMPILER_USAGE: &str = "usage: teq compiler <build|check|watch> <files or 
          \x20         type lambda (`Either[String, *]` for `[X] =>> Either[String, X]`)\n\
          --max-inlines  scalac's -Xmax-inlines: how deep inline calls may nest (32 by default);\n\
          \x20         a `max-inlines = n` in the teq.toml sets it for a project\n\
+         --max-inlined-trees  scalac's -Xmax-inlined-trees: the trees an outermost inline call's\n\
+         \x20         expansions may inline (2000000 by default)\n\
+         --retain-trees  scalac's -Yretain-trees: a macro's Symbol.tree of a class's or a\n\
+         \x20         package's member has its right-hand side\n\
          --source  scalac's -source: the source version of a file whose source import names none\n\
          \x20         (3.0-migration to 3.9, future-migration, future), 3.8 by default\n\
          --language  scalac's -language: the comma-separated features enabled for the program\n\
@@ -732,7 +741,7 @@ const INTERP_USAGE: &str = "usage: teq interp <files or directories...> [options
          \x20         program observes through LinkingInfo.productionMode\n\
          --no-cache   reads the jars without the jar cache (TEQ_NO_CACHE=1 does the same)\n\
          --sourceroot dir  what the pickles' source paths are relative to (scalac's -sourceroot)\n\
-         --dialect flags, --strict-equality, --kind-projector, --max-inlines n\n\
+         --dialect flags, --strict-equality, --kind-projector, --max-inlines n, --retain-trees\n\
          \x20         the typer's settings, as teq compiler takes them (teq compiler --help)\n\
          --cacheable-state a.B, --no-known-caches, --macro-state ordered|per-worker\n\
          \x20         the rules for the state macro runs share with several workers, as teq compiler\n\
@@ -880,6 +889,8 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
         dump_defs: false,
         dialect: dialect::Dialect::default(),
         max_inlines: typer::MAX_INLINES,
+        max_inlined_trees: typer::MAX_INLINED_TREES,
+        retain_trees: false,
         jvm: false,
         interp,
         classpath: Vec::new(),
@@ -982,6 +993,11 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
             "--main" => o.main = args.next(),
             "--module" if interp => o.module = args.next(),
             "--strict-equality" => flags.push(dialect::STRICT_EQUALITY.to_string()),
+            "--retain-trees" => o.retain_trees = true,
+            "--max-inlined-trees" => match args.next().and_then(|n| n.parse::<i64>().ok()) {
+                Some(n) => o.max_inlined_trees = n,
+                None => usage_for(command),
+            },
             "--max-inlines" => match args.next().and_then(|n| n.parse::<u32>().ok()) {
                 Some(n) if n > 0 => max_inlines = Some(n),
                 _ => usage_for(command),
@@ -1920,6 +1936,8 @@ fn compile() -> i32 {
     }
     typer.unused.defs = typer::unused::DefKinds::of(&typer.diags.policy.unused);
     typer.inline.max_depth = opts.max_inlines;
+    typer.inline.max_trees = opts.max_inlined_trees;
+    typer.inline.retain_trees = opts.retain_trees;
     typer.inline.production = opts.release;
     typer.inline.es_modules = opts.split.is_some();
     // A module's products need no entry point: a Scala.js check's as a JVM build's (`all_mains`).
@@ -2498,7 +2516,7 @@ fn build_jvm(
     let mut named: Vec<types::ClassId> = class_sites.iter().map(|&(_, c)| c).collect();
     named.sort_unstable();
     named.dedup();
-    let typer::Worker { prog, syms, file_pkgs, types, tvars, interner, loaded, entry_points, mixin_supers, jvm_volatile, .. } = &mut typer;
+    let typer::Worker { prog, syms, file_pkgs, types, tvars, interner, loaded, entry_points, mixin_supers, jvm_volatile, getters, .. } = &mut typer;
     let product_inits = loaded.as_ref().map(|l| l.get_mut().cp.product_inits.clone()).unwrap_or_default();
     // A JVM build always reads the class path: scala-library is on it.
     let typer::loader::Loaded { cp, classes, java, target_names, product_target_names, volatile, .. } = loaded.as_ref().expect("a JVM build reads its class path").get_mut();
@@ -2513,6 +2531,7 @@ fn build_jvm(
         sources: &all_sources,
         file_pkgs: file_pkgs.own(),
         asts,
+        getters: Some(&**getters),
         java: Some(&*java),
         target_names: Some(&*target_names),
         source_target_names: Some(source_target_names),
@@ -3384,6 +3403,8 @@ pub(crate) fn with_typed_program<R: Send>(name: &str, text: &str, flags: &[&str]
             open_classpath(&opts, &mut typer, cp, jar_files, jdk_file);
             typer.dialect = opts.dialect;
             typer.inline.max_depth = opts.max_inlines;
+            typer.inline.max_trees = opts.max_inlined_trees;
+            typer.inline.retain_trees = opts.retain_trees;
             typer.inline.outlines = !opts.jvm && !opts.interp && !opts.no_outline;
             if opts.jvm {
                 typer.set_jvm();

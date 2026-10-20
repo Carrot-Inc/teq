@@ -4836,10 +4836,15 @@ impl<'a> Gen<'a> {
         let clauses = self.declared_clauses(s).unwrap_or_else(|| (0..sig.clauses.len()).collect());
         let pos = clauses.iter().position(|&c| c == ci).unwrap_or(ci);
         let before: usize = clauses[..pos].iter().map(|&c| sig.clauses[c].params.len()).sum();
-        // A parameter whose type names the method's type parameters keeps its getter typed so
-        // here and in the pickle, where scalac's has the default's type:
-        // teq's typer infers the method's type arguments without the getter's.
-        let ret = if p.by_name { self.erase(p.ty) } else { m.params[before + k].clone() };
+        // The getter's type as the typer completed it (`Namer.inferredResultType`): the default's
+        // own where the parameter's type names the method's type parameters (`a$default$1[A]:
+        // String`), as scalac's class file has it; the parameter's otherwise.
+        let own = self.cx.input.getters.and_then(|t| crate::typer::getters::getter_type(t, self.cx.input.syms, crate::tir::DefaultOf::Method(s), i)).filter(|&t| t != p.ty);
+        let ret = match own {
+            Some(t) => self.erase(t),
+            None if p.by_name => self.erase(p.ty),
+            None => m.params[before + k].clone(),
+        };
         GetterShape { index: before + k + 1, before, ret, by_name: p.by_name }
     }
 

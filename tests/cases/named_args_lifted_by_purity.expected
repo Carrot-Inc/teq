@@ -1,0 +1,12 @@
+Group(List(1),And,none)
+cid
+Group(List(),Or,none)
+d
+Group(List(2),And,x)
+ni
+Group(List(3),And,y)
+
+Pair(1,2)
+ba
+Pair(2,1)
+

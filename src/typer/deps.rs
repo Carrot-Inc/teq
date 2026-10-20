@@ -1032,7 +1032,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             }
             let packages = self.clause_packages(u);
             let imports: Vec<(Vec<Name>, crate::ast::ImportSel)> =
-                self.w.ast(u).imports.iter().chain(&self.w.ast(u).language_imports).map(|i| (i.path.clone(), i.sel.clone())).collect();
+                self.w.ast(u).imports.iter().map(|i| (i.path.clone(), i.sel.clone())).collect();
             for (path, sel) in imports {
                 self.import(u, &path, &sel, &packages);
             }
@@ -1163,7 +1163,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             return Some(ImportPrefix::Pkg(ROOT_PKG));
         }
         let bound = if self.w.file_imports[u.0 as usize].is_some() {
-            let env = super::Env { file: u, frames: Vec::new(), imports: Vec::new() };
+            let env = super::Env { file: u, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None };
             self.w.with_env(env, |w| w.lookup_term(head))
         } else {
             None

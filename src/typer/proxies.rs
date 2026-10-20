@@ -357,6 +357,11 @@ impl<'a> Worker<'a> {
             }
     }
 
+    /// `lifted_roots` of the class `tc`.
+    pub(super) fn lifted_roots_of(&self, tc: &TClass) -> Vec<TExprId> {
+        self.lifted_roots(std::slice::from_ref(tc))
+    }
+
     /// The expressions of the classes `classes`: their members' bodies and defaults, their
     /// initialisers and the arguments of their parents' constructors.
     fn lifted_roots(&self, classes: &[TClass]) -> Vec<TExprId> {
@@ -601,6 +606,12 @@ impl<'a> Worker<'a> {
         self.adapt_lifted_calls_in(&[block], true);
     }
 
+    /// `adapt_block_calls` over the trees `roots` of a member whose block is finished: after the
+    /// inlining phase, for the members of the local traits it lifted (`lift_deferred_traits`).
+    pub(super) fn adapt_block_calls_in(&mut self, roots: &[TExprId]) {
+        self.adapt_lifted_calls_in(roots, true);
+    }
+
     fn adapt_lifted_calls_in(&mut self, roots: &[TExprId], at_block: bool) {
         if self.lifted_members.is_empty() {
             return;
@@ -801,6 +812,13 @@ impl<'a> Worker<'a> {
     /// own `super` calls of such members pass them, and so does its call of a trait's
     /// initialiser that takes some. Its captures then take what it passes.
     pub(super) fn add_trait_forwarders(&mut self, k: ClassId) {
+        self.add_trait_forwarders_of(k, None);
+    }
+
+    /// `add_trait_forwarders` for the traits `only` among those `k` mixes in, where given: the
+    /// local traits lifted after the inlining phase (`lift_deferred_traits`), whose forwarders the
+    /// class's check could not make.
+    pub(super) fn add_trait_forwarders_of(&mut self, k: ClassId, only: Option<&[ClassId]>) {
         if !self.in_block(k) || self.is_stored_class(k) {
             return;
         }
@@ -816,7 +834,7 @@ impl<'a> Worker<'a> {
         if !held.is_empty() {
             self.accessor_captures.insert(k, held);
         }
-        let traits: Vec<ClassId> = self.syms.class(k).base_types.iter().skip(1).map(|&(b, _)| b).filter(|&b| self.lifted_trait(b)).collect();
+        let traits: Vec<ClassId> = self.syms.class(k).base_types.iter().skip(1).map(|&(b, _)| b).filter(|&b| self.lifted_trait(b) && only.map_or(true, |o| o.contains(&b))).collect();
         if traits.is_empty() {
             return;
         }

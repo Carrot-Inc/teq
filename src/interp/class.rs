@@ -269,6 +269,10 @@ impl<'a, 't> Interp<'a, 't> {
         if self.macro_ctx.is_some() {
             self.typer.macro_files.insert(file, ());
         }
+        // A file of a unit the run's unit waits for stops the run (`Worker::run_suspends`).
+        if self.typer.program_file(file) && self.typer.run_suspends(file) {
+            self.halt_on_withheld()?;
+        }
         let f = file.0 as usize;
         if self.made.file_done.len() <= f {
             self.made.file_done.resize(f + 1, false);
@@ -307,6 +311,7 @@ impl<'a, 't> Interp<'a, 't> {
             if self.made.statics.contains_key(&sym) {
                 continue;
             }
+            self.typer.prepare_executable(init);
             match self.eval(init, &frame, &cx) {
                 Ok(v) => {
                     self.made.insert_static(sym, v, self.records.runs);
@@ -420,6 +425,9 @@ impl<'a, 't> Interp<'a, 't> {
             }
             (_, Owner::Package(_)) => {
                 let file = self.top_def_file(s, file);
+                if self.typer.program_file(file) && self.typer.run_suspends(file) {
+                    self.halt_on_withheld()?;
+                }
                 self.refresh_top_vals();
                 if self.macro_ctx.is_some() {
                     self.typer.macro_files.insert(file, ());
@@ -454,6 +462,7 @@ impl<'a, 't> Interp<'a, 't> {
                     },
                 };
                 self.halt_on_withheld()?;
+                self.typer.prepare_executable(init);
                 let outer = super::enter_epoch();
                 let cx = super::enter_init(|| self.qualified_name(s));
                 super::own_epoch(super::EpochOwner::Other, || self.qualified_name(s).to_string());
@@ -814,6 +823,14 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// The field initialisers, statements and trait bodies that the construction of `c` runs.
     fn run_inits(&mut self, obj: &Rc<Object>, c: ClassId, ti: usize, frame: &Rc<Frame>, cx: &Ctx) -> R<()> {
+        // Its plain inline calls expanded first, where the inlining phase keeps some still; a
+        // body holding the call whose expansion runs this macro has not run yet, as while its
+        // class is checked (`construct`).
+        if !self.typer.prepare_class(ti) && self.macro_ctx.is_some() {
+            // A class of a unit the run's unit waits for stops the run (`Worker::run_suspends`).
+            self.halt_on_withheld()?;
+            return Ok(());
+        }
         #[cfg(debug_assertions)]
         if self.typer.forked && crate::types::view::probing() {
             let me = self.typer.worker;

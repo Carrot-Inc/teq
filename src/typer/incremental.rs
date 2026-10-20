@@ -11,6 +11,7 @@ use crate::ast::DefId;
 use crate::shape::Remap;
 use crate::source::{FileId, Span};
 use crate::symbols::*;
+use crate::intern::FxMap;
 use crate::types::*;
 use std::sync::Arc;
 
@@ -116,16 +117,25 @@ impl<'a> Worker<'a> {
                 }
             }
             self.move_forwarders(change.file, change.remap);
-            self.forget_typing(change.file, change.remap);
+            self.forget_typing(std::slice::from_ref(&change.file), Some(change.remap));
             inferred.extend(self.open_inferred(change.file, &moved).into_iter().map(|(sym, sig)| (change.file, sym, sig)));
+            self.reopen_getters(change.file);
         }
+        // The build begins here: the interpreter's next run makes the program's objects anew.
+        self.prog.build_start = self.prog.shifts;
         self.prog.main = None;
         let prefix = super::merge::Prefix::of(self);
         let exprs_mark = self.prog.exprs.len();
+        self.begin_demands();
+        self.checked_imports.clear();
+        self.import_heads.clear();
         for change in changes {
             self.check_file(change.file);
         }
         self.complete_pending_sealed_files();
+        self.fill_getters();
+        // The retyped files' kept calls, and those an earlier build with an error left, expanded.
+        self.inlining_phase();
         // The files' top-level value forwarders, forgotten with their typing: made again as the
         // full path makes them once the bodies are typed.
         self.define_top_value_forwarders();
@@ -174,6 +184,105 @@ impl<'a> Worker<'a> {
         Ok(restored)
     }
 
+
+    /// The files a round of the inlining phase gave up typed again from their trees, as dotty's
+    /// later run compiles a suspended unit from its untyped tree (`Run.compileSuspendedUnits`,
+    /// whose `TyperPhase` types it again): what their typing and their rounds put into the
+    /// program dropped, their inferred signatures opened, their bodies typed again with the
+    /// expansions typing makes (a transparent macro's run among them), their plain calls kept.
+    pub(super) fn retype_suspended(&mut self, files: &[FileId]) {
+        // What reads signatures, whose inferred ones open, is read again.
+        self.given_fast.clear();
+        self.head_sigs.clear();
+        self.path_sigs.clear();
+        self.erased_results.clear();
+        self.inner_chain_members.clear();
+        self.inference_failed.clear();
+        self.forget_typing(files, None);
+        // The files' symbols with a definition, collected in one walk of the table.
+        let mut defined: FxMap<u32, Vec<SymId>> = FxMap::default();
+        for &f in files {
+            defined.insert(f.0, Vec::new());
+        }
+        for (i, s) in self.syms.syms.iter().enumerate() {
+            if s.def.is_some() {
+                if let Some(of_file) = defined.get_mut(&s.file.0) {
+                    of_file.push(SymId(i as u32));
+                }
+            }
+        }
+        for &file in files {
+            let of_file = defined.remove(&file.0).unwrap_or_default();
+            self.open_inferred(file, &of_file);
+            self.reopen_getters(file);
+            self.forget_body_definitions(file);
+        }
+        self.reopen_suspended();
+        self.checked_imports.retain(|&(f, _), _| !files.iter().any(|x| x.0 == f));
+        self.import_heads.retain(|&(f, _), _| !files.iter().any(|x| x.0 == f));
+        for &file in files {
+            self.check_file(file);
+        }
+        self.complete_pending_sealed_files();
+        self.fill_getters();
+    }
+
+    /// The completions a macro of the run suspended, of any file, completed again by their next
+    /// reader, as a later run's completers are new (`Run.compileSuspendedUnits`): a declared
+    /// signature's, an alias's (`suspend_alias`), a default getter's. An inferred signature of a
+    /// retyped file is opened with the rest (`open_inferred`).
+    fn reopen_suspended(&mut self) {
+        for i in 0..self.syms.syms.len() {
+            if self.syms.sym_cells.get(i as u32) == Completion::Suspended {
+                self.syms.syms[i].sig = None;
+                self.syms.sym_cells.set(i as u32, Completion::NotStarted);
+            }
+        }
+        for i in 0..self.syms.aliases.len() {
+            let a = crate::types::AliasId(i as u32);
+            if self.syms.alias(a).state() == Completion::Suspended {
+                self.syms.alias(a).state().set(Completion::NotStarted);
+            }
+        }
+        for i in 0..self.syms.classes.len() {
+            let c = ClassId(i as u32);
+            if self.syms.class(c).state() == Completion::Suspended {
+                self.syms.class(c).state().set(Completion::NotStarted);
+            }
+        }
+    }
+
+    /// The file's definitions inside its bodies forgotten by their definitions (`def_syms`,
+    /// `def_classes`, `def_aliases`), made anew with the bodies, as a session's retype keeps
+    /// those outside alone (`Remap::defs`): a block's class found by its definition would be
+    /// the old typing's, which the program no longer holds.
+    fn forget_body_definitions(&mut self, file: FileId) {
+        let f = file.0 as usize;
+        for (d, s) in self.def_syms.entries_in(f) {
+            if self.in_body(self.syms.sym(s).owner) {
+                self.def_syms.remove(f, &d);
+            }
+        }
+        for (d, c) in self.def_classes.entries_in(f) {
+            if self.in_body(self.syms.class(c).owner) {
+                self.def_classes.remove(f, &d);
+            }
+        }
+        for (d, a) in self.def_aliases.entries_in(f) {
+            if self.in_body(self.syms.alias(a).owner) {
+                self.def_aliases.remove(f, &d);
+            }
+        }
+    }
+
+    /// Whether a definition of `owner` stands in a body: a block's, or a member of a class that does.
+    fn in_body(&self, owner: Owner) -> bool {
+        match owner {
+            Owner::Local => true,
+            Owner::Class(c) => self.in_body(self.syms.class(c).owner),
+            _ => false,
+        }
+    }
 
     /// Gives the value forwarders of the file's export clauses the positions a build of the new
     /// text gives them: the selector found again in its clause, the alternative's offset kept
@@ -285,25 +394,52 @@ impl<'a> Worker<'a> {
         moved
     }
 
-    /// Drops what typing the file's bodies produced and cached, the anonymous classes its
+    /// Drops what typing the files' bodies produced and cached, the anonymous classes their
     /// expansions made included. The diagnostics of the bodies go, to be reported again; those
-    /// of what is resolved once (a signature, a parent, an import) move with the edit.
-    fn forget_typing(&mut self, file: FileId, remap: &Remap) {
-        self.index_forget_bodies(file);
-        self.forget_unused(file, remap);
-        for sites in self.inline_deps.values_mut() {
-            sites.remove(&file);
+    /// of what is resolved once (a signature, a parent, an import) move with the edit, or stay
+    /// where they are without one (`remap` none: the same trees typed again, the phase's retype of
+    /// its suspended files; a session's edit is one file's). Each table of the program is walked
+    /// once for the files.
+    fn forget_typing(&mut self, files: &[FileId], remap: Option<&Remap>) {
+        debug_assert!(remap.is_none() || files.len() == 1, "an edit's remap is one file's");
+        for &file in files {
+            self.index_forget_bodies(file);
+            self.forget_unused(file, remap);
+            for sites in self.inline_deps.values_mut() {
+                sites.remove(&file);
+            }
+            self.inlining.forget_file(file, &self.prog);
         }
+        let mut set = vec![false; self.files.len()];
+        for &f in files {
+            if let Some(b) = set.get_mut(f.0 as usize) {
+                *b = true;
+            }
+        }
+        let of = |f: FileId| set.get(f.0 as usize).copied().unwrap_or(false);
         let syms = &self.syms;
-        let sym_in = |s: &SymId| syms.sym(*s).file == file;
+        let sym_in = |s: &SymId| of(syms.sym(*s).file);
+        // The same tree typed again (the phase's retype) takes back what its own typing made: a
+        // class an expansion at a site in another file made of this file's template is that file's.
+        let in_place = remap.is_none();
+        // The file a class is taken back with: the typing's that made it in place, the edited one's.
+        let typed_in = move |c: ClassId| -> Option<FileId> {
+            let info = syms.class(c);
+            if in_place {
+                Some(info.made_at.unwrap_or(info.file)).filter(|&f| of(f))
+            } else {
+                (of(info.file) || info.made_at.is_some_and(|f| of(f))).then(|| files[0])
+            }
+        };
+        let made_here = |c: ClassId| typed_in(c).is_some();
         if let Some(d) = self.deps.as_deref_mut() {
             d.forget(|c| match c {
-                super::deps::Comp::Body(s) => syms.sym(s).file == file,
-                super::deps::Comp::ClassBody(k) => syms.class_of_files(k, std::slice::from_ref(&file)),
+                super::deps::Comp::Body(s) => of(syms.sym(s).file),
+                super::deps::Comp::ClassBody(k) => made_here(k),
                 _ => false,
             });
         }
-        let class_in = |c: &ClassId| syms.class_of_files(*c, std::slice::from_ref(&file));
+        let class_in = |c: &ClassId| made_here(*c);
         let unchecked: Vec<ClassId> = self.class_done.local.keys().copied().filter(|c| class_in(c)).collect();
         self.class_done.retain(|c, _| !class_in(c));
         for c in unchecked {
@@ -326,12 +462,12 @@ impl<'a> Worker<'a> {
         let funs = &self.prog.funs;
         self.prog.top_funs.own_mut().retain(|f| !sym_in(&funs[f.idx()].sym));
         self.prog.top_vals.own_mut().retain(|(s, _)| !sym_in(s));
-        self.prog.template_calls.retain(|&(_, unit)| unit != file);
-        self.prog.get_class_units.retain(|&unit| unit != file);
+        self.prog.template_calls.retain(|&(_, unit)| !of(unit));
+        self.prog.get_class_units.retain(|&unit| !of(unit));
         self.prog_index = super::check::ProgIndex::default();
         self.roots_memo.clear();
         self.subclasses = super::overload::SubclassIndex::default();
-        self.anon_sites.retain(|&(f, _, site), _| f != file && site.map_or(true, |(sf, _)| sf != file));
+        self.anon_sites.retain(|&(f, _, site), _| if in_place { !of(site.map_or(f, |(sf, _)| sf)) } else { !of(f) && site.map_or(true, |(sf, _)| !of(sf)) });
         self.mixin_supers.retain(|c, _| !class_in(c));
         self.super_problems_told.retain(|(c, _), _| !class_in(c));
         // The outer-this field of an inner class is named by the class's position, which the
@@ -340,42 +476,53 @@ impl<'a> Worker<'a> {
             .outer_this
             .local
             .iter()
-            .filter(|&(c, _)| class_in(c))
-            .map(|(&c, &s)| (s, format!("$this{}", self.prog.position(file, syms.class(c).span.start))))
+            .filter_map(|(&c, &s)| typed_in(c).map(|file| (s, format!("$this{}", self.prog.position(file, syms.class(c).span.start)))))
+            .collect();
+        // The anonymous and local classes made anew no longer extend anything.
+        let unlinked: Vec<(ClassId, ClassId)> = (0..syms.classes.len())
+            .filter_map(|i| {
+                let c = ClassId(i as u32);
+                let info = &syms.classes[i];
+                if info.owner != Owner::Local || !made_here(c) {
+                    return None;
+                }
+                info.superclass.map(|parent| (parent, c))
+            })
             .collect();
         for (s, name) in renamed {
             let name = self.interner.intern(&name);
             self.syms.sym_mut(s).name = name;
         }
-        self.forget_anon_subclasses(file);
-        self.quote.forget_file(file);
-        self.forget_capture(file);
+        for (parent, c) in unlinked {
+            self.syms.class_mut(parent).subclasses.retain(|&d| d != c);
+        }
+        for &file in files {
+            self.quote.forget_file(file);
+            self.forget_capture(file);
+        }
         self.diags.items.retain_mut(|d| {
-            if d.file != file {
+            if !of(d.file) {
                 return true;
             }
+            let Some(remap) = remap else { return !d.of_body };
             match moved(remap, d.span).filter(|_| !d.of_body) {
                 Some(span) => {
                     d.span = span;
+                    // Its owner, a completion of the same file, moves with it: a definition's
+                    // place, a signature's keeping its mark (`DiagOwner::sig`). One the edit
+                    // gives no place stands for no completion.
+                    if d.owner.file == d.file.0 {
+                        let mark = d.owner.place & crate::source::DiagOwner::SIG;
+                        d.owner = match remap.spans.get(&d.owner.at()) {
+                            Some(at) => crate::source::DiagOwner::new(d.file, at.start | mark),
+                            None => crate::source::DiagOwner::NONE,
+                        };
+                    }
                     true
                 }
                 None => false,
             }
         });
-    }
-
-    /// The anonymous and local classes of a file are made anew when its bodies are typed again;
-    /// the old ones no longer extend anything.
-    fn forget_anon_subclasses(&mut self, file: FileId) {
-        for i in 0..self.syms.classes.len() {
-            let info = &self.syms.classes[i];
-            if (info.file != file && info.made_at != Some(file)) || info.owner != Owner::Local {
-                continue;
-            }
-            let Some(parent) = info.superclass else { continue };
-            let c = ClassId(i as u32);
-            self.syms.class_mut(parent).subclasses.retain(|&d| d != c);
-        }
     }
 
     /// Forgets the signatures of the vals and defs among `moved` whose type is inferred, so that

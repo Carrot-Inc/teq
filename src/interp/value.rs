@@ -51,7 +51,7 @@ pub enum Value {
 }
 
 /// What a `quotes.reflect.Tree` stands for in the typed IR.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum TreeRef {
     Expr(TExprId),
     /// A statement of a block, by its index in `Program::stmts`.
@@ -60,6 +60,9 @@ pub enum TreeRef {
     Class(ClassId),
     /// A member or parameter definition, by its symbol.
     Def(SymId),
+    /// A member's definition read inside its class's retained tree (a class of a block, or under
+    /// `--retain-trees`), its right-hand side with it whatever `Symbol.tree` of the member gives.
+    Member(SymId),
     /// A case of a match, by its index in `Program::cases`.
     Case(u32),
     Pat(TPatId),
@@ -98,7 +101,7 @@ pub enum TreeRef {
 }
 
 /// What a `quotes.reflect.Symbol` stands for.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum SymRef {
     Term(SymId),
     Class(ClassId),

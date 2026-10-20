@@ -1513,6 +1513,7 @@ impl<'a> Worker<'a> {
             declared_rhs: crate::tir::NO_TYPE,
             // An export's type forwarder, of scalac's or of another module of teq's (`EXPORTED`).
             exported: e.flags.has(tags::EXPORTED),
+            completion_noted: false,
         });
         self.loaded_mut().aliases.insert(aid, LAlias { file, addr: e.addr });
         self.loaded_mut().tables[file as usize].aliases.insert(e.addr, aid);
@@ -1899,6 +1900,14 @@ impl<'a> Worker<'a> {
         let read_no_inits = !sig.index.statements
             && sig.index.members.iter().all(|e| e.tag != tags::VALDEF || !e.has_body || e.flags.has(tags::LAZY) || e.flags.has(tags::OBJECT));
         self.syms.class_mut(c).read_no_inits = read_no_inits;
+        // The emitters' record of a library class (`elaborate::class_no_inits_recorded`): a jar's
+        // as its pickle reads; a product's is left to the records, which hold the source rule
+        // (`TreeInfo.defKind`: a lazy val or a parameterless given with a right-hand side
+        // initialises), so that a module built against the products emits what the whole build
+        // emits (the pickle's `indexStats` leaves lazy vals out, and `Givens$()` would be a pure
+        // path there alone).
+        let product_class = self.loaded.as_ref().map_or(false, |l| l.is_product_class(c));
+        self.syms.class_mut(c).no_inits_recorded = if product_class { 0 } else if read_no_inits { 1 } else { 2 };
         if kind == ClassKind::Trait {
             let tasty = self.tasty(lc.file);
             let product = self.loaded.as_ref().map_or(false, |l| l.is_product_class(c));
@@ -3507,13 +3516,13 @@ impl<'a> Worker<'a> {
             if tasty.simple(*n) != Some("deprecated") {
                 continue;
             }
-            let string = |this: &mut Self, arg: Option<&AnnotArg>| match arg {
-                Some(AnnotArg::Str(s)) => Some(this.lname(&tasty, *s)),
+            // The strings read off the file alone: its names' cache is the loader's lock holder's
+            // (`lname`), and a forked worker checks a deprecated reference outside the lock.
+            let string = |arg: Option<&AnnotArg>| match arg {
+                Some(AnnotArg::Str(s)) => Some(tasty.name(tasty.source_name(*s))),
                 _ => None,
             };
-            let message = string(self, a.args.first()).map(|n| self.name_str(n));
-            let since = string(self, a.args.get(1)).map(|n| self.name_str(n));
-            return (message, since);
+            return (string(a.args.first()), string(a.args.get(1)));
         }
         (None, None)
     }

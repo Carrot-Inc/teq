@@ -101,39 +101,20 @@ pub struct Attempts {
     late: Vec<u32>,
 }
 
-/// Where plain inline calls are expanded: at the end of the item, dotty's order within it
-/// (`item`, the default); `TEQ_PLAIN_EXPANSION` names the
-/// others for measurement: where they are typed, as before (`typing`), or at the outermost
-/// attempt's end (`commit`).
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum PlainExpansion {
-    Typing,
-    Commit,
-    Item,
-}
-
 fn flush_trace() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("TEQ_FLUSH_TRACE").is_some())
 }
 
-pub(super) fn plain_expansion() -> PlainExpansion {
-    static AT: std::sync::OnceLock<PlainExpansion> = std::sync::OnceLock::new();
-    *AT.get_or_init(|| match std::env::var("TEQ_PLAIN_EXPANSION").as_deref() {
-        Ok("commit") => PlainExpansion::Commit,
-        Ok("typing") => PlainExpansion::Typing,
-        _ => PlainExpansion::Item,
-    })
-}
 
 /// A plain inline call typed as a call, with what its expansion needs of the call site; the
 /// call taken out once an expansion that reads it as an argument expanded it first
 /// (`expand_pending_in`).
 pub(super) struct PendingInline {
-    node: crate::tir::TExprId,
+    pub(super) node: crate::tir::TExprId,
     /// The call's type as the typing gave it.
-    typed_as: crate::types::TypeId,
-    call: Option<PendingCall>,
+    pub(super) typed_as: crate::types::TypeId,
+    pub(super) call: Option<PendingCall>,
     /// The last attempt's sequence number when the call was typed: an attempt begun after it
     /// keeps the call's expansion ahead of the later phase (`Worker::expand_pending_in`).
     seq: u32,
@@ -141,33 +122,50 @@ pub(super) struct PendingInline {
     /// the later phase reports it (`Worker::release_held`), so that no typing in between takes it
     /// as its own (an attempt's verdict, an argument the retry on the qualifier reuses, a quiet
     /// typing that drops what it reported); a retraction that puts the call back pending takes it.
-    held: Vec<crate::source::Diagnostic>,
+    pub(super) held: Vec<crate::source::Diagnostic>,
+    /// Where the inlining phase reaches the call: its file, the member whose tree holds it and
+    /// its place in the typing of that member (`Worker::walk_place`).
+    pub(super) place: super::inlining::WalkOrder,
 }
 
 /// What the expansion of a pending call needs of its site.
 #[derive(Clone)]
-struct PendingCall {
-    call: super::apply::MethodCall,
-    sig: std::sync::Arc<crate::symbols::MethodSig>,
-    subst: crate::types::Subst,
-    args: Vec<crate::tir::TExprId>,
-    arg_types: Vec<(crate::tir::TExprId, crate::types::TypeId)>,
-    ret_ty: crate::types::TypeId,
-    span: crate::source::Span,
-    expected: Option<crate::types::TypeId>,
-    env: std::sync::Arc<super::Env>,
-    gadt: Vec<(crate::types::TParamId, crate::types::TypeId, i8)>,
-    body_node: Option<super::BodyNode>,
-    of_bodies: bool,
+pub(super) struct PendingCall {
+    pub(super) call: super::apply::MethodCall,
+    pub(super) sig: std::sync::Arc<crate::symbols::MethodSig>,
+    pub(super) subst: crate::types::Subst,
+    pub(super) args: Vec<crate::tir::TExprId>,
+    pub(super) arg_types: Vec<(crate::tir::TExprId, crate::types::TypeId)>,
+    pub(super) ret_ty: crate::types::TypeId,
+    pub(super) span: crate::source::Span,
+    pub(super) expected: Option<crate::types::TypeId>,
+    pub(super) env: std::sync::Arc<super::Env>,
+    /// The typer's GADT bounds at the call, which an expansion within the typing reads; none for
+    /// a call kept for the inlining phase, which runs outside the typer's state as dotty's does
+    /// (its context holds no GADT constraint: `summonInline[TC[A]]` under a case that bounds `A`
+    /// finds nothing, `out/phase/probes/gadt_summon`).
+    pub(super) gadt: Vec<(crate::types::TParamId, crate::types::TypeId, i8)>,
+    pub(super) body_node: Option<super::BodyNode>,
+    pub(super) of_bodies: bool,
+    /// The completion that owns what the expansion reports, and the completions in progress
+    /// around the call (`Inlining::completing`), as the call's site had them.
+    pub(super) owner: crate::source::DiagOwner,
+    pub(super) completing: Vec<crate::source::DiagOwner>,
     /// scalac's owner chain at the call, which a macro's `Symbol.spliceOwner` reads.
-    owners: Vec<super::site::SiteOwner>,
-    bodies_in_progress: Vec<crate::types::SymId>,
+    pub(super) owners: Vec<super::site::SiteOwner>,
+    pub(super) bodies_in_progress: Vec<crate::types::SymId>,
     /// Whether the expansion stands at the end of the call it completes (an inline given found
     /// by a search, `InlineState::site_at_end`).
-    at_end: bool,
+    pub(super) at_end: bool,
     /// A comprehension's trailing `map` `markTrailingMap` marks (`Worker::mark_pending_for_map`), whose
     /// expansion `DropForMap.transformInlined` reads.
     for_map: Option<std::sync::Arc<super::apply::ForMapMark>>,
+    /// For a call kept inside a transparent expansion, the locals of the expansions around it,
+    /// innermost last, which a class its expansion makes captures (`InlineState::outer_locals`).
+    pub(super) outer_locals: Vec<Vec<crate::types::SymId>>,
+    /// The receiver's type as the typing gave it (`InlineState::recv_types`), which the
+    /// expansion's `this` takes.
+    pub(super) recv_type: Option<crate::types::TypeId>,
 }
 
 /// A node changed in place, with its value or its recorded type as it was; or the pending call
@@ -202,6 +200,15 @@ impl Attempts {
     #[inline]
     pub fn closed(&self) -> bool {
         self.open == 0
+    }
+
+    /// The inlining phase's expansions begin: their errors are no attempt's verdict.
+    pub(super) fn flushing_begin(&mut self) {
+        self.flushing += 1;
+    }
+
+    pub(super) fn flushing_end(&mut self) {
+        self.flushing -= 1;
     }
 }
 
@@ -653,16 +660,17 @@ impl<'a> Worker<'a> {
         self.expand_pending(te, typed_as, call)
     }
 
-    /// Whether a plain inline call of `sym` typed now waits for the later expansion phase:
-    /// not a transparent method's, not one typed inside an expansion
+    /// Whether a plain inline call of `sym` typed now is kept for the inlining phase
+    /// (`Inlines.needsInlining`, which holds in the typer only for a transparent method or under
+    /// `Mode.ForceInline`): not a transparent method's, not one typed inside an expansion
     /// or a retained inline body, the method inlined into itself (whose nested calls teq still
     /// expands as it walks; dotty's `ForceInline` positions, an `inline if`'s condition, are
-    /// among them), and only under an attempt or an item, which flush it.
+    /// among them), and only under an attempt or an item, whose unit's end keeps it.
     pub(super) fn defers_plain_inline(&mut self, sym: crate::types::SymId) -> bool {
-        let at = plain_expansion();
-        if at == PlainExpansion::Typing
-            || self.inline.depth > 0
-            || self.inline.retained > 0
+        if self.inline.depth > 0 {
+            return self.defers_in_expansion(sym);
+        }
+        if self.inline.retained > 0
             || self.inline.checking > 0
             || self.quote.level > 0
             || self.quote.macro_depth > 0
@@ -674,22 +682,60 @@ impl<'a> Worker<'a> {
         // (`Inlines.needsInlining` after the typer), which the macro may read (macwire's
         // `lazy val api = wire[Api]` beside the others it wires).
         let inferring = self.inferring_depth != 0 && self.body_depth == self.inferring_depth;
-        let open = self.attempts.open != 0 || (at == PlainExpansion::Item && !self.var_frames.is_empty()) || inferring;
-        // A local inline method's call keeps its expansion here: what it checks at the call (a
-        // forward reference, scalac's E039 of the typer) is the typer's. A local inline given is
-        // found by the search, as a member's is, and expanded as the member's.
-        let info = self.syms.sym(sym);
-        open && info.mods & crate::ast::mods::TRANSPARENT == 0
-            && (info.owner != crate::symbols::Owner::Local || info.mods & crate::ast::mods::GIVEN != 0)
-            && self.intrinsic_of(sym).is_none()
+        let open = self.attempts.open != 0 || !self.var_frames.is_empty() || inferring;
+        open && self.plain_callee(sym)
+    }
+
+    /// Whether `sym` is a callee whose call the inlining phase expands, in the typer as inside a
+    /// transparent expansion (`Inlines.needsInlining`, one decision for both): not a transparent
+    /// method. A local inline method's call is kept once its definition's record is checked: what
+    /// the call checks of a forward reference (scalac's E039, the typer's) is checked here, where
+    /// such a call keeps its expansion (`Fallback::ForwardReference`). A local inline given is
+    /// found by the search, as a member's is, and expanded as the member's. A deferred inline
+    /// member's call is rejected where it is typed (`Typer.adapt`'s "Deferred inline ... cannot be
+    /// invoked"). Of `scala.compiletime`'s methods, those scalac declares a plain `inline def`
+    /// (`error`, `requireConst`, `constValueTuple`, `summonAll`) wait for the phase as any plain
+    /// call; the transparent ones and those no inline method expand where they are typed.
+    fn plain_callee(&mut self, sym: crate::types::SymId) -> bool {
+        let (mods, owner, defined) = {
+            let info = self.syms.sym(sym);
+            (info.mods, info.owner, info.def.is_some())
+        };
+        mods & crate::ast::mods::TRANSPARENT == 0
+            && self.intrinsic_of(sym).map_or(true, |i| i.is_plain_inline())
+            && !(defined && self.is_abstract_member(sym))
+            && (owner != crate::symbols::Owner::Local || mods & crate::ast::mods::GIVEN != 0 || self.substitution_entry(sym).is_ok())
+    }
+
+    /// Whether a plain inline call of `sym` met in an expansion under way stays a call kept for the
+    /// inlining phase: in the typer (the phase expands what it meets), inside transparent
+    /// expansions alone and none of their `Mode.ForceInline` positions (`InlineState::forcing`),
+    /// as dotty's `InlineTyper` keeps it (`Inlines.needsInlining` in the typer is
+    /// `needsTransparentInlining`); not where teq expands ahead of the phase (a flush, the
+    /// expansion of an argument a transparent call reads), nor in a quote or a macro's run.
+    pub(super) fn defers_in_expansion(&mut self, sym: crate::types::SymId) -> bool {
+        if self.inlining.running
+            || self.attempts.flushing > 0
+            || self.inline.forcing > 0
+            || self.inline.retained > 0
+            || self.inline.checking > 0
+            || self.quote.level > 0
+            || self.quote.macro_depth > 0
+        {
+            return false;
+        }
+        let transparent = |s: crate::types::SymId| self.syms.sym(s).mods & crate::ast::mods::TRANSPARENT != 0;
+        if self.inline.sites.is_empty() || !self.inline.sites.iter().all(|s| transparent(s.callee)) {
+            return false;
+        }
+        self.plain_callee(sym)
     }
 
     /// Whether an error an inline intrinsic reports now is one scalac reports only in its
     /// `Inlining` phase: inside the expansion of a transparent method at typing time, under an
-    /// attempt, with the later phase on.
+    /// attempt.
     pub(super) fn reports_late(&self) -> bool {
-        plain_expansion() != PlainExpansion::Typing
-            && self.attempts.open != 0
+        self.attempts.open != 0
             && self.attempts.flushing == 0
             && self.inline.sites.iter().any(|s| self.syms.sym(s.callee).mods & crate::ast::mods::TRANSPARENT != 0)
     }
@@ -763,11 +809,25 @@ impl<'a> Worker<'a> {
         // The types as they are solved now: a later rollback of a probe that forced this typing
         // may reopen a variable they name.
         let owner_subst = call.owner_subst.iter().map(|&(p, t)| (p, self.zonk(t))).collect();
+        let call_sym = call.sym;
         let call = super::apply::MethodCall { recv: call.recv, sym: call.sym, owner_subst, ext_recv: call.ext_recv, prefix: call.prefix, refined: call.refined.clone() };
         let subst = subst.iter().map(|&(p, t)| (p, self.zonk(t))).collect();
         let arg_types = arg_types.into_iter().map(|(e, t)| (e, self.zonk(t))).collect();
         let ret_ty = self.zonk(ret_ty);
         let expected = expected.map(|t| self.zonk(t));
+        // A call met in a transparent expansion stands where the outermost call does, in the
+        // scopes the expanded bodies open around it (`defers_in_expansion`): what its expansion
+        // searches at the site, and where it reports, as its `Inlined` stands in dotty's tree.
+        let (env, span, outer_locals) = match (self.inline.depth > 0, self.inline.site_env.clone(), self.inline.sites.first().map(|s| s.span)) {
+            (true, Some(site), Some(at)) => {
+                let mut locals = self.inline.outer_locals.clone();
+                locals.push(self.env_locals());
+                let env = self.expansion_site_env(&site).0;
+                (self.shared_site_env(env), at, locals)
+            }
+            _ => (self.shared_worker_env(), span, Vec::new()),
+        };
+        let recv_type = call.recv.and_then(|r| self.inline.recv_types.remove(&r)).map(|t| self.zonk(t));
         let pending = PendingCall {
             call,
             sig: sig.clone(),
@@ -777,25 +837,43 @@ impl<'a> Worker<'a> {
             ret_ty,
             span,
             expected,
-            env: std::sync::Arc::new(self.env.clone()),
+            env,
             gadt: self.gadt.clone(),
             body_node: self.body_node,
             of_bodies: self.diags.of_bodies,
+            owner: self.diags.owner,
+            completing: self.inlining.completing.clone(),
             owners: self.sites.owners.clone(),
             bodies_in_progress: self.bodies_in_progress.clone(),
             at_end: self.inline.site_at_end,
             for_map: None,
+            outer_locals,
+            recv_type,
         };
         let len = self.attempts.pending.len();
         self.note_rare(Rare::Pending, len);
-        self.attempts.pending.push(PendingInline { node, typed_as, call: Some(pending), seq: self.attempts.seq, held: Vec::new() });
+        let place = self.walk_place();
+        self.prog.mark_kept(node);
+        self.attempts.pending.push(PendingInline { node, typed_as, call: Some(pending), seq: self.attempts.seq, held: Vec::new(), place });
+        // The dialect's refusal is the call's, where the program writes it (teq's own, no phase
+        // of scalac's).
+        if self.inline.depth == 0 {
+            self.restrict_inline_call(call_sym, span);
+        }
+        // The call's dependency on the callee's body is recorded where the phase expands it, or,
+        // in a build that reported an error and runs no phase, where the phase gives way
+        // (`Worker::inlining_phase`).
     }
 
-    /// The later expansion phase: each pending call expanded at its site, in the order the calls
-    /// were typed, its node replaced in place by its expansion (as `expand_deferred_inlines`
-    /// replaces a quote's call); what an expansion leaves pending is expanded after it.
-    pub(super) fn flush_pending_inline(&mut self) {
-        self.flush_pending_from(0);
+
+    /// The pending entries from `start` on, taken out of the journal.
+    pub(super) fn take_pending_from(&mut self, start: usize) -> Vec<PendingInline> {
+        if self.attempts.pending.len() <= start {
+            return Vec::new();
+        }
+        let taken = self.attempts.pending.split_off(start);
+        self.pending_cut_at(start);
+        taken
     }
 
     /// The end of a unit the parallel typer publishes once it is made (a member's body, a class's
@@ -808,6 +886,65 @@ impl<'a> Worker<'a> {
         } else if !self.inline_unboxes.is_empty() && self.attempts.open == 0 {
             self.apply_inline_unboxes();
         }
+    }
+
+    /// The end of a unit the parallel typer publishes once it is made (an item, a member's body, a
+    /// class's `TClass`), whose file is `file`: its plain inline calls from `start` on are kept for
+    /// the inlining phase, as dotty's typer leaves a call in the tree for its `Inlining`
+    /// (`Inlines.needsInlining`), each with its site's context; a library's or the std's body,
+    /// compiled code whose own compilation inlined it, has them expanded now, which is the form the
+    /// interpreter runs.
+    ///
+    /// A class of a block (a local or anonymous class, a SAM's), lifted with what it captures,
+    /// keeps its calls too: the captures teq reads off the class's typed nodes where its typing
+    /// ends are completed after the phase (`settle_lifted_captures`), as dotty's `LambdaLift`
+    /// runs after its `Inlining` over the expanded trees.
+    #[inline]
+    pub(super) fn end_unit(&mut self, start: usize, file: crate::source::FileId) {
+        if self.attempts.pending.len() <= start
+            && self.attempts.fold_later.is_empty()
+            && self.attempts.index_later.is_empty()
+            && self.inline_unboxes.is_empty()
+        {
+            return;
+        }
+        self.end_unit_now(start, file);
+    }
+
+    #[inline(never)]
+    fn end_unit_now(&mut self, start: usize, file: crate::source::FileId) {
+        if !self.program_file(file) {
+            return self.flush_pending_since(start);
+        }
+        for p in self.take_pending_from(start) {
+            self.keep_for_phase(p);
+        }
+        self.keep_folds_for_phase();
+        if !self.inline_unboxes.is_empty() && self.attempts.open == 0 {
+            self.apply_inline_unboxes();
+        }
+    }
+
+    /// The `if`s and tuple indexes whose folding waits for pending calls, folded once the phase
+    /// expanded them (`fold_conditions_later`, `fold_indexes_later`).
+    pub(super) fn keep_folds_for_phase(&mut self) {
+        if !self.attempts.fold_later.is_empty() {
+            let later = std::mem::take(&mut self.attempts.fold_later);
+            self.inlining.fold_later.extend(later);
+        }
+        if !self.attempts.index_later.is_empty() {
+            let later = std::mem::take(&mut self.attempts.index_later);
+            self.inlining.index_later.extend(later);
+        }
+    }
+
+    /// The `if`s and tuple indexes the phase's expansions may fold, folded.
+    pub(super) fn fold_kept_folds(&mut self) {
+        self.attempts.fold_later = std::mem::take(&mut self.inlining.fold_later);
+        self.attempts.index_later = std::mem::take(&mut self.inlining.index_later);
+        self.fold_conditions_later();
+        self.fold_indexes_later();
+        self.keep_folds_for_phase();
     }
 
     /// The pending calls registered from position `start` on, expanded.
@@ -1033,7 +1170,9 @@ impl<'a> Worker<'a> {
         call.args = copied;
         let len = self.attempts.pending.len();
         self.note_rare(Rare::Pending, len);
-        self.attempts.pending.push(PendingInline { node: copy, typed_as, call: Some(call), seq: self.attempts.seq, held: Vec::new() });
+        let place = self.walk_place();
+        self.prog.mark_kept(copy);
+        self.attempts.pending.push(PendingInline { node: copy, typed_as, call: Some(call), seq: self.attempts.seq, held: Vec::new(), place });
     }
 
     /// The pending calls among `originals` that the expansion `expanded` does not hold: copies of
@@ -1048,9 +1187,9 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether `te` is a call still pending.
+    /// Whether `te` is a call still pending, its unit's or one a unit kept for the inlining phase.
     pub(super) fn is_pending_call(&self, te: crate::tir::TExprId) -> bool {
-        !self.attempts.pending.is_empty() && self.attempts.pending.iter().rev().any(|p| p.node == te && p.call.is_some())
+        self.inlining.holds(te) || !self.attempts.pending.is_empty() && self.attempts.pending.iter().rev().any(|p| p.node == te && p.call.is_some())
     }
 
     /// The pending inline call `te` is a comprehension's trailing `map` (`Desugar.makeFor`'s `TrailingForMap` on
@@ -1063,6 +1202,9 @@ impl<'a> Worker<'a> {
 
     /// The type the typing gave `te`, a call still pending.
     pub(super) fn pending_type(&self, te: crate::tir::TExprId) -> Option<crate::types::TypeId> {
+        if let Some(t) = self.inlining.typed_as(te) {
+            return Some(t);
+        }
         if self.attempts.pending.is_empty() {
             return None;
         }
@@ -1071,7 +1213,7 @@ impl<'a> Worker<'a> {
 
     /// Whether the tree of `te` holds a call still pending.
     pub(super) fn holds_pending_call(&self, te: crate::tir::TExprId) -> bool {
-        if self.attempts.pending.iter().all(|p| p.call.is_none()) {
+        if self.inlining.index.is_empty() && self.attempts.pending.iter().all(|p| p.call.is_none()) {
             return false;
         }
         self.prog.descendants(te).any(|e| self.is_pending_call(e))
@@ -1123,6 +1265,7 @@ impl<'a> Worker<'a> {
                 self.attempts.index_later.push((index, te, elem));
             } else if self.fold_constant_as_typed(index).is_some() {
                 let value = self.prog.expr(elem);
+                self.journal_typed(te);
                 self.rewrite_expr(te, value);
             }
         }
@@ -1143,10 +1286,12 @@ impl<'a> Worker<'a> {
 
     /// The pending call at `node` expanded, with what it captured of its site restored, the node
     /// replaced in place by the expansion.
-    fn expand_pending(&mut self, node: crate::tir::TExprId, typed_as: crate::types::TypeId, p: PendingCall) -> Option<crate::types::TypeId> {
+    pub(super) fn expand_pending(&mut self, node: crate::tir::TExprId, typed_as: crate::types::TypeId, p: PendingCall) -> Option<crate::types::TypeId> {
         let gadt = std::mem::replace(&mut self.gadt, p.gadt);
         let body_node = std::mem::replace(&mut self.body_node, p.body_node);
         let of_bodies = std::mem::replace(&mut self.diags.of_bodies, p.of_bodies);
+        let owner = std::mem::replace(&mut self.diags.owner, p.owner);
+        let completing = std::mem::replace(&mut self.inlining.completing, p.completing);
         let owners = std::mem::replace(&mut self.sites.owners, p.owners);
         let bodies = std::mem::replace(&mut self.bodies_in_progress, p.bodies_in_progress);
         let arg_types: Vec<_> = p.arg_types.into_iter().map(|(e, t)| (e, self.zonk(t))).collect();
@@ -1156,19 +1301,38 @@ impl<'a> Worker<'a> {
         let subst: crate::types::Subst = p.subst.iter().map(|&(q, t)| (q, self.zonk(t))).collect();
         let ret_ty = self.zonk(p.ret_ty);
         let expected = p.expected.map(|t| self.zonk(t));
-        let env = std::sync::Arc::try_unwrap(p.env).unwrap_or_else(|shared| (*shared).clone());
+        // The phase's walk keeps a block's scope record in place across its calls
+        // (`Inlining::installed`); any other expansion takes the call's environment around it.
+        let installed = self.inline.depth == 0 && self.inlining.installed.as_ref().is_some_and(|i| std::sync::Arc::ptr_eq(i, &p.env));
+        let env = if installed { None } else { Some(std::sync::Arc::try_unwrap(p.env).unwrap_or_else(|shared| (*shared).clone())) };
         let at_end = std::mem::replace(&mut self.inline.site_at_end, p.at_end);
-        let expanded = self.with_env(env, |t| t.expand_inline(&call, &sig, &subst, &args, ret_ty, span, expected));
+        let outer_locals = std::mem::replace(&mut self.inline.outer_locals, p.outer_locals);
+        if let (Some(r), Some(t)) = (call.recv, p.recv_type) {
+            let t = self.zonk(t);
+            self.inline.recv_types.insert(r, t);
+        }
+        let expanded = match env {
+            Some(env) => self.with_env(env, |t| t.expand_inline(&call, &sig, &subst, &args, ret_ty, span, expected)),
+            None => self.expand_inline(&call, &sig, &subst, &args, ret_ty, span, expected),
+        };
+        self.inline.outer_locals = outer_locals;
         self.inline.site_at_end = at_end;
         self.inline.arg_types = arg_types;
         self.gadt = gadt;
         self.body_node = body_node;
         self.diags.of_bodies = of_bodies;
+        self.diags.owner = owner;
+        self.inlining.completing = completing;
         self.sites.owners = owners;
         self.bodies_in_progress = bodies;
         if flush_trace() {
             let name = self.name_str(self.syms.sym(call.sym).name);
             eprintln!("flush {} at {:?}: {:?}", name, span, expanded.map(|(e, _)| self.prog.expr(e)));
+        }
+        // An expansion the inlining phase's first round gave up leaves the call as it was
+        // (`Worker::expand_suspending`).
+        if self.inlining.suspended_hit {
+            return None;
         }
         let (expanded, ty) = expanded?;
         // `DropForMap.transformInlined` of a trailing `map`'s expansion, its call kept as dotty's `Inlined` keeps it.
@@ -1181,6 +1345,10 @@ impl<'a> Worker<'a> {
         };
         {
             if expanded != node {
+                // The call stays what reflection reads of the typed tree (`Inlining::journal`).
+                if self.prog.is_kept(node) {
+                    self.journal_typed(node);
+                }
                 // A type the typing gave the call's node after it was typed (an `Int` widened to
                 // `Double` in place, `widen_numeric`) stays, as it stays on an expansion's node.
                 // A numeric widening is the node retyped (an `Int` node typed `Double`); another
@@ -1259,6 +1427,18 @@ impl<'a> Worker<'a> {
             if let Some(&sym) = ix.selected.get(&from) {
                 ix.selected.insert(to, sym);
             }
+        }
+    }
+
+    /// The diagnostics from `from` on dropped as a retraction drops them, the late ones' positions
+    /// among them with them (what a file's round the inlining phase gives up reported after its
+    /// suspension, `Worker::keep_suspension_prefix`).
+    pub(super) fn drop_diagnostics_from(&mut self, from: usize) {
+        if !self.attempts.late.is_empty() {
+            self.attempts.late.retain(|&i| (i as usize) < from);
+        }
+        if self.diags.items.len() > from {
+            self.drop_diagnostics(from);
         }
     }
 
@@ -1497,13 +1677,20 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Rewrites the node `te` in place, its prior value journaled while an attempt is open.
+    /// Rewrites the node `te` in place, its prior value journaled while an attempt is open and
+    /// while the inlining phase records a file's round (`Inlining::rewrite_log`).
     pub(super) fn rewrite_expr(&mut self, te: crate::tir::TExprId, value: crate::tir::TExpr) {
         if self.attempts.open != 0 {
             let len = self.attempts.rewrites.len();
             self.note_rare(Rare::Rewrites, len);
             let prior = self.prog.expr(te);
             self.attempts.rewrites.push(Rewrite::Expr(te, prior));
+        }
+        if self.inlining.rewrite_log.is_some() {
+            let prior = self.prog.expr(te);
+            if let Some(log) = self.inlining.rewrite_log.as_mut() {
+                log.push(super::inlining::Prior::Expr(te, prior));
+            }
         }
         self.prog.exprs[te.idx()] = value;
     }
@@ -1516,6 +1703,12 @@ impl<'a> Worker<'a> {
     }
 
     fn journal_type(&mut self, te: crate::tir::TExprId) {
+        if self.inlining.rewrite_log.is_some() && self.prog.record_types {
+            let prior = self.prog.type_or_aside(te);
+            if let Some(log) = self.inlining.rewrite_log.as_mut() {
+                log.push(super::inlining::Prior::Type(te, prior));
+            }
+        }
         if self.attempts.open != 0 && self.prog.record_types {
             let len = self.attempts.rewrites.len();
             self.note_rare(Rare::Rewrites, len);
@@ -1610,8 +1803,9 @@ impl<'a> Worker<'a> {
             if !self.attempts.rewrites.is_empty() {
                 self.attempts.rewrites.clear();
             }
-            if !self.attempts.pending.is_empty() && (plain_expansion() == PlainExpansion::Commit || self.var_frames.is_empty()) {
-                self.flush_pending_inline();
+            if !self.attempts.pending.is_empty() && self.var_frames.is_empty() {
+                let file = self.env.file;
+                self.end_unit(0, file);
             }
         }
     }

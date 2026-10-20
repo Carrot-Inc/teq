@@ -1,7 +1,7 @@
 // expect: no eligible member nope at Source
 // expect: cannot resolve export: missing not found
 // expect: cannot resolve export: Inner not found
-// expect: an export needs a qualifier
+// expect: expected '.', found new line
 // absent: cyclic export
 // expect: no given instance of type Tag[Int]
 // expect: not found: secret

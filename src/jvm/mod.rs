@@ -42,6 +42,9 @@ pub struct Input<'a> {
     pub sources: &'a [SourceFile],
     pub file_pkgs: &'a [PkgId],
     pub asts: &'a crate::ast::Asts,
+    /// The typer's getters of the program's defaults, whose completed types the getters' methods
+    /// take (`getters::getter_type`); none for a build without the typer's table.
+    pub getters: Option<&'a crate::typer::getters::GetterTable>,
     /// The Java classes of the classpath and the JDK, called through the descriptors their
     /// class files give.
     pub java: Option<&'a crate::typer::loader::Java>,

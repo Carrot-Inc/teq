@@ -3652,7 +3652,10 @@ impl<'w, 'a> P<'w, 'a> {
                     let default = typed.get(starts[ci] + k).copied().flatten();
                     // A getter is inline where its parameter is (`Desugar.defaultGetters`).
                     let inline = self.w.syms.sym(p.sym).mods & mods::INLINE != 0;
-                    self.default_getter(&name, index, &sig.tparams, &declared[..pos], p.ty, info.mods & mods::PRIVATE != 0, false, exported, inline, producer, default);
+                    // The getter's type as its completion gave it (`inferredResultType`), the
+                    // parameter's where nothing refers to the method's type parameters.
+                    let gty = crate::typer::getters::getter_type(&self.w.getters, &self.w.syms, crate::tir::DefaultOf::Method(s), starts[ci] + k).unwrap_or(p.ty);
+                    self.default_getter(&name, index, &sig.tparams, &declared[..pos], gty, gty == p.ty, info.mods & mods::PRIVATE != 0, false, exported, inline, producer, default);
                 }
                 index += 1;
             }
@@ -3660,7 +3663,7 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn default_getter(&mut self, method: &str, index: u32, tparams: &[TParamId], before: &[ClauseSig], ty: TypeId, private: bool, synthetic: bool, exported: bool, inline: bool, producer: Producer, default: Option<crate::tir::TExprId>) {
+    fn default_getter(&mut self, method: &str, index: u32, tparams: &[TParamId], before: &[ClauseSig], ty: TypeId, unchecked: bool, private: bool, synthetic: bool, exported: bool, inline: bool, producer: Producer, default: Option<crate::tir::TExprId>) {
         let addr = self.buf.addr();
         self.buf.byte(DEFDEF);
         let len = self.buf.begin_length();
@@ -3674,22 +3677,20 @@ impl<'w, 'a> P<'w, 'a> {
             crate::tir::TExpr::Lambda(ps, body) if ps.len == 0 && self.w.as_function(ty).is_none() => body,
             _ => e,
         });
-        // Of a parameter whose type names the method's type parameters, scalac's getter has the
-        // default's type (`foo$default$1[T]: String` of `x: T = "abc"`), from which its calls
-        // infer the method's type arguments; teq's typer infers them without it.
-        let own_typed = default.and_then(|e| self.w.prog.type_of(e)).map_or(false, |d| {
-            !tparams.is_empty() && self.w.mentions_tparam_of(ty, Some(tparams)) && !self.w.mentions_tparam_of(d, Some(tparams))
-        });
+        // The getter's type: the parameter's under `@uncheckedVariance` where the completion kept
+        // it (`inferredResultType`: `AnnotatedType(defaultTp, UncheckedVarianceAnnot)`), else the
+        // default's own (`foo$default$1[T]: String` of `x: T = "abc"`), from which a downstream's
+        // calls infer the method's type arguments.
         self.mark_tree();
-        self.unchecked_variance(ty);
+        if unchecked {
+            self.unchecked_variance(ty);
+        } else {
+            self.ty(ty);
+        }
         match default.filter(|_| producer == Producer::Default) {
             Some(e) => {
                 let mark = self.body_begin();
-                if own_typed {
-                    self.fail("a default of a type parameter's type, which scalac's getter types as the default".to_string());
-                } else {
-                    self.body_term(e, ty);
-                }
+                self.body_term(e, ty);
                 match self.body_end(mark) {
                     Ok(()) => self.count_body(producer),
                     Err(reason) => {
@@ -4382,7 +4383,8 @@ impl<'w, 'a> P<'w, 'a> {
             for p in &clause.params {
                 if p.has_default {
                     let default = typed.get(index as usize).copied().flatten();
-                    self.default_getter("<init>", index, &tparams, &clauses[..ci], p.ty, false, false, false, false, Producer::Default, default);
+                    let gty = crate::typer::getters::getter_type(&self.w.getters, &self.w.syms, crate::tir::DefaultOf::Ctor(k), index as usize).unwrap_or(p.ty);
+                    self.default_getter("<init>", index, &tparams, &clauses[..ci], gty, gty == p.ty, false, false, false, false, Producer::Default, default);
                 }
                 index += 1;
             }
@@ -4401,7 +4403,8 @@ impl<'w, 'a> P<'w, 'a> {
                 for p in &clause.params {
                     if p.has_default {
                         let default = typed.get(index as usize).copied().flatten();
-                        self.default_getter("<init>", index, &tparams, &sig.clauses[..ci], p.ty, false, false, false, false, Producer::Default, default);
+                        let gty = crate::typer::getters::getter_type(&self.w.getters, &self.w.syms, crate::tir::DefaultOf::Method(s), index as usize).unwrap_or(p.ty);
+                        self.default_getter("<init>", index, &tparams, &sig.clauses[..ci], gty, gty == p.ty, false, false, false, false, Producer::Default, default);
                     }
                     index += 1;
                 }

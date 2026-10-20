@@ -862,6 +862,7 @@ impl<'a> Worker<'a> {
         let mut opaque = Vec::new();
         let mut spread = Vec::new();
         let mut ascribed = Vec::new();
+        let mut tuple_index = Vec::new();
         let mut erased = Vec::new();
         if let Some(b) = body {
             // What the notes name of a typing the body dropped (an alternative tried and
@@ -890,6 +891,8 @@ impl<'a> Worker<'a> {
             spread.sort();
             ascribed = nodes.keys().copied().filter(|&e| self.prog.is_ascribed(e)).collect();
             ascribed.sort();
+            tuple_index = nodes.keys().copied().filter(|&e| self.prog.is_tuple_index(e)).collect();
+            tuple_index.sort();
             // The lean library's call is the intrinsic's, deferred: each expansion evaluates it anew.
             erased = nodes.keys().copied().filter(|&e| !notes.deferred.contains(&e) && self.calls_erased_value(e)).collect();
             erased.sort();
@@ -935,6 +938,7 @@ impl<'a> Worker<'a> {
             opaque,
             spread,
             ascribed,
+            tuple_index,
             erased,
             hoisted,
             imports: if body.is_some() { notes.imports } else { Vec::new() },
@@ -1159,6 +1163,9 @@ impl<'a> Worker<'a> {
         }
         for (i, &e) in def.ascribed.iter().enumerate() {
             note(e, Meta::Ascribed(i as u32));
+        }
+        for (i, &e) in def.tuple_index.iter().enumerate() {
+            note(e, Meta::TupleIndex(i as u32));
         }
         for (i, &e) in def.erased.iter().enumerate() {
             note(e, Meta::Erased(i as u32));
@@ -1652,6 +1659,7 @@ impl<'a> Worker<'a> {
                 Meta::Opaque(_) => self.prog.mark_opaque(copy),
                 Meta::Spread(_) => self.prog.mark_spread(copy),
                 Meta::Ascribed(_) => self.prog.mark_ascribed(copy),
+                Meta::TupleIndex(_) => self.prog.mark_tuple_index(copy),
                 Meta::Erased(_) => self.note_erased_value(copy, Span::default()),
                 Meta::Import(i) => {
                     let imp = def.imports[i as usize];
@@ -2259,6 +2267,7 @@ impl<'a> Worker<'a> {
         }
         let owners_depth = self.sites.owners.len();
         self.sites.owners.push(SiteOwner::Sym(sym));
+        let outer_owner = self.entered_body(sym);
         self.bodies_in_progress.push(sym);
         let var_frame = self.var_frame_begin();
         self.body_depth += 1;
@@ -2269,7 +2278,7 @@ impl<'a> Worker<'a> {
         let outer_return = self.return_to.take();
         let outer_returns = std::mem::take(&mut self.returns);
         let transparent = def.mods & mods::TRANSPARENT != 0;
-        let defaults = self.enter_params(sig, &default_exprs, frame);
+        let defaults = self.enter_params(sig, &default_exprs, frame, Some(crate::tir::DefaultOf::Method(sym)), true);
         let (te, ty) = if declared {
             (self.check_expr(body, sig.ret), sig.ret)
         } else {
@@ -2285,6 +2294,7 @@ impl<'a> Worker<'a> {
         self.body_depth -= 1;
         self.var_frame_end(var_frame);
         self.bodies_in_progress.pop();
+        self.left_body(outer_owner);
         self.sites.owners.truncate(owners_depth);
         self.ext_scope = outer_ext_scope;
         self.env.frames.truncate(frame);
@@ -2694,6 +2704,7 @@ enum Meta {
     Opaque(u32),
     Spread(u32),
     Ascribed(u32),
+    TupleIndex(u32),
     Erased(u32),
     Import(u32),
     Alias(u32),
@@ -2801,6 +2812,7 @@ impl InlineDefinition {
             erased: Vec::new(),
             spread: Vec::new(),
             ascribed: Vec::new(),
+            tuple_index: Vec::new(),
             hoisted: Vec::new(),
             imports: Vec::new(),
             node_types: FxMap::default(),
@@ -2896,9 +2908,9 @@ inline def f(x: Int, y: String = \"d\"): String =
             assert!(nodes.iter().all(|&e| w.prog.type_of(e).is_none()));
             let body_ty = def.node_types[&def.body.unwrap()];
             assert_eq!(w.show(body_ty), "String");
-            // A literal's node keeps its constant type where it conforms (`TypeAssigner.assignType(Literal)`).
-            let default_ty = def.node_types[&def.defaults[1].unwrap()];
-            assert_eq!(w.show(default_ty), "\"d\"");
+            // The default is its getter's, a member of its own (`Desugar.addDefaultGetters`): the
+            // record holds the body alone, a call's omission applying the getter.
+            assert!(def.defaults.iter().all(|d| d.is_none()));
         });
     }
 

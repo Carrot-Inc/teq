@@ -45,6 +45,15 @@ pub struct ClauseArgs {
     /// The method and where the clause's parameters start among its: a parameter without a
     /// default of its own takes one a member it overrides declares (`hasDefaultParams`).
     pub inherit: Option<(SymId, usize)>,
+    /// Whose default getters the clause's omitted arguments apply, and where the clause's
+    /// parameters start among the callee's (`getters`).
+    pub getters: Option<(DefaultOf, usize)>,
+    /// The steps the callee's signature was seen through from the receiver, which a getter's
+    /// type is seen through as well (`Worker::replay_sig_view`).
+    pub view: Vec<super::apply::ViewStep>,
+    /// The type of each omitted argument's getter, seen so, by the parameter's place in the
+    /// clause: what the getter's application has (`elaborate_written`).
+    pub getter_types: Vec<(usize, TypeId)>,
     /// The parameters the arguments left to their defaults, in order.
     pub omitted: Vec<usize>,
     /// The parameter of each argument, in the order written.
@@ -103,46 +112,67 @@ pub(crate) fn clause_start(sig: &MethodSig, i: usize) -> usize {
     i
 }
 
-/// Whether a class's body runs nothing when an instance is made: no statements and no val
-/// with an initialiser, nor in a superclass (dotty's `NoInits`, `TreeInfo.bodyKind`): its
-/// constructor is pure and its object's reference a path (`TreeInfo.refPurity`).
-pub(crate) fn no_inits(syms: &Symbols, c: ClassId) -> bool {
-    let mut at = Some(c);
-    let mut steps = 0;
-    while let Some(k) = at {
-        let info = syms.class(k);
-        if info.has_statements {
-            return false;
-        }
-        // `TreeInfo.defKind`: a val with a right-hand side initialises, a module's or an enum
-        // case's too, and a given's without parameters (a lazy val); a class parameter's, an
-        // abstract one's, a def's and a class's do not. A product's member is judged as its
-        // source's, by its flags.
-        let fields = info.member_order.iter().any(|&m| {
-            let s = syms.sym(m);
-            let valued = match s.kind {
-                SymKind::Val | SymKind::Var | SymKind::Object(_) | SymKind::EnumValue(_) => true,
-                SymKind::Given => s.sig.as_ref().map_or(true, |sig| sig.clauses.is_empty()),
-                _ => false,
-            };
-            valued && s.mods & mods::ABSTRACT == 0 && !info.ctor_syms.iter().any(|cl| cl.contains(&m))
-        });
-        // A nested class or trait whose constructor has defaults gets a companion object for
-        // their getters where it has none (`Desugar.addDefaultGetters`), a module val of this one.
-        let getters_companion = info.nested.values().any(|&n| {
-            let k = syms.class(n);
-            matches!(k.kind, ClassKind::Class | ClassKind::Trait) && k.companion.is_none() && k.ctor.iter().any(|cl| cl.params.iter().any(|p| p.has_default))
-        });
-        if fields || getters_companion {
-            return false;
-        }
-        at = info.superclass;
-        steps += 1;
-        if steps > 64 {
-            return false;
-        }
+/// `SymDenotation.isNoInitsRealClass` over the symbol tables alone, for the emitters, which have
+/// no worker: a class or an object, no trait, which is assured (`isAssuredNoInits`: `Some`, a
+/// tuple class, an object whose companion is one) or every base of which (`base_types`, the
+/// traits among them) runs nothing when an instance is made (`NoInits`), as the typer recorded
+/// it at the class's completion from its source or its pickle (`ClassInfo::no_inits_recorded`,
+/// `Worker::class_no_inits`), else as its records hold it.
+pub(crate) fn no_inits(syms: &Symbols, interner: &crate::intern::Interner, c: ClassId) -> bool {
+    if syms.class(c).kind == ClassKind::Trait {
+        return false;
     }
-    true
+    if is_assured_no_inits(syms, interner, c) {
+        return true;
+    }
+    syms.class(c).base_types.iter().all(|&(k, _)| class_no_inits_recorded(syms, k))
+}
+
+/// `Definitions.isAssuredNoInits` over the symbol tables: `scala.Some`, `scala.Tuple1` to
+/// `scala.Tuple22` (`MaxTupleArity`), or an object whose companion is one.
+fn is_assured_no_inits(syms: &Symbols, interner: &crate::intern::Interner, c: ClassId) -> bool {
+    let assured = |k: ClassId| {
+        let info = syms.class(k);
+        let in_scala = matches!(info.owner, Owner::Package(p) if interner.get(syms.pkg(p).name) == "scala" && syms.pkg(p).parent.is_some_and(|q| syms.pkg(q).parent.is_none()));
+        let name = interner.get(info.name);
+        in_scala && (name == "Some" || name.strip_prefix("Tuple").is_some_and(|n| n.parse::<u32>().is_ok_and(|n| (1..=22).contains(&n)))) // dotty's `Definitions.MaxTupleArity`, `isAssuredNoInits`
+    };
+    let info = syms.class(c);
+    if info.kind == ClassKind::Object {
+        return info.companion.is_some_and(|k| syms.class(k).kind != ClassKind::Object && assured(k));
+    }
+    assured(c)
+}
+
+/// Whether the class `k` runs nothing of its own when an instance is made: as the typer recorded
+/// it at the class's completion (`no_inits_recorded`, `TreeInfo.parentsKind` and `defKind` over its
+/// source, `TreeUnpickler.indexStats` over its pickle), else as its records hold it: no statement,
+/// no val with an initialiser (a module's, an enum case's and a parameterless given's among them),
+/// no companion object made for its nested classes' default getters.
+pub(crate) fn class_no_inits_recorded(syms: &Symbols, k: ClassId) -> bool {
+    let info = syms.class(k);
+    match info.no_inits_recorded {
+        1 => return true,
+        2 => return false,
+        _ => {}
+    }
+    if info.has_statements {
+        return false;
+    }
+    let fields = info.member_order.iter().any(|&m| {
+        let s = syms.sym(m);
+        let valued = match s.kind {
+            SymKind::Val | SymKind::Var | SymKind::Object(_) | SymKind::EnumValue(_) => true,
+            SymKind::Given => s.sig.as_ref().map_or(true, |sig| sig.clauses.is_empty()),
+            _ => false,
+        };
+        valued && s.mods & mods::ABSTRACT == 0 && !info.ctor_syms.iter().any(|cl| cl.contains(&m))
+    });
+    let getters_companion = info.nested.values().any(|&n| {
+        let k = syms.class(n);
+        matches!(k.kind, ClassKind::Class | ClassKind::Trait) && k.companion.is_none() && k.ctor.iter().any(|cl| cl.params.iter().any(|p| p.has_default))
+    });
+    !fields && !getters_companion
 }
 
 impl<'a> Worker<'a> {
@@ -197,6 +227,26 @@ impl<'a> Worker<'a> {
             // first read running the initialiser.
             TExpr::CallStatic(s, l) if l.len == 0 && self.lazy_accessor(s) => Purity::IDEMPOTENT,
             TExpr::CallMethod(r, s, l) if l.len == 0 && self.lazy_accessor(s) => self.expr_purity(r).min(Purity::IDEMPOTENT),
+            // `isPureApply`: a constant expression of a known pure operation (a primitive value
+            // class's or `String`'s method, one of `Any`'s `pureMethods`) over pure arguments, and a
+            // case class's synthetic `apply` whose class has no initialisation
+            // (`isPureSyntheticCaseApply`).
+            TExpr::CallStatic(s, l) if self.is_pure_synthetic_case_apply(s) => {
+                let args = self.prog.expr_list(l).to_vec();
+                args.into_iter().fold(Purity::PURE, |p, a| p.min(self.expr_purity(a)))
+            }
+            TExpr::CallStatic(s, l) if self.is_known_pure_op(s) && self.fold_constant_as_typed(e).is_some() => {
+                let args = self.prog.expr_list(l).to_vec();
+                args.into_iter().fold(Purity::PURE, |p, a| p.min(self.expr_purity(a)))
+            }
+            TExpr::CallMethod(r, s, l) if self.is_known_pure_op(s) && self.fold_constant_as_typed(e).is_some() => {
+                let args = self.prog.expr_list(l).to_vec();
+                let p = self.expr_purity(r).min(Purity::PURE);
+                args.into_iter().fold(p, |p, a| p.min(self.expr_purity(a)))
+            }
+            // `scala.quoted.Type.of[T]` and `scala.compiletime.erasedValue[T]` (`exprPurity`'s
+            // `TypeApply` cases).
+            TExpr::CallStatic(s, l) if l.len == 0 && self.is_pure_type_apply(s) => Purity::PURE,
             // A stable member's reference, an export's forwarder of an object or of a val
             // (`final def O: p.O.type`, `isStableMember`): a path (`refPurity`).
             TExpr::CallStatic(s, l) if l.len == 0 && self.stable_member_def(s) => {
@@ -234,19 +284,77 @@ impl<'a> Worker<'a> {
         info.mods & mods::LAZY != 0 && matches!(info.kind, SymKind::Val | SymKind::Given)
     }
 
-    /// dotty's `TreeInfo.refPurity` of a reference to `s`.
+    /// `isKnownPureOp`: a method of a primitive value class or of `String`, or one of `Any`'s
+    /// `pureMethods` (`==`, `!=`, `equals`, `hashCode`, `toString`, `##`, `getClass`,
+    /// `isInstanceOf`, `eq`, `ne`).
+    fn is_known_pure_op(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        match info.owner {
+            Owner::Class(c) => {
+                if c == self.b.string || self.syms.class(c).kind == ClassKind::Builtin {
+                    return true;
+                }
+                let any = c == self.b.any_ref || self.class_path(c) == "scala.Any";
+                any && matches!(self.name_ref(info.name), "==" | "!=" | "equals" | "hashCode" | "toString" | "##" | "getClass" | "isInstanceOf" | "eq" | "ne")
+            }
+            _ => false,
+        }
+    }
+
+    /// `isPureSyntheticCaseApply`: the synthetic `apply` of a case class's companion whose class
+    /// has no initialisation (`isNoInitsRealClass`).
+    fn is_pure_synthetic_case_apply(&mut self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        if info.name != crate::names::APPLY || info.def.is_some() {
+            return false;
+        }
+        let Owner::Class(o) = info.owner else { return false };
+        if self.syms.class(o).kind != ClassKind::Object {
+            return false;
+        }
+        let Some(k) = self.syms.class(o).companion else { return false };
+        self.syms.class(k).mods & mods::CASE != 0 && self.no_inits_real_class(k)
+    }
+
+    /// `exprPurity`'s pure `TypeApply` cases: `Type.of[T]` and `erasedValue[T]` (`classOf` and
+    /// `asInstanceOf` have nodes of their own).
+    fn is_pure_type_apply(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        let name = self.name_ref(info.name);
+        match info.owner {
+            Owner::Class(c) => name == "of" && self.class_path(c) == "scala.quoted.Type",
+            Owner::Package(p) => name == "erasedValue" && self.pkg_path(p) == "scala.compiletime",
+            Owner::Local => false,
+        }
+    }
+
+    /// dotty's `TreeInfo.refPurity` of a reference to `s`: a method that takes parameters, a
+    /// reference whose type is a constant, a stable member (a module's by its initialisation, a
+    /// lazy one idempotent, an inline parameter impure), else impure.
     fn ref_purity(&mut self, s: SymId) -> Purity {
         let (kind, mods) = (self.syms.sym(s).kind, self.syms.sym(s).mods);
+        // `tree.tpe.isInstanceOf[ConstantType]`: a value declared of a constant type.
+        if matches!(kind, SymKind::Val | SymKind::Param) && mods & (mods::MUTABLE | mods::LAZY) == 0 {
+            if let Some(sig) = self.syms.sym(s).sig.as_ref() {
+                if sig.clauses.is_empty() && sig.tparams.is_empty() && matches!(self.types.get(sig.ret), Type::Lit(_)) {
+                    return Purity::PURE_PATH;
+                }
+            }
+        }
         match kind {
             SymKind::Var => Purity::IMPURE,
             _ if mods & mods::MUTABLE != 0 => Purity::IMPURE,
             SymKind::Object(c) => self.module_purity(c),
             SymKind::Param if mods & mods::INLINE != 0 => Purity::IMPURE,
             SymKind::Val | SymKind::Param | SymKind::EnumValue(_) if mods & mods::LAZY == 0 => Purity::PURE_PATH,
+            // A given with parameters is a method, whose reference is a path (`Parsers.givenDef`).
+            SymKind::Given if self.syms.sym(s).sig.as_ref().is_some_and(|sig| !sig.clauses.is_empty() || !sig.tparams.is_empty()) => Purity::PURE_PATH,
             SymKind::Val | SymKind::Param | SymKind::EnumValue(_) | SymKind::Given => Purity::IDEMPOTENT_PATH,
-            // A method's reference is a path unless it is parameterless.
+            // A method's reference is a path unless it is parameterless (`refPurity`'s
+            // `isParameterless`), where it is no stable member but a stable forwarder
+            // (`StableRealizable`).
             SymKind::Def => match self.syms.sym(s).sig.as_ref() {
-                Some(sig) if sig.clauses.is_empty() => Purity::IMPURE,
+                Some(sig) if sig.clauses.is_empty() && !self.syms.sym(s).stable => Purity::IMPURE,
                 _ => Purity::PURE_PATH,
             },
             SymKind::Overloaded(_) => Purity::PURE_PATH,
@@ -263,17 +371,10 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether a class's body runs nothing when an instance is made (`no_inits`), the class and
-    /// its superclasses completed first: a product's members are known once it completes, as
-    /// dotty's `is(NoInits)` completes a class read from its pickle.
+    /// `isNoInitsRealClass` (`no_inits_real_class`): the one rule the purity of an object's
+    /// reference and of a construction read.
     pub(super) fn no_inits(&mut self, c: ClassId) -> bool {
-        let mut at = Some(c);
-        for _ in 0..64 {
-            let Some(k) = at else { break };
-            self.complete_class(k);
-            at = self.syms.class(k).superclass;
-        }
-        no_inits(&self.syms, c)
+        self.no_inits_real_class(c)
     }
 
     /// The method whose parameter `index`, counted across its clauses, has the default a call
@@ -358,7 +459,14 @@ impl<'a> Worker<'a> {
         if written.omitted.is_empty() && written.order.is_empty() {
             return;
         }
-        let types: Vec<TypeId> = if written.omitted.is_empty() { Vec::new() } else { clause.params.iter().map(|p| self.param_type(p.ty, subst)).collect() };
+        let mut types: Vec<TypeId> = if written.omitted.is_empty() { Vec::new() } else { clause.params.iter().map(|p| self.param_type(p.ty, subst)).collect() };
+        // An omitted argument is its getter's application, of the getter's type as the arguments'
+        // typing saw it (`ClauseArgs::getter_types`: `tryDefault`'s `defaultArg.tpe.widen`).
+        for &(j, t) in &written.getter_types {
+            if j < types.len() {
+                types[j] = t;
+            }
+        }
         self.elaborate_clause(plan, recv, args, first, written, &types, span);
     }
 

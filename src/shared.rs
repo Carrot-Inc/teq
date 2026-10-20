@@ -286,6 +286,11 @@ impl<T> SlabVec<T> {
         unsafe { (*self.mapped.get()).as_ref().map_or(0, |m| m.bytes) }
     }
 
+    /// How many slots the mapping holds, none where the vector is not mapped.
+    pub fn mapped_entries(&self) -> usize {
+        self.mapped_bytes() / std::mem::size_of::<T>().max(1)
+    }
+
     /// Whether the entries live in a mapping (`map_regions`).
     pub fn is_mapped(&self) -> bool {
         unsafe { (*self.mapped.get()).is_some() }
@@ -1147,6 +1152,8 @@ pub struct CellState(AtomicU32);
 
 const NOT_STARTED: u32 = 0;
 const DONE: u32 = 1;
+/// `Completion::Suspended`, above every claim.
+const SUSPENDED: u32 = u32::MAX;
 /// From here up: `Done` stored under the loader's lock, `Done` to the thread that stored it
 /// and `InProgress` to every other until the records the completion changed are published
 /// (`flush_staged_done`, from `Worker::lock_released`).
@@ -1178,6 +1185,7 @@ impl CellState {
         CellState(AtomicU32::new(match c {
             Completion::NotStarted => NOT_STARTED,
             Completion::Done => DONE,
+            Completion::Suspended => SUSPENDED,
             // No thread: a record made in progress on the thread that reads it next.
             Completion::InProgress => 2,
         }))
@@ -1189,6 +1197,7 @@ impl CellState {
         match self.0.load(Ordering::Acquire) {
             NOT_STARTED => Completion::NotStarted,
             DONE => Completion::Done,
+            SUSPENDED => Completion::Suspended,
             v => CellState::in_progress(v),
         }
     }
@@ -1209,7 +1218,7 @@ impl CellState {
     #[inline]
     pub fn owner(&self) -> Option<usize> {
         match self.0.load(Ordering::Acquire) {
-            NOT_STARTED | DONE => None,
+            NOT_STARTED | DONE | SUSPENDED => None,
             v if v >= STAGED => Some((v - STAGED) as usize),
             v => Some((v - 2) as usize),
         }
@@ -1227,10 +1236,12 @@ impl CellState {
             Completion::NotStarted => NOT_STARTED,
             Completion::Done if lock_depth() > 0 => return self.stage(),
             Completion::Done => DONE,
+            // Its readers read no record of it: never staged.
+            Completion::Suspended => SUSPENDED,
             Completion::InProgress => 2 + thread_number() as u32,
         };
         self.0.store(v, Ordering::Release);
-        if v == DONE {
+        if v == DONE || v == SUSPENDED {
             notify();
         }
     }

@@ -275,7 +275,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// Writes `f` as the trees of the node `e`: their source and the span a node made without
     /// one takes.
-    fn within<R>(&mut self, e: Option<TExprId>, f: impl FnOnce(&mut Self) -> R) -> R {
+    pub(super) fn within<R>(&mut self, e: Option<TExprId>, f: impl FnOnce(&mut Self) -> R) -> R {
         let own = self.term_at(e);
         let (src, ctx) = (self.src_ctx, self.span_ctx);
         if let Some((file, span)) = own {
@@ -771,7 +771,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     // ---- nodes ----------------------------------------------------------------------------
 
-    fn node(&mut self, e: TExprId, recs: &NodeRecords) {
+    pub(super) fn node(&mut self, e: TExprId, recs: &NodeRecords) {
         let node = self.w.prog.expr(e);
         let form = recs.form;
         self.call_evidence = recs.evidence.clone();
@@ -6025,6 +6025,12 @@ impl<'w, 'a> P<'w, 'a> {
                     None => p.call(outer.callee, Qual::Owner, targs, &outer.args),
                 }
             });
+        }
+        // The std's transparent `quotes(using q)`: its argument in the `INLINED` of the
+        // parameter's proxy, the call scala-library's `Quotes$package` (`quotes_expansion`).
+        if inner.is_empty() && self.is_std_quotes(outer.callee) {
+            let rest = NodeRecords { inline_calls: Vec::new(), ..recs.clone() };
+            return self.within_site(outer.site, e, |p| p.quotes_expansion(e, &rest));
         }
         // The `INLINED` at the call's place, its expansion at the body's (a macro's: the
         // splice's), as scalac's pickle has them.

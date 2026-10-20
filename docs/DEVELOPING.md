@@ -132,7 +132,10 @@ python3 tests/support/classdiff.py A B       # two trees of class files as parse
 ./bench/compare.sh A B                       # two binaries interleaved on every budget row
 ./bench/instr-compare.sh A B                 # instructions retired on the budget's programs, one worker
 ./bench/layout.sh plain|pgo                  # whether a no-op edit moves a row
-TEQ_INLINE_COUNTS=<file> ./tests/run.sh      # the inline calls expanded by substitution and by retype
+TEQ_INLINE_COUNTS=<file> ./tests/run.sh      # the inline calls expanded by substitution and by retype,
+                                             # those kept for the inlining phase and their bytes, the
+                                             # phase's forked units, reflection's queries and its memo's,
+                                             # the files suspended at typing and those typed again
 ```
 
 `--time` prints the phases, the reach's and the emit's parts (`TEQ_PART_TIMES=0` turns the parts off,

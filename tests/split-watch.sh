@@ -1239,6 +1239,25 @@ same_as_fresh "inline: condition edit" "$src"
 expect "inline: condition edit runs" "$(timeout 20 node "$work/out/main.mjs" | tr '\n' ' ')" "63 2 "
 stop
 
+# A build that reports a typing error runs no inlining phase (dotty's run gates its phases on the
+# reporter): a file typed again beside the error keeps its plain inline calls, and the fix of the
+# error alone expands them, rewriting the other file's module as a fresh build writes it
+# (tests/split/inline_phase).
+rm -rf "$src" "$work/out"
+cp -r tests/split/inline_phase "$src"
+start "$src" --split "$work/out"
+expect "inline phase: first build" "$(field ok),$(field incremental)" 'true,false'
+sed -i.bak 's/"hi " + twice(21)/"hello " + twice(50)/' "$src/a.scala"
+sed -i.bak 's/val bad: String = "x"/val bad: String = 1/' "$src/b.scala"
+build "$src/a.scala" "$src/b.scala"
+expect "inline phase: an error beside the edit" "$(field ok),$(field incremental)" 'false,true'
+sed -i.bak 's/val bad: String = 1/val bad: String = "ok"/' "$src/b.scala"
+build "$src/b.scala"
+expect "inline phase: the error's fix" "$(field ok),$(field incremental),$(field changed)" 'true,true,["a.mjs"]'
+same_as_fresh "inline phase: the error's fix" "$src"
+expect "inline phase: the fix runs" "$(timeout 20 node "$work/out/main.mjs" | tr '\n' ' ')" "hello 100 "
+stop
+
 # --- Syntax errors and their fixes --------------------------------------------------------------
 # For each representative shape of a syntax error, a
 # session over tests/split/cycle takes the broken text, typed from its recovered tree, which

@@ -339,11 +339,19 @@ impl<'a> Worker<'a> {
     /// The record of a call's callee, checked on the call if the walk has not met its
     /// definition yet, so that what a call gives does not depend on the typing order.
     pub(super) fn demand_definition(&mut self, sym: SymId) {
+        // The expansion needs the body, which dotty's Namer types when it is first forced
+        // (`addInlineInfo`'s lazy body): a demand of the definition being typed.
+        if self.is_inline_callee(sym) {
+            self.note_reached(sym);
+        }
         if self.checks_inline_definition() || !self.is_inline_callee(sym) || self.inline_definitions.contains_key(&sym) {
             return;
         }
-        // The check is the definition's whatever becomes of an attempt that asked for it.
+        // The check is the definition's whatever becomes of an attempt that asked for it, an item
+        // unwinding from its unit's suspension among them (`Inlining::unwinding`): the record
+        // outlives the run.
         let promoted = self.promote_begin(sym);
+        let unwinding = std::mem::replace(&mut self.inlining.unwinding, false);
         if self.library_inline(sym) {
             self.demand_library_definition(sym);
         } else if self.syms.sym(sym).owner == Owner::Local {
@@ -351,6 +359,7 @@ impl<'a> Worker<'a> {
         } else {
             self.check_inline_definition(sym);
         }
+        self.inlining.unwinding |= unwinding;
         self.promote_end(promoted);
     }
 
@@ -1062,6 +1071,15 @@ impl<'a> Worker<'a> {
     /// and replaced where they changed, a reduced conditional's selected branch, a kept call's
     /// expansion, a substituted parameter's argument.
     fn walk(&mut self, w: &mut Walk, e: TExprId) -> TExprId {
+        // An expansion the inlining phase's first round gave up, an enclosing one's included,
+        // walks no further, as dotty's `SuspendException` ends the unit's `Inlining` where its
+        // splice is met (`Worker::expand_suspending`).
+        if self.inlining.suspended_hit {
+            w.failed = true;
+            let unit = self.prog.add(TExpr::Unit);
+            self.set_walked_type(w, unit, ERROR);
+            return unit;
+        }
         // A part the copy left, reached: copied now, the walk never writing into the stored body.
         let e = if w.demand.is_left(e) { self.demand_in_walk(w, e, None) } else { e };
         // An ascription's type, before the walk gives the node its replacement's.
@@ -1807,7 +1825,9 @@ impl<'a> Worker<'a> {
     /// expansions around, as `captured_by` finds them.
     fn captured_among(&mut self, c: ClassId, refs: &[SymId]) -> Vec<SymId> {
         let visible = self.visible_to_class(c);
-        refs.iter().copied().filter(|s| visible.contains(s)).collect()
+        let captures = refs.iter().copied().filter(|s| visible.contains(s)).collect();
+        self.note_lifted(c, visible);
+        captures
     }
 
     /// A macro's splice of the copy (`${ (using q: Quotes) => impl(q) }`): its code, the copy of
@@ -2157,7 +2177,7 @@ impl<'a> Worker<'a> {
                 let msg = format!("inline value must be pure but was: {}", self.code_of_tree(init));
                 if let Some(site) = self.inline.sites.last() {
                     let (file, span) = (site.body_file, site.body_span);
-                    self.diags.error(file, span, msg);
+                    self.diags.late_error_of(file, span, msg, crate::source::PHASE_FIRST_TRANSFORM);
                 }
                 return;
             }
@@ -2172,10 +2192,11 @@ impl<'a> Worker<'a> {
             } else {
                 "inline value must contain a literal constant value.\n\nTo inline more complex types consider using `inline def`"
             };
-            // In the body, which the expansion's relocation moves to the call with its note.
+            // In the body, which the expansion's relocation moves to the call with its note: an
+            // error of `InlineVals`, after `Inlining` (`inline_val_error`).
             if let Some(site) = self.inline.sites.last() {
                 let (file, span) = (site.body_file, site.body_span);
-                self.diags.error(file, span, msg);
+                self.diags.late_error_of(file, span, msg, crate::source::PHASE_FIRST_TRANSFORM);
             }
             return;
         };
@@ -2332,7 +2353,8 @@ impl<'a> Worker<'a> {
         // A deferred inline method is no callee of either path: its call is refused before any
         // entry decision (`expand_inline_call`).
         let deferred = self.syms.sym(sym).def.is_some() && self.is_abstract_member(sym);
-        let entry = (self.intrinsic_of(sym).is_none() && self.is_inline_callee(sym) && !deferred).then(|| self.substitution_entry(sym));
+        let intrinsic = self.intrinsic_of(sym);
+        let entry = (intrinsic.is_none() && self.is_inline_callee(sym) && !deferred).then(|| self.substitution_entry(sym));
         if matches!(entry, Some(Err(e)) if e != Fallback::Library) {
             for (_, t) in subst.iter_mut() {
                 if self.types.has_paths(*t) {
@@ -2340,12 +2362,29 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        let inline_callee = entry.is_some();
         // A checked record the entry decision just found is the one the expansion takes: its
         // call is not decided a second time (`InlineState::entry`).
         if let Some(Ok(def)) = entry {
             self.inline.entry = Some((sym, def));
         }
         let call = MethodCall { recv, sym, owner_subst, ext_recv: None, prefix, refined: None };
+        // A plain call in a transparent expansion stays a call, kept for the inlining phase
+        // with its place's context (`defers_in_expansion`), typed by its declared result: one of
+        // `scala.compiletime`'s plain inline methods (`error`) as well, which no entry expands.
+        if (inline_callee || intrinsic.is_some_and(|i| i.is_plain_inline())) && self.defers_in_expansion(sym) {
+            self.inline.entry = None;
+            let typed_as = self.normalize(ret_ty);
+            self.defer_plain_inline(e, &call, &sig, &subst, &args, arg_types, ret_ty, typed_as, d.span, d.expected);
+            w.inst.types.insert(e, typed_as);
+            if self.prog.owns_expr(e) {
+                self.prog.set_type(e, typed_as);
+            }
+            if let Some(r) = recv {
+                self.inline.recv_types.remove(&r);
+            }
+            return e;
+        }
         self.inline.site_at_end = d.at_end;
         self.inline.arg_types = arg_types;
         let inherited = self.inline.inherited.len();
@@ -2647,7 +2686,11 @@ impl<'a> Worker<'a> {
     fn walk_if(&mut self, w: &mut Walk, e: TExprId) -> TExprId {
         let TExpr::If(c, t, els) = self.prog.expr(e) else { unreachable!() };
         let reducible = w.reducible_at(e);
+        // An `inline if`'s condition is walked under `Mode.ForceInline` (`InlineTyper.typedIf`).
+        let forcing = reducible.is_some() as u32;
+        self.inline.forcing += forcing;
         let c2 = self.walk(w, c);
+        self.inline.forcing -= forcing;
         // A condition that is a constant, as a tree or by its type (scalac's `ConstantValue`:
         // the type of a path widened to what it stands for, `cond(): C.b.type` over a `final val
         // b: true`), selects its branch; the condition stays before it unless evaluating it
@@ -2867,7 +2910,10 @@ impl<'a> Worker<'a> {
     fn reduce_inline_match(&mut self, w: &mut Walk, e: TExprId) -> TExprId {
         let TExpr::Match(scrut, cases) = self.prog.expr(e) else { unreachable!() };
         let source = w.reducible_at(e).expect("a reducible match's source");
+        // The scrutinee is walked under `Mode.ForceInline` (`InlineTyper.typedMatchFinish`).
+        self.inline.forcing += 1;
         let s2 = self.walk(w, scrut);
+        self.inline.forcing -= 1;
         let sty = self.walked_type(w, s2);
         let sty = self.solve_in(sty);
         let constant = self.fold_constant(s2).or_else(|| self.fold_type(sty));
@@ -3464,6 +3510,21 @@ pub mod counts {
         retained: u64,
         superseded: u64,
         pruned: u64,
+        /// The inlining phase's: the calls the units kept, their retained high-water bytes (the
+        /// records and their site environments' frames), the expansions the phase made and those
+        /// an executable preparation made ahead of it, and the builds a cross-worker preparation
+        /// gave to one worker.
+        kept: u64,
+        kept_bytes: u64,
+        phase_expanded: u64,
+        prepared: u64,
+        gave_way: u64,
+        phase_units: u64,
+        typing_suspended: u64,
+        retyped: u64,
+        inherited_written: u64,
+        reflect_asked: u64,
+        reflect_answered: u64,
     }
 
     static COUNTS: Mutex<Option<Counts>> = Mutex::new(None);
@@ -3533,6 +3594,54 @@ pub mod counts {
         with(|c| c.records += 1);
     }
 
+    /// A call kept for the inlining phase, of `bytes` retained.
+    pub fn kept(bytes: u64) {
+        with(|c| {
+            c.kept += 1;
+            c.kept_bytes += bytes;
+        });
+    }
+
+    /// A kept call the phase expanded, or (`prepared`) an executable preparation ahead of it.
+    pub fn phase_expanded(prepared: bool) {
+        with(|c| {
+            c.phase_expanded += !prepared as u64;
+            c.prepared += prepared as u64;
+        });
+    }
+
+    pub fn gave_way() {
+        with(|c| c.gave_way += 1);
+    }
+
+    /// The phase forked over its units, `units` of them (`Worker::expand_in_parallel`).
+    pub fn phase_forked(units: usize) {
+        with(|c| c.phase_units += units as u64);
+    }
+
+    /// The files a macro of the run suspended at typing, `typing` of them, and the files typed again
+    /// for a later round, `retyped` (`Worker::inlining_phase`).
+    pub fn suspended_files(typing: usize, retyped: usize) {
+        with(|c| {
+            c.typing_suspended += typing as u64;
+            c.retyped += retyped as u64;
+        });
+    }
+
+    /// Reflection's queries in the phase, `asked`, and those its memo `answered`.
+    pub fn reflected(asked: u64, answered: u64) {
+        with(|c| {
+            c.reflect_asked += asked;
+            c.reflect_answered += answered;
+        });
+    }
+
+    /// Variables of the typing before the phase's fork its workers changed, changes the merge
+    /// drops (`TVars::inherited_written`).
+    pub fn inherited_written(n: usize) {
+        with(|c| c.inherited_written += n as u64);
+    }
+
     pub fn retained(canonical: u64, superseded: u64) {
         with(|c| {
             c.retained += canonical;
@@ -3552,6 +3661,10 @@ pub mod counts {
         for (reason, n) in &c.fallbacks {
             line.push_str(&format!("; {}: {}", reason.name(), n));
         }
+        line.push_str(&format!(
+            "; phase: kept {} ({} bytes) expanded {} prepared {} gave way {} forked units {} inherited variables changed {} reflection queries {} memo answers {} files suspended at typing {} typed again {}",
+            c.kept, c.kept_bytes, c.phase_expanded, c.prepared, c.gave_way, c.phase_units, c.inherited_written, c.reflect_asked, c.reflect_answered, c.typing_suspended, c.retyped
+        ));
         if setting == "1" {
             eprintln!("{}", line);
         } else if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(setting) {

@@ -191,7 +191,7 @@ impl<'a> Defaults<'a> {
                 matches!(info.kind, SymKind::Val | SymKind::Param) && info.mods & (mods::MUTABLE | mods::LAZY) == 0
             }
             // An object without initialisation, whose first reference runs nothing.
-            TExpr::Module(c) => crate::typer::elaborate::no_inits(self.syms, c),
+            TExpr::Module(c) => crate::typer::elaborate::no_inits(self.syms, self.interner, c),
             // A val of `this`.
             TExpr::Field(r, s) => {
                 let info = self.syms.sym(s);

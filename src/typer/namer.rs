@@ -627,6 +627,7 @@ impl<'a> Worker<'a> {
                         js: false,
                         declared_rhs: crate::tir::NO_TYPE,
                         exported: false,
+                        completion_noted: false,
                     });
                     self.def_aliases.insert(file.0 as usize, id, aid);
                     let duplicate = match owner {

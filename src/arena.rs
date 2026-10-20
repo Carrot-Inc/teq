@@ -842,6 +842,11 @@ pub struct Arena<T> {
     /// The worker's view of the shared records and of its peers' (`RecordView`), while its
     /// worker types with the type store's overlays on.
     view: Option<Box<RecordView<T>>>,
+    /// The copies of shared records this worker changed outside the loader's lock while
+    /// `owning`, read by it alone in their places, which the merge writes over the shared ones
+    /// (the inlining phase's workers, each the owner of its units' trees: `Arena::take_owned`).
+    owned: FxMap<u32, Box<T>>,
+    pub owning: bool,
 }
 
 /// A worker's view of the shared records of one kind: every read of a published record by
@@ -1072,7 +1077,7 @@ impl<T> Default for Arena<T> {
 
 impl<T> Arena<T> {
     pub fn new() -> Arena<T> {
-        Arena { plain: Vec::new(), own: Box::new(SlabVec::with_capacity(0)), own_base: 0, shared: None, prefix_len: 0, working: FxMap::default(), made: 0, staged_from: u32::MAX, alloc_shared: false, peer_reads: None, view: None }
+        Arena { plain: Vec::new(), own: Box::new(SlabVec::with_capacity(0)), own_base: 0, shared: None, prefix_len: 0, working: FxMap::default(), made: 0, staged_from: u32::MAX, alloc_shared: false, peer_reads: None, view: None, owned: FxMap::default(), owning: false }
     }
 
     pub fn with_capacity(n: usize) -> Arena<T> {
@@ -1132,6 +1137,11 @@ impl<T> Arena<T> {
     /// export (`RecordView::read_own_held`).
     #[inline(never)]
     fn forked_get(&self, i: u32) -> &T {
+        if !self.owned.is_empty() {
+            if let Some(r) = self.owned.get(&i) {
+                return r;
+            }
+        }
         if i >= LOCAL_BASE {
             let j = i.wrapping_sub(self.own_base) as usize;
             if j < self.own.len() {
@@ -1249,6 +1259,11 @@ impl<T> Arena<T> {
 
     #[inline(never)]
     fn forked_raw(&self, i: u32) -> &T {
+        if !self.owned.is_empty() {
+            if let Some(r) = self.owned.get(&i) {
+                return r;
+            }
+        }
         if i < self.prefix_len && self.working.is_empty() {
             return unsafe { self.shared.as_ref().unwrap_unchecked() }.get(i);
         }
@@ -1461,12 +1476,35 @@ impl<T> Arena<T> {
         self.shared.as_ref().map(|s| s.marks.clone())
     }
 
+    /// The worker's copy of shared record `i`, made from the record as it reads it at the first
+    /// change (`owning`).
+    #[cold]
+    fn owned_mut(&mut self, i: u32) -> &mut T
+    where
+        T: Record,
+    {
+        if !self.owned.contains_key(&i) {
+            let copy = Box::new(self.forked_get(i).clone());
+            self.owned.insert(i, copy);
+        }
+        self.owned.get_mut(&i).expect("the copy just made")
+    }
+
+    /// The copies of shared records this worker changed while `owning`, by id, handed to the
+    /// merge.
+    pub fn take_owned(&mut self) -> FxMap<u32, Box<T>> {
+        std::mem::take(&mut self.owned)
+    }
+
     #[cold]
     #[inline(never)]
     fn shared_get_mut(&mut self, i: u32) -> &mut T
     where
         T: Record,
     {
+        if self.owning && i < LOCAL_BASE && lock_depth() == 0 {
+            return self.owned_mut(i);
+        }
         let s = self.shared.as_ref().expect("no such record");
         assert!(i < LOCAL_BASE, "record {} of worker {:?} changed by worker {:?}: another worker's records are read, never changed", i, worker_of(i), worker_of(self.own_base));
         assert!(lock_depth() > 0, "a shared record ({}) changed outside the loader's lock", i);
@@ -1731,7 +1769,7 @@ impl<T> Arena<T> {
         let mut own = Box::new(SlabVec::with_capacity(1024));
         shared.peers[worker].store(&mut *own, Ordering::Release);
         let prefix_len = shared.fork_len as u32;
-        Arena { plain: Vec::new(), own, own_base: worker_base(worker), shared: Some(shared), prefix_len, working: FxMap::default(), made: 0, staged_from: u32::MAX, alloc_shared: false, peer_reads: None, view: None }
+        Arena { plain: Vec::new(), own, own_base: worker_base(worker), shared: Some(shared), prefix_len, working: FxMap::default(), made: 0, staged_from: u32::MAX, alloc_shared: false, peer_reads: None, view: None, owned: FxMap::default(), owning: false }
     }
 
     /// The loader's lock was taken at depth one: what is pushed from here on is staged.
@@ -1877,7 +1915,7 @@ impl<T> Arena<T> {
             self.check_unescaped(j, i);
             return true;
         }
-        lock_depth() > 0 && i >= self.staged_from && i < LOCAL_BASE
+        (lock_depth() > 0 && i >= self.staged_from && i < LOCAL_BASE) || (self.owning && i < LOCAL_BASE && lock_depth() == 0)
     }
 }
 
@@ -2138,6 +2176,10 @@ impl<T: Copy> Entries<T> {
 pub struct Parallel<T: Copy> {
     own: Vec<T>,
     shared: Option<Arc<Entries<T>>>,
+    /// The entries of shared records this worker set outside the loader's lock while `owning`,
+    /// as `Arena::owned`'s copies.
+    owned: FxMap<u32, T>,
+    pub owning: bool,
     default: T,
     /// Whether the entries set are the loader's lock holder's, of staged shared records.
     pub alloc_shared: bool,
@@ -2156,6 +2198,8 @@ impl<T: Copy + Send + Sync> Parallel<T> {
         Parallel {
             own: Vec::new(),
             shared: None,
+            owned: FxMap::default(),
+            owning: false,
             default,
             alloc_shared: false,
             shared_reads: None,
@@ -2176,6 +2220,11 @@ impl<T: Copy + Send + Sync> Parallel<T> {
     /// An entry while the workers share the entries (the vector is empty then).
     #[inline(never)]
     fn shared_get(&self, i: u32) -> Option<T> {
+        if !self.owned.is_empty() {
+            if let Some(&v) = self.owned.get(&i) {
+                return Some(v);
+            }
+        }
         #[cfg(debug_assertions)]
         if let (Some((marks, own_base)), Some(k)) = (&self.marks, worker_of(i)) {
             if worker_base(k) != *own_base {
@@ -2207,6 +2256,10 @@ impl<T: Copy + Send + Sync> Parallel<T> {
     #[inline(never)]
     #[cfg_attr(debug_assertions, track_caller)]
     fn set_shared(&mut self, i: u32, v: T) {
+        if self.owning && i < LOCAL_BASE && lock_depth() == 0 {
+            self.owned.insert(i, v);
+            return;
+        }
         assert!(i >= LOCAL_BASE || lock_depth() > 0, "a shared record's entry set outside the loader's lock");
         #[cfg(debug_assertions)]
         if let Some((marks, own_base)) = &self.marks {
@@ -2247,10 +2300,23 @@ impl<T: Copy + Send + Sync> Parallel<T> {
         self.shared.clone().expect("no shared region")
     }
 
+    /// The entries of shared records this worker set while `owning`, by id, handed to the merge.
+    pub fn take_owned(&mut self) -> FxMap<u32, T> {
+        std::mem::take(&mut self.owned)
+    }
+
+    /// Drops the entries from `n` on, with one worker.
+    pub fn truncate(&mut self, n: usize) {
+        debug_assert!(self.shared.is_none());
+        self.own.truncate(n);
+    }
+
     pub fn attach(shared: Arc<Entries<T>>, default: T, _worker: usize) -> Parallel<T> {
         Parallel {
             own: Vec::new(),
             shared: Some(shared),
+            owned: FxMap::default(),
+            owning: false,
             default,
             alloc_shared: false,
             shared_reads: None,
@@ -2876,10 +2942,13 @@ impl<V: Copy> FileMaps<V> {
         self.shared.as_ref()?.get(&(file as u32, *d))
     }
 
+    /// Enters the definition's value in place of any it had, shared or the worker's own alike: a
+    /// block typed again (an argument retyped against another expected type) enters its locals
+    /// afresh, and its statements take the last entry.
     pub fn insert(&mut self, file: usize, d: crate::ast::DefId, v: V) {
         if self.to_shared {
             if let Some(s) = &self.shared {
-                s.insert((file as u32, d), v);
+                s.replace((file as u32, d), v);
                 return;
             }
         }

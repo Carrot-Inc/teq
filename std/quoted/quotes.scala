@@ -38,7 +38,7 @@ object QuotesImpl extends Quotes:
   // to the internal methods the interpreter answers (`TypeRef.underlying(ctx)`): a token.
   def ctx: AnyRef = this
 
-def quotes(using q: Quotes): q.type = q
+transparent inline def quotes(using q: Quotes): q.type = q
 
 object Expr:
   def apply[T](x: T)(using to: ToExpr[T])(using Quotes): Expr[T] = to.apply(x)
