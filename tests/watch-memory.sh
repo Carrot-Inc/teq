@@ -37,7 +37,10 @@
 # plain build, `@fork` one worker through the fork, `@8`, `@12` and `@16` workers; its ceiling is in
 # MB, or at 8, 12 and 16 the parallel typer's memory aim as a ratio of the same run's plain
 # build (twice, 2.5 times, provisional while the cap stays 8, and three times), where the recording
-# measured it to hold.
+# measured it to hold. The fix rows, `peak-fix-frontend@<w>`, are a fresh `teq compiler fix --check`'s peak over the
+# frontend with the shipped rules, its rules over w workers (`--threads`), the typing's and the rules' phase's both: a
+# one-shot process the driver does not run, measured by the child's `ru_maxrss` (the resident size's high-water mark,
+# `VmHWM`), their rows Linux's alone (`only`), `@8` and `@16` held as ratios of `@1`.
 # Selecting a ratio row runs its baseline too.
 #
 # The memory is the physical footprint on macOS and the resident size plus swap on Linux, where the
@@ -112,6 +115,20 @@ if judged=$(python3 tests/watch-memory/judge.py self-test); then pass=$((pass + 
   fail=$((fail + 1))
 fi
 
+# The shipped rules with DisableSyntax's settings on, the configuration of the fix peaks (`fixpeak`).
+fix_conf='rules = [DisableSyntax, CatsImplicitsImport, TypelevelAs, EmptyCollectionsUnified, NoUnusedImports]
+DisableSyntax.keywords = [implicit, lazy]
+DisableSyntax.noVars = true
+DisableSyntax.noNulls = true
+DisableSyntax.noReturns = true
+DisableSyntax.noWhileLoops = true
+DisableSyntax.noAsInstanceOf = true
+DisableSyntax.noIsInstanceOf = true
+DisableSyntax.noSemicolons = true
+DisableSyntax.noUniversalEquality = true
+DisableSyntax.noDefaultArgs = true
+lint.error.includes = ".*"'
+
 # The sessions: name, workload, corpus and the watch arguments, SRC and OUT standing for the
 # session's copy of the corpus and its output directory.
 sessions=()
@@ -140,13 +157,18 @@ for w in 1 fork 8 12 16; do
   session peak-frontend@$w peak app --check SRC/shared SRC/frontend --classpath "$cp" --cacheable-state meridian.web.css.Catalog
   session peak-core@$w peak core --check SRC
 done
+# `teq fix`'s peak (fix-speed's table, row 3.6): a fresh `teq compiler fix --check` over the application corpus's
+# frontend with every shipped rule (`fix_conf`, below), its rules over 1, 4, 8 and 16 workers (`--threads`).
+for w in 1 4 8 16; do
+  session peak-fix-frontend@$w fixpeak app SRC/shared SRC/frontend --classpath "$cp" --cacheable-state meridian.web.css.Catalog --threads $w
+done
 
 # The edits of a session and the seconds it may take: a build of the frontend that is full
 # takes eight seconds with an unoptimised binary.
 edits_of() {
   case $1 in
     full) echo $((edits / 2)) ;;
-    peak) echo 0 ;;
+    peak | fixpeak) echo 0 ;;
     *) echo "$edits" ;;
   esac
 }
@@ -248,6 +270,24 @@ start() {
     args+=("${a//OUT/$dir/out}")
   done
   count=$(edits_of "$workload")
+  if [ "$workload" = fixpeak ]; then
+    # A one-shot process, which the driver (resident sessions alone) does not run: its peak resident size, the child's
+    # `ru_maxrss` (the kernel's `VmHWM` on Linux, in KB), written as the driver writes a peak session's line.
+    printf '%s\n' "$fix_conf" > "$dir/fix.conf"
+    env -u TEQ_THREADS -u TEQ_SESSION_WORKERS -u TEQ_FORK TEQ_NO_CACHE=1 timeout 600 python3 - "$name" "$TEQ" "$dir/fix.conf" "${args[@]}" > "$dir/line" 2> "$dir/err" 9>&- <<'EOF' &
+import resource, subprocess, sys, time
+name, teq, conf, args = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
+start = time.time()
+r = subprocess.run([teq, "compiler", "fix", *args, "--config", conf, "--check"], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+ms = (time.time() - start) * 1000
+if r.returncode not in (0, 1):
+    sys.stderr.write(r.stderr.decode(errors="replace")[-2000:])
+    sys.exit(1)
+peak = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024
+print(f"{name} workload peak edits 0 metric VmHWM memory_first_mb {peak:.1f} peak_mb {peak:.1f} first_build_ms {ms:.1f}")
+EOF
+    return
+  fi
   env -u TEQ_THREADS -u TEQ_SESSION_WORKERS -u TEQ_SESSION_THREADS -u TEQ_FORK -u TEQ_SESSION_WORKERS_LOG -u WATCH_MEMORY_WORKERS $(settings_of "$name" "$dir") $(extra_of "$name" "$dir") WATCH_MEMORY_WORKLOAD=$workload TEQ_NO_CACHE=1 timeout "$(seconds_of "$workload" "$corpus" "$count")" node tests/watch-memory/driver.mjs "$name" "$TEQ" "$count" "${roots[@]}" -- "${args[@]}" > "$dir/line" 2> "$dir/err" 9>&- &
 }
 

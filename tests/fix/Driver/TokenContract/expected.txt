@@ -1,0 +1,1788 @@
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Comment|0|53|/*\nrules = ["file:../../support/DumpTokens.scala"]\n*/|true|false|false|true|\nrules = ["file:../../support/DumpTokens.scala"]\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|53|54|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Comment|54|169|// The bridge's token contract (docs/FIX.md, "Token"; fix-speed's matrix): every token's kind, offsets, text, `is`,|true|false|false|true| The bridge's token contract (docs/FIX.md, "Token"; fix-speed's matrix): every token's kind, offsets, text, `is`,
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|169|170|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Comment|170|234|// `isKeyword`, `isTrivia` and value, the lints all at `marker`.|true|false|false|true| `isKeyword`, `isTrivia` and value, the lints all at `marker`.
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|234|235|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwPackage|235|242|package|true|false|true|false|package
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|242|243| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|243|249|tokens|true|false|false|false|tokens
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|249|250|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|250|251|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwImport|251|257|import|true|false|true|false|import
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|257|258| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|258|263|scala|true|false|false|false|scala
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Dot|263|264|.|true|false|false|false|.
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|264|270|quoted|true|false|false|false|quoted
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Dot|270|271|.|true|false|false|false|.
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|271|272|*|true|false|false|false|*
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|272|273|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|273|274|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Comment|274|308|/* a block /* nested */ comment */|true|false|false|true| a block /* nested */ comment 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|308|309|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwObject|309|315|object|true|false|true|false|object
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|315|316| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|316|329|TokenContract|true|false|false|false|TokenContract
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|329|330|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|330|331|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|331|333|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwVal|333|336|val|true|false|true|false|val
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|336|337| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|337|343|marker|true|false|false|false|marker
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|343|344| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|344|345|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|345|346| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|346|347|0|true|false|false|false|0
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|347|348| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Comment|348|375|// assert: DumpTokens.token|true|false|false|true| assert: DumpTokens.token
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|375|376|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|376|378|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwVal|378|381|val|true|false|true|false|val
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|381|382| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|382|383|x|true|false|false|false|x
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|383|384| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|384|385|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|385|386| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|386|387|1|true|false|false|false|1
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Semicolon|387|388|;|true|false|false|false|;
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|388|389| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwVal|389|392|val|true|false|true|false|val
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|392|393| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|393|394|c|true|false|false|false|c
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|394|395| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|395|396|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|396|397| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Char|397|400|'c'|true|false|false|false|'c'
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|400|401|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|401|403|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwVal|403|406|val|true|false|true|false|val
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|406|407| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|407|408|s|true|false|false|false|s
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|408|409| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|409|410|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|410|411| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Id|411|412|s|true|false|false|false|s
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Delimiter|412|413|"|true|false|false|false|"
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Part|413|414|a|true|false|false|false|a
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Delimiter|414|415|$|true|false|false|false|$
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBrace|415|416|{|true|false|false|false|{
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|416|417|x|true|false|false|false|x
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBrace|417|418|}|true|false|false|false|}
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Part|418|419|b|true|false|false|false|b
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Delimiter|419|420|$|true|false|false|false|$
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|420|421|x|true|false|false|false|x
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Part|421|423|$$|true|false|false|false|$$
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.End|423|424|"|true|false|false|false|"
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|424|425| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|425|426|+|true|false|false|false|+
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|426|427| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Id|427|430|raw|true|false|false|false|raw
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Delimiter|430|433|"""|true|false|false|false|"""
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Part|433|435|q |true|false|false|false|q 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Delimiter|435|436|$|true|false|false|false|$
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|436|437|x|true|false|false|false|x
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.End|437|440|"""|true|false|false|false|"""
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|440|441| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|441|442|+|true|false|false|false|+
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|442|443| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Id|443|444|s|true|false|false|false|s
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.Delimiter|444|445|"|true|false|false|false|"
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Interpolation.End|445|446|"|true|false|false|false|"
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|446|447| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|447|448|+|true|false|false|false|+
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|448|449| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.String|449|454|"😀é"|true|false|false|false|"😀é"
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|454|455|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|455|457|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwVal|457|460|val|true|false|true|false|val
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|460|461| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|461|462|n|true|false|false|false|n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|462|463| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|463|464|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|464|465| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Long|465|467|3L|true|false|false|false|3L
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|467|468| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|468|469|+|true|false|false|false|+
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|469|470| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Float|470|474|1.5f|true|false|false|false|1.5f
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|474|475| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|475|476|+|true|false|false|false|+
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|476|477| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Double|477|479|2d|true|false|false|false|2d
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|479|480| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|480|481|+|true|false|false|false|+
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|481|482| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|482|486|0x1F|true|false|false|false|0x1F
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|486|487| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|487|488|+|true|false|false|false|+
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|488|489| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Double|489|492|1e3|true|false|false|false|1e3
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|492|493|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|493|495|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwVal|495|498|val|true|false|true|false|val
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|498|499| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|499|512|`back quoted`|true|false|false|false|back quoted
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|512|513| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|513|514|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|514|515| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|515|516|1|true|false|false|false|1
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|516|517|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|517|519|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwType|519|523|type|true|false|true|false|type
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|523|524| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|524|525|T|true|false|false|false|T
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|525|526| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|526|527|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|527|528| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|528|529|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|529|530|A|true|false|false|false|A
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|530|531|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|531|532| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: TypeLambdaArrow|532|535|=>>|true|false|false|false|=>>
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|535|536| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|536|540|List|true|false|false|false|List
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|540|541|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|541|542|A|true|false|false|false|A
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|542|543|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|543|544|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|544|546|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwClass|546|551|class|true|false|true|false|class
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|551|552| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|552|553|C|true|false|false|false|C
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|553|554| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBrace|554|555|{|true|false|false|false|{
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|555|556| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwType|556|560|type|true|false|true|false|type
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|560|561| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|561|564|Foo|true|false|false|false|Foo
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|564|565| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|565|566|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|566|567| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|567|570|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|570|571| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBrace|571|572|}|true|false|false|false|}
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|572|573|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|573|575|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwType|575|579|type|true|false|true|false|type
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|579|580| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|580|581|U|true|false|false|false|U
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|581|582| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|582|583|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|583|584| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|584|585|C|true|false|false|false|C
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|585|586|#|true|false|false|false|#
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|586|589|Foo|true|false|false|false|Foo
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|589|590|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|590|592|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwDef|592|595|def|true|false|true|false|def
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|595|596| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|596|597|f|true|false|false|false|f
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|597|598|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|598|603|using|true|false|false|false|using
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|603|604| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|604|605|y|true|false|false|false|y
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|605|606|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|606|607| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|607|610|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|610|611|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|611|612|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwImplicit|612|620|implicit|true|false|true|false|implicit
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|620|621| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|621|622|z|true|false|false|false|z
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|622|623|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|623|624| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|624|627|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|627|628|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|628|629|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|629|630| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|630|633|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|633|634| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: ContextArrow|634|637|?=>|true|false|false|false|?=>
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|637|638| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|638|641|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|641|642| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|642|643|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|643|644| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwNull|644|648|null|true|false|true|false|null
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Dot|648|649|.|true|false|false|false|.
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|649|661|asInstanceOf|true|false|false|false|asInstanceOf
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|661|662|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|662|665|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|665|666|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|666|667|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|667|669|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|669|675|inline|true|false|false|false|inline
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|675|676| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwDef|676|679|def|true|false|true|false|def
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|679|680| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|680|681|g|true|false|false|false|g
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|681|682|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|682|683| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|683|686|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|686|687| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|687|688|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|688|689| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Splice|689|690|$|true|false|false|false|$
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBrace|690|691|{|true|false|false|false|{
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|691|692| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|692|697|gImpl|true|false|false|false|gImpl
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|697|698| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBrace|698|699|}|true|false|false|false|}
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|699|700|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|700|702|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwDef|702|705|def|true|false|true|false|def
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|705|706| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|706|711|gImpl|true|false|false|false|gImpl
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|711|712|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|712|717|using|true|false|false|false|using
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|717|718| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|718|724|Quotes|true|false|false|false|Quotes
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|724|725|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|725|726|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|726|727| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|727|731|Expr|true|false|false|false|Expr
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|731|732|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|732|735|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|735|736|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|736|737| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|737|738|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|738|739| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Quote|739|740|'|true|false|false|false|'
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBrace|740|741|{|true|false|false|false|{
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|741|742| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|742|743|1|true|false|false|false|1
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|743|744| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBrace|744|745|}|true|false|false|false|}
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|745|746|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|746|748|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwDef|748|751|def|true|false|true|false|def
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|751|752| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|752|753|h|true|false|false|false|h
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|753|754|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|754|755|e|true|false|false|false|e
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|755|756|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|756|757| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|757|761|Expr|true|false|false|false|Expr
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|761|762|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|762|765|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|765|766|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|766|767|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|767|768|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|768|773|using|true|false|false|false|using
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|773|774| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|774|780|Quotes|true|false|false|false|Quotes
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|780|781|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|781|782|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|782|783| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|783|787|Expr|true|false|false|false|Expr
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|787|788|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|788|791|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|791|792|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|792|793| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|793|794|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|794|795| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Quote|795|796|'|true|false|false|false|'
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBrace|796|797|{|true|false|false|false|{
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|797|798| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Splice|798|799|$|true|false|false|false|$
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBrace|799|800|{|true|false|false|false|{
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|800|801| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|801|802|e|true|false|false|false|e
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|802|803| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBrace|803|804|}|true|false|false|false|}
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|804|805| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|805|806|+|true|false|false|false|+
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|806|807| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|807|808|1|true|false|false|false|1
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|808|809| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBrace|809|810|}|true|false|false|false|}
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|810|811|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|811|813|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwDef|813|816|def|true|false|true|false|def
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|816|817| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|817|818|q|true|false|false|false|q
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|818|819|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|819|824|using|true|false|false|false|using
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|824|825| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|825|831|Quotes|true|false|false|false|Quotes
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|831|832|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|832|833|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|833|834| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|834|838|Expr|true|false|false|false|Expr
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|838|839|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|839|842|Any|true|false|false|false|Any
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|842|843|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|843|844| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|844|845|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|845|846| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Quote|846|847|'|true|false|false|false|'
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBrace|847|848|{|true|false|false|false|{
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|848|849| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Splice|849|850|$|true|false|false|false|$
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBrace|850|851|{|true|false|false|false|{
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|851|852| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Quote|852|853|'|true|false|false|false|'
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|853|854|x|true|false|false|false|x
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|854|855| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBrace|855|856|}|true|false|false|false|}
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|856|857| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBrace|857|858|}|true|false|false|false|}
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|858|859|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|859|861|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwDef|861|864|def|true|false|true|false|def
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|864|865| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|865|866|l|true|false|false|false|l
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|866|867|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|867|872|using|true|false|false|false|using
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|872|873| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|873|879|Quotes|true|false|false|false|Quotes
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|879|880|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|880|881|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|881|882| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|882|886|Type|true|false|false|false|Type
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|886|887|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|887|890|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|890|891|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|891|892| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|892|893|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|893|894| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Quote|894|895|'|true|false|false|false|'
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|895|896|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|896|899|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|899|900|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|900|901|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|901|903|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwFor|903|906|for|true|false|true|false|for
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|906|907| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|907|908|a|true|false|false|false|a
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|908|909| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftArrow|909|911|<-|true|false|false|false|<-
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|911|912| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|912|916|List|true|false|false|false|List
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|916|917|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|917|918|1|true|false|false|false|1
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|918|919|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|919|920| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwIf|920|922|if|true|false|true|false|if
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|922|923| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|923|924|a|true|false|false|false|a
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|924|925| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|925|926|>|true|false|false|false|>
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|926|927| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|927|928|0|true|false|false|false|0
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|928|929| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwYield|929|934|yield|true|false|true|false|yield
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|934|935| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|935|936|a|true|false|false|false|a
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|936|937|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|937|939|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwWhile|939|944|while|true|false|true|false|while
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|944|945| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|945|946|x|true|false|false|false|x
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|946|947| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|947|948|<|true|false|false|false|<
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|948|949| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|949|950|0|true|false|false|false|0
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|950|951| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwDo|951|953|do|true|false|true|false|do
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|953|954| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|954|955|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|955|956|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|956|957|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|957|959|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|959|962|end|true|false|false|false|end
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|962|963| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwWhile|963|968|while|true|false|true|false|while
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|968|969|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|969|971|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwIf|971|973|if|true|false|true|false|if
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|973|974| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwTrue|974|978|true|true|false|true|false|true
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|978|979| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwThen|979|983|then|true|false|true|false|then
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|983|984| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|984|985|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|985|986|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|986|987| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwElse|987|991|else|true|false|true|false|else
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|991|992| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|992|993|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|993|994|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|994|995|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|995|997|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|997|1000|end|true|false|false|false|end
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1000|1001| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwIf|1001|1003|if|true|false|true|false|if
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1003|1004|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1004|1006|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1006|1007|x|true|false|false|false|x
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1007|1008| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwMatch|1008|1013|match|true|false|true|false|match
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1013|1014|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1014|1018|    |true|false|false|true|    
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwCase|1018|1022|case|true|false|true|false|case
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1022|1023| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Underscore|1023|1024|_|true|false|false|false|_
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|1024|1025|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1025|1026| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1026|1029|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1029|1030| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightArrow|1030|1032|=>|true|false|false|false|=>
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1032|1033| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|1033|1034|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|1034|1035|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1035|1036|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1036|1038|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1038|1041|end|true|false|false|false|end
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1041|1042| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwMatch|1042|1047|match|true|false|true|false|match
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1047|1048|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1048|1050|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwVal|1050|1053|val|true|false|true|false|val
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1053|1054| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1054|1055|t|true|false|false|false|t
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1055|1056| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|1056|1057|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1057|1058| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|1058|1059|1|true|false|false|false|1
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Tab|1059|1060|\t|true|false|false|true|\t
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Comment|1060|1075|// a tab before|true|false|false|true| a tab before
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1075|1076|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1076|1078|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1078|1087|extension|true|false|false|false|extension
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1087|1088| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|1088|1089|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1089|1090|a|true|false|false|false|a
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|1090|1091|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1091|1092| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1092|1095|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|1095|1096|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1096|1097| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwDef|1097|1100|def|true|false|true|false|def
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1100|1101| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1101|1105|plus|true|false|false|false|plus
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1105|1106| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|1106|1107|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1107|1108| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1108|1109|a|true|false|false|false|a
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1109|1110|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1110|1112|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1112|1118|opaque|true|false|false|false|opaque
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1118|1119| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwType|1119|1123|type|true|false|true|false|type
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1123|1124| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1124|1125|O|true|false|false|false|O
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1125|1126| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|1126|1127|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1127|1128| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1128|1131|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1131|1132|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1132|1134|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: At|1134|1135|@|true|false|false|false|@
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1135|1145|deprecated|true|false|false|false|deprecated
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1145|1146| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwVal|1146|1149|val|true|false|true|false|val
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1149|1150| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1150|1151|d|true|false|false|false|d
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1151|1152| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|1152|1153|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1153|1154| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwThis|1154|1158|this|true|false|true|false|this
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1158|1159|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1159|1161|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwClass|1161|1166|class|true|false|true|false|class
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1166|1167| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1167|1168|V|true|false|false|false|V
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|1168|1169|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1169|1170|+|true|false|false|false|+
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1170|1171|A|true|false|false|false|A
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Comma|1171|1172|,|true|false|false|false|,
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1172|1173| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1173|1174|-|true|false|false|false|-
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1174|1175|B|true|false|false|false|B
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|1175|1176|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|1176|1177|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1177|1178|a|true|false|false|false|a
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|1178|1179|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1179|1180| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightArrow|1180|1182|=>|true|false|false|false|=>
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1182|1183| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1183|1184|A|true|false|false|false|A
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Comma|1184|1185|,|true|false|false|false|,
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1185|1186| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1186|1188|bs|true|false|false|false|bs
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|1188|1189|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1189|1190| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1190|1191|B|true|false|false|false|B
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1191|1192|*|true|false|false|false|*
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|1192|1193|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1193|1194| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBrace|1194|1195|{|true|false|false|false|{
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1195|1196| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwDef|1196|1199|def|true|false|true|false|def
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1199|1200| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1200|1201|u|true|false|false|false|u
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Colon|1201|1202|:|true|false|false|false|:
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1202|1203| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1203|1207|Unit|true|false|false|false|Unit
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1207|1208| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|1208|1209|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1209|1210| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwReturn|1210|1216|return|true|false|true|false|return
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1216|1217| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBrace|1217|1218|}|true|false|false|false|}
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1218|1219|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1219|1221|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwTry|1221|1224|try|true|false|true|false|try
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1224|1225| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|1225|1226|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|1226|1227|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1227|1228| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwCatch|1228|1233|catch|true|false|true|false|catch
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1233|1234| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBrace|1234|1235|{|true|false|false|false|{
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1235|1236| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwCase|1236|1240|case|true|false|true|false|case
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1240|1241| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1241|1242|e|true|false|false|false|e
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1242|1243| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightArrow|1243|1245|=>|true|false|false|false|=>
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1245|1246| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwThrow|1246|1251|throw|true|false|true|false|throw
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1251|1252| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1252|1253|e|true|false|false|false|e
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1253|1254| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBrace|1254|1255|}|true|false|false|false|}
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1255|1256| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwFinally|1256|1263|finally|true|false|true|false|finally
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1263|1264| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftParen|1264|1265|(|true|false|false|false|(
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightParen|1265|1266|)|true|false|false|false|)
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1266|1267|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1267|1269|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwGiven|1269|1274|given|true|false|true|false|given
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1274|1275| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1275|1278|Int|true|false|false|false|Int
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1278|1279| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|1279|1280|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1280|1281| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Constant.Int|1281|1282|1|true|false|false|false|1
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1282|1283|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1283|1285|  |true|false|false|true|  
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwVal|1285|1288|val|true|false|true|false|val
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1288|1289| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1289|1290|u|true|false|false|false|u
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1290|1291| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Equals|1291|1292|=|true|false|false|false|=
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1292|1293| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1293|1294|x|true|false|false|false|x
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Dot|1294|1295|.|true|false|false|false|.
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1295|1307|isInstanceOf|true|false|false|false|isInstanceOf
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LeftBracket|1307|1308|[|true|false|false|false|[
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1308|1317|Matchable|true|false|false|false|Matchable
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: RightBracket|1317|1318|]|true|false|false|false|]
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1318|1319| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1319|1321|&&|true|false|false|false|&&
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1321|1322| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwTrue|1322|1326|true|true|false|true|false|true
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1326|1327| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1327|1329||||true|false|false|false|||
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1329|1330| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: KwFalse|1330|1335|false|true|false|true|false|false
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1335|1336|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1336|1339|end|true|false|false|false|end
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Space|1339|1340| |true|false|false|true| 
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: Ident|1340|1353|TokenContract|true|false|false|false|TokenContract
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^
+Driver/TokenContract/input.scala:12:7: error: [DumpTokens.token]: LF|1353|1354|\n|true|false|false|true|\n
+    val marker = 0 // assert: DumpTokens.token
+        ^^^^^^

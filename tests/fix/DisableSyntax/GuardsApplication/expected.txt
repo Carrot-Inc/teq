@@ -1,0 +1,15 @@
+DisableSyntax/GuardsApplication/input.scala:13:1: error: [DisableSyntax.mutable]: no mutable imports
+  import scala.collection.mutable // assert: DisableSyntax.mutable
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DisableSyntax/GuardsApplication/input.scala:16:3: error: [DisableSyntax.var]: mutable state should be avoided
+    var v = 1 // assert: DisableSyntax.var
+    ^^^
+DisableSyntax/GuardsApplication/input.scala:19:18: error: [DisableSyntax.return]: return should be avoided, consider using if/else instead
+    def r(): Int = return 1 // assert: DisableSyntax.return
+                   ^^^^^^
+DisableSyntax/GuardsApplication/input.scala:20:19: error: [DisableSyntax.while]: while loops should be avoided, consider using recursion instead
+    def w(): Unit = while v < 0 do v += 1 // assert: DisableSyntax.while
+                    ^^^^^
+DisableSyntax/GuardsApplication/input.scala:37:7: error: [DisableSyntax.noFinalize]: finalize should not be used
+    def finalize(): Unit = () // assert: DisableSyntax.noFinalize
+        ^^^^^^^^

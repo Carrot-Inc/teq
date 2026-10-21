@@ -56,6 +56,13 @@ final class Token(private[fix] val gen: Int, private[fix] val idx: Int):
   override def hashCode: Int = gen * 1000003 + idx
   override def toString: String = text
 
+/** The kinds' codes, which the shipped rules' walks compare (`Native.tokenCodes`, `Native.tokensOf`): a code is an index of
+  * the run's names (src/fix/source.rs, `TOKEN_KINDS`). */
+object Token:
+  private[fix] lazy val names: Array[String] = Native.tokenKindNames()
+  /** A kind's code, -1 for a name no token has. */
+  private[fix] def code(name: String): Int = names.indexOf(name)
+
 /** A run of the editable stream, `[from, until)`. */
 final class Tokens(private[fix] val gen: Int, val from: Int, val until: Int):
   def length: Int = until - from
@@ -77,11 +84,22 @@ final class Tokens(private[fix] val gen: Int, val from: Int, val until: Int):
       i += 1
     out.toList
   def iterator: Iterator[Token] = toList.iterator
-  def foreach(f: Token => Unit): Unit = toList.foreach(f)
+  def foreach(f: Token => Unit): Unit =
+    var i = from
+    while i < until do
+      f(new Token(gen, i))
+      i += 1
   def collect[T](f: PartialFunction[Token, T]): List[T] = toList.collect(f)
   def filter(p: Token => Boolean): List[Token] = toList.filter(p)
-  def find(p: Token => Boolean): Option[Token] = toList.find(p)
-  def exists(p: Token => Boolean): Boolean = toList.exists(p)
+  def find(p: Token => Boolean): Option[Token] =
+    var i = from
+    var found: Option[Token] = None
+    while found.isEmpty && i < until do
+      val t = new Token(gen, i)
+      if p(t) then found = Some(t)
+      i += 1
+    found
+  def exists(p: Token => Boolean): Boolean = find(p).isDefined
   def slice(a: Int, b: Int): Tokens = new Tokens(gen, from + a.max(0).min(length), from + b.max(a.max(0)).min(length))
   def drop(n: Int): Tokens = slice(n, length)
   def take(n: Int): Tokens = slice(0, n)

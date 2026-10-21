@@ -20,6 +20,25 @@ fn text(a: &[Value], i: usize) -> String {
     a.get(i + 1).and_then(Value::as_str).unwrap_or("").to_string()
 }
 
+/// The `Int`s of the `Array` argument `i`.
+fn int_items(a: &[Value], i: usize) -> Vec<i32> {
+    match a.get(i + 1) {
+        Some(Value::Array(cell)) => cell.borrow().iter().filter_map(Value::as_i32).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Which of `n` codes `codes` names, ignoring a code outside them.
+fn wanted_codes(codes: Vec<i32>, n: usize) -> Vec<bool> {
+    let mut want = vec![false; n];
+    for c in codes {
+        if let Some(w) = usize::try_from(c).ok().and_then(|c| want.get_mut(c)) {
+            *w = true;
+        }
+    }
+    want
+}
+
 fn ints(v: impl IntoIterator<Item = i32>) -> Value {
     Value::Array(ArrayCell::new(v.into_iter().map(Value::Int).collect()))
 }
@@ -181,8 +200,48 @@ pub(super) fn install(t: &mut Table) {
     reg!(t, "teq.fix.Native.tokenCount", |it, a| on_doc(it, int(a, 0), |d| Ok(Value::Int(d.tokens.len() as i32))));
     reg!(t, "teq.fix.Native.tokenKind", |it, a| {
         let k = int(a, 1);
-        on_doc(it, int(a, 0), |d| Ok(Value::string(crate::fix::source::kind_name(token(d, k)?.kind))))
+        on_doc(it, int(a, 0), |d| Ok(Value::str(crate::fix::source::kind_name(token(d, k)?.kind))))
     });
+    // DisableSyntax's walks (fix-speed's table, rows 8.1 and 8.3): the nodes of the kinds given, in the tree's pre-order
+    // (`Tree.collect`'s: a node, then its children in order), and the tokens of the codes given, in the stream's order.
+    reg!(t, "teq.fix.Native.preorder", |it, a| {
+        let kinds = int_items(a, 1);
+        on_doc(it, int(a, 0), |d| {
+            let want = wanted_codes(kinds, KIND_NAMES.len());
+            let mut out = Vec::new();
+            let mut stack: Vec<u32> = d.tree.nodes.len().checked_sub(1).map(|root| root as u32).into_iter().collect();
+            while let Some(n) = stack.pop() {
+                if want[d.tree.nodes[n as usize].kind as usize] {
+                    out.push(n as i32);
+                }
+                stack.extend(d.tree.children(n).iter().rev().map(|&(_, c)| c));
+            }
+            Ok(ints(out))
+        })
+    });
+    // The subtree of a node in pre-order, the node first (`Tree.collect`'s and `Tree.traverse`'s order).
+    reg!(t, "teq.fix.Native.subtree", |it, a| {
+        let n = int(a, 1);
+        on_doc(it, int(a, 0), |d| {
+            node(d, n)?;
+            let mut out = Vec::new();
+            let mut stack = vec![n as u32];
+            while let Some(m) = stack.pop() {
+                out.push(m as i32);
+                stack.extend(d.tree.children(m).iter().rev().map(|&(_, c)| c));
+            }
+            Ok(ints(out))
+        })
+    });
+    reg!(t, "teq.fix.Native.tokensOf", |it, a| {
+        let codes = int_items(a, 1);
+        on_doc(it, int(a, 0), |d| {
+            let want = wanted_codes(codes, crate::fix::source::TOKEN_KINDS.len());
+            Ok(ints(d.tokens.iter().enumerate().filter(|(_, p)| want[crate::fix::source::kind_code(p.kind) as usize]).map(|(i, _)| i as i32)))
+        })
+    });
+    reg!(t, "teq.fix.Native.tokenKindNames", |_it, _a| Ok(strings(crate::fix::source::TOKEN_KINDS.iter().map(|s| s.to_string()))));
+    reg!(t, "teq.fix.Native.tokenCodes", |it, a| on_doc(it, int(a, 0), |d| Ok(ints(d.tokens.iter().map(|p| crate::fix::source::kind_code(p.kind) as i32)))));
     reg!(t, "teq.fix.Native.tokenStart", |it, a| {
         let k = int(a, 1);
         on_doc(it, int(a, 0), |d| Ok(Value::Int(d.utf16.units(token(d, k)?.span.start) as i32)))

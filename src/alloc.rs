@@ -1515,7 +1515,7 @@ mod tests {
         ("src/emit/layout.rs", 2, "alloc::spawn_in for the scan of the anonymous classes' creations and for their shapes"),
         ("src/emit/mod.rs", 1, "alloc::spawn_in"),
         ("src/emit/outline.rs", 1, "alloc::spawn_in"),
-        ("src/fix/engine.rs", 2, "a builder for the stacks' size of teq fix's rule thread and typing thread, alloc::enter the first statement of each closure"),
+        ("src/fix/engine.rs", 2, "a builder for the stacks' size of teq fix's rule workers (`Pool::add_worker`) and typing thread, alloc::enter the first statement of each closure"),
         ("src/frontend.rs", 1, "alloc::spawn_in"),
         ("src/interp/net.rs", 1, "a builder for the connect's waiter, alloc::enter the first statement of its closure"),
         ("src/interp/process.rs", 2, "a builder for the reaper's small stack, alloc::enter the first statement of its closure; the other starts a program's child under teq interp"),

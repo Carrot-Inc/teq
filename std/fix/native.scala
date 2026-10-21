@@ -22,6 +22,16 @@ object Native:
   @js("$fix") def nodeTokens(gen: Int, node: Int): Array[Int]
   @js("$fix") def tokenCount(gen: Int): Int
   @js("$fix") def tokenKind(gen: Int, token: Int): String
+  /** The token kinds' names, by code (src/fix/source.rs, `TOKEN_KINDS`). */
+  @js("$fix") def tokenKindNames(): Array[String]
+  /** The document's tokens' kind codes, one a token. */
+  @js("$fix") def tokenCodes(gen: Int): Array[Int]
+  /** The tokens whose kind's code is among `codes`, in the stream's order. */
+  @js("$fix") def tokensOf(gen: Int, codes: Array[Int]): Array[Int]
+  /** The node and every node under it, in pre-order (`Tree.collect`'s order). */
+  @js("$fix") def subtree(gen: Int, node: Int): Array[Int]
+  /** The nodes whose kind is among `kinds`, in the tree's pre-order (`Tree.collect`'s). */
+  @js("$fix") def preorder(gen: Int, kinds: Array[Int]): Array[Int]
   @js("$fix") def tokenStart(gen: Int, token: Int): Int
   @js("$fix") def tokenEnd(gen: Int, token: Int): Int
   @js("$fix") def line(gen: Int, offset: Int): Int

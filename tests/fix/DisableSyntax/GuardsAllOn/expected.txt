@@ -1,0 +1,66 @@
+DisableSyntax/GuardsAllOn/input.scala:29:1: error: [DisableSyntax.mutable]: no mutable imports
+  import scala.collection.mutable // assert: DisableSyntax.mutable
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DisableSyntax/GuardsAllOn/input.scala:32:3: error: [DisableSyntax.var]: mutable state should be avoided
+    var v = 1 // assert: DisableSyntax.var
+    ^^^
+DisableSyntax/GuardsAllOn/input.scala:33:19: error: [DisableSyntax.null]: null should be avoided, consider using Option instead
+    val n: String = null // assert: DisableSyntax.null
+                    ^^^^
+DisableSyntax/GuardsAllOn/input.scala:34:22: error: [DisableSyntax.throw]: exceptions should be avoided, consider encoding the error in the return type instead
+    def t(): Nothing = throw new Exception // assert: DisableSyntax.throw
+                       ^^^^^
+DisableSyntax/GuardsAllOn/input.scala:35:18: error: [DisableSyntax.return]: return should be avoided, consider using if/else instead
+    def r(): Int = return 1 // assert: DisableSyntax.return
+                   ^^^^^^
+DisableSyntax/GuardsAllOn/input.scala:36:19: error: [DisableSyntax.while]: while loops should be avoided, consider using recursion instead
+    def w(): Unit = while v < 0 do v += 1 // assert: DisableSyntax.while
+                    ^^^^^
+DisableSyntax/GuardsAllOn/input.scala:37:21: error: [DisableSyntax.asInstanceOf]: asInstanceOf casts are disabled, use pattern matching instead
+    def c(a: Any) = a.asInstanceOf[Int] // assert: DisableSyntax.asInstanceOf
+                      ^^^^^^^^^^^^
+DisableSyntax/GuardsAllOn/input.scala:38:21: error: [DisableSyntax.asInstanceOfMatchable]: asInstanceOf[Matchable] is used here to enable pattern matching on Any. Consider using the .asMatchable extension method instead for better readability.
+    def m(a: Any) = a.asInstanceOf[Matchable] // assert: DisableSyntax.asInstanceOfMatchable
+                      ^^^^^^^^^^^^
+DisableSyntax/GuardsAllOn/input.scala:39:21: error: [DisableSyntax.isInstanceOf]: isInstanceOf checks are disabled, use pattern matching instead
+    def i(a: Any) = a.isInstanceOf[String] // assert: DisableSyntax.isInstanceOf
+                      ^^^^^^^^^^^^
+DisableSyntax/GuardsAllOn/input.scala:40:12: error: [DisableSyntax.noSemicolons]: semicolons are disabled
+    val s = 1; val s2 = 2 // assert: DisableSyntax.noSemicolons
+             ^
+DisableSyntax/GuardsAllOn/input.scala:41:14: error: [DisableSyntax.noTabs]: tabs are disabled
+    val tab = 1	// assert: DisableSyntax.noTabs
+               ^
+DisableSyntax/GuardsAllOn/input.scala:42:13: error: [DisableSyntax.covariant]: Covariant types could lead to error-prone situations
+    class Cov[+A] // assert: DisableSyntax.covariant
+              ^
+DisableSyntax/GuardsAllOn/input.scala:43:16: error: [DisableSyntax.contravariant]: Contravariant types could lead to error-prone situations
+    class Contra[-A] // assert: DisableSyntax.contravariant
+                 ^
+DisableSyntax/GuardsAllOn/input.scala:44:18: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+    def d(a: Int = 1) = a // assert: DisableSyntax.defaultArgs
+                   ^
+DisableSyntax/GuardsAllOn/input.scala:45:14: error: [DisableSyntax.valInAbstract]: val definitions in traits/abstract classes may cause initialization bugs
+    trait Tr { val tv = 1 } // assert: DisableSyntax.valInAbstract
+               ^^^^^^^^^^
+DisableSyntax/GuardsAllOn/input.scala:46:3: error: [DisableSyntax.implicitObject]: implicit objects may cause implicit resolution errors
+    implicit object IO // assert: DisableSyntax.implicitObject
+    ^^^^^^^^^^^^^^^^^^
+DisableSyntax/GuardsAllOn/input.scala:47:3: error: [DisableSyntax.implicitConversion]: implicit conversions weaken type safety and always can be replaced by explicit conversions
+    implicit def conv(x: Int): String = "" // assert: DisableSyntax.implicitConversion
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DisableSyntax/GuardsAllOn/input.scala:48:3: error: [DisableSyntax.noFinalVal]: Final vals cause problems with incremental compilation
+    final val fv = 1 // assert: DisableSyntax.noFinalVal
+    ^^^^^
+DisableSyntax/GuardsAllOn/input.scala:50:7: error: [DisableSyntax.noValPatterns]: Pattern matching in val assignment can result in match error, use "_ match { ... }" with a fallback case instead.
+    val Some(pc) = Option(1) // assert: DisableSyntax.noValPatterns
+        ^^^^^^^^
+DisableSyntax/GuardsAllOn/input.scala:51:22: error: [DisableSyntax.==]: == and != are unsafe since they allow comparing two unrelated types
+    def eq(a: Int) = a == 1 // assert: DisableSyntax.==
+                       ^^
+DisableSyntax/GuardsAllOn/input.scala:52:22: error: [DisableSyntax.!=]: == and != are unsafe since they allow comparing two unrelated types
+    def ne(a: Int) = a != 1 // assert: DisableSyntax.!=
+                       ^^
+DisableSyntax/GuardsAllOn/input.scala:54:3: error: [DisableSyntax.lazy]: lazy is disabled
+    lazy val lz = 1 // assert: DisableSyntax.lazy
+    ^^^^

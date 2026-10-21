@@ -18,9 +18,8 @@ pub enum Kind {
     CR,
     FF,
     Comment,
-    /// The `end` of an end marker, and its name or keyword.
+    /// The `end` of an end marker (its name is the name's own token: an `Ident`, or the keyword's of `end while`).
     End,
-    EndName,
     /// A script's header, its `#!` line through its `!#` line where it has one, which the lexer skips
     /// (`directives::script_header`).
     Shebang,
@@ -32,53 +31,216 @@ pub enum Kind {
     InterpDelim,
 }
 
-/// A token's kind as the API names it, scalameta's token class (`KwVar`, `Ident`, `Semicolon`, `Tab`, `Comment`).
-pub fn kind_name(k: Kind) -> String {
-    let named = match k {
-        Kind::Space => "Space",
-        Kind::Tab => "Tab",
-        Kind::LF => "LF",
-        Kind::CRLF => "CRLF",
-        Kind::CR => "CR",
-        Kind::FF => "FF",
-        Kind::Comment => "Comment",
-        Kind::End | Kind::EndName => "Ident",
-        Kind::Shebang => "Shebang",
-        Kind::Bom => "BOM",
-        Kind::InterpDelim => "Interpolation.Delimiter",
-        Kind::Tok(t) => match t {
-            Tok::Ident | Tok::OpIdent => "Ident",
-            Tok::Semi => "Semicolon",
-            Tok::Comma => "Comma",
-            Tok::Dot => "Dot",
-            Tok::LParen => "LeftParen",
-            Tok::RParen => "RightParen",
-            Tok::LBracket => "LeftBracket",
-            Tok::RBracket => "RightBracket",
-            Tok::LBrace => "LeftBrace",
-            Tok::RBrace => "RightBrace",
-            Tok::Colon | Tok::ColonEol => "Colon",
-            Tok::Eq => "Equals",
-            Tok::Arrow => "RightArrow",
-            Tok::CtxArrow => "ContextArrow",
-            Tok::LArrow => "LeftArrow",
-            Tok::Subtype => "Subtype",
-            Tok::Supertype => "Supertype",
-            Tok::At => "At",
-            Tok::Underscore => "Underscore",
-            Tok::IntLit => "Constant.Int",
-            Tok::LongLit => "Constant.Long",
-            Tok::DoubleLit => "Constant.Double",
-            Tok::FloatLit => "Constant.Float",
-            Tok::CharLit => "Constant.Char",
-            Tok::StringLit => "Constant.String",
-            Tok::InterpStart => "Interpolation.Id",
-            Tok::StrPart => "Interpolation.Part",
-            Tok::InterpEnd => "Interpolation.End",
-            _ => return format!("{:?}", t),
-        },
+macro_rules! token_kinds {
+    ($($code:ident = $name:literal),* $(,)?) => {
+        #[allow(clippy::upper_case_acronyms)]
+        #[derive(Clone, Copy)]
+        #[repr(u16)]
+        enum Code {
+            $($code),*
+        }
+        /// The token kinds the API names (`Token.kind`), by code: scalameta's token classes as the bridge names them
+        /// (docs/FIX.md, "Token"), each once. A document's codes are handed to the rule program once
+        /// (`Native.tokenCodes`), the names once a run (`Native.tokenKindNames`).
+        pub const TOKEN_KINDS: &[&str] = &[$($name),*];
     };
-    named.to_string()
+}
+
+token_kinds!(
+    Space = "Space",
+    Tab = "Tab",
+    LF = "LF",
+    CRLF = "CRLF",
+    CR = "CR",
+    FF = "FF",
+    Comment = "Comment",
+    Ident = "Ident",
+    Shebang = "Shebang",
+    Bom = "BOM",
+    InterpDelim = "Interpolation.Delimiter",
+    Semicolon = "Semicolon",
+    Comma = "Comma",
+    Dot = "Dot",
+    LeftParen = "LeftParen",
+    RightParen = "RightParen",
+    LeftBracket = "LeftBracket",
+    RightBracket = "RightBracket",
+    LeftBrace = "LeftBrace",
+    RightBrace = "RightBrace",
+    Colon = "Colon",
+    Equals = "Equals",
+    RightArrow = "RightArrow",
+    ContextArrow = "ContextArrow",
+    LeftArrow = "LeftArrow",
+    Subtype = "Subtype",
+    Supertype = "Supertype",
+    At = "At",
+    Underscore = "Underscore",
+    ConstantInt = "Constant.Int",
+    ConstantLong = "Constant.Long",
+    ConstantDouble = "Constant.Double",
+    ConstantFloat = "Constant.Float",
+    ConstantChar = "Constant.Char",
+    ConstantString = "Constant.String",
+    InterpolationId = "Interpolation.Id",
+    InterpolationPart = "Interpolation.Part",
+    InterpolationEnd = "Interpolation.End",
+    Quote = "Quote",
+    QuoteId = "QuoteId",
+    Splice = "Splice",
+    TypeLambdaArrow = "TypeLambdaArrow",
+    Eof = "Eof",
+    EndLambda = "EndLambda",
+    Newline = "Newline",
+    Indent = "Indent",
+    Outdent = "Outdent",
+    KwAbstract = "KwAbstract",
+    KwCase = "KwCase",
+    KwClass = "KwClass",
+    KwDef = "KwDef",
+    KwDo = "KwDo",
+    KwElse = "KwElse",
+    KwEnum = "KwEnum",
+    KwExtends = "KwExtends",
+    KwFalse = "KwFalse",
+    KwFinal = "KwFinal",
+    KwFor = "KwFor",
+    KwGiven = "KwGiven",
+    KwIf = "KwIf",
+    KwImport = "KwImport",
+    KwLazy = "KwLazy",
+    KwMatch = "KwMatch",
+    KwNew = "KwNew",
+    KwNull = "KwNull",
+    KwObject = "KwObject",
+    KwOverride = "KwOverride",
+    KwPackage = "KwPackage",
+    KwPrivate = "KwPrivate",
+    KwProtected = "KwProtected",
+    KwReturn = "KwReturn",
+    KwSealed = "KwSealed",
+    KwSuper = "KwSuper",
+    KwThen = "KwThen",
+    KwThis = "KwThis",
+    KwThrow = "KwThrow",
+    KwTrait = "KwTrait",
+    KwTrue = "KwTrue",
+    KwTry = "KwTry",
+    KwCatch = "KwCatch",
+    KwFinally = "KwFinally",
+    KwType = "KwType",
+    KwVal = "KwVal",
+    KwVar = "KwVar",
+    KwWhile = "KwWhile",
+    KwWith = "KwWith",
+    KwYield = "KwYield",
+    KwExport = "KwExport",
+    KwImplicit = "KwImplicit",
+);
+
+/// A token's kind's code, its index in `TOKEN_KINDS`: every `Tok` named, those that never reach the stream (`Eof`, the
+/// layout) by their own names.
+pub fn kind_code(k: Kind) -> u16 {
+    use Code as C;
+    (match k {
+        Kind::Space => C::Space,
+        Kind::Tab => C::Tab,
+        Kind::LF => C::LF,
+        Kind::CRLF => C::CRLF,
+        Kind::CR => C::CR,
+        Kind::FF => C::FF,
+        Kind::Comment => C::Comment,
+        Kind::End => C::Ident,
+        Kind::Shebang => C::Shebang,
+        Kind::Bom => C::Bom,
+        Kind::InterpDelim => C::InterpDelim,
+        Kind::Tok(t) => match t {
+            Tok::Ident | Tok::OpIdent => C::Ident,
+            Tok::IntLit => C::ConstantInt,
+            Tok::LongLit => C::ConstantLong,
+            Tok::DoubleLit => C::ConstantDouble,
+            Tok::FloatLit => C::ConstantFloat,
+            Tok::CharLit => C::ConstantChar,
+            Tok::StringLit => C::ConstantString,
+            Tok::InterpStart => C::InterpolationId,
+            Tok::StrPart => C::InterpolationPart,
+            Tok::InterpEnd => C::InterpolationEnd,
+            Tok::Quote => C::Quote,
+            Tok::QuoteId => C::QuoteId,
+            Tok::Splice => C::Splice,
+            Tok::LParen => C::LeftParen,
+            Tok::RParen => C::RightParen,
+            Tok::LBracket => C::LeftBracket,
+            Tok::RBracket => C::RightBracket,
+            Tok::LBrace => C::LeftBrace,
+            Tok::RBrace => C::RightBrace,
+            Tok::Comma => C::Comma,
+            Tok::Semi => C::Semicolon,
+            Tok::Dot => C::Dot,
+            Tok::Colon | Tok::ColonEol => C::Colon,
+            Tok::Eq => C::Equals,
+            Tok::Arrow => C::RightArrow,
+            Tok::CtxArrow => C::ContextArrow,
+            Tok::LArrow => C::LeftArrow,
+            Tok::Subtype => C::Subtype,
+            Tok::Supertype => C::Supertype,
+            Tok::At => C::At,
+            Tok::Underscore => C::Underscore,
+            Tok::TypeLambdaArrow => C::TypeLambdaArrow,
+            Tok::Eof => C::Eof,
+            Tok::EndLambda => C::EndLambda,
+            Tok::Newline => C::Newline,
+            Tok::Indent => C::Indent,
+            Tok::Outdent => C::Outdent,
+            Tok::KwAbstract => C::KwAbstract,
+            Tok::KwCase => C::KwCase,
+            Tok::KwClass => C::KwClass,
+            Tok::KwDef => C::KwDef,
+            Tok::KwDo => C::KwDo,
+            Tok::KwElse => C::KwElse,
+            Tok::KwEnum => C::KwEnum,
+            Tok::KwExtends => C::KwExtends,
+            Tok::KwFalse => C::KwFalse,
+            Tok::KwFinal => C::KwFinal,
+            Tok::KwFor => C::KwFor,
+            Tok::KwGiven => C::KwGiven,
+            Tok::KwIf => C::KwIf,
+            Tok::KwImport => C::KwImport,
+            Tok::KwLazy => C::KwLazy,
+            Tok::KwMatch => C::KwMatch,
+            Tok::KwNew => C::KwNew,
+            Tok::KwNull => C::KwNull,
+            Tok::KwObject => C::KwObject,
+            Tok::KwOverride => C::KwOverride,
+            Tok::KwPackage => C::KwPackage,
+            Tok::KwPrivate => C::KwPrivate,
+            Tok::KwProtected => C::KwProtected,
+            Tok::KwReturn => C::KwReturn,
+            Tok::KwSealed => C::KwSealed,
+            Tok::KwSuper => C::KwSuper,
+            Tok::KwThen => C::KwThen,
+            Tok::KwThis => C::KwThis,
+            Tok::KwThrow => C::KwThrow,
+            Tok::KwTrait => C::KwTrait,
+            Tok::KwTrue => C::KwTrue,
+            Tok::KwTry => C::KwTry,
+            Tok::KwCatch => C::KwCatch,
+            Tok::KwFinally => C::KwFinally,
+            Tok::KwType => C::KwType,
+            Tok::KwVal => C::KwVal,
+            Tok::KwVar => C::KwVar,
+            Tok::KwWhile => C::KwWhile,
+            Tok::KwWith => C::KwWith,
+            Tok::KwYield => C::KwYield,
+            Tok::KwExport => C::KwExport,
+            Tok::KwImplicit => C::KwImplicit,
+        },
+    }) as u16
+}
+
+/// A token's kind as the API names it, scalameta's token class (`KwVar`, `Ident`, `Semicolon`, `Tab`, `Comment`).
+pub fn kind_name(k: Kind) -> &'static str {
+    TOKEN_KINDS[kind_code(k) as usize]
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -103,16 +265,34 @@ pub(super) fn editable_kind(text: &str, t: &crate::token::Token) -> Option<Tok> 
     }
 }
 
+/// The kind scalameta's tokenizer gives a word it scans as a token of its own: its keyword's (`while`, `this`, `null`),
+/// else `Ident`. An end marker's name and a quoted identifier's are such words (scalameta's `LegacyScanner` lexes the
+/// name after `end` and after the `'` of `'x` as any token), where teq's lexer makes one token of `'x` and its parser
+/// reads the end marker's name as a name.
+fn word_kind(word: &str) -> Kind {
+    Kind::Tok(crate::token::keyword(word).unwrap_or(Tok::Ident))
+}
+
 /// Every byte of `text` in order: the kept tokens and end markers, and the comments and trivia between them. A gap
 /// holds only what the lexer skips; anything else there is a defect of the record, `Err` with its offset.
 pub fn editable(text: &str, kept: &SourceKept) -> Result<Vec<Piece>, u32> {
     let mut marks: Vec<Piece> = Vec::with_capacity(kept.tokens.len() + kept.end_markers.len() * 2);
-    marks.extend(kept.tokens.iter().filter_map(|t| editable_kind(text, t).map(|k| Piece { kind: Kind::Tok(k), span: t.span })));
+    for t in &kept.tokens {
+        let Some(k) = editable_kind(text, t) else { continue };
+        if k == Tok::QuoteId {
+            // `'x`: the quote, then the name's own token, as scalameta's tokenizer scans them.
+            let quote = Span::new(t.span.start, t.span.start + 1);
+            marks.push(Piece { kind: Kind::Tok(Tok::Quote), span: quote });
+            marks.push(Piece { kind: word_kind(&text[quote.end as usize..t.span.end as usize]), span: Span::new(quote.end, t.span.end) });
+        } else {
+            marks.push(Piece { kind: Kind::Tok(k), span: t.span });
+        }
+    }
     for &m in &kept.end_markers {
         let word = Span::new(m.start, m.start + 3);
         let name_start = text[word.end as usize..m.end as usize].find(|c: char| c != ' ').map_or(m.end, |i| word.end + i as u32);
         marks.push(Piece { kind: Kind::End, span: word });
-        marks.push(Piece { kind: Kind::EndName, span: Span::new(name_start, m.end) });
+        marks.push(Piece { kind: word_kind(&text[name_start as usize..m.end as usize]), span: Span::new(name_start, m.end) });
     }
     marks.sort_by_key(|p| p.span.start);
     marks.dedup_by_key(|p| p.span);
@@ -245,6 +425,25 @@ mod tests {
     }
 
     #[test]
+    fn kind_names_by_code() {
+        // Each name once; the kinds named as the API named them before the codes (the bridge's names, docs/FIX.md).
+        let mut names: Vec<&str> = TOKEN_KINDS.to_vec();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), TOKEN_KINDS.len());
+        for w in ["while", "if", "this", "null", "true", "implicit", "export", "given", "then"] {
+            let t = crate::token::keyword(w).expect(w);
+            assert_eq!(kind_name(Kind::Tok(t)), format!("{:?}", t));
+        }
+        assert_eq!(kind_name(Kind::Tok(Tok::OpIdent)), "Ident");
+        assert_eq!(kind_name(Kind::End), "Ident");
+        assert_eq!(kind_name(Kind::Tok(Tok::ColonEol)), "Colon");
+        assert_eq!(kind_name(Kind::Tok(Tok::QuoteId)), "QuoteId");
+        assert_eq!(kind_name(Kind::InterpDelim), "Interpolation.Delimiter");
+        assert_eq!(kind_name(Kind::Bom), "BOM");
+    }
+
+    #[test]
     fn comments_end_markers_and_line_ends() {
         let text = "// head\r\nobject O:\r\n\t/* a /* nested */ b */ val x = 1 // tail\r\n  def f = 2\r\nend O\r\n";
         let ps = pieces(text).unwrap();
@@ -254,7 +453,22 @@ mod tests {
         assert_eq!(kinds[..2], [Kind::Comment, Kind::CRLF]);
         assert!(ps.iter().any(|p| p.kind == Kind::Comment && &text[p.span.start as usize..p.span.end as usize] == "/* a /* nested */ b */"));
         assert!(ps.iter().any(|p| p.kind == Kind::Comment && &text[p.span.start as usize..p.span.end as usize] == "// tail"));
-        assert!(kinds.contains(&Kind::Tab) && kinds.contains(&Kind::End) && kinds.contains(&Kind::EndName));
+        assert!(kinds.contains(&Kind::Tab) && kinds.contains(&Kind::End));
+        let name = ps.iter().position(|p| p.kind == Kind::End).map(|i| ps[i + 2]);
+        assert_eq!(name.map(|p| (p.kind, &text[p.span.start as usize..p.span.end as usize])), Some((Kind::Tok(Tok::Ident), "O")));
+    }
+
+    #[test]
+    fn end_marker_keywords_and_quoted_identifiers() {
+        // As scalameta's tokenizer scans them: `end while`'s name a `KwWhile`, `end O`'s an `Ident`, the quote of `'x`
+        // and then its name.
+        let text = "object O:\n  def f(x: Int): Unit =\n    while x < 0 do ()\n    end while\n  def q(using scala.quoted.Quotes) = '{ ${ 'x } }\nend O\n";
+        let ps = pieces(text).unwrap();
+        let shown: Vec<(Kind, &str)> = ps.iter().map(|p| (p.kind, &text[p.span.start as usize..p.span.end as usize])).filter(|(k, _)| !matches!(k, Kind::Space | Kind::LF)).collect();
+        assert_eq!(shown.iter().filter(|&&(k, t)| k == Kind::End && t == "end").count(), 2);
+        assert!(shown.windows(2).any(|w| w[0] == (Kind::End, "end") && w[1] == (Kind::Tok(Tok::KwWhile), "while")));
+        assert!(shown.windows(2).any(|w| w[0] == (Kind::End, "end") && w[1] == (Kind::Tok(Tok::Ident), "O")));
+        assert!(shown.windows(2).any(|w| w[0] == (Kind::Tok(Tok::Quote), "'") && w[1] == (Kind::Tok(Tok::Ident), "x")));
     }
 
     #[test]

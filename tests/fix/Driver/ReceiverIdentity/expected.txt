@@ -1,0 +1,6 @@
+Driver/ReceiverIdentity/input.scala:5:16: error: [ReceiverIdentity.identity]: visited root
+  object O { val marker = 1 + 2; val y = List(3) } // assert: ReceiverIdentity.identity
+                 ^^^^^^
+Driver/ReceiverIdentity/input.scala:5:16: error: [ReceiverIdentity.identity]: traverse=1 equal=1 collect=1 inner=1
+  object O { val marker = 1 + 2; val y = List(3) } // assert: ReceiverIdentity.identity
+                 ^^^^^^

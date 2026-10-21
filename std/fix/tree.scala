@@ -16,20 +16,27 @@ abstract class Tree(private[fix] val gen: Int, private[fix] val idx: Int):
   final def tokens: Tokens =
     val r = Native.nodeTokens(gen, idx)
     new Tokens(gen, r(0), r(1))
-  /** What `f` gives of this node and every node under it, in pre-order, as scalameta's `collect`. */
+  /** What `f` gives of this node and every node under it, in pre-order, as scalameta's `collect`: this node itself first,
+    * before anything of the tree is read, then the order under it read once (`Native.subtree`), each node made as it is
+    * visited. */
   final def collect[T](f: PartialFunction[Tree, T]): List[T] =
     val out = ListBuffer.empty[T]
-    def go(t: Tree): Unit =
+    if f.isDefinedAt(this) then out += f(this)
+    val order = Native.subtree(gen, idx)
+    var i = 1
+    while i < order.length do
+      val t = Tree.of(gen, order(i))
       if f.isDefinedAt(t) then out += f(t)
-      t.children.foreach(go)
-    go(this)
+      i += 1
     out.toList
-  /** `f` on this node and every node under it, in pre-order. */
+  /** `f` on this node and every node under it, in pre-order: this node itself first, as `collect`. */
   final def traverse(f: Tree => Unit): Unit =
-    def go(t: Tree): Unit =
-      f(t)
-      t.children.foreach(go)
-    go(this)
+    f(this)
+    val order = Native.subtree(gen, idx)
+    var i = 1
+    while i < order.length do
+      f(Tree.of(gen, order(i)))
+      i += 1
   protected final def written: String = Native.value(gen, idx)
   protected final def all(field: String): List[Tree] = Native.field(gen, idx, field).toList.map(i => Tree.of(gen, i))
   protected final def opt(field: String): Option[Tree] = all(field).headOption

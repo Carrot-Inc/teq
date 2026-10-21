@@ -1,6 +1,6 @@
-//! What the rule thread holds of the run (docs/FIX.md, "The bridge"): the document the rules read, its tokens and
+//! What a rule worker holds of the run (docs/FIX.md, "The bridge"): the document the rules read, its tokens and
 //! tree, its offsets in the interpreter's UTF-16 units, the configuration, and what the rules return. The
-//! interpreter's `teq.fix.Native` builtins (`interp::fix`) read and fill it through `with_host` on the rule thread;
+//! interpreter's `teq.fix.Native` builtins (`interp::fix`) read and fill it through `with_host` on its worker;
 //! a handle is a document's generation and an index, so a rule that keeps a tree past its document is told so.
 
 use super::config::Conf;
@@ -120,7 +120,19 @@ pub struct Results {
     pub failures: Vec<(u32, String)>,
 }
 
-/// The rule thread's state.
+/// Who reads a document: its job, its round, its slot (its place among the round's documents), its generation and the
+/// worker. The coordinator assigns it when it hands the document out; the worker's answer carries it back from the host,
+/// and a query to the target typer would carry it (fix-speed's table, §4: `fix::query`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Asker {
+    pub job: u32,
+    pub round: u32,
+    pub slot: u32,
+    pub gen: u32,
+    pub worker: u32,
+}
+
+/// A rule worker's state.
 pub struct Host {
     pub doc: Option<DocView>,
     pub results: Results,
@@ -128,8 +140,10 @@ pub struct Host {
     /// Per node of `conf`, whether a rule's decoding read it (`Native.confField`): a configured rule's settings no
     /// decoding read are unknown ones.
     pub read: Vec<bool>,
-    /// The next atomic group's number.
+    /// The atomic groups the current document's rules made (`Native.newGroup`), numbered from 1 there.
     pub groups: u32,
+    /// Who reads the current document.
+    pub asker: Option<Asker>,
 }
 
 thread_local! {
