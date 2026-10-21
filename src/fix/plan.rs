@@ -535,7 +535,7 @@ fn beg_comment(d: &DocView, first: usize, block: bool) -> Option<usize> {
             Kind::Space | Kind::Tab => {}
             k => {
                 let name = super::source::kind_name(k);
-                if !comments.is_empty() && (can_end_stat(d, i, &name) || block || had_line_end && name == "Comma") {
+                if !comments.is_empty() && (can_end_stat(d, i, name) || block || had_line_end && name == "Comma") {
                     comments.drain(0..pending);
                 }
                 break;

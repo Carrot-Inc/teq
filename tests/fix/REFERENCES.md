@@ -89,6 +89,20 @@ otherwise, and under `--check` 1 where there is a lint or an edit.
 - `DisableSyntax/PlaceholderFunctions`: placeholder functions (`_ + 1`, `(_: Int) != 1`, `_ * _`) under
   `noUniversalEquality`, their `_`s scalameta's `Term.Placeholder`s and their functions `Term.AnonymousFunction`s,
   which a rule matching an infix application's operand reads as terms.
+- The cases of fix-speed (the rules over several workers, the guarded checks): `Driver/TokenContract` (every token's
+  kind, offsets, text, `is`, keyword and trivia classes and value, over an input of every token class teq lexes; rule
+  `support/DumpTokens.scala`), `Driver/TreeContract` (the design pass's probe of the tree in both orders of access and
+  after another document; rule `support/InspectTree.scala`), `Driver/FieldContract` (every kind's named fields through
+  its accessors, an empty one and a missing one's exception; rule `support/DumpFields.scala`), each recorded on the
+  binary before the part's changes; `DisableSyntax/EndMarkerKeywords` (an end marker's keyword name a keyword's token,
+  as scalameta's tokenizer scans it, reported as scalafix's `Keyword` extractor reports it, `end given` not: from
+  scalafix's `DisableSyntaxConfig.scala` at `41cf7983`, `Keyword.unapply` and `kwSet`); `DisableSyntax/FinalizeUnconditional`
+  and `FinalizeDefaultArgs` (`FinalizeMatcher` read no setting, after `DefaultMatcher`'s cases: from scalafix's
+  `DisableSyntax.scala` at `41cf7983`, `checkTree`); `DisableSyntax/GuardsAllOff`, `GuardsAllOn`, `GuardsApplication` and
+  `GuardsMixed` (one input with every check under four configurations, recorded by the rule before its settings were
+  asked first); `Driver/ReceiverIdentity` (`collect` and `traverse` visiting their receiver as itself, the root's and an
+  inner node's: the push pass of `becf46896`, its Root and Identity probes; rule `support/ReceiverIdentity.scala`). The
+  `parallel` cases of `tests/fix.scala` generate their corpus.
 
 ## Fixtures not taken
 

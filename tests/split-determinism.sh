@@ -15,7 +15,8 @@
 # counts as passed, and so does the corpus without the jars it reads. Every forked build sweeps
 # its merged program for a worker's id left (`TEQ_MERGE_SWEEP=1`), and
 # the assertion-enabled build checks the parallel merge against the serial walk's order
-# (`TEQ_MERGE_TRACE=1`), which the release build ignores.
+# (`TEQ_MERGE_TRACE=1`), which the release build ignores. `teq fix`'s rules' phase over the frontend is
+# compared at one worker and several, its execution record read for the workers it ran on (`fixes`, below).
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 export TEQ_MERGE_SWEEP=${TEQ_MERGE_SWEEP:-1}
@@ -145,6 +146,56 @@ else
   ok
 fi
 
+# `teq compiler fix --check` over the frontend with every shipped rule (DisableSyntax with most of its settings on), at one
+# worker and at eight and each count of THREADS above one: the output (both streams, the trace's document lines among
+# them, and the exit) the one-worker run's, and each run's execution record (docs/FIX.md, "Debugging a rule") a
+# parallel one, every round dispatched over its workers, none serial. tests/fix.scala's `parallel` cases hold the
+# record to its full check, the forced schedules and the mutation controls.
+fixes() {
+  local conf=$work/fix.conf counts="8"
+  for n in ${THREADS//,/ }; do [ "$n" != 1 ] && [ "$n" != auto ] && counts="$counts $n"; done
+  cat > "$conf" <<'CONF'
+rules = [DisableSyntax, CatsImplicitsImport, TypelevelAs, EmptyCollectionsUnified, NoUnusedImports]
+DisableSyntax.keywords = [implicit, lazy]
+DisableSyntax.noVars = true
+DisableSyntax.noNulls = true
+DisableSyntax.noReturns = true
+DisableSyntax.noWhileLoops = true
+DisableSyntax.noAsInstanceOf = true
+DisableSyntax.noIsInstanceOf = true
+DisableSyntax.noSemicolons = true
+DisableSyntax.noUniversalEquality = true
+DisableSyntax.noDefaultArgs = true
+DisableSyntax.regex = [{ id = mutable, pattern = "(?m)^import scala\\.collection\\.mutable", message = "no mutable imports" }]
+lint.error.includes = ".*"
+CONF
+  run_fix() {
+    TEQ_FIX_TRACE=1 TEQ_FIX_RECORD=$work/fix-$1.record timeout 300 "$TEQ" compiler fix "${@:2}" --config "$conf" --check --threads "$1" > "$work/fix-$1.out" 2> "$work/fix-$1.err"
+    echo $? > "$work/fix-$1.status"
+    grep -v '^fix: .* ms in all' "$work/fix-$1.err" > "$work/fix-$1.shown"
+  }
+  run_fix 1 "$@"
+  grep -q '^run eligible=1 ' "$work/fix-1.record" || { bad "fix: the one-worker run's record: $(head -2 "$work/fix-1.record" | tr '\n' ' ')"; return; }
+  for n in $counts; do
+    run_fix "$n" "$@"
+    if ! cmp -s "$work/fix-1.status" "$work/fix-$n.status" || ! cmp -s "$work/fix-1.out" "$work/fix-$n.out" || ! cmp -s "$work/fix-1.shown" "$work/fix-$n.shown"; then
+      bad "fix at $n workers: its output differs from one worker's (exit $(cat "$work/fix-$n.status"), $(cat "$work/fix-1.status") at one)"
+    elif ! awk -v n="$n" '
+        /^run / { if ($0 !~ "workers=" n "( |$)" || $0 !~ /eligible=1/) bad = "the run line: " $0 }
+        /^serial/ { bad = "a serial round: " $0 }
+        /^round / { r++ }
+        /^done / { split($4, w, "="); seen[r, w[2]] = 1; done[r]++ }
+        END {
+          if (bad != "") { print bad; exit 1 }
+          for (i = 1; i <= r; i++) { k = 0; for (j = 0; j < n; j++) if ((i, j) in seen) k++; if (k < 2) { print "round " i " ran on " k " worker"; exit 1 } }
+        }' "$work/fix-$n.record" > "$work/fix-$n.check"; then
+      bad "fix at $n workers: $(cat "$work/fix-$n.check")"
+    else
+      ok
+    fi
+  done
+}
+
 cp=""
 missing=""
 for jar in scala-library cats-kernel cats-core sourcecode; do
@@ -165,6 +216,7 @@ else
   # The flag a JVM build implies since the lean JVM mode's retirement, for a REF from before it.
   builds app-api-jvm jvm "$work/src/shared" "$work/src/api" --classpath "$cp" --std=scala-library
   builds app-api-interp interp "$work/src/shared" "$work/src/api" --classpath "$cp"
+  fixes "$work/src/shared" "$work/src/frontend" --classpath "$cp" --cacheable-state meridian.web.css.Catalog
 fi
 
 echo "split-determinism: $pass passed, $fail failed"

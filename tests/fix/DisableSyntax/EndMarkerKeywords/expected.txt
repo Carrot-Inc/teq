@@ -1,0 +1,51 @@
+DisableSyntax/EndMarkerKeywords/input.scala:15:5: error: [DisableSyntax.while]: while loops should be avoided, consider using recursion instead
+      while i > 0 do // assert: DisableSyntax.while
+      ^^^^^
+DisableSyntax/EndMarkerKeywords/input.scala:17:9: error: [DisableSyntax.while]: while loops should be avoided, consider using recursion instead
+      end while // assert: DisableSyntax.while
+          ^^^^^
+DisableSyntax/EndMarkerKeywords/input.scala:19:5: error: [DisableSyntax.if]: if is disabled
+      if b then // assert: DisableSyntax.if
+      ^^
+DisableSyntax/EndMarkerKeywords/input.scala:23:9: error: [DisableSyntax.if]: if is disabled
+      end if // assert: DisableSyntax.if
+          ^^
+DisableSyntax/EndMarkerKeywords/input.scala:25:7: error: [DisableSyntax.match]: match is disabled
+      x match // assert: DisableSyntax.match
+        ^^^^^
+DisableSyntax/EndMarkerKeywords/input.scala:28:9: error: [DisableSyntax.match]: match is disabled
+      end match // assert: DisableSyntax.match
+          ^^^^^
+DisableSyntax/EndMarkerKeywords/input.scala:30:5: error: [DisableSyntax.for]: for is disabled
+      for k <- List(1) do // assert: DisableSyntax.for
+      ^^^
+DisableSyntax/EndMarkerKeywords/input.scala:32:9: error: [DisableSyntax.for]: for is disabled
+      end for // assert: DisableSyntax.for
+          ^^^
+DisableSyntax/EndMarkerKeywords/input.scala:34:5: error: [DisableSyntax.try]: try is disabled
+      try // assert: DisableSyntax.try
+      ^^^
+DisableSyntax/EndMarkerKeywords/input.scala:38:9: error: [DisableSyntax.try]: try is disabled
+      end try // assert: DisableSyntax.try
+          ^^^
+DisableSyntax/EndMarkerKeywords/input.scala:40:5: error: [DisableSyntax.new]: new is disabled
+      new Object: // assert: DisableSyntax.new
+      ^^^
+DisableSyntax/EndMarkerKeywords/input.scala:42:9: error: [DisableSyntax.new]: new is disabled
+      end new // assert: DisableSyntax.new
+          ^^^
+DisableSyntax/EndMarkerKeywords/input.scala:44:9: error: [DisableSyntax.this]: this is disabled
+      def this() = // assert: DisableSyntax.this
+          ^^^^
+DisableSyntax/EndMarkerKeywords/input.scala:45:7: error: [DisableSyntax.this]: this is disabled
+        this(1) // assert: DisableSyntax.this
+        ^^^^
+DisableSyntax/EndMarkerKeywords/input.scala:46:9: error: [DisableSyntax.this]: this is disabled
+      end this // assert: DisableSyntax.this
+          ^^^^
+DisableSyntax/EndMarkerKeywords/input.scala:47:3: error: [DisableSyntax.val]: val is disabled
+    val (a, b) = // assert: DisableSyntax.val
+    ^^^
+DisableSyntax/EndMarkerKeywords/input.scala:49:7: error: [DisableSyntax.val]: val is disabled
+    end val // assert: DisableSyntax.val
+        ^^^

@@ -173,11 +173,33 @@ final class DisableSyntax(config: DisableSyntaxConfig) extends SyntacticRule("Di
     val section = c.conf.get("disableSyntax").getOrElse(c.conf.section("DisableSyntax"))
     DisableSyntaxConfig.decode(section).map(new DisableSyntax(_))
 
+  // What the configuration turns on, asked before any node or token is read (fix-speed's table, §8; scalafix reads the
+  // node or the token first, with the same results): the walk of the tree visits the nodes of the kinds an enabled case
+  // can be defined at, and every `Defn.Def`, for `FinalizeMatcher`, which no setting turns off; the token checks visit
+  // the tokens of the kinds an enabled case reads (scalafix's `Keyword` extractor's `kwSet`, `Semicolon`, `Tab`, `Ident`).
+  private lazy val treeKinds: Array[Int] =
+    val c = config
+    val kinds = List("Defn.Def") ++
+      (if c.noFinalVal then List("Defn.Val") else Nil) ++
+      (if c.noValPatterns then List("Defn.Val", "Defn.Var") else Nil) ++
+      (if c.noCovariantTypes then List("Mod.Covariant") else Nil) ++
+      (if c.noContravariantTypes then List("Mod.Contravariant") else Nil) ++
+      (if c.noValInAbstract then List("Defn.Class", "Defn.Trait") else Nil) ++
+      (if c.noImplicitObject then List("Defn.Object") else Nil) ++
+      (if c.noUniversalEquality then List("Term.ApplyInfix", "Term.Apply") else Nil)
+    kinds.distinct.map(k => Tree.kindNames.indexOf(k)).toArray
+  private lazy val tokenCodes: Array[Int] =
+    val c = config
+    val keywords = DisableSyntaxConfig.keywordsAll.filter(c.isDisabled).map(k => "Kw" + k.capitalize)
+    val names = keywords ++ (if c.noSemicolons then List("Semicolon") else Nil) ++ (if c.noTabs then List("Tab") else Nil) ++
+      (if c.noAsInstanceOf || c.noIsInstanceOf then List("Ident") else Nil)
+    names.map(Token.code).filter(_ >= 0).toArray
+
   private def checkRegex(doc: SyntacticDocument): List[Diagnostic] =
     // Matches starting inside suppression anchors are never reported: an anchor may name the very pattern it
     // suppresses (scalafix issue 507).
-    lazy val anchors: List[(Int, Int)] = doc.tokens.collect {
-      case t if t.is("Comment") && Suppression.isAnchor(t.value) => (t.start, t.end)
+    lazy val anchors: List[(Int, Int)] = Native.tokensOf(doc.gen, Array(Token.code("Comment"))).toList.map(i => new Token(doc.gen, i)).collect {
+      case t if Suppression.isAnchor(t.value) => (t.start, t.end)
     }
     def withinAnchor(position: Position): Boolean = anchors.exists { case (s, e) => s <= position.start && position.start < e }
     val text = doc.input.text
@@ -199,34 +221,44 @@ final class DisableSyntax(config: DisableSyntaxConfig) extends SyntacticRule("Di
       out.toList
     }
 
+  // scalafix's `TokenList.trailing(token).takeWhile(!_.is[RightBracket]).collectFirst { case Ident("Matchable") => }`:
+  // the tokens after the cast up to the first `RightBracket`, or to the document's end, any an `Ident` `Matchable`.
+  private def matchableCast(doc: SyntacticDocument, codes: Array[Int], from: Int): Boolean =
+    val (bracket, ident) = (Token.code("RightBracket"), Token.code("Ident"))
+    var i = from
+    var found = false
+    while !found && i < codes.length && codes(i) != bracket do
+      found = codes(i) == ident && new Token(doc.gen, i).value == "Matchable"
+      i += 1
+    found
+
   private def checkTokens(doc: SyntacticDocument): List[Diagnostic] =
-    val tokens = doc.tokens.toList
-    tokens.zipWithIndex.collect {
-      case (token, _) if token.isKeyword && DisableSyntaxConfig.keywordsAll.contains(token.text) && config.isDisabled(token.text) =>
+    lazy val codes = Native.tokenCodes(doc.gen)
+    Native.tokensOf(doc.gen, tokenCodes).toList.flatMap { i =>
+      val token = new Token(doc.gen, i)
+      if token.isKeyword && DisableSyntaxConfig.keywordsAll.contains(token.text) && config.isDisabled(token.text) then
         val keyword = token.text
-        keyword match
+        Some(keyword match
           case "var" => Diagnostic(keyword, "mutable state should be avoided", token.pos)
           case "null" => Diagnostic(keyword, "null should be avoided, consider using Option instead", token.pos)
           case "throw" => Diagnostic(keyword, "exceptions should be avoided, consider encoding the error in the return type instead", token.pos)
           case "return" => Diagnostic(keyword, "return should be avoided, consider using if/else instead", token.pos)
           case "while" => Diagnostic(keyword, "while loops should be avoided, consider using recursion instead", token.pos)
-          case _ => Diagnostic(keyword, keyword + " is disabled", token.pos)
-      case (token, _) if token.is("Semicolon") && config.noSemicolons =>
-        Diagnostic("noSemicolons", "semicolons are disabled", token.pos)
-      case (token, _) if token.is("Tab") && config.noTabs =>
-        Diagnostic("noTabs", "tabs are disabled", token.pos)
-      case (token, i) if token.is("Ident") && token.value == "asInstanceOf" && config.noAsInstanceOf =>
-        val isMatchableCast = tokens.drop(i + 1).takeWhile(t => !t.is("RightBracket")).exists(t => t.is("Ident") && t.value == "Matchable")
-        if isMatchableCast then
-          Diagnostic(
+          case _ => Diagnostic(keyword, keyword + " is disabled", token.pos))
+      else if config.noSemicolons && token.is("Semicolon") then Some(Diagnostic("noSemicolons", "semicolons are disabled", token.pos))
+      else if config.noTabs && token.is("Tab") then Some(Diagnostic("noTabs", "tabs are disabled", token.pos))
+      else if config.noAsInstanceOf && token.is("Ident") && token.value == "asInstanceOf" then
+        if matchableCast(doc, codes, i + 1) then
+          Some(Diagnostic(
             "asInstanceOfMatchable",
             "asInstanceOf[Matchable] is used here to enable pattern matching on Any. " +
               "Consider using the .asMatchable extension method instead for better readability.",
             token.pos
-          )
-        else Diagnostic("asInstanceOf", "asInstanceOf casts are disabled, use pattern matching instead", token.pos)
-      case (token, _) if token.is("Ident") && token.value == "isInstanceOf" && config.noIsInstanceOf =>
-        Diagnostic("isInstanceOf", "isInstanceOf checks are disabled, use pattern matching instead", token.pos)
+          ))
+        else Some(Diagnostic("asInstanceOf", "asInstanceOf casts are disabled, use pattern matching instead", token.pos))
+      else if config.noIsInstanceOf && token.is("Ident") && token.value == "isInstanceOf" then
+        Some(Diagnostic("isInstanceOf", "isInstanceOf checks are disabled, use pattern matching instead", token.pos))
+      else None
     }
 
   private def abstractWithVals(t: Tree): Option[List[Defn.Val]] =
@@ -253,7 +285,16 @@ final class DisableSyntax(config: DisableSyntaxConfig) extends SyntacticRule("Di
   // A parameter of an `implicit` clause carries scalameta's `Mod.Implicit`; one of a `using` clause does not.
   private def hasNonImplicitParam(d: Defn.Def): Boolean = d.paramClauses.exists(_.values.exists(p => !p.isImplicit))
 
-  private def checkTree(doc: SyntacticDocument): List[Diagnostic] = doc.tree.collect { case t => t }.flatMap {
+  // The infix and the selected applications of `op` (scalafix's `Term.ApplyInfix.Initial(_, t @ Term.Name(op), _, _)` and
+  // `Term.Apply.Initial(Term.Select(_, t @ Term.Name(op)), _)`): their operator's name.
+  private def infixOp(t: Tree, op: String): Option[Term.Name] = t match
+    case Term.ApplyInfix.Initial(_, n @ Term.Name(o), _, _) if o == op => Some(n)
+    case _ => None
+  private def selectedOp(t: Tree, op: String): Option[Term.Name] = t match
+    case Term.Apply.Initial(Term.Select(_, n @ Term.Name(o)), _) if o == op => Some(n)
+    case _ => None
+
+  private def checkTree(doc: SyntacticDocument): List[Diagnostic] = Native.preorder(doc.gen, treeKinds).toList.map(i => Tree.of(doc.gen, i)).flatMap {
     case t: Defn.Val if config.noFinalVal && t.mods.exists(_.isInstanceOf[Mod.Final]) =>
       val mod = t.mods.find(_.isInstanceOf[Mod.Final]).get
       List(Diagnostic("noFinalVal", "Final vals cause problems with incremental compilation", mod.pos))
@@ -265,25 +306,29 @@ final class DisableSyntax(config: DisableSyntaxConfig) extends SyntacticRule("Di
       List(Diagnostic("contravariant", "Contravariant types could lead to error-prone situations", t.pos))
     case t if config.noValInAbstract && abstractWithVals(t).isDefined =>
       abstractWithVals(t).get.map(v => Diagnostic("valInAbstract", "val definitions in traits/abstract classes may cause initialization bugs", v.pos))
-    case t: Defn.Object if t.mods.exists(_.isInstanceOf[Mod.Implicit]) && config.noImplicitObject =>
+    case t: Defn.Object if config.noImplicitObject && t.mods.exists(_.isInstanceOf[Mod.Implicit]) =>
       List(Diagnostic("implicitObject", "implicit objects may cause implicit resolution errors", t.pos))
-    case t: Defn.Def if t.mods.exists(_.isInstanceOf[Mod.Implicit]) && hasNonImplicitParam(t) && config.noImplicitConversion =>
+    case t: Defn.Def if config.noImplicitConversion && t.mods.exists(_.isInstanceOf[Mod.Implicit]) && hasNonImplicitParam(t) =>
       List(Diagnostic("implicitConversion", "implicit conversions weaken type safety and always can be replaced by explicit conversions", t.pos))
     case t if config.noDefaultArgs && defaultArgs(t).isDefined =>
       defaultArgs(t).get.map(m => Diagnostic("defaultArgs", "Default args makes it hard to use methods as functions.", m.pos))
-    case Term.ApplyInfix.Initial(_, t @ Term.Name("=="), _, _) if config.noUniversalEquality =>
-      List(Diagnostic("==", config.noUniversalEqualityMessage, t.pos))
-    case Term.Apply.Initial(Term.Select(_, t @ Term.Name("==")), _) if config.noUniversalEquality =>
-      List(Diagnostic("==", config.noUniversalEqualityMessage, t.pos))
-    case Term.ApplyInfix.Initial(_, t @ Term.Name("!="), _, _) if config.noUniversalEquality =>
-      List(Diagnostic("!=", config.noUniversalEqualityMessage, t.pos))
-    case Term.Apply.Initial(Term.Select(_, t @ Term.Name("!=")), _) if config.noUniversalEquality =>
-      List(Diagnostic("!=", config.noUniversalEqualityMessage, t.pos))
-    case d: Defn.Def if config.noFinalize && d.name.value == "finalize" && (d.paramss == Nil || d.paramss == List(Nil)) =>
+    case t if config.noUniversalEquality && infixOp(t, "==").isDefined =>
+      List(Diagnostic("==", config.noUniversalEqualityMessage, infixOp(t, "==").get.pos))
+    case t if config.noUniversalEquality && selectedOp(t, "==").isDefined =>
+      List(Diagnostic("==", config.noUniversalEqualityMessage, selectedOp(t, "==").get.pos))
+    case t if config.noUniversalEquality && infixOp(t, "!=").isDefined =>
+      List(Diagnostic("!=", config.noUniversalEqualityMessage, infixOp(t, "!=").get.pos))
+    case t if config.noUniversalEquality && selectedOp(t, "!=").isDefined =>
+      List(Diagnostic("!=", config.noUniversalEqualityMessage, selectedOp(t, "!=").get.pos))
+    // scalafix's `FinalizeMatcher`, by `orElse` after the cases above: it reads no setting, `noFinalize` none either.
+    case d: Defn.Def if d.name.value == "finalize" && (d.paramss == Nil || d.paramss == List(Nil)) =>
       List(Diagnostic("noFinalize", "finalize should not be used", d.name.pos,
         "there is no guarantee that finalize will be called and\noverriding finalize incurs a performance penalty"))
     case _ => Nil
   }
 
   override def fix(using doc: SyntacticDocument): Patch =
-    (checkTree(doc) ++ checkTokens(doc) ++ checkRegex(doc)).map(Patch.lint).asPatch
+    val tree = checkTree(doc)
+    val tokens = if tokenCodes.isEmpty then Nil else checkTokens(doc)
+    val regex = if config.regex.isEmpty then Nil else checkRegex(doc)
+    (tree ++ tokens ++ regex).map(Patch.lint).asPatch

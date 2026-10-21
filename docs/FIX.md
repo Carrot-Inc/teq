@@ -92,7 +92,14 @@ final class NoPrintln(message: String) extends SyntacticRule("NoPrintln"):
   `Semicolon`, `Comma`, `LeftBrace`, `Space`, `Tab`, `LF`, `CRLF`, `Comment`, `Constant.Int`,
   `Interpolation.Part`, ...), `text`, `value` (a comment's text inside its delimiters, an identifier's name without
   its backquotes), `pos`, `isKeyword`,
-  `isTrivia`. An end marker is its `end` and its name, two `Ident`s.
+  `isTrivia`. An end marker is its `end`, an `Ident`, and its name, an `Ident` or, where the name is a keyword, that
+keyword's token (`KwWhile` of `end while`), as scalameta's tokenizer scans it; so is a quoted identifier, `'x` in a
+splice, its quote a `Quote` (scalameta's `MacroQuote`) and its name the name's own token. Where scalameta's stream
+differs otherwise, no shipped rule reads the difference: an interpolation's opening quote and its `$` and `${` are
+`Interpolation.Delimiter` (scalameta's `Start`, `SpliceStart`), and teq makes none of scalameta's empty tokens
+(`SpliceEnd`, an empty `Part`, `BOF`, `EOF`); a run of spaces is one `Space`; `#` and a splice's `$` are an `Ident` and a
+`Splice`; a script's header (`#!` or `::#!` through a line starting `!#`, scalac's) is one `Shebang`, where scalameta's
+is the first line alone.
 - `Position`: `start` and `end` in UTF-16 units of `input.text` (a `String`'s, as scalameta's), `startLine`,
   `startColumn`, `endLine`, `endColumn` from 0, `text`; `Position.Range(input, start, end)` from offsets of the text,
   a regex match's among them. The lints print in the compiler's columns.
@@ -105,7 +112,7 @@ final class NoPrintln(message: String) extends SyntacticRule("NoPrintln"):
   comment, inside its braces where it has them; in a file whose first statement is no package clause, at its start;
   unless the file has it written in a top-level import), `lint(Diagnostic(...))`, `+`, `empty`, `atomic`, and
   `asPatch` of a collection or an option of patches. A token, an importee or a position of another document than
-  the one the rule reads fails the rule, in a patch as in an accessor.
+  the one the rule reads fails the rule, in a patch as in an accessor (a token keeps its `kind` once read).
 - `Diagnostic(id, message, position, explanation = "", severity = LintSeverity.Error)`, or a class implementing
   `message`, `position`, `severity`, `categoryID`. Its full id is `<rule>.<id>`.
 - `Configuration` and `Conf`: `c.conf.section(name)` (an empty one where the configuration has none), `get`,
@@ -138,6 +145,12 @@ final class NoPrintln(message: String) extends SyntacticRule("NoPrintln"):
   any other edit then is exit 2, the rule rewriting its own output. In the second round a file the first left as it
   was reads alike, so only the semantic rules run over it again (another file's edits may leave its imports
   unused), the others' results being the first round's. A run that edits nothing types once.
+- The rules run over a round's documents on workers of their own, each with the rules' program and an interpreter of
+  its own, when every configured rule is one teq ships (none keeps state across documents): as many as `--threads`
+  (or `TEQ_THREADS`; the cores by default) and the round's documents allow, started once its typing has ended. A
+  `file:` rule keeps one worker for the whole run, so that its instance keeps its state across documents, jobs and
+  rounds. The documents' results are planned in the documents' order, whichever worker ends first, so the output is
+  the one-worker run's byte for byte.
 
 ## The rules teq ships
 
@@ -150,7 +163,9 @@ tests/fix's cases), its file keeping the repository's notice.
   `noImplicitConversion`, `noFinalVal`, `noFinalize`, `noValPatterns`, `noUniversalEquality`,
   `noUniversalEqualityMessage`, `regex` as strings or objects with `id`, `pattern` or `regex = { pattern,
   captureGroup }`, `message` and its `{$n}` substitution), its section also `disableSyntax`. `noXml` is read and
-  reports nothing: teq reads no XML literal.
+  reports nothing: teq reads no XML literal. A `finalize` of no parameters (or one empty clause) is reported whatever
+  `noFinalize` says, where no other check claims the definition, as scalafix's `FinalizeMatcher` reports it after its
+  other cases (`noDefaultArgs` claims every definition).
 - `CatsImplicitsImport` (xuwei-k/scalafix-rules): a warning on `import cats.implicits._`; the setting `message`.
 - `TypelevelAs` (typelevel-scalafix): the lints of `.map(_ => <literal>)` and `.as(())`.
 - `EmptyCollectionsUnified` (scalafix-unified): `List()`, `List[T]()`, `Set()`, `Map()` and `Nil` written as
@@ -166,4 +181,15 @@ tests/fix's cases), its file keeping the repository's notice.
 
 `TEQ_FIX_TREE=1` prints each document's tree, a node a line with its text; `TEQ_FIX_TRACE=1` the counts of each
 document's nodes, tokens, edits and lints and each rule's failure, then the run's phases (the rules' program, the
-typing, the rules, the planning) in milliseconds and what the allocator reserved.
+typing, the rules — the rounds' wall time, the workers, their documents' time summed, its CPU time and the longest document's —, the
+planning) in milliseconds and what the allocator reserved.
+`TEQ_FIX_RECORD=<file>` writes the run's execution record, a line an event: `run` (whether the rules are the shipped
+ones alone and the workers), each worker's `worker` line (when it was ready), each round's `round` (its job, its number,
+its documents and its first generation), a `dispatch` and a `done` line a document (its slot, generation and worker, and
+when its rules began and ended, in microseconds since the run began, and the worker's CPU time between), a `serial` line where a round runs on one worker,
+and `round-end` (the round's wall time and the sums of its documents' times and CPU times): the fix suite reads it to tell a parallel
+run from a serial one. `TEQ_FIX_INPUTS=<file>` writes each job's inputs as the compiler resolves them (its roots, the links it follows, its
+exclusions), a line `<job>\t<path>` each, and does nothing else: the corpus a measurement of bench/fix runs over.
+`TEQ_FIX_SCHEDULE` (`reverse`, `shuffle:<seed>`), `TEQ_FIX_BARRIER=<workers>` and
+`TEQ_FIX_PLANT` (`serial`, `completion`) are that suite's switches: the order the documents are handed out in, a wait
+until that many workers have begun, and the mutation controls its checks must refuse.

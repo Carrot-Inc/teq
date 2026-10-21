@@ -1,0 +1,24 @@
+DisableSyntax/GuardsMixed/input.scala:18:19: error: [DisableSyntax.null]: null should be avoided, consider using Option instead
+    val n: String = null // assert: DisableSyntax.null
+                    ^^^^
+DisableSyntax/GuardsMixed/input.scala:26:14: error: [DisableSyntax.noTabs]: tabs are disabled
+    val tab = 1	// assert: DisableSyntax.noTabs
+               ^
+DisableSyntax/GuardsMixed/input.scala:27:13: error: [DisableSyntax.covariant]: Covariant types could lead to error-prone situations
+    class Cov[+A] // assert: DisableSyntax.covariant
+              ^
+DisableSyntax/GuardsMixed/input.scala:31:3: error: [DisableSyntax.implicitObject]: implicit objects may cause implicit resolution errors
+    implicit object IO // assert: DisableSyntax.implicitObject
+    ^^^^^^^^^^^^^^^^^^
+DisableSyntax/GuardsMixed/input.scala:35:7: error: [DisableSyntax.noValPatterns]: Pattern matching in val assignment can result in match error, use "_ match { ... }" with a fallback case instead.
+    val Some(pc) = Option(1) // assert: DisableSyntax.noValPatterns
+        ^^^^^^^^
+DisableSyntax/GuardsMixed/input.scala:36:22: error: [DisableSyntax.==]: == and != are unsafe since they allow comparing two unrelated types
+    def eq(a: Int) = a == 1 // assert: DisableSyntax.==
+                       ^^
+DisableSyntax/GuardsMixed/input.scala:37:22: error: [DisableSyntax.!=]: == and != are unsafe since they allow comparing two unrelated types
+    def ne(a: Int) = a != 1 // assert: DisableSyntax.!=
+                       ^^
+DisableSyntax/GuardsMixed/input.scala:38:7: error: [DisableSyntax.noFinalize]: finalize should not be used
+    def finalize(): Unit = () // assert: DisableSyntax.noFinalize
+        ^^^^^^^^

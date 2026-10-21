@@ -7,7 +7,7 @@
 // a caret line and a message), no more and no fewer; the exit is 1 where an error remains, else 0; a second run over
 // what the first left changes nothing and prints the same; `--check` over the input changes nothing and exits 1
 // where there is an edit or a lint. A script's case is `input.sc` and `output.sc`. A case with a `refused.txt` is one the run refuses: exit 2, that text among what it
-// prints, every file as it was. Then the verb's own cases (`verb`, below). `--record` writes each expected.txt from
+// prints, every file as it was. Then the verb's own cases (`verb`) and the rules' phase over several workers (`parallel`), below. `--record` writes each expected.txt from
 // a run whose lints match their assertions. Run from the repository's root:
 // `./teq interp tests/fix.scala [-- --teq <binary>] [--record] [--only <Rule/Case prefix>]`.
 import java.nio.file.{Files, Path, Paths, StandardCopyOption}
@@ -96,6 +96,9 @@ import scala.jdk.CollectionConverters.*
   if only.forall(o => "verb".startsWith(o) || o.startsWith("verb")) then
     val (vp, _) = Verb.run(teq, work, bad)
     pass += vp
+  if only.forall(o => "parallel".startsWith(o) || o.startsWith("parallel")) then
+    val (pp, _) = Parallel.run(teq, work, bad)
+    pass += pp
   println(s"fix: $pass passed, $fail failed")
   Script.exit(if fail == 0 then 0 else 1)
 }
@@ -363,6 +366,33 @@ object Verb:
     val sh = build(work, "shared", "rules/Fail.scala" -> failing, ".scalafix.conf" -> "rules = [\"file:rules/Fail.scala\"]\n")
     val rsh = fix(sh, "core", "core", "--check")
     expect("shared file failure", rsh.status == 2 && rsh.errAll().contains("the rule Fail failed: java.lang.IllegalStateException: second context failed"), s"exit ${rsh.status}: ${rsh.errAll()}")
+    // The verb over several workers (fix-speed's table, row 5.5): the lock's two projects, and a file two jobs read (core
+    // selected twice), with the shipped rules, each job with 34 editable files so that its rounds run on the pool. At
+    // eight workers, the barrier holding four of them, each run gives the one-worker run's bytes (both streams, the exit,
+    // every file it leaves), and its record is a parallel one by `Parallel.recordProblems`: every round's documents and
+    // generations complete, evaluations overlapping; the same run serialized (`TEQ_FIX_PLANT=serial`) fails that check.
+    val many = (0 until 33).flatMap { i =>
+      Seq(f"core/src/core/C$i%02d.scala" -> s"package core\nimport scala.collection.mutable\nobject C$i { val x = $i }\n",
+        f"app/src/app/A$i%02d.scala" -> s"package app\nimport core.C$i\nobject A$i { var y = C$i.x }\n")
+    }
+    for (name, args) <- Seq("both" -> Seq[String](), "twice" -> Seq("core", "core")) do
+      def go(tag: String, w: Int, env: (String, String)*) =
+        val d = build(work, s"workers-$name-$tag", many*)
+        val record = d.resolve("record.txt")
+        val res = Sh((Vector(teq, "fix") ++ args)*).in(d).withEnv((Seq("TEQ_THREADS" -> w.toString, "TEQ_FIX_RECORD" -> record.toString) ++ env)*).timeout(300).check(false).run()
+        val files = ("core/src/core/Core.scala" +: "app/src/app/App.scala" +: many.map(_._1)).map(f => f -> text(d, f)).toMap
+        (res.status, res.outAll(), res.errAll(), files, if Files.exists(record) then read(record).linesIterator.toVector else Vector())
+      val one = go("1", 1)
+      val eight = go("8", 8, "TEQ_FIX_BARRIER" -> "4")
+      val serialized = go("serial", 8, "TEQ_FIX_PLANT" -> "serial")
+      val fixed = eight._4("core/src/core/C00.scala") == "package core\nobject C0 { val x = 0 }\n"
+      expect(s"workers/$name", one._1 == eight._1 && one._2 == eight._2 && one._3 == eight._3 && one._4 == eight._4 && (one._1 == 0 || one._1 == 1) && fixed,
+        s"exit ${one._1} and ${eight._1}; streams alike ${one._2 == eight._2 && one._3 == eight._3}, files alike ${one._4 == eight._4}, core's import removed $fixed:\n${diff(one._3, eight._3)}")
+      val problems = Parallel.recordProblems(eight._5, 8, 4)
+      val rounds = eight._5.filter(_.startsWith("round ")).map(Parallel.fieldsOf)
+      expect(s"workers/$name/record", problems.isEmpty && rounds.size >= 2 && rounds.forall(_.getOrElse("docs", "0").toInt >= 33),
+        (problems ++ rounds.map(r => s"round ${r.getOrElse("job", "?")}/${r.getOrElse("round", "?")}: ${r.getOrElse("docs", "?")} documents")).mkString("\n  "))
+      expect(s"workers/$name/serialized-refused", Parallel.recordProblems(serialized._5, 8, 1).nonEmpty, "the record's check accepts the serialized run")
     // scalafix's `ImportPatchOps`: an added import goes after the file's leading imports, else right of
     // `fallbackToken`'s token: inside a package's braces, before the leading comment of a package's first statement
     // (scalafix's PatchSuite case), after a package clause's line; at the start of a file of comments alone. One the
@@ -403,4 +433,188 @@ object Verb:
       val rx = fix(x)
       Sh("chmod", "u+w", dir.toString).check(false).run()
       expect("write failure", rx.status == 2 && rx.errAll().contains("cannot write") && text(x, "core/src/core/Core.scala") == coreSource, s"exit ${rx.status}: ${rx.errAll()}")
+    (pass, fail)
+
+/** The rules' phase over several workers (docs/FIX.md, "The run"): a generated corpus every shipped rule reports on and
+  * edits (lints of two rules at one position, suppressions, an atomic patch dropped by one, an import round two removes),
+  * run by `teq compiler fix` at 1, 4, 8 and 16 workers under the forced schedules (`TEQ_FIX_SCHEDULE`); each run's bytes
+  * (the files it leaves, both streams with the trace's document lines and without its timing line, the exit) are the
+  * one-worker run's, and its execution record (`TEQ_FIX_RECORD`) is a parallel one: every document of every round
+  * dispatched once and done once with its slot's generation, by workers of the run's, at least `TEQ_FIX_BARRIER` of them
+  * in rule evaluation before any finished, no round serial. Worker counts and times are no evidence; the record's
+  * intervals are. The mutation controls (`TEQ_FIX_PLANT`) must fail: `serial` the record's check, `completion` the
+  * bytes. A run with a project rule (`file:`) stays serial for the whole run: its record says so and its rule keeps its
+  * state across documents, jobs and rounds (Count's visits, Stale's refusal of a patch of another document). */
+object Parallel:
+  /** Whether the engine runs the rules' phase in parallel; while it did not, the record's check had to refuse its runs
+    * (the witness's negative control, which the `serial` plant keeps). */
+  val engineParallel = true
+  val counts = Vector(1, 4, 8, 16)
+  val schedules = Vector("natural", "reverse", "shuffle:1", "shuffle:2", "shuffle:3")
+  val conf: String =
+    """|rules = [DisableSyntax, CatsImplicitsImport, TypelevelAs, EmptyCollectionsUnified, NoUnusedImports]
+       |DisableSyntax.noVars = true
+       |DisableSyntax.noNulls = true
+       |DisableSyntax.noReturns = true
+       |DisableSyntax.noWhileLoops = true
+       |DisableSyntax.noAsInstanceOf = true
+       |DisableSyntax.noIsInstanceOf = true
+       |DisableSyntax.noUniversalEquality = true
+       |DisableSyntax.noDefaultArgs = true
+       |DisableSyntax.noSemicolons = true
+       |DisableSyntax.regex = [
+       |  { id = nullText, pattern = "null", message = "no null" }
+       |  { id = mapConst, pattern = "List\\(1\\)\\.map\\(_ => 2\\)", message = "a map to a constant" }
+       |]
+       |lint.error.includes = ".*"
+       |""".stripMargin
+
+  /** The corpus's file `i`: its size and what it holds vary with `i`, so that documents take unequal times. */
+  def source(i: Int): String =
+    val name = f"F$i%03d"
+    val used = i % 2 == 1
+    val extra = (0 until (i % 5) * 6).map(k => s"  def d$k(a: Int = $k) = a == $k || a != ${k + 1}\n").mkString
+    s"""|package par
+        |import scala.collection.mutable.ListBuffer
+        |import scala.collection.immutable.Nil
+        |object $name:
+        |  var counter = $i
+        |  val xs = List()
+        |  val ys: List[Int] = Nil
+        |  val zs = List() // scalafix:ok EmptyCollectionsUnified
+        |  def eq(a: Int) = a == $i || a != 0
+        |  def cast(a: Any) = a.asInstanceOf[Int]
+        |  def isIt(a: Any) = a.isInstanceOf[String]
+        |  val n: String = null
+        |  val mapped = List(1).map(_ => 2)
+        |  // scalafix:off DisableSyntax.var
+        |  var hidden = 0
+        |  // scalafix:on
+        |  def loop(): Unit = while counter < 0 do counter += 1
+        |  def r(): Int = return 1
+        |  val lb = ${if used then "ListBuffer(1)" else "1"}; val semi = 2
+        |$extra""".stripMargin
+
+  final case class Outcome(status: Int, out: String, err: String, files: Map[String, String], record: Vector[String])
+
+  /** A copy of `files` under a directory of its own, the run's `teq compiler fix` over them, what it leaves. */
+  def runOn(teq: String, work: Path, tag: String, files: Seq[(String, String)], confText: String, threads: Int, env: Seq[(String, String)], check: Boolean = false): Outcome =
+    val dir = work.resolve("parallel-" + tag)
+    Sh.remove(dir)
+    for (f, text) <- files do
+      Files.createDirectories(dir.resolve(f).getParent)
+      Files.writeString(dir.resolve(f), text)
+    Files.writeString(dir.resolve("fix.conf"), confText)
+    val record = dir.resolve("record.txt")
+    val args = Vector(teq, "compiler", "fix") ++ files.map(_._1).filter(f => f.startsWith("src/") && f.endsWith(".scala")).sorted ++ Vector("--config", "fix.conf", "--threads", threads.toString) ++ (if check then Vector("--check") else Vector())
+    val r = Sh(args*).in(dir).withEnv((Seq("TEQ_FIX_TRACE" -> "1", "TEQ_FIX_RECORD" -> record.toString) ++ env)*).timeout(300).check(false).run()
+    // The trace's last line holds the run's times; the document lines are the bytes' (they follow the consumption order).
+    val err = r.errAll().linesIterator.filterNot(l => l.startsWith("fix: ") && l.contains(" ms in all")).mkString("\n")
+    val left = files.map((f, _) => f -> read(dir.resolve(f))).toMap
+    Outcome(r.status, r.outAll(), err, left, if Files.exists(record) then read(record).linesIterator.toVector else Vector())
+
+  def fieldsOf(line: String): Map[String, String] =
+    line.split(" ").toVector.drop(1).flatMap(kv => kv.split("=", 2).toVector match
+      case Vector(k, v) => Some(k -> v)
+      case _ => None
+    ).toMap
+
+  /** What the record shows against a parallel run of `workers` with `barrier` workers held until they all began. */
+  def recordProblems(rec: Vector[String], workers: Int, barrier: Int): Vector[String] =
+    val problems = Vector.newBuilder[String]
+    rec.find(_.startsWith("run ")).map(fieldsOf) match
+      case None => problems += "no run line"
+      case Some(run) =>
+        if run.get("eligible") != Some("1") then problems += s"the run is not eligible: ${run}"
+        if run.get("workers") != Some(workers.toString) then problems += s"the run's workers ${run.get("workers")}, expected $workers"
+    if rec.exists(_.startsWith("barrier-timeout")) then problems += "a barrier timed out"
+    // The rounds: from each `round` line to its `round-end`.
+    var i = 0
+    var rounds = 0
+    while i < rec.length do
+      if rec(i).startsWith("round ") then
+        rounds += 1
+        val head = fieldsOf(rec(i))
+        val n = head.getOrElse("docs", "0").toInt
+        val first = head.getOrElse("first_gen", "0").toInt
+        val body = rec.drop(i + 1).takeWhile(l => !l.startsWith("round-end"))
+        val where = s"round ${head.getOrElse("job", "?")}/${head.getOrElse("round", "?")}"
+        if body.exists(_.startsWith("serial")) && n > 1 && workers > 1 then problems += s"$where: ${body.find(_.startsWith("serial")).get}"
+        val dispatched = body.filter(_.startsWith("dispatch ")).map(fieldsOf)
+        val done = body.filter(_.startsWith("done ")).map(fieldsOf)
+        for (what, ls) <- Seq("dispatched" -> dispatched, "done" -> done) do
+          val slots = ls.map(_.getOrElse("slot", "-1").toInt)
+          if slots.sorted != (0 until n).toVector then problems += s"$where: the slots $what are ${slots.sorted.mkString(",")}, expected 0..${n - 1} once each"
+          for l <- ls do
+            val slot = l.getOrElse("slot", "-1").toInt
+            if l.getOrElse("gen", "-1").toInt != first + slot then problems += s"$where: slot $slot $what with generation ${l.get("gen")}"
+            val w = l.getOrElse("worker", "-1").toInt
+            if w < 0 || w >= workers then problems += s"$where: slot $slot $what by worker $w of $workers"
+        // Evaluations overlapping, read from the recorded intervals (not from the workers' ids).
+        if n > 1 && workers > 1 then
+          val spans = done.map(d => (d.getOrElse("start_us", "0").toLong, d.getOrElse("finish_us", "0").toLong))
+          val events = (spans.map((a, _) => (a, 1)) ++ spans.map((_, b) => (b, -1))).sortBy(e => (e._1, e._2))
+          var running = 0
+          var peak = 0
+          for (_, d) <- events do
+            running += d
+            peak = peak.max(running)
+          if peak < 2 then problems += s"$where: its $n documents evaluated one at a time"
+        // Several workers in rule evaluation before any finished.
+        if n >= barrier && barrier > 1 && done.nonEmpty then
+          val firstFinish = done.map(_.getOrElse("finish_us", "0").toLong).min
+          val begun = done.filter(_.getOrElse("start_us", "0").toLong < firstFinish)
+          val by = begun.map(_.getOrElse("worker", "-1")).distinct.size
+          if by < barrier then problems += s"$where: $by workers began before the first document finished, expected $barrier"
+        i += body.length + 1
+      i += 1
+    if rounds == 0 then problems += "no round"
+    problems.result()
+
+  def run(teq: String, work: Path, bad: (String, String) => Unit): (Int, Int) =
+    var pass = 0
+    var fail = 0
+    def expect(name: String, cond: Boolean, why: => String): Unit =
+      if cond then pass += 1 else { fail += 1; bad("parallel/" + name, why) }
+    def sameBytes(a: Outcome, b: Outcome): Option[String] =
+      if a.status != b.status then Some(s"exit ${b.status}, the one-worker run's ${a.status}")
+      else if a.out != b.out then Some("stdout differs:\n" + diff(a.out, b.out))
+      else if a.err != b.err then Some("stderr differs:\n" + diff(a.err, b.err))
+      else a.files.find((f, t) => b.files.get(f) != Some(t)).map((f, t) => s"$f differs:\n" + diff(t, b.files.getOrElse(f, "")))
+    val files = (0 until 48).map(i => f"src/par/F$i%03d.scala" -> source(i))
+    val base = runOn(teq, work, "base", files, conf, 1, Seq())
+    expect("base", base.status == 1 && base.err.contains("[DisableSyntax.var]") && base.files.exists((f, t) => !t.contains("immutable.Nil")), s"the one-worker run: exit ${base.status}\n${base.err.linesIterator.take(20).mkString("\n")}")
+    for w <- counts.drop(1); s <- schedules do
+      val o = runOn(teq, work, s"w$w-${s.replace(':', '-')}", files, conf, w, Seq("TEQ_FIX_SCHEDULE" -> s, "TEQ_FIX_BARRIER" -> "4"))
+      expect(s"w$w/$s/bytes", sameBytes(base, o).isEmpty, sameBytes(base, o).getOrElse(""))
+      val problems = recordProblems(o.record, w, 4)
+      if engineParallel then expect(s"w$w/$s/record", problems.isEmpty, problems.mkString("\n  "))
+      else expect(s"w$w/$s/record-refused", problems.nonEmpty, "the record's check accepts a serial engine's run")
+    // The mutation controls: a serialized engine fails the record's check, a concatenation in completion order the bytes.
+    if engineParallel then
+      val serialized = runOn(teq, work, "plant-serial", files, conf, 8, Seq("TEQ_FIX_PLANT" -> "serial", "TEQ_FIX_BARRIER" -> "4"))
+      expect("plant/serial", recordProblems(serialized.record, 8, 4).nonEmpty, "the record's check accepts a serialized run")
+      val completion = runOn(teq, work, "plant-completion", files, conf, 8, Seq("TEQ_FIX_PLANT" -> "completion", "TEQ_FIX_SCHEDULE" -> "reverse"))
+      expect("plant/completion", sameBytes(base, completion).nonEmpty, "the bytes of a run planned in completion order are the one-worker run's")
+    // A refused run: the edits leave a program that does not type; every file as it was, at every count.
+    val refusedFiles = files.take(8) :+ ("src/par/Refused.scala" -> "package par\nobject Refused:\n  def f(x: Nil.type) = x\n  val v = f(Nil)\n")
+    val refused = counts.map(w => runOn(teq, work, s"refused-$w", refusedFiles, conf, w, Seq()))
+    expect("refused", refused.head.status == 2 && refused.head.files == refusedFiles.toMap, s"exit ${refused.head.status}, files kept ${refused.head.files == refusedFiles.toMap}")
+    for (o, w) <- refused.zip(counts).drop(1) do expect(s"refused/w$w", sameBytes(refused.head, o).isEmpty, sameBytes(refused.head, o).getOrElse(""))
+    // A project rule keeps one rule thread for the whole run: Count's visits go on across documents and rounds, Stale's
+    // patch of the first document refused in the second, at every count.
+    val count = "package rules\nimport teq.fix.*\nfinal class Count extends SyntacticRule(\"Count\"):\n  private var n = 0\n  override def fix(using doc: SyntacticDocument): Patch =\n    n += 1\n    Patch.lint(Diagnostic(\"count\", n.toString, doc.tree.pos))\n"
+    val stale = read(Paths.get("tests/fix/support/Stale.scala"))
+    val stateFiles = Seq("src/A.scala" -> "object A { val old = 1; val l = List() }\n", "src/B.scala" -> "object B { val now = 2 }\n", "rules/Count.scala" -> count, "rules/Stale.scala" -> stale)
+    val countConf = "rules = [EmptyCollectionsUnified, \"file:rules/Count.scala\"]\n"
+    val staleConf = "rules = [\"file:rules/Stale.scala\"]\n"
+    val counted = counts.map(w => runOn(teq, work, s"count-$w", stateFiles, countConf, w, Seq()))
+    val countLints = "\\[Count\\.count\\]: (\\d+)".r.findAllMatchIn(counted.head.err).map(_.group(1)).toVector
+    expect("count", countLints == Vector("3", "2"), s"Count's lints ${countLints.mkString(",")}, expected 3 (A, round two) and 2 (B)")
+    for (o, w) <- counted.zip(counts).drop(1) do
+      expect(s"count/w$w", sameBytes(counted.head, o).isEmpty, sameBytes(counted.head, o).getOrElse(""))
+      expect(s"count/w$w/serial", o.record.exists(l => l.startsWith("run ") && fieldsOf(l).get("eligible") == Some("0")), o.record.take(3).mkString("\n"))
+    val staled = counts.map(w => runOn(teq, work, s"stale-$w", stateFiles, staleConf, w, Seq()))
+    expect("stale", staled.head.status == 2 && staled.head.err.contains("another document"), s"exit ${staled.head.status}\n${staled.head.err.linesIterator.take(5).mkString("\n")}")
+    for (o, w) <- staled.zip(counts).drop(1) do expect(s"stale/w$w", sameBytes(staled.head, o).isEmpty, sameBytes(staled.head, o).getOrElse(""))
     (pass, fail)

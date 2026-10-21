@@ -643,7 +643,7 @@ fn trace(s: &mut Stats, e: Event) {
 
 /// This thread's CPU time, in ns.
 #[cfg(unix)]
-fn thread_cpu_ns() -> u64 {
+pub(crate) fn thread_cpu_ns() -> u64 {
     #[repr(C)]
     struct Timespec {
         sec: i64,
@@ -667,7 +667,7 @@ fn thread_cpu_ns() -> u64 {
 /// units but advances at the clock's interrupt (15.6 ms by default), so a short stretch reads
 /// as nothing or as a whole tick.
 #[cfg(windows)]
-fn thread_cpu_ns() -> u64 {
+pub(crate) fn thread_cpu_ns() -> u64 {
     #[repr(C)]
     #[derive(Clone, Copy, Default)]
     struct FileTime {

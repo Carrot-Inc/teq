@@ -1,11 +1,14 @@
-//! `teq fix`'s run (docs/FIX.md, "The run"): the rules compiled and configured once on the rule thread, the
-//! interpreter's; each job (a configuration's program, or the files `teq compiler fix` names) typed on a typing thread
-//! of its own, the two never at once; each editable document's view handed to the rules; the patches planned, all
-//! of them before anything is written; at most two rounds, the second over the first's text, typed again, for the
-//! imports the first's edits left unused.
+//! `teq fix`'s run (docs/FIX.md, "The run"): the rules compiled and configured on the rule workers, each with an
+//! interpreter of its own; each job (a configuration's program, or the files `teq compiler fix` names) typed on a typing
+//! thread of its own, typing and rules never at once; each editable document's view handed to a worker, which runs
+//! every rule over it, the results gathered in the documents' order; the patches planned, all of them before anything
+//! is written; at most two rounds, the second over the first's text, typed again, for the imports the first's edits
+//! left unused. A run whose rules teq ships takes as many workers as `--threads` (the cores by default) and a round's
+//! documents allow; one with a project rule (`file:`) keeps one worker, whose rule instances keep their state across
+//! documents.
 
 use super::config::Conf;
-use super::host::{self, DocView, Host, Results, Severity, Utf16};
+use super::host::{self, Asker, DocView, Host, Results, Severity, Utf16};
 use super::nodes::{self, K};
 use super::plan::{self, Plan, Printed};
 use crate::source::{FileId, SourceFile, Span};
@@ -71,21 +74,213 @@ impl Job {
 }
 
 enum ToRules {
-    /// A document, and whether its semantic rules alone run over it.
-    Doc(Box<DocView>, bool),
-    End,
+    Doc(Box<DocView>, Handout),
+}
+
+/// What comes with a document: whether its semantic rules alone run over it, who asks (the host's `asker`), the
+/// milliseconds its answer waits before it is sent (`TEQ_FIX_SCHEDULE`'s shuffle, else none), and whether it is the
+/// worker's first of the round, where `TEQ_FIX_BARRIER` holds it.
+struct Handout {
+    semantic_only: bool,
+    asker: Asker,
+    delay: u64,
+    first: bool,
 }
 
 enum FromRules {
-    Ready(Result<Vec<RuleInfo>, String>),
-    /// The document's results, and the document handed back for the planner.
-    Done(Box<Results>, Box<DocView>),
+    /// A worker's rules compiled and configured, or why not, and the microseconds that took.
+    Ready(usize, Result<Vec<RuleInfo>, String>, u64),
+    Done(Box<Answer>),
+    /// A worker that panicked.
+    Ended,
 }
 
-#[derive(Clone)]
+/// A document's results as its worker hands them back.
+struct Answer {
+    asker: Asker,
+    results: Results,
+    /// The document, handed back for the planner.
+    view: DocView,
+    /// The atomic groups the document's rules made, numbered from 1 there (`Native.newGroup`).
+    groups: u32,
+    /// When its rules began and ended (`now_us`), and the worker thread's CPU time in between, in microseconds: the
+    /// work, whatever the machine's other load leaves the thread of the wall time.
+    start: u64,
+    finish: u64,
+    cpu: u64,
+    /// Whether the worker waited for `TEQ_FIX_BARRIER`'s workers in vain.
+    barrier_timeout: bool,
+}
+
+#[derive(Clone, PartialEq)]
 struct RuleInfo {
     name: String,
     semantic: bool,
+    /// Whether teq ships the rule (`Driver.shipped`), not a `file:` entry's.
+    shipped: bool,
+}
+
+/// What a worker needs to compile and configure the rules.
+#[derive(Clone)]
+struct Boot {
+    conf: Conf,
+    config_dir: PathBuf,
+    requested: Vec<String>,
+}
+
+/// The rule workers: threads of the fix engine's own, so that none carries a compile worker's builtin table or caches,
+/// each with the rules' program typed, its interpreter and its host. The lead, worker 0, starts with the run; the
+/// others when a round's documents can use them, once its typing has ended. Dropping the pool closes their channels,
+/// which ends them.
+struct Pool<'scope, 'env> {
+    scope: &'scope std::thread::Scope<'scope, 'env>,
+    boot: Boot,
+    to: Vec<mpsc::Sender<ToRules>>,
+    back: mpsc::Sender<FromRules>,
+    from: mpsc::Receiver<FromRules>,
+    /// Whether each worker answered `Ready`.
+    ready: Vec<bool>,
+    /// The workers the run may use: one where a project rule is configured (`drive_rounds`).
+    limit: usize,
+    eligible: bool,
+    gate: std::sync::Arc<Gate>,
+}
+
+impl<'scope, 'env> Pool<'scope, 'env> {
+    fn new(scope: &'scope std::thread::Scope<'scope, 'env>, boot: Boot) -> Self {
+        let (back, from) = mpsc::channel::<FromRules>();
+        let k = std::env::var("TEQ_FIX_BARRIER").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+        let gate = std::sync::Arc::new(Gate { k, begun: std::sync::Mutex::new(((u32::MAX, u32::MAX), 0)) });
+        let mut pool = Pool { scope, boot, to: Vec::new(), back, from, ready: Vec::new(), limit: 1, eligible: false, gate };
+        pool.add_worker();
+        pool
+    }
+
+    fn add_worker(&mut self) {
+        let w = self.to.len();
+        let (tx, rx) = mpsc::channel::<ToRules>();
+        let (back, boot, gate) = (self.back.clone(), self.boot.clone(), self.gate.clone());
+        std::thread::Builder::new()
+            .name(format!("teq-fix-rules-{}", w))
+            .stack_size(1 << 30)
+            .spawn_scoped(self.scope, move || {
+                crate::alloc::enter();
+                rule_thread(w, boot, rx, back, &gate)
+            })
+            .expect("a rule worker");
+        self.to.push(tx);
+        self.ready.push(false);
+    }
+}
+
+/// `TEQ_FIX_BARRIER=<k>`, the fix suite's: each worker waits at its first document of a round until `k` workers have
+/// begun one of that round, so that the record shows several in rule evaluation before any finished, in every round.
+struct Gate {
+    k: usize,
+    /// The round under way, its job and number, and the workers that began a document of it.
+    begun: std::sync::Mutex<((u32, u32), usize)>,
+}
+
+impl Gate {
+    /// At a worker's first document of `round`: waits until `k` workers have begun one, ten seconds at most; whether
+    /// in vain.
+    fn pass(&self, round: (u32, u32)) -> bool {
+        if self.k <= 1 {
+            return false;
+        }
+        {
+            let mut b = self.begun.lock().unwrap_or_else(|e| e.into_inner());
+            if b.0 != round {
+                *b = (round, 0);
+            }
+            b.1 += 1;
+        }
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let b = *self.begun.lock().unwrap_or_else(|e| e.into_inner());
+            if b.0 != round || b.1 >= self.k {
+                return false;
+            }
+            if std::time::Instant::now() > until {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    }
+}
+
+/// The order a round's documents are handed out in (`TEQ_FIX_SCHEDULE`, the fix suite's perturbations): the documents'
+/// own; `reverse`, the last first and the first held until a later one is done, so that the completion order is
+/// another; `shuffle:<seed>`, a seeded permutation with each answer delayed a seeded 0 to 3 ms. Completion order never
+/// decides an output's order.
+#[derive(Clone, Copy, PartialEq)]
+enum Schedule {
+    Natural,
+    Reverse,
+    Shuffle(u64),
+}
+
+impl Schedule {
+    fn of_env() -> Schedule {
+        match std::env::var("TEQ_FIX_SCHEDULE").ok().as_deref() {
+            Some("reverse") => Schedule::Reverse,
+            Some(s) if s.starts_with("shuffle:") => Schedule::Shuffle(s["shuffle:".len()..].parse().unwrap_or(1)),
+            _ => Schedule::Natural,
+        }
+    }
+
+    fn order(self, n: usize) -> Vec<usize> {
+        let mut order: Vec<usize> = (0..n).collect();
+        match self {
+            Schedule::Natural => {}
+            Schedule::Reverse => order.reverse(),
+            Schedule::Shuffle(seed) => {
+                let mut x = seed;
+                for i in (1..n).rev() {
+                    x = mix(x);
+                    order.swap(i, (x % (i as u64 + 1)) as usize);
+                }
+            }
+        }
+        order
+    }
+
+    fn delay(self, slot: usize) -> u64 {
+        match self {
+            Schedule::Shuffle(seed) => mix(seed ^ (slot as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15)) % 4,
+            _ => 0,
+        }
+    }
+}
+
+/// splitmix64's step.
+fn mix(x: u64) -> u64 {
+    let mut z = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
+}
+
+/// `TEQ_FIX_PLANT`, the mutation controls of the fix suite's witness (tests/fix.scala, `Parallel`), a test-only switch
+/// that nothing else reads: `serial` hands one document at a time to the lead alone while the workers are started,
+/// which the record's check must refuse; `completion` consumes the documents in the order they are done, which the byte
+/// comparison must refuse.
+fn plant() -> Option<String> {
+    std::env::var("TEQ_FIX_PLANT").ok()
+}
+
+/// The workers a run whose rules teq ships may take: the jobs' `--threads` (or `TEQ_THREADS`), else the machine's cores
+/// (`TEQ_WORKERS` bounding them).
+fn requested_workers(jobs: &[Job]) -> usize {
+    let asked = jobs
+        .iter()
+        .filter_map(|j| {
+            let mut args = vec!["compiler".to_string(), "check".to_string()];
+            args.extend(j.args.iter().cloned());
+            crate::frontend::requested_threads(crate::parse_options_from(args.into_iter()).threads)
+        })
+        .max();
+    asked.unwrap_or_else(crate::workers).max(1)
 }
 
 /// One file's outcome of a round.
@@ -99,6 +294,24 @@ struct Outcome {
 
 /// Runs `jobs` under `setup`; the run's exit status (docs/CLI.md, "teq fix").
 pub fn run(setup: Setup, jobs: Vec<Job>) -> i32 {
+    // `TEQ_FIX_INPUTS=<file>`: each job's inputs as the compiler resolves them (`program_paths`: the roots, the links
+    // followed, the exclusions applied), a line `<job>\t<path>` each, written and nothing else done: the corpus a
+    // measurement runs over, as bench/fix/run.sh takes its identity.
+    if let Some(file) = std::env::var_os("TEQ_FIX_INPUTS") {
+        let mut out = String::new();
+        for (k, job) in jobs.iter().enumerate() {
+            for p in program_paths(job) {
+                out.push_str(&format!("{}\t{}\n", k, p));
+            }
+        }
+        return match std::fs::write(&file, out) {
+            Ok(()) => 0,
+            Err(e) => {
+                eprintln!("teq fix: cannot write the inputs {}: {}", Path::new(&file).display(), e);
+                2
+            }
+        };
+    }
     let requested = match requested_rules(&setup) {
         Ok(r) => r,
         Err(e) => {
@@ -114,22 +327,12 @@ pub fn run(setup: Setup, jobs: Vec<Job>) -> i32 {
             return 2;
         }
     };
-    let (to_rules, rules_rx) = mpsc::channel::<ToRules>();
-    let (from_rules_tx, from_rules) = mpsc::channel::<FromRules>();
-    let conf = setup.conf.clone();
-    let config_dir = setup.config_dir.clone();
+    record_open();
+    let boot = Boot { conf: setup.conf.clone(), config_dir: setup.config_dir.clone(), requested };
     std::thread::scope(|scope| {
-        let rule_thread = std::thread::Builder::new()
-            .name("teq-fix-rules".to_string())
-            .stack_size(1 << 30)
-            .spawn_scoped(scope, move || {
-                crate::alloc::enter();
-                rule_thread(conf, config_dir, requested, rules_rx, from_rules_tx)
-            })
-            .expect("the rule thread");
-        let code = drive(&setup, &lints, &jobs, &to_rules, &from_rules);
-        let _ = to_rules.send(ToRules::End);
-        let _ = rule_thread.join();
+        let mut pool = Pool::new(scope, boot);
+        let code = drive(&setup, &lints, &jobs, &mut pool);
+        drop(pool);
         code
     })
 }
@@ -145,37 +348,92 @@ fn requested_rules(setup: &Setup) -> Result<Vec<String>, String> {
     }
 }
 
-fn drive(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], to_rules: &mpsc::Sender<ToRules>, from_rules: &mpsc::Receiver<FromRules>) -> i32 {
+fn drive(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mut Pool<'_, '_>) -> i32 {
     let started = std::time::Instant::now();
-    let code = drive_rounds(setup, lint_config, jobs, to_rules, from_rules);
+    let code = drive_rounds(setup, lint_config, jobs, pool);
+    record_close();
     if std::env::var_os("TEQ_FIX_TRACE").is_some() {
         TIMES.with(|t| {
             let (t, held) = (t.get(), crate::alloc::held());
-            eprintln!("fix: {:.0} ms in all: the rules' program {:.0} ms, typing {:.0} ms, the rules {:.0} ms, planning {:.0} ms; the allocator reserved {} MB, its requests over 32 KB at most {} MB", started.elapsed().as_secs_f64() * 1e3, t[0] * 1e3, t[1] * 1e3, t[2] * 1e3, t[3] * 1e3, held.reserved >> 20, held.large_peak >> 20);
+            eprintln!("fix: {:.0} ms in all: the rules' program {:.0} ms, typing {:.0} ms, the rules {:.0} ms on {} worker{} (their documents {:.0} ms, {:.0} ms of CPU, the longest {:.0} ms), planning {:.0} ms; the allocator reserved {} MB, its requests over 32 KB at most {} MB", started.elapsed().as_secs_f64() * 1e3, t[0] * 1e3, t[1] * 1e3, t[2] * 1e3, pool.to.len(), if pool.to.len() == 1 { "" } else { "s" }, t[4] * 1e3, t[6] * 1e3, t[5] * 1e3, t[3] * 1e3, held.reserved >> 20, held.large_peak >> 20);
         });
     }
     code
 }
 
 thread_local! {
-    /// Seconds the run spent: making the rules' program ready, typing, in the rules, planning (`TEQ_FIX_TRACE`).
-    static TIMES: std::cell::Cell<[f64; 4]> = const { std::cell::Cell::new([0.0; 4]) };
+    /// Seconds the run spent: making the rules' program ready, typing, in the rules (the rounds' wall time, from a
+    /// round's first document handed out to its last one planned), planning (which overlaps the rules' wall time), the
+    /// documents' rules summed over the workers, the longest document's, the documents' CPU time (`TEQ_FIX_TRACE`).
+    static TIMES: std::cell::Cell<[f64; 7]> = const { std::cell::Cell::new([0.0; 7]) };
+}
+
+/// The run's epoch, which the coordinator's and the rule thread's clock readings of the execution record share.
+static EPOCH: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+/// Microseconds since the run's epoch.
+fn now_us() -> u64 {
+    EPOCH.get_or_init(std::time::Instant::now).elapsed().as_micros() as u64
+}
+
+thread_local! {
+    /// The execution record, `TEQ_FIX_RECORD=<file>` (docs/FIX.md, "Debugging a rule"): what the run dispatched to
+    /// which worker and when each document's rules began and ended, written by the coordinator alone.
+    static RECORD: std::cell::RefCell<Option<std::io::BufWriter<std::fs::File>>> = const { std::cell::RefCell::new(None) };
+}
+
+fn record_open() {
+    now_us();
+    if let Some(path) = std::env::var_os("TEQ_FIX_RECORD") {
+        match std::fs::File::create(&path) {
+            Ok(f) => RECORD.with(|r| *r.borrow_mut() = Some(std::io::BufWriter::new(f))),
+            Err(e) => eprintln!("teq fix: cannot write the record {}: {}", std::path::Path::new(&path).display(), e),
+        }
+    }
+}
+
+fn record(line: std::fmt::Arguments<'_>) {
+    use std::io::Write;
+    RECORD.with(|r| {
+        if let Some(w) = r.borrow_mut().as_mut() {
+            let _ = writeln!(w, "{}", line);
+        }
+    });
+}
+
+fn record_close() {
+    use std::io::Write;
+    RECORD.with(|r| {
+        if let Some(mut w) = r.borrow_mut().take() {
+            let _ = w.flush();
+        }
+    });
 }
 
 fn timed(k: usize, since: std::time::Instant) {
-    let d = since.elapsed().as_secs_f64();
+    add_time(k, since.elapsed().as_secs_f64());
+}
+
+fn add_time(k: usize, d: f64) {
     TIMES.with(|t| {
         let mut v = t.get();
-        v[k] += d;
+        if k == 5 {
+            v[k] = v[k].max(d);
+        } else {
+            v[k] += d;
+        }
         t.set(v);
     });
 }
 
-fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], to_rules: &mpsc::Sender<ToRules>, from_rules: &mpsc::Receiver<FromRules>) -> i32 {
+fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mut Pool<'_, '_>) -> i32 {
     let ready = std::time::Instant::now();
-    let infos = match from_rules.recv() {
-        Ok(FromRules::Ready(Ok(infos))) => infos,
-        Ok(FromRules::Ready(Err(e))) => {
+    let infos = match pool.from.recv() {
+        Ok(FromRules::Ready(_, Ok(infos), boot)) => {
+            record(format_args!("worker w=0 ready_us={} boot_us={}", now_us(), boot));
+            infos
+        }
+        Ok(FromRules::Ready(_, Err(e), _)) => {
             eprintln!("{}", e.trim_end());
             return 2;
         }
@@ -185,6 +443,13 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], to_rules:
         }
     };
     timed(0, ready);
+    pool.ready[0] = true;
+    // The rules teq ships keep no state across documents (fix-speed's table, §1): their run takes several workers. A
+    // project rule's instance may (Count's visits, Stale's kept token): its run keeps the lead alone.
+    pool.eligible = infos.iter().all(|i| i.shipped);
+    pool.limit = if pool.eligible { requested_workers(jobs) } else { 1 };
+    record(format_args!("run eligible={} workers={}", pool.eligible as u8, pool.limit));
+    let mut base = 0u32;
     let names: Vec<String> = infos.iter().map(|i| i.name.clone()).collect();
     let semantic_rules: Vec<bool> = infos.iter().map(|i| i.semantic).collect();
     let semantic = semantic_rules.contains(&true);
@@ -194,7 +459,7 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], to_rules:
     let mut kept: HashMap<String, Results> = HashMap::new();
     for (k, job) in jobs.iter().enumerate() {
         let earlier = Earlier { results: &HashMap::new(), semantic: &semantic_rules };
-        match round(job, &HashMap::new(), semantic, &mut gen, &names, &setup.display, to_rules, from_rules, earlier, Some(&mut kept)) {
+        match round((k, 1), job, &HashMap::new(), semantic, &mut gen, &mut base, &names, &infos, &setup.display, pool, earlier, Some(&mut kept)) {
             Ok(outcomes) => first.push((k, outcomes)),
             Err(e) => {
                 eprint!("{}", e);
@@ -224,7 +489,7 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], to_rules:
                 continue;
             }
             let earlier = Earlier { results: &kept, semantic: &semantic_rules };
-            match round(&jobs[*k], &changed, semantic, &mut gen, &names, &setup.display, to_rules, from_rules, earlier, None) {
+            match round((*k, 2), &jobs[*k], &changed, semantic, &mut gen, &mut base, &names, &infos, &setup.display, pool, earlier, None) {
                 Ok(o) => second.extend(o),
                 Err(e) => {
                     eprintln!("teq fix: the program does not type after the rules' edits ({}):", rules_of(&by_path, &changed));
@@ -243,6 +508,9 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], to_rules:
         if let Some(code) = refused(second.values().map(|o| &o.plan)) {
             return code;
         }
+        // In the paths' order, so that the file a refusal names is the same in every run.
+        let mut second: Vec<(String, Outcome)> = second.into_iter().collect();
+        second.sort_by(|a, b| a.0.cmp(&b.0));
         for (path, o) in second {
             if let Some(&(_, _, ref rules)) = o.plan.edits.iter().find(|(_, _, rules)| rules.iter().any(|&r| names[r as usize] != "NoUnusedImports")) {
                 let rule = rules.iter().map(|&r| names[r as usize].as_str()).find(|n| *n != "NoUnusedImports").unwrap_or("");
@@ -401,10 +669,12 @@ impl Earlier<'_> {
     }
 }
 
-/// A round of `job`: its program typed with `overrides` standing for files, each editable document's rules run and
-/// their patches planned; round one keeps each file's results in `kept`.
+/// A round of `job`: its program typed with `overrides` standing for files, its editable documents handed to the
+/// workers, each document's results planned in the documents' order (`consume`); round one keeps each file's results
+/// in `kept`. `base` numbers the atomic groups as one counter over the whole run would: each document's are numbered
+/// from 1 on its worker, then offset by the groups of the documents planned before it.
 #[allow(clippy::too_many_arguments)]
-fn round(job: &Job, overrides: &HashMap<String, String>, semantic: bool, gen: &mut u32, names: &[String], display: &Option<(PathBuf, PathBuf)>, to_rules: &mpsc::Sender<ToRules>, from_rules: &mpsc::Receiver<FromRules>, earlier: Earlier<'_>, mut kept: Option<&mut HashMap<String, Results>>) -> Result<Vec<Outcome>, String> {
+fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, semantic: bool, gen: &mut u32, base: &mut u32, names: &[String], infos: &[RuleInfo], display: &Option<(PathBuf, PathBuf)>, pool: &mut Pool<'_, '_>, earlier: Earlier<'_>, mut kept: Option<&mut HashMap<String, Results>>) -> Result<Vec<Outcome>, String> {
     let first_gen = *gen;
     let typing = std::time::Instant::now();
     let docs = std::thread::scope(|scope| {
@@ -420,38 +690,137 @@ fn round(job: &Job, overrides: &HashMap<String, String>, semantic: bool, gen: &m
             .unwrap_or_else(|_| Err("teq fix: the typing thread panicked\n".to_string()))
     })?;
     timed(1, typing);
-    *gen = first_gen + docs.len() as u32;
-    let mut out = Vec::new();
-    for d in docs {
-        let (file, path, text) = (d.file.clone(), d.path.clone(), d.text.clone());
-        // The planner reads the view too: the rules hand it back with their results.
-        let in_rules = std::time::Instant::now();
-        let before = if overrides.contains_key(&file) { None } else { earlier.results.get(&file) };
-        let _ = to_rules.send(ToRules::Doc(Box::new(d), before.is_some()));
-        let (view, results) = match from_rules.recv() {
-            Ok(FromRules::Done(r, v)) => (v, r),
-            _ => return Err("teq fix: the rule thread ended\n".to_string()),
-        };
-        let results = match before {
-            Some(b) => earlier.joined(b, *results),
-            None => *results,
-        };
-        timed(2, in_rules);
-        let planning = std::time::Instant::now();
-        if std::env::var_os("TEQ_FIX_TRACE").is_some() {
-            eprintln!("fix: {} (generation {}): {} nodes, {} tokens, {} edits, {} import edits, {} lints, {} failures", view.path, view.gen, view.tree.nodes.len(), view.tokens.len(), results.edits.len(), results.imports.len(), results.lints.len(), results.failures.len());
-            for (r, f) in &results.failures {
-                eprintln!("fix:   rule {} failed: {}", r, f);
-            }
-        }
-        let p = plan::plan(&view, &results, names);
-        timed(3, planning);
-        if let Some(k) = kept.as_deref_mut() {
-            k.insert(file.clone(), results);
-        }
-        out.push(Outcome { file, doc_path: path, text, plan: p });
+    let n = docs.len();
+    *gen = first_gen + n as u32;
+    record(format_args!("round job={} round={} docs={} first_gen={}", k, r, n, first_gen));
+    // The workers this round takes, started now that its typing has ended: no worker's interpreter runs beside a typing
+    // (`interp::WATCHING`, which a typer of several workers sets, is process-wide).
+    let want = if pool.limit > 1 && n > 1 { pool.limit.min(n) } else { 1 };
+    if want == 1 {
+        let reason = if !pool.eligible { "project-rules" } else if pool.limit == 1 { "one-worker" } else { "one-document" };
+        record(format_args!("serial reason={}", reason));
     }
+    while pool.to.len() < want {
+        pool.add_worker();
+    }
+    let schedule = Schedule::of_env();
+    let plant = plant();
+    let (serial_plant, completion_plant) = (plant.as_deref() == Some("serial"), plant.as_deref() == Some("completion"));
+    // Idle workers, the lowest last so that it is handed a document first.
+    let mut idle: Vec<usize> = (0..pool.to.len()).rev().filter(|&w| pool.ready[w] && (!serial_plant || w == 0)).collect();
+    let mut pending: std::collections::VecDeque<usize> = schedule.order(n).into();
+    let mut docs: Vec<Option<DocView>> = docs.into_iter().map(Some).collect();
+    let mut slots: Vec<Option<Box<Answer>>> = (0..n).map(|_| None).collect();
+    // The workers handed a document of this round already.
+    let mut handed = vec![false; pool.to.len()];
+    let (mut next, mut consumed, mut in_flight, mut later_done) = (0usize, 0usize, 0usize, false);
+    let (rules_start, round_start, mut service, mut cpu) = (std::time::Instant::now(), now_us(), 0u64, 0u64);
+    let mut out = Vec::new();
+    let ended = || "teq fix: the rule thread ended\n".to_string();
+    while consumed < n {
+        while !idle.is_empty() && !(serial_plant && in_flight > 0) {
+            // Under `reverse` the first document waits for a later one's results.
+            let Some(at) = pending.iter().position(|&s| !(schedule == Schedule::Reverse && s == 0 && n > 1 && !later_done)) else { break };
+            let slot = pending.remove(at).expect("a pending document");
+            let w = idle.pop().expect("an idle worker");
+            let d = docs[slot].take().expect("a document handed out once");
+            let semantic_only = !overrides.contains_key(&d.file) && earlier.results.contains_key(&d.file);
+            let asker = Asker { job: k as u32, round: r, slot: slot as u32, gen: d.gen, worker: w as u32 };
+            record(format_args!("dispatch slot={} gen={} worker={} at_us={}", slot, d.gen, w, now_us()));
+            let first = !std::mem::replace(&mut handed[w], true);
+            pool.to[w].send(ToRules::Doc(Box::new(d), Handout { semantic_only, asker, delay: schedule.delay(slot), first })).map_err(|_| ended())?;
+            in_flight += 1;
+        }
+        match pool.from.recv() {
+            Ok(FromRules::Done(a)) => {
+                in_flight -= 1;
+                let (w, slot) = (a.asker.worker as usize, a.asker.slot as usize);
+                if a.asker.job != k as u32 || a.asker.round != r || slot >= n || slots[slot].is_some() || docs[slot].is_some() {
+                    return Err(format!("teq fix: the results of a document of another round, or twice (slot {})\n", slot));
+                }
+                idle.push(w);
+                later_done |= slot != 0;
+                if a.barrier_timeout {
+                    record(format_args!("barrier-timeout worker={}", w));
+                }
+                record(format_args!("done slot={} gen={} worker={} start_us={} finish_us={} cpu_us={} queries=0", slot, a.asker.gen, w, a.start, a.finish, a.cpu));
+                let took = a.finish.saturating_sub(a.start);
+                (service, cpu) = (service + took, cpu + a.cpu);
+                add_time(5, took as f64 / 1e6);
+                if completion_plant {
+                    out.push(consume(*a, overrides, &earlier, names, base, kept.as_deref_mut()));
+                    consumed += 1;
+                } else {
+                    slots[slot] = Some(a);
+                }
+            }
+            Ok(FromRules::Ready(w, Ok(theirs), boot)) => {
+                if theirs != infos {
+                    return Err(format!("teq fix: the rule worker {} configured the rules otherwise than the first\n", w));
+                }
+                record(format_args!("worker w={} ready_us={} boot_us={}", w, now_us(), boot));
+                pool.ready[w] = true;
+                if !serial_plant {
+                    idle.push(w);
+                }
+            }
+            Ok(FromRules::Ready(_, Err(e), _)) => return Err(format!("{}\n", e.trim_end())),
+            Ok(FromRules::Ended) | Err(_) => return Err(ended()),
+        }
+        while next < n {
+            let Some(a) = slots[next].take() else { break };
+            out.push(consume(*a, overrides, &earlier, names, base, kept.as_deref_mut()));
+            next += 1;
+            consumed += 1;
+        }
+    }
+    timed(2, rules_start);
+    add_time(4, service as f64 / 1e6);
+    add_time(6, cpu as f64 / 1e6);
+    record(format_args!("round-end wall_us={} service_us={} cpu_us={}", now_us() - round_start, service, cpu));
     Ok(out)
+}
+
+/// A document's results planned: its atomic groups numbered after those planned before it, round one's results of a
+/// file round two's semantic rules alone ran over joined with theirs, the trace's line, the plan.
+fn consume(a: Answer, overrides: &HashMap<String, String>, earlier: &Earlier<'_>, names: &[String], base: &mut u32, kept: Option<&mut HashMap<String, Results>>) -> Outcome {
+    let Answer { mut results, view, groups, .. } = a;
+    let offset = |g: &mut u32| {
+        if *g != 0 {
+            *g += *base;
+        }
+    };
+    for e in &mut results.edits {
+        offset(&mut e.group);
+    }
+    for op in &mut results.imports {
+        match op {
+            host::ImportOp::Remove { group, .. } | host::ImportOp::Add { group, .. } => offset(group),
+        }
+    }
+    for l in &mut results.lints {
+        offset(&mut l.group);
+    }
+    *base += groups;
+    let (file, path, text) = (view.file.clone(), view.path.clone(), view.text.clone());
+    let before = if overrides.contains_key(&file) { None } else { earlier.results.get(&file) };
+    let results = match before {
+        Some(b) => earlier.joined(b, results),
+        None => results,
+    };
+    let planning = std::time::Instant::now();
+    if std::env::var_os("TEQ_FIX_TRACE").is_some() {
+        eprintln!("fix: {} (generation {}): {} nodes, {} tokens, {} edits, {} import edits, {} lints, {} failures", view.path, view.gen, view.tree.nodes.len(), view.tokens.len(), results.edits.len(), results.imports.len(), results.lints.len(), results.failures.len());
+        for (r, f) in &results.failures {
+            eprintln!("fix:   rule {} failed: {}", r, f);
+        }
+    }
+    let p = plan::plan(&view, &results, names);
+    timed(3, planning);
+    if let Some(k) = kept {
+        k.insert(file.clone(), results);
+    }
+    Outcome { file, doc_path: path, text, plan: p }
 }
 
 /// The paths of the job's program, its editable files and the rest of what it reads.
@@ -749,18 +1118,36 @@ impl LintConfig {
 /// The program the rules run in: the std's `teq.fix` named, so that its files enter, and the `file:` sources.
 const ENTRY: &str = "package teq.fix.program\n\nobject Entry:\n  val driver: teq.fix.Driver.type = teq.fix.Driver\n";
 
-fn rule_thread(conf: Conf, config_dir: PathBuf, requested: Vec<String>, rx: mpsc::Receiver<ToRules>, tx: mpsc::Sender<FromRules>) {
+/// Tells the coordinator of a worker that panicked, which would otherwise wait for its answer.
+struct EndedGuard(mpsc::Sender<FromRules>);
+
+impl Drop for EndedGuard {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            let _ = self.0.send(FromRules::Ended);
+        }
+    }
+}
+
+/// Worker `worker`: the rules' program typed and the rules configured (`Ready`), then each document it is handed run through
+/// every rule (`Done`), until its channel closes.
+fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc::Sender<FromRules>, gate: &Gate) {
     crate::interp::fix::want();
-    host::install(Host { doc: None, results: Results::default(), conf: conf.clone(), read: vec![false; conf.nodes.len()], groups: 0 });
+    let _guard = EndedGuard(tx.clone());
+    let booting = std::time::Instant::now();
+    let since = |t: std::time::Instant| t.elapsed().as_micros() as u64;
+    let Boot { conf, config_dir, requested } = boot;
+    host::install(Host { doc: None, results: Results::default(), conf: conf.clone(), read: vec![false; conf.nodes.len()], groups: 0, asker: None });
     let sources: Vec<(String, PathBuf)> = requested.iter().filter_map(|r| r.strip_prefix("file:").map(|p| (r.clone(), config_dir.join(p)))).collect();
     let mut files: Vec<PathBuf> = Vec::new();
     for (_, p) in &sources {
         files.extend(scala_files(p));
     }
-    let temp = std::env::temp_dir().join(format!("teq-fix-{}", std::process::id()));
+    // A path of the worker's own: another worker removes its directory while this one may still read its entry.
+    let temp = std::env::temp_dir().join(format!("teq-fix-{}-{}", std::process::id(), worker));
     let entry = temp.join("entry.scala");
     if let Err(e) = std::fs::create_dir_all(&temp).and_then(|_| std::fs::write(&entry, ENTRY)) {
-        let _ = tx.send(FromRules::Ready(Err(format!("teq fix: cannot write {}: {}", entry.display(), e))));
+        let _ = tx.send(FromRules::Ready(worker, Err(format!("teq fix: cannot write {}: {}", entry.display(), e)), since(booting)));
         return;
     }
     let mut args = vec![entry.to_string_lossy().into_owned()];
@@ -771,7 +1158,7 @@ fn rule_thread(conf: Conf, config_dir: PathBuf, requested: Vec<String>, rx: mpsc
     let program = match crate::read_program(&opts, paths, &roots) {
         Ok(p) => p,
         Err(e) => {
-            let _ = tx.send(FromRules::Ready(Err(e)));
+            let _ = tx.send(FromRules::Ready(worker, Err(e), since(booting)));
             return;
         }
     };
@@ -781,7 +1168,7 @@ fn rule_thread(conf: Conf, config_dir: PathBuf, requested: Vec<String>, rx: mpsc
     let cp = crate::open_jars(&opts);
     let (mut sfiles, mut asts, blocks_of, std, selected, scalajs_unlocked) = crate::parse_build(&opts, cp.as_ref(), program, &mut interner, &mut diags);
     if diags.has_errors() {
-        let _ = tx.send(FromRules::Ready(Err(diags.render(&sfiles))));
+        let _ = tx.send(FromRules::Ready(worker, Err(diags.render(&sfiles)), since(booting)));
         return;
     }
     let (jar_files, jdk_file) = crate::jar_pseudo_files(&opts, &mut sfiles, &mut asts);
@@ -796,7 +1183,7 @@ fn rule_thread(conf: Conf, config_dir: PathBuf, requested: Vec<String>, rx: mpsc
     typer.run();
     if typer.diags.items.iter().any(|d| !d.is_warning) {
         let (shown, _, _) = typer.report_diags();
-        let _ = tx.send(FromRules::Ready(Err(shown)));
+        let _ = tx.send(FromRules::Ready(worker, Err(shown), since(booting)));
         return;
     }
     let rule_files: Vec<FileId> = sources_all.as_slice().iter().enumerate().filter(|(_, f)| files.iter().any(|p| p.to_string_lossy() == f.path)).map(|(i, _)| FileId(i as u32)).collect();
@@ -830,7 +1217,7 @@ fn rule_thread(conf: Conf, config_dir: PathBuf, requested: Vec<String>, rx: mpsc
     let (driver, syms, project) = match found {
         Ok(f) => f,
         Err(e) => {
-            let _ = tx.send(FromRules::Ready(Err(e)));
+            let _ = tx.send(FromRules::Ready(worker, Err(e), since(booting)));
             return;
         }
     };
@@ -856,7 +1243,7 @@ fn rule_thread(conf: Conf, config_dir: PathBuf, requested: Vec<String>, rx: mpsc
             available.push((interp.describe_value(&name), Some(path.clone()), r));
         }
         // The rules asked for, in the configuration's order: a name, or every rule of a `file:` source.
-        let mut chosen: Vec<(String, crate::interp::Value)> = Vec::new();
+        let mut chosen: Vec<(String, crate::interp::Value, bool)> = Vec::new();
         let mut unknown: Vec<String> = Vec::new();
         for req in &requested {
             if let Some(p) = req.strip_prefix("file:") {
@@ -866,11 +1253,11 @@ fn rule_thread(conf: Conf, config_dir: PathBuf, requested: Vec<String>, rx: mpsc
                     unknown.push(req.clone());
                 }
                 for (n, _, v) in of_file {
-                    chosen.push((n.clone(), v.clone()));
+                    chosen.push((n.clone(), v.clone(), false));
                 }
             } else {
                 match available.iter().find(|(n, _, _)| n == req) {
-                    Some((n, _, v)) => chosen.push((n.clone(), v.clone())),
+                    Some((n, f, v)) => chosen.push((n.clone(), v.clone(), f.is_none())),
                     None => unknown.push(req.clone()),
                 }
             }
@@ -881,10 +1268,10 @@ fn rule_thread(conf: Conf, config_dir: PathBuf, requested: Vec<String>, rx: mpsc
         }
         let mut configured = Vec::new();
         let mut infos = Vec::new();
-        for (n, v) in &chosen {
+        for (n, v, shipped) in &chosen {
             let c = interp.call_method(module.clone(), syms[3], vec![v.clone()]).map_err(|f| format!("teq fix: the configuration of {}: {}", n, failure(&mut interp, f)))?;
             let semantic = interp.call_method(module.clone(), syms[2], vec![c.clone()]).map_err(|f| failure(&mut interp, f))?;
-            infos.push(RuleInfo { name: n.clone(), semantic: matches!(semantic, crate::interp::Value::Bool(true)) });
+            infos.push(RuleInfo { name: n.clone(), semantic: matches!(semantic, crate::interp::Value::Bool(true)), shipped: *shipped });
             configured.push(c);
         }
         // A setting under a configured rule's section that its decoding never read is unknown (metaconfig's
@@ -898,19 +1285,24 @@ fn rule_thread(conf: Conf, config_dir: PathBuf, requested: Vec<String>, rx: mpsc
     let (module, configured, infos) = match ready {
         Ok(r) => r,
         Err(e) => {
-            let _ = tx.send(FromRules::Ready(Err(e)));
+            let _ = tx.send(FromRules::Ready(worker, Err(e), since(booting)));
             return;
         }
     };
-    let _ = tx.send(FromRules::Ready(Ok(infos)));
+    let _ = tx.send(FromRules::Ready(worker, Ok(infos), since(booting)));
     let rules = crate::interp::fix::array_of(configured);
-    while let Ok(ToRules::Doc(doc, semantic_only)) = rx.recv() {
+    while let Ok(ToRules::Doc(doc, Handout { semantic_only, asker, delay, first })) = rx.recv() {
         let gen = doc.gen;
+        // A document's atomic groups are numbered from 1; the coordinator offsets them (`consume`).
         host::with_host(|h| {
             h.doc = Some(*doc);
             h.results = Results::default();
+            h.groups = 0;
+            h.asker = Some(asker);
         });
         interp.set_limits(crate::interp::Limits::unlimited());
+        let (start, cpu_start) = (now_us(), crate::measure::thread_cpu_ns());
+        let barrier_timeout = first && gate.pass((asker.job, asker.round));
         let r = interp.call_method(module.clone(), syms[4], vec![rules.clone(), crate::interp::Value::Int(gen as i32), crate::interp::Value::Bool(semantic_only)]);
         let failure = match r {
             Ok(_) => None,
@@ -919,16 +1311,20 @@ fn rule_thread(conf: Conf, config_dir: PathBuf, requested: Vec<String>, rx: mpsc
                 other => interp.describe(&other),
             }),
         };
-        let (results, view) = host::with_host(|h| {
+        let (finish, cpu) = (now_us(), crate::measure::thread_cpu_ns().saturating_sub(cpu_start) / 1000);
+        let (results, view, groups, asker) = host::with_host(|h| {
             let mut r = std::mem::take(&mut h.results);
             if let Some(f) = failure {
                 r.failures.push((0, f));
             }
-            (r, h.doc.take())
+            (r, h.doc.take(), h.groups, h.asker.take())
         })
         .unwrap_or_default();
-        let Some(view) = view else { break };
-        if tx.send(FromRules::Done(Box::new(results), Box::new(view))).is_err() {
+        let (Some(view), Some(asker)) = (view, asker) else { break };
+        if delay > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+        }
+        if tx.send(FromRules::Done(Box::new(Answer { asker, results, view, groups, start, finish, cpu, barrier_timeout }))).is_err() {
             break;
         }
     }

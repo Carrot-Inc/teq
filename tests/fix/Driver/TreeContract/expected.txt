@@ -1,0 +1,129 @@
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: nodes=14 same=true traverse=true
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: extractedFirst=4+05 * 6;5*06 extracted=4+05 * 6;5*06 equalHandles=true
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: identity=parent=true equal=true hash=true;parent=true equal=true hash=true
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: nested=0 typed=4 + 5 * 6
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: root=Source parent=true
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Source:object B { val marker = 4 + 5 * 6 }
+
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Defn.Object:object B { val marker = 4 + 5 * 6 }
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Term.Name:B
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Template:{ val marker = 4 + 5 * 6 }
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Defn.Val:val marker = 4 + 5 * 6
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Pat.Var:marker
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Term.Name:marker
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Term.ApplyInfix:4 + 5 * 6
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Lit.Int:4
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Term.Name:+
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Term.ApplyInfix:5 * 6
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Lit.Int:5
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Term.Name:*
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/B.scala:1:16: error: [InspectTree.tree]: Lit.Int:6
+  object B { val marker = 4 + 5 * 6 }
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: nodes=17 same=true traverse=true
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: extractedFirst=1+02 extracted=1+02 equalHandles=true
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: identity=parent=true equal=true hash=true
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: nested=0 typed=1 + 2
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: root=Source parent=true
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Source:/*
+rules = ["file:../../support/InspectTree.scala"]
+*/
+// The tree's contract (docs/FIX.md, "Tree"): the design pass's probe (fix-speed's), and after another document (B.scala).
+object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Defn.Object:object O { val marker = 1 + 2; val y = List(3) }
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Term.Name:O
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Template:{ val marker = 1 + 2; val y = List(3) }
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Defn.Val:val marker = 1 + 2
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Pat.Var:marker
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Term.Name:marker
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Term.ApplyInfix:1 + 2
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Lit.Int:1
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Term.Name:+
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Lit.Int:2
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Defn.Val:val y = List(3)
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Pat.Var:y
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Term.Name:y
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Term.Apply:List(3)
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Term.Name:List
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^
+Driver/TreeContract/input.scala:5:16: error: [InspectTree.tree]: Lit.Int:3
+  object O { val marker = 1 + 2; val y = List(3) } // assert: InspectTree.tree
+                 ^^^^^^

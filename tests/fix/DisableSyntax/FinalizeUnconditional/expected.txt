@@ -1,0 +1,3 @@
+DisableSyntax/FinalizeUnconditional/input.scala:10:7: error: [DisableSyntax.noFinalize]: finalize should not be used
+    def finalize(): Unit = () // assert: DisableSyntax.noFinalize
+        ^^^^^^^^
