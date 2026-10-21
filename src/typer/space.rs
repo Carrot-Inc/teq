@@ -1593,7 +1593,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
         }
         let mark = self.t.snapshot();
         let r = self.t.is_sub(a, b);
-        self.t.rollback(mark);
+        self.t.rollback(&mark);
         self.sc.subs.insert((a, b), r);
         r
     }

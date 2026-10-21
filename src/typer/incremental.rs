@@ -98,6 +98,8 @@ impl<'a> Worker<'a> {
         self.java_members_exhausted.clear();
         // The infix tuples noted by node (`Worker::infix_tuples`) are of the files' earlier parses.
         self.infix_tuples.retain(|&(f, _), _| !changes.iter().any(|c| c.file == f));
+        // So are the binders' `@nowarn`s, which their retype registers again.
+        self.binder_nowarns.retain(|n| !changes.iter().any(|c| c.file == n.file));
         self.inference_failed.clear();
         // A warning of the session's options, told once (an object with cacheable state made anew):
         // the answer that carried it is over.

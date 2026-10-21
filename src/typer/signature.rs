@@ -1125,7 +1125,7 @@ impl<'a> Worker<'a> {
             let call = MethodCall { recv: None, sym: e, owner_subst: subst, ext_recv: None, prefix, refined: None };
             let mark = self.snapshot();
             let applies = self.extension_applicable(&call, t);
-            self.rollback(mark);
+            self.rollback(&mark);
             if !applies {
                 continue;
             }
@@ -1165,7 +1165,7 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         subst
     }
 

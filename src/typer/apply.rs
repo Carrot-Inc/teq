@@ -777,7 +777,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         let conforms = self.is_sub(offered, declared);
         if !conforms {
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         conforms
     }
@@ -791,7 +791,7 @@ impl<'a> Worker<'a> {
                 let mark = self.snapshot();
                 let conforms = self.is_sub(ty, exp);
                 if !conforms {
-                    self.rollback(mark);
+                    self.rollback(&mark);
                 }
                 conforms
             }
@@ -924,7 +924,8 @@ impl<'a> Worker<'a> {
                 if name == names::CLASS_OF && lists.is_empty() && library_stub(self) {
                     if let Some(ta) = targs.filter(|ta| ta.len == 1) {
                         let ty = self.resolve_type(self.cur_ast().ty_list(ta)[0]);
-                        return self.type_class_of(ty, span);
+                        let (te, class) = self.type_class_of(ty, span);
+                        return (te, self.class_constant_type(class));
                     }
                 }
                 // Synthesized members are reachable without a qualifier too.
@@ -3391,12 +3392,23 @@ impl<'a> Worker<'a> {
         let crate::types::Type::Lit(l) = self.types.get(self.syms.sig(s).ret) else { return None };
         Some(match self.types.lit_val(l) {
             crate::types::LitVal::Int(v) => TExpr::Int(v),
+            crate::types::LitVal::Byte(v) => TExpr::Int(v as i32),
+            crate::types::LitVal::Short(v) => TExpr::Int(v as i32),
             crate::types::LitVal::Long(v) => TExpr::Long(v),
             crate::types::LitVal::Double(bits) => TExpr::Double(f64::from_bits(bits)),
             crate::types::LitVal::Float(bits) => TExpr::Double(f32::from_bits(bits) as f64),
             crate::types::LitVal::Char(c) => TExpr::Char(c),
             crate::types::LitVal::Bool(b) => TExpr::Bool(b),
             crate::types::LitVal::Str(n) => TExpr::Str(self.prog.add_str(self.interner.get(n))),
+            // A class constant's tree is its `classOf[T]`.
+            crate::types::LitVal::Class(class) => {
+                let t = match self.types.get(class) {
+                    crate::types::Type::Class(_, args) => self.types.items(args).first().copied().unwrap_or(crate::types::ANY),
+                    _ => crate::types::ANY,
+                };
+                let (te, _) = self.type_class_of(t, Span::default());
+                self.prog.expr(te)
+            }
         })
     }
 
@@ -4833,7 +4845,11 @@ impl<'a> Worker<'a> {
                 explicit[i - explicit_from]
             } else {
                 let v = self.fresh_var();
-                self.tvars.last_mut().unwrap().name = Some(self.syms.tparam(tp).name);
+                let var = self.tvars.last_mut().unwrap();
+                var.name = Some(self.syms.tparam(tp).name);
+                if self.syms.tparam(tp).arity > 0 {
+                    var.set_origin(tp);
+                }
                 v
             };
             subst.push((tp, t));
@@ -4876,8 +4892,11 @@ impl<'a> Worker<'a> {
             let var = self.types.subst(var, &subst);
             let mut is_explicit = i >= explicit_from && i - explicit_from < explicit.len();
             if is_explicit {
-                let arity = self.param_arity(tp);
-                if var != NOTHING && self.type_arity(var) != arity && !self.is_body_file(self.env.file) {
+                // A constructor's arguments are an applied type tree's (`New(AppliedTypeTree)`, `typedAppliedTypeTree`'s
+                // `preCheckKinds`: `hasSameKindAs`); a method's are checked by their arity (`checkBounds` at PostTyper,
+                // `tests/pending-cases/method_type_arg_kind.scala`).
+                let wrong = if ctor.is_some() { !self.pre_check_kind(var, tp) } else { var != NOTHING && self.type_arity(var) != self.param_arity(tp) };
+                if wrong && !self.is_body_file(self.env.file) {
                     let msg = self.kind_mismatch(var, tp);
                     self.error(span, msg);
                 }
@@ -4924,7 +4943,7 @@ impl<'a> Worker<'a> {
             // path's (`extMethodApply`'s `receiver`).
             self.alias_bound_as_path = self.is_stable_path(recv);
             if !self.is_sub(recv_ty, pty) {
-                self.rollback(mark);
+                self.rollback(&mark);
                 if trial {
                     return None;
                 }
@@ -5039,7 +5058,7 @@ impl<'a> Worker<'a> {
                     if self.types.has_paths(pty) && !self.types.names_term(pty, &leading) {
                         let mark = self.snapshot();
                         if !self.is_sub(recv_ty, pty) {
-                            self.rollback(mark);
+                            self.rollback(&mark);
                             let msg = format!(
                                 "value {} is not a member of {}: the extension method takes {}",
                                 self.name_str(self.syms.sym(call.sym).name),
@@ -5137,7 +5156,7 @@ impl<'a> Worker<'a> {
                         if let Some(r) = eta_ret_expected.filter(|&r| r != ERROR && !self.types.contains_error(r)) {
                             let mark = self.snapshot();
                             if !self.is_sub(ret_ty, r) {
-                                self.rollback(mark);
+                                self.rollback(&mark);
                             }
                         }
                     }
@@ -5444,11 +5463,11 @@ impl<'a> Worker<'a> {
                         if let Some(e) = expected_param {
                             let mark = self.snapshot();
                             if !self.is_sub(e, pty) && (eta_sam.is_some() || from_expected) {
-                                self.rollback(mark);
+                                self.rollback(&mark);
                                 let view_compat = std::mem::replace(&mut self.view_compat, true);
                                 let fits = self.is_compatible(e, pty);
                                 self.view_compat = view_compat;
-                                self.rollback(mark);
+                                self.rollback(&mark);
                                 if fits {
                                     adapted_from = Some(e);
                                 } else if eta_sam.is_some() {
@@ -6023,7 +6042,7 @@ impl<'a> Worker<'a> {
         }
         let mark = self.snapshot();
         if !self.is_sub(fun, exp) {
-            self.rollback(mark);
+            self.rollback(&mark);
         }
     }
 
@@ -6061,7 +6080,7 @@ impl<'a> Worker<'a> {
                     // A wildcard argument of the result (`Collector[T, ?, List[T]]` against an
                     // enclosing call's `Collector[? >: String, A, R]`) relates captured, as
                     // dotty's argument check captures it (`Applications.captureWildcardsCompat`).
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     let captured = self.capture_wildcards(ret_ty);
                     let compared = self.normalized_for_proto(captured, exp);
                     ok = captured != ret_ty && self.is_sub(compared, exp);
@@ -6071,7 +6090,7 @@ impl<'a> Worker<'a> {
                 }
                 self.necessary_either = outer;
                 if !ok {
-                    self.rollback(mark);
+                    self.rollback(&mark);
                 }
             }
             return None;
@@ -6089,7 +6108,7 @@ impl<'a> Worker<'a> {
             let mark = self.snapshot();
             let compared = self.normalized_for_proto(ret_ty, exp);
             if !self.is_sub(compared, exp) {
-                self.rollback(mark);
+                self.rollback(&mark);
             }
         }
         None
@@ -6119,7 +6138,7 @@ impl<'a> Worker<'a> {
             }
             let mark = self.snapshot();
             if !self.is_sub(ret_ty, bound) {
-                self.rollback(mark);
+                self.rollback(&mark);
             }
         }
     }
@@ -7316,10 +7335,10 @@ impl<'a> Worker<'a> {
         let span = self.cur_ast().expr_span(e);
         let mark = self.snapshot();
         if self.is_sub(ty, tpt) {
-            self.rollback(mark);
+            self.rollback(&mark);
             return (te, ty);
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         match self.convert_to_typed(te, ty, tpt, span, true) {
             Some((converted, cty)) if cty != ERROR => (converted, cty),
             Some((te, _)) => (te, ERROR),
@@ -9885,7 +9904,7 @@ impl<'a> Worker<'a> {
         let smallest = self.tuple_type(&vec![NOTHING; size]);
         let mark = self.snapshot();
         let holds = self.is_sub(smallest, ty);
-        self.rollback(mark);
+        self.rollback(&mark);
         holds
     }
 
@@ -10477,7 +10496,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
         let ok = self.extension_applicable(&call, t);
-        self.rollback(mark);
+        self.rollback(&mark);
         ok
     }
 
@@ -10497,7 +10516,7 @@ impl<'a> Worker<'a> {
             let mark = self.snapshot();
             let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
             let ok = self.extension_applicable(&call, t);
-            self.rollback(mark);
+            self.rollback(&mark);
             ok
         })
     }
@@ -10629,7 +10648,7 @@ impl<'a> Worker<'a> {
     fn fits_lambda_result(&mut self, ty: TypeId, ret: TypeId) -> bool {
         let mark = self.snapshot();
         let fits = self.is_sub(ty, ret);
-        self.rollback(mark);
+        self.rollback(&mark);
         let from = self.deref(ty);
         let from = self.widen_lit(from);
         let to = self.deref(ret);
@@ -10692,7 +10711,7 @@ impl<'a> Worker<'a> {
                     let wanted = self.types.subst(param.ty, &subst);
                     let wanted = self.solve_in(wanted);
                     let ty = (fixed && !self.types.has_vars(wanted)).then_some(wanted);
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     ty
                 }
             };
@@ -10844,7 +10863,7 @@ impl<'a> Worker<'a> {
         let from = self.widen_lit(from);
         let to = self.deref(first);
         let fits = self.is_sub(q_ty, first) || self.numeric_widening(from, to);
-        self.rollback(mark);
+        self.rollback(&mark);
         fits
     }
 
@@ -11264,7 +11283,7 @@ impl<'a> Worker<'a> {
         let subst = self.boundary_vars(&sig, owner_ty);
         let applicable = matched && self.applicable_to_types(clause, &args, &types, &subst);
         self.discard_diagnostics(diags);
-        self.rollback(outer);
+        self.rollback(&outer);
         if applicable {
             return Boundary::Stands;
         }
@@ -11307,7 +11326,7 @@ impl<'a> Worker<'a> {
         let formal = self.types.subst(clause.params[0].ty, &subst);
         let formal = self.deref(formal);
         let matches = clause.params[1..].iter().all(|p| p.has_default) && self.fits_boundary(ty, formal);
-        self.rollback(outer);
+        self.rollback(&outer);
         if matches {
             return Boundary::Stands;
         }
@@ -11779,7 +11798,7 @@ impl<'a> Worker<'a> {
             SelectionResult::Type(expected) => {
                 let mark = self.snapshot();
                 let ok = self.is_compatible(r, expected);
-                self.rollback(mark);
+                self.rollback(&mark);
                 ok
             }
             SelectionResult::Selected if i > 0 => match layers {
@@ -11895,7 +11914,7 @@ impl<'a> Worker<'a> {
                         self.result_matches(r, i, after_args, views)
                     }
                 };
-            self.rollback(mark);
+            self.rollback(&mark);
             if ok {
                 return true;
             }
@@ -11921,7 +11940,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         let subst = self.boundary_vars(&sig, owner_ty);
         let ok = self.applicable_to_types(clause, &args, &types, &subst);
-        self.rollback(mark);
+        self.rollback(&mark);
         ok
     }
 
@@ -12036,7 +12055,7 @@ impl<'a> Worker<'a> {
             };
             let mark = self.snapshot();
             let fits = self.fits_boundary(ty, p);
-            self.rollback(mark);
+            self.rollback(&mark);
             if !fits {
                 return false;
             }
@@ -12335,7 +12354,7 @@ impl<'a> Worker<'a> {
         let view_compat = std::mem::replace(&mut self.view_compat, true);
         let fits = self.is_compatible(ty, exp);
         self.view_compat = view_compat;
-        self.rollback(mark);
+        self.rollback(&mark);
         !fits
     }
 
@@ -12745,7 +12764,7 @@ impl<'a> Worker<'a> {
             Some(pty) => self.is_sub(recv_ty, pty),
             None => true,
         };
-        self.rollback(mark);
+        self.rollback(&mark);
         fits
     }
 
@@ -13046,7 +13065,7 @@ impl<'a> Worker<'a> {
             let mark = self.snapshot();
             let call = MethodCall { recv: owner, sym, owner_subst, ext_recv: Some((recv, recv_ty)), prefix, refined: None };
             let applicable = self.extension_applicable(&call, recv_ty);
-            self.rollback(mark);
+            self.rollback(&mark);
             if !applicable {
                 continue;
             }
@@ -13266,7 +13285,7 @@ impl<'a> Worker<'a> {
             let call = MethodCall { recv: None, sym, owner_subst, ext_recv: None, prefix, refined: None };
             let mark = self.snapshot();
             let applicable = self.extension_applicable(&call, t);
-            self.rollback(mark);
+            self.rollback(&mark);
             applicable
         });
         declared || self.given_provides_apply(t)
@@ -13292,7 +13311,7 @@ impl<'a> Worker<'a> {
             let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
             let mark = self.snapshot();
             let applicable = self.extension_applicable(&call, recv_ty);
-            self.rollback(mark);
+            self.rollback(&mark);
             if applicable {
                 return true;
             }
@@ -13418,7 +13437,7 @@ impl<'a> Worker<'a> {
             };
             let mark = t.snapshot();
             let ok = t.is_sub(narrow, wide);
-            t.rollback(mark);
+            t.rollback(&mark);
             ok
         };
         covers(self, b, a) && !covers(self, a, b)

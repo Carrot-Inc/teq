@@ -1,0 +1,6 @@
+Driver/LintFilterDefaults/input.scala:10:3: warning: [DisableSyntax.var]: mutable state should be avoided
+    var x = 1 // assert: DisableSyntax.var
+    ^^^
+Driver/LintFilterDefaults/input.scala:11:19: error: [DisableSyntax.null]: null should be avoided, consider using Option instead
+    val y: String = null // assert: DisableSyntax.null
+                    ^^^^

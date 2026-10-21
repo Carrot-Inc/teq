@@ -1,0 +1,9 @@
+DisableSyntax/MatchableDisableSyntax/input.scala:10:11: error: [DisableSyntax.asInstanceOfMatchable]: asInstanceOf[Matchable] is used here to enable pattern matching on Any. Consider using the .asMatchable extension method instead for better readability.
+        obj.asInstanceOf[Matchable] match { /* assert: DisableSyntax.asInstanceOfMatchable
+            ^^^^^^^^^^^^
+DisableSyntax/MatchableDisableSyntax/input.scala:20:7: error: [DisableSyntax.asInstanceOf]: asInstanceOf casts are disabled, use pattern matching instead
+      x.asInstanceOf[String] /* assert: DisableSyntax.asInstanceOf
+        ^^^^^^^^^^^^
+DisableSyntax/MatchableDisableSyntax/input.scala:28:11: error: [DisableSyntax.asInstanceOfMatchable]: asInstanceOf[Matchable] is used here to enable pattern matching on Any. Consider using the .asMatchable extension method instead for better readability.
+        obj.asInstanceOf  [  Matchable  ] match { /* assert: DisableSyntax.asInstanceOfMatchable
+            ^^^^^^^^^^^^

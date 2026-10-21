@@ -178,12 +178,20 @@ impl Refinement {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum LitVal {
     Int(i32),
+    /// A constant narrowed to `Byte` or `Short` (`Constant.convertTo`'s `ByteTag`, `ShortTag`): the fold's
+    /// (`ConstantTree` of a narrowed literal, `Typer::constant_tree`), which no fold makes a literal type of; the tree
+    /// keeps its class's type.
+    Byte(i8),
+    Short(i16),
     Long(i64),
     Double(u64),
     Float(u32),
     Char(u16),
     Bool(bool),
     Str(Name),
+    /// A class constant (dotty's `Constant` of `ClazzTag`: `classOf[T]`, a primitive's `getClass`), by the type its
+    /// constant type widens to, `Class[T]` (`ConstantType.underlying`, `defn.ClassType(c.typeValue)`).
+    Class(TypeId),
 }
 
 /// A `Double` as the JVM's `Double.toString` writes it (what scalac's `ops.any.ToString` and its
@@ -552,6 +560,11 @@ impl TypeStore {
             Type::Rec(b) | Type::Annotated(b) => self.entry_flag(b),
             Type::RecThis(_) => PATHS_BIT | REC_BIT,
             Type::Match(s, m) => REDUCIBLE_BIT | self.entry_flag(s) | self.match_parts(m).fold(0, |acc, a| acc | self.entry_flag(a)),
+            // A class constant mentions what its `Class[T]` does.
+            Type::Lit(l) => match self.entry_lit(l) {
+                LitVal::Class(c) => self.entry_flag(c),
+                _ => 0,
+            },
             _ => 0,
         }
     }
@@ -2273,6 +2286,11 @@ impl TypeStore {
                 out.extend_from_slice(self.entry_items(args));
             }
             Type::Rec(b) | Type::Annotated(b) => out.push(b),
+            Type::Lit(l) => {
+                if let LitVal::Class(c) = self.entry_lit(l) {
+                    out.push(c);
+                }
+            }
             Type::Refined(p, r) => {
                 out.push(p);
                 match self.entry_refinement(r) {
@@ -3480,9 +3498,17 @@ impl ShadowNs<'_> {
         }
         let store = self.store;
         let v = store.entry_lit(l);
-        match self.find(Sub::Lits, hash_of(&v), |i| store.entry_lit(LitId(i)) == v) {
+        // A class constant names a type, translated as a refinement's is.
+        let (key, real) = match v {
+            LitVal::Class(c) => {
+                let c2 = self.ty(c);
+                (vec![hash_of(&std::mem::discriminant(&v)), c2], Self::real(&[c2]).then(|| LitVal::Class(TypeId(c2 as u32))))
+            }
+            v => (vec![hash_of(&v)], Some(v)),
+        };
+        match real.and_then(|v| self.find(Sub::Lits, hash_of(&v), |i| store.entry_lit(LitId(i)) == v)) {
             Some(id) => id as u64,
-            None => self.intern(Sub::Lits, vec![hash_of(&v)]),
+            None => self.intern(Sub::Lits, key),
         }
     }
 
@@ -4057,7 +4083,14 @@ impl TypeStore {
                 let bound = part(info.bound);
                 self.match_type(s, &cases, bound)
             }
-            Type::Lit(l) => self.lit(self.entry_lit(l)),
+            // A class constant names a type (`Class[T]`'s), made again as a part is.
+            Type::Lit(l) => match self.entry_lit(l) {
+                LitVal::Class(c) => {
+                    let c = part(c);
+                    self.lit(LitVal::Class(c))
+                }
+                v => self.lit(v),
+            },
             Type::Blocked(b) => self.blocked(self.entry_blocked(b)),
             Type::Term(_) if self.entry_unshared(t) => self.unshared_copy(t),
             leaf => self.mk(leaf),

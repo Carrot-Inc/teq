@@ -1,7 +1,8 @@
 //! The `@nowarn` annotations of the program's files as the reporting policy's suppressions
 //! (`warnings.rs`), dotty's `Typer.registerNowarn` and `Run.suppressions.registerNowarn`: an
-//! annotation of a definition covers the definition's whole range, its annotations included; one
-//! of an ascription (`e: @nowarn`) covers the ascription. Its argument, `value` by position or by
+//! annotation of a definition covers the definition's whole range, its annotations included (a
+//! binder's, its annotations to its bounds); one of an ascription (`e: @nowarn`) covers the
+//! ascription. Its argument, `value` by position or by
 //! name, is read as `-Wconf`'s filters where it is a constant string
 //! (`Annotation.argumentConstantString(0)`): a literal as written, anything else typed where the
 //! annotation stands and folded as scalac's typer folds constants (a `final val`, a
@@ -55,6 +56,20 @@ impl<'a> Worker<'a> {
             }
             for (range, a) in &ast.nowarn_ascriptions {
                 self.register(file, a, *range, &mut sups, &mut warnings);
+            }
+        }
+        // A binder's, from its annotation typed in its context (`completeAnnotations`' `registerNowarn`): over the
+        // binder's `TypeDef`, its annotations to its bounds.
+        for n in self.binder_nowarns.iter().filter(|n| self.program_source(n.file)) {
+            if !n.constant {
+                warnings.push(Diagnostic::plain(n.file, n.arg.unwrap_or(n.annot), "filter needs to be a compile-time constant string".to_string(), true, true));
+            }
+            let (sup, warning) = Suppression::new(n.file, n.annot, n.range, &n.conf);
+            if let Some(msg) = warning {
+                warnings.push(Diagnostic::plain(n.file, n.arg.unwrap_or(n.annot), msg, true, true));
+            }
+            if sup.start != sup.end {
+                sups.push(sup);
             }
         }
         // The innermost first (`reportSuspendedMessages`' order): the one a warning matches is
@@ -129,7 +144,7 @@ impl<'a> Worker<'a> {
             let ty = t.widen_path(ty);
             t.constant_by_type(te, Some(ty)).or_else(|| t.fold_constant_as_typed(te))
         });
-        self.rollback(trail);
+        self.rollback(&trail);
         self.var_frame_end(frame);
         // What the argument's typing reports at it is the annotation's; what it does elsewhere
         // on the way keeps its diagnostics.

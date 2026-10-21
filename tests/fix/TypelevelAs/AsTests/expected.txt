@@ -1,0 +1,9 @@
+TypelevelAs/AsTests/input.scala:11:5: error: [TypelevelAs.as]: .map(_ => f) can be replaced by .as(f)
+      List(1, 2, 3).map(_ => 1) /* assert: TypelevelAs.as
+      ^^^^^^^^^^^^^^^^^^^^^^^^^
+TypelevelAs/AsTests/input.scala:17:5: error: [TypelevelAs.as]: .map(_ => ()) can be replaced by .void
+      List(1, 2, 3).map(_ => ()) /* assert: TypelevelAs.as
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypelevelAs/AsTests/input.scala:23:5: error: [TypelevelAs.as]: .as(()) can be replaced by .void
+      List(1, 2, 3).as(()) /* assert: TypelevelAs.as
+      ^^^^^^^^^^^^^^^^^^^^

@@ -249,7 +249,7 @@ impl<'a> Worker<'a> {
         if self.is_sub(tuple, expected) {
             return Some(te);
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         None
     }
 

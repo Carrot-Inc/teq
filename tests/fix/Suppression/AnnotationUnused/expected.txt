@@ -1,0 +1,18 @@
+Suppression/AnnotationUnused/input.scala:11:28: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    @SuppressWarnings(Array("scalafix:NoDummy")) // assert: UnusedScalafixSuppression
+                             ^^^^^^^^^^^^^^^^
+Suppression/AnnotationUnused/input.scala:14:28: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    @SuppressWarnings(Array("scalafix:NoDummy", "NoNull")) // assert: UnusedScalafixSuppression
+                             ^^^^^^^^^^^^^^^^
+Suppression/AnnotationUnused/input.scala:17:28: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    @SuppressWarnings(Array("scalafix:NoDummy", "scalafix:NoNull")) // assert: UnusedScalafixSuppression
+                             ^^^^^^^^^^^^^^^^
+Suppression/AnnotationUnused/input.scala:17:48: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    @SuppressWarnings(Array("scalafix:NoDummy", "scalafix:NoNull")) // assert: UnusedScalafixSuppression
+                                                 ^^^^^^^^^^^^^^^
+Suppression/AnnotationUnused/input.scala:23:30: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    @SuppressWarnings(Array("""scalafix:NoDummy""")) // assert: UnusedScalafixSuppression
+                               ^^^^^^^^^^^^^^^^
+Suppression/AnnotationUnused/input.scala:26:28: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    @SuppressWarnings(Array("scalafix:NoDummy")) // assert: UnusedScalafixSuppression
+                             ^^^^^^^^^^^^^^^^

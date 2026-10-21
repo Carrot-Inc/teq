@@ -235,7 +235,7 @@ impl<'a> Worker<'a> {
     /// annotation interface (`Namer.addAnnotations`): each argument without a name reported by the unit's
     /// version (`MigrationVersion.NonNamedArgumentInJavaAnnotation`, an error from 3.6), but a lone one
     /// where the interface declares `value`, which it stands for.
-    fn check_named_java_annotation_args(&mut self, file: crate::source::FileId, class: ClassId, instance: ast::ExprId) {
+    pub(super) fn check_named_java_annotation_args(&mut self, file: crate::source::FileId, class: ClassId, instance: ast::ExprId) {
         let ast = self.ast(file);
         let ast::Expr::New(_, args) = ast.expr(instance) else { return };
         let args = ast.expr_list(args);
@@ -390,7 +390,7 @@ impl<'a> Worker<'a> {
 
     /// The referent as scalac shows a symbol, its kind and name (`method m`, `class Old`), with
     /// its owner.
-    fn shown(&self, r: Referent) -> (String, Owner) {
+    pub(super) fn shown(&self, r: Referent) -> (String, Owner) {
         match r {
             Referent::Sym(s) => {
                 let info = self.syms.sym(s);

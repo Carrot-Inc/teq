@@ -1143,11 +1143,25 @@ impl<'a> Worker<'a> {
         if let Some(&id) = tasty.interned.borrow().get(n as usize).filter(|&&id| id != u32::MAX) {
             return Name(id);
         }
-        let name = self.interner.intern(&tasty.name(tasty.source_name(n)));
+        let name = self.tasty_name(tasty, tasty.source_name(n));
         if let Some(slot) = tasty.interned.borrow_mut().get_mut(n as usize) {
             *slot = name.0;
         }
         name
+    }
+
+    /// A TASTy name as teq names it: `TastyUnpickler.readNameContents`' `UNIQUE` read back as its kind's derived name
+    /// (`uniqueNameKindOfSeparator(separator)(original, num)`) for the kinds teq derives (`ContextBoundParamName`'s
+    /// `evidence$`, `WildcardParamName`'s `_$`, of no underlying name: `Interner::unique`), every other by its text.
+    pub(super) fn tasty_name(&self, tasty: &TastyFile, n: u32) -> Name {
+        if let Some(crate::tasty::TName::Unique { separator, num, underlying: None }) = tasty.names.get(n as usize) {
+            match tasty.simple(*separator) {
+                Some("evidence$") => return self.interner.unique("evidence$", *num),
+                Some("_$") => return self.interner.unique("_$", *num),
+                _ => {}
+            }
+        }
+        self.interner.intern(&tasty.name(n))
     }
 
     // ---- entering classes ----
@@ -1480,6 +1494,7 @@ impl<'a> Worker<'a> {
                     .map(|p| {
                         let pn = self.lname(&tasty, p.name);
                         let id = self.syms.new_tparam(pn, variance_of(p.flags));
+                        self.syms.tparams[id.idx()].arity = types::hk_arity(&p.info);
                         self.loaded_mut().tables[file as usize].tparams.insert(p.addr, id);
                         id
                     })
@@ -1692,6 +1707,63 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The `TypeParamsCompleter` of a library class not yet completed: its type parameters' bounds read from its
+    /// pickle (`set_tparam_bounds`), the class itself left to its completion, as dotty's unpickled class gives its
+    /// type parameters and completes each one's `paramInfo` on its own (`TypeApplications.typeParams`'
+    /// `tsym.typeParams`, `Checking.preCheckKind`'s `paramBounds`); once (`ClassInfo::tparams_made`), the class's
+    /// completion keeping them. A kind query of an application reads them so (`Worker::class_tparam_infos`), whatever
+    /// the parameters' arities: a bound reaching a constructor indirectly (`G <: P#F`) is a kind of its own.
+    pub(in crate::typer) fn bound_loaded_tparams(&mut self, c: ClassId) {
+        let info = self.syms.class(c);
+        if info.def.is_some() || info.tparams_made || info.state().get() != Completion::NotStarted {
+            return;
+        }
+        let opaque = info.kind == ClassKind::Opaque;
+        let lc = self.loaded.as_ref().and_then(|l| l.classes.get(&c).copied());
+        // An opaque type's parameters are its definition's lambda's (`typeParams` of its `TypeRef`, the lambda's
+        // parameter infos, which `hasSameKindAs` compares).
+        if let (true, Some(lc)) = (opaque, lc) {
+            self.bound_opaque_tparams(c, lc);
+            return;
+        }
+        // A class whose completion bounds no parameter from a pickle (a Java class, a value case): its parameters are
+        // as its entry made them, marked so that a later application asks no more.
+        let Some(lc) = lc.filter(|lc| !lc.value_case) else {
+            self.syms.class_mut(c).tparams_made = true;
+            return;
+        };
+        let tasty = self.tasty(lc.file);
+        let tparams = Decoder::new(&tasty).class_tparams(lc.addr);
+        let mut cx = MapCx::new(lc.file);
+        let ids = self.syms.class(c).tparams.to_vec();
+        for (tp, &id) in tparams.iter().zip(&ids) {
+            self.set_tparam_bounds(&mut cx, id, &tp.info);
+        }
+        self.syms.class_mut(c).tparams_made = true;
+    }
+
+    /// An opaque type's parameters bounded as its definition's lambda bounds them (`TYPEDEF`'s `TypeLambda` over the
+    /// parameters its entry made), once (`ClassInfo::tparams_made`): the parameter-only loader's, or its completion's.
+    fn bound_opaque_tparams(&mut self, c: ClassId, lc: LClass) {
+        if self.syms.class(c).tparams_made {
+            return;
+        }
+        let tasty = self.tasty(lc.file);
+        let sig = Decoder::new(&tasty).type_def_sig(lc.addr);
+        if let TType::Lambda { kind: crate::tasty::tree::LambdaKind::Type, binder, params, .. } = &sig.rhs {
+            let ids = self.syms.class(c).tparams.to_vec();
+            // The parameters named by their definitions' addresses (the entry's tables), or by the lambda's binder.
+            let mut cx = MapCx::new(lc.file);
+            if *binder != 0 {
+                cx.binders.push((*binder, ids.clone()));
+            }
+            for (p, &id) in params.iter().zip(&ids) {
+                self.set_tparam_bounds(&mut cx, id, &p.info);
+            }
+        }
+        self.syms.class_mut(c).tparams_made = true;
+    }
+
     pub(super) fn complete_loaded_class(&mut self, c: ClassId) {
         if self.is_java_placeholder(c) {
             self.complete_java_placeholder(c);
@@ -1724,6 +1796,7 @@ impl<'a> Worker<'a> {
         let mut decoder = Decoder::new(&tasty);
         let kind = self.syms.class(c).kind;
         if kind == ClassKind::Opaque {
+            self.bound_opaque_tparams(c, lc);
             let sig = decoder.type_def_sig(lc.addr);
             let mut cx = MapCx::new(lc.file);
             // A generic opaque type's bounds stand inside its lambda (`[T] =>> (? <: B[T]) =
@@ -1782,8 +1855,11 @@ impl<'a> Worker<'a> {
         let sig = decoder.class_sig(lc.addr);
         let mut cx = MapCx::new(lc.file);
         let ids = self.syms.class(c).tparams.to_vec();
-        for (tp, &id) in sig.tparams.iter().zip(&ids) {
-            self.set_tparam_bounds(&mut cx, id, &tp.info);
+        // Parameters bounded already by their own completer (`bound_loaded_tparams`) keep their bounds.
+        if !self.syms.class(c).tparams_made {
+            for (tp, &id) in sig.tparams.iter().zip(&ids) {
+                self.set_tparam_bounds(&mut cx, id, &tp.info);
+            }
         }
         let mut parents: Vec<TypeId> = sig.parents.iter().map(|p| self.map_type(&mut cx, p)).collect();
         // A case object and a companion, an inner one too, are read as the program's own: of the
@@ -1915,7 +1991,7 @@ impl<'a> Worker<'a> {
             let has_statements = (eager && sig.index.statements)
                 || sig.index.members.iter().any(|e| {
                     e.tag == tags::VALDEF && e.has_body && !e.flags.has(tags::OBJECT) && !e.flags.has(tags::LAZY) && {
-                        let name = self.interner.intern(&tasty.name(tasty.source_name(e.name)));
+                        let name = self.tasty_name(&tasty, tasty.source_name(e.name));
                         eager || e.flags.has(tags::MUTABLE) || self.syms.class(c).members.get(&name).map_or(false, |&m| self.implements_def(c, m))
                     }
                 });
@@ -2094,7 +2170,13 @@ impl<'a> Worker<'a> {
                     TType::Bounds(lo, hi) => if upper { &**hi } else { &**lo },
                     other => other,
                 };
-                if self.is_open_bound(cx, inner, upper) {
+                // `[X..] =>> Any` is kept as the parameter's arity and variances alone where each of its parameters is
+                // `TypeBounds.empty` (the source's `F[_]`); one bounded or of a kind of its own (`CC[G[_]]`) keeps the
+                // lambda, the parameters' infos the kind queries read (`typeParams`).
+                let empty_params = || {
+                    params.iter().all(|p| matches!(&p.info, TType::Bounds(lo, hi) if self.is_open_bound(cx, lo, false) && self.is_open_bound(cx, hi, true)))
+                };
+                if self.is_open_bound(cx, inner, upper) && (!upper || empty_params()) {
                     return if upper { ANY } else { NOTHING };
                 }
                 let lambda = TType::Lambda { kind: crate::tasty::tree::LambdaKind::Type, params: params.clone(), result: Box::new(inner.clone()), binder: *binder };

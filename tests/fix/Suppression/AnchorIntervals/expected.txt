@@ -1,0 +1,9 @@
+Suppression/AnchorIntervals/input.scala:13:7: error: [NoDummy]: Dummy!
+    val aDummy = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorIntervals/input.scala:19:19: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:off NoDummy */ // assert: UnusedScalafixSuppression
+                    ^^^^^^^
+Suppression/AnchorIntervals/input.scala:25:7: error: [NoDummy]: Dummy!
+    val dDummy = 0 // assert: NoDummy
+        ^^^^^^

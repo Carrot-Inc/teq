@@ -1,0 +1,3 @@
+Driver/CRComment/Lone.scala:1:26: warning: [DisableSyntax.var]: mutable state should be avoided
+  // commentobject Lone { var x = 1 }
+                           ^^^

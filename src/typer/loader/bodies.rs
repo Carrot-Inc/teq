@@ -1143,18 +1143,32 @@ impl<'a> Worker<'a> {
     fn widened_lit(&self, v: LitVal) -> TypeId {
         match v {
             LitVal::Int(_) => self.b.t_int,
+            LitVal::Byte(_) => self.b.t_byte,
+            LitVal::Short(_) => self.b.t_short,
             LitVal::Long(_) => self.b.t_long,
             LitVal::Double(_) => self.b.t_double,
             LitVal::Float(_) => self.b.t_float,
             LitVal::Char(_) => self.b.t_char,
             LitVal::Bool(_) => self.b.t_boolean,
             LitVal::Str(_) => self.b.t_string,
+            LitVal::Class(class) => class,
         }
     }
 
     fn lit_expr(&mut self, cv: &mut Conv, v: LitVal) -> ExprId {
         let e = match v {
             LitVal::Int(i) => Expr::IntLit(i as i64),
+            // A narrowed constant keeps its type, as `conv_const`'s `BYTEconst` does.
+            LitVal::Byte(_) | LitVal::Short(_) => {
+                let (i, t) = match v {
+                    LitVal::Byte(b) => (b as i64, self.b.t_byte),
+                    LitVal::Short(h) => (h as i64, self.b.t_short),
+                    _ => unreachable!(),
+                };
+                let lit = cv.expr(Expr::IntLit(i));
+                let ty = cv.ty(TyExpr::Resolved(t));
+                Expr::Typed(lit, ty)
+            }
             LitVal::Long(l) => Expr::LongLit(l),
             LitVal::Double(bits) => Expr::DoubleLit(f64::from_bits(bits)),
             LitVal::Float(bits) => Expr::FloatLit(f32::from_bits(bits)),
@@ -1164,6 +1178,14 @@ impl<'a> Worker<'a> {
                 let text = self.name_str(n);
                 let s = cv.ast.add_str(text);
                 Expr::StringLit(s)
+            }
+            // `classOf[T]` of a class constant `Class[T]`.
+            LitVal::Class(class) => {
+                let t = match self.types.get(class) {
+                    Type::Class(_, args) => self.types.items(args).first().copied().unwrap_or(ANY),
+                    _ => ANY,
+                };
+                Expr::ClassOf(cv.ty(TyExpr::Resolved(t)))
             }
         };
         cv.expr(e)
@@ -1616,7 +1638,7 @@ impl<'a> Worker<'a> {
         let mut cx = super::MapCx::new(cv.file);
         let ctor = self.map_type_ctor(&mut cx, &f);
         let Type::Ctor(c) = self.types.get(ctor) else { return false };
-        let name = self.interner.intern(&cv.tasty.name(cv.tasty.source_name(n)));
+        let name = self.tasty_name(&cv.tasty, cv.tasty.source_name(n));
         self.syms.class(c).tparams.iter().any(|&p| self.syms.tparam(p).name == name)
     }
 
@@ -1667,7 +1689,7 @@ impl<'a> Worker<'a> {
         if wilds.next().is_some() {
             return None;
         }
-        let name = self.interner.intern(&cv.tasty.name(cv.tasty.source_name(*n)));
+        let name = self.tasty_name(&cv.tasty, cv.tasty.source_name(*n));
         let param = *self.syms.class(c).tparams.get(index)?;
         (self.syms.tparam(param).name == name).then_some(wild)
     }
@@ -2392,7 +2414,7 @@ impl<'a> Worker<'a> {
             return false;
         }
         let Some(p) = self.package_of_path(cv, prefix) else { return false };
-        let n = self.interner.intern(&cv.tasty.name(cv.tasty.source_name(n)));
+        let n = self.tasty_name(&cv.tasty, cv.tasty.source_name(n));
         self.enter_pkg_objects(p);
         self.load_pkg_member(p, n);
         self.syms.entry_named(self.interner, p, n).and_then(|e| e.term).is_none()
@@ -3850,11 +3872,11 @@ impl<'a> Worker<'a> {
     /// The name of a selection: scalac's internal spellings of the casts read as the source
     /// ones, and a super accessor as the `super` selection it stands for.
     fn select_name(&mut self, cv: &Conv, n: u32) -> Name {
-        let text = cv.tasty.name(cv.tasty.source_name(n));
-        match text.as_str() {
-            "$asInstanceOf$" => names::AS_INSTANCE_OF,
-            "$isInstanceOf$" => names::IS_INSTANCE_OF,
-            _ => self.interner.intern(&text),
+        let n = cv.tasty.source_name(n);
+        match cv.tasty.simple(n) {
+            Some("$asInstanceOf$") => names::AS_INSTANCE_OF,
+            Some("$isInstanceOf$") => names::IS_INSTANCE_OF,
+            _ => self.tasty_name(&cv.tasty, n),
         }
     }
 
@@ -5600,9 +5622,9 @@ impl<'a> Worker<'a> {
         let TType::Applied(_, args) = ty else { return None };
         let [inner] = args.as_slice() else { return None };
         let tasty = cv.tasty.clone();
-        let mut binds: Vec<(Addr, String)> = Vec::new();
+        let mut binds: Vec<(Addr, NameRef)> = Vec::new();
         collect_type_binds(&tasty, inner, &mut binds);
-        let vars: Vec<(Addr, Name)> = binds.iter().map(|(a, text)| (*a, self.interner.intern(text))).collect();
+        let vars: Vec<(Addr, Name)> = binds.iter().map(|&(a, n)| (a, self.tasty_name(&tasty, n))).collect();
         for &(addr, name) in &vars {
             cv.local_types.insert(addr, name);
             cv.quote_type_vars.insert(addr, ());
@@ -5625,7 +5647,7 @@ impl<'a> Worker<'a> {
                     collect_local_types(&targs[0], &mut locals);
                     let mut all = vars.clone();
                     for addr in locals {
-                        let name = Decoder::new(&tasty).name_at(addr).map(|n| self.interner.intern(&tasty.name(tasty.source_name(n))));
+                        let name = Decoder::new(&tasty).name_at(addr).map(|n| self.tasty_name(&tasty, tasty.source_name(n)));
                         if let Some(&(_, v)) = vars.iter().find(|&&(_, v)| Some(v) == name) {
                             all.push((addr, v));
                         }
@@ -6090,13 +6112,15 @@ fn collect_local_types(t: &TType, out: &mut Vec<Addr>) {
     }
 }
 
-fn collect_type_binds(tasty: &TastyFile, t: &TType, out: &mut Vec<(Addr, String)>) {
-    let walk = |t: &TType, out: &mut Vec<(Addr, String)>| collect_type_binds(tasty, t, out);
+/// The type variables a quote pattern binds (`BIND`s) inside `t`, each by its address and its name as the pickle
+/// has it (its kind kept: `Worker::tasty_name` reads it as the shape's lookup does).
+fn collect_type_binds(tasty: &TastyFile, t: &TType, out: &mut Vec<(Addr, NameRef)>) {
+    let walk = |t: &TType, out: &mut Vec<(Addr, NameRef)>| collect_type_binds(tasty, t, out);
     match t {
         TType::LocalType(addr, _) => {
             if Decoder::new(tasty).tag_at(*addr) == tags::BIND && !out.iter().any(|(a, _)| a == addr) {
                 if let Some(n) = Decoder::new(tasty).name_at(*addr) {
-                    out.push((*addr, tasty.name(tasty.source_name(n)).to_string()));
+                    out.push((*addr, tasty.source_name(n)));
                 }
             }
         }

@@ -74,3 +74,4 @@ quotecopymembers bundle  the same as companionderived bundle: the quote's copies
 inlinecopymembers classes  the same as inlinesam: the classes b's expansions of a's inline bodies make are named at the product's pseudo file's places (`Mac$$anon$iw5fyuj19dac_11$1rc96ct_139`), the whole build's at Mac.scala's (`Mac$$anon$1ebb5g8_456$1rc96ct_139`), which `Made$` constructs, and carry its SourceFile; their members are the members leg's
 inlinecopymembers subset  the same as classes
 inlinecopymembers bundle  the same as inlinesam bundle
+untupledplaceholder bundle  an untupled placeholder lambda (`xs.map(_ + _)` over pairs) reads each element as `(t$0._1 ?? 0)` in the split bundle, as `t$0._1` in the whole build's (master's, met by the gate of ed4dafbea's fold): a part of its own

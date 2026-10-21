@@ -1700,8 +1700,9 @@ package java.lang:
   @javaAnnotation
   @jvmClass("java/lang/Deprecated")
   trait Deprecated extends java.lang.annotation.Annotation:
-    def since(): String
-    def forRemoval(): scala.Boolean
+    // `@javaAnnotation` on an element: it has a default (its class file's `AnnotationDefault`).
+    @javaAnnotation def since(): String
+    @javaAnnotation def forRemoval(): scala.Boolean
 
   @javaDefined
   @javaAnnotation

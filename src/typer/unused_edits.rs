@@ -35,7 +35,7 @@ struct Clause {
 
 /// For each selector of `sels` (a file's, in source order) with `used` false, the action its
 /// warning carries, if any.
-pub(super) fn import_actions(text: &str, sels: &[&Import], used: &[bool]) -> Vec<Option<Action>> {
+pub(crate) fn import_actions(text: &str, sels: &[&Import], used: &[bool]) -> Vec<Option<Action>> {
     let mut out: Vec<Option<Action>> = vec![None; sels.len()];
     let b = text.as_bytes();
     let mut order: Vec<usize> = (0..sels.len()).collect();

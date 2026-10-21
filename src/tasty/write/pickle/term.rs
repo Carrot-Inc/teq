@@ -3602,7 +3602,7 @@ impl<'w, 'a> P<'w, 'a> {
         let char = self.w.b.t_char;
         let mark = self.w.snapshot();
         let sub = self.w.is_sub(t, char);
-        self.w.rollback(mark);
+        self.w.rollback(&mark);
         sub
     }
 
@@ -4420,7 +4420,7 @@ impl<'w, 'a> P<'w, 'a> {
         let expected = expected.filter(|&pt| {
             let mark = self.w.snapshot();
             let bound_conforms = self.w.is_sub(ty, pt);
-            self.w.rollback(mark);
+            self.w.rollback(&mark);
             !bound_conforms
         });
         let ty = expected.unwrap_or(ty);
@@ -5458,7 +5458,7 @@ impl<'w, 'a> P<'w, 'a> {
         !self.w.types.has_vars(scrut) && !self.w.types.has_vars(t) && {
             let mark = self.w.snapshot();
             let sub = self.w.is_sub(scrut, t);
-            self.w.rollback(mark);
+            self.w.rollback(&mark);
             !sub
         }
     }
@@ -6754,7 +6754,7 @@ impl<'w, 'a> P<'w, 'a> {
         let tested = !self.w.types.has_vars(scrut) && !self.w.types.has_vars(t) && {
             let mark = self.w.snapshot();
             let sub = self.w.is_sub(scrut, t);
-            self.w.rollback(mark);
+            self.w.rollback(&mark);
             !sub
         };
         let typed = tested.then(|| self.open(TYPED));

@@ -1355,7 +1355,7 @@ impl<'a, 't> Interp<'a, 't> {
             Some(env) => self.typer.with_env((*env).clone(), check),
             None => check(self.typer),
         };
-        self.typer.rollback(mark);
+        self.typer.rollback(&mark);
         ok
     }
 }
@@ -5170,12 +5170,18 @@ impl<'a, 't> Interp<'a, 't> {
             Type::Lit(l) => {
                 let c = match self.typer.types.lit_val(l) {
                     LitVal::Int(_) => self.typer.b.int,
+                    LitVal::Byte(_) => self.typer.b.byte,
+                    LitVal::Short(_) => self.typer.b.short,
                     LitVal::Long(_) => self.typer.b.long,
                     LitVal::Double(_) => self.typer.b.double,
                     LitVal::Float(_) => self.typer.b.float,
                     LitVal::Char(_) => self.typer.b.char,
                     LitVal::Bool(_) => self.typer.b.boolean,
                     LitVal::Str(_) => self.typer.b.string,
+                    LitVal::Class(class) => match self.typer.types.get(class) {
+                        Type::Class(c, _) => c,
+                        _ => return SymRef::Any,
+                    },
                 };
                 SymRef::Class(c)
             }

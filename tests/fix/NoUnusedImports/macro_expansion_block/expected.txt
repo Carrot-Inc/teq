@@ -1,0 +1,3 @@
+NoUnusedImports/macro_expansion_block/input.scala:8:10: warning: [NoUnusedImports.unverified]: unused import, left: an expansion in this file may use it
+  import p.* // assert: NoUnusedImports.unverified
+           ^

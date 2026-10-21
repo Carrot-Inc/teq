@@ -709,7 +709,7 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         out
     }
@@ -763,7 +763,7 @@ impl<'a> Worker<'a> {
         let sig = self.sig_arc(g);
         let is_def = self.syms.sym(g).kind == SymKind::Def && sig.clauses.first().map_or(false, |c| !c.is_using);
         let Some(ConversionSite { site, subst, from, to }) = self.conversion_site(g, via, &shape) else {
-            self.rollback(mark);
+            self.rollback(&mark);
             return None;
         };
         let declared_to = to;
@@ -778,7 +778,7 @@ impl<'a> Worker<'a> {
         // (`inferView`'s `argument.tpe`).
         self.alias_bound_as_path = self.is_stable_path(recv);
         if !self.is_sub(recv_ty, from) {
-            self.rollback(widened);
+            self.rollback(&widened);
             // The receiver is the conversion's argument, and a receiver of a numeric constant type
             // is converted to the parameter's type as scalac adapts a constant (`44.usd` for an
             // `implicit class Usd(n: Double)`, a `val n: 44`): a literal has its class type here
@@ -801,7 +801,7 @@ impl<'a> Worker<'a> {
                 Some(w) => recv = w,
                 None if singleton_from && self.conforms_as_path(recv, from) => {}
                 None => {
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     return None;
                 }
             }
@@ -812,7 +812,7 @@ impl<'a> Worker<'a> {
             if self.blocked_conversion.is_none() && super::loader::types::first_blocked(&self.types, to).is_some() {
                 self.blocked_conversion = Some(to);
             }
-            self.rollback(mark);
+            self.rollback(&mark);
             return None;
         }
         // A by-name parameter takes the receiver as a thunk (`implicit def f(fa: => F[A])`).
@@ -838,7 +838,7 @@ impl<'a> Worker<'a> {
                         Some(arg) => args.push(if p.by_name { self.by_name_thunk(arg) } else { arg }),
                         None => {
                             self.given_ambiguity = None;
-                            self.rollback(mark);
+                            self.rollback(&mark);
                             return None;
                         }
                     }
@@ -898,7 +898,7 @@ impl<'a> Worker<'a> {
                             match self.import_value_ref(v, span) {
                                 Some((r, _)) => r,
                                 None => {
-                                    self.rollback(mark);
+                                    self.rollback(&mark);
                                     return None;
                                 }
                             }
@@ -928,7 +928,7 @@ impl<'a> Worker<'a> {
                     let result = self.fresh_var();
                     let bound = self.snapshot();
                     if !accept(self, result) {
-                        self.rollback(bound);
+                        self.rollback(&bound);
                     }
                     Some(self.types.class(conversion, &[recv_ty, result]))
                 }
@@ -947,7 +947,7 @@ impl<'a> Worker<'a> {
                 Via::Scope => self.instantiate_given_with((g, GivenScope::Lexical), target, span, to_type),
             };
             let Some((instance, inst_ty)) = instance else {
-                self.rollback(mark);
+                self.rollback(&mark);
                 return None;
             };
             let lists = vec![ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span, fun: ArgList::NO_FUN }];
@@ -993,7 +993,7 @@ impl<'a> Worker<'a> {
             let applied = self.zonk(applied);
             if applied != ERROR {
                 if !accept(self, applied) {
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     return None;
                 }
                 given_result = Some(applied);
@@ -1008,7 +1008,7 @@ impl<'a> Worker<'a> {
             let from = self.zonk(from);
             !self.is_sub(recv_ty, from) || !accept(self, ty)
         } {
-            self.rollback(mark);
+            self.rollback(&mark);
             return None;
         }
         if self.notes_type_trees() && is_def && !shape.tparams.is_empty() {
@@ -1258,7 +1258,7 @@ impl<'a> Worker<'a> {
                 ok = self.is_sub(var, upper) && self.is_sub(lower, var);
             }
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         ok
     }
 
@@ -1314,7 +1314,7 @@ impl<'a> Worker<'a> {
             let ret = self.seen_from_prefix(ret, to, alt);
             let mark = self.snapshot();
             let fits = self.is_sub(ret, expected);
-            self.rollback(mark);
+            self.rollback(&mark);
             fits
         })
     }
@@ -1349,7 +1349,7 @@ impl<'a> Worker<'a> {
         self.solve_var(v);
         let solved = self.zonk(to);
         let has = self.prim_op_applies(solved, name) || self.has_member_like(solved, name);
-        self.rollback(mark);
+        self.rollback(&mark);
         has
     }
 

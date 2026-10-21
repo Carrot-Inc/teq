@@ -349,12 +349,15 @@ impl<'a> Worker<'a> {
             Type::Lit(v) => {
                 let widened = match self.types.lit_val(v) {
                     LitVal::Int(_) => self.b.t_int,
+                    LitVal::Byte(_) => self.b.t_byte,
+                    LitVal::Short(_) => self.b.t_short,
                     LitVal::Long(_) => self.b.t_long,
                     LitVal::Double(_) => self.b.t_double,
                     LitVal::Float(_) => self.b.t_float,
                     LitVal::Char(_) => self.b.t_char,
                     LitVal::Bool(_) => self.b.t_boolean,
                     LitVal::Str(_) => self.b.t_string,
+                    LitVal::Class(class) => class,
                 };
                 self.sig_name(widened, in_array, depth + 1, lib)
             }

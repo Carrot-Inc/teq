@@ -1,0 +1,9 @@
+Driver/LambdaBinders/input.scala:8:11: warning: [Params.param]: A
+  type T = [A] =>> List[A] // assert: Params.param
+            ^
+Driver/LambdaBinders/input.scala:9:11: warning: [Params.param]: B <: AnyRef
+  type P = [B <: AnyRef] => B => B // assert: Params.param
+            ^^^^^^^^^^^
+Driver/LambdaBinders/input.scala:10:10: warning: [Params.param]: C
+  val f = [C] => (c: C) => c // assert: Params.param
+           ^

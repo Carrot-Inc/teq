@@ -515,9 +515,22 @@ impl<'a> Gen<'a> {
             return;
         };
         let pushed = match self.cx.input.types.lit_val(l) {
+            // A class constant's value is its initialiser's, the `classOf` tree.
+            LitVal::Class(_) => {
+                self.expr(init, ty);
+                return;
+            }
             LitVal::Int(v) => {
                 self.iconst(v);
                 JType::I
+            }
+            LitVal::Byte(v) => {
+                self.iconst(v as i32);
+                JType::B
+            }
+            LitVal::Short(v) => {
+                self.iconst(v as i32);
+                JType::S
             }
             LitVal::Long(v) => {
                 self.lconst(v);

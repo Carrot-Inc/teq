@@ -176,7 +176,7 @@ impl<'a> Worker<'a> {
         }
         let mark = self.snapshot();
         let conforms = self.is_sub(s, t);
-        self.rollback(mark);
+        self.rollback(&mark);
         if conforms {
             return self.type_test_identity(class, t, target);
         }
@@ -248,7 +248,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         let holds = if equal { self.is_same(from, to) } else { self.is_sub(from, to) };
         if !holds {
-            self.rollback(mark);
+            self.rollback(&mark);
             return None;
         }
         if let Some(refl) = self.evidence_refl(from, target) {
@@ -485,7 +485,7 @@ impl<'a> Worker<'a> {
         if self.is_sub(arg, *lower) {
             return true;
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         false
     }
 

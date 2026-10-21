@@ -14,8 +14,9 @@ A program teq compiles for JavaScript or runs in its interpreter carries the par
 uses, which may include the adaptations from Scala.js, the Scala standard library, scalajs-dom and
 scala-java-locales named below and the character tables made from the Unicode Character Database; a build with
 --hot carries the react-refresh runtime. Those entries' notices accompany a distribution of a program that
-contains them. The entries for the test programs, the Zed extension's files, the compiler's hash algorithm and
-the Rust crates linked into teq's binary concern teq itself, not the programs it compiles.
+contains them. The entries for the test programs, the rules of `teq fix`, the Zed extension's files, the
+compiler's hash algorithm and the Rust crates linked into teq's binary concern teq itself, not the programs it
+compiles.
 
 This product includes test programs adapted from the Scala 3 compiler
 (https://github.com/scala/scala3), Copyright 2012-2026 EPFL and
@@ -60,6 +61,130 @@ Its license:
         * Neither the name of Carlos Quiroz nor the names of its contributors
           may be used to endorse or promote products derived from this software
           without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+This product includes the rules and test files of `teq fix` adapted from five repositories of
+scalafix rules, as tests/fix/REFERENCES.md lists them file by file:
+
+- scalafix (https://github.com/scalacenter/scalafix, commit 41cf7983a19a0453be78d1fe9863d77470ca6dec),
+  Copyright (c) 2016-2023, EPFL, licensed under the BSD 3-Clause License: the rule DisableSyntax of
+  std/fix/rules/DisableSyntax.scala, the test rules of tests/fix/support, the fixtures under
+  tests/fix/DisableSyntax and tests/fix/Suppression, and the placement of an added import that
+  src/fix/plan.rs ports from scalafix-core's ImportPatchOps. Its license:
+
+    BSD 3-Clause License
+
+    Copyright (c) 2016-2023, EPFL
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, this
+       list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright notice,
+       this list of conditions and the following disclaimer in the documentation
+       and/or other materials provided with the distribution.
+
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+    FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+    CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+    OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+- scalafix-rules (https://github.com/xuwei-k/scalafix-rules, commit
+  995edb7a922724bc680158bc1cca61d568e72c88), Copyright (c) 2022 kenji yoshida, licensed under the MIT
+  License: the rule CatsImplicitsImport of std/fix/rules/CatsImplicitsImport.scala and the fixture under
+  tests/fix/CatsImplicitsImport. Its license:
+
+    MIT License
+
+    Copyright (c) 2022 kenji yoshida
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+- scalafix-unified (https://github.com/ghostbuster91/scalafix-unified, commit
+  6563e96c9f0b26175c226b758c752ce1123249ae), by its author, under the Apache License, Version 2.0 as its
+  build.sbt declares it (the repository has no licence file and its files name no copyright holder): the
+  rule EmptyCollectionsUnified of std/fix/rules/EmptyCollectionsUnified.scala and the fixtures under
+  tests/fix/EmptyCollectionsUnified.
+
+- typelevel-scalafix (https://github.com/typelevel/typelevel-scalafix, commit
+  f5bc61f93fd290cd83f27bf277bb740f2a6a808a), Copyright 2022 Typelevel, licensed under the Apache License,
+  Version 2.0: the rule TypelevelAs of std/fix/rules/TypelevelAs.scala and the fixture under
+  tests/fix/TypelevelAs.
+
+- scalafix-forbidden-symbol (https://github.com/tanin47/scalafix-forbidden-symbol, commit
+  813a206a4218dc86b52718077fad5d82f2c3d4ed), Copyright (c) 2025 Tanin Na Nakorn, licensed under the MIT
+  License, from which the rule ForbiddenSymbol is to be adapted (tests/fix/REFERENCES.md, "the next
+  part"). Its license:
+
+    Copyright © 2025 Tanin Na Nakorn
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+This product includes a port, in src/fix/plan.rs, of the leading-comment scan (`begComment`,
+scalameta/parsers' ScalametaParser.scala) and of `canEndStat` (ScannerTokens.scala) of scalameta
+(https://github.com/scalameta/scalameta, tag v4.17.4, commit 51efeb6b0fc0c8e7c7232167fa99f7d2ee8403b1),
+the parser scalafix 41cf798 reads files with, Copyright (c) 2014-2018 EPFL and Copyright (c) 2016-2018
+Twitter, Inc., licensed under the BSD 3-Clause License. Its license:
+
+    Copyright (c) 2014-2018 EPFL
+    Copyright (c) 2016-2018 Twitter, Inc.
+
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without modification,
+    are permitted provided that the following conditions are met:
+
+      * Redistributions of source code must retain the above copyright notice,
+        this list of conditions and the following disclaimer.
+      * Redistributions in binary form must reproduce the above copyright notice,
+        this list of conditions and the following disclaimer in the documentation
+        and/or other materials provided with the distribution.
+      * Neither the name of the EPFL nor the names of its contributors
+        may be used to endorse or promote products derived from this software
+        without specific prior written permission.
 
     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT

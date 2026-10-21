@@ -1,0 +1,1 @@
+the rule Stale failed: java.lang.IllegalStateException: a token of another document than the one the rule reads

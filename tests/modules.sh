@@ -198,6 +198,8 @@ result() {
 
 # The sources of a module, sorted.
 sources() { find "$1" -name '*.scala' | LC_ALL=C sort; }
+# A source's path from the root: relative ones joined to it, a generated case's absolute ones as they are.
+at_root() { case $1 in /*) echo "$1" ;; *) echo "$root/$1" ;; esac; }
 
 # The --sourceroot of a module's builds: the case's directory, or the module's own.
 sroot() {
@@ -491,6 +493,12 @@ run_case() {
   piece_ran "$1" || return
   name=$1
   dir=tests/modules/$name
+  # A case whose sources are partly made (`generate.py <dir>`: a module too large to keep, such as one past the
+  # parallel parse's size) is copied beside its products and made there.
+  if [ -f "$dir/generate.py" ]; then
+    mkdir -p "$out/$name/case" && cp -R "$dir"/. "$out/$name/case" && python3 "$dir/generate.py" "$out/$name/case" || { echo "FAIL $name: generate.py"; fail=$((fail + 1)); return; }
+    dir=$out/$name/case
+  fi
   [ -d "$dir/a" ] || { echo "no case $name"; fail=$((fail + 1)); return; }
   mods=(a)
   [ -d "$dir/b" ] && mods+=(b)
@@ -888,7 +896,7 @@ PY
   cp=$out/$name/view-a
   for m in "${mods[@]:1}"; do
     srcs=()
-    while IFS= read -r f; do srcs+=("$root/$f"); done < <(sources "$dir/$m")
+    while IFS= read -r f; do srcs+=("$(at_root "$f")"); done < <(sources "$dir/$m")
     log=$(scalac "$cp" "$out/$name/scalac-$m" "${srcs[@]}")
     code=$?
     if [ -f "$expect" ]; then
@@ -909,7 +917,7 @@ PY
     detail=""
     if [ "$down" = main ]; then
       srcs=()
-      for f in "${down_srcs[@]}"; do srcs+=("$root/$f"); done
+      for f in "${down_srcs[@]}"; do srcs+=("$(at_root "$f")"); done
       log=$(scalac "$cp" "$out/$name/scalac-main" "${srcs[@]}") || { ok=0; detail=$log; }
     fi
     if [ $ok = 1 ]; then
@@ -927,7 +935,7 @@ PY
     for m in "${mods[@]}"; do
       srcs=()
       if grep -qx "$m" "$dir/over-scalac.txt"; then
-        while IFS= read -r f; do srcs+=("$root/$f"); done < <(sources "$dir/$m")
+        while IFS= read -r f; do srcs+=("$(at_root "$f")"); done < <(sources "$dir/$m")
         log=$(scalac "${cp:-$SL}" "$out/$name/over-$m" "${srcs[@]}") || { ok=0; detail="$detail$m by scalac: $log"$'\n'; break; }
       else
         while IFS= read -r f; do srcs+=("$f"); done < <(sources "$dir/$m")
@@ -986,7 +994,7 @@ PY
   # scalac-client: scalac's client over teq's products and over scalac's.
   if [ -d "$dir/client" ] && [ -f "$dir/client.txt" ] && [ ! -f "$expect" ] && [ $have_java = 1 ]; then
     csrcs=()
-    while IFS= read -r f; do csrcs+=("$root/$f"); done < <(sources "$dir/client")
+    while IFS= read -r f; do csrcs+=("$(at_root "$f")"); done < <(sources "$dir/client")
     want=$(cat "$dir/client.txt")
     main=$(main_class "${csrcs[@]}")
     for side in teq scalac cross; do
@@ -1024,7 +1032,7 @@ PY
   cp=$out/$name/viewl-a
   for m in "${mods[@]:1}"; do
     srcs=()
-    while IFS= read -r f; do srcs+=("$root/$f"); done < <(sources "$dir/$m")
+    while IFS= read -r f; do srcs+=("$(at_root "$f")"); done < <(sources "$dir/$m")
     log=$(scalac "$cp" "$out/$name/scalacl-$m" "${srcs[@]}")
     [ $? -eq 0 ] && ok=1 || ok=0
     [ $ok = 1 ] && scalac_ok=$((scalac_ok + 1))

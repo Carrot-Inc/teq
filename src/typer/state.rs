@@ -217,6 +217,10 @@ struct Open {
     /// The length of each rarely written journal at the first write inside the attempt, or
     /// `UNTAKEN`.
     at: [u32; RARE],
+    /// The trail's length and the variables' count where the attempt began (`Mark`'s), what its retraction undoes
+    /// down to and the variables it keeps the instances of (`retract_trail`): `Worker::permanent_instance`'s.
+    trail: u32,
+    vars: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -1452,6 +1456,14 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The lowest trail position from which an open attempt's retraction (or setting aside) undoes the instance of `v`:
+    /// the outermost attempt begun after `v` was made, whose retraction keeps no instance of an older variable
+    /// (`retract_trail`; one made inside it keeps its instance, as dotty's owning state makes it permanent),
+    /// `usize::MAX` where none is open.
+    pub(super) fn attempt_floor(&self, v: crate::types::TVarId) -> usize {
+        self.attempts.stack.iter().find(|o| !self.tvars.made_since(v, o.vars as usize)).map_or(usize::MAX, |o| o.trail as usize)
+    }
+
     /// Begins an attempt.
     #[inline]
     pub(super) fn attempt(&mut self) -> Mark {
@@ -1468,7 +1480,7 @@ impl<'a> Worker<'a> {
             index: self.index_mark(),
         };
         self.attempts.open = seq;
-        self.attempts.stack.push(Open { seq, at: [UNTAKEN; RARE] });
+        self.attempts.stack.push(Open { seq, at: [UNTAKEN; RARE], trail: m.trail, vars: m.vars });
         m
     }
 

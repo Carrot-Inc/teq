@@ -1,0 +1,1 @@
+// commentobject Lone { var x = 1 }

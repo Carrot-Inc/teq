@@ -1947,8 +1947,8 @@ impl<'a> Worker<'a> {
             return;
         }
         let mark = self.snapshot();
-        let always = self.is_sub(sty, t) && self.snapshot() == mark && !self.null_conforms(t);
-        self.rollback(mark);
+        let always = self.is_sub(sty, t) && self.trail.len() == mark.at() && !self.null_conforms(t);
+        self.rollback(&mark);
         if always {
             // Tested as `TypeTestsCasts` tests a conforming scrutinee: a generic class's pattern keeps
             // its class test (`conforming_test`).
@@ -2851,6 +2851,8 @@ impl<'a> Worker<'a> {
         let lazy = |t: &Self, s: SymId| t.syms.sym(s).mods & crate::ast::mods::LAZY != 0;
         match self.prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::This | TExpr::Module(_) => true,
+            // `exprPurity`'s `TypeApply` of `Predef.classOf`.
+            TExpr::ClassOf(..) => true,
             TExpr::Local(s) | TExpr::Static(s) => self.idempotent_ref(s) && !lazy(self, s),
             TExpr::Field(r, s) => self.idempotent_ref(s) && !lazy(self, s) && self.is_pure_value(r),
             TExpr::Unary(_, a) | TExpr::ToStr(a, _) => self.fold_constant_as_typed(e).is_some() && self.is_pure_value(a),
@@ -3291,7 +3293,7 @@ impl<'a> Worker<'a> {
                         let Some(pty) = w.inst.types.get(x) else { return false };
                         let mark = self.snapshot();
                         let ok = self.is_sub(s.ty, pty);
-                        self.rollback(mark);
+                        self.rollback(&mark);
                         ok
                     }
                     _ => match (self.fold_constant(x), s.constant) {
@@ -3317,7 +3319,7 @@ impl<'a> Worker<'a> {
                 let (class_ty, _) = self.instantiate_pattern_class(c, s.ty);
                 let mark = self.snapshot();
                 if !self.is_sub(s.ty, class_ty) {
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     return false;
                 }
                 let class_ty = self.zonk(class_ty);
@@ -3457,7 +3459,7 @@ impl<'a> Worker<'a> {
         let snapshot = self.snapshot();
         let ok = with_vars != ERROR && self.is_sub(sty, with_vars);
         if !ok {
-            self.rollback(snapshot);
+            self.rollback(&snapshot);
             return None;
         }
         for &(p, v) in &vars {

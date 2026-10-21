@@ -1,0 +1,1 @@
+DisableSyntax_KeywordsNotAList.conf:3:26: expected a list, found a string

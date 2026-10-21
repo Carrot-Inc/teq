@@ -2075,12 +2075,15 @@ impl<'c, 'a> Collector<'c, 'a> {
             Type::Lit(l) => {
                 let class = match self.w.types.lit_val(l) {
                     LitVal::Int(_) => self.w.b.t_int,
+                    LitVal::Byte(_) => self.w.b.t_byte,
+                    LitVal::Short(_) => self.w.b.t_short,
                     LitVal::Long(_) => self.w.b.t_long,
                     LitVal::Double(_) => self.w.b.t_double,
                     LitVal::Float(_) => self.w.b.t_float,
                     LitVal::Char(_) => self.w.b.t_char,
                     LitVal::Bool(_) => self.w.b.t_boolean,
                     LitVal::Str(_) => self.w.b.t_string,
+                    LitVal::Class(class) => class,
                 };
                 self.type_deps(class);
             }

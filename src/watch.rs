@@ -556,7 +556,7 @@ pub fn run(opts: &Options) -> ! {
         // The files parsed now have their syntax diagnostics replaced; a file whose tree was
         // kept keeps its own, and a file gone takes its own with it.
         let parsed_now: Vec<usize> = (n_std..files.len()).filter(|&f| slots[f].is_none()).collect();
-        frontend::parse_files(&files, n_std..files.len(), &mut slots, &mut interner, &mut diags, Some(&mut used), parallel, usize::MAX, opts.syntax, &opts.source_at);
+        frontend::parse_files(&files, n_std..files.len(), &mut slots, &mut interner, &mut diags, Some(&mut used), parallel, usize::MAX, opts.syntax, &opts.source_at, &[]);
         for &f in &parsed_now {
             syntax.remove(&entries[f - n_std].canonical);
         }
@@ -583,7 +583,7 @@ pub fn run(opts: &Options) -> ! {
         // The std's trees keep the names' spans where the index records them (`Syntax::index`).
         let std_syntax = crate::parser::Syntax { index: opts.index, ..Default::default() };
         let parsed_before: Vec<bool> = slots[..n_std].iter().map(Option::is_some).collect();
-        frontend::parse_files(&files, (0..n_std).filter(|&i| selected[i]), &mut slots, &mut interner, &mut diags, None, parallel, frontend::STD_WORKERS, std_syntax, &[]);
+        frontend::parse_files(&files, (0..n_std).filter(|&i| selected[i]), &mut slots, &mut interner, &mut diags, None, parallel, frontend::STD_WORKERS, std_syntax, &[], &[]);
         if opts.index {
             for (slot, _) in slots[..n_std].iter_mut().zip(&parsed_before).filter(|(_, &before)| !before) {
                 slot.iter_mut().flatten().for_each(Ast::shrink_index_spans);

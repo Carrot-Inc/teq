@@ -12,6 +12,7 @@ mod client;
 mod daemon;
 mod dev;
 mod events;
+mod fix;
 pub mod export;
 pub mod fetch;
 pub mod generators;
@@ -132,6 +133,11 @@ const VERBS: &str = "  compile [project...]       type the projects' closures an
                              block names one; without a word the declared one, else the single
                              main class among the products, as sbt's run) on a JVM of its own
                              with the runtime classpath
+  fix [--check] [--rules A,B] [--config file] [project...] [file...]
+                             the lint and rewrite rules of .scalafix.conf (docs/FIX.md) over
+                             the projects' sources as compile types them, the files rewritten
+                             in place and the lints printed; --check rewrites nothing and
+                             exits 1 where a file would change or a lint is printed
   stage [project]            compile, then write the project's Docker stage (every project's
                              with a stage block without one) as sbt-native-packager's does
   watch <project> [options]  the project's resident on stdin and stdout, options added to its
@@ -200,7 +206,7 @@ fn quiet_export() -> Option<Export> {
 }
 
 /// The eight project verbs, the top level's own.
-pub const PROJECT_VERBS: [&str; 8] = ["compile", "test", "run", "stage", "watch", "build", "dev", "stop"];
+pub const PROJECT_VERBS: [&str; 9] = ["compile", "test", "run", "stage", "watch", "build", "dev", "stop", "fix"];
 
 /// The options `run` reads before the verb: the project verbs' own, and the daemon's.
 const PREFIX_OPTIONS: [&str; 4] = ["--export", "--strict", "--daemon", "--identity"];
@@ -280,6 +286,7 @@ pub fn run(args: &[String]) -> ! {
         "run" => run::run(&export, &rest),
         "watch" | "build" => one_project(&export, &verb, &rest),
         "dev" => dev::run(export, &rest),
+        "fix" => fix::run(&export, &rest),
         _ => unreachable!("a project verb"),
     };
     std::process::exit(code)

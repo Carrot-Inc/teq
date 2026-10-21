@@ -1,0 +1,27 @@
+Suppression/Issue507/input.scala:24:3: error: [DisableSyntax.println]: println is disabled
+    println("reported") // assert: DisableSyntax.println
+    ^^^^^^^
+Suppression/Issue507/input.scala:24:48: error: [DisableSyntax.println]: println is disabled
+    println("reported") // assert: DisableSyntax.println
+                                                 ^^^^^^^
+Suppression/Issue507/input.scala:26:7: error: [DisableSyntax.offensive]: Please consider a less offensive word such as Extension
+    val pimpMyLibrary = 1 // assert: DisableSyntax.offensive
+        ^^^^
+Suppression/Issue507/input.scala:28:6: error: [DisableSyntax.offensive]: Please consider a less offensive word such as Extension
+    /* pimp in a regular comment */ // assert: DisableSyntax.offensive
+       ^^^^
+Suppression/Issue507/input.scala:50:3: error: [DisableSyntax.println]: println is disabled
+    println("reported again") // assert: DisableSyntax.println
+    ^^^^^^^
+Suppression/Issue507/input.scala:50:54: error: [DisableSyntax.println]: println is disabled
+    println("reported again") // assert: DisableSyntax.println
+                                                       ^^^^^^^
+Suppression/Issue507/input.scala:54:27: error: [DisableSyntax.spanning]: rest of the line.* is disabled
+    val spanningReported = "rest of the line" // assert: DisableSyntax.spanning
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Suppression/Issue507/input.scala:59:18: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:ok println */ // assert: UnusedScalafixSuppression
+                   ^^^^^^^
+Suppression/Issue507/input.scala:60:19: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:off println */ // assert: UnusedScalafixSuppression
+                    ^^^^^^^

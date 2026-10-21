@@ -835,14 +835,14 @@ impl<'a> Worker<'a> {
                 // lower bounds joined and the upper bounds met; bounds that conflict
                 // (`X >: String` with `X <: Int`) stay as they are, which `CheckRealizable`
                 // reports (`HasProblemBounds`).
-                let mark = self.trail.len();
+                let mark = self.snapshot();
                 let that_within = (lo == NOTHING || self.is_sub(lo, lo2)) && (hi == ANY || self.is_sub(hi2, hi));
-                self.rollback(mark);
+                self.rollback(&mark);
                 if that_within {
                     return MemberInfo::Bounds(lo2, hi2);
                 }
                 let this_within = (lo2 == NOTHING || self.is_sub(lo2, lo)) && (hi2 == ANY || self.is_sub(hi, hi2));
-                self.rollback(mark);
+                self.rollback(&mark);
                 if this_within {
                     return MemberInfo::Bounds(lo, hi);
                 }
@@ -855,10 +855,10 @@ impl<'a> Worker<'a> {
     }
 
     fn alias_within(&mut self, x: TypeId, lo: TypeId, hi: TypeId) -> bool {
-        let mark = self.trail.len();
+        let mark = self.snapshot();
         let within = (hi == ANY || self.is_sub(x, hi)) && (lo == NOTHING || self.is_sub(lo, x));
         if !within {
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         within
     }
@@ -2170,7 +2170,7 @@ impl<'a> Worker<'a> {
                                 if self.term_member_qualifies(wanted_ref, &wanted, sig, alt, owner_ty, name, false, parent) {
                                     return true;
                                 }
-                                self.rollback(mark);
+                                self.rollback(&mark);
                             }
                             return false;
                         }
@@ -2392,16 +2392,16 @@ impl<'a> Worker<'a> {
         }
         let pairs: Vec<(ParamSig, ParamSig)> = theirs.clauses.iter().flat_map(|c| c.params.iter().cloned()).zip(sig.clauses.iter().flat_map(|c| c.params.iter().cloned())).collect();
         let renamed: Vec<(SymId, TypeId)> = pairs.iter().filter(|(p, q)| p.sym != q.sym).map(|(p, q)| (p.sym, self.types.mk(Type::Term(q.sym)))).collect();
-        let mark = self.trail.len();
+        let mark = self.snapshot();
         for (p, q) in &pairs {
             if p.by_name != q.by_name || p.repeated != q.repeated {
-                self.rollback(mark);
+                self.rollback(&mark);
                 return false;
             }
             let t = self.subst_paths(p.ty, &renamed);
             let t = self.types.subst(t, &subst);
             if !self.is_same(t, q.ty) {
-                self.rollback(mark);
+                self.rollback(&mark);
                 return false;
             }
         }
@@ -2426,7 +2426,7 @@ impl<'a> Worker<'a> {
         }
         let pairs: Vec<(ParamSig, ParamSig)> = theirs.clauses.iter().flat_map(|c| c.params.iter().cloned()).zip(sig.clauses.iter().flat_map(|c| c.params.iter().cloned())).collect();
         let renamed: Vec<(SymId, TypeId)> = pairs.iter().filter(|(p, q)| p.sym != q.sym).map(|(p, q)| (p.sym, self.types.mk(Type::Term(q.sym)))).collect();
-        let mark = self.trail.len();
+        let mark = self.snapshot();
         let seen = |w: &mut Self, t: TypeId| {
             let t = w.subst_paths(t, &renamed);
             w.types.subst(t, &subst)
@@ -2437,20 +2437,20 @@ impl<'a> Worker<'a> {
             let (lo, hi) = (seen(self, lo), seen(self, hi));
             let (qlo, qhi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
             if !self.is_sub(qlo, lo) || !self.is_sub(hi, qhi) {
-                self.rollback(mark);
+                self.rollback(&mark);
                 return false;
             }
         }
         for (p, q) in &pairs {
             let t = seen(self, p.ty);
             if p.by_name != q.by_name || p.repeated != q.repeated || !self.is_same(t, q.ty) {
-                self.rollback(mark);
+                self.rollback(&mark);
                 return false;
             }
         }
         let ret = seen(self, theirs.ret);
         if !self.is_sub(sig.ret, ret) {
-            self.rollback(mark);
+            self.rollback(&mark);
             return false;
         }
         true
@@ -2595,14 +2595,14 @@ impl<'a> Worker<'a> {
             bounds.push(if xl == yl { xl } else { self.types.union(xl, yl) });
             bounds.push(if xh == yh { xh } else { self.types.inter(xh, yh) });
         }
-        let mark = self.trail.len();
+        let mark = self.snapshot();
         let mut params = Vec::new();
         for (p, q) in xs.clauses.iter().flat_map(|c| c.params.iter()).zip(ys.clauses.iter().flat_map(|c| c.params.iter())) {
             let pt = self.types.subst(p.ty, &sx);
             let qt = self.subst_paths(q.ty, &renamed);
             let qt = self.types.subst(qt, &sy);
             if p.by_name != q.by_name || p.repeated != q.repeated || !self.is_same(pt, qt) {
-                self.rollback(mark);
+                self.rollback(&mark);
                 return None;
             }
             params.push(pt);

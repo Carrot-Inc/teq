@@ -71,6 +71,9 @@ pub struct Method {
     pub param_names: Option<Vec<Option<String>>>,
     pub deprecated: bool,
     pub annotations: Vec<String>,
+    /// An annotation interface's element with a default (`AnnotationDefault`, JVMS 4.7.22), which an annotation may
+    /// leave out (dotty's `tryDefault` of a Java annotation's constructor).
+    pub annotation_default: bool,
     /// The method's annotations whole, runtime-visible then invisible, where a mixin forwarder
     /// can select it, a method of one of `Object`'s names (`FORWARDED`) in any class file, a
     /// Java interface's default among them: what the forwarder writes again
@@ -328,6 +331,7 @@ impl ClassFile {
                         }
                     }
                     "Deprecated" => m.deprecated = true,
+                    "AnnotationDefault" => m.annotation_default = true,
                     "MethodParameters" => {
                         let mut names = Vec::new();
                         for _ in 0..r.u8()? {

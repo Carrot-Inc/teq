@@ -1076,7 +1076,7 @@ impl<'a> Worker<'a> {
         let (Some(x), Some(y)) = (receiver(self, a), receiver(self, b)) else { return false };
         let mark = self.snapshot();
         let same = self.is_same(x, y);
-        self.rollback(mark);
+        self.rollback(&mark);
         same
     }
 
@@ -1989,7 +1989,7 @@ impl<'a> Worker<'a> {
         let found = self.resolve_given_telling(target, span).ok();
         self.search_only_depth = outer;
         if found.is_none() {
-            self.rollback(mark);
+            self.rollback(&mark);
             self.drop_reported_since(diags);
             self.given_ambiguity = None;
         }
@@ -3295,7 +3295,7 @@ impl<'a> Worker<'a> {
             let (fits, context_free) = if transparent { (true, false) } else { self.fits_target(given, target) };
             self.profile.try_end(!fits, true);
             self.profile.given.shape_unkept += (self.profile.on && !context_free) as u64;
-            self.rollback(mark);
+            self.rollback(&mark);
             how = if fits { Step::FitShapeYes } else { Step::FitShapeNo };
             (fits, context_free)
         };
@@ -4006,7 +4006,7 @@ impl<'a> Worker<'a> {
             }
             let mark = self.snapshot();
             let holds = self.is_sub(applied, bound);
-            self.rollback(mark);
+            self.rollback(&mark);
             if !holds {
                 return false;
             }
@@ -4105,9 +4105,9 @@ impl<'a> Worker<'a> {
         let (Some(p1), Some(p2)) = (self.widened_receiver(a), self.widened_receiver(b)) else { return 0 };
         let mark = self.snapshot();
         let wins1 = self.is_sub(p1, p2);
-        self.rollback(mark);
+        self.rollback(&mark);
         let wins2 = self.is_sub(p2, p1);
-        self.rollback(mark);
+        self.rollback(&mark);
         match (wins1, wins2) {
             (true, false) => 1,
             (false, true) => -1,
@@ -4187,7 +4187,7 @@ impl<'a> Worker<'a> {
             Some(ok && self.hk_bounds_hold(&sig_y, &subst_y))
         })()
         .unwrap_or(false);
-        self.rollback(mark);
+        self.rollback(&mark);
         ok
     }
 
@@ -4220,7 +4220,7 @@ impl<'a> Worker<'a> {
         let (Some(x), Some(y)) = (path(self, a), path(self, b)) else { return false };
         let mark = self.snapshot();
         let same = self.is_same(x, y);
-        self.rollback(mark);
+        self.rollback(&mark);
         same
     }
 
@@ -4355,6 +4355,11 @@ impl<'a> Worker<'a> {
         0
     }
 
+    /// `derives_from`, for `teq fix`'s discovery of a file's rules (`fix::engine`).
+    pub fn is_subclass_of(&mut self, c: ClassId, base: ClassId) -> bool {
+        self.derives_from(c, base)
+    }
+
     pub(super) fn derives_from(&mut self, c: ClassId, base: ClassId) -> bool {
         self.complete_class(c);
         self.typer_derives(c, base)
@@ -4390,7 +4395,7 @@ impl<'a> Worker<'a> {
         // takes no `C[X] <: Iterable[X]` of the other, and an `A <: Singleton` no `A` of the
         // other (dotty's `instantiateWithTypeVars` in `Applications.isAsGood`).
         let ok = ok && self.hk_bounds_hold(&sig_b, &subst) && self.first_order_bounds_hold(&sig_b, &subst);
-        self.rollback(mark);
+        self.rollback(&mark);
         ok
     }
 
@@ -4478,7 +4483,7 @@ impl<'a> Worker<'a> {
             let p = self.types.subst(p, &subst);
             self.is_sub(arg, p)
         });
-        self.rollback(mark);
+        self.rollback(&mark);
         ok
     }
 
@@ -4515,7 +4520,7 @@ impl<'a> Worker<'a> {
             let mark = self.snapshot();
             let reduced = self.normalize(t);
             let size = (reduced != t).then(|| self.type_size(reduced, seen));
-            self.rollback(mark);
+            self.rollback(&mark);
             if let Some(size) = size {
                 return size;
             }
@@ -5138,7 +5143,7 @@ impl<'a> Worker<'a> {
         } else if let (Some(t), true) = (target, transparent) {
             let mark = self.snapshot();
             if !self.is_sub(ret, t) {
-                self.rollback(mark);
+                self.rollback(&mark);
             }
             expanded_target = Some(t);
         } else if let Some(t) = target {
@@ -5598,7 +5603,7 @@ impl<'a> Worker<'a> {
                     };
                     return Some((self.prog.add(TExpr::Local(rec)), open_target));
                 }
-                self.rollback(mark);
+                self.rollback(&mark);
             }
             below_byname |= open_byname;
         }

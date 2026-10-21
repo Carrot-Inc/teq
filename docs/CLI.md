@@ -9,6 +9,7 @@ teq test [project] [pattern...]   # compile, then run the project's suites
 teq run api [-- args]             # compile, then run the project's main class on a JVM
 teq compile [project...]          # type the projects' closures and write their class files
 teq dev frontend                  # a Scala.js project's dev loop; stage, watch, build and stop likewise
+teq fix [--check] [project...] [file...]  # the lint and rewrite rules of .scalafix.conf (docs/FIX.md)
 ```
 
 The compiler on files is `teq compiler`, and the interpreter `teq interp`:
@@ -25,6 +26,7 @@ teq compiler build src/ --target jvm -o out/main.jar   # JVM class files linked 
                                   # TeqMain); without .jar, -o names a directory of .class files
 node out/main.js                  # a build runs under node (script or ES module), a jar under java
 teq interp src/ [-- args]         # run in the compiler's own interpreter, without an output file
+teq compiler fix src/ --config c.conf      # teq fix's rules over files, typed with the compiler's options
 teq compiler check src/                    # type check only
       --classpath a.jar:b.jar     # read the classes the program names from the jars' TASTy files
       --std=scala-library         # on JavaScript, scala-library as the std from its jar (default: lean,
@@ -128,6 +130,34 @@ interpreter"). The program ends when its main has returned and no thread but dae
 `System.exit`, at an exception main does not catch, or at SIGINT, SIGTERM or SIGHUP (status 128 plus the signal's
 number), its shutdown hooks run one after another on the main thread while the other threads go on, and then every
 thread stops. A second signal ends the program at once.
+
+`teq fix [--check] [--rules A,B] [--config <file>] [<project>...] [<file>...]` runs lint and rewrite rules over a
+build's sources, scalafix's rules and configuration with no sbt and no JVM: the rules are Scala under the
+interpreter, against the API of docs/FIX.md, over the trees and the typer the compiler made of the sources in the same
+process. The configuration is `.scalafix.conf` beside `teq.lock`, or `--config`'s file (its `rules`, each rule's
+settings, `lint.error`, `lint.warning`, `lint.info` and `lint.ignore`); `--rules` replaces its `rules`. Each project
+is typed as `teq compile` types it: its configurations under the keys a compile plans (`test` covering `compile` in
+an sbt build, each configuration its own in a Mill one), each key's closure one program with the resident's
+inputs, exclusions, class path, flags and per-root source versions, its generators run first under compile's
+policy (a command generator runs its program, which may be Java: the one JVM boundary). Only the projects' own
+source roots are edited, never a dependency's, a generated root or a generator's output beneath an own root (typed,
+not edited, and no file to name). A script (`.sc`) is edited as written: the wrapper teq types it in is no part of
+its text. An argument that names an existing file, or has
+a path's shape (a separator, a drive letter, a `.scala` or `.java` suffix), is a file, which narrows the edits and
+lints to it while its project's whole program is typed; it must be one of the sources the selected projects
+compile (their exclusions applied), else exit 2. Any other argument is a project, or `project/configuration`. A
+relative `--config` is read from the working directory, and its `file:` rules beside it. The
+edits are written in place and the lints printed as the compiler prints its diagnostics, `<file>:<line>:<col>:
+<severity>: [<rule>.<category>]: <message>` with the line and carets under it, the paths from the working
+directory. Exit status: 0 when the run is complete and nothing is left (under `--check`: nothing to change and no
+lint); 1 when `--check` finds an edit or a lint, or an error-severity lint remains after the edits; 2 for an unknown
+project, file, rule or setting, a configuration teq does not read, a program that does not type, an analysis that
+is unavailable, a rule that fails, edits of two rules that overlap, or a file that cannot be written. `--check`
+writes nothing and names each file it would rewrite. A second run after a fixing run changes nothing.
+`teq compiler fix <inputs> [compiler options] [--check] [--rules A,B] [--config <file>]` is the same over the files
+and options the compiler takes (`teq compiler check`'s), every file of the program editable, the configuration
+`.scalafix.conf` of the working directory where `--config` names none: a single file on a class path, outside any
+build.
 
 An argument `@file` stands for the file's lines, one argument per line, up to the first `--`
 (what follows a `--` is the program's, as written): `teq @build.args`. teq's own tools start teq

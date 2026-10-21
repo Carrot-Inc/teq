@@ -247,6 +247,22 @@ pub fn lex_with(text: &str, interner: &Interner, close_parens: &[u32], keywords:
     }
 }
 
+/// dotty's `Scanner.skipLine`: where a line comment starting at `start` ends, at the CR, the LF or the SU
+/// (`Chars.SU`) that ends its line, or at the end of the text. Out of the lexer's loop, whose code stays its own.
+#[inline(never)]
+pub(crate) fn line_comment_end(src: &[u8], start: usize) -> usize {
+    let mut i = start;
+    while i < src.len() {
+        // The three are control characters: a comment's other bytes pass on one comparison.
+        let c = src[i];
+        if c < 0x20 && matches!(c, b'\n' | b'\r' | 0x1a) {
+            return i;
+        }
+        i += 1;
+    }
+    src.len()
+}
+
 /// Where the block comment opening at `start` (its `/*`) ends, past its `*/`: comments nest, each
 /// `/*` inside one opening another that its own `*/` closes, as scalac reads them. None when the
 /// text ends first. The lexer and the header directives' scan (`crate::directives`) read comments
@@ -311,6 +327,18 @@ impl<'a> Lexer<'a> {
         self.errors.push((Span::new(start as u32, end as u32), msg.to_string()));
     }
 
+    /// `Scanners.getBackquotedIdent`'s refusals of the backquoted name at `start` (closed at `self.pos`): an empty one
+    /// and the wildcard.
+    #[cold]
+    #[inline(never)]
+    fn refuse_backquoted(&mut self, start: usize) {
+        match &self.text[start + 1..self.pos] {
+            "" => self.error(start, start + 1, "empty quoted identifier"),
+            "_" => self.error(start, start + 1, "wildcard invalid as backquoted identifier"),
+            _ => {}
+        }
+    }
+
     #[inline]
     fn push(&mut self, kind: Tok, start: usize, end: usize) {
         self.tokens.push(Token {
@@ -342,9 +370,7 @@ impl<'a> Lexer<'a> {
                 }
                 b'/' if self.peek(1) == b'/' => {
                     comment_on_line = true;
-                    while self.pos < self.src.len() && self.src[self.pos] != b'\n' {
-                        self.pos += 1;
-                    }
+                    self.pos = line_comment_end(self.src, self.pos);
                 }
                 b'/' if self.peek(1) == b'*' => {
                     comment_on_line = true;
@@ -1356,12 +1382,15 @@ impl<'a> Lexer<'a> {
                 while self.pos < self.src.len() && !matches!(self.src[self.pos], b'`' | b'\n') {
                     self.pos += 1;
                 }
-                // A backquote that closes nothing on its line is reported and passed over, the
-                // rest of the line read as it stands.
+                // `Scanners.getBackquotedIdent`: a backquote that closes nothing on its line is reported and
+                // passed over, the rest of the line read as it stands; an empty name and the wildcard are refused.
                 if self.peek(0) != b'`' {
-                    self.error(start, start + 1, "unterminated backquoted identifier");
+                    self.error(start, start + 1, "unclosed quoted identifier");
                     self.pos = start + 1;
                     return;
+                }
+                if self.pos - start <= 2 {
+                    self.refuse_backquoted(start);
                 }
                 let name = self.interner.intern(&self.text[start + 1..self.pos]);
                 self.pos += 1;

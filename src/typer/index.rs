@@ -93,6 +93,9 @@ pub struct Record {
 
 #[derive(Default)]
 pub struct Index {
+    /// The files where an outermost inline or macro expansion was made, by its call site's file, in the order met:
+    /// where `teq fix`'s NoUnusedImports removes nothing (docs/FIX.md, "NoUnusedImports").
+    pub expanded: Vec<FileId>,
     journal: Vec<(FileId, Record)>,
     /// Per program file its records, by span.
     files: Vec<Vec<Record>>,
@@ -165,6 +168,7 @@ impl Index {
     /// program's), its journal its own: what it records goes to the merge (`absorb`).
     pub fn attach(&self) -> Index {
         Index {
+            expanded: Vec::new(),
             journal: Vec::new(),
             files: Vec::new(),
             nodes: Vec::new(),
@@ -211,7 +215,8 @@ impl Index {
 
     /// Takes over another worker's tables at the merge, where this one has no entry of its own;
     /// its records come with the work items (`merge_workers`).
-    pub fn absorb(&mut self, o: Index) {
+    pub fn absorb(&mut self, mut o: Index) {
+        self.expanded.append(&mut o.expanded);
         fn union<K: Eq + std::hash::Hash, V>(mine: &mut FxMap<K, V>, theirs: FxMap<K, V>) {
             for (k, v) in theirs {
                 mine.entry(k).or_insert(v);

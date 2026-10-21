@@ -1,0 +1,3 @@
+NoUnusedImports/after_rewrite_other_file/Other.scala:4:3: warning: [DisableSyntax.var]: mutable state should be avoided
+    var count = 0
+    ^^^

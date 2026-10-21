@@ -38,6 +38,11 @@ pub struct Syntax {
     /// The file is read from the wrapper, whose class reads the script's statements, from the file's
     /// start, at its `` `<script>` `` statement (`Parser::parse_script_body`).
     pub script: Option<u32>,
+    /// The source-preserving mode of `teq fix`'s files (docs/FIX.md): the parser keeps the unit's tokens and end
+    /// markers on its first AST (`SyntaxNotes::source`), where `fix::source` finds the comments between them, and
+    /// each definition's modifiers and each type parameter's variance where they were written
+    /// (`SyntaxNotes::modifiers`, `variances`).
+    pub keep: bool,
 }
 
 pub struct Parser<'a> {
@@ -271,6 +276,9 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
     for ast in &mut asts {
         ast.source_version = unit;
         ast.notes.backquoted_idents.clone_from(&backquoted);
+    }
+    if syntax.keep {
+        asts[0].notes.source = Some(Box::new(crate::ast::SourceKept { tokens: p.toks.clone(), end_markers: p.end_markers.clone() }));
     }
     *lexed = LexResult { keywords, tokens: p.toks, errors: p.lex_errors, warnings: p.lex_warnings, end_markers: p.end_markers, boundaries: p.boundaries, case_lines: p.case_lines, backquoted };
     Parsed { asts, errors: p.errors, warnings: p.warnings, boundary: p.boundary, keywords }
@@ -880,11 +888,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Placeholder parameters only need distinct names within one lambda.
+    /// A placeholder's parameter, dotty's `WildcardParamName`: a derived name (`Interner::unique`), which no written
+    /// identifier names, numbered by its place in its lambda (the names need be distinct within one lambda alone).
     fn placeholder_name(&mut self, index: usize) -> Name {
         if self.placeholder_names.len() <= index {
             for i in self.placeholder_names.len()..=index {
-                let n = self.interner.intern(&format!("_${}", i));
+                let n = self.interner.unique("_$", i as u32);
                 self.placeholder_names.push(n);
             }
         }
@@ -1002,8 +1011,11 @@ impl<'a> Parser<'a> {
         while self.at(Tok::KwPackage) && self.kind_at(1) != Tok::KwObject && !self.package_block_follows() {
             let start = self.bump().span;
             loop {
-                let (n, _) = self.expect_ident();
+                let (n, s) = self.expect_ident();
                 self.ast.package.push(n);
+                if self.syntax.keep {
+                    self.ast.notes.package_names.push(s);
+                }
                 if !self.eat(Tok::Dot) {
                     break;
                 }
@@ -1188,8 +1200,11 @@ impl<'a> Parser<'a> {
         let start = self.bump().span;
         let outer = self.open_package_block();
         loop {
-            let (n, _) = self.expect_ident();
+            let (n, s) = self.expect_ident();
             self.ast.package.push(n);
+            if self.syntax.keep {
+                self.ast.notes.package_names.push(s);
+            }
             if !self.eat(Tok::Dot) {
                 break;
             }

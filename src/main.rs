@@ -14,6 +14,7 @@ mod deflate;
 mod dialect;
 mod directives;
 mod emit;
+mod fix;
 mod frontend;
 mod held;
 mod index;
@@ -101,7 +102,9 @@ pub(crate) fn std_layout(opts: &Options, cp: Option<&classpath::Classpath>) -> V
     let jvm: &[(&str, &str)] = if opts.jvm { JVM_STD_SOURCES } else { &[] };
     let time_from_jar = cp.map_or(false, |cp| cp.holds_tasty_in(TIME_PACKAGE));
     let time: &[(&str, &str)] = if opts.jvm || opts.std != StdMode::Lean || time_from_jar { &[] } else { TIME_STD_SOURCES };
-    let base = std_sources(opts.std, opts.jvm).into_iter().chain(time.iter().copied()).chain(jvm.iter().copied()).chain(QUOTED_SOURCES.iter().copied());
+    // `teq.fix`, the rule API of `teq fix`, only in the program its rules run in (`fix::engine`).
+    let fix: &[(&str, &str)] = if opts.fix_std { FIX_SOURCES } else { &[] };
+    let base = std_sources(opts.std, opts.jvm).into_iter().chain(time.iter().copied()).chain(jvm.iter().copied()).chain(QUOTED_SOURCES.iter().copied()).chain(fix.iter().copied());
     let dom_from_jar = cp.map_or(false, |cp| cp.holds_tasty_in(DOM_PACKAGE));
     let facades = SCALAJS_SOURCES
         .iter()
@@ -134,7 +137,9 @@ pub(crate) fn parse_build(
     let parallel = frontend::parallel(&files);
     let mut slots: Vec<Option<Vec<ast::Ast>>> = (0..files.len()).map(|_| None).collect();
     let mut used = frontend::UsedNames::default();
-    frontend::parse_files(&files, n_std..files.len(), &mut slots, interner, diags, Some(&mut used), parallel, usize::MAX, opts.syntax, &opts.source_at);
+    // `teq fix`'s files keep their source (`Syntax::keep`).
+    let keep: Vec<bool> = if opts.keep.is_empty() { Vec::new() } else { files.iter().map(|f| !f.is_std && opts.keep.contains(&f.path)).collect() };
+    frontend::parse_files(&files, n_std..files.len(), &mut slots, interner, diags, Some(&mut used), parallel, usize::MAX, opts.syntax, &opts.source_at, &keep);
     let scalajs_unlocked = scalajs_jar(&opts.classpath) || frontend::names_scalajs(&used, interner);
     let selected = frontend::select_std(&std, &used, interner, scalajs_unlocked);
     for i in (0..n_std).filter(|&i| selected[i]) {
@@ -143,10 +148,86 @@ pub(crate) fn parse_build(
     let todo = (0..n_std).filter(|&i| selected[i]);
     // The std files are few and small: a handful of workers parse them in the time it would
     // take to start a full set.
-    frontend::parse_files(&files, todo, &mut slots, interner, diags, None, parallel, frontend::STD_WORKERS, parser::Syntax::default(), &[]);
+    frontend::parse_files(&files, todo, &mut slots, interner, diags, None, parallel, frontend::STD_WORKERS, parser::Syntax::default(), &[], &[]);
     let (asts, blocks_of) = frontend::lay_out(&mut files, slots, &std);
     let locked = used.defines_scalajs;
     (files, asts, blocks_of, std, selected, scalajs_unlocked && !locked)
+}
+
+/// The program's files read, under the keys their positions' names know them by, a script's text as it is loaded
+/// (`script::loaded_as`): what `compile` and `teq fix` (`fix::engine`) read alike.
+pub(crate) fn read_program(opts: &Options, paths: Vec<String>, roots: &intern::FxMap<String, String>) -> Result<Vec<SourceFile>, String> {
+    read_program_with(opts, paths, roots, |_, text| text)
+}
+
+/// `read_program`, each file's text `given` its path and what the disk holds: `teq fix`'s second round hands its
+/// rewritten texts in, and keeps a script's text as written before the wrapper is appended for typing.
+pub(crate) fn read_program_with(opts: &Options, paths: Vec<String>, roots: &intern::FxMap<String, String>, mut given: impl FnMut(&str, String) -> String) -> Result<Vec<SourceFile>, String> {
+    let mut program: Vec<SourceFile> = Vec::new();
+    let keys = program_keys(opts, paths.iter().map(String::as_str));
+    for (path, key) in paths.into_iter().zip(keys) {
+        match std::fs::read_to_string(&path) {
+            Ok(text) => {
+                let text = given(&path, text);
+                let root = roots.get(&path).map(String::as_str);
+                let package = script_package(&path, root);
+                let text = script::loaded_as(&path, planted::plant_clock(text, program.len()), &package, &script_path(opts, &path, root));
+                program.push(SourceFile { path, text, is_std: false, key })
+            }
+            Err(e) => return Err(format!("cannot read {}: {}", path, e)),
+        }
+    }
+    Ok(program)
+}
+
+/// The typer's settings `opts` gives, past its workers, its std, its class path and its entry point's name: what
+/// `compile` and `teq fix`'s typing of a configuration (`fix::engine`) set alike.
+pub(crate) fn configure_typer(typer: &mut typer::Typer<'_>, opts: &Options, asts: &Asts, files: &Sources) {
+    typer.cacheable_state = opts.cacheable_state.clone();
+    typer.known_caches = !opts.no_known_caches;
+    typer.macro_state_per_worker = opts.macro_state_per_worker;
+    crate::measure::set_macro_state_per_worker(opts.macro_state_per_worker);
+    typer.dialect = opts.dialect;
+    typer.diags.policy = std::sync::Arc::new(opts.policy());
+    if opts.wunused_imports {
+        typer.unused.mode = typer::unused::Mode::Warn;
+    }
+    typer.unused.defs = typer::unused::DefKinds::of(&typer.diags.policy.unused);
+    typer.inline.max_depth = opts.max_inlines;
+    typer.inline.max_trees = opts.max_inlined_trees;
+    typer.inline.retain_trees = opts.retain_trees;
+    typer.inline.production = opts.release;
+    typer.inline.es_modules = opts.split.is_some();
+    // A module's products need no entry point: a Scala.js check's as a JVM build's (`all_mains`).
+    typer.choose_entry = !opts.all_mains && opts.products.is_none();
+    typer.open_world = opts.products.is_some() && opts.jvm;
+    typer.writes_products = opts.products.is_some();
+    // A Scala.js module's products record the expansions too, for a downstream to outline them
+    // as the whole program does.
+    typer.inline.outlines = (opts.command != "check" || opts.products.is_some()) && !opts.jvm && !opts.interp && !opts.no_outline;
+    typer.emits_bodies = opts.command != "check" || opts.products.is_some() || opts.interp || opts.analysis_version.is_some();
+    if opts.jvm {
+        typer.set_jvm();
+    }
+    if opts.interp {
+        typer.interp = true;
+        typer.prog.record_types = true;
+    }
+    // A macro reads the types of the trees it is given, so a program with quotes, or with a
+    // classpath whose libraries may define macros, keeps the type of every expression.
+    if !opts.classpath.is_empty() || frontend::uses_quotes(&asts, files.as_slice()) {
+        typer.prog.record_types = true;
+    }
+    // The product modes keep the typed form of their bodies and annotations for the pickles, an
+    // analysis's API reads the annotations from them, and an answer with the dependencies reads
+    // the bodies.
+    if opts.products.is_some() || typer::capture::forced() || opts.analysis_version.is_some() {
+        let owned = owned_files(&opts, typer.w.files.as_slice());
+        typer.enable_capture(owned.as_deref());
+    }
+    if opts.analysis_version == Some(jvm::api::WITH_DEPS) {
+        typer.deps = Some(Box::default());
+    }
 }
 
 /// Hands the typer the std slots of the build: the parsed ones enter with the program, the rest
@@ -360,6 +441,18 @@ pub(crate) const QUOTED_SOURCES: &[(&str, &str)] = &[
 /// `java.time` for the interpreter (and the types of a JavaScript build), left out where a jar on
 /// the class path holds the package's TASTy (scala-java-time, which a Scala.js build that runs
 /// with the package names), as the DOM's files are; the JVM has the JDK's.
+/// `teq.fix`: `teq fix`'s rule API and the rules it ships (docs/FIX.md).
+pub(crate) const FIX_SOURCES: &[(&str, &str)] = &[
+    ("<std>/fix/native.scala", include_str!("../std/fix/native.scala")),
+    ("<std>/fix/tree.scala", include_str!("../std/fix/tree.scala")),
+    ("<std>/fix/api.scala", include_str!("../std/fix/api.scala")),
+    ("<std>/fix/rules/DisableSyntax.scala", include_str!("../std/fix/rules/DisableSyntax.scala")),
+    ("<std>/fix/rules/CatsImplicitsImport.scala", include_str!("../std/fix/rules/CatsImplicitsImport.scala")),
+    ("<std>/fix/rules/TypelevelAs.scala", include_str!("../std/fix/rules/TypelevelAs.scala")),
+    ("<std>/fix/rules/EmptyCollectionsUnified.scala", include_str!("../std/fix/rules/EmptyCollectionsUnified.scala")),
+    ("<std>/fix/rules/NoUnusedImports.scala", include_str!("../std/fix/rules/NoUnusedImports.scala")),
+];
+
 pub(crate) const TIME_STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/javalib/time.scala", include_str!("../std/javalib/time.scala")),
     ("<std>/javalib/time_exceptions.scala", include_str!("../std/javalib/time_exceptions.scala")),
@@ -451,6 +544,11 @@ pub(crate) struct Options {
     /// `watch --check --index`: the session keeps the navigation index and answers the
     /// language server's queries, its positions counted as `positions` says.
     pub index: bool,
+    /// The program's files `teq fix` reads and edits, whose source the parser keeps (`Syntax::keep`), by their
+    /// paths as the program's: none outside `teq fix` (`fix::engine`).
+    pub keep: Vec<String>,
+    /// The build is the program `teq fix`'s rules run in: the std's `teq.fix` is laid out (`FIX_SOURCES`).
+    pub fix_std: bool,
     /// `watch --wait-for-build`: the first build waits for the first `build` command, the texts
     /// before it taken in (the language server's sessions).
     pub wait_for_build: bool,
@@ -804,7 +902,7 @@ fn parse_options() -> Options {
 /// and `lsp`; `compiler <build|check|watch>` and `interp`, whose options this parses; else a
 /// project verb, or the prefix options that come before one, which `task::run` serves with the
 /// export found above the working directory. No word, or an unknown one, gets the usage.
-fn parse_options_from(args: impl Iterator<Item = String>) -> Options {
+pub(crate) fn parse_options_from(args: impl Iterator<Item = String>) -> Options {
     let args: Vec<String> = args.collect();
     let Some(first) = args.first() else { task::run(&[]) };
     match first.as_str() {
@@ -825,6 +923,7 @@ fn parse_options_from(args: impl Iterator<Item = String>) -> Options {
 fn parse_compiler_options(args: &[String]) -> Options {
     match args.first().map(String::as_str) {
         Some("build" | "check" | "watch") => parse_file_options(&args[0], &args[1..]),
+        Some("fix") => fix::cli::compiler_fix(&args[1..]),
         Some("--help" | "-h") => compiler_help(),
         _ => usage(),
     }
@@ -853,7 +952,7 @@ fn interp_refuses(a: &str) -> Option<&'static str> {
 
 /// The options of `teq compiler build|check|watch` and of `teq interp`, whose typing mode is
 /// the interpreter's (`Options::interp`) and whose refused options get one line each.
-fn parse_file_options(command: &str, args: &[String]) -> Options {
+pub(crate) fn parse_file_options(command: &str, args: &[String]) -> Options {
     let interp = command == "interp";
     if interp && matches!(args.first().map(String::as_str), Some("--help" | "-h")) {
         interp_help();
@@ -866,6 +965,8 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
         split: None,
         check: false,
         index: false,
+        keep: Vec::new(),
+        fix_std: false,
         wait_for_build: false,
         positions: watch::Positions::Utf16,
         module_per_file: Vec::new(),
@@ -1694,7 +1795,7 @@ pub(crate) fn open_classpath(opts: &Options, typer: &mut typer::Worker, cp: Opti
 }
 
 /// Writes the cache of the jars the build inflated entries of, for the next build.
-fn save_jar_caches(typer: &mut typer::Worker) {
+pub(crate) fn save_jar_caches(typer: &mut typer::Worker) {
     if typer.loaded.is_some() {
         typer.loaded_mut().cp.save_caches();
     }
@@ -1787,27 +1888,18 @@ fn compile() -> i32 {
     }
     let t_start = Instant::now();
     answer_start(t_start);
-    let mut program: Vec<SourceFile> = Vec::new();
     let (paths, roots, left_out) = collect_program_paths_with_roots(&opts);
     if opts.products.is_some() && paths.is_empty() {
         manifest_only(&opts);
     }
-    let keys = program_keys(&opts, paths.iter().map(String::as_str));
-    for (path, key) in paths.into_iter().zip(keys) {
-        match std::fs::read_to_string(&path) {
-            Ok(text) => {
-                let root = roots.get(&path).map(String::as_str);
-                let package = script_package(&path, root);
-                let text = script::loaded_as(&path, planted::plant_clock(text, program.len()), &package, &script_path(&opts, &path, root));
-                program.push(SourceFile { path, text, is_std: false, key })
-            }
-            Err(e) => {
-                eprintln!("cannot read {}: {}", path, e);
-                answer_failure(&opts);
-                std::process::exit(2);
-            }
+    let mut program = match read_program(&opts, paths, &roots) {
+        Ok(program) => program,
+        Err(e) => {
+            eprintln!("{}", e);
+            answer_failure(&opts);
+            std::process::exit(2);
         }
-    }
+    };
     // The directives of a script's files, the script's first, and what Scala CLI reports of them before any is used
     // (`ExtractedDirectives.from`): its lexer's errors, which fail the run, and a deprecated key's warning.
     let directed = opts.interp.then(|| {
@@ -1925,51 +2017,7 @@ fn compile() -> i32 {
     } else if let Some(run) = opts.inputs.iter().find(|i| script::is_script(i)) {
         typer.set_main_name(&script::main_object(run));
     }
-    typer.cacheable_state = opts.cacheable_state.clone();
-    typer.known_caches = !opts.no_known_caches;
-    typer.macro_state_per_worker = opts.macro_state_per_worker;
-    crate::measure::set_macro_state_per_worker(opts.macro_state_per_worker);
-    typer.dialect = opts.dialect;
-    typer.diags.policy = std::sync::Arc::new(opts.policy());
-    if opts.wunused_imports {
-        typer.unused.mode = typer::unused::Mode::Warn;
-    }
-    typer.unused.defs = typer::unused::DefKinds::of(&typer.diags.policy.unused);
-    typer.inline.max_depth = opts.max_inlines;
-    typer.inline.max_trees = opts.max_inlined_trees;
-    typer.inline.retain_trees = opts.retain_trees;
-    typer.inline.production = opts.release;
-    typer.inline.es_modules = opts.split.is_some();
-    // A module's products need no entry point: a Scala.js check's as a JVM build's (`all_mains`).
-    typer.choose_entry = !opts.all_mains && opts.products.is_none();
-    typer.open_world = opts.products.is_some() && opts.jvm;
-    typer.writes_products = opts.products.is_some();
-    // A Scala.js module's products record the expansions too, for a downstream to outline them
-    // as the whole program does.
-    typer.inline.outlines = (opts.command != "check" || opts.products.is_some()) && !opts.jvm && !opts.interp && !opts.no_outline;
-    typer.emits_bodies = opts.command != "check" || opts.products.is_some() || opts.interp || opts.analysis_version.is_some();
-    if opts.jvm {
-        typer.set_jvm();
-    }
-    if opts.interp {
-        typer.interp = true;
-        typer.prog.record_types = true;
-    }
-    // A macro reads the types of the trees it is given, so a program with quotes, or with a
-    // classpath whose libraries may define macros, keeps the type of every expression.
-    if !opts.classpath.is_empty() || frontend::uses_quotes(&asts, files.as_slice()) {
-        typer.prog.record_types = true;
-    }
-    // The product modes keep the typed form of their bodies and annotations for the pickles, an
-    // analysis's API reads the annotations from them, and an answer with the dependencies reads
-    // the bodies.
-    if opts.products.is_some() || typer::capture::forced() || opts.analysis_version.is_some() {
-        let owned = owned_files(&opts, typer.w.files.as_slice());
-        typer.enable_capture(owned.as_deref());
-    }
-    if opts.analysis_version == Some(jvm::api::WITH_DEPS) {
-        typer.deps = Some(Box::default());
-    }
+    configure_typer(&mut typer, &opts, &asts, &files);
     measure::enable(opts.timings);
     measure::enable_parts(opts.timings);
     typer.run();

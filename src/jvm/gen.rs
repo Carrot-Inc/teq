@@ -645,12 +645,15 @@ impl<'a> Gen<'a> {
             }
             Type::Lit(l) => match cx.input.types.lit_val(l) {
                 LitVal::Int(_) => JType::I,
+                LitVal::Byte(_) => JType::B,
+                LitVal::Short(_) => JType::S,
                 LitVal::Long(_) => JType::J,
                 LitVal::Double(_) => JType::D,
                 LitVal::Float(_) => JType::F,
                 LitVal::Char(_) => JType::C,
                 LitVal::Bool(_) => JType::Z,
                 LitVal::Str(_) => JType::L(Rc::from(STRING)),
+                LitVal::Class(class) => return self.erase(class),
             },
             // As scalac erases them: a path to its type (a given object's to its class, the
             // module class its `TermRef` widens to), an abstract member to its upper bound, a

@@ -16,7 +16,7 @@ use crate::types::*;
 pub struct MapCx {
     pub file: u32,
     /// The type lambdas being mapped, innermost last, for `ParamRef`.
-    binders: Vec<(Addr, Vec<TParamId>)>,
+    pub(super) binders: Vec<(Addr, Vec<TParamId>)>,
     /// The method types of refinements being mapped, innermost last, with their parameters'
     /// addresses and symbols: a type names a parameter by a `ParamRef` to the binder, a type
     /// tree by a `LocalTerm` to the parameter's definition (`c.T` of `(c: Ctx) => c.T`).
@@ -347,8 +347,7 @@ impl<'a> Worker<'a> {
                 let ids: Vec<TParamId> = params
                     .iter()
                     .map(|p| {
-                        let text = tasty.name(tasty.source_name(p.name));
-                        let n = self.interner.intern(&text);
+                        let n = self.tasty_name(&tasty, tasty.source_name(p.name));
                         let id = self.syms.new_tparam(n, 0);
                         self.syms.tparams[id.idx()].arity = hk_arity(&p.info);
                         if p.addr != 0 {
@@ -409,6 +408,13 @@ impl<'a> Worker<'a> {
                     Const::Str(n) => {
                         let text = tasty.name(*n);
                         LitVal::Str(self.interner.intern(&text))
+                    }
+                    // A class constant (`CLASSconst`), of the type `Class[T]` it widens to.
+                    Const::Class(of) => {
+                        let of = of.clone();
+                        let t_of = self.map_type(cx, &of);
+                        let Some(class) = self.java_lang_class("Class") else { return self.blocked(cx, Shape::ConstantType, t) };
+                        LitVal::Class(self.types.class(class, &[t_of]))
                     }
                     _ => return self.blocked(cx, Shape::ConstantType, t),
                 };
@@ -1237,8 +1243,7 @@ impl<'a> Worker<'a> {
     }
 
     fn intern_name(&mut self, tasty: &TastyFile, n: u32) -> Name {
-        let text = tasty.name(n);
-        self.interner.intern(&text)
+        self.tasty_name(tasty, n)
     }
 
     /// The types of package `scala` that teq defines itself, and the Java classes it stands

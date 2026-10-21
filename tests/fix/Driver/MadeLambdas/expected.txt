@@ -1,0 +1,3 @@
+Driver/MadeLambdas/input.scala:11:10: warning: [Lambdas.lambda]: [A] =>> List[A]
+  type T = [A] =>> List[A] // assert: Lambdas.lambda
+           ^^^^^^^^^^^^^^^

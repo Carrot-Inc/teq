@@ -244,7 +244,7 @@ WPID=
 if [[ $answer == *'"build":4'* ]] && [ $status -eq 0 ]; then ok; else bad "watch: the input's end at the commit point (exit $status): $answer"; fi
 exec 4<&-
 
-# teq compile over a lock of one project (teq.lock, written by the example's check-export.py
+# teq compile and teq fix over a lock of one project (teq.lock, written by the example's check-export.py
 # as tests/task.sh writes one), its jars from the coursier cache (no sbt).
 if [ -f "$lib" ] && [ -f "$lib3" ]; then
   tdir=$work/build
@@ -284,6 +284,14 @@ PY
   classes=$(find "$tdir" -name 'Core$.class' | head -1)
   if [ $status -eq 0 ] && [ -n "$classes" ]; then ok; else bad "teq compile (exit $status): $(head -5 "$work/out" "$work/err")"; fi
   task stop
+  # teq fix over it, a file named by its Windows path (drive Z:, backslashes) classified as a file, its unused import
+  # removed by the new text's rename over the original (tests/windows.sh has the write failure, which wine does not
+  # answer as Windows does).
+  printf 'package core\n\nimport scala.collection.mutable\n\nobject Core:\n  def answer: Int = 42\n' > "$tdir/core/src/core/Core.scala"
+  printf 'rules = [NoUnusedImports]\n' > "$tdir/.scalafix.conf"
+  task fix "$(win "$tdir/core/src/core/Core.scala")"
+  status=$?
+  if [ $status -eq 0 ] && ! grep -q mutable "$tdir/core/src/core/Core.scala"; then ok; else bad "teq fix of a file by its Windows path (exit $status): $(head -5 "$work/out" "$work/err")"; fi
 fi
 
 echo "wine: passed: $pass of $((pass + fail))"

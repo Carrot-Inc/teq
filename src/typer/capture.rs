@@ -145,26 +145,96 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// A Java annotation's `new`, which constructs no instance: each argument typed against the
-    /// element of its name (a lone positional one is `value`'s), a nested annotation likewise.
+    /// A Java annotation's `new`, which constructs no instance, typed as dotty types the application of the constructor
+    /// its class file's elements make (`isJavaAnnotConstr`): the arguments ordered by `Applications.reorder`
+    /// (`java_annotation_order`), each typed against its element's type (a nested annotation by its own application,
+    /// then adapted to it), an element
+    /// left out its default (`tryDefault`: `AnnotationDefault`) or `MissingArgument`, an argument beyond the elements
+    /// `too many arguments`; `None` where the application fails. A lone positional argument is `value`'s, as
+    /// `checkNamedArgumentForJavaAnnotation` names it where the interface declares `value`.
     pub(super) fn type_java_annotation(&mut self, c: ClassId, e: crate::ast::ExprId) -> Option<TExprId> {
         use crate::ast::Expr;
         let ast = self.cur_ast();
         let Expr::New(_, args) = ast.expr(e) else { return None };
         let args: Vec<crate::ast::ExprId> = ast.expr_list(args).to_vec();
         self.complete_class(c);
+        let elements = self.java_annotation_elements(c);
+        let names: Vec<crate::intern::Name> = elements.iter().map(|&m| self.syms.sym(m).name).collect();
+        let value = self.interner.intern("value");
+        // `checkNamedArgumentForJavaAnnotation`'s naming: a lone positional argument where `value` is declared.
+        let lone_value = args.len() == 1 && !matches!(ast.expr(args[0]), Expr::NamedArg(..)) && names.contains(&value);
+        let written: Vec<(Option<crate::intern::Name>, crate::ast::ExprId)> = args
+            .iter()
+            .map(|&a| match ast.expr(a) {
+                Expr::NamedArg(n, _) => (Some(n), a),
+                _ if lone_value => (Some(value), a),
+                _ => (None, a),
+            })
+            .collect();
+        let mut ok = true;
+        let ordered = self.java_annotation_order(c, &names, &written, &mut ok);
+        if !ok {
+            return None;
+        }
+        // `matchArgs` over the elements: an argument typed against its element, a left-out element its default or the
+        // end of the matching (`missingArg`), an argument left over `too many arguments`.
+        let mut typed_of: Vec<(crate::ast::ExprId, TExprId)> = Vec::with_capacity(args.len());
+        for (n, &element) in elements.iter().enumerate() {
+            match ordered.get(n).copied().flatten() {
+                Some(arg) => {
+                    let v = match ast.expr(arg) {
+                        Expr::NamedArg(_, v) => v,
+                        _ => arg,
+                    };
+                    let ty = self.sig_of(element).ret;
+                    let mark = self.diags.items.len();
+                    // `addTyped` → `typedArg`: the value typed with the element's formal expected and adapted to it; a
+                    // nested annotation by its own application (`typedNew`, `typedApply`), then adapted, and where that
+                    // fails an error tree the matching goes on past.
+                    let te = match self.java_annotation_class(v) {
+                        Some(k) => match self.type_java_annotation(k, v) {
+                            Some(nested) => {
+                                let actual = self.types.class(k, &[]);
+                                let span = ast.expr_span(v);
+                                self.adapt(nested, actual, ty, span)
+                            }
+                            None => self.prog.add(TExpr::Unit),
+                        },
+                        None => self.check_expr(v, ty),
+                    };
+                    // A positional argument `checkNamedArgumentForJavaAnnotation` refused (an error from 3.6) stands
+                    // where its typing's error would: scalac's reporter hides that one (`UniqueMessagePositions`).
+                    let refused = !lone_value
+                        && !matches!(ast.expr(arg), Expr::NamedArg(..))
+                        && crate::source_version::Migration::NonNamedArgumentInJavaAnnotation.outcome(ast.source_version) == crate::source_version::Outcome::Error;
+                    if refused {
+                        let at = ast.written_arg(arg).map_or(ast.expr_span(arg), |(w, _)| w).start;
+                        let file = self.env.file;
+                        let kept: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| d.is_warning || d.file != file || d.span.start != at).collect();
+                        self.diags.items.extend(kept);
+                    }
+                    typed_of.push((arg, te));
+                }
+                None if self.syms.sym(element).mods & crate::ast::mods::JAVA_ANNOTATION != 0 => {}
+                None => {
+                    let span = ast.expr_span(e);
+                    self.missing_java_annotation_element(c, names[n], span);
+                    return None;
+                }
+            }
+        }
+        if let Some(&Some(extra)) = ordered.get(elements.len()) {
+            let msg = format!("too many arguments for {}", self.java_annotation_ctor_string(c));
+            self.error(ast.expr_span(extra), msg);
+            return None;
+        }
+        // The arguments as written, each named by its element (the pickle's).
         let mut typed = Vec::with_capacity(args.len());
-        for &arg in &args {
-            let (name, value) = match ast.expr(arg) {
-                Expr::NamedArg(n, v) => (n, v),
-                _ if args.len() == 1 => (self.interner.intern("value"), arg),
-                _ => return None,
-            };
-            let element = self.own_alternative(c, name, 0)?;
-            let ty = self.sig_of(element).ret;
-            let te = match self.java_annotation_class(value) {
-                Some(k) => self.type_java_annotation(k, value)?,
-                None => self.check_expr(value, ty),
+        for &(name, arg) in &written {
+            let Some(&(_, te)) = typed_of.iter().find(|&&(a, _)| a == arg) else { continue };
+            let name = match name {
+                Some(n) => n,
+                None => names[ordered.iter().position(|&a| a == Some(arg)).unwrap_or(0)],
             };
             self.capture_wrap(te, Wrap::Named(name));
             typed.push(te);
@@ -173,6 +243,126 @@ impl<'a> Worker<'a> {
         let te = self.prog.add(TExpr::New(c, list));
         self.capture_form(te, Form::JavaAnnotation);
         Some(te)
+    }
+
+    /// The elements of the Java annotation `c`, its constructor's parameters: its own methods in their class file's order.
+    fn java_annotation_elements(&self, c: ClassId) -> Vec<SymId> {
+        self.syms
+            .class(c)
+            .member_order
+            .iter()
+            .copied()
+            .filter(|&m| {
+                let info = self.syms.sym(m);
+                info.owner == crate::symbols::Owner::Class(c) && info.name != crate::names::INIT && matches!(info.kind, crate::symbols::SymKind::Def)
+            })
+            .collect()
+    }
+
+    /// `Applications.reorder` (`handlePositional`, `handleNamed`) of the arguments `written` (each with its name where
+    /// it is named) over the parameter names `pnames`: per parameter its argument, `None` where it is left empty, the
+    /// arguments a failure keeps after them. A name of no parameter or of one taken already fails (`ok` false); a
+    /// positional argument after a named one is an error that does not.
+    fn java_annotation_order(&mut self, c: ClassId, pnames: &[crate::intern::Name], written: &[(Option<crate::intern::Name>, crate::ast::ExprId)], ok: &mut bool) -> Vec<Option<crate::ast::ExprId>> {
+        let mut out = Vec::new();
+        // `handlePositional`: a named argument of the next parameter, or a positional one, in place.
+        let mut p = 0;
+        let mut i = 0;
+        while i < written.len() {
+            match written[i].0 {
+                Some(n) if p < pnames.len() && pnames[p] == n => {}
+                Some(_) => break,
+                None => {}
+            }
+            out.push(Some(written[i].1));
+            p += 1;
+            i += 1;
+        }
+        if i == written.len() {
+            return out;
+        }
+        // `handleNamed`, from the first named argument out of place.
+        let mut name_to_arg: Vec<(crate::intern::Name, crate::ast::ExprId)> = written[i..].iter().filter_map(|&(n, a)| n.map(|n| (n, a))).collect();
+        let mut to_drop: Vec<crate::intern::Name> = Vec::new();
+        let mut missing = false;
+        let mut pn: &[crate::intern::Name] = &pnames[p.min(pnames.len())..];
+        let mut args: &[(Option<crate::intern::Name>, crate::ast::ExprId)] = &written[i..];
+        loop {
+            if let Some(&pname) = pn.first() {
+                if let Some(k) = name_to_arg.iter().position(|&(n, _)| n == pname) {
+                    let (_, arg) = name_to_arg.remove(k);
+                    out.push(Some(arg));
+                    to_drop.push(pname);
+                    pn = &pn[1..];
+                    continue;
+                }
+            }
+            match args.first() {
+                Some(&(Some(aname), arg)) => {
+                    if let Some(k) = to_drop.iter().position(|&n| n == aname) {
+                        to_drop.remove(k);
+                        args = &args[1..];
+                    } else if !pn.is_empty() && name_to_arg.iter().any(|&(n, _)| n == aname) {
+                        out.push(None);
+                        pn = &pn[1..];
+                        missing = true;
+                    } else {
+                        let ctor = self.java_annotation_ctor_string(c);
+                        let msg = if pnames.contains(&aname) {
+                            format!("parameter {} of {} is already instantiated", self.name_str(aname), ctor)
+                        } else {
+                            format!("{} does not have a parameter {}", ctor, self.name_str(aname))
+                        };
+                        let span = self.cur_ast().expr_span(arg);
+                        self.error(span, msg);
+                        *ok = false;
+                        out.push(Some(arg));
+                        pn = pn.get(1..).unwrap_or(&[]);
+                        args = &args[1..];
+                    }
+                }
+                Some(&(None, arg)) => {
+                    if !to_drop.is_empty() || missing {
+                        let span = self.cur_ast().expr_span(arg);
+                        self.error(span, "positional after named argument");
+                    }
+                    out.push(Some(arg));
+                    pn = pn.get(1..).unwrap_or(&[]);
+                    args = &args[1..];
+                }
+                None => {
+                    if pn.is_empty() {
+                        return out;
+                    }
+                    pn = &pn[1..];
+                }
+            }
+        }
+    }
+
+    /// `methString` of a Java annotation's constructor: `constructor J in trait J: (e1: T1, ..): J`, its elements its
+    /// parameters, in their class file's order.
+    fn java_annotation_ctor_string(&mut self, c: ClassId) -> String {
+        let mut params = Vec::new();
+        for m in self.java_annotation_elements(c) {
+            let element = self.syms.sym(m).name;
+            let ty = self.sig_of(m).ret;
+            params.push(format!("{}: {}", self.name_str(element), self.show(ty)));
+        }
+        let class = self.name_str(self.syms.class(c).name);
+        let (shown, _) = self.shown(super::referents::Referent::Class(c));
+        format!("constructor {} in {}: ({}): {}", class, shown, params.join(", "), class)
+    }
+
+    /// `MissingArgument` (E171) of the element `name`, at the annotation: `not enough arguments for ..` where the name
+    /// has a `$`, else `missing argument for parameter <name> of ..`.
+    #[cold]
+    #[inline(never)]
+    fn missing_java_annotation_element(&mut self, c: ClassId, name: crate::intern::Name, span: crate::source::Span) {
+        let ctor = self.java_annotation_ctor_string(c);
+        let shown = self.name_str(name);
+        let msg = if shown.contains('$') { format!("not enough arguments for {}", ctor) } else { format!("missing argument for parameter {} of {}", shown, ctor) };
+        self.error(span, msg);
     }
 
     /// The annotations of the definition `d` (its own unless `own` is false: a class's are its

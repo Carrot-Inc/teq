@@ -641,3 +641,22 @@ and `pos/i17735a.scala`, `pos/i22440.scala` (`accepts`), `warn/i22629.scala` and
 more specialized than the right hand side expression's type Int` (scalac's `(1 : Int)`): the same review gave a literal
 pattern its constant type, which teq's printer writes `1`, where the check took the widened `Int`. No test of `tests/run` names a
 `-Wconf`, so `tests/scala3/run.py`, which reads the options with the same functions, runs as before.
+
+## teq fix's fix-up: a binder's annotations, `typeParam` by owner (2026-10-19)
+
+The fix-up of the fix-verb part (the review of `340567fdd`) ported `Parsers.typeParam`'s owner decision for a type
+lambda's and a polymorphic function's binders (a `_` binder, `acceptsWildcard`; context bounds from 3.6,
+`acceptsCtxBounds`, which a polymorphic function desugars as `Desugar.elimContextBounds` does and a type lambda
+refuses, `stripContextBounds`), read a higher-kinded parameter's own parameter's annotations and context bounds
+(`annotsAsMods`, `IllegalContextBounds`), and typed a binder's annotations. Eight tests moved:
+
+- To `accepts` (from `syntax`): `pos/contextbounds-for-poly-functions` (the desugaring, named and braced bounds, a
+  type lambda as a bound, a named evidence in a later parameter's type), `pos/i13660` and `pos/i19942` (a `_`
+  binder).
+- To `same` (from `syntax`): `neg/i3452` and `neg/i4986c`, whose errors teq now reaches; from `superset`:
+  `neg/i22552`, "context bounds are not allowed in type lambdas" in scalac's place.
+- `neg/i2887b` to `superset` (from `syntax`): its `X[_] <: [_] =>> Any` now parses, and teq's typer, which does not
+  apply a parameter by a bound that is a type lambda, reports `this type does not take type arguments` beside the
+  test's error.
+- `pos/i22922` to `rejects` (from `syntax`): its `type Const[C] = [_] =>> C` now parses, and the test stops at a proof
+  of an intersection's equality (`Cannot prove that ... =:= ...`) teq's typer does not make.

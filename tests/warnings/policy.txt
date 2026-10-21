@@ -61,3 +61,9 @@ unused_constant: -Wunused:explicits
 unused_constant: -Wunused:explicits -Werror
 overlap: -deprecation -Wtostring-interpolated
 overlap: -Wtostring-interpolated
+nowarn_binder: -deprecation
+nowarn_binder:
+nowarn_binder_context: -deprecation
+nowarn_binder_context: -deprecation -Werror
+nowarn_binder_werror: -deprecation -Werror
+nowarn_binder_cast: -deprecation -Werror

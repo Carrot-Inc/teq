@@ -1,0 +1,45 @@
+Driver/AnnotatedModifiers/input.scala:13:3: warning: [Modifiers.mod]: Mod.Annot @ann
+    @ann inline def f = 1 // assert: Modifiers.mod
+    ^^^^
+Driver/AnnotatedModifiers/input.scala:13:8: warning: [Modifiers.mod]: Mod.Inline inline
+    @ann inline def f = 1 // assert: Modifiers.mod
+         ^^^^^^
+Driver/AnnotatedModifiers/input.scala:14:3: warning: [Modifiers.mod]: Mod.Annot @ann
+    @ann transparent inline def g = 2 // assert: Modifiers.mod
+    ^^^^
+Driver/AnnotatedModifiers/input.scala:14:8: warning: [Modifiers.mod]: Mod.Transparent transparent
+    @ann transparent inline def g = 2 // assert: Modifiers.mod
+         ^^^^^^^^^^^
+Driver/AnnotatedModifiers/input.scala:14:20: warning: [Modifiers.mod]: Mod.Inline inline
+    @ann transparent inline def g = 2 // assert: Modifiers.mod
+                     ^^^^^^
+Driver/AnnotatedModifiers/input.scala:15:3: warning: [Modifiers.mod]: Mod.Annot @modifiers.ann()
+    @modifiers.ann() @tagged[Int] inline def h = 3 // assert: Modifiers.mod
+    ^^^^^^^^^^^^^^^^
+Driver/AnnotatedModifiers/input.scala:15:20: warning: [Modifiers.mod]: Mod.Annot @tagged[Int]
+    @modifiers.ann() @tagged[Int] inline def h = 3 // assert: Modifiers.mod
+                     ^^^^^^^^^^^^
+Driver/AnnotatedModifiers/input.scala:15:33: warning: [Modifiers.mod]: Mod.Inline inline
+    @modifiers.ann() @tagged[Int] inline def h = 3 // assert: Modifiers.mod
+                                  ^^^^^^
+Driver/AnnotatedModifiers/input.scala:16:3: warning: [Modifiers.mod]: Mod.Annot @tagged[{ type T = Int }]
+    @tagged[{ type T = Int }] inline def i = 4 // assert: Modifiers.mod
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/AnnotatedModifiers/input.scala:16:29: warning: [Modifiers.mod]: Mod.Inline inline
+    @tagged[{ type T = Int }] inline def i = 4 // assert: Modifiers.mod
+                              ^^^^^^
+Driver/AnnotatedModifiers/input.scala:17:3: warning: [Modifiers.mod]: Mod.Annot @tagged[Mods.type]
+    @tagged[Mods.type] inline def j = 5 // assert: Modifiers.mod
+    ^^^^^^^^^^^^^^^^^^
+Driver/AnnotatedModifiers/input.scala:17:22: warning: [Modifiers.mod]: Mod.Inline inline
+    @tagged[Mods.type] inline def j = 5 // assert: Modifiers.mod
+                       ^^^^^^
+Driver/AnnotatedModifiers/input.scala:18:3: warning: [Modifiers.mod]: Mod.Annot @tagged[(Int, String)]
+    @tagged[(Int, String)] transparent inline def k = 6 // assert: Modifiers.mod
+    ^^^^^^^^^^^^^^^^^^^^^^
+Driver/AnnotatedModifiers/input.scala:18:26: warning: [Modifiers.mod]: Mod.Transparent transparent
+    @tagged[(Int, String)] transparent inline def k = 6 // assert: Modifiers.mod
+                           ^^^^^^^^^^^
+Driver/AnnotatedModifiers/input.scala:18:38: warning: [Modifiers.mod]: Mod.Inline inline
+    @tagged[(Int, String)] transparent inline def k = 6 // assert: Modifiers.mod
+                                       ^^^^^^

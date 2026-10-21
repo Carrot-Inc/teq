@@ -1,0 +1,15 @@
+DisableSyntax/NoFinalize/input.scala:11:9: error: [DisableSyntax.noFinalize]: finalize should not be used
+      def finalize(): Unit = () // assert: DisableSyntax.noFinalize
+          ^^^^^^^^
+DisableSyntax/NoFinalize/input.scala:15:19: error: [DisableSyntax.noFinalize]: finalize should not be used
+      protected def finalize(): Unit = () // assert: DisableSyntax.noFinalize
+                    ^^^^^^^^
+DisableSyntax/NoFinalize/input.scala:19:19: error: [DisableSyntax.noFinalize]: finalize should not be used
+      protected def finalize() = () // assert: DisableSyntax.noFinalize
+                    ^^^^^^^^
+DisableSyntax/NoFinalize/input.scala:23:9: error: [DisableSyntax.noFinalize]: finalize should not be used
+      def finalize() = () // assert: DisableSyntax.noFinalize
+          ^^^^^^^^
+DisableSyntax/NoFinalize/input.scala:27:19: error: [DisableSyntax.noFinalize]: finalize should not be used
+      protected def finalize() = () /* assert: DisableSyntax.noFinalize
+                    ^^^^^^^^

@@ -1,0 +1,169 @@
+# teq fix: lint and rewrite rules
+
+`teq fix` (docs/CLI.md) runs scalafix-shaped rules over a build's sources with no sbt and no JVM. A rule is Scala,
+run by teq's interpreter against the API of the std's package `teq.fix`, shaped after scalafix's `scalafix.v1` so
+that a scalafix rule reads alike and ports with local changes; it reads the trees and tokens of the files the
+compiler parsed and typed in the same process, and returns patches and lints, which `teq fix` plans, checks and
+applies. A program teq does not type is exit 2 before any rule runs, the syntactic rules among them.
+
+## Configuration
+
+`.scalafix.conf` beside `teq.lock` (or the file `--config` names), read by teq: the HOCON that scalafix's
+configurations use. `key = value`, `key: value` and `key { ... }`, dotted keys (`DisableSyntax.noVars = true`),
+objects merged as HOCON merges them, lists with or without commas and over lines, quoted and bare strings (a quoted
+one's characters as written, its spaces among them), adjacent strings joined with what stands between them
+(`"print""ln"`), numbers, booleans, `null`, `#` and `//` comments. Anything else of HOCON (`include`,
+`${...}`, `+=`, `"""`) is an error at its place (exit 2), never skipped.
+
+```
+rules = [DisableSyntax, NoUnusedImports, "file:fix/NoToString.scala"]
+DisableSyntax.noVars = true
+DisableSyntax.regex = [{ id = offensive, pattern = "[Pp]imp", message = "Please consider a less offensive word" }]
+lint.error.includes = ".*"
+```
+
+- `rules` (or `rule`): a rule's name, or `file:<path>`, a Scala file or a directory of them relative to the
+  configuration's directory, every concrete class there extending `teq.fix.Rule` with a constructor of no
+  arguments a rule under its `name`. `--rules A,B` replaces the list. A name of no rule is an error naming it.
+  A `class:<name>` entry is not read: it names no rule (exit 2).
+- A rule's settings are under its name, or a section its decoding reads instead (`disableSyntax`). A key of either
+  that the rule's decoding does not read is an error at its place (`DisableSyntax.noVar: no such setting`), as
+  metaconfig's unknown field is; the settings of a rule the run does not configure are ignored, as scalafix ignores
+  them.
+- `lint.error`, `lint.warning`, `lint.info` and `lint.ignore`: scalafix's `LintConfig`, each a `FilterMatcher`
+  (a regex, a list of them standing for their alternation, or `{ includes, excludes }`, a regex each, an object
+  naming none including everything and excluding nothing) found in a lint's full id, `<rule>.<category>` (or
+  `<rule>` for an empty category); the error filter first, then the warning one, then the info one, else the
+  lint's own severity; `lint.ignore` drops a lint. A regex that does not compile, or a value of another kind, is an
+  error at its place before any rule runs (exit 2), as `FilterMatcher.reader` decodes.
+- A setting a rule reads as a list (`DisableSyntax.keywords`, `regex`) that is no list is an error at its place
+  (exit 2), as metaconfig's collection decoders have it: `Conf.asList`, `asStrings`.
+
+## The rule API
+
+```scala
+import teq.fix.*
+
+final class NoPrintln(message: String) extends SyntacticRule("NoPrintln"):
+  def this() = this("use the logger")
+
+  override def withConfiguration(c: Configuration): Configured[Rule] =
+    c.conf.section("NoPrintln").string("message", message).map(new NoPrintln(_))
+
+  override def fix(using doc: SyntacticDocument): Patch =
+    doc.tree.collect {
+      case t @ Term.Apply(Term.Name("println"), List(arg)) =>
+        Patch.lint(Diagnostic("call", message, t.pos)) + Patch.replaceTree(t, "log.info(" + arg.syntax + ")").atomic
+    }.asPatch
+```
+
+- `SyntacticRule(name)` with `fix(using doc: SyntacticDocument): Patch`, `SemanticRule(name)` with
+  `fix(using doc: SemanticDocument): Patch`; `withConfiguration` returns the configured rule or `Configured.NotOk`.
+- `SyntacticDocument`: `input` (its `text` and `path`), `tree` (the `Source`), `tokens`.
+  `SemanticDocument` adds the typer's answers: `unusedImports`, the importees the typer's unused-import analysis
+  reports (`-Wunused:imports`'s), and `hasExpansions`, whether an inline or macro expansion was made in the file.
+  `unusedImports` throws where the analysis is unavailable (the program did not type), so a run that cannot answer
+  fails with exit 2 rather than finding nothing. `symbol` and `info` (SemanticDB's symbols and signatures, which
+  the next part ports from dotty's `SemanticSymbolBuilder` and `TypeOps`), `tpe`, `<:<` and `references` are not
+  there yet.
+- `Tree`: every node of the parser's trees, named and laid out as scalameta's: `Source`, `Pkg`, `Import`,
+  `Importer`, `Importee.Name`/`Rename`/`Unimport`/`Wildcard`/`Given`/`GivenAll`, `Defn.Val`/`Var`/`Def`/`Class`/
+  `Trait`/`Object`/`Enum`/`EnumCase`/`Given`/`GivenAlias`/`Type`, `Decl.*`, `Template`, `Init`, `Term.Param` and
+  `Term.ParamClause` (`isImplicit`, `isUsing`), `Type.Param`, `Mod.*` (each modifier where it is written, and
+  `Mod.Annot`), `Term.*` (`Name`, `Select`, `Apply`, `ApplyInfix`, `ApplyUnary`, `ApplyType`, `Function`, `Match`,
+  `Block`, `If`, `While`, `For`, `Return`, `Throw`, `New`, `Interpolate`, `AnonymousFunction` and `Placeholder` of
+  `_ + 1`, ...), `Lit.*`, `Case`, `Enumerator.*`,
+  `Pat.*`, `Type.*`; a kind with no class of its own is an `Other`. Each has `pos`, `syntax` (its text), `parent`,
+  `children`, `tokens`, `collect` and `traverse` (pre-order), and the named children of its kind (`fun`, `args`,
+  `tparams`, a higher-kinded `Type.Param`'s too (`A` of `F[+A]`, its variance a `Mod.Covariant`), and a type
+  lambda's, a polymorphic function type's and literal's (`A` of `[A] =>> List[A]`, a polymorphic function's
+  binder's context bounds among its children), `Type.Annotate`'s `tpe` and `annots` (`@ann(1 == 2)` a `Mod.Annot`),
+  `qual`, `name`, `mods`, `pats`, `rhs`, `templ`, ...), with the extractors scalameta's rules match on
+  (`Term.Apply(fun, args)`, `Term.Apply.Initial(...)`, `Term.Select(qual, name)`, `Term.Name(value)`, `Lit.Unit()`).
+  An expression in parentheses of its own is a `Term.Parens`, which scalameta drops. A `Template` is scalameta's:
+  from the token after the header (past `extends`) to its definition's end, its braces and an empty body in it; a
+  `Term.ParamClause` spans its parentheses, an empty `()` too.
+  What the parser makes up (a case class's companion, a `derives` clause's given, a pattern definition's vals, the
+  lambda a higher-kinded parameter's bound is made over its clause, whose written bound stands in its place, a
+  polymorphic function's evidences) is no node: a pattern definition
+  is the `Defn.Val` written. Two handles of one node are equal; a node of a document the rules no longer read throws
+  when asked anything.
+- `Token`: every byte of the file is in one, trivia included: `kind` is scalameta's token class (`KwVar`, `Ident`,
+  `Semicolon`, `Comma`, `LeftBrace`, `Space`, `Tab`, `LF`, `CRLF`, `Comment`, `Constant.Int`,
+  `Interpolation.Part`, ...), `text`, `value` (a comment's text inside its delimiters, an identifier's name without
+  its backquotes), `pos`, `isKeyword`,
+  `isTrivia`. An end marker is its `end` and its name, two `Ident`s.
+- `Position`: `start` and `end` in UTF-16 units of `input.text` (a `String`'s, as scalameta's), `startLine`,
+  `startColumn`, `endLine`, `endColumn` from 0, `text`; `Position.Range(input, start, end)` from offsets of the text,
+  a regex match's among them. The lints print in the compiler's columns.
+- `Patch`: `addLeft` and `addRight` of a token or a tree, `removeToken`, `removeTokens`, `replaceToken`,
+  `replaceTree` (the tree's tokens removed and the text added right of the first, scalafix's), `removeImportee`
+  (dotty's `CheckUnused.checkImports` edits: the importer goes with its last importee, the import with its last
+  importer, a clause with one importee kept written as that importee's import), `addGlobalImport("a.b.c")`
+  (scalafix's `ImportPatchOps`: a line `import a.b.c` right of the last token of the file's leading imports, else of
+  `fallbackToken`'s token: in a package clause, before its first statement's line and that statement's leading
+  comment, inside its braces where it has them; in a file whose first statement is no package clause, at its start;
+  unless the file has it written in a top-level import), `lint(Diagnostic(...))`, `+`, `empty`, `atomic`, and
+  `asPatch` of a collection or an option of patches. A token, an importee or a position of another document than
+  the one the rule reads fails the rule, in a patch as in an accessor.
+- `Diagnostic(id, message, position, explanation = "", severity = LintSeverity.Error)`, or a class implementing
+  `message`, `position`, `severity`, `categoryID`. Its full id is `<rule>.<id>`.
+- `Configuration` and `Conf`: `c.conf.section(name)` (an empty one where the configuration has none), `get`,
+  `keys`, `items`, `string(key, default)`, `boolean`, `int`, `strings`, `asRegex`, `place` (the setting's file,
+  line and column for a message); `Configured.Ok`/`NotOk` with `map`, `flatMap` and `Configured.all`.
+
+## Patches, suppressions and rounds
+
+- Each rule's edits merge as scalafix's: on one token, additions concatenated in the order made, a removal and an
+  addition a replacement. Across rules, edits that are the same count once and additions to a token none removes are
+  joined in the configured order of the rules; a removal by one rule and an addition by another on one token is a
+  conflict, exit 2 with both rules named. The edits are applied in dotty's `Rewrites.Patches.apply` order: each
+  distinct edit once, sorted by its start alone (a stable sort over the tokens' edits, then the import removals', then
+  the added imports), one that overlaps the next refused (exit 2, both rules named). The whole run is planned before a
+  file is written; a file two configurations share must be edited alike by both, a failure in either refuses it, and
+  the lints of both are printed, each once. A file is written beside itself, then renamed over the original.
+- Untouched bytes stay as they are. A `\n` a rule inserts is written as the file's line ending, that of its first
+  line break. An edit that would end between a CR and its LF ends after the LF, the line's CRLF written after its
+  text.
+- Suppressions are scalafix's `EscapeHatch`: `// scalafix:off [rules]` to `// scalafix:on [rules]`,
+  `// scalafix:ok [rules]` after the tree it ends or on its line, `@SuppressWarnings(Array("[scalafix:]rule"))` or
+  `"all"` on a definition. A suppressed lint is dropped; an `atomic` patch with an edit where its rule is suppressed
+  is dropped whole; other edits are not suppressed, as scalafix does not suppress them. A lint made inside an
+  atomic patch goes with the patch: dropped where its edits are suppressed, reported where they are not. An anchor,
+  or an annotated rule written `scalafix:`, that suppresses nothing is the warning `UnusedScalafixSuppression`.
+- At most two rounds. The rules run over the files as read; where they edit, every program that reads an edited
+  file is typed again over what they left (a dependent's, whose own files are as they were, too; one that no longer
+  types refuses the whole run before a file is written) and the rules run once more, where only `NoUnusedImports`'
+  removals may edit (an import a rewrite made unused, as `Nil` rewritten `List.empty` leaves `import scala.Nil`);
+  any other edit then is exit 2, the rule rewriting its own output. In the second round a file the first left as it
+  was reads alike, so only the semantic rules run over it again (another file's edits may leave its imports
+  unused), the others' results being the first round's. A run that edits nothing types once.
+
+## The rules teq ships
+
+Each is ported from its repository (tests/fix/REFERENCES.md: the revisions, the licences, the fixtures run as
+tests/fix's cases), its file keeping the repository's notice.
+
+- `DisableSyntax` (scalafix): every setting of its `DisableSyntaxConfig` (`keywords`, `noVars`, `noThrows`,
+  `noNulls`, `noReturns`, `noWhileLoops`, `noAsInstanceOf`, `noIsInstanceOf`, `noSemicolons`, `noTabs`, `noXml`,
+  `noCovariantTypes`, `noContravariantTypes`, `noDefaultArgs`, `noValInAbstract`, `noImplicitObject`,
+  `noImplicitConversion`, `noFinalVal`, `noFinalize`, `noValPatterns`, `noUniversalEquality`,
+  `noUniversalEqualityMessage`, `regex` as strings or objects with `id`, `pattern` or `regex = { pattern,
+  captureGroup }`, `message` and its `{$n}` substitution), its section also `disableSyntax`. `noXml` is read and
+  reports nothing: teq reads no XML literal.
+- `CatsImplicitsImport` (xuwei-k/scalafix-rules): a warning on `import cats.implicits._`; the setting `message`.
+- `TypelevelAs` (typelevel-scalafix): the lints of `.map(_ => <literal>)` and `.as(())`.
+- `EmptyCollectionsUnified` (scalafix-unified): `List()`, `List[T]()`, `Set()`, `Map()` and `Nil` written as
+  `.empty` (and `List()` in a pattern as `Nil`), each atomically, its quasiquotes written as the patterns they
+  stand for.
+- `NoUnusedImports` (teq's): every importee the typer's unused-import analysis reports removed through dotty's edits; a
+  hiding selector (`a as _`) goes in the same run as its clause's last wildcard, as `CheckUnused.matchingSelector`
+  counts it used only beside one. In a file where an expansion was made (an inline method's or a macro's), scalac
+  credits imports through the expansion that teq's analysis does not yet see (CheckUnused's `resolveUsage` over the
+  expansion's trees): there each unused importee is the warning `NoUnusedImports.unverified` and stays.
+
+## Debugging a rule
+
+`TEQ_FIX_TREE=1` prints each document's tree, a node a line with its text; `TEQ_FIX_TRACE=1` the counts of each
+document's nodes, tokens, edits and lints and each rule's failure, then the run's phases (the rules' program, the
+typing, the rules, the planning) in milliseconds and what the allocator reserved.

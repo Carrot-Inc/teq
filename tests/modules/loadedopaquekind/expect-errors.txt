@@ -1,0 +1,4 @@
+tests/modules/loadedopaquekind/b/Use.scala:5:18: error: type argument C does not have the same kind as its bound [_]
+    type Bad = Box[lok.Lib.C]
+                   ^^^^^^^^^
+1 error found

@@ -407,7 +407,7 @@ impl<'a> Worker<'a> {
                 }
                 let mark = self.snapshot();
                 let agreement = self.compare_sigs(c, msig.clone(), None, p, bt);
-                self.rollback(mark);
+                self.rollback(&mark);
                 if agreement != Agreement::Params && declares(self, p) {
                     return Some(p);
                 }

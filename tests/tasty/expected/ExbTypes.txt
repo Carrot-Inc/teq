@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/ExbTypes.tasty (TASTy 28.8, 659 bytes)
+package fix.exist
+@SourceFile trait ExbTypes extends Object {
+  type Type[A]
+  object Type extends Object {
+    def apply[A](using t: Type[A]): Type[A] = ...
+  }
+}

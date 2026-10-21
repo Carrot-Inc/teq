@@ -473,6 +473,13 @@ pub struct Key {
     pub configuration: String,
 }
 
+/// `Export::typing_args_with`.
+pub struct TypingArgs {
+    pub head: Vec<String>,
+    pub tail: Vec<String>,
+    pub jvm: bool,
+}
+
 impl Key {
     pub fn new(project: &str, configuration: &str) -> Key {
         Key { project: project.to_string(), configuration: configuration.to_string() }
@@ -1031,19 +1038,10 @@ impl Export {
 
     /// `resident_args`, `progress` told of each artifact fetched for it.
     pub fn resident_args_with(&self, key: &Key, progress: &(dyn Fn(&str) + Sync)) -> Result<Vec<String>, String> {
-        let project = &self.projects[&key.project];
-        let conf = &project.configurations[&key.configuration];
-        let jvm = project.platform == Platform::Jvm;
+        let typing = self.typing_args_with(key, progress)?;
         let mut args = vec!["compiler".to_string(), "watch".to_string()];
-        args.extend(self.inputs_of(key).into_iter().map(|p| self.relative(&p)));
-        for x in &project.description.excludes {
-            args.extend(["--exclude".to_string(), x.clone()]);
-        }
-        let jars = self.jars_with(key, progress)?;
-        if !jars.is_empty() {
-            args.extend(["--classpath".to_string(), join_paths(&jars)]);
-        }
-        if jvm {
+        args.extend(typing.head);
+        if typing.jvm {
             args.extend(["--target", "jvm", "--std=scala-library", "--all-mains", "--analysis-version", "3", "-o"].map(str::to_string));
             args.push(self.classes(key));
         } else if let Some(link) = self.test_link(key) {
@@ -1052,10 +1050,29 @@ impl Export {
         } else {
             args.push("--check".to_string());
         }
-        args.extend(project.description.session_args());
-        args.extend(conf.flags.args(jvm));
-        args.extend(self.source_args(key));
+        args.extend(typing.tail);
         Ok(args)
+    }
+
+    /// What of the resident's command line types the configuration's closure, without what it writes: the
+    /// inputs, the exclusions and the class path (`head`), then the session's arguments, the flags and the roots'
+    /// source versions (`tail`). `teq fix` types a configuration with these (`fix::engine`).
+    pub fn typing_args_with(&self, key: &Key, progress: &(dyn Fn(&str) + Sync)) -> Result<TypingArgs, String> {
+        let project = &self.projects[&key.project];
+        let conf = &project.configurations[&key.configuration];
+        let jvm = project.platform == Platform::Jvm;
+        let mut head: Vec<String> = self.inputs_of(key).into_iter().map(|p| self.relative(&p)).collect();
+        for x in &project.description.excludes {
+            head.extend(["--exclude".to_string(), x.clone()]);
+        }
+        let jars = self.jars_with(key, progress)?;
+        if !jars.is_empty() {
+            head.extend(["--classpath".to_string(), join_paths(&jars)]);
+        }
+        let mut tail = project.description.session_args();
+        tail.extend(conf.flags.args(jvm));
+        tail.extend(self.source_args(key));
+        Ok(TypingArgs { head, tail, jvm })
     }
 
     /// The source version of each source root of the closure (`--source-at <root> <version>`), where the
