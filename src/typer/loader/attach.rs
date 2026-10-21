@@ -1,6 +1,6 @@
 //! The documents a language server's client is shown a library's source in (docs/TARGETS.md,
 //! "The language server"). A jar's source is an entry
-//! of the sources jar beside it, written once, read-only, under the cache at a path named by
+//! of its sources jar (`places::SourcesLookup`), written once, read-only, under the cache at a path named by
 //! the sources jar's identity (a hash of its entries' names, CRCs and sizes) and the entry, so
 //! that every session reading one sources jar names one document, and two versions of a jar two;
 //! a product's source is the producer's own file, which the product's manifest names. A library
@@ -199,8 +199,8 @@ fn token_ends(name: &str, rest: &str) -> bool {
 
 impl<'a> Worker<'a> {
     /// The path of the document of the source `recorded` of the loaded file `file`, with the
-    /// sources jar's entry it shows where it is a jar's: `None` without a sources jar or a
-    /// product's source on disk, and for a recorded path the sources jar holds no entry or
+    /// sources jar's entry it shows where it is a jar's: `None` without a sources jar whose entry
+    /// reads or a product's source on disk, and for a recorded path the sources jar holds no entry or
     /// several entries for.
     fn document_path(&mut self, file: u32, recorded: &str) -> Option<(PathBuf, Option<(String, usize)>)> {
         let jar = {
@@ -211,14 +211,13 @@ impl<'a> Worker<'a> {
             let (source, _) = self.product_source_of(file)?;
             return Some((crate::source::canonicalize(&source).ok()?, None));
         }
-        let sources = super::places::sources_jar_of(&jar)?;
         let dir = documents_dir()?;
         self.with_loader(|w| {
-            let loaded = w.loaded_mut();
-            let sj = loaded.sources_jars.entry(sources.clone()).or_insert_with(|| SourcesJar::open(&sources));
-            let sj = sj.as_mut()?;
-            let Match::Found(i) = sj.find(recorded) else { return None };
-            let jar_name = sources.rsplit(['/', '\\']).next().unwrap_or(&sources).to_string();
+            let lookup = &mut w.loaded_mut().sources;
+            // The candidate whose entry reads: one found damaged at the read is passed over.
+            let (sources, i, _) = lookup.entry_text(&jar, recorded)?;
+            let sj = lookup.opened.get(&sources)?;
+            let jar_name = super::places::file_name(&sources).to_string();
             Some((dir.join(sj.identity()).join(jar_name).join(sj.entry_name(i)), Some((sources.clone(), i))))
         })
     }
@@ -231,7 +230,7 @@ impl<'a> Worker<'a> {
             let (_, text) = self.product_text(file)?;
             return Some(Document { path, text });
         };
-        let text = self.with_loader(|w| w.loaded_mut().sources_jars.get_mut(&sources)?.as_mut()?.text(i))?;
+        let text = self.with_loader(|w| w.loaded_mut().sources.opened.get_mut(&sources)?.text(i).ok())?;
         if !write_document(&path, &text) {
             return None;
         }
@@ -379,14 +378,13 @@ impl<'a> Worker<'a> {
             if !jar.ends_with(".jar") {
                 continue;
             }
-            let Some(sources) = super::places::sources_jar_of(jar) else { continue };
-            if sources.rsplit(['/', '\\']).next() != Some(name.as_str()) {
-                continue;
-            }
             let same = self.with_loader(|w| {
-                let loaded = w.loaded_mut();
-                let sj = loaded.sources_jars.entry(sources.clone()).or_insert_with(|| SourcesJar::open(&sources));
-                sj.as_ref().map_or(false, |sj| sj.identity() == identity)
+                let lookup = &mut w.loaded_mut().sources;
+                if !lookup.names(jar, &name) {
+                    return false;
+                }
+                let Some(sources) = lookup.find(jar) else { return false };
+                super::places::file_name(&sources) == name && lookup.opened.get(&sources).map_or(false, |sj| sj.identity() == identity)
             });
             if same {
                 return Some(j as u16);
@@ -405,7 +403,7 @@ impl<'a> Worker<'a> {
         let Some(file_name) = entry.rsplit('/').next().map(str::to_string) else { return };
         let map = self.source_map(jar);
         let jar_path = self.loaded.as_ref().map(|l| l.cp.paths[jar as usize].clone());
-        let Some(sources) = jar_path.as_deref().and_then(super::places::sources_jar_of) else { return };
+        let Some(sources) = jar_path.and_then(|j| self.with_loader(|w| w.loaded_mut().sources.find(&j))) else { return };
         let mut wanted: Vec<crate::classpath::CpFile> = Vec::new();
         for (recorded, files) in map.iter() {
             if recorded.rsplit('/').next() != Some(file_name.as_str()) {
@@ -413,7 +411,7 @@ impl<'a> Worker<'a> {
             }
             let found = self.with_loader(|w| {
                 let loaded = w.loaded_mut();
-                let sj = loaded.sources_jars.get(&sources).and_then(|s| s.as_ref())?;
+                let sj = loaded.sources.opened.get(&sources)?;
                 match sj.find(recorded) {
                     Match::Found(i) if sj.entry_name(i) == entry => Some(()),
                     _ => None,
@@ -435,7 +433,8 @@ impl<'a> Worker<'a> {
     /// path names (`<identity>/<sources jar>/<entry>`) whose recorded source is the entry,
     /// opened and entered where the program never reached them, or of the product directories
     /// for another path, whose source's document is the path. Kept until the loader reads
-    /// another file.
+    /// another file; a jar's document none of whose files is found (its sources found nowhere) is
+    /// not kept.
     pub(in crate::typer) fn document_files(&mut self, path: &Path) -> Vec<u32> {
         let Some(loaded) = self.loaded.as_ref() else { return Vec::new() };
         let read = loaded.files.len();
@@ -456,11 +455,7 @@ impl<'a> Worker<'a> {
         for (i, f) in loaded.files.as_slice().iter().enumerate() {
             let jar = &loaded.cp.paths[f.cp.jar as usize];
             let fits = match &jar_document {
-                Some(rel) => {
-                    let sources = jar.strip_suffix(".jar").map(|s| format!("{}-sources.jar", s));
-                    let named = sources.as_deref().and_then(|s| s.rsplit(['/', '\\']).next());
-                    rel.components().nth(1).and_then(|c| c.as_os_str().to_str()) == named
-                }
+                Some(rel) => jar.ends_with(".jar") && rel.components().nth(1).and_then(|c| c.as_os_str().to_str()).is_some_and(|name| loaded.sources.names(jar, name)),
                 None => !jar.ends_with(".jar"),
             };
             if fits {
@@ -474,6 +469,13 @@ impl<'a> Worker<'a> {
             if self.document_path(file, &recorded).map_or(false, |(p, _)| p == path) {
                 found.push(file);
             }
+        }
+        // A jar's document stands on its jar's sources being found: none found now (gone from the
+        // store, not yet fetched again) is no state to keep, and the next request derives it again,
+        // its files entered then.
+        if jar_document.is_some() && found.is_empty() {
+            self.with_loader(|w| w.loaded_mut().documents.remove(path));
+            return found;
         }
         self.with_loader(|w| {
             let state = w.loaded_mut().documents.entry(path.to_path_buf()).or_default();

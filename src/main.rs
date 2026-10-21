@@ -553,6 +553,9 @@ pub(crate) struct Options {
     /// before it taken in (the language server's sessions).
     pub wait_for_build: bool,
     pub positions: watch::Positions,
+    /// `watch --check --index --sources-of <jar> <files>`: per jar of the class path, where the
+    /// language server has its sources looked for, in order (`typer::loader::places`).
+    pub library_sources: Vec<(String, Vec<String>)>,
     pub module_per_file: Vec<String>,
     pub hot: bool,
     pub main: Option<String>,
@@ -945,7 +948,7 @@ fn interp_refuses(a: &str) -> Option<&'static str> {
         "-o" | "--split" | "--module-per-file" | "--hot" | "--size-report" | "--products" | "--own" | "--all-mains" | "--removed" | "--analysis-version" | "--java-output-version" => Some("is a build's: the interpreter runs the program and writes nothing"),
         "--target" => Some("belongs to teq compiler: the interpreter is a target of its own"),
         "--std" | "--no-std" => Some("belongs to teq compiler: the interpreter runs on the lean std"),
-        "--check" | "--index" | "--wait-for-build" | "--positions" => Some("belongs to teq compiler watch: the interpreter runs once and keeps no session"),
+        "--check" | "--index" | "--wait-for-build" | "--positions" | "--sources-of" => Some("belongs to teq compiler watch: the interpreter runs once and keeps no session"),
         _ => None,
     }
 }
@@ -969,6 +972,7 @@ pub(crate) fn parse_file_options(command: &str, args: &[String]) -> Options {
         fix_std: false,
         wait_for_build: false,
         positions: watch::Positions::Utf16,
+        library_sources: Vec::new(),
         module_per_file: Vec::new(),
         hot: false,
         main: None,
@@ -1042,6 +1046,10 @@ pub(crate) fn parse_file_options(command: &str, args: &[String]) -> Options {
                     eprintln!("--positions takes utf-16 or utf-8");
                     std::process::exit(2);
                 }
+            },
+            "--sources-of" => match (args.next(), args.next()) {
+                (Some(jar), Some(list)) => o.library_sources.push((jar, list.split(classpath::SEPARATOR).filter(|p| !p.is_empty()).map(str::to_string).collect())),
+                _ => usage_for(command),
             },
             "--module-per-file" => match args.next() {
                 Some(list) => o.module_per_file.extend(list.split(',').filter(|p| !p.is_empty()).map(str::to_string)),
@@ -1252,6 +1260,10 @@ pub(crate) fn parse_file_options(command: &str, args: &[String]) -> Options {
     }
     if o.wait_for_build && o.command != "watch" {
         eprintln!("--wait-for-build belongs to `teq compiler watch`");
+        std::process::exit(2);
+    }
+    if !o.library_sources.is_empty() && !o.index {
+        eprintln!("--sources-of belongs to `teq compiler watch --check --index`");
         std::process::exit(2);
     }
     o.syntax.index = o.index;
@@ -1791,6 +1803,7 @@ fn own_products_entry(opts: &Options) -> Option<usize> {
 pub(crate) fn open_classpath(opts: &Options, typer: &mut typer::Worker, cp: Option<classpath::Classpath>, jar_files: Vec<source::FileId>, jdk_file: source::FileId) {
     if let Some(cp) = cp {
         typer.set_classpath(cp, jar_files, jdk_file, opts.jdk_release, opts.std);
+        typer.loaded_mut().sources.candidates = opts.library_sources.iter().cloned().collect();
     }
 }
 

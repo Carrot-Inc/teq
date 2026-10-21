@@ -21,14 +21,14 @@
 #   pieces   the long suites' pieces (tests/support/pieces.sh): each of lsp, jvm-watch, modules and split deals every
 #            unit it lists to exactly one piece of 1 to 8, in its order, its listing of three the units dealt; the
 #            module-only checks and split programs, the programs on both of jvm-watch's lists and the language
-#            server's idle minute and jar fetch among the units; selectors out of range or misspelled refused before
+#            server's idle minute, jar fetch and libraries' sources among the units; selectors out of range or misspelled refused before
 #            any setup, another option refused there too, a piece of no units passed; every listed unit asked for once
 #            by the suite's places that run units (PIECES_DRY=1); a unit asked for twice, never or unlisted, a body
 #            run twice, never or unasked failing a stand-in suite's piece; the execution identities, each unit's body
 #            stamping its name and site as it starts over stand-in binaries (PIECES_STAMP_ONLY=1): every piece of
 #            every n of 1 to 8 running each site of each of its units once, the pieces of each n together the whole
 #            run's bodies and the whole run's 1/1's (tests/lsp.sh's scenarios each at the automatic count, two and
-#            sixteen workers, the idle minute and the jar fetch once); on a copy of tests/jvm-watch.sh, a program's body
+#            sixteen workers, the idle minute, the jar fetch and the libraries' sources once); on a copy of tests/jvm-watch.sh, a program's body
 #            run twice behind its guard, another's dropped behind it, a section's dropped, a retype session called
 #            twice and another's call deleted each failing the piece;
 #            tests/support/pieces.py's merge summing counters, counting a whole suite's verdict and a failure any
@@ -300,9 +300,9 @@ check "pieces: modules lists the checks once a run and the split programs as uni
 check "pieces: jvm-watch lists a program by its list, the two on both lists twice, and its nine sessions one after another" "$work/pieces-jvm-watch.1" eval \
   '[ "$(units_of jvm-watch | grep -c -x -E "(passing|watch-only)/(inline_definition_gaps|scala3_typeclass-derivation3)")" = 4 ] &&
   [ "$(units_of jvm-watch | grep -c "^passing/")" = "$(wc -w < tests/jvm-passing.txt)" ] && [ "$(units_of jvm-watch | grep -c "^retype/")" = 9 ]'
-check "pieces: lsp lists every scenario of the driver once, the idle minute and the jar fetch among them" "$work/pieces-lsp.1" eval \
+check "pieces: lsp lists every scenario of the driver once, the idle minute, the jar fetch and the libraries' sources among them" "$work/pieces-lsp.1" eval \
   '[ "$(units_of lsp | sort)" = "$(sed -n "s/^const scenarios = { \(.*\) }$/\1/p" tests/lsp/driver.mjs | tr -d " " | tr "," "\n" | sort)" ] &&
-  [ "$(units_of lsp | grep -c -x -E "idleMinute|jarFetch")" = 2 ]'
+  [ "$(units_of lsp | grep -c -x -E "idleMinute|jarFetch|librarySources|sourcesFailures|sourcesHeld|sourcesBackoff|sourcesPaths")" = 7 ]'
 # A selector out of range or misspelled, or another option, is refused before any setup; a piece of no units passes
 # as one.
 : > "$work/selectors.log"
@@ -315,9 +315,11 @@ for suite in lsp jvm-watch modules split; do
 done
 TEQ=/nonexistent timeout 60 tests/modules.sh --piece 1/2 misuse > /dev/null 2>&1
 [ $? = 2 ] || echo "modules --piece 1/2 misuse: not refused" >> "$work/selectors.log"
-out=$(TEQ=/nonexistent timeout 60 tests/lsp.sh --piece 40/40 2>&1)
+# The piece past the suite's units' count is one of no units.
+n=$(( $(units_of lsp | wc -l) + 1 ))
+out=$(TEQ=/nonexistent timeout 60 tests/lsp.sh --piece $n/$n 2>&1)
 code=$?
-[ $code = 0 ] && [ "$out" = "$(printf 'pieces: lsp 40/40: 0 units:\npieces: lsp 40/40 summary: exit=0 units=0')" ] || echo "lsp --piece 40/40: exit $code, $out" >> "$work/selectors.log"
+[ $code = 0 ] && [ "$out" = "$(printf 'pieces: lsp %s/%s: 0 units:\npieces: lsp %s/%s summary: exit=0 units=0' $n $n $n $n)" ] || echo "lsp --piece $n/$n: exit $code, $out" >> "$work/selectors.log"
 check "pieces: selectors out of range or misspelled refused before setup, a piece of no units passed" "$work/selectors.log" eval '[ ! -s "$work/selectors.log" ]'
 # Each suite's places that run units ask for every unit it lists once (PIECES_DRY=1: none runs).
 for suite in lsp jvm-watch modules split; do
@@ -363,7 +365,7 @@ printf '%s\n' '#!/bin/bash' 'case $1 in tests/lsp/driver.mjs) ;; *) exec "$REAL_
   'names=$(sed -n "s/^const scenarios = { \(.*\) }$/\1/p" tests/lsp/driver.mjs | tr -d " " | tr "," "\n")' \
   '[ -z "$LSP_UNITS" ] || echo "$names" > "$LSP_UNITS"' \
   'for name in $names; do' \
-  '  case ,${LSP_ONLY:-}, in *,$name,*) ;; ,,) case $name in idleMinute|jarFetch) continue ;; esac ;; *) continue ;; esac' \
+  '  case ,${LSP_ONLY:-}, in *,$name,*) ;; ,,) case $name in idleMinute|jarFetch|librarySources|sourcesFailures|sourcesHeld|sourcesBackoff|sourcesPaths) continue ;; esac ;; *) continue ;; esac' \
   '  [ -z "$PIECES_RAN" ] || echo "$name ${TEQ_SESSION_THREADS:-auto}" >> "$PIECES_RAN"' 'done' 'echo "0 passed, 0 failed"' > "$stand/node"
 for tool in java javap scala-cli; do printf '#!/bin/sh\nexit 1\n' > "$stand/$tool"; done
 chmod +x "$stand"/*

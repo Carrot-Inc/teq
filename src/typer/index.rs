@@ -2206,14 +2206,28 @@ impl<'a> Worker<'a> {
     /// use or a declaration, with the index.
     fn document_target_at(&mut self, path: &std::path::Path, offset: u32) -> Option<(Span, DocTarget, std::sync::Arc<DocIndex>)> {
         // The offset is in the text the client holds, which is the file's as the server read it:
-        // a file made whole by this query held another text, and the query is declined.
-        let held = super::loader::attach::document_bytes(path)?;
+        // a file made whole by this query held another text, and the query is declined. The bytes
+        // are read before the lookup, and no file at all (teq's cache cleared) is no other text: the
+        // lookup reacquires the sources or reports their miss, the document is made whole, and the
+        // server compares what it holds with the file written when the answer goes out.
+        let held = match std::fs::symlink_metadata(path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            _ => Some(super::loader::attach::document_bytes(path)?),
+        };
         let ix = self.document_index(path)?;
-        if held != ix.text.as_bytes() {
+        if held.is_some_and(|held| held != ix.text.as_bytes()) {
             return None;
         }
         let r = ix.at(offset)?;
         Some((r.span, r.target, ix))
+    }
+
+    /// The offset of a position the language server gave as a line and a character, for a library
+    /// document the client has not opened whose file is gone: the document made whole through the
+    /// lookup first (`document_index`), which reports a miss where its sources are found nowhere.
+    pub fn document_offset(&mut self, path: &std::path::Path, line: u32, character: u32, positions: crate::watch::Positions) -> Option<u32> {
+        let ix = self.document_index(path)?;
+        Some(crate::index::offset_of(&ix.text, line, character, positions))
     }
 
     /// The documents indexed so far, each as `document_index` keeps it: made whole again where

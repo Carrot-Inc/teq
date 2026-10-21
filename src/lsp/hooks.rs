@@ -4,7 +4,14 @@
 //! and `TEQ_LSP_TEST_BARRIER=<prefix>` holds a session's build of named files (an edit's, never
 //! the idle build of every file) at its start, at its commit point and before its answer while
 //! `<prefix>.start`, `<prefix>.commit` or `<prefix>.answer` exists (a file that names process ids
-//! holds those sessions alone). Unset, each costs the test of a value read once.
+//! holds those sessions alone). Unset, each costs the test of a value read once. The fetches of the
+//! libraries' sources (`sources.rs`) append to the trace too: a transfer's start (`sources-start
+//! <attempt> <url>`), the archive placed in the store for every binary that reads it
+//! (`sources-published`), an attempt's end with its outcome (`sources-released <attempt> <url>
+//! <outcome>`), an artifact whose sources a candidate of every binary holds, with no transfer
+//! (`sources-held 0 <url>`), and a session's report of an archive it found damaged at a read
+//! (`sources-rejected <attempts> <url>`); `TEQ_LSP_SOURCES_MINUTE` makes the minute their retries
+//! count in that many milliseconds.
 
 use std::io::Write;
 use std::path::PathBuf;

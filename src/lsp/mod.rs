@@ -14,6 +14,7 @@ mod export;
 pub(crate) mod hooks;
 pub mod json;
 mod rpc;
+mod sources;
 pub mod uri;
 mod workspace;
 
@@ -613,6 +614,8 @@ struct Server {
     /// label (`labelOffsetSupport`); else as the label's text, as dotty's presentation compiler
     /// gives it (`SignatureHelpProvider.paramToParameterInformation`).
     label_offsets: bool,
+    /// The fetches of the sessions' libraries' sources.
+    sources: sources::Fetcher,
 }
 
 
@@ -668,6 +671,7 @@ pub fn run(args: &[String]) -> ! {
         snippets: false,
         document_changes: false,
         label_offsets: false,
+        sources: sources::Fetcher::new(),
     };
     server.serve(inbox)
 }
@@ -782,6 +786,12 @@ fn wake_in(now: Instant, deadlines: [Option<Instant>; 3]) -> Duration {
     soonest.map_or(Duration::from_millis(500), |t| t.saturating_duration_since(now).min(Duration::from_millis(500)))
 }
 
+/// Whether nothing at all is at `path`, a dangling link being something: a library document's
+/// file removed with teq's cache, which the session makes whole again.
+fn missing(path: &Path) -> bool {
+    matches!(std::fs::symlink_metadata(path), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+}
+
 /// The text of a file on disk, a regular file's alone: a pipe in a document's place is never
 /// opened, which would block the server.
 fn read_text(path: &Path) -> Option<String> {
@@ -811,8 +821,13 @@ impl Server {
                 Ok(Event::Client(Err(msg))) => respond_error(&Json::Null, PARSE_ERROR, &msg),
                 Ok(Event::ClientGone) => self.exit(),
                 Ok(Event::Line(s, generation, line)) => {
+                    let json = Json::parse(&line).unwrap_or(Json::Null);
+                    // What a child reports of the libraries' sources is the fetcher's before anything is
+                    // decided about the message that carried it: a stale child's, a discarded or dropped
+                    // answer's.
+                    self.sources_reported(&json);
                     if self.sessions.get(s).map_or(false, |x| x.generation == generation) {
-                        self.answer(s, &line);
+                        self.answer(s, json);
                     }
                 }
                 Ok(Event::Exited(s, generation)) => {
@@ -838,6 +853,7 @@ impl Server {
     }
 
     fn exit(&mut self) -> ! {
+        self.sources.stop();
         for s in &mut self.sessions {
             if let Some(p) = s.proc.take() {
                 p.kill();
@@ -907,6 +923,7 @@ impl Server {
                     self.settle_progress(s);
                 }
                 self.kill_exports();
+                self.sources.stop();
                 self.coalesce_until = None;
                 respond(&id, Json::Null);
             }
@@ -942,8 +959,8 @@ impl Server {
                     (Some(path), _) if self.library_document_changed(&path) => respond(&id, Json::Null),
                     (Some(path), Some((line, character))) => {
                         let verb = if method == "callHierarchy/incomingCalls" { "incoming" } else { "outgoing" };
-                        let Some(offset) = self.offset(&path, line, character) else { return respond(&id, Json::Null) };
-                        let command = format!("{} {} {}\n", verb, path.display(), offset);
+                        let Some(at) = self.position_at(&path, line, character) else { return respond(&id, Json::Null) };
+                        let command = format!("{} {} {}\n", verb, path.display(), at);
                         self.ask(id, method, Some(&path), &command, false)
                     }
                     _ => respond(&id, Json::Null),
@@ -960,19 +977,35 @@ impl Server {
         if self.library_document_changed(&path) {
             return respond(&id, Json::Null);
         }
-        let Some(offset) = self.offset(&path, line, character) else { return respond(&id, Json::Null) };
-        let command = format!("{} {} {}{}\n", verb, path.display(), offset, extra);
+        let Some(at) = self.position_at(&path, line, character) else { return respond(&id, Json::Null) };
+        let command = format!("{} {} {}{}\n", verb, path.display(), at, extra);
         self.ask(id, method, Some(&path), &command, false)
     }
 
     /// Whether a file no session owns (a library's source) is open with a text
     /// other than the one on disk, which the sessions' positions describe: its queries answer
-    /// nothing.
+    /// nothing. What is at the path and is not a regular file, or does not read, is another text.
+    /// No file at all (teq's cache cleared) is none: the session's lookup reacquires the sources or
+    /// reports their miss and makes the document whole again, and the answer's origin is checked
+    /// here again when it goes out, on the file the session wrote.
     fn library_document_changed(&self, path: &Path) -> bool {
         match self.docs.get(path) {
+            Some(_) if missing(path) => false,
             Some(doc) if !self.sessions.iter().any(|s| s.owns(path)) => read_text(path).map_or(true, |t| t != doc.text),
             _ => false,
         }
+    }
+
+    /// The position a navigation query sends: the byte offset in the text the client holds
+    /// (`offset`), or `<line>:<character>` for a jar's document the client has not opened whose
+    /// file is gone. There is no text here to turn that position with: the session resolves it in
+    /// the document it makes whole through its lookup (`Query::parse_at`).
+    fn position_at(&self, path: &Path, line: u32, character: u32) -> Option<String> {
+        let attached = || crate::typer::loader::attach::is_document(path) && !crate::typer::loader::attach::is_std_document(path);
+        if !self.docs.contains_key(path) && missing(path) && attached() {
+            return Some(format!("{}:{}", line, character));
+        }
+        self.offset(path, line, character).map(|o| o.to_string())
     }
 
     /// The byte offset of a position in the file as the client has it: the open document's
@@ -1668,6 +1701,10 @@ impl Server {
                     continue;
                 }
                 let description = workspace::description(&export, &key);
+                // The fetcher's configuration is the reloaded lock's, whether the session runs or not.
+                if let Ok(d) = &description {
+                    self.sources.want(&d.sources);
+                }
                 if description == self.sessions[s].description {
                     continue;
                 }
@@ -1925,6 +1962,8 @@ impl Server {
         if description.inputs.is_empty() {
             return;
         }
+        // The sources of its libraries that no candidate holds, fetched in the background.
+        self.sources.want(&description.sources);
         // A build's session starts as `teq @<file>`, its class path past Windows' cap on the
         // command line: a file of this server's under the build's `target/teq`, which no other
         // server's session shares. A bare root's has no class path and keeps the command line.
@@ -2302,9 +2341,8 @@ impl Server {
         self.start_due_export();
     }
 
-    fn answer(&mut self, s: usize, line: &str) {
+    fn answer(&mut self, s: usize, json: Json) {
         let Some(expect) = self.sessions[s].expect.pop_front() else { return };
-        let json = Json::parse(line).unwrap_or(Json::Null);
         match expect {
             Expect::Build(build) => {
                 // The idle period runs from here: a poll slower than `IDLE` is never followed by
@@ -2323,6 +2361,25 @@ impl Server {
                 self.tell_notes(s, &json);
                 self.query_answered(q, s, result);
             }
+        }
+    }
+
+    /// What a session reports of the libraries' sources since its last message, carried by every
+    /// message it writes and read from every parsed line of every child, before the line meets what it
+    /// answers: the sources jars it found damaged at a read (`rejected`, `places::take_rejections`),
+    /// which the fetcher's validation, reading no entry's data, cannot see; and the jars whose sources a
+    /// navigation found nowhere (`missed`, `places::take_misses`), which the fetcher reads its store
+    /// again for.
+    fn sources_reported(&mut self, answer: &Json) {
+        // The rejections first: a miss that a rejection caused (the only candidate rejected) meets
+        // the artifact as the rejection left it.
+        for r in answer.get("rejected").map(Json::arr).unwrap_or(&[]) {
+            let (Some(path), Some(size)) = (r.get("path").and_then(Json::str), r.get("size").and_then(Json::num)) else { continue };
+            let modified = r.get("secs").and_then(Json::num).map(|secs| std::time::UNIX_EPOCH + Duration::new(secs as u64, r.get("nanos").and_then(Json::uint).unwrap_or(0)));
+            self.sources.rejected(Path::new(path), (size as u64, modified));
+        }
+        for jar in answer.get("missed").map(Json::arr).unwrap_or(&[]).iter().filter_map(Json::str) {
+            self.sources.missed(Path::new(jar));
         }
     }
 
@@ -2781,7 +2838,7 @@ mod tests {
     }
 
     fn session(key: Option<Key>, root: &str) -> Session {
-        let description = Description { root: PathBuf::from(root), inputs: Vec::new(), excludes: Vec::new(), classpath: Vec::new(), jvm_std: None, flags: Vec::new() };
+        let description = Description { root: PathBuf::from(root), inputs: Vec::new(), excludes: Vec::new(), classpath: Vec::new(), sources: Vec::new(), jvm_std: None, flags: Vec::new() };
         let export = key.as_ref().map(|_| PathBuf::from("/w/teq.lock"));
         Session::new(PathBuf::from("/w"), export, key, Ok(description))
     }

@@ -19,6 +19,8 @@ pub struct Entry {
 
 pub struct Zip {
     file: File,
+    /// The file's length when it was opened: what the directory says is read only within it.
+    len: u64,
     /// The central directory as it stands in the file; entry names point into it.
     directory: Vec<u8>,
     pub entries: Vec<Entry>,
@@ -76,6 +78,16 @@ impl Zip {
         if count == 0xffff || dir_size == u32::MAX || dir_offset == u32::MAX {
             return Err(format!("{}: zip64 archives are not supported", path));
         }
+        // The directory lies before its end record and holds an entry's fixed 46 bytes for each entry it
+        // lists: both checked before it is read, so that no size the end record declares is allocated
+        // past what the file holds.
+        let end_at = file_len - tail_len as u64 + end as u64;
+        if dir_offset as u64 + dir_size as u64 > end_at {
+            return Err(format!("{}: central directory of {} bytes at {} runs past its end record at {}", path, dir_size, dir_offset, end_at));
+        }
+        if count * 46 > dir_size as usize {
+            return Err(format!("{}: central directory lists {} entries in {} bytes, fewer than the 46 each takes", path, count, dir_size));
+        }
         let directory = read_at(&file, dir_offset as u64, dir_size as usize)?;
         let mut entries = Vec::with_capacity(count);
         let mut at = 0usize;
@@ -83,6 +95,11 @@ impl Zip {
             let name_len = u16_at(&directory, at + 28);
             let extra_len = u16_at(&directory, at + 30) as usize;
             let comment_len = u16_at(&directory, at + 32) as usize;
+            // An entry's name, extra field and comment lie within the directory, which every reader
+            // of them slices.
+            if at + 46 + name_len as usize + extra_len + comment_len > directory.len() {
+                return Err(format!("{}: central directory entry {} runs past the directory's {} bytes", path, entries.len(), directory.len()));
+            }
             entries.push(Entry {
                 name_start: (at + 46) as u32,
                 name_len,
@@ -100,7 +117,49 @@ impl Zip {
         if entries.len() != count {
             return Err(format!("{}: central directory lists {} entries, found {}", path, count, entries.len()));
         }
-        Ok(Zip { file, directory, entries })
+        Ok(Zip { file, len: file_len, directory, entries })
+    }
+
+    /// An archive opened whole: its central directory read (`open`), then every entry's local
+    /// header read where the directory places it, its signature checked and its name, its extra field
+    /// and its data, by the local header's own lengths, within the file. The one validation of a
+    /// library's sources jar, wherever it lies (the language server's fetch and its sessions' opening
+    /// alike), so that an archive taken is one each of whose entries reads as far as its size goes.
+    pub fn open_valid(path: &str) -> Result<Zip, String> {
+        let zip = Zip::open(path)?;
+        let len = zip.len;
+        for e in &zip.entries {
+            let header = read_at(&zip.file, e.header_offset as u64, LOCAL_HEADER_SIZE)?;
+            if header.len() < LOCAL_HEADER_SIZE || u32_at(&header, 0) != LOCAL_HEADER {
+                return Err(format!("{}: {}: no local header at {}", path, zip.name(e), e.header_offset));
+            }
+            let end = e.header_offset as u64 + LOCAL_HEADER_SIZE as u64 + u16_at(&header, 26) as u64 + u16_at(&header, 28) as u64 + e.compressed_size as u64;
+            if end > len {
+                return Err(format!("{}: {}: its local header and data end at {}, past the file's {} bytes", path, zip.name(e), end, len));
+            }
+        }
+        Ok(zip)
+    }
+
+    /// The size and modification time of the file this archive was opened from, read through its
+    /// handle: the opened file's, whatever stands at its path now.
+    pub fn stamp(&self) -> Option<(u64, Option<std::time::SystemTime>)> {
+        self.file.metadata().ok().map(|m| (m.len(), m.modified().ok()))
+    }
+
+    /// The sha1 of the file this archive was opened from, its bytes read through its handle.
+    pub fn sha1(&self) -> Result<String, String> {
+        let mut sha1 = crate::task::fetch::Sha1::new();
+        let mut at = 0u64;
+        loop {
+            let chunk = read_at(&self.file, at, 1 << 16)?;
+            if chunk.is_empty() {
+                break;
+            }
+            sha1.update(&chunk);
+            at += chunk.len() as u64;
+        }
+        Ok(sha1.hex())
     }
 
     /// The index of the entry of that name, if any.
@@ -127,6 +186,11 @@ impl Zip {
     /// The uncompressed data of the entry, checked against its CRC-32.
     pub fn read(&self, index: usize) -> Result<Vec<u8>, String> {
         let e = &self.entries[index];
+        // The local header and the data lie within the file, checked before a read is allocated for the
+        // size the directory declares.
+        if e.header_offset as u64 + LOCAL_HEADER_SIZE as u64 + e.compressed_size as u64 > self.len {
+            return Err(format!("{}: truncated entry", self.name(e)));
+        }
         let wanted = LOCAL_HEADER_SIZE + e.name_len as usize + EXTRA_GUESS + e.compressed_size as usize;
         let mut raw = read_at(&self.file, e.header_offset as u64, wanted)?;
         if raw.len() < LOCAL_HEADER_SIZE || u32_at(&raw, 0) != LOCAL_HEADER {
@@ -146,7 +210,9 @@ impl Zip {
                 raw.drain(..data_start);
                 raw
             }
-            8 => inflate(&raw[data_start..data_end], e.size as usize).map_err(|m| format!("{}: {}", self.name(e), m))?,
+            // The size declared reserved up to the file's length, the output growing past it only as the
+            // stream gives it.
+            8 => inflate(&raw[data_start..data_end], (e.size as u64).min(self.len) as usize).map_err(|m| format!("{}: {}", self.name(e), m))?,
             m => return Err(format!("{}: unsupported compression method {}", self.name(e), m)),
         };
         if data.len() != e.size as usize || crc32(&data) != e.crc32 {
@@ -792,6 +858,91 @@ mod tests {
         for cut in 0..=data.len() {
             assert_eq!(super::crc32_update(super::crc32(&data[..cut]), &data[cut..]), super::crc32(&data), "cut at {cut}");
         }
+    }
+
+    /// A central directory whose declared size ends inside an entry's name (the end record's size
+    /// field set short): refused at the opening, never sliced past its end when a name is read.
+    #[test]
+    fn an_entry_past_its_directory_is_refused() {
+        let dir = std::env::temp_dir().join(format!("teq-zip-directory-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut bytes = include_bytes!("../tests/lsp/libs/lib/liba-1.0-sources.jar").to_vec();
+        let end = bytes.windows(4).rposition(|w| w == [0x50, 0x4b, 0x05, 0x06]).unwrap();
+        bytes[end + 12..end + 16].copy_from_slice(&46u32.to_le_bytes());
+        let (short, whole) = (dir.join("short.jar"), dir.join("whole.jar"));
+        std::fs::write(&short, &bytes).unwrap();
+        std::fs::write(&whole, include_bytes!("../tests/lsp/libs/lib/liba-1.0-sources.jar")).unwrap();
+        let refused = super::Zip::open(short.to_str().unwrap()).err();
+        let opened = super::Zip::open_valid(whole.to_str().unwrap()).map(|z| z.entries.len());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(refused.is_some_and(|e| e.contains("runs past the directory")));
+        assert_eq!(opened, Ok(1));
+    }
+
+    /// An end record whose directory does not lie before it (its size 2 GB, or its offset at the file's
+    /// end) or lists more entries than its size holds, and an entry whose data the directory places
+    /// past the file or whose size it declares at 4 GB: each refused with the reader's message, nothing
+    /// allocated for the size declared.
+    #[test]
+    fn sizes_declared_past_the_file_are_refused() {
+        let dir = std::env::temp_dir().join(format!("teq-zip-declared-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let whole = include_bytes!("../tests/lsp/libs/lib/liba-1.0-sources.jar");
+        let end = whole.windows(4).rposition(|w| w == [0x50, 0x4b, 0x05, 0x06]).unwrap();
+        let entry = whole.windows(4).position(|w| w == [0x50, 0x4b, 0x01, 0x02]).unwrap();
+        let damaged = |at: usize, bytes: &[u8]| {
+            let mut copy = whole.to_vec();
+            copy[at..at + bytes.len()].copy_from_slice(bytes);
+            copy
+        };
+        let write = |name: &str, bytes: &[u8]| {
+            let path = dir.join(format!("{name}.jar"));
+            std::fs::write(&path, bytes).unwrap();
+            path.to_str().unwrap().to_string()
+        };
+        let opened = |bytes: Vec<u8>, name: &str| super::Zip::open(&write(name, &bytes)).err().unwrap_or_default();
+        let size = opened(damaged(end + 12, &0x8000_004bu32.to_le_bytes()), "size");
+        let offset = opened(damaged(end + 16, &(whole.len() as u32).to_le_bytes()), "offset");
+        let count = opened(damaged(end + 10, &1000u16.to_le_bytes()), "count");
+        let read = |bytes: Vec<u8>, name: &str| super::Zip::open(&write(name, &bytes)).map(|z| z.read(0).err().unwrap_or_default());
+        let compressed = read(damaged(entry + 20, &0x7fff_0000u32.to_le_bytes()), "compressed");
+        let inflated = read(damaged(entry + 24, &0xffff_fff0u32.to_le_bytes()), "inflated");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(size.contains("central directory of 2147483723 bytes at") && size.contains("runs past its end record"), "{size}");
+        assert!(offset.contains("runs past its end record"), "{offset}");
+        assert!(count.contains("lists 1000 entries in") && count.contains("fewer than the 46 each takes"), "{count}");
+        assert!(compressed.as_ref().is_ok_and(|e| e.ends_with(": truncated entry")), "{compressed:?}");
+        assert!(inflated.as_ref().is_ok_and(|e| e.ends_with(": CRC-32 or size mismatch")), "{inflated:?}");
+    }
+
+    /// An archive whose directory reads but whose entry does not lie where it says: a local header's
+    /// offset past the file, a local extra field's length (byte 28 of the header) running past it, a
+    /// local header's signature overwritten. Each opens, and each is refused as no whole archive.
+    #[test]
+    fn an_entry_past_the_file_is_no_whole_archive() {
+        let dir = std::env::temp_dir().join(format!("teq-zip-local-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let whole = include_bytes!("../tests/lsp/libs/lib/liba-1.0-sources.jar");
+        let entry = whole.windows(4).position(|w| w == [0x50, 0x4b, 0x01, 0x02]).unwrap();
+        let damaged = |at: usize, bytes: &[u8]| {
+            let mut copy = whole.to_vec();
+            copy[at..at + bytes.len()].copy_from_slice(bytes);
+            copy
+        };
+        let cases = [
+            ("offset", damaged(entry + 42, &(whole.len() as u32 + 100).to_le_bytes())),
+            ("extra", damaged(28, &65535u16.to_le_bytes())),
+            ("signature", damaged(0, b"PK\x09\x09")),
+        ];
+        let mut verdicts = Vec::new();
+        for (name, bytes) in &cases {
+            let path = dir.join(format!("{name}.jar"));
+            std::fs::write(&path, bytes).unwrap();
+            let path = path.to_str().unwrap().to_string();
+            verdicts.push((*name, super::Zip::open(&path).is_ok(), super::Zip::open_valid(&path).is_ok()));
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(verdicts, [("offset", true, false), ("extra", true, false), ("signature", true, false)]);
     }
 
     /// Threads reading one jar at once each read their own entry's bytes: a read moves nothing

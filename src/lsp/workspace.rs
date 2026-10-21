@@ -2,7 +2,7 @@
 //! root (docs/TARGETS.md, "The workspace"), each a session opened when a file of its own source
 //! roots is, or without an export one session over every `.scala` file of the root.
 
-use crate::task::export::{Export, Key, Platform};
+use crate::task::export::{Export, Key, LibrarySources, Platform};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -15,6 +15,9 @@ pub struct Description {
     pub inputs: Vec<PathBuf>,
     pub excludes: Vec<PathBuf>,
     pub classpath: Vec<PathBuf>,
+    /// Where the sources of the classpath's artifacts are looked for and fetched into
+    /// (`Export::library_sources`), a jar of the tree's own beside it.
+    pub sources: Vec<LibrarySources>,
     /// `--target jvm --std=<std>`, for a JVM description.
     pub jvm_std: Option<String>,
     pub flags: Vec<String>,
@@ -32,6 +35,9 @@ impl Description {
         if !self.classpath.is_empty() {
             args.push("--classpath".to_string());
             args.push(crate::task::export::join_paths(&self.classpath));
+        }
+        for s in &self.sources {
+            args.extend(["--sources-of".to_string(), s.jar.to_string_lossy().into_owned(), crate::task::export::join_paths(&s.candidates)]);
         }
         if let Some(std) = &self.jvm_std {
             args.extend(["--target".to_string(), "jvm".to_string(), format!("--std={}", std)]);
@@ -54,12 +60,14 @@ pub fn description(export: &Export, key: &Key) -> Result<Description, String> {
     let jvm = project.platform == Platform::Jvm;
     let mut flags = conf.flags.args(jvm);
     flags.extend(project.description.session_args());
+    // The artifacts fetched for it, each told to the client's log as its transfer starts.
+    let jars = export.jars_keyed(key, &|line| super::notify("window/logMessage", crate::lsp::json::obj([("type", 4u32.into()), ("message", line.into())])))?;
     Ok(Description {
         root: export.root.clone(),
         inputs: export.session_inputs(key),
         excludes: project.description.excludes.iter().map(|x| export.path(x)).collect(),
-        // The artifacts fetched for it, each told to the client's log as its transfer starts.
-        classpath: export.jars_with(key, &|line| super::notify("window/logMessage", crate::lsp::json::obj([("type", 4u32.into()), ("message", line.into())])))?,
+        sources: jars.iter().filter_map(|(jar, key)| export.library_sources(jar, key.as_deref()?)).collect(),
+        classpath: jars.into_iter().map(|(jar, _)| jar).collect(),
         jvm_std: jvm.then(|| "scala-library".to_string()),
         flags,
     })
@@ -67,7 +75,7 @@ pub fn description(export: &Export, key: &Key) -> Result<Description, String> {
 
 /// One session over every `.scala` file of a root without an export, on the lean std.
 pub fn bare(root: &Path) -> Description {
-    Description { root: root.to_path_buf(), inputs: vec![root.to_path_buf()], excludes: Vec::new(), classpath: Vec::new(), jvm_std: None, flags: Vec::new() }
+    Description { root: root.to_path_buf(), inputs: vec![root.to_path_buf()], excludes: Vec::new(), classpath: Vec::new(), sources: Vec::new(), jvm_std: None, flags: Vec::new() }
 }
 
 #[cfg(test)]

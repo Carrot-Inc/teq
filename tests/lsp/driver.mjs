@@ -8,7 +8,7 @@
 import { spawn, execSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { createServer } from "node:http"
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync, existsSync, utimesSync, symlinkSync, realpathSync, appendFileSync, chmodSync, readdirSync, statSync, lstatSync } from "node:fs"
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync, existsSync, utimesSync, symlinkSync, realpathSync, appendFileSync, chmodSync, readdirSync, statSync, lstatSync, renameSync } from "node:fs"
 import { join, dirname } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { parse as parseLock } from "../../integrations/vite/lock.js"
@@ -4727,14 +4727,30 @@ async function jarFetch() {
   const file = join(root, "app/src/Main.scala")
   writeFileSync(file, 'object Main:\n  val name: Int = sourcecode.Name("main")\n')
   const data = readFileSync(jar)
-  const parts = jar.slice(jar.indexOf("/maven2/") + "/maven2/".length).split("/")
+  const sources = readFileSync(jar.replace(/\.jar$/, "-sources.jar"))
+  const path = jar.slice(jar.indexOf("/maven2/") + "/maven2/".length)
+  const parts = path.split("/")
   const key = [parts.slice(0, -3).join("."), parts.at(-3), parts.at(-2)].join(":")
-  const requests = []
+  // Each URL a route of its own, counting its requests: the binary, its sources and their checksum.
+  const sourcesPath = path.replace(/\.jar$/, "-sources.jar")
+  const routes = { [`/${path}`]: 0, [`/${sourcesPath}`]: 0, [`/${sourcesPath}.sha1`]: 0 }
+  const asked = () => Object.values(routes).reduce((a, b) => a + b, 0)
+  let others = 0
   let toldAtEnd
   let c
   const told = (client) => client.notifications.filter((n) => n.method === "window/logMessage" && n.params.message.startsWith(`teq: fetching ${key} (`))
   const server = createServer((req, res) => {
-    requests.push(req.url)
+    if (!(req.url in routes)) {
+      others++
+      res.writeHead(404)
+      return res.end()
+    }
+    routes[req.url]++
+    if (req.url === `/${sourcesPath}`) {
+      res.writeHead(200, { "Content-Length": sources.length })
+      return res.end(sources)
+    }
+    if (req.url === `/${sourcesPath}.sha1`) return res.end(`${createHash("sha1").update(sources).digest("hex")}\n`)
     res.writeHead(200, { "Content-Length": data.length })
     res.write(data.subarray(0, 1))
     setTimeout(() => {
@@ -4744,11 +4760,15 @@ async function jarFetch() {
   })
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve))
   const record = `loop ${createHash("sha1").update(data).digest("hex")} ${data.length}`
-  writeExport(join(root, "teq.lock"), { app: { platform: "jvm", sources: ["app/src"], classpath: [{ key, record }] } }, [{ id: "loop", url: `http://127.0.0.1:${server.address().port}/` }])
-  const env = { TEQ_CACHE_DIR: join(work, "fetch-cache") }
-  // A session over the file: its first diagnostics' messages, then the server stopped.
-  const run = async () => {
+  const repository = `http://127.0.0.1:${server.address().port}/`
+  writeExport(join(root, "teq.lock"), { app: { platform: "jvm", sources: ["app/src"], classpath: [{ key, record }] } }, [{ id: "loop", url: repository }])
+  const trace = join(work, "fetch-trace")
+  const env = { TEQ_CACHE_DIR: join(work, "fetch-cache"), TEQ_LSP_TRACE_FILE: trace }
+  // A session over the file: its first diagnostics' messages, and once its sources are placed (or
+  // found placed), the server stopped.
+  const run = async (sourcesEvent) => {
     c = new Client(root, env)
+    const from = traceOf(trace).length
     try {
       await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
       c.notify("initialized", {})
@@ -4756,7 +4776,8 @@ async function jarFetch() {
       c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version: 1, text: readFileSync(file, "utf8") } })
       const ds = (await c.waitDiagnostics(m, uriOf(file), (ds) => ds.length > 0, 60000))?.map((d) => d.message)
       // The transfer's end seen, which a cold session waited for.
-      await until(() => requests.length === 0 || toldAtEnd !== undefined, 10000)
+      await until(() => routes[`/${path}`] === 0 || toldAtEnd !== undefined, 10000)
+      await traced(trace, from, (e) => e.event === sourcesEvent && e.rest[0] === repository + sourcesPath, sourcesEvent)
       await c.result("shutdown", null)
       c.notify("exit", null)
       await Promise.race([c.exited, sleep(10000)])
@@ -4768,13 +4789,1130 @@ async function jarFetch() {
   }
   const mismatch = ["type mismatch: found Name, required Int"]
   try {
-    const cold = await run()
+    const cold = await run("sources-published")
     const lines = told(c)
-    check("a jar fetched for a session over the loopback interface is told in the client's log before its transfer ends, its classes the session's", same(cold, mismatch) && requests.length === 1 && toldAtEnd === 1 && lines.length === 1 && lines[0].params.type === 4, { cold, requests, toldAtEnd, lines, stderr: c.stderr.slice(-400) })
-    const warm = await run()
-    check("a second server over the same cache fetches nothing and tells no fetch", same(warm, mismatch) && requests.length === 1 && told(c).length === 0, { warm, requests, lines: told(c) })
+    check("a jar fetched for a session over the loopback interface is told in the client's log before its transfer ends, its classes the session's, its sources fetched once into the sources' store", same(cold, mismatch) && routes[`/${path}`] === 1 && routes[`/${sourcesPath}`] === 1 && routes[`/${sourcesPath}.sha1`] === 1 && others === 0 && toldAtEnd === 1 && lines.length === 1 && lines[0].params.type === 4, { cold, routes, others, toldAtEnd, lines, stderr: c.stderr.slice(-400) })
+    const before = asked()
+    const warm = await run("sources-held")
+    check("a second server over the same cache fetches nothing and tells no fetch", same(warm, mismatch) && asked() === before && others === 0 && told(c).length === 0 && logged(c, "teq: fetching sources of").length === 0, { warm, routes, others, lines: told(c) })
   } finally {
     server.close()
+  }
+}
+
+// --- A library's sources ---------------------------------------------------------------------------
+
+/** A repository on the loopback interface in Maven's layout, each path a route of its own (a binary,
+ * its sources, the sources' `.sha1`) counting its requests and answering as its mode says: `serve`
+ * the bytes, `missing` 404, `refuse` the connection reset, `hold` until released, `cut` half the bytes
+ * then the connection ended, a whole response of `truncated` bytes, and with `auth` set 401 unless
+ * the request carries those credentials (held until released with `holdRefusals`); `missing` answers
+ * with `errorPage` as its body when set. */
+class Repository {
+  constructor() {
+    this.routes = new Map()
+    this.server = createServer((req, res) => this.answer(req, res))
+  }
+  async start() {
+    await new Promise((resolve) => this.server.listen(0, "127.0.0.1", resolve))
+    this.url = `http://127.0.0.1:${this.server.address().port}/`
+    return this
+  }
+  route(path, bytes, mode = "serve") {
+    const r = { bytes, mode, requests: 0, held: [], auth: undefined }
+    this.routes.set(`/${path}`, r)
+    return r
+  }
+  answer(req, res) {
+    const r = this.routes.get(req.url)
+    if (!r) {
+      res.writeHead(404)
+      return res.end()
+    }
+    r.requests++
+    if (r.auth && req.headers.authorization !== `Basic ${Buffer.from(r.auth).toString("base64")}`) {
+      const refuse = () => {
+        res.writeHead(401)
+        res.end()
+      }
+      return r.holdRefusals ? r.held.push(refuse) : refuse()
+    }
+    const serve = () => {
+      res.writeHead(200, { "Content-Length": r.bytes.length })
+      res.end(r.bytes)
+    }
+    if (r.mode === "serve") serve()
+    else if (r.mode === "missing") {
+      res.writeHead(404, { "Content-Length": r.errorPage?.length ?? 0 })
+      res.end(r.errorPage)
+    } else if (r.mode === "refuse") req.socket.destroy()
+    else if (r.mode === "hold") r.held.push(serve)
+    else if (r.mode === "cut") {
+      res.writeHead(200, { "Content-Length": r.bytes.length })
+      res.write(r.bytes.subarray(0, r.bytes.length >> 1), () => req.socket.destroy())
+    } else if (r.mode === "truncated") {
+      const cut = r.bytes.subarray(0, r.bytes.length - 30)
+      res.writeHead(200, { "Content-Length": cut.length })
+      res.end(cut)
+    }
+  }
+  /** Every request so far, of every route. */
+  requests() {
+    return [...this.routes.values()].reduce((n, r) => n + r.requests, 0)
+  }
+  release(r) {
+    r.mode = "serve"
+    for (const serve of r.held.splice(0)) serve()
+  }
+  close() {
+    for (const r of this.routes.values()) this.release(r)
+    this.server.closeAllConnections?.()
+    this.server.close()
+  }
+}
+const sha1Of = (bytes) => createHash("sha1").update(bytes).digest("hex")
+const libJar = (name) => readFileSync(join(here, "libs/lib", name))
+/** An artifact of the repository: `<group>:<name>:<version>` at Maven's layout, its binary, sources
+ * and the sources' checksum each a route, and its record in the lock's table. */
+function servedArtifact(repo, group, name, version, binary, sources) {
+  const dir = `${group.replaceAll(".", "/")}/${name}/${version}`
+  const jarPath = `${dir}/${name}-${version}.jar`
+  const sourcesPath = `${dir}/${name}-${version}-sources.jar`
+  return {
+    key: `${group}:${name}:${version}`,
+    jarPath,
+    sourcesPath,
+    sha1: sha1Of(binary),
+    binary,
+    sources,
+    record: `loop ${sha1Of(binary)} ${binary.length}`,
+    jar: repo.route(jarPath, binary),
+    src: repo.route(sourcesPath, sources),
+    sum: repo.route(`${sourcesPath}.sha1`, Buffer.from(`${sha1Of(sources)}\n`)),
+  }
+}
+/** Where coursier keeps the file of a URL of the loopback repository (`fetch::coursier_file`). */
+const coursierOf = (cache, repo, path) => join(cache, "http", `127.0.0.1%3A${repo.server.address().port}`, path)
+const place = (file, bytes) => {
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, bytes)
+}
+const liba = () => libJar("liba-1.0.jar")
+const libaSources = () => libJar("liba-1.0-sources.jar")
+/** The fixture sources with one field of their zip damaged: the entry's local header offset past the
+ * file (`offset`), its local header's extra-field length, byte 28, at its largest (`extra`), or the
+ * directory's CRC-32 of the entry (`crc`), which only the entry's read finds. The directory reads
+ * every way; no entry does. */
+function damagedSources(field) {
+  const bytes = Buffer.from(libaSources())
+  const entry = bytes.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]))
+  if (field === "offset") bytes.writeUInt32LE(bytes.length + 100, entry + 42)
+  else if (field === "crc") bytes[entry + 16] ^= 0xff
+  else bytes.writeUInt16LE(65535, 28)
+  return bytes
+}
+/** `bytes` put at `file` as a cache's publisher replaces a file: written beside it, renamed over it. */
+function replace(file, bytes) {
+  writeFileSync(`${file}.new`, bytes)
+  renameSync(`${file}.new`, file)
+}
+const sessionsEnded = (c) => c.notifications.filter((n) => n.method === "textDocument/publishDiagnostics" && JSON.stringify(n.params).includes("the teq session ended"))
+const sourcesMain = "object M:\n  val a: liba.A = liba.A.make\n  val n: Int = a.hello\n"
+const traceSays = (file, event, url, ...rest) => traceOf(file).some((e) => e.event === event && e.rest[0] === url && rest.every((w, i) => e.rest[i + 1] === w))
+async function traceSaid(file, event, url, ...rest) {
+  if (!(await until(() => traceSays(file, event, url, ...rest), 60000))) throw new Error(`no ${event} ${url} ${rest.join(" ")} in the trace: ${JSON.stringify(traceOf(file))}`)
+}
+const logged = (c, prefix) => c.notifications.filter((n) => n.method === "window/logMessage" && n.params.message.startsWith(prefix))
+
+/** A server over a project of one source that reads the jars `classpath` names, in the directory
+ * `name` of its own under the work directory with its own teq cache and coursier cache (`cache`,
+ * `coursier`), the trace `trace`; `body` given the client once the file is open, the server shut
+ * down after it. */
+async function sourcesServer(name, { classpath, repositories, env = {}, cache, coursier, projects, main = sourcesMain }, body) {
+  const root = join(work, "sources", name)
+  mkdirSync(root, { recursive: true })
+  const files = {}
+  for (const [project, cp] of Object.entries(projects ?? { app: classpath })) {
+    files[project] = join(root, project, "src/M.scala")
+    place(files[project], main.replace("object M", `object ${project.toUpperCase()}`))
+  }
+  writeExport(join(root, "teq.lock"), Object.fromEntries(Object.entries(projects ?? { app: classpath }).map(([p, cp]) => [p, { platform: "jvm", sources: [`${p}/src`], classpath: cp }])), repositories)
+  const trace = join(root, `trace-${Date.now()}`)
+  const c = new Client(root, { TEQ_CACHE_DIR: cache, COURSIER_CACHE: coursier, TEQ_LSP_TRACE_FILE: trace, ...env })
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: { general: { positionEncodings: ["utf-16"] } }, initializationOptions: { maxSessions: 8 } })
+    c.notify("initialized", {})
+    const open = (file) => c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version: 1, text: readFileSync(file, "utf8") } })
+    open(files.app ?? Object.values(files)[0])
+    await body({ c, root, trace, files, file: files.app ?? Object.values(files)[0], open })
+  } catch (e) {
+    check(`${name}: ran to its end`, false, `${e.stack}\nstderr: ${c.stderr.slice(-1500)}`)
+  } finally {
+    await c.result("shutdown", null).catch(() => {})
+    c.notify("exit", null)
+    if ((await Promise.race([c.exited, sleep(10000).then(() => "timeout")])) === "timeout") c.proc.kill()
+  }
+}
+/** The answer to a definition of `liba.A.make` in `file`: its sources' document at the declaration,
+ * which `cache`'s attached documents hold. */
+async function landsInSources(c, file, cache) {
+  const found = await c.result("textDocument/definition", at_(file, "A.make", 0, 2))
+  const docOf = (loc) => loc?.uri && fileURLToPath(loc.uri)
+  const doc = docOf(found?.[0])
+  const ok = found?.length === 1 && doc.startsWith(realpathSync(cache) + "/attached/") && doc.endsWith("/liba-1.0-sources.jar/liba/A.scala") && same(found[0], at(doc, "def make", 0, 4, 4))
+  return { ok, found }
+}
+async function noLocation(c, file) {
+  const answer = await c.request("textDocument/definition", at_(file, "A.make", 0, 2))
+  return answer.result === null && !answer.error
+}
+/** A case's teq cache and coursier cache, the second empty but for the machine's Maven Central files, which
+ * hold the scala-library the JVM session reads (the coursier cache `jar` is in). */
+function caches(name) {
+  const coursier = join(work, "sources", `${name}-coursier`)
+  mkdirSync(coursier, { recursive: true })
+  if (!existsSync(join(coursier, "https"))) symlinkSync(jar.slice(0, jar.indexOf("/https/") + "/https".length), join(coursier, "https"))
+  return { cache: join(work, "sources", `${name}-teq-cache`), coursier }
+}
+
+/** The sources found and fetched wherever the binary and its sources are: beside the jar, in coursier's
+ * cache, in teq's sources store, fetched from the lock's repository; and a sources jar placed beside a
+ * jar after a miss, or a damaged one replaced, found at the next navigation. */
+async function librarySources() {
+  const repo = await new Repository().start()
+  const repositories = [{ id: "loop", url: repo.url }]
+  try {
+    // (a) The binary in coursier's cache, its sources fetched.
+    {
+      const art = servedArtifact(repo, "test.a", "liba", "1.0", liba(), libaSources())
+      const { cache, coursier } = caches("a")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      await sourcesServer("a", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-published", repo.url + art.sourcesPath)
+        const { ok, found } = await landsInSources(c, file, cache)
+        const fetching = logged(c, `teq: fetching sources of ${art.key}`)
+        check("coursier-binary-fetched-sources: after the publication, the definition in the fetched sources' document at its line, the sources asked once, the fetch told once in the client's log", ok && art.jar.requests === 0 && art.src.requests === 1 && art.sum.requests === 1 && fetching.length === 1 && fetching[0].params.type === 4, { found, requests: [art.jar.requests, art.src.requests, art.sum.requests], fetching })
+      })
+    }
+    // (b) The binary in teq's store (coursier's cache empty), its sources fetched into the sources'
+    // store; a second server over the same caches asks nothing.
+    {
+      const art = servedArtifact(repo, "test.b", "liba", "1.0", liba(), libaSources())
+      const { cache, coursier } = caches("b")
+      let cold, warm
+      await sourcesServer("b", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-published", repo.url + art.sourcesPath)
+        cold = await landsInSources(c, file, cache)
+      })
+      const stored = existsSync(join(cache, "sources", art.sha1, "liba-1.0-sources.jar")) && !existsSync(join(cache, "artifacts", art.sha1, "liba-1.0-sources.jar"))
+      check("store-binary-store-sources: the binary fetched into the store, its sources into the sources' store beside no binary, the definition answered", cold?.ok && stored && art.jar.requests === 1 && art.src.requests === 1, { cold, stored, requests: [art.jar.requests, art.src.requests] })
+      const before = repo.requests()
+      await sourcesServer("b", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-held", repo.url + art.sourcesPath)
+        warm = await landsInSources(c, file, cache)
+      })
+      check("store-binary-store-sources: a second server over the same caches answers with no request", warm?.ok && repo.requests() === before, { warm, requests: repo.requests() - before })
+    }
+    // (c) The binary in one cache and its sources in the other, the repository refusing every request.
+    {
+      const art = servedArtifact(repo, "test.c1", "liba", "1.0", liba(), libaSources())
+      for (const r of [art.jar, art.src, art.sum]) r.mode = "refuse"
+      const { cache, coursier } = caches("c1")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      place(join(cache, "sources", art.sha1, "liba-1.0-sources.jar"), art.sources)
+      await sourcesServer("c1", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-held", repo.url + art.sourcesPath)
+        const { ok, found } = await landsInSources(c, file, cache)
+        check("coursier-binary-store-sources: the binary in coursier's cache, its sources in teq's store, offline: answered", ok && art.jar.requests + art.src.requests + art.sum.requests === 0, { found, requests: [art.jar.requests, art.src.requests] })
+      })
+    }
+    {
+      const art = servedArtifact(repo, "test.c2", "liba", "1.0", liba(), libaSources())
+      for (const r of [art.jar, art.src, art.sum]) r.mode = "refuse"
+      const { cache, coursier } = caches("c2")
+      place(join(cache, "artifacts", art.sha1, "liba-1.0.jar"), art.binary)
+      place(coursierOf(coursier, repo, art.sourcesPath), art.sources)
+      await sourcesServer("c2", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-held", repo.url + art.sourcesPath)
+        const { ok, found } = await landsInSources(c, file, cache)
+        check("store-binary-coursier-sources-offline: the binary in teq's store, its sources in coursier's cache, offline: answered", ok && art.jar.requests + art.src.requests + art.sum.requests === 0, { found, requests: [art.jar.requests, art.src.requests] })
+      })
+    }
+    // Two binaries of one library (a platform's classifiers) sharing its plain sources artifact: one
+    // transfer, each binary's place in the store filled, both navigating with no restart.
+    {
+      const linux = servedArtifact(repo, "test.platform", "liba", "1.0", liba(), libaSources())
+      // Another binary: the same jar with a comment of one byte.
+      const commented = liba()
+      commented.writeUInt16LE(1, commented.length - 2)
+      const osxBinary = Buffer.concat([commented, Buffer.from("x")])
+      const osx = { ...linux, binary: osxBinary, sha1: sha1Of(osxBinary), record: `loop ${sha1Of(osxBinary)} ${osxBinary.length}` }
+      const { key, jarPath } = linux
+      for (const [art, classifier] of [[linux, "linux-x86_64"], [osx, "osx-aarch_64"]]) {
+        art.key = `${key}:${classifier}`
+        art.jarPath = jarPath.replace(".jar", `-${classifier}.jar`)
+      }
+      const { cache, coursier } = caches("shared")
+      place(coursierOf(coursier, repo, linux.jarPath), linux.binary)
+      place(coursierOf(coursier, repo, osx.jarPath), osx.binary)
+      const projects = { app: [{ key: linux.key, record: linux.record }], next: [{ key: osx.key, record: osx.record }] }
+      await sourcesServer("shared", { projects, repositories, cache, coursier }, async ({ c, trace, files, open }) => {
+        const url = repo.url + linux.sourcesPath
+        await traceSaid(trace, "sources-published", url)
+        const first = await landsInSources(c, files.app, cache)
+        const from = traceOf(trace).length
+        open(files.next)
+        await traced(trace, from, (e) => e.rest[0] === url && (e.event === "sources-published" || e.event === "sources-held"), "the second binary's sources placed")
+        const second = await landsInSources(c, files.next, cache)
+        const stores = [linux, osx].map((art) => existsSync(join(cache, "sources", art.sha1, "liba-1.0-sources.jar")))
+        check("shared-sources-url: two binaries sharing one sources artifact, one transfer, each binary's place in the store filled, both navigating with no restart", first.ok && second.ok && same(stores, [true, true]) && linux.src.requests === 1, { first, second, stores, requests: linux.src.requests })
+      })
+    }
+    // A damaged sibling at the sources URL's place in coursier's cache (its entry's local header past the
+    // file): a failed open, the fetched copy in the store taken after it, and once the sibling is
+    // replaced whole the answer stays; alone (none published), it answers once replaced, with no restart.
+    {
+      const art = servedArtifact(repo, "test.sibling", "liba", "1.0", liba(), libaSources())
+      const { cache, coursier } = caches("sibling")
+      const sibling = coursierOf(coursier, repo, art.sourcesPath)
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      place(sibling, damagedSources("offset"))
+      await sourcesServer("sibling", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-published", repo.url + art.sourcesPath)
+        const past = await landsInSources(c, file, cache)
+        replace(sibling, libaSources())
+        const replaced = await landsInSources(c, file, cache)
+        check("damaged-sibling: a sibling in coursier's cache whose entry lies past the file is a failed open, the fetched copy in the store answering; replaced whole, still answered, no session ended", past.ok && replaced.ok && art.src.requests === 1 && sessionsEnded(c).length === 0, { past, replaced, requests: art.src.requests, ended: sessionsEnded(c) })
+      })
+      const alone = servedArtifact(repo, "test.alone", "liba", "1.0", liba(), libaSources())
+      alone.src.mode = "missing"
+      const own = caches("alone")
+      const aloneSibling = coursierOf(own.coursier, repo, alone.sourcesPath)
+      place(coursierOf(own.coursier, repo, alone.jarPath), alone.binary)
+      place(aloneSibling, damagedSources("offset"))
+      await sourcesServer("alone", { classpath: [{ key: alone.key, record: alone.record }], repositories, cache: own.cache, coursier: own.coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-released", repo.url + alone.sourcesPath, "absent")
+        const none = await noLocation(c, file)
+        replace(aloneSibling, libaSources())
+        const replaced = await landsInSources(c, file, own.cache)
+        check("damaged-sibling: the damaged sibling alone, none published: no location; replaced whole by a rename, the next navigation answers, no restart, no session ended", none && replaced.ok && sessionsEnded(c).length === 0, { replaced, ended: sessionsEnded(c) })
+      })
+    }
+    // A sibling whose entry's CRC is not its directory's: it opens and is chosen, its entry fails to
+    // read, and it is passed over from then on, the original in the store answering, every ask.
+    {
+      const art = servedArtifact(repo, "test.crc", "liba", "1.0", liba(), libaSources())
+      for (const r of [art.jar, art.src, art.sum]) r.mode = "refuse"
+      const { cache, coursier } = caches("crc")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      place(coursierOf(coursier, repo, art.sourcesPath), damagedSources("crc"))
+      place(join(cache, "sources", art.sha1, "liba-1.0-sources.jar"), art.sources)
+      await sourcesServer("crc", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-held", repo.url + art.sourcesPath)
+        const first = await landsInSources(c, file, cache)
+        const second = await landsInSources(c, file, cache)
+        check("damaged-data-sibling: a sibling whose entry fails its CRC at the read is dropped and passed over, the original in the store answering at the first ask and the next, no request, no session ended", first.ok && second.ok && art.jar.requests + art.src.requests + art.sum.requests === 0 && sessionsEnded(c).length === 0, { first, second, requests: [art.jar.requests, art.src.requests, art.sum.requests], ended: sessionsEnded(c) })
+      })
+    }
+    // The fetched copy removed from the store before the first navigation: held no longer, the
+    // navigation's reading of the store finds it gone and one transfer places it again; the second
+    // ask answers.
+    {
+      const art = servedArtifact(repo, "test.removed", "liba", "1.0", liba(), libaSources())
+      const { cache, coursier } = caches("removed")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      await sourcesServer("removed", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        const url = repo.url + art.sourcesPath
+        await traceSaid(trace, "sources-published", url)
+        rmSync(join(cache, "sources", art.sha1, "liba-1.0-sources.jar"))
+        const first = await c.request("textDocument/definition", at_(file, "A.make", 0, 2))
+        await traced(trace, 0, (e) => e.event === "sources-published" && e.rest[0] === url && e.id === 2, "the second publication")
+        const second = await landsInSources(c, file, cache)
+        check("store-removed: the store's copy removed before the first navigation, read as gone and placed again by one transfer, the second ask answered", !first.error && second.ok && art.src.requests === 2, { first: first.result, second, requests: art.src.requests })
+      })
+    }
+    // (f) A jar of the tree: its sources jar copied beside it after a miss, and a damaged one replaced.
+    {
+      const { cache, coursier } = caches("f")
+      const root = join(work, "sources", "f")
+      place(join(root, "lib/liba-1.0.jar"), liba())
+      place(join(root, "damaged/liba-1.0.jar"), liba())
+      place(join(root, "damaged/liba-1.0-sources.jar"), libaSources().subarray(0, 150))
+      const projects = { app: [{ file: "lib/liba-1.0.jar" }], dam: [{ file: "damaged/liba-1.0.jar" }] }
+      await sourcesServer("f", { projects, repositories, cache, coursier }, async ({ c, files, open }) => {
+        open(files.dam)
+        const missed = await noLocation(c, files.app)
+        copyFileSync(join(here, "libs/lib/liba-1.0-sources.jar"), join(root, "lib/liba-1.0-sources.jar"))
+        const late = await landsInSources(c, files.app, cache)
+        check("late-sources: a sources jar copied beside the jar after a miss, found at the next navigation", missed && late.ok, late)
+        const damaged = await noLocation(c, files.dam)
+        writeFileSync(join(root, "damaged/liba-1.0-sources.jar"), libaSources())
+        const repaired = await landsInSources(c, files.dam, cache)
+        check("late-sources: a damaged sources jar replaced by a whole one, found at the next navigation", damaged && repaired.ok, repaired)
+      })
+    }
+  } finally {
+    repo.close()
+  }
+}
+
+/** A sources artifact the repository does not publish, refused credentials repaired, a checksum
+ * that does not match, a transfer cut short and every request refused: no location meanwhile, the
+ * hover kept, each failure told once, and the attempt made again as its state says. */
+async function sourcesFailures() {
+  const repo = await new Repository().start()
+  const repositories = [{ id: "loop", url: repo.url }]
+  // A minute of the backoff for the cases that wait for a retry.
+  const quick = { TEQ_LSP_SOURCES_MINUTE: "300" }
+  try {
+    // (d) None published: no location, the hover kept, one request and no other within the backoff.
+    {
+      const art = servedArtifact(repo, "test.d", "liba", "1.0", liba(), libaSources())
+      art.src.mode = "missing"
+      const { cache, coursier } = caches("d")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      await sourcesServer("d", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-released", repo.url + art.sourcesPath, "absent")
+        const none = await noLocation(c, file)
+        const hover = await c.result("textDocument/hover", at_(file, "A.make", 0, 2))
+        const again = await noLocation(c, file)
+        const told = logged(c, `teq: no sources published for ${art.key}`)
+        check("no-sources-published: no location, the hover kept, told once, one request and none again within the backoff", none && again && hover?.contents?.value?.includes("def liba.A.make: A") && told.length === 1 && logged(c, `teq: fetching sources of ${art.key}`).length === 1 && art.src.requests === 1 && art.sum.requests === 0, { hover, told, requests: [art.src.requests, art.sum.requests] })
+      })
+    }
+    // (e) Basic authentication with sbt's credentials file under a temporary home: fetched; then a
+    // wrong password, refused until the file is repaired, fetched at the next navigation.
+    {
+      const credentialed = [{ id: "loop", url: repo.url, credentials: "127.0.0.1" }]
+      const home = (name, password) => {
+        const dir = join(work, "sources", `${name}-home`)
+        place(join(dir, ".sbt/.credentials"), `realm=Test\nhost=127.0.0.1\nuser=reader\npassword=${password}\n`)
+        return dir
+      }
+      const art = servedArtifact(repo, "test.e", "liba", "1.0", liba(), libaSources())
+      for (const r of [art.src, art.sum]) r.auth = "reader:secret"
+      {
+        const { cache, coursier } = caches("e1")
+        place(coursierOf(coursier, repo, art.jarPath), art.binary)
+        await sourcesServer("e1", { classpath: [{ key: art.key, record: art.record }], repositories: credentialed, cache, coursier, env: { HOME: home("e1", "secret") } }, async ({ c, trace, file }) => {
+          await traceSaid(trace, "sources-published", repo.url + art.sourcesPath)
+          const { ok, found } = await landsInSources(c, file, cache)
+          check("credentials: the sources fetched with the credentials of sbt's file for the repository's host", ok, found)
+        })
+      }
+      {
+        const { cache, coursier } = caches("e2")
+        place(coursierOf(coursier, repo, art.jarPath), art.binary)
+        const dir = home("e2", "wrong")
+        const before = art.src.requests
+        await sourcesServer("e2", { classpath: [{ key: art.key, record: art.record }], repositories: credentialed, cache, coursier, env: { HOME: dir } }, async ({ c, trace, file }) => {
+          await traceSaid(trace, "sources-released", repo.url + art.sourcesPath, "refused")
+          const none = await noLocation(c, file)
+          const refused = logged(c, `teq: cannot fetch the sources of ${art.key}, the credentials refused`)
+          check("credentials: a wrong password refused, no location, told once with the file to repair", none && refused.length === 1 && refused[0].params.message.includes(".sbt/.credentials") && art.src.requests === before + 1, { refused, requests: art.src.requests - before })
+          writeFileSync(join(dir, ".sbt/.credentials"), "realm=Test\nhost=127.0.0.1\nuser=reader\npassword=secret\n")
+          const t = new Date(Date.now() + 2000)
+          utimesSync(join(dir, ".sbt/.credentials"), t, t)
+          // The navigation after the repair makes the attempt.
+          await noLocation(c, file).catch(() => false)
+          await traceSaid(trace, "sources-published", repo.url + art.sourcesPath)
+          const { ok, found } = await landsInSources(c, file, cache)
+          check("credentials: the file repaired, fetched at the next attempt and answered, the recovery told", ok && logged(c, `teq: fetched the sources of ${art.key}`).length === 1, { found, log: logged(c, "teq: ") })
+        })
+      }
+    }
+    // (g) A checksum that does not match and a transfer cut short: nothing published, no location;
+    // the next attempt, the repository serving whole bytes, publishes them.
+    for (const [name, broken, outcome] of [["checksum-mismatch", (art) => (art.sum.bytes = Buffer.from(`${"0".repeat(40)}\n`)), "rejected"], ["truncated-transfer", (art) => (art.src.mode = "cut"), "transport"], ["truncated-archive", (art) => (art.src.mode = "truncated"), "rejected"]]) {
+      const art = servedArtifact(repo, `test.${name}`, "liba", "1.0", liba(), libaSources())
+      const whole = art.sum.bytes
+      broken(art)
+      const { cache, coursier } = caches(name)
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      await sourcesServer(name, { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-released", repo.url + art.sourcesPath, outcome)
+        const none = await noLocation(c, file)
+        const stored = readdirSync(join(cache, "sources", art.sha1)).filter((f) => !f.endsWith(".part"))
+        art.src.mode = "serve"
+        art.sum.bytes = whole
+        await traceSaid(trace, "sources-published", repo.url + art.sourcesPath)
+        const { ok, found } = await landsInSources(c, file, cache)
+        const label = name === "truncated-archive" ? "truncated-transfer: a whole response of a truncated archive" : name === "truncated-transfer" ? "truncated-transfer: a transfer cut short" : "checksum-mismatch: a .sha1 that does not match"
+        check(`${label}: nothing published, no location; the next attempt publishes the whole bytes, answered`, none && same(stored, []) && ok, { stored, found })
+      })
+    }
+    // A central directory whose declared size ends inside its entry's name, served with its matching
+    // checksum: refused before it is placed, no session ends; the repository repaired, the next attempt
+    // publishes the whole archive. And one an earlier server placed in the store: a failed open,
+    // removed and fetched again, no session ending on it.
+    {
+      const malformed = Buffer.from(libaSources())
+      const end = malformed.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+      malformed.writeUInt32LE(46, end + 12)
+      const ended = (c) => c.notifications.filter((n) => n.method === "textDocument/publishDiagnostics" && JSON.stringify(n.params).includes("the teq session ended"))
+      const art = servedArtifact(repo, "test.directory", "liba", "1.0", liba(), malformed)
+      const { cache, coursier } = caches("directory")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      await sourcesServer("directory", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-released", repo.url + art.sourcesPath, "rejected")
+        const none = await noLocation(c, file)
+        const stored = readdirSync(join(cache, "sources", art.sha1)).filter((f) => !f.endsWith(".part"))
+        art.src.bytes = libaSources()
+        art.sum.bytes = Buffer.from(`${sha1Of(libaSources())}\n`)
+        await traceSaid(trace, "sources-published", repo.url + art.sourcesPath)
+        const { ok, found } = await landsInSources(c, file, cache)
+        const hover = await c.result("textDocument/hover", at_(file, "a.hello", 0, 2))
+        check("malformed-directory: an archive whose directory runs past its declared size, its checksum matching, refused before it is placed; repaired, published and answered, no session ended", none && same(stored, []) && ok && hover?.contents?.value?.includes("def liba.A.hello: Int") && ended(c).length === 0, { stored, found, hover, ended: ended(c) })
+      })
+      const placed = servedArtifact(repo, "test.placed", "liba", "1.0", liba(), libaSources())
+      const earlier = caches("placed")
+      place(coursierOf(earlier.coursier, repo, placed.jarPath), placed.binary)
+      place(join(earlier.cache, "sources", placed.sha1, "liba-1.0-sources.jar"), malformed)
+      await sourcesServer("placed", { classpath: [{ key: placed.key, record: placed.record }], repositories, cache: earlier.cache, coursier: earlier.coursier }, async ({ c, trace, file }) => {
+        const before = await c.request("textDocument/definition", at_(file, "A.make", 0, 2))
+        await traceSaid(trace, "sources-published", repo.url + placed.sourcesPath)
+        const { ok, found } = await landsInSources(c, file, earlier.cache)
+        check("malformed-directory: one an earlier server placed in the store is a failed open, removed and fetched again, answered, no session ended", !before.error && ok && placed.src.requests === 1 && ended(c).length === 0, { before, found, requests: placed.src.requests, ended: ended(c) })
+      })
+    }
+    // An end record declaring its central directory at 2 GB (0x8000004b bytes) in an archive of a few
+    // hundred, served with its matching checksum to a server whose address space is held to 2 GB once its
+    // first build is in (`prlimit`), where the size declared was allocated and the server aborted: refused
+    // before anything is read for it, the server standing; the repository repaired, published and
+    // answered. Its control, the whole archive served the same way, published and answered at once.
+    for (const oversized of [true, false]) {
+      const name = oversized ? "oversized-directory" : "oversized-directory-control"
+      const bytes = Buffer.from(libaSources())
+      if (oversized) bytes.writeUInt32LE(0x8000004b, bytes.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])) + 12)
+      const art = servedArtifact(repo, `test.${name}`, "liba", "1.0", liba(), bytes)
+      art.src.mode = "hold"
+      const { cache, coursier } = caches(name)
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      await sourcesServer(name, { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
+        const url = repo.url + art.sourcesPath
+        const standing = () => c.proc.exitCode === null && c.proc.signalCode === null
+        await traced(trace, 0, (e) => e.event === "published", "the first build")
+        if (!(await until(() => art.src.held.length === 1, 15000))) throw new Error("the sources' request never held")
+        execSync(`prlimit --pid ${c.proc.pid} --as=2000000000`)
+        repo.release(art.src)
+        if (oversized) {
+          await traceSaid(trace, "sources-released", url, "rejected")
+          const none = await noLocation(c, file)
+          const stored = readdirSync(join(cache, "sources", art.sha1)).filter((f) => !f.endsWith(".part"))
+          art.src.bytes = libaSources()
+          art.sum.bytes = Buffer.from(`${sha1Of(libaSources())}\n`)
+          await traceSaid(trace, "sources-published", url)
+          const { ok, found } = await landsInSources(c, file, cache)
+          check("oversized-directory: an archive whose end record declares a 2 GB directory, its checksum matching, refused before anything is read for it by a server held to 2 GB of address space; repaired, published and answered, the server standing", none && same(stored, []) && ok && standing(), { stored, found, signal: c.proc.signalCode, stderr: c.stderr.slice(-400) })
+        } else {
+          await traceSaid(trace, "sources-published", url)
+          const { ok, found } = await landsInSources(c, file, cache)
+          check("oversized-directory, its control: the whole archive served the same way to a server held to 2 GB of address space, published and answered with one request", ok && art.src.requests === 1 && standing(), { found, requests: art.src.requests, signal: c.proc.signalCode, stderr: c.stderr.slice(-400) })
+        }
+      })
+    }
+    // An archive whose entry's local header gives an extra field running past the file (byte 28 at 65535),
+    // served with its matching checksum: refused before it is placed; the repository repaired, published
+    // and answered with no restart. And one an earlier server placed in the store: removed and fetched
+    // again. No session ends.
+    {
+      const art = servedArtifact(repo, "test.extra", "liba", "1.0", liba(), damagedSources("extra"))
+      const { cache, coursier } = caches("extra")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      await sourcesServer("extra", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-released", repo.url + art.sourcesPath, "rejected")
+        const none = await noLocation(c, file)
+        const stored = readdirSync(join(cache, "sources", art.sha1)).filter((f) => !f.endsWith(".part"))
+        art.src.bytes = libaSources()
+        art.sum.bytes = Buffer.from(`${sha1Of(libaSources())}\n`)
+        await traceSaid(trace, "sources-published", repo.url + art.sourcesPath)
+        const { ok, found } = await landsInSources(c, file, cache)
+        check("local-extra-length: an entry whose local extra field runs past the file, its checksum matching, refused before it is placed; repaired, published and answered with no restart, no session ended", none && same(stored, []) && ok && sessionsEnded(c).length === 0, { stored, found, ended: sessionsEnded(c) })
+      })
+      const placed = servedArtifact(repo, "test.extraplaced", "liba", "1.0", liba(), libaSources())
+      const earlier = caches("extraplaced")
+      place(coursierOf(earlier.coursier, repo, placed.jarPath), placed.binary)
+      place(join(earlier.cache, "sources", placed.sha1, "liba-1.0-sources.jar"), damagedSources("extra"))
+      await sourcesServer("extraplaced", { classpath: [{ key: placed.key, record: placed.record }], repositories, cache: earlier.cache, coursier: earlier.coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-published", repo.url + placed.sourcesPath)
+        const { ok, found } = await landsInSources(c, file, earlier.cache)
+        check("local-extra-length: one an earlier server placed in the store, removed and fetched again, answered, no session ended", ok && placed.src.requests === 1 && sessionsEnded(c).length === 0, { found, requests: placed.src.requests, ended: sessionsEnded(c) })
+      })
+    }
+    // Credentials repaired while the refused request is pending: the attempt read the wrong file, so
+    // the next one is made at once, with no navigation and long before the minute's backoff.
+    {
+      const art = servedArtifact(repo, "test.pending", "liba", "1.0", liba(), libaSources())
+      for (const r of [art.src, art.sum]) r.auth = "reader:secret"
+      art.src.holdRefusals = true
+      const { cache, coursier } = caches("pending")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      const home = join(work, "sources", "pending-home")
+      const credentials = join(home, ".sbt/.credentials")
+      place(credentials, "realm=Test\nhost=127.0.0.1\nuser=reader\npassword=wrong\n")
+      const url = repo.url + art.sourcesPath
+      await sourcesServer("pending", { classpath: [{ key: art.key, record: art.record }], repositories: [{ id: "loop", url: repo.url, credentials: "127.0.0.1" }], cache, coursier, env: { HOME: home } }, async ({ c, trace, file }) => {
+        if (!(await until(() => art.src.held.length === 1, 60000))) throw new Error("no refused request held")
+        writeFileSync(credentials, "realm=Test\nhost=127.0.0.1\nuser=reader\npassword=secret\n")
+        const t = new Date(Date.now() + 2000)
+        utimesSync(credentials, t, t)
+        art.src.holdRefusals = false
+        for (const refuse of art.src.held.splice(0)) refuse()
+        await traceSaid(trace, "sources-released", url, "refused")
+        await traceSaid(trace, "sources-published", url)
+        const of = (event) => traceOf(trace).filter((e) => e.event === event && e.rest[0] === url)
+        const [refused, again] = [of("sources-released")[0], of("sources-start")[1]]
+        const { ok, found } = await landsInSources(c, file, cache)
+        check("credentials-pending: credentials repaired while the refused request was pending, the next attempt made at once with no navigation, published and answered", ok && again !== undefined && again.ms - refused.ms < 10000 && art.src.requests === 2, { found, refused, again, requests: art.src.requests })
+      })
+    }
+    // A repository the lock names no credentials for answers 401; the lock reloaded with its host named
+    // (didChangeWatchedFiles), the artifact takes the lock's configuration and is fetched at once with
+    // the credentials of sbt's file, with no restart of the server and long before the minute's backoff.
+    {
+      const art = servedArtifact(repo, "test.relock", "liba", "1.0", liba(), libaSources())
+      for (const r of [art.src, art.sum]) r.auth = "reader:secret"
+      const { cache, coursier } = caches("relock")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      const home = join(work, "sources", "relock-home")
+      place(join(home, ".sbt/.credentials"), "realm=Test\nhost=127.0.0.1\nuser=reader\npassword=secret\n")
+      const classpath = [{ key: art.key, record: art.record }]
+      const url = repo.url + art.sourcesPath
+      await sourcesServer("relock", { classpath, repositories, cache, coursier, env: { HOME: home } }, async ({ c, root, trace, file }) => {
+        await traceSaid(trace, "sources-released", url, "refused")
+        const none = await noLocation(c, file)
+        writeExport(join(root, "teq.lock"), { app: { platform: "jvm", sources: ["app/src"], classpath } }, [{ id: "loop", url: repo.url, credentials: "127.0.0.1" }])
+        const notified = Date.now()
+        c.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: uriOf(join(root, "teq.lock")), type: 2 }] })
+        await traceSaid(trace, "sources-published", url)
+        const published = traceOf(trace).find((e) => e.event === "sources-published" && e.rest[0] === url)
+        const { ok, found } = await landsInSources(c, file, cache)
+        check("credentials-from-lock: refused with no credentials named, the lock reloaded with its host named, fetched at once with sbt's credentials, answered with no restart of the server", none && ok && published.ms - notified < 10000 && art.src.requests === 2, { found, waited: published.ms - notified, requests: art.src.requests })
+      })
+    }
+    // Held stands on the candidates the server validated, with their stamps: the store's copy truncated
+    // in place, or removed beside a malformed sibling, moves it; the navigation's reading finds no
+    // validated candidate left, one transfer places the sources again and the next ask answers.
+    for (const [name, seed, damage] of [
+      ["truncated", () => {}, (store) => replace(store, Buffer.from("truncated"))],
+      ["beside-malformed", (sibling) => place(sibling, damagedSources("offset")), (store) => rmSync(store)],
+    ]) {
+      const art = servedArtifact(repo, `test.held-${name}`, "liba", "1.0", liba(), libaSources())
+      const { cache, coursier } = caches(`held-${name}`)
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      seed(coursierOf(coursier, repo, art.sourcesPath))
+      const url = repo.url + art.sourcesPath
+      await sourcesServer(`held-${name}`, { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-published", url)
+        damage(join(cache, "sources", art.sha1, "liba-1.0-sources.jar"))
+        const first = await c.request("textDocument/definition", at_(file, "A.make", 0, 2))
+        await traced(trace, 0, (e) => e.event === "sources-published" && e.rest[0] === url && e.id === 2, "the second publication")
+        const second = await landsInSources(c, file, cache)
+        check(`held-revalidated: the store's copy ${name === "truncated" ? "truncated in place" : "removed beside a malformed sibling"}, no validated candidate left at the navigation, one transfer places it again and the next ask answers`, !first.error && second.ok && art.src.requests === 2 && sessionsEnded(c).length === 0, { first: first.result, second, requests: art.src.requests })
+      })
+    }
+    // An archive a session rejects at an entry's read (its CRC not its directory's), which the server's
+    // validation of the directory and headers accepts: the rejection reaches the fetcher. A sibling
+    // rejected is passed over and the sources fetched; the store's own copy rejected (published with a
+    // matching checksum) is removed and goes through the failure states, the repaired repository's
+    // sources fetched at the next attempt and answered.
+    {
+      const art = servedArtifact(repo, "test.read-sibling", "liba", "1.0", liba(), libaSources())
+      const { cache, coursier } = caches("read-sibling")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      place(coursierOf(coursier, repo, art.sourcesPath), damagedSources("crc"))
+      const url = repo.url + art.sourcesPath
+      await sourcesServer("read-sibling", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-held", url)
+        const first = await c.request("textDocument/definition", at_(file, "A.make", 0, 2))
+        await traceSaid(trace, "sources-rejected", url)
+        await traceSaid(trace, "sources-published", url)
+        const second = await landsInSources(c, file, cache)
+        check("read-rejection-reported: a sibling whose entry fails its CRC, held by its directory, rejected at the session's read; the rejection reaches the fetcher, the sources fetched and the next ask answered", first.result === null && second.ok && art.src.requests === 1 && sessionsEnded(c).length === 0, { first: first.result, second, requests: art.src.requests })
+      })
+    }
+    {
+      const damaged = damagedSources("crc")
+      const art = servedArtifact(repo, "test.read-store", "liba", "1.0", liba(), damaged)
+      const { cache, coursier } = caches("read-store")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      const url = repo.url + art.sourcesPath
+      await sourcesServer("read-store", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-published", url)
+        art.src.bytes = libaSources()
+        art.sum.bytes = Buffer.from(`${sha1Of(libaSources())}\n`)
+        const first = await c.request("textDocument/definition", at_(file, "A.make", 0, 2))
+        await traceSaid(trace, "sources-rejected", url)
+        await traced(trace, 0, (e) => e.event === "sources-published" && e.rest[0] === url && e.id === 2, "the second publication")
+        const second = await landsInSources(c, file, cache)
+        const told = logged(c, `teq: the sources of ${art.key} are not placed`)
+        check("read-rejection-reported: the store's copy, published with a matching checksum and rejected at the session's read, removed and refused as an archive (told once); the repaired repository fetched at the next attempt and answered", first.result === null && second.ok && art.src.requests === 2 && told.length === 1 && sessionsEnded(c).length === 0, { first: first.result, second, requests: art.src.requests, told })
+      })
+    }
+    // A rejection belongs to the archive read: libb's sources with one entry's CRC damaged (Cases.scala),
+    // read for its other entry, then replaced whole by a rename, as a sibling in coursier's cache and as
+    // the store's copy: the replacement is opened again and answers, nothing rejected, the repaired file
+    // kept.
+    for (const where of ["sibling", "store"]) {
+      const a = servedArtifact(repo, `test.open-${where}`, "liba", "1.0", liba(), libaSources())
+      const good = libJar("libb-1.0-sources.jar")
+      const bad = Buffer.from(good)
+      for (let at = 0; (at = bad.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]), at)) >= 0; at += 46 + bad.readUInt16LE(at + 28)) {
+        if (bad.subarray(at + 46, at + 46 + bad.readUInt16LE(at + 28)).toString().endsWith("Cases.scala")) bad[at + 16] ^= 0xff
+      }
+      const b = servedArtifact(repo, `test.open-${where}`, "libb", "1.0", libJar("libb-1.0.jar"), good)
+      b.src.mode = "missing"
+      const { cache, coursier } = caches(`open-${where}`)
+      for (const art of [a, b]) place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      place(coursierOf(coursier, repo, a.sourcesPath), a.sources)
+      const damaged = where === "sibling" ? coursierOf(coursier, repo, b.sourcesPath) : join(cache, "sources", b.sha1, "libb-1.0-sources.jar")
+      place(damaged, bad)
+      const main = "object M:\n  val b = new libb.B\n  val c = new libb.Cases\n  val n = b.twiceHello\n  val k = c.helper(2)\n"
+      const url = repo.url + b.sourcesPath
+      await sourcesServer(`open-${where}`, { classpath: [a, b].map((x) => ({ key: x.key, record: x.record })), repositories, cache, coursier, main }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-held", url)
+        const docOf = (loc) => loc?.uri && fileURLToPath(loc.uri)
+        const first = await c.result("textDocument/definition", at_(file, "b.twiceHello", 0, 2))
+        replace(damaged, good)
+        const second = await c.result("textDocument/definition", at_(file, "c.helper", 0, 2))
+        const ok = (found, entry, needle, length) => found?.length === 1 && docOf(found[0]).endsWith(`/libb-1.0-sources.jar/libb/${entry}`) && same(found[0], at(docOf(found[0]), needle, 0, 4, length))
+        const rejected = traceOf(trace).filter((e) => e.event === "sources-rejected" && e.rest[0] === url)
+        check(`replaced-open-archive: an archive read for one entry and replaced whole by a rename (the ${where === "sibling" ? "sibling in coursier's cache" : "store's copy"}) is opened again and answers for the entry the old one could not read, nothing rejected, the repaired file kept`, ok(first, "B.scala", "def twiceHello", 10) && ok(second, "Cases.scala", "def helper", 6) && rejected.length === 0 && existsSync(damaged) && sessionsEnded(c).length === 0, { first, second, rejected, kept: existsSync(damaged) })
+      })
+    }
+    // The same unreadable bytes served again with their checksum: the session's rejection is a failure,
+    // and so is each transfer of those bytes, refused rather than placed again, so the waits grow (1, 2, 4,
+    // 8 minutes, the minute 200 ms) through four definitions answered by nothing; the client told the
+    // fetch and the failure once and no recovery, until the repository serves readable bytes.
+    {
+      const art = servedArtifact(repo, "test.unreadable", "liba", "1.0", liba(), damagedSources("crc"))
+      const { cache, coursier } = caches("unreadable")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      const url = repo.url + art.sourcesPath
+      const minute = 200
+      await sourcesServer("unreadable", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier, env: { TEQ_LSP_SOURCES_MINUTE: String(minute) } }, async ({ c, trace, file }) => {
+        const of = (event, id) => traceOf(trace).find((e) => e.event === event && e.rest[0] === url && e.id === id)
+        await traceSaid(trace, "sources-published", url)
+        const answers = [(await c.request("textDocument/definition", at_(file, "A.make", 0, 2))).result]
+        await traceSaid(trace, "sources-rejected", url)
+        const ends = [traceOf(trace).find((e) => e.event === "sources-rejected" && e.rest[0] === url)]
+        for (const n of [2, 3, 4]) {
+          await traced(trace, 0, (e) => e.event === "sources-released" && e.rest[0] === url && e.id === n, `attempt ${n}'s end`)
+          ends.push(of("sources-released", n))
+          answers.push((await c.request("textDocument/definition", at_(file, "A.make", 0, 2))).result)
+        }
+        const before = logged(c, "teq: fetched the sources of").length
+        art.src.bytes = libaSources()
+        art.sum.bytes = Buffer.from(`${sha1Of(libaSources())}\n`)
+        await traced(trace, 0, (e) => e.event === "sources-published" && e.rest[0] === url && e.id === 5, "the readable bytes' publication")
+        const waits = [2, 3, 4, 5].map((n, i) => of("sources-start", n).ms - ends[i].ms)
+        const expected = [1, 2, 4, 8].map((m) => m * minute)
+        const { ok, found } = await landsInSources(c, file, cache)
+        const told = { fetching: logged(c, `teq: fetching sources of ${art.key}`).length, failed: logged(c, `teq: the sources of ${art.key} are not placed`).length, recovered: logged(c, "teq: fetched the sources of").length }
+        check("unreadable-republished: the same unreadable bytes refused, not placed again, four definitions answered by nothing while the waits grow 1, 2, 4 and 8 minutes; told the fetch and the failure once, the recovery once and only when readable bytes are placed", answers.every((a) => a === null) && waits.every((w, i) => w >= expected[i] - 5 && w < expected[i] + 1000) && ends.slice(1).every((e) => e.rest[1] === "rejected") && same(told, { fetching: 1, failed: 1, recovered: 1 }) && before === 0 && ok, { answers, waits, expected, told, before, found })
+      })
+    }
+    // The rejection record consulted wherever a candidate is acquired. Two binaries share one sources
+    // artifact whose bytes no session can read, published into the first's place and copied into the
+    // second's; the repository repaired, the first's copy rejected at the session's read: the
+    // second's copy, the same bytes, is not a candidate either, so the sources are fetched again,
+    // the repaired bytes placed in both, the recovery told once, both projects answering.
+    {
+      const bad = damagedSources("crc")
+      const linux = servedArtifact(repo, "test.shared-rejected", "liba", "1.0", liba(), bad)
+      const commented = liba()
+      commented.writeUInt16LE(1, commented.length - 2)
+      const osxBinary = Buffer.concat([commented, Buffer.from("x")])
+      const osx = { ...linux, binary: osxBinary, sha1: sha1Of(osxBinary), record: `loop ${sha1Of(osxBinary)} ${osxBinary.length}` }
+      const { key, jarPath } = linux
+      for (const [art, classifier] of [[linux, "linux-x86_64"], [osx, "osx-aarch_64"]]) {
+        art.key = `${key}:${classifier}`
+        art.jarPath = jarPath.replace(".jar", `-${classifier}.jar`)
+      }
+      const { cache, coursier } = caches("shared-rejected")
+      for (const art of [linux, osx]) place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      const projects = { app: [{ key: linux.key, record: linux.record }], next: [{ key: osx.key, record: osx.record }] }
+      const url = repo.url + linux.sourcesPath
+      await sourcesServer("shared-rejected", { projects, repositories, cache, coursier, env: quick }, async ({ c, trace, files, open }) => {
+        await traceSaid(trace, "sources-published", url)
+        let from = traceOf(trace).length
+        open(files.next)
+        await traced(trace, from, (e) => e.rest[0] === url && e.event === "sources-published", "the second binary's copy")
+        linux.src.bytes = libaSources()
+        linux.sum.bytes = Buffer.from(`${sha1Of(libaSources())}\n`)
+        from = traceOf(trace).length
+        const first = (await c.request("textDocument/definition", at_(files.app, "A.make", 0, 2))).result
+        await traced(trace, from, (e) => e.rest[0] === url && e.event === "sources-rejected", "the read's rejection")
+        await traced(trace, from, (e) => e.rest[0] === url && e.event === "sources-published", "the repaired bytes' publication")
+        const recoveredBefore = logged(c, "teq: fetched the sources of").length
+        const app = await landsInSources(c, files.app, cache)
+        const next = (await c.result("textDocument/definition", at_(files.next, "A.make", 0, 2)))?.length === 1
+        const stores = [linux, osx].map((art) => join(cache, "sources", art.sha1, "liba-1.0-sources.jar")).map((f) => (existsSync(f) ? sha1Of(readFileSync(f)) : null))
+        check("shared-rejected-copy: the first binary's copy rejected at a read, the second's copy of the same bytes no candidate either; fetched again, the repaired bytes in both places, both projects answering, the recovery told once", first === null && app.ok && next && same(stores, [sha1Of(libaSources()), sha1Of(libaSources())]) && linux.src.requests === 2 && recoveredBefore === 1 && logged(c, "teq: fetched the sources of").length === 1, { first, app, next, stores, requests: linux.src.requests, recovered: logged(c, "teq: fetched the sources of").length })
+      })
+    }
+    // A rejected copy in the store that cannot be removed (its directory read-only): it stays
+    // rejected, never held; the removal's error goes through the retry states, told once; the
+    // directory restored, the copy is removed and the repaired bytes fetched and answered.
+    {
+      const art = servedArtifact(repo, "test.undeletable", "liba", "1.0", liba(), damagedSources("crc"))
+      const { cache, coursier } = caches("undeletable")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      const url = repo.url + art.sourcesPath
+      const dir = join(cache, "sources", art.sha1)
+      await sourcesServer("undeletable", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-published", url)
+        art.src.bytes = libaSources()
+        art.sum.bytes = Buffer.from(`${sha1Of(libaSources())}\n`)
+        chmodSync(dir, 0o555)
+        // A user the mode binds (root's removal ignores it, and then only the recovery is checked).
+        let binds = false
+        try {
+          writeFileSync(join(dir, ".probe"), "")
+          rmSync(join(dir, ".probe"))
+        } catch {
+          binds = true
+        }
+        let first, removalFailed, heldWhileStuck, told, waits
+        try {
+          const from = traceOf(trace).length
+          first = (await c.request("textDocument/definition", at_(file, "A.make", 0, 2))).result
+          const rejected = await traced(trace, from, (e) => e.rest[0] === url && e.event === "sources-rejected", "the read's rejection")
+          if (binds) {
+            // Two removals failed in a row: the retry states' waits, a minute then two.
+            const failed = (e) => e.rest[0] === url && e.event === "sources-released" && e.rest[1] === "transport"
+            const once = await traced(trace, from, failed, "the removal's failure")
+            const twice = await traced(trace, from, (e) => failed(e) && e.id > once.id, "the removal's second failure")
+            waits = [once.ms - rejected.ms, twice.ms - once.ms]
+            removalFailed = waits[0] >= 300 - 5 && waits[1] >= 600 - 5
+            heldWhileStuck = traceOf(trace).slice(from).some((e) => e.rest[0] === url && (e.event === "sources-held" || e.event === "sources-published"))
+            told = logged(c, `teq: cannot fetch the sources of ${art.key}: cannot remove`).length
+          }
+        } finally {
+          chmodSync(dir, 0o755)
+        }
+        await traced(trace, 0, (e) => e.rest[0] === url && e.event === "sources-published" && e.id > 1, "the repaired bytes' publication")
+        const { ok, found } = await landsInSources(c, file, cache)
+        check(`undeletable-rejected-copy: a rejected copy that cannot be removed stays rejected and is never held, its removal's error a failure through the retry states (a minute, then two), told once; the directory restored, fetched again and answered${binds ? "" : " (as a user the read-only mode does not bind: the recovery alone checked)"}`, first === null && ok && (!binds || (removalFailed && !heldWhileStuck && told === 1)), { binds, first, waits, removalFailed, heldWhileStuck, told, found })
+      })
+    }
+    // A publication settled against the record as it is at the settle. The repository's archive with
+    // its matching checksum, the checksum's response held; the same unreadable bytes beside the binary
+    // meanwhile, rejected at the session's read; the checksum released: the bytes are not published
+    // nor held, the failure kept, and the reacquisition fetches the repaired repository's bytes.
+    {
+      const bad = damagedSources("crc")
+      const art = servedArtifact(repo, "test.mid-transfer", "liba", "1.0", liba(), bad)
+      art.sum.mode = "hold"
+      const { cache, coursier } = caches("mid-transfer")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      const url = repo.url + art.sourcesPath
+      await sourcesServer("mid-transfer", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
+        if (!(await until(() => art.sum.held.length === 1, 60000))) throw new Error("the checksum's response not held")
+        place(coursierOf(coursier, repo, art.sourcesPath), bad)
+        const first = (await c.request("textDocument/definition", at_(file, "A.make", 0, 2))).result
+        await traceSaid(trace, "sources-rejected", url)
+        repo.release(art.sum)
+        await traced(trace, 0, (e) => e.event === "sources-released" && e.rest[0] === url && e.id === 1, "the first attempt's end")
+        const settled = traceOf(trace).find((e) => e.event === "sources-released" && e.rest[0] === url && e.id === 1).rest[1]
+        const publishedFirst = traceSays(trace, "sources-published", url)
+        art.src.bytes = libaSources()
+        art.sum.bytes = Buffer.from(`${sha1Of(libaSources())}\n`)
+        await traceSaid(trace, "sources-published", url)
+        const { ok, found } = await landsInSources(c, file, cache)
+        const stored = sha1Of(readFileSync(join(cache, "sources", art.sha1, "liba-1.0-sources.jar")))
+        check("rejected-mid-transfer: bytes a session rejected while the fetch of the same bytes held its checksum are not published nor held when the fetch ends; the failure kept, the repaired repository fetched and answered", first === null && settled === "rejected" && !publishedFirst && ok && stored === sha1Of(libaSources()) && art.src.requests === 2 && logged(c, "teq: fetched the sources of").length === 1 && sessionsEnded(c).length === 0, { first, settled, publishedFirst, found, requests: art.src.requests })
+      })
+    }
+    // A rejection by hash told as a read's is. The sibling unreadable, the repository's bytes fetched
+    // and answered; then the store's copy replaced by the rejected bytes: the session skips them by their
+    // hash and reports it, so the fetcher takes the copy as rejected and fetches the bytes again.
+    {
+      const bad = damagedSources("crc")
+      const art = servedArtifact(repo, "test.restored", "liba", "1.0", liba(), libaSources())
+      const { cache, coursier } = caches("restored")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      place(coursierOf(coursier, repo, art.sourcesPath), bad)
+      const store = join(cache, "sources", art.sha1, "liba-1.0-sources.jar")
+      const url = repo.url + art.sourcesPath
+      await sourcesServer("restored", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-held", url)
+        await c.request("textDocument/definition", at_(file, "A.make", 0, 2))
+        await traceSaid(trace, "sources-published", url)
+        const recovered = await landsInSources(c, file, cache)
+        replace(store, bad)
+        const from = traceOf(trace).length
+        const first = (await c.request("textDocument/definition", at_(file, "A.make", 0, 2))).result
+        await traced(trace, from, (e) => e.event === "sources-rejected" && e.rest[0] === url, "the hash's rejection reported")
+        await traced(trace, from, (e) => e.event === "sources-published" && e.rest[0] === url, "the bytes fetched again")
+        const { ok, found } = await landsInSources(c, file, cache)
+        check("rejected-bytes-restored: the store's copy replaced by bytes the session rejected before, skipped by their hash and reported; taken as rejected by the fetcher, fetched again and answered", recovered.ok && first === null && ok && art.src.requests === 2 && sessionsEnded(c).length === 0, { recovered, first, found, requests: art.src.requests })
+      })
+    }
+    // A rejection carried by an answer the server discards. The store's copy unreadable (fetched with
+    // its matching checksum), the repository repaired; an edit's build held at its start, a definition
+    // queued behind it, a second edit cancelling the build: the definition's answer is discarded with
+    // the cancelled build, and its rejection reaches the fetcher all the same, which fetches the
+    // repaired bytes. A second server over the same caches (the restart control) answers from them.
+    {
+      const art = servedArtifact(repo, "test.discarded", "liba", "1.0", liba(), damagedSources("crc"))
+      const { cache, coursier } = caches("discarded")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      const url = repo.url + art.sourcesPath
+      const barrier = join(work, "sources", "discarded-barrier")
+      const classpath = [{ key: art.key, record: art.record }]
+      try {
+        await sourcesServer("discarded", { classpath, repositories, cache, coursier, env: { ...quick, TEQ_LSP_TEST_BARRIER: barrier } }, async ({ c, trace, file }) => {
+          await traceSaid(trace, "sources-published", url)
+          await traced(trace, 0, (e) => e.event === "published", "the first build's diagnostics")
+          art.src.bytes = libaSources()
+          art.sum.bytes = Buffer.from(`${sha1Of(libaSources())}\n`)
+          const text = readFileSync(file, "utf8")
+          const change = (version) => c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file), version }, contentChanges: [{ text: text + "\n".repeat(version) }] })
+          writeFileSync(`${barrier}.start`, "")
+          const from = traceOf(trace).length
+          change(2)
+          const held = await traced(trace, from, (e) => e.event === "held" && e.rest[0] === "start", "the edit's build held at its start")
+          const pending = c.request("textDocument/definition", at_(file, "A.make", 0, 2))
+          change(3)
+          await traced(trace, from, (e) => e.event === "wrote-cancel" && e.id === held.id, "the build's cancel")
+          rmSync(`${barrier}.start`)
+          const first = (await pending).result
+          await traced(trace, from, (e) => e.event === "sources-rejected" && e.rest[0] === url, "the discarded answer's rejection")
+          await traced(trace, from, (e) => e.event === "sources-published" && e.rest[0] === url, "the repaired bytes' publication")
+          const { ok, found } = await landsInSources(c, file, cache)
+          check("rejection-in-a-discarded-answer: a definition's answer discarded with a cancelled build carries the store's copy's rejection, which reaches the fetcher; the repaired bytes fetched and answered with no restart", first === null && ok && art.src.requests === 2 && sessionsEnded(c).length === 0, { first, found, requests: art.src.requests })
+        })
+      } finally {
+        rmSync(`${barrier}.start`, { force: true })
+      }
+      await sourcesServer("discarded-restart", { classpath, repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-held", url)
+        const { ok, found } = await landsInSources(c, file, cache)
+        check("rejection-in-a-discarded-answer: the restart control, a second server over the same caches, answers from the repaired bytes with no request", ok && art.src.requests === 2, { found, requests: art.src.requests })
+      })
+    }
+    // A checksum the repository does not have, its 404 answered with a page larger than a checksum's
+    // bound: absent, the sources published.
+    {
+      const art = servedArtifact(repo, "test.page", "liba", "1.0", liba(), libaSources())
+      art.sum.mode = "missing"
+      art.sum.errorPage = Buffer.from(`<html><body><h1>404 Not Found</h1>${" ".repeat(2048)}</body></html>`)
+      const { cache, coursier } = caches("page")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      await sourcesServer("page", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-published", repo.url + art.sourcesPath)
+        const { ok, found } = await landsInSources(c, file, cache)
+        check("html-404-sidecar: a .sha1 answered 404 with an HTML page larger than a checksum, absent, the sources published and answered", ok && art.sum.requests === 1, { found, sidecar: art.sum.requests })
+      })
+    }
+    // (i) Every request refused, then served: the next attempt after the backoff publishes them.
+    {
+      const art = servedArtifact(repo, "test.i", "liba", "1.0", liba(), libaSources())
+      for (const r of [art.src, art.sum]) r.mode = "refuse"
+      const { cache, coursier } = caches("i")
+      place(coursierOf(coursier, repo, art.jarPath), art.binary)
+      await sourcesServer("i", { classpath: [{ key: art.key, record: art.record }], repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
+        await traceSaid(trace, "sources-released", repo.url + art.sourcesPath, "transport")
+        const none = await noLocation(c, file)
+        const told = logged(c, `teq: cannot fetch the sources of ${art.key}`)
+        for (const r of [art.src, art.sum]) r.mode = "serve"
+        await traceSaid(trace, "sources-published", repo.url + art.sourcesPath)
+        const { ok, found } = await landsInSources(c, file, cache)
+        check("offline-then-online: no location while every request is refused, told once; served, the navigation after the next attempt answers", none && told.length === 1 && told[0].params.type === 2 && ok, { told, found })
+      })
+    }
+  } finally {
+    repo.close()
+  }
+}
+
+/** Sources held by the repository, both of the sources' transfers taken: the session's build and an
+ * unrelated query complete meanwhile, and a new project's binary is fetched and checked; released,
+ * the sources are published and answered. */
+async function sourcesHeld() {
+  const repo = await new Repository().start()
+  const repositories = [{ id: "loop", url: repo.url }]
+  try {
+    const a = servedArtifact(repo, "test.h", "liba", "1.0", liba(), libaSources())
+    const b = servedArtifact(repo, "test.h", "libb", "1.0", libJar("libb-1.0.jar"), libJar("libb-1.0-sources.jar"))
+    const other = servedArtifact(repo, "test.h2", "liba", "2.0", libJar("liba-2.0.jar"), libJar("liba-2.0-sources.jar"))
+    for (const r of [a.src, b.src, other.src]) r.mode = "hold"
+    const { cache, coursier } = caches("h")
+    place(coursierOf(coursier, repo, a.jarPath), a.binary)
+    place(coursierOf(coursier, repo, b.jarPath), b.binary)
+    const projects = { app: [{ key: a.key, record: a.record }, { key: b.key, record: b.record }], next: [{ key: other.key, record: other.record }] }
+    await sourcesServer("h", { projects, repositories, cache, coursier }, async ({ c, trace, files, open }) => {
+      const held = await until(() => a.src.held.length === 1 && b.src.held.length === 1, 60000)
+      const m = c.mark()
+      c.notify("textDocument/didChange", { textDocument: { uri: uriOf(files.app), version: 2 }, contentChanges: [{ text: `${sourcesMain}  val wrong: String = 1\n` }] })
+      const built = await c.waitDiagnostics(m, uriOf(files.app), (ds) => ds.length > 0, 60000)
+      const hover = await c.result("textDocument/hover", at_(files.app, "a.hello", 0, 2))
+      const m2 = c.mark()
+      writeFileSync(files.next, `${sourcesMain.replace("object M", "object NEXT")}  val wrong: String = 2\n`)
+      open(files.next)
+      const fetched = await c.waitDiagnostics(m2, uriOf(files.next), (ds) => ds.length > 0, 60000)
+      check("held-download: with both of the sources' transfers held, the session's build and an unrelated query complete, and a new project's binary is fetched and its file checked", held && built?.some((d) => d.message.includes("type mismatch")) && hover?.contents?.value?.includes("def liba.A.hello: Int") && fetched?.some((d) => d.message.includes("type mismatch")) && other.jar.requests === 1 && a.src.held.length === 1, { held, built, hover, fetched, binary: other.jar.requests })
+      for (const r of [a.src, b.src, other.src]) repo.release(r)
+      await traceSaid(trace, "sources-published", repo.url + a.sourcesPath)
+      const { ok, found } = await landsInSources(c, files.app, cache)
+      check("held-download: released, the sources published and the definition answered", ok, found)
+    })
+  } finally {
+    repo.close()
+  }
+}
+
+/** The reading of the store on every path into a library document. For each request the server serves
+ * that reaches one (definition, references with the declaration, the call hierarchy's preparation and
+ * its incoming and outgoing calls, and hover, references and implementation over a library document;
+ * implementations are the program's alone, workspace symbols list the program's declarations alone,
+ * and signature help over a jar's document answers nothing, so none of those reaches one otherwise),
+ * libb's sources fetched and then their copy in the store
+ * removed: the request finds them nowhere, which reads the store again and fetches them, and the same
+ * request then answers into the document; the control, the same sequence with the store intact,
+ * answers at once with no second request. */
+async function sourcesPaths() {
+  const repo = await new Repository().start()
+  try {
+    const main = "object M:\n  val b = new libb.B\n  val c = new libb.Cases\n  def run: Int = c.helper(2) + b.twiceHello\nclass Mine extends libb.Base:\n  override def value: Int = 3\n"
+    const docOf = (loc) => loc?.uri && fileURLToPath(loc.uri)
+    const inCases = (uri) => !!uri && fileURLToPath(uri).endsWith("/libb-1.0-sources.jar/libb/Cases.scala")
+    // The texts of the documents asked over, read before their files are removed: the positions of the
+    // requests made after are in them, as a client's are in the text it holds.
+    const texts = new Map()
+    const atDoc = (path, needle, n = 0, delta = 0) => {
+      const text = texts.get(path) ?? readFileSync(path, "utf8")
+      let i = -1
+      for (let k = 0; k <= n; k++) i = text.indexOf(needle, i + 1)
+      return { textDocument: { uri: uriOf(path) }, position: positionAt(text, i + delta) }
+    }
+    // Each path: the request, and whether its answer reaches the library document. `inDoc` asks over the
+    // document, its path from a definition made while the store stands.
+    const paths = [
+      ["definition", false, (c, file) => c.result("textDocument/definition", at_(file, "c.helper", 0, 2)), (r) => r?.length === 1 && inCases(r[0].uri)],
+      ["references with the declaration", false, (c, file) => c.result("textDocument/references", { ...at_(file, "c.helper", 0, 2), context: { includeDeclaration: true } }), (r) => (r ?? []).some((l) => inCases(l.uri))],
+      ["implementation over the library document", true, (c, file, doc) => c.result("textDocument/implementation", atDoc(doc, "def value: Int = 0", 0, 4)), (r) => (r ?? []).some((l) => !inCases(l.uri))],
+      ["call hierarchy's preparation", false, (c, file) => c.result("textDocument/prepareCallHierarchy", at_(file, "c.helper", 0, 2)), (r) => r?.length === 1 && inCases(r[0].uri)],
+      ["outgoing calls", false, async (c, file) => {
+        const item = (await c.result("textDocument/prepareCallHierarchy", at_(file, "def run", 0, 4)))?.[0]
+        return item && c.result("callHierarchy/outgoingCalls", { item })
+      }, (r) => (r ?? []).some((call) => inCases(call.to?.uri))],
+      ["incoming calls", true, async (c, file, doc) => {
+        const item = (await c.result("textDocument/prepareCallHierarchy", atDoc(doc, "def helper", 0, 4)))?.[0]
+        return item && c.result("callHierarchy/incomingCalls", { item })
+      }, (r) => (r ?? []).some((call) => call.from?.name === "run")],
+      ["hover over the library document", true, (c, file, doc) => c.result("textDocument/hover", atDoc(doc, "def helper", 0, 4)), (r) => !!r?.contents?.value?.includes("helper")],
+      ["references over the library document", true, (c, file, doc) => c.result("textDocument/references", { ...atDoc(doc, "def helper", 0, 4), context: { includeDeclaration: true } }), (r) => (r ?? []).some((l) => !inCases(l.uri)) && (r ?? []).some((l) => inCases(l.uri))],
+    ]
+    // Each path over three states of teq's cache: libb's copy in the store removed; `sources/` and
+    // `attached/` removed alike, the documents gone with the sources (a request over the document then
+    // gives its position as a line and a character, the client holding no text of it); and its control,
+    // the cache intact.
+    for (const [name, inDoc, ask, answered] of paths) {
+      for (const state of ["removed", "cleared", "intact"]) {
+        const tag = `${name.replaceAll(" ", "-").replaceAll("'", "")}-${state}`
+        const a = servedArtifact(repo, `test.paths.${tag}`, "liba", "1.0", liba(), libaSources())
+        const b = servedArtifact(repo, `test.paths.${tag}`, "libb", "1.0", libJar("libb-1.0.jar"), libJar("libb-1.0-sources.jar"))
+        const { cache, coursier } = caches(`paths-${tag}`)
+        for (const art of [a, b]) place(coursierOf(coursier, repo, art.jarPath), art.binary)
+        const url = repo.url + b.sourcesPath
+        await sourcesServer(`paths-${tag}`, { classpath: [a, b].map((x) => ({ key: x.key, record: x.record })), repositories: [{ id: "loop", url: repo.url }], cache, coursier, main }, async ({ c, trace, file }) => {
+          await traceSaid(trace, "sources-published", url)
+          await traceSaid(trace, "sources-published", repo.url + a.sourcesPath)
+          let doc
+          if (inDoc) doc = docOf((await c.result("textDocument/definition", at_(file, "c.helper", 0, 2)))?.[0])
+          if (inDoc) texts.set(doc, readFileSync(doc, "utf8"))
+          if (state === "removed") rmSync(join(cache, "sources", b.sha1, "libb-1.0-sources.jar"))
+          if (state === "cleared") for (const dir of ["sources", "attached"]) rmSync(join(cache, dir), { recursive: true })
+          const first = await ask(c, file, doc)
+          if (state !== "intact") {
+            await traced(trace, 0, (e) => e.event === "sources-published" && e.rest[0] === url && e.id === 2, `${name}: the sources fetched again`)
+            const again = await ask(c, file, doc)
+            const written = !inDoc || existsSync(doc)
+            const what = state === "removed" ? "libb's sources removed from the store" : "sources/ and attached/ removed, the documents with the sources"
+            check(`${state === "removed" ? "store-removed" : "cache-cleared"} over ${name}: ${what}, the request finds them nowhere and the store is read again, one transfer places them, and the request answers into the document${state === "cleared" ? ", written again" : ""}`, answered(again) && written && b.src.requests === 2 && sessionsEnded(c).length === 0, { first, again, written, requests: b.src.requests })
+          } else {
+            check(`store-removed over ${name}, its control: the store intact, the request answers into the document at once, no second request`, answered(first) && b.src.requests === 1 && !traceSays(trace, "sources-released", url, "rejected"), { first, requests: b.src.requests })
+          }
+        })
+      }
+    }
+    // The pass on 6d7d21e30's probe: the document a definition gave, open in the client, and teq's whole
+    // cache removed under it. Hover, definition, references with the declaration and call hierarchy's
+    // preparation at `def make`, in the open document: the first finds the sources nowhere and reports
+    // it, one transfer places them again, the document is written again, and each answers in the same
+    // open document, as an application-side definition then lands in it. Its control, the cache kept:
+    // each answers at once, one request. At the session's default worker count, two and sixteen.
+    const docAsks = [
+      ["hover", (c, doc) => c.result("textDocument/hover", atDoc(doc, "def make", 0, 4)), (r) => !!r?.contents?.value?.includes("make")],
+      ["definition", (c, doc) => c.result("textDocument/definition", atDoc(doc, "def make", 0, 4)), (r, doc) => (r ?? []).some((l) => docOf(l) === doc)],
+      ["references", (c, doc) => c.result("textDocument/references", { ...atDoc(doc, "def make", 0, 4), context: { includeDeclaration: true } }), (r, doc) => (r ?? []).some((l) => docOf(l) === doc)],
+      ["call hierarchy's preparation", (c, doc) => c.result("textDocument/prepareCallHierarchy", atDoc(doc, "def make", 0, 4)), (r, doc) => r?.length === 1 && docOf(r[0]) === doc],
+    ]
+    for (const threads of [undefined, "2", "16"]) {
+      for (const cleared of [true, false]) {
+        const tag = `open-document-${cleared ? "cleared" : "kept"}-${threads ?? "default"}`
+        const art = servedArtifact(repo, `test.paths.${tag}`, "liba", "1.0", liba(), libaSources())
+        const { cache, coursier } = caches(`paths-${tag}`)
+        place(coursierOf(coursier, repo, art.jarPath), art.binary)
+        const url = repo.url + art.sourcesPath
+        const workers = threads ? `${threads} workers` : "the default workers"
+        await sourcesServer(`paths-${tag}`, { classpath: [{ key: art.key, record: art.record }], repositories: [{ id: "loop", url: repo.url }], cache, coursier, env: threads ? { TEQ_SESSION_THREADS: threads } : {} }, async ({ c, trace, file }) => {
+          await traceSaid(trace, "sources-published", url)
+          const doc = docOf((await landsInSources(c, file, cache)).found?.[0])
+          texts.set(doc, readFileSync(doc, "utf8"))
+          c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(doc), languageId: "scala", version: 1, text: texts.get(doc) } })
+          if (cleared) rmSync(cache, { recursive: true })
+          const askAll = async () => {
+            const out = []
+            for (const [what, ask, answered] of docAsks) {
+              const r = await ask(c, doc)
+              out.push({ what, answered: answered(r, doc), r })
+            }
+            return out
+          }
+          const first = await askAll()
+          if (cleared) {
+            await traced(trace, 0, (e) => e.event === "sources-published" && e.rest[0] === url && e.id === 2, "the sources fetched again")
+            const again = await askAll()
+            const app = docOf((await landsInSources(c, file, cache)).found?.[0])
+            check(`cache-cleared under an open library document at ${workers}: the first request finds the sources nowhere and reports it, one transfer places them, the document is written again, and hover, definition, references and call hierarchy's preparation each answer in the open document, as an application-side definition does`, again.every((a) => a.answered) && existsSync(doc) && app === doc && art.src.requests === 2 && sessionsEnded(c).length === 0, { first, again, app, requests: art.src.requests })
+          } else {
+            check(`cache-cleared under an open library document at ${workers}, its control: the cache kept, each request answers in the open document at once, one request`, first.every((a) => a.answered) && art.src.requests === 1, { first, requests: art.src.requests })
+          }
+        })
+      }
+    }
+  } finally {
+    repo.close()
+  }
+}
+
+/** The backoff of transport failures through the worker, its minute shortened: every request refused,
+ * each wait from an attempt's end to the next one's start 1, 2, 4 and 8 minutes, then the hour, the
+ * count kept across the attempts between them. */
+async function sourcesBackoff() {
+  const repo = await new Repository().start()
+  const minute = 150
+  try {
+    const art = servedArtifact(repo, "test.backoff", "liba", "1.0", liba(), libaSources())
+    art.src.mode = "refuse"
+    const { cache, coursier } = caches("backoff")
+    place(coursierOf(coursier, repo, art.jarPath), art.binary)
+    await sourcesServer("backoff", { classpath: [{ key: art.key, record: art.record }], repositories: [{ id: "loop", url: repo.url }], cache, coursier, env: { TEQ_LSP_SOURCES_MINUTE: String(minute) } }, async ({ c, trace, file }) => {
+      const url = repo.url + art.sourcesPath
+      await traced(trace, 0, (e) => e.event === "sources-released" && e.id === 6 && e.rest[0] === url, "the sixth attempt's end", 60000)
+      const of = (event) => traceOf(trace).filter((e) => e.event === event && e.rest[0] === url)
+      const [starts, ends] = [of("sources-start"), of("sources-released")]
+      const waits = starts.slice(1, 6).map((s, i) => s.ms - ends[i].ms)
+      const expected = [1, 2, 4, 8, 60].map((m) => m * minute)
+      const none = await noLocation(c, file)
+      const told = logged(c, `teq: cannot fetch the sources of ${art.key}`)
+      check("backoff: through the worker, each transport failure waits 1, 2, 4 and 8 minutes, then the hour, before the next attempt, told once", none && waits.length === 5 && waits.every((w, i) => w >= expected[i] - 5 && w < expected[i] + 1000) && told.length === 1 && ends.slice(0, 6).every((e) => e.rest[1] === "transport"), { waits, expected, told })
+    })
+  } finally {
+    repo.close()
   }
 }
 
@@ -4804,9 +5942,10 @@ async function refusedMapping() {
   }
 }
 
-const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, refusedMapping, idleMinute, jarFetch }
-// Run only when named: the idle minute and the jar fetch, which tests/lsp.sh runs once each.
-const named = new Set(["idleMinute", "jarFetch"])
+const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths }
+// Run only when named: the idle minute, the jar fetch and the sources' fetches, which tests/lsp.sh
+// runs once each.
+const named = new Set(["idleMinute", "jarFetch", "librarySources", "sourcesFailures", "sourcesHeld", "sourcesBackoff", "sourcesPaths"])
 // A name of no scenario fails the run before any runs; `LSP_UNITS=<file>` is given every scenario's name, which
 // tests/lsp.sh holds its list of units to; `PIECES_RAN=<file>` is told each scenario as it starts, with the count of
 // workers it runs at (tests/support/pieces.sh).

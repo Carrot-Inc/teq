@@ -124,9 +124,8 @@ pub struct Loaded {
     pub declared: SharedMap<crate::ast::DeclRef, declared::Declared>,
     /// Per loaded file asked for a place, its positions.
     pub positions: SharedMap<u32, Arc<places::FilePositions>>,
-    /// The sources jars opened for the places they attach, by path; `None` for one that cannot
-    /// be read. Read under the loader's lock.
-    pub sources_jars: FxMap<String, Option<places::SourcesJar>>,
+    /// The sources jars of the jars, opened for the places they attach and the documents they show.
+    pub sources: places::SourcesLookup,
     /// The tokens the products' files record, composed with the build's own for the listing.
     pub tokens: provenance::Tokens,
     /// The library documents the language server was asked about, with the loaded files whose
@@ -354,7 +353,7 @@ impl Loaded {
             decoded_classes: FxMap::default(),
             declared: SharedMap::new(),
             positions: SharedMap::new(),
-            sources_jars: FxMap::default(),
+            sources: Default::default(),
             tokens: Default::default(),
             documents: FxMap::default(),
             tparam_defs: FxMap::default(),

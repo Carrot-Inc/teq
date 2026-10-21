@@ -19,17 +19,25 @@
 # build kept at one worker, and as many sessions at sixteen as at two. The first pass types every
 # session's full builds at the automatic count (tests/support/sessions.sh), its line saying which
 # forked. After it, once, the driver's `idleMinute` alone: an idle session's polls over a minute,
-# read from the server's trace against the rule, its line giving their count and spacing; and its `jarFetch`
+# read from the server's trace against the rule, its line giving their count and spacing; its `jarFetch`
 # alone: a pinned jar fetched from a repository on the loopback interface, the fetch told in the client's log
-# before the transfer ends, and nothing asked of the repository by a second server over the same cache.
+# before the transfer ends, its sources fetched beside, and nothing asked of the repository by a second server
+# over the same cache; and the sources of the libraries, each scenario alone (`librarySources`, `sourcesFailures`,
+# `sourcesHeld`, `sourcesBackoff`, `sourcesPaths`, the last over every request that reaches a library document): a jar's sources found beside it, in coursier's cache or in teq's sources store,
+# fetched from a repository on the loopback interface whose every URL is a route of its own (one transfer for the
+# binaries that share a sources artifact), and retried after a miss, a failed open, none published, refused
+# credentials, a bad checksum or directory, a cut transfer and every request refused, the backoff's waits read
+# from the server's trace, never by sleeps.
 # `--piece <k>/<n>` runs piece k of n alone (tests/support/pieces.sh): a unit is one of the driver's scenarios at all
-# three counts, or the idle minute, or the jar fetch; the evidence of forks and joins is the whole suite's then, the
-# gate summing it over the pieces.
+# three counts, or one of those run once; the evidence of forks and joins is the whole suite's then, the gate
+# summing it over the pieces.
 cd "$(dirname "$0")/.."
 . tests/support/pieces.sh
+# The scenarios run once, at the automatic count: the server's schedule and its transfers are no worker count's.
+once='idleMinute jarFetch librarySources sourcesFailures sourcesHeld sourcesBackoff sourcesPaths'
 suite_units() {
-  sed -n 's/^const scenarios = { \(.*\) }$/\1/p' tests/lsp/driver.mjs | tr -d ' ' | tr ',' '\n' | grep -v -x -E 'idleMinute|jarFetch' | sed 's/$/ auto 2 16/'
-  printf '%s\n' 'idleMinute auto' 'jarFetch auto'
+  sed -n 's/^const scenarios = { \(.*\) }$/\1/p' tests/lsp/driver.mjs | tr -d ' ' | tr ',' '\n' | grep -v -x -E "${once// /|}" | sed 's/$/ auto 2 16/'
+  printf '%s auto\n' $once
 }
 ! pieces_option lsp "$1" "$2" || shift 2
 [ $# = 0 ] || pieces_usage
@@ -68,7 +76,7 @@ fi
 # A piece's scenarios of the three counts, every one of them in a whole run, which names none to the driver; the
 # driver's own list of scenarios is held to the units.
 scenarios=
-for s in $(suite_units | cut -d' ' -f1 | grep -v -x -E 'idleMinute|jarFetch'); do piece_has "$s" && scenarios=$scenarios,$s; done
+for s in $(suite_units | cut -d' ' -f1 | grep -v -x -E "${once// /|}"); do piece_has "$s" && scenarios=$scenarios,$s; done
 only=()
 [ -z "$PIECE" ] || only=(LSP_ONLY="${scenarios#,}" LSP_UNITS="$work/units")
 ran() { [ -z "$PIECE" ] || [ -n "$scenarios" ]; }
@@ -109,6 +117,16 @@ if piece_has jarFetch; then
   tally "$work/fetch.log"
   [ $code = 0 ] || status=1
 fi
+# The libraries' sources found, fetched and retried, each scenario once.
+for s in librarySources sourcesFailures sourcesHeld sourcesBackoff sourcesPaths; do
+  piece_has "$s" || continue
+  timeout 150 env LSP_ONLY=$s ${PIECE:+LSP_UNITS="$work/units"} node tests/lsp/driver.mjs "$TEQ" "$work/$s" "$jar" "$jar2" > "$work/$s.log" 2>&1
+  code=$?
+  grep -E '^FAIL' "$work/$s.log"
+  echo "lsp: the libraries' sources, $s: $(tail -1 "$work/$s.log")"
+  tally "$work/$s.log"
+  [ $code = 0 ] || status=1
+done
 if [ "${TEQ_FORK:-}" = 1 ]; then
   if "$TEQ" --version | grep -q assertions; then
     forks=$(sed -nE 's/^view checks: end [0-9]+: (typed|not typed), ([0-9]+) forks.*/\2/p' "$TEQ_VIEW_CHECKS_LOG" | awk '{ n += $1 } END { print n + 0 }')

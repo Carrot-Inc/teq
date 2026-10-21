@@ -316,6 +316,27 @@ EOF
   fi
   rm -rf "$work"
 fi
+# A jar whose end record declares its central directory at 2 GB (0x8000004b bytes) in a file of 2 kB: refused with
+# the reader's message before anything is read for it, under an address space held to 2 GB, where the size declared
+# was allocated and the compiler aborted. Its control, the jar whole, checks under the same limit.
+work=$(mktemp -d)
+python3 - tests/lsp/libs/lib/liba-1.0.jar "$work/oversized.jar" <<'EOF'
+import sys
+b = bytearray(open(sys.argv[1], 'rb').read())
+end = b.rfind(b'PK\x05\x06')
+b[end + 12:end + 16] = (0x8000004b).to_bytes(4, 'little')
+open(sys.argv[2], 'wb').write(bytes(b))
+EOF
+printf '@main def m(): Unit = println(liba.A.make.hello)\n' > "$work/m.scala"
+for jar in tests/lsp/libs/lib/liba-1.0.jar "$work/oversized.jar"; do
+  out=$(ulimit -v 2000000; TEQ_CACHE_DIR=$work/cache timeout 60 "$TEQ" compiler check "$work/m.scala" --classpath "$jar" 2>&1)
+  code=$?
+  case $jar in
+    */oversized.jar) [ $code = 2 ] && grep -qF "$jar: central directory of 2147483723 bytes at " <<< "$out" && grep -q ' runs past its end record at ' <<< "$out" ;;
+    *) [ $code = 0 ] ;;
+  esac && passed=$((passed + 1)) || { echo "FAIL a jar declaring a 2 GB central directory, $jar: exit $code"; head -5 <<< "$out"; fail=1; }
+done
+rm -rf "$work"
 # What follows `--` is the program's (docs/TARGETS.md, "Argument files"): `teq interp` passes an
 # `@` there to the program as it is, a file of that name existing or not, as scalac's run does.
 work=$(cd "$(mktemp -d)" && pwd -P)
