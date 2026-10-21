@@ -34,7 +34,7 @@ Linux-x86_64 frontend-check-day@16 edits 40 growth_kb_per_edit 2651.8 memory_end
 Linux-x86_64 lsp-day@16 edits 40 growth_kb_per_edit 6.2 memory_end_mb 8.0 metric Anonymous+Swap
 Linux-x86_64 lsp-day@16-child edits 40 growth_kb_per_edit 553.0 memory_end_mb 385.5 metric Rss+Swap
 Linux-x86_64 peak-frontend@1 metric VmHWM ceiling_mb 436.0 because 379.1 MB measured and the tolerance's 15% over it
-Linux-x86_64 peak-core@1 metric VmHWM ceiling_mb 213.3 because 185.5 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-core@1 metric VmHWM ceiling_mb 241.4 because 209.9 MB measured and the tolerance's 15% over it
 Linux-x86_64 peak-frontend@fork metric VmHWM ceiling_mb 502.1 because 436.6 MB measured and the tolerance's 15% over it
 Linux-x86_64 peak-core@fork metric VmHWM ceiling_mb 335.5 because 291.7 MB measured and the tolerance's 15% over it
 Linux-x86_64 peak-frontend@8 metric VmHWM ceiling_ratio 2.0 of peak-frontend@1 because the parallel typer's memory aim, at most 2 times one worker's peak; 1.71 measured
@@ -66,6 +66,7 @@ only Linux-x86_64 peak-fix-frontend@16 because the fix peak is the child's ru_ma
 # Linux-x86_64: lsp-day recorded again 2026-10-01 from the release build of 8e88756d1: the language server's own process, which types nothing, ends with master's anonymous memory (7.6 MB) and master's six threads, the rest the binary's file-backed resident pages, which follow the file's page-cache state and not the revision (4.7 to 6.4 MB for a freshly linked or long-kept binary, 3.0 to 3.9 MB for a fresh copy, master's 7f2122fc5 alike); the row holds the freshly linked build's end, 13.4 MB (the gate's 13.5 and 13.6), and its growth
 # Linux-x86_64: lsp-day measured 2026-10-07 on 07265d8e5 against master (5cc7c9285) and the branch with the std files' records in the names-only mode: the server's anonymous memory 8.0 MB in all three, its file-backed pages 7.1 to 7.6 MB for a binary used where it was linked and 4.3 MB for a fresh copy, so the row ends at 14.8 to 15.3 MB or at 12.0 to 12.1 MB by that state alone, the child's anonymous memory within 0.8 MB across the three: two binaries are compared in one state
 # Linux-x86_64: lsp-day, lsp-day@2, lsp-day@8 and lsp-day@16, the language server's own process, measured by its anonymous memory plus swap since 2026-10-08 (metric Anonymous+Swap, the driver's header; the child rows keep Rss+Swap) and recorded again that day from the release build of 27e402f9e, the largest of four runs of the four at one job: 7.8 to 7.9 MB at the end in every run and at every worker count, 6.2 to 11.6 KB per edit, where the same runs' resident size ended at 13.1 to 13.6 MB; the notes above are of the resident size
+# Linux-x86_64: peak-core@1 recorded again 2026-10-21 on master's release build of 8fe9efa98 (master 0947541bd), the largest of three runs (one WATCH_MEMORY_RECORD=1, two =max: 208.3, 209.7, 209.9), the tolerance unchanged; the growth since the 2026-10-13 record is a45420874's (writer-products-4, the synthesized mirrors and companions written as scalac's: 184.3 MB at 40d442f9b, 202.0 at a45420874 over the baselines) and 7 MB of drift since
 # Darwin-arm64: recorded 2026-09-29, teq 0.1.0 a43c7283 pgo; where this record passes the 2026-09-28 one and that one is tighter, its limit is kept
 # Darwin-arm64: jvm-body, jvm-tenth and jvm-day recorded again 2026-10-01 with the release build that retired the lean JVM mode, linked against scala-library, the JVM's one mode: master's link mode ends them at 460, 447 and 441 MB, the lean mode at 227, 191 and 191
 Darwin-arm64 split-body edits 40 growth_kb_per_edit 735.0 memory_end_mb 285.2 metric phys_footprint
@@ -120,7 +121,7 @@ observed Darwin-arm64 peak-core@8 metric phys_footprint_peak peak_mb 284.6 ratio
 observed Darwin-arm64 peak-frontend@16 metric phys_footprint_peak peak_mb 897.9 ratio 2.60 of peak-frontend@1 recorded 2026-10-03, teq 0.1.0 21810d552
 observed Darwin-arm64 peak-core@16 metric phys_footprint_peak peak_mb 321.4 ratio 1.97 of peak-core@1 recorded 2026-10-03, teq 0.1.0 21810d552
 observed Linux-x86_64 peak-frontend@1 metric VmHWM peak_mb 379.1 recorded 2026-10-11, teq 0.1.8 97c2e853c
-observed Linux-x86_64 peak-core@1 metric VmHWM peak_mb 185.5 recorded 2026-10-11, teq 0.1.8 97c2e853c
+observed Linux-x86_64 peak-core@1 metric VmHWM peak_mb 209.9 recorded 2026-10-21, teq 0.1.9 8fe9efa98
 observed Linux-x86_64 peak-frontend@fork metric VmHWM peak_mb 436.6 recorded 2026-10-11, teq 0.1.8 97c2e853c
 observed Linux-x86_64 peak-core@fork metric VmHWM peak_mb 291.7 recorded 2026-10-14, teq 0.1.8 522777874
 observed Linux-x86_64 peak-frontend@8 metric VmHWM peak_mb 647.0 ratio 1.71 of peak-frontend@1 recorded 2026-10-11, teq 0.1.8 97c2e853c
