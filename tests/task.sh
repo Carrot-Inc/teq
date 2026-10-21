@@ -2714,8 +2714,9 @@ else
   echo "task: note: no wine here, teq.cmd not run"
 fi
 
-[ -d integrations/vite/node_modules/yaml ] || timeout 120 npm --prefix integrations/vite install --legacy-peer-deps --prefer-offline --no-audit --no-fund > "$work/vite-npm.log" 2>&1 || fail "vite-plugin-teq: npm install in integrations/vite: $(tail -3 "$work/vite-npm.log")"
+[ -d integrations/vite/node_modules/yaml ] && [ -d integrations/vite/node_modules/vite ] || timeout 180 npm --prefix integrations/vite install --legacy-peer-deps --prefer-offline --no-audit --no-fund > "$work/vite-npm.log" 2>&1 || fail "vite-plugin-teq: npm install in integrations/vite: $(tail -3 "$work/vite-npm.log")"
 if timeout 60 node integrations/vite/test.mjs > "$work/vite.out" 2>&1; then pass "vite-plugin-teq reads the export and finds the binary it pins (integrations/vite/test.mjs)"; else fail "vite-plugin-teq: $(grep FAIL "$work/vite.out" || tail -5 "$work/vite.out")"; fi
+if timeout 120 node integrations/vite/test-dev.mjs > "$work/vite-dev.out" 2>&1; then pass "vite-plugin-teq swaps and reloads on vite's dev server with teq replaced (integrations/vite/test-dev.mjs)"; else fail "vite-plugin-teq dev: $(grep FAIL "$work/vite-dev.out" || tail -5 "$work/vite-dev.out")"; fi
 # The parallel typer's vite loop (bench/ptyper-vite-loop.mjs) over web's export: each step's answer, the error's
 # failing, the body edits incremental.
 web_export 0.1.7-check.1 a a
