@@ -7,7 +7,7 @@
 // a caret line and a message), no more and no fewer; the exit is 1 where an error remains, else 0; a second run over
 // what the first left changes nothing and prints the same; `--check` over the input changes nothing and exits 1
 // where there is an edit or a lint. A script's case is `input.sc` and `output.sc`. A case with a `refused.txt` is one the run refuses: exit 2, that text among what it
-// prints, every file as it was. Then the verb's own cases (`verb`) and the rules' phase over several workers (`parallel`), below. `--record` writes each expected.txt from
+// prints, every file as it was. Then the verb's own cases (`verb`), the rules' phase over several workers (`parallel`) and the jobs' typing over several workers (`typing`), below. `--record` writes each expected.txt from
 // a run whose lints match their assertions. Run from the repository's root:
 // `./teq interp tests/fix.scala [-- --teq <binary>] [--record] [--only <Rule/Case prefix>]`.
 import java.nio.file.{Files, Path, Paths, StandardCopyOption}
@@ -99,6 +99,9 @@ import scala.jdk.CollectionConverters.*
   if only.forall(o => "parallel".startsWith(o) || o.startsWith("parallel")) then
     val (pp, _) = Parallel.run(teq, work, bad)
     pass += pp
+  if only.forall(o => "typing".startsWith(o) || o.startsWith("typing")) then
+    val (tp, _) = Typing.run(teq, work, bad)
+    pass += tp
   println(s"fix: $pass passed, $fail failed")
   Script.exit(if fail == 0 then 0 else 1)
 }
@@ -190,6 +193,10 @@ object Verb:
 
   /** The lock, core's `excludes` those named and its generators those written (the lock's YAML items). */
   def lockOf(coreExcludes: List[String], coreGenerators: String = ""): String =
+    lockWith(project("app", List("core")) + project("core", Nil, coreExcludes, coreGenerators))
+
+  /** A lock of the projects `projects` writes (`project`'s blocks). */
+  def lockWith(projects: String): String =
     """|teq: 0.1.9
        |format: 1
        |binaries: {}
@@ -202,14 +209,14 @@ object Verb:
        |java:
        |  outputVersion: 17
        |projects:
-       |""".stripMargin + project("app", List("core")) + project("core", Nil, coreExcludes, coreGenerators) +
+       |""".stripMargin + projects +
       """|repositories:
          |  - id: maven-central
          |    url: https://repo1.maven.org/maven2/
          |""".stripMargin
 
-  def project(name: String, deps: List[String], excludes: List[String] = Nil, generators: String = ""): String =
-    val cp = deps.map(d => s"          - {configuration: compile, project: $d}\n").mkString
+  def project(name: String, deps: List[String], excludes: List[String] = Nil, generators: String = "", files: List[String] = Nil): String =
+    val cp = deps.map(d => s"          - {configuration: compile, project: $d}\n").mkString + files.map(f => s"          - {file: $f}\n").mkString
     val sources = (deps.map(d => s"        - $d/src\n") :+ s"        - $name/src\n").mkString
     s"""|  $name:
         |    base: $name
@@ -498,7 +505,7 @@ object Parallel:
   final case class Outcome(status: Int, out: String, err: String, files: Map[String, String], record: Vector[String])
 
   /** A copy of `files` under a directory of its own, the run's `teq compiler fix` over them, what it leaves. */
-  def runOn(teq: String, work: Path, tag: String, files: Seq[(String, String)], confText: String, threads: Int, env: Seq[(String, String)], check: Boolean = false): Outcome =
+  def runOn(teq: String, work: Path, tag: String, files: Seq[(String, String)], confText: String, threads: Int, env: Seq[(String, String)], check: Boolean = false, extra: Seq[String] = Seq()): Outcome =
     val dir = work.resolve("parallel-" + tag)
     Sh.remove(dir)
     for (f, text) <- files do
@@ -506,10 +513,11 @@ object Parallel:
       Files.writeString(dir.resolve(f), text)
     Files.writeString(dir.resolve("fix.conf"), confText)
     val record = dir.resolve("record.txt")
-    val args = Vector(teq, "compiler", "fix") ++ files.map(_._1).filter(f => f.startsWith("src/") && f.endsWith(".scala")).sorted ++ Vector("--config", "fix.conf", "--threads", threads.toString) ++ (if check then Vector("--check") else Vector())
+    val args = Vector(teq, "compiler", "fix") ++ files.map(_._1).filter(f => f.startsWith("src/") && (f.endsWith(".scala") || f.endsWith(".sc"))).sorted ++ Vector("--config", "fix.conf", "--threads", threads.toString) ++ extra ++ (if check then Vector("--check") else Vector())
     val r = Sh(args*).in(dir).withEnv((Seq("TEQ_FIX_TRACE" -> "1", "TEQ_FIX_RECORD" -> record.toString) ++ env)*).timeout(300).check(false).run()
-    // The trace's last line holds the run's times; the document lines are the bytes' (they follow the consumption order).
-    val err = r.errAll().linesIterator.filterNot(l => l.startsWith("fix: ") && l.contains(" ms in all")).mkString("\n")
+    // The trace's last line holds the run's times, and a typing attempt's line its times and workers; the document lines
+    // are the bytes' (they follow the consumption order).
+    val err = r.errAll().linesIterator.filterNot(l => (l.startsWith("fix: ") && l.contains(" ms in all")) || l.startsWith("fix: typing ")).mkString("\n")
     val left = files.map((f, _) => f -> read(dir.resolve(f))).toMap
     Outcome(r.status, r.outAll(), err, left, if Files.exists(record) then read(record).linesIterator.toVector else Vector())
 
@@ -617,4 +625,489 @@ object Parallel:
     val staled = counts.map(w => runOn(teq, work, s"stale-$w", stateFiles, staleConf, w, Seq()))
     expect("stale", staled.head.status == 2 && staled.head.err.contains("another document"), s"exit ${staled.head.status}\n${staled.head.err.linesIterator.take(5).mkString("\n")}")
     for (o, w) <- staled.zip(counts).drop(1) do expect(s"stale/w$w", sameBytes(staled.head, o).isEmpty, sameBytes(staled.head, o).getOrElse(""))
+    (pass, fail)
+
+/** The jobs' typing over several workers (docs/FIX.md, "The run"): each job and round typed as `teq compiler check`
+  * types its program, its workers by compile's rule, a parallel attempt that gives way typed again at one worker
+  * within its round. Every run's bytes (the files it leaves, both streams without the trace's timing lines, the exit)
+  * are the one-worker run's, refusals (exit 2) compared as their own class; and its execution record's `typing` lines
+  * say, per job, round and attempt, the count asked, whether the typing forked and its outcome (`one`, `joined`,
+  * `retried`, `refused`); under `TEQ_FIX_TYPING_WORK=1` its `typing-item` lines say which typing worker typed each item
+  * of the queue and when, the witness that several workers typed at once, read from the items' own intervals. The
+  * witness corpus runs over typing {1,4,8,16} × rules {1,4,8,16} (`TEQ_FIX_TYPING_THREADS`, the rules' count
+  * `--threads`); the plant `TEQ_FIX_PLANT=serial-typing`, which types every job at one worker and leaves the rules' pool
+  * alone, must fail the typing check while it passes the rules' (`Parallel.recordProblems`), and `TEQ_SERIAL_ITEMS=1`,
+  * one item at a time across forked workers, the items' check. Every rule worker started before a typing is ready
+  * before it begins (`TEQ_FIX_BOOT_DELAY` holding their bootstraps), so that no bootstrap's typing runs beside it.
+  * `--threads` reaches both verbs in both spellings; a refused mapping is recorded as one worker's typing in place.
+  * The default getter's case (`tests/workers/default_getter_sealed`): in the assertion-enabled build a forked typing of a
+  * method with a default argument aborts at a check of the parallel typer's (pinned as tests/workers.sh's
+  * `default_getter_sealed`); there a run that aborts so, the witness corpus's among them, is pending on that pin. The counter macro library of
+  * tests/fix/support/typing/counter, whose state a run changes, gives a parallel attempt way at 4, 8 and 16 in round
+  * one, in round two and in a later job: each run the one-worker run's bytes, the project rule `Print`'s configuration
+  * printed once, a refusal (`ZBad.scala`) every file as it was. The library is read from its products on the class path
+  * (`lib/`, built by the suite), as a dependency's are: a macro of the program itself expands before the fork. The merge's semantic answers (tests/fix/support/typing:
+  * `marks`, `withheld`, `records`, `blocks`, `phase-errors`, `round2`, and `NoUnusedImports/macro_expansion_block`) are
+  * the one-worker typing's at every count. */
+object Typing:
+  /** Whether the engine types a job over several workers; while it did not, the typing check had to refuse its runs
+    * (the witness's negative control, which the `serial-typing` plant keeps). */
+  val engineParallelTyping = true
+  val counts = Vector(1, 4, 8, 16)
+  val fixtures: Path = Paths.get("tests/fix/support/typing")
+
+  /** The witness corpus's file `i`: `Parallel.source(i)`, which every shipped rule reports on and edits, and objects of
+    * methods enough that several workers' items overlap. */
+  def witnessSource(i: Int): String =
+    val objects = (0 until 4).map { o =>
+      val defs = (0 until 30).map(k => s"  def m$k(a: Int, b: String): Int = if a > $k then (b.length + a * ${k + 1}) % 7 else m${(k + 1) % 30}(a + 1, b + \"$k\")\n").mkString
+      s"object W${i}x$o:\n$defs"
+    }.mkString
+    Parallel.source(i) + objects
+
+  /** A file of non-ASCII text, an edit after a character of two UTF-16 units, and a script's document. */
+  val unicode = "src/par/Unicode.scala" -> "package par\nobject Ünïcode:\n  val ŝ = \"ñ😀\"; val xs = List()\n  var v = 1\n"
+  val script = "src/par/Script.sc" -> "val ys = List()\nvar w = 2\nprintln(ys.size + w)\n"
+
+  /** A run that ended in an allocation the system refused, the address space spent by an allocation and no thread's
+    * start: Rust's "memory allocation of … failed", glibc's "out of memory" (a thread's destructors registered), an
+    * arena's "no memory for a cell directory". */
+  def allocationRefused(r: Sh.Result): Boolean =
+    val err = r.errAll()
+    r.status == 134 && (err.contains("memory allocation of") || err.contains("out of memory") || err.contains("no memory for a cell directory"))
+
+  /** The files of a fixture directory, under `src/<prefix>/`. */
+  def program(dir: String, prefix: String): Seq[(String, String)] =
+    Files.list(fixtures.resolve(dir)).iterator.asScala.toVector.sorted.map(f => s"src/$prefix/${f.getFileName}" -> read(f))
+
+  final case class Attempt(job: Int, round: Int, attempt: Int, asked: Int, effective: Int, mappingRefused: Boolean, workerRefused: Boolean, forked: Boolean, outcome: String, start: Long, why: String)
+
+  /** The record's `typing` lines; `why=` is the rest of its line. */
+  def attemptsOf(rec: Vector[String]): Vector[Attempt] =
+    rec.filter(_.startsWith("typing ")).map { l =>
+      val (head, why) = l.indexOf(" why=") match
+        case -1 => (l, "")
+        case at => (l.take(at), l.drop(at + 5))
+      val f = Parallel.fieldsOf(head)
+      def n(k: String) = f.getOrElse(k, "-1").toInt
+      Attempt(n("job"), n("round"), n("attempt"), n("asked"), n("effective"), f.get("mapping_refused") == Some("1"), f.get("worker_refused") == Some("1"), f.get("forked") == Some("1"), f.getOrElse("outcome", ""), f.getOrElse("start_us", "-1").toLong, why)
+    }
+
+  final case class Item(job: Int, round: Int, attempt: Int, worker: Int, index: Int, t0: Long, t1: Long, file: String)
+
+  /** The record's `typing-item` lines (`TEQ_FIX_TYPING_WORK=1`); `file=` is the rest of its line. */
+  def itemsOf(rec: Vector[String]): Vector[Item] =
+    rec.filter(_.startsWith("typing-item ")).map { l =>
+      val (head, file) = l.indexOf(" file=") match
+        case -1 => (l, "")
+        case at => (l.take(at), l.drop(at + 6))
+      val f = Parallel.fieldsOf(head)
+      def n(k: String) = f.getOrElse(k, "-1").toLong
+      Item(n("job").toInt, n("round").toInt, n("attempt").toInt, n("worker").toInt, n("index").toInt, n("t0_us"), n("t1_us"), file)
+    }
+
+  /** What the record shows against typing at `asked` workers: each job's and round's attempts, the terminal one last,
+    * and a `round` line only after a terminal attempt that typed; `retried` the job-rounds whose parallel attempt is to
+    * give way. */
+  def typingProblems(rec: Vector[String], asked: Int, retried: Set[(Int, Int)] = Set()): Vector[String] =
+    val problems = Vector.newBuilder[String]
+    val attempts = attemptsOf(rec)
+    if attempts.isEmpty then problems += "no typing line"
+    val rounds = rec.filter(_.startsWith("round ")).map(Parallel.fieldsOf).map(f => (f.getOrElse("job", "-1").toInt, f.getOrElse("round", "-1").toInt))
+    for (jr, as) <- attempts.groupBy(a => (a.job, a.round)).toVector.sortBy(_._1) do
+      val where = s"job ${jr._1} round ${jr._2}"
+      val seq = as.sortBy(_.attempt)
+      if seq.map(_.attempt) != (1 to seq.size).toVector then problems += s"$where: attempts ${seq.map(_.attempt).mkString(",")}"
+      val first = seq.head
+      if first.asked != asked || first.effective != asked then problems += s"$where: asked ${first.asked}, effective ${first.effective}, $asked asked"
+      if asked == 1 then
+        if seq.size != 1 || first.forked || first.outcome != "one" then problems += s"$where: at one worker ${seq.mkString("; ")}"
+      else if retried(jr) then
+        if seq.size != 2 || !first.forked || first.outcome != "retried" || first.why.isEmpty then problems += s"$where: expected a parallel attempt that gave way, ${seq.mkString("; ")}"
+        else if seq(1).asked != 1 || seq(1).forked || seq(1).outcome != "one" then problems += s"$where: the attempt after the give-way ${seq(1)}"
+      else if seq.size != 1 || !first.forked || first.outcome != "joined" then problems += s"$where: expected one joined attempt, ${seq.mkString("; ")}"
+    for jr <- rounds if !attempts.exists(a => (a.job, a.round) == jr) do problems += s"job ${jr._1} round ${jr._2}: documents with no typing line"
+    problems.result()
+
+  /** The witness that several typing workers typed at once: in each job-round's joined attempt, items of two workers
+    * at least, and two of them in progress at one moment, read from the recorded intervals. */
+  def workProblems(rec: Vector[String]): Vector[String] =
+    val items = itemsOf(rec)
+    val joined = attemptsOf(rec).filter(_.outcome == "joined")
+    if joined.isEmpty then Vector("no joined attempt")
+    else joined.flatMap { a =>
+      val mine = items.filter(i => i.job == a.job && i.round == a.round && i.attempt == a.attempt)
+      val workers = mine.map(_.worker).distinct.size
+      val events = (mine.map(i => (i.t0, 1)) ++ mine.map(i => (i.t1, -1))).sortBy(e => (e._1, e._2))
+      var running = 0
+      var peak = 0
+      for (_, d) <- events do
+        running += d
+        peak = peak.max(running)
+      val where = s"job ${a.job} round ${a.round}"
+      (if workers < 2 then Vector(s"$where: ${mine.size} items typed by $workers worker(s)") else Vector()) ++
+        (if peak < 2 then Vector(s"$where: its items typed one at a time") else Vector())
+    }
+
+  /** The pool's readiness before every typing: each rule worker started before a typing began (`worker-start`) answered
+    * `Ready` (its `worker` line) before it, so that no worker's bootstrap, whose one-worker typing writes the interpreter's
+    * process-wide watch, runs beside a typing. */
+  def barrierProblems(rec: Vector[String]): Vector[String] =
+    val started = rec.filter(_.startsWith("worker-start ")).map(Parallel.fieldsOf).map(f => f.getOrElse("w", "-1").toInt -> f.getOrElse("at_us", "-1").toLong).toMap
+    val ready = rec.filter(_.startsWith("worker ")).map(Parallel.fieldsOf).map(f => f.getOrElse("w", "-1").toInt -> f.getOrElse("ready_us", "-1").toLong).toMap
+    val attempts = attemptsOf(rec)
+    if attempts.isEmpty then Vector("no typing line")
+    else if started.size < 2 then Vector(s"${started.size} worker(s) started: no typing after a later worker's start")
+    else attempts.flatMap { a =>
+      started.toVector.sorted.collect {
+        case (w, at) if at < a.start && ready.get(w).forall(_ > a.start) =>
+          s"job ${a.job} round ${a.round} attempt ${a.attempt} began at ${a.start} us, worker $w (started at $at) ready at ${ready.get(w).fold("never")(_.toString)}"
+      }
+    }
+
+  def run(teq: String, work: Path, bad: (String, String) => Unit): (Int, Int) =
+    var pass = 0
+    var fail = 0
+    def expect(name: String, cond: Boolean, why: => String): Unit =
+      if cond then pass += 1 else { fail += 1; bad("typing/" + name, why) }
+    def sameBytes(a: Parallel.Outcome, b: Parallel.Outcome): Option[String] =
+      if a.status != b.status then Some(s"exit ${b.status}, the one-worker run's ${a.status}")
+      else if a.out != b.out then Some("stdout differs:\n" + diff(a.out, b.out))
+      else if a.err != b.err then Some("stderr differs:\n" + diff(a.err, b.err))
+      else a.files.find((f, t) => b.files.get(f) != Some(t)).map((f, t) => s"$f differs:\n" + diff(t, b.files.getOrElse(f, "")))
+    /** The typing check of a run at `asked` typing workers: passed by the parallel engine, refused by a serial one. */
+    def typing(name: String, o: Parallel.Outcome, asked: Int, retried: Set[(Int, Int)] = Set(), witness: Boolean = false): Unit =
+      val problems = typingProblems(o.record, asked, retried) ++ (if witness && asked > 1 then workProblems(o.record) else Vector())
+      if engineParallelTyping then expect(name, problems.isEmpty, problems.mkString("\n  "))
+      else if asked > 1 then expect(name + "/refused", problems.nonEmpty, "the typing check accepts a serial engine's run")
+    // The assertion-enabled build aborts a forked typing of a method with a default argument (a worker changes the
+    // default getter's record after a publication sealed it): the parallel typer's, pinned as tests/workers.sh's
+    // `default_getter_sealed` for its own part. A run that aborts so there is pending on that pin, counted apart; any
+    // other abort fails.
+    val assertions = Sh(teq, "--version").check(false).run().outAll().trim.endsWith("assertions")
+    var pending = 0
+    def pinned(name: String, o: Parallel.Outcome): Boolean =
+      val hit = assertions && o.status == 134 && o.err.contains("after a publication sealed it")
+      if hit then
+        pending += 1
+        println(s"PENDING typing/$name: a default getter's record changed after its publication sealed it (tests/workers.sh's default_getter_sealed)")
+      hit
+    def typed(tag: String, files: Seq[(String, String)], conf: String, t: Int, r: Int, env: Seq[(String, String)] = Seq(), extra: Seq[String] = Seq()): Parallel.Outcome =
+      Parallel.runOn(teq, work, "typing-" + tag, files, conf, r, (if t == r then Seq() else Seq("TEQ_FIX_TYPING_THREADS" -> t.toString)) ++ env, extra = extra)
+
+    // The witness corpus over typing × rules: the bytes the 1×1 run's, the typing's record parallel where it asks
+    // several workers, the rules' record parallel where they do.
+    val corpus = (0 until 24).map(i => f"src/par/F$i%03d.scala" -> witnessSource(i)) :+ unicode :+ script
+    val base = typed("t1-r1", corpus, Parallel.conf, 1, 1)
+    expect("base", base.status == 1 && base.err.contains("[DisableSyntax.var]") && base.files("src/par/Unicode.scala").contains("List.empty") && base.files("src/par/Script.sc").contains("List.empty"),
+      s"the one-worker run: exit ${base.status}\n${base.err.linesIterator.take(20).mkString("\n")}")
+    for t <- counts; r <- counts if (t, r) != (1, 1) do
+      val env = Seq("TEQ_FIX_TYPING_WORK" -> "1") ++ (if r > 1 then Seq("TEQ_FIX_BARRIER" -> (r min 4).toString) else Seq())
+      val o = typed(s"t$t-r$r", corpus, Parallel.conf, t, r, env)
+      if !pinned(s"t$t/r$r", o) then
+        expect(s"t$t/r$r/bytes", sameBytes(base, o).isEmpty, sameBytes(base, o).getOrElse(""))
+        typing(s"t$t/r$r/typing", o, t, witness = true)
+        val rules = Parallel.recordProblems(o.record, r, r min 4)
+        expect(s"t$t/r$r/rules", rules.isEmpty, rules.mkString("\n  "))
+    // The control: the typing serial, the rules' pool parallel. The rules' check accepts it; the typing check must not.
+    val planted = typed("plant-serial-typing", corpus, Parallel.conf, 8, 8, Seq("TEQ_FIX_PLANT" -> "serial-typing", "TEQ_FIX_TYPING_WORK" -> "1", "TEQ_FIX_BARRIER" -> "4"))
+    expect("plant/serial-typing/bytes", sameBytes(base, planted).isEmpty, sameBytes(base, planted).getOrElse(""))
+    expect("plant/serial-typing/rules", Parallel.recordProblems(planted.record, 8, 4).isEmpty, Parallel.recordProblems(planted.record, 8, 4).mkString("\n  "))
+    expect("plant/serial-typing/refused", (typingProblems(planted.record, 8) ++ workProblems(planted.record)).nonEmpty, "the typing check accepts a run whose typing was serial")
+    // The control the items alone tell: one item at a time across the workers (`TEQ_SERIAL_ITEMS=1`), the workers'
+    // assignment unchanged, so that the attempt says it forked and the items name several workers.
+    val serialItems = typed("serial-items", corpus, Parallel.conf, 8, 8, Seq("TEQ_SERIAL_ITEMS" -> "1", "TEQ_FIX_TYPING_WORK" -> "1", "TEQ_FIX_BARRIER" -> "4"))
+    if !pinned("serial-items", serialItems) then
+      expect("serial-items/bytes", sameBytes(base, serialItems).isEmpty, sameBytes(base, serialItems).getOrElse(""))
+      expect("serial-items/refused", workProblems(serialItems.record).nonEmpty, "the items' check accepts a run whose items were typed one at a time")
+    // The pool's readiness: round one's documents done by the lead while the others' bootstraps are held
+    // (`TEQ_FIX_BOOT_DELAY`), round two's typing waits for every one of them.
+    val ready = (0 until 4).map(i => f"src/rd/R$i.scala" -> s"package rd\nimport scala.Nil\nobject R$i { val empty: List[Int] = Nil }\n")
+    val readyRun = typed("ready", ready, "rules = [EmptyCollectionsUnified, NoUnusedImports]\n", 4, 4, Seq("TEQ_FIX_BOOT_DELAY" -> "1500"))
+    val readyRounds = readyRun.record.count(_.startsWith("round "))
+    if engineParallelTyping then expect("ready", readyRounds == 2 && barrierProblems(readyRun.record).isEmpty, s"$readyRounds rounds\n  " + barrierProblems(readyRun.record).mkString("\n  "))
+    else expect("ready/refused", barrierProblems(readyRun.record).nonEmpty, "the readiness check accepts the unchanged engine's run")
+    if engineParallelTyping then
+      // The two requests apart: typing at eight, the rules' pool at one.
+      val apart = Parallel.runOn(teq, work, "typing-apart", corpus, Parallel.conf, 8, Seq("TEQ_FIX_RULE_THREADS" -> "1"))
+      if !pinned("apart", apart) then
+        expect("apart/bytes", sameBytes(base, apart).isEmpty, sameBytes(base, apart).getOrElse(""))
+        expect("apart/typing", typingProblems(apart.record, 8).isEmpty, typingProblems(apart.record, 8).mkString("\n  "))
+        expect("apart/rules", apart.record.exists(l => l.startsWith("run ") && Parallel.fieldsOf(l).get("workers") == Some("1")), apart.record.take(3).mkString("\n"))
+      // A refused mapping (Linux, where `ulimit -v` bounds the address space): the overlays do not fit in 16 GiB at four
+      // workers, so the typer types in place by one worker, the fork's path not taken though `TEQ_FORK=1` asks for it;
+      // the record says what happened (`mapping_refused=1 effective=1 forked=0 outcome=one`), and the files are as one
+      // worker leaves them.
+      if Sh("uname", "-s").check(false).run().outAll().trim == "Linux" then
+        val dir = work.resolve("typing-mapping")
+        Sh.remove(dir)
+        val files = program("records", "records")
+        for (f, text) <- files do
+          Files.createDirectories(dir.resolve(f).getParent)
+          Files.writeString(dir.resolve(f), text)
+        Files.writeString(dir.resolve("fix.conf"), "rules = [NoUnusedImports]\n")
+        val record = dir.resolve("record.txt")
+        val inputs = files.map(_._1).sorted.mkString(" ")
+        val r = Sh("bash", "-c", s"ulimit -v 16777216 && exec '$teq' compiler fix $inputs --config fix.conf --threads 4").in(dir)
+          .withEnv("TEQ_FORK" -> "1", "TEQ_FIX_RULE_THREADS" -> "1", "TEQ_FIX_RECORD" -> record.toString).timeout(300).check(false).run()
+        val attempts = if Files.exists(record) then attemptsOf(read(record).linesIterator.toVector) else Vector()
+        val one = typed("mapping-one", files, "rules = [NoUnusedImports]\n", 1, 1)
+        expect("mapping/record", attempts.nonEmpty && attempts.forall(a => a.mappingRefused && a.asked == 4 && a.effective == 1 && !a.forked && a.outcome == "one"),
+          s"exit ${r.status}: ${attempts.mkString("; ")}\n${r.errAll().linesIterator.take(5).mkString("\n")}")
+        expect("mapping/files", r.status == one.status && files.forall((f, _) => read(dir.resolve(f)) == one.files(f)), s"exit ${r.status}, the one-worker run's ${one.status}")
+        // The address space bounded a GiB at a time (the push pass of 139c515e8, its reproducer as a sweep): from 6 GiB
+        // until the fork is joined, at 4, 8 and 16 workers, a run never aborts. Each gives the one-worker run's exit,
+        // lints and files (compile's note of a refused mapping aside), and its record the typer's answer: the mappings
+        // refused (`mapping_refused=1`, one worker typing in place), a worker given no thread after the fork
+        // (`worker_refused=1`, the attempt given way, then one worker's `outcome=one`), or the fork joined; and each
+        // count's sweep meets a worker given no thread, the window between the two, at least once.
+        for w <- Vector(4, 8, 16) do
+          val sweep = work.resolve(s"typing-limit-$w")
+          Sh.remove(sweep)
+          for (f, text) <- files do
+            Files.createDirectories(sweep.resolve(f).getParent)
+            Files.writeString(sweep.resolve(f), text)
+          Files.writeString(sweep.resolve("fix.conf"), "rules = [NoUnusedImports]\n")
+          val base = Sh("bash", "-c", s"exec '$teq' compiler fix $inputs --config fix.conf --check --threads 1").in(sweep).timeout(300).check(false).run()
+          val wrong = Vector.newBuilder[String]
+          var spent = 0
+          var (gib, joined, refusedWorker) = (6, false, false)
+          while !joined && gib <= 64 do
+            val record = sweep.resolve(s"record-$gib.txt")
+            val r = Sh("bash", "-c", s"ulimit -v ${gib.toLong * 1024 * 1024} && exec '$teq' compiler fix $inputs --config fix.conf --check --threads $w").in(sweep)
+              .withEnv("TEQ_FIX_RECORD" -> record.toString).timeout(300).check(false).run()
+            val err = r.errAll().linesIterator.filterNot(_.startsWith("teq: no memory mapping for the type store's overlays")).mkString("\n")
+            val as = if Files.exists(record) then attemptsOf(read(record).linesIterator.toVector) else Vector()
+            val kept = files.forall((f, t) => read(sweep.resolve(f)) == t)
+            if allocationRefused(r) then spent += 1
+            else if r.status != base.status || err != base.errAll().linesIterator.mkString("\n") || !kept then wrong += s"$gib GiB: exit ${r.status} (one worker's ${base.status}), lints alike ${err == base.errAll().linesIterator.mkString("\n")}, files kept $kept: ${r.errAll().linesIterator.take(3).mkString(" | ")}"
+            else if as.isEmpty then wrong += s"$gib GiB: no typing line"
+            else
+              val last = as.last
+              val pathOk =
+                if as.head.workerRefused then as.size == 2 && as.head.outcome == "retried" && !last.forked && last.outcome == "one"
+                else if as.head.mappingRefused then as.size == 1 && !last.forked && last.outcome == "one"
+                else as.size == 1 && last.forked && last.outcome == "joined"
+              if !pathOk then wrong += s"$gib GiB: ${as.mkString("; ")}"
+              refusedWorker |= as.head.workerRefused
+              joined = !as.head.mappingRefused && !as.head.workerRefused && last.outcome == "joined"
+            gib += 1
+          expect(s"limit/w$w", wrong.result().isEmpty && joined, (if joined then "" else s"the fork never joined up to ${gib - 1} GiB\n  ") + wrong.result().mkString("\n  "))
+          if spent > 0 then println(s"typing/limit/w$w: $spent run(s) ended in an allocation the system refused (no start's), counted apart")
+          expect(s"limit/w$w/worker-refused", refusedWorker, s"no limit from 6 to ${gib - 1} GiB gave a worker no thread after the fork")
+        // The starts of the typing's threads, each refused (the push pass of 95a753abf, its probe as cells): the body
+        // phase's workers, the inlining phase's and the merge's crew, over a program of inline calls at four workers.
+        // The limits where each is met lie in the GiB below the first that joins the fork, a few MiB apart and moving
+        // with the schedule: a GiB at a time to that first one, 32 MiB at a time across the GiB below it, then 8 MiB at a
+        // time over the 384 MiB from just below the highest limit that refused the body phase's start, again (four
+        // times at most) until every start was met. Each run gives the one-worker run's exit, lints and files,
+        // its record the path taken (the mappings refused; a start refused, named in the reason, the attempt given
+        // way and one worker's `outcome=one` after; the fork joined); a run that ends in an allocation the system
+        // refused (Rust's "memory allocation of … failed", the address space spent by an allocation and no thread's
+        // start) is counted apart, any other end fails.
+        val inlineFiles = program("inline", "inl")
+        val cells = work.resolve("typing-starts")
+        Sh.remove(cells)
+        for (f, text) <- inlineFiles do
+          Files.createDirectories(cells.resolve(f).getParent)
+          Files.writeString(cells.resolve(f), text)
+        Files.writeString(cells.resolve("fix.conf"), "rules = [NoUnusedImports]\n")
+        val inlineInputs = inlineFiles.map(_._1).sorted.mkString(" ")
+        val inlineBase = Sh("bash", "-c", s"exec '$teq' compiler fix $inlineInputs --config fix.conf --check --threads 1").in(cells).timeout(300).check(false).run()
+        val starts = Map("a typing worker" -> "body", "a worker of the inlining phase" -> "inlining", "a merge thread" -> "merge")
+        val wrong = Vector.newBuilder[String]
+        val met = scala.collection.mutable.Set.empty[String]
+        var allocations = 0
+        // The highest limit of the 32 MiB pass where the body phase's start was refused: the inlining phase's and the
+        // merge's lie above it, by a few MiB and the schedule.
+        var bodyAt = 0L
+        /** One run under `mib` MiB: whether it joined the fork. */
+        def cell(mib: Long): Boolean =
+          val record = cells.resolve("record.txt")
+          Files.deleteIfExists(record)
+          val r = Sh("bash", "-c", s"ulimit -v ${mib * 1024} && exec '$teq' compiler fix $inlineInputs --config fix.conf --check --threads 4").in(cells)
+            .withEnv("TEQ_FIX_RECORD" -> record.toString, "TEQ_FIX_RULE_THREADS" -> "1").timeout(300).check(false).run()
+          val err = r.errAll().linesIterator.filterNot(_.startsWith("teq: no memory mapping for the type store's overlays")).mkString("\n")
+          val as = if Files.exists(record) then attemptsOf(read(record).linesIterator.toVector) else Vector()
+          if allocationRefused(r) then
+            allocations += 1
+            false
+          else if r.status != inlineBase.status || err != inlineBase.errAll().linesIterator.mkString("\n") || !inlineFiles.forall((f, t) => read(cells.resolve(f)) == t) then
+            wrong += s"$mib MiB: exit ${r.status} (one worker's ${inlineBase.status}): ${r.errAll().linesIterator.take(3).mkString(" | ")}"
+            false
+          else if as.isEmpty then
+            wrong += s"$mib MiB: no typing line"
+            false
+          else
+            val (first, last) = (as.head, as.last)
+            if first.workerRefused then
+              starts.find((why, _) => first.why.startsWith("the system gave " + why + " no thread")) match
+                case Some((_, site)) =>
+                  met += site
+                  if site == "body" then bodyAt = bodyAt max mib
+                case None => wrong += s"$mib MiB: a refusal of no start named: ${first.why}"
+              if as.size != 2 || first.outcome != "retried" || last.forked || last.outcome != "one" then wrong += s"$mib MiB: ${as.mkString("; ")}"
+              false
+            else if first.mappingRefused then
+              if as.size != 1 || last.forked || last.outcome != "one" then wrong += s"$mib MiB: ${as.mkString("; ")}"
+              false
+            else
+              if as.size != 1 || !last.forked || last.outcome != "joined" then wrong += s"$mib MiB: ${as.mkString("; ")}"
+              true
+        var joinedAt = 0L
+        var g = 6L
+        while joinedAt == 0 && g <= 64 do
+          if cell(g * 1024) then joinedAt = g
+          g += 1
+        var sweeps = 0
+        if joinedAt > 0 then
+          for mib <- ((joinedAt - 1) * 1024) until (joinedAt * 1024) by 32 do cell(mib)
+          sweeps = 1
+          val from = if bodyAt > 0 then bodyAt - 64 else (joinedAt - 1) * 1024
+          while sweeps < 5 && !Set("body", "inlining", "merge").subsetOf(met) do
+            for mib <- from until (from + 384) by 8 do cell(mib)
+            sweeps += 1
+        expect("starts", joinedAt > 0 && wrong.result().isEmpty, (if joinedAt == 0 then "the fork never joined up to 64 GiB\n  " else "") + wrong.result().mkString("\n  "))
+        expect("starts/met", Set("body", "inlining", "merge").subsetOf(met), s"the starts met: ${met.toVector.sorted.mkString(", ")}, over the GiB below $joinedAt GiB ($sweeps sweeps, $allocations allocations refused)")
+        if allocations > 0 then println(s"typing/starts: $allocations run(s) ended in an allocation the system refused (no start's), counted apart")
+
+    // The counter macro library (`counter/lib`, its products built here): a run of `next` changes `Counter.n`, which
+    // other runs share, so a parallel attempt gives way and the round types again at one worker; `Edit.scala`'s
+    // rewrite types the program again in round two, which gives way again. The project rule `Print` prints
+    // `configured` once whatever the attempts.
+    val products = work.resolve("typing-counter-products")
+    Sh.remove(products)
+    val built = Sh(teq, "compiler", "check", fixtures.resolve("counter/lib").toString, "--products", products.toString).timeout(300).check(false).run()
+    expect("counter/products", built.status == 0, built.errAll())
+    val cp = Seq("--classpath", products.toString)
+    val print = "rules/Print.scala" -> read(Paths.get("tests/fix/support/Print.scala"))
+    val counterConf = "rules = [EmptyCollectionsUnified, NoUnusedImports, \"file:rules/Print.scala\"]\n"
+    val editFixed = "package p\nobject Edit { val empty: List[Int] = List.empty }\n"
+    val files = program("counter/use", "p") :+ print
+    val runs = counts.map(t => typed(s"counter-$t", files, counterConf, t, t, extra = cp))
+    val one = runs.head
+    expect("counter", one.status == 0 && one.files("src/p/Edit.scala") == editFixed && one.err.linesIterator.count(_ == "configured") == 1,
+      s"exit ${one.status}, Edit.scala ${one.files("src/p/Edit.scala")}, configured ${one.err.linesIterator.count(_ == "configured")} times\n${one.err.linesIterator.take(10).mkString("\n")}")
+    for (o, t) <- runs.zip(counts).drop(1) do
+      expect(s"counter/w$t/bytes", sameBytes(one, o).isEmpty, sameBytes(one, o).getOrElse(""))
+      typing(s"counter/w$t/typing", o, t, retried = Set((0, 1), (0, 2)))
+    // The retry's refusal: the program with `ZBad.scala` gives way, its one-worker typing refuses it, exit 2, the
+    // error printed once, every file as it was.
+    val badFiles = program("counter/use", "p") ++ program("counter/bad", "p") :+ print
+    val bads = counts.map(t => typed(s"bad-$t", badFiles, counterConf, t, t, extra = cp))
+    expect("bad", bads.head.status == 2 && bads.head.files == badFiles.toMap && bads.head.err.linesIterator.count(_.contains("error: type mismatch")) == 1 && bads.head.err.linesIterator.count(_ == "configured") == 1,
+      s"exit ${bads.head.status}, files kept ${bads.head.files == badFiles.toMap}\n${bads.head.err}")
+    for (o, t) <- bads.zip(counts).drop(1) do
+      expect(s"bad/w$t/bytes", sameBytes(bads.head, o).isEmpty, sameBytes(bads.head, o).getOrElse(""))
+      typing(s"bad/w$t/typing", o, t, retried = Set((0, 1)))
+
+    // A later job: the verb over two projects, `a` and `b`, b's program the counter's; each run the one-worker run's
+    // bytes, b's job given way in both its rounds, a's joined in both.
+    val twoLock = Verb.lockWith(Verb.project("a", Nil) + Verb.project("b", Nil, files = List("lib-products")))
+    val aFiles = Seq("a/src/a/A.scala" -> "package a\nimport scala.Nil\nobject A { val empty: List[Int] = Nil }\n", "a/src/a/B.scala" -> "package a\nobject B { val b = 1 }\n")
+    val bFiles = program("counter/use", "p").map((f, t) => f.replaceFirst("^src/", "b/src/") -> t)
+    val twoFiles = Seq("teq.lock" -> twoLock, ".scalafix.conf" -> "rules = [EmptyCollectionsUnified, NoUnusedImports]\n",
+      "lib/macros.scala" -> read(fixtures.resolve("counter/lib/macros.scala"))) ++ aFiles ++ bFiles
+    def verb(tag: String, args: Seq[String], env: (String, String)*): Parallel.Outcome =
+      val d = work.resolve("typing-verb-" + tag)
+      Sh.remove(d)
+      for (f, text) <- twoFiles do
+        Files.createDirectories(d.resolve(f).getParent)
+        Files.writeString(d.resolve(f), text)
+      // b's class path: the library's products, a directory of the build's tree, built for its JVM projects.
+      Sh(teq, "compiler", "check", "lib/macros.scala", "--products", "lib-products", "--target", "jvm", "--std=scala-library").in(d).timeout(300).check(true).run()
+      val record = d.resolve("record.txt")
+      val r = Sh((Vector(teq, "fix") ++ args)*).in(d).withEnv((Seq("TEQ_FIX_RECORD" -> record.toString) ++ env)*).timeout(300).check(false).run()
+      val err = r.errAll().linesIterator.filterNot(_.startsWith("fix: ")).mkString("\n")
+      Parallel.Outcome(r.status, r.outAll(), err, twoFiles.map((f, _) => f -> read(d.resolve(f))).toMap, if Files.exists(record) then read(record).linesIterator.toVector else Vector())
+    val verbs = counts.map(t => verb(s"w$t", Seq(), "TEQ_THREADS" -> t.toString))
+    val vOne = verbs.head
+    expect("later-job", vOne.status == 0 && vOne.files("a/src/a/A.scala") == "package a\nobject A { val empty: List[Int] = List.empty }\n" && vOne.files("b/src/p/Edit.scala") == editFixed,
+      s"exit ${vOne.status}\n${vOne.err}")
+    for (o, t) <- verbs.zip(counts).drop(1) do
+      expect(s"later-job/w$t/bytes", sameBytes(vOne, o).isEmpty, sameBytes(vOne, o).getOrElse(""))
+      // The job b's: the one whose attempts give way.
+      val bJob = attemptsOf(o.record).find(_.outcome == "retried").map(_.job).getOrElse(-1)
+      typing(s"later-job/w$t/typing", o, t, retried = Set((bJob, 1), (bJob, 2)))
+      if engineParallelTyping then
+        val jobs = attemptsOf(o.record).map(_.job).distinct
+        expect(s"later-job/w$t/jobs", jobs.size == 2 && bJob == jobs.max, s"jobs ${jobs.mkString(",")}, the one given way $bJob")
+    // A small first job whose round the lead ends alone while the others' bootstraps are held: the later job's typing
+    // waits for every one of them.
+    if engineParallelTyping then
+      val held = verb("ready-4", Seq(), "TEQ_THREADS" -> "4", "TEQ_FIX_BOOT_DELAY" -> "1500")
+      expect("later-job/ready/bytes", sameBytes(vOne, held).isEmpty, sameBytes(vOne, held).getOrElse(""))
+      expect("later-job/ready", barrierProblems(held.record).isEmpty, barrierProblems(held.record).mkString("\n  "))
+    // `teq fix --threads n`: compile's option, the one request of both counts.
+    if engineParallelTyping then
+      val flag = verb("flag-8", Seq("--threads", "8"))
+      expect("flag/bytes", sameBytes(vOne, flag).isEmpty, sameBytes(vOne, flag).getOrElse(""))
+      val bJob = attemptsOf(flag.record).find(_.outcome == "retried").map(_.job).getOrElse(-1)
+      expect("flag/typing", typingProblems(flag.record, 8, Set((bJob, 1), (bJob, 2))).isEmpty, typingProblems(flag.record, 8, Set((bJob, 1), (bJob, 2))).mkString("\n  "))
+      expect("flag/rules", flag.record.exists(l => l.startsWith("run ") && Parallel.fieldsOf(l).get("workers") == Some("8")), flag.record.take(3).mkString("\n"))
+      val flagEq = verb("flag-eq-8", Seq("--threads=8"))
+      expect("flag/eq/bytes", sameBytes(vOne, flagEq).isEmpty, sameBytes(vOne, flagEq).getOrElse(""))
+      expect("flag/eq/typing", attemptsOf(flagEq.record).nonEmpty && attemptsOf(flagEq.record).forall(a => a.attempt > 1 || a.asked == 8), attemptsOf(flagEq.record).mkString("\n  "))
+      for bad <- Seq("0", "x") do
+        val o = verb(s"flag-$bad", Seq("--threads", bad))
+        expect(s"flag/$bad", o.status == 2 && o.files == twoFiles.toMap && o.err.contains("--threads"), s"exit ${o.status}\n${o.err}")
+      // `teq compiler fix`, whose one job is built from what the flags leave: both spellings reach it.
+      for (spelling, args) <- Seq("space" -> Seq("--threads", "8"), "eq" -> Seq("--threads=8")) do
+        val o = typed(s"compiler-flag-$spelling", files, counterConf, 1, 1, extra = cp ++ args)
+        expect(s"compiler-flag/$spelling/bytes", sameBytes(one, o).isEmpty, sameBytes(one, o).getOrElse(""))
+        expect(s"compiler-flag/$spelling/typing", typingProblems(o.record, 8, Set((0, 1), (0, 2))).isEmpty, typingProblems(o.record, 8, Set((0, 1), (0, 2))).mkString("\n  "))
+      for bad <- Seq("0", "x") do
+        val o = typed(s"compiler-flag-$bad", files, counterConf, 1, 1, extra = cp ++ Seq("--threads", bad))
+        expect(s"compiler-flag/$bad", o.status == 2 && o.files == files.toMap && o.err.contains("--threads"), s"exit ${o.status}\n${o.err}")
+
+    // The merge's semantic answers, each the one-worker typing's at every count.
+    val unusedConf = "rules = [NoUnusedImports]\n"
+    val bothConf = "rules = [EmptyCollectionsUnified, NoUnusedImports]\n"
+    val mebDir = Paths.get("tests/fix/NoUnusedImports/macro_expansion_block")
+    val meb = Files.list(mebDir).iterator.asScala.toVector.sorted.filter(f => f.toString.endsWith(".scala") && f.getFileName.toString != "output.scala").map(f => s"src/meb/${f.getFileName}" -> read(f))
+    val mebConf = header(read(mebDir.resolve("input.scala")), mebDir.toAbsolutePath)
+    val semantic = Seq(
+      ("marks", program("marks", "marks"), unusedConf, 0),
+      ("withheld", program("withheld", "withheld"), unusedConf, 2),
+      ("records", program("records", "records"), unusedConf, 0),
+      ("blocks", program("blocks", "blocks"), bothConf, 0),
+      ("phase-errors", program("phase-errors", "pe"), bothConf, 2),
+      ("round2", program("round2", "p"), bothConf, 0),
+      ("macro_expansion_block", meb, mebConf, -1))
+    for (name, files, conf, status) <- semantic do
+      val runs = counts.map(t => typed(s"$name-$t", files, conf, t, t, Seq("TEQ_FIX_TYPING_WORK" -> "1")))
+      val one = runs.head
+      expect(name, (status == -1 || one.status == status) && (one.status != 2 || one.files == files.toMap), s"exit ${one.status}, expected $status\n${one.err.linesIterator.take(10).mkString("\n")}")
+      for (o, t) <- runs.zip(counts).drop(1) do
+        expect(s"$name/w$t/bytes", sameBytes(one, o).isEmpty, sameBytes(one, o).getOrElse(""))
+        typing(s"$name/w$t/typing", o, t)
+    // What each answer is: no unused import where scalac 3.8.4 finds none (a wildcard and a hiding selector, a given and
+    // a name, marked by readers in other files); the analysis withheld after an error, the run refused; the imports of a
+    // file with an expansion kept as unverified; the CRLF file's braced packages one document; `import scala.Nil` removed
+    // in round two.
+    if engineParallelTyping then
+      // The readers' workers: `A.scala`'s and `B.scala`'s items typed by two workers, each a reader of `Shared.scala`'s
+      // imports through another file's member (the queue hands each worker a first file of its own).
+      for t <- counts.drop(1) do
+        val o = typed(s"marks-workers-$t", program("marks", "marks"), unusedConf, t, t, Seq("TEQ_FIX_TYPING_WORK" -> "1"))
+        val by = itemsOf(o.record).filter(i => i.file.endsWith("marks/A.scala") || i.file.endsWith("marks/B.scala")).map(i => i.file.takeRight(7) -> i.worker).distinct
+        expect(s"marks/w$t/readers", by.size == 2 && by.map(_._2).distinct.size == 2, s"the readers' items: ${by.mkString(", ")}")
+    val marks = typed("marks-check", program("marks", "marks"), unusedConf, 1, 1)
+    expect("marks/answer", marks.status == 0 && !marks.err.contains("NoUnusedImports") && marks.files == program("marks", "marks").toMap, marks.err)
+    val records = typed("records-check", program("records", "records"), unusedConf, 1, 1)
+    expect("records/answer", records.err.linesIterator.count(_.contains("[NoUnusedImports.unverified]")) == 2 && records.files == program("records", "records").toMap, records.err)
+    val round2 = typed("round2-check", program("round2", "p"), bothConf, 1, 1)
+    expect("round2/answer", round2.files("src/p/Input.scala") == "package p\nobject Example { val empty: List[Int] = List.empty }\n", round2.files("src/p/Input.scala"))
+    // The default getter's case (the push pass of 5c171b26f), its fixture tests/workers.sh's: two files, a method with a
+    // default argument, typed by several workers: the bytes the one-worker run's; in the assertion-enabled build
+    // pending on the pin until the parallel typer's publication of the getter is fixed.
+    val getter = Files.list(Paths.get("tests/workers/default_getter_sealed")).iterator.asScala.toVector.sorted.map(f => s"src/dg/${f.getFileName}" -> read(f))
+    val getterOne = typed("getter-1", getter, unusedConf, 1, 1)
+    expect("getter", getterOne.status == 0, s"exit ${getterOne.status}\n${getterOne.err.linesIterator.take(5).mkString("\n")}")
+    for t <- counts.drop(1) do
+      val o = typed(s"getter-$t", getter, unusedConf, t, t)
+      if !pinned(s"getter/w$t", o) then
+        expect(s"getter/w$t/bytes", sameBytes(getterOne, o).isEmpty, sameBytes(getterOne, o).getOrElse(""))
+        typing(s"getter/w$t/typing", o, t)
+    if pending > 0 then println(s"typing: $pending pending on tests/workers.sh's default_getter_sealed")
     (pass, fail)

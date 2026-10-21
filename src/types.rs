@@ -2254,6 +2254,25 @@ pub fn take_mapping_refused() -> bool {
     REFUSED.swap(false, Ordering::Relaxed)
 }
 
+/// The first thread of a typing's the system refused since the last ask, and why.
+static WORKER_REFUSED: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// The system gave a thread of the typing's no thread: a body phase's or an inlining phase's worker (`Typer::run`,
+/// `Worker::expand_in_parallel`), which give the build way themselves, or a merge thread (`crew::Crew::with`), whose
+/// merge runs its share on the caller's thread and is never kept: compile, a session and `teq fix` type the build
+/// again by one worker (`take_worker_refused`).
+pub fn note_worker_refused(why: String) {
+    let mut r = WORKER_REFUSED.lock().unwrap_or_else(|e| e.into_inner());
+    if r.is_none() {
+        *r = Some(why);
+    }
+}
+
+/// Why a thread of a typing since the last ask was refused, if one was.
+pub fn take_worker_refused() -> Option<String> {
+    WORKER_REFUSED.lock().unwrap_or_else(|e| e.into_inner()).take()
+}
+
 pub fn overlays_wanted() -> bool {
     static STATE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
     match STATE.load(Ordering::Relaxed) {
@@ -2552,6 +2571,16 @@ impl TypeStore {
         true
     }
 
+    /// Waits for the drop of the overlays that `reclaim_overlays` started and no later fork
+    /// joined (`refork_overlays`): `teq fix`, before a typing's store goes with its typer, whose drop
+    /// would let the thread go, so that the next typing finds what it freed.
+    pub fn join_reclaiming(&self) {
+        let freeing = self.reclaiming.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(freeing) = freeing {
+            let _ = freeing.join();
+        }
+    }
+
     /// The overlays for `workers` workers over the store's mapped vectors.
     #[cold]
     fn make_overlays(&self, workers: usize) {
@@ -2662,8 +2691,9 @@ impl TypeStore {
                 return drop(apart);
             }
             let apart = crate::crew::Unshared(apart);
-            let freeing = crate::alloc::spawn(move || drop(apart));
-            *self.reclaiming.lock().unwrap_or_else(|e| e.into_inner()) = Some(freeing);
+            // Where the system gives the thread none, the overlays are freed here, with the closure.
+            let freeing = crate::alloc::spawn_or_drop(move || drop(apart));
+            *self.reclaiming.lock().unwrap_or_else(|e| e.into_inner()) = freeing;
         }
     }
 

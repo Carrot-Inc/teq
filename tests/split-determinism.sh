@@ -148,7 +148,8 @@ fi
 
 # `teq compiler fix --check` over the frontend with every shipped rule (DisableSyntax with most of its settings on), at one
 # worker and at eight and each count of THREADS above one: the output (both streams, the trace's document lines among
-# them, and the exit) the one-worker run's, and each run's execution record (docs/FIX.md, "Debugging a rule") a
+# them, and the exit) the one-worker run's, the trace's run lines apart (its phases' `ms in all` line and each typing's
+# `fix: typing` lines, which say the workers and the times), and each run's execution record (docs/FIX.md, "Debugging a rule") a
 # parallel one, every round dispatched over its workers, none serial. tests/fix.scala's `parallel` cases hold the
 # record to its full check, the forced schedules and the mutation controls.
 fixes() {
@@ -172,7 +173,7 @@ CONF
   run_fix() {
     TEQ_FIX_TRACE=1 TEQ_FIX_RECORD=$work/fix-$1.record timeout 300 "$TEQ" compiler fix "${@:2}" --config "$conf" --check --threads "$1" > "$work/fix-$1.out" 2> "$work/fix-$1.err"
     echo $? > "$work/fix-$1.status"
-    grep -v '^fix: .* ms in all' "$work/fix-$1.err" > "$work/fix-$1.shown"
+    grep -v -e '^fix: .* ms in all' -e '^fix: typing ' "$work/fix-$1.err" > "$work/fix-$1.shown"
   }
   run_fix 1 "$@"
   grep -q '^run eligible=1 ' "$work/fix-1.record" || { bad "fix: the one-worker run's record: $(head -2 "$work/fix-1.record" | tr '\n' ' ')"; return; }

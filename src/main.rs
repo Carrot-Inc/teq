@@ -1863,7 +1863,10 @@ fn main() {
     if resident {
         typer::thread::session();
     }
-    if resident && !std::env::var_os("TEQ_RESIDENT").is_some_and(|v| v == "0") {
+    // `teq fix` and `teq compiler fix` type program after program, each typing's workers and typing thread ending before
+    // the next typing begins: what they leave goes to the centre, as a session's builds' do, without a session's typing
+    // thread (docs/FIX.md, "Patches, suppressions and rounds").
+    if (resident || fix_verb(argfile::args())) && !std::env::var_os("TEQ_RESIDENT").is_some_and(|v| v == "0") {
         alloc::resident();
     }
     // The typer recurses over expressions and through the definitions they name; a library's
@@ -1872,6 +1875,22 @@ fn main() {
     let code = compiler.join().unwrap_or(2);
     interp::code_stats_report();
     std::process::exit(code);
+}
+
+/// Whether the command line is `teq fix`'s (after the prefix options a project verb takes) or `teq compiler fix`'s.
+fn fix_verb(args: &[String]) -> bool {
+    let mut words = args.iter().map(String::as_str);
+    loop {
+        match words.next() {
+            Some("--export") => {
+                words.next();
+            }
+            Some("--strict") => {}
+            Some("fix") => return true,
+            Some("compiler") => return words.next() == Some("fix"),
+            _ => return false,
+        }
+    }
 }
 
 fn compile() -> i32 {
@@ -2026,8 +2045,11 @@ fn compile() -> i32 {
         typer.on_thread(|w| w.count_retained_records());
     }
     measure::prep_measured(typer::prep::replayed().map(|r| r.kinds), typer::prep::write_capture());
-    if typer.serial.is_needed() {
-        let why = typer.serial.reason().unwrap_or_default();
+    // A thread of the typing's the system refused (`types::note_worker_refused`): the workers' starts gave the build
+    // way; a merge thread's merge ran its share on the caller's thread and is not kept either.
+    let refusal = types::take_worker_refused();
+    if typer.serial.is_needed() || refusal.is_some() {
+        let why = typer.serial.reason().or(refusal).unwrap_or_default();
         if requested.is_none() && !typer.serial.of_diagnostics() {
             let module = typer.serial.undeclared_module().filter(|(name, c)| typer.declared_by(name, *c)).map(|(name, _)| name);
             eprintln!("{}", give_way_note(&why, module.as_deref()));

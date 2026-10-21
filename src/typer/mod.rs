@@ -2506,9 +2506,18 @@ impl<'a> Typer<'a> {
                 let gave_way = std::thread::scope(|s| {
                     let (handed, collected) = std::sync::mpsc::channel::<(usize, Worker<'a>)>();
                     let n = others.len();
-                    let empty: Vec<bool> = others.iter().map(Option::is_none).collect();
+                    let mut empty: Vec<bool> = others.iter().map(Option::is_none).collect();
                     let mut handles = Vec::with_capacity(n);
+                    let mut refused = false;
                     for (k, (mut worker, first)) in others.into_iter().enumerate().filter_map(|(k, o)| Some((k, o?))) {
+                        // A worker the system gives no thread (its stack's address space, beside the overlays'
+                        // mappings) is left unstarted with every one after it, and the build gives way
+                        // (`need_serial`): the started workers stop taking items and one worker types it again, as
+                        // where the mappings were refused (`types::note_worker_refused`).
+                        if refused {
+                            empty[k] = true;
+                            continue;
+                        }
                         let queue = &queue;
                         let handed = handed.clone();
                         let handle = std::thread::Builder::new()
@@ -2541,9 +2550,17 @@ impl<'a> Typer<'a> {
                                     items.push(("returned us", since()));
                                     crate::measure::inventory_line(&format!("worker {}", k + 1), &items);
                                 }
-                            })
-                            .expect("cannot start a typing worker");
-                        handles.push(handle);
+                            });
+                        match handle {
+                            Ok(handle) => handles.push(handle),
+                            Err(e) => {
+                                refused = true;
+                                empty[k] = true;
+                                let why = format!("the system gave a typing worker no thread ({})", e);
+                                crate::types::note_worker_refused(why.clone());
+                                w.need_serial(|| why);
+                            }
+                        }
                     }
                     drop(handed);
                     let spawned = since();

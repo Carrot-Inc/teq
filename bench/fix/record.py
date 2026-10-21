@@ -1,4 +1,4 @@
-# bench/fix/record.py <record> <workers|->: whether a `teq fix` run's execution record (TEQ_FIX_RECORD, docs/FIX.md) is
+# bench/fix/record.py <record> <workers|-> [<typing workers|->]: whether a `teq fix` run's execution record (TEQ_FIX_RECORD, docs/FIX.md) is
 # the parallel run bench/fix/run.sh measures: the shipped rules (`eligible=1`) over the workers asked (`-`: the record's
 # own count); every round's documents dispatched and done once each, with their slots' generations, by workers of the
 # run's; no round serial where it has documents for several workers, no barrier waited for in vain, no worker evaluating
@@ -7,13 +7,19 @@
 # (`start_us`, `finish_us`), not from the workers' ids, which a serialized schedule may spread, reaches at least two at
 # once and half those workers (the toy corpus's 1,000 documents at sixteen workers peak at ten). A smaller round (jzon's
 # two documents, which worker 0 may finish before worker 1 has started) is a cost cell: complete, its utilization
-# reported, no overlap asked of it. Prints a `utilization` line a round, then each problem; exits 1 on any problem.
+# reported, no overlap asked of it. And the typing (fix-parallel-typing): every round's documents come from a typing attempt
+# the record names (`typing`), and where the typing's workers are asked (the third argument, else the rules') each round's
+# first attempt asked that many, typed with
+# them, forked and was merged (`joined`), the one attempt of its round: a parallel attempt that gave way and was typed
+# again by one worker (`retried`), or a typing by fewer workers than asked, is not the measurement the row claims.
+# Prints a `utilization` line a round, then each problem; exits 1 on any problem.
 import sys
 
 def fields(line):
     return dict(kv.split("=", 1) for kv in line.split()[1:] if "=" in kv)
 
 path, asked = sys.argv[1], sys.argv[2]
+typing = sys.argv[3] if len(sys.argv) > 3 else asked
 lines = open(path).read().split("\n")
 problems = []
 run = next((fields(l) for l in lines if l.startswith("run ")), None)
@@ -81,6 +87,24 @@ while i < len(lines):
             problems.append(f"{where}: its {n} documents evaluated one at a time ({len(by_worker)} worker ids, {want} workers)")
         elif 2 * peak < want:
             problems.append(f"{where}: its {n} documents at most {peak} at once, of {want} workers")
+attempts = {}
+for l in lines:
+    if l.startswith("typing "):
+        f = fields(l.split(" why=", 1)[0])
+        attempts.setdefault((f.get("job"), f.get("round")), []).append(f)
+if typing != "-":
+    for l in lines:
+        if l.startswith("round "):
+            f = fields(l)
+            if (f.get("job"), f.get("round")) not in attempts:
+                problems.append(f"round {f.get('job')}/{f.get('round')}: typed by no attempt the record names")
+    for (job, rnd), seq in sorted(attempts.items()):
+        first = seq[0]
+        n = int(typing)
+        if (int(first.get("asked", "0")), int(first.get("effective", "0"))) != (n, n):
+            problems.append(f"typing {job}/{rnd}: asked {first.get('asked')}, typed with {first.get('effective')}, {n} asked")
+        elif n > 1 and (len(seq) != 1 or first.get("forked") != "1" or first.get("outcome") != "joined"):
+            problems.append(f"typing {job}/{rnd}: {', '.join(a.get('outcome', '?') for a in seq)}, not one attempt merged")
 if rounds == 0:
     problems.append("no round")
 elif not any(l.startswith("done ") for l in lines):

@@ -23,6 +23,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   checks each inside such a project, and outside one each is checked against the jars it names.
 - sbt-teq records in `teq.lock` each dependency a build declares at a version its resolution evicted, so that a
   script asking that version runs on the one chosen ([the lockfile](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
+- `teq fix` runs scalafix's rules over a build's sources with no sbt and no JVM, each program typed over compile's
+  workers, the output the one-worker run's ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md),
+  [the command line](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
 
 <details>
 <summary>Conformance with scalac and the JDK</summary>

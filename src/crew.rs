@@ -18,6 +18,9 @@ unsafe impl Send for Part {}
 
 struct State {
     part: Option<Part>,
+    /// The first thread's number the system gave no thread (`with`), every one after it missing too: the caller runs
+    /// their shares of each part after its own (`run`). The crew's thread count where none is missing.
+    refused_from: usize,
     /// The threads still running the current part, the calling thread's share excluded.
     running: usize,
     /// A crew thread's part panicked: the caller panics after the part.
@@ -46,23 +49,32 @@ impl Drop for Crew {
 impl Crew {
     /// Runs `f` with a crew of `threads` threads (`f`'s own one of them) for its parts.
     pub fn with<R>(threads: usize, f: impl FnOnce(&Crew) -> R) -> R {
-        let crew = Crew { threads: threads.max(1), state: Mutex::new(State { part: None, running: 0, panicked: false, stop: false }), begun: Condvar::new(), done: Condvar::new(), garbage: Mutex::new(Vec::new()) };
+        let threads = threads.max(1);
+        let crew = Crew { threads, state: Mutex::new(State { part: None, refused_from: threads, running: 0, panicked: false, stop: false }), begun: Condvar::new(), done: Condvar::new(), garbage: Mutex::new(Vec::new()) };
         if crew.threads == 1 {
             return f(&crew);
         }
         std::thread::scope(|s| {
-            let handles: Vec<_> = (1..crew.threads)
-                .map(|k| {
-                    let crew = &crew;
-                    std::thread::Builder::new()
-                        .name(format!("teq-merge-{}", k))
-                        .spawn_scoped(s, move || {
-                            crate::alloc::enter();
-                            crew.serve(k)
-                        })
-                        .expect("cannot start a merge thread")
-                })
-                .collect();
+            // A thread the system gives none (its stack's address space) and every one after it are missing: the
+            // parts keep their division by the crew's count, the caller running the missing threads' shares, and
+            // the refusal is noted (`types::note_worker_refused`), so that the build this merge is for is never kept:
+            // whether a share run on another thread than its own gives the same merge is not established.
+            let mut handles = Vec::with_capacity(crew.threads - 1);
+            for k in 1..crew.threads {
+                let shared = &crew;
+                let started = std::thread::Builder::new().name(format!("teq-merge-{}", k)).spawn_scoped(s, move || {
+                    crate::alloc::enter();
+                    shared.serve(k)
+                });
+                match started {
+                    Ok(h) => handles.push(h),
+                    Err(e) => {
+                        crate::types::note_worker_refused(format!("the system gave a merge thread no thread ({})", e));
+                        crew.lock().refused_from = k;
+                        break;
+                    }
+                }
+            }
             // The threads stop when `f` returns or unwinds, so that the scope's join ends.
             struct Stop<'c>(&'c Crew);
             impl Drop for Stop<'_> {
@@ -137,14 +149,21 @@ impl Crew {
         // SAFETY: the lifetime is erased for the crew threads' copies only, and this call does not
         // return before every one of them has finished with it.
         let erased: *const (dyn Fn(usize) + Sync) = unsafe { std::mem::transmute::<&(dyn Fn(usize) + Sync), &'static (dyn Fn(usize) + Sync)>(job) };
-        {
+        let refused_from = {
             let mut s = self.lock();
             let number = s.part.map_or(1, |p| p.number + 1);
             s.part = Some(Part { job: erased, number });
-            s.running = self.threads - 1;
-        }
+            s.running = s.refused_from - 1;
+            s.refused_from
+        };
         self.begun.notify_all();
-        let mine = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job(0)));
+        let mine = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            job(0);
+            // The shares of the threads the system gave none, on this one.
+            for k in refused_from..self.threads {
+                job(k);
+            }
+        }));
         let mut s = self.lock();
         while s.running > 0 {
             s = self.done.wait(s).unwrap_or_else(|e| e.into_inner());
@@ -185,12 +204,37 @@ pub fn share(k: usize, n: usize, range: std::ops::Range<usize>) -> std::ops::Ran
 /// Drops `v` on a thread of its own, off the merge's main thread: the
 /// overlays given back, the indexes and memos the join retires, the record versions published
 /// copies replaced. With the memory measured (`TEQ_WORKERS_MEMORY=1`) dropped here, so that the
-/// merge's barriers count what it gave back.
+/// merge's barriers count what it gave back. The thread is let go, unless the process waits for
+/// such threads (`keep_given_back`).
 pub fn give_back<T: Send + 'static>(v: T) {
     if crate::measure::memory_wanted() {
         return drop(v);
     }
-    crate::alloc::spawn(move || drop(v));
+    // Where the system gives the thread none, `v` is dropped here, with the closure.
+    let Some(thread) = crate::alloc::spawn_or_drop(move || drop(v)) else { return };
+    if KEEP.load(std::sync::atomic::Ordering::Relaxed) {
+        GIVEN.lock().unwrap_or_else(|e| e.into_inner()).push(thread);
+    }
+}
+
+/// Whether `give_back` keeps its threads for `given_back`.
+static KEEP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static GIVEN: Mutex<Vec<std::thread::JoinHandle<()>>> = Mutex::new(Vec::new());
+
+/// Keeps the threads `give_back` starts from now on, for `given_back`: `teq fix`, whose next
+/// typing should find what the last one's merge gave back. A process that never asks keeps none,
+/// so that no session holds a thread that has ended.
+pub fn keep_given_back() {
+    KEEP.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Waits for every thread `give_back` started and kept since the last call: what it was given
+/// dropped and the thread ended, its lists handed back where the process is resident.
+pub fn given_back() {
+    let threads = std::mem::take(&mut *GIVEN.lock().unwrap_or_else(|e| e.into_inner()));
+    for t in threads {
+        let _ = t.join();
+    }
 }
 
 /// A value no thread but its holder refers to any more, given back (`give_back`) though its type

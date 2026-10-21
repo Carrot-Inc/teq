@@ -1,7 +1,8 @@
 #!/bin/bash
 # bench/fix/selftest.sh <teq>: the runner's own checks, the saved controls of the push pass of fix-speed's becf46896: an
 # eight-worker run over the toy corpus accepted, its row appended; and each of these rejected, no row appended: the same
-# run serialized (`TEQ_FIX_PLANT=serial`, its record's every document on worker 0), a corpus that is absent, a job teq
+# run serialized (`TEQ_FIX_PLANT=serial`, its record's every document on worker 0), its typing serialized
+# (`TEQ_FIX_PLANT=serial-typing`, the rules' pool parallel: the typing's attempts by one worker), a corpus that is absent, a job teq
 # refuses (exit 2: a corpus that does not type), a run whose exit and bytes are not the baseline's (`FIX_EXPECT`), and a
 # corpus that is not the baseline's (empty, or one file of the thousand, flat or behind a directory link the compiler
 # follows: refused before the measured run, the files it lacks counted against the engine's own input set).
@@ -9,7 +10,9 @@
 # ready at each dispatch (the pass of 1bd060d10's control: no two evaluations overlap, every worker id appears),
 # refused, and over the accepted run's, accepted; and the cost-probe runner (bench/fix/probes.sh) over an absent corpus
 # and over one teq refuses, each failing with no row appended. And the cost cell: jzon's two documents at eight workers
-# accepted, its utilization reported, and a record of that shape accepted by the validator.
+# accepted, its utilization reported, and a record of that shape accepted by the validator. And the parity runner's
+# reading of the unused imports (bench/fix/parity.sh): a project SemanticRule's pair compared with check reading them,
+# refused without, a syntactic rule's compared.
 cd "$(dirname "$0")/../.."
 teq=${1:?usage: bench/fix/selftest.sh <teq>}
 work=out/measure/selftest
@@ -66,6 +69,7 @@ check_record() {
 cat > "$work/cost-cell.record" <<'REC'
 worker w=0 ready_us=20000 boot_us=19000
 run eligible=1 workers=8
+typing job=0 round=1 attempt=1 asked=8 effective=8 forked=1 outcome=joined start_us=20100 end_us=29000
 round job=0 round=1 docs=2 first_gen=0
 dispatch slot=0 gen=0 worker=0 at_us=30000
 done slot=0 gen=0 worker=0 start_us=30100 finish_us=40000 cpu_us=9800 queries=0
@@ -82,6 +86,8 @@ check absent reject FIX_CORPORA=$work/none bench/fix/run.sh "$teq" selftest jzon
 check refused reject FIX_CORPORA=$work/bad bench/fix/run.sh "$teq" selftest toy all-on.conf 8 cold
 check baseline reject FIX_EXPECT=0:000000000000:$toy bench/fix/run.sh "$teq" selftest toy all-on.conf 8 cold
 check same-bytes accept FIX_EXPECT=$expect bench/fix/run.sh "$teq" selftest toy all-on.conf 4 cold
+# The typing serial, the rules' pool as asked (fix-parallel-typing): the rules' record a parallel one, the typing's not.
+check serial-typing reject TEQ_FIX_PLANT=serial-typing FIX_EXPECT=$expect bench/fix/run.sh "$teq" selftest toy all-on.conf 8 cold
 # The corpus a row ran over (the pass of 621d498f0): an empty `toy`, with the full corpus's baseline and without one, and
 # a `toy` of one file of the thousand against that baseline, each refused before teq runs, no row appended.
 mkdir -p "$work/empty/toy" "$work/one/toy"
@@ -126,5 +132,28 @@ probe_check() {
 }
 probe_check probes-absent "$PWD/$work/none"
 probe_check probes-refused "$PWD/$work/bad"
+# The parity runner (bench/fix/parity.sh, the push pass of ce03e7ddb): both sides read the unused imports alike, check's
+# setting taken from the fix run's record (`semantic=`, the engine's predicate over the configured rules). A project rule
+# that is a SemanticRule, with no NoUnusedImports named, over a program with unused imports: a pair compared, check run
+# with the analysis; the same pair with check forced without it (`PARITY_CHECK_UNUSED=off`) refused; the shipped
+# DisableSyntax alone, syntactic: a pair compared, no side reading them.
+mkdir -p "$work/parity"
+printf 'import teq.fix.*\n\nfinal class Probe extends SemanticRule("Probe"):\n  override def fix(using doc: SemanticDocument): Patch = Patch.empty\n' > "$work/parity/Probe.scala"
+printf 'rules = ["file:Probe.scala"]\n' > "$work/parity/semantic.conf"
+printf 'rules = [DisableSyntax]\nDisableSyntax.noVars = true\n' > "$work/parity/syntactic.conf"
+# parity_check <name> <compared|rejected> <unused> <conf> [env...]: one pair at four workers, its verdict and every side's
+# reading of the unused imports.
+parity_check() {
+  local name=$1 want=$2 unused=$3 conf=$4
+  shift 4
+  env "$@" timeout 300 bench/fix/parity.sh "$teq" tests/fix/support/typing/records "$work/parity/$conf" 1 4 > "$work/$name.log" 2>&1
+  local verdict sides
+  verdict=$(grep -oE 'pair (compared|rejected)' "$work/$name.log" | cut -d' ' -f2)
+  sides=$(grep -E ' (fix|check|indexed) attempts=' "$work/$name.log" | grep -oE 'unused=[01-]' | tr '\n' ' ')
+  if [ "$verdict" = "$want" ] && [ "$sides" = "$unused" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL $name: $verdict, $sides: $(tail -1 "$work/$name.log")"; fi
+}
+parity_check parity-semantic compared "unused=1 unused=1 unused=1 " semantic.conf
+parity_check parity-semantic-unread rejected "unused=1 unused=0 unused=1 " semantic.conf PARITY_CHECK_UNUSED=off
+parity_check parity-syntactic compared "unused=0 unused=0 unused=0 " syntactic.conf
 echo "selftest: $pass passed, $fail failed"
 [ $fail = 0 ]

@@ -1,4 +1,4 @@
-//! `teq fix [--check] [--rules A,B] [--config <file>] [<module>...] [<file>...]` (docs/CLI.md, "teq fix"): the
+//! `teq fix [--check] [--rules A,B] [--config <file>] [--threads n] [<module>...] [<file>...]` (docs/CLI.md, "teq fix"): the
 //! rules of `.scalafix.conf` over the lock's modules as `teq compile` reads them. Each project is typed under the keys
 //! `teq compile` types it under (`Export::widest`, and a configuration of its own where that key's closure holds
 //! none of its roots), each key's closure as one program with the resident's typing arguments
@@ -10,13 +10,15 @@ use crate::fix::engine::{self, Job, Setup};
 use std::path::{Path, PathBuf};
 
 pub fn run(export: &Export, args: &[String]) -> i32 {
-    let (check, rules, config, rest) = match crate::fix::cli::flags(args) {
+    let flags = match crate::fix::cli::flags(args) {
         Ok(f) => f,
         Err(e) => {
             eprintln!("teq fix: {}", e);
             return 2;
         }
     };
+    let threads = flags.threads_args();
+    let crate::fix::cli::Flags { check, rules, config, rest, .. } = flags;
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     // An argument that names a file, or has a path's shape, is a file; any other a module.
     let (mut files, mut modules): (Vec<PathBuf>, Vec<String>) = (Vec::new(), Vec::new());
@@ -131,6 +133,8 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
             args.extend(["--target", "jvm", "--std=scala-library"].map(str::to_string));
         }
         args.extend(typing.tail);
+        // `--threads n`, after the project's own (its description's `threads`), which compile's options take last.
+        args.extend(threads.iter().cloned());
         let roots: Vec<String> = own.iter().map(|r| export.relative(&export.path(r))).collect();
         let generated = generated.iter().map(|g| export.relative(g)).collect();
         engine_jobs.push(Job { args, roots: Some(roots), files: (!files.is_empty()).then(|| files.clone()), generated });

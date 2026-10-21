@@ -579,27 +579,38 @@ impl<'a> Worker<'a> {
         crate::measure::phase_done("inlining, the fork");
         let others: Vec<Worker<'a>> = (1..workers).map(|k| self.attach(k)).collect();
         let others: Vec<Option<Worker<'a>>> = std::thread::scope(|s| {
-            let handles: Vec<_> = others
-                .into_iter()
-                .enumerate()
-                .map(|(k, mut w)| {
-                    let q = &queue;
-                    std::thread::Builder::new()
-                        .name(format!("teq-inlining-{}", k + 1))
-                        .stack_size(1 << 30)
-                        .spawn_scoped(s, move || {
-                            crate::alloc::enter();
-                            w.phase_work(q);
-                            // A session outlives the build: the cycles this worker's macro runs left
-                            // go with its thread (`interp::dispose`), as a body-phase worker's do.
-                            if crate::alloc::is_resident() {
-                                crate::interp::dispose();
-                            }
-                            w
-                        })
-                        .expect("cannot start a worker of the inlining phase")
-                })
-                .collect();
+            let mut handles = Vec::with_capacity(others.len());
+            let mut refused = false;
+            for (k, mut w) in others.into_iter().enumerate() {
+                // A worker the system gives no thread is left unstarted with every one after it, and the
+                // build gives way (`need_serial`), as a body phase's worker refused its thread does.
+                if refused {
+                    continue;
+                }
+                let q = &queue;
+                let handle = std::thread::Builder::new()
+                    .name(format!("teq-inlining-{}", k + 1))
+                    .stack_size(1 << 30)
+                    .spawn_scoped(s, move || {
+                        crate::alloc::enter();
+                        w.phase_work(q);
+                        // A session outlives the build: the cycles this worker's macro runs left
+                        // go with its thread (`interp::dispose`), as a body-phase worker's do.
+                        if crate::alloc::is_resident() {
+                            crate::interp::dispose();
+                        }
+                        w
+                    });
+                match handle {
+                    Ok(handle) => handles.push(handle),
+                    Err(e) => {
+                        refused = true;
+                        let why = format!("the system gave a worker of the inlining phase no thread ({})", e);
+                        crate::types::note_worker_refused(why.clone());
+                        self.need_serial(|| why);
+                    }
+                }
+            }
             self.phase_work(&queue);
             handles.into_iter().map(|h| Some(h.join().unwrap_or_else(|_| std::process::exit(101)))).collect()
         });

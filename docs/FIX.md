@@ -145,6 +145,19 @@ is the first line alone.
   any other edit then is exit 2, the rule rewriting its own output. In the second round a file the first left as it
   was reads alike, so only the semantic rules run over it again (another file's edits may leave its imports
   unused), the others' results being the first round's. A run that edits nothing types once.
+- Each program is typed as `teq compiler check` types it, over compile's workers: `--threads` (or `TEQ_THREADS`), else
+  compile's count for that round's text (one under 512 KiB or where one unit holds over half of it, else the cores up
+  to eight); the unused imports and the expansions are the merged typer's, as one worker's. A parallel attempt that
+  gives way (a macro's run that changed state other runs share, two diagnostics at one place) is the round's: its
+  program is typed again by one worker from the round's texts, nothing of the attempt kept and the rules not configured
+  again, so that the output is the one-worker run's; the record and the trace say so, nothing else does. A typing waits
+  for every rule worker started to be ready, and the rules for the typing's end. Where the system gives one of the
+  typing's threads no thread (the address space bounded: a body phase's or an inlining phase's worker, a merge thread),
+  the attempt is given up as above and the round typed by one worker, the record naming the thread; a rule worker it
+  gives no thread leaves the rules on the workers they have (the record's `worker-refused` line), and the first rule
+  worker's or the typing thread's refusal is exit 2 with the reason. The run's allocator is a resident
+  process's (`TEQ_RESIDENT=0` the batch one, for measuring): each typing's threads hand back what they hold as they end
+  and the next typing takes it, so that a round's typing does not strand the last one's memory.
 - The rules run over a round's documents on workers of their own, each with the rules' program and an interpreter of
   its own, when every configured rule is one teq ships (none keeps state across documents): as many as `--threads`
   (or `TEQ_THREADS`; the cores by default) and the round's documents allow, started once its typing has ended. A
@@ -182,14 +195,29 @@ tests/fix's cases), its file keeping the repository's notice.
 `TEQ_FIX_TREE=1` prints each document's tree, a node a line with its text; `TEQ_FIX_TRACE=1` the counts of each
 document's nodes, tokens, edits and lints and each rule's failure, then the run's phases (the rules' program, the
 typing, the rules — the rounds' wall time, the workers, their documents' time summed, its CPU time and the longest document's —, the
-planning) in milliseconds and what the allocator reserved.
+planning) in milliseconds and what the allocator reserved; and a line for each typing attempt (its workers asked and
+typed with, its outcome and, where it gave way, why; its parts: reading and parsing, the jars, the typing as `teq
+compiler check --time` counts its `type` phase, with `run`'s phases, the documents, the jar caches, the attempt's exit)
+and for each round the wait for what its merges gave back to be dropped.
 `TEQ_FIX_RECORD=<file>` writes the run's execution record, a line an event: `run` (whether the rules are the shipped
-ones alone and the workers), each worker's `worker` line (when it was ready), each round's `round` (its job, its number,
+ones alone, the workers, and whether a semantic rule is configured, so that the typings read the unused imports), each worker's `worker-start` and `worker` lines (when it was started and when it was
+ready), each typing attempt's `typing` line (its job, round and number, the workers asked and those `Typer::run` typed
+with, whether the system refused the overlays' mappings, so that one worker typed it in place, or one of the typing's
+threads (a worker of either phase, a merge thread), so that the attempt was given up and one worker typed the round
+again, whether it forked, its outcome, `one`,
+`joined`, `retried` or `refused`, when it began and ended, why it gave way), each round's `round` (its job, its number,
 its documents and its first generation), a `dispatch` and a `done` line a document (its slot, generation and worker, and
 when its rules began and ended, in microseconds since the run began, and the worker's CPU time between), a `serial` line where a round runs on one worker,
 and `round-end` (the round's wall time and the sums of its documents' times and CPU times): the fix suite reads it to tell a parallel
 run from a serial one. `TEQ_FIX_INPUTS=<file>` writes each job's inputs as the compiler resolves them (its roots, the links it follows, its
 exclusions), a line `<job>\t<path>` each, and does nothing else: the corpus a measurement of bench/fix runs over.
 `TEQ_FIX_SCHEDULE` (`reverse`, `shuffle:<seed>`), `TEQ_FIX_BARRIER=<workers>` and
-`TEQ_FIX_PLANT` (`serial`, `completion`) are that suite's switches: the order the documents are handed out in, a wait
-until that many workers have begun, and the mutation controls its checks must refuse.
+`TEQ_FIX_PLANT` (`serial`, `completion`, `serial-typing`) are that suite's switches: the order the documents are handed
+out in, a wait until that many workers have begun, and the mutation controls its checks must refuse (`serial-typing`
+types every program by one worker, the rules' pool left as asked). So are `TEQ_FIX_TYPING_THREADS=<n>` and
+`TEQ_FIX_RULE_THREADS=<n>`, the typing's and the rules' counts apart; `TEQ_FIX_TYPING_WORK=1`, which turns the typer's
+counters on for each typing and writes a `typing-item` line for each item of its queue (the worker, the item's index in
+its file, when it began and ended, its file), the witness that several workers typed at once; and
+`TEQ_FIX_BOOT_DELAY=<ms>`, which holds every rule worker but the first that long before its bootstrap.
+`TEQ_FIX_INDEX=off` is bench/fix's, for its comparison with `teq compiler check`, which indexes nothing: the typer makes
+no index, and `hasExpansions` is false everywhere.

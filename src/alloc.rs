@@ -854,6 +854,20 @@ where
     })
 }
 
+/// `spawn` for a thread that only frees what it is given: where the system gives no thread (its stack's address space),
+/// the closure is dropped on the calling thread with what it holds, as the free it stood for, and there is no handle.
+pub fn spawn_or_drop<F>(f: F) -> Option<std::thread::JoinHandle<()>>
+where
+    F: FnOnce() + Send + 'static,
+{
+    std::thread::Builder::new()
+        .spawn(move || {
+            enter();
+            f()
+        })
+        .ok()
+}
+
 /// `Scope::spawn` for a thread of the compiler.
 pub fn spawn_in<'scope, F, T>(scope: &'scope std::thread::Scope<'scope, '_>, f: F) -> std::thread::ScopedJoinHandle<'scope, T>
 where
@@ -1509,7 +1523,7 @@ mod tests {
     /// `spawn` or a name that begins with `spawn_` stands in its code, and the entry its
     /// threads go through.
     const STARTS: &[(&str, usize, &str)] = &[
-        ("src/alloc.rs", 4, "spawn and spawn_in themselves, which enter first"),
+        ("src/alloc.rs", 6, "spawn, spawn_or_drop and spawn_in themselves, which enter first"),
         ("src/classpath.rs", 1, "alloc::spawn_in"),
         ("src/crew.rs", 2, "a builder for the merge threads, alloc::enter the first statement of the closure; the retired data's free through spawn"),
         ("src/emit/layout.rs", 2, "alloc::spawn_in for the scan of the anonymous classes' creations and for their shapes"),

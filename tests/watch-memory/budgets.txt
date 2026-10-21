@@ -48,11 +48,12 @@ Linux-x86_64 peak-frontend@12 metric VmHWM ceiling_ratio 2.5 of peak-frontend@1 
 Linux-x86_64 peak-core@12 metric VmHWM ceiling_ratio 2.5 of peak-core@1 because the parallel typer's memory aim, at most 2.5 times one worker's peak; 1.56 measured
 # Linux-x86_64: index-std-day recorded 2026-10-07, teq 0.1.6 3b7191425: index-day's session asked besides the references of the std's List, which demand every std file after each full build; it ends at 274.0 MB where index-day ends at 231.3 MB on the same binary, the difference the std's typing
 Linux-x86_64 index-std-day edits 40 growth_kb_per_edit 139.7 memory_end_mb 317.7 metric Rss+Swap
-# Linux-x86_64: the fix rows, peak-fix-frontend@1, @4, @8 and @16, recorded 2026-10-21 on the release build of fix-speed's 368ee7517 (teq 0.1.9, its version printing c388323c9, the commit its tree was built over), one WATCH_MEMORY_RECORD=1 run: a fresh `teq compiler fix --check` over the frontend, the shipped rules, its rules over 1, 4, 8 and 16 workers; the peak a run of the frontend's typing (one typer) and its rules' workers, each with the rules' program and an interpreter of its own, about 19 MB a worker. @8 and @16 are held to the measured ratio of @1 and the tolerance's 15% over it, tighter than the parallel typer's aims; Linux's alone, where the child's ru_maxrss is VmHWM.
-Linux-x86_64 peak-fix-frontend@1 metric VmHWM ceiling_mb 808.6 because 703.1 MB measured and the tolerance's 15% over it
-Linux-x86_64 peak-fix-frontend@4 metric VmHWM ceiling_mb 913.2 because 794.1 MB measured and the tolerance's 15% over it
-Linux-x86_64 peak-fix-frontend@8 metric VmHWM ceiling_ratio 1.4 of peak-fix-frontend@1 because 1.21 times one worker's peak measured and the tolerance's 15% over it
-Linux-x86_64 peak-fix-frontend@16 metric VmHWM ceiling_ratio 1.6 of peak-fix-frontend@1 because 1.38 times one worker's peak measured and the tolerance's 15% over it
+# Linux-x86_64: the fix rows, peak-fix-frontend@1, @4, @8 and @16, recorded 2026-10-21 by WATCH_MEMORY_RECORD=1 on the release build of fix-parallel-typing's 2cf5a0a7b: a fresh `teq compiler fix --check` over the frontend, the shipped rules, its typing and its rules over 1, 4, 8 and 16 workers (`--threads`, both counts), both rounds, the allocator a resident process's (each typing's threads hand back what they hold). @8 and @16 are held to the parallel typer's memory aims (twice and three times one worker's peak), which they measured under (1.81, 2.65); Linux's alone, where the child's ru_maxrss is VmHWM.
+Linux-x86_64 peak-fix-frontend@1 metric VmHWM ceiling_mb 736.7 because 640.6 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-fix-frontend@4 metric VmHWM ceiling_mb 1036.8 because 901.6 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-fix-frontend@8 metric VmHWM ceiling_ratio 2.0 of peak-fix-frontend@1 because the parallel typer's memory aim, at most 2 times one worker's peak; 1.81 measured
+Linux-x86_64 peak-fix-frontend@16 metric VmHWM ceiling_ratio 3.0 of peak-fix-frontend@1 because the parallel typer's memory aim, at most 3 times one worker's peak; 2.65 measured
+# Linux-x86_64: peak-fix-frontend@1, peak-fix-frontend@4, peak-fix-frontend@8, peak-fix-frontend@16 recorded 2026-10-21, teq 0.1.9 2cf5a0a7b
 # Linux-x86_64: split-body, check-body, jvm-body, split-tenth, check-tenth, jvm-tenth, split-day, check-day, jvm-day, hot-day, hot-full, index-day, index-std-day, lsp-day, lsp-day-child, frontend-hot-day, frontend-hot-full, frontend-check-day, frontend-hot-full@2, frontend-check-day@2, lsp-day@2, lsp-day@2-child, frontend-hot-full@8, frontend-check-day@8, lsp-day@8, lsp-day@8-child, frontend-hot-full@16, frontend-check-day@16, lsp-day@16, lsp-day@16-child, frontend-hot-full@12 raised to the run's numbers where larger 2026-10-19, teq 0.1.9 b3aba4e74
 only Linux-x86_64 index-std-day because the reference machine recorded it on Linux alone; a platform without its row runs the suite without the session
 only Linux-x86_64 peak-fix-frontend@1 because the fix peak is the child's ru_maxrss, VmHWM on Linux alone
@@ -130,7 +131,7 @@ observed Darwin-arm64 peak-frontend@12 metric phys_footprint_peak peak_mb 764.3 
 observed Darwin-arm64 peak-core@12 metric phys_footprint_peak peak_mb 264.5 recorded 2026-10-03, teq 0.1.0 d1628706f
 observed Linux-x86_64 peak-frontend@12 metric VmHWM peak_mb 765.4 ratio 2.02 of peak-frontend@1 recorded 2026-10-11, teq 0.1.8 97c2e853c
 observed Linux-x86_64 peak-core@12 metric VmHWM peak_mb 289.3 ratio 1.56 of peak-core@1 recorded 2026-10-11, teq 0.1.8 97c2e853c
-observed Linux-x86_64 peak-fix-frontend@1 metric VmHWM peak_mb 703.1 recorded 2026-10-21, teq 0.1.9 c388323c9
-observed Linux-x86_64 peak-fix-frontend@4 metric VmHWM peak_mb 794.1 recorded 2026-10-21, teq 0.1.9 c388323c9
-observed Linux-x86_64 peak-fix-frontend@8 metric VmHWM peak_mb 854.1 ratio 1.21 of peak-fix-frontend@1 recorded 2026-10-21, teq 0.1.9 c388323c9
-observed Linux-x86_64 peak-fix-frontend@16 metric VmHWM peak_mb 969.8 ratio 1.38 of peak-fix-frontend@1 recorded 2026-10-21, teq 0.1.9 c388323c9
+observed Linux-x86_64 peak-fix-frontend@1 metric VmHWM peak_mb 640.6 recorded 2026-10-21, teq 0.1.9 2cf5a0a7b
+observed Linux-x86_64 peak-fix-frontend@4 metric VmHWM peak_mb 901.6 recorded 2026-10-21, teq 0.1.9 2cf5a0a7b
+observed Linux-x86_64 peak-fix-frontend@8 metric VmHWM peak_mb 1158.7 ratio 1.81 of peak-fix-frontend@1 recorded 2026-10-21, teq 0.1.9 2cf5a0a7b
+observed Linux-x86_64 peak-fix-frontend@16 metric VmHWM peak_mb 1699.1 ratio 2.65 of peak-fix-frontend@1 recorded 2026-10-21, teq 0.1.9 2cf5a0a7b
