@@ -534,6 +534,8 @@ impl<'a> Worker<'a> {
                     self.syms.new_sym(def.name, SymKind::Def, def.mods, owner, file, Some(id), def.span);
                 self.note_scoped_private(file, sym);
                 let jvm = self.jvm;
+                // A std stand-in's markers are read of an annotated definition alone.
+                let is_std = !def.annots.is_empty() && self.source(file).is_std;
                 let def_name = if jvm { self.interner.get(def.name).to_string() } else { String::new() };
                 {
                     let ast = self.ast(file);
@@ -560,6 +562,9 @@ impl<'a> Worker<'a> {
                             info.is_main = true;
                         } else if a.name == names::JAVA_DEFINED {
                             info.java_defined = true;
+                        } else if a.name == names::JAVA_ANNOTATION && is_std {
+                            // A std stand-in's annotation element with a default (a class file's `AnnotationDefault`).
+                            info.mods |= mods::JAVA_ANNOTATION;
                         } else if a.name == names::JVM_EVIDENCE {
                             info.jvm_evidence = true;
                         }

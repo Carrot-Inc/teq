@@ -166,7 +166,7 @@ impl<'a> Worker<'a> {
         }
         let mark = self.snapshot();
         let conforms = self.is_sub(sty, scrut);
-        self.rollback(mark);
+        self.rollback(&mark);
         if !conforms {
             return None;
         }
@@ -534,8 +534,8 @@ impl<'a> Worker<'a> {
                 // (`testNotNull`), which no type pattern takes, whatever the type a stored body's
                 // abstract pattern type comes to at an expansion.
                 let mark = self.snapshot();
-                let conforms = self.is_sub(sty, t) && self.snapshot() == mark;
-                self.rollback(mark);
+                let conforms = self.is_sub(sty, t) && self.trail.len() == mark.at();
+                self.rollback(&mark);
                 self.refine_gadt(t, sty);
                 let always = conforms && !self.scrutinee_may_be_null(sty);
                 let not_null = conforms && !always;
@@ -543,8 +543,8 @@ impl<'a> Worker<'a> {
                 // wildcard fixed to `Int` by `case l: Leaf[Int]`) keeps its own type past the
                 // case, so the binding takes the pattern's, as under scalac.
                 let equal = conforms && {
-                    let back = self.is_sub(t, sty) && self.snapshot() == mark;
-                    self.rollback(mark);
+                    let back = self.is_sub(t, sty) && self.trail.len() == mark.at();
+                    self.rollback(&mark);
                     back
                 };
                 // A pattern over an abstract type goes through the `TypeTest` or the `ClassTag`
@@ -807,7 +807,7 @@ impl<'a> Worker<'a> {
                 let part_sty = if singleton { part_sty } else { self.widen_type(part_sty) };
                 let mark = self.snapshot();
                 let narrows = self.is_sub(pat_ty, part_sty);
-                self.rollback(mark);
+                self.rollback(&mark);
                 let problem = if narrows { "is more specialized than" } else { "does not match" };
                 format!("pattern's type {} {} the right hand side expression's type {}", self.show(pat_ty), problem, self.show(part_sty))
             }
@@ -1017,7 +1017,7 @@ impl<'a> Worker<'a> {
         let stripped = self.erased_named_tuple(sty);
         let mark = self.snapshot();
         let ok = self.is_sub(stripped, target);
-        self.rollback(mark);
+        self.rollback(&mark);
         if ok {
             return true;
         }
@@ -1225,7 +1225,7 @@ impl<'a> Worker<'a> {
                 found.push((p, inst, lower, upper));
             }
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         for (p, inst, lower, upper) in found {
             // A lower bound the pattern states (a library body's `Box[? >: String]`) stays: the
             // scrutinee's joins it, and a scrutinee that fixes the variable below
@@ -1235,7 +1235,7 @@ impl<'a> Worker<'a> {
                 if stated_lower != NOTHING {
                     let mark = self.snapshot();
                     let above = self.is_sub(stated_lower, known);
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     if !above {
                         continue;
                     }
@@ -1301,8 +1301,8 @@ impl<'a> Worker<'a> {
         let scrut = self.deref(sty);
         if matches!(self.types.get(scrut), Type::Param(_) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_)) {
             let mark = self.snapshot();
-            let conforms = self.is_sub(t, sty) && self.snapshot() == mark;
-            self.rollback(mark);
+            let conforms = self.is_sub(t, sty) && self.trail.len() == mark.at();
+            self.rollback(&mark);
             return if conforms { t } else { self.types.mk(Type::Inter(t, sty)) };
         }
         // Over a union each part binds its own: itself where it conforms to the pattern's
@@ -1314,8 +1314,8 @@ impl<'a> Worker<'a> {
             let mut bound: Vec<TypeId> = Vec::new();
             for p in parts {
                 let mark = self.snapshot();
-                let conforms = self.is_sub(p, t) && self.snapshot() == mark;
-                self.rollback(mark);
+                let conforms = self.is_sub(p, t) && self.trail.len() == mark.at();
+                self.rollback(&mark);
                 // A part no value of the pattern's type can be (`String` for `case i: Int`)
                 // binds nothing, as scalac's `&` of two disjoint classes is empty.
                 let part = match conforms {
@@ -1334,8 +1334,8 @@ impl<'a> Worker<'a> {
                         return false;
                     }
                     let mark = self.snapshot();
-                    let below = self.is_sub(p, q) && self.snapshot() == mark;
-                    self.rollback(mark);
+                    let below = self.is_sub(p, q) && self.trail.len() == mark.at();
+                    self.rollback(&mark);
                     below && (q != p)
                 });
                 if !absorbed && !kept.contains(&p) {
@@ -1435,8 +1435,8 @@ impl<'a> Worker<'a> {
                     return Some(taken);
                 }
                 let mark = self.snapshot();
-                let narrower = self.is_sub(taken, sty) && self.snapshot() == mark;
-                self.rollback(mark);
+                let narrower = self.is_sub(taken, sty) && self.trail.len() == mark.at();
+                self.rollback(&mark);
                 Some(if narrower { taken } else { self.types.mk(Type::Inter(taken, sty)) })
             }
             _ => None,
@@ -1475,7 +1475,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         let conforms = self.is_sub(class_ty, sty);
         if !conforms {
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         let fixed_below: Vec<bool> = vars
             .iter()
@@ -1696,7 +1696,7 @@ impl<'a> Worker<'a> {
         }
         let mark = self.snapshot();
         let conforms = self.is_sub(sty, class_ty);
-        self.rollback(mark);
+        self.rollback(&mark);
         if !conforms {
             self.check_sensical_test(class_ty, sty, span);
         }
@@ -1718,7 +1718,7 @@ impl<'a> Worker<'a> {
         self.check_related(class_ty, sty, span);
         let mark = self.snapshot();
         let always = self.is_sub(sty, class_ty);
-        self.rollback(mark);
+        self.rollback(&mark);
         let test = if always { self.prog.add_test(TypeTest::Always) } else { self.test_for(class_ty, sty, span, true) };
         let seq_ty = match self.seq_class() {
             Some(seq) => self.types.class(seq, &[elem]),
@@ -1783,7 +1783,7 @@ impl<'a> Worker<'a> {
         let pat = self.prog.add_pat(TPat::Unapply(scrut, call, inner));
         let mark = self.snapshot();
         let total = self.is_sub(sty, class_ty);
-        self.rollback(mark);
+        self.rollback(&mark);
         if total {
             self.irrefutable_pats.insert(pat, ());
         }
@@ -1872,7 +1872,7 @@ impl<'a> Worker<'a> {
         }
         let mark = self.snapshot();
         let known = self.is_sub(sty, class_ty);
-        self.rollback(mark);
+        self.rollback(&mark);
         if known {
             return pat;
         }
@@ -3042,7 +3042,7 @@ impl<'a> Worker<'a> {
         let tested = self.types.class(c, &asked);
         let mark = self.snapshot();
         let below = self.is_sub(sty, tested);
-        self.rollback(mark);
+        self.rollback(&mark);
         if below {
             return true;
         }

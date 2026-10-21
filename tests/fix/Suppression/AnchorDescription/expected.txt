@@ -1,0 +1,15 @@
+Suppression/AnchorDescription/input.scala:11:7: error: [NoDummy]: Dummy!
+    val dummy0 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorDescription/input.scala:22:7: error: [NoDummy]: Dummy!
+    val dummy2 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorDescription/input.scala:33:7: error: [NoDummy]: Dummy!
+    val dummy4 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorDescription/input.scala:44:7: error: [NoDummy]: Dummy!
+    val dummy6 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorDescription/input.scala:50:7: error: [NoDummy]: Dummy!
+    val dummy8 = 0 // assert: NoDummy
+        ^^^^^^

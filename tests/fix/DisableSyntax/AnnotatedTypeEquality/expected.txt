@@ -1,0 +1,3 @@
+DisableSyntax/AnnotatedTypeEquality/input.scala:11:24: error: [DisableSyntax.==]: == and != are unsafe since they allow comparing two unrelated types
+    val x: String @ann(1 == 2) = "x" // assert: DisableSyntax.==
+                         ^^

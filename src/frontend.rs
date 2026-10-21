@@ -322,12 +322,13 @@ pub fn parse_files(
     max_workers: usize,
     syntax: parser::Syntax,
     roots: &[(std::path::PathBuf, crate::source_version::SourceVersion)],
+    keep: &[bool],
 ) {
     let todo: Vec<usize> = todo.filter(|&i| slots[i].is_none()).collect();
     let workers = crate::workers().min(todo.len()).min(max_workers);
     if !parallel || workers < 2 {
         for &i in &todo {
-            let (asts, found) = parse_one(&files[i].text, interner, parser::Syntax { std: files[i].is_std, script: crate::script::suffix_at(&files[i].path, &files[i].text), ..syntax_of(roots, &files[i].path, syntax) });
+            let (asts, found) = parse_one(&files[i].text, interner, parser::Syntax { std: files[i].is_std, script: crate::script::suffix_at(&files[i].path, &files[i].text), keep: keep.get(i).copied().unwrap_or(false), ..syntax_of(roots, &files[i].path, syntax) });
             found.report(FileId(i as u32), files[i].is_std, diags);
             if let Some(used) = used.as_deref_mut() {
                 for ast in &asts {
@@ -352,7 +353,7 @@ pub fn parse_files(
                         loop {
                             let slot = next.fetch_add(1, Ordering::Relaxed);
                             let Some(&i) = order.get(slot) else { break };
-                            let (asts, errors) = parse_one(&files[i].text, &mut local, parser::Syntax { std: files[i].is_std, script: crate::script::suffix_at(&files[i].path, &files[i].text), ..syntax_of(roots, &files[i].path, syntax) });
+                            let (asts, errors) = parse_one(&files[i].text, &mut local, parser::Syntax { std: files[i].is_std, script: crate::script::suffix_at(&files[i].path, &files[i].text), keep: keep.get(i).copied().unwrap_or(false), ..syntax_of(roots, &files[i].path, syntax) });
                             if note {
                                 for ast in &asts {
                                     note_used_names(ast, &mut local_used, &local);
@@ -367,7 +368,7 @@ pub fn parse_files(
             handles.into_iter().map(|h| h.join().expect("parser thread panicked")).collect()
         });
         for (local, local_used, done) in results {
-            let map: Vec<Name> = (0..local.len()).map(|n| interner.intern(local.get(Name(n as u32)))).collect();
+            let map = merge_names(&local, interner);
             if let Some(used) = used.as_deref_mut() {
                 used.merge(&local_used, &map);
             }
@@ -470,6 +471,17 @@ pub fn uses_quotes(asts: &Asts, files: &[SourceFile]) -> bool {
 
 /// Moves an AST a parser thread wrote with its own interner into the build's, `map` taking each
 /// of the thread's names to the build's: every name the parser writes.
+/// The names of a parser thread's interner `local` as the build's interner `into` has them: a derived name (a
+/// placeholder's `WildcardParamName`, an evidence's `ContextBoundParamName`: `Interner::unique`, dotty's `UniqueName`
+/// whatever the build holds) made again of its kind, every other by its text.
+fn merge_names(local: &Interner, into: &Interner) -> Vec<Name> {
+    let mut map: Vec<Option<Name>> = vec![None; local.len()];
+    for (separator, num, n) in local.derived_names() {
+        map[n.0 as usize] = Some(into.unique(separator, num));
+    }
+    map.into_iter().enumerate().map(|(n, m)| m.unwrap_or_else(|| into.intern(local.get(Name(n as u32))))).collect()
+}
+
 fn remap_names(ast: &mut Ast, map: &[Name]) {
     let m = |n: &mut Name| *n = map[n.0 as usize];
     for e in &mut ast.exprs {
@@ -570,6 +582,25 @@ mod tests {
         largest_unit_bytes(&files, &asts, &blocks_of)
     }
 
+    /// A parser thread's derived names keep their kind in the build's interner whatever it held before: a placeholder's
+    /// `_$0` stays `WildcardParamName`'s (`unique_parts`), not the text a written `_$0` would intern to, so that a module
+    /// parsed alone and in a parallel whole build pickles one name (the gate of `ed4dafbea`'s app chain).
+    #[test]
+    fn merged_placeholder_stays_derived() {
+        let local = Interner::new();
+        let (mut parsed, found) = parse_one("object P:\n  val f: Int => Int = _ + 1\n", &local, parser::Syntax::default());
+        assert!(found.errors.is_empty(), "{:?}", found.errors);
+        let build = Interner::new();
+        let written = build.intern("_$0");
+        let map = merge_names(&local, &build);
+        remap_names(&mut parsed[0], &map);
+        let placeholder = build.unique("_$", 0);
+        assert_ne!(placeholder, written);
+        assert_eq!(build.unique_parts(placeholder), Some(("_$", 0)));
+        assert!(parsed[0].lambda_params.iter().any(|p| p.name == placeholder));
+        assert!(!parsed[0].lambda_params.iter().any(|p| p.name == written));
+    }
+
     #[test]
     fn the_largest_unit_runs_to_the_next_definition() {
         let a = "object A:\n  def f = 1\n";
@@ -607,7 +638,7 @@ mod tests {
         for i in 0..40 {
             build.intern(&format!("taken{}", i));
         }
-        let map: Vec<Name> = (0..local.len()).map(|n| build.intern(local.get(Name(n as u32)))).collect();
+        let map = merge_names(&local, &build);
         assert_ne!(local.lookup("outer"), build.lookup("outer"));
         let ast = &mut parsed[0];
         remap_names(ast, &map);

@@ -1,0 +1,21 @@
+Driver/LambdaBindersI13541/input.scala:6:9: warning: [Params.param]: A
+  trait F[A] // assert: Params.param
+          ^
+Driver/LambdaBindersI13541/input.scala:11:10: warning: [Params.param]: B
+  type Foo[B] = [A] =>> Bar[A, B] // assert: Params.param
+           ^
+Driver/LambdaBindersI13541/input.scala:11:16: warning: [Params.param]: A
+  type Foo[B] = [A] =>> Bar[A, B] // assert: Params.param
+                 ^
+Driver/LambdaBindersI13541/input.scala:12:11: warning: [Params.param]: A
+  trait Bar[A, B] // assert: Params.param
+            ^
+Driver/LambdaBindersI13541/input.scala:12:14: warning: [Params.param]: B
+  trait Bar[A, B] // assert: Params.param
+               ^
+Driver/LambdaBindersI13541/input.scala:14:15: warning: [Params.param]: A: F
+  given fooUnit[A: F]: Foo[Unit][A] = ??? // assert: Params.param
+                ^^^^
+Driver/LambdaBindersI13541/input.scala:17:7: warning: [Params.param]: A: F
+  def f[A: F](using Foo[Unit][A]): Nothing = ??? // assert: Params.param
+        ^^^^

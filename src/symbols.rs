@@ -619,6 +619,9 @@ pub struct Symbols {
     /// parameter written with the same name is not one. Few symbols are one, and the symbols'
     /// records are read by every lookup.
     pub context_bounds: crate::arena::Layered<SymId, ()>,
+    /// The annotations installed on a binder of a type lambda, a polymorphic function type or literal (dotty's
+    /// `Namer.addAnnotations`' `sym.addAnnotation`), with their file: few binders have one.
+    pub binder_annots: crate::arena::Layered<TParamId, (crate::source::FileId, Vec<crate::ast::Annot>)>,
     /// Per file its place in the canonical order: a program file's id, and for the pseudo files
     /// of library bodies, which are made in the order they are demanded, the order of their
     /// keys (`Worker::rank_files`). Empty until the typer is done: what orders the output by file
@@ -837,6 +840,7 @@ impl Symbols {
             dispatch_names: Default::default(),
             js_export_names: Default::default(),
             context_bounds: Default::default(),
+            binder_annots: Default::default(),
             file_ranks: Vec::new(),
             product_places: Default::default(),
             product_sources: Vec::new(),
@@ -884,6 +888,7 @@ impl Symbols {
             dispatch_names: self.dispatch_names.attach(),
             js_export_names: self.js_export_names.attach(),
             context_bounds: self.context_bounds.attach(),
+            binder_annots: self.binder_annots.attach(),
             file_ranks: Vec::new(),
             product_places: Default::default(),
             product_sources: Vec::new(),

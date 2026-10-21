@@ -1,0 +1,30 @@
+DisableSyntax/DisableSyntaxBase/input.scala:36:3: error: [DisableSyntax.null]: null should be avoided, consider using Option instead
+    null /* assert: DisableSyntax.null
+    ^^^^
+DisableSyntax/DisableSyntaxBase/input.scala:41:3: error: [DisableSyntax.var]: mutable state should be avoided
+    var a = 1 // assert: DisableSyntax.var
+    ^^^
+DisableSyntax/DisableSyntaxBase/input.scala:43:19: error: [DisableSyntax.return]: return should be avoided, consider using if/else instead
+    def foo: Unit = return // assert: DisableSyntax.return
+                    ^^^^^^
+DisableSyntax/DisableSyntaxBase/input.scala:45:3: error: [DisableSyntax.throw]: exceptions should be avoided, consider encoding the error in the return type instead
+    throw new Exception("ok") // assert: DisableSyntax.throw
+    ^^^^^
+DisableSyntax/DisableSyntaxBase/input.scala:47:14: error: [DisableSyntax.noSemicolons]: semicolons are disabled
+    "semicolon"; /* assert: DisableSyntax.noSemicolons
+               ^
+DisableSyntax/DisableSyntaxBase/input.scala:51:24: error: [DisableSyntax.offensive]: Please consider a less offensive word such as Extension
+    implicit class StringPimp(value: String) { // assert: DisableSyntax.offensive
+                         ^^^^
+DisableSyntax/DisableSyntaxBase/input.scala:55:3: error: [DisableSyntax.magicNumbers]: Numbers (5 in this instance) should always have a named parameter attached, or be assigned to a val.
+    5 /* assert: DisableSyntax.magicNumbers
+    ^
+DisableSyntax/DisableSyntaxBase/input.scala:63:3: error: [DisableSyntax.Await\.result]: Await\.result is disabled
+    Await.result(Future(fortyTwo), someDays) // assert: DisableSyntax.Await\.result
+    ^^^^^^^^^^^^
+DisableSyntax/DisableSyntaxBase/input.scala:67:7: error: [DisableSyntax.noFinalize]: finalize should not be used
+    def finalize(): Unit = println("exit") // assert: DisableSyntax.noFinalize
+        ^^^^^^^^
+DisableSyntax/DisableSyntaxBase/input.scala:71:3: error: [DisableSyntax.while]: while loops should be avoided, consider using recursion instead
+    while (true) () /* assert: DisableSyntax.while
+    ^^^^^

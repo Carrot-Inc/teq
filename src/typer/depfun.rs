@@ -97,12 +97,17 @@ impl<'a> Worker<'a> {
         self.push_scope();
         let mut sig_params = Vec::with_capacity(names.len());
         for (&name, &p) in names.iter().zip(&param_tys) {
+            // `typedDependent`'s `apply` over the parameters: each one's `valOrDefDefSig` (`checkSimpleKinded`, through a
+            // by-name's `ExprType`), a clause in completion reading its information, a diagnostic at the parameter.
             let ty = match self.cur_ast().ty(p) {
                 TyExpr::ByName(inner) => {
                     let t = self.resolve_type(inner);
-                    self.by_name_type(t)
+                    if !self.binder_completing.is_empty() && self.simple_kinded_at(t, self.fun_param_span(p), self.cur_ast().ty_spans[inner.idx()]) { ERROR } else { self.by_name_type(t) }
                 }
-                _ => self.resolve_type(p),
+                _ => {
+                    let t = self.resolve_type(p);
+                    if !self.binder_completing.is_empty() && self.simple_kinded_at(t, self.fun_param_span(p), self.cur_ast().ty_spans[p.idx()]) { ERROR } else { t }
+                }
             };
             let pspan = self.cur_ast().ty_spans[p.idx()];
             let sym = self.syms.new_sym(name, SymKind::Param, 0, Owner::Local, file, None, pspan);
@@ -117,6 +122,8 @@ impl<'a> Worker<'a> {
             sig_params.push(ParamSig { name, ty, by_name: false, repeated: false, has_default: false, sym });
         }
         let r = self.resolve_type(ret);
+        // The `apply`'s result through its own `valOrDefDefSig`, a diagnostic at the `apply`, the function type's tree.
+        let r = if !self.binder_completing.is_empty() && self.simple_kinded_at(r, span, self.cur_ast().ty_spans[ret.idx()]) { ERROR } else { r };
         self.env.frames.pop();
         if sig_params.iter().any(|p| p.ty == ERROR) || r == ERROR {
             return ERROR;
@@ -154,6 +161,17 @@ impl<'a> Worker<'a> {
             return ERROR;
         }
         self.named_fun_type(ctx, sig_params, r, span)
+    }
+
+    /// A named function type's parameter of the type expression `p`: from its name to its type
+    /// (`SyntaxNotes::fun_param_starts`), the type's own span where the parser recorded none.
+    fn fun_param_span(&self, p: TyExprId) -> Span {
+        let ast = self.cur_ast();
+        let ty = ast.ty_spans[p.idx()];
+        match ast.notes.fun_param_starts.binary_search_by_key(&p, |&(t, _)| t) {
+            Ok(k) => Span::new(ast.notes.fun_param_starts[k].1, ty.end),
+            Err(_) => ty,
+        }
     }
 
     /// A member selected through the path of `param` in `t`, `f.A` for `f`.

@@ -1,0 +1,6 @@
+DisableSyntax/DisableSyntaxInstanceOf/input.scala:9:5: error: [DisableSyntax.isInstanceOf]: isInstanceOf checks are disabled, use pattern matching instead
+    1.isInstanceOf[Int] // assert: DisableSyntax.isInstanceOf
+      ^^^^^^^^^^^^
+DisableSyntax/DisableSyntaxInstanceOf/input.scala:10:6: error: [DisableSyntax.asInstanceOf]: asInstanceOf casts are disabled, use pattern matching instead
+    "".asInstanceOf[Int] // assert: DisableSyntax.asInstanceOf
+       ^^^^^^^^^^^^

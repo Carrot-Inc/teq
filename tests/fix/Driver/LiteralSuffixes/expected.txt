@@ -1,0 +1,12 @@
+Driver/LiteralSuffixes/input.scala:7:3: warning: [Suffixes.val]: val long = 2L
+    val long = 2L // assert: Suffixes.val
+    ^^^^^^^^^^^^^
+Driver/LiteralSuffixes/input.scala:8:3: warning: [Suffixes.val]: val float = 2.5f
+    val float = 2.5f // assert: Suffixes.val
+    ^^^^^^^^^^^^^^^^
+Driver/LiteralSuffixes/input.scala:9:3: warning: [Suffixes.val]: val double = 3.0d
+    val double = 3.0d // assert: Suffixes.val
+    ^^^^^^^^^^^^^^^^^
+Driver/LiteralSuffixes/input.scala:10:3: warning: [Suffixes.val]: val upper = 0x10L
+    val upper = 0x10L /* assert: Suffixes.val
+    ^^^^^^^^^^^^^^^^^

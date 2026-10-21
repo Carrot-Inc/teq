@@ -1,0 +1,3 @@
+Suppression/AtomicRemovalOutside/input.scala:4:17: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+  /* scalafix:off RemoveNamesAtomic */ // assert: UnusedScalafixSuppression
+                  ^^^^^^^^^^^^^^^^^

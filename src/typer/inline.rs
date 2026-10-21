@@ -850,6 +850,16 @@ impl<'a> Worker<'a> {
         expanded
     }
 
+    /// An outermost expansion's call site, for the index's `expanded` (`teq fix`'s NoUnusedImports): out of
+    /// `expand_inline_call`'s line, which a compile with no index runs without it.
+    #[cold]
+    #[inline(never)]
+    fn note_expanded(&mut self, file: FileId) {
+        if let Some(index) = self.index.as_mut() {
+            index.expanded.push(file);
+        }
+    }
+
     fn expand_inline_call(
         &mut self,
         call: &MethodCall,
@@ -989,6 +999,9 @@ impl<'a> Worker<'a> {
         self.inline.depth += 1;
         if self.inline.sites.is_empty() {
             self.quote.begin_site(site.file, site.span.start);
+            if self.index.is_some() {
+                self.note_expanded(site.file);
+            }
         }
         self.inline.sites.push(site);
         // The body stands in its definition's scope, where the type variables of the patterns
@@ -2141,7 +2154,7 @@ impl<'a> Worker<'a> {
                 self.is_sub(declared, part)
             }
         });
-        self.rollback(mark);
+        self.rollback(&mark);
         holds && singleton
     }
 
@@ -3538,7 +3551,7 @@ impl<'a> Worker<'a> {
                     (TExpr::Module(_), _) => {
                         let mark = self.snapshot();
                         let ok = self.is_sub(s.ty, pty);
-                        self.rollback(mark);
+                        self.rollback(&mark);
                         ok
                     }
                     _ => match (self.fold_constant(te), s.constant) {
@@ -3568,7 +3581,7 @@ impl<'a> Worker<'a> {
                 let mark = self.snapshot();
                 let conforms = self.is_sub(s.ty, class_ty);
                 if !conforms {
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     return false;
                 }
                 let class_ty = self.zonk(class_ty);
@@ -3683,7 +3696,7 @@ impl<'a> Worker<'a> {
     pub(super) fn narrowed_to(&mut self, sty: TypeId, pt: TypeId) -> TypeId {
         let mark = self.snapshot();
         let precise = self.is_sub(sty, pt);
-        self.rollback(mark);
+        self.rollback(&mark);
         if precise { sty } else { pt }
     }
 
@@ -3755,7 +3768,7 @@ impl<'a> Worker<'a> {
                     }
                     Some(self.zonk(pt))
                 } else {
-                    self.rollback(snapshot);
+                    self.rollback(&snapshot);
                     None
                 };
                 self.inline.pat_vars.truncate(mark);
@@ -4724,6 +4737,8 @@ impl<'a> Worker<'a> {
     fn shown_literal(&mut self, v: LitVal, e: TExprId) -> String {
         match v {
             LitVal::Int(i) => i.to_string(),
+            LitVal::Byte(b) => b.to_string(),
+            LitVal::Short(h) => h.to_string(),
             LitVal::Long(l) => format!("{}L", l),
             LitVal::Double(bits) => {
                 let d = f64::from_bits(bits);
@@ -4745,6 +4760,13 @@ impl<'a> Worker<'a> {
             LitVal::Char(c) => format!("'{}'", char::from_u32(c as u32).unwrap_or('?')),
             LitVal::Bool(b) => b.to_string(),
             LitVal::Str(s) => format!("\"{}\"", self.name_ref(s).escape_default()),
+            LitVal::Class(class) => {
+                let t = match self.types.get(class) {
+                    Type::Class(_, args) => self.types.items(args).first().copied().unwrap_or(ANY),
+                    _ => ANY,
+                };
+                format!("classOf[{}]", self.show(t))
+            }
         }
     }
 
@@ -4896,7 +4918,7 @@ impl<'a> Worker<'a> {
             if self.is_sub(x, y) {
                 return Some(elems);
             }
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         None
     }
@@ -4923,6 +4945,10 @@ pub(super) enum TypeOpResult {
 
 pub(super) fn eval_type_op(module: &str, op: &str, args: &[LitVal], text: impl Fn(Name) -> String) -> Option<TypeOpResult> {
     use LitVal::*;
+    // No operation of `scala.compiletime.ops` takes a class constant.
+    if args.iter().any(|a| matches!(a, Class(_))) {
+        return None;
+    }
     let int = |v: &LitVal| match v {
         Int(i) => Some(*i),
         _ => None,
@@ -4933,6 +4959,8 @@ pub(super) fn eval_type_op(module: &str, op: &str, args: &[LitVal], text: impl F
     };
     let render = |v: &LitVal| match v {
         Int(i) => i.to_string(),
+        Byte(b) => b.to_string(),
+        Short(h) => h.to_string(),
         Long(l) => l.to_string(),
         // The JVM's `toString`, as `TypeEval` applies it (`1.0`, `3.4028235E38`).
         Double(d) => crate::types::java_double_string(f64::from_bits(*d)),
@@ -4940,6 +4968,7 @@ pub(super) fn eval_type_op(module: &str, op: &str, args: &[LitVal], text: impl F
         Bool(b) => b.to_string(),
         Char(c) => char::from_u32(*c as u32).map_or(String::new(), |c| c.to_string()),
         Str(s) => text(*s),
+        Class(_) => String::new(),
     };
     let lit = |v: LitVal| Some(TypeOpResult::Lit(v));
     match (module, op, args) {

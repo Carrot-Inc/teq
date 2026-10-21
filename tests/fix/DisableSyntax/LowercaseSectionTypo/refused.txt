@@ -1,0 +1,1 @@
+DisableSyntax_LowercaseSectionTypo.conf:3:23: disableSyntax.noVar: no such setting

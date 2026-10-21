@@ -8,28 +8,28 @@ trait ConstantAnnotation extends StaticAnnotation
 // Accepted and ignored; they exist so that imports of them resolve. Their constructors,
 // parameter names, defaults and meta annotations are scala-library's, which the products'
 // pickles name.
-final class tailrec
+final class tailrec extends StaticAnnotation
 @setter @getter
-class unused(message: String):
+class unused(message: String) extends StaticAnnotation:
   def this() = this("")
-class nowarn(value: String = "")
-final class targetName(name: String)
-final class implicitNotFound(msg: String)
+class nowarn(value: String = "") extends ConstantAnnotation
+final class targetName(name: String) extends StaticAnnotation
+final class implicitNotFound(msg: String) extends ConstantAnnotation
 @getter
-final class implicitAmbiguous(msg: String)
+final class implicitAmbiguous(msg: String) extends ConstantAnnotation
 @setter @param @beanSetter @beanGetter @getter @field
-final class static
-final class experimental(message: String):
+final class static extends StaticAnnotation
+final class experimental(message: String) extends StaticAnnotation:
   def this() = this("")
-final class publicInBinary
-final class switch
-final class threadUnsafe
-final class varargs
+final class publicInBinary extends StaticAnnotation
+final class switch extends StaticAnnotation
+final class threadUnsafe extends StaticAnnotation
+final class varargs extends StaticAnnotation
 @companionMethod @companionClass @beanSetter @beanGetter @setter @getter
-final class compileTimeOnly(message: String)
-final class unroll
+final class compileTimeOnly(message: String) extends StaticAnnotation
+final class unroll extends StaticAnnotation
 @field @param
-class constructorOnly
+class constructorOnly extends StaticAnnotation
 
 // The annotation of `Predef.runtimeChecked`'s result, which a pattern's checks read on the
 // scrutinee's type.
@@ -37,19 +37,19 @@ package internal:
   final class RuntimeChecked() extends Annotation
 
 package unchecked:
-  final class uncheckedVariance
+  final class uncheckedVariance extends StaticAnnotation
   @field @getter
-  final class uncheckedStable
-  final class uncheckedCaptures
+  final class uncheckedStable extends StaticAnnotation
+  final class uncheckedCaptures extends StaticAnnotation
 
 package meta:
-  final class field
-  final class getter
-  final class setter
-  final class param
-  final class beanGetter
-  final class beanSetter
-  final class companionClass
-  final class companionMethod
-  final class companionObject
-  final class languageFeature(feature: String, enableRequired: Boolean)
+  final class field extends StaticAnnotation
+  final class getter extends StaticAnnotation
+  final class setter extends StaticAnnotation
+  final class param extends StaticAnnotation
+  final class beanGetter extends StaticAnnotation
+  final class beanSetter extends StaticAnnotation
+  final class companionClass extends StaticAnnotation
+  final class companionMethod extends StaticAnnotation
+  final class companionObject extends StaticAnnotation
+  final class languageFeature(feature: String, enableRequired: Boolean) extends StaticAnnotation

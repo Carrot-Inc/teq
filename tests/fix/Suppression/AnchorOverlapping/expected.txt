@@ -1,0 +1,87 @@
+Suppression/AnchorOverlapping/input.scala:12:7: error: [NoDummy]: Dummy!
+    val dummy0 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorOverlapping/input.scala:13:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:22:5: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+      /* scalafix:off */ // assert: UnusedScalafixSuppression
+      ^^^^^^^^^^^^^^^^^^
+Suppression/AnchorOverlapping/input.scala:30:7: error: [NoDummy]: Dummy!
+    val dummy1 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorOverlapping/input.scala:31:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:38:5: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    } /* scalafix:ok */ // assert: UnusedScalafixSuppression
+      ^^^^^^^^^^^^^^^^^
+Suppression/AnchorOverlapping/input.scala:43:7: error: [NoDummy]: Dummy!
+    val dummy2 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorOverlapping/input.scala:44:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:58:5: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    } /* scalafix:ok */ // assert: UnusedScalafixSuppression
+      ^^^^^^^^^^^^^^^^^
+Suppression/AnchorOverlapping/input.scala:62:7: error: [NoDummy]: Dummy!
+    val dummy3 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorOverlapping/input.scala:63:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:67:5: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+      /* scalafix:off */ // assert: UnusedScalafixSuppression
+      ^^^^^^^^^^^^^^^^^^
+Suppression/AnchorOverlapping/input.scala:75:7: error: [NoDummy]: Dummy!
+    val dummy4 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorOverlapping/input.scala:76:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:93:7: error: [NoDummy]: Dummy!
+    val dummy5 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorOverlapping/input.scala:94:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:107:7: error: [NoDummy]: Dummy!
+    val dummy6 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorOverlapping/input.scala:108:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:118:5: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+      /* scalafix:on */ // assert: UnusedScalafixSuppression
+      ^^^^^^^^^^^^^^^^^
+Suppression/AnchorOverlapping/input.scala:125:7: error: [NoDummy]: Dummy!
+    val dummy7 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorOverlapping/input.scala:126:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:144:7: error: [NoDummy]: Dummy!
+    val dummy8 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorOverlapping/input.scala:145:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:157:7: error: [NoDummy]: Dummy!
+    val dummy9 = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorOverlapping/input.scala:158:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:170:7: error: [NoDummy]: Dummy!
+    val dummy10 = 0 // assert: NoDummy
+        ^^^^^^^
+Suppression/AnchorOverlapping/input.scala:171:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorOverlapping/input.scala:183:7: error: [NoDummy]: Dummy!
+    val dummy11 = 0 // assert: NoDummy
+        ^^^^^^^
+Suppression/AnchorOverlapping/input.scala:184:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^

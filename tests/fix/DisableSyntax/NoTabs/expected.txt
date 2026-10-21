@@ -1,0 +1,3 @@
+DisableSyntax/NoTabs/input.scala:8:1: error: [DisableSyntax.noTabs]: tabs are disabled
+  	             /* assert: DisableSyntax.noTabs
+  ^

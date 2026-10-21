@@ -1116,6 +1116,8 @@ impl<'a> Parser<'a> {
                 self.bump();
                 lhs = self.ast.add_expr(Expr::Select(lhs, t.name), start.to(t.span));
                 self.note_name(lhs, t.span);
+                // dotty's `PostfixOp(od, Ident(op))`, whose operator is an identifier (`existsSubTree`).
+                self.ast.notes.postfix_ops.push(lhs);
                 return lhs;
             }
             let (prec, right) = op_precedence(self.interner.get(t.name));
@@ -1404,16 +1406,23 @@ impl<'a> Parser<'a> {
             }
             Tok::LParen => self.parse_parens(),
             Tok::LBracket if self.bracket_followed_by(Tok::Arrow) => {
-                let (params, bounds) = self.parse_type_params_of_lambda();
+                let (params, bounds, ctx, annotated) = self.parse_type_params_of_lambda();
                 self.expect(Tok::Arrow);
                 let lambda = self.parse_expr();
                 if !matches!(self.ast.expr(lambda), Expr::Lambda(..)) {
                     self.error_at(start, "a polymorphic function literal takes a function literal after `=>`");
+                } else if !ctx.is_empty() {
+                    self.poly_lambda_evidence(&params, &ctx, lambda);
                 }
                 let l = push_list(&mut self.ast.name_lists, &params);
                 let id = self.ast.add_expr(Expr::PolyLambda(l, lambda), start.to(self.prev_span()));
                 if let Some(bl) = self.lambda_bounds_list(&bounds) {
                     self.ast.poly_lambda_bounds.push((id, bl));
+                }
+                if !annotated.is_empty() {
+                    self.record_binder_annots(BinderClause::PolyLiteral(id), annotated);
+                } else {
+                    self.record_binder_names(BinderClause::PolyLiteral(id), annotated, &bounds);
                 }
                 id
             }

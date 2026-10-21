@@ -212,6 +212,7 @@ dotty's typer leaves (`Inlined` nodes among them), which teq does not make (`ben
 |---|---|
 | `docs/COMPATIBILITY.md` | Scala compatibility: what is not there yet, and where behaviour differs on purpose |
 | `docs/CLI.md` | the command line: every command and flag |
+| `docs/FIX.md` | `teq fix`: lint and rewrite rules in Scala, their configuration, the rules teq ships |
 | `docs/TARGETS.md` | the three targets and their output: JavaScript, JVM class files, the interpreter; watch mode, Windows |
 | `docs/TOOLING.md` | the sbt plugin, the lockfile and the launchers, the export of a Mill build, `teq`, the vite plugin, the language server and Zed |
 | `docs/LIBRARIES.md` | libraries from their jars, the two standard libraries, Java classes |

@@ -78,6 +78,8 @@ pub struct Interner {
     index: Table,
     chunk: UnsafeCell<String>,
     full_chunks: UnsafeCell<Vec<String>>,
+    /// The derived names made (`unique`), by separator and number: the writer's, under the lock.
+    unique: UnsafeCell<Vec<(&'static str, u32, Name)>>,
 }
 
 unsafe impl Sync for Interner {}
@@ -92,6 +94,7 @@ impl Interner {
             index: Table::with_capacity(4096),
             chunk: UnsafeCell::new(String::with_capacity(CHUNK_SIZE)),
             full_chunks: UnsafeCell::new(Vec::new()),
+            unique: UnsafeCell::new(Vec::new()),
         };
         crate::names::prefill(&mut i);
         i
@@ -115,6 +118,41 @@ impl Interner {
         self.index.find(h, #[inline(always)] |i| self.strs.get(i as usize).text == s).map(Name)
     }
 
+    /// A derived name of a `UniqueNameKind` (dotty's `NameKinds`, `ContextBoundParamName`'s `evidence$` and its
+    /// number): its text the separator and the number, which it is shown as, and its identity none of a written
+    /// identifier's, the index holding it not (`intern("evidence$1")` gives another name); one per separator and
+    /// number, as dotty's derived names are.
+    #[cold]
+    #[inline(never)]
+    pub fn unique(&self, separator: &'static str, num: u32) -> Name {
+        let _held = self.serial.hold();
+        // SAFETY: the writer's list, read and appended under the lock (or by the thread that owns the interner).
+        let made = unsafe { &mut *self.unique.get() };
+        if let Some(&(_, _, n)) = made.iter().find(|&&(s, k, _)| s == separator && k == num) {
+            return n;
+        }
+        let n = Name(self.add_slot(&format!("{}{}", separator, num)));
+        made.push((separator, num, n));
+        n
+    }
+
+    /// Every derived name (`unique`) with its separator and number: what a merge of this interner's names into another
+    /// makes again there by its kind, never by its text.
+    pub fn derived_names(&self) -> Vec<(&'static str, u32, Name)> {
+        let _held = self.serial.hold();
+        // SAFETY: read under the lock, as `unique` writes it.
+        unsafe { (*self.unique.get()).clone() }
+    }
+
+    /// The separator and the number of the derived name `n` (`unique`), none for a written one.
+    #[cold]
+    #[inline(never)]
+    pub fn unique_parts(&self, n: Name) -> Option<(&'static str, u32)> {
+        let _held = self.serial.hold();
+        // SAFETY: read under the lock, as `unique` writes it.
+        unsafe { (*self.unique.get()).iter().find(|&&(_, _, m)| m == n).map(|&(s, k, _)| (s, k)) }
+    }
+
     pub fn intern(&self, s: &str) -> Name {
         let h = hash_of(s);
         if let Some(n) = self.find(h, s) {
@@ -126,6 +164,15 @@ impl Interner {
                 return n;
             }
         }
+        let n = self.add_slot(s);
+        self.index.insert(h, n);
+        Name(n)
+    }
+
+    /// A new name's slot of the text `s`, unindexed: `intern`'s and `unique`'s one append, the writer's, under the lock
+    /// (the slots' one push site, which keeps their growth inside it).
+    #[inline(never)]
+    fn add_slot(&self, s: &str) -> u32 {
         // The writer's, under the lock: the chunks are appended and never reallocated
         // (the capacity is checked), and live as long as the interner.
         let stored: &'static str = unsafe {
@@ -139,9 +186,7 @@ impl Interner {
             chunk.push_str(s);
             &*(&chunk[start..] as *const str)
         };
-        let n = self.strs.push(Slot { text: stored, encoded: std::sync::atomic::AtomicU32::new(0) }) as u32;
-        self.index.insert(h, n);
-        Name(n)
+        self.strs.push(Slot { text: stored, encoded: std::sync::atomic::AtomicU32::new(0) }) as u32
     }
 
     /// The encoded form of `n` (`NameTransformer.encode`, dotty's `SimpleName.mangle`), `n` itself where encoding

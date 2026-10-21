@@ -1,0 +1,3 @@
+DisableSyntax/RegexQuotedSpaces/input.scala:9:13: error: [DisableSyntax.spaced]:  v[a]r  is disabled
+    val t = "a var b" // assert: DisableSyntax.spaced
+              ^^^^^

@@ -1,0 +1,12 @@
+Driver/PolyContextBounds/input.scala:9:11: warning: [Params.param]: X
+  trait Ord[X] // assert: Params.param
+            ^
+Driver/PolyContextBounds/input.scala:10:11: warning: [Params.param]: _
+  type W = [_] =>> Int // assert: Params.param
+            ^
+Driver/PolyContextBounds/input.scala:11:13: warning: [Params.param]: X: Ord
+  val less = [X: Ord] => (x: X, y: X) => summon[Ord[X]] != null // assert: Params.param
+              ^^^^^^
+Driver/PolyContextBounds/input.scala:12:14: warning: [Params.param]: Y: Ord as ord
+  type Less = [Y: Ord as ord] => (Y, Y) => Boolean // assert: Params.param
+               ^^^^^^^^^^^^^

@@ -385,12 +385,17 @@ impl Value {
     pub fn from_lit(v: LitVal, interner: &crate::intern::Interner) -> Value {
         match v {
             LitVal::Int(i) => Value::Int(i),
+            LitVal::Byte(b) => Value::Byte(b),
+            LitVal::Short(h) => Value::Short(h),
             LitVal::Long(l) => Value::Long(l),
             LitVal::Double(d) => Value::Double(f64::from_bits(d)),
             LitVal::Float(f) => Value::Float(f32::from_bits(f)),
             LitVal::Char(c) => Value::Char(c),
             LitVal::Bool(b) => Value::Bool(b),
             LitVal::Str(n) => Value::str(interner.get(n)),
+            // A class constant reaches the interpreter as its `classOf` tree (`Worker::literal_expr`), never as a
+            // literal of its own.
+            LitVal::Class(_) => Value::Unit,
         }
     }
 

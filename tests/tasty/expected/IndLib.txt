@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/IndLib.tasty (TASTy 28.8, 591 bytes)
+package fix.indirect
+@SourceFile opaque object IndLib extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  opaque type IndO[G <: IndP#F] = Any
+}

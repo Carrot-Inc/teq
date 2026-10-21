@@ -442,7 +442,7 @@ impl<'a> Worker<'a> {
         for t in [expected, found] {
             let mark = self.snapshot();
             self.normalize(t);
-            self.rollback(mark);
+            self.rollback(&mark);
             if self.matches.trace.is_some() {
                 break;
             }
@@ -500,7 +500,7 @@ impl<'a> Worker<'a> {
             // A scrutinee that matches a pattern it is also disjoint from has no values
             // (`(Nothing, String)`), and reducing past it would be unsound.
             if self.provably_disjoint(scrut, boundary) {
-                self.rollback(mark);
+                self.rollback(&mark);
                 return CaseResult::Empty;
             }
             let abstract_scrut = self.is_abstract_scrutinee(scrut);
@@ -515,13 +515,13 @@ impl<'a> Worker<'a> {
             // The instances are read before the variables they were solved from are undone.
             let insts: Subst = insts.into_iter().map(|(b, t)| (b, self.zonk(t))).collect();
             let fails: Vec<(Name, TypeId, TypeId)> = fails.into_iter().map(|(n, lo, hi)| (n, self.zonk(lo), self.zonk(hi))).collect();
-            self.rollback(mark);
+            self.rollback(&mark);
             if !fails.is_empty() {
                 return CaseResult::NoInstance(fails);
             }
             return CaseResult::Reduced(self.types.subst(case.body, &insts));
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         if self.provably_disjoint(scrut, boundary) {
             CaseResult::Disjoint
         } else {

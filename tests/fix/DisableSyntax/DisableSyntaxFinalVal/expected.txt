@@ -1,0 +1,9 @@
+DisableSyntax/DisableSyntaxFinalVal/input.scala:8:3: error: [DisableSyntax.noFinalVal]: Final vals cause problems with incremental compilation
+    final implicit val a: Int = 1 // assert: DisableSyntax.noFinalVal
+    ^^^^^
+DisableSyntax/DisableSyntaxFinalVal/input.scala:9:12: error: [DisableSyntax.noFinalVal]: Final vals cause problems with incremental compilation
+    implicit final val b: Int = 1 // assert: DisableSyntax.noFinalVal
+             ^^^^^
+DisableSyntax/DisableSyntaxFinalVal/input.scala:10:3: error: [DisableSyntax.noFinalVal]: Final vals cause problems with incremental compilation
+    final val c = 1 // assert: DisableSyntax.noFinalVal
+    ^^^^^

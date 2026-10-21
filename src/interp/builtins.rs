@@ -539,6 +539,9 @@ pub fn table() -> Rc<Table> {
                 install_typer_templates(&mut table);
                 install_reflective(&mut table);
                 super::quoted::install(&mut table);
+                if super::fix::wanted() {
+                    super::fix::install(&mut table);
+                }
                 super::files::install(&mut table);
                 super::process::install(&mut table);
                 super::threads::install(&mut table);

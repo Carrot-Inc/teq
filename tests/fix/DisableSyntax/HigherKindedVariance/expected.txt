@@ -1,0 +1,9 @@
+DisableSyntax/HigherKindedVariance/input.scala:10:16: error: [DisableSyntax.covariant]: Covariant types could lead to error-prone situations
+  trait Higher[F[+A]] // assert: DisableSyntax.covariant
+                 ^
+DisableSyntax/HigherKindedVariance/input.scala:11:16: error: [DisableSyntax.contravariant]: Contravariant types could lead to error-prone situations
+  trait Contra[G[-B], H[_]] // assert: DisableSyntax.contravariant
+                 ^
+DisableSyntax/HigherKindedVariance/input.scala:12:18: error: [DisableSyntax.covariant]: Covariant types could lead to error-prone situations
+  trait Nested[K[L[+C]]] // assert: DisableSyntax.covariant
+                   ^

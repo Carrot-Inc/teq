@@ -1,0 +1,141 @@
+Suppression/AnnotationScopes/input.scala:13:8: error: [NoDummy]: Dummy!
+    type DummyType_0 = Any // assert: NoDummy
+         ^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:15:9: error: [NoDummy]: Dummy!
+    trait DummyTrait_0 { // assert: NoDummy
+          ^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:16:9: error: [NoDummy]: Dummy!
+      def aDummy: Unit // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:17:9: error: [NoDummy]: Dummy!
+      val bDummy: Int // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:18:9: error: [NoDummy]: Dummy!
+      var cDummy: Int // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:19:10: error: [NoDummy]: Dummy!
+      type Dummy // assert: NoDummy
+           ^^^^^
+Suppression/AnnotationScopes/input.scala:22:10: error: [NoDummy]: Dummy!
+    object DummyObject_0 { // assert: NoDummy
+           ^^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:23:9: error: [NoDummy]: Dummy!
+      def aDummy = () // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:26:15: error: [NoDummy]: Dummy!
+    class Foo_0[DummyTypeParam] // assert: NoDummy
+                ^^^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:28:9: error: [NoDummy]: Dummy!
+    class DummyClass_0( // assert: NoDummy
+          ^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:29:22: error: [NoDummy]: Dummy!
+                   val aDummy: Int, // assert: NoDummy
+                       ^^^^^^
+Suppression/AnnotationScopes/input.scala:30:22: error: [NoDummy]: Dummy!
+                   val bDummy: Int) { // assert: NoDummy
+                       ^^^^^^
+Suppression/AnnotationScopes/input.scala:32:9: error: [NoDummy]: Dummy!
+      val cDummy = 0 // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:33:9: error: [NoDummy]: Dummy!
+      var dDummy = 0 // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:35:14: error: [NoDummy]: Dummy!
+      def this(eDummy: String, // assert: NoDummy
+               ^^^^^^
+Suppression/AnnotationScopes/input.scala:36:14: error: [NoDummy]: Dummy!
+               fDummy: String) = { // assert: NoDummy
+               ^^^^^^
+Suppression/AnnotationScopes/input.scala:37:12: error: [NoDummy]: Dummy!
+        this(eDummy.toInt, fDummy.toInt) // assert: NoDummy
+             ^^^^^^
+Suppression/AnnotationScopes/input.scala:37:26: error: [NoDummy]: Dummy!
+        this(eDummy.toInt, fDummy.toInt) // assert: NoDummy
+                           ^^^^^^
+Suppression/AnnotationScopes/input.scala:40:9: error: [NoDummy]: Dummy!
+      def gDummy( // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:41:15: error: [NoDummy]: Dummy!
+                hDummy: Int, // assert: NoDummy
+                ^^^^^^
+Suppression/AnnotationScopes/input.scala:42:15: error: [NoDummy]: Dummy!
+                iDummy: Int): Unit = { // assert: NoDummy
+                ^^^^^^
+Suppression/AnnotationScopes/input.scala:43:11: error: [NoDummy]: Dummy!
+        val jDummy = 0 // assert: NoDummy
+            ^^^^^^
+Suppression/AnnotationScopes/input.scala:44:11: error: [NoDummy]: Dummy!
+        var hDummy = 0 // assert: NoDummy
+            ^^^^^^
+Suppression/AnnotationScopes/input.scala:57:9: error: [NoDummy]: Dummy!
+    trait DummyTrait_2 { // assert: NoDummy
+          ^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:84:9: error: [NoDummy]: Dummy!
+    class DummyClass_3( // assert: NoDummy
+          ^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:86:22: error: [NoDummy]: Dummy!
+                   val bDummy: Int) { // assert: NoDummy
+                       ^^^^^^
+Suppression/AnnotationScopes/input.scala:87:9: error: [NoDummy]: Dummy!
+      val cDummy = 0 // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:91:9: error: [NoDummy]: Dummy!
+    class DummyClass_4 { // assert: NoDummy
+          ^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:94:9: error: [NoDummy]: Dummy!
+      var dDummy = 0 // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:98:9: error: [NoDummy]: Dummy!
+    class DummyClass_5 { // assert: NoDummy
+          ^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:107:9: error: [NoDummy]: Dummy!
+    class DummyClass_6 { // assert: NoDummy
+          ^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:110:14: error: [NoDummy]: Dummy!
+               fDummy: String) = { // assert: NoDummy
+               ^^^^^^
+Suppression/AnnotationScopes/input.scala:116:9: error: [NoDummy]: Dummy!
+    class DummyClass_7 { // assert: NoDummy
+          ^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:126:9: error: [NoDummy]: Dummy!
+    class DummyClass_8 { // assert: NoDummy
+          ^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:128:9: error: [NoDummy]: Dummy!
+      def gDummy( // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:130:17: error: [NoDummy]: Dummy!
+                  iDummy: Int): Unit = { // assert: NoDummy
+                  ^^^^^^
+Suppression/AnnotationScopes/input.scala:131:11: error: [NoDummy]: Dummy!
+        val jDummy = 0 // assert: NoDummy
+            ^^^^^^
+Suppression/AnnotationScopes/input.scala:132:11: error: [NoDummy]: Dummy!
+        var hDummy = 0 // assert: NoDummy
+            ^^^^^^
+Suppression/AnnotationScopes/input.scala:137:9: error: [NoDummy]: Dummy!
+    class DummyClass_9 { // assert: NoDummy
+          ^^^^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:139:9: error: [NoDummy]: Dummy!
+      def gDummy( // assert: NoDummy
+          ^^^^^^
+Suppression/AnnotationScopes/input.scala:140:17: error: [NoDummy]: Dummy!
+                  hDummy: Int, // assert: NoDummy
+                  ^^^^^^
+Suppression/AnnotationScopes/input.scala:141:17: error: [NoDummy]: Dummy!
+                  iDummy: Int): Unit = { // assert: NoDummy
+                  ^^^^^^
+Suppression/AnnotationScopes/input.scala:160:9: error: [NoDummy]: Dummy!
+      def aDummy2 = { // assert: NoDummy
+          ^^^^^^^
+Suppression/AnnotationScopes/input.scala:169:9: error: [NoDummy]: Dummy!
+      def aDummy3 = { // assert: NoDummy
+          ^^^^^^^
+Suppression/AnnotationScopes/input.scala:170:11: error: [NoDummy]: Dummy!
+        def aDummy31 = { // assert: NoDummy
+            ^^^^^^^^
+Suppression/AnnotationScopes/input.scala:173:13: error: [NoDummy]: Dummy!
+          def aDummy312 = () // assert: NoDummy
+              ^^^^^^^^^
+Suppression/AnnotationScopes/input.scala:174:13: error: [NoDummy]: Dummy!
+          def aDummy313 = () // assert: NoDummy
+              ^^^^^^^^^

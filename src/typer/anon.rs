@@ -1461,7 +1461,7 @@ impl<'a> Worker<'a> {
                 self.is_sub(lo, l) && self.is_sub(h, hi) && !(self.is_sub(l, lo) && self.is_sub(hi, h))
             }
         };
-        self.rollback(mark);
+        self.rollback(&mark);
         if !needed {
             return None;
         }
@@ -1541,16 +1541,16 @@ impl<'a> Worker<'a> {
                     break;
                 }
             }
-            self.rollback(mark);
+            self.rollback(&mark);
             if !same {
                 continue;
             }
             let mine = self.types.subst(own.ret, &rename);
             let mine = self.as_seen_from(mine, this, c);
             let their = self.types.subst(theirs.ret, &subst);
-            let mark = self.trail.len();
+            let mark = self.snapshot();
             let narrower = self.is_sub(mine, their) && !self.is_sub(their, mine);
-            self.rollback(mark);
+            self.rollback(&mark);
             return Some(narrower);
         }
         None
@@ -1816,7 +1816,7 @@ impl<'a> Worker<'a> {
                     let mark = self.snapshot();
                     // scalac takes no declared type for a by-name parameter.
                     if p.by_name || (!self.types.has_wild(expected) && expected != ERROR && declared != ERROR && !self.is_sub(expected, declared)) {
-                        self.rollback(mark);
+                        self.rollback(&mark);
                         declared_narrower = true;
                     }
                     (declared, if p.repeated { offered } else { declared })

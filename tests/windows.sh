@@ -8,7 +8,7 @@
 # on java, and one that finds it in the coursier cache under %LOCALAPPDATA%; a macro reading a file beside the file
 # it expands in, under a directory with a space and a non-ASCII character, defined in the build and loaded from a
 # library's products by a class path of two entries; a macro's `Path.resolve`, against scalac's answers on Windows;
-# `teq lsp` driven with Windows URIs (tests/wine/lsp.mjs, natively) and its idle minute; `teq compile` over a lock of
+# `teq lsp` driven with Windows URIs (tests/wine/lsp.mjs, natively) and its idle minute; `teq compile` and `teq fix` over a lock of
 # one project (the build tool); a generator of that project that the build's own binary runs (`teq interp`, the sbt
 # example's images script), the binary a copy under a directory with a space and sentinels first on the PATH; and the launcher teq.cmd run by cmd.exe with a lock pinning the binary at a local
 # URL: a cold cache fetches it with curl.exe and runs it, a warm one runs it with the server gone, a lock pinning
@@ -192,6 +192,21 @@ PY
   classes=$(find "$tdir" -name 'Core$.class' | head -1)
   if [ $status -eq 0 ] && [ -n "$classes" ]; then ok; else bad "teq compile (exit $status): $(head -5 "$work/out" "$work/err")"; fi
   task stop
+
+  # teq fix over the project (docs/CLI.md): a file named by its Windows path, drive letter and backslashes, classified
+  # as a file; its unused import removed by the new text's rename over the original; then a write that fails (the
+  # file read-only, which Windows refuses to replace) leaving it as it was, exit 2. The class path is `;`-joined.
+  printf 'package core\n\nimport scala.collection.mutable\n\nobject Core:\n  def answer: Int = 42\n' > "$tdir/core/src/core/Core.scala"
+  printf 'rules = [NoUnusedImports]\n' > "$tdir/.scalafix.conf"
+  task fix "$(win "$tdir/core/src/core/Core.scala")"
+  status=$?
+  if [ $status -eq 0 ] && ! grep -q mutable "$tdir/core/src/core/Core.scala"; then ok; else bad "teq fix of a file by its Windows path (exit $status): $(head -5 "$work/out" "$work/err")"; fi
+  printf 'package core\n\nimport scala.collection.mutable\n\nobject Core:\n  def answer: Int = 42\n' > "$tdir/core/src/core/Core.scala"
+  attrib +R "$(win "$tdir/core/src/core/Core.scala")"
+  task fix
+  status=$?
+  attrib -R "$(win "$tdir/core/src/core/Core.scala")"
+  if [ $status -eq 2 ] && grep -q mutable "$tdir/core/src/core/Core.scala" && grep -q "cannot replace\|cannot write" "$work/err"; then ok; else bad "teq fix of a read-only file (exit $status): $(head -5 "$work/out" "$work/err")"; fi
 
   # The same project with a generator, integrations/sbt/example's images script over its images, run as
   # `teq interp`: the word `teq` is the binary running, here a copy under a directory with a space, never a teq

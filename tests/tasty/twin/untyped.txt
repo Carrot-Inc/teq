@@ -4,3 +4,4 @@ cake4      teq's typer does not find `En`, a case class a base trait nests, in a
 overloads  teq's typer does not let a case class field implement a parameterless member its trait overloads
 runtime    teq's typer does not see `update` of `UnsafeAPI` implemented by the anonymous class
 shapes     teq's typer exports from objects and packages alone (`export impl.{run, const as c}` of a val)
+existentials teq writes no TASTy of a class whose parameter a later one bounds (`Bounded[L <: U, U, ..]`, chimney's order; tests/pending-cases/forward_tparam_bound.scala)

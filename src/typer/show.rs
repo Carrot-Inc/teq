@@ -255,9 +255,9 @@ impl<'a> Worker<'a> {
                     self.show_args(args, out);
                 }
             }
-            Type::Param(p) => out.push_str(self.interner.get(self.syms.tparam(p).name)),
+            Type::Param(p) => out.push_str(self.type_name_ref(self.syms.tparam(p).name)),
             Type::AppParam(p, args) => {
-                out.push_str(self.interner.get(self.syms.tparam(p).name));
+                out.push_str(self.type_name_ref(self.syms.tparam(p).name));
                 self.show_args(args, out);
             }
             Type::Ctor(c) => out.push_str(self.interner.get(self.syms.class(c).name)),
@@ -315,6 +315,8 @@ impl<'a> Worker<'a> {
             }
             Type::Lit(l) => match self.types.lit_val(l) {
                 LitVal::Int(i) => out.push_str(&i.to_string()),
+                LitVal::Byte(b) => out.push_str(&b.to_string()),
+                LitVal::Short(h) => out.push_str(&h.to_string()),
                 LitVal::Long(l) => {
                     out.push_str(&l.to_string());
                     out.push('L');
@@ -332,6 +334,16 @@ impl<'a> Worker<'a> {
                 }
                 LitVal::Bool(b) => out.push_str(if b { "true" } else { "false" }),
                 LitVal::Str(s) => out.push_str(&format!("{:?}", self.interner.get(s))),
+                // A class constant as scalac's printer writes its value, `classOf[T]`.
+                LitVal::Class(class) => {
+                    let t = match self.types.get(class) {
+                        Type::Class(_, args) => self.types.items(args).first().copied().unwrap_or(ANY),
+                        _ => ANY,
+                    };
+                    out.push_str("classOf[");
+                    self.show_into(t, out, false);
+                    out.push(']');
+                }
             },
             Type::Blocked(b) => {
                 let description = self.types.blocked_description(b);
@@ -586,7 +598,7 @@ impl<'a> Worker<'a> {
                             if i > 0 {
                                 out.push_str(", ");
                             }
-                            out.push_str(self.interner.get(self.syms.tparam(t).name));
+                            out.push_str(self.type_name_ref(self.syms.tparam(t).name));
                             let (lo, hi) = (types.next().unwrap_or(NOTHING), types.next().unwrap_or(ANY));
                             if lo != NOTHING {
                                 out.push_str(" >: ");

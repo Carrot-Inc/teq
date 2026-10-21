@@ -28,6 +28,33 @@ pub type JointInfo = Option<std::sync::Arc<MethodSig>>;
 /// instance of its owner it is a member of, and its joint information.
 pub(super) type Denot = ((SymId, TypeId), JointInfo);
 
+/// A mark of the trail (`Worker::snapshot`), its position; held by its scope, the outermost one held keeps the floor
+/// (`Worker::mark_floor`) at its position until it goes, as a `TyperState` exploring stays the variables' constraint
+/// until it is committed or dropped.
+#[must_use]
+pub struct TrailMark {
+    at: usize,
+    floor: Option<std::ptr::NonNull<std::cell::Cell<usize>>>,
+}
+
+impl TrailMark {
+    /// The trail's length at the mark.
+    #[inline]
+    pub fn at(&self) -> usize {
+        self.at
+    }
+}
+
+impl Drop for TrailMark {
+    #[inline]
+    fn drop(&mut self) {
+        if let Some(floor) = self.floor {
+            // The worker that made the mark owns the cell for as long as its marks are held (`Worker::mark_floor`).
+            unsafe { floor.as_ref() }.set(usize::MAX);
+        }
+    }
+}
+
 impl<'a> Worker<'a> {
     pub fn fresh_var(&mut self) -> TypeId {
         let index = self.tvars.len();
@@ -46,11 +73,29 @@ impl<'a> Worker<'a> {
         (self.fresh_var(), v)
     }
 
-    pub fn snapshot(&self) -> usize {
-        self.trail.len()
+    /// A mark of the trail, which `rollback` returns to while it is held: the outermost one held is the floor
+    /// (`Worker::mark_floor`) below which no rollback reopens an instance (`permanent_instance`).
+    #[inline]
+    pub fn snapshot(&self) -> TrailMark {
+        let at = self.trail.len();
+        let floor = &*self.mark_floor;
+        let outer = if floor.get() == usize::MAX {
+            floor.set(at);
+            Some(std::ptr::NonNull::from(floor))
+        } else {
+            None
+        };
+        TrailMark { at, floor: outer }
     }
 
-    pub fn rollback(&mut self, mark: usize) {
+    /// Undoes the trail down to `mark`, which stays held.
+    #[inline]
+    pub fn rollback(&mut self, mark: &TrailMark) {
+        self.rollback_to(mark.at);
+    }
+
+    /// Undoes the trail down to the position `mark`, one a mark still held is at.
+    pub fn rollback_to(&mut self, mark: usize) {
         if self.profile.on && self.inline.depth > 0 && self.trail.len() > mark {
             self.profile.inline.rollbacks += 1;
             self.profile.inline.rollback_entries += (self.trail.len() - mark) as u64;
@@ -98,6 +143,21 @@ impl<'a> Worker<'a> {
                 Redo::DropDeps(v) => self.drop_deps(v),
             }
         }
+    }
+
+    /// `TypeVar.permanentInst` (`core/Types.scala` 4996-5009, `isPermanentlyInstantiated` 5054): the variable's
+    /// instance where nothing can reopen it any more, as dotty's permanent `inst` is one no state that may still be
+    /// reset holds (`instantiateWith`'s owning state, `TyperState.gc`); none where the variable is open, or where its
+    /// instance's entry lies at or above the outermost trail mark held (`mark_floor`: a `rollback` to it undoes the
+    /// entry) or an open attempt begun after the variable was made (`attempt_floor`: its retraction undoes it).
+    pub(super) fn permanent_instance(&self, v: TVarId) -> Option<TypeId> {
+        let inst = self.tvars[v].inst?;
+        let floor = self.mark_floor.get().min(self.attempt_floor(v));
+        if floor >= self.trail.len() {
+            return Some(inst);
+        }
+        let reopenable = self.trail[floor..].iter().any(|u| matches!(*u, Undo::Inst(w) if w == v));
+        if reopenable { None } else { Some(inst) }
     }
 
     pub(super) fn instantiate(&mut self, v: TVarId, t: TypeId) {
@@ -805,7 +865,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         let ok = self.is_sub(a, b);
         if !ok {
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         ok
     }
@@ -910,7 +970,7 @@ impl<'a> Worker<'a> {
                     if holds || !exact {
                         return holds;
                     }
-                    self.rollback(mark);
+                    self.rollback(&mark);
                 }
             }
         }
@@ -986,8 +1046,8 @@ impl<'a> Worker<'a> {
             // conforms to `?T | Other` without becoming a bound of `?T`, and `X | Other` binds
             // `?T` to `X` alone.
             let mark = self.snapshot();
-            if self.is_sub_union_member(a, b, false, mark)
-                || (self.types.has_vars(b) && self.is_sub_union_member(a, b, true, mark))
+            if self.is_sub_union_member(a, b, false, mark.at())
+                || (self.types.has_vars(b) && self.is_sub_union_member(a, b, true, mark.at()))
             {
                 return true;
             }
@@ -1006,10 +1066,10 @@ impl<'a> Worker<'a> {
                 if self.is_sub(a, parent) && self.refinement_holds(a, parent, r) {
                     return true;
                 }
-                self.rollback(mark);
+                self.rollback(&mark);
             }
             if self.necessary_either && self.types.has_vars(x) && self.types.has_vars(y) {
-                if let Some(ok) = self.is_sub_inter_necessary(x, y, b, mark) {
+                if let Some(ok) = self.is_sub_inter_necessary(x, y, b, mark.at()) {
                     return ok;
                 }
             }
@@ -1020,17 +1080,17 @@ impl<'a> Worker<'a> {
                 if lower != NOTHING && self.is_sub(a, lower) {
                     return true;
                 }
-                self.rollback(mark);
+                self.rollback(&mark);
             }
             if self.is_sub(x, b) {
                 return true;
             }
-            self.rollback(mark);
+            self.rollback(&mark);
             if self.is_sub(y, b) {
                 return true;
             }
-            self.rollback(mark);
-            return self.is_sub_inter_laws(x, y, b, mark);
+            self.rollback(&mark);
+            return self.is_sub_inter_laws(x, y, b, mark.at());
         }
         if let Some(u) = self.opaque_underlying(a) {
             return self.is_sub(u, b);
@@ -1098,13 +1158,13 @@ impl<'a> Worker<'a> {
                     if self.is_sub(a, b) {
                         return true;
                     }
-                    self.rollback(mark);
+                    self.rollback(&mark);
                 }
                 let mark = self.snapshot();
                 if self.app_var_instance(a, b, v, c, cargs, n) {
                     return true;
                 }
-                self.rollback(mark);
+                self.rollback(&mark);
                 // Else the variable is a constructor of a base type of the class, the first in
                 // its linearisation that fits, as dotty's `canInstantiate` lifts the argument to
                 // its base classes (`liftToBase`): a `Map[K, V]` as `M[A]` with `M[A] <:
@@ -1126,7 +1186,7 @@ impl<'a> Worker<'a> {
                     if self.app_var_instance(base, b, v, bc, bargs, n) {
                         return true;
                     }
-                    self.rollback(mark);
+                    self.rollback(&mark);
                 }
                 false
             }
@@ -1251,7 +1311,7 @@ impl<'a> Worker<'a> {
                     if self.is_sub(upper, b) {
                         return true;
                     }
-                    self.rollback(mark);
+                    self.rollback(&mark);
                 }
                 match tb {
                     Type::AppParam(q, bargs) => match self.app_param_lower(q, bargs) {
@@ -1309,7 +1369,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         let holds = self.is_sub(p1, p2);
         if !holds {
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         holds
     }
@@ -1332,7 +1392,7 @@ impl<'a> Worker<'a> {
                 if self.contained_args(xs, ys) {
                     return Some(true);
                 }
-                self.rollback(mark);
+                self.rollback(&mark);
             }
         }
         let (na, nb) = (self.reduce_head(a).unwrap_or(a), self.reduce_head(b).unwrap_or(b));
@@ -1373,11 +1433,11 @@ impl<'a> Worker<'a> {
                     if self.is_sub(a, x) {
                         return Some(true);
                     }
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     if self.is_sub(a, y) {
                         return Some(true);
                     }
-                    self.rollback(mark);
+                    self.rollback(&mark);
                 }
                 let bound = self.match_bound(a);
                 Some(bound != ANY && self.is_sub(bound, b))
@@ -1410,7 +1470,7 @@ impl<'a> Worker<'a> {
                     if self.is_sub(x, b) {
                         return Some(true);
                     }
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     self.is_sub(y, b)
                 }
                 _ => false,
@@ -1453,7 +1513,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         let holds = self.is_sub(p, q);
         if !holds {
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         holds
     }
@@ -1508,7 +1568,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         let holds = if flipped { self.is_sub(this, path) } else { self.is_sub(path, this) };
         if !holds {
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         holds
     }
@@ -1703,7 +1763,7 @@ impl<'a> Worker<'a> {
                         if self.is_sub(x, b) {
                             return true;
                         }
-                        self.rollback(mark);
+                        self.rollback(&mark);
                         self.is_sub(y, b)
                     }
                     // An object's type is the path of a val declared with it (`O` and an
@@ -1720,7 +1780,7 @@ impl<'a> Worker<'a> {
                 if self.refinement_holds(a, parent, r) {
                     return true;
                 }
-                self.rollback(mark);
+                self.rollback(&mark);
                 return false;
             }
             Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
@@ -1729,14 +1789,14 @@ impl<'a> Worker<'a> {
                 if lower != NOTHING && lower != b && self.is_sub(a, lower) {
                     return true;
                 }
-                self.rollback(mark);
+                self.rollback(&mark);
                 // Two members of one name through prefixes that conform: `p.T <: C#T` for a
                 // `p: C`, `x.T <: y.T` for an `x: y.type`, and `C#T <: D#T` for a `C <: D`.
                 if let (Type::Member(p, n), Type::Member(q, m)) = (ta, tb) {
                     if n == m && p != q && (self.types.is_path(p) || !self.types.is_path(q)) && self.is_sub(p, q) {
                         return true;
                     }
-                    self.rollback(mark);
+                    self.rollback(&mark);
                 }
             }
             // A path's type below a parameter bounded below by it: the capture of a pattern's
@@ -1747,7 +1807,7 @@ impl<'a> Worker<'a> {
                 if self.is_sub(a, lower) {
                     return true;
                 }
-                self.rollback(mark);
+                self.rollback(&mark);
             }
             _ => {}
         }
@@ -1788,7 +1848,7 @@ impl<'a> Worker<'a> {
                 if self.is_sub(op, b) && self.is_sub(oq, b) {
                     return true;
                 }
-                self.rollback(mark);
+                self.rollback_to(mark);
             }
         }
         let Type::Class(c, _) = self.types.get(b) else { return false };
@@ -1797,7 +1857,7 @@ impl<'a> Worker<'a> {
         if self.is_sub(merged, b) {
             return true;
         }
-        self.rollback(mark);
+        self.rollback_to(mark);
         false
     }
 
@@ -1831,7 +1891,7 @@ impl<'a> Worker<'a> {
                 if self.is_sub(a, b) {
                     return true;
                 }
-                self.rollback(mark);
+                self.rollback_to(mark);
                 false
             }
         }
@@ -1859,7 +1919,7 @@ impl<'a> Worker<'a> {
             if holds {
                 return true;
             }
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         false
     }
@@ -1914,7 +1974,7 @@ impl<'a> Worker<'a> {
             Type::Param(id) => Some(id),
             _ => None,
         }).collect();
-        let escaped = self.trail[mark..].iter().any(|u| {
+        let escaped = self.trail[mark.at()..].iter().any(|u| {
             let bound = match *u {
                 Undo::Inst(v) => self.tvars[v].inst,
                 Undo::Lower(v) => self.tvars[v].lower.last().copied(),
@@ -1924,7 +1984,7 @@ impl<'a> Worker<'a> {
             bound.map_or(false, |t| self.mentions_tparam_of(t, Some(&binders)))
         });
         if escaped {
-            self.rollback(mark);
+            self.rollback(&mark);
             return false;
         }
         true
@@ -2164,7 +2224,7 @@ impl<'a> Worker<'a> {
             if self.is_sub(base, b) {
                 return true;
             }
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         false
     }
@@ -2362,12 +2422,15 @@ impl<'a> Worker<'a> {
         let Type::Lit(l) = self.types.get(t) else { return t };
         match self.types.lit_val(l) {
             LitVal::Int(_) => self.b.t_int,
+            LitVal::Byte(_) => self.b.t_byte,
+            LitVal::Short(_) => self.b.t_short,
             LitVal::Long(_) => self.b.t_long,
             LitVal::Double(_) => self.b.t_double,
             LitVal::Float(_) => self.b.t_float,
             LitVal::Char(_) => self.b.t_char,
             LitVal::Bool(_) => self.b.t_boolean,
             LitVal::Str(_) => self.b.t_string,
+            LitVal::Class(class) => class,
         }
     }
 
@@ -2493,12 +2556,12 @@ impl<'a> Worker<'a> {
     /// part conforms, for the ordinary rule to decide.
     fn is_sub_inter_necessary(&mut self, x: TypeId, y: TypeId, b: TypeId, mark: usize) -> Option<bool> {
         let left = self.is_sub(x, b);
-        self.rollback(mark);
+        self.rollback_to(mark);
         if !left {
             return None;
         }
         let right = self.is_sub(y, b);
-        self.rollback(mark);
+        self.rollback_to(mark);
         right.then_some(true)
     }
 
@@ -2585,11 +2648,11 @@ impl<'a> Worker<'a> {
         if self.is_sub(b, a) {
             return Some(a);
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         if self.is_sub(a, b) {
             return Some(b);
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         let ca = self.class_of(a)?;
         if self.lub_in_progress.contains(&(a, b)) {
             return None;
@@ -2744,11 +2807,11 @@ impl<'a> Worker<'a> {
         let lo = if self.is_sub(xlo, ylo) {
             xlo
         } else {
-            self.rollback(mark);
+            self.rollback(&mark);
             if self.is_sub(ylo, xlo) {
                 ylo
             } else {
-                self.rollback(mark);
+                self.rollback(&mark);
                 self.types.inter(xlo, ylo)
             }
         };
@@ -2782,11 +2845,11 @@ impl<'a> Worker<'a> {
         if self.is_sub(a, b) {
             return b;
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         if self.is_sub(b, a) {
             return a;
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         self.types.soft_union(a, b)
     }
 
@@ -2807,9 +2870,9 @@ impl<'a> Worker<'a> {
             Type::Refined(p, _) => self.is_sub(p, self.b.t_singleton),
             Type::Rec(body) => self.is_sub(body, self.b.t_singleton),
             Type::Inter(x, y) => {
-                let mark = self.trail.len();
+                let mark = self.snapshot();
                 self.is_sub(x, self.b.t_singleton) || {
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     self.is_sub(y, self.b.t_singleton)
                 }
             }
@@ -2967,7 +3030,7 @@ impl<'a> Worker<'a> {
             }
             let mark = self.snapshot();
             if !self.is_sub(w_ty, choice) {
-                self.rollback(mark);
+                self.rollback(&mark);
                 let l = self.solve_in(w_ty);
                 choice = self.join_lower(v, choice, l);
             }
@@ -3000,7 +3063,7 @@ impl<'a> Worker<'a> {
         let choice = if fits || uppers.is_empty() {
             choice
         } else {
-            self.rollback(mark);
+            self.rollback(&mark);
             self.choice_from_uppers(v, &uppers, true)
         };
         let fitted = fits.then_some(choice);
@@ -3116,7 +3179,7 @@ impl<'a> Worker<'a> {
         if uppers.iter().all(|&u| self.is_sub(w, u)) {
             w
         } else {
-            self.rollback(mark);
+            self.rollback(&mark);
             t
         }
     }
@@ -3234,7 +3297,7 @@ impl<'a> Worker<'a> {
             }
             let mark = self.snapshot();
             let holds = self.is_sub(u, self.b.t_singleton);
-            self.rollback(mark);
+            self.rollback(&mark);
             holds
         })
     }
@@ -3814,7 +3877,7 @@ impl<'a> Worker<'a> {
                     maximize.push(v);
                 }
             } else if s >= 0 {
-                self.rollback(mark);
+                self.rollback(&mark);
                 return false;
             } else {
                 maximize.push(v);
@@ -3928,7 +3991,7 @@ impl<'a> Worker<'a> {
             if exp != self.b.t_unit && exp != ANY && exp != ERROR {
                 let snap = self.snapshot();
                 if !self.is_sub(ty, exp) {
-                    self.rollback(snap);
+                    self.rollback(&snap);
                 }
             }
         }
@@ -4036,13 +4099,13 @@ impl<'a> Worker<'a> {
         if self.is_sub(hygienic, r) {
             return;
         }
-        self.rollback(snap);
+        self.rollback(&snap);
         // The result as its variables end, as dotty renders the message once they are
         // instantiated (`A` of `pair(x => Item(x.a), s)` is `Any`, `fixLevels` avoiding `x.A`).
         let snap = self.snapshot();
         let solved = self.solve_in(r);
         let (r_text, h_text) = self.show_pair(solved, hygienic);
-        self.rollback(snap);
+        self.rollback(&snap);
         let msg = format!("return type {} of lambda cannot be made hygienic\nit is not a supertype of the hygienic type {}", r_text, h_text);
         self.error(span, msg);
     }
@@ -4073,7 +4136,7 @@ impl<'a> Worker<'a> {
                 let snap = self.snapshot();
                 self.instantiate_from(w, from_below, ANY);
                 let inst = self.zonk(t);
-                self.rollback(snap);
+                self.rollback(&snap);
                 let avoided = self.avoid_params(inst, params, v, seen);
                 seen.pop();
                 if avoided != inst { avoided } else { t }
@@ -5395,7 +5458,7 @@ impl<'a> Worker<'a> {
         let renamed = self.renamed_info(rinfo, &info);
         let mark = self.snapshot();
         let below = self.is_sub(renamed.ret, info.ret);
-        self.rollback(mark);
+        self.rollback(&mark);
         below
     }
 
@@ -5678,8 +5741,8 @@ impl<'a> Worker<'a> {
             return true;
         }
         let mark = self.snapshot();
-        let sub = self.is_sub(a, b) && self.snapshot() == mark;
-        self.rollback(mark);
+        let sub = self.is_sub(a, b) && self.trail.len() == mark.at();
+        self.rollback(&mark);
         sub
     }
 

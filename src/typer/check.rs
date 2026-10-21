@@ -1248,6 +1248,57 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The annotations of the binders of `clause` (`SyntaxNotes::binder_annots`), typed where the typer resolves the
+    /// clause, as dotty's `Typer.completeAnnotations` types a binder's `TypeDef`'s in `annotContext`: a lambda's before
+    /// its binders exist, a type definition's own clause's with them (the callers' places); one whose binders a type
+    /// definition owns (a lambda in its right side or bounds, `type_def_frames`) outside the definition's frames
+    /// (`isInner`).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn binder_annotations(&mut self, clause: ast::BinderClause) {
+        self.binder_annotations_of(clause);
+    }
+
+    fn binder_annotations_of(&mut self, clause: ast::BinderClause) {
+        if self.kind_only_bound {
+            return;
+        }
+        let file = self.env.file;
+        let records: Vec<ast::BinderAnnot> = self.ast(file).notes.binder_annots.iter().filter(|r| r.clause == clause).copied().collect();
+        if records.is_empty() {
+            return;
+        }
+        let owned = match clause {
+            ast::BinderClause::Lambda(_) => self.type_def_frames.filter(|&depth| depth <= self.env.frames.len()),
+            _ => None,
+        };
+        match owned {
+            Some(depth) => {
+                let frames = self.env.frames[..depth].to_vec();
+                let imports = self.env.imports.iter().copied().filter(|i| (i.depth as usize) <= depth).collect();
+                // The file's imports visible here stay so (`import_limit`): the cut drops frames alone.
+                let (import_limit, visible_imports) = (self.env.import_limit, self.env.visible_imports.clone());
+                let env = super::Env { file, frames, imports, import_limit, visible_imports };
+                self.with_env(env, |t| t.complete_binder_annotations(file, &records));
+            }
+            None => self.complete_binder_annotations(file, &records),
+        }
+    }
+
+    fn complete_binder_annotations(&mut self, file: FileId, records: &[ast::BinderAnnot]) {
+        // scalac's dependency extraction reads no annotation of a definition.
+        let deps = self.deps.take();
+        let outer = std::mem::replace(&mut self.typing_annotation, true);
+        // What the annotation holds is the annotation's dummy owner's, no type definition's.
+        let type_def = self.type_def_frames.take();
+        for r in records {
+            self.complete_binder_annotation(file, r);
+        }
+        self.type_def_frames = type_def;
+        self.typing_annotation = outer;
+        self.deps = deps;
+    }
+
     /// The traversal reaches the type alias defined at `id` where it stands
     /// (`Typer.typedStats` → `typedTypeDef`): its completion, done or suspended, is one the
     /// definition being typed reached (`complete_alias`), as dotty completes it there.
@@ -1261,6 +1312,1666 @@ impl<'a> Worker<'a> {
         }
         if let Some(&a) = self.def_aliases.get(file.0 as usize, &id) {
             self.complete_alias(a);
+        }
+    }
+
+    /// `TypeDefCompleter.completerTypeParams` (`Namer.scala` 1053-1073) over the binders `ids` a clause made (dotty's
+    /// `index(tparams)`), each completed in turn (`typedAheadExpr(param)` → `ensureCompleted`) and then its annotations
+    /// (`completeAnnotations`, an own clause's `records`), a binder a read forces completing then
+    /// (`Worker::binder_info`). `bounds` holds each binder's lower and upper bound as written.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn complete_clause(&mut self, ids: &[TParamId], bounds: Vec<(TyExprId, TyExprId)>, records: Vec<ast::BinderAnnot>, keys: [Option<ast::BinderClause>; 2]) {
+        let file = self.env.file;
+        // A binder's bounds are its own (`typedTypeDef`'s context), no type definition's.
+        let type_def = self.type_def_frames.take();
+        let n = ids.len();
+        self.binder_completing.push(super::ClauseCompletion { file, ids: ids.to_vec(), states: vec![super::BinderState::NotStarted; n], bounds, own: vec![crate::tir::NO_TYPE; n], records, keys, failed: Vec::new() });
+        let at = self.binder_completing.len() - 1;
+        for i in 0..n {
+            if self.binder_completing[at].states[i] == super::BinderState::NotStarted {
+                // A cycle a completion at the top meets is reported where it is read (`binder_info`'s callers).
+                let _ = self.complete_binder(at, i);
+            }
+            // The binder's annotations installed on it (`addAnnotations`' `sym.addAnnotation`).
+            let all: Vec<ast::BinderAnnot> = self.binder_completing[at].records.iter().filter(|r| r.index as usize == i).copied().collect();
+            self.install_binder_annotations(file, &all, ids);
+            // `completeAnnotations`: the binder's annotations typed whole, its completion over; one whose class's typing
+            // failed is the error tree it made.
+            let c = &self.binder_completing[at];
+            let own: Vec<ast::BinderAnnot> = c.records.iter().filter(|r| r.index as usize == i && !c.failed.contains(&r.annot.instance)).copied().collect();
+            if !own.is_empty() {
+                self.complete_binder_annotations(file, &own);
+            }
+        }
+        self.binder_completing.pop();
+        self.type_def_frames = type_def;
+    }
+
+    /// `Namer.addAnnotations`' `sym.addAnnotation`: the records' annotations installed on their binders among `ids`
+    /// (`Symbols::binder_annots`), which the pickle writes on a binder's `TYPEPARAM`.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn install_binder_annotations(&mut self, file: FileId, records: &[ast::BinderAnnot], ids: &[TParamId]) {
+        for (i, &p) in ids.iter().enumerate() {
+            let annots: Vec<ast::Annot> = records.iter().filter(|r| r.index as usize == i).map(|r| r.annot).collect();
+            if !annots.is_empty() {
+                self.syms.binder_annots.insert(p, (file, annots));
+            }
+        }
+    }
+
+    /// `SymDenotation.completeFrom` → `Namer.Completer.completeInCreationContext` of the binder `i` of the clause `at`:
+    /// `Touched` while its annotations' classes are typed (`addAnnotations`' `typedAheadAnnotationClass`), `Provisional`
+    /// (`dummyInfo1`) while its bounds are (`typeSig`'s `typedAheadType(rhs)`), `abstracted`'s `lo.isRef(Nothing)` a
+    /// read of the lower bound, then `Checking` (`NoCompleter`) while `checkNonCyclic` checks them. A cycle met outside
+    /// a tree of its own (`abstracted`'s read) leaves the completion: the binder keeps `dummyInfo1` and the cycle goes
+    /// to the read that started the completion, which reports it.
+    fn complete_binder(&mut self, at: usize, i: usize) -> Result<(), TParamId> {
+        use super::BinderState::*;
+        let p = self.binder_completing[at].ids[i];
+        self.binder_completing[at].states[i] = Touched;
+        // `addAnnotations`: each annotation's class, the `New`'s type expression alone; the arguments wait.
+        let records: Vec<ast::BinderAnnot> = self.binder_completing[at].records.iter().filter(|r| r.index as usize == i).copied().collect();
+        if !records.is_empty() {
+            let outer = std::mem::replace(&mut self.typing_annotation, true);
+            let deps = self.deps.take();
+            let file = self.binder_completing[at].file;
+            for r in &records {
+                if let Some(tpt) = self.annotation_new_type(r.annot.instance) {
+                    let mark = self.diags.items.len();
+                    self.resolve_type(tpt);
+                    // The typed-ahead tree an error, which the annotation's typing reuses (`TypedAhead`): typed no more.
+                    let span = self.ast(file).expr_span(r.annot.instance);
+                    if self.diags.items[mark..].iter().any(|d| !d.is_warning && d.file == file && d.span.start >= span.start && d.span.end <= span.end) {
+                        self.binder_completing[at].failed.push(r.annot.instance);
+                    }
+                }
+            }
+            self.deps = deps;
+            self.typing_annotation = outer;
+        }
+        self.binder_completing[at].states[i] = Provisional;
+        // `typedAheadType(rhs)`: the bounds typed, the reads in them caught at their trees.
+        let (lo, hi) = self.binder_completing[at].bounds[i];
+        let lower = if lo == crate::ast::NO_BOUND { NOTHING } else { self.resolve_type(lo) };
+        let upper = if hi == crate::ast::NO_BOUND { ANY } else { self.resolve_type(hi) };
+        // `abstracted` → `boundsFromParams`' `lo.isRef(defn.NothingClass)`: its reads (its answer chooses whether the
+        // lower bound is abstracted over the binder's own clause, which teq's bound keeps as written).
+        if let Err(cycle) = self.is_ref_reads(lower, RefSym::Nothing) {
+            self.binder_completing[at].states[i] = Done;
+            return Err(cycle);
+        }
+        self.binder_completing[at].states[i] = Checking;
+        let (lower, upper) = match self.check_non_cyclic(at, i, lower, upper) {
+            Ok(()) => (lower, upper),
+            Err(()) => (ERROR, ERROR),
+        };
+        let info = &mut self.syms.tparams[p.idx()];
+        info.lower = lower;
+        info.upper = upper;
+        self.binder_completing[at].states[i] = Done;
+        Ok(())
+    }
+
+    /// The type expression of the class an annotation instantiates (`typedAheadAnnotationClass`: through `Apply`,
+    /// `TypeApply` and the constructor's selection to `New(tpt)`).
+    fn annotation_new_type(&self, instance: ast::ExprId) -> Option<TyExprId> {
+        let ast = self.cur_ast();
+        let mut e = instance;
+        loop {
+            match ast.expr(e) {
+                ast::Expr::Apply(f, _) | ast::Expr::TypeApply(f, _) => e = f,
+                ast::Expr::New(tpt, _) => return Some(tpt),
+                _ => return None,
+            }
+        }
+    }
+
+    /// The read of the binder `p`'s information (`TypeRef.info` → `completeFrom`): a binder of a clause in completion
+    /// `NotStarted` completes now; one `Touched` or `Checking` is a cycle (`CyclicReference`), named by the binder its
+    /// completion's read met; `Provisional` and `Done` read their bounds. No binder of a clause in completion: nothing.
+    pub(super) fn binder_info(&mut self, p: TParamId) -> Result<(), TParamId> {
+        use super::BinderState::*;
+        for at in (0..self.binder_completing.len()).rev() {
+            if let Some(i) = self.binder_completing[at].ids.iter().position(|&q| q == p) {
+                return match self.binder_completing[at].states[i] {
+                    NotStarted => self.complete_binder(at, i),
+                    Touched | Checking => Err(p),
+                    Provisional | Done => Ok(()),
+                };
+            }
+        }
+        Ok(())
+    }
+
+    /// The state of the binder `p` where a clause in completion has it.
+    fn binder_state(&self, p: TParamId) -> Option<super::BinderState> {
+        self.binder_completing.iter().rev().find_map(|c| c.ids.iter().position(|&q| q == p).map(|i| c.states[i]))
+    }
+
+    /// E046 at `at` for the cycle a read met (`CyclicReference`, caught by the tree whose typing read it:
+    /// `typedUnadapted`'s `TypeError` handler).
+    pub(super) fn report_cyclic(&mut self, cycle: TParamId, at: Span) {
+        let msg = format!("Cyclic reference involving type {}", self.type_name_ref(self.syms.tparam(cycle).name));
+        self.error(at, msg);
+    }
+
+    /// `Type.isRef(sym)` (`core/Types.scala` 198-218, `skipRefined` true), with its reads: whether the symbol the
+    /// reference reaches (`ref_target_reads`) is `sym`.
+    #[inline(always)]
+    pub(super) fn is_ref_reads(&mut self, t: TypeId, sym: RefSym) -> Result<bool, TParamId> {
+        Ok(self.ref_target_reads(t)? == Some(sym))
+    }
+
+    /// `Type.isRef(sym)` where no read can meet a cycle the caller reports (`is_ref_reads`'s cycle reads as no reference).
+    #[inline(always)]
+    pub(super) fn is_ref(&mut self, t: TypeId, sym: RefSym) -> bool {
+        self.is_ref_reads(t, sym).unwrap_or(false)
+    }
+
+    /// The class (or `Nothing`) `isRef` finds `t` a reference to, none where it is no reference to a class: `isRef`'s
+    /// walk (`core/Types.scala` 198-218), one chain whatever `sym` is, with the reads a `TypeRef`'s information makes
+    /// (`this1.info`): a reference to a class that class (`Nothing` teq's own type); another reference its information's
+    /// alias followed (`TypeAlias(tp) => tp.isRef`), else its own symbol, no class: a parameter's information is bounds,
+    /// a declaration's or a member's an alias or bounds (one completing its own `typeSig` its completer); an application
+    /// dealiased where its constructor is an alias (`AppliedType.dealias`: the alias applied), else its constructor
+    /// (`underlying`); an alias kept by name: a curried one dealiased, a match alias's information a `MatchAlias`, no
+    /// `TypeAlias`; a refinement, a recursive type, an annotated type their parent; a variable its instance
+    /// (`instanceOpt`), an open one none; a polymorphic function type the refinement of `PolyFunction` it is.
+    #[inline(always)]
+    pub(super) fn ref_target_reads(&mut self, t: TypeId) -> Result<Option<RefSym>, TParamId> {
+        self.ref_target_of::<false>(t)
+    }
+
+    /// `ref_target_reads` of `t`, or with `WIDEN` of `t.widen` (`preCheckKind`'s `arg.tpe.widen.isRef`) on the same
+    /// dispatch: `widen`'s fast path a type that is no path, no variable and no annotated type itself
+    /// (`case _: TypeRef => this`), else a path's underlying type, through variables and annotations (`widen_path`).
+    #[inline(always)]
+    fn ref_target_of<const WIDEN: bool>(&mut self, t: TypeId) -> Result<Option<RefSym>, TParamId> {
+        match self.types.get(t) {
+            Type::Nothing => Ok(Some(RefSym::Nothing)),
+            Type::Class(c, _) | Type::Ctor(c) => Ok(Some(RefSym::Class(c))),
+            // A parameter's information is bounds, its read nothing outside a binder's completion (`binder_info`).
+            Type::Param(_) | Type::AppParam(..) if self.binder_completing.is_empty() => Ok(None),
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Var(_) | Type::AppVar(..) | Type::Annotated(_) if WIDEN => {
+                let widened = self.widen_path(t);
+                self.ref_target_reads(widened)
+            }
+            _ => self.ref_target_other(t),
+        }
+    }
+
+    /// `t.widen.isRef(sym)` with its reads (`ref_target_of`).
+    #[inline(always)]
+    pub(super) fn widened_is_ref_reads(&mut self, t: TypeId, sym: RefSym) -> Result<bool, TParamId> {
+        Ok(self.ref_target_of::<true>(t)? == Some(sym))
+    }
+
+    /// `ref_target_reads` of a type no class's or `Nothing`'s own reference: out of the kind checks' line.
+    #[cold]
+    #[inline(never)]
+    fn ref_target_other(&mut self, t: TypeId) -> Result<Option<RefSym>, TParamId> {
+        let t = self.deref_keeping(t);
+        match self.types.get(t) {
+            Type::Nothing => Ok(Some(RefSym::Nothing)),
+            Type::Class(c, _) | Type::Ctor(c) => Ok(Some(RefSym::Class(c))),
+            Type::Nested(_, class) => self.ref_target_reads(class),
+            Type::Param(p) | Type::AppParam(p, _) => {
+                self.binder_info(p)?;
+                Ok(None)
+            }
+            Type::Decl(_) | Type::Member(..) => match self.kind_info(t)? {
+                KindInfo::Alias(alias) => self.ref_target_reads(alias),
+                _ => Ok(None),
+            },
+            Type::AppMember(m, args) => match self.kind_info(m)? {
+                KindInfo::Alias(alias) => {
+                    let args: Vec<TypeId> = self.types.items(args).to_vec();
+                    match self.apply_if_parameterized(alias, &args)? {
+                        KindInfo::Bounds(applied) | KindInfo::Alias(applied) => self.ref_target_reads(applied),
+                        KindInfo::Unknown => Ok(None),
+                    }
+                }
+                _ => Ok(None),
+            },
+            Type::Alias(a, _) => {
+                if self.is_match_alias(a) {
+                    return Ok(None);
+                }
+                match self.kind_dealias(t) {
+                    Some(e) => self.ref_target_reads(e),
+                    None => Ok(None),
+                }
+            }
+            Type::Refined(parent, _) | Type::Rec(parent) | Type::Annotated(parent) => self.ref_target_reads(parent),
+            Type::Poly(..) => Ok(self.std_class("PolyFunction").map(RefSym::Class)),
+            _ => Ok(None),
+        }
+    }
+
+    /// `ref_target_reads` where no read can meet a cycle the caller reports.
+    #[inline(always)]
+    pub(super) fn ref_target(&mut self, t: TypeId) -> Option<RefSym> {
+        self.ref_target_reads(t).unwrap_or(None)
+    }
+
+    /// The reads a member selection makes of its prefix (`prefix.member(name)`: the prefix's information).
+    fn prefix_reads(&mut self, prefix: TypeId) -> Result<(), TParamId> {
+        let prefix = self.deref_keeping(prefix);
+        match self.types.get(prefix) {
+            Type::Param(p) | Type::AppParam(p, _) => self.binder_info(p),
+            Type::Member(q, _) | Type::AppMember(q, _) => self.prefix_reads(q),
+            _ => Ok(()),
+        }
+    }
+
+    /// A non-class reference's information as the kind queries read it (`TypeRef.info`), with its reads: a parameter's
+    /// (`binder_info`; a binder whose bounds are being typed its `dummyInfo1`, `binder_own_clause`), a member's or a
+    /// declaration's (its prefix's reads, then `type_member`; one still completing its `dummyInfo1` over its declared
+    /// parameters, `typeSig`'s), each as `boundsFromParams` keeps it (`param_info_hi`, `member_info_hi`); an
+    /// application's `superType` (`AppliedType.superType`, `core/Types.scala` 4742-4754: the constructor's applied,
+    /// `apply_if_parameterized`); an open variable's `origin`'s (`TypeVar.underlying` 5199-5202, `ParamRef.underlying`
+    /// 4885-4890: the parameter it was made for, else the bounds it keeps).
+    fn kind_info(&mut self, t: TypeId) -> Result<KindInfo, TParamId> {
+        match self.types.get(t) {
+            Type::Param(p) => {
+                self.binder_info(p)?;
+                if self.binder_state(p).is_some_and(|s| s != super::BinderState::Done) {
+                    return Ok(KindInfo::Bounds(self.binder_own_clause(p)));
+                }
+                Ok(KindInfo::Bounds(self.param_info_hi(p)))
+            }
+            Type::Decl(a) => {
+                if self.member_completing(t) {
+                    return Ok(KindInfo::Bounds(self.declared_clause(a)));
+                }
+                self.complete_alias(a);
+                let info = &self.syms.aliases[a.idx()];
+                Ok(match info.bounds {
+                    Some((_, hi)) => KindInfo::Bounds(self.member_info_hi(Some(a), hi)),
+                    None if info.rhs != ERROR => KindInfo::Alias(info.rhs),
+                    None => KindInfo::Unknown,
+                })
+            }
+            Type::Member(prefix, name) => {
+                self.prefix_reads(prefix)?;
+                let alias = self.type_member_alias(prefix, name);
+                if self.member_completing(t) {
+                    return Ok(KindInfo::Bounds(alias.map_or(ANY, |a| self.declared_clause(a))));
+                }
+                Ok(match self.type_member(prefix, name) {
+                    Some(super::members::MemberInfo::Alias(a)) => KindInfo::Alias(a),
+                    Some(super::members::MemberInfo::Bounds(_, hi)) => KindInfo::Bounds(self.member_info_hi(alias, hi)),
+                    None => KindInfo::Unknown,
+                })
+            }
+            // `AppliedType.superType` of a non-class constructor: its own `superType` applied (`applyIfParameterized`).
+            Type::AppParam(..) | Type::AppMember(..) | Type::AppVar(..) => {
+                let (head, args) = match self.types.get(t) {
+                    Type::AppParam(f, args) => (self.types.param(f), args),
+                    Type::AppMember(m, args) => (m, args),
+                    Type::AppVar(v, args) => (self.types.mk(Type::Var(v)), args),
+                    _ => unreachable!(),
+                };
+                let args: Vec<TypeId> = self.types.items(args).to_vec();
+                match self.kind_info(head)? {
+                    KindInfo::Bounds(hi) | KindInfo::Alias(hi) => self.apply_if_parameterized(hi, &args),
+                    KindInfo::Unknown => Ok(KindInfo::Unknown),
+                }
+            }
+            Type::Var(v) => match self.tvars[v].origin() {
+                Some(p) => {
+                    let origin = self.types.param(p);
+                    self.kind_info(origin)
+                }
+                None => Ok(KindInfo::Bounds(self.tvars[v].declared().1)),
+            },
+            _ => Ok(KindInfo::Unknown),
+        }
+    }
+
+    /// `applyIfParameterized(args)` (`core/TypeApplications.scala` 446-447) of a constructor's `superType` `hi`, with its
+    /// reads: itself where it takes no parameters (`typeParams` empty); else `appliedTo` (374-441): a lambda
+    /// instantiated, a class, a parameter, a member, an alias, a variable applied (`AppliedType(self, args)`); another
+    /// proxy, an application or a wildcard's or annotated type's parent, its own `superType` applied in turn (the
+    /// `AppliedType(self, args)` dotty makes reads that `superType` first).
+    fn apply_if_parameterized(&mut self, hi: TypeId, args: &[TypeId]) -> Result<KindInfo, TParamId> {
+        let hi = self.deref_keeping(hi);
+        if hi == ERROR {
+            return Ok(KindInfo::Unknown);
+        }
+        if let Type::Lambda(..) = self.types.get(hi) {
+            let applied = self.types.apply_ctor(hi, args);
+            return Ok(if applied == ERROR { KindInfo::Unknown } else { KindInfo::Bounds(applied) });
+        }
+        // `typeParams.nonEmpty`: the reference's own query, which guards its own walk (`type_params_reads`), so the
+        // helper's call is no cycle of the reference's information.
+        if self.type_params_reads(hi)?.is_empty() {
+            return Ok(KindInfo::Bounds(hi));
+        }
+        match self.types.get(hi) {
+            Type::Ctor(_) | Type::Param(_) | Type::Member(..) | Type::Decl(_) | Type::Alias(..) | Type::Var(_) => {
+                let applied = self.types.apply_ctor(hi, args);
+                Ok(if applied == ERROR { KindInfo::Unknown } else { KindInfo::Bounds(applied) })
+            }
+            // An application's own `superType`, applied in turn: the walk keeps a bound that reaches itself.
+            Type::AppParam(..) | Type::AppMember(..) | Type::AppVar(..) => {
+                if !self.kind_walk_enter(hi) {
+                    return Ok(KindInfo::Unknown);
+                }
+                let r = match self.kind_info(hi) {
+                    Ok(KindInfo::Bounds(s)) | Ok(KindInfo::Alias(s)) => self.apply_if_parameterized(s, args),
+                    Ok(KindInfo::Unknown) => Ok(KindInfo::Unknown),
+                    Err(e) => Err(e),
+                };
+                self.kind_walk.pop();
+                r
+            }
+            Type::BoundedWild(_, u) | Type::Annotated(u) => self.apply_if_parameterized(u, args),
+            _ => Ok(KindInfo::Unknown),
+        }
+    }
+
+    /// A parameter's upper bound as its information holds it (`boundsFromParams`, `core/Types.scala` 4598-4620): one
+    /// that did not resolve the error; one taking a clause the parser keeps by its arity and variances alone (`F[_]`,
+    /// `F[+X]`: none of the clause's parameters bounded or of a kind of its own, `Parser::parse_type_params`, the
+    /// loader's open bound) `[X..] =>> Any` over parameters each `TypeBounds.empty`, made once (`kind_clauses`); else
+    /// the bound.
+    fn param_info_hi(&mut self, p: TParamId) -> TypeId {
+        let info = self.syms.tparam(p);
+        let (upper, arity) = (info.upper, info.arity as usize);
+        if arity == 0 || upper != ANY {
+            return upper;
+        }
+        if let Some(&t) = self.kind_clauses.get(&p) {
+            return t;
+        }
+        let variances = self.syms.tparam(p).hk_variances.clone();
+        let ps: Vec<TypeId> = (0..arity)
+            .map(|k| {
+                let q = self.syms.new_tparam(crate::names::WILDCARD, variances.get(k).copied().unwrap_or(0));
+                self.types.param(q)
+            })
+            .collect();
+        let l = self.types.list(&ps);
+        let t = self.types.mk(Type::Lambda(l, ANY));
+        self.kind_clauses.insert(p, t);
+        t
+    }
+
+    /// A member's upper bound as its information holds it: one declared without a lambda bound (`type F[G[_]]`)
+    /// `[X..] =>> Any` over its declared parameters (`declared_clause`), each with its own information; else the bound.
+    fn member_info_hi(&mut self, alias: Option<AliasId>, hi: TypeId) -> TypeId {
+        match alias {
+            Some(a) if hi == ANY => self.declared_clause(a),
+            _ => hi,
+        }
+    }
+
+    /// `boundsFromParams(tparamSyms, TypeBounds.empty)`'s upper bound over the declared parameters of the member `a`
+    /// (`completerTypeParams`): `[X..] =>> Any`, `Any` where it declares none.
+    fn declared_clause(&mut self, a: AliasId) -> TypeId {
+        let ps: Vec<TypeId> = self.syms.aliases[a.idx()].tparams.clone().into_iter().map(|q| self.types.param(q)).collect();
+        if ps.is_empty() {
+            return ANY;
+        }
+        let l = self.types.list(&ps);
+        self.types.mk(Type::Lambda(l, ANY))
+    }
+
+    /// The `dummyInfo1` of the binder `p` whose bounds are being typed: `[X..] =>> Any` over its own clause's parameters
+    /// (`ClauseCompletion::own`), `TypeBounds.empty` where it has no clause of its own.
+    fn binder_own_clause(&self, p: TParamId) -> TypeId {
+        self.binder_completing
+            .iter()
+            .rev()
+            .find_map(|c| c.ids.iter().position(|&q| q == p).map(|i| c.own[i]))
+            .filter(|&t| t != crate::tir::NO_TYPE)
+            .unwrap_or(ANY)
+    }
+
+    /// `AppliedType.superType` of an application of a non-class constructor (`kind_info`'s application arm), none where
+    /// it is unknown or its reads meet a cycle.
+    pub(super) fn applied_super_type(&mut self, t: TypeId) -> Option<TypeId> {
+        match self.kind_info(t) {
+            Ok(KindInfo::Bounds(s)) | Ok(KindInfo::Alias(s)) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// `kind_dealias` for the typer's other readers.
+    pub(super) fn alias_kept_expansion(&mut self, t: TypeId) -> Option<TypeId> {
+        self.kind_dealias(t)
+    }
+
+    /// `dealias` of an alias kept by name (`Type::Alias`: a curried alias, a match alias): its expansion, none where it
+    /// has none or is itself.
+    fn kind_dealias(&mut self, t: TypeId) -> Option<TypeId> {
+        let Type::Alias(a, args) = self.types.get(t) else { return None };
+        self.alias_expansion(a, args).filter(|&e| e != t)
+    }
+
+    /// Enters the reference `t` on the kind queries' walk (`Worker::kind_walk`): false where it is on it already, a
+    /// bound reaching itself (dotty's `CyclicReference`), which reads as no information.
+    fn kind_walk_enter(&mut self, t: TypeId) -> bool {
+        if self.kind_walk.contains(&t) {
+            return false;
+        }
+        self.kind_walk.push(t);
+        true
+    }
+
+    /// `hkResult` (`core/TypeApplications.scala` 269-282) with its reads, the result type where one exists: 269 the
+    /// dealiased type; 270-273 a `TypeRef`: `AnyKind` itself, a class none, else `info.hkResult` (a `TypeBounds` its
+    /// `superType`, `hi`, 2193-2196, recursively); 274-275 an `AppliedType`: a class constructor none, else
+    /// `superType.hkResult`; 276 an `HKTypeLambda` its result; 277 a singleton, a refinement, a recursive type none; 278 a
+    /// wildcard its bounds'; 279-282 a variable its instance, another proxy its `superType`'s, else none. A class
+    /// constructor as an argument is eta-expanded (`adaptType`): its class applied to its parameters.
+    pub(super) fn hk_result_reads(&mut self, t: TypeId) -> Result<Option<TypeId>, TParamId> {
+        let t = self.deref_keeping(t);
+        match self.types.get(t) {
+            Type::Class(c, _) | Type::Ctor(c) if self.is_scala_class(c, "AnyKind") => Ok(Some(t)),
+            // An unresolved bound, any kind as `AnyKind` is (`is_any_kind`).
+            Type::Error => Ok(Some(t)),
+            Type::Ctor(c) => {
+                self.class_tparam_infos(c);
+                let ps: Vec<TypeId> = self.syms.class(c).tparams.clone().into_iter().map(|q| self.types.param(q)).collect();
+                if ps.is_empty() {
+                    return Ok(None);
+                }
+                Ok(Some(self.types.class(c, &ps)))
+            }
+            Type::Lambda(_, body) => Ok(Some(body)),
+            // 269: `dealias`, an alias kept by name (a curried one, `Const[T]` of `[X] =>> T`, a match alias) expanded.
+            Type::Alias(..) => match self.kind_dealias(t) {
+                Some(e) => self.hk_result_reads(e),
+                None => Ok(None),
+            },
+            Type::Param(_) | Type::Decl(_) | Type::Member(..) | Type::AppParam(..) | Type::AppMember(..) | Type::Var(_) | Type::AppVar(..) => {
+                if !self.kind_walk_enter(t) {
+                    return Ok(None);
+                }
+                let r = match self.kind_info(t) {
+                    Ok(KindInfo::Bounds(hi)) | Ok(KindInfo::Alias(hi)) => self.hk_result_reads(hi),
+                    Ok(KindInfo::Unknown) => Ok(None),
+                    Err(e) => Err(e),
+                };
+                self.kind_walk.pop();
+                r
+            }
+            Type::BoundedWild(_, hi) => self.hk_result_reads(hi),
+            Type::Annotated(u) => self.hk_result_reads(u),
+            _ => Ok(None),
+        }
+    }
+
+    /// `hasSameKindAs(other)` (`core/TypeApplications.scala` 290-305) with its reads, in its order (`other` the formal
+    /// parameter itself, whose information is the `paramBounds` whose `hi` dotty passes): both `hkResult`s,
+    /// `isAnyKind` of either (a symbol test); where the first exists, the second exists, the results' kinds, then
+    /// `typeParams.corresponds(other.typeParams)(_.paramInfo.hasSameKindAs(_.paramInfo))`; else the second none. Each
+    /// `&&` stops the reads after it.
+    pub(super) fn has_same_kind_reads(&mut self, t: TypeId, other: TypeId) -> Result<bool, TParamId> {
+        let self_result = self.hk_result_reads(t)?;
+        let other_result = self.hk_result_reads(other)?;
+        if self_result.is_some_and(|r| self.is_any_kind(r)) || other_result.is_some_and(|r| self.is_any_kind(r)) {
+            return Ok(true);
+        }
+        let Some(self_result) = self_result else {
+            return Ok(other_result.is_none());
+        };
+        let Some(other_result) = other_result else {
+            return Ok(false);
+        };
+        if !self.has_same_kind_reads(self_result, other_result)? {
+            return Ok(false);
+        }
+        let own = self.type_params_reads(t)?;
+        let others = self.type_params_reads(other)?;
+        for (&a, &b) in own.iter().zip(&others) {
+            if !self.has_same_kind_reads(a, b)? {
+                return Ok(false);
+            }
+        }
+        Ok(own.len() == others.len())
+    }
+
+    /// `isAnyKind` of a `hkResult`: the `TypeRef` of `AnyKind`.
+    fn is_any_kind(&self, t: TypeId) -> bool {
+        match self.types.get(t) {
+            Type::Class(c, _) | Type::Ctor(c) => self.is_scala_class(c, "AnyKind"),
+            Type::Error => true,
+            _ => false,
+        }
+    }
+
+    /// `typeParams` (`core/TypeApplications.scala` 170-213) with its reads, each parameter as `hasSameKindAs` reads its
+    /// `paramInfo` (a parameter itself, whose information is its bounds; `Any` for a clause known by its arity, its
+    /// infos `TypeBounds.empty`): 182-197 a `TypeRef`: a class's parameters, else its information's (a binder still under
+    /// its completer by its clause, `completerTypeParams`); 199-201 an `AppliedType`: a class constructor none, else
+    /// `superType.typeParams`; 204-205 an `HKTypeLambda` its own; 206-211 a singleton, a refinement, a recursive type
+    /// none, a wildcard its bounds', another proxy its `superType`'s; else none. A class constructor as an argument
+    /// (eta-expanded) its class's.
+    fn type_params_reads(&mut self, t: TypeId) -> Result<Vec<TypeId>, TParamId> {
+        let t = self.deref_keeping(t);
+        match self.types.get(t) {
+            Type::Lambda(l, _) => Ok(self.types.items(l).to_vec()),
+            Type::Alias(..) => match self.kind_dealias(t) {
+                Some(e) => self.type_params_reads(e),
+                None => Ok(Vec::new()),
+            },
+            Type::Ctor(c) => {
+                self.class_tparam_infos(c);
+                Ok(self.syms.class(c).tparams.clone().into_iter().map(|q| self.types.param(q)).collect())
+            }
+            Type::Param(_) | Type::Decl(_) | Type::Member(..) | Type::AppParam(..) | Type::AppMember(..) | Type::Var(_) | Type::AppVar(..) => {
+                if !self.kind_walk_enter(t) {
+                    return Ok(Vec::new());
+                }
+                let r = match self.kind_info(t) {
+                    Ok(KindInfo::Bounds(hi)) | Ok(KindInfo::Alias(hi)) => self.type_params_reads(hi),
+                    Ok(KindInfo::Unknown) => Ok(Vec::new()),
+                    Err(e) => Err(e),
+                };
+                self.kind_walk.pop();
+                r
+            }
+            Type::BoundedWild(_, hi) => self.type_params_reads(hi),
+            Type::Annotated(u) => self.type_params_reads(u),
+            _ => Ok(Vec::new()),
+        }
+    }
+
+    /// `hasSimpleKind` (`core/TypeApplications.scala` 246-250) with its reads: `typeParams.isEmpty && !hasAnyKind`, else
+    /// the dealiased type's where `dealias` changed it (an alias's information followed).
+    pub(super) fn has_simple_kind_reads(&mut self, t: TypeId) -> Result<bool, TParamId> {
+        let t = self.deref_keeping(t);
+        if self.type_params_reads(t)?.is_empty() && !self.has_any_kind_reads(t)? {
+            return Ok(true);
+        }
+        let dealiased = match self.types.get(t) {
+            Type::Member(..) | Type::Decl(_) => match self.kind_info(t)? {
+                KindInfo::Alias(a) => a,
+                _ => t,
+            },
+            Type::Alias(..) => self.kind_dealias(t).unwrap_or(t),
+            _ => t,
+        };
+        if dealiased != t && self.kind_walk_enter(t) {
+            let r = self.has_simple_kind_reads(dealiased);
+            self.kind_walk.pop();
+            return r;
+        }
+        Ok(false)
+    }
+
+    /// `hasAnyKind`'s loop (`core/Types.scala` 371-381): a class `TypeRef` is `AnyKind` or not; another `TypeRef` its
+    /// `translucentSuperType` (3034-3041: an alias's alias, bounds' `hi`); another proxy its `underlying` (an
+    /// application its constructor, 4740; a lambda its result, 3975; an annotated, refined or recursive type its parent;
+    /// a wildcard's bounds `hi`); else false.
+    fn has_any_kind_reads(&mut self, t: TypeId) -> Result<bool, TParamId> {
+        let t = self.deref_keeping(t);
+        match self.types.get(t) {
+            Type::Class(c, _) | Type::Ctor(c) => Ok(self.is_scala_class(c, "AnyKind")),
+            Type::Param(_) | Type::Decl(_) | Type::Member(..) => {
+                if !self.kind_walk_enter(t) {
+                    return Ok(false);
+                }
+                let r = match self.kind_info(t) {
+                    Ok(KindInfo::Bounds(hi)) | Ok(KindInfo::Alias(hi)) => self.has_any_kind_reads(hi),
+                    Ok(_) => Ok(false),
+                    Err(e) => Err(e),
+                };
+                self.kind_walk.pop();
+                r
+            }
+            Type::AppParam(f, _) => {
+                let head = self.types.param(f);
+                self.has_any_kind_reads(head)
+            }
+            Type::AppMember(m, _) => self.has_any_kind_reads(m),
+            // An open variable's `underlying`, its `origin`'s information (`TypeVar.underlying`); an application of one its
+            // constructor.
+            Type::Var(_) => {
+                if !self.kind_walk_enter(t) {
+                    return Ok(false);
+                }
+                let r = match self.kind_info(t) {
+                    Ok(KindInfo::Bounds(hi)) | Ok(KindInfo::Alias(hi)) => self.has_any_kind_reads(hi),
+                    Ok(KindInfo::Unknown) => Ok(false),
+                    Err(e) => Err(e),
+                };
+                self.kind_walk.pop();
+                r
+            }
+            Type::AppVar(v, _) => {
+                let head = self.types.mk(Type::Var(v));
+                self.has_any_kind_reads(head)
+            }
+            Type::Alias(..) => match self.kind_dealias(t) {
+                Some(e) => self.has_any_kind_reads(e),
+                None => Ok(false),
+            },
+            Type::Lambda(_, body) => self.has_any_kind_reads(body),
+            Type::Annotated(u) | Type::Refined(u, _) | Type::Rec(u) | Type::BoundedWild(_, u) => self.has_any_kind_reads(u),
+            _ => Ok(false),
+        }
+    }
+
+    /// `Checking.preCheckKind(arg, paramBounds)` (`typer/Checking.scala` 189-193) with its reads, in its order:
+    /// `arg.tpe.widen.isRef(defn.NothingClass) || !paramBounds.exists || arg.tpe.hasSameKindAs(paramBounds.bounds.hi)`,
+    /// `hi` the formal's upper bound (`None`: an unbounded wildcard argument's `NoType`). The value is whether the
+    /// argument is kept (an argument refused is an error tree, read no further).
+    pub(super) fn pre_check_kind_reads(&mut self, arg: TypeId, hi: Option<TypeId>) -> Result<bool, TParamId> {
+        // An error tree's own verdict says nothing (`HideNonSensicalMessages` hides a message of the error type).
+        if self.types.contains_error(arg) {
+            return Ok(true);
+        }
+        if self.widened_is_ref_reads(arg, RefSym::Nothing)? {
+            return Ok(true);
+        }
+        match hi {
+            Some(hi) => self.has_same_kind_reads(arg, hi),
+            None => Ok(true),
+        }
+    }
+
+    /// `preCheckKind` of the argument `arg` for the parameter `p`, outside a binder's completion (where its reads meet no
+    /// cycle): the widened argument a reference to `Nothing`, then `hasSameKindAs` of the parameter's information
+    /// (`has_same_kind`, which keeps an argument that did not resolve, teq's error tree).
+    pub(super) fn pre_check_kind(&mut self, arg: TypeId, p: TParamId) -> bool {
+        self.widened_is_ref_reads(arg, RefSym::Nothing).unwrap_or(false) || self.has_same_kind(arg, p)
+    }
+
+    /// `typedAppliedTypeTree`'s `tpt1.tpe.dealiasKeepAnnotsAndOpaques` (`typer/Typer.scala` 2725), before the arguments
+    /// are typed: a non-class constructor's information (`Type.dealias`'s `tp.info`): a binder's; a member's prefix's.
+    pub(super) fn dealias_reads(&mut self, ctor: TypeId) -> Result<(), TParamId> {
+        match self.types.get(ctor) {
+            Type::Param(f) => self.binder_info(f),
+            Type::Member(prefix, _) => self.prefix_reads(prefix),
+            _ => Ok(()),
+        }
+    }
+
+    /// `Typer.adaptType`'s `etaExpand` (`typer/Typer.scala` 5051-5068, `TypeApplications.etaExpand`'s `self.dealias`) of
+    /// a type expression outside a constructor's place: a bare binder of a clause in completion whose `typeParamSymbols`
+    /// are its completer's (`completerTypeParams`: a clause of its own, the binder `NotStarted` or `Touched`) has its
+    /// information read.
+    pub(super) fn eta_reads(&mut self, t: TypeId) -> Result<(), TParamId> {
+        let Type::Param(p) = self.types.get(t) else {
+            return Ok(());
+        };
+        use super::BinderState::*;
+        for at in (0..self.binder_completing.len()).rev() {
+            let c = &self.binder_completing[at];
+            if let Some(i) = c.ids.iter().position(|&q| q == p) {
+                if !matches!(c.states[i], NotStarted | Touched) {
+                    return Ok(());
+                }
+                let hi = c.bounds[i].1;
+                let file = c.file;
+                if hi == crate::ast::NO_BOUND || self.ast(file).notes.own_clause_bounds.binary_search(&hi).is_err() {
+                    return Ok(());
+                }
+                return self.binder_info(p);
+            }
+        }
+        Ok(())
+    }
+
+    /// `desugar.refinedTypeToClass`' `stripToCore` (`ast/Desugar.scala` 2500-2507) of a refinement's parent: an
+    /// application or a class itself, another proxy's `underlying` (a binder's information, then its upper bound),
+    /// an intersection both sides.
+    pub(super) fn strip_to_core_reads(&mut self, t: TypeId) -> Result<(), TParamId> {
+        let t = self.deref_keeping(t);
+        match self.types.get(t) {
+            Type::Param(p) => {
+                self.binder_info(p)?;
+                let upper = self.syms.tparam(p).upper;
+                if upper == ANY || upper == ERROR || self.binder_state(p).is_some_and(|s| s != super::BinderState::Done) {
+                    return Ok(());
+                }
+                self.strip_to_core_reads(upper)
+            }
+            Type::Inter(a, b) => {
+                self.strip_to_core_reads(a)?;
+                self.strip_to_core_reads(b)
+            }
+            Type::Annotated(u) | Type::Rec(u) => self.strip_to_core_reads(u),
+            _ => Ok(()),
+        }
+    }
+
+    /// `SelectionProto.hasUnknownMembers` (`typer/ProtoTypes.scala` 236-253) of a selection's qualifier, with its reads
+    /// (`has_unknown_members` over the typer's types, `KnownTypes`): a binder's `info` read where dotty reads `tp.info`.
+    pub(super) fn has_unknown_members_reads(&mut self, t: TypeId) -> Result<bool, TParamId> {
+        let mut visiting = Vec::new();
+        has_unknown_members(&mut KnownTypes { w: self }, t, &mut visiting)
+    }
+
+    /// A non-class reference's information as `hasUnknownMembers` reads it (`tp.info`: `loBound`, `hiBound`), with its
+    /// read: a binder's (`binder_info`; one whose bounds are being typed its `dummyInfo1`), an abstract member's or an
+    /// alias's (a member completing its provisional bounds, `typeSig`'s).
+    fn reference_bounds(&mut self, t: TypeId) -> Result<(TypeId, TypeId), TParamId> {
+        Ok(match self.types.get(t) {
+            Type::Param(p) => {
+                self.binder_info(p)?;
+                if self.binder_state(p).is_some_and(|s| s != super::BinderState::Done) {
+                    (NOTHING, self.binder_own_clause(p))
+                } else {
+                    (self.syms.tparam(p).lower, self.param_info_hi(p))
+                }
+            }
+            Type::Decl(a) => {
+                if self.member_completing(t) {
+                    return Ok((NOTHING, self.declared_clause(a)));
+                }
+                self.complete_alias(a);
+                let info = &self.syms.aliases[a.idx()];
+                match info.bounds {
+                    Some((lo, hi)) => (lo, hi),
+                    None => (info.rhs, info.rhs),
+                }
+            }
+            Type::Member(prefix, name) => {
+                let alias = self.type_member_alias(prefix, name);
+                if self.member_completing(t) {
+                    return Ok((NOTHING, alias.map_or(ANY, |a| self.declared_clause(a))));
+                }
+                match self.type_member(prefix, name) {
+                    Some(super::members::MemberInfo::Alias(a)) => (a, a),
+                    Some(super::members::MemberInfo::Bounds(lo, hi)) => (lo, hi),
+                    None => (NOTHING, ANY),
+                }
+            }
+            _ => (NOTHING, ANY),
+        })
+    }
+
+    /// `Type.isProvisional`, `testProvisional` (`core/Types.scala` 118-152), over the typer's types.
+    pub(super) fn is_provisional(&mut self, t: TypeId) -> bool {
+        let mut seen: Vec<TypeId> = Vec::new();
+        self.test_provisional(t, &mut seen)
+    }
+
+    /// `testProvisional`'s `test`: a reference met again false (dotty marks it `mightBeProvisional = false` before it
+    /// recurses, which breaks cycles). A parameter: a binder whose completion is under way true (its `dummyInfo1`'s
+    /// `Provisional`, or its completer's `LazyType`), else its bounds' (`ParamRef.underlying`; a parameter `TypeRef`'s
+    /// `TypeBounds`, not static, its prefix none). A member or a declaration (`TypeRef`): `alias_provisional`. A selected
+    /// term (`TermRef`): not static, its prefix's. An application: its constructor's or an argument's (`fold`). A class:
+    /// its arguments', a nested class's prefix. A variable: not permanently instantiated true (`permanent_instance`), else
+    /// its permanent instance's. Else the parts' (`foldOver`).
+    fn test_provisional(&mut self, t: TypeId, seen: &mut Vec<TypeId>) -> bool {
+        if seen.contains(&t) {
+            return false;
+        }
+        seen.push(t);
+        match self.types.get(t) {
+            Type::Param(p) => {
+                if self.binder_state(p).is_some_and(|s| s != super::BinderState::Done) {
+                    return true;
+                }
+                let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
+                self.test_provisional(lo, seen) || self.test_provisional(hi, seen)
+            }
+            Type::Decl(a) => self.alias_provisional(a, None, seen),
+            Type::Member(prefix, name) => match self.type_member_alias(prefix, name) {
+                Some(a) => self.alias_provisional(a, Some(prefix), seen),
+                // A member no declaration of the prefix's classes names (a refinement's): not static, its prefix's.
+                None => self.test_provisional(prefix, seen),
+            },
+            Type::Select(prefix, s) => {
+                let owner = self.syms.sym(s).owner;
+                !self.is_static_owner(owner) && self.test_provisional(prefix, seen)
+            }
+            // `!t.isPermanentlyInstantiated || test(t.permanentInst)`: an instance a held mark or an open attempt can
+            // still undo is provisional whatever it is (`instanceOpt` sees it; `hasUnknownMembers` reads that one).
+            Type::Var(v) => match self.permanent_instance(v) {
+                Some(inst) => self.test_provisional(inst, seen),
+                None => true,
+            },
+            // An application of a variable: its constructor's or an argument's (`fold`).
+            Type::AppVar(v, args) => {
+                let head = self.types.mk(Type::Var(v));
+                let args = self.types.items(args).to_vec();
+                self.test_provisional(head, seen) || args.into_iter().any(|x| self.test_provisional(x, seen))
+            }
+            Type::AppParam(f, args) => {
+                let head = self.types.param(f);
+                let args = self.types.items(args).to_vec();
+                self.test_provisional(head, seen) || args.into_iter().any(|x| self.test_provisional(x, seen))
+            }
+            Type::AppMember(m, args) => {
+                let args = self.types.items(args).to_vec();
+                self.test_provisional(m, seen) || args.into_iter().any(|x| self.test_provisional(x, seen))
+            }
+            Type::Alias(a, args) => {
+                let args = self.types.items(args).to_vec();
+                self.alias_provisional(a, None, seen) || args.into_iter().any(|x| self.test_provisional(x, seen))
+            }
+            Type::Nested(prefix, class) => self.test_provisional(prefix, seen) || self.test_provisional(class, seen),
+            _ => {
+                let mut parts = Vec::new();
+                self.types.parts(t, &mut parts);
+                parts.into_iter().any(|x| self.test_provisional(x, seen))
+            }
+        }
+    }
+
+    /// `testProvisional` of a `TypeRef` to the member `a`: its symbol `Provisional` (its `typeSig` under way) true; a
+    /// static one (owned by a package or a static object) nothing more; else its prefix's, or its information's: not
+    /// completed (`LazyType`) true, an alias its target's, bounds either side's. The member's own information, as
+    /// declared (`infoOrCompleter`, no completion forced).
+    fn alias_provisional(&mut self, a: AliasId, prefix: Option<TypeId>, seen: &mut Vec<TypeId>) -> bool {
+        let state = self.syms.alias(a).state().get();
+        if state == Completion::InProgress {
+            return true;
+        }
+        if self.is_static_owner(self.syms.aliases[a.idx()].owner) {
+            return false;
+        }
+        if prefix.is_some_and(|p| self.test_provisional(p, seen)) {
+            return true;
+        }
+        if state != Completion::Done {
+            return true;
+        }
+        let info = &self.syms.aliases[a.idx()];
+        match info.bounds {
+            Some((lo, hi)) => self.test_provisional(lo, seen) || self.test_provisional(hi, seen),
+            None => {
+                let rhs = info.rhs;
+                self.test_provisional(rhs, seen)
+            }
+        }
+    }
+
+    /// `completeAnnotations`' step for one annotation of the binder `r`: `typedAnnotation` (a Java class's arguments
+    /// checked first, `Namer.addAnnotations`' `checkNamedArgumentForJavaAnnotation`), then `checkAnnotArgs`,
+    /// `checkAnnotClass` and `checkAnnotApplicable`. A `@nowarn`'s registration is `register_suppressions`', once
+    /// typing is over.
+    fn complete_binder_annotation(&mut self, file: FileId, r: &ast::BinderAnnot) {
+        let instance = r.annot.instance;
+        let span = self.ast(file).expr_span(instance);
+        let mark = self.diags.items.len();
+        let frame = self.var_frame_begin();
+        let pending = self.attempts.pending_len();
+        let (class, typed) = match self.java_annotation_class(instance) {
+            Some(c) => {
+                self.check_named_java_annotation_args(file, c, instance);
+                (Some(c), self.type_java_annotation(c, instance))
+            }
+            None => {
+                let (te, ty) = self.type_expr(instance, None);
+                let ty = self.dealias(ty);
+                let class = match self.types.get(ty) {
+                    Type::Class(c, _) => Some(c),
+                    _ => None,
+                };
+                (class, Some(te))
+            }
+        };
+        if self.attempts.pending_len() > pending {
+            self.flush_pending_from(pending);
+        }
+        self.var_frame_end(frame);
+        // An annotation whose typing reported an error at it is checked no further (`checkAnnotClass`' `isError`); a
+        // check's message at the same place would be hidden by scalac's reporter (`UniqueMessagePositions`).
+        let failed = self.diags.items[mark..].iter().any(|d| !d.is_warning && d.file == file && d.span.start >= span.start && d.span.end <= span.end);
+        let Some(class) = class else { return };
+        if !failed {
+            if typed.is_some() {
+                self.check_annot_args(file, class, instance);
+            }
+            self.check_annot_class(class, span);
+            // `checkAnnotApplicable`: a binder is a type, never a real method. Its second error (not accessed
+            // statically) stands at the same place at the same level, which scalac's reporter hides; teq's hides an
+            // error only by the same error.
+            if self.class_path(class) == "scala.main" {
+                let name = self.binder_name(file, r);
+                let msg = format!("main annotation cannot be applied to type {}", self.name_str(name));
+                self.error(span, msg);
+            }
+        }
+        // The typed tree of the annotation installed on the binder, which the pickle writes (`prog.capture`).
+        if let (false, Some(te)) = (failed, typed) {
+            if let Some(c) = self.prog.capture.as_deref_mut().filter(|c| c.annotates(file)) {
+                c.annotations.insert((file, instance), te);
+            }
+        }
+        // `if Annotations.annotClass(annot1) == defn.NowarnAnnot then registerNowarn(annot1, mdef)`: by the class the
+        // annotation resolved to (an import's rename is the class), from its argument typed here.
+        if self.class_path(class) == "scala.annotation.nowarn" {
+            self.binder_nowarn(file, r, span);
+        }
+    }
+
+    /// `Typer.registerNowarn` of a binder's `@nowarn`: its filter the constant string of its first argument
+    /// (`argumentConstantString(0)`, typed in the binder's context), `""` where none is written (the default getter's),
+    /// else `none` with the warning at the argument; over the binder's `TypeDef` (`Worker::binder_nowarns`).
+    fn binder_nowarn(&mut self, file: FileId, r: &ast::BinderAnnot, annot: Span) {
+        let arg = self.annotation_argument(file, r.annot.instance);
+        let t_string = self.b.t_string;
+        let (conf, constant) = match arg {
+            None => (String::new(), true),
+            // `argumentConstant`: `stripCast(arg).tpe.widenTermRefExpr.normalized`, the operand of a cast as the
+            // typed tree types it (a selection's qualifier: no type expected).
+            Some(arg) => {
+                let (operand, expected) = match self.strip_cast(file, arg) {
+                    Some(operand) => (operand, None),
+                    None => (arg, Some(t_string)),
+                };
+                let ty = self.annot_argument_type(file, operand, expected);
+                match self.constant_of_type(ty) {
+                    Some(crate::types::LitVal::Str(s)) => (self.name_str(s), true),
+                    _ => ("none".to_string(), false),
+                }
+            }
+        };
+        let arg = arg.map(|a| self.ast(file).expr_span(a));
+        let n = super::BinderNowarn { file, annot, range: r.span, conf, arg, constant };
+        if !self.binder_nowarns.contains(&n) {
+            self.binder_nowarns.push(n);
+        }
+    }
+
+    /// `Annotation.argument(0)`: the first term argument of the annotation, its argument lists flattened
+    /// (`allTermArguments`), a named one as written.
+    fn annotation_argument(&self, file: FileId, instance: ast::ExprId) -> Option<ast::ExprId> {
+        let ast = self.ast(file);
+        let mut lists = Vec::new();
+        let mut e = instance;
+        loop {
+            match ast.expr(e) {
+                ast::Expr::Apply(f, l) => {
+                    lists.push(l);
+                    e = f;
+                }
+                ast::Expr::New(_, l) => {
+                    lists.push(l);
+                    break;
+                }
+                _ => return None,
+            }
+        }
+        lists.iter().rev().flat_map(|&l| ast.expr_list(l).iter().copied()).next()
+    }
+
+    /// `Checking.checkNonCyclic` (`typer/Checking.scala` 425-437) of the binder `i` of the clause `at`, its bounds `lower`
+    /// and `upper`: `CheckNonCyclicMap.checkInfo` over them; a cycle is `IllegalCyclicTypeReference` (E140) at the
+    /// binder, whose information is then the error type.
+    fn check_non_cyclic(&mut self, at: usize, i: usize, lower: TypeId, upper: TypeId) -> Result<(), ()> {
+        let sym = self.binder_completing[at].ids[i];
+        let mut m = NonCyclic { sym, locked: Vec::new(), cycle_ok: false, nested_cycle_ok: false, variance: 1, where_: "", last_checked: NOTHING };
+        if self.nc_check_info(&mut m, lower, upper).is_ok() {
+            return Ok(());
+        }
+        let (file, keys) = (self.binder_completing[at].file, self.binder_completing[at].keys);
+        let named = self.ast(file).notes.binder_names.iter().find(|&&(cl, k, _)| k as usize == i && keys.contains(&Some(cl))).map(|&(_, _, s)| s);
+        let bound = self.binder_completing[at].bounds[i];
+        let span = named.unwrap_or_else(|| {
+            let t = if bound.1 != crate::ast::NO_BOUND { bound.1 } else { bound.0 };
+            self.ast(file).ty_spans[t.idx()]
+        });
+        let msg = format!(
+            "illegal cyclic type reference: {} {} of type {} refers back to the type itself",
+            m.where_,
+            self.show(m.last_checked),
+            self.type_name_ref(self.syms.tparam(sym).name)
+        );
+        let file_was = std::mem::replace(&mut self.env.file, file);
+        self.error(span, msg);
+        self.env.file = file_was;
+        Err(())
+    }
+
+    /// `checkInfo` (296-310) of bounds `>: lo <: hi`: the lower part at variance -1, the upper one with nested cycles
+    /// allowed (`checkUpper`).
+    fn nc_check_info(&mut self, m: &mut NonCyclic, lo: TypeId, hi: TypeId) -> Result<(), ()> {
+        let saved = m.variance;
+        m.variance = -1;
+        let r = self.nc_check_part(m, lo, "lower bound");
+        m.variance = saved;
+        r?;
+        self.nc_check_upper(m, hi, "upper bound")
+    }
+
+    /// `checkInfo` of a `TypeAlias(alias)`: the alias as its lower part at variance -1, then as its upper one.
+    fn nc_check_alias(&mut self, m: &mut NonCyclic, alias: TypeId) -> Result<(), ()> {
+        let saved = m.variance;
+        m.variance = -1;
+        let r = self.nc_check_part(m, alias, "alias");
+        m.variance = saved;
+        r?;
+        self.nc_check_upper(m, alias, "alias")
+    }
+
+    /// `checkPart`: the part checked, `where` and `lastChecked` set after it whatever came of it (`finally`).
+    fn nc_check_part(&mut self, m: &mut NonCyclic, t: TypeId, w: &'static str) -> Result<(), ()> {
+        let r = self.nc_apply(m, t);
+        m.where_ = w;
+        m.last_checked = t;
+        r
+    }
+
+    /// `checkUpper`: `checkPart` with nested cycles allowed.
+    fn nc_check_upper(&mut self, m: &mut NonCyclic, t: TypeId, w: &'static str) -> Result<(), ()> {
+        let saved = m.nested_cycle_ok;
+        m.nested_cycle_ok = true;
+        let r = self.nc_check_part(m, t, w);
+        m.nested_cycle_ok = saved;
+        r
+    }
+
+    /// `apply(tp, cycleOK, nestedCycleOK)` (313-323).
+    fn nc_apply_with(&mut self, m: &mut NonCyclic, t: TypeId, cycle_ok: bool, nested_cycle_ok: bool) -> Result<(), ()> {
+        let saved = (m.cycle_ok, m.nested_cycle_ok);
+        m.cycle_ok = cycle_ok;
+        m.nested_cycle_ok = nested_cycle_ok;
+        let r = self.nc_apply(m, t);
+        (m.cycle_ok, m.nested_cycle_ok) = saved;
+        r
+    }
+
+    /// `CheckNonCyclicMap.apply` (325-378): a path's information then its prefix (`TermRef`), a refinement's parent and
+    /// its members' infos at the nested flag, a recursive type's parent, a reference with an interesting prefix
+    /// explored (`TypeRef`), every other type mapped over (`TypeMap.mapOver`).
+    fn nc_apply(&mut self, m: &mut NonCyclic, t: TypeId) -> Result<(), ()> {
+        let t = self.deref_keeping(t);
+        match self.types.get(t) {
+            Type::Term(_) | Type::Select(..) => {
+                let underlying = self.path_underlying(t);
+                if underlying != t {
+                    self.nc_apply(m, underlying)?;
+                }
+                match self.types.get(t) {
+                    Type::Select(prefix, _) => self.nc_map_prefix(m, prefix),
+                    _ => Ok(()),
+                }
+            }
+            Type::Refined(parent, r) => {
+                self.nc_apply(m, parent)?;
+                // `this(rinfo, nestedCycleOK, nestedCycleOK)`.
+                let saved = (m.cycle_ok, m.nested_cycle_ok);
+                m.cycle_ok = m.nested_cycle_ok;
+                let r = self.nc_refinement_info(m, r);
+                (m.cycle_ok, m.nested_cycle_ok) = saved;
+                r
+            }
+            Type::Rec(parent) => self.nc_apply(m, parent),
+            Type::Param(q) => {
+                let r = self.nc_binder_ref(m, t, q);
+                if r.is_err() && m.cycle_ok {
+                    return Ok(());
+                }
+                r
+            }
+            Type::Member(prefix, name) => {
+                let r = self.nc_member_ref(m, t, prefix, name);
+                if r.is_err() && m.cycle_ok {
+                    return Ok(());
+                }
+                r
+            }
+            Type::Decl(a) => {
+                let r = self.nc_decl_ref(m, t, a);
+                if r.is_err() && m.cycle_ok {
+                    return Ok(());
+                }
+                r
+            }
+            _ => self.nc_map_over(m, t),
+        }
+    }
+
+    /// `mapOver(rinfo)` of a refinement member's information, as one type: a `TypeBounds` its lower bound at
+    /// `-variance`, its upper at the variance; a `TypeAlias` (`AliasingBounds`) at variance 0; a method's
+    /// (`mapOverLambda`) type parameters' bounds (a `TypeBounds` at `-variance`), value parameters at `-variance`, result
+    /// at the variance; a value's type at the variance.
+    fn nc_refinement_info(&mut self, m: &mut NonCyclic, r: crate::types::RefineId) -> Result<(), ()> {
+        let saved = m.variance;
+        let at = |w: &mut Self, m: &mut NonCyclic, t: TypeId, variance: i8| {
+            m.variance = variance;
+            let r = w.nc_apply(m, t);
+            m.variance = saved;
+            r
+        };
+        match self.types.refinement(r) {
+            crate::types::Refinement::Bounds(_, lo, hi) => {
+                at(self, m, lo, -saved)?;
+                at(self, m, hi, saved)
+            }
+            crate::types::Refinement::Alias(_, a) => at(self, m, a, 0),
+            crate::types::Refinement::Val(_, _, v) => at(self, m, v, saved),
+            crate::types::Refinement::Term(_, sym, l) => {
+                let items = self.types.items(l).to_vec();
+                let k = self.syms.sym(sym).sig.as_ref().map_or(0, |sig| sig.tparams.len());
+                let Some((&result, rest)) = items.split_last() else {
+                    return Ok(());
+                };
+                let bounds = (2 * k).min(rest.len());
+                for pair in rest[..bounds].chunks(2) {
+                    at(self, m, pair[0], saved)?;
+                    if let Some(&hi) = pair.get(1) {
+                        at(self, m, hi, -saved)?;
+                    }
+                }
+                for &p in &rest[bounds..] {
+                    at(self, m, p, -saved)?;
+                }
+                at(self, m, result, saved)
+            }
+        }
+    }
+
+    /// Whether an alias's or an object's abstract member's `TypeRef` has an interesting prefix (`isInteresting`): a local
+    /// one's `NoPrefix`; a top-level one's package object, or an object's (a static module class of this run's
+    /// sources, `pcls.span.exists && pcls.defRunId == ctx.runId`), an object's nested in a class its prefix's (a
+    /// `ThisType`, the binder's owner no class); a class's member its `ThisType`, none. teq keeps no prefix on
+    /// `Type::Alias` or `Type::Decl`: an object's member is taken through the object's `TermRef`.
+    fn nc_alias_interesting(&self, a: AliasId) -> bool {
+        let info = &self.syms.aliases[a.idx()];
+        let source = !self.in_jar(info.file) && !self.is_body_file(info.file);
+        match info.owner {
+            Owner::Local => true,
+            Owner::Package(_) => source,
+            Owner::Class(c) => {
+                let mut c = c;
+                loop {
+                    if self.syms.class(c).kind != ClassKind::Object {
+                        return false;
+                    }
+                    match self.syms.class(c).owner {
+                        Owner::Class(o) => c = o,
+                        Owner::Package(_) => return source,
+                        Owner::Local => return true,
+                    }
+                }
+            }
+        }
+    }
+
+    /// The `TypeRef` case for an application of a match alias kept by name (`this(tycon)` of `mapOver`'s
+    /// `AppliedType`): where interesting, `locked` by the alias, its information (`MatchAlias`) checked.
+    fn nc_alias_ref(&mut self, m: &mut NonCyclic, a: AliasId) -> Result<(), ()> {
+        if !self.nc_alias_interesting(a) {
+            return Ok(());
+        }
+        let key = self.types.mk(Type::Alias(a, crate::types::EMPTY_LIST));
+        if m.locked.contains(&key) {
+            return Err(());
+        }
+        m.locked.push(key);
+        self.complete_alias(a);
+        let (rhs, tparams) = (self.syms.aliases[a.idx()].rhs, self.syms.aliases[a.idx()].tparams.clone());
+        let r = self.nc_check_match_alias(m, &tparams, rhs);
+        m.locked.pop();
+        r
+    }
+
+    /// The `TypeRef` case for an object's abstract member (`O.T`): where interesting, `locked`, its bounds checked.
+    fn nc_decl_ref(&mut self, m: &mut NonCyclic, t: TypeId, a: AliasId) -> Result<(), ()> {
+        if !self.nc_alias_interesting(a) {
+            return Ok(());
+        }
+        if m.locked.contains(&t) {
+            return Err(());
+        }
+        m.locked.push(t);
+        self.complete_alias(a);
+        let r = match self.syms.aliases[a.idx()].bounds {
+            Some((lo, hi)) if lo != ERROR && hi != ERROR => self.nc_check_info(m, lo, hi),
+            Some(_) => Ok(()),
+            None => {
+                let rhs = self.syms.aliases[a.idx()].rhs;
+                self.nc_check_member_alias(m, rhs)
+            }
+        };
+        m.locked.pop();
+        r
+    }
+
+    /// `checkInfo` of a member's alias: a `MatchAlias` (a match type, or a lambda over one) by `nc_check_match_alias`,
+    /// another `TypeAlias` by `nc_check_alias`.
+    fn nc_check_member_alias(&mut self, m: &mut NonCyclic, alias: TypeId) -> Result<(), ()> {
+        match self.types.get(alias) {
+            Type::Match(..) => self.nc_check_match_alias(m, &[], alias),
+            Type::Lambda(ps, body) if matches!(self.types.get(body), Type::Match(..)) => {
+                let params: Vec<TParamId> = self.types.items(ps).iter().filter_map(|&p| match self.types.get(p) {
+                    Type::Param(q) => Some(q),
+                    _ => None,
+                }).collect();
+                self.nc_check_match_alias(m, &params, body)
+            }
+            _ => self.nc_check_alias(m, alias),
+        }
+    }
+
+    /// `checkInfo`'s `MatchAlias(alias)` (303-304): `atVariance(0)(checkUpper(alias, "match"))`, the alias a lambda
+    /// over `tparams` (`mapOverLambda`: their bounds at `-0`) whose result is the match type `rhs`.
+    fn nc_check_match_alias(&mut self, m: &mut NonCyclic, tparams: &[TParamId], rhs: TypeId) -> Result<(), ()> {
+        let saved = (m.variance, m.nested_cycle_ok);
+        m.variance = 0;
+        m.nested_cycle_ok = true;
+        let mut r = Ok(());
+        for &q in tparams {
+            let (lo, hi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
+            r = self.nc_apply(m, lo).and_then(|_| self.nc_apply(m, hi));
+            if r.is_err() {
+                break;
+            }
+        }
+        if r.is_ok() {
+            r = self.nc_apply(m, rhs);
+        }
+        m.where_ = "match";
+        m.last_checked = if tparams.is_empty() {
+            rhs
+        } else {
+            let ps: Vec<TypeId> = tparams.iter().map(|&q| self.types.param(q)).collect();
+            let l = self.types.list(&ps);
+            self.types.mk(Type::Lambda(l, rhs))
+        };
+        (m.variance, m.nested_cycle_ok) = saved;
+        r
+    }
+
+    /// The `TypeRef` case for a binder (`NoPrefix`, interesting): locked or the one checked in `NoCompleter` a cycle; a
+    /// reference whose information is `NoCompleter` not explored; another's information read (`binder_info`,
+    /// completing it) and checked.
+    fn nc_binder_ref(&mut self, m: &mut NonCyclic, t: TypeId, q: TParamId) -> Result<(), ()> {
+        let state = self.binder_state(q);
+        if m.locked.contains(&t) || (state == Some(super::BinderState::Checking) && q == m.sym) {
+            return Err(());
+        }
+        if state == Some(super::BinderState::Checking) {
+            return Ok(());
+        }
+        m.locked.push(t);
+        let r = match self.binder_info(q) {
+            Err(_) => Err(()),
+            Ok(()) => {
+                let (lo, hi) = match self.binder_state(q) {
+                    Some(super::BinderState::Provisional) => (NOTHING, ANY),
+                    _ => (self.syms.tparam(q).lower, self.syms.tparam(q).upper),
+                };
+                if lo == ERROR || hi == ERROR {
+                    Ok(())
+                } else {
+                    self.nc_check_info(m, lo, hi)
+                }
+            }
+        };
+        m.locked.pop();
+        r
+    }
+
+    /// The `TypeRef` case for a type member `prefix.name`: its prefix mapped (at `variance max 0`, cycles not allowed);
+    /// where the prefix is interesting, locked a cycle, else its alias or its bounds checked.
+    fn nc_member_ref(&mut self, m: &mut NonCyclic, t: TypeId, prefix: TypeId, name: Name) -> Result<(), ()> {
+        if !self.nc_interesting(prefix) {
+            return Ok(());
+        }
+        let saved = m.variance;
+        m.variance = m.variance.max(0);
+        let r = self.nc_apply_with(m, prefix, false, false);
+        m.variance = saved;
+        r?;
+        if m.locked.contains(&t) {
+            return Err(());
+        }
+        m.locked.push(t);
+        let r = match self.type_member(prefix, name) {
+            Some(super::members::MemberInfo::Alias(a)) => self.nc_check_member_alias(m, a),
+            Some(super::members::MemberInfo::Bounds(lo, hi)) => self.nc_check_info(m, lo, hi),
+            _ => Ok(()),
+        };
+        m.locked.pop();
+        r
+    }
+
+    /// A path prefix mapped over (`mapOver`'s `NamedType`: the prefix at `variance max 0`).
+    fn nc_map_prefix(&mut self, m: &mut NonCyclic, prefix: TypeId) -> Result<(), ()> {
+        let saved = m.variance;
+        m.variance = m.variance.max(0);
+        let r = self.nc_apply(m, prefix);
+        m.variance = saved;
+        r
+    }
+
+    /// `isInteresting(prefix)` (342-360) for a binder (owned by no class): a path into an object of this run's sources,
+    /// or a local path (its prefix `NoPrefix`); an intersection either side, a union both; a refinement, a recursive
+    /// type, an application; an annotated type its parent; a class's `this` none (the owner is no class).
+    fn nc_interesting(&mut self, prefix: TypeId) -> bool {
+        let prefix = self.deref_keeping(prefix);
+        match self.types.get(prefix) {
+            Type::Term(s) => match self.inner_object_of_sym(s) {
+                Some(_) => self.nc_source_object(s),
+                None => true,
+            },
+            Type::Select(q, s) => match self.inner_object_of_sym(s) {
+                Some(_) => self.nc_source_object(s),
+                None => self.nc_interesting(q),
+            },
+            Type::Inter(a, b) => self.nc_interesting(a) || self.nc_interesting(b),
+            Type::Union(a, b, _) => self.nc_interesting(a) && self.nc_interesting(b),
+            Type::Refined(..) | Type::Rec(_) | Type::AppParam(..) | Type::AppMember(..) => true,
+            Type::Class(_, args) => !self.types.items(args).is_empty(),
+            Type::Annotated(u) => self.nc_interesting(u),
+            _ => false,
+        }
+    }
+
+    /// A static object defined in this run (`pcls.span.exists && pcls.defRunId == ctx.runId`): of a program's source.
+    fn nc_source_object(&self, s: SymId) -> bool {
+        let file = self.syms.sym(s).file;
+        !self.in_jar(file) && !self.is_body_file(file)
+    }
+
+    /// `TypeMap.mapOver` (`core/Types.scala` 6429-6539) for the map: an application's constructor and its arguments
+    /// (`mapArgs` by `tyconTypeParams`), a lambda's parameters' bounds at the variance flipped and its result
+    /// (`mapOverLambda`), a wildcard's bounds (the lower one flipped), a variable's instance (`mapOverTypeVar`), an
+    /// annotated type's parent (`Annotation.mapWith`: `RuntimeChecked`, the one annotation teq keeps, has no argument),
+    /// a match type's bound, scrutinee (variance 0) and cases, an intersection's and a union's sides, a class
+    /// constant's class type.
+    fn nc_map_over(&mut self, m: &mut NonCyclic, t: TypeId) -> Result<(), ()> {
+        match self.types.get(t) {
+            Type::Class(c, args) => {
+                if self.types.items(args).is_empty() {
+                    return Ok(());
+                }
+                let variances: Vec<i8> = self.syms.class(c).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
+                let args = self.types.items(args).to_vec();
+                self.nc_map_args(m, &args, &variances)
+            }
+            // `mapOver(AppliedType)`: the constructor, then `mapArgs(args, tyconTypeParams(tp))`, each argument at its
+            // parameter's `paramVarianceSign`.
+            Type::AppParam(f, args) => {
+                let head = self.types.param(f);
+                self.nc_apply(m, head)?;
+                let variances = self.tycon_type_params(head)?;
+                let args = self.types.items(args).to_vec();
+                self.nc_map_args(m, &args, &variances)
+            }
+            Type::AppMember(head, args) => {
+                self.nc_apply(m, head)?;
+                let args = self.types.items(args).to_vec();
+                let variances = self.tycon_type_params(head)?;
+                self.nc_map_args(m, &args, &variances)
+            }
+            Type::Alias(a, args) => {
+                // `this(tycon)`: the alias's `TypeRef`, a cycle there under `cycle_ok` its `LazyRef`.
+                let r = self.nc_alias_ref(m, a);
+                if r.is_err() && !m.cycle_ok {
+                    return r;
+                }
+                let variances: Vec<i8> = self.syms.aliases[a.idx()].tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
+                let args = self.types.items(args).to_vec();
+                self.nc_map_args(m, &args, &variances)
+            }
+            Type::Nested(prefix, class) => {
+                self.nc_map_prefix(m, prefix)?;
+                self.nc_map_over(m, class)
+            }
+            Type::Lambda(ps, body) | Type::Poly(ps, body) => {
+                // `mapOverLambda`: the parameters' infos (`TypeBounds`) at `-variance`, a `PolyType`'s as the type stores
+                // them (`poly_bounds`), a lambda's its binders'; then the result.
+                let bounds: Vec<(TypeId, TypeId)> = match self.types.get(t) {
+                    Type::Poly(..) => self.types.poly_bounds(ps).chunks(2).map(|b| (b[0], b.get(1).copied().unwrap_or(ANY))).collect(),
+                    _ => self.types.items(ps).to_vec().into_iter().filter_map(|p| match self.types.get(p) {
+                        Type::Param(q) => Some((self.syms.tparam(q).lower, self.syms.tparam(q).upper)),
+                        _ => None,
+                    }).collect(),
+                };
+                let saved = m.variance;
+                m.variance = -saved;
+                for (lo, hi) in bounds {
+                    let inner = m.variance;
+                    m.variance = -inner;
+                    let r = self.nc_apply(m, lo);
+                    m.variance = inner;
+                    if r.is_err() {
+                        m.variance = saved;
+                        return r;
+                    }
+                    if let Err(e) = self.nc_apply(m, hi) {
+                        m.variance = saved;
+                        return Err(e);
+                    }
+                }
+                m.variance = saved;
+                self.nc_apply(m, body)
+            }
+            Type::BoundedWild(lo, hi) => {
+                let saved = m.variance;
+                m.variance = -saved;
+                let r = self.nc_apply(m, lo);
+                m.variance = saved;
+                r?;
+                self.nc_apply(m, hi)
+            }
+            Type::Var(_) | Type::AppVar(..) => {
+                let inst = self.deref_keeping(t);
+                if inst != t {
+                    return self.nc_apply(m, inst);
+                }
+                // An open variable's application: its arguments as any application's.
+                let Type::AppVar(v, args) = self.types.get(t) else { return Ok(()) };
+                let head = self.types.mk(Type::Var(v));
+                let args = self.types.items(args).to_vec();
+                let variances = self.tycon_type_params(head)?;
+                self.nc_map_args(m, &args, &variances)
+            }
+            Type::Annotated(u) => self.nc_apply(m, u),
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
+                self.nc_apply(m, a)?;
+                self.nc_apply(m, b)
+            }
+            Type::Match(scrut, mid) => {
+                let info = self.types.match_info(mid).clone();
+                self.nc_apply(m, info.bound)?;
+                let saved = m.variance;
+                m.variance = 0;
+                let r = self.nc_apply(m, scrut);
+                m.variance = saved;
+                r?;
+                // The cases at the variance restored: a case's binders (`mapOverLambda` of a `MatchCase` result: their
+                // infos at 0), then `MatchCase[Pat, +Body]`'s arguments (`scala/runtime/MatchCase.scala`).
+                for case in info.cases.iter() {
+                    let binders = self.types.items(case.binders).to_vec();
+                    if !binders.is_empty() {
+                        m.variance = 0;
+                        let r = binders.into_iter().try_for_each(|b| match self.types.get(b) {
+                            Type::Param(q) => {
+                                let (lo, hi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
+                                self.nc_apply(m, lo).and_then(|_| self.nc_apply(m, hi))
+                            }
+                            _ => Ok(()),
+                        });
+                        m.variance = saved;
+                        r?;
+                    }
+                    self.nc_map_args(m, &[case.pattern, case.body], &[0, 1])?;
+                }
+                Ok(())
+            }
+            Type::Lit(l) => match self.types.lit_val(l) {
+                crate::types::LitVal::Class(class) => self.nc_apply(m, class),
+                _ => Ok(()),
+            },
+            _ => Ok(()),
+        }
+    }
+
+    /// `AppliedType.tyconTypeParams` (`core/Types.scala` 4831-4834) of an application's constructor `head`, their
+    /// variances (`paramVarianceSign`): `tycon.typeParams` (`type_params_reads`: a parameter's or a member's information
+    /// through its bounds, `O.G <: P#F` the parameters `P#F` declares, `G <: F` those of `F`'s clause); none,
+    /// `HKTypeLambda.any`'s invariant ones (`nc_map_args` reads an absent variance as invariant). A read's cycle is the
+    /// check's (`checkNonCyclic`'s `CyclicReference` catch).
+    fn tycon_type_params(&mut self, head: TypeId) -> Result<Vec<i8>, ()> {
+        let ps = self.type_params_reads(head).map_err(|_| ())?;
+        Ok(ps.iter().map(|&q| match self.types.get(q) {
+            Type::Param(q) => self.syms.tparam(q).variance,
+            _ => 0,
+        }).collect())
+    }
+
+    /// CheckNonCyclicMap's `mapArg` (380-388) over `mapArgs`: each argument at `variance * paramVarianceSign`, cycles
+    /// allowed as nested ones are, nested ones where the variance differs from the parameter's (none past the
+    /// parameters, an absent variance invariant).
+    fn nc_map_args(&mut self, m: &mut NonCyclic, args: &[TypeId], variances: &[i8]) -> Result<(), ()> {
+        for (k, &arg) in args.iter().enumerate() {
+            let sign = variances.get(k).copied().unwrap_or(0).signum();
+            let variance_diff = m.variance != sign;
+            let saved = m.variance;
+            m.variance = saved * sign;
+            let nested1 = m.nested_cycle_ok || m.variance != 0 && variance_diff;
+            let nested = m.nested_cycle_ok;
+            let r = self.nc_apply_with(m, arg, nested, nested1);
+            m.variance = saved;
+            r?;
+        }
+        Ok(())
+    }
+
+    /// The name of the binder `r` annotates, by its clause's names.
+    fn binder_name(&self, file: FileId, r: &ast::BinderAnnot) -> Name {
+        let ast = self.ast(file);
+        let names = match r.clause {
+            ast::BinderClause::Lambda(t) | ast::BinderClause::Own(t) | ast::BinderClause::PolyFun(t) => match ast.ty(t) {
+                TyExpr::Lambda(l, _) | TyExpr::PolyFun(l, _) => l,
+                _ => return names::EMPTY,
+            },
+            ast::BinderClause::PolyLiteral(e) => match ast.expr(e) {
+                ast::Expr::PolyLambda(l, _) => l,
+                _ => return names::EMPTY,
+            },
+        };
+        ast.name_lists[names.range()].get(r.index as usize).copied().unwrap_or(names::EMPTY)
+    }
+
+    /// `Checking.checkAnnotArgs`: the compiler's own annotations' arguments, its own tests. `@targetName`'s one
+    /// argument (`Apply(tycon, arg :: Nil)`) a `Literal` of the typed tree: one written so, its parentheses dropped as
+    /// the typed tree drops them, not empty; a named one, an ascription, a block, an operation (`ConstFold` gives it a
+    /// constant type, not a `Literal`) or a constant's name is none. `@implicitNotFound`'s and `@implicitAmbiguous`'s
+    /// argument of a constant type (`arg.tpe.widenTermRefExpr.normalized`), `argument_constant`.
+    fn check_annot_args(&mut self, file: FileId, class: ClassId, instance: ast::ExprId) {
+        let path = self.class_path(class);
+        let name = match path.as_str() {
+            "scala.annotation.targetName" => "targetName",
+            "scala.annotation.implicitNotFound" => "implicitNotFound",
+            "scala.annotation.implicitAmbiguous" => "implicitAmbiguous",
+            _ => return,
+        };
+        let ast = self.ast(file);
+        let ast::Expr::New(_, written) = ast.expr(instance) else { return };
+        let &[arg] = ast.expr_list(written) else { return };
+        let at = ast.expr_span(arg);
+        if name == "targetName" {
+            let mut lit = arg;
+            while let ast::Expr::Parens(x) = ast.expr(lit) {
+                lit = x;
+            }
+            match ast.expr(lit) {
+                ast::Expr::StringLit(s) if ast.str(s).is_empty() => self.error(at, "target name cannot be empty"),
+                ast::Expr::StringLit(_)
+                | ast::Expr::IntLit(_)
+                | ast::Expr::LongLit(_)
+                | ast::Expr::DoubleLit(_)
+                | ast::Expr::DecimalLit(_)
+                | ast::Expr::FloatLit(_)
+                | ast::Expr::BoolLit(_)
+                | ast::Expr::CharLit(_)
+                | ast::Expr::NullLit
+                | ast::Expr::UnitLit => {}
+                _ => self.error(at, format!("@{} needs a string literal as argument", name)),
+            }
+            return;
+        }
+        let t_string = self.b.t_string;
+        let ty = self.annot_argument_type(file, arg, Some(t_string));
+        if self.constant_of_type(ty).is_none() {
+            self.error(at, format!("@{} requires constant expressions as a parameter", name));
+        }
+    }
+
+    /// The type of the annotation argument `arg` as the annotation's typed tree has it (`arg.tpe`): typed where the
+    /// annotation is, against `expected`, under a rollback: what its typing reports at it is the annotation's, which
+    /// typed it already.
+    fn annot_argument_type(&mut self, file: FileId, arg: ast::ExprId, expected: Option<TypeId>) -> TypeId {
+        let span = self.ast(file).expr_span(arg);
+        let recorded = self.index_mark();
+        let mark = self.diags.items.len();
+        let frame = self.var_frame_begin();
+        let trail = self.snapshot();
+        let pending = self.attempts.pending_len();
+        let arg = match self.ast(file).expr(arg) {
+            ast::Expr::NamedArg(_, v) => v,
+            _ => arg,
+        };
+        let (_, ty) = self.type_expr(arg, expected);
+        if self.attempts.pending_len() > pending {
+            self.flush_pending_from(pending);
+        }
+        let ty = self.deref_keeping(ty);
+        self.rollback(&trail);
+        self.var_frame_end(frame);
+        let own = |d: &crate::source::Diagnostic| d.file == file && d.span.start >= span.start && d.span.end <= span.end;
+        let elsewhere: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !own(d)).collect();
+        self.diags.items.extend(elsewhere);
+        self.index_drop_records_within(recorded, file, span);
+        ty
+    }
+
+    /// `tpd.stripCast` (`TreeInfo.scala` 845-855) of a written argument: `x.asInstanceOf[T]` (and `x.asInstanceOf[T]()`),
+    /// the selection `isTypeCast`'s (`Any.asInstanceOf`, `Any.$asInstanceOf$`), its operand, recursively; none where
+    /// `arg` is no cast.
+    fn strip_cast(&mut self, file: FileId, arg: ast::ExprId) -> Option<ast::ExprId> {
+        let ast = self.ast(file);
+        let mut e = match ast.expr(arg) {
+            ast::Expr::NamedArg(_, v) => v,
+            _ => arg,
+        };
+        let mut stripped = None;
+        loop {
+            let ty_app = match ast.expr(e) {
+                ast::Expr::Apply(f, args) if ast.expr_list(args).is_empty() => f,
+                _ => e,
+            };
+            let ast::Expr::TypeApply(f, _) = ast.expr(ty_app) else { return stripped };
+            let ast::Expr::Select(inner, n) = ast.expr(f) else { return stripped };
+            // teq's typer resolves the selection to the universal cast by its name (`universal_member`).
+            if n != names::AS_INSTANCE_OF && self.name_str(n) != "$asInstanceOf$" {
+                return stripped;
+            }
+            stripped = Some(inner);
+            e = inner;
+        }
+    }
+
+    /// `Checking.checkAnnotClass`: a Java class an annotation interface, a Scala class an
+    /// `scala.annotation.Annotation`. `@assumeSafe`'s branch is the safe mode's (`Feature.safeEnabled`), which teq
+    /// does not read.
+    fn check_annot_class(&mut self, class: ClassId, span: Span) {
+        // `JavaDefined`: read from a class file, a std's stand-in for the JDK's (the JVM back end's `java_defined`), or
+        // `java.lang.Object`, which teq's `AnyRef` is.
+        let object = class == self.b.any_ref;
+        let java = object || self.is_java_class(class) || {
+            let std = self.source(self.syms.class(class).file).is_std;
+            std && self.jdk_rooted(self.package_of_class(class))
+        };
+        if java {
+            if self.syms.class(class).mods & mods::JAVA_ANNOTATION == 0 {
+                let shown = if object { "class Object".to_string() } else { self.shown(super::referents::Referent::Class(class)).0 };
+                self.error(span, format!("{} is not a valid Java annotation: it was not declared with `@interface`", shown));
+            }
+            return;
+        }
+        self.complete_class(class);
+        let annotation = self.syms.class(class).base_types.iter().map(|&(b, _)| b).collect::<Vec<_>>().into_iter().any(|b| self.class_path(b) == "scala.annotation.Annotation");
+        if !annotation {
+            let (shown, _) = self.shown(super::referents::Referent::Class(class));
+            self.error(span, format!("{} is not a valid Scala annotation: it does not extend `scala.annotation.Annotation`", shown));
         }
     }
 
@@ -2661,7 +4372,9 @@ impl<'a> Worker<'a> {
             self.prog.set_type(init, lit);
             return lit;
         }
-        if let Some(v) = self.fold_type(ty).or_else(|| self.constant_by_type(init, None)).filter(|_| !widened) {
+        // A `classOf[T]`'s constant is the class constant of its type, `Class[T]` (`ConstFold.apply`).
+        let class_constant = |t: &mut Self| matches!(t.prog.expr(init), TExpr::ClassOf(..)).then(|| crate::types::LitVal::Class(t.widen_lit(ty)));
+        if let Some(v) = self.fold_type(ty).or_else(|| self.constant_by_type(init, None)).or_else(|| class_constant(self)).filter(|_| !widened) {
             // A constant of the initialiser's type (a call's declared result `true` included) is
             // the val's where the initialiser is pure (scalac's `exprPurity`); in a body, the
             // expansion checks it.
@@ -3983,7 +5696,7 @@ impl<'a> Worker<'a> {
                             pt == t || {
                                 let mark = self.snapshot();
                                 let same = self.is_sub(pt, t) && self.is_sub(t, pt);
-                                self.rollback(mark);
+                                self.rollback(&mark);
                                 same
                             }
                         })
@@ -5508,7 +7221,7 @@ impl<'a> Worker<'a> {
                 (Some((lo, hi)), None) => self.is_sub(lo, m_rhs) && self.is_sub(m_rhs, hi),
                 (Some((plo, phi)), Some((mlo, mhi))) => self.is_sub(plo, mlo) && self.is_sub(mhi, phi),
             };
-            self.rollback(mark);
+            self.rollback(&mark);
             if ok {
                 continue;
             }
@@ -7342,7 +9055,7 @@ impl<'a> Worker<'a> {
             // `G[A]` for a `G[_]`: an argument stands where `G`'s own parameter puts it.
             Type::AppParam(p, args) => {
                 let v = self.syms.tparam(p).variance;
-                if v != 0 && v != sign {
+                if v != 0 && v != sign && !self.variance_skip.contains(&self.types.param(p)) {
                     return Some((p, sign));
                 }
                 let n = self.types.items(args).len();
@@ -7372,7 +9085,16 @@ impl<'a> Worker<'a> {
             Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.variance_violation(a, sign).or_else(|| self.variance_violation(b, sign))
             }
-            Type::Lambda(_, body) => self.variance_violation(body, sign),
+            // A lambda's parameters are no class's: `Validator` checks a `TypeRef` whose symbol the base contains
+            // (`base.isContainedIn(sym.owner)`), so the variances a binder's own clause declares (`F[+X]`) are not read.
+            Type::Lambda(ps, body) => {
+                let mark = self.variance_skip.len();
+                let own = self.types.items(ps).to_vec();
+                self.variance_skip.extend(own);
+                let found = self.variance_violation(body, sign);
+                self.variance_skip.truncate(mark);
+                found
+            }
             // `TypeAccumulator.foldOver` of a `RefinedType`, which `VarianceChecker.Validator`
             // folds: the parent, then the refinement's info, an alias invariantly, bounds the
             // lower contravariantly and the upper covariantly, a method its type parameters'
@@ -7807,4 +9529,308 @@ pub(super) enum Nullary {
     Strict,
     Java,
     Scala2,
+}
+
+/// What `hasUnknownMembers` asks of a type (`typer/ProtoTypes.scala` 236-253): its case.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum UnknownShape {
+    /// A `WildcardType`, `NoType`, a `TypeRef` to `Nothing`: true.
+    Unknown,
+    /// A class's `TypeRef`, a static symbol's: false.
+    Known,
+    /// A non-class, non-static `TypeRef`, with its prefix (none: `NoPrefix`).
+    Reference(Option<TypeId>),
+    /// An uninstantiated `TypeVar`.
+    OpenVar,
+    /// An `AppliedType`, with its constructor.
+    Applied(TypeId),
+    /// Another `TypeProxy`.
+    Proxy,
+    /// Else (an intersection, a union: false, as dotty leaves them).
+    Other,
+}
+
+/// The type tests and queries `hasUnknownMembers` makes, so that its walk is one over the typer's types (`KnownTypes`)
+/// and a test's.
+pub(super) trait UnknownMembers {
+    fn shape(&mut self, t: TypeId) -> UnknownShape;
+    /// `tp.info`'s `loBound` and `hiBound` of a reference: the read, a cycle its error.
+    fn bounds(&mut self, t: TypeId) -> Result<(TypeId, TypeId), TParamId>;
+    fn is_provisional(&mut self, t: TypeId) -> bool;
+    /// `TypeComparer.bounds(tp.origin).lo` of an open variable.
+    fn var_lower(&mut self, t: TypeId) -> TypeId;
+    /// `superType` of a proxy or an application, with its reads.
+    fn super_type(&mut self, t: TypeId) -> Result<Option<TypeId>, TParamId>;
+}
+
+/// `SelectionProto.hasUnknownMembers` (`typer/ProtoTypes.scala` 236-253), each `||` and `&&` stopping the reads after
+/// it: a wildcard and `Nothing` true; a class or a static symbol false; another reference its prefix's, or its
+/// information's upper bound provisional with unknown members and its lower bound with unknown members; an open variable
+/// its constraint's lower bound's; an application its constructor's or its `superType`'s; another proxy its
+/// `superType`'s; else false. A type met again on the walk reads as false (dotty's `CyclicReference`).
+pub(super) fn has_unknown_members<U: UnknownMembers>(u: &mut U, t: TypeId, visiting: &mut Vec<TypeId>) -> Result<bool, TParamId> {
+    if visiting.contains(&t) {
+        return Ok(false);
+    }
+    visiting.push(t);
+    let r = has_unknown_members_of(u, t, visiting);
+    visiting.pop();
+    r
+}
+
+fn has_unknown_members_of<U: UnknownMembers>(u: &mut U, t: TypeId, visiting: &mut Vec<TypeId>) -> Result<bool, TParamId> {
+    match u.shape(t) {
+        UnknownShape::Unknown => Ok(true),
+        UnknownShape::Known | UnknownShape::Other => Ok(false),
+        UnknownShape::Reference(prefix) => {
+            if let Some(p) = prefix {
+                if has_unknown_members(u, p, visiting)? {
+                    return Ok(true);
+                }
+            }
+            let (lo, hi) = u.bounds(t)?;
+            Ok(u.is_provisional(hi) && has_unknown_members(u, hi, visiting)? && has_unknown_members(u, lo, visiting)?)
+        }
+        UnknownShape::OpenVar => {
+            let lo = u.var_lower(t);
+            has_unknown_members(u, lo, visiting)
+        }
+        UnknownShape::Applied(tycon) => {
+            if has_unknown_members(u, tycon, visiting)? {
+                return Ok(true);
+            }
+            match u.super_type(t)? {
+                Some(s) => has_unknown_members(u, s, visiting),
+                None => Ok(false),
+            }
+        }
+        UnknownShape::Proxy => match u.super_type(t)? {
+            Some(s) => has_unknown_members(u, s, visiting),
+            None => Ok(false),
+        },
+    }
+}
+
+/// The typer's types as `hasUnknownMembers` reads them.
+struct KnownTypes<'w, 'a> {
+    w: &'w mut Worker<'a>,
+}
+
+impl UnknownMembers for KnownTypes<'_, '_> {
+    fn shape(&mut self, t: TypeId) -> UnknownShape {
+        let w = &mut *self.w;
+        if t == crate::tir::NO_TYPE {
+            return UnknownShape::Unknown;
+        }
+        let t = w.deref_keeping(t);
+        let static_owner = |w: &Worker, a: Option<AliasId>| a.is_some_and(|a| w.is_static_owner(w.syms.aliases[a.idx()].owner));
+        match w.types.get(t) {
+            Type::Wild | Type::BoundedWild(..) | Type::Nothing => UnknownShape::Unknown,
+            Type::Class(..) | Type::Ctor(_) | Type::Nested(..) => UnknownShape::Known,
+            Type::Param(_) => UnknownShape::Reference(None),
+            Type::Decl(a) => {
+                if static_owner(w, Some(a)) { UnknownShape::Known } else { UnknownShape::Reference(None) }
+            }
+            Type::Member(prefix, name) => {
+                let alias = w.type_member_alias(prefix, name);
+                if static_owner(w, alias) { UnknownShape::Known } else { UnknownShape::Reference(Some(prefix)) }
+            }
+            Type::Var(_) => UnknownShape::OpenVar,
+            Type::AppParam(p, _) => UnknownShape::Applied(w.types.param(p)),
+            Type::AppMember(m, _) => UnknownShape::Applied(m),
+            Type::AppVar(v, _) => UnknownShape::Applied(w.types.mk(Type::Var(v))),
+            Type::Alias(..) | Type::Term(_) | Type::Select(..) | Type::This(_) | Type::Lit(_) | Type::Annotated(_) | Type::Refined(..) | Type::Rec(_) | Type::Lambda(..) | Type::Match(..) => UnknownShape::Proxy,
+            _ => UnknownShape::Other,
+        }
+    }
+
+    fn bounds(&mut self, t: TypeId) -> Result<(TypeId, TypeId), TParamId> {
+        let t = self.w.deref_keeping(t);
+        self.w.reference_bounds(t)
+    }
+
+    fn is_provisional(&mut self, t: TypeId) -> bool {
+        self.w.is_provisional(t)
+    }
+
+    fn var_lower(&mut self, t: TypeId) -> TypeId {
+        let w = &mut *self.w;
+        let t = w.deref_keeping(t);
+        let Type::Var(v) = w.types.get(t) else { return NOTHING };
+        let lower = w.tvars[v].lower.clone();
+        lower.into_iter().fold(NOTHING, |acc, l| if acc == NOTHING { l } else { w.types.soft_union(acc, l) })
+    }
+
+    fn super_type(&mut self, t: TypeId) -> Result<Option<TypeId>, TParamId> {
+        let w = &mut *self.w;
+        let t = w.deref_keeping(t);
+        Ok(match w.types.get(t) {
+            // `AppliedType.superType`: the constructor's own applied (`kind_info`'s application arm).
+            Type::AppParam(..) | Type::AppMember(..) | Type::AppVar(..) => match w.kind_info(t)? {
+                KindInfo::Bounds(s) | KindInfo::Alias(s) => Some(s),
+                KindInfo::Unknown => None,
+            },
+            Type::Alias(..) => w.kind_dealias(t),
+            Type::Term(_) | Type::Select(..) | Type::This(_) => {
+                let s = w.widen_path(t);
+                (s != t).then_some(s)
+            }
+            Type::Lit(_) => Some(w.widen_lit(t)),
+            Type::Annotated(u) | Type::Refined(u, _) | Type::Rec(u) | Type::Lambda(_, u) => Some(u),
+            Type::Match(_, m) => Some(w.types.match_info(m).bound),
+            _ => None,
+        })
+    }
+}
+
+#[cfg(test)]
+mod unknown_members_tests {
+    use super::*;
+
+    const PROGRAM: &str = "object O:\n  type S <: Any\ntrait P:\n  type R\n  def f[T <: Int](x: T): T = x\n@main def run(): Unit = println(1)\n";
+
+    /// `testProvisional` and `hasUnknownMembers` over the typer's own types (`KnownTypes`), a typed program's worker.
+    #[test]
+    fn provisional_information_through_the_real_types() {
+        crate::with_typed_program("provisional", PROGRAM, &[], |w| {
+            let name = w.interner.intern("q");
+            // A parameter whose upper bound is an open variable: provisional through its information (`ParamRef.underlying`),
+            // and no more once the variable is instantiated.
+            let q = w.syms.new_tparam(name, 0);
+            let (v, var) = w.fresh_var_id();
+            w.syms.tparams[q.idx()].upper = v;
+            let pq = w.types.param(q);
+            assert!(w.is_provisional(pq));
+            // An application of it: provisional through its constructor, its argument a class.
+            let int = w.b.t_int;
+            let l = w.types.list(&[int]);
+            let applied = w.types.mk(Type::AppParam(q, l));
+            assert!(w.is_provisional(applied));
+            w.tvars[var].inst = Some(int);
+            assert!(!w.is_provisional(pq));
+            assert!(!w.is_provisional(applied));
+            // A parameter bounding itself: the cycle reads as not provisional.
+            let r = w.syms.new_tparam(name, 0);
+            let pr = w.types.param(r);
+            w.syms.tparams[r.idx()].upper = pr;
+            assert!(!w.is_provisional(pr));
+            // A member of a trait (not static) through its bounds, both sides read; a static object's member stops there.
+            let alias = |w: &mut Worker, n: &str| {
+                let n = w.interner.intern(n);
+                (0..w.syms.aliases.len()).map(|i| AliasId(i as u32)).find(|&a| w.syms.aliases[a.idx()].name == n).expect("the member")
+            };
+            let (rr, ss) = (alias(w, "R"), alias(w, "S"));
+            w.complete_alias(rr);
+            w.complete_alias(ss);
+            let (dr, ds) = (w.types.mk(Type::Decl(rr)), w.types.mk(Type::Decl(ss)));
+            assert!(!w.is_provisional(dr) && !w.is_provisional(ds));
+            let (open, _) = w.fresh_var_id();
+            w.syms.aliases[rr.idx()].bounds = Some((NOTHING, open));
+            w.syms.aliases[ss.idx()].bounds = Some((NOTHING, open));
+            assert!(w.is_provisional(dr));
+            assert!(!w.is_provisional(ds));
+        });
+    }
+
+    /// `testProvisional`'s variable: provisional while its instance is one a rollback or a retraction can still undo
+    /// (`isPermanentlyInstantiated`), whatever the instance; `hasUnknownMembers` reads the instance as it stands
+    /// (`isInstantiated`, `instanceOpt`).
+    #[test]
+    fn provisional_until_an_instance_is_permanent() {
+        crate::with_typed_program("permanent", PROGRAM, &[], |w| {
+            let int = w.b.t_int;
+            // A trail mark held: the instance a rollback to it undoes is provisional, while `hasUnknownMembers` sees the
+            // class; rolled back, the variable is open.
+            let (var, v) = w.fresh_var_id();
+            let mark = w.snapshot();
+            w.instantiate(v, int);
+            assert!(w.is_provisional(var));
+            assert_eq!(w.has_unknown_members_reads(var), Ok(false));
+            w.rollback(&mark);
+            drop(mark);
+            assert!(w.tvars[v].inst.is_none());
+            assert!(w.is_provisional(var));
+            // Instantiated under a mark that then goes with its region kept (committed): permanent.
+            let mark = w.snapshot();
+            w.instantiate(v, int);
+            assert!(w.is_provisional(var));
+            drop(mark);
+            assert!(!w.is_provisional(var));
+            // No mark held: permanent at once; a mark taken after the instance does not reach it.
+            let (var2, v2) = w.fresh_var_id();
+            w.instantiate(v2, int);
+            assert!(!w.is_provisional(var2));
+            let mark = w.snapshot();
+            assert!(!w.is_provisional(var2));
+            drop(mark);
+            // An open attempt begun after the variable was made: its retraction undoes the instance, provisional; a
+            // variable made inside it keeps its instance (its owning state's), permanent.
+            let (var3, v3) = w.fresh_var_id();
+            let m = w.attempt();
+            w.instantiate(v3, int);
+            assert!(w.is_provisional(var3));
+            let (var4, v4) = w.fresh_var_id();
+            w.instantiate(v4, int);
+            assert!(!w.is_provisional(var4));
+            w.retract(m);
+            assert!(w.tvars[v3].inst.is_none());
+            assert_eq!(w.tvars[v4].inst, Some(int));
+            assert!(!w.is_provisional(var4));
+        });
+    }
+
+    #[test]
+    fn unknown_members_through_a_qualifiers_variable() {
+        crate::with_typed_program("unknown", PROGRAM, &[], |w| {
+            let name = w.interner.intern("q");
+            // The qualifier an open variable whose lower bound is a parameter bounded by an open variable from above and
+            // by `Nothing` from below: its upper bound provisional with unknown members (an open variable's lower bound
+            // `Nothing`), its lower bound `Nothing`: unknown members, read through the variable's lower bound.
+            let q = w.syms.new_tparam(name, 0);
+            let (hi, _) = w.fresh_var_id();
+            w.syms.tparams[q.idx()].upper = hi;
+            let pq = w.types.param(q);
+            let (qual, qv) = w.fresh_var_id();
+            w.tvars[qv].lower.push(pq);
+            assert_eq!(w.has_unknown_members_reads(qual), Ok(true));
+            // Its upper bound a class instead: no provisional bound, no unknown members.
+            let int = w.b.t_int;
+            w.syms.tparams[q.idx()].upper = int;
+            assert_eq!(w.has_unknown_members_reads(qual), Ok(false));
+            // A class: known; `Nothing`: unknown.
+            assert_eq!(w.has_unknown_members_reads(int), Ok(false));
+            assert_eq!(w.has_unknown_members_reads(NOTHING), Ok(true));
+        });
+    }
+}
+
+/// The symbol `Type.isRef` compares a reference with: `Nothing` (teq's own type, dotty's `NothingClass`) or a class.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum RefSym {
+    Nothing,
+    Class(ClassId),
+}
+
+/// A non-class reference's information as the kind queries read it (`Worker::kind_info`).
+#[derive(Clone, Copy)]
+enum KindInfo {
+    /// `TypeBounds(_, hi)`: `hi` its `superType` (a clause's `[X..] =>> hi` over its parameters, `boundsFromParams`).
+    Bounds(TypeId),
+    /// `TypeAlias(alias)`: what `dealias` follows.
+    Alias(TypeId),
+    /// No information (an error, an overloaded or missing member).
+    Unknown,
+}
+
+/// `CheckNonCyclicMap`'s state (`typer/Checking.scala` 257-295): the binder checked, the references whose information is
+/// being checked (`locked`), whether a cycle is allowed here and in nested refinements, the variance, and where the
+/// last part checked was (`where`, `lastChecked`) for the message.
+struct NonCyclic {
+    sym: TParamId,
+    locked: Vec<TypeId>,
+    cycle_ok: bool,
+    nested_cycle_ok: bool,
+    variance: i8,
+    where_: &'static str,
+    last_checked: TypeId,
 }

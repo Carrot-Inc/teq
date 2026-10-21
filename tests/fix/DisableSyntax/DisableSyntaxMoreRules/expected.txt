@@ -1,0 +1,69 @@
+DisableSyntax/DisableSyntaxMoreRules/input.scala:17:12: error: [DisableSyntax.covariant]: Covariant types could lead to error-prone situations
+    class Co[+T](t: T) // assert: DisableSyntax.covariant
+             ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:18:16: error: [DisableSyntax.contravariant]: Contravariant types could lead to error-prone situations
+    class Contra[-T](t: T) // assert: DisableSyntax.contravariant
+                 ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:20:13: error: [DisableSyntax.contravariant]: Contravariant types could lead to error-prone situations
+    class Pro[-A,             // assert: DisableSyntax.contravariant
+              ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:21:5: error: [DisableSyntax.covariant]: Covariant types could lead to error-prone situations
+      +B](a: A, b: B) // assert: DisableSyntax.covariant
+      ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:23:17: error: [DisableSyntax.covariant]: Covariant types could lead to error-prone situations
+    trait TraitCo[+T]            // assert: DisableSyntax.covariant
+                  ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:24:15: error: [DisableSyntax.covariant]: Covariant types could lead to error-prone situations
+    type TypeCo[+T] = TraitCo[T] // assert: DisableSyntax.covariant
+                ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:27:22: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+      def bar(x: Int = 42) = 1 /* assert: DisableSyntax.defaultArgs
+                       ^^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:34:22: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+      def bar(x: Int = 42) = ???           // assert: DisableSyntax.defaultArgs
+                       ^^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:35:30: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+      def foo(a: Int)(b: Int = 1) = ???    // assert: DisableSyntax.defaultArgs
+                               ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:36:33: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+      def foobar(a: Int, b: Int = 1) = ??? // assert: DisableSyntax.defaultArgs
+                                  ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:39:24: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+                a: Int = 1, // assert: DisableSyntax.defaultArgs
+                         ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:40:24: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+                b: Int = 2  // assert: DisableSyntax.defaultArgs
+                         ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:42:24: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+                c: Int = 3, // assert: DisableSyntax.defaultArgs
+                         ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:43:24: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+                d: Int = 4  // assert: DisableSyntax.defaultArgs
+                         ^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:52:31: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+      override def bar(x: Int = 42) = 4 // assert: DisableSyntax.defaultArgs
+                                ^^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:55:20: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+    def bar(x: Int = 42) = 5 // assert: DisableSyntax.defaultArgs
+                     ^^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:57:28: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+      def foobarfoo(x: Int = 42) = 6 // assert: DisableSyntax.defaultArgs
+                             ^^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:63:5: error: [DisableSyntax.valInAbstract]: val definitions in traits/abstract classes may cause initialization bugs
+      val noooo = "yes" // assert: DisableSyntax.valInAbstract
+      ^^^^^^^^^^^^^^^^^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:67:5: error: [DisableSyntax.valInAbstract]: val definitions in traits/abstract classes may cause initialization bugs
+      val superImportantConst = 42 * 42 * 42 // assert: DisableSyntax.valInAbstract
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:78:3: error: [DisableSyntax.implicitObject]: implicit objects may cause implicit resolution errors
+    implicit object FooImplicit extends Foo {} // assert: DisableSyntax.implicitObject
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:80:3: error: [DisableSyntax.implicitConversion]: implicit conversions weaken type safety and always can be replaced by explicit conversions
+    implicit def toString(a: Any): String = a.toString // assert: DisableSyntax.implicitConversion
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:83:5: error: [DisableSyntax.==]: == and != are not typesafe, use === and =!= from cats.Eq instead
+    1 == 2 /* assert: DisableSyntax.==
+      ^^
+DisableSyntax/DisableSyntaxMoreRules/input.scala:88:5: error: [DisableSyntax.!=]: == and != are not typesafe, use === and =!= from cats.Eq instead
+    1 != 2 /* assert: DisableSyntax.!=
+      ^^

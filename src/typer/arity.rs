@@ -487,7 +487,7 @@ impl<'a> Worker<'a> {
             let failed = |t: &mut Self| {
                 if t.diags.items[diags..].iter().any(|d| !d.is_warning) {
                     t.discard_diagnostics(diags);
-                    t.rollback(mark);
+                    t.rollback(&mark);
                     return true;
                 }
                 false

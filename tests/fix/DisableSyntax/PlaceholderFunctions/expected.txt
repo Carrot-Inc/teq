@@ -1,0 +1,6 @@
+DisableSyntax/PlaceholderFunctions/input.scala:10:26: error: [DisableSyntax.==]: == and != are unsafe since they allow comparing two unrelated types
+    val ones = xs.filter(_ == 1) // assert: DisableSyntax.==
+                           ^^
+DisableSyntax/PlaceholderFunctions/input.scala:11:35: error: [DisableSyntax.!=]: == and != are unsafe since they allow comparing two unrelated types
+    val others = xs.filter((_: Int) != 1) // assert: DisableSyntax.!=
+                                    ^^

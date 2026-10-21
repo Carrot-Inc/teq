@@ -370,6 +370,9 @@ impl<'a> Worker<'a> {
                 // The variable keeps the bounds its parameter declares, as a poly application's
                 // variable does (`instDirection` tells the constraint's apart from them).
                 let (ty, v) = self.fresh_var_id();
+                if self.syms.tparam(p).arity > 0 {
+                    self.tvars[v].set_origin(p);
+                }
                 if hi != ANY || lo != NOTHING {
                     self.tvars[v].set_declared(lo, hi);
                     if hi != ANY {
@@ -459,7 +462,7 @@ impl<'a> Worker<'a> {
             // The parameter's type itself where the default conforms to it, frozen (`frozen_<:<`).
             let mark = self.snapshot();
             let conforms = self.is_sub(tp, default_tp);
-            self.rollback(mark);
+            self.rollback(&mark);
             if conforms {
                 return default_tp;
             }

@@ -286,6 +286,12 @@ impl<'a> Worker<'a> {
         (imp.sel != SelRef::NONE).then(|| *self.import_sels.get(imp.sel.0 as usize))
     }
 
+    /// Whether the last report withheld its findings after an error (`report_unused`): no finding is then no answer,
+    /// which `teq fix` refuses to read as none (`fix::engine`).
+    pub fn unused_withheld(&self) -> bool {
+        self.unused.withheld
+    }
+
     /// Whether what is resolved now marks: the check runs, and the code is no inline expansion's.
     #[inline(always)]
     fn marking(&self) -> bool {
@@ -469,7 +475,7 @@ impl<'a> Worker<'a> {
         if self.attempts.pending_len() > pending {
             self.flush_pending_from(pending);
         }
-        self.rollback(trail);
+        self.rollback(&trail);
         self.var_frame_end(frame);
         let span = self.ast(file).expr_span(instance);
         let own = |d: &crate::source::Diagnostic| d.file == file && d.span.start >= span.start && d.span.end <= span.end;
@@ -606,7 +612,7 @@ impl<'a> Worker<'a> {
         let sig = self.sig_arc(sym);
         let mark = self.snapshot();
         let fits = self.is_sub(sig.ret, bound);
-        self.rollback(mark);
+        self.rollback(&mark);
         fits
     }
 
@@ -624,7 +630,7 @@ impl<'a> Worker<'a> {
             }
             let mark = self.snapshot();
             let fits = self.is_sub(sig.ret, target);
-            self.rollback(mark);
+            self.rollback(&mark);
             fits
         })
     }

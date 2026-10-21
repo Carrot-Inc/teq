@@ -680,20 +680,32 @@ impl<'w, 'a> P<'w, 'a> {
         if sym != SymId(u32::MAX) {
             return self.term_name(sym);
         }
+        self.derived_or_simple(n)
+    }
+
+    /// A derived name's unique name (`Interner::unique`: an evidence's, a placeholder's), another's simple name.
+    fn derived_or_simple(&mut self, n: Name) -> u32 {
+        let text = self.w.interner.get(n);
+        if text.starts_with("evidence$") || text.starts_with("_$") {
+            if let Some((sep, num)) = self.w.interner.unique_parts(n) {
+                return self.names.unique_of(sep, num);
+            }
+        }
         self.simple_name(n)
     }
 
-    /// The name of a term symbol where a tree or a reference names it: the simple name of its text, a context
-    /// bound's evidence (a method's parameter, a class's field) the unique name dotty's `ContextBoundParamName`
-    /// is, at its definition and at every reference alike.
+    /// The name of a term symbol where a tree or a reference names it: the simple name of its text, a derived name
+    /// the unique name it is (dotty's `ContextBoundParamName`, `WildcardParamName`: a context bound's evidence, a
+    /// placeholder's parameter), at its definition and at every reference alike.
     pub(super) fn term_name(&mut self, s: SymId) -> u32 {
-        let (n, evidence) = (self.w.syms.sym(s).name, self.w.syms.context_bounds.contains_key(&s));
-        if evidence {
+        let n = self.w.syms.sym(s).name;
+        // A context bound's evidence a library's symbol names by its text.
+        if self.w.syms.context_bounds.contains_key(&s) {
             if let Some(num) = self.w.interner.get(n).strip_prefix("evidence$").and_then(|d| d.parse().ok()) {
                 return self.names.unique_of("evidence$", num);
             }
         }
-        self.simple_name(n)
+        self.derived_or_simple(n)
     }
 
     fn simple_name(&mut self, n: Name) -> u32 {
@@ -2219,7 +2231,7 @@ impl<'w, 'a> P<'w, 'a> {
         let extra = extra.as_slice();
         self.buf.byte(TYPEPARAM);
         let len = self.buf.begin_length();
-        let n = self.simple_name(info.name);
+        let n = self.derived_or_simple(info.name);
         self.buf.nat(n as u64);
         self.mark_tree();
         self.bounds(&info);
@@ -2230,7 +2242,9 @@ impl<'w, 'a> P<'w, 'a> {
             flags.push(CONTRAVARIANT);
         }
         self.write_flags(&flags);
-        if let Some((file, annots)) = self.tparam_annots.remove(&tp) {
+        // A definition's type parameter's annotations, or those installed on a binder (`Namer.addAnnotations`).
+        let installed = self.tparam_annots.remove(&tp).or_else(|| self.w.syms.binder_annots.get(&tp).cloned());
+        if let Some((file, annots)) = installed {
             self.source_annotations(file, &annots, annot::Dest::Any, &mut |_, _| {});
         }
         self.buf.end_length(len);
@@ -6291,6 +6305,14 @@ impl<'w, 'a> P<'w, 'a> {
                 self.buf.byte(INTCONST);
                 self.buf.long_int(i as i64);
             }
+            LitVal::Byte(b) => {
+                self.buf.byte(BYTECONST);
+                self.buf.long_int(b as i64);
+            }
+            LitVal::Short(h) => {
+                self.buf.byte(SHORTCONST);
+                self.buf.long_int(h as i64);
+            }
             LitVal::Long(l) => {
                 self.buf.byte(LONGCONST);
                 self.buf.long_int(l);
@@ -6313,6 +6335,15 @@ impl<'w, 'a> P<'w, 'a> {
                 let n = self.simple_name(s);
                 self.buf.byte(STRINGCONST);
                 self.buf.nat(n as u64);
+            }
+            // `CLASSconst Type`: the class constant by its type value, `T` of `Class[T]`.
+            LitVal::Class(class) => {
+                let t = match self.w.types.get(class) {
+                    Type::Class(_, args) => self.w.types.items(args).first().copied().unwrap_or(ANY),
+                    _ => ANY,
+                };
+                self.buf.byte(CLASSCONST);
+                self.ty(t);
             }
         }
     }
@@ -6347,7 +6378,7 @@ impl<'w, 'a> P<'w, 'a> {
                     // over a lambda of its own parameters.
                     let info = self.w.syms.tparam(*id).clone();
                     self.bounds(&info);
-                    let n = self.simple_name(info.name);
+                    let n = self.derived_or_simple(info.name);
                     self.buf.nat(n as u64);
                 }
                 None => {

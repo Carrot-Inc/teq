@@ -358,7 +358,8 @@ pub mod mods {
     /// or a token after it that neither continues it nor ends the statement. What parsed of it
     /// is kept, and the typer reads what is missing as unknown.
     pub const INCOMPLETE: Mods = 1 << 23;
-    /// A Java annotation interface read from its class file.
+    /// A Java annotation interface read from its class file; on one's element, an element with a default
+    /// (`AnnotationDefault`, the std's stand-in's marked `@javaAnnotation`), which an annotation may leave out.
     pub const JAVA_ANNOTATION: Mods = 1 << 24;
     /// The setter `x_=` of a `var x`: of an abstract var (with `ABSTRACT`), the member an
     /// assignment through the var calls and an implementing class defines; of a concrete one,
@@ -608,6 +609,9 @@ pub struct Import {
 /// apart from the tree's own tables.
 #[derive(Default, Debug)]
 pub struct SyntaxNotes {
+    /// The `match` keyword of each match type (`MatchTypeTree`'s point, where an error at the tree stands), by the
+    /// type's node, ascending.
+    pub match_keywords: Vec<(TyExprId, Span)>,
     /// The operators of the infix types and the infix extractor patterns written with an identifier
     /// (`A Pair B`, `case a Cons b`; not `A | B`, `case h :: t`), ascending: the `Name` an infix type's
     /// `Apply` applies and the path its `Ctor` names, which `Checking.checkValidInfix` reads as the
@@ -626,6 +630,98 @@ pub struct SyntaxNotes {
     /// ascending: `untpd.isBackquoted` of a name, the `Backquoted` attachment `Parsers.makeIdent` pushes. The unit's
     /// record, which the parser installs on every AST it makes for the unit.
     pub backquoted_idents: Vec<u32>,
+    /// Under `Syntax::keep` (`teq fix`'s files), on the unit's first AST: the lexer's tokens and end markers, from
+    /// which `fix::source` makes the editable token stream.
+    pub source: Option<Box<SourceKept>>,
+    /// Under `Syntax::keep`: the names of the package clauses this AST's parse wrote, in order.
+    pub package_names: Vec<Span>,
+    /// Under `Syntax::keep`: the parameters of each higher-kinded parameter's clause (`A` of `F[+A]`), nested
+    /// ones too, in source order.
+    pub hk_params: Vec<HkParam>,
+    /// Under `Syntax::keep`: each higher-kinded clause's owner (the start of the name before its `[`) and the end of
+    /// its `]`.
+    pub hk_clauses: Vec<(u32, u32)>,
+    /// The annotations of the binders, a higher-kinded parameter's own parameters' and a type lambda's or polymorphic
+    /// function's, each with its clause: modifiers the typer types where it resolves the clause
+    /// (`Worker::binder_annotations`), as dotty's `TypeDef.withMods` keeps them for `Typer.completeAnnotations`; the
+    /// tree's `Mod.Annot`s under `Syntax::keep`.
+    pub binder_annots: Vec<BinderAnnot>,
+    /// A definition's type parameter whose clause has an annotated binder and no bound (`F[@a A]`): the start of its
+    /// name and the lambda made of its clause for the record (`BinderClause::Own`), which the typer resolves where it
+    /// resolves the parameter's bounds.
+    pub hk_param_clauses: Vec<(u32, TyExprId)>,
+    /// The binders of a clause of which one is annotated, each with its clause, its place in it and its name's span:
+    /// where a binder forced while a sibling completes is reported (`Worker::forces_binder`).
+    pub binder_names: Vec<(BinderClause, u32, Span)>,
+    /// The upper bounds the parser made over a binder's clause of its own (`F[X] <: B`, `F[X]`: dotty's `TypeDef` whose
+    /// right side is a `LambdaTypeTree`, `lambdaAbstract(hkparams, bounds)`), ascending; not a written lambda bound
+    /// (`F <: [X] =>> B`, a `TypeBoundsTree`). A binder so written has `completerTypeParams` while it completes, which
+    /// `Typer.adaptType` eta-expands (`Worker::eta_reads`).
+    pub own_clause_bounds: Vec<TyExprId>,
+    /// The variances of a binder's own clause (`F[+X]`, `typeParam` under `ParamOwner.Hk`) by each lambda the parser
+    /// made over it (its bounds, `lambdaAbstract`), where one is not invariant: `boundsFromParams`' `paramVariance`,
+    /// which the lambda's parameters take (`Worker::poly_params`).
+    pub clause_variances: Vec<(TyExprId, Box<[i8]>)>,
+    /// A named function type's parameters (`(x: A) => B`): each one's type and the start of its name, ascending: where
+    /// the parameter's `ValDef` stands (`typedFunctionType.typedDependent`), a diagnostic of its signature there.
+    pub fun_param_starts: Vec<(TyExprId, u32)>,
+    /// The selections the parser made of a postfix operator (`xs size`), ascending: dotty's `PostfixOp(od, Ident(op))`,
+    /// whose operator an identifier is (`parser::references_name`).
+    pub postfix_ops: Vec<ExprId>,
+    /// Under `Syntax::keep`: the type lambdas written (`[X] =>> F[X]`); any other `TyExpr::Lambda` the parser made, a
+    /// higher-kinded parameter's bound over its clause or a kind projector's `*`.
+    pub written_lambdas: Vec<TyExprId>,
+    /// Under `Syntax::keep`: a polymorphic function's binder's context bounds, by the start of its name (scalameta's
+    /// `Type.Param.cbounds`), which the parser has made the evidences of a context function, each with the span of
+    /// the bound and its `as` name.
+    pub binder_cbounds: Vec<(u32, TyExprId, Span)>,
+}
+
+/// An annotation of a binder (`SyntaxNotes::binder_annots`): its clause, the binder's place in it, the binder's span
+/// as dotty's `TypeDef` has it (from its first annotation to its last bound: what a `@nowarn` among them covers,
+/// `registerNowarn(tree.sourcePos, mdef.span)`), the start of its name (by which the tree finds its `Mod.Annot`s), and
+/// the annotation.
+#[derive(Clone, Copy, Debug)]
+pub struct BinderAnnot {
+    pub clause: BinderClause,
+    pub index: u32,
+    pub span: Span,
+    pub name: u32,
+    pub annot: Annot,
+}
+
+/// The clause of an annotated binder, by the node the typer resolves it at (`Typer.annotContext`'s cases).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BinderClause {
+    /// A type lambda written (`[A] =>> R`) that is no type definition's own clause: its binders' annotations do not
+    /// see them.
+    Lambda(TyExprId),
+    /// A type definition's own clause, whose binders' annotations see them (`Namer.TypeDefCompleter.completerTypeParams`):
+    /// a parameterless alias's right side written as a lambda, or a higher-kinded parameter's clause by the lambda the
+    /// parser made of it (its bound, or one made for the record: `SyntaxNotes::hk_param_clauses`).
+    Own(TyExprId),
+    /// A polymorphic function type's.
+    PolyFun(TyExprId),
+    /// A polymorphic function literal's.
+    PolyLiteral(ExprId),
+}
+
+/// A parameter of a higher-kinded parameter's clause, kept for `teq fix`: its owner (the start of the name the clause
+/// follows), its name or `_`, its `+` or `-`, and its bounds.
+#[derive(Clone, Copy, Debug)]
+pub struct HkParam {
+    pub owner: u32,
+    pub name: Span,
+    pub variance: Option<Span>,
+    pub lower: Option<TyExprId>,
+    pub upper: Option<TyExprId>,
+}
+
+/// What the lexer read of a unit, kept for `teq fix` (`SyntaxNotes::source`).
+#[derive(Debug)]
+pub struct SourceKept {
+    pub tokens: Vec<crate::token::Token>,
+    pub end_markers: Vec<Span>,
 }
 
 pub struct Ast {
@@ -1130,6 +1226,11 @@ impl Ast {
     /// The parameter names a function type writes, `c` of `(c: Ctx) => c.T`.
     pub fn fun_param_names(&self, id: TyExprId) -> Option<ListRef> {
         self.fun_param_names.iter().find(|&&(f, _)| f == id).map(|&(_, n)| n)
+    }
+    /// The variances of the clause the lambda `id` was made over (`SyntaxNotes::clause_variances`), none where it is
+    /// invariant or written.
+    pub fn clause_variances(&self, id: TyExprId) -> Option<&[i8]> {
+        self.notes.clause_variances.iter().find(|(l, _)| *l == id).map(|(_, v)| &**v)
     }
     #[inline]
     pub fn def(&self, id: DefId) -> &Def {

@@ -127,8 +127,10 @@ impl<'a> Parser<'a> {
             let start = self.bump().span;
             let (mut path, name) = self.parse_class_path();
             if self.at(Tok::LBracket) {
+                // `simpleType`'s applied type, from the path (the `@` is the annotation's).
+                let from = self.ast.ty_spans[path.idx()];
                 let targs = self.parse_type_args();
-                path = self.ast.add_ty(TyExpr::Apply(path, targs), start.to(self.prev_span()));
+                path = self.ast.add_ty(TyExpr::Apply(path, targs), from.to(self.prev_span()));
             }
             let mut args = ListRef::EMPTY;
             let mut values = ListRef::EMPTY;
@@ -789,12 +791,35 @@ impl<'a> Parser<'a> {
         let lower = self.eat(Tok::Supertype).then(|| self.parse_type());
         let upper = self.eat(Tok::Subtype).then(|| self.parse_type());
         let rhs = self.eat(Tok::Eq).then(|| self.parse_type());
+        if let (Some(r), true, false) = (rhs, tparams.is_empty(), self.ast.notes.binder_annots.is_empty()) {
+            self.own_alias_clause(r);
+        }
         if rhs.is_none() && m & mods::OPAQUE != 0 {
             self.error_at(span, "an opaque type needs a right-hand side");
         }
         let m = if self.error_events == mark { m } else { m | mods::INCOMPLETE };
         let kind = DefKind::TypeAlias { tparams, rhs, lower, upper };
         self.ast.add_def(Def { name, span, mods: m, annots, kind })
+    }
+
+    /// A parameterless alias whose right side is a lambda written there, not in parentheses, is the lambda's binders'
+    /// owner, whose completer has them (`Namer.TypeDefCompleter.completerTypeParams` of `TypeDef(_,
+    /// LambdaTypeTree(..))`, a `Parens` no such tree): its clause is the alias's own.
+    #[cold]
+    #[inline(never)]
+    fn own_alias_clause(&mut self, rhs: TyExprId) {
+        let start = self.ast.ty_spans[rhs.idx()].start;
+        let at = self.toks.partition_point(|t| t.span.start < start);
+        let before = self.toks[..at].iter().rev().find(|t| !matches!(t.kind, Tok::Newline | Tok::Indent | Tok::Outdent));
+        if !before.is_some_and(|t| t.kind == Tok::Eq) {
+            return;
+        }
+        for a in self.ast.notes.binder_annots.iter_mut().filter(|a| a.clause == BinderClause::Lambda(rhs)) {
+            a.clause = BinderClause::Own(rhs);
+        }
+        for n in self.ast.notes.binder_names.iter_mut().filter(|n| n.0 == BinderClause::Lambda(rhs)) {
+            n.0 = BinderClause::Own(rhs);
+        }
     }
 
     /// An extension's methods, a language import among them scoped to them (dotty's

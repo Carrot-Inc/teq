@@ -1,0 +1,1 @@
+DisableSyntax_RegexNotAList.conf:3:23: expected a list, found a string

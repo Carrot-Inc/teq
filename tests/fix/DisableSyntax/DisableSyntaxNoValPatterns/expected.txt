@@ -1,0 +1,12 @@
+DisableSyntax/DisableSyntaxNoValPatterns/input.scala:8:7: error: [DisableSyntax.noValPatterns]: Pattern matching in val assignment can result in match error, use "_ match { ... }" with a fallback case instead.
+    val Right(notFound) = 1.asInstanceOf[Either[String, String]] // assert: DisableSyntax.noValPatterns
+        ^^^^^^^^^^^^^^^
+DisableSyntax/DisableSyntaxNoValPatterns/input.scala:9:7: error: [DisableSyntax.noValPatterns]: Pattern matching in val assignment can result in match error, use "_ match { ... }" with a fallback case instead.
+    var Right(shame) = 1.asInstanceOf[Either[String, String]]  // assert: DisableSyntax.noValPatterns
+        ^^^^^^^^^^^^
+DisableSyntax/DisableSyntaxNoValPatterns/input.scala:16:7: error: [DisableSyntax.noValPatterns]: Pattern matching in val assignment can result in match error, use "_ match { ... }" with a fallback case instead.
+    val TestClass(a, b) = TestClass(1, 1) /* assert: DisableSyntax.noValPatterns
+        ^^^^^^^^^^^^^^^
+DisableSyntax/DisableSyntaxNoValPatterns/input.scala:19:7: error: [DisableSyntax.noValPatterns]: Pattern matching in val assignment can result in match error, use "_ match { ... }" with a fallback case instead.
+    val TestClass(c, _) = TestClass(1, 1) /* assert: DisableSyntax.noValPatterns
+        ^^^^^^^^^^^^^^^

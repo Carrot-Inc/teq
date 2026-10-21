@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/ExbMac.tasty (TASTy 28.8, 1194 bytes)
+package fix.exist
+@SourceFile object ExbMac extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  <macro> inline def bounded(inline n: Int): Predef.String = <body@114>
+  def boundedImpl(n: Expr[Int])(using x$2: Quotes): Expr[Predef.String] = ...
+}

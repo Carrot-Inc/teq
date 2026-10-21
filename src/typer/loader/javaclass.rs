@@ -924,6 +924,10 @@ impl<'a> Worker<'a> {
             if m.access & ACC_PROTECTED != 0 {
                 mm |= mods::PROTECTED;
             }
+            // An annotation interface's element with a default (`AnnotationDefault`): an annotation may leave it out.
+            if m.annotation_default {
+                mm |= mods::JAVA_ANNOTATION;
+            }
             let sym = self.syms.new_sym(name, SymKind::Def, mm, Owner::Class(owner), file, None, Span::default());
             self.syms.sym_mut(sym).java_defined = true;
             self.java_mut().syms.insert(sym, JSym { class: c, member: JMember::Method(i as u32) });

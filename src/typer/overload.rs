@@ -2455,7 +2455,7 @@ impl<'a> Worker<'a> {
             let choice = self.resolve_overloaded(&alts, None, &mut lists, &mut Vec::new(), None, true, false, None);
             self.overload_arg_spans.truncate(spans_mark);
             self.drop_reported_since(reported);
-            self.rollback(mark);
+            self.rollback(&mark);
             match choice {
                 Ok(i) => return Some(choose(i)),
                 Err(f) => {
@@ -2606,7 +2606,7 @@ impl<'a> Worker<'a> {
                     pt == q.ty || {
                         let mark = self.snapshot();
                         let same = self.is_sub(pt, q.ty) && self.is_sub(q.ty, pt);
-                        self.rollback(mark);
+                        self.rollback(&mark);
                         same
                     }
                 })
@@ -2803,7 +2803,7 @@ impl<'a> Worker<'a> {
                     .filter(|&i| {
                         let mark = t.snapshot();
                         let ok = t.is_applicable(&alts[i], &explicit, &upto);
-                        t.rollback(mark);
+                        t.rollback(&mark);
                         ok
                     })
                     .collect()
@@ -2913,7 +2913,7 @@ impl<'a> Worker<'a> {
                     let value = self.value_type(&alts[i], &subst, applied, Norm::Applied);
                     self.is_compatible(value, exp)
                 };
-                self.rollback(mark);
+                self.rollback(&mark);
                 ok
             })
             .collect();
@@ -2947,7 +2947,7 @@ impl<'a> Worker<'a> {
                 let subst = self.alt_subst(&alts[i], &[]);
                 let pty = self.types.subst(p.params[0].ty, &subst);
                 let holds = self.holds_tuple(pty, n);
-                self.rollback(mark);
+                self.rollback(&mark);
                 holds
             })
             .collect();
@@ -3003,7 +3003,7 @@ impl<'a> Worker<'a> {
                 0 => self.selection_matches(value, name, views),
                 _ => self.selection_deep(value, top, depth, views),
             };
-            self.rollback(mark);
+            self.rollback(&mark);
             if ok {
                 found.push(i);
             }
@@ -3055,7 +3055,7 @@ impl<'a> Worker<'a> {
                 let subst = self.alt_subst(&alts[i], explicit);
                 let value = self.value_type(&alts[i], &subst, 0, Norm::Expected(exp));
                 let ok = self.is_sub(value, exp);
-                self.rollback(mark);
+                self.rollback(&mark);
                 ok
             })
             .collect()
@@ -3090,7 +3090,7 @@ impl<'a> Worker<'a> {
                     let value = self.value_type(&alts[i], &subst, 1, Norm::Applied);
                     ok = self.is_sub(value, result);
                 }
-                self.rollback(mark);
+                self.rollback(&mark);
                 ok
             })
             .collect()
@@ -3160,7 +3160,7 @@ impl<'a> Worker<'a> {
             let upper = self.types.subst(upper, &subst);
             let lower = self.types.subst(lower, &subst);
             let ok = self.is_sub(arg, upper) && self.is_sub(lower, arg);
-            self.rollback(mark);
+            self.rollback(&mark);
             ok
         })
     }
@@ -3680,7 +3680,7 @@ impl<'a> Worker<'a> {
                 let subst = self.alt_subst(alt, &explicit);
                 let pty = self.types.subst(declared, &subst);
                 let takes_literal = !self.is_compatible(ty, pty) && self.is_compatible(lit, pty);
-                self.rollback(mark);
+                self.rollback(&mark);
                 if takes_literal {
                     lists[li].args[j] = match info.shapes[j].name {
                         Some(name) => ArgSrc::Named(name, te, lit),
@@ -3778,7 +3778,7 @@ impl<'a> Worker<'a> {
                     let mark = self.snapshot();
                     let fits = self.is_sub(ty, wanted);
                     if !fits {
-                        self.rollback(mark);
+                        self.rollback(&mark);
                         return false;
                     }
                     continue;
@@ -3852,7 +3852,7 @@ impl<'a> Worker<'a> {
         if self.is_sub(ty, pty) {
             return true;
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         // An argument where a context function is expected is wrapped in one: it fits when it
         // fits the result (`(s: S) => s.x` for a `Ctx ?=> S => A`).
         if let Some((_, result)) = self.as_context_function(pty) {
@@ -3872,7 +3872,7 @@ impl<'a> Worker<'a> {
                 if self.is_sub(ty, sam_fn) {
                     return true;
                 }
-                self.rollback(mark);
+                self.rollback(&mark);
             }
         }
         let from = self.deref(ty);
@@ -3972,9 +3972,9 @@ impl<'a> Worker<'a> {
         let (x, y) = (alt(self, a), alt(self, b));
         let mark = self.snapshot();
         let ab = self.is_as_specific(&x, &y, &[], None);
-        self.rollback(mark);
+        self.rollback(&mark);
         let ba = self.is_as_specific(&y, &x, &[], None);
-        self.rollback(mark);
+        self.rollback(&mark);
         match (ab, ba) {
             (true, false) => Some(true),
             (false, true) => Some(false),
@@ -3998,7 +3998,7 @@ impl<'a> Worker<'a> {
             let subst = self.alt_subst(b, explicit);
             let (ra, rb) = (self.types.subst(a.sig.ret, &own_subst), self.types.subst(b.sig.ret, &subst));
             let ok = self.is_compatible(ra, rb);
-            self.rollback(mark);
+            self.rollback(&mark);
             return ok;
         };
         if clause.params.is_empty() && (b.is_method() || !b.sig.tparams.is_empty()) {
@@ -4018,7 +4018,7 @@ impl<'a> Worker<'a> {
             let pty = self.types.subst(other.params[mapping.param(j)].ty, &subst);
             self.is_compatible(ty, pty)
         });
-        self.rollback(mark);
+        self.rollback(&mark);
         ok
     }
 
@@ -4048,7 +4048,7 @@ impl<'a> Worker<'a> {
             let subst = t.alt_subst(&alts[i], explicit);
             let value = t.value_type(&alts[i], &subst, applied, Norm::Applied);
             let ok = t.is_compatible(value, exp);
-            t.rollback(mark);
+            t.rollback(&mark);
             ok
         };
         if conforms(self, chosen) {

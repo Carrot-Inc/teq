@@ -13,6 +13,7 @@ mod eval;
 pub use code::code_stats_report;
 mod fast;
 mod files;
+pub(crate) mod fix;
 mod format;
 pub mod identity;
 mod jdk;

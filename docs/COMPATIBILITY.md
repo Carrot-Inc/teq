@@ -230,6 +230,10 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   the first read of either variable, a local's element at the first read of its variable. scalac 3.8.4
   evaluates the element at every read (its `makePatDef` makes each variable a `def` of its element), a defect
   dotty fixed after 3.8.4.
+- A name the compiler makes is numbered by its place in what makes it, the same at any worker count and in any
+  split of a build: a placeholder's parameter by its place in its lambda (`_ + _` is `(_$0, _$1) => _$0 + _$1`), a
+  context bound's evidence by its place in its definition, where scalac numbers a placeholder's per file; no program
+  names one (each is a name apart from every written identifier), and messages show scalac's numbers.
 - `println(())` and `print(())` print `undefined` on JavaScript and in the interpreter, as under Scala.js, and
   `()` on the JVM, as under scalac; a bare `println` prints an empty line on every target.
 - JVM: a `null` from an erased Java result of type `Int` (a missing key of a `java.util.HashMap[String, Int]`)

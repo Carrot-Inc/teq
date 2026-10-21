@@ -657,7 +657,7 @@ impl<'a> Worker<'a> {
             if self.is_sub(lo, expected) && self.is_sub(expected, hi) {
                 continue;
             }
-            self.rollback(mark);
+            self.rollback(&mark);
             let found = match alias {
                 Some(t) => format!(" = {}", self.show(t)),
                 None if lo == NOTHING => format!(" <: {}", self.show(hi)),
@@ -1109,7 +1109,7 @@ impl<'a> Worker<'a> {
                 } else {
                     None
                 };
-                self.rollback(mark);
+                self.rollback(&mark);
                 picked
             }
             _ => None,

@@ -97,7 +97,7 @@ jobs:
             jars: true
             scala3: true
           - group: interp
-            suites: interp interp-script
+            suites: interp interp-script fix
             minutes: 25
             jars: true
           - group: jvm

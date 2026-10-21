@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/IndC.tasty (TASTy 28.8, 410 bytes)
+package fix.indirect
+@SourceFile class IndC[G <: IndP#F]() extends Object {
+}

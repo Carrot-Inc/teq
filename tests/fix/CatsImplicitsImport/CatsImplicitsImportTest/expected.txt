@@ -1,0 +1,3 @@
+CatsImplicitsImport/CatsImplicitsImportTest/input.scala:6:1: warning: [CatsImplicitsImport]: use `cats.syntax` instead of `cats.implicits` https://github.com/typelevel/cats/issues/4138
+  import cats.implicits._ // assert: CatsImplicitsImport
+  ^^^^^^^^^^^^^^^^^^^^^^^

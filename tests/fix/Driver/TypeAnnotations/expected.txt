@@ -1,0 +1,6 @@
+Driver/TypeAnnotations/input.scala:9:17: warning: [Annotations.annot]: @ann(1)
+    val x: String @ann(1) = "x" // assert: Annotations.annot
+                  ^^^^^^^
+Driver/TypeAnnotations/input.scala:10:3: warning: [Annotations.annot]: @ann(2)
+    @ann(2) val y = 1 // assert: Annotations.annot
+    ^^^^^^^

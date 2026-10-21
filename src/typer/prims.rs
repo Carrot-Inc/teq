@@ -672,7 +672,7 @@ impl<'a> Worker<'a> {
         }
         if (self.is_primitive(prim_lty) || prim_lty == self.b.t_string) && classify(op).is_some() {
             let (te, ty) = self.binop_or_member(op, tl, prim_lty, widened, r, FunEnd::operand_at(op_end), span, None);
-            let ty = self.const_folded(te, ty, tl, lty);
+            let ty = self.const_folded(te, ty, op, tl, lty);
             return Some(self.apply_callee(super::apply::Callee::Value(te, ty), None, lists, span, expected));
         }
         let keeps_type = self.types.is_path(solved) || matches!(self.types.get(solved), Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Alias(..));
@@ -770,7 +770,7 @@ impl<'a> Worker<'a> {
         // and a type parameter bounded by a primitive or `String` its bound's.
         let prim_lty = self.operator_type(widened);
         let (te, ty) = self.binop_or_member(op, tl, prim_lty, lty, r, FunEnd::operand_at(op_end), span, expected);
-        (te, self.const_folded(te, ty, tl, own_ty))
+        (te, self.const_folded(te, ty, op, tl, own_ty))
     }
 
     /// The builtin primitive or `String` that bounds the type parameter `t` from above
@@ -830,9 +830,13 @@ impl<'a> Worker<'a> {
     ) -> (TExprId, TypeId) {
         // The short-circuit operators of a Boolean, which `b ||= c` reaches as `b = b || c`.
         if (op == names::AMPAMP || op == names::BARBAR) && self.dealias(prim_lty) == self.b.t_boolean {
-            let tr = self.check_right_operand(op, tl, r);
+            let mark = if op == names::AMPAMP { self.push_tested(tl) } else { self.tested.len() };
+            let (tr, typed, rty) = self.checked_operand_typed(r, self.b.t_boolean);
+            self.pop_tested(mark);
             let prim = if op == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
-            return (self.prog.add(TExpr::Prim(prim, tl, tr)), self.b.t_boolean);
+            let te = self.prog.add(TExpr::Prim(prim, tl, tr));
+            self.binop_rhs = Some((te, typed, rty));
+            return (te, self.b.t_boolean);
         }
         let args = match self.prim_binop(op, tl, prim_lty, r, span) {
             Binop::Done(te, ty) => return (te, ty),
@@ -1135,7 +1139,8 @@ impl<'a> Worker<'a> {
         let (tl, lty) = self.type_expr(l, None);
         let (tr, rty) = self.type_expr(r, None);
         let (te, ty) = self.typed_equality(tl, lty, tr, rty, negate, span);
-        (te, self.const_folded(te, ty, tl, lty))
+        let op = if negate { names::NEQ } else { names::EQEQ };
+        (te, self.const_folded_binary(te, ty, op, (tl, lty), (tr, rty)))
     }
 
     /// `l == r` or `l != r` over operands typed already, as the typer reads the operator in
@@ -1148,9 +1153,9 @@ impl<'a> Worker<'a> {
         if !self.strict_equality() && (self.types.has_vars(lty) || self.types.has_vars(rty)) {
             let snap = self.snapshot();
             if !self.is_sub(lty, rty) {
-                self.rollback(snap);
+                self.rollback(&snap);
                 if !self.is_sub(rty, lty) {
-                    self.rollback(snap);
+                    self.rollback(&snap);
                 }
             }
         }
@@ -1253,7 +1258,7 @@ impl<'a> Worker<'a> {
         let pty = self.types.subst(pty, &subst);
         let mark = self.snapshot();
         let fits = self.is_sub(rty, pty);
-        self.rollback(mark);
+        self.rollback(&mark);
         fits
     }
 
@@ -1322,7 +1327,7 @@ impl<'a> Worker<'a> {
         if !strict {
             let mark = self.snapshot();
             let related = self.is_sub(l, r) || self.is_sub(r, l);
-            self.rollback(mark);
+            self.rollback(&mark);
             if related || self.mentions_param(l) || self.mentions_param(r) {
                 return Some(true);
             }
@@ -1470,11 +1475,15 @@ impl<'a> Worker<'a> {
                 let rty = self.solve_in(rty);
                 let rs = self.to_str(tr, rty);
                 let l = self.prog.list(&[tl, rs]);
-                return Binop::Done(self.prog.add(TExpr::StrConcat(l)), b_string);
+                let te = self.prog.add(TExpr::StrConcat(l));
+                self.binop_rhs = Some((te, tr, rty));
+                return Binop::Done(te, b_string);
             }
             if classify(op) == Some(OpClass::Compare) {
-                let tr = self.checked_operand(r, b_string);
-                return Binop::Done(self.prog.add(TExpr::Prim(compare_op(op), tl, tr)), b_bool);
+                let (tr, typed, rty) = self.checked_operand_typed(r, b_string);
+                let te = self.prog.add(TExpr::Prim(compare_op(op), tl, tr));
+                self.binop_rhs = Some((te, typed, rty));
+                return Binop::Done(te, b_bool);
             }
             return Binop::NotBuiltin;
         }
@@ -1485,13 +1494,19 @@ impl<'a> Worker<'a> {
                 names::CARET => PrimOp::BoolXor,
                 _ => return Binop::NotBuiltin,
             };
-            let tr = self.checked_operand(r, b_bool);
-            return Binop::Done(self.prog.add(TExpr::Prim(prim, tl, tr)), b_bool);
+            let (tr, typed, rty) = self.checked_operand_typed(r, b_bool);
+            let te = self.prog.add(TExpr::Prim(prim, tl, tr));
+            self.binop_rhs = Some((te, typed, rty));
+            return Binop::Done(te, b_bool);
         }
         let (Some(lrank), Some(class)) = (self.is_numeric(lty), classify(op)) else { return Binop::NotBuiltin };
         let literal_hint = if self.is_const_expr(r) && lrank >= R_LONG { Some(lty) } else { None };
         let (tr, operand_ty) = self.typed_operand(r, literal_hint);
-        self.prim_binop_typed(op, tl, lty, lrank, class, tr, operand_ty, span)
+        let done = self.prim_binop_typed(op, tl, lty, lrank, class, tr, operand_ty, span);
+        if let Binop::Done(te, _) = done {
+            self.binop_rhs = Some((te, tr, operand_ty));
+        }
+        done
     }
 
     /// `l op r` as a builtin operator over operands typed already (a macro's reconstruction of
@@ -1676,73 +1691,277 @@ impl<'a> Worker<'a> {
             return Some((self.prog.add(TExpr::Prim(prim, te, tr)), self.b.t_boolean));
         }
         let (folded, fty) = self.binop_or_member(name, te, ty, ty, r, list.fun, span, expected);
-        Some((folded, self.const_folded(folded, fty, te, ty)))
+        Some((folded, self.const_folded(folded, fty, name, te, ty)))
     }
 
     fn prefix_on(&mut self, op: Name, operand: TExprId, operand_ty: TypeId, span: Span) -> (TExprId, TypeId) {
         let (te, ty) = self.prefix_on_typed(op, operand, operand_ty, span);
-        (te, self.const_folded(te, ty, operand, operand_ty))
+        let unop = format!("unary_{}", self.name_ref(op));
+        (te, self.const_folded_select(te, ty, &unop, operand, operand_ty))
     }
 
-    /// dotty's `ConstFold`: a primitive operation over constant trees (a tree of a constant type,
-    /// through an ascription, `ConstantTree`) has the folded constant's type, so `1 + 2` is a `3`
-    /// and `h(1 + 1)` of `def h(a: Int): a.type` a `2`. The value is teq's folding of the tree
-    /// (`fold_constant_as_typed`), which holds scalac's rules; an operation over a plain inline
-    /// call of a type that is no constant is none (`widened_constant`), one of a constant type is
-    /// read as its type, as the typer reads it pending. `first`, of type `first_ty`, is the
-    /// operation's first operand: no constant tree unless its type is a constant or it is an
-    /// ascription (`ConstantTree`'s `Typed`), which spares the walk of every other operation.
+    /// `ConstFold.Apply` (`typer/ConstFold.scala` 31-45) of the builtin operation `te` (`x op y`), of type `ty`, the
+    /// first operand `x` of the type `x_ty` the typer gave it, the second the one `prim_binop` typed with the node
+    /// (`Worker::binop_rhs`): an operation of `foldedBinops` over two `ConstantTree`s has the type of the constant
+    /// `foldBinop` gives (`withFoldedType`); the tree and its effects stay as they are.
     #[inline]
-    pub(super) fn const_folded(&mut self, te: TExprId, ty: TypeId, first: TExprId, first_ty: TypeId) -> TypeId {
-        let first_ty = self.deref(first_ty);
-        if !matches!(self.types.get(first_ty), Type::Lit(_)) && !self.prog.is_widened(first) {
+    pub(super) fn const_folded(&mut self, te: TExprId, ty: TypeId, op: Name, x: TExprId, x_ty: TypeId) -> TypeId {
+        // An operand that can be no `ConstantTree` folds nothing, the common case, decided before anything else.
+        if !self.maybe_constant_tree(x, x_ty) {
             return ty;
         }
-        self.fold_operation(te, ty)
+        let y = match self.binop_rhs {
+            Some((node, tr, rty)) if node == te => (tr, rty),
+            _ => return ty,
+        };
+        self.const_folded_binary(te, ty, op, (x, x_ty), y)
     }
 
-    /// `const_folded` of an operation whose first operand is a constant tree.
+    /// `ConstFold.Apply` over operands typed with their types.
     #[inline(never)]
-    fn fold_operation(&mut self, te: TExprId, ty: TypeId) -> TypeId {
-        if ty == ERROR || matches!(self.types.get(ty), Type::Lit(_)) {
+    pub(super) fn const_folded_binary(&mut self, te: TExprId, ty: TypeId, op: Name, x: (TExprId, TypeId), y: (TExprId, TypeId)) -> TypeId {
+        if ty == ERROR || matches!(self.types.get(ty), Type::Lit(_)) || !self.maybe_constant_tree(x.0, x.1) {
             return ty;
         }
-        let constant = match self.prog.expr(te) {
-            TExpr::Prim(_, a, b) => self.constant_operand(a) && self.constant_operand(b),
-            TExpr::Unary(_, a) => self.constant_operand(a),
-            TExpr::StrConcat(l) => {
-                let parts = self.prog.expr_list(l).to_vec();
-                parts.into_iter().all(|x| self.constant_operand(x))
-            }
-            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) => true,
-            _ => false,
-        };
-        if !constant || self.widened_constant(te) {
+        let name = self.name_ref(op);
+        if !FOLDED_BINOPS.contains(&name) {
             return ty;
         }
-        let Some(v) = self.fold_typed_by_pending_types(te) else { return ty };
+        let name = name.to_string();
+        let Some(cx) = self.constant_tree(x.0, x.1) else { return ty };
+        let Some(cy) = self.constant_tree(y.0, y.1) else { return ty };
+        let folded = fold_binop(&name, cx, cy, |a, b| self.interner.intern(&format!("{}{}", self.interner.get(a), self.interner.get(b))));
+        self.with_folded_type(te, ty, folded)
+    }
+
+    /// `ConstFold.Select` (47-52) of the operation `te` (`x.op`: a prefix operator `unary_op`, a conversion), of type
+    /// `ty`: one of `foldedUnops` over a `ConstantTree` has the type of the constant `foldUnop` gives.
+    pub(super) fn const_folded_select(&mut self, te: TExprId, ty: TypeId, op: &str, x: TExprId, x_ty: TypeId) -> TypeId {
+        if ty == ERROR || matches!(self.types.get(ty), Type::Lit(_)) || !self.maybe_constant_tree(x, x_ty) || !FOLDED_UNOPS.contains(&op) {
+            return ty;
+        }
+        let Some(FoldConst::Val(cx)) = self.constant_tree(x, x_ty) else { return ty };
+        let folded = fold_unop(op, cx).map(FoldConst::Val);
+        self.with_folded_type(te, ty, folded)
+    }
+
+    /// `withFoldedType` (73-75): the tree typed with the folded constant, where its kind is the operation's own type's
+    /// (a `Float`'s value kept a `Float`, `folded_as`).
+    fn with_folded_type(&mut self, te: TExprId, ty: TypeId, folded: Option<FoldConst>) -> TypeId {
+        let Some(FoldConst::Val(v)) = folded else { return ty };
         let v = self.folded_as(v, ty);
         let lit = self.types.lit(v);
-        if self.widen_lit(lit) == self.widen_lit(ty) { lit } else { ty }
+        let _ = te;
+        if self.widen_lit(lit) == self.widen_lit(ty) {
+            lit
+        } else {
+            ty
+        }
     }
 
-    /// An operand that may be a constant tree, by its shape, whatever types the program records:
-    /// a literal, a reference to a value of a constant type (`ConstantTree` reads a reference by
-    /// its type, as the folding does), an operation, a conversion or a block over such, an
-    /// ascription, a pending inline call (read by its type). The folding decides.
-    fn constant_operand(&mut self, e: TExprId) -> bool {
+    /// Whether the tree `e` of type `ty` can be a `ConstantTree` at all, a cheap test before the reading: a literal, a
+    /// `null`, an ascription, or a type that may stand for a constant (a literal type, a path, a member, an
+    /// intersection or a union, a match).
+    #[inline]
+    fn maybe_constant_tree(&mut self, e: TExprId, ty: TypeId) -> bool {
+        let ty = self.deref_keeping(ty);
+        match self.types.get(ty) {
+            Type::Lit(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::Inter(..) | Type::Union(..) | Type::Match(..) | Type::Alias(..) => true,
+            // A literal typed at a class (a hint's) is the class's operand alone; `null` is typed `Null`.
+            _ => self.prog.is_widened(e) || ty == self.b.t_null && matches!(self.prog.expr(e), TExpr::Null),
+        }
+    }
+
+    /// `ConstantTree` of an ascription's inner tree `inner` of its own type `ty` (`Typed(expr, _)`'s `expr`), kept by
+    /// the ascription's node `node` (`Worker::ascription_constants`); out of `type_expr`'s line.
+    #[inline(never)]
+    pub(super) fn note_ascribed_tree_constant(&mut self, node: TExprId, inner: TExprId, ty: TypeId) {
+        // The answer kept whatever it is: a negative one is no structural evaluation's to make later.
+        let c = if self.maybe_constant_tree(inner, ty) || self.literal_tree(inner) { self.constant_tree(inner, ty) } else { None };
+        self.ascription_constants.insert(node, AscribedLayer::Typed(c));
+    }
+
+    /// An adaptation's numeric conversion of the node `te` in place (`widened` the same node) over an ascription:
+    /// dotty's conversion is a tree of its own around the `Typed`, read by its type (`ConstantTree`'s fallback), so it is
+    /// the node's outer layer now (`AscribedLayer::Cast`).
+    pub(super) fn note_conversion_layer(&mut self, te: TExprId, widened: TExprId) {
+        if widened == te && self.prog.is_widened(te) {
+            self.ascription_constants.insert(te, AscribedLayer::Cast);
+        }
+    }
+
+    /// Whether `e` is a literal tree (a literal node, or a block ending in one, as `adaptConstant` makes): a `Literal`'s
+    /// type is its constant in dotty, which the node's value is here.
+    fn literal_tree(&self, e: TExprId) -> bool {
         match self.prog.expr(e) {
-            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) => true,
-            TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => match self.syms.sym(s).sig.as_ref() {
-                Some(sig) => {
-                    let ret = sig.ret;
-                    self.fold_type(ret).is_some()
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Char(_) | TExpr::Bool(_) | TExpr::Str(_) | TExpr::Null => true,
+            TExpr::Block(_, res) => self.literal_tree(res),
+            _ => false,
+        }
+    }
+
+    /// `ConstFold.ConstantTree` (62-71) of the tree `e`, of the type `ty` the typer gave it: `Inlined(_, Nil, expr)` an
+    /// expansion's, which `ty` is; `Typed(expr, _)` the ascribed tree's own (an ascription keeps no node of its own:
+    /// the node's constant, `ascribed_constant`); `Literal(null)` the null constant; a literal its value; any other tree
+    /// its type's, `tpe.widenTermRefExpr.normalized.simplified` (`constant_of_simplified`): a call's, a block's, a
+    /// cast's (its target's) alike.
+    fn constant_tree(&mut self, e: TExprId, ty: TypeId) -> Option<FoldConst> {
+        if self.prog.is_widened(e) || self.prog.is_ascribed(e) {
+            match self.ascription_constants.get(&e) {
+                // `Typed(expr, _)`: the inner tree as the ascription's typing read it, a negative answer as well.
+                Some(&AscribedLayer::Typed(c)) => return c,
+                // A cast over it (`TypeApply(Select(_, asInstanceOf), _)`): its own type, never the tree inside.
+                Some(AscribedLayer::Cast) => return self.constant_of_simplified(ty).map(FoldConst::Val),
+                None => {}
+            }
+        }
+        if self.prog.is_widened(e) {
+            return self.ascribed_constant(e).map(FoldConst::Val);
+        }
+        // A cast that keeps no node (`ascribed_bits` without the ascription's `widened_bits`), or a plain inline
+        // call's expansion: its tree's type, the cast's target, the call's declared result.
+        if self.prog.is_ascribed(e) {
+            return self.constant_of_simplified(ty).map(FoldConst::Val);
+        }
+        let literal = |t: &Self, v: LitVal| (t.dialect.interpreted_constants || !t.inline.evaluated.contains_key(&e)).then_some(FoldConst::Val(v));
+        match self.prog.expr(e) {
+            TExpr::Null => return Some(FoldConst::Null),
+            TExpr::Int(v) => {
+                let v = self.narrowed_literal(v, ty);
+                return literal(self, v);
+            }
+            TExpr::Long(v) => return literal(self, LitVal::Long(v)),
+            TExpr::Double(v) => {
+                let v = self.folded_as(LitVal::Double(v.to_bits()), ty);
+                return literal(self, v);
+            }
+            TExpr::Bool(v) => return literal(self, LitVal::Bool(v)),
+            TExpr::Char(v) => return literal(self, LitVal::Char(v)),
+            TExpr::Str(s) => {
+                let v = LitVal::Str(self.interner.intern(&self.prog.strings[s.idx()]));
+                return literal(self, v);
+            }
+            // A block's type is its result's: `adaptConstant`'s `Block(tree :: Nil, lit)` its literal.
+            TExpr::Block(_, res) if self.literal_tree(res) => return self.constant_tree(res, ty),
+            _ => {}
+        }
+        self.constant_of_simplified(ty).map(FoldConst::Val)
+    }
+
+    /// An integer literal's constant by its tag: one typed `Byte` or `Short` is the narrowed constant
+    /// `Constant.convertTo` made (`adapt_constant_node`'s literal, a library body's `Typed(Literal(BYTEconst))`), with
+    /// its `ByteTag` or `ShortTag`; else an `Int`.
+    fn narrowed_literal(&mut self, v: i32, ty: TypeId) -> LitVal {
+        let ty = self.deref_keeping(ty);
+        if ty == self.b.t_byte {
+            if let Ok(b) = i8::try_from(v) {
+                return LitVal::Byte(b);
+            }
+        } else if ty == self.b.t_short {
+            if let Ok(h) = i16::try_from(v) {
+                return LitVal::Short(h);
+            }
+        }
+        LitVal::Int(v)
+    }
+
+    /// The constant of an ascribed tree (`Typed(expr, _)`'s `expr`), whose own type the node no longer carries: a
+    /// literal its value, a value or a call of a constant result (its declared result's, a call's type where it
+    /// takes no type parameter), a block its result's, an operation its folding.
+    fn ascribed_constant(&mut self, e: TExprId) -> Option<LitVal> {
+        match self.prog.expr(e) {
+            TExpr::CallStatic(s, _) | TExpr::CallMethod(_, s, _) => {
+                let sig = self.sig_of(s);
+                if !sig.tparams.is_empty() {
+                    return None;
                 }
-                None => false,
+                let ret = sig.ret;
+                self.constant_of_simplified(ret)
+            }
+            TExpr::Block(_, res) => self.ascribed_constant(res),
+            _ => self.fold_typed_by_pending_types(e),
+        }
+    }
+
+    /// `ConstFold.apply`'s `classOf[T]` (`Constant(targ.tpe)`) and `ConstFold.Apply`'s primitive `getClass`: the class
+    /// constant of the type `Class[T]` (dotty's `ClazzTag`), which widens to it.
+    pub(super) fn class_constant_type(&mut self, class: TypeId) -> TypeId {
+        if class == ERROR {
+            return class;
+        }
+        self.types.lit(LitVal::Class(class))
+    }
+
+    /// `widenTermRefExpr.normalized`'s constant (`Checking.checkAnnotArgs`, `Annotations.argumentConstant`): a path's
+    /// type widened to what it stands for (`widen_path`), normalized, a literal type; an annotated one none
+    /// (`normalized` keeps the annotation).
+    pub(super) fn constant_of_type(&mut self, ty: TypeId) -> Option<LitVal> {
+        let ty = self.deref_keeping(ty);
+        if matches!(self.types.get(ty), Type::Annotated(_)) {
+            return None;
+        }
+        let ty = self.widen_path(ty);
+        let ty = self.normalize(ty);
+        let ty = self.deref_keeping(ty);
+        match self.types.get(ty) {
+            Type::Lit(l) => Some(self.types.lit_val(l)),
+            _ => None,
+        }
+    }
+
+    /// `ConstFold.ConstantTree`'s type test: `tpe.widenTermRefExpr.normalized.simplified` a constant type.
+    pub(super) fn constant_of_simplified(&mut self, ty: TypeId) -> Option<LitVal> {
+        let ty = self.deref_keeping(ty);
+        if matches!(self.types.get(ty), Type::Annotated(_)) {
+            return None;
+        }
+        let ty = self.widen_path(ty);
+        // A class's type that nothing reduces (no type-level operation) is no constant whatever `simplified` does: read
+        // no further (a path's widened `Int`, the common operand).
+        let shape = self.types.get(ty);
+        if matches!(shape, Type::Class(..)) && !self.types.head_reducible(shape) {
+            return None;
+        }
+        let ty = self.normalize(ty);
+        self.simplify_constant(ty)
+    }
+
+    /// `TypeOps.simplify` (`TypeOps.scala` 133-206) as it bears on a constant: a projection through a prefix reduced
+    /// (`reduceProjection`: the member's alias), a match type or a match alias normalized (`tryNormalize`), `l & r`
+    /// the glb of the two (`"x" & String` is `"x"`: a side's constant conforming to the other), `l | r` the lub (one
+    /// constant), an inference variable its instance; an annotated type keeps its annotation (no constant).
+    fn simplify_constant(&mut self, ty: TypeId) -> Option<LitVal> {
+        let ty = self.deref_keeping(ty);
+        match self.types.get(ty) {
+            Type::Lit(l) => Some(self.types.lit_val(l)),
+            Type::Member(prefix, name) => match self.type_member(prefix, name)? {
+                super::members::MemberInfo::Alias(a) if a != ty => self.simplify_constant(a),
+                _ => None,
             },
-            TExpr::Unary(_, a) | TExpr::ToStr(a, _) | TExpr::Block(_, a) => self.constant_operand(a),
-            TExpr::Prim(_, a, b) => self.constant_operand(a) && self.constant_operand(b),
-            _ => self.prog.is_widened(e) || self.pending_type(e).is_some(),
+            Type::Alias(..) | Type::Match(..) => {
+                let n = self.normalize(ty);
+                if n != ty {
+                    self.simplify_constant(n)
+                } else {
+                    None
+                }
+            }
+            Type::Inter(a, b) => {
+                for (x, y) in [(a, b), (b, a)] {
+                    if let Some(v) = self.simplify_constant(x) {
+                        let lit = self.types.lit(v);
+                        if self.is_sub(lit, y) {
+                            return Some(v);
+                        }
+                    }
+                }
+                None
+            }
+            Type::Union(a, b, _) => {
+                let x = self.simplify_constant(a)?;
+                (self.simplify_constant(b)? == x).then_some(x)
+            }
+            _ => None,
         }
     }
 
@@ -1785,13 +2004,17 @@ impl<'a> Worker<'a> {
             let u = if op == names::MINUS { UnOp::IntNeg } else { UnOp::IntNot };
             return (self.prog.add(TExpr::Unary(u, as_int)), t_int);
         }
-        if op == names::PLUS && self.is_numeric(ty).is_some() {
+        if let (names::PLUS, Some(rank)) = (op, self.is_numeric(ty)) {
             if self.capturing() {
                 self.capture_wrap(te, Wrap::Member(names::UNARY_PLUS, span));
             }
             let file = self.env.file;
             if let Some(ix) = self.index.as_mut() {
                 ix.identity_prefixes.insert((file, span.start), ());
+            }
+            // `Byte`'s, `Short`'s and `Char`'s `unary_+` is an `Int` (`def unary_+ : Int`), promoted as `-` and `~` are.
+            if matches!(rank, R_BYTE | R_SHORT | R_CHAR) {
+                return (self.promote(te, ty, R_INT), t_int);
             }
             return (te, ty);
         }
@@ -1839,14 +2062,14 @@ impl<'a> Worker<'a> {
             "doubleValue" if rank != R_CHAR => R_DOUBLE,
             _ => return None,
         };
-        let conversion = NUMERIC_CONVERSIONS.contains(&text);
+        let conversion = NUMERIC_CONVERSIONS.contains(&text).then(|| text.to_string());
         let te = self.convert_rank(recv, recv_ty, to);
         let ty = self.rank_type(to);
         // A conversion of a constant tree has the converted constant's type (dotty's
         // `ConstFold.Select`, `foldUnop`'s `toInt` and kin): `2.5f.toInt` is a `2`. A `Byte` or
         // `Short` one keeps its class, which teq has no constant type of.
-        if conversion {
-            return Some((te, self.const_folded(te, ty, recv, recv_ty)));
+        if let Some(op) = conversion {
+            return Some((te, self.const_folded_select(te, ty, &op, recv, recv_ty)));
         }
         Some((te, ty))
     }
@@ -1941,6 +2164,21 @@ impl<'a> Worker<'a> {
         self.checked_operand_cached(r, expected)
     }
 
+    /// `checked_operand`, with the operand as typed before it was adapted, and its type (`ConstFold`'s `ConstantTree`
+    /// reads them): the adapted tree, the typed one, its type.
+    fn checked_operand_typed(&mut self, r: ExprId, expected: TypeId) -> (TExprId, TExprId, TypeId) {
+        let cached = if self.selection_typed.is_empty() { None } else { self.selection_typed_of(r).flatten() };
+        let (te, ty) = match cached {
+            Some(typed) => typed,
+            None => self.type_expr(r, Some(expected)),
+        };
+        if cached.is_none() && expected == self.b.t_unit {
+            self.warn_discarded(r, te, ty);
+        }
+        let span = self.cur_ast().expr_span(r);
+        (self.adapt(te, ty, expected, span), te, ty)
+    }
+
     #[cold]
     #[inline(never)]
     fn checked_operand_cached(&mut self, r: ExprId, expected: TypeId) -> TExprId {
@@ -1988,6 +2226,10 @@ impl<'a> Worker<'a> {
                 // (`TypeTestsCasts.transformAsInstanceOf`: "Replace cast by type ascription"), and a
                 // cast a passed test leaves untested (`untested_lowering`) dotty's cast tree.
                 self.prog.mark_ascribed(recv);
+                // The cast is the node's outer layer now, an ascription's constant inside it no longer read.
+                if self.prog.is_widened(recv) {
+                    self.ascription_constants.insert(recv, AscribedLayer::Cast);
+                }
                 if self.capturing() {
                     self.capture_wrap(recv, Wrap::Cast(t));
                 }
@@ -2549,7 +2791,9 @@ impl<'a> Worker<'a> {
                 let class = self.widen_lit(recv_ty);
                 let primitive = self.is_numeric(class).is_some() || class == self.b.t_boolean || class == self.b.t_unit;
                 if primitive {
+                    // `ConstFold.Apply`'s `getClass` of a primitive value: the class constant (`Constant(qual.tpe.widen)`).
                     let (of, ty) = self.type_class_of(class, span);
+                    let ty = self.class_constant_type(ty);
                     let l = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
                     let te = self.prog.add(TExpr::Block(l, of));
                     self.end_chain(te, ty);
@@ -2696,4 +2940,261 @@ fn arith_op(op: Name, rank: u8) -> Option<PrimOp> {
         (names::PERCENT, R_DOUBLE) => DoubleRem,
         _ => return None,
     })
+}
+
+/// The outer layer of a node an ascription or a cast keeps (`Worker::ascription_constants`).
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum AscribedLayer {
+    /// `Typed(expr, _)`: `expr`'s constant, or none (a negative answer kept).
+    Typed(Option<FoldConst>),
+    /// A cast, read by its own type.
+    Cast,
+}
+
+/// A `ConstantTree`'s constant (`Constant`): a value, or `null` (`NullTag`), which only `==` and `!=` fold.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum FoldConst {
+    Val(LitVal),
+    Null,
+}
+
+/// `ConstFold.foldedBinops` and `foldedUnops`.
+const FOLDED_BINOPS: [&str; 19] = ["||", "|", "^", "&&", "&", "==", "!=", "<", ">", "<=", ">=", "<<", ">>>", ">>", "+", "-", "*", "/", "%"];
+const FOLDED_UNOPS: [&str; 9] = ["unary_!", "unary_~", "unary_+", "unary_-", "toChar", "toInt", "toFloat", "toLong", "toDouble"];
+
+/// dotty's `Constants` tags, which order the numeric ones (`ByteTag` to `DoubleTag`).
+const BOOLEAN_TAG: u8 = 2;
+const BYTE_TAG: u8 = 3;
+const SHORT_TAG: u8 = 4;
+const CHAR_TAG: u8 = 5;
+const INT_TAG: u8 = 6;
+const LONG_TAG: u8 = 7;
+const FLOAT_TAG: u8 = 8;
+const DOUBLE_TAG: u8 = 9;
+const STRING_TAG: u8 = 10;
+const NULL_TAG: u8 = 11;
+const CLAZZ_TAG: u8 = 12;
+
+/// A constant's tag (dotty's `Constant.tag`).
+fn const_tag(v: FoldConst) -> u8 {
+    match v {
+        FoldConst::Null => NULL_TAG,
+        FoldConst::Val(LitVal::Bool(_)) => BOOLEAN_TAG,
+        FoldConst::Val(LitVal::Byte(_)) => BYTE_TAG,
+        FoldConst::Val(LitVal::Short(_)) => SHORT_TAG,
+        FoldConst::Val(LitVal::Char(_)) => CHAR_TAG,
+        FoldConst::Val(LitVal::Int(_)) => INT_TAG,
+        FoldConst::Val(LitVal::Long(_)) => LONG_TAG,
+        FoldConst::Val(LitVal::Float(_)) => FLOAT_TAG,
+        FoldConst::Val(LitVal::Double(_)) => DOUBLE_TAG,
+        FoldConst::Val(LitVal::Str(_)) => STRING_TAG,
+        FoldConst::Val(LitVal::Class(_)) => CLAZZ_TAG,
+    }
+}
+
+/// dotty's `Constant.isNumeric`: a tag from `ByteTag` to `DoubleTag`.
+fn const_numeric(v: FoldConst) -> bool {
+    (BYTE_TAG..=DOUBLE_TAG).contains(&const_tag(v))
+}
+
+/// `Constant.intValue`: per its tag, a `Long` narrowed, a `Float` or a `Double` converted as the JVM converts it
+/// (saturating, `NaN` to 0), never through a `Long`.
+fn const_int(v: LitVal) -> i32 {
+    match v {
+        LitVal::Byte(b) => b as i32,
+        LitVal::Short(h) => h as i32,
+        LitVal::Char(c) => c as i32,
+        LitVal::Int(i) => i,
+        LitVal::Long(l) => l as i32,
+        LitVal::Float(f) => f32::from_bits(f) as i32,
+        LitVal::Double(d) => f64::from_bits(d) as i32,
+        _ => 0,
+    }
+}
+
+/// `Constant.longValue`: per its tag, a `Float` or a `Double` converted as the JVM converts it.
+fn const_long(v: LitVal) -> i64 {
+    match v {
+        LitVal::Byte(b) => b as i64,
+        LitVal::Short(h) => h as i64,
+        LitVal::Char(c) => c as i64,
+        LitVal::Int(i) => i as i64,
+        LitVal::Long(l) => l,
+        LitVal::Float(f) => f32::from_bits(f) as i64,
+        LitVal::Double(d) => f64::from_bits(d) as i64,
+        _ => 0,
+    }
+}
+
+fn const_double(v: LitVal) -> f64 {
+    match v {
+        LitVal::Float(f) => f32::from_bits(f) as f64,
+        LitVal::Double(d) => f64::from_bits(d),
+        v => const_long(v) as f64,
+    }
+}
+
+fn const_float(v: LitVal) -> f32 {
+    match v {
+        LitVal::Float(f) => f32::from_bits(f),
+        LitVal::Double(d) => f64::from_bits(d) as f32,
+        v => const_long(v) as f32,
+    }
+}
+
+/// `ConstFold.foldUnop` (77-101).
+fn fold_unop(op: &str, x: LitVal) -> Option<LitVal> {
+    use LitVal::*;
+    let numeric = const_numeric(FoldConst::Val(x));
+    Some(match (op, x) {
+        ("unary_!", Bool(b)) => Bool(!b),
+        ("unary_~", Int(i)) => Int(!i),
+        ("unary_~", Long(l)) => Long(!l),
+        ("unary_+", Int(_) | Long(_) | Float(_) | Double(_)) => x,
+        ("unary_-", Int(i)) => Int(i.wrapping_neg()),
+        ("unary_-", Long(l)) => Long(l.wrapping_neg()),
+        ("unary_-", Float(f)) => Float((-f32::from_bits(f)).to_bits()),
+        ("unary_-", Double(d)) => Double((-f64::from_bits(d)).to_bits()),
+        // `Constant.charValue` is `intValue.toChar`.
+        ("toChar", v) if numeric => Char(const_int(v) as u16),
+        ("toInt", v) if numeric => Int(const_int(v)),
+        ("toLong", v) if numeric => Long(const_long(v)),
+        ("toFloat", v) if numeric => Float(const_float(v).to_bits()),
+        ("toDouble", v) if numeric => Double(const_double(v).to_bits()),
+        _ => return None,
+    })
+}
+
+/// `ConstFold.foldBinop` (190-211): the operation's tag the operands' common one, the larger of two numeric ones,
+/// `NullTag` where either is `null`, else none (`"a" + 1` folds not); a division by zero none (`ArithmeticException`).
+/// `concat` makes the string of two.
+fn fold_binop(op: &str, x: FoldConst, y: FoldConst, concat: impl FnOnce(Name, Name) -> Name) -> Option<FoldConst> {
+    use LitVal::*;
+    let (tx, ty) = (const_tag(x), const_tag(y));
+    let tag = if tx == ty {
+        tx
+    } else if const_numeric(x) && const_numeric(y) {
+        tx.max(ty)
+    } else if tx == NULL_TAG || ty == NULL_TAG {
+        NULL_TAG
+    } else {
+        return None;
+    };
+    // `foldNullOp`: `==` and `!=` by the tags.
+    if tag == NULL_TAG {
+        return match op {
+            "==" => Some(FoldConst::Val(Bool(tx == ty))),
+            "!=" => Some(FoldConst::Val(Bool(tx != ty))),
+            _ => None,
+        };
+    }
+    let (FoldConst::Val(x), FoldConst::Val(y)) = (x, y) else { return None };
+    Some(FoldConst::Val(match tag {
+        BOOLEAN_TAG => {
+            let (Bool(a), Bool(b)) = (x, y) else { return None };
+            match op {
+                "||" | "|" => Bool(a | b),
+                "^" => Bool(a ^ b),
+                "&&" | "&" => Bool(a & b),
+                "==" => Bool(a == b),
+                "!=" => Bool(a != b),
+                _ => return None,
+            }
+        }
+        // dotty's `ByteTag | ShortTag | CharTag | IntTag`.
+        BYTE_TAG..=INT_TAG => {
+            let (a, b) = (const_long(x) as i32, const_long(y) as i32);
+            match op {
+                "|" => Int(a | b),
+                "^" => Int(a ^ b),
+                "&" => Int(a & b),
+                "<<" => Int(a.wrapping_shl(b as u32)),
+                ">>>" => Int(((a as u32).wrapping_shr(b as u32)) as i32),
+                ">>" => Int(a.wrapping_shr(b as u32)),
+                "==" => Bool(a == b),
+                "!=" => Bool(a != b),
+                "<" => Bool(a < b),
+                ">" => Bool(a > b),
+                "<=" => Bool(a <= b),
+                ">=" => Bool(a >= b),
+                "+" => Int(a.wrapping_add(b)),
+                "-" => Int(a.wrapping_sub(b)),
+                "*" => Int(a.wrapping_mul(b)),
+                "/" if b != 0 => Int(a.wrapping_div(b)),
+                "%" if b != 0 => Int(a.wrapping_rem(b)),
+                _ => return None,
+            }
+        }
+        LONG_TAG => {
+            let (a, b) = (const_long(x), const_long(y));
+            let narrow = tx <= INT_TAG;
+            match op {
+                "|" => Long(a | b),
+                "^" => Long(a ^ b),
+                "&" => Long(a & b),
+                "<<" if narrow => Int((a as i32).wrapping_shl(b as u32)),
+                ">>>" if narrow => Int(((a as i32 as u32).wrapping_shr(b as u32)) as i32),
+                ">>" if narrow => Int((a as i32).wrapping_shr(b as u32)),
+                "<<" => Long(a.wrapping_shl(b as u32)),
+                ">>>" => Long(((a as u64).wrapping_shr(b as u32)) as i64),
+                ">>" => Long(a.wrapping_shr(b as u32)),
+                "==" => Bool(a == b),
+                "!=" => Bool(a != b),
+                "<" => Bool(a < b),
+                ">" => Bool(a > b),
+                "<=" => Bool(a <= b),
+                ">=" => Bool(a >= b),
+                "+" => Long(a.wrapping_add(b)),
+                "-" => Long(a.wrapping_sub(b)),
+                "*" => Long(a.wrapping_mul(b)),
+                "/" if b != 0 => Long(a.wrapping_div(b)),
+                "%" if b != 0 => Long(a.wrapping_rem(b)),
+                _ => return None,
+            }
+        }
+        FLOAT_TAG => {
+            let (a, b) = (const_float(x), const_float(y));
+            match op {
+                "==" => Bool(a == b),
+                "!=" => Bool(a != b),
+                "<" => Bool(a < b),
+                ">" => Bool(a > b),
+                "<=" => Bool(a <= b),
+                ">=" => Bool(a >= b),
+                "+" => Float((a + b).to_bits()),
+                "-" => Float((a - b).to_bits()),
+                "*" => Float((a * b).to_bits()),
+                "/" => Float((a / b).to_bits()),
+                "%" => Float((a % b).to_bits()),
+                _ => return None,
+            }
+        }
+        DOUBLE_TAG => {
+            let (a, b) = (const_double(x), const_double(y));
+            match op {
+                "==" => Bool(a == b),
+                "!=" => Bool(a != b),
+                "<" => Bool(a < b),
+                ">" => Bool(a > b),
+                "<=" => Bool(a <= b),
+                ">=" => Bool(a >= b),
+                "+" => Double((a + b).to_bits()),
+                "-" => Double((a - b).to_bits()),
+                "*" => Double((a * b).to_bits()),
+                "/" => Double((a / b).to_bits()),
+                "%" => Double((a % b).to_bits()),
+                _ => return None,
+            }
+        }
+        STRING_TAG => {
+            let (Str(a), Str(b)) = (x, y) else { return None };
+            match op {
+                "+" => Str(concat(a, b)),
+                "==" => Bool(a == b),
+                "!=" => Bool(a != b),
+                _ => return None,
+            }
+        }
+        _ => return None,
+    }))
 }

@@ -734,7 +734,7 @@ impl<'a> Worker<'a> {
                 }
                 let mark = self.snapshot();
                 let within = self.is_sub(ax, ay) && self.is_sub(ay, ax);
-                self.rollback(mark);
+                self.rollback(&mark);
                 if within {
                     continue;
                 }

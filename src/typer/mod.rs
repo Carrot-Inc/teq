@@ -71,7 +71,7 @@ mod tailrec;
 mod tostring;
 pub mod unused;
 mod unused_defs;
-mod unused_edits;
+pub(crate) mod unused_edits;
 pub mod value_exports;
 
 use crate::ast::{Ast, Asts, ListRef};
@@ -367,6 +367,53 @@ impl Frame {
     pub fn locals(owner: u32) -> Frame {
         Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner }
     }
+}
+
+/// A binder's `@nowarn` (`Worker::binder_nowarns`): its file, the annotation's span, the binder's (what it covers), its
+/// filter (`argumentConstantString(0)`, `""` without an argument, `none` for one of no constant string), and its
+/// argument's span, where `filter needs to be a compile-time constant string` (`constant`) and the filter's own
+/// warning stand.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BinderNowarn {
+    pub file: FileId,
+    pub annot: Span,
+    pub range: Span,
+    pub conf: String,
+    pub arg: Option<Span>,
+    pub constant: bool,
+}
+
+/// A binder's state in its clause's completion (dotty's `SymDenotation.completeFrom` over a `TypeDefCompleter`), which
+/// `Worker::binder_info` reads.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BinderState {
+    /// Its completer not run (`infoOrCompleter` a `LazyType`).
+    NotStarted,
+    /// Its annotations' classes typed (`Touched`, the completer its info): a read is a cycle.
+    Touched,
+    /// Its bounds typed (`dummyInfo1`, `Provisional`): a read is `>: Nothing <: Any`.
+    Provisional,
+    /// Its bounds checked (`NoCompleter`, `checkNonCyclic`): a read is a cycle.
+    Checking,
+    /// Its information installed.
+    Done,
+}
+
+/// The completion of one clause's binders (`TypeDefCompleter.completerTypeParams`, `Worker::complete_clause`): each
+/// binder's state, its bounds as written (`NO_BOUND` where none), the records of its annotations an own clause's
+/// completion types (`addAnnotations`), the clause's file and its keys in `SyntaxNotes::binder_names`.
+pub struct ClauseCompletion {
+    pub file: FileId,
+    pub ids: Vec<TParamId>,
+    pub states: Vec<BinderState>,
+    pub bounds: Vec<(crate::ast::TyExprId, crate::ast::TyExprId)>,
+    /// Each binder's `dummyInfo1` while its bounds are typed: `[X..] =>> Any` over the parameters its own clause's lambda
+    /// made (`completerTypeParams`, `Worker::note_own_clause`), `NO_TYPE` before then or where it has no clause.
+    pub own: Vec<TypeId>,
+    pub records: Vec<crate::ast::BinderAnnot>,
+    pub keys: [Option<crate::ast::BinderClause>; 2],
+    /// The annotations (their instances) whose class's typing failed, the error tree their typing reuses.
+    pub failed: Vec<crate::ast::ExprId>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -772,6 +819,22 @@ impl TVarInfo {
         self.extra.as_deref().and_then(|e| e.declared).unwrap_or((NOTHING, ANY))
     }
 
+    /// The higher-kinded parameter it was made for (`TypeVar.origin`), where recorded (`TVarExtra::origin`).
+    pub fn origin(&self) -> Option<TParamId> {
+        self.extra.as_deref().and_then(|e| e.origin)
+    }
+
+    pub fn set_origin(&mut self, p: TParamId) {
+        self.extra.get_or_insert_with(Default::default).origin = Some(p);
+    }
+
+    /// The origin through a renumbering of the parameters (the workers' merge).
+    pub fn map_origin(&mut self, f: impl Fn(TParamId) -> TParamId) {
+        if let Some(e) = self.extra.as_deref_mut() {
+            e.origin = e.origin.map(f);
+        }
+    }
+
     /// Whether it stands for a fixed argument of a partial unification (`TVarExtra::fixed`).
     #[inline]
     pub fn is_fixed(&self) -> bool {
@@ -805,6 +868,9 @@ pub struct TVarExtra {
     /// The bounds its type parameter declares, as substituted (`param.binder.paramInfos`), which
     /// `instDirection` compares the constraint's bounds with.
     declared: Option<(TypeId, TypeId)>,
+    /// The higher-kinded parameter it was made for (`TypeVar.origin`), whose information the kind queries read while
+    /// it is open; recorded where a poly application or a prototype's approximation makes it.
+    origin: Option<TParamId>,
     /// It stands for an argument of the class a higher-kinded variable was unified with, the
     /// leftmost ones the unification fixes (`F[A] >: Validated[E, A]` makes `F` a
     /// `Validated[?e, _]` with `?e >: E`), which dotty's `canInstantiate` takes as it is.
@@ -901,6 +967,7 @@ pub struct ViewMemos {
     matches: matchtypes::MatchMemos,
     given_fast: FxMap<(TypeId, FileId, u64), (std::sync::Arc<implicits::GivenResult>, Box<[u32]>)>,
     lit_types: FxMap<crate::types::LitVal, TypeId>,
+    kind_clauses: crate::intern::FxMap<TParamId, TypeId>,
 }
 
 pub struct Worker<'a> {
@@ -932,6 +999,9 @@ pub struct Worker<'a> {
     /// The first variable of the innermost method application being typed.
     pub app_base: u32,
     pub trail: Vec<Undo>,
+    /// The position of the outermost trail mark held (`snapshot`'s `TrailMark`), `usize::MAX` where none is: what a
+    /// `rollback` can still reopen lies at or above it. Boxed so that a mark's drop reaches it wherever the worker moves.
+    pub mark_floor: Box<std::cell::Cell<usize>>,
     /// The dependencies of the variables instantiated, as an undo of the trail
     /// (`Undo::DropDeps`) gives them back, in the trail's order.
     pub dropped_deps: Vec<Vec<(TVarId, u8)>>,
@@ -987,6 +1057,26 @@ pub struct Worker<'a> {
     pub search_byname: bool,
     /// Set while a definition's annotation is typed for its pickle.
     pub typing_annotation: bool,
+    /// While a type definition's right side or bounds are resolved (`resolve_alias_def`), the depth of the frames
+    /// below its own: a type lambda there has the definition as its binders' owner (`typedLambdaTypeTree` indexes them
+    /// in `ctx.owner`), whose contexts `annotContext` leaves out (`binder_annotations`). The environment's: `with_env`
+    /// leaves it, and a new owner inside (a binder's bounds, a refinement, a polymorphic function type's `apply`)
+    /// clears it.
+    pub type_def_frames: Option<usize>,
+    /// Set while `make_tparams` reads a higher-kinded parameter's kind ahead of its scope: its clause's annotations
+    /// are left to the bounds' resolution where the parameters are in scope (`resolve_tparam_bounds_of`).
+    pub kind_only_bound: bool,
+    /// The binders' `@nowarn`s, registered as `completeAnnotations` registers them (`registerNowarn`), from the
+    /// annotation typed in its binder's context: what `register_suppressions` makes suppressions of. Merged with the
+    /// workers; a retyped file's dropped before its retype.
+    pub binder_nowarns: Vec<BinderNowarn>,
+    /// While a type definition's own clause's binder's annotations are typed (`TypeDefCompleter.completerTypeParams`'
+    /// `typedAheadExpr` of each binder in turn): the binder completing and the clause's later ones, not completed yet,
+    /// whose information forced is `completeFrom`'s cycle (`Worker::forces_binder`).
+    pub binder_completing: Vec<ClauseCompletion>,
+    /// The builtin operation `prim_binop` built last, with its right operand and that operand's type before it was
+    /// adapted (`ConstFold.Apply`'s `ConstantTree` of the argument, read by `const_folded` at once).
+    pub binop_rhs: Option<(TExprId, TExprId, TypeId)>,
     /// Set while the arguments of a constructor in an annotation are typed: scalac lifts none of
     /// them (`Applications.isAnnotConstr`), where it lifts an ordinary call's.
     pub annotation_args: bool,
@@ -1498,6 +1588,18 @@ pub struct Worker<'a> {
     /// The last ascribed literal (`44: Int`): its type is the ascription's, so a conversion's
 /// receiver of that node is no constant to adapt (`Expr::Typed`, `try_conversion`).
     pub ascribed_constant: Option<TExprId>,
+    /// The outer layer of a node an ascription or a cast keeps (teq's typed tree has no `Typed` or `TypeApply` of its
+    /// own there): an ascription's inner tree's `ConstantTree` (`Typed(expr, _)`'s `expr`, the adapted tree read with
+    /// its type, `null` included), or a cast over it, which `ConstantTree` reads by its type; the later layer replaces
+    /// the earlier. `ConstFold`'s operand reads it.
+    pub(super) ascription_constants: crate::intern::FxMap<TExprId, prims::AscribedLayer>,
+    /// The references the kind queries are inside (`hk_result_reads`, `type_params_reads`, `has_any_kind_reads`): one
+    /// met again is a bound reaching itself, read as no information.
+    pub(super) kind_walk: Vec<TypeId>,
+    /// The information of a parameter whose clause is kept by its arity and variances alone (`F[_]`, `F[+X]`:
+    /// `TypeBounds(Nothing, [X..] =>> Any)` over parameters each `TypeBounds.empty`), made once (`Worker::param_info_hi`)
+    /// in each view (`swap_view_memos`) and again after the merge, which renumbers the worker's own.
+    pub(super) kind_clauses: crate::intern::FxMap<TParamId, TypeId>,
     /// Parent constructor arguments that were typed early, to infer the type arguments of
     /// `case A extends E(1)`.
     pub inferred_parent_args: crate::arena::Layered<ClassId, crate::tir::ParentCall>,
@@ -2721,6 +2823,7 @@ impl<'a> Worker<'a> {
             tvars: TVars::new(),
             app_base: 0,
             trail: Vec::new(),
+            mark_floor: Box::new(std::cell::Cell::new(usize::MAX)),
             dropped_deps: Vec::new(),
             attempts: Default::default(),
             inlining: Default::default(),
@@ -2745,6 +2848,11 @@ impl<'a> Worker<'a> {
             given_stack: Vec::new(),
             search_byname: false,
             typing_annotation: false,
+            type_def_frames: None,
+            kind_only_bound: false,
+            binder_nowarns: Vec::new(),
+            binder_completing: Vec::new(),
+            binop_rhs: None,
             annotation_args: false,
             inline_getters_only: false,
             written_purity: Default::default(),
@@ -2925,6 +3033,9 @@ impl<'a> Worker<'a> {
             sites: site::DefSites::default(),
             enum_case_new: None,
             ascribed_constant: None,
+            ascription_constants: Default::default(),
+            kind_walk: Vec::new(),
+            kind_clauses: Default::default(),
             inferred_parent_args: Default::default(),
             inferred_trait_args: Default::default(),
             parent_args_of: None,
@@ -3127,6 +3238,7 @@ impl<'a> Worker<'a> {
             tvars: TVars::attach(&self.tvars, worker as u32, self.tvars_at_fork),
             app_base: Default::default(),
             trail: Default::default(),
+            mark_floor: Box::new(std::cell::Cell::new(usize::MAX)),
             dropped_deps: Default::default(),
             attempts: Default::default(),
             inlining: Default::default(),
@@ -3143,6 +3255,9 @@ impl<'a> Worker<'a> {
             index: self.index.as_ref().map(|ix| Box::new(ix.attach())),
             deps: self.deps.as_ref().map(|_| Box::default()),
             ascribed_constant: None,
+            ascription_constants: Default::default(),
+            kind_walk: Vec::new(),
+            kind_clauses: Default::default(),
             inline_deps: Default::default(),
             interpolations: self.interpolations.clone(),
             bodies_in_progress: Default::default(),
@@ -3157,6 +3272,11 @@ impl<'a> Worker<'a> {
             given_stack: Default::default(),
             search_byname: Default::default(),
             typing_annotation: false,
+            type_def_frames: None,
+            kind_only_bound: false,
+            binder_nowarns: Vec::new(),
+            binder_completing: Vec::new(),
+            binop_rhs: None,
             annotation_args: false,
             inline_getters_only: false,
             written_purity: Default::default(),
@@ -3885,6 +4005,7 @@ impl<'a> Worker<'a> {
         self.matches.swap_memos(&mut other.matches);
         std::mem::swap(&mut self.given_fast, &mut other.given_fast);
         std::mem::swap(&mut self.lit_types, &mut other.lit_types);
+        std::mem::swap(&mut self.kind_clauses, &mut other.kind_clauses);
     }
 
     /// What the release is about to make every worker's, checked to name the base alone
@@ -4592,6 +4713,18 @@ impl<'a> Worker<'a> {
         self.interner.get(n)
     }
 
+    /// `RefinedPrinter.nameString` of a type name (`printing/RefinedPrinter.scala` 88-92): a `WildcardParamName`
+    /// (`name.isTypeName && name.is(WildcardParamName)`), a `_` type parameter's derived `_$n` (`Interner::unique`),
+    /// prints `_`; a written `_$0`, no derived name, keeps its text.
+    pub fn type_name_ref(&self, n: Name) -> &str {
+        let text = self.interner.get(n);
+        if text.starts_with("_$") && self.interner.unique_parts(n).is_some_and(|(sep, _)| sep == "_$") {
+            "_"
+        } else {
+            text
+        }
+    }
+
     /// The signature phase: the syntax scanned, every definition entered, the std classes
     /// found, the classes and aliases of the program completed, then the tables of the
     /// program's scopes the bodies read (`build_scope_tables`). What the bodies then demand of
@@ -5291,12 +5424,14 @@ impl<'a> Worker<'a> {
         // The refinements being resolved are the environment's being left: a definition
         // completed in another names none of their members.
         let saved_refine_scopes = std::mem::take(&mut self.refine_scopes);
+        let saved_type_def = self.type_def_frames.take();
         self.compute_transparent();
         let r = f(self);
         self.env = saved;
         self.transparent = saved_transparent;
         self.ext_scope = saved_ext_scope;
         self.refine_scopes = saved_refine_scopes;
+        self.type_def_frames = saved_type_def;
         r
     }
 

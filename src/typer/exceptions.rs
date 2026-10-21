@@ -43,7 +43,7 @@ impl<'a> Worker<'a> {
         let jse_ty = self.types.class(jse, &[]);
         let mark = self.snapshot();
         let can = self.is_sub(jse_ty, t);
-        self.rollback(mark);
+        self.rollback(&mark);
         can
     }
 
@@ -183,7 +183,7 @@ impl<'a> Worker<'a> {
             TPat::Test(_, t, inner) => {
                 let mark = self.snapshot();
                 let below = self.is_sub(jse_ty, t);
-                self.rollback(mark);
+                self.rollback(&mark);
                 below && self.pattern_takes(inner, jse, jse_ty)
             }
             TPat::Class(c, ..) => c == jse,
@@ -440,7 +440,7 @@ impl<'a> Worker<'a> {
         };
         let mark = self.snapshot();
         let conforms = self.is_sub(sty, taken);
-        self.rollback(mark);
+        self.rollback(&mark);
         // An abstract input type goes through the `TypeTest` or the `ClassTag` in scope, as
         // `typedUnApply` retypes it through `tryWithTypeTest` (Applications.scala 1958): the
         // extractor sees only what the tag's `unapply` gives.
@@ -578,10 +578,10 @@ impl<'a> Worker<'a> {
         let with_vars = self.types.subst(pty, &vars);
         let bounded = self.snapshot();
         if self.is_sub(sty, with_vars) {
-            self.rollback(mark);
+            self.rollback(&mark);
             return sty;
         }
-        self.rollback(bounded);
+        self.rollback(&bounded);
         // A class or a type parameter of the `unapply` is a type its input is tested against,
         // and so is an abstract type over a scrutinee of a class (`Types.this.Type[A$1]` over an
         // `Any`, unchecked); over a scrutinee of an abstract type (chimney's extractors'
@@ -590,11 +590,11 @@ impl<'a> Worker<'a> {
         // the call inferring the parameters.
         let with_vars_head = self.dealias(with_vars);
         if !matches!(self.types.get(with_vars_head), Type::Class(..) | Type::Var(_)) && self.abstract_scrutinee(sty) {
-            self.rollback(mark);
+            self.rollback(&mark);
             return sty;
         }
         if !self.is_sub(with_vars, sty) {
-            self.rollback(bounded);
+            self.rollback(&bounded);
         }
         let variances = self.var_variances(with_vars);
         let mut chosen: Subst = Vec::with_capacity(vars.len());
@@ -625,7 +625,7 @@ impl<'a> Worker<'a> {
         }
         let taken = self.types.subst(pty, &chosen);
         let taken = self.zonk(taken);
-        self.rollback(mark);
+        self.rollback(&mark);
         if unsettled || self.types.has_vars(taken) { sty } else { taken }
     }
 
@@ -642,8 +642,8 @@ impl<'a> Worker<'a> {
             lower = if lower == NOTHING { l } else { self.types.soft_union(lower, l) };
         }
         let mark = self.snapshot();
-        let collapsed = self.is_sub(upper, lower) && self.snapshot() == mark;
-        self.rollback(mark);
+        let collapsed = self.is_sub(upper, lower) && self.trail.len() == mark.at();
+        self.rollback(&mark);
         // Bounds that meet, or an upper bound of a final class (`A <: String`), instantiate the
         // variable to its upper bound, as `maximizeType` does.
         if collapsed || self.final_bound(upper) {
@@ -723,13 +723,13 @@ impl<'a> Worker<'a> {
         let Type::Inter(a, b) = self.types.get(t) else { return t };
         let (a, b) = (self.narrower_of_meet(a), self.narrower_of_meet(b));
         let mark = self.snapshot();
-        let a_below = self.is_sub(a, b) && self.snapshot() == mark;
-        self.rollback(mark);
+        let a_below = self.is_sub(a, b) && self.trail.len() == mark.at();
+        self.rollback(&mark);
         if a_below {
             return a;
         }
-        let b_below = self.is_sub(b, a) && self.snapshot() == mark;
-        self.rollback(mark);
+        let b_below = self.is_sub(b, a) && self.trail.len() == mark.at();
+        self.rollback(&mark);
         if b_below { b } else { self.types.mk(Type::Inter(a, b)) }
     }
 

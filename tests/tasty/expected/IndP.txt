@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/IndP.tasty (TASTy 28.8, 377 bytes)
+package fix.indirect
+@SourceFile trait IndP extends Object {
+  type F[X]
+}

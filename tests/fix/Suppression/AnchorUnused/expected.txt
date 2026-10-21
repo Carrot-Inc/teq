@@ -1,0 +1,63 @@
+Suppression/AnchorUnused/input.scala:37:19: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:off NoDummy */ // assert: UnusedScalafixSuppression
+                    ^^^^^^^
+Suppression/AnchorUnused/input.scala:43:7: error: [NoDummy]: Dummy!
+    val dDummy = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorUnused/input.scala:51:19: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:off NoDummy */ // assert: UnusedScalafixSuppression
+                    ^^^^^^^
+Suppression/AnchorUnused/input.scala:53:18: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:on NoDummyTypo */ // assert: UnusedScalafixSuppression
+                   ^^^^^^^^^^^
+Suppression/AnchorUnused/input.scala:63:29: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    val ok = 1 /* scalafix:ok NoDummy */ // assert: UnusedScalafixSuppression
+                              ^^^^^^^
+Suppression/AnchorUnused/input.scala:68:20: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    ) /* scalafix:ok NoDummy */ // assert: UnusedScalafixSuppression
+                     ^^^^^^^
+Suppression/AnchorUnused/input.scala:70:30: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    object Ok { /* scalafix:ok NoDummy */ // assert: UnusedScalafixSuppression
+                               ^^^^^^^
+Suppression/AnchorUnused/input.scala:86:3: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:on */ // assert: UnusedScalafixSuppression
+    ^^^^^^^^^^^^^^^^^
+Suppression/AnchorUnused/input.scala:87:18: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:on NoDummy */ // assert: UnusedScalafixSuppression
+                   ^^^^^^^
+Suppression/AnchorUnused/input.scala:88:18: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:on NoNull */ // assert: UnusedScalafixSuppression
+                   ^^^^^^
+Suppression/AnchorUnused/input.scala:92:7: error: [NoDummy]: Dummy!
+    val gDummy = 1 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorUnused/input.scala:93:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorUnused/input.scala:97:19: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:off NoDummy */ // assert: UnusedScalafixSuppression
+                    ^^^^^^^
+Suppression/AnchorUnused/input.scala:99:19: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:off NoNull */ // assert: UnusedScalafixSuppression
+                    ^^^^^^
+Suppression/AnchorUnused/input.scala:100:3: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:off */ // assert: UnusedScalafixSuppression
+    ^^^^^^^^^^^^^^^^^^
+Suppression/AnchorUnused/input.scala:101:3: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:off */ // assert: UnusedScalafixSuppression
+    ^^^^^^^^^^^^^^^^^^
+Suppression/AnchorUnused/input.scala:106:3: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:on */ // assert: UnusedScalafixSuppression
+    ^^^^^^^^^^^^^^^^^
+Suppression/AnchorUnused/input.scala:107:18: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:on NoDummy */ // assert: UnusedScalafixSuppression
+                   ^^^^^^^
+Suppression/AnchorUnused/input.scala:108:18: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:on NoNull */ // assert: UnusedScalafixSuppression
+                   ^^^^^^
+Suppression/AnchorUnused/input.scala:111:7: error: [NoDummy]: Dummy!
+    val iDummy = 1 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorUnused/input.scala:112:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^

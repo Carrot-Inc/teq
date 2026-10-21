@@ -881,7 +881,11 @@ impl Remap {
                 let cases: Vec<MatchCase> = info.cases.iter().map(|c| MatchCase { binders: list(p, c.binders), pattern: part(p, c.pattern), body: part(p, c.body) }).collect();
                 types.match_type(s, &cases, part(p, info.bound))
             }
-            Type::Lit(l) => types.lit(src.lit_val(l)),
+            // A class constant names its `Class[T]`, promoted as a part (`parts`).
+            Type::Lit(l) => match src.lit_val(l) {
+                crate::types::LitVal::Class(c) => types.lit(crate::types::LitVal::Class(part(p, c))),
+                v => types.lit(v),
+            },
             Type::Blocked(b) => {
                 let d = src.blocked_description(b).to_string();
                 types.blocked(&d)
@@ -1131,6 +1135,8 @@ impl Remap {
             for t in info.lower.iter_mut().chain(info.upper.iter_mut()) {
                 *t = r.ty(*t);
             }
+            // The parameter a higher-kinded variable was made for, a worker's own renumbered (`TVarExtra::origin`).
+            info.map_origin(|p| r.tparam(p));
         };
         let own = tvars.len();
         let prefix = (prefix as usize).min(own);
@@ -1212,6 +1218,7 @@ impl Remap {
         self.map(&mut w.syms.dispatch_names.local, |r, s| r.sym(s), |_, _| {});
         self.map(&mut w.syms.js_export_names.local, |r, s| r.sym(s), |_, _| {});
         self.map(&mut w.syms.context_bounds.local, |r, s| r.sym(s), |_, _| {});
+        self.map(&mut w.syms.binder_annots.local, |r, p| r.tparam(p), |_, _| {});
     }
 
     fn program(&mut self, w: &mut Worker) {
@@ -2211,6 +2218,11 @@ impl<'a> Worker<'a> {
     /// (`merge_workers` takes their records).
     fn absorb(&mut self, o: &mut Worker<'a>) {
         self.diags.absorb(std::mem::take(&mut o.diags));
+        for n in std::mem::take(&mut o.binder_nowarns) {
+            if !self.binder_nowarns.contains(&n) {
+                self.binder_nowarns.push(n);
+            }
+        }
         self.absorb_unused(o);
         self.sealed_std_files.append(&mut o.sealed_std_files);
         debug_assert!(o.pending_mirror_parents.is_empty(), "a companion's mirror parent left to the merge");
@@ -2246,6 +2258,7 @@ impl<'a> Worker<'a> {
         self.syms.dispatch_names.absorb(o.syms.dispatch_names.take_local());
         self.syms.js_export_names.absorb(o.syms.js_export_names.take_local());
         self.syms.context_bounds.absorb(o.syms.context_bounds.take_local());
+        self.syms.binder_annots.absorb(o.syms.binder_annots.take_local());
         self.quote.absorb(&mut o.quote);
         self.inlining.absorb(&mut o.inlining);
         // The lambdas around the calls kept for the inlining phase, which a macro's
@@ -2691,6 +2704,7 @@ impl<'a> Worker<'a> {
         self.syms.dispatch_names.merge_own();
         self.syms.js_export_names.merge_own();
         self.syms.context_bounds.merge_own();
+        self.syms.binder_annots.merge_own();
         if let Some(r) = self.js_registry.take() {
             let r = std::sync::Arc::try_unwrap(r).unwrap_or_else(|_| panic!("the JS registry is still shared"));
             self.prog.js_imports = r.list.into_vec();
@@ -2772,6 +2786,9 @@ impl<'a> Worker<'a> {
         self.package_levels.clear();
         self.value_sigs.clear();
         self.lit_types.clear();
+        // The kind queries' clauses (`param_info_hi`): lambdas over parameters the worker made, its own records, which the
+        // merge renumbers and whose overlay it gives back.
+        self.kind_clauses.clear();
         self.derived_aliases.clear();
         self.inferred_outcomes.clear();
         self.inferred_val_outcomes.clear();
@@ -2786,6 +2803,7 @@ impl<'a> Worker<'a> {
         self.gadt.clear();
         self.enum_case_new = None;
         self.ascribed_constant = None;
+        self.ascription_constants.clear();
         self.arg_types_seen.clear();
         self.erroneous_args.clear();
         self.erroneous_lambdas.clear();

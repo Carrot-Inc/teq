@@ -1,0 +1,9 @@
+DisableSyntax/BackquotedCasts/input.scala:10:13: error: [DisableSyntax.asInstanceOf]: asInstanceOf casts are disabled, use pattern matching instead
+    val y = x.`asInstanceOf`[Int] // assert: DisableSyntax.asInstanceOf
+              ^^^^^^^^^^^^^^
+DisableSyntax/BackquotedCasts/input.scala:11:13: error: [DisableSyntax.isInstanceOf]: isInstanceOf checks are disabled, use pattern matching instead
+    val z = x.`isInstanceOf`[Int] // assert: DisableSyntax.isInstanceOf
+              ^^^^^^^^^^^^^^
+DisableSyntax/BackquotedCasts/input.scala:12:13: error: [DisableSyntax.asInstanceOfMatchable]: asInstanceOf[Matchable] is used here to enable pattern matching on Any. Consider using the .asMatchable extension method instead for better readability.
+    val m = x.asInstanceOf[`Matchable`] // assert: DisableSyntax.asInstanceOfMatchable
+              ^^^^^^^^^^^^

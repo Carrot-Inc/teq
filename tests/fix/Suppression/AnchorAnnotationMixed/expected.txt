@@ -1,0 +1,36 @@
+Suppression/AnchorAnnotationMixed/input.scala:11:7: error: [NoDummy]: Dummy!
+    def aDummy0(x: Option[Any]): Unit = { // assert: NoDummy
+        ^^^^^^^
+Suppression/AnchorAnnotationMixed/input.scala:12:9: error: [NoDummy]: Dummy!
+      val bDummy = 0 // assert: NoDummy
+          ^^^^^^
+Suppression/AnchorAnnotationMixed/input.scala:13:9: error: [NoDummy]: Dummy!
+      val cDummy = 0 // assert: NoDummy
+          ^^^^^^
+Suppression/AnchorAnnotationMixed/input.scala:14:15: error: [NoNull]: Nulls are not allowed.
+      val foo = null // assert: NoNull
+                ^^^^
+Suppression/AnchorAnnotationMixed/input.scala:22:35: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+      val cDummy = 0 /* scalafix:ok NoDummy */ // assert: UnusedScalafixSuppression
+                                    ^^^^^^^
+Suppression/AnchorAnnotationMixed/input.scala:35:16: error: [NoNull]: Nulls are not allowed.
+      val foo2 = null // assert: NoNull
+                 ^^^^
+Suppression/AnchorAnnotationMixed/input.scala:40:19: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    /* scalafix:off NoDummy */ // assert: UnusedScalafixSuppression
+                    ^^^^^^^
+Suppression/AnchorAnnotationMixed/input.scala:47:7: error: [NoDummy]: Dummy!
+    val dDummy = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorAnnotationMixed/input.scala:54:21: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+      /* scalafix:off NoDummy */ // assert: UnusedScalafixSuppression
+                      ^^^^^^^
+Suppression/AnchorAnnotationMixed/input.scala:59:7: error: [NoDummy]: Dummy!
+    val eDummy = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorAnnotationMixed/input.scala:73:7: error: [NoDummy]: Dummy!
+    val fDummy = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorAnnotationMixed/input.scala:86:7: error: [NoDummy]: Dummy!
+    val hDummy = 0 // assert: NoDummy
+        ^^^^^^

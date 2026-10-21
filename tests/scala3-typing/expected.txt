@@ -877,7 +877,7 @@ neg/i22423.scala	same
 neg/i22439.scala	superset	+2 lines: missing argument for parameter {}
 neg/i22440.scala	same		--source future
 neg/i22498.scala	accepts	
-neg/i22552.scala	superset	+1 lines: Context bounds are not allowed in this position
+neg/i22552.scala	same	
 neg/i22560.scala	subset	1/3 lines
 neg/i22560b.scala	same	
 neg/i22560c	subset	4/5 lines
@@ -1010,7 +1010,7 @@ neg/i280.scala	same
 neg/i2808.scala	same	
 neg/i2871.scala	same	
 neg/i2887a.scala	same	
-neg/i2887b.scala	syntax	expected identifier, found {}
+neg/i2887b.scala	superset	+1 lines: this type does not take type arguments
 neg/i2887c.scala	same	
 neg/i2901.scala	same	
 neg/i2928.scala	accepts	
@@ -1035,7 +1035,7 @@ neg/i3332.scala	syntax	expected {}, found {}
 neg/i3348.scala	superset	+1 lines: value {} is not a member of {}
 neg/i3364.scala	accepts	
 neg/i3442.scala	same	
-neg/i3452.scala	syntax	expected identifier, found {}
+neg/i3452.scala	same	
 neg/i3470.scala	same	
 neg/i3471.scala	same	
 neg/i3487.scala	std	F
@@ -1133,7 +1133,7 @@ neg/i4935.scala	std	A
 neg/i4936.scala	same	
 neg/i4984.scala	oos	extractors
 neg/i4986a.scala	same	
-neg/i4986c.scala	syntax	expected identifier, found {}
+neg/i4986c.scala	same	
 neg/i4986d.scala	subset	2/3 lines
 neg/i50-volatile.scala	different	type mismatch
 neg/i5001.scala	same	
@@ -2271,7 +2271,7 @@ pos/constraining-lub.scala	accepts
 pos/constrs.scala	accepts	
 pos/constvalue-of-failed-match-type.scala	accepts	
 pos/consume.scala	rejects	not found: {}
-pos/contextbounds-for-poly-functions.scala	syntax	expected {}, found {}
+pos/contextbounds-for-poly-functions.scala	accepts	
 pos/contextbounds-implicits-old.scala	std	Manifest
 pos/contrib467.scala	accepts	
 pos/conversion-function-prototype.scala	rejects	missing parameter type
@@ -2768,7 +2768,7 @@ pos/i13586	accepts
 pos/i13586.scala	accepts	
 pos/i1365.scala	rejects	class Script cannot extend final class ArrayBuffer
 pos/i1366.scala	accepts	
-pos/i13660.scala	syntax	expected identifier, found {}
+pos/i13660.scala	accepts	
 pos/i13668.scala	accepts	
 pos/i13669.scala	accepts	
 pos/i13739.scala	accepts	
@@ -3310,7 +3310,7 @@ pos/i19907_slow_100_3.scala	accepts
 pos/i1990a.scala	accepts	
 pos/i19929.scala	accepts	
 pos/i19942.1.scala	accepts	
-pos/i19942.scala	syntax	expected identifier, found {}
+pos/i19942.scala	accepts	
 pos/i19950.scala	rejects	missing parameter type
 pos/i19955a.scala	accepts	
 pos/i19955b.scala	accepts	
@@ -3494,7 +3494,7 @@ pos/i2278.scala	accepts
 pos/i22833-unroll-final-class.scala	accepts	
 pos/i22879.scala	accepts	
 pos/i2292.scala	accepts	
-pos/i22922.scala	syntax	expected identifier, found {}
+pos/i22922.scala	rejects	Cannot prove that (Fx2 : Fx2) & U =:= U & (Fx : SourceEffect[A]) & Fx2.
 pos/i22923.scala	accepts	
 pos/i22944.scala	accepts	
 pos/i22974a	accepts	
@@ -5920,7 +5920,7 @@ warn/i10994.scala	syntax	expected {}, found {}
 warn/i11022.scala	oos	pattern-defs
 warn/i11097.scala	silent	
 warn/i11178.scala	subset	3/4 diagnostics
-warn/i11333.scala	silent	
+warn/i11333.scala	same	
 warn/i11344.scala	same	
 warn/i11963a.scala	silent	
 warn/i11963b.scala	silent	
@@ -6252,7 +6252,7 @@ warn/t11620.scala	rejects	type mismatch
 warn/t11681.scala	silent	
 warn/t13095.scala	same	
 warn/t2755.scala	different	the type test for Array[Int] cannot be checked at runtime because its type arguments can't be determined from Any
-warn/t3235-minimal.scala	silent	
+warn/t3235-minimal.scala	different	Widening conversion from Long to Double loses precision.
 warn/t5830.scala	wording	unreachable case
 warn/tostring-interpolated.scala	silent	
 warn/tuple-exhaustivity.scala	superset	+1 diagnostics: match may not be exhaustive.

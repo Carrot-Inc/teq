@@ -1,0 +1,12 @@
+Suppression/AnchorDoubleOn/input.scala:11:1: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+  /* scalafix:off */ // assert: UnusedScalafixSuppression
+  ^^^^^^^^^^^^^^^^^^
+Suppression/AnchorDoubleOn/input.scala:12:17: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+  /* scalafix:off NoDummy */ // assert: UnusedScalafixSuppression
+                  ^^^^^^^
+Suppression/AnchorDoubleOn/input.scala:13:17: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+  /* scalafix:off NoDummy */ // assert: UnusedScalafixSuppression
+                  ^^^^^^^
+Suppression/AnchorDoubleOn/input.scala:17:10: error: [NoDummy]: Dummy!
+    object Dummy // assert: NoDummy
+           ^^^^^

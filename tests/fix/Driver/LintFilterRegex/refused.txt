@@ -1,0 +1,1 @@
+Driver_LintFilterRegex.conf:4:24: Unclosed character class near index 1

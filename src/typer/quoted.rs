@@ -1443,8 +1443,8 @@ impl<'a> Worker<'a> {
             sty
         } else {
             let mark = self.snapshot();
-            let narrower = self.is_sub(pat_ty, sty) && self.snapshot() == mark;
-            self.rollback(mark);
+            let narrower = self.is_sub(pat_ty, sty) && self.trail.len() == mark.at();
+            self.rollback(&mark);
             if narrower { pat_ty } else { self.types.mk(Type::Inter(pat_ty, sty)) }
         };
         self.tag_pats.insert(unapply, bound);
@@ -1679,7 +1679,7 @@ impl<'a> Worker<'a> {
         let te_ty = self.solve_inferred(te_ty);
         let snap = self.snapshot();
         let fits = te_ty == ERROR || self.is_sub(te_ty, expr_ty);
-        self.rollback(snap);
+        self.rollback(&snap);
         if !fits {
             let any_expr = self.expr_type(ANY);
             if !self.is_sub(te_ty, any_expr) {

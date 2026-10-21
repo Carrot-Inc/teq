@@ -75,6 +75,28 @@ for src in tests/classpath/*.scala; do
     passed=$((passed + 1))
   fi
 done
+# tests/classpath/forked/*/: a program of several files checked as above, against the jars of its `// jars:` line,
+# at one, two and sixteen workers (`--threads`), each without an error: what a worker of the body phase keeps past
+# the merge is read by the typing after it (the files a macro of the run suspended, typed again).
+for dir in tests/classpath/forked/*/; do
+  [ -d "$dir" ] || continue
+  dir=${dir%/}
+  jars_of "$dir"
+  if [ -n "$JARS_MISSING" ]; then
+    echo "skip $dir: not in the coursier cache:$JARS_MISSING"
+    skipped=$((skipped + 1))
+    continue
+  fi
+  for n in 1 2 16; do
+    if out=$(timeout 60 "$TEQ" compiler check "$dir"/*.scala --classpath "$JARS_CP" --std=scala-library --threads $n 2>&1); then
+      passed=$((passed + 1))
+    else
+      echo "FAIL $dir at $n workers"
+      echo "$out" | head -10
+      fail=1
+    fi
+  done
+done
 # tests/classpath/jvm/*.scala run on the JVM with the jars of their `// jars:` line on the class
 # path, linked against scala-library's jar (the JVM's one mode; the jar pinned where the line
 # names none): a `// std:` line names JavaScript's modes and is not read here. A missing

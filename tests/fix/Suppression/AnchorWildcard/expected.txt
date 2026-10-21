@@ -1,0 +1,21 @@
+Suppression/AnchorWildcard/input.scala:12:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorWildcard/input.scala:13:7: error: [NoDummy]: Dummy!
+    val aDummy = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorWildcard/input.scala:20:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorWildcard/input.scala:21:7: error: [NoDummy]: Dummy!
+    val cDummy = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorWildcard/input.scala:28:3: error: [NoNull]: Nulls are not allowed.
+    null // assert: NoNull
+    ^^^^
+Suppression/AnchorWildcard/input.scala:29:7: error: [NoDummy]: Dummy!
+    val eDummy = 0 // assert: NoDummy
+        ^^^^^^
+Suppression/AnchorWildcard/input.scala:41:7: error: [NoDummy]: Dummy!
+    val fDummy = 0 // assert: NoDummy
+        ^^^^^^

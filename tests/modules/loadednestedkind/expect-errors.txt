@@ -1,0 +1,7 @@
+tests/modules/loadednestedkind/b/Use.scala:4:27: error: type argument Option does not have the same kind as its bound [G[_]]
+    type Wrong = lnka.AnnFG[Option]
+                            ^^^^^^
+tests/modules/loadednestedkind/b/Use.scala:5:32: error: type argument N#F does not have the same kind as its bound [_]
+    type WrongMember = lnka.AnnF[lnka.N#F]
+                                 ^^^^^^^^
+2 errors found

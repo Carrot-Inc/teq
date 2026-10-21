@@ -1,0 +1,3 @@
+Suppression/AnnotationWithNonLiteralValue/input.scala:11:7: error: [NoDummy]: Dummy!
+    val aDummy = 0 // assert: NoDummy
+        ^^^^^^

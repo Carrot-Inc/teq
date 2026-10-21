@@ -79,6 +79,7 @@ suite parser        ./tests/parser.sh
 suite interop       ./tests/run_interop.sh
 suite dce           ./tests/dce.sh
 suite size          ./teq interp tests/size.scala
+suite fix           ./teq interp tests/fix.scala
 suite split         ./tests/split.sh
 suite split-watch   ./tests/split-watch.sh
 suite check-watch   ./tests/check-watch.sh

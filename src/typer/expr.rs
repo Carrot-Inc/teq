@@ -534,6 +534,17 @@ impl<'a> Worker<'a> {
         self.check_expr_own(e, expected).0
     }
 
+    /// `check_expr`, with the adapted tree's type (`adapt_typed`'s): what `ConstantTree(Typed(expr, _))` reads of an
+    /// ascription's operand, a constant converted by the adaptation included.
+    pub(super) fn check_expr_adapted(&mut self, e: ExprId, expected: TypeId) -> (TExprId, TypeId) {
+        let (te, ty) = self.type_expr(e, Some(expected));
+        if expected == self.b.t_unit {
+            self.warn_discarded(e, te, ty);
+        }
+        let span = self.cur_ast().expr_span(e);
+        self.adapt_typed(te, ty, expected, span)
+    }
+
     /// `check_expr`, with the type the expression had before it was adapted.
     pub fn check_expr_own(&mut self, e: ExprId, expected: TypeId) -> (TExprId, TypeId) {
         let (te, ty) = self.type_expr(e, Some(expected));
@@ -692,7 +703,7 @@ impl<'a> Worker<'a> {
         if self.is_sub(actual, expected) {
             return (te, actual);
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         if let Some(te) = self.named_to_tuple(te, actual, exp) {
             return (te, expected);
         }
@@ -715,11 +726,11 @@ impl<'a> Worker<'a> {
         if self.conforms_as_path(te, exp) || self.conforms_as_literal(te, actual, exp) {
             return (te, expected);
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         if self.conforms_as_anon(te, exp) {
             return (te, expected);
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         // An eta-expansion typed ahead of the trait with a single abstract method expected of
         // it (an argument typed for overload resolution, `map(f)` for a `SAM[Int, T]`) still
         // implements the trait, and so does a function literal an attempt adapts as an earlier
@@ -735,7 +746,7 @@ impl<'a> Worker<'a> {
                 if self.is_sub(actual, sam_fn) {
                     return (self.sam_from_function(trait_ty, method, sig, subst, te, actual, span).0, expected);
                 }
-                self.rollback(inner);
+                self.rollback(&inner);
             }
         }
         // A path's singleton, an export's stable forwarder of a val among them (`Facade.n` of
@@ -748,15 +759,28 @@ impl<'a> Worker<'a> {
         // takes the literal its alias takes, as the alias is the type there.
         let seen_through = self.opaque_underlying(exp_shape).map(|u| self.deref_alias(u));
         let exp_shape = seen_through.unwrap_or(exp_shape);
+        // `adaptToSubType`'s `x.convertTo(pt)`: the expected type itself (its `classBound` strips a `Null` alternative
+        // alone, `constant_class_bound`); a union's numeric member is the view's (`int2long` under `Long | String`).
+        let pt = seen_through.unwrap_or(exp);
         let target = match self.types.get(exp_shape) {
             Type::Union(..) => self.numeric_member(exp_shape).unwrap_or(exp),
-            _ => seen_through.unwrap_or(exp),
+            _ => pt,
         };
+        if let Some((converted, ty)) = self.convert_constant(te, actual, act, pt, expected, span) {
+            self.note_conversion_layer(te, converted);
+            return (converted, ty);
+        }
         if let Some(widened) = self.widen_numeric(te, act, target) {
+            self.note_conversion_layer(te, widened);
             return (widened, expected);
         }
-        if let Some(narrowed) = self.narrow_literal(te, act, target) {
-            return (narrowed, expected);
+        // A literal's narrowing is `convertTo`'s too: by the expected type's class bound (an `Int` or a `Char` alone
+        // narrows).
+        if act == self.b.t_int || act == self.b.t_char {
+            let bound = self.constant_class_bound(pt);
+            if let Some(narrowed) = self.narrow_literal(te, act, bound) {
+                return (narrowed, expected);
+            }
         }
         if let Type::Var(v) = self.types.get(exp) {
             if let Some(converted) = self.widen_to_bound(te, act, v, expected) {
@@ -841,7 +865,7 @@ impl<'a> Worker<'a> {
         let expected1 = self.reported_type(expected, -1, 0, &mut fbounded);
         let mark = self.snapshot();
         let conforms = self.is_sub(found1, expected1);
-        self.rollback(mark);
+        self.rollback(&mark);
         if conforms || fbounded {
             (found, expected, fbounded)
         } else {
@@ -1025,7 +1049,7 @@ impl<'a> Worker<'a> {
         if self.is_sub(lit, expected) {
             return true;
         }
-        self.rollback(mark);
+        self.rollback(&mark);
         false
     }
 
@@ -1135,13 +1159,13 @@ impl<'a> Worker<'a> {
     /// A numeric value for an open variable bounded above by a wider numeric class widens to
     /// that class, which becomes the variable's lower bound: `Some(1)` for an `Option[Long]`.
     fn widen_to_bound(&mut self, te: TExprId, act: TypeId, v: TVarId, expected: TypeId) -> Option<TExprId> {
-        let target = self.numeric_upper_bound(v)?;
+        let target = self.numeric_upper_bound(v, true)?;
         if !self.numeric_widening(act, target) {
             return None;
         }
         let mark = self.snapshot();
         if !self.is_sub(target, expected) {
-            self.rollback(mark);
+            self.rollback(&mark);
             return None;
         }
         // The conversion happens here, not again when the variable is solved.
@@ -1153,7 +1177,10 @@ impl<'a> Worker<'a> {
 
     /// The numeric class among the upper bounds of `v`, also through variables bounded by it
     /// and as the one numeric member of a union bound.
-    fn numeric_upper_bound(&mut self, v: TVarId) -> Option<TypeId> {
+    /// The numeric class an open variable is bounded by from above, through the variables it is bounded by; a union
+    /// bound its one numeric member where `unions` (the view's, `numeric_member`), else its class symbol's where that
+    /// is numeric (a constant's `classBound`).
+    fn numeric_upper_bound(&mut self, v: TVarId, unions: bool) -> Option<TypeId> {
         if self.tvars[v].upper.is_empty() {
             return None;
         }
@@ -1166,9 +1193,17 @@ impl<'a> Worker<'a> {
                     let u = self.deref(u);
                     match self.types.get(u) {
                         Type::Var(w) => next.push(w),
-                        Type::Union(..) => {
+                        Type::Union(..) if unions => {
                             if let Some(m) = self.numeric_member(u) {
                                 return Some(m);
+                            }
+                        }
+                        Type::Union(..) => {
+                            if let Some(c) = self.class_symbol(u) {
+                                let t = self.types.class(c, &[]);
+                                if self.is_numeric(t).is_some() {
+                                    return Some(t);
+                                }
                             }
                         }
                         _ if self.is_numeric(u).is_some() => return Some(u),
@@ -1198,7 +1233,7 @@ impl<'a> Worker<'a> {
                     continue;
                 }
                 // An open member bounded by a numeric class stands for that class.
-                Type::Var(v) => match self.numeric_upper_bound(v) {
+                Type::Var(v) => match self.numeric_upper_bound(v, true) {
                     Some(u) => u,
                     None => continue,
                 },
@@ -1216,6 +1251,310 @@ impl<'a> Worker<'a> {
     /// A literal has its constant type, as dotty's `TypeAssigner.assignType(Literal)` gives it
     /// (`(1 : Int)`); an inferred type widens it where it is instantiated
     /// (`ConstraintHandling.widenInferred`), so `List(1)` is a `List[Int]` and `val x = 1` an `Int`.
+    /// `adaptToSubType`'s constant conversion (`typer/Typer.scala` 4950-4963): a tree whose type is a numeric constant
+    /// (`widenTermRefExpr.normalized`) takes `Constant.convertTo(pt)` (`core/Constants.scala` 151-190) where it gives
+    /// one: 165-167 an expected singleton takes none; 169 the target `classBound(pt)` (`constant_class_bound`); 170 the same
+    /// class none (the tree conforms); 172-177 a `Byte`, `Short` or `Char` of an `Int`-range constant within its range
+    /// (`isByteRange` 30, `isShortRange` 31, `isCharRange` 32); 178-179 an `Int` of an `Int`-range one (33); 180-181 a
+    /// `Long` of a `Long`-range one (34); a `Float` of a `Float`-range one (35); a `Double` of any number (36); else none.
+    /// E167 where an `Int` or a `Long` to a `Float` or a `Long` to a `Double` loses digits (4955-4960). The tree is
+    /// `adaptConstant`'s (4935-4944, `adapt_constant_node`), a widening's the widened node (`widen_numeric`, the value
+    /// the same); its type the converted constant's (teq has no `Byte` or `Short` constant type: the class, the value in
+    /// the literal node).
+    #[inline(never)]
+    fn convert_constant(&mut self, te: TExprId, actual: TypeId, act: TypeId, target: TypeId, expected: TypeId, span: Span) -> Option<(TExprId, TypeId)> {
+        use super::prims::{R_BYTE, R_CHAR, R_DOUBLE, R_FLOAT, R_INT, R_LONG, R_SHORT};
+        let constant = self.widen_path(actual);
+        let constant = self.normalize(constant);
+        let Type::Lit(l) = self.types.get(constant) else {
+            return None;
+        };
+        let exp = self.deref(expected);
+        if matches!(self.types.get(exp), Type::Lit(_) | Type::Term(_) | Type::Select(..)) {
+            return None;
+        }
+        let bound = self.constant_class_bound(target);
+        let rank = self.is_numeric(bound)?;
+        let v = self.types.lit_val(l);
+        let (source, int) = match v {
+            LitVal::Int(i) => (R_INT, Some(i)),
+            LitVal::Byte(b) => (R_BYTE, Some(b as i32)),
+            LitVal::Short(h) => (R_SHORT, Some(h as i32)),
+            LitVal::Char(c) => (R_CHAR, Some(c as i32)),
+            LitVal::Long(_) => (R_LONG, None),
+            LitVal::Float(_) => (R_FLOAT, None),
+            LitVal::Double(_) => (R_DOUBLE, None),
+            _ => return None,
+        };
+        if source == rank {
+            return None;
+        }
+        let converted = match rank {
+            R_BYTE => LitVal::Byte(i8::try_from(int?).ok()?),
+            R_SHORT => LitVal::Short(i16::try_from(int?).ok()?),
+            R_CHAR => LitVal::Char(u16::try_from(int?).ok()?),
+            R_INT => LitVal::Int(int?),
+            R_LONG => LitVal::Long(match v {
+                LitVal::Long(l) => l,
+                _ => int? as i64,
+            }),
+            R_FLOAT => match v {
+                LitVal::Double(_) => return None,
+                LitVal::Long(l) => LitVal::Float((l as f32).to_bits()),
+                LitVal::Float(_) => v,
+                _ => LitVal::Float((int? as f32).to_bits()),
+            },
+            R_DOUBLE => match v {
+                LitVal::Float(f) => LitVal::Double((f32::from_bits(f) as f64).to_bits()),
+                LitVal::Long(l) => LitVal::Double((l as f64).to_bits()),
+                LitVal::Double(_) => v,
+                _ => LitVal::Double((int? as f64).to_bits()),
+            },
+            _ => return None,
+        };
+        // `adaptToSubType` 4955-4960: by the expected type's `classSymbol`, not the bound converted to (`Float | Null`'s is
+        // its join's, no `Float`).
+        let cls = self.class_symbol(target);
+        let (float, double) = (Some(self.b.float), Some(self.b.double));
+        let lossy = match v {
+            LitVal::Int(i) => cls == float && (i as f32) as i32 != i,
+            LitVal::Long(l) => (cls == float && (l as f32) as i64 != l) || (cls == double && (l as f64) as i64 != l),
+            _ => false,
+        };
+        if lossy {
+            // The expected type as the message prints it once inference is over: an open variable's class (dotty's
+            // message renders its `TypeVar` instantiated).
+            let d = self.deref(target);
+            let open = matches!(self.types.get(d), Type::Var(_));
+            let to = match (open, cls) {
+                (true, Some(c)) => {
+                    let t = self.types.class(c, &[]);
+                    self.show(t)
+                }
+                _ => self.show(target),
+            };
+            let from = self.show(act);
+            self.warn_lossy_constant(&from, &to, span);
+        }
+        let ty = if matches!(rank, R_BYTE | R_SHORT) { bound } else { self.literal_type(converted) };
+        if self.numeric_widening(act, bound) {
+            let widened = self.widen_numeric(te, act, bound)?;
+            return Some((widened, ty));
+        }
+        // A plain inline call still pending narrows as `narrow_literal` expands it.
+        if self.is_pending_call(te) {
+            return None;
+        }
+        let node = self.adapt_constant_node(te, converted, bound);
+        Some((node, ty))
+    }
+
+    /// `adaptConstant(tree, tpe)` (`typer/Typer.scala` 4935-4944): a literal takes the converted value; a block its
+    /// result adapted; an idempotent tree (a stable path) the literal alone; any other tree evaluated, then the literal
+    /// (`Block(tree :: Nil, lit)`), once. Typed as the class `class`.
+    fn adapt_constant_node(&mut self, te: TExprId, v: LitVal, class: TypeId) -> TExprId {
+        let lit = match v {
+            LitVal::Int(i) => TExpr::Int(i),
+            // A narrowed constant's literal: the integer typed by its class (`narrowed_literal` reads its tag back).
+            LitVal::Byte(b) => TExpr::Int(b as i32),
+            LitVal::Short(h) => TExpr::Int(h as i32),
+            LitVal::Char(c) => TExpr::Char(c),
+            LitVal::Long(l) => TExpr::Long(l),
+            LitVal::Float(f) => TExpr::Double(f32::from_bits(f) as f64),
+            LitVal::Double(d) => TExpr::Double(f64::from_bits(d)),
+            _ => return te,
+        };
+        let node = match self.prog.expr(te) {
+            TExpr::Int(_) | TExpr::Char(_) | TExpr::Long(_) | TExpr::Double(_) => {
+                self.prog.exprs[te.idx()] = lit;
+                te
+            }
+            TExpr::Block(stmts, res) => {
+                let r = self.adapt_constant_node(res, v, class);
+                self.prog.add(TExpr::Block(stmts, r))
+            }
+            _ if self.is_stable_path(te) => self.prog.add(lit),
+            _ => {
+                let stmts = self.prog.stmts.push_slice(&[TStmt::Expr(te)]);
+                let l = self.prog.add(lit);
+                self.prog.set_type(l, class);
+                self.prog.add(TExpr::Block(stmts, l))
+            }
+        };
+        self.prog.set_type(node, class);
+        node
+    }
+
+    /// `Constant.convertTo`'s `classBound` (`core/Constants.scala` 152-164) of the target: a type variable its upper
+    /// bound where that is a primitive class, else its lower bound's; an abstract type (a parameter, a member) its lower
+    /// bound's; else itself (aliases already followed by the caller, `dealias`).
+    fn constant_class_bound(&mut self, t: TypeId) -> TypeId {
+        let mut seen: Vec<TypeId> = Vec::new();
+        let mut t = t;
+        // Each step a lower bound; a bound met again (variables bounding each other from below) ends the walk there.
+        loop {
+            let d = self.deref_alias(t);
+            let d = self.strip_null(d);
+            if seen.contains(&d) {
+                return d;
+            }
+            seen.push(d);
+            let next = match self.types.get(d) {
+                Type::Var(v) => {
+                    let info = &self.tvars[v];
+                    let (upper, lower) = (info.upper.clone(), info.lower.clone());
+                    if let Some(&u) = upper.iter().find(|&&u| self.is_numeric(u).is_some()) {
+                        return u;
+                    }
+                    match lower.first() {
+                        Some(&lo) => lo,
+                        None => return d,
+                    }
+                }
+                Type::Param(p) => {
+                    let lo = self.syms.tparam(p).lower;
+                    if lo == NOTHING || lo == ERROR { return d } else { lo }
+                }
+                Type::Member(..) | Type::Decl(_) => {
+                    let (lo, _) = self.member_bounds(d);
+                    if lo == NOTHING || lo == ERROR || lo == d { return d } else { lo }
+                }
+                _ => return d,
+            };
+            t = next;
+        }
+    }
+
+    /// `stripNull` (`core/NullOpsDecorator.scala` 17-45): each step widened and dealiased (`widenDealias`); a union's
+    /// sides stripped, the `Null` one dropped, else the union of them; an intersection rebuilt where both sides lost a
+    /// `Null`; bounds both sides; the type itself where nothing was stripped (`tpStripped ne tpWiden`).
+    fn strip_null(&mut self, t: TypeId) -> TypeId {
+        let widened = self.widen_dealias(t);
+        let stripped = match self.types.get(widened) {
+            Type::Union(a, b, kind) => {
+                let (x, y) = (self.strip_null(a), self.strip_null(b));
+                if self.is_null_type(y) {
+                    x
+                } else if self.is_null_type(x) {
+                    y
+                } else if x == a && y == b {
+                    widened
+                } else {
+                    self.types.union_as(kind, x, y)
+                }
+            }
+            Type::Inter(a, b) => {
+                let (x, y) = (self.strip_null(a), self.strip_null(b));
+                if x != a && y != b { self.types.inter(x, y) } else { widened }
+            }
+            Type::BoundedWild(lo, hi) => {
+                let (x, y) = (self.strip_null(lo), self.strip_null(hi));
+                if x == lo && y == hi { widened } else { self.types.bounded_wild(x, y) }
+            }
+            _ => widened,
+        };
+        if stripped != widened { stripped } else { t }
+    }
+
+    /// `widenDealias` (`core/Types.scala` 1643-1648): `widen` (a path's, a literal's underlying type) then `dealias`,
+    /// until neither changes the type.
+    fn widen_dealias(&mut self, t: TypeId) -> TypeId {
+        let mut t = t;
+        loop {
+            let w = self.widen_path(t);
+            let w = self.widen_lit(w);
+            let d = self.deref_alias(w);
+            if d == t {
+                return t;
+            }
+            t = d;
+        }
+    }
+
+    /// `isNullType` (`core/Types.scala` 1870): `isRef(defn.NullClass)`.
+    fn is_null_type(&mut self, t: TypeId) -> bool {
+        let null = self.b.null;
+        self.is_ref(t, super::check::RefSym::Class(null))
+    }
+
+    /// `Type.classSymbol` (`core/Types.scala`) as the lossy-conversion test reads it: a class's; a proxy's supertype's
+    /// (a literal's class, a parameter's or an abstract member's bound, a path's widened type); of an intersection the
+    /// side that derives from the other; of a union the side beside `Nothing`, else its join's, which is either side's
+    /// class only where both have it (none otherwise: a final class like `Float` is no join of another).
+    pub(super) fn class_symbol(&mut self, t: TypeId) -> Option<ClassId> {
+        let t = self.deref_alias(t);
+        match self.types.get(t) {
+            Type::Class(c, _) | Type::Ctor(c) => Some(c),
+            Type::Lit(_) => {
+                let w = self.widen_lit(t);
+                if w == t { None } else { self.class_symbol(w) }
+            }
+            Type::Term(_) | Type::Select(..) | Type::This(_) => {
+                let w = self.widen_path(t);
+                if w == t { None } else { self.class_symbol(w) }
+            }
+            Type::Param(p) => {
+                let upper = self.syms.tparam(p).upper;
+                if upper == t { None } else { self.class_symbol(upper) }
+            }
+            Type::Member(..) | Type::Decl(_) => {
+                let (_, hi) = self.member_bounds(t);
+                if hi == t || hi == ERROR { None } else { self.class_symbol(hi) }
+            }
+            Type::Annotated(u) | Type::Refined(u, _) | Type::Rec(u) | Type::Lambda(_, u) => self.class_symbol(u),
+            // An open variable's `superType`: its `origin`'s, the parameter's `paramInfo`, its upper bound (`TVarExtra::
+            // origin`, else the bounds the variable keeps of it, `declared`).
+            Type::Var(v) => {
+                let hi = match self.tvars[v].origin() {
+                    Some(p) => self.syms.tparam(p).upper,
+                    None => self.tvars[v].declared().1,
+                };
+                if hi == t { None } else { self.class_symbol(hi) }
+            }
+            // An application's `superType` (its constructor's bound applied, `kind_info`), an alias kept by name its
+            // expansion, a match type its bound.
+            Type::AppParam(..) | Type::AppMember(..) | Type::AppVar(..) => match self.applied_super_type(t) {
+                Some(s) if s != t => self.class_symbol(s),
+                _ => None,
+            },
+            Type::Alias(..) => match self.alias_kept_expansion(t) {
+                Some(e) if e != t => self.class_symbol(e),
+                _ => None,
+            },
+            Type::Match(_, m) => {
+                let bound = self.types.match_info(m).bound;
+                self.class_symbol(bound)
+            }
+            Type::Inter(a, b) => {
+                let (x, y) = (self.class_symbol(a), self.class_symbol(b));
+                match (x, y) {
+                    (Some(l), Some(r)) if self.derives_from(l, r) => Some(l),
+                    (Some(l), Some(r)) if self.derives_from(r, l) => Some(r),
+                    _ => None,
+                }
+            }
+            Type::Union(a, b, _) => {
+                if self.deref_alias(a) == NOTHING {
+                    return self.class_symbol(b);
+                }
+                if self.deref_alias(b) == NOTHING {
+                    return self.class_symbol(a);
+                }
+                let (x, y) = (self.class_symbol(a), self.class_symbol(b));
+                if x == y { x } else { None }
+            }
+            _ => None,
+        }
+    }
+
+    /// `LossyWideningConstantConversion` (E167).
+    #[cold]
+    #[inline(never)]
+    fn warn_lossy_constant(&mut self, from: &str, to: &str, span: Span) {
+        let msg = format!("Widening conversion from {from} to {to} loses precision.\nWrite `.to{to}` instead.");
+        self.warn_as(span, msg, crate::source::Warning::id(crate::warnings::id::LOSSY_WIDENING_CONSTANT_CONVERSION));
+    }
+
     fn literal_type(&mut self, value: LitVal) -> TypeId {
         if let Some(&t) = self.lit_types.get(&value) {
             return t;
@@ -1228,6 +1567,8 @@ impl<'a> Worker<'a> {
     pub fn literal_expr(&mut self, value: LitVal) -> TExprId {
         let e = match value {
             LitVal::Int(v) => TExpr::Int(v),
+            LitVal::Byte(v) => TExpr::Int(v as i32),
+            LitVal::Short(v) => TExpr::Int(v as i32),
             LitVal::Long(v) => TExpr::Long(v),
             LitVal::Double(bits) => TExpr::Double(f64::from_bits(bits)),
             // A `Float` is a `Double` node of its value typed `Float`.
@@ -1235,6 +1576,14 @@ impl<'a> Worker<'a> {
             LitVal::Char(c) => TExpr::Char(c),
             LitVal::Bool(b) => TExpr::Bool(b),
             LitVal::Str(s) => TExpr::Str(self.prog.add_str(self.interner.get(s))),
+            // A class constant's tree is its `classOf[T]` (`Literal(Constant(T))`).
+            LitVal::Class(class) => {
+                let t = match self.types.get(class) {
+                    Type::Class(_, args) => self.types.items(args).first().copied().unwrap_or(ANY),
+                    _ => ANY,
+                };
+                return self.type_class_of(t, Span::default()).0;
+            }
         };
         self.prog.add(e)
     }
@@ -1579,21 +1928,34 @@ impl<'a> Worker<'a> {
         let span = ast.expr_span(e);
         match ast.expr(e) {
             Expr::IntLit(v) => {
+                // `typedNumber`'s `pt.dealias.isRef(..)` of a primitive numeric class (`is_ref`: an alias kept by name,
+                // a refinement, an annotation read through): a union is none (its numeric alternative is
+                // `adaptToSubType`'s `convertTo` to the union, or the view's), a variable its upper bound where that is a
+                // primitive class (`classBound`'s constraint entry, `hi.classSymbol`).
                 let mut exp = expected.map(|t| self.deref(t));
                 match exp.map(|t| self.types.get(t)) {
-                    Some(Type::Var(var)) => exp = self.numeric_upper_bound(var),
-                    Some(Type::Union(..)) => exp = self.numeric_member(exp.unwrap()),
+                    Some(Type::Var(var)) => exp = self.numeric_upper_bound(var, false),
+                    Some(Type::Union(..)) => exp = None,
                     _ => {}
                 }
+                // The class each `isRef` asks of the target, its walk taken once (`ref_target`).
+                let target = match exp.and_then(|t| self.ref_target(t)) {
+                    Some(super::check::RefSym::Class(c)) => Some(c),
+                    _ => None,
+                };
                 // The constant converted to the numeric class expected, a constant of that class
                 // (`Constant.convertTo` in `adapt`): `1` where a `Long` is expected is a `1L`.
-                if exp == Some(self.b.t_long) {
+                if target == Some(self.b.long) {
                     return (self.prog.add(TExpr::Long(v)), self.literal_type(LitVal::Long(v)));
                 }
-                if exp == Some(self.b.t_double) {
+                if target == Some(self.b.double) {
                     return (self.prog.add(TExpr::Double(v as f64)), self.literal_type(LitVal::Double((v as f64).to_bits())));
                 }
-                if exp == Some(self.b.t_float) {
+                if target == Some(self.b.float) {
+                    // `typedNumber`'s `floatFromDigits`, E167 where the digits are an `Int` the `Float` does not keep.
+                    if i32::try_from(v).is_ok_and(|i| (v as f32) as i32 != i) {
+                        self.warn_lossy_constant("Int", "Float", span);
+                    }
                     return (self.prog.add(TExpr::Double(v as f32 as f64)), self.literal_type(LitVal::Float((v as f32).to_bits())));
                 }
                 // An integer literal narrows to the Byte or Short that is expected when it fits.
@@ -1629,7 +1991,9 @@ impl<'a> Worker<'a> {
                 let digits = ast.str(s);
                 // Whether the digits are a zero's, read only of a value that is zero.
                 let nonzero = || !digits.bytes().take_while(|&c| c != b'e' && c != b'E').all(|c| matches!(c, b'0' | b'.' | b'-' | b'+'));
-                let float = expected.map(|t| self.deref(t)) == Some(self.b.t_float);
+                // `typedNumber`'s `target.isRef(defn.FloatClass)`.
+                let float_class = self.b.float;
+                let float = expected.is_some_and(|t| self.is_ref(t, super::check::RefSym::Class(float_class)));
                 let (v, ty) = if float {
                     let v = digits.parse::<f32>().unwrap_or(0.0);
                     self.number_range(v.is_infinite(), v == 0.0 && nonzero(), span);
@@ -1717,7 +2081,8 @@ impl<'a> Worker<'a> {
             },
             Expr::ClassOf(t) => {
                 let ty = self.resolve_type(t);
-                self.type_class_of(ty, span)
+                let (te, class) = self.type_class_of(ty, span);
+                (te, self.class_constant_type(class))
             }
             Expr::Unsupported(what) => {
                 let msg = format!("not supported yet: {}", self.cur_ast().strings[what.idx()]);
@@ -1879,7 +2244,9 @@ impl<'a> Worker<'a> {
                     self.ascribed(typed.0, typed.1);
                     return typed;
                 }
-                let te = self.check_expr(inner, t);
+                // The inner tree's own type, with its instantiated type arguments (`ConstFold.ConstantTree` reads it
+                // through the `Typed`).
+                let (te, own_ty) = self.check_expr_adapted(inner, t);
                 if self.denotation_marks.is_some() {
                     self.mark_block_node(inner, te);
                 }
@@ -1898,12 +2265,18 @@ impl<'a> Worker<'a> {
                 // A plain call still pending, whose node its expansion takes later, keeps the type
                 // the typing gave it (a widening) under the ascription's.
                 let pending_call = self.prog.type_of(te).map_or(false, |it| it != t && self.is_numeric(it).is_some()) && self.is_pending_call(te);
-                let te = match self.prog.type_of(te) {
+                let node = match self.prog.type_of(te) {
                     Some(inner_ty) if (inner_ty == self.b.t_double || narrowed_literal || pending_call) && self.is_numeric(t).is_none() && self.quote.level == 0 => {
                         self.prog.add(TExpr::Block(crate::ast::ListRef::EMPTY, te))
                     }
                     _ => te,
                 };
+                // `Typed(expr, _)`'s `expr` as `ConstantTree` reads it, before the ascription marks the node: its own
+                // typed type, `null` included, kept by the node the ascription keeps.
+                if self.fold_type(t).is_none() {
+                    self.note_ascribed_tree_constant(node, te, own_ty);
+                }
+                let te = node;
                 self.ascribed(te, t);
                 // Its type stands as written to erasure (`Erasure.typedTyped`), the JVM's
                 // qualifier of a member selected from it (`Program::ascribed_bits`).
@@ -3087,7 +3460,11 @@ impl<'a> Worker<'a> {
     fn type_poly_lambda(&mut self, e: ExprId, tparams: ListRef, lambda: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let names: Vec<Name> = self.cur_ast().name_lists[tparams.range()].to_vec();
         let bounds = self.cur_ast().poly_lambda_bounds.iter().find(|(l, _)| *l == e).map(|&(_, bl)| bl);
-        let (ids, ps) = self.poly_params(&names, bounds);
+        // Its binders' annotations before they exist (`annotContext` of the closure's `$anonfun`'s parameters).
+        if !self.cur_ast().notes.binder_annots.is_empty() {
+            self.binder_annotations(ast::BinderClause::PolyLiteral(e));
+        }
+        let (ids, ps) = self.poly_params(&names, bounds, ast::BinderClause::PolyLiteral(e));
         if self.index.is_some() {
             self.index_poly_tparams(span, &names, &ids);
         }
@@ -3569,7 +3946,7 @@ impl<'a> Worker<'a> {
         self.alias_bound_as_path = path;
         let fits = self.is_sub(ty, exp);
         if !(fits && path && alias_head) {
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         if fits {
             if !self.jvm && self.is_primitive_type_id(act) && self.is_erased_result(te) {
@@ -3580,7 +3957,7 @@ impl<'a> Worker<'a> {
         }
         if self.is_numeric(act).is_some() {
             if let Some(widened) = self.widen_to_bound(te, act, v, exp) {
-                return (widened, self.numeric_upper_bound(v).unwrap_or(ty));
+                return (widened, self.numeric_upper_bound(v, true).unwrap_or(ty));
             }
         }
         if let Some(discarded) = self.discard_to_unit_bound(te, ty, v, exp, span) {
@@ -3606,7 +3983,7 @@ impl<'a> Worker<'a> {
         }
         let mark = self.snapshot();
         if !self.is_sub(unit, exp) {
-            self.rollback(mark);
+            self.rollback(&mark);
             return None;
         }
         Some((self.adapt(te, ty, unit, span), unit))
@@ -3618,7 +3995,7 @@ impl<'a> Worker<'a> {
     fn convert_lambda_result(&mut self, te: TExprId, ty: TypeId, exp: TypeId, span: Span) -> (TExprId, TypeId) {
         let mark = self.snapshot();
         let fits = self.is_sub(ty, exp);
-        self.rollback(mark);
+        self.rollback(&mark);
         if fits || self.types.has_vars(exp) {
             return (te, ty);
         }
@@ -3789,7 +4166,7 @@ impl<'a> Worker<'a> {
                     }
                     let mark = self.snapshot();
                     let below = self.is_sub(parts[i], parts[j]);
-                    self.rollback(mark);
+                    self.rollback(&mark);
                     below
                 })
         })
@@ -4092,7 +4469,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         for u in uppers {
             if !self.is_sub(improved, u) {
-                self.rollback(mark);
+                self.rollback(&mark);
                 return None;
             }
         }
@@ -4117,7 +4494,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         for u in uppers {
             if !self.is_sub(lower, u) {
-                self.rollback(mark);
+                self.rollback(&mark);
                 return None;
             }
         }
@@ -5304,7 +5681,7 @@ impl<'a> Worker<'a> {
             self.type_expr(assign, None);
             let failed = self.diags.items[mark..].iter().any(|d| !d.is_warning);
             self.drop_reported_since(mark);
-            self.rollback(vars);
+            self.rollback(&vars);
             if failed {
                 return;
             }
@@ -5827,7 +6204,7 @@ impl<'a> Worker<'a> {
         let mark = self.snapshot();
         let res = self.is_sub(a, b) && self.is_sub(b, a);
         if !res {
-            self.rollback(mark);
+            self.rollback(&mark);
         }
         self.same_level -= 1;
         if let Some(saved) = saved {
