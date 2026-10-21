@@ -1213,7 +1213,9 @@ PY
 session_removal
 
 # A session's forked full builds keep nothing of theirs: the allocator's blocks in use (`stats`) after the
-# ninetieth as after the thirtieth, within 2 KB in all, through the fork at one worker and at eight (without,
+# ninetieth as after the thirtieth, each the minimum over three consecutive builds (an object of about 4 KB
+# toggles between builds on master's binary too, so one reading lands on it one time in twelve), within 2 KB in
+# all, through the fork at one worker and at eight (without,
 # every forked build lost the peers' table of every shared arena, 48 KB a build, and every worker and merge
 # thread its own handle, some sixteen bytes a thread, 6.7 KB over the sixty builds at eight; the fixed builds
 # measured 0 and 32 to 240 bytes).
@@ -1239,15 +1241,17 @@ def send(c):
     p.stdin.flush()
     return json.loads(p.stdout.readline())
 json.loads(p.stdout.readline())
-live = []
+early, late = [], []
 for i in range(1, 91):
     send("build")
-    if i in (30, 90):
-        live.append(send("stats")["stats"]["allocator"]["live"])
+    if i in (28, 29, 30):
+        early.append(send("stats")["stats"]["allocator"]["live"])
+    if i in (88, 89, 90):
+        late.append(send("stats")["stats"]["allocator"]["live"])
 p.stdin.write("quit\n")
 p.stdin.flush()
 p.wait(timeout=30)
-print(live[1] - live[0])
+print(min(late) - min(early))
 PY
 )
     if [ -n "$grown" ] && [ "$grown" -lt 2048 ]; then ok; else bad "session flat ($how): the blocks in use grew by $grown bytes over sixty forked full builds"; fi

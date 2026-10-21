@@ -348,7 +348,7 @@ Independently of any run, the gate's line `records` holds every record of the he
 (`bench/reference/ratchet.scala check <revision>`, the revision `--master-rev` names, by default master's head, a head
 that does not contain it refused until rebased), the records of either revision enumerated, so that a floor goes neither with its file nor with its
 project's directory: for the same inputs the head's scope is master's and its debt within master's; a first record is
-a baseline; new inputs take a migration with its reason and evidence; a record removed fails.
+a baseline; new inputs take a migration with its reason and evidence; over unchanged inputs a migration is admitted when every item it adds pairs with one it loses by the message (the position and the printed lines apart) and the debt does not grow, an accepted error the compiler now places or prints elsewhere; a record removed fails.
 `tests/gate-scripts.sh`'s `records` section proves the rules over stand-in transcripts through the ratchet's verbs,
 and `tests/lila-test-verb.sh`, `tests/reference-test-verb.sh` and `tests/mill-test-verb.sh` the verbs' own use of them
 over stand-in teq binaries.

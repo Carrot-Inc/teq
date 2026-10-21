@@ -11,8 +11,14 @@
 //! resolution of the same bytes waits for the first's placement and takes it, copied under its own
 //! name when it has another), a line per transfer to the caller as it starts, and the first failure
 //! ending the others.
+//!
+//! A library's sources artifact, which no export pins, is fetched by the language server into teq's
+//! sources store, `<cache>/sources/<sha1 of the binary>/<name>`, never beside the binary in
+//! `artifacts/`, whose files are all taken for the binary (`fetch_sources`): in a pool of transfers of
+//! its own, `MAX_SOURCE_TRANSFERS`, so that a binary never waits for one, its archive read and the
+//! repository's `.sha1` checked before it is placed.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::io::{ErrorKind, Read, Write};
 use std::net::IpAddr;
@@ -57,18 +63,85 @@ pub struct Wanted<'a> {
     pub key: &'a str,
 }
 
-/// How many transfers the process runs at once.
+/// How many transfers of binaries the process runs at once.
 pub const MAX_TRANSFERS: usize = 4;
+/// How many transfers of sources artifacts the process runs at once, in a pool of their own.
+pub const MAX_SOURCE_TRANSFERS: usize = 2;
 
-/// The transfers under way in the process, and the artifacts they fetch (`<kind>/<sha1>`).
+/// A pool of transfers: how many it runs at once, those under way and the artifacts they fetch.
+struct Pool {
+    size: usize,
+    transfers: Mutex<Transfers>,
+    /// Told whenever a transfer of the pool ends.
+    ended: Condvar,
+}
+
+/// The transfers under way in a pool, and the artifacts they fetch (`<kind>/<sha1>`, a sources
+/// artifact's URL).
 struct Transfers {
     running: usize,
     fetching: Vec<String>,
 }
 
-static TRANSFERS: Mutex<Transfers> = Mutex::new(Transfers { running: 0, fetching: Vec::new() });
-/// Told whenever a transfer ends.
-static ENDED: Condvar = Condvar::new();
+/// The binaries' transfers (`resolve_all`).
+static BINARIES: Pool = Pool::new(MAX_TRANSFERS);
+/// The sources artifacts' transfers (`fetch_sources`), which take no slot of the binaries'.
+static SOURCES: Pool = Pool::new(MAX_SOURCE_TRANSFERS);
+
+/// A transfer's place in its pool, given back when dropped.
+struct Slot<'a> {
+    pool: &'a Pool,
+    id: String,
+}
+
+impl Drop for Slot<'_> {
+    fn drop(&mut self) {
+        let mut transfers = self.pool.transfers.lock().unwrap_or_else(|e| e.into_inner());
+        transfers.running -= 1;
+        transfers.fetching.retain(|f| *f != self.id);
+        drop(transfers);
+        self.pool.ended.notify_all();
+    }
+}
+
+/// What a wait for a slot ends with.
+enum Taken<'a, T> {
+    Slot(Slot<'a>),
+    /// What was placed meanwhile.
+    Placed(T),
+    Cancelled,
+}
+
+impl Pool {
+    const fn new(size: usize) -> Pool {
+        Pool { size, transfers: Mutex::new(Transfers { running: 0, fetching: Vec::new() }), ended: Condvar::new() }
+    }
+
+    /// A slot for a transfer of `id` once one is free and no other transfer of `id` is under way;
+    /// before that, what `placed` finds placed, asked whenever no transfer of `id` runs; nothing once
+    /// `cancel` is set.
+    fn take<T>(&self, id: &str, cancel: &AtomicBool, mut placed: impl FnMut() -> Option<T>) -> Taken<'_, T> {
+        let mut transfers = self.transfers.lock().unwrap_or_else(|e| e.into_inner());
+        loop {
+            if cancel.load(Ordering::Relaxed) {
+                return Taken::Cancelled;
+            }
+            if !transfers.fetching.iter().any(|f| f == id) {
+                if let Some(found) = placed() {
+                    return Taken::Placed(found);
+                }
+                if transfers.running < self.size {
+                    break;
+                }
+            }
+            transfers = self.ended.wait_timeout(transfers, POLL).unwrap_or_else(|e| e.into_inner()).0;
+        }
+        transfers.running += 1;
+        transfers.fetching.push(id.to_string());
+        Taken::Slot(Slot { pool: self, id: id.to_string() })
+    }
+}
+
 /// How often a waiting transfer and a running curl look at the resolution's end.
 const POLL: Duration = Duration::from_millis(20);
 const CANCELLED: &str = "cancelled by an earlier failure";
@@ -200,13 +273,17 @@ fn cached(w: &Wanted) -> Option<PathBuf> {
     fs::metadata(&file).is_ok_and(|m| m.len() == w.pin.size).then_some(file)
 }
 
-/// A file the shared cache holds of the same sha1 under another name, placed (and so verified)
-/// by an earlier fetch: the same bytes, which a copy gives this name without a transfer.
+/// A file the shared cache holds of the same sha1 under another name, placed by an earlier fetch:
+/// the same bytes, which a copy gives this name without a transfer, once its sha1 is the pinned one
+/// (what else stands there is never taken for the artifact).
 fn sibling(w: &Wanted) -> Option<PathBuf> {
-    let dir = cache_root()?.join(w.kind).join(w.pin.sha1);
+    sibling_in(&cache_root()?.join(w.kind).join(w.pin.sha1), &w.pin)
+}
+
+fn sibling_in(dir: &Path, pin: &Pin) -> Option<PathBuf> {
     fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).find(|p| {
         let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        !is_part(&name) && fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() == w.pin.size)
+        !is_part(&name) && fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() == pin.size) && sha1_file(p).is_ok_and(|sha1| sha1 == pin.sha1)
     })
 }
 
@@ -214,35 +291,15 @@ fn sibling(w: &Wanted) -> Option<PathBuf> {
 /// other resolution is fetching it; when another was, its placement is taken.
 fn transfer(w: &Wanted, cancel: &AtomicBool, progress: &(dyn Fn(&str) + Sync)) -> Result<PathBuf, String> {
     let id = format!("{}/{}", w.kind, w.pin.sha1);
-    let mut transfers = TRANSFERS.lock().unwrap_or_else(|e| e.into_inner());
-    loop {
-        if cancel.load(Ordering::Relaxed) {
-            return Err(CANCELLED.to_string());
-        }
-        if !transfers.fetching.contains(&id) {
-            if let Some(file) = cached(w) {
-                return Ok(file);
-            }
-            if let Some(placed) = sibling(w) {
-                drop(transfers);
-                return copied(w, &placed).map_err(|e| format!("{}: {}", w.key, e));
-            }
-            if transfers.running < MAX_TRANSFERS {
-                break;
-            }
-        }
-        transfers = ENDED.wait_timeout(transfers, POLL).unwrap_or_else(|e| e.into_inner()).0;
-    }
-    transfers.running += 1;
-    transfers.fetching.push(id.clone());
-    drop(transfers);
+    let slot = match BINARIES.take(&id, cancel, || cached(w).map(Ok).or_else(|| sibling(w).map(Err))) {
+        Taken::Placed(Ok(file)) => return Ok(file),
+        Taken::Placed(Err(placed)) => return copied(w, &placed).map_err(|e| format!("{}: {}", w.key, e)),
+        Taken::Cancelled => return Err(CANCELLED.to_string()),
+        Taken::Slot(slot) => slot,
+    };
     progress(&format!("teq: fetching {} ({})", w.key, shown_size(w.pin.size)));
     let placed = fetch(w, cancel).map_err(|e| if e == CANCELLED { e } else { format!("{}: {}", w.key, e) });
-    let mut transfers = TRANSFERS.lock().unwrap_or_else(|e| e.into_inner());
-    transfers.running -= 1;
-    transfers.fetching.retain(|f| *f != id);
-    drop(transfers);
-    ENDED.notify_all();
+    drop(slot);
     placed
 }
 
@@ -280,9 +337,14 @@ fn fetch(w: &Wanted, cancel: &AtomicBool) -> Result<PathBuf, String> {
         _ => None,
     };
     fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {}", dir.display(), e))?;
-    remove_abandoned_parts(&dir);
+    remove_abandoned_parts(&dir, MAX_TIME);
     let part = part_beside(&file)?;
-    let placed = download(&url, w.pin.size, w.source.credentials, credentials.as_ref(), credentials_file.as_deref(), &part, cancel)
+    let placed = download(&url, w.pin.size, MAX_TIME, w.source.credentials, credentials.as_ref(), credentials_file.as_deref(), &part, cancel)
+        .map_err(|failure| match failure {
+            Failure::TooLarge => format!("{} has more than the {} bytes the export pins: refused", url, w.pin.size),
+            Failure::Status(_, said) | Failure::Transport(said) => said,
+            Failure::Cancelled => CANCELLED.to_string(),
+        })
         .and_then(|()| verify(&url, &w.pin, &part))
         .and_then(|()| {
             set_executable(&part, w.kind == "bin")?;
@@ -294,6 +356,201 @@ fn fetch(w: &Wanted, cancel: &AtomicBool) -> Result<PathBuf, String> {
         });
     let _ = fs::remove_file(&part);
     placed.map(|()| file)
+}
+
+/// The bounds on a sources artifact: its size and its transfer's time.
+const MAX_SOURCES_SIZE: u64 = 300_000_000;
+const MAX_SOURCES_TIME: Duration = Duration::from_secs(600);
+/// The bound on a checksum file, a line.
+const MAX_CHECKSUM_SIZE: u64 = 1024;
+
+/// The path of a jar's sources artifact under its repository, as Maven lays a classifier's out
+/// beside the binary: the binary's file name with its classifier replaced by `sources`, or by
+/// `test-sources` for `tests` (the classifier of Maven's test jar, whose sources' is
+/// `test-sources`), a platform's classifier (`linux-x86_64`) sharing the plain sources; a Scala.js
+/// or cross-version suffix is the artifact's own name and stays. None for a path that is no `.jar`,
+/// or whose file name does not end in its classifier (a repository of another layout).
+pub fn sources_path(path: &str, classifier: Option<&str>) -> Option<String> {
+    let stem = path.strip_suffix(".jar")?;
+    let (stem, sources) = match classifier {
+        None => (stem, "sources"),
+        Some(c) => (stem.strip_suffix(c)?.strip_suffix('-')?, if c == "tests" { "test-sources" } else { "sources" }),
+    };
+    Some(format!("{}-{}.jar", stem, sources))
+}
+
+/// Where teq's sources store keeps the sources artifact `name` of the binary of sha1 `sha1`:
+/// `<cache>/sources/<sha1>/<name>`.
+pub fn sources_store(sha1: &str, name: &str) -> Option<PathBuf> {
+    Some(cache_root()?.join("sources").join(sha1).join(name))
+}
+
+/// Whether `path` is a file holding a whole zip archive (`zip::Zip::open_valid`, the validation the
+/// sessions open a sources jar by too): a sources jar that opens.
+pub fn valid_archive(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|m| m.is_file()) && path.to_str().is_some_and(|p| crate::zip::Zip::open_valid(p).is_ok())
+}
+
+/// The modification time of sbt's credentials file, none where there is none.
+pub fn credentials_stamp() -> Option<std::time::SystemTime> {
+    fs::metadata(credentials_file()?).and_then(|m| m.modified()).ok()
+}
+
+/// A sources artifact to fetch: its URL, the host whose credentials the fetch presents when the
+/// export names one, its place in teq's sources store (`sources_store`), and the sha1s of the
+/// archives of it a session found unreadable, which are not placed again.
+pub struct SourcesWanted<'a> {
+    pub url: &'a str,
+    pub credentials: Option<&'a str>,
+    pub file: &'a Path,
+    pub unreadable: &'a BTreeSet<String>,
+}
+
+/// How a fetch of a sources artifact ended, each failure with what the client is told.
+#[derive(Debug, PartialEq)]
+pub enum SourcesFetched {
+    /// In the store: placed by this transfer, or by another of the process meanwhile.
+    Published,
+    /// The repository has no such artifact (404 or 410): none published.
+    Absent(String),
+    /// The repository refused the credentials, or asked for some (401 or 403).
+    Refused(String),
+    /// No answer, an answer cut short or another status, of the archive or of its checksum.
+    Failed(String),
+    /// Bytes that are no archive, larger than the bound, or not those the repository's `.sha1`
+    /// names.
+    Rejected(String),
+    Cancelled,
+}
+
+/// A sources artifact fetched into teq's sources store once a transfer of the sources' pool is free
+/// and no other is fetching it, `started` told as the transfer starts: its body read whole, its zip
+/// archive's central directory read, and the repository's `.sha1` checksum of it compared when the
+/// repository has one (a checksum it does not have is no failure, one it cannot give is), then
+/// renamed into place, so that a session finds a whole archive or none. No sha1 is pinned: the
+/// export pins the binary alone.
+pub fn fetch_sources(w: &SourcesWanted, cancel: &AtomicBool, started: &dyn Fn()) -> SourcesFetched {
+    let slot = match SOURCES.take(w.url, cancel, || valid_archive(w.file).then_some(())) {
+        Taken::Placed(()) => return SourcesFetched::Published,
+        Taken::Cancelled => return SourcesFetched::Cancelled,
+        Taken::Slot(slot) => slot,
+    };
+    started();
+    let fetched = place_sources(w, cancel);
+    drop(slot);
+    fetched
+}
+
+fn place_sources(w: &SourcesWanted, cancel: &AtomicBool) -> SourcesFetched {
+    let credentials_file = credentials_file();
+    let credentials = match (w.credentials, &credentials_file) {
+        (Some(host), Some(f)) => match Credentials::read(f, host) {
+            Ok(c) => c,
+            Err(e) => return SourcesFetched::Failed(e),
+        },
+        _ => None,
+    };
+    let Some(dir) = w.file.parent() else { return SourcesFetched::Failed(format!("{} is no file of a directory", w.file.display())) };
+    if let Err(e) = fs::create_dir_all(dir) {
+        return SourcesFetched::Failed(format!("cannot create {}: {}", dir.display(), e));
+    }
+    remove_abandoned_parts(dir, MAX_SOURCES_TIME);
+    let (part, checksum) = match (part_beside(w.file), part_beside(&w.file.with_extension("jar.sha1"))) {
+        (Ok(part), Ok(checksum)) => (part, checksum),
+        (Err(e), other) | (other, Err(e)) => {
+            if let Ok(made) = other {
+                let _ = fs::remove_file(made);
+            }
+            return SourcesFetched::Failed(e);
+        }
+    };
+    let get = |url: &str, size: u64, into: &Path| download(url, size, MAX_SOURCES_TIME, w.credentials, credentials.as_ref(), credentials_file.as_deref(), into, cancel);
+    let fetched = match get(w.url, MAX_SOURCES_SIZE, &part) {
+        Err(failure) => sources_failure(w.url, failure),
+        Ok(()) if !valid_archive(&part) => SourcesFetched::Rejected(format!("{} is no zip archive whose directory reads", w.url)),
+        Ok(()) => {
+            let sidecar = format!("{}.sha1", w.url);
+            let answer = get(&sidecar, MAX_CHECKSUM_SIZE, &checksum).and_then(|()| fs::read_to_string(&checksum).map_err(|e| Failure::Transport(format!("cannot read {}: {}", checksum.display(), e))));
+            match sha1_file(&part).map_err(|e| format!("cannot read {}: {}", part.display(), e)) {
+                Err(e) => SourcesFetched::Failed(e),
+                Ok(sha1) => match checked(w.url, answer, &sha1) {
+                    Err(failed) => failed,
+                    // The same bytes a session could not read: refused, not placed again.
+                    Ok(()) if w.unreadable.contains(&sha1) => SourcesFetched::Rejected(format!("{} serves again the archive a session could not read (sha1 {})", w.url, sha1)),
+                    Ok(()) => publish(&part, w.file),
+                },
+            }
+        }
+    };
+    let _ = fs::remove_file(&part);
+    let _ = fs::remove_file(&checksum);
+    fetched
+}
+
+/// What a failed transfer of a sources artifact or of its checksum is.
+fn sources_failure(url: &str, failure: Failure) -> SourcesFetched {
+    match failure {
+        Failure::TooLarge => SourcesFetched::Rejected(format!("{} has more than {} bytes: refused", url, MAX_SOURCES_SIZE)),
+        Failure::Status(404 | 410, said) => SourcesFetched::Absent(said),
+        Failure::Status(401 | 403, said) => SourcesFetched::Refused(said),
+        Failure::Status(_, said) | Failure::Transport(said) => SourcesFetched::Failed(said),
+        Failure::Cancelled => SourcesFetched::Cancelled,
+    }
+}
+
+/// The repository's checksum of the archive `url` held to its sha1: the first word of the `.sha1`
+/// file, as Maven writes it (alone, or followed by the file's name); a checksum the repository does
+/// not have (404 or 410) is nothing to compare, a request that failed otherwise a failure of the
+/// fetch.
+fn checked(url: &str, answer: Result<String, Failure>, sha1: &str) -> Result<(), SourcesFetched> {
+    let text = match answer {
+        Ok(text) => text,
+        Err(Failure::Status(404 | 410, _)) => return Ok(()),
+        Err(Failure::TooLarge) => return Err(SourcesFetched::Rejected(format!("{}.sha1 holds no sha1", url))),
+        Err(failure) => return Err(sources_failure(&format!("{}.sha1", url), failure)),
+    };
+    let named = text.split_whitespace().next().unwrap_or_default().to_ascii_lowercase();
+    if named.len() != 40 || !named.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(SourcesFetched::Rejected(format!("{}.sha1 holds no sha1", url)));
+    }
+    if named != sha1 {
+        return Err(SourcesFetched::Rejected(format!("{} has sha1 {} where {}.sha1 names {}: refused", url, sha1, url, named)));
+    }
+    Ok(())
+}
+
+/// The archive `from` (another binary's copy of the same sources artifact) copied into its place in
+/// the store `file` through a partial file of its own; none fetched.
+pub fn publish_copy(from: &Path, file: &Path) -> SourcesFetched {
+    let Some(dir) = file.parent() else { return SourcesFetched::Failed(format!("{} is no file of a directory", file.display())) };
+    if let Err(e) = fs::create_dir_all(dir) {
+        return SourcesFetched::Failed(format!("cannot create {}: {}", dir.display(), e));
+    }
+    let part = match part_beside(file) {
+        Ok(part) => part,
+        Err(e) => return SourcesFetched::Failed(e),
+    };
+    let placed = match fs::copy(from, &part) {
+        Err(e) => SourcesFetched::Failed(format!("cannot copy {} to {}: {}", from.display(), part.display(), e)),
+        Ok(_) if !valid_archive(&part) => SourcesFetched::Rejected(format!("{} is no zip archive whose directory reads", from.display())),
+        Ok(_) => publish(&part, file),
+    };
+    let _ = fs::remove_file(&part);
+    placed
+}
+
+/// The fetched archive renamed into its place in the store, written through first; one another
+/// fetch placed meanwhile is the same artifact.
+fn publish(part: &Path, file: &Path) -> SourcesFetched {
+    let written = fs::File::options().read(true).write(true).open(part).and_then(|f| f.sync_all()).map_err(|e| format!("cannot write {}: {}", part.display(), e)).and_then(|()| set_executable(part, false));
+    if let Err(e) = written {
+        return SourcesFetched::Failed(e);
+    }
+    match fs::rename(part, file) {
+        Ok(()) => SourcesFetched::Published,
+        Err(_) if valid_archive(file) => SourcesFetched::Published,
+        Err(e) => SourcesFetched::Failed(format!("cannot move {} to {}: {}", part.display(), file.display(), e)),
+    }
 }
 
 /// A partial file beside `path` that this fetch alone writes, created afresh: neither a process
@@ -317,14 +574,15 @@ fn is_part(name: &str) -> bool {
     name.starts_with('.') && name.ends_with(".part")
 }
 
-/// The partial files of fetches interrupted before they could remove them.
-fn remove_abandoned_parts(dir: &Path) {
+/// The partial files of fetches interrupted before they could remove them: older than the bound
+/// `max_time` on the fetches that write them.
+fn remove_abandoned_parts(dir: &Path, max_time: Duration) {
     let Ok(entries) = fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
         let name = entry.file_name();
         let name = name.to_string_lossy();
         let age = entry.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok());
-        if is_part(&name) && age.is_some_and(|age| age > MAX_TIME) {
+        if is_part(&name) && age.is_some_and(|age| age > max_time) {
             let _ = fs::remove_file(entry.path());
         }
     }
@@ -412,22 +670,34 @@ fn set_executable(_file: &Path, _executable: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Why a transfer gave no file.
+#[derive(Debug, PartialEq)]
+enum Failure {
+    /// The body is larger than the bound.
+    TooLarge,
+    /// The server answered this status, told as the message says.
+    Status(u16, String),
+    /// No answer, or one cut short: what curl says.
+    Transport(String),
+    Cancelled,
+}
+
 /// The response's body written to `part` by curl, its configuration on stdin and none of the
 /// user's (a `.curlrc` could add headers to the file or log the credentials): redirects followed
 /// to https alone (the credentials sent to the first host alone, as curl does), a body larger
-/// than the pinned size refused, a transfer slower than a kilobyte a second for a minute or
-/// longer than `MAX_TIME` given up. Proxies and certificates come from the environment, as for
-/// any curl.
-fn download(url: &str, size: u64, host: Option<&str>, credentials: Option<&Credentials>, credentials_file: Option<&Path>, part: &Path, cancel: &AtomicBool) -> Result<(), String> {
-    refuse_cleartext(url)?;
-    let output = part.to_str().ok_or_else(|| format!("{} is no UTF-8 path for curl to write", part.display()))?;
+/// than `size` refused, a transfer slower than a kilobyte a second for a minute or longer than
+/// `max_time` given up. Proxies and certificates come from the environment, as for any curl.
+#[allow(clippy::too_many_arguments)]
+fn download(url: &str, size: u64, max_time: Duration, host: Option<&str>, credentials: Option<&Credentials>, credentials_file: Option<&Path>, part: &Path, cancel: &AtomicBool) -> Result<(), Failure> {
+    refuse_cleartext(url).map_err(Failure::Transport)?;
+    let output = part.to_str().ok_or_else(|| Failure::Transport(format!("{} is no UTF-8 path for curl to write", part.display())))?;
     let mut config = format!(
         "url = {}\noutput = {}\nwrite-out = \"%{{http_code}}\"\nsilent\nshow-error\nlocation\nproto-redir = \"=https\"\n\
          max-filesize = {}\nconnect-timeout = 15\nspeed-limit = 1024\nspeed-time = 60\nmax-time = {}\n",
         quoted(url),
         quoted(output),
         size,
-        MAX_TIME.as_secs()
+        max_time.as_secs()
     );
     if let Some(c) = credentials {
         config.push_str(&format!("user = {}\n", quoted(&format!("{}:{}", c.user, c.password))));
@@ -438,7 +708,7 @@ fn download(url: &str, size: u64, host: Option<&str>, credentials: Option<&Crede
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("cannot run curl to fetch {}: {}", url, e))?;
+        .map_err(|e| Failure::Transport(format!("cannot run curl to fetch {}: {}", url, e)))?;
     let written = curl.stdin.take().expect("curl's stdin is piped").write_all(config.as_bytes());
     // Its output is a status code and a line of error at most, which no pipe fills.
     let exit = loop {
@@ -447,24 +717,17 @@ fn download(url: &str, size: u64, host: Option<&str>, credentials: Option<&Crede
             Ok(None) if cancel.load(Ordering::Relaxed) => {
                 let _ = curl.kill();
                 let _ = curl.wait();
-                return Err(CANCELLED.to_string());
+                return Err(Failure::Cancelled);
             }
             Ok(None) => std::thread::sleep(POLL),
-            Err(e) => return Err(format!("curl fetching {}: {}", url, e)),
+            Err(e) => return Err(Failure::Transport(format!("curl fetching {}: {}", url, e))),
         }
     };
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let _ = curl.stdout.take().map(|mut o| o.read_to_end(&mut stdout));
     let _ = curl.stderr.take().map(|mut e| e.read_to_end(&mut stderr));
     let done = std::process::Output { status: exit, stdout, stderr };
-    if done.status.code() == Some(MAX_FILESIZE_EXCEEDED) {
-        return Err(format!("{} has more than the {} bytes the export pins: refused", url, size));
-    }
-    if !done.status.success() || written.is_err() {
-        let said = String::from_utf8_lossy(&done.stderr);
-        let said = said.lines().map(str::trim).rfind(|l| !l.is_empty()).unwrap_or("no message");
-        return Err(format!("GET {} failed: {}", url, said));
-    }
+    // The status the server answered comes first: an error's page larger than the bound is the error.
     let status = String::from_utf8_lossy(&done.stdout).trim().to_string();
     let shown = credentials_file.map_or("~/.sbt/.credentials".to_string(), |f| f.display().to_string());
     if !status.is_empty() && status != "000" && status != "200" {
@@ -473,7 +736,16 @@ fn download(url: &str, size: u64, host: Option<&str>, credentials: Option<&Crede
             (Some(host), None) => format!(" ({} holds no credentials for {})", shown, host),
             (None, _) => String::new(),
         };
-        return Err(format!("GET {} answered {}{}", url, status, whose));
+        let said = format!("GET {} answered {}{}", url, status, whose);
+        return Err(status.parse().map_or(Failure::Transport(said.clone()), |code| Failure::Status(code, said)));
+    }
+    if done.status.code() == Some(MAX_FILESIZE_EXCEEDED) {
+        return Err(Failure::TooLarge);
+    }
+    if !done.status.success() || written.is_err() {
+        let said = String::from_utf8_lossy(&done.stderr);
+        let said = said.lines().map(str::trim).rfind(|l| !l.is_empty()).unwrap_or("no message");
+        return Err(Failure::Transport(format!("GET {} failed: {}", url, said)));
     }
     Ok(())
 }
@@ -514,7 +786,7 @@ fn quoted(s: &str) -> String {
 }
 
 /// sbt's credentials file: `$SBT_CREDENTIALS`, else `~/.sbt/.credentials`.
-fn credentials_file() -> Option<PathBuf> {
+pub fn credentials_file() -> Option<PathBuf> {
     var("SBT_CREDENTIALS").or_else(|| Some(home()?.join(".sbt").join(".credentials")))
 }
 
@@ -791,6 +1063,117 @@ mod tests {
         assert!(is_part(".lib-1.0.jar.0123456789abcdef.part"));
         // An artifact whose own name starts with a dot is placed, a sibling to take.
         assert!(!is_part(".one.jar") && !is_part("lib-1.0.jar"));
+    }
+
+    #[test]
+    fn takes_a_sibling_of_the_pinned_sha1_alone() {
+        let dir = std::env::temp_dir().join(format!("teq-sibling-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let binary = b"the binary's bytes";
+        let pin_sha1 = sha1(binary);
+        let pin = Pin { sha1: &pin_sha1, size: binary.len() as u64 };
+        // A file of the pinned size with other bytes (a sources archive placed there) is not the binary.
+        fs::write(dir.join("x-1.0-sources.jar"), b"the other bytes!!!").unwrap();
+        let other = sibling_in(&dir, &pin);
+        fs::write(dir.join("x_3-1.0.jar"), binary).unwrap();
+        let found = sibling_in(&dir, &pin);
+        fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(other, None);
+        assert_eq!(found, Some(dir.join("x_3-1.0.jar")));
+    }
+
+    #[test]
+    fn names_a_sources_artifact_as_maven_lays_it_out() {
+        let at = |path: &str, classifier| sources_path(path, classifier);
+        assert_eq!(at("org/x/x/1.0/x-1.0.jar", None).as_deref(), Some("org/x/x/1.0/x-1.0-sources.jar"));
+        // Maven's test jar has its sources as `test-sources`, not `tests-sources`.
+        assert_eq!(at("org/apache/commons/commons-lang3/3.17.0/commons-lang3-3.17.0-tests.jar", Some("tests")).as_deref(), Some("org/apache/commons/commons-lang3/3.17.0/commons-lang3-3.17.0-test-sources.jar"));
+        // A platform's classifier shares the plain sources.
+        assert_eq!(at("io/netty/netty-transport-native-epoll/4.1.0/netty-transport-native-epoll-4.1.0-linux-x86_64.jar", Some("linux-x86_64")).as_deref(), Some("io/netty/netty-transport-native-epoll/4.1.0/netty-transport-native-epoll-4.1.0-sources.jar"));
+        // Scala.js and cross-built artifacts: the suffix is the artifact's name.
+        assert_eq!(at("com/lihaoyi/sourcecode_sjs1_3/0.4.2/sourcecode_sjs1_3-0.4.2.jar", None).as_deref(), Some("com/lihaoyi/sourcecode_sjs1_3/0.4.2/sourcecode_sjs1_3-0.4.2-sources.jar"));
+        assert_eq!(at("dev/zio/zio-json_3/0.7.0/zio-json_3-0.7.0.jar", None).as_deref(), Some("dev/zio/zio-json_3/0.7.0/zio-json_3-0.7.0-sources.jar"));
+        // A path of another layout, which does not end in its classifier, and a file that is no jar.
+        assert_eq!(at("org/x/x/1.0/jars/x.jar", Some("tests")), None);
+        assert_eq!(at("org/x/x/1.0/x-1.0.zip", None), None);
+    }
+
+    #[test]
+    fn holds_a_sources_archive_to_the_repositorys_checksum() {
+        let url = "https://repo.example/x-1.0-sources.jar";
+        let sha1 = "1934ff54ff1feef349c5c93d7fcc89653e88da19";
+        assert_eq!(checked(url, Ok(format!("{}\n", sha1)), sha1), Ok(()));
+        assert_eq!(checked(url, Ok(format!("{}  x-1.0-sources.jar\n", sha1.to_ascii_uppercase())), sha1), Ok(()));
+        // A checksum the repository does not have is nothing to compare.
+        assert_eq!(checked(url, Err(Failure::Status(404, "GET answered 404".into())), sha1), Ok(()));
+        let mismatch = checked(url, Ok("f92605606fa20c170f4c0a884038ac6058897872".into()), sha1);
+        assert!(matches!(&mismatch, Err(SourcesFetched::Rejected(m)) if m.contains("f92605606fa20c170f4c0a884038ac6058897872")), "{mismatch:?}");
+        assert!(matches!(checked(url, Ok("<html>not found</html>".into()), sha1), Err(SourcesFetched::Rejected(_))));
+        // A checksum request that failed otherwise fails the fetch, to be tried again.
+        assert!(matches!(checked(url, Err(Failure::Status(503, "GET answered 503".into())), sha1), Err(SourcesFetched::Failed(_))));
+        assert!(matches!(checked(url, Err(Failure::Transport("GET failed: connection refused".into())), sha1), Err(SourcesFetched::Failed(_))));
+        assert!(matches!(checked(url, Err(Failure::Status(401, "GET answered 401".into())), sha1), Err(SourcesFetched::Refused(_))));
+    }
+
+    #[test]
+    fn classifies_a_failed_sources_transfer() {
+        let url = "https://repo.example/x-1.0-sources.jar";
+        assert!(matches!(sources_failure(url, Failure::Status(404, String::new())), SourcesFetched::Absent(_)));
+        assert!(matches!(sources_failure(url, Failure::Status(410, String::new())), SourcesFetched::Absent(_)));
+        assert!(matches!(sources_failure(url, Failure::Status(401, String::new())), SourcesFetched::Refused(_)));
+        assert!(matches!(sources_failure(url, Failure::Status(403, String::new())), SourcesFetched::Refused(_)));
+        assert!(matches!(sources_failure(url, Failure::Status(502, String::new())), SourcesFetched::Failed(_)));
+        assert!(matches!(sources_failure(url, Failure::Transport(String::new())), SourcesFetched::Failed(_)));
+        assert!(matches!(sources_failure(url, Failure::TooLarge), SourcesFetched::Rejected(_)));
+        assert_eq!(sources_failure(url, Failure::Cancelled), SourcesFetched::Cancelled);
+    }
+
+    #[test]
+    fn reads_a_sources_archive_whole_or_not_at_all() {
+        let dir = std::env::temp_dir().join(format!("teq-archive-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let bytes = include_bytes!("../../tests/lsp/libs/lib/liba-1.0-sources.jar");
+        let (whole, cut, short, past) = (dir.join("whole.jar"), dir.join("cut.jar"), dir.join("short.jar"), dir.join("past.jar"));
+        fs::write(&whole, bytes).unwrap();
+        fs::write(&cut, &bytes[..bytes.len() - 30]).unwrap();
+        // The end record's directory size set short, ending inside the entry's name.
+        let end = bytes.windows(4).rposition(|w| w == [0x50, 0x4b, 0x05, 0x06]).unwrap();
+        let mut sized = bytes.to_vec();
+        sized[end + 12..end + 16].copy_from_slice(&46u32.to_le_bytes());
+        fs::write(&short, &sized).unwrap();
+        // The entry's data placed past the file's end by its local header's offset.
+        let entry = bytes.windows(4).position(|w| w == [0x50, 0x4b, 0x01, 0x02]).unwrap();
+        let mut moved = bytes.to_vec();
+        moved[entry + 42..entry + 46].copy_from_slice(&(bytes.len() as u32).to_le_bytes());
+        fs::write(&past, &moved).unwrap();
+        let read = (valid_archive(&whole), valid_archive(&cut), valid_archive(&short), valid_archive(&past), valid_archive(&dir.join("none.jar")), valid_archive(&dir));
+        fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(read, (true, false, false, false, false, false));
+    }
+
+    #[test]
+    fn the_sources_pool_takes_no_binary_slot() {
+        // The sources' transfers all under way, as many binaries' start at once as their pool runs.
+        let never = AtomicBool::new(false);
+        let sources: Vec<Taken<()>> = (0..MAX_SOURCE_TRANSFERS).map(|i| SOURCES.take(&format!("test:sources/{i}"), &never, || None)).collect();
+        assert!(sources.iter().all(|t| matches!(t, Taken::Slot(_))));
+        let late = AtomicBool::new(false);
+        std::thread::scope(|scope| {
+            let watchdog = scope.spawn(|| {
+                let until = std::time::Instant::now() + Duration::from_secs(10);
+                while !late.load(Ordering::Relaxed) && std::time::Instant::now() < until {
+                    std::thread::sleep(POLL);
+                }
+                late.store(true, Ordering::Relaxed);
+            });
+            let binaries: Vec<Taken<()>> = (0..MAX_TRANSFERS).map(|i| BINARIES.take(&format!("test:binary/{i}"), &late, || None)).collect();
+            let all = binaries.iter().all(|t| matches!(t, Taken::Slot(_)));
+            late.store(true, Ordering::Relaxed);
+            watchdog.join().unwrap();
+            assert!(all, "a binary waited for a slot while the sources' pool was full");
+        });
     }
 
     #[test]

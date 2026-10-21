@@ -1,7 +1,8 @@
 # The weights of the long suites' units (tests/support/pieces.py, `<suite> <unit> <seconds>`), which deal them to
 # pieces of about equal time where units differ much: a unit not listed weighs its suite's `*`, else 1, so a unit
 # added lands in a piece without a weight of its own. Only their ratios count. tests/lsp.sh's are each scenario's
-# seconds alone at the automatic count, three times for its three runs (the idle minute and the jar fetch once).
+# seconds alone at the automatic count, three times for its three runs (the idle minute, the jar fetch and the
+# libraries' sources once).
 lsp * 10
 lsp mainWorkspace 36
 lsp appliedValues 295
@@ -38,3 +39,8 @@ lsp unusedImportActions 17
 lsp refusedMapping 5
 lsp idleMinute 103
 lsp jarFetch 2
+lsp librarySources 4
+lsp sourcesFailures 20
+lsp sourcesHeld 1
+lsp sourcesBackoff 12
+lsp sourcesPaths 9

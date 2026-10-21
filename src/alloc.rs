@@ -1538,6 +1538,7 @@ mod tests {
         ("src/jvm/mod.rs", 2, "alloc::spawn_in for the class generation and for the class files' writing"),
         ("src/lsp/export.rs", 2, "alloc::spawn for the thread that waits on sbt; the other starts the sbt process"),
         ("src/lsp/mod.rs", 7, "alloc::spawn six times, the generators' worker among them; the seventh starts a child process"),
+        ("src/lsp/sources.rs", 1, "alloc::spawn for the workers that fetch the libraries' sources"),
         ("src/main.rs", 1, "a builder for the stack's size; alloc::enter is the first statement of compile"),
         ("src/products.rs", 1, "alloc::spawn_in for the publication's steps"),
         ("src/task/client.rs", 1, "starts the daemon process"),

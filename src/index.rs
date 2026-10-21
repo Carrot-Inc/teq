@@ -73,6 +73,50 @@ impl Query {
         })
     }
 
+    /// `parse`, a navigation query's position also taken as `<line>:<character>`: the language
+    /// server's for a library document the client has not opened and whose file is gone, which it
+    /// has no text to turn into an offset. The query comes with offset 0 and the position apart, and
+    /// the session resolves it in the document it makes whole through its lookup
+    /// (`Worker::document_offset`).
+    pub fn parse_at(line: &str) -> Option<(Query, Option<(u32, u32)>)> {
+        let (verb, rest) = line.split_once(' ').unwrap_or((line, ""));
+        if matches!(verb, "definition" | "hover" | "implementation" | "prepare-call" | "incoming" | "outgoing" | "references") {
+            let (head, declaration) = match verb {
+                "references" => rest.rsplit_once(' ').map_or((rest, None), |(h, d)| (h, Some(d))),
+                _ => (rest, None),
+            };
+            let at = head.rsplit_once(' ').and_then(|(path, at)| {
+                let (l, c) = at.trim().split_once(':')?;
+                Some((path, l.parse().ok()?, c.parse().ok()?))
+            });
+            if let Some((path, l, c)) = at {
+                let line = match declaration {
+                    Some(d) => format!("{} {} 0 {}", verb, path, d),
+                    None => format!("{} {} 0", verb, path),
+                };
+                return Some((Query::parse(&line)?, Some((l, c))));
+            }
+        }
+        Query::parse(line).map(|q| (q, None))
+    }
+
+    /// The query with its position at `offset`, a query with none as it is.
+    pub fn at(&self, offset: u32) -> Query {
+        match self.clone() {
+            Query::Definition(p, _) => Query::Definition(p, offset),
+            Query::References(p, _, d) => Query::References(p, offset, d),
+            Query::Hover(p, _) => Query::Hover(p, offset),
+            Query::Implementation(p, _) => Query::Implementation(p, offset),
+            Query::PrepareCall(p, _) => Query::PrepareCall(p, offset),
+            Query::Incoming(p, _) => Query::Incoming(p, offset),
+            Query::Outgoing(p, _) => Query::Outgoing(p, offset),
+            Query::Complete(p, _, f) => Query::Complete(p, offset, f),
+            Query::Resolve(p, _, g, n) => Query::Resolve(p, offset, g, n),
+            Query::Signature(p, _) => Query::Signature(p, offset),
+            q @ (Query::Symbols(_) | Query::WorkspaceSymbols(_) | Query::Stats) => q,
+        }
+    }
+
     pub fn file(&self) -> Option<&Path> {
         match self {
             Query::Definition(p, _)
@@ -197,5 +241,12 @@ mod tests {
         assert_eq!(Query::parse("complete /a b.scala 12 1"), Some(Query::Complete(PathBuf::from("/a b.scala"), 12, 1)));
         assert_eq!(Query::parse("complete-resolve /a.scala 3 7:2 java.util.UUID"), Some(Query::Resolve(PathBuf::from("/a.scala"), 3, "7:2".into(), "java.util.UUID".into())));
         assert_eq!(Query::parse("signature /a b.scala 12"), Some(Query::Signature(PathBuf::from("/a b.scala"), 12)));
+        assert_eq!(Query::parse_at("hover /a b.scala 12"), Some((Query::Hover(PathBuf::from("/a b.scala"), 12), None)));
+        assert_eq!(Query::parse_at("hover /a b.scala 3:7"), Some((Query::Hover(PathBuf::from("/a b.scala"), 0), Some((3, 7)))));
+        assert_eq!(Query::parse_at("references /a.scala 3:7 1"), Some((Query::References(PathBuf::from("/a.scala"), 0, true), Some((3, 7)))));
+        assert_eq!(Query::parse_at("outgoing /a.scala 0:0"), Some((Query::Outgoing(PathBuf::from("/a.scala"), 0), Some((0, 0)))));
+        assert_eq!(Query::parse_at("signature /a.scala 3:7"), None);
+        assert_eq!(Query::parse_at("hover /a.scala 3:x"), None);
+        assert_eq!(Query::References(PathBuf::from("/a.scala"), 0, true).at(41), Query::References(PathBuf::from("/a.scala"), 41, true));
     }
 }

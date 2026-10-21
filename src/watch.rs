@@ -91,8 +91,10 @@ enum Command {
     Build(Option<Vec<String>>, Option<u64>),
     /// `text <path> <bytes>`: the text, or `None` for `text <path> 0`.
     Text(String, Option<String>),
-    /// A query of the language server's (`--index`), answered with one JSON line.
-    Query(crate::index::Query),
+    /// A query of the language server's (`--index`), answered with one JSON line, with the
+    /// position it gave as a line and a character where it had no text to turn it into an offset
+    /// (`Query::parse_at`).
+    Query(crate::index::Query, Option<(u32, u32)>),
     /// `stats`: what the session holds, answered with one JSON line.
     Stats,
     /// `cancel <n>`: the build of that identity stops if it has not begun typing; answered by
@@ -445,7 +447,7 @@ pub fn run(opts: &Options) -> ! {
                     crate::lsp::hooks::began(build_id, requested.is_some());
                     break;
                 }
-                Some(Command::Query(_)) => print_answer(&crate::lsp::json::Json::Null),
+                Some(Command::Query(..)) => print_answer(&crate::lsp::json::Json::Null),
                 Some(Command::Stats) => print_stats(None),
                 _ => end_session(full_builds),
             }
@@ -529,7 +531,7 @@ pub fn run(opts: &Options) -> ! {
                         reason = "previous build failed".to_string();
                         break;
                     }
-                    Some(Command::Query(_)) => print_answer(&crate::lsp::json::Json::Null),
+                    Some(Command::Query(..)) => print_answer(&crate::lsp::json::Json::Null),
                     Some(Command::Stats) => print_stats(None),
                     _ => end_session(full_builds),
                 }
@@ -860,11 +862,19 @@ pub fn run(opts: &Options) -> ! {
                     print_stats(kept.as_ref());
                     continue;
                 }
-                Command::Query(q) => {
+                Command::Query(q, at) => {
                     let demanded = |typer: &Option<Typer>| typer.as_ref().and_then(|t| t.index.as_ref()).map_or(0, |ix| ix.demanded());
                     let (before, held) = (demanded(&typer), account());
                     let (answer, declared) = match typer.as_mut() {
-                        Some(t) => t.on_thread(|w| w.index_query(&q, &query_files)),
+                        // A position as a line and a character: resolved in the library document made
+                        // whole through the lookup, which reports a miss where it cannot be.
+                        Some(t) => t.on_thread(|w| match at {
+                            None => w.index_query(&q, &query_files),
+                            Some((line, character)) => match q.file().and_then(|p| w.document_offset(p, line, character, query_files.positions)) {
+                                Some(offset) => w.index_query(&q.at(offset), &query_files),
+                                None => (crate::lsp::json::Json::Null, None),
+                            },
+                        }),
                         None => (crate::lsp::json::Json::Null, None),
                     };
                     if demanded(&typer) > before {
@@ -2147,8 +2157,8 @@ fn read_command(input: &mut impl BufRead, opts: &Options) -> Option<Command> {
         return Some(Command::Stats);
     }
     if opts.index {
-        if let Some(q) = crate::index::Query::parse(line) {
-            return Some(Command::Query(q));
+        if let Some((q, at)) = crate::index::Query::parse_at(line) {
+            return Some(Command::Query(q, at));
         }
     }
     if let Some(rest) = line.strip_prefix("text ") {
@@ -2444,8 +2454,8 @@ fn print_answer(result: &crate::lsp::json::Json) {
 }
 
 /// With where the query's target is declared: `{"result":...,"declared":{"path":..,"offset":..}}`,
-/// and `"notes"`, the document paths the query found something else at
-/// (`attach::take_refusals`).
+/// `"notes"`, the document paths the query found something else at (`attach::take_refusals`), and
+/// the sources' reports (`sources_reports`).
 fn print_answer_declared(result: &crate::lsp::json::Json, declared: Option<&(PathBuf, u32)>) {
     let mut line = String::from("{\"result\":");
     result.write(&mut line);
@@ -2457,6 +2467,10 @@ fn print_answer_declared(result: &crate::lsp::json::Json, declared: Option<&(Pat
     if !notes.is_empty() {
         line.push_str(",\"notes\":");
         crate::lsp::json::Json::Arr(notes.into_iter().map(Into::into).collect()).write(&mut line);
+    }
+    for (field, report) in sources_reports() {
+        line.push_str(&format!(",\"{}\":", field));
+        line.push_str(&report);
     }
     line.push('}');
     let mut out = std::io::stdout().lock();
@@ -2549,8 +2563,12 @@ fn print_stats(kept: Option<&Kept>) {
         ));
     }
     let parts: Vec<(&str, JsonValue)> = parts.iter().map(|(name, part)| (*name, JsonValue::Raw(part))).collect();
+    let stats = json_object(&parts);
+    let reports = sources_reports();
+    let mut fields = vec![("stats", JsonValue::Raw(&stats))];
+    fields.extend(reports.iter().map(|(field, report)| (*field, JsonValue::Raw(report))));
     let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "{}", json_object(&[("stats", JsonValue::Raw(&json_object(&parts)))]));
+    let _ = writeln!(out, "{}", json_object(&fields));
     let _ = out.flush();
 }
 
@@ -2570,12 +2588,24 @@ fn with_carried(carried: Option<Option<Vec<String>>>, requested: Option<Vec<Stri
     }
 }
 
-/// The answer of a build cancelled at its commit point.
+/// What every message of the session carries for the language server's fetcher of sources, emptied as
+/// it is written: the sources jars rejected at a read (`rejected`, `places::take_rejections`) and the
+/// jars whose sources a lookup found nowhere (`missed`, `places::take_misses`) since the last message.
+fn sources_reports() -> Vec<(&'static str, String)> {
+    let rejected = crate::typer::loader::places::take_rejections().map(|r| ("rejected", r));
+    let missed = crate::typer::loader::places::take_misses().map(|m| ("missed", m));
+    rejected.into_iter().chain(missed).collect()
+}
+
+/// The answer of a build cancelled at its commit point, with the sources' reports (`sources_reports`).
 fn print_cancelled(build: Option<u64>) {
     let id = build.unwrap_or_default();
     crate::lsp::hooks::trace("session", || format!("cancelled {}", id));
+    let reports = sources_reports();
+    let mut fields = vec![("cancelled", JsonValue::Bool(true)), ("build", JsonValue::Int(id as usize))];
+    fields.extend(reports.iter().map(|(field, report)| (*field, JsonValue::Raw(report))));
     let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "{}", json_object(&[("cancelled", JsonValue::Bool(true)), ("build", JsonValue::Int(id as usize))]));
+    let _ = writeln!(out, "{}", json_object(&fields));
     let _ = out.flush();
 }
 
@@ -2623,6 +2653,8 @@ fn print_report(r: &Report) {
     if let Some(notes) = &notes {
         fields.push(("notes", JsonValue::Raw(notes)));
     }
+    let reports = sources_reports();
+    fields.extend(reports.iter().map(|(field, report)| (*field, JsonValue::Raw(report))));
     if let Some(diagnostics) = &diagnostics {
         fields.push(("diagnostics", JsonValue::Raw(diagnostics)));
     }

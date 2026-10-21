@@ -511,9 +511,18 @@ definitions, references, hovers, document and workspace symbols, implementations
 callers and callees of a method, grouped by their enclosing definition), completion and signature help, and
 publishes diagnostics after each edit (an unused import as a hint, with a quick fix removing it: scalac's own
 edit, CheckUnused's, which deletes the statement, keeps its one used selector or drops the unused ones with
-their commas). A definition into a library goes to its source, read from the sources jar beside the jar, or
+their commas). A definition into a library goes to its source, read from the jar's sources jar, or
 into teq's own standard library, shown in read-only documents where navigation works as in a source, and
-completion and signature help too in the standard library's. A member called on an object seen as one of its
+completion and signature help too in the standard library's. A jar's sources jar is found beside the jar, in
+coursier's cache (where `sbt updateClassifiers` and Metals put it) or in teq's own cache: once a project's session
+starts, the server fetches the sources of each of its libraries that has them nowhere from the repository the
+`teq.lock` names for it (with the credentials sbt's credentials file holds for its host), in the background, each
+told in the language server's log (`teq: fetching sources of <library>`), and the next navigation into the library
+finds them, with no restart; a sources jar placed or replaced meanwhile is found the same way. A library that
+publishes no sources artifact has no document: a definition into it answers nothing and its hover stays; the
+server asks for its sources again after a quarter of an hour and at its next start, after a failed transfer
+(offline, the repository down) after 1, 2, 4 and 8 minutes and then hourly, and after refused credentials once the
+credentials file changes, each failure told once in the log. A member called on an object seen as one of its
 parents (`(Obj: Base).f`) is the parent's, as scalac's tree names it; the object's that runs is among its
 implementations. Formatting, other code actions and rename are not offered; hover shows a name's signature or
 type, not yet an expression's.

@@ -46,6 +46,25 @@ pub struct Repository {
     pub credentials: Option<String>,
 }
 
+/// Where a jar of a session's classpath has its sources: the files looked for, in order, and for an
+/// artifact of the table the fetch that places them in the last (`Export::library_sources`).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct LibrarySources {
+    pub jar: PathBuf,
+    pub candidates: Vec<PathBuf>,
+    pub fetch: Option<SourcesFetch>,
+}
+
+/// A sources artifact as the language server fetches it: its artifact's key, its URL, the host whose
+/// credentials it is fetched with, and its place in teq's sources store.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct SourcesFetch {
+    pub key: String,
+    pub url: String,
+    pub credentials: Option<String>,
+    pub store: PathBuf,
+}
+
 /// The compiler a lock pins: its version and, per classifier, its binary's fields as written
 /// (`<url> <sha1> <size>`).
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -944,6 +963,28 @@ impl Export {
                 _ => self.resolve(e).map(|p| (p, None)),
             })
             .collect()
+    }
+
+    /// Where the sources of the jar `jar`, the table's artifact `key`, are looked for, in order: beside
+    /// the jar (coursier's copy or the shared cache's, whichever the classpath reads), at the sources
+    /// URL's place in coursier's cache (where `updateClassifiers` and Metals put it), and in teq's
+    /// sources store, where the language server fetches it from the artifact's repository; none for a
+    /// path whose sources artifact the layout does not name (`fetch::sources_path`).
+    pub fn library_sources(&self, jar: &Path, key: &str) -> Option<LibrarySources> {
+        let artifact = self.table.get(key)?;
+        let repository = self.repositories.get(&artifact.repository)?;
+        let path = fetch::sources_path(&artifact.path, key.split(':').nth(3))?;
+        let name = file_name(&path);
+        let url = fetch::Source { repository: &repository.url, path: &path, credentials: None }.url();
+        let store = fetch::sources_store(&artifact.sha1, name);
+        let mut candidates: Vec<PathBuf> = Vec::new();
+        for c in [Some(jar.with_file_name(name)), fetch::coursier_cache().and_then(|cache| fetch::coursier_file(&cache, &url)), store.clone()].into_iter().flatten() {
+            if !candidates.contains(&c) {
+                candidates.push(c);
+            }
+        }
+        let fetch = store.map(|store| SourcesFetch { key: key.to_string(), url, credentials: repository.credentials.clone(), store });
+        Some(LibrarySources { jar: jar.to_path_buf(), candidates, fetch })
     }
 
     /// A jar of the table as the fetch takes it.
