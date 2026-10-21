@@ -1,0 +1,2 @@
+object A:
+  def d(a: Int = 1) = a

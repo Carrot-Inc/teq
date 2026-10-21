@@ -25,6 +25,15 @@ case $corpus in
 esac
 args=("${dirs[@]}" "${opts[@]}")
 [ "$workers" = - ] || args+=(--threads "$workers")
+# FIX_TYPING=<n> (fix-parallel-typing): the typing's workers apart from the rules' (`TEQ_FIX_TYPING_THREADS`), the label
+# suffixed `-t<n>` so that the rows and the caches stay apart; the record's typing then held to that count.
+# `FIX_TYPING=-`: the typing not held, for a binary whose record predates the typing's lines (master's before the part).
+typing=$workers typing_env=()
+if [ "${FIX_TYPING:-}" = - ]; then
+  typing=-
+elif [ -n "${FIX_TYPING:-}" ]; then
+  typing=$FIX_TYPING label=$label-t$FIX_TYPING typing_env=(TEQ_FIX_TYPING_THREADS="$FIX_TYPING")
+fi
 results=${FIX_RESULTS:-out/measure/results.tsv}
 cache=out/measure/cache/$label-$corpus-$(basename "$conf" .conf)-$workers
 [ "$temp" = cold ] && rm -rf "$cache"
@@ -66,7 +75,7 @@ if [ -n "${FIX_EXPECT:-}" ]; then
     reject "the corpus holds ${identity%%:*} source files ($identity), the baseline's $expected: $lacks of its files missing or changed"
   fi
 fi
-env "$@" TEQ_CACHE_DIR=$PWD/$cache TEQ_FIX_TRACE=1 TEQ_FIX_RECORD=$PWD/$base.record timeout 300 /usr/bin/time -v -o "$base.time" "$teq" compiler fix "${args[@]}" --config "$confpath" --check > "$base.out" 2> "$base.err"
+env "$@" "${typing_env[@]}" TEQ_CACHE_DIR=$PWD/$cache TEQ_FIX_TRACE=1 TEQ_FIX_RECORD=$PWD/$base.record timeout 300 /usr/bin/time -v -o "$base.time" "$teq" compiler fix "${args[@]}" --config "$confpath" --check > "$base.out" 2> "$base.err"
 code=$?
 wall=$(awk -F': ' '/Elapsed \(wall clock\)/ {n=split($2,a,":"); s=0; for(i=1;i<=n;i++) s=s*60+a[i]; print s}' "$base.time")
 rss=$(awk -F': ' '/Maximum resident set size/ {print $2}' "$base.time")
@@ -81,7 +90,7 @@ digest=$( (cat "$base.out"; grep -v '^fix: ' "$base.err") | sha1sum | cut -c1-12
 # a witness round.
 utilization=-
 if [ -s "$base.record" ]; then
-  verdict=$(python3 bench/fix/record.py "$base.record" "$workers") || reject "the record: $(echo "$verdict" | grep -v '^utilization ' | head -3 | tr '\n' ';')"
+  verdict=$(python3 bench/fix/record.py "$base.record" "$workers" "$typing") || reject "the record: $(echo "$verdict" | grep -v '^utilization ' | head -3 | tr '\n' ';')"
   utilization=$(echo "$verdict" | awk '/^utilization / { for (i = 2; i <= NF; i++) { split($i, kv, "="); f[kv[1]] = kv[2] } printf "%s%s:%sd,%s/%s%s", (n++ ? " " : ""), $2, f["docs"], f["peak"], f["of"], (f["witness"] == "yes" ? "w" : "") }')
 elif [ "$workers" != - ]; then
   reject "no execution record at $workers workers"
@@ -89,5 +98,18 @@ fi
 if [ -n "${FIX_EXPECT:-}" ] && [ "$code:$digest" != "$(echo "$FIX_EXPECT" | cut -d: -f1-2)" ]; then
   reject "exit and bytes $code:$digest, the baseline's $(echo "$FIX_EXPECT" | cut -d: -f1-2)"
 fi
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$label" "$corpus" "$(basename "$conf" .conf)" "$workers" "$temp" "$code" "$wall" "$rss" "$digest" "$phases" "$utilization" "$identity" >> "$results"
+# Each typing attempt (the trace's `fix: typing` lines): `<job>/<round>/<attempt>:<outcome>:<workers>:type=<ms>:run=<ms>`,
+# `type` as `teq compiler check --time` counts its type phase, `run` the sum of `Typer::run`'s phases; a row's 13th field.
+typings=$(python3 - "$base.err" <<'PY'
+import re, sys
+out = []
+for l in open(sys.argv[1], errors="replace"):
+    m = re.match(r"fix: typing job (\d+) round (\d+) attempt (\d+): (\d+) workers? asked, (\d+) typed, (\w+).*?type (\d+) ms \(run: (.*?)\), documents", l)
+    if m:
+        run = sum(int(x) for x in re.findall(r" (\d+)(?:,|$)", m.group(8)))
+        out.append(f"{m.group(1)}/{m.group(2)}/{m.group(3)}:{m.group(6)}:{m.group(5)}:type={m.group(7)}:run={run}")
+print(" ".join(out) or "-")
+PY
+)
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$label" "$corpus" "$(basename "$conf" .conf)" "$workers" "$temp" "$code" "$wall" "$rss" "$digest" "$phases" "$utilization" "$identity" "$typings" >> "$results"
 printf '%s %s %s w=%s %s: exit %s, %s s, %s KiB, %s; corpus %s; utilization %s; %s\n' "$label" "$corpus" "$(basename "$conf" .conf)" "$workers" "$temp" "$code" "$wall" "$rss" "$digest" "$identity" "$utilization" "$phases"

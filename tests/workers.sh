@@ -1311,6 +1311,21 @@ else
   echo "workers: the watch's numbering across a session's full builds unproven: the evidence is the assertion-enabled build's TEQ_SESSION_INVENTORY"
 fi
 
+# A method with a default argument, typed through the fork: in the assertion-enabled build a worker changes the
+# default getter's record after a publication sealed it (`src/arena.rs`'s check of a published record, "worker Some(0)
+# changed its record ... (teq::tir::TFun) after a publication sealed it"), on master's binary as on teq fix's typing
+# (fix-parallel-typing's push pass of 5c171b26f): the parallel typer's publication of a default getter, pinned here for
+# its own part and printed as known while the build at four workers aborts, a pass once it does not; the release
+# builds carry no such check. tests/fix.scala's `typing` cases are pending on it in that build.
+if "$TEQ" --version | grep -q assertions; then
+  saved_counts=$COUNTS
+  COUNTS=4
+  known default_getter_sealed "a default getter's record changed after its publication sealed it" 1 compiler check tests/workers/default_getter_sealed
+  COUNTS=$saved_counts
+else
+  echo "workers: default_getter_sealed unproven: the check it trips is the assertion-enabled build's"
+fi
+
 # A named local class an inline method's body defines, the definition checked on each worker whose
 # expansion asks for it first: the pickle of the body holds the class its block defines once
 # (`Capture::block_classes`), at every count as at one (before, the products at two workers held a

@@ -131,7 +131,7 @@ interpreter"). The program ends when its main has returned and no thread but dae
 number), its shutdown hooks run one after another on the main thread while the other threads go on, and then every
 thread stops. A second signal ends the program at once.
 
-`teq fix [--check] [--rules A,B] [--config <file>] [<project>...] [<file>...]` runs lint and rewrite rules over a
+`teq fix [--check] [--rules A,B] [--config <file>] [--threads n] [<project>...] [<file>...]` runs lint and rewrite rules over a
 build's sources, scalafix's rules and configuration with no sbt and no JVM: the rules are Scala under the
 interpreter, against the API of docs/FIX.md, over the trees and the typer the compiler made of the sources in the same
 process. The configuration is `.scalafix.conf` beside `teq.lock`, or `--config`'s file (its `rules`, each rule's
@@ -153,8 +153,11 @@ directory. Exit status: 0 when the run is complete and nothing is left (under `-
 lint); 1 when `--check` finds an edit or a lint, or an error-severity lint remains after the edits; 2 for an unknown
 project, file, rule or setting, a configuration teq does not read, a program that does not type, an analysis that
 is unavailable, a rule that fails, edits of two rules that overlap, or a file that cannot be written. `--check`
-writes nothing and names each file it would rewrite. A second run after a fixing run changes nothing.
-`teq compiler fix <inputs> [compiler options] [--check] [--rules A,B] [--config <file>]` is the same over the files
+writes nothing and names each file it would rewrite. A second run after a fixing run changes nothing. `--threads n`
+(or `--threads=n`) is compile's option, handed to every program the run types, over a project's own `threads`: the
+workers that type each program and those the rules run on (docs/FIX.md, "Patches, suppressions and rounds"); without
+it `TEQ_THREADS`, then compile's count for each program typed.
+`teq compiler fix <inputs> [compiler options] [--check] [--rules A,B] [--config <file>] [--threads n]` is the same over the files
 and options the compiler takes (`teq compiler check`'s), every file of the program editable, the configuration
 `.scalafix.conf` of the working directory where `--config` names none: a single file on a class path, outside any
 build.

@@ -1,7 +1,7 @@
 #!/bin/bash
 # bench/fix/matrix.sh <label> <teq> [<base label> <base teq>]: the stage's matrix (fix-speed's table, §9): the three
-# corpora, the all-on and the application's settings, 1, 4, 8 and 16 workers, cold then warm; each rule alone over jzon
-# at 1 and 8 workers. A base binary given runs once per corpus, settings and temperature (its rules' phase is serial),
+# corpora, the all-on and the application's settings, 1, 4, 8 and 16 workers, cold then warm; the frontend with every rule
+# cold at typing 1, 4, 8 and 16 × rules 1, 4, 8 and 16 (fix-parallel-typing); each rule alone over jzon at 1 and 8 workers. A base binary given runs once per corpus, settings and temperature (its rules' phase is serial),
 # before the candidate's runs of that cell, and its exit, its bytes and its corpus's identity are the cell's baseline,
 # which each candidate run must give (`FIX_EXPECT`), the base's corpus identity asked of the candidate's engine
 # (`FIX_INVENTORY_TEQ`: the base predates `TEQ_FIX_INPUTS`); without one, the candidate's one-worker run is the baseline. A run bench/fix/run.sh rejects (a
@@ -34,6 +34,24 @@ for corpus in toy jzon frontend; do
     for temp in cold warm; do cell $corpus $conf $temp 1 4 8 16; done
   done
 done
+# The typing's workers apart from the rules' (fix-parallel-typing): the frontend with every rule, cold, typing × rules,
+# each run's bytes the cell's baseline's (`FIX_TYPING`, the rows labelled `<label>-t<n>`).
+tcell() {
+  local corpus=$1 conf=$2 temp=$3 expect="" t w
+  if [ -n "$bteq" ]; then
+    if FIX_INVENTORY_TEQ=$teq $m "$bteq" "$blabel" "$corpus" "$conf" - "$temp"; then expect=$(last); else rejected=$((rejected + 1)); return; fi
+  fi
+  for t in 1 4 8 16; do
+    for w in 1 4 8 16; do
+      if FIX_TYPING=$t FIX_EXPECT=$expect $m "$teq" "$label" "$corpus" "$conf" "$w" "$temp"; then
+        [ -n "$expect" ] || expect=$(last)
+      else
+        rejected=$((rejected + 1))
+      fi
+    done
+  done
+}
+tcell frontend all-on.conf cold
 for r in DisableSyntax CatsImplicitsImport TypelevelAs EmptyCollectionsUnified NoUnusedImports; do
   cell jzon one-$r.conf cold 1 8
 done

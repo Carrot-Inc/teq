@@ -140,6 +140,9 @@ path. Over the core-only benchmark a `watch --split` session grows by 1 MB per b
 end at 2.7 GB rather than 8.2, and twenty full builds at 2.9 GB rather than 17. What remains is the cycles
 of a retype that expands macros, swept only at a full build, 2 to 6 MB per such edit, until a sweep at
 every build takes them.
+`teq fix` runs its allocator as a resident process's too, without a session's typing thread: it types program
+after program (each job's rounds, and a round again where a parallel attempt gave way), and each typing's threads hand
+back what they held as they end, for the next typing to take: one typing no longer strands the last one's memory (docs/FIX.md).
 
 ## The release build
 

@@ -102,7 +102,12 @@ otherwise, and under `--check` 1 where there is a lint or an edit.
   `GuardsMixed` (one input with every check under four configurations, recorded by the rule before its settings were
   asked first); `Driver/ReceiverIdentity` (`collect` and `traverse` visiting their receiver as itself, the root's and an
   inner node's: the push pass of `becf46896`, its Root and Identity probes; rule `support/ReceiverIdentity.scala`). The
-  `parallel` cases of `tests/fix.scala` generate their corpus.
+  `parallel` cases of `tests/fix.scala` generate their corpus. The `typing` cases (fix-parallel-typing) generate their
+  witness corpus too, and read the design pass's programs from `support/typing/`: `counter/` (a macro library whose run
+  changes state other runs share, read from its products, its users and an edit for round two; `bad/ZBad.scala` a type
+  error), `marks/` (a wildcard, a hiding selector, a given and a name marked by readers in other files), `withheld/`,
+  `records/` (an inline expansion and overloads), `blocks/` (CRLF, braced packages), `phase-errors/`, `round2/`; their
+  rule `support/Print.scala` prints its configuration.
 
 ## Fixtures not taken
 

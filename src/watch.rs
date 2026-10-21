@@ -718,8 +718,11 @@ pub fn run(opts: &Options) -> ! {
                 ];
                 session_inventory(full_builds, "after the run", t.interner, &items);
             }
-            if t.serial.is_needed() {
-                let why = t.serial.reason().unwrap_or_default();
+            // A thread of the typing's the system refused (`types::note_worker_refused`): the workers' starts gave the
+            // build way; a merge thread's merge ran its share on the caller's thread and is not kept either.
+            let refusal = crate::types::take_worker_refused();
+            if t.serial.is_needed() || refusal.is_some() {
+                let why = t.serial.reason().or(refusal).unwrap_or_default();
                 crate::types::view::gave_way(&why);
                 if automatic && !t.serial.of_diagnostics() {
                     let module = t.serial.undeclared_module().filter(|(name, c)| t.on_thread(|w| w.declared_by(name, *c))).map(|(name, _)| name);

@@ -768,6 +768,35 @@ pub fn phase_work_end(worker: usize, aside: Option<SetAside>) {
     }
 }
 
+/// An item of the body phase's queue as a worker typed it (`item_end`).
+pub struct ItemSpan {
+    pub worker: u32,
+    pub file: u32,
+    pub index: u32,
+    pub start: Instant,
+    pub end: Instant,
+}
+
+/// The items every worker handed over (`flush`) since the last call, and nothing else of what
+/// they measured, which goes: `teq fix`'s witness that several workers typed at once
+/// (`TEQ_FIX_TYPING_WORK`), each typing's items its own.
+pub fn take_items() -> Vec<ItemSpan> {
+    let at = |ns: u64| epoch() + Duration::from_nanos(ns);
+    let mut items = Vec::new();
+    for flushed in [&FLUSHED, &FLUSHED_PHASE] {
+        for (_, s) in std::mem::take(&mut *flushed.lock().unwrap_or_else(|e| e.into_inner())) {
+            items.extend(s.item_rows.iter().map(|r| ItemSpan { worker: r.worker, file: r.file, index: r.index, start: at(r.t0), end: at(r.t1) }));
+        }
+    }
+    items
+}
+
+/// The type phase's parts so far, each with its wall time (`phase_done`, which runs whether the
+/// counters do or not): `teq fix`'s trace of an attempt's `run`.
+pub fn phase_parts() -> Vec<(&'static str, Duration)> {
+    phases().parts.clone()
+}
+
 /// Hands this thread's measurements over as worker `worker`'s: at the end of its part of the body
 /// phase, and on the typing thread at the end of the type phase.
 pub fn flush(worker: usize) {

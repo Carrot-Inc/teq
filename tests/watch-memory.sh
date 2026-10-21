@@ -38,7 +38,7 @@
 # MB, or at 8, 12 and 16 the parallel typer's memory aim as a ratio of the same run's plain
 # build (twice, 2.5 times, provisional while the cap stays 8, and three times), where the recording
 # measured it to hold. The fix rows, `peak-fix-frontend@<w>`, are a fresh `teq compiler fix --check`'s peak over the
-# frontend with the shipped rules, its rules over w workers (`--threads`), the typing's and the rules' phase's both: a
+# frontend with the shipped rules, its typing and its rules over w workers (`--threads`, both counts), both phases: a
 # one-shot process the driver does not run, measured by the child's `ru_maxrss` (the resident size's high-water mark,
 # `VmHWM`), their rows Linux's alone (`only`), `@8` and `@16` held as ratios of `@1`.
 # Selecting a ratio row runs its baseline too.
@@ -158,7 +158,7 @@ for w in 1 fork 8 12 16; do
   session peak-core@$w peak core --check SRC
 done
 # `teq fix`'s peak (fix-speed's table, row 3.6): a fresh `teq compiler fix --check` over the application corpus's
-# frontend with every shipped rule (`fix_conf`, below), its rules over 1, 4, 8 and 16 workers (`--threads`).
+# frontend with every shipped rule (`fix_conf`, below), its typing and its rules over 1, 4, 8 and 16 workers (`--threads`).
 for w in 1 4 8 16; do
   session peak-fix-frontend@$w fixpeak app SRC/shared SRC/frontend --classpath "$cp" --cacheable-state meridian.web.css.Catalog --threads $w
 done

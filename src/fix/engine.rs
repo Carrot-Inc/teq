@@ -1,6 +1,8 @@
-//! `teq fix`'s run (docs/FIX.md, "The run"): the rules compiled and configured on the rule workers, each with an
+//! `teq fix`'s run (docs/FIX.md, "Patches, suppressions and rounds"): the rules compiled and configured on the rule workers, each with an
 //! interpreter of its own; each job (a configuration's program, or the files `teq compiler fix` names) typed on a typing
-//! thread of its own, typing and rules never at once; each editable document's view handed to a worker, which runs
+//! thread of its own as `teq compiler check` types it, over compile's workers, a parallel attempt that gives way typed
+//! again by one worker within its round; typing and rules never at once, every rule worker ready before a typing
+//! begins; each editable document's view handed to a worker, which runs
 //! every rule over it, the results gathered in the documents' order; the patches planned, all of them before anything
 //! is written; at most two rounds, the second over the first's text, typed again, for the imports the first's edits
 //! left unused. A run whose rules teq ships takes as many workers as `--threads` (the cores by default) and a round's
@@ -147,16 +149,17 @@ struct Pool<'scope, 'env> {
 }
 
 impl<'scope, 'env> Pool<'scope, 'env> {
-    fn new(scope: &'scope std::thread::Scope<'scope, 'env>, boot: Boot) -> Self {
+    fn new(scope: &'scope std::thread::Scope<'scope, 'env>, boot: Boot) -> Result<Self, String> {
         let (back, from) = mpsc::channel::<FromRules>();
         let k = std::env::var("TEQ_FIX_BARRIER").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
         let gate = std::sync::Arc::new(Gate { k, begun: std::sync::Mutex::new(((u32::MAX, u32::MAX), 0)) });
         let mut pool = Pool { scope, boot, to: Vec::new(), back, from, ready: Vec::new(), limit: 1, eligible: false, gate };
-        pool.add_worker();
-        pool
+        pool.add_worker().map(|()| pool)
     }
 
-    fn add_worker(&mut self) {
+    /// One more worker, or why the system gave it no thread (its stack's address space): the pool then keeps the
+    /// workers it has, which the documents' order makes no difference to.
+    fn add_worker(&mut self) -> Result<(), String> {
         let w = self.to.len();
         let (tx, rx) = mpsc::channel::<ToRules>();
         let (back, boot, gate) = (self.back.clone(), self.boot.clone(), self.gate.clone());
@@ -167,9 +170,11 @@ impl<'scope, 'env> Pool<'scope, 'env> {
                 crate::alloc::enter();
                 rule_thread(w, boot, rx, back, &gate)
             })
-            .expect("a rule worker");
+            .map_err(|e| format!("the system gave the rule worker {} no thread ({})", w, e))?;
         self.to.push(tx);
         self.ready.push(false);
+        record(format_args!("worker-start w={} at_us={}", w, now_us()));
+        Ok(())
     }
 }
 
@@ -270,8 +275,11 @@ fn plant() -> Option<String> {
 }
 
 /// The workers a run whose rules teq ships may take: the jobs' `--threads` (or `TEQ_THREADS`), else the machine's cores
-/// (`TEQ_WORKERS` bounding them).
+/// (`TEQ_WORKERS` bounding them); `TEQ_FIX_RULE_THREADS=<n>`, the fix suite's, the rules' count apart from the typing's.
 fn requested_workers(jobs: &[Job]) -> usize {
+    if let Some(n) = std::env::var("TEQ_FIX_RULE_THREADS").ok().and_then(|v| v.parse::<usize>().ok()).filter(|&n| n >= 1) {
+        return n;
+    }
     let asked = jobs
         .iter()
         .filter_map(|j| {
@@ -328,9 +336,18 @@ pub fn run(setup: Setup, jobs: Vec<Job>) -> i32 {
         }
     };
     record_open();
+    // The threads the typings' merges drop what they gave back on are waited for between typings (`round`).
+    crate::crew::keep_given_back();
     let boot = Boot { conf: setup.conf.clone(), config_dir: setup.config_dir.clone(), requested };
     std::thread::scope(|scope| {
-        let mut pool = Pool::new(scope, boot);
+        let mut pool = match Pool::new(scope, boot) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("teq fix: {}", e);
+                record_close();
+                return 2;
+            }
+        };
         let code = drive(&setup, &lints, &jobs, &mut pool);
         drop(pool);
         code
@@ -448,11 +465,13 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mu
     // project rule's instance may (Count's visits, Stale's kept token): its run keeps the lead alone.
     pool.eligible = infos.iter().all(|i| i.shipped);
     pool.limit = if pool.eligible { requested_workers(jobs) } else { 1 };
-    record(format_args!("run eligible={} workers={}", pool.eligible as u8, pool.limit));
     let mut base = 0u32;
     let names: Vec<String> = infos.iter().map(|i| i.name.clone()).collect();
     let semantic_rules: Vec<bool> = infos.iter().map(|i| i.semantic).collect();
+    // A semantic rule configured: the typings read the unused imports (`-Wunused:imports`), which the record says, so
+    // that a comparison with `teq compiler check` asks the same of it (bench/fix/parity.sh).
     let semantic = semantic_rules.contains(&true);
+    record(format_args!("run eligible={} workers={} semantic={}", pool.eligible as u8, pool.limit, semantic as u8));
     let mut gen = 0u32;
     // Round one, over the files as read; the rules' results kept for round two.
     let mut first: Vec<(usize, Vec<Outcome>)> = Vec::new();
@@ -676,20 +695,46 @@ impl Earlier<'_> {
 #[allow(clippy::too_many_arguments)]
 fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, semantic: bool, gen: &mut u32, base: &mut u32, names: &[String], infos: &[RuleInfo], display: &Option<(PathBuf, PathBuf)>, pool: &mut Pool<'_, '_>, earlier: Earlier<'_>, mut kept: Option<&mut HashMap<String, Results>>) -> Result<Vec<Outcome>, String> {
     let first_gen = *gen;
+    // Every rule worker started is ready before a typing begins: its bootstrap types the rules' program at one worker,
+    // which sets the interpreter's process-wide watch (`interp::WATCHING`) a typing of several workers depends on.
+    while let Some(w) = pool.ready.iter().position(|&ready| !ready) {
+        match pool.from.recv() {
+            Ok(FromRules::Ready(w, Ok(theirs), boot)) => {
+                if theirs != infos {
+                    return Err(format!("teq fix: the rule worker {} configured the rules otherwise than the first\n", w));
+                }
+                record(format_args!("worker w={} ready_us={} boot_us={}", w, now_us(), boot));
+                pool.ready[w] = true;
+            }
+            Ok(FromRules::Ready(_, Err(e), _)) => return Err(format!("{}\n", e.trim_end())),
+            Ok(FromRules::Done(_)) => return Err(format!("teq fix: the results of a document of another round, before worker {} was ready\n", w)),
+            Ok(FromRules::Ended) | Err(_) => return Err("teq fix: the rule thread ended\n".to_string()),
+        }
+    }
     let typing = std::time::Instant::now();
-    let docs = std::thread::scope(|scope| {
-        std::thread::Builder::new()
-            .name("teq-fix-typer".to_string())
-            .stack_size(1 << 30)
-            .spawn_scoped(scope, || {
-                crate::alloc::enter();
-                typed(job, overrides, semantic, first_gen, display)
-            })
-            .expect("the typing thread")
-            .join()
-            .unwrap_or_else(|_| Err("teq fix: the typing thread panicked\n".to_string()))
-    })?;
+    let (attempts, docs) = std::thread::scope(|scope| {
+        let thread = std::thread::Builder::new().name("teq-fix-typer".to_string()).stack_size(1 << 30).spawn_scoped(scope, || {
+            crate::alloc::enter();
+            typed(job, overrides, semantic, first_gen, display)
+        });
+        match thread {
+            Ok(t) => t.join().unwrap_or_else(|_| (Vec::new(), Err("teq fix: the typing thread panicked\n".to_string()))),
+            Err(e) => (Vec::new(), Err(format!("teq fix: the system gave the typing thread no thread ({})\n", e))),
+        }
+    });
+    // What the merges gave back to be dropped on threads of their own (`crew::give_back`), dropped before anything
+    // follows, so that the next typing finds it.
+    let waiting = std::time::Instant::now();
+    crate::crew::given_back();
+    // A resident process's mappings that sat at the centre through the whole typing go back to the system, as at a
+    // session's idle point between builds.
+    if crate::alloc::is_resident() {
+        crate::alloc::age();
+    }
+    let waited = waiting.elapsed();
     timed(1, typing);
+    record_attempts(k, r, &attempts, waited);
+    let docs = docs?;
     let n = docs.len();
     *gen = first_gen + n as u32;
     record(format_args!("round job={} round={} docs={} first_gen={}", k, r, n, first_gen));
@@ -701,7 +746,12 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
         record(format_args!("serial reason={}", reason));
     }
     while pool.to.len() < want {
-        pool.add_worker();
+        if let Err(e) = pool.add_worker() {
+            // The rounds after this one keep to the workers the system gave.
+            record(format_args!("worker-refused w={} why={}", pool.to.len(), e));
+            pool.limit = pool.to.len();
+            break;
+        }
     }
     let schedule = Schedule::of_env();
     let plant = plant();
@@ -781,6 +831,35 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
     Ok(out)
 }
 
+/// The round's typing attempts in the record and the trace (docs/FIX.md, "Debugging a rule"): each attempt's line, its
+/// items under `TEQ_FIX_TYPING_WORK=1`; the trace's line of its parts, `run`'s phases, and the wait for the merges' drops.
+fn record_attempts(k: usize, r: u32, attempts: &[Attempt], waited: std::time::Duration) {
+    let trace = std::env::var_os("TEQ_FIX_TRACE").is_some();
+    for a in attempts {
+        let why = if a.why.is_empty() { String::new() } else { format!(" why={}", a.why.replace('\n', " ")) };
+        record(format_args!("typing job={} round={} attempt={} asked={} effective={} mapping_refused={} worker_refused={} forked={} outcome={} start_us={} end_us={}{}", k, r, a.number, a.asked, a.effective, a.mapping_refused as u8, a.worker_refused as u8, a.forked as u8, a.outcome, a.start_us, a.end_us, why));
+        for (worker, index, t0, t1, file) in &a.items {
+            record(format_args!("typing-item job={} round={} attempt={} worker={} index={} t0_us={} t1_us={} file={}", k, r, a.number, worker, index, t0, t1, file));
+        }
+        if trace {
+            let ms = |s: f64| s * 1e3;
+            let phases: Vec<String> = a.phases.iter().map(|(n, d)| format!("{} {:.0}", n, d.as_secs_f64() * 1e3)).collect();
+            eprintln!(
+                "fix: typing job {} round {} attempt {}: {} worker{} asked, {} typed, {}{}: read and parse {:.0} ms, jars {:.0} ms, type {:.0} ms (run: {}), documents {:.0} ms, caches {:.0} ms, exit {:.0} ms; the allocator reserved {} MB at the typer's drop",
+                k, r, a.number, a.asked, if a.asked == 1 { "" } else { "s" }, a.effective, a.outcome, if a.why.is_empty() { if a.mapping_refused { " (the overlays' mappings refused)".to_string() } else { String::new() } } else { format!(" ({})", a.why) },
+                ms(a.parts[0]), ms(a.parts[1]), ms(a.parts[2]), phases.join(", "), ms(a.parts[3]), ms(a.parts[4]), ms(a.parts[5]), a.held >> 20
+            );
+        }
+    }
+    if trace {
+        let held = crate::alloc::held();
+        eprintln!(
+            "fix: typing job {} round {}: the merges' drops waited for {:.0} ms; then the allocator reserved {} MB, {} MB of it free at the centre, {} MB of mappings kept",
+            k, r, waited.as_secs_f64() * 1e3, held.reserved >> 20, held.centre_free >> 20, held.mapped_kept >> 20
+        );
+    }
+}
+
 /// A document's results planned: its atomic groups numbered after those planned before it, round one's results of a
 /// file round two's semantic rules alone ran over joined with theirs, the trace's line, the plan.
 fn consume(a: Answer, overrides: &HashMap<String, String>, earlier: &Earlier<'_>, names: &[String], base: &mut u32, kept: Option<&mut HashMap<String, Results>>) -> Outcome {
@@ -830,9 +909,87 @@ pub(crate) fn program_paths(job: &Job) -> Vec<String> {
     crate::collect_program_paths_with_roots(&crate::parse_options_from(args.into_iter())).0
 }
 
+/// An attempt at a round's typing, as the record and the trace tell it (docs/FIX.md, "Debugging a rule").
+struct Attempt {
+    /// From 1; a second where the first gave way.
+    number: u32,
+    /// The workers handed to the typer, and those it typed with: one where the overlays' mappings were refused
+    /// (`mapping_refused`), else the count within `typer::MAX_WORKERS`, which `Typer::run` clamps it to.
+    asked: usize,
+    effective: usize,
+    /// Whether the system refused the overlays' mappings, so that `Typer::run` typed in place by one worker without the
+    /// fork (`types::take_mapping_refused`).
+    mapping_refused: bool,
+    /// Whether the system refused a thread of the typing's after the fork (a body phase's or an inlining phase's worker,
+    /// a merge thread), so that the attempt is given up and the round typed again by one worker
+    /// (`types::take_worker_refused`).
+    worker_refused: bool,
+    /// Whether `Typer::run` took the fork: several workers, or `TEQ_FORK=1`, and the mappings given.
+    forked: bool,
+    /// `one` (no fork), `joined` (the workers merged), `retried` (it gave way), `refused` (the merge's check).
+    outcome: &'static str,
+    /// Why it gave way.
+    why: String,
+    /// When it began and ended, in microseconds since the run began.
+    start_us: u64,
+    end_us: u64,
+    /// Seconds: reading and parsing, the jars, typing as compile's `type` phase counts it (the jars, the typer made and
+    /// set up, `run`), the documents, the jar caches, the exit (the disposal and the drops).
+    parts: [f64; 6],
+    /// `run`'s phases (`measure::phase_parts`).
+    phases: Vec<(&'static str, std::time::Duration)>,
+    /// Under `TEQ_FIX_TYPING_WORK=1`, each item of the queue: its worker, its index in its file, when it began and
+    /// ended (microseconds since the run began), its file.
+    items: Vec<(u32, u32, u64, u64, String)>,
+    /// The allocator's reserve at the typer's drop, in bytes.
+    held: usize,
+}
+
 /// The job's program typed as `teq compiler check` types it, with the index and, for a semantic rule, the unused
-/// imports, and the views of its editable files; the rendered errors where it does not type.
-fn typed(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>) -> Result<Vec<DocView>, String> {
+/// imports, and the views of its editable files; the rendered errors where it does not type. A parallel attempt that
+/// gives way is the round's: the round's texts typed again by one worker on this thread, nothing of the attempt
+/// published, the rules configured and the earlier rounds' results as they were (docs/FIX.md, "Patches, suppressions and rounds"). The attempts
+/// come back for the record.
+fn typed(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>) -> (Vec<Attempt>, Result<Vec<DocView>, String>) {
+    let mut attempts = Vec::new();
+    #[cfg(debug_assertions)]
+    let numbers = crate::typer::thread::run(crate::shared::numbers_taken_by_others);
+    if let Some(docs) = attempt(job, overrides, semantic, first_gen, display, None, &mut attempts) {
+        return (attempts, docs);
+    }
+    // What watch's retry asserts of an attempt that gave way (`watch.rs`): nothing of it is held on the typing thread.
+    #[cfg(debug_assertions)]
+    {
+        let (taken, depth, staged, overlay) = crate::typer::thread::run(|| (crate::shared::numbers_taken_by_others(), crate::shared::lock_depth(), crate::shared::staged_completions(), crate::types::in_overlay()));
+        assert_eq!(taken, numbers, "the attempt's workers kept their threads' numbers");
+        assert_eq!((depth, staged, overlay), (0, 0, false), "the attempt left the loader's lock held, completions staged or an overlay entered");
+    }
+    // One worker takes no fork, and only a forked build gives way (`Worker::need_serial_for_state`).
+    let docs = attempt(job, overrides, semantic, first_gen, display, Some(1), &mut attempts).unwrap_or_else(|| Err("teq fix: the typing gave way at one worker\n".to_string()));
+    (attempts, docs)
+}
+
+/// The workers a round types with: compile's (`--threads`, `TEQ_THREADS`, else the automatic count over the round's
+/// texts, `frontend::automatic_threads`), unless the fix suite's switches say otherwise: `TEQ_FIX_TYPING_THREADS=<n>`, the
+/// matrix's typing count apart from the rules', and `TEQ_FIX_PLANT=serial-typing`, its control, one.
+fn typing_threads(opts: &crate::Options, program_bytes: usize, largest_unit: usize) -> usize {
+    if plant().as_deref() == Some("serial-typing") {
+        return 1;
+    }
+    if let Some(n) = std::env::var("TEQ_FIX_TYPING_THREADS").ok().and_then(|v| v.parse::<usize>().ok()).filter(|&n| n >= 1) {
+        return n;
+    }
+    crate::frontend::requested_threads(opts.threads).unwrap_or_else(|| crate::frontend::automatic_threads(program_bytes, largest_unit))
+}
+
+/// One attempt at the round's typing, at `forced` workers or the round's own count (`typing_threads`): its documents or
+/// its rendered errors, or `None` where it gave way. Nothing is read of the typer before the give-way and the merge's
+/// refusal are ruled out; the jar caches are written by an attempt that ends the round, never by one that gave way or
+/// whose merge was refused, as compile writes them; every attempt ends with the interpreter's state of its program
+/// disposed of on the thread that typed, and the typer, its trees and its texts dropped here.
+#[allow(clippy::too_many_arguments)]
+fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>, forced: Option<usize>, attempts: &mut Vec<Attempt>) -> Option<Result<Vec<DocView>, String>> {
+    let (began, start_us) = (std::time::Instant::now(), now_us());
     let mut args = vec!["compiler".to_string(), "check".to_string()];
     args.extend(job.args.iter().cloned());
     let mut opts = crate::parse_options_from(args.into_iter());
@@ -848,37 +1005,117 @@ fn typed(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first_g
     // A file's text as round one left it where `overrides` has it; a script's as written, its document's text: the
     // wrapper `read_program` appends to a `.sc` (`script::wrap`) is for typing alone, past the script's own text.
     let mut written: HashMap<String, String> = HashMap::new();
-    let program = crate::read_program_with(&opts, paths, &roots, |p, disk| {
+    let program = match crate::read_program_with(&opts, paths, &roots, |p, disk| {
         let text = overrides.get(p).cloned().unwrap_or(disk);
         if crate::script::is_script(p) {
             written.insert(p.to_string(), text.clone());
         }
         text
-    })
-    .map_err(|e| format!("{}\n", e))?;
+    }) {
+        Ok(p) => p,
+        Err(e) => return Some(Err(format!("{}\n", e))),
+    };
+    let program_bytes: usize = program.iter().map(|f| f.text.len()).sum();
     let mut interner = crate::intern::Interner::new();
     let mut diags = crate::source::Diagnostics::default();
+    let opening = std::time::Instant::now();
     let cp = crate::open_jars(&opts);
+    let jars = opening.elapsed();
     let (mut files, mut asts, blocks_of, std, selected, scalajs_unlocked) = crate::parse_build(&opts, cp.as_ref(), program, &mut interner, &mut diags);
     if diags.has_errors() {
-        return Err(diags.render(&files));
+        return Some(Err(diags.render(&files)));
     }
+    // Compile's count, from the program's bytes and its largest unit before the jars' pseudo-files (`compile`).
+    let largest_unit = crate::frontend::largest_unit_bytes(&files, &asts, &blocks_of);
     let (jar_files, jdk_file) = crate::jar_pseudo_files(&opts, &mut files, &mut asts);
     let asts = crate::ast::Asts::new(asts);
     let sources = crate::source::Sources::new(files);
+    let mut parts = [0.0; 6];
+    parts[0] = (began.elapsed() - jars).as_secs_f64();
+    parts[1] = jars.as_secs_f64();
+    let typing = std::time::Instant::now();
+    let asked = forced.unwrap_or_else(|| typing_threads(&opts, program_bytes, largest_unit));
     let mut typer = crate::typer::Typer::new(&asts, &sources, &mut interner);
-    typer.threads = 1;
+    typer.threads = asked;
     crate::install_std(&mut typer, std, &selected, &blocks_of, scalajs_unlocked);
     crate::open_classpath(&opts, &mut typer, cp, jar_files, jdk_file);
     crate::configure_typer(&mut typer, &opts, &asts, &sources);
     typer.choose_entry = false;
-    typer.index = Some(Box::default());
+    // `TEQ_FIX_INDEX=off`, bench/fix's parity pair alone: the typer's records not made, as `teq compiler check`, which
+    // indexes nothing, types; `hasExpansions` is then false everywhere.
+    typer.index = (std::env::var_os("TEQ_FIX_INDEX").is_none_or(|v| v != "off")).then(Box::default);
+    // The witness's items (`TEQ_FIX_TYPING_WORK=1`, the fix suite's): the counters `--time` turns on, for this attempt.
+    let witness = std::env::var_os("TEQ_FIX_TYPING_WORK").is_some_and(|v| v == "1");
+    crate::measure::enable(witness);
+    // The flag of a refusal before this typing (a rule program's typer's under `TEQ_FORK=1`, every bootstrap ended
+    // before a typing begins) is not this typing's.
+    crate::types::take_mapping_refused();
+    crate::types::take_worker_refused();
     typer.run();
-    crate::save_jar_caches(&mut typer);
-    if typer.diags.items.iter().any(|d| !d.is_warning) || typer.diags.syntax_errors {
-        let (shown, _, _) = typer.report_diags();
-        return Err(shown);
+    if witness {
+        typer.on_thread(|_| crate::measure::flush(0));
+        crate::measure::enable(false);
     }
+    parts[2] = (typing.elapsed() + jars).as_secs_f64();
+    // `Typer::run`'s own conditions: a refused mapping types in place by one worker, else the count clamped, forked at
+    // several workers or under `TEQ_FORK=1`.
+    let mapping_refused = crate::types::take_mapping_refused();
+    // A thread of the typing's the system refused: the workers' starts give the build way themselves; a merge thread's
+    // merge ran its share on the caller's thread and is not kept either (`crew::Crew::with`).
+    let refusal = crate::types::take_worker_refused();
+    let worker_refused = refusal.is_some();
+    let effective = if mapping_refused { 1 } else { asked.clamp(1, crate::typer::MAX_WORKERS) };
+    let forked = !mapping_refused && (effective > 1 || std::env::var_os("TEQ_FORK").is_some_and(|v| v == "1"));
+    let epoch = *EPOCH.get_or_init(std::time::Instant::now);
+    let at = |t: std::time::Instant| t.saturating_duration_since(epoch).as_micros() as u64;
+    let items = if witness { crate::measure::take_items().into_iter().map(|i| (i.worker, i.index, at(i.start), at(i.end), sources.as_slice()[i.file as usize].path.clone())).collect() } else { Vec::new() };
+    let mut a = Attempt { number: attempts.len() as u32 + 1, asked, effective, mapping_refused, worker_refused, forked, outcome: if forked { "joined" } else { "one" }, why: String::new(), start_us, end_us: 0, parts, phases: crate::measure::phase_parts(), items, held: 0 };
+    let result = if typer.serial.is_needed() || worker_refused {
+        a.outcome = "retried";
+        a.why = typer.serial.reason().or(refusal).unwrap_or_default();
+        crate::types::view::gave_way(&a.why);
+        if std::env::var_os("TEQ_SERIAL_TRACE").is_some() {
+            eprintln!("teq: typed again by one worker: {}", a.why);
+        }
+        None
+    } else if typer.merge_failed {
+        a.outcome = "refused";
+        Some(Err(typer.report_diags().0))
+    } else {
+        let caching = std::time::Instant::now();
+        crate::save_jar_caches(&mut typer);
+        a.parts[4] = caching.elapsed().as_secs_f64();
+        if typer.diags.items.iter().any(|d| !d.is_warning) || typer.diags.syntax_errors {
+            Some(Err(typer.report_diags().0))
+        } else {
+            let documents = std::time::Instant::now();
+            let docs = documents_of(&typer, &sources, &asts, &blocks_of, &editable, &written, semantic, first_gen, display);
+            a.parts[3] = documents.elapsed().as_secs_f64();
+            Some(docs)
+        }
+    };
+    // The attempt's exit, on the thread that typed (`thread::run`'s, `TEQ_BODY_THREAD`): the overlays' drop the merge
+    // began, then the interpreter's caches and the cycles its macro runs left (`interp::dispose`, which `Typer::run`
+    // does at its start for an earlier program on that thread); then the typer, its trees and its texts.
+    let exiting = std::time::Instant::now();
+    typer.on_thread(|w| {
+        w.types.join_reclaiming();
+        crate::interp::dispose();
+    });
+    a.held = crate::alloc::held().reserved;
+    drop(typer);
+    drop(asts);
+    drop(sources);
+    drop(interner);
+    a.parts[5] = exiting.elapsed().as_secs_f64();
+    a.end_us = now_us();
+    attempts.push(a);
+    result
+}
+
+/// The views of the job's editable files, from a typer that typed the program.
+#[allow(clippy::too_many_arguments)]
+fn documents_of(typer: &crate::typer::Typer<'_>, sources: &crate::source::Sources, asts: &crate::ast::Asts, blocks_of: &[Vec<usize>], editable: &[String], written: &HashMap<String, String>, semantic: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>) -> Result<Vec<DocView>, String> {
     let files = sources.as_slice();
     let expanded: Vec<FileId> = typer.index.as_ref().map(|i| i.expanded.clone()).unwrap_or_default();
     let withheld = typer.unused_withheld();
@@ -1134,6 +1371,13 @@ impl Drop for EndedGuard {
 fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc::Sender<FromRules>, gate: &Gate) {
     crate::interp::fix::want();
     let _guard = EndedGuard(tx.clone());
+    // `TEQ_FIX_BOOT_DELAY=<ms>`, the fix suite's: every worker but the lead holds its bootstrap that long, so that a
+    // round's lead finishes its documents first and the next typing has to wait for the others (`round`).
+    if worker > 0 {
+        if let Some(ms) = std::env::var("TEQ_FIX_BOOT_DELAY").ok().and_then(|v| v.parse::<u64>().ok()) {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+    }
     let booting = std::time::Instant::now();
     let since = |t: std::time::Instant| t.elapsed().as_micros() as u64;
     let Boot { conf, config_dir, requested } = boot;
