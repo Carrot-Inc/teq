@@ -7,7 +7,7 @@
     ".": "./index.js"
   },
   "scripts": {
-    "test": "node test.mjs",
+    "test": "node test.mjs && node test-dev.mjs",
     "prepack": "cp ../../NOTICE ../../LICENSE ."
   },
   "files": [
@@ -25,5 +25,8 @@
   "peerDependencies": {
     "vite": ">=6"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "vite": "8.1.5"
+  }
 }

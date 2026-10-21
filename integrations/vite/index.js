@@ -11,6 +11,10 @@ const PLUGIN = "teq"
 // accepts its own update, and the page takes it with every swap (docs/TARGETS.md, "Module
 // splitting").
 const LISTING = "hot-build.mjs"
+// vite keys its module graph, the ids it resolves and the files its watcher reports to its hooks by
+// paths with forward slashes (its normalizePath); node's `join` gives backslashes on Windows, so
+// a path of the plugin's meets vite in vite's form, and a path for the file system stays node's.
+const viteForm = (path) => (sep === "\\" ? posix.normalize(path.replaceAll("\\", "/")) : path)
 
 /**
  * Builds a Scala.js project of the build's export, `teq.lock`, with teq in the place of the
@@ -43,6 +47,7 @@ export default function teq({ project, prefix = "scalajs", outDir, generate, des
   }
 
   const entry = () => (isDev ? join(outputDir, "main.mjs") : join(outputDir, "main.js"))
+  const outputPrefix = () => `${viteForm(outputDir)}/`
 
   // The URL vite serves a file of the output directory at: by its path under the root, through
   // /@fs/ elsewhere, under the configured base.
@@ -82,7 +87,7 @@ export default function teq({ project, prefix = "scalajs", outDir, generate, des
     // watcher must not react to them.
     config(userConfig, { command }) {
       const dir = outputDirOf(resolve(userConfig.root ?? process.cwd()), command, userConfig.server?.port ?? 5173)
-      return { server: { watch: { ignored: [`${dir}/**`] } } }
+      return { server: { watch: { ignored: [`${viteForm(dir)}/**`] } } }
     },
 
     async configResolved(resolved) {
@@ -131,7 +136,7 @@ export default function teq({ project, prefix = "scalajs", outDir, generate, des
     resolveId(source) {
       if (!source.startsWith(importPrefix)) return null
       const name = source.slice(importPrefix.length)
-      return name === "main.js" ? entry() : join(outputDir, name)
+      return viteForm(name === "main.js" ? entry() : join(outputDir, name))
     },
 
     // An empty map tells vite's import analysis not to build one: for megabytes of modules it
@@ -139,14 +144,14 @@ export default function teq({ project, prefix = "scalajs", outDir, generate, des
     // footer that re-runs a re-executed module's `$hot()` once the page has booted is teq's own
     // (docs/TARGETS.md, "Module splitting"), written into the module text under --hot.
     transform(code, id) {
-      if (!outputDir || !id.startsWith(outputDir + sep)) return null
+      if (!outputDir || !id.startsWith(outputPrefix())) return null
       return { code, map: { mappings: "" } }
     },
 
     // Updates of the output's modules are the plugin's (below); an event the watcher reports for
     // one anyway, say after the ignore pattern missed a rename, must not start a second update.
     hotUpdate({ file }) {
-      if (isDev && outputDir && file.startsWith(outputDir + sep)) return []
+      if (isDev && outputDir && file.startsWith(outputPrefix())) return []
     },
 
     configureServer(server) {
@@ -175,13 +180,13 @@ export default function teq({ project, prefix = "scalajs", outDir, generate, des
       }
 
       function invalidateFiles(files, timestamp) {
-        for (const file of files) for (const mod of graph.getModulesByFile(file) ?? []) invalidate(mod, timestamp)
+        for (const file of files) for (const mod of graph.getModulesByFile(viteForm(file)) ?? []) invalidate(mod, timestamp)
       }
 
       // A reload needs no new addresses: vite's own invalidation, which leaves them as they
       // are and has every importer of a rewritten module read anew.
       function reload(files, why) {
-        for (const file of [...files, join(outputDir, LISTING)]) for (const mod of graph.getModulesByFile(file) ?? []) graph.invalidateModule(mod)
+        for (const file of [...files, join(outputDir, LISTING)]) for (const mod of graph.getModulesByFile(viteForm(file)) ?? []) graph.invalidateModule(mod)
         hot.send({ type: "full-reload", path: "*" })
         return `page reload: ${why}`
       }
@@ -209,7 +214,7 @@ export default function teq({ project, prefix = "scalajs", outDir, generate, des
         invalidateFiles(fresh, timestamp)
         for (const mod of chain.modules) invalidate(mod, timestamp)
         const boundaries = new Set()
-        for (const mod of graph.getModulesByFile(entry()) ?? []) {
+        for (const mod of graph.getModulesByFile(viteForm(entry())) ?? []) {
           invalidate(mod, timestamp)
           for (const importer of mod.importers) {
             if (!importer.isSelfAccepting) continue
@@ -217,8 +222,8 @@ export default function teq({ project, prefix = "scalajs", outDir, generate, des
             boundaries.add(importer.url)
           }
         }
-        if (boundaries.size === 0) return reload([], `no importer of ${importPrefix}main.js accepts its own updates`)
-        for (const mod of graph.getModulesByFile(listing) ?? []) {
+        if (boundaries.size === 0) return reload(fresh, `no importer of ${importPrefix}main.js accepts its own updates`)
+        for (const mod of graph.getModulesByFile(viteForm(listing)) ?? []) {
           invalidate(mod, timestamp)
           boundaries.add(mod.url)
         }
@@ -237,14 +242,14 @@ export default function teq({ project, prefix = "scalajs", outDir, generate, des
       function importingModules(files) {
         const modules = new Set()
         const stoppedAt = new Set()
-        const entryFile = entry()
-        const queue = files.flatMap((file) => [...(graph.getModulesByFile(file) ?? [])])
+        const entryFile = viteForm(entry())
+        const queue = files.flatMap((file) => [...(graph.getModulesByFile(viteForm(file)) ?? [])])
         const changed = new Set(queue)
         while (queue.length > 0) {
           const mod = queue.pop()
           for (const importer of mod.importers) {
             const file = importer.file
-            if (!file || file === entryFile || !file.startsWith(outputDir + sep)) continue
+            if (!file || file === entryFile || !file.startsWith(outputPrefix())) continue
             if (changed.has(importer) || modules.has(importer)) continue
             const name = file.slice(outputDir.length + 1)
             if (!isSmallModule(described, name)) {
