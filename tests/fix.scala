@@ -671,10 +671,12 @@ object Typing:
 
   /** A run that ended in an allocation the system refused, the address space spent by an allocation and no thread's
     * start: Rust's "memory allocation of … failed", glibc's "out of memory" (a thread's destructors registered), an
-    * arena's "no memory for a cell directory". */
+    * arena's "no memory for a cell directory", and the signal stack Rust's std maps as a started thread begins
+    * ("failed to allocate an alternative stack"), refused after the start succeeded and before any code of teq's. */
   def allocationRefused(r: Sh.Result): Boolean =
     val err = r.errAll()
-    r.status == 134 && (err.contains("memory allocation of") || err.contains("out of memory") || err.contains("no memory for a cell directory"))
+    r.status == 134 && (err.contains("memory allocation of") || err.contains("out of memory") || err.contains("no memory for a cell directory")
+      || err.contains("failed to allocate an alternative stack"))
 
   /** The files of a fixture directory, under `src/<prefix>/`. */
   def program(dir: String, prefix: String): Seq[(String, String)] =
