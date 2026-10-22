@@ -1,8 +1,9 @@
 #!/bin/bash
-# Numeric cutoffs added since the base to the typer (the inlining phase with it), the parser, the types and the TIR: a loop bounded by a literal, a depth, fuel, level or step comparison, a length comparison or a `take` against
-# a literal of three or more. Dotty walks a type or a tree to its end; a limit it does have is a named constant
-# (`Config.LogPendingSubTypesThreshold`, `-Xmax-inlines`), so a line adding a cutoff names dotty's constant or option
-# on the line (the word `dotty` on it), else the line is listed and the check fails. The base is master where the
+# Numeric cutoffs added since the base anywhere under src: a loop bounded by a literal, a depth, fuel, level or step
+# comparison, a length comparison or a `take` against a literal of three or more. Dotty walks a type or a tree to its
+# end; a limit it does have is a named constant (`Config.LogPendingSubTypesThreshold`, `-Xmax-inlines`), the JDK,
+# Scala.js and the formats teq reads have theirs, so a line adding a cutoff names its reference on the line (the word
+# `dotty`, `scalac`, `jdk`, `scala.js` or `rfc` on it), else the line is listed and the check fails. The base is master where the
 # worktree holds it as an ancestor (the sharded gate's rebased worktree), else the previous commit (a landing's
 # squash), the comparison from the merge base; `tests/no-caps.sh <base> <head>` compares two revisions the same way.
 cd "$(dirname "$0")/.."
@@ -13,7 +14,7 @@ git rev-parse -q --verify "$base^{commit}" > /dev/null || { echo "no-caps: no ba
 python3 - "$base" "$head" <<'PY'
 import re, subprocess, sys
 base, head = sys.argv[1], sys.argv[2]
-paths = ['src/typer', 'src/parser', 'src/types', 'src/tir']
+paths = ['src']
 diff = subprocess.run(['git', 'diff', '-U0', f'{base}...{head}', '--'] + paths, capture_output=True, text=True).stdout
 cutoff = re.compile(r'\.\.=?\s*(\d+)\b'
                     r'|\b(?:depth|level|fuel|budget|steps?|rounds?|iterations?|limit|tries|attempts|links?|hops?|nesting|passes)\w*\s*(?:<|>|<=|>=|==|!=)\s*(\d+)\b'
@@ -31,11 +32,11 @@ for line in diff.split('\n'):
         text = line[1:]
         for mm in cutoff.finditer(text):
             value = max(int(g) for g in mm.groups() if g)
-            if value >= 3 and 'dotty' not in text and not text.lstrip().startswith('//'):
+            if value >= 3 and not re.search(r'dotty|scalac|jdk|scala\.?js|rfc', text, re.I) and not text.lstrip().startswith('//'):
                 hits.append(f'{file}:{n}: {text.strip()}')
                 break
         n += 1
 for h in hits: print(h)
-print(f'no-caps: {len(hits)} added cutoff line(s) without dotty\'s constant named ({base}..{head})')
+print(f'no-caps: {len(hits)} added cutoff line(s) without a reference named ({base}..{head})')
 sys.exit(1 if hits else 0)
 PY
