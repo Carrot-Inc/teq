@@ -2,8 +2,10 @@
 # Numeric cutoffs added since the base anywhere under src: a loop bounded by a literal, a depth, fuel, level or step
 # comparison, a length comparison or a `take` against a literal of three or more. Dotty walks a type or a tree to its
 # end; a limit it does have is a named constant (`Config.LogPendingSubTypesThreshold`, `-Xmax-inlines`), the JDK,
-# Scala.js and the formats teq reads have theirs, so a line adding a cutoff names its reference on the line (the word
-# `dotty`, `scalac`, `jdk`, `scala.js` or `rfc` on it), else the line is listed and the check fails. The base is master where the
+# Scala.js, the formats teq reads and the tools its own tooling is held to (rust-analyzer, scalafix, scalameta, the
+# LSP, the OS) have theirs, so a line adding a cutoff names its reference on the line (the word `dotty`, `scalac`,
+# `jdk`, `scala.js`, `rfc`, `rust-analyzer`, `scalafix`, `scalameta`, `lsp`, `libc`, `posix` or `windows` on it),
+# else the line is listed and the check fails. The base is master where the
 # worktree holds it as an ancestor (the sharded gate's rebased worktree), else the previous commit (a landing's
 # squash), the comparison from the merge base; `tests/no-caps.sh <base> <head>` compares two revisions the same way.
 cd "$(dirname "$0")/.."
@@ -32,7 +34,7 @@ for line in diff.split('\n'):
         text = line[1:]
         for mm in cutoff.finditer(text):
             value = max(int(g) for g in mm.groups() if g)
-            if value >= 3 and not re.search(r'dotty|scalac|jdk|scala\.?js|rfc', text, re.I) and not text.lstrip().startswith('//'):
+            if value >= 3 and not re.search(r'dotty|scalac|jdk|scala\.?js|rfc|rust-analyzer|scalafix|scalameta|\blsp\b|libc|posix|windows', text, re.I) and not text.lstrip().startswith('//'):
                 hits.append(f'{file}:{n}: {text.strip()}')
                 break
         n += 1
