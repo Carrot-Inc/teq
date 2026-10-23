@@ -1,0 +1,53 @@
+Nodes/Export/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Export, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Export\n\nobject Export:\n  val marker = 0 // assert: DumpStructure.structure\n  object Inner:\n    def f = 1\n  export Inner.f\n"
+  stats Pkg syntax="package nodes.Export\n\nobject Export:\n  val marker = 0 // assert: DumpStructure.structure\n  object Inner:\n    def f = 1\n  export Inner.f"
+    .stats = [Defn.Object "object Export:\n  val marker = 0 // assert: DumpStructure.structure\n  object Inner:\n    def f = 1\n  export Inner.f"]
+    ref Term.Select syntax="nodes.Export"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Export" syntax="Export"
+    body Pkg.Body syntax="object Export:\n  val marker = 0 // assert: DumpStructure.structure\n  object Inner:\n    def f = 1\n  export Inner.f"
+      stats Defn.Object syntax="object Export:\n  val marker = 0 // assert: DumpStructure.structure\n  object Inner:\n    def f = 1\n  export Inner.f"
+        mods Nil
+        name Term.Name value="Export" syntax="Export"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  object Inner:\n    def f = 1\n  export Inner.f"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Object "object Inner:\n    def f = 1", Export "export Inner.f"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  object Inner:\n    def f = 1\n  export Inner.f"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Object syntax="object Inner:\n    def f = 1"
+              mods Nil
+              name Term.Name value="Inner" syntax="Inner"
+              templ Template syntax=":\n    def f = 1"
+                .self = Self ""
+                .stats = [Defn.Def "def f = 1"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    def f = 1"
+                  selfOpt None
+                  stats Defn.Def syntax="def f = 1"
+                    .paramClauses = []
+                    .paramss = []
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="f" syntax="f"
+                    paramClauseGroups Nil
+                    decltpe None
+                    body Lit.Int value=1 syntax="1"
+                derives Nil
+            stats Export syntax="export Inner.f"
+              importers Importer syntax="Inner.f"
+                ref Term.Name value="Inner" syntax="Inner"
+                importees Importee.Name syntax="f"
+                  name Name.Indeterminate value="f" syntax="f"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

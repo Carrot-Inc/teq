@@ -1,0 +1,3 @@
+Driver/WithTypeNoOperator/input.scala:9:13: error: [Operators.op]: &
+  type Both = A & B // assert: Operators.op
+              ^^^^^

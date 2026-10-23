@@ -18,6 +18,13 @@
 #            expectations, another system's, another std's, a budget of one platform, the JVM's platform, a split
 #            watch case of another std or of the JVM alone), the want-of ones refused (a jar, a tool, a note of a
 #            check a tool's absence leaves undone).
+#   pin      tests/gate.sh's app-fix pin (app_fix_pin) over a repository of a migration commit, a later one and a side
+#            branch's: the migration an ancestor of HEAD holds it, the side branch's commit or no commit predates it,
+#            and a depth-one clone without the migration commit fails with git's error, never a skip.
+#   appfix   bench/app/fix.sh over a stand-in checkout and teq: its check `teq fix --check` alone with the checkout's
+#            HEAD as SOURCE_VERSION, a check, the coverage or the fixtures failing failing the line (a check's exit 1
+#            among them), a check that writes no record or an empty one failing it though an earlier run's record is
+#            there, the copy removed after each run and the checkout untouched.
 #   pieces   the long suites' pieces (tests/support/pieces.sh): each of lsp, jvm-watch, modules and split deals every
 #            unit it lists to exactly one piece of 1 to 8, in its order, its listing of three the units dealt; the
 #            module-only checks and split programs, the programs on both of jvm-watch's lists and the language
@@ -264,6 +271,64 @@ refused|runner-classes: note: no javac (javac), not checked: set JAVAC or JAVA_H
 refused|skip the corpus: no /scala3/tests/warn
 WORDINGS
 check "skips: the want-of rule admits the by-design skips and refuses the others" "$work/skips.log" eval '[ ! -s "$work/skips.log" ]'
+
+# The app-fix line's pin: git's answer alone skips it, a lookup git cannot answer fails it.
+source <(sed -n '/^app_fix_pin() {/,/^}/p' tests/gate.sh)
+pin=$work/pin
+commit_pin() { git -C "$pin/origin" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q --allow-empty -m "$1" && git -C "$pin/origin" rev-parse HEAD; }
+{ git init -q -b main "$pin/origin" && migration=$(commit_pin migration) && git -C "$pin/origin" checkout -q -b side &&
+  side=$(commit_pin side) && git -C "$pin/origin" checkout -q main && later=$(commit_pin later) &&
+  git clone -q "$pin/origin" "$pin/full" && git clone -q --depth 1 "file://$pin/origin" "$pin/shallow"; } > "$work/pin.log" 2>&1
+for row in "full|$migration|0|holds" "full|$side|0|predates" "full||0|predates" "shallow|$later|0|holds" "shallow|$migration|1|the migration's ancestry not known (git exit 128): "; do
+  IFS='|' read -r clone since want_code want <<< "$row"
+  got=$(app_fix_pin "$pin/$clone" "$since")
+  code=$?
+  [ "$code" = "$want_code" ] && [[ $got == "$want"* ]] || echo "$clone ${since:-(none)}: exit $code, $got; not exit $want_code, $want" >> "$work/pin.log"
+done
+check "pin: an ancestor holds the migration, another commit or none predates it, a depth-one clone's lookup fails" "$work/pin.log" \
+  eval '[ -n "$later" ] && ! grep -q ": exit " "$work/pin.log"'
+
+# bench/app/fix.sh over a stand-in checkout and teq: the check `teq fix --check` alone with the checkout's HEAD as
+# SOURCE_VERSION (the stand-in teq exits 3 otherwise), each step's failure the line's, a record left by an earlier run
+# never counted (none written, or the empty one of a run of no configuration, fails the coverage), a failing check with no exception though the comparator would
+# accept anything asked of it; the copy removed after and the checkout untouched.
+appfix=$work/appfix
+mkdir -p "$appfix/repo/fix/fixtures" "$appfix/repo/fix/reference" "$appfix/bin"
+printf '#!/bin/bash\necho "fixtures: 1 passed"\nexit "${FIXTURE_STATUS:-0}"\n' > "$appfix/repo/fix/fixtures/run.sh"
+echo '// a stand-in' > "$appfix/repo/fix/Compare.scala"
+echo stand-in > "$appfix/repo/fix/reference/manifest.tsv"
+cat > "$appfix/bin/teq" << 'STANDIN'
+#!/bin/bash
+# `fix --check` with the checkout's HEAD as SOURCE_VERSION writes a record of one document, an empty one under SKIP_ALL
+# (every configuration skipped), none under NO_RECORD; the coverage counts the record's documents against one source.
+if [ "$*" = "fix --check" ] && [ "$SOURCE_VERSION" = "$(cat "$APPFIX_HEAD")" ]; then
+  if [ -n "${SKIP_ALL:-}" ]; then : > "$TEQ_FIX_RECORD"; elif [ -z "${NO_RECORD:-}" ]; then echo "doc path=a.scala" > "$TEQ_FIX_RECORD"; fi
+  touch made-in-copy
+  exit "${CHECK_STATUS:-0}"
+fi
+[ "$1 $2" = "interp fix/Compare.scala" ] || exit 3
+if [ "$4" = coverage ]; then
+  documents=$(grep -c "^doc " "$6")
+  echo "coverage: 1 sources of sbt's tasks, $documents documents of teq's"
+  [ "$documents" = 1 ] || exit 1
+  exit "${COVERAGE_STATUS:-0}"
+fi
+echo "compare $4: stand-in"
+STANDIN
+chmod +x "$appfix/repo/fix/fixtures/run.sh" "$appfix/bin/teq"
+{ git -C "$appfix/repo" init -q && git -C "$appfix/repo" add -A &&
+  git -C "$appfix/repo" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m stand-in; } > "$work/appfix.log" 2>&1
+git -C "$appfix/repo" rev-parse HEAD > "$appfix/head"
+# Each row after the clean one finds the record a passing run left: a check that writes none, or an empty one, fails.
+for row in "|0|1 documents" "NO_RECORD=1|1|wrote no record" "|0|1 documents" "SKIP_ALL=1|1|0 documents" "CHECK_STATUS=1|1|" "CHECK_STATUS=2|1|" "COVERAGE_STATUS=1|1|" "FIXTURE_STATUS=1|1|"; do
+  IFS='|' read -r setting want says <<< "$row"
+  env $setting APPFIX_HEAD="$appfix/head" timeout 60 bench/app/fix.sh "$appfix/repo" "$appfix/bin/teq" "$appfix/out" > "$appfix/run.log" 2>&1
+  code=$?
+  [ $code = "$want" ] && [[ $(tail -1 "$appfix/run.log") == *"$says"* ]] && [ ! -e "$appfix/out/copy" ] && [ -z "$(git -C "$appfix/repo" status --porcelain)" ] ||
+    echo "${setting:-clean}: exit $code, not $want${says:+ saying $says}; $(tail -1 "$appfix/run.log")" >> "$work/appfix.log"
+done
+check "appfix: the check teq fix --check alone, a failing check, coverage or fixture failing the line, no record or an empty one failing it, the copy removed, the checkout untouched" "$work/appfix.log" \
+  eval '! grep -q ": exit " "$work/appfix.log"'
 
 # The long suites' pieces (tests/support/pieces.sh): every unit a suite lists in exactly one piece, in the suite's
 # order, for every number of pieces; the units only a whole run used to reach among them.

@@ -1,0 +1,58 @@
+Nodes/Type.Select/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Type.Select, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_Select\n\nobject Type_Select:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = scala.Int\n  val x: scala.collection.immutable.List[Int] = Nil\n"
+  stats Pkg syntax="package nodes.Type_Select\n\nobject Type_Select:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = scala.Int\n  val x: scala.collection.immutable.List[Int] = Nil"
+    .stats = [Defn.Object "object Type_Select:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = scala.Int\n  val x: scala.collection.immutable.List[Int] = Nil"]
+    ref Term.Select syntax="nodes.Type_Select"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_Select" syntax="Type_Select"
+    body Pkg.Body syntax="object Type_Select:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = scala.Int\n  val x: scala.collection.immutable.List[Int] = Nil"
+      stats Defn.Object syntax="object Type_Select:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = scala.Int\n  val x: scala.collection.immutable.List[Int] = Nil"
+        mods Nil
+        name Term.Name value="Type_Select" syntax="Type_Select"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type A = scala.Int\n  val x: scala.collection.immutable.List[Int] = Nil"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Type "type A = scala.Int", Defn.Val "val x: scala.collection.immutable.List[Int] = Nil"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type A = scala.Int\n  val x: scala.collection.immutable.List[Int] = Nil"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Type syntax="type A = scala.Int"
+              .tparams = []
+              mods Nil
+              name Type.Name value="A" syntax="A"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Select syntax="scala.Int"
+                qual Term.Name value="scala" syntax="scala"
+                name Type.Name value="Int" syntax="Int"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Val syntax="val x: scala.collection.immutable.List[Int] = Nil"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe Type.Apply syntax="scala.collection.immutable.List[Int]"
+                .args = [Type.Name "Int"]
+                tpe Type.Select syntax="scala.collection.immutable.List"
+                  qual Term.Select syntax="scala.collection.immutable"
+                    qual Term.Select syntax="scala.collection"
+                      qual Term.Name value="scala" syntax="scala"
+                      name Term.Name value="collection" syntax="collection"
+                    name Term.Name value="immutable" syntax="immutable"
+                  name Type.Name value="List" syntax="List"
+                argClause Type.ArgClause syntax="[Int]"
+                  values Type.Name value="Int" syntax="Int"
+              rhs Term.Name value="Nil" syntax="Nil"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

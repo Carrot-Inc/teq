@@ -1,0 +1,147 @@
+Nodes/Template/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Template, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Template\n\nobject Template:\n  val marker = 0 // assert: DumpStructure.structure\n  class B\n  trait T\n  class C extends B with T:\n    val x = 1\n  case class D(x: Int) derives CanEqual\n  object E extends B\n"
+  stats Pkg syntax="package nodes.Template\n\nobject Template:\n  val marker = 0 // assert: DumpStructure.structure\n  class B\n  trait T\n  class C extends B with T:\n    val x = 1\n  case class D(x: Int) derives CanEqual\n  object E extends B"
+    .stats = [Defn.Object "object Template:\n  val marker = 0 // assert: DumpStructure.structure\n  class B\n  trait T\n  class C extends B with T:\n    val x = 1\n  case class D(x: Int) derives CanEqual\n  object E extends B"]
+    ref Term.Select syntax="nodes.Template"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Template" syntax="Template"
+    body Pkg.Body syntax="object Template:\n  val marker = 0 // assert: DumpStructure.structure\n  class B\n  trait T\n  class C extends B with T:\n    val x = 1\n  case class D(x: Int) derives CanEqual\n  object E extends B"
+      stats Defn.Object syntax="object Template:\n  val marker = 0 // assert: DumpStructure.structure\n  class B\n  trait T\n  class C extends B with T:\n    val x = 1\n  case class D(x: Int) derives CanEqual\n  object E extends B"
+        mods Nil
+        name Term.Name value="Template" syntax="Template"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class B\n  trait T\n  class C extends B with T:\n    val x = 1\n  case class D(x: Int) derives CanEqual\n  object E extends B"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class B", Defn.Trait "trait T", Defn.Class "class C extends B with T:\n    val x = 1", Defn.Class "case class D(x: Int) derives CanEqual", Defn.Object "object E extends B"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class B\n  trait T\n  class C extends B with T:\n    val x = 1\n  case class D(x: Int) derives CanEqual\n  object E extends B"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class B"
+              .tparams = []
+              mods Nil
+              name Type.Name value="B" syntax="B"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Trait syntax="trait T"
+              .tparams = []
+              mods Nil
+              name Type.Name value="T" syntax="T"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Class syntax="class C extends B with T:\n    val x = 1"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax="extends B with T:\n    val x = 1"
+                .self = Self ""
+                .stats = [Defn.Val "val x = 1"]
+                earlyClause None
+                inits Init syntax="B"
+                  .argss = []
+                  tpe Type.Name value="B" syntax="B"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                inits Init syntax="T"
+                  .argss = []
+                  tpe Type.Name value="T" syntax="T"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax=":\n    val x = 1"
+                  selfOpt None
+                  stats Defn.Val syntax="val x = 1"
+                    mods Nil
+                    pats Pat.Var syntax="x"
+                      name Term.Name value="x" syntax="x"
+                    decltpe None
+                    rhs Lit.Int value=1 syntax="1"
+                derives Nil
+            stats Defn.Class syntax="case class D(x: Int) derives CanEqual"
+              .tparams = []
+              mods Mod.Case syntax="case"
+              name Type.Name value="D" syntax="D"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(x: Int)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax="derives CanEqual"
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Type.Name value="CanEqual" syntax="CanEqual"
+            stats Defn.Object syntax="object E extends B"
+              mods Nil
+              name Term.Name value="E" syntax="E"
+              templ Template syntax="extends B"
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Init syntax="B"
+                  .argss = []
+                  tpe Type.Name value="B" syntax="B"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

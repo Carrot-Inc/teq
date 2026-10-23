@@ -1,0 +1,92 @@
+Nodes/Type.With.Self/input.scala:12:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's WithType probe, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_With_Self\n\ntrait A\ntrait B\ntrait Subject { self: A with B => }\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Type_With_Self\n\ntrait A\ntrait B\ntrait Subject { self: A with B => }\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Trait "trait A", Defn.Trait "trait B", Defn.Trait "trait Subject { self: A with B => }", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Type_With_Self"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_With_Self" syntax="Type_With_Self"
+    body Pkg.Body syntax="trait A\ntrait B\ntrait Subject { self: A with B => }\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Trait syntax="trait A"
+        .tparams = []
+        mods Nil
+        name Type.Name value="A" syntax="A"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax=""
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Nil
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Trait syntax="trait B"
+        .tparams = []
+        mods Nil
+        name Type.Name value="B" syntax="B"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax=""
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Nil
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Trait syntax="trait Subject { self: A with B => }"
+        .tparams = []
+        mods Nil
+        name Type.Name value="Subject" syntax="Subject"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax=""
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Nil
+        templ Template syntax="{ self: A with B => }"
+          .self = Self "self: A with B =>"
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax="{ self: A with B => }"
+            selfOpt Self syntax="self: A with B =>"
+              name Term.Name value="self" syntax="self"
+              decltpe Type.With syntax="A with B"
+                lhs Type.Name value="A" syntax="A"
+                rhs Type.Name value="B" syntax="B"
+            stats Nil
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

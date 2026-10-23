@@ -1,0 +1,44 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's DollarValue probe, its fields, values, syntax and derived accessors as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Interpolate_Dollar\n\nobject O { val x = s\"$$\" }\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Term_Interpolate_Dollar\n\nobject O { val x = s\"$$\" }\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Object "object O { val x = s\"$$\" }", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Term_Interpolate_Dollar"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Interpolate_Dollar" syntax="Term_Interpolate_Dollar"
+    body Pkg.Body syntax="object O { val x = s\"$$\" }\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Object syntax="object O { val x = s\"$$\" }"
+        mods Nil
+        name Term.Name value="O" syntax="O"
+        templ Template syntax="{ val x = s\"$$\" }"
+          .self = Self ""
+          .stats = [Defn.Val "val x = s\"$$\""]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax="{ val x = s\"$$\" }"
+            selfOpt None
+            stats Defn.Val syntax="val x = s\"$$\""
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Term.Interpolate syntax="s\"$$\""
+                prefix Term.Name value="s" syntax="s"
+                parts Lit.String value="$" syntax="$$"
+                args Nil
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil

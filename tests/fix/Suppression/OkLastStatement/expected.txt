@@ -1,0 +1,3 @@
+Suppression/OkLastStatement/input.scala:9:7: error: [NoDummy]: Dummy!
+    val aDummy = 1 // assert: NoDummy
+        ^^^^^^

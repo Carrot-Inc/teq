@@ -1,10 +1,13 @@
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Source@0-1870 stats=[Pkg@174-1851]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Source@0-1870 stats=[Pkg@174-1869]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pkg@174-1851 ref=Term.Name@182-188 stats=[Import@190-254,Import@255-297,Defn.Object@299-1851]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pkg@174-1869 ref=Term.Name@182-188 body=Pkg.Body@190-1869
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@182-188 value=fields
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pkg.Body@190-1869 stats=[Import@190-254,Import@255-297,Defn.Object@299-1851,Term.EndMarker@1852-1869]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Import@190-254 importers=[Importer@197-254]
@@ -28,25 +31,25 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@203
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@214-221 value=mutable
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Importee.Name@223-233 name=Term.Name@223-233
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Importee.Name@223-233 name=Name.Indeterminate@223-233
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@223-233 value=ListBuffer
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Indeterminate@223-233 value=ListBuffer
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Importee.Rename@235-243 name=Term.Name@235-238 rename=Term.Name@242-243
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Importee.Rename@235-243 name=Name.Indeterminate@235-238 rename=Name.Indeterminate@242-243
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@235-238 value=Map
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Indeterminate@235-238 value=Map
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@242-243 value=M
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Indeterminate@242-243 value=M
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Importee.Unimport@245-253 name=Term.Name@245-248
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Importee.Unimport@245-253 name=Name.Indeterminate@245-248
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@245-248 value=Set
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Indeterminate@245-248 value=Set
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Import@255-297 importers=[Importer@262-297]
@@ -85,7 +88,10 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Object@2
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@306-319 value=FieldContract
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@319-1851 inits=[] self=None stats=[Defn.Val@323-337,Defn.Var@369-383,Defn.Val@386-411,Defn.Def@414-481,Defn.Def@484-517,Defn.Trait@520-582,Defn.Class@585-705,Defn.Enum@708-760,Defn.GivenAlias@763-809,Defn.Given@812-886,Export@889-905,Defn.Val@908-932,Defn.Val@935-1040,Defn.Val@1043-1119,Defn.Def@1122-1171,Defn.Val@1174-1200,Defn.Val@1203-1232,Defn.Val@1235-1264,Defn.Val@1267-1298,Defn.Type@1301-1325,Defn.Val@1328-1356,Defn.Val@1359-1417,Defn.Val@1420-1449,Defn.Val@1452-1482,Defn.Val@1485-1515,Defn.Val@1518-1590,Defn.Val@1593-1611,Defn.Val@1614-1627,Defn.Def@1630-1655,Defn.Def@1658-1703,Defn.Val@1706-1723,Defn.Val@1726-1748,Defn.Val@1751-1769,Defn.Val@1772-1796,Defn.Val@1799-1851]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@319-1851 inits=[] body=Template.Body@319-1851 derives=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template.Body@319-1851 selfOpt=None stats=[Defn.Val@323-337,Defn.Var@369-383,Defn.Val@386-411,Defn.Def@414-481,Defn.Def@484-517,Defn.Trait@520-582,Defn.Class@585-705,Defn.Enum@708-760,Defn.GivenAlias@763-809,Defn.Given@812-886,Export@889-905,Defn.Val@908-932,Defn.Val@935-1040,Defn.Val@1043-1119,Defn.Def@1122-1171,Defn.Val@1174-1200,Defn.Val@1203-1232,Defn.Val@1235-1264,Defn.Val@1267-1298,Defn.Type@1301-1325,Defn.Val@1328-1356,Defn.Val@1359-1417,Defn.Val@1420-1449,Defn.Val@1452-1482,Defn.Val@1485-1515,Defn.Val@1518-1590,Defn.Val@1593-1611,Defn.Val@1614-1627,Defn.Def@1630-1655,Defn.Def@1658-1703,Defn.Val@1706-1723,Defn.Val@1726-1748,Defn.Val@1751-1769,Defn.Val@1772-1796,Defn.Val@1799-1851]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Val@323-337 mods=[] pats=[Pat.Var@327-333] decltpe=None rhs=Lit.Int@336-337
@@ -110,6 +116,9 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@373
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@376-379 value=Int
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Placeholder@382-383 
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Val@386-411 mods=[Mod.Final@386-391] pats=[Pat.Tuple@396-402] decltpe=None rhs=Term.Tuple@405-411
@@ -142,22 +151,34 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@406-4
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@409-410 value=2
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@414-481 mods=[] name=Term.Name@418-419 tparams=[Type.Param@420-421] paramClauses=[Term.ParamClause@422-440,Term.ParamClause@440-454,Term.ParamClause@454-474] decltpe=Some(Type.Name@476-477) body=Term.Name@480-481
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@414-481 mods=[] name=Term.Name@418-419 paramClauseGroups=[Member.ParamClauseGroup@419-474] decltpe=Some(Type.Name@476-477) body=Term.Name@480-481
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@418-419 value=f
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@420-421 mods=[] name=Type.Name@420-421 tparams=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Member.ParamClauseGroup@419-474 tparamClause=Type.ParamClause@419-422 paramClauses=[Term.ParamClause@422-440,Term.ParamClause@440-454,Term.ParamClause@454-474]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@419-422 values=[Type.Param@420-421]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@420-421 mods=[] name=Type.Name@420-421 tparamClause=Type.ParamClause@421-421 bounds=Type.Bounds@421-421
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@420-421 value=A
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@422-440 values=[Term.Param@423-427,Term.Param@429-439] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@421-421 values=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@423-427 mods=[] name=Term.Name@423-424 decltpe=Some(Type.Name@426-427) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Bounds@421-421 lo=None hi=None context=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@422-440 values=[Term.Param@423-427,Term.Param@429-439] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@423-427 mods=[] name=Term.Name@423-424 decltpe=Some(Type.Name@426-427) default=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@423-424 value=x
@@ -166,7 +187,7 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@423
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@426-427 value=A
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@429-439 mods=[] name=Term.Name@429-430 decltpe=Some(Type.Name@432-435) default=Some(Lit.Int@438-439) isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@429-439 mods=[] name=Term.Name@429-430 decltpe=Some(Type.Name@432-435) default=Some(Lit.Int@438-439)
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@429-430 value=y
@@ -178,10 +199,13 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@432
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@438-439 value=1
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@440-454 values=[Term.Param@447-453] isImplicit=false isUsing=true
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@440-454 values=[Term.Param@447-453] mod=Some(Mod.Using@441-446)
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@447-453 mods=[] name=Term.Name@447-448 decltpe=Some(Type.Name@450-453) default=None isImplicit=false isUsing=true
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@447-453 mods=[Mod.Using@441-446] name=Term.Name@447-448 decltpe=Some(Type.Name@450-453) default=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Using@441-446 
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@447-448 value=z
@@ -190,10 +214,16 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@447
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@450-453 value=Int
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@454-474 values=[Term.Param@464-473] isImplicit=true isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Using@441-446 
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@464-473 mods=[] name=Term.Name@464-465 decltpe=Some(Type.Name@467-473) default=None isImplicit=true isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@454-474 values=[Term.Param@464-473] mod=Some(Mod.Implicit@455-463)
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@464-473 mods=[Mod.Implicit@455-463] name=Term.Name@464-465 decltpe=Some(Type.Name@467-473) default=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Implicit@455-463 
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@464-465 value=w
@@ -202,28 +232,37 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@464
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@467-473 value=String
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Implicit@455-463 
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@476-477 value=A
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@480-481 value=x
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@484-517 mods=[] name=Term.Name@488-489 tparams=[] paramClauses=[Term.ParamClause@489-499] decltpe=Some(Type.Name@501-504) body=Term.ApplyUnary@507-517
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@484-517 mods=[] name=Term.Name@488-489 paramClauseGroups=[Member.ParamClauseGroup@489-499] decltpe=Some(Type.Name@501-504) body=Term.ApplyUnary@507-517
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@488-489 value=g
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@489-499 values=[Term.Param@490-498] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Member.ParamClauseGroup@489-499 tparamClause=Type.ParamClause@489-489 paramClauses=[Term.ParamClause@489-499]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@490-498 mods=[] name=Term.Name@490-492 decltpe=Some(Type.Repeated@497-498) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@489-489 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@489-499 values=[Term.Param@490-498] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@490-498 mods=[] name=Term.Name@490-492 decltpe=Some(Type.Repeated@494-498) default=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@490-492 value=xs
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Repeated@497-498 
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Repeated@494-498 
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@494-497 value=Int
@@ -247,13 +286,25 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@508
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@511-517 value=length
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Trait@520-582 mods=[] name=Type.Name@526-527 tparams=[] templ=Template@528-582
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Trait@520-582 mods=[] name=Type.Name@526-527 tparamClause=Type.ParamClause@528-528 ctor=Ctor.Primary@528-528 templ=Template@528-582
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@526-527 value=T
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@528-582 inits=[] self=None stats=[Decl.Val@530-540,Decl.Var@542-552,Decl.Def@554-572,Decl.Type@574-580]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@528-528 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Ctor.Primary@528-528 mods=[] paramClauses=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@528-528 value=
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@528-582 inits=[] body=Template.Body@528-582 derives=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template.Body@528-582 selfOpt=None stats=[Decl.Val@530-540,Decl.Var@542-552,Decl.Def@554-572,Decl.Type@574-580]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Decl.Val@530-540 mods=[] pats=[Pat.Var@534-535] decltpe=Type.Name@537-540
@@ -280,16 +331,22 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@546
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@549-552 value=Int
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Decl.Def@554-572 mods=[] name=Term.Name@558-559 tparams=[] paramClauses=[Term.ParamClause@559-567] decltpe=Type.Name@569-572
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Decl.Def@554-572 mods=[] name=Term.Name@558-559 paramClauseGroups=[Member.ParamClauseGroup@559-567] decltpe=Type.Name@569-572
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@558-559 value=d
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@559-567 values=[Term.Param@560-566] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Member.ParamClauseGroup@559-567 tparamClause=Type.ParamClause@559-559 paramClauses=[Term.ParamClause@559-567]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@560-566 mods=[] name=Term.Name@560-561 decltpe=Some(Type.Name@563-566) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@559-559 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@559-567 values=[Term.Param@560-566] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@560-566 mods=[] name=Term.Name@560-561 decltpe=Some(Type.Name@563-566) default=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@560-561 value=x
@@ -301,13 +358,19 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@563
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@569-572 value=Int
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Decl.Type@574-580 mods=[] name=Type.Name@579-580
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Decl.Type@574-580 mods=[] name=Type.Name@579-580 tparamClause=Type.ParamClause@581-581 bounds=Type.Bounds@581-581
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@579-580 value=E
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Class@585-705 mods=[Mod.Abstract@585-593] name=Type.Name@600-601 tparams=[Type.Param@602-604,Type.Param@606-608] ctor=[Term.ParamClause@609-621] templ=Template@630-705
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@581-581 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Bounds@581-581 lo=None hi=None context=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Class@585-705 mods=[Mod.Abstract@585-593] name=Type.Name@600-601 tparamClause=Type.ParamClause@601-609 ctor=Ctor.Primary@609-621 templ=Template@622-705
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Abstract@585-593 
@@ -316,7 +379,10 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Abstract@
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@600-601 value=C
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@602-604 mods=[Mod.Covariant@602-603] name=Type.Name@603-604 tparams=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@601-609 values=[Type.Param@602-604,Type.Param@606-608]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@602-604 mods=[Mod.Covariant@602-603] name=Type.Name@603-604 tparamClause=Type.ParamClause@604-604 bounds=Type.Bounds@604-604
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Covariant@602-603 
@@ -325,7 +391,13 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Covariant
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@603-604 value=A
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@606-608 mods=[Mod.Contravariant@606-607] name=Type.Name@607-608 tparams=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@604-604 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Bounds@604-604 lo=None hi=None context=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@606-608 mods=[Mod.Contravariant@606-607] name=Type.Name@607-608 tparamClause=Type.ParamClause@608-608 bounds=Type.Bounds@608-608
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Contravariant@606-607 
@@ -334,10 +406,25 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Contravar
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@607-608 value=B
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@609-621 values=[Term.Param@614-620] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@608-608 values=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@614-620 mods=[] name=Term.Name@614-615 decltpe=Some(Type.Name@617-620) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Bounds@608-608 lo=None hi=None context=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Ctor.Primary@609-621 mods=[] paramClauses=[Term.ParamClause@609-621]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@609-609 value=
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@609-621 values=[Term.Param@610-620] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@610-620 mods=[Mod.ValParam@610-613] name=Term.Name@614-615 decltpe=Some(Type.Name@617-620) default=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.ValParam@610-613 
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@614-615 value=c
@@ -346,43 +433,70 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@614
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@617-620 value=Int
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@630-705 inits=[Init@630-631,Init@637-649] self=Some(Type.Name@658-659) stats=[Defn.Type@667-679,Defn.Def@684-701]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@622-705 inits=[Init@630-631,Init@637-649] body=Template.Body@650-705 derives=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@630-631 tpe=Type.Name@630-631 args=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@630-631 tpe=Type.Name@630-631 argClauses=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@630-631 value=T
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@637-649 tpe=Type.Name@637-649 args=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@632-632 value=
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@637-649 tpe=Type.Name@637-649 argClauses=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@637-649 value=Serializable
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@650-650 value=
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template.Body@650-705 selfOpt=Some(Self@652-662) stats=[Defn.Type@667-679,Defn.Def@684-701]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Self@652-662 name=Term.Name@652-656 decltpe=Some(Type.Name@658-659)
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@652-656 value=self
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@658-659 value=T
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Type@667-679 mods=[] name=Type.Name@672-673
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Type@667-679 mods=[] name=Type.Name@672-673 tparamClause=Type.ParamClause@674-674 bounds=Type.Bounds@674-674 body=Type.Name@676-679
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@672-673 value=F
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@674-674 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@676-679 value=Int
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@684-701 mods=[] name=Term.Name@688-689 tparams=[] paramClauses=[Term.ParamClause@689-697] decltpe=None body=Term.Name@700-701
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Bounds@674-674 lo=None hi=None context=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@684-701 mods=[] name=Term.Name@688-689 paramClauseGroups=[Member.ParamClauseGroup@689-697] decltpe=None body=Term.Name@700-701
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@688-689 value=d
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@689-697 values=[Term.Param@690-696] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Member.ParamClauseGroup@689-697 tparamClause=Type.ParamClause@689-689 paramClauses=[Term.ParamClause@689-697]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@690-696 mods=[] name=Term.Name@690-691 decltpe=Some(Type.Name@693-696) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@689-689 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@689-697 values=[Term.Param@690-696] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@690-696 mods=[] name=Term.Name@690-691 decltpe=Some(Type.Name@693-696) default=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@690-691 value=x
@@ -394,43 +508,55 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@693
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@700-701 value=x
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Enum@708-760 mods=[] name=Type.Name@713-718 templ=Template@718-760
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Enum@708-760 mods=[] name=Type.Name@713-718 tparamClause=Type.ParamClause@718-718 ctor=Ctor.Primary@718-718 templ=Template@718-760
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@713-718 value=Color
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@718-760 inits=[] self=None stats=[Defn.EnumCase@729-732,Defn.EnumCase@734-739,Defn.EnumCase@749-760]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@718-718 values=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.EnumCase@729-732 mods=[] name=Type.Name@729-732
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Ctor.Primary@718-718 mods=[] paramClauses=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@729-732 value=Red
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@718-718 value=
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@732-732 inits=[] self=None stats=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@718-760 inits=[] body=Template.Body@718-760 derives=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.EnumCase@734-739 mods=[] name=Type.Name@734-739
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template.Body@718-760 selfOpt=None stats=[Defn.RepeatedEnumCase@724-739,Defn.EnumCase@744-760]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@734-739 value=Green
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.RepeatedEnumCase@724-739 mods=[] cases=[Term.Name@729-732,Term.Name@734-739]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@739-739 inits=[] self=None stats=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@729-732 value=Red
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.EnumCase@749-760 mods=[] name=Type.Name@749-752
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@734-739 value=Green
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@749-752 value=Mix
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.EnumCase@744-760 mods=[] name=Term.Name@749-752 tparamClause=Type.ParamClause@752-752 ctor=Ctor.Primary@752-760 inits=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@752-760 values=[Term.Param@753-759] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@749-752 value=Mix
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@753-759 mods=[] name=Term.Name@753-754 decltpe=Some(Type.Name@756-759) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@752-752 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Ctor.Primary@752-760 mods=[] paramClauses=[Term.ParamClause@752-760]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@752-752 value=
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@752-760 values=[Term.Param@753-759] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@753-759 mods=[] name=Term.Name@753-754 decltpe=Some(Type.Name@756-759) default=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@753-754 value=r
@@ -439,22 +565,25 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@753
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@756-759 value=Int
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@760-760 inits=[] self=None stats=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.GivenAlias@763-809 mods=[] paramClauseGroups=[] decltpe=Type.Apply@769-784 body=Term.Apply@787-809
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.GivenAlias@763-809 mods=[] body=Term.Apply@787-809
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@769-769 value=
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Apply@769-784 tpe=Type.Name@769-777 args=[Type.Name@778-783]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Apply@769-784 tpe=Type.Name@769-777 argClause=Type.ArgClause@777-784
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@769-777 value=Ordering
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@777-784 values=[Type.Name@778-783]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@778-783 value=Color
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@787-809 fun=Term.Select@787-798 args=[Term.AnonymousFunction@799-808]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@787-809 fun=Term.Select@787-798 argClause=Term.ArgClause@798-809
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Select@787-798 qual=Term.Name@787-795 name=Term.Name@796-798
@@ -464,6 +593,9 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@787
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@796-798 value=by
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@798-809 values=[Term.AnonymousFunction@799-808] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.AnonymousFunction@799-808 body=Term.Select@799-808
@@ -478,34 +610,52 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Placehol
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@801-808 value=ordinal
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Given@812-886 mods=[] templ=Template@849-886
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Given@812-886 mods=[] paramClauseGroups=[] templ=Template@823-886
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@818-821 value=cmp
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Apply@823-839 tpe=Type.Name@823-831 args=[Type.Name@832-838]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@823-886 inits=[Init@823-839] body=Template.Body@849-886 derives=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@823-839 tpe=Type.Apply@823-839 argClauses=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Apply@823-839 tpe=Type.Name@823-831 argClause=Type.ArgClause@831-839
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@823-831 value=Ordering
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@831-839 values=[Type.Name@832-838]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@832-838 value=String
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@849-886 inits=[] self=None stats=[Defn.Def@849-886]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@840-840 value=
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@849-886 mods=[] name=Term.Name@853-860 tparams=[] paramClauses=[Term.ParamClause@860-882] decltpe=None body=Lit.Int@885-886
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template.Body@849-886 selfOpt=None stats=[Defn.Def@849-886]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@849-886 mods=[] name=Term.Name@853-860 paramClauseGroups=[Member.ParamClauseGroup@860-882] decltpe=None body=Lit.Int@885-886
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@853-860 value=compare
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@860-882 values=[Term.Param@861-870,Term.Param@872-881] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Member.ParamClauseGroup@860-882 tparamClause=Type.ParamClause@860-860 paramClauses=[Term.ParamClause@860-882]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@861-870 mods=[] name=Term.Name@861-862 decltpe=Some(Type.Name@864-870) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@860-860 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@860-882 values=[Term.Param@861-870,Term.Param@872-881] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@861-870 mods=[] name=Term.Name@861-862 decltpe=Some(Type.Name@864-870) default=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@861-862 value=p
@@ -514,7 +664,7 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@861
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@864-870 value=String
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@872-881 mods=[] name=Term.Name@872-873 decltpe=Some(Type.Name@875-881) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@872-881 mods=[] name=Term.Name@872-873 decltpe=Some(Type.Name@875-881) default=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@872-873 value=q
@@ -535,10 +685,10 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Importer@896-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@896-901 value=Color
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Importee.Name@902-905 name=Term.Name@902-905
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Importee.Name@902-905 name=Name.Indeterminate@902-905
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@902-905 value=Red
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Indeterminate@902-905 value=Red
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Val@908-932 mods=[] pats=[Pat.Var@912-913] decltpe=None rhs=Term.Interpolate@916-932
@@ -550,22 +700,40 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@912-9
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@912-913 value=s
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Interpolate@916-932 prefix=Term.Name@916-917 args=[Term.Name@920-921,Term.ApplyInfix@925-930]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Interpolate@916-932 prefix=Term.Name@916-917 args=[Term.Name@920-921,Term.Block@924-931]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@916-917 value=s
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.String@918-919 value=x
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.String@921-923 value= y
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.String@931-931 value=
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@920-921 value=a
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@925-930 lhs=Term.Name@925-926 op=Term.Name@927-928 targs=[] args=[Lit.Int@929-930]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Block@924-931 stats=[Term.ApplyInfix@925-930]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@925-930 lhs=Term.Name@925-926 op=Term.Name@927-928 targClause=Type.ArgClause@929-929 argClause=Term.ArgClause@929-930
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@925-926 value=b
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@927-928 value=+
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@929-929 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@929-930 values=[Lit.Int@929-930] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@929-930 value=1
@@ -580,7 +748,7 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@939-9
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@939-940 value=p
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Match@943-1040 expr=Term.Tuple@943-949 cases=[Case@960-985,Case@990-1024,Case@1029-1040]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Match@943-1040 expr=Term.Tuple@943-949 casesBlock=Term.CasesBlock@960-1040 mods=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Tuple@943-949 args=[Term.Name@944-945,Term.Name@947-948]
@@ -592,10 +760,13 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@944
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@947-948 value=b
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.CasesBlock@960-1040 cases=[Case@960-985,Case@990-1024,Case@1029-1040]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Case@960-985 pat=Pat.Alternative@965-980 cond=None body=Lit.Int@984-985
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Alternative@965-980 alternatives=[Pat.Tuple@965-971,Pat.Tuple@974-980]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Alternative@965-980 lhs=Pat.Tuple@965-971 rhs=Pat.Tuple@974-980
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Tuple@965-971 args=[Lit.Int@966-967,Pat.Wildcard@969-970]
@@ -649,13 +820,19 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@100
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1006-1009 value=Int
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1014-1019 lhs=Term.Name@1014-1015 op=Term.Name@1016-1017 targs=[] args=[Lit.Int@1018-1019]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1014-1019 lhs=Term.Name@1014-1015 op=Term.Name@1016-1017 targClause=Type.ArgClause@1018-1018 argClause=Term.ArgClause@1018-1019
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1014-1015 value=y
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1016-1017 value=>
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1018-1018 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1018-1019 values=[Lit.Int@1018-1019] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1018-1019 value=0
@@ -682,7 +859,10 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1047-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1047-1048 value=l
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ForYield@1051-1119 enums=[Enumerator.Generator@1055-1067,Enumerator.Guard@1071-1076,Enumerator.Val@1078-1083,Enumerator.Generator@1085-1107] body=Term.ApplyInfix@1114-1119
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ForYield@1051-1119 enumsBlock=Term.EnumeratorsBlock@1055-1107 body=Term.ApplyInfix@1114-1119
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.EnumeratorsBlock@1055-1107 enums=[Enumerator.Generator@1055-1067,Enumerator.Guard@1068-1076,Enumerator.Val@1078-1083,Enumerator.Generator@1085-1107]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Enumerator.Generator@1055-1067 pat=Pat.Var@1055-1056 rhs=Term.Apply@1060-1067
@@ -694,25 +874,34 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1055-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1055-1056 value=i
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1060-1067 fun=Term.Name@1060-1064 args=[Lit.Int@1065-1066]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1060-1067 fun=Term.Name@1060-1064 argClause=Term.ArgClause@1064-1067
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1060-1064 value=List
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1064-1067 values=[Lit.Int@1065-1066] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1065-1066 value=1
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Enumerator.Guard@1071-1076 cond=Term.ApplyInfix@1071-1076
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Enumerator.Guard@1068-1076 cond=Term.ApplyInfix@1071-1076
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1071-1076 lhs=Term.Name@1071-1072 op=Term.Name@1073-1074 targs=[] args=[Lit.Int@1075-1076]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1071-1076 lhs=Term.Name@1071-1072 op=Term.Name@1073-1074 targClause=Type.ArgClause@1075-1075 argClause=Term.ArgClause@1075-1076
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1071-1072 value=i
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1073-1074 value=>
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1075-1075 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1075-1076 values=[Lit.Int@1075-1076] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1075-1076 value=0
@@ -748,10 +937,13 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1089-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1089-1090 value=m
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1095-1107 fun=Term.Name@1095-1099 args=[Term.Tuple@1100-1106]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1095-1107 fun=Term.Name@1095-1099 argClause=Term.ArgClause@1099-1107
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1095-1099 value=List
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1099-1107 values=[Term.Tuple@1100-1106] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Tuple@1100-1106 args=[Term.Name@1101-1102,Term.Name@1104-1105]
@@ -763,7 +955,7 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@110
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1104-1105 value=j
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1114-1119 lhs=Term.Name@1114-1115 op=Term.Name@1116-1117 targs=[] args=[Term.Name@1118-1119]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1114-1119 lhs=Term.Name@1114-1115 op=Term.Name@1116-1117 targClause=Type.ArgClause@1118-1118 argClause=Term.ArgClause@1118-1119
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1114-1115 value=k
@@ -772,22 +964,37 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@111
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1116-1117 value=+
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1118-1118 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1118-1119 values=[Term.Name@1118-1119] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1118-1119 value=m
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@1122-1171 mods=[] name=Term.Name@1126-1130 tparams=[] paramClauses=[Term.ParamClause@1130-1132] decltpe=Some(Type.Name@1134-1138) body=Term.For@1141-1171
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@1122-1171 mods=[] name=Term.Name@1126-1130 paramClauseGroups=[Member.ParamClauseGroup@1130-1132] decltpe=Some(Type.Name@1134-1138) body=Term.For@1141-1171
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1126-1130 value=loop
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@1130-1132 values=[] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Member.ParamClauseGroup@1130-1132 tparamClause=Type.ParamClause@1130-1130 paramClauses=[Term.ParamClause@1130-1132]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1130-1130 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@1130-1132 values=[] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1134-1138 value=Unit
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.For@1141-1171 enums=[Enumerator.Generator@1145-1157] body=Term.Apply@1161-1171
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.For@1141-1171 enumsBlock=Term.EnumeratorsBlock@1145-1157 body=Term.Apply@1161-1171
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.EnumeratorsBlock@1145-1157 enums=[Enumerator.Generator@1145-1157]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Enumerator.Generator@1145-1157 pat=Pat.Var@1145-1146 rhs=Term.Apply@1150-1157
@@ -799,19 +1006,25 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1145-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1145-1146 value=i
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1150-1157 fun=Term.Name@1150-1154 args=[Lit.Int@1155-1156]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1150-1157 fun=Term.Name@1150-1154 argClause=Term.ArgClause@1154-1157
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1150-1154 value=List
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1154-1157 values=[Lit.Int@1155-1156] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1155-1156 value=1
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1161-1171 fun=Term.Name@1161-1168 args=[Term.Name@1169-1170]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1161-1171 fun=Term.Name@1161-1168 argClause=Term.ArgClause@1168-1171
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1161-1168 value=println
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1168-1171 values=[Term.Name@1169-1170] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1169-1170 value=i
@@ -826,10 +1039,13 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1178-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1178-1180 value=fn
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Function@1183-1200 params=[Term.Param@1184-1190] body=Term.ApplyInfix@1195-1200
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Function@1183-1200 paramClause=Term.ParamClause@1183-1191 body=Term.ApplyInfix@1195-1200
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@1184-1190 mods=[] name=Term.Name@1184-1185 decltpe=Some(Type.Name@1187-1190) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@1183-1191 values=[Term.Param@1184-1190] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@1184-1190 mods=[] name=Term.Name@1184-1185 decltpe=Some(Type.Name@1187-1190) default=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1184-1185 value=x
@@ -838,13 +1054,19 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@118
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1187-1190 value=Int
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1195-1200 lhs=Term.Name@1195-1196 op=Term.Name@1197-1198 targs=[] args=[Lit.Int@1199-1200]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1195-1200 lhs=Term.Name@1195-1196 op=Term.Name@1197-1198 targClause=Type.ArgClause@1199-1199 argClause=Term.ArgClause@1199-1200
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1195-1196 value=x
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1197-1198 value=+
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1199-1199 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1199-1200 values=[Lit.Int@1199-1200] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1199-1200 value=1
@@ -859,16 +1081,19 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1207-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1207-1211 value=anon
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1214-1232 fun=Term.Select@1214-1225 args=[Term.AnonymousFunction@1226-1231]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1214-1232 fun=Term.Select@1214-1225 argClause=Term.ArgClause@1225-1232
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Select@1214-1225 qual=Term.Apply@1214-1221 name=Term.Name@1222-1225
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1214-1221 fun=Term.Name@1214-1218 args=[Lit.Int@1219-1220]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1214-1221 fun=Term.Name@1214-1218 argClause=Term.ArgClause@1218-1221
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1214-1218 value=List
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1218-1221 values=[Lit.Int@1219-1220] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1219-1220 value=1
@@ -877,16 +1102,25 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1219-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1222-1225 value=map
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1225-1232 values=[Term.AnonymousFunction@1226-1231] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.AnonymousFunction@1226-1231 body=Term.ApplyInfix@1226-1231
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1226-1231 lhs=Term.Placeholder@1226-1227 op=Term.Name@1228-1229 targs=[] args=[Lit.Int@1230-1231]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1226-1231 lhs=Term.Placeholder@1226-1227 op=Term.Name@1228-1229 targClause=Type.ArgClause@1230-1230 argClause=Term.ArgClause@1230-1231
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Placeholder@1226-1227 
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1228-1229 value=+
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1230-1230 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1230-1231 values=[Lit.Int@1230-1231] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1230-1231 value=1
@@ -901,19 +1135,31 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1239-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1239-1243 value=poly
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.PolyFunction@1246-1264 tparams=[Type.Param@1247-1248]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.PolyFunction@1246-1264 tparamClause=Type.ParamClause@1246-1249 body=Term.Function@1253-1264
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@1247-1248 mods=[] name=Type.Name@1247-1248 tparams=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1246-1249 values=[Type.Param@1247-1248]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@1247-1248 mods=[] name=Type.Name@1247-1248 tparamClause=Type.ParamClause@1248-1248 bounds=Type.Bounds@1248-1248
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1247-1248 value=X
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Function@1253-1264 params=[Term.Param@1254-1258] body=Term.Name@1263-1264
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1248-1248 values=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@1254-1258 mods=[] name=Term.Name@1254-1255 decltpe=Some(Type.Name@1257-1258) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Bounds@1248-1248 lo=None hi=None context=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Function@1253-1264 paramClause=Term.ParamClause@1253-1259 body=Term.Name@1263-1264
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@1253-1259 values=[Term.Param@1254-1258] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@1254-1258 mods=[] name=Term.Name@1254-1255 decltpe=Some(Type.Name@1257-1258) default=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1254-1255 value=x
@@ -934,16 +1180,28 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1271-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1271-1276 value=typed
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.PolyFunction@1278-1291 tparams=[Type.Param@1279-1280]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.PolyFunction@1278-1291 tparamClause=Type.ParamClause@1278-1281
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@1279-1280 mods=[] name=Type.Name@1279-1280 tparams=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1278-1281 values=[Type.Param@1279-1280]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@1279-1280 mods=[] name=Type.Name@1279-1280 tparamClause=Type.ParamClause@1280-1280 bounds=Type.Bounds@1280-1280
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1279-1280 value=X
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Function@1285-1291 
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1280-1280 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Bounds@1280-1280 lo=None hi=None context=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Function@1285-1291 paramClause=Type.FuncParamClause@1285-1286 res=Type.Name@1290-1291
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.FuncParamClause@1285-1286 values=[Type.Name@1285-1286]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1285-1286 value=X
@@ -955,28 +1213,46 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@129
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1294-1298 value=poly
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Type@1301-1325 mods=[] name=Type.Name@1306-1307
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Type@1301-1325 mods=[] name=Type.Name@1306-1307 tparamClause=Type.ParamClause@1308-1308 bounds=Type.Bounds@1308-1308 body=Type.Lambda@1310-1325
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1306-1307 value=L
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Lambda@1310-1325 tparams=[Type.Param@1311-1312]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1308-1308 values=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@1311-1312 mods=[] name=Type.Name@1311-1312 tparams=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Lambda@1310-1325 tparamClause=Type.ParamClause@1310-1313
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1310-1313 values=[Type.Param@1311-1312]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Param@1311-1312 mods=[] name=Type.Name@1311-1312 tparamClause=Type.ParamClause@1312-1312 bounds=Type.Bounds@1312-1312
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1311-1312 value=X
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Apply@1318-1325 tpe=Type.Name@1318-1322 args=[Type.Name@1323-1324]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1312-1312 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Bounds@1312-1312 lo=None hi=None context=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Apply@1318-1325 tpe=Type.Name@1318-1322 argClause=Type.ArgClause@1322-1325
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1318-1322 value=List
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1322-1325 values=[Type.Name@1323-1324]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1323-1324 value=X
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Bounds@1308-1308 lo=None hi=None context=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Val@1328-1356 mods=[] pats=[Pat.Var@1332-1335] decltpe=Some(Type.Annotate@1337-1352) rhs=Lit.Int@1355-1356
@@ -997,10 +1273,13 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@133
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Mod.Annot@1341-1352 init=Init@1342-1352
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@1342-1352 tpe=Type.Name@1342-1352 args=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@1342-1352 tpe=Type.Name@1342-1352 argClauses=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1342-1352 value=deprecated
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@1353-1353 value=
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1355-1356 value=1
@@ -1015,10 +1294,13 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1363-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1363-1365 value=tr
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Try@1368-1417 expr=Lit.Int@1372-1373 catchp=[Case@1382-1404] finallyp=Some(Lit.Unit@1415-1417)
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Try@1368-1417 expr=Lit.Int@1372-1373 catchClause=Some(Term.CasesBlock@1380-1406) finallyp=Some(Lit.Unit@1415-1417)
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1372-1373 value=1
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.CasesBlock@1380-1406 cases=[Case@1382-1404]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Case@1382-1404 pat=Pat.Typed@1387-1399 cond=None body=Lit.Int@1403-1404
@@ -1054,7 +1336,7 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@142
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.While@1428-1449 expr=Term.ApplyInfix@1434-1439 body=Term.ApplyInfix@1443-1449
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1434-1439 lhs=Term.Name@1434-1435 op=Term.Name@1436-1437 targs=[] args=[Lit.Int@1438-1439]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1434-1439 lhs=Term.Name@1434-1435 op=Term.Name@1436-1437 targClause=Type.ArgClause@1438-1438 argClause=Term.ArgClause@1438-1439
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1434-1435 value=v
@@ -1063,16 +1345,28 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@143
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1436-1437 value=<
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1438-1438 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1438-1439 values=[Lit.Int@1438-1439] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1438-1439 value=0
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1443-1449 lhs=Term.Name@1443-1444 op=Term.Name@1445-1447 targs=[] args=[Lit.Int@1448-1449]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1443-1449 lhs=Term.Name@1443-1444 op=Term.Name@1445-1447 targClause=Type.ArgClause@1448-1448 argClause=Term.ArgClause@1448-1449
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1443-1444 value=v
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1445-1447 value=+=
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1448-1448 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1448-1449 values=[Lit.Int@1448-1449] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1448-1449 value=1
@@ -1087,16 +1381,22 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1456-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1456-1457 value=i
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.If@1460-1482 cond=Term.ApplyInfix@1463-1468 thenp=Lit.Int@1474-1475 elsep=Some(Lit.Int@1481-1482)
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.If@1460-1482 cond=Term.ApplyInfix@1463-1468 thenp=Lit.Int@1474-1475 elsep=Lit.Int@1481-1482 mods=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1463-1468 lhs=Term.Name@1463-1464 op=Term.Name@1465-1466 targs=[] args=[Lit.Int@1467-1468]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1463-1468 lhs=Term.Name@1463-1464 op=Term.Name@1465-1466 targClause=Type.ArgClause@1467-1467 argClause=Term.ArgClause@1467-1468
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1463-1464 value=a
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1465-1466 value=>
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1467-1467 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1467-1468 values=[Lit.Int@1467-1468] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1467-1468 value=0
@@ -1120,16 +1420,25 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@148
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.New@1494-1515 init=Init@1498-1515
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@1498-1515 tpe=Type.Apply@1498-1513 args=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@1498-1515 tpe=Type.Apply@1498-1513 argClauses=[Term.ArgClause@1513-1515]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Apply@1498-1513 tpe=Type.Name@1498-1508 args=[Type.Name@1509-1512]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Apply@1498-1513 tpe=Type.Name@1498-1508 argClause=Type.ArgClause@1508-1513
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1498-1508 value=ListBuffer
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1508-1513 values=[Type.Name@1509-1512]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1509-1512 value=Int
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@1513-1513 value=
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1513-1515 values=[] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Val@1518-1590 mods=[] pats=[Pat.Var@1522-1524] decltpe=None rhs=Term.NewAnonymous@1527-1590
@@ -1144,13 +1453,19 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@152
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.NewAnonymous@1527-1590 templ=Template@1531-1590
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@1531-1590 inits=[Init@1531-1532] self=None stats=[Defn.Val@1535-1544,Defn.Var@1546-1555,Defn.Def@1557-1574,Defn.Type@1576-1588]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template@1531-1590 inits=[Init@1531-1532] body=Template.Body@1533-1590 derives=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@1531-1532 tpe=Type.Name@1531-1532 args=[]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@1531-1532 tpe=Type.Name@1531-1532 argClauses=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1531-1532 value=T
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@1533-1533 value=
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Template.Body@1533-1590 selfOpt=None stats=[Defn.Val@1535-1544,Defn.Var@1546-1555,Defn.Def@1557-1574,Defn.Type@1576-1588]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Val@1535-1544 mods=[] pats=[Pat.Var@1539-1540] decltpe=None rhs=Lit.Int@1543-1544
@@ -1177,16 +1492,22 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@155
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1554-1555 value=2
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@1557-1574 mods=[] name=Term.Name@1561-1562 tparams=[] paramClauses=[Term.ParamClause@1562-1570] decltpe=None body=Term.Name@1573-1574
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@1557-1574 mods=[] name=Term.Name@1561-1562 paramClauseGroups=[Member.ParamClauseGroup@1562-1570] decltpe=None body=Term.Name@1573-1574
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1561-1562 value=d
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@1562-1570 values=[Term.Param@1563-1569] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Member.ParamClauseGroup@1562-1570 tparamClause=Type.ParamClause@1562-1562 paramClauses=[Term.ParamClause@1562-1570]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@1563-1569 mods=[] name=Term.Name@1563-1564 decltpe=Some(Type.Name@1566-1569) default=None isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1562-1562 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@1562-1570 values=[Term.Param@1563-1569] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Param@1563-1569 mods=[] name=Term.Name@1563-1564 decltpe=Some(Type.Name@1566-1569) default=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1563-1564 value=x
@@ -1198,13 +1519,19 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@156
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1573-1574 value=x
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Type@1576-1588 mods=[] name=Type.Name@1581-1582
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Type@1576-1588 mods=[] name=Type.Name@1581-1582 tparamClause=Type.ParamClause@1583-1583 bounds=Type.Bounds@1583-1583 body=Type.Name@1585-1588
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1581-1582 value=E
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1583-1583 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1585-1588 value=Int
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Bounds@1583-1583 lo=None hi=None context=[]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Val@1593-1611 mods=[] pats=[Pat.Var@1597-1600] decltpe=None rhs=Term.Ascribe@1604-1610
@@ -1216,7 +1543,7 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1597-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1597-1600 value=asc
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Ascribe@1604-1610 expr=Lit.Int@1604-1605 tpe=Some(Type.Name@1607-1610)
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Ascribe@1604-1610 expr=Lit.Int@1604-1605 tpe=Type.Name@1607-1610
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1604-1605 value=1
@@ -1240,31 +1567,43 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Eta@1624
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1624-1625 value=g
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@1630-1655 mods=[] name=Term.Name@1634-1637 tparams=[] paramClauses=[Term.ParamClause@1637-1639] decltpe=Some(Type.Name@1641-1644) body=Term.Return@1647-1655
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@1630-1655 mods=[] name=Term.Name@1634-1637 paramClauseGroups=[Member.ParamClauseGroup@1637-1639] decltpe=Some(Type.Name@1641-1644) body=Term.Return@1647-1655
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1634-1637 value=ret
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@1637-1639 values=[] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Member.ParamClauseGroup@1637-1639 tparamClause=Type.ParamClause@1637-1637 paramClauses=[Term.ParamClause@1637-1639]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1637-1637 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@1637-1639 values=[] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1641-1644 value=Int
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Return@1647-1655 expr=Some(Lit.Int@1654-1655)
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Return@1647-1655 expr=Lit.Int@1654-1655
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1654-1655 value=1
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@1658-1703 mods=[] name=Term.Name@1662-1665 tparams=[] paramClauses=[Term.ParamClause@1665-1667] decltpe=Some(Type.Name@1669-1676) body=Term.Throw@1679-1703
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Def@1658-1703 mods=[] name=Term.Name@1662-1665 paramClauseGroups=[Member.ParamClauseGroup@1665-1667] decltpe=Some(Type.Name@1669-1676) body=Term.Throw@1679-1703
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1662-1665 value=thr
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@1665-1667 values=[] isImplicit=false isUsing=false
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Member.ParamClauseGroup@1665-1667 tparamClause=Type.ParamClause@1665-1665 paramClauses=[Term.ParamClause@1665-1667]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ParamClause@1665-1665 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ParamClause@1665-1667 values=[] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1669-1676 value=Nothing
@@ -1276,16 +1615,22 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Throw@16
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.New@1685-1703 init=Init@1689-1703
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@1689-1703 tpe=Type.Name@1689-1698 args=[Lit.String@1699-1702]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Init@1689-1703 tpe=Type.Name@1689-1698 argClauses=[Term.ArgClause@1698-1703]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1689-1698 value=Exception
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Name.Anonymous@1698-1698 value=
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1698-1703 values=[Lit.String@1699-1702] mod=None
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.String@1699-1702 value=x
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Val@1706-1723 mods=[] pats=[Pat.Var@1710-1715] decltpe=None rhs=Term.ApplyUnary@1718-1723
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Val@1706-1723 mods=[] pats=[Pat.Var@1710-1715] decltpe=None rhs=Lit.Boolean@1718-1723
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1710-1715 name=Term.Name@1710-1715
@@ -1294,13 +1639,7 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1710-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1710-1715 value=unary
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyUnary@1718-1723 op=Term.Name@1718-1719 arg=Lit.Boolean@1719-1723
-    val marker = 0 // assert: DumpFields.fields
-        ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1718-1719 value=!
-    val marker = 0 // assert: DumpFields.fields
-        ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Boolean@1719-1723 value=true
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Boolean@1718-1723 value=false
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Defn.Val@1726-1748 mods=[] pats=[Pat.Var@1730-1733] decltpe=None rhs=Term.Select@1736-1748
@@ -1315,10 +1654,13 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@173
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Select@1736-1748 qual=Term.Apply@1736-1743 name=Term.Name@1744-1748
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1736-1743 fun=Term.Name@1736-1740 args=[Lit.Int@1741-1742]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Apply@1736-1743 fun=Term.Name@1736-1740 argClause=Term.ArgClause@1740-1743
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1736-1740 value=List
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1740-1743 values=[Lit.Int@1741-1742] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1741-1742 value=1
@@ -1336,13 +1678,19 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1755-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1755-1758 value=inf
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1761-1769 lhs=Lit.Int@1761-1762 op=Term.Name@1763-1765 targs=[] args=[Term.Name@1766-1769]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyInfix@1761-1769 lhs=Lit.Int@1761-1762 op=Term.Name@1763-1765 targClause=Type.ArgClause@1766-1766 argClause=Term.ArgClause@1766-1769
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Int@1761-1762 value=1
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1763-1765 value=::
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1766-1766 values=[]
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ArgClause@1766-1769 values=[Term.Name@1766-1769] mod=None
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1766-1769 value=Nil
@@ -1357,7 +1705,7 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Pat.Var@1776-
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1776-1778 value=ty
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyType@1781-1796 fun=Term.Select@1781-1791 targs=[Type.Name@1792-1795]
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.ApplyType@1781-1796 fun=Term.Select@1781-1791 targClause=Type.ArgClause@1791-1796
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Select@1781-1791 qual=Term.Name@1781-1785 name=Term.Name@1786-1791
@@ -1367,6 +1715,9 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@178
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1786-1791 value=empty
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.ArgClause@1791-1796 values=[Type.Name@1792-1795]
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Type.Name@1792-1795 value=Int
@@ -1393,7 +1744,7 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Double@18
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Float@1820-1824 value=1.0
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
-Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Char@1826-1829 value='c'
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Char@1826-1829 value=c
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Boolean@1831-1835 value=true
@@ -1406,5 +1757,11 @@ Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Unit@1842
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^
 Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Lit.Null@1846-1850 value=null
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.EndMarker@1852-1869 name=Term.Name@1856-1869
+    val marker = 0 // assert: DumpFields.fields
+        ^^^^^^
+Driver/FieldContract/input.scala:11:7: error: [DumpFields.fields]: Term.Name@1856-1869 value=FieldContract
     val marker = 0 // assert: DumpFields.fields
         ^^^^^^

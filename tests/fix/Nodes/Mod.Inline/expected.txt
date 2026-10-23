@@ -1,0 +1,52 @@
+Nodes/Mod.Inline/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.Inline, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Inline\n\nobject Mod_Inline:\n  val marker = 0 // assert: DumpStructure.structure\n  inline val a = 1\n  inline def f(inline x: Int) = x\n"
+  stats Pkg syntax="package nodes.Mod_Inline\n\nobject Mod_Inline:\n  val marker = 0 // assert: DumpStructure.structure\n  inline val a = 1\n  inline def f(inline x: Int) = x"
+    .stats = [Defn.Object "object Mod_Inline:\n  val marker = 0 // assert: DumpStructure.structure\n  inline val a = 1\n  inline def f(inline x: Int) = x"]
+    ref Term.Select syntax="nodes.Mod_Inline"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Inline" syntax="Mod_Inline"
+    body Pkg.Body syntax="object Mod_Inline:\n  val marker = 0 // assert: DumpStructure.structure\n  inline val a = 1\n  inline def f(inline x: Int) = x"
+      stats Defn.Object syntax="object Mod_Inline:\n  val marker = 0 // assert: DumpStructure.structure\n  inline val a = 1\n  inline def f(inline x: Int) = x"
+        mods Nil
+        name Term.Name value="Mod_Inline" syntax="Mod_Inline"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  inline val a = 1\n  inline def f(inline x: Int) = x"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "inline val a = 1", Defn.Def "inline def f(inline x: Int) = x"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  inline val a = 1\n  inline def f(inline x: Int) = x"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="inline val a = 1"
+              mods Mod.Inline syntax="inline"
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Def syntax="inline def f(inline x: Int) = x"
+              .paramClauses = [Term.ParamClause "(inline x: Int)"]
+              .paramss = [[Term.Param "inline x: Int"]]
+              .tparams = []
+              mods Mod.Inline syntax="inline"
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(inline x: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(inline x: Int)"
+                  values Term.Param syntax="inline x: Int"
+                    mods Mod.Inline syntax="inline"
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Name value="x" syntax="x"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

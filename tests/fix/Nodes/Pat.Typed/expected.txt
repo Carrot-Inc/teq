@@ -1,0 +1,67 @@
+Nodes/Pat.Typed/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pat.Typed, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pat_Typed\n\nobject Pat_Typed:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Any) = x match\n    case i: Int => i\n    case _: String => 0\n    case _ => 1\n"
+  stats Pkg syntax="package nodes.Pat_Typed\n\nobject Pat_Typed:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Any) = x match\n    case i: Int => i\n    case _: String => 0\n    case _ => 1"
+    .stats = [Defn.Object "object Pat_Typed:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Any) = x match\n    case i: Int => i\n    case _: String => 0\n    case _ => 1"]
+    ref Term.Select syntax="nodes.Pat_Typed"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pat_Typed" syntax="Pat_Typed"
+    body Pkg.Body syntax="object Pat_Typed:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Any) = x match\n    case i: Int => i\n    case _: String => 0\n    case _ => 1"
+      stats Defn.Object syntax="object Pat_Typed:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Any) = x match\n    case i: Int => i\n    case _: String => 0\n    case _ => 1"
+        mods Nil
+        name Term.Name value="Pat_Typed" syntax="Pat_Typed"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Any) = x match\n    case i: Int => i\n    case _: String => 0\n    case _ => 1"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(x: Any) = x match\n    case i: Int => i\n    case _: String => 0\n    case _ => 1"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Any) = x match\n    case i: Int => i\n    case _: String => 0\n    case _ => 1"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(x: Any) = x match\n    case i: Int => i\n    case _: String => 0\n    case _ => 1"
+              .paramClauses = [Term.ParamClause "(x: Any)"]
+              .paramss = [[Term.Param "x: Any"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: Any)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: Any)"
+                  values Term.Param syntax="x: Any"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Any" syntax="Any"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Match syntax="x match\n    case i: Int => i\n    case _: String => 0\n    case _ => 1"
+                .cases = [Case "case i: Int => i", Case "case _: String => 0", Case "case _ => 1"]
+                expr Term.Name value="x" syntax="x"
+                casesBlock Term.CasesBlock syntax="case i: Int => i\n    case _: String => 0\n    case _ => 1"
+                  cases Case syntax="case i: Int => i"
+                    pat Pat.Typed syntax="i: Int"
+                      lhs Pat.Var syntax="i"
+                        name Term.Name value="i" syntax="i"
+                      rhs Type.Name value="Int" syntax="Int"
+                    cond None
+                    body Term.Name value="i" syntax="i"
+                  cases Case syntax="case _: String => 0"
+                    pat Pat.Typed syntax="_: String"
+                      lhs Pat.Wildcard syntax="_"
+                      rhs Type.Name value="String" syntax="String"
+                    cond None
+                    body Lit.Int value=0 syntax="0"
+                  cases Case syntax="case _ => 1"
+                    pat Pat.Wildcard syntax="_"
+                    cond None
+                    body Lit.Int value=1 syntax="1"
+                mods Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

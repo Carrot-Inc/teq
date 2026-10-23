@@ -1,12 +1,13 @@
 /*
 rules = ["file:../../support/RemoveListAtomic.scala"]
 */
-// The removal of `List` is applied as dotty's import edit, which reaches to the next selector and so over the `off`
-// anchor before `Set`: the atomic patch has a suppressed token in its edit and goes whole, so that no anchor is deleted
-// (`EscapeHatch.filter` checks the token edits applied; the review of `4fd7f3293`).
+// The removal of `List`, the first of the removed run, is its tokens and the comma and whitespace after it
+// (`ImportPatchOps`' `remove` and `removeUpToFirstComma`), which stop at the `off` anchor before `Set`: no token of
+// the atomic patch is suppressed, so it is applied (`EscapeHatch.filter` checks the token edits applied; the review of
+// `4fd7f3293`), and the anchors suppress nothing.
 import scala.collection.immutable.{
   List,
-  /* scalafix:off RemoveListAtomic */ Set,
+  /* scalafix:off RemoveListAtomic */ Set, // assert: UnusedScalafixSuppression
   /* scalafix:on RemoveListAtomic */ Map
 }
 object Input

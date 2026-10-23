@@ -1,0 +1,90 @@
+Nodes/Term.Try/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Try, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Try\n\nobject Term_Try:\n  val marker = 0 // assert: DumpStructure.structure\n  def f = try 1 catch { case e: Exception => 2 } finally println()\n  def g = try 1 finally println()\n  def h = try 1 catch\n    case _: Exception => 2\n"
+  stats Pkg syntax="package nodes.Term_Try\n\nobject Term_Try:\n  val marker = 0 // assert: DumpStructure.structure\n  def f = try 1 catch { case e: Exception => 2 } finally println()\n  def g = try 1 finally println()\n  def h = try 1 catch\n    case _: Exception => 2"
+    .stats = [Defn.Object "object Term_Try:\n  val marker = 0 // assert: DumpStructure.structure\n  def f = try 1 catch { case e: Exception => 2 } finally println()\n  def g = try 1 finally println()\n  def h = try 1 catch\n    case _: Exception => 2"]
+    ref Term.Select syntax="nodes.Term_Try"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Try" syntax="Term_Try"
+    body Pkg.Body syntax="object Term_Try:\n  val marker = 0 // assert: DumpStructure.structure\n  def f = try 1 catch { case e: Exception => 2 } finally println()\n  def g = try 1 finally println()\n  def h = try 1 catch\n    case _: Exception => 2"
+      stats Defn.Object syntax="object Term_Try:\n  val marker = 0 // assert: DumpStructure.structure\n  def f = try 1 catch { case e: Exception => 2 } finally println()\n  def g = try 1 finally println()\n  def h = try 1 catch\n    case _: Exception => 2"
+        mods Nil
+        name Term.Name value="Term_Try" syntax="Term_Try"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f = try 1 catch { case e: Exception => 2 } finally println()\n  def g = try 1 finally println()\n  def h = try 1 catch\n    case _: Exception => 2"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f = try 1 catch { case e: Exception => 2 } finally println()", Defn.Def "def g = try 1 finally println()", Defn.Def "def h = try 1 catch\n    case _: Exception => 2"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f = try 1 catch { case e: Exception => 2 } finally println()\n  def g = try 1 finally println()\n  def h = try 1 catch\n    case _: Exception => 2"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f = try 1 catch { case e: Exception => 2 } finally println()"
+              .paramClauses = []
+              .paramss = []
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Nil
+              decltpe None
+              body Term.Try syntax="try 1 catch { case e: Exception => 2 } finally println()"
+                .catchp = [Case "case e: Exception => 2"]
+                expr Lit.Int value=1 syntax="1"
+                catchClause Term.CasesBlock syntax="{ case e: Exception => 2 }"
+                  cases Case syntax="case e: Exception => 2"
+                    pat Pat.Typed syntax="e: Exception"
+                      lhs Pat.Var syntax="e"
+                        name Term.Name value="e" syntax="e"
+                      rhs Type.Name value="Exception" syntax="Exception"
+                    cond None
+                    body Lit.Int value=2 syntax="2"
+                finallyp Term.Apply syntax="println()"
+                  .args = []
+                  fun Term.Name value="println" syntax="println"
+                  argClause Term.ArgClause syntax="()"
+                    values Nil
+                    mod None
+            stats Defn.Def syntax="def g = try 1 finally println()"
+              .paramClauses = []
+              .paramss = []
+              .tparams = []
+              mods Nil
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Nil
+              decltpe None
+              body Term.Try syntax="try 1 finally println()"
+                .catchp = []
+                expr Lit.Int value=1 syntax="1"
+                catchClause None
+                finallyp Term.Apply syntax="println()"
+                  .args = []
+                  fun Term.Name value="println" syntax="println"
+                  argClause Term.ArgClause syntax="()"
+                    values Nil
+                    mod None
+            stats Defn.Def syntax="def h = try 1 catch\n    case _: Exception => 2"
+              .paramClauses = []
+              .paramss = []
+              .tparams = []
+              mods Nil
+              name Term.Name value="h" syntax="h"
+              paramClauseGroups Nil
+              decltpe None
+              body Term.Try syntax="try 1 catch\n    case _: Exception => 2"
+                .catchp = [Case "case _: Exception => 2"]
+                expr Lit.Int value=1 syntax="1"
+                catchClause Term.CasesBlock syntax="case _: Exception => 2"
+                  cases Case syntax="case _: Exception => 2"
+                    pat Pat.Typed syntax="_: Exception"
+                      lhs Pat.Wildcard syntax="_"
+                      rhs Type.Name value="Exception" syntax="Exception"
+                    cond None
+                    body Lit.Int value=2 syntax="2"
+                finallyp None
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

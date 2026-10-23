@@ -1,0 +1,3 @@
+DisableSyntax/ExtensionFinalize/input.scala:10:29: error: [DisableSyntax.noFinalize]: finalize should not be used
+    extension (s: String) def finalize(): Unit = () // assert: DisableSyntax.noFinalize
+                              ^^^^^^^^

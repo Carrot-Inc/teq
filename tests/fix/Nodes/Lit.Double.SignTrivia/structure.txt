@@ -1,0 +1,56 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's DecimalTrivia probe: a sign folded into a decimal across a comment, its value scalameta 4.17.4's reader's\n// (structure.txt), the comment in its syntax and none of its digits.\npackage nodes.Lit_Double_SignTrivia\n\nobject O {\n  val x = - /* sign */ 1.25\n  val y = -  2.50f\n  val z = - /* zero */ 0.0\n}\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Lit_Double_SignTrivia\n\nobject O {\n  val x = - /* sign */ 1.25\n  val y = -  2.50f\n  val z = - /* zero */ 0.0\n}\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Object "object O {\n  val x = - /* sign */ 1.25\n  val y = -  2.50f\n  val z = - /* zero */ 0.0\n}", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Lit_Double_SignTrivia"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_Double_SignTrivia" syntax="Lit_Double_SignTrivia"
+    body Pkg.Body syntax="object O {\n  val x = - /* sign */ 1.25\n  val y = -  2.50f\n  val z = - /* zero */ 0.0\n}\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Object syntax="object O {\n  val x = - /* sign */ 1.25\n  val y = -  2.50f\n  val z = - /* zero */ 0.0\n}"
+        mods Nil
+        name Term.Name value="O" syntax="O"
+        templ Template syntax="{\n  val x = - /* sign */ 1.25\n  val y = -  2.50f\n  val z = - /* zero */ 0.0\n}"
+          .self = Self ""
+          .stats = [Defn.Val "val x = - /* sign */ 1.25", Defn.Val "val y = -  2.50f", Defn.Val "val z = - /* zero */ 0.0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax="{\n  val x = - /* sign */ 1.25\n  val y = -  2.50f\n  val z = - /* zero */ 0.0\n}"
+            selfOpt None
+            stats Defn.Val syntax="val x = - /* sign */ 1.25"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Lit.Double format="-1.25" syntax="- /* sign */ 1.25"
+                .value = -1.25
+            stats Defn.Val syntax="val y = -  2.50f"
+              mods Nil
+              pats Pat.Var syntax="y"
+                name Term.Name value="y" syntax="y"
+              decltpe None
+              rhs Lit.Float format="-2.5" syntax="-  2.50f"
+                .value = -2.5
+            stats Defn.Val syntax="val z = - /* zero */ 0.0"
+              mods Nil
+              pats Pat.Var syntax="z"
+                name Term.Name value="z" syntax="z"
+              decltpe None
+              rhs Lit.Double format="0.0" syntax="- /* zero */ 0.0"
+                .value = 0.0
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil

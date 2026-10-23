@@ -1,0 +1,55 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Name.This, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Name_This\n\nobject Name_This:\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    this: Any =>\n    def f = 1\n"
+  stats Pkg syntax="package nodes.Name_This\n\nobject Name_This:\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    this: Any =>\n    def f = 1"
+    .stats = [Defn.Object "object Name_This:\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    this: Any =>\n    def f = 1"]
+    ref Term.Select syntax="nodes.Name_This"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Name_This" syntax="Name_This"
+    body Pkg.Body syntax="object Name_This:\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    this: Any =>\n    def f = 1"
+      stats Defn.Object syntax="object Name_This:\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    this: Any =>\n    def f = 1"
+        mods Nil
+        name Term.Name value="Name_This" syntax="Name_This"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    this: Any =>\n    def f = 1"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Trait "trait T:\n    this: Any =>\n    def f = 1"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    this: Any =>\n    def f = 1"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Trait syntax="trait T:\n    this: Any =>\n    def f = 1"
+              .tparams = []
+              mods Nil
+              name Type.Name value="T" syntax="T"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    this: Any =>\n    def f = 1"
+                .self = Self "this: Any =>"
+                .stats = [Defn.Def "def f = 1"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    this: Any =>\n    def f = 1"
+                  selfOpt Self syntax="this: Any =>"
+                    name Name.This syntax="this"
+                      .value = "this"
+                    decltpe Type.Name value="Any" syntax="Any"
+                  stats Defn.Def syntax="def f = 1"
+                    .paramClauses = []
+                    .paramss = []
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="f" syntax="f"
+                    paramClauseGroups Nil
+                    decltpe None
+                    body Lit.Int value=1 syntax="1"
+                derives Nil
+          derives Nil

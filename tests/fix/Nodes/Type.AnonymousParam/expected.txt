@@ -1,0 +1,130 @@
+Nodes/Type.AnonymousParam/input.scala:10:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Type.AnonymousParam: a kind projector's type and its placeholders (`-Ykind-projector`), its fields as scalameta 4.17.4's\n// (structure.txt).\n// teq: --kind-projector\npackage nodes.Type_AnonymousParam\n\nobject Type_AnonymousParam:\n  val marker = 0 // assert: DumpStructure.structure\n  type M = Map[Int, *]\n  type E = Either[*, String]\n  trait F[G[_]]\n  type V = F[Either[+*, Int]]\n"
+  stats Pkg syntax="package nodes.Type_AnonymousParam\n\nobject Type_AnonymousParam:\n  val marker = 0 // assert: DumpStructure.structure\n  type M = Map[Int, *]\n  type E = Either[*, String]\n  trait F[G[_]]\n  type V = F[Either[+*, Int]]"
+    .stats = [Defn.Object "object Type_AnonymousParam:\n  val marker = 0 // assert: DumpStructure.structure\n  type M = Map[Int, *]\n  type E = Either[*, String]\n  trait F[G[_]]\n  type V = F[Either[+*, Int]]"]
+    ref Term.Select syntax="nodes.Type_AnonymousParam"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_AnonymousParam" syntax="Type_AnonymousParam"
+    body Pkg.Body syntax="object Type_AnonymousParam:\n  val marker = 0 // assert: DumpStructure.structure\n  type M = Map[Int, *]\n  type E = Either[*, String]\n  trait F[G[_]]\n  type V = F[Either[+*, Int]]"
+      stats Defn.Object syntax="object Type_AnonymousParam:\n  val marker = 0 // assert: DumpStructure.structure\n  type M = Map[Int, *]\n  type E = Either[*, String]\n  trait F[G[_]]\n  type V = F[Either[+*, Int]]"
+        mods Nil
+        name Term.Name value="Type_AnonymousParam" syntax="Type_AnonymousParam"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type M = Map[Int, *]\n  type E = Either[*, String]\n  trait F[G[_]]\n  type V = F[Either[+*, Int]]"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Type "type M = Map[Int, *]", Defn.Type "type E = Either[*, String]", Defn.Trait "trait F[G[_]]", Defn.Type "type V = F[Either[+*, Int]]"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type M = Map[Int, *]\n  type E = Either[*, String]\n  trait F[G[_]]\n  type V = F[Either[+*, Int]]"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Type syntax="type M = Map[Int, *]"
+              .tparams = []
+              mods Nil
+              name Type.Name value="M" syntax="M"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.AnonymousLambda syntax="Map[Int, *]"
+                tpe Type.Apply syntax="Map[Int, *]"
+                  .args = [Type.Name "Int", Type.AnonymousParam "*"]
+                  tpe Type.Name value="Map" syntax="Map"
+                  argClause Type.ArgClause syntax="[Int, *]"
+                    values Type.Name value="Int" syntax="Int"
+                    values Type.AnonymousParam syntax="*"
+                      variant None
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Type syntax="type E = Either[*, String]"
+              .tparams = []
+              mods Nil
+              name Type.Name value="E" syntax="E"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.AnonymousLambda syntax="Either[*, String]"
+                tpe Type.Apply syntax="Either[*, String]"
+                  .args = [Type.AnonymousParam "*", Type.Name "String"]
+                  tpe Type.Name value="Either" syntax="Either"
+                  argClause Type.ArgClause syntax="[*, String]"
+                    values Type.AnonymousParam syntax="*"
+                      variant None
+                    values Type.Name value="String" syntax="String"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Trait syntax="trait F[G[_]]"
+              .tparams = [Type.Param "G[_]"]
+              mods Nil
+              name Type.Name value="F" syntax="F"
+              tparamClause Type.ParamClause syntax="[G[_]]"
+                values Type.Param syntax="G[_]"
+                  .tparams = [Type.Param "_"]
+                  mods Nil
+                  name Type.Name value="G" syntax="G"
+                  tparamClause Type.ParamClause syntax="[_]"
+                    values Type.Param syntax="_"
+                      .tparams = []
+                      mods Nil
+                      name Name.Placeholder syntax="_"
+                        .value = "_"
+                      tparamClause Type.ParamClause syntax=""
+                        values Nil
+                      bounds Type.Bounds syntax=""
+                        lo None
+                        hi None
+                        context Nil
+                        view Nil
+                  bounds Type.Bounds syntax=""
+                    lo None
+                    hi None
+                    context Nil
+                    view Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Type syntax="type V = F[Either[+*, Int]]"
+              .tparams = []
+              mods Nil
+              name Type.Name value="V" syntax="V"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Apply syntax="F[Either[+*, Int]]"
+                .args = [Type.AnonymousLambda "Either[+*, Int]"]
+                tpe Type.Name value="F" syntax="F"
+                argClause Type.ArgClause syntax="[Either[+*, Int]]"
+                  values Type.AnonymousLambda syntax="Either[+*, Int]"
+                    tpe Type.Apply syntax="Either[+*, Int]"
+                      .args = [Type.AnonymousParam "+*", Type.Name "Int"]
+                      tpe Type.Name value="Either" syntax="Either"
+                      argClause Type.ArgClause syntax="[+*, Int]"
+                        values Type.AnonymousParam syntax="+*"
+                          variant Mod.Covariant syntax="+*"
+                        values Type.Name value="Int" syntax="Int"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

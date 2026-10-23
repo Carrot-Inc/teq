@@ -1,0 +1,73 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's QuotedName probe, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_TypedParam_Quoted\n\nobject Subject { type F = (`a b`: Int) => String; type T = (`c d`: Int, e: String) }\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Type_TypedParam_Quoted\n\nobject Subject { type F = (`a b`: Int) => String; type T = (`c d`: Int, e: String) }\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Object "object Subject { type F = (`a b`: Int) => String; type T = (`c d`: Int, e: String) }", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Type_TypedParam_Quoted"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_TypedParam_Quoted" syntax="Type_TypedParam_Quoted"
+    body Pkg.Body syntax="object Subject { type F = (`a b`: Int) => String; type T = (`c d`: Int, e: String) }\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Object syntax="object Subject { type F = (`a b`: Int) => String; type T = (`c d`: Int, e: String) }"
+        mods Nil
+        name Term.Name value="Subject" syntax="Subject"
+        templ Template syntax="{ type F = (`a b`: Int) => String; type T = (`c d`: Int, e: String) }"
+          .self = Self ""
+          .stats = [Defn.Type "type F = (`a b`: Int) => String", Defn.Type "type T = (`c d`: Int, e: String)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax="{ type F = (`a b`: Int) => String; type T = (`c d`: Int, e: String) }"
+            selfOpt None
+            stats Defn.Type syntax="type F = (`a b`: Int) => String"
+              .tparams = []
+              mods Nil
+              name Type.Name value="F" syntax="F"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Function syntax="(`a b`: Int) => String"
+                paramClause Type.FuncParamClause syntax="(`a b`: Int)"
+                  values Type.TypedParam syntax="`a b`: Int"
+                    name Type.Name value="a b" syntax="`a b`"
+                    typ Type.Name value="Int" syntax="Int"
+                    mods Nil
+                res Type.Name value="String" syntax="String"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Type syntax="type T = (`c d`: Int, e: String)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="T" syntax="T"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Tuple syntax="(`c d`: Int, e: String)"
+                args Type.TypedParam syntax="`c d`: Int"
+                  name Type.Name value="c d" syntax="`c d`"
+                  typ Type.Name value="Int" syntax="Int"
+                  mods Nil
+                args Type.TypedParam syntax="e: String"
+                  name Type.Name value="e" syntax="e"
+                  typ Type.Name value="String" syntax="String"
+                  mods Nil
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil

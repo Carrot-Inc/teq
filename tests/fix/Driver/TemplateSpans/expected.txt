@@ -4,9 +4,9 @@ Driver/TemplateSpans/input.scala:6:18: warning: [Templates.span]: { val inserted
 Driver/TemplateSpans/input.scala:7:13: warning: [Templates.span]: { val x = 1 }
   object Full { val x = 1 } /* assert: Templates.span
               ^^^^^^^^^^^^^
-Driver/TemplateSpans/input.scala:11:11: warning: [Templates.span]:
+Driver/TemplateSpans/input.scala:11:37: warning: [Templates.span]:
   class Base // assert: Templates.span
-            ^
-Driver/TemplateSpans/input.scala:12:21: warning: [Templates.span]: Base { def y = 2 }
+                                      ^
+Driver/TemplateSpans/input.scala:12:13: warning: [Templates.span]: extends Base { def y = 2 }
   class Child extends Base { def y = 2 } /* assert: Templates.span
-                      ^^^^^^^^^^^^^^^^^^
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^

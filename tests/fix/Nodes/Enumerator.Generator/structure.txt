@@ -1,0 +1,65 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Enumerator.Generator, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Enumerator_Generator\n\nobject Enumerator_Generator:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); (y, z) <- List((1, 2)) yield x + y\n"
+  stats Pkg syntax="package nodes.Enumerator_Generator\n\nobject Enumerator_Generator:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); (y, z) <- List((1, 2)) yield x + y"
+    .stats = [Defn.Object "object Enumerator_Generator:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); (y, z) <- List((1, 2)) yield x + y"]
+    ref Term.Select syntax="nodes.Enumerator_Generator"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Enumerator_Generator" syntax="Enumerator_Generator"
+    body Pkg.Body syntax="object Enumerator_Generator:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); (y, z) <- List((1, 2)) yield x + y"
+      stats Defn.Object syntax="object Enumerator_Generator:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); (y, z) <- List((1, 2)) yield x + y"
+        mods Nil
+        name Term.Name value="Enumerator_Generator" syntax="Enumerator_Generator"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); (y, z) <- List((1, 2)) yield x + y"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = for x <- List(1); (y, z) <- List((1, 2)) yield x + y"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); (y, z) <- List((1, 2)) yield x + y"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = for x <- List(1); (y, z) <- List((1, 2)) yield x + y"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.ForYield syntax="for x <- List(1); (y, z) <- List((1, 2)) yield x + y"
+                .enums = [Enumerator.Generator "x <- List(1)", Enumerator.Generator "(y, z) <- List((1, 2))"]
+                enumsBlock Term.EnumeratorsBlock syntax="x <- List(1); (y, z) <- List((1, 2))"
+                  enums Enumerator.Generator syntax="x <- List(1)"
+                    pat Pat.Var syntax="x"
+                      name Term.Name value="x" syntax="x"
+                    rhs Term.Apply syntax="List(1)"
+                      .args = [Lit.Int "1"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Term.ArgClause syntax="(1)"
+                        values Lit.Int value=1 syntax="1"
+                        mod None
+                  enums Enumerator.Generator syntax="(y, z) <- List((1, 2))"
+                    pat Pat.Tuple syntax="(y, z)"
+                      args Pat.Var syntax="y"
+                        name Term.Name value="y" syntax="y"
+                      args Pat.Var syntax="z"
+                        name Term.Name value="z" syntax="z"
+                    rhs Term.Apply syntax="List((1, 2))"
+                      .args = [Term.Tuple "(1, 2)"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Term.ArgClause syntax="((1, 2))"
+                        values Term.Tuple syntax="(1, 2)"
+                          args Lit.Int value=1 syntax="1"
+                          args Lit.Int value=2 syntax="2"
+                        mod None
+                body Term.ApplyInfix syntax="x + y"
+                  .args = [Term.Name "y"]
+                  .targs = []
+                  lhs Term.Name value="x" syntax="x"
+                  op Term.Name value="+" syntax="+"
+                  targClause Type.ArgClause syntax=""
+                    values Nil
+                  argClause Term.ArgClause syntax="y"
+                    values Term.Name value="y" syntax="y"
+                    mod None
+          derives Nil

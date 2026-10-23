@@ -1,0 +1,310 @@
+# The programs of scalameta 4.17.4's ExportImportSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 283 line 7 Stat dialects.Scala3 :: export-single
+object W283 {
+export A.b.c
+}
+#!scalac ok
+#!regions L26/
+#!layout
+Source 0 29
+  Defn.Object 0 28
+    Term.Name 7 11
+    Template 12 28
+      Template.Body 12 28
+        Export 14 26
+          Importer 21 26
+            Term.Select 21 24
+              Term.Name 21 22
+              Term.Name 23 24
+            Importee.Name 25 26
+              Name.Indeterminate 25 26
+#!program 284 line 12 Source dialects.Scala3 :: export-single-toplevel
+package a
+export A.b.c
+#!scalac ok
+#!regions L9/
+#!layout
+Source 0 23
+  Pkg 0 22
+    Term.Name 8 9
+    Pkg.Body 10 22
+      Export 10 22
+        Importer 17 22
+          Term.Select 17 20
+            Term.Name 17 18
+            Term.Name 19 20
+          Importee.Name 21 22
+            Name.Indeterminate 21 22
+#!program 285 line 22 Stat dialects.Scala3 :: export-given
+object W285 {
+export A.{ given Int }
+}
+#!scalac ok
+#!regions L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 11
+    Template 12 38
+      Template.Body 12 38
+        Export 14 36
+          Importer 21 36
+            Term.Name 21 22
+            Importee.Given 25 34
+              Type.Name 31 34
+#!program 286 line 28 Stat dialects.Scala3 :: export-given-no-brace
+object W286 {
+export A.given Int
+}
+#!scalac ok
+#!regions L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 11
+    Template 12 34
+      Template.Body 12 34
+        Export 14 32
+          Importer 21 32
+            Term.Name 21 22
+            Importee.Given 23 32
+              Type.Name 29 32
+#!program 287 line 34 Stat dialects.Scala3 :: export-given-all
+object W287 {
+export A.given
+}
+#!scalac ok
+#!regions L28/
+#!layout
+Source 0 31
+  Defn.Object 0 30
+    Term.Name 7 11
+    Template 12 30
+      Template.Body 12 30
+        Export 14 28
+          Importer 21 28
+            Term.Name 21 22
+            Importee.GivenAll 23 28
+#!program 288 line 37 Stat dialects.Scala3 :: export-given-all-mixed
+object W288 {
+export A.{ given, a }
+}
+#!scalac refuses: named exports cannot follow wildcard exports
+#!regions L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 11
+    Template 12 37
+      Template.Body 12 37
+        Export 14 35
+          Importer 21 35
+            Term.Name 21 22
+            Importee.GivenAll 25 30
+            Importee.Name 32 33
+              Name.Indeterminate 32 33
+#!program 289 line 41 Stat dialects.Scala3 :: export-multiple
+object W289 {
+export A.{ b, c, d, * }
+}
+#!scalac ok
+#!regions L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Export 14 37
+          Importer 21 37
+            Term.Name 21 22
+            Importee.Name 25 26
+              Name.Indeterminate 25 26
+            Importee.Name 28 29
+              Name.Indeterminate 28 29
+            Importee.Name 31 32
+              Name.Indeterminate 31 32
+            Importee.Wildcard 34 35
+#!program 290 line 51 Stat dialects.Scala3 :: export-multiple-rename
+object W290 {
+export A.{ b as x, c as _ }
+}
+#!scalac ok
+#!regions L41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 11
+    Template 12 43
+      Template.Body 12 43
+        Export 14 41
+          Importer 21 41
+            Term.Name 21 22
+            Importee.Rename 25 31
+              Name.Indeterminate 25 26
+              Name.Indeterminate 30 31
+            Importee.Unimport 33 39
+              Name.Indeterminate 33 34
+#!program 291 line 55 Stat dialects.Scala3 :: rename-as
+object W291 {
+import a.b.C as D
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 11
+    Template 12 33
+      Template.Body 12 33
+        Import 14 31
+          Importer 21 31
+            Term.Select 21 24
+              Term.Name 21 22
+              Term.Name 23 24
+            Importee.Rename 25 31
+              Name.Indeterminate 25 26
+              Name.Indeterminate 30 31
+#!program 292 line 59 Stat dialects.Scala3 :: rename-as-simple
+object W292 {
+import c as d
+}
+#!scalac ok
+#!regions L27/
+#!layout
+Source 0 30
+  Defn.Object 0 29
+    Term.Name 7 11
+    Template 12 29
+      Template.Body 12 29
+        Import 14 27
+          Importer 21 27
+            Term.Anonymous 26 26
+            Importee.Rename 21 27
+              Name.Indeterminate 21 22
+              Name.Indeterminate 26 27
+#!program 293 line 64 Stat dialects.Scala3 :: rename-multi
+object W293 {
+import A.{ min as minimum, `*` as multiply }
+}
+#!scalac ok
+#!regions L58/
+#!layout
+Source 0 61
+  Defn.Object 0 60
+    Term.Name 7 11
+    Template 12 60
+      Template.Body 12 60
+        Import 14 58
+          Importer 21 58
+            Term.Name 21 22
+            Importee.Rename 25 39
+              Name.Indeterminate 25 28
+              Name.Indeterminate 32 39
+            Importee.Rename 41 56
+              Name.Indeterminate 41 44
+              Name.Indeterminate 48 56
+#!program 294 line 70 Stat dialects.Scala3 :: rename-multi-unimport
+object W294 {
+import Predef.{ augmentString as _, * }
+}
+#!scalac ok
+#!regions L53/
+#!layout
+Source 0 56
+  Defn.Object 0 55
+    Term.Name 7 11
+    Template 12 55
+      Template.Body 12 55
+        Import 14 53
+          Importer 21 53
+            Term.Name 21 27
+            Importee.Unimport 30 48
+              Name.Indeterminate 30 43
+            Importee.Wildcard 50 51
+#!program 295 line 75 Stat dialects.Scala3 :: unimport-as
+object W295 {
+import a.b.C as _
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 11
+    Template 12 33
+      Template.Body 12 33
+        Import 14 31
+          Importer 21 31
+            Term.Select 21 24
+              Term.Name 21 22
+              Term.Name 23 24
+            Importee.Unimport 25 31
+              Name.Indeterminate 25 26
+#!program 296 line 79 Stat dialects.Scala3 :: import-wildcard
+object W296 {
+import A.b.*
+}
+#!scalac ok
+#!regions L26/
+#!layout
+Source 0 29
+  Defn.Object 0 28
+    Term.Name 7 11
+    Template 12 28
+      Template.Body 12 28
+        Import 14 26
+          Importer 21 26
+            Term.Select 21 24
+              Term.Name 21 22
+              Term.Name 23 24
+            Importee.Wildcard 25 26
+#!program 297 line 83 Stat dialects.Scala3 :: import-wildcard-backquoted
+object W297 {
+import A.b.`*`
+}
+#!scalac ok
+#!regions L28/
+#!layout
+Source 0 31
+  Defn.Object 0 30
+    Term.Name 7 11
+    Template 12 30
+      Template.Body 12 30
+        Import 14 28
+          Importer 21 28
+            Term.Select 21 24
+              Term.Name 21 22
+              Term.Name 23 24
+            Importee.Name 25 28
+              Name.Indeterminate 25 28
+#!program 298 line 100 Stat dialects.Scala3 :: #3754 export Type.this.field
+object W298 {
+case class A():
+  export A.this.value
+
+}
+#!scalac ok
+#!regions I29/2 O52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 11
+    Template 12 54
+      Template.Body 12 54
+        Defn.Class 14 51
+          Mod.Case 14 18
+          Type.Name 25 26
+          Type.ParamClause 26 26
+          Ctor.Primary 26 28
+            Name.Anonymous 26 26
+            Term.ParamClause 26 28
+          Template 28 51
+            Template.Body 28 51
+              Export 32 51
+                Importer 39 51
+                  Term.This 39 45
+                    Name.Indeterminate 39 40
+                  Importee.Name 46 51
+                    Name.Indeterminate 46 51

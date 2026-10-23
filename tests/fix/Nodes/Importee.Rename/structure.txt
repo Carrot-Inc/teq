@@ -1,0 +1,57 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Importee.Rename, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Importee_Rename\n\nobject Importee_Rename:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => MMap, Set as MSet}\n  val m = MMap(1 -> 2)\n"
+  stats Pkg syntax="package nodes.Importee_Rename\n\nobject Importee_Rename:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => MMap, Set as MSet}\n  val m = MMap(1 -> 2)"
+    .stats = [Defn.Object "object Importee_Rename:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => MMap, Set as MSet}\n  val m = MMap(1 -> 2)"]
+    ref Term.Select syntax="nodes.Importee_Rename"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Importee_Rename" syntax="Importee_Rename"
+    body Pkg.Body syntax="object Importee_Rename:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => MMap, Set as MSet}\n  val m = MMap(1 -> 2)"
+      stats Defn.Object syntax="object Importee_Rename:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => MMap, Set as MSet}\n  val m = MMap(1 -> 2)"
+        mods Nil
+        name Term.Name value="Importee_Rename" syntax="Importee_Rename"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => MMap, Set as MSet}\n  val m = MMap(1 -> 2)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Import "import scala.collection.mutable.{Map => MMap, Set as MSet}", Defn.Val "val m = MMap(1 -> 2)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => MMap, Set as MSet}\n  val m = MMap(1 -> 2)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Import syntax="import scala.collection.mutable.{Map => MMap, Set as MSet}"
+              importers Importer syntax="scala.collection.mutable.{Map => MMap, Set as MSet}"
+                ref Term.Select syntax="scala.collection.mutable"
+                  qual Term.Select syntax="scala.collection"
+                    qual Term.Name value="scala" syntax="scala"
+                    name Term.Name value="collection" syntax="collection"
+                  name Term.Name value="mutable" syntax="mutable"
+                importees Importee.Rename syntax="Map => MMap"
+                  name Name.Indeterminate value="Map" syntax="Map"
+                  rename Name.Indeterminate value="MMap" syntax="MMap"
+                importees Importee.Rename syntax="Set as MSet"
+                  name Name.Indeterminate value="Set" syntax="Set"
+                  rename Name.Indeterminate value="MSet" syntax="MSet"
+            stats Defn.Val syntax="val m = MMap(1 -> 2)"
+              mods Nil
+              pats Pat.Var syntax="m"
+                name Term.Name value="m" syntax="m"
+              decltpe None
+              rhs Term.Apply syntax="MMap(1 -> 2)"
+                .args = [Term.ApplyInfix "1 -> 2"]
+                fun Term.Name value="MMap" syntax="MMap"
+                argClause Term.ArgClause syntax="(1 -> 2)"
+                  values Term.ApplyInfix syntax="1 -> 2"
+                    .args = [Lit.Int "2"]
+                    .targs = []
+                    lhs Lit.Int value=1 syntax="1"
+                    op Term.Name value="->" syntax="->"
+                    targClause Type.ArgClause syntax=""
+                      values Nil
+                    argClause Term.ArgClause syntax="2"
+                      values Lit.Int value=2 syntax="2"
+                      mod None
+                  mod None
+          derives Nil

@@ -1,0 +1,47 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's VarValue probe, its fields, values, syntax and derived accessors as scalameta 4.17.4's (structure.txt).\npackage nodes.Defn_Var_Pattern\n\nobject O { var (a, b) = (1, 2) }\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Defn_Var_Pattern\n\nobject O { var (a, b) = (1, 2) }\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Object "object O { var (a, b) = (1, 2) }", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Defn_Var_Pattern"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Defn_Var_Pattern" syntax="Defn_Var_Pattern"
+    body Pkg.Body syntax="object O { var (a, b) = (1, 2) }\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Object syntax="object O { var (a, b) = (1, 2) }"
+        mods Nil
+        name Term.Name value="O" syntax="O"
+        templ Template syntax="{ var (a, b) = (1, 2) }"
+          .self = Self ""
+          .stats = [Defn.Var "var (a, b) = (1, 2)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax="{ var (a, b) = (1, 2) }"
+            selfOpt None
+            stats Defn.Var syntax="var (a, b) = (1, 2)"
+              .rhs = Some(Term.Tuple "(1, 2)")
+              mods Nil
+              pats Pat.Tuple syntax="(a, b)"
+                args Pat.Var syntax="a"
+                  name Term.Name value="a" syntax="a"
+                args Pat.Var syntax="b"
+                  name Term.Name value="b" syntax="b"
+              decltpe None
+              body Term.Tuple syntax="(1, 2)"
+                args Lit.Int value=1 syntax="1"
+                args Lit.Int value=2 syntax="2"
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil

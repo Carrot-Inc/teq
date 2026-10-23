@@ -1,0 +1,59 @@
+Nodes/Term.Return/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Return, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Return\n\nobject Term_Return:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = return 1\n  def g(): Unit = return\n"
+  stats Pkg syntax="package nodes.Term_Return\n\nobject Term_Return:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = return 1\n  def g(): Unit = return"
+    .stats = [Defn.Object "object Term_Return:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = return 1\n  def g(): Unit = return"]
+    ref Term.Select syntax="nodes.Term_Return"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Return" syntax="Term_Return"
+    body Pkg.Body syntax="object Term_Return:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = return 1\n  def g(): Unit = return"
+      stats Defn.Object syntax="object Term_Return:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = return 1\n  def g(): Unit = return"
+        mods Nil
+        name Term.Name value="Term_Return" syntax="Term_Return"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = return 1\n  def g(): Unit = return"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(): Int = return 1", Defn.Def "def g(): Unit = return"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = return 1\n  def g(): Unit = return"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(): Int = return 1"
+              .paramClauses = [Term.ParamClause "()"]
+              .paramss = [[]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="()"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="()"
+                  values Nil
+                  mod None
+              decltpe Type.Name value="Int" syntax="Int"
+              body Term.Return syntax="return 1"
+                expr Lit.Int value=1 syntax="1"
+            stats Defn.Def syntax="def g(): Unit = return"
+              .paramClauses = [Term.ParamClause "()"]
+              .paramss = [[]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Member.ParamClauseGroup syntax="()"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="()"
+                  values Nil
+                  mod None
+              decltpe Type.Name value="Unit" syntax="Unit"
+              body Term.Return syntax="return"
+                expr Lit.Unit syntax=""
+                  .value = ()
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

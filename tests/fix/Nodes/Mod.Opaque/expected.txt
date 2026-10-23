@@ -1,0 +1,40 @@
+Nodes/Mod.Opaque/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.Opaque, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Opaque\n\nobject Mod_Opaque:\n  val marker = 0 // assert: DumpStructure.structure\n  opaque type A = Int\n"
+  stats Pkg syntax="package nodes.Mod_Opaque\n\nobject Mod_Opaque:\n  val marker = 0 // assert: DumpStructure.structure\n  opaque type A = Int"
+    .stats = [Defn.Object "object Mod_Opaque:\n  val marker = 0 // assert: DumpStructure.structure\n  opaque type A = Int"]
+    ref Term.Select syntax="nodes.Mod_Opaque"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Opaque" syntax="Mod_Opaque"
+    body Pkg.Body syntax="object Mod_Opaque:\n  val marker = 0 // assert: DumpStructure.structure\n  opaque type A = Int"
+      stats Defn.Object syntax="object Mod_Opaque:\n  val marker = 0 // assert: DumpStructure.structure\n  opaque type A = Int"
+        mods Nil
+        name Term.Name value="Mod_Opaque" syntax="Mod_Opaque"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  opaque type A = Int"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Type "opaque type A = Int"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  opaque type A = Int"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Type syntax="opaque type A = Int"
+              .tparams = []
+              mods Mod.Opaque syntax="opaque"
+              name Type.Name value="A" syntax="A"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Name value="Int" syntax="Int"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

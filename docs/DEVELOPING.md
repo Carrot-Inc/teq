@@ -260,7 +260,15 @@ upstreams' products and compares with the whole build, its permitted mismatches 
 of `bench/app/chain.sh`'s header; none when unset, every mismatch failing the line); `app-cypress` runs the
 application's end-to-end suite through the script `APP_CYPRESS` names, over the binary's own build of the
 application (its services, its API and its served bundle), a failing spec failing the line, since a build's
-identity cannot see a change of run-time semantics (skipped without the script).
+identity cannot see a change of run-time semantics (skipped without the script); `app-fix` runs the application's
+lint and rewrite rules under `teq fix` over the pinned snapshot (`bench/app/fix.sh`: a copy of its HEAD, `teq fix
+--check` there with `SOURCE_VERSION` that HEAD, each configuration under the file its lock's `scalafix` record names,
+its documents, its own record's, against the frozen manifest of what scalafix covers, then the rules' fixtures), a
+lint, a configured rule teq lacks, a check that writes no record, a document too many or too few or a
+failing fixture failing the line; it is skipped while the snapshot predates the rules' migration (`app_fix_since` in
+tests/gate.sh) as git answers it, and fails where git cannot answer, as on a shallow checkout without that commit. It
+proves the snapshot accepted by the head under its configuration, not the equivalence with scalafix, which the
+application's `fix/compare.sh` compares.
 
 `app-scalac` runs only when `--only` or `--with` names it, at each release and nightly, not at a landing (scalac's
 two compiles take minutes): scalac 3.8.4 as the oracle of teq's diagnostics on the main and test lists

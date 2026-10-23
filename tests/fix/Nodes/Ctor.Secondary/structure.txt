@@ -1,0 +1,100 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Ctor.Secondary, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Ctor_Secondary\n\nobject Ctor_Secondary:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(x: Int):\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()\n"
+  stats Pkg syntax="package nodes.Ctor_Secondary\n\nobject Ctor_Secondary:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(x: Int):\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()"
+    .stats = [Defn.Object "object Ctor_Secondary:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(x: Int):\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()"]
+    ref Term.Select syntax="nodes.Ctor_Secondary"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Ctor_Secondary" syntax="Ctor_Secondary"
+    body Pkg.Body syntax="object Ctor_Secondary:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(x: Int):\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()"
+      stats Defn.Object syntax="object Ctor_Secondary:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(x: Int):\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()"
+        mods Nil
+        name Term.Name value="Ctor_Secondary" syntax="Ctor_Secondary"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C(x: Int):\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class C(x: Int):\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C(x: Int):\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class C(x: Int):\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(x: Int)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=":\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()"
+                .self = Self ""
+                .stats = [Ctor.Secondary "def this() = this(1)", Ctor.Secondary "def this(s: String) =\n      this(s.length)\n      println()"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    def this() = this(1)\n    def this(s: String) =\n      this(s.length)\n      println()"
+                  selfOpt None
+                  stats Ctor.Secondary syntax="def this() = this(1)"
+                    mods Nil
+                    name Name.This syntax="this"
+                      .value = "this"
+                    paramClauses Term.ParamClause syntax="()"
+                      values Nil
+                      mod None
+                    body Ctor.Block syntax="this(1)"
+                      init Init syntax="this(1)"
+                        .argss = [[Lit.Int "1"]]
+                        tpe Type.Singleton syntax="this"
+                          ref Term.This syntax="this"
+                            qual Name.Anonymous syntax=""
+                              .value = ""
+                        name Name.Anonymous syntax=""
+                          .value = ""
+                        argClauses Term.ArgClause syntax="(1)"
+                          values Lit.Int value=1 syntax="1"
+                          mod None
+                      stats Nil
+                  stats Ctor.Secondary syntax="def this(s: String) =\n      this(s.length)\n      println()"
+                    mods Nil
+                    name Name.This syntax="this"
+                      .value = "this"
+                    paramClauses Term.ParamClause syntax="(s: String)"
+                      values Term.Param syntax="s: String"
+                        mods Nil
+                        name Term.Name value="s" syntax="s"
+                        decltpe Type.Name value="String" syntax="String"
+                        default None
+                      mod None
+                    body Ctor.Block syntax="this(s.length)\n      println()"
+                      init Init syntax="this(s.length)"
+                        .argss = [[Term.Select "s.length"]]
+                        tpe Type.Singleton syntax="this"
+                          ref Term.This syntax="this"
+                            qual Name.Anonymous syntax=""
+                              .value = ""
+                        name Name.Anonymous syntax=""
+                          .value = ""
+                        argClauses Term.ArgClause syntax="(s.length)"
+                          values Term.Select syntax="s.length"
+                            qual Term.Name value="s" syntax="s"
+                            name Term.Name value="length" syntax="length"
+                          mod None
+                      stats Term.Apply syntax="println()"
+                        .args = []
+                        fun Term.Name value="println" syntax="println"
+                        argClause Term.ArgClause syntax="()"
+                          values Nil
+                          mod None
+                derives Nil
+          derives Nil

@@ -1,0 +1,47 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Throw, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Throw\n\nobject Term_Throw:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = throw new RuntimeException(\"x\")\n"
+  stats Pkg syntax="package nodes.Term_Throw\n\nobject Term_Throw:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = throw new RuntimeException(\"x\")"
+    .stats = [Defn.Object "object Term_Throw:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = throw new RuntimeException(\"x\")"]
+    ref Term.Select syntax="nodes.Term_Throw"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Throw" syntax="Term_Throw"
+    body Pkg.Body syntax="object Term_Throw:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = throw new RuntimeException(\"x\")"
+      stats Defn.Object syntax="object Term_Throw:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = throw new RuntimeException(\"x\")"
+        mods Nil
+        name Term.Name value="Term_Throw" syntax="Term_Throw"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = throw new RuntimeException(\"x\")"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(): Int = throw new RuntimeException(\"x\")"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(): Int = throw new RuntimeException(\"x\")"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(): Int = throw new RuntimeException(\"x\")"
+              .paramClauses = [Term.ParamClause "()"]
+              .paramss = [[]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="()"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="()"
+                  values Nil
+                  mod None
+              decltpe Type.Name value="Int" syntax="Int"
+              body Term.Throw syntax="throw new RuntimeException(\"x\")"
+                expr Term.New syntax="new RuntimeException(\"x\")"
+                  init Init syntax="RuntimeException(\"x\")"
+                    .argss = [[Lit.String "\"x\""]]
+                    tpe Type.Name value="RuntimeException" syntax="RuntimeException"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    argClauses Term.ArgClause syntax="(\"x\")"
+                      values Lit.String value="x" syntax="\"x\""
+                      mod None
+          derives Nil

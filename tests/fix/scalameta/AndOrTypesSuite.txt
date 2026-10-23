@@ -1,0 +1,212 @@
+# The programs of scalameta 4.17.4's AndOrTypesSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 0 line 8 Type dialects.Scala3 :: A with B
+object W0 {
+  type T = A with B
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 9
+    Template 10 33
+      Template.Body 10 33
+        Defn.Type 14 31
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Type.With 23 31
+            Type.Name 23 24
+            Type.Name 30 31
+          Type.Bounds 21 21
+#!program 1 line 10 Type dialects.Scala3 :: A & B & C
+object W1 {
+  type T = A & B & C
+}
+#!scalac ok
+#!regions L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 9
+    Template 10 34
+      Template.Body 10 34
+        Defn.Type 14 32
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Type.ApplyInfix 23 32
+            Type.ApplyInfix 23 28
+              Type.Name 23 24
+              Type.Name 25 26
+              Type.Name 27 28
+            Type.Name 29 30
+            Type.Name 31 32
+          Type.Bounds 21 21
+#!program 2 line 14 Type dialects.Scala3 :: A & B
+object W2 {
+  type T = A & B
+}
+#!scalac ok
+#!regions L28/
+#!layout
+Source 0 31
+  Defn.Object 0 30
+    Term.Name 7 9
+    Template 10 30
+      Template.Body 10 30
+        Defn.Type 14 28
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Type.ApplyInfix 23 28
+            Type.Name 23 24
+            Type.Name 25 26
+            Type.Name 27 28
+          Type.Bounds 21 21
+#!program 3 line 16 Type dialects.Scala3 :: A | B
+object W3 {
+  type T = A | B
+}
+#!scalac ok
+#!regions L28/
+#!layout
+Source 0 31
+  Defn.Object 0 30
+    Term.Name 7 9
+    Template 10 30
+      Template.Body 10 30
+        Defn.Type 14 28
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Type.ApplyInfix 23 28
+            Type.Name 23 24
+            Type.Name 25 26
+            Type.Name 27 28
+          Type.Bounds 21 21
+#!program 4 line 19 Stat dialects.Scala3 :: ortype-example
+object W4 {
+def help(id: UserName | Password): Unit
+}
+#!scalac ok
+#!regions L51/
+#!layout
+Source 0 54
+  Defn.Object 0 53
+    Term.Name 7 9
+    Template 10 53
+      Template.Body 10 53
+        Decl.Def 12 51
+          Term.Name 16 20
+          Member.ParamClauseGroup 20 45
+            Type.ParamClause 20 20
+            Term.ParamClause 20 45
+              Term.Param 21 44
+                Term.Name 21 23
+                Type.ApplyInfix 25 44
+                  Type.Name 25 33
+                  Type.Name 34 35
+                  Type.Name 36 44
+          Type.Name 47 51
+#!program 5 line 27 Stat dialects.Scala3 :: ortype-example
+object W5 {
+val either: Password | UserName
+}
+#!scalac ok
+#!regions L43/
+#!layout
+Source 0 46
+  Defn.Object 0 45
+    Term.Name 7 9
+    Template 10 45
+      Template.Body 10 45
+        Decl.Val 12 43
+          Pat.Var 16 22
+            Term.Name 16 22
+          Type.ApplyInfix 24 43
+            Type.Name 24 32
+            Type.Name 33 34
+            Type.Name 35 43
+#!program 6 line 34 Stat dialects.Scala3 :: andtype-example
+object W6 {
+val x: Reset & Ord[Int]
+}
+#!scalac ok
+#!regions L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 9
+    Template 10 37
+      Template.Body 10 37
+        Decl.Val 12 35
+          Pat.Var 16 17
+            Term.Name 16 17
+          Type.ApplyInfix 19 35
+            Type.Name 19 24
+            Type.Name 25 26
+            Type.Apply 27 35
+              Type.Name 27 30
+              Type.ArgClause 30 35
+                Type.Name 31 34
+#!program 7 line 37 Stat dialects.Scala3 :: andtype-example
+object W7 {
+def fx(a: List[A & B]): Unit
+}
+#!scalac ok
+#!regions L40/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 9
+    Template 10 42
+      Template.Body 10 42
+        Decl.Def 12 40
+          Term.Name 16 18
+          Member.ParamClauseGroup 18 34
+            Type.ParamClause 18 18
+            Term.ParamClause 18 34
+              Term.Param 19 33
+                Term.Name 19 20
+                Type.Apply 22 33
+                  Type.Name 22 26
+                  Type.ArgClause 26 33
+                    Type.ApplyInfix 27 32
+                      Type.Name 27 28
+                      Type.Name 29 30
+                      Type.Name 31 32
+          Type.Name 36 40
+#!program 8 line 67 Stat dialects.Scala3 :: #3119
+object W8 {
+object A:
+  type AllTraits = Trait1 & Trait2 & Trait3
+    & Trait4 & Trait5
+
+}
+#!scalac ok
+#!regions I21/2 X65/2 O88/
+#!layout
+Source 0 91
+  Defn.Object 0 90
+    Term.Name 7 9
+    Template 10 90
+      Template.Body 10 90
+        Defn.Object 12 87
+          Term.Name 19 20
+          Template 20 87
+            Template.Body 20 87
+              Defn.Type 24 87
+                Type.Name 29 38
+                Type.ParamClause 39 39
+                Type.ApplyInfix 41 87
+                  Type.ApplyInfix 41 78
+                    Type.ApplyInfix 41 65
+                      Type.ApplyInfix 41 56
+                        Type.Name 41 47
+                        Type.Name 48 49
+                        Type.Name 50 56
+                      Type.Name 57 58
+                      Type.Name 59 65
+                    Type.Name 70 71
+                    Type.Name 72 78
+                  Type.Name 79 80
+                  Type.Name 81 87
+                Type.Bounds 39 39

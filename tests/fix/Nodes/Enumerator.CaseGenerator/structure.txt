@@ -1,0 +1,47 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Enumerator.CaseGenerator, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Enumerator_CaseGenerator\n\nobject Enumerator_CaseGenerator:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for case (x, y) <- List((1, 2)) yield x\n"
+  stats Pkg syntax="package nodes.Enumerator_CaseGenerator\n\nobject Enumerator_CaseGenerator:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for case (x, y) <- List((1, 2)) yield x"
+    .stats = [Defn.Object "object Enumerator_CaseGenerator:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for case (x, y) <- List((1, 2)) yield x"]
+    ref Term.Select syntax="nodes.Enumerator_CaseGenerator"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Enumerator_CaseGenerator" syntax="Enumerator_CaseGenerator"
+    body Pkg.Body syntax="object Enumerator_CaseGenerator:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for case (x, y) <- List((1, 2)) yield x"
+      stats Defn.Object syntax="object Enumerator_CaseGenerator:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for case (x, y) <- List((1, 2)) yield x"
+        mods Nil
+        name Term.Name value="Enumerator_CaseGenerator" syntax="Enumerator_CaseGenerator"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for case (x, y) <- List((1, 2)) yield x"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = for case (x, y) <- List((1, 2)) yield x"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for case (x, y) <- List((1, 2)) yield x"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = for case (x, y) <- List((1, 2)) yield x"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.ForYield syntax="for case (x, y) <- List((1, 2)) yield x"
+                .enums = [Enumerator.CaseGenerator "case (x, y) <- List((1, 2))"]
+                enumsBlock Term.EnumeratorsBlock syntax="case (x, y) <- List((1, 2))"
+                  enums Enumerator.CaseGenerator syntax="case (x, y) <- List((1, 2))"
+                    pat Pat.Tuple syntax="(x, y)"
+                      args Pat.Var syntax="x"
+                        name Term.Name value="x" syntax="x"
+                      args Pat.Var syntax="y"
+                        name Term.Name value="y" syntax="y"
+                    rhs Term.Apply syntax="List((1, 2))"
+                      .args = [Term.Tuple "(1, 2)"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Term.ArgClause syntax="((1, 2))"
+                        values Term.Tuple syntax="(1, 2)"
+                          args Lit.Int value=1 syntax="1"
+                          args Lit.Int value=2 syntax="2"
+                        mod None
+                body Term.Name value="x" syntax="x"
+          derives Nil

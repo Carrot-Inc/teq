@@ -1,0 +1,49 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Eta, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Eta\n\nobject Term_Eta:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x\n  val g = f _\n"
+  stats Pkg syntax="package nodes.Term_Eta\n\nobject Term_Eta:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x\n  val g = f _"
+    .stats = [Defn.Object "object Term_Eta:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x\n  val g = f _"]
+    ref Term.Select syntax="nodes.Term_Eta"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Eta" syntax="Term_Eta"
+    body Pkg.Body syntax="object Term_Eta:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x\n  val g = f _"
+      stats Defn.Object syntax="object Term_Eta:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x\n  val g = f _"
+        mods Nil
+        name Term.Name value="Term_Eta" syntax="Term_Eta"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x\n  val g = f _"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(x: Int) = x", Defn.Val "val g = f _"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x\n  val g = f _"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(x: Int) = x"
+              .paramClauses = [Term.ParamClause "(x: Int)"]
+              .paramss = [[Term.Param "x: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Name value="x" syntax="x"
+            stats Defn.Val syntax="val g = f _"
+              mods Nil
+              pats Pat.Var syntax="g"
+                name Term.Name value="g" syntax="g"
+              decltpe None
+              rhs Term.Eta syntax="f _"
+                expr Term.Name value="f" syntax="f"
+          derives Nil

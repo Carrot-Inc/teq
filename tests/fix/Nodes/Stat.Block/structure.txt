@@ -1,0 +1,98 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Stat.Block, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Stat_Block\n\nobject Stat_Block:\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  type R = A { type T; def m: Int }\n  type S = { val v: Int }\n"
+  stats Pkg syntax="package nodes.Stat_Block\n\nobject Stat_Block:\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  type R = A { type T; def m: Int }\n  type S = { val v: Int }"
+    .stats = [Defn.Object "object Stat_Block:\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  type R = A { type T; def m: Int }\n  type S = { val v: Int }"]
+    ref Term.Select syntax="nodes.Stat_Block"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Stat_Block" syntax="Stat_Block"
+    body Pkg.Body syntax="object Stat_Block:\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  type R = A { type T; def m: Int }\n  type S = { val v: Int }"
+      stats Defn.Object syntax="object Stat_Block:\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  type R = A { type T; def m: Int }\n  type S = { val v: Int }"
+        mods Nil
+        name Term.Name value="Stat_Block" syntax="Stat_Block"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  type R = A { type T; def m: Int }\n  type S = { val v: Int }"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Trait "trait A", Defn.Type "type R = A { type T; def m: Int }", Defn.Type "type S = { val v: Int }"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  type R = A { type T; def m: Int }\n  type S = { val v: Int }"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Trait syntax="trait A"
+              .tparams = []
+              mods Nil
+              name Type.Name value="A" syntax="A"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Type syntax="type R = A { type T; def m: Int }"
+              .tparams = []
+              mods Nil
+              name Type.Name value="R" syntax="R"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Refine syntax="A { type T; def m: Int }"
+                .stats = [Decl.Type "type T", Decl.Def "def m: Int"]
+                tpe Type.Name value="A" syntax="A"
+                body Stat.Block syntax="{ type T; def m: Int }"
+                  stats Decl.Type syntax="type T"
+                    .tparams = []
+                    mods Nil
+                    name Type.Name value="T" syntax="T"
+                    tparamClause Type.ParamClause syntax=""
+                      values Nil
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                  stats Decl.Def syntax="def m: Int"
+                    .paramClauses = []
+                    .paramss = []
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="m" syntax="m"
+                    paramClauseGroups Nil
+                    decltpe Type.Name value="Int" syntax="Int"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Type syntax="type S = { val v: Int }"
+              .tparams = []
+              mods Nil
+              name Type.Name value="S" syntax="S"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Refine syntax="{ val v: Int }"
+                .stats = [Decl.Val "val v: Int"]
+                tpe None
+                body Stat.Block syntax="{ val v: Int }"
+                  stats Decl.Val syntax="val v: Int"
+                    mods Nil
+                    pats Pat.Var syntax="v"
+                      name Term.Name value="v" syntax="v"
+                    decltpe Type.Name value="Int" syntax="Int"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+          derives Nil

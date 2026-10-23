@@ -1,0 +1,65 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Annotate, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Annotate\n\nobject Term_Annotate:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = (x: @unchecked)\n  val b = (x: @unchecked @deprecated)\n"
+  stats Pkg syntax="package nodes.Term_Annotate\n\nobject Term_Annotate:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = (x: @unchecked)\n  val b = (x: @unchecked @deprecated)"
+    .stats = [Defn.Object "object Term_Annotate:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = (x: @unchecked)\n  val b = (x: @unchecked @deprecated)"]
+    ref Term.Select syntax="nodes.Term_Annotate"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Annotate" syntax="Term_Annotate"
+    body Pkg.Body syntax="object Term_Annotate:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = (x: @unchecked)\n  val b = (x: @unchecked @deprecated)"
+      stats Defn.Object syntax="object Term_Annotate:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = (x: @unchecked)\n  val b = (x: @unchecked @deprecated)"
+        mods Nil
+        name Term.Name value="Term_Annotate" syntax="Term_Annotate"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = (x: @unchecked)\n  val b = (x: @unchecked @deprecated)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val x = 1", Defn.Val "val a = (x: @unchecked)", Defn.Val "val b = (x: @unchecked @deprecated)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = (x: @unchecked)\n  val b = (x: @unchecked @deprecated)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val x = 1"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Val syntax="val a = (x: @unchecked)"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.Annotate syntax="x: @unchecked"
+                expr Term.Name value="x" syntax="x"
+                annots Mod.Annot syntax="@unchecked"
+                  init Init syntax="unchecked"
+                    .argss = []
+                    tpe Type.Name value="unchecked" syntax="unchecked"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    argClauses Nil
+            stats Defn.Val syntax="val b = (x: @unchecked @deprecated)"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Term.Annotate syntax="x: @unchecked @deprecated"
+                expr Term.Name value="x" syntax="x"
+                annots Mod.Annot syntax="@unchecked"
+                  init Init syntax="unchecked"
+                    .argss = []
+                    tpe Type.Name value="unchecked" syntax="unchecked"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    argClauses Nil
+                annots Mod.Annot syntax="@deprecated"
+                  init Init syntax="deprecated"
+                    .argss = []
+                    tpe Type.Name value="deprecated" syntax="deprecated"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    argClauses Nil
+          derives Nil

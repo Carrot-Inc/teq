@@ -1,0 +1,1031 @@
+# The programs of scalameta 4.17.4's DerivesSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 191 line 15 Stat dialects.Scala3 :: simple-derives
+object W191 {
+enum Tree[T] derives Eq, Ordering, Show {
+  case Branch
+  case Leaf
+}
+
+}
+#!scalac ok
+#!regions L69/ L81/ F83/
+#!layout
+Source 0 87
+  Defn.Object 0 86
+    Term.Name 7 11
+    Template 12 86
+      Template.Body 12 86
+        Defn.Enum 14 83
+          Type.Name 19 23
+          Type.ParamClause 23 26
+            Type.Param 24 25
+              Type.Name 24 25
+              Type.ParamClause 25 25
+              Type.Bounds 25 25
+          Ctor.Primary 27 27
+            Name.Anonymous 27 27
+          Template 27 83
+            Template.Body 54 83
+              Defn.EnumCase 58 69
+                Term.Name 63 69
+                Type.ParamClause 69 69
+                Ctor.Primary 69 69
+                  Name.Anonymous 69 69
+              Defn.EnumCase 72 81
+                Term.Name 77 81
+                Type.ParamClause 81 81
+                Ctor.Primary 81 81
+                  Name.Anonymous 81 81
+            Type.Name 35 37
+            Type.Name 39 47
+            Type.Name 49 53
+#!program 192 line 35 Stat dialects.Scala3 :: extends-derives
+object W192 {
+enum Tree[T] extends Bee derives Eq, scala.derives.Ordering, Show {
+  case Branch
+  case Leaf
+}
+
+}
+#!scalac ok
+#!regions L95/ L107/ F109/
+#!layout
+Source 0 113
+  Defn.Object 0 112
+    Term.Name 7 11
+    Template 12 112
+      Template.Body 12 112
+        Defn.Enum 14 109
+          Type.Name 19 23
+          Type.ParamClause 23 26
+            Type.Param 24 25
+              Type.Name 24 25
+              Type.ParamClause 25 25
+              Type.Bounds 25 25
+          Ctor.Primary 27 27
+            Name.Anonymous 27 27
+          Template 27 109
+            Init 35 38
+              Type.Name 35 38
+              Name.Anonymous 39 39
+            Template.Body 80 109
+              Defn.EnumCase 84 95
+                Term.Name 89 95
+                Type.ParamClause 95 95
+                Ctor.Primary 95 95
+                  Name.Anonymous 95 95
+              Defn.EnumCase 98 107
+                Term.Name 103 107
+                Type.ParamClause 107 107
+                Ctor.Primary 107 107
+                  Name.Anonymous 107 107
+            Type.Name 47 49
+            Type.Select 51 73
+              Term.Select 51 64
+                Term.Name 51 56
+                Term.Name 57 64
+              Type.Name 65 73
+            Type.Name 75 79
+#!program 193 line 61 Stat dialects.Scala3 :: case-class-derives
+object W193 {
+case class Node(name : String) extends Tree derives Eq:
+  def hello() = ""
+  def bye() = ""
+
+
+}
+#!scalac ok
+#!regions I69/2 L88/2 O107/
+#!layout
+Source 0 110
+  Defn.Object 0 109
+    Term.Name 7 11
+    Template 12 109
+      Template.Body 12 109
+        Defn.Class 14 105
+          Mod.Case 14 18
+          Type.Name 25 29
+          Type.ParamClause 29 29
+          Ctor.Primary 29 44
+            Name.Anonymous 29 29
+            Term.ParamClause 29 44
+              Term.Param 30 43
+                Term.Name 30 34
+                Type.Name 37 43
+          Template 45 105
+            Init 53 57
+              Type.Name 53 57
+              Name.Anonymous 58 58
+            Template.Body 68 105
+              Defn.Def 72 88
+                Term.Name 76 81
+                Member.ParamClauseGroup 81 83
+                  Type.ParamClause 81 81
+                  Term.ParamClause 81 83
+                Lit.String 86 88
+              Defn.Def 91 105
+                Term.Name 95 98
+                Member.ParamClauseGroup 98 100
+                  Type.ParamClause 98 98
+                  Term.ParamClause 98 100
+                Lit.String 103 105
+            Type.Name 66 68
+#!program 194 line 94 Stat dialects.Scala3 :: newline-derives
+object W194 {
+class A
+    derives AVeryLongName1,
+      AVeryLongName2,
+      AVeryLongName3
+
+}
+#!scalac ok
+#!regions F92/
+#!layout
+Source 0 96
+  Defn.Object 0 95
+    Term.Name 7 11
+    Template 12 95
+      Template.Body 12 95
+        Defn.Class 14 92
+          Type.Name 20 21
+          Type.ParamClause 26 26
+          Ctor.Primary 26 26
+            Name.Anonymous 26 26
+          Template 26 92
+            Template.Body 92 92
+            Type.Name 34 48
+            Type.Name 56 70
+            Type.Name 78 92
+#!program 195 line 131 Stat dialects.Scala3 :: newline-derives-params
+object W195 {
+class A[T](a: Int, b: Int)
+    derives Alpha[T],
+      Epsilon[T] {
+  def a = ???
+}
+
+}
+#!scalac refuses: end of statement expected but '[' found
+#!regions L95/ F97/
+#!layout
+Source 0 101
+  Defn.Object 0 100
+    Term.Name 7 11
+    Template 12 100
+      Template.Body 12 100
+        Defn.Class 14 97
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 97
+            Template.Body 80 97
+              Defn.Def 84 95
+                Term.Name 88 89
+                Term.Name 92 95
+            Type.Apply 53 61
+              Type.Name 53 58
+              Type.ArgClause 58 61
+                Type.Name 59 60
+            Type.Apply 69 79
+              Type.Name 69 76
+              Type.ArgClause 76 79
+                Type.Name 77 78
+#!program 196 line 140 Stat dialects.Scala3 :: newline-derives-params
+object W196 {
+class A[T](a: Int, b: Int)
+    derives
+      Alpha[T],
+      Epsilon[T]
+      {
+  def a = ???
+}
+
+}
+#!scalac refuses: an identifier expected, but 'end of statement' found
+#!regions L107/ F109/
+#!layout
+Source 0 113
+  Defn.Object 0 112
+    Term.Name 7 11
+    Template 12 112
+      Template.Body 12 112
+        Defn.Class 14 109
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 109
+            Template.Body 92 109
+              Defn.Def 96 107
+                Term.Name 100 101
+                Term.Name 104 107
+            Type.Apply 59 67
+              Type.Name 59 64
+              Type.ArgClause 64 67
+                Type.Name 65 66
+            Type.Apply 75 85
+              Type.Name 75 82
+              Type.ArgClause 82 85
+                Type.Name 83 84
+#!program 197 line 168 Stat dialects.Scala3 :: newline-derives-coloneol
+object W197 {
+class A[T](a: Int, b: Int)
+    derives Alpha[T],
+      Epsilon[T]:
+  def a = ???
+
+}
+#!scalac refuses: end of statement expected but '[' found
+#!regions I80/2 O95/
+#!layout
+Source 0 98
+  Defn.Object 0 97
+    Term.Name 7 11
+    Template 12 97
+      Template.Body 12 97
+        Defn.Class 14 94
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 94
+            Template.Body 79 94
+              Defn.Def 83 94
+                Term.Name 87 88
+                Term.Name 91 94
+            Type.Apply 53 61
+              Type.Name 53 58
+              Type.ArgClause 58 61
+                Type.Name 59 60
+            Type.Apply 69 79
+              Type.Name 69 76
+              Type.ArgClause 76 79
+                Type.Name 77 78
+#!program 198 line 176 Stat dialects.Scala3 :: newline-derives-coloneol
+object W198 {
+class A[T](a: Int, b: Int)
+    derives
+      Alpha[T],
+      Epsilon[T]:
+  def a = ???
+
+}
+#!scalac refuses: an identifier expected, but 'end of statement' found
+#!regions I86/2 O101/
+#!layout
+Source 0 104
+  Defn.Object 0 103
+    Term.Name 7 11
+    Template 12 103
+      Template.Body 12 103
+        Defn.Class 14 100
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 100
+            Template.Body 85 100
+              Defn.Def 89 100
+                Term.Name 93 94
+                Term.Name 97 100
+            Type.Apply 59 67
+              Type.Name 59 64
+              Type.ArgClause 64 67
+                Type.Name 65 66
+            Type.Apply 75 85
+              Type.Name 75 82
+              Type.ArgClause 82 85
+                Type.Name 83 84
+#!program 199 line 185 Stat dialects.Scala3 :: newline-derives-coloneol
+object W199 {
+class A[T](a: Int, b: Int)
+    derives
+   Alpha[T],
+   Epsilon[T]:
+  def a = ???
+
+}
+#!scalac refuses: an identifier expected, but 'end of statement' found
+#!regions I80/2 O95/
+#!layout
+Source 0 98
+  Defn.Object 0 97
+    Term.Name 7 11
+    Template 12 97
+      Template.Body 12 97
+        Defn.Class 14 94
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 94
+            Template.Body 79 94
+              Defn.Def 83 94
+                Term.Name 87 88
+                Term.Name 91 94
+            Type.Apply 56 64
+              Type.Name 56 61
+              Type.ArgClause 61 64
+                Type.Name 62 63
+            Type.Apply 69 79
+              Type.Name 69 76
+              Type.ArgClause 76 79
+                Type.Name 77 78
+#!program 200 line 211 Stat dialects.Scala3 :: newline-extends-derives-coloneol
+object W200 {
+class A[T](a: Int, b: Int)
+    extends Alpha[T]
+    derives Epsilon[T]:
+  def a = ???
+
+}
+#!scalac refuses: end of statement expected but '[' found
+#!regions I85/2 O100/
+#!layout
+Source 0 103
+  Defn.Object 0 102
+    Term.Name 7 11
+    Template 12 102
+      Template.Body 12 102
+        Defn.Class 14 99
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 99
+            Init 53 61
+              Type.Apply 53 61
+                Type.Name 53 58
+                Type.ArgClause 58 61
+                  Type.Name 59 60
+              Name.Anonymous 66 66
+            Template.Body 84 99
+              Defn.Def 88 99
+                Term.Name 92 93
+                Term.Name 96 99
+            Type.Apply 74 84
+              Type.Name 74 81
+              Type.ArgClause 81 84
+                Type.Name 82 83
+#!program 201 line 219 Stat dialects.Scala3 :: newline-extends-derives-coloneol
+object W201 {
+class A[T](a: Int, b: Int)
+    extends
+      Alpha[T]
+    derives
+      Epsilon[T]:
+  def a = ???
+
+}
+#!scalac refuses: an identifier expected, but 'end of statement' found
+#!regions I97/2 O112/
+#!layout
+Source 0 115
+  Defn.Object 0 114
+    Term.Name 7 11
+    Template 12 114
+      Template.Body 12 114
+        Defn.Class 14 111
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 111
+            Init 59 67
+              Type.Apply 59 67
+                Type.Name 59 64
+                Type.ArgClause 64 67
+                  Type.Name 65 66
+              Name.Anonymous 72 72
+            Template.Body 96 111
+              Defn.Def 100 111
+                Term.Name 104 105
+                Term.Name 108 111
+            Type.Apply 86 96
+              Type.Name 86 93
+              Type.ArgClause 93 96
+                Type.Name 94 95
+#!program 202 line 229 Stat dialects.Scala3 :: newline-extends-derives-coloneol
+object W202 {
+class A[T](a: Int, b: Int)
+    extends
+   Alpha[T]
+    derives
+   Epsilon[T]:
+  def a = ???
+
+}
+#!scalac refuses: an identifier expected, but 'end of statement' found
+#!regions I91/2 O106/
+#!layout
+Source 0 109
+  Defn.Object 0 108
+    Term.Name 7 11
+    Template 12 108
+      Template.Body 12 108
+        Defn.Class 14 105
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 105
+            Init 56 64
+              Type.Apply 56 64
+                Type.Name 56 61
+                Type.ArgClause 61 64
+                  Type.Name 62 63
+              Name.Anonymous 69 69
+            Template.Body 90 105
+              Defn.Def 94 105
+                Term.Name 98 99
+                Term.Name 102 105
+            Type.Apply 80 90
+              Type.Name 80 87
+              Type.ArgClause 87 90
+                Type.Name 88 89
+#!program 203 line 256 Stat dialects.Scala3 :: newline-extends-derives-coloneol-not-like-refine-type
+object W203 {
+class A[T](a: Int, b: Int)
+    extends Alpha[T]
+    derives Epsilon[T]:
+  require(true)
+
+}
+#!scalac refuses: end of statement expected but '[' found
+#!regions I85/2 O102/
+#!layout
+Source 0 105
+  Defn.Object 0 104
+    Term.Name 7 11
+    Template 12 104
+      Template.Body 12 104
+        Defn.Class 14 101
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 101
+            Init 53 61
+              Type.Apply 53 61
+                Type.Name 53 58
+                Type.ArgClause 58 61
+                  Type.Name 59 60
+              Name.Anonymous 66 66
+            Template.Body 84 101
+              Term.Apply 88 101
+                Term.Name 88 95
+                Term.ArgClause 95 101
+                  Lit.Boolean 96 100
+            Type.Apply 74 84
+              Type.Name 74 81
+              Type.ArgClause 81 84
+                Type.Name 82 83
+#!program 204 line 264 Stat dialects.Scala3 :: newline-extends-derives-coloneol-not-like-refine-type
+object W204 {
+class A[T](a: Int, b: Int)
+    extends
+      Alpha[T]
+    derives
+      Epsilon[T]:
+  require(true)
+
+}
+#!scalac refuses: an identifier expected, but 'end of statement' found
+#!regions I97/2 O114/
+#!layout
+Source 0 117
+  Defn.Object 0 116
+    Term.Name 7 11
+    Template 12 116
+      Template.Body 12 116
+        Defn.Class 14 113
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 113
+            Init 59 67
+              Type.Apply 59 67
+                Type.Name 59 64
+                Type.ArgClause 64 67
+                  Type.Name 65 66
+              Name.Anonymous 72 72
+            Template.Body 96 113
+              Term.Apply 100 113
+                Term.Name 100 107
+                Term.ArgClause 107 113
+                  Lit.Boolean 108 112
+            Type.Apply 86 96
+              Type.Name 86 93
+              Type.ArgClause 93 96
+                Type.Name 94 95
+#!program 205 line 274 Stat dialects.Scala3 :: newline-extends-derives-coloneol-not-like-refine-type
+object W205 {
+class A[T](a: Int, b: Int)
+    extends
+   Alpha[T]
+    derives
+   Epsilon[T]:
+  require(true)
+
+}
+#!scalac refuses: an identifier expected, but 'end of statement' found
+#!regions I91/2 O108/
+#!layout
+Source 0 111
+  Defn.Object 0 110
+    Term.Name 7 11
+    Template 12 110
+      Template.Body 12 110
+        Defn.Class 14 107
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 107
+            Init 56 64
+              Type.Apply 56 64
+                Type.Name 56 61
+                Type.ArgClause 61 64
+                  Type.Name 62 63
+              Name.Anonymous 69 69
+            Template.Body 90 107
+              Term.Apply 94 107
+                Term.Name 94 101
+                Term.ArgClause 101 107
+                  Lit.Boolean 102 106
+            Type.Apply 80 90
+              Type.Name 80 87
+              Type.ArgClause 87 90
+                Type.Name 88 89
+#!program 206 line 301 Stat dialects.Scala3 :: newline-extends-with-not-derives-coloneol-not-like-refine-type
+object W206 {
+class A[T](a: Int, b: Int)
+    extends Alpha[T]
+    with Epsilon[T]:
+  require(true)
+
+}
+#!scalac ok
+#!regions I82/2 O99/
+#!layout
+Source 0 102
+  Defn.Object 0 101
+    Term.Name 7 11
+    Template 12 101
+      Template.Body 12 101
+        Defn.Class 14 98
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 98
+            Init 53 61
+              Type.Apply 53 61
+                Type.Name 53 58
+                Type.ArgClause 58 61
+                  Type.Name 59 60
+              Name.Anonymous 66 66
+            Init 71 81
+              Type.Apply 71 81
+                Type.Name 71 78
+                Type.ArgClause 78 81
+                  Type.Name 79 80
+              Name.Anonymous 81 81
+            Template.Body 81 98
+              Term.Apply 85 98
+                Term.Name 85 92
+                Term.ArgClause 92 98
+                  Lit.Boolean 93 97
+#!program 207 line 309 Stat dialects.Scala3 :: newline-extends-with-not-derives-coloneol-not-like-refine-type
+object W207 {
+class A[T](a: Int, b: Int)
+    extends
+      Alpha[T]
+    with
+      Epsilon[T]:
+  require(true)
+
+}
+#!scalac refuses: an identifier expected, but indent found
+#!regions I94/2 O111/
+#!layout
+Source 0 114
+  Defn.Object 0 113
+    Term.Name 7 11
+    Template 12 113
+      Template.Body 12 113
+        Defn.Class 14 110
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 110
+            Init 59 67
+              Type.Apply 59 67
+                Type.Name 59 64
+                Type.ArgClause 64 67
+                  Type.Name 65 66
+              Name.Anonymous 72 72
+            Init 83 93
+              Type.Apply 83 93
+                Type.Name 83 90
+                Type.ArgClause 90 93
+                  Type.Name 91 92
+              Name.Anonymous 93 93
+            Template.Body 93 110
+              Term.Apply 97 110
+                Term.Name 97 104
+                Term.ArgClause 104 110
+                  Lit.Boolean 105 109
+#!program 208 line 319 Stat dialects.Scala3 :: newline-extends-with-not-derives-coloneol-not-like-refine-type
+object W208 {
+class A[T](a: Int, b: Int)
+    extends
+   Alpha[T]
+    with
+   Epsilon[T]:
+  require(true)
+
+}
+#!scalac refuses: an identifier expected, but indent found
+#!regions I88/2 O105/
+#!layout
+Source 0 108
+  Defn.Object 0 107
+    Term.Name 7 11
+    Template 12 107
+      Template.Body 12 107
+        Defn.Class 14 104
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 104
+            Init 56 64
+              Type.Apply 56 64
+                Type.Name 56 61
+                Type.ArgClause 61 64
+                  Type.Name 62 63
+              Name.Anonymous 69 69
+            Init 77 87
+              Type.Apply 77 87
+                Type.Name 77 84
+                Type.ArgClause 84 87
+                  Type.Name 85 86
+              Name.Anonymous 87 87
+            Template.Body 87 104
+              Term.Apply 91 104
+                Term.Name 91 98
+                Term.ArgClause 98 104
+                  Lit.Boolean 99 103
+#!program 209 line 346 Stat dialects.Scala3 :: newline-extends-not-derives-coloneol-not-like-refine-type
+object W209 {
+class A[T](a: Int, b: Int)
+    extends Alpha[T]:
+  require(true)
+
+}
+#!scalac ok
+#!regions I62/2 O79/
+#!layout
+Source 0 82
+  Defn.Object 0 81
+    Term.Name 7 11
+    Template 12 81
+      Template.Body 12 81
+        Defn.Class 14 78
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 78
+            Init 53 61
+              Type.Apply 53 61
+                Type.Name 53 58
+                Type.ArgClause 58 61
+                  Type.Name 59 60
+              Name.Anonymous 61 61
+            Template.Body 61 78
+              Term.Apply 65 78
+                Term.Name 65 72
+                Term.ArgClause 72 78
+                  Lit.Boolean 73 77
+#!program 210 line 353 Stat dialects.Scala3 :: newline-extends-not-derives-coloneol-not-like-refine-type
+object W210 {
+class A[T](a: Int, b: Int)
+    extends
+      Alpha[T]:
+  require(true)
+
+}
+#!scalac ok
+#!regions I68/2 O85/
+#!layout
+Source 0 88
+  Defn.Object 0 87
+    Term.Name 7 11
+    Template 12 87
+      Template.Body 12 87
+        Defn.Class 14 84
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 84
+            Init 59 67
+              Type.Apply 59 67
+                Type.Name 59 64
+                Type.ArgClause 64 67
+                  Type.Name 65 66
+              Name.Anonymous 67 67
+            Template.Body 67 84
+              Term.Apply 71 84
+                Term.Name 71 78
+                Term.ArgClause 78 84
+                  Lit.Boolean 79 83
+#!program 211 line 361 Stat dialects.Scala3 :: newline-extends-not-derives-coloneol-not-like-refine-type
+object W211 {
+class A[T](a: Int, b: Int)
+    extends
+   Alpha[T]:
+  require(true)
+
+}
+#!scalac ok
+#!regions I65/2 O82/
+#!layout
+Source 0 85
+  Defn.Object 0 84
+    Term.Name 7 11
+    Template 12 84
+      Template.Body 12 84
+        Defn.Class 14 81
+          Type.Name 20 21
+          Type.ParamClause 21 24
+            Type.Param 22 23
+              Type.Name 22 23
+              Type.ParamClause 23 23
+              Type.Bounds 23 23
+          Ctor.Primary 24 40
+            Name.Anonymous 24 24
+            Term.ParamClause 24 40
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+              Term.Param 33 39
+                Term.Name 33 34
+                Type.Name 36 39
+          Template 45 81
+            Init 56 64
+              Type.Apply 56 64
+                Type.Name 56 61
+                Type.ArgClause 61 64
+                  Type.Name 62 63
+              Name.Anonymous 64 64
+            Template.Body 64 81
+              Term.Apply 68 81
+                Term.Name 68 75
+                Term.ArgClause 75 81
+                  Lit.Boolean 76 80
+#!program 212 line 394 Stat dialects.Scala3 :: not-derives
+object W212 {
+class A:
+  def derives() = ???
+  derives()
+
+}
+#!scalac ok
+#!regions I22/2 L44/2 O57/
+#!layout
+Source 0 60
+  Defn.Object 0 59
+    Term.Name 7 11
+    Template 12 59
+      Template.Body 12 59
+        Defn.Class 14 56
+          Type.Name 20 21
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 56
+            Template.Body 21 56
+              Defn.Def 25 44
+                Term.Name 29 36
+                Member.ParamClauseGroup 36 38
+                  Type.ParamClause 36 36
+                  Term.ParamClause 36 38
+                Term.Name 41 44
+              Term.Apply 47 56
+                Term.Name 47 54
+                Term.ArgClause 54 56
+#!program 213 line 401 Stat dialects.Scala3 :: not-derives
+object W213 {
+class A:
+  def
+    derives() = ???
+  derives()
+
+}
+#!scalac ok
+#!regions I22/2 L48/2 O61/
+#!layout
+Source 0 64
+  Defn.Object 0 63
+    Term.Name 7 11
+    Template 12 63
+      Template.Body 12 63
+        Defn.Class 14 60
+          Type.Name 20 21
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 60
+            Template.Body 21 60
+              Defn.Def 25 48
+                Term.Name 33 40
+                Member.ParamClauseGroup 40 42
+                  Type.ParamClause 40 40
+                  Term.ParamClause 40 42
+                Term.Name 45 48
+              Term.Apply 51 60
+                Term.Name 51 58
+                Term.ArgClause 58 60

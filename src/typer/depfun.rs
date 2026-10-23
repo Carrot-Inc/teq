@@ -155,12 +155,12 @@ impl<'a> Worker<'a> {
     }
 
     /// A named function type's parameter of the type expression `p`: from its name to its type
-    /// (`SyntaxNotes::fun_param_starts`), the type's own span where the parser recorded none.
+    /// (`SyntaxNotes::named_type_starts`), the type's own span where the parser recorded none.
     fn fun_param_span(&self, p: TyExprId) -> Span {
         let ast = self.cur_ast();
         let ty = ast.ty_spans[p.idx()];
-        match ast.notes.fun_param_starts.binary_search_by_key(&p, |&(t, _)| t) {
-            Ok(k) => Span::new(ast.notes.fun_param_starts[k].1, ty.end),
+        match ast.notes.named_type_starts.binary_search_by_key(&p, |&(t, _)| t) {
+            Ok(k) => Span::new(ast.notes.named_type_starts[k].1, ty.end),
             Err(_) => ty,
         }
     }

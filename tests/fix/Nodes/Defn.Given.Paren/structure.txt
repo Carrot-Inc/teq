@@ -1,0 +1,175 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Givens of a parenthesized type, their form as scalameta 4.17.4's `givenDecl` decides it (structure.txt): a body or a\n// constructor call after the type's parentheses a `Defn.Given`, its `Init` from the parenthesis; nothing after them\n// a `Decl.GivenAnonymous`.\npackage nodes.Defn_Given_Paren\n\ntrait A\ntrait B\ntrait C\nclass D\n\nobject Defn_Given_Paren:\n  val marker = 0 // assert: DumpStructure.structure\n  given (A) with {}\n  given (B)\n  given C with {}\n  given (D)()\n"
+  stats Pkg syntax="package nodes.Defn_Given_Paren\n\ntrait A\ntrait B\ntrait C\nclass D\n\nobject Defn_Given_Paren:\n  val marker = 0 // assert: DumpStructure.structure\n  given (A) with {}\n  given (B)\n  given C with {}\n  given (D)()"
+    .stats = [Defn.Trait "trait A", Defn.Trait "trait B", Defn.Trait "trait C", Defn.Class "class D", Defn.Object "object Defn_Given_Paren:\n  val marker = 0 // assert: DumpStructure.structure\n  given (A) with {}\n  given (B)\n  given C with {}\n  given (D)()"]
+    ref Term.Select syntax="nodes.Defn_Given_Paren"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Defn_Given_Paren" syntax="Defn_Given_Paren"
+    body Pkg.Body syntax="trait A\ntrait B\ntrait C\nclass D\n\nobject Defn_Given_Paren:\n  val marker = 0 // assert: DumpStructure.structure\n  given (A) with {}\n  given (B)\n  given C with {}\n  given (D)()"
+      stats Defn.Trait syntax="trait A"
+        .tparams = []
+        mods Nil
+        name Type.Name value="A" syntax="A"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax=""
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Nil
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Trait syntax="trait B"
+        .tparams = []
+        mods Nil
+        name Type.Name value="B" syntax="B"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax=""
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Nil
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Trait syntax="trait C"
+        .tparams = []
+        mods Nil
+        name Type.Name value="C" syntax="C"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax=""
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Nil
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Class syntax="class D"
+        .tparams = []
+        mods Nil
+        name Type.Name value="D" syntax="D"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax=""
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Nil
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Object syntax="object Defn_Given_Paren:\n  val marker = 0 // assert: DumpStructure.structure\n  given (A) with {}\n  given (B)\n  given C with {}\n  given (D)()"
+        mods Nil
+        name Term.Name value="Defn_Given_Paren" syntax="Defn_Given_Paren"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  given (A) with {}\n  given (B)\n  given C with {}\n  given (D)()"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Given "given (A) with {}", Decl.GivenAnonymous "given (B)", Defn.Given "given C with {}", Defn.Given "given (D)()"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  given (A) with {}\n  given (B)\n  given C with {}\n  given (D)()"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Given syntax="given (A) with {}"
+              .paramClauses = []
+              .tparams = []
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              templ Template syntax="(A) with {}"
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Init syntax="(A)"
+                  .argss = []
+                  tpe Type.Name value="A" syntax="A"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax="{}"
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Decl.GivenAnonymous syntax="given (B)"
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              decltpe Type.Name value="B" syntax="B"
+            stats Defn.Given syntax="given C with {}"
+              .paramClauses = []
+              .tparams = []
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              templ Template syntax="C with {}"
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Init syntax="C"
+                  .argss = []
+                  tpe Type.Name value="C" syntax="C"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax="{}"
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Given syntax="given (D)()"
+              .paramClauses = []
+              .tparams = []
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              templ Template syntax="(D)()"
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Init syntax="(D)()"
+                  .argss = [[]]
+                  tpe Type.Name value="D" syntax="D"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Term.ArgClause syntax="()"
+                    values Nil
+                    mod None
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+          derives Nil

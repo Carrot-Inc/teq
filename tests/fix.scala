@@ -7,7 +7,7 @@
 // a caret line and a message), no more and no fewer; the exit is 1 where an error remains, else 0; a second run over
 // what the first left changes nothing and prints the same; `--check` over the input changes nothing and exits 1
 // where there is an edit or a lint. A script's case is `input.sc` and `output.sc`. A case with a `refused.txt` is one the run refuses: exit 2, that text among what it
-// prints, every file as it was. Then the verb's own cases (`verb`), the rules' phase over several workers (`parallel`) and the jobs' typing over several workers (`typing`), below. `--record` writes each expected.txt from
+// prints, every file as it was. A build's case, a directory with a teq.lock, is run by `teq fix` twice (below). Then the verb's own cases (`verb`), the rules' phase over several workers (`parallel`) and the jobs' typing over several workers (`typing`), below. `--record` writes each expected.txt from
 // a run whose lints match their assertions. Run from the repository's root:
 // `./teq interp tests/fix.scala [-- --teq <binary>] [--record] [--only <Rule/Case prefix>]`.
 import java.nio.file.{Files, Path, Paths, StandardCopyOption}
@@ -72,7 +72,8 @@ import scala.jdk.CollectionConverters.*
       val outputMatches =
         if Files.exists(c.resolve(outputName)) then withoutHeader(out1).trim == expectedOut.trim else out1 == expectedOut
       if !outputMatches then problems += s"the output differs from $outputName:\n${diff(expectedOut, withoutHeader(out1))}"
-      problems ++= checkAsserts(input, parsed)
+      // The run's lints are at the lines of the file it leaves, whose assertions they answer.
+      problems ++= checkAsserts(out1, parsed)
       val expectedStatus = if parsed.exists(_.severity == "error") then 1 else 0
       if r1.status != expectedStatus then problems += s"exit ${r1.status}, expected $expectedStatus"
       val expectedFile = c.resolve("expected.txt")
@@ -81,16 +82,67 @@ import scala.jdk.CollectionConverters.*
       else
         val want = if Files.exists(expectedFile) then read(expectedFile) else ""
         if lints != want then problems += s"the lints differ from expected.txt:\n${diff(want, lints)}"
+      // A case with a `scalameta.txt`, scalameta 4.17.4's tree of its input (support/MetaDump.scala): the tree its
+      // DumpLayout lint prints is that one, node for node.
+      val layout = c.resolve("scalameta.txt")
+      if Files.exists(layout) then
+        val printed = lints.linesIterator.dropWhile(!_.endsWith("BEGIN")).drop(1).takeWhile(_ != "END").mkString("\n")
+        val want = read(layout).linesIterator.mkString("\n")
+        if printed != want then problems += s"the tree differs from scalameta.txt's:\n${diff(want, printed)}"
+      // A case with a `structure.txt`, scalameta 4.17.4's structure of its input (support/MetaStructure.scala): the
+      // structure its DumpStructure lint prints is that one, every field of every node (the node contract).
+      val structure = c.resolve("structure.txt")
+      if Files.exists(structure) then
+        val printed = lints.linesIterator.dropWhile(!_.endsWith("BEGIN")).drop(1).takeWhile(_ != "END").mkString("\n")
+        val want = read(structure).linesIterator.mkString("\n")
+        if printed != want then problems += s"the structure differs from structure.txt's:\n${diff(want, printed)}"
       // A second run over what the first left changes nothing and prints what the first printed of it.
       val dir = work.resolve(name)
       val r2 = command(teq, name, inputName, extras, confFile, classpath, false, work).run()
       if read(dir.resolve(inputName)) != out1 then problems += "a second run changed the file again"
       if out1 == input && r2.errAll().replace(work.toString + "/", "") != lints then problems += "a second run printed other lints"
-      // `--check` changes nothing.
+      // `--check` changes nothing, and prints round one's lints at the input's lines, which its assertions answer.
       val (rc, outc) = runOn(true)
+      problems ++= checkAsserts(input, lintsOf(rc.errAll().replace(work.toString + "/", ""), name + "/" + inputName)).map("--check: " + _)
       val checkStatus = if out1 != input || lints.linesIterator.exists(_.matches(".*: (error|warning|info): \\[.*")) then 1 else 0
       if outc != input then problems += "--check changed the file"
       if rc.status != checkStatus then problems += s"--check exited ${rc.status}, expected $checkStatus"
+    if problems.isEmpty then pass += 1 else bad(name, problems.mkString("\n  "))
+
+  // A build's case, a directory holding a teq.lock with the configurations and sources it names: `teq fix` in a copy of
+  // it, twice. The first leaves the files `output/` holds (the others as they were) and prints `expected.txt`, exit 1
+  // where an error is among it; the second, over what the first left, exits as the first and prints the same, as one
+  // run reports what the next identical one does.
+  val builds: Vector[Path] =
+    Files.list(root).iterator.asScala.toVector.filter(Files.isDirectory(_)).filterNot(_.getFileName.toString == "support").sorted
+      .flatMap(r => Files.list(r).iterator.asScala.toVector.filter(c => Files.exists(c.resolve("teq.lock"))).sorted)
+      .filter(c => only.forall(o => root.relativize(c).toString.replace('\\', '/').startsWith(o)))
+  for c <- builds do
+    val name = root.relativize(c).toString.replace('\\', '/')
+    val dir = work.resolve(name)
+    Sh.remove(dir)
+    val files = Files.walk(c).iterator.asScala.toVector.filter(Files.isRegularFile(_)).map(c.relativize).filterNot(f => f.startsWith("output") || f.toString == "expected.txt").sorted
+    for f <- files do
+      Files.createDirectories(dir.resolve(f).getParent)
+      Files.copy(c.resolve(f), dir.resolve(f))
+    def fixRun() = Sh(teq, "fix").in(dir).timeout(300).check(false).run()
+    val r1 = fixRun()
+    val lints = r1.errAll()
+    val r2 = fixRun()
+    val problems = scala.collection.mutable.ListBuffer.empty[String]
+    val expectedStatus = if lints.linesIterator.exists(_.contains(": error: [")) then 1 else 0
+    if r1.status != expectedStatus then problems += s"exit ${r1.status}, expected $expectedStatus:\n$lints"
+    if r2.status != r1.status || r2.errAll() != lints then problems += s"the second run exited ${r2.status} printing\n${r2.errAll()}where the first exited ${r1.status} printing\n$lints"
+    for f <- files if f.toString.endsWith(".scala") do
+      val output = c.resolve("output").resolve(f)
+      val want = read(if Files.exists(output) then output else c.resolve(f))
+      if read(dir.resolve(f)) != want then problems += s"$f differs:\n${diff(want, read(dir.resolve(f)))}"
+    val expectedFile = c.resolve("expected.txt")
+    if record && problems.isEmpty then
+      if lints.nonEmpty then Files.writeString(expectedFile, lints) else Files.deleteIfExists(expectedFile)
+    else
+      val want = if Files.exists(expectedFile) then read(expectedFile) else ""
+      if lints != want then problems += s"the lints differ from expected.txt:\n${diff(want, lints)}"
     if problems.isEmpty then pass += 1 else bad(name, problems.mkString("\n  "))
 
   if only.forall(o => "verb".startsWith(o) || o.startsWith("verb")) then
@@ -110,7 +162,9 @@ def read(p: Path): String = new String(Files.readAllBytes(p), java.nio.charset.S
 
 def command(teq: String, name: String, input: String, extras: Vector[Path], conf: Path, classpath: Option[String], check: Boolean, dir: Path): Sh.Cmd =
   val files = (name + "/" + input) +: extras.map(e => name + "/" + e.getFileName)
-  val base = Vector(teq, "compiler", "fix") ++ files ++ Vector("--config", conf.toString) ++ classpath.toVector.flatMap(cp => Vector("--classpath", cp)) ++ (if check then Vector("--check") else Vector())
+  // A `// teq: <flags>` line of the input passes those flags (`--kind-projector`), as tests/run.sh's cases do.
+  val flags = read(dir.resolve(name).resolve(input)).linesIterator.collectFirst { case l if l.startsWith("// teq: ") => l.stripPrefix("// teq: ").split(' ').toVector.filter(_.nonEmpty) }.getOrElse(Vector())
+  val base = Vector(teq, "compiler", "fix") ++ files ++ Vector("--config", conf.toString) ++ classpath.toVector.flatMap(cp => Vector("--classpath", cp)) ++ flags ++ (if check then Vector("--check") else Vector())
   Sh(base*).in(dir).timeout(300).check(false)
 
 /** The leading comment of a fixture, its configuration, with each `file:` entry made absolute from `dir`. */
@@ -215,9 +269,12 @@ object Verb:
          |    url: https://repo1.maven.org/maven2/
          |""".stripMargin
 
-  def project(name: String, deps: List[String], excludes: List[String] = Nil, generators: String = "", files: List[String] = Nil): String =
+  /** A project's block; `scalafix` the fields of the compile configuration's `scalafix` record, as sbt-teq exports it,
+    * and `root` its source root where it is not `<name>/src`. */
+  def project(name: String, deps: List[String], excludes: List[String] = Nil, generators: String = "", files: List[String] = Nil, scalafix: List[String] = Nil, root: String = ""): String =
+    val own = if root.isEmpty then s"$name/src" else root
     val cp = deps.map(d => s"          - {configuration: compile, project: $d}\n").mkString + files.map(f => s"          - {file: $f}\n").mkString
-    val sources = (deps.map(d => s"        - $d/src\n") :+ s"        - $name/src\n").mkString
+    val sources = (deps.map(d => s"        - $d/src\n") :+ s"        - $own\n").mkString
     s"""|  $name:
         |    base: $name
         |    configurations:
@@ -233,9 +290,9 @@ object Verb:
         |          werror: false
         |        generators:${if generators.isEmpty then " []" else "\n" + generators}
         |        mainClasses: []
-        |        resources: []
+        |        resources: []${if scalafix.isEmpty then "" else "\n        scalafix:" + scalafix.map(f => s"\n          $f").mkString}
         |        sources:
-        |          - $name/src
+        |          - $own
         |    description:
         |      cacheableState: []
         |      excludes:${if excludes.isEmpty then " []" else excludes.map(e => s"\n        - $e").mkString}
@@ -322,6 +379,57 @@ object Verb:
     expect("generated not named", rgf.status == 2 && rgf.errAll().contains("BuildInfo.scala is no source of the projects selected"), s"exit ${rgf.status}: ${rgf.errAll()}")
     // A relative `--config` from a directory under the root: its `file:` rules beside it, though the run works from the
     // build's root.
+    // The record lists each document of each job with the lints that job gave it, before a file's lints are merged.
+    val recordFile = work.resolve("verb-record.txt")
+    val rrec = Sh(teq, "fix").in(build(work, "record")).withEnv("TEQ_FIX_RECORD" -> recordFile.toString).timeout(300).check(false).run()
+    val recLines = if Files.exists(recordFile) then read(recordFile).linesIterator.toVector else Vector()
+    val appDoc = recLines.exists(l => l.startsWith("doc job=") && l.contains(" key=app") && l.contains("/verb-record/.scalafix.conf ") && l.contains(" round=1 lints=1 ") && l.endsWith(" path=app/src/app/App.scala"))
+    val appLint = recLines.exists(l => l.startsWith("lint job=") && l.contains(" round=1 line=3 col=14 ") && l.contains(" severity=error id=DisableSyntax.var path=app/src/app/App.scala message=\""))
+    expect("record lints", rrec.status == 1 && appDoc && appLint, s"exit ${rrec.status}: ${recLines.filter(l => l.startsWith("doc") || l.startsWith("lint")).mkString("\n")}")
+    // A configuration sbt-scalafix skips is left out unless named; one with a configuration file of its own runs under
+    // it, the rest under the root's, both runs in the record.
+    val skip = build(work, "scalafix-skip", "teq.lock" -> lockWith(project("app", List("core")) + project("core", Nil, scalafix = List("skip: true"))))
+    val rskip = fix(skip, "--check")
+    expect("scalafix skip", rskip.status == 1 && rskip.errAll().contains(varLint) && !rskip.errAll().contains("Core.scala"), s"exit ${rskip.status}: ${rskip.errAll()}")
+    val rnamed = fix(skip, "core/compile")
+    expect("scalafix skip named", rnamed.status == 0 && text(skip, "core/src/core/Core.scala") == coreFixed, s"exit ${rnamed.status}: ${rnamed.errAll()}")
+    val own = build(work, "scalafix-config", "teq.lock" -> lockWith(project("app", List("core"), scalafix = List("config: app/.scalafix.conf", "skip: false")) + project("core", Nil)),
+      "app/.scalafix.conf" -> "rules = [NoUnusedImports]\n")
+    val ownRecord = work.resolve("verb-scalafix-config.txt")
+    val rown = Sh(teq, "fix").in(own).withEnv("TEQ_FIX_RECORD" -> ownRecord.toString).timeout(300).check(false).run()
+    val ownDocs = if Files.exists(ownRecord) then read(ownRecord).linesIterator.filter(_.startsWith("doc job=")).toVector else Vector()
+    val underOwn = ownDocs.exists(l => l.contains("/verb-scalafix-config/app/.scalafix.conf ") && l.endsWith(" path=app/src/app/App.scala"))
+    val underRoot = ownDocs.exists(l => l.contains("/verb-scalafix-config/.scalafix.conf ") && l.endsWith(" path=core/src/core/Core.scala"))
+    expect("scalafix config", rown.status == 0 && text(own, "core/src/core/Core.scala") == coreFixed && !rown.errAll().contains("DisableSyntax") && underOwn && underRoot,
+      s"exit ${rown.status}, app's document under its file: $underOwn, core's under the root's: $underRoot: ${rown.errAll()}\n${ownDocs.mkString("\n")}")
+    val rflag = fix(own, "--check", "--config", ".scalafix.conf")
+    expect("scalafix config flag", rflag.status == 1 && rflag.errAll().contains(varLint), s"exit ${rflag.status}: ${rflag.errAll()}")
+    // The configuration files' parts are one run: a rule one of them lacks refuses it before another's edit is written,
+    // and two that share a file must edit it alike, else nothing is written; with no part, an empty record.
+    val emptyList = "package app\nobject App { val xs: List[Int] = List() }\n"
+    def parts(name: String, lock: String, files: (String, String)*) = build(work, name, (Seq("teq.lock" -> lock, "a.conf" -> "rules = [EmptyCollectionsUnified]\n") ++ files)*)
+    val lacking = parts("parts-lacking", lockWith(project("app", Nil, scalafix = List("config: a.conf", "skip: false")) + project("core", Nil, scalafix = List("config: b.conf", "skip: false"))),
+      "b.conf" -> "rules = [MissingRule]\n", "app/src/app/App.scala" -> emptyList)
+    val rlack = fix(lacking)
+    expect("parts lacking", rlack.status == 2 && rlack.errAll().contains("unknown rule MissingRule") && text(lacking, "app/src/app/App.scala") == emptyList, s"exit ${rlack.status}: ${rlack.errAll()}")
+    val shared = parts("parts-shared", lockWith(project("a", Nil, scalafix = List("config: a.conf", "skip: false"), root = "shared/src") + project("b", Nil, scalafix = List("config: b.conf", "skip: false"), root = "shared/src")),
+      "b.conf" -> "rules = [DisableSyntax]\n", "shared/src/app/App.scala" -> emptyList)
+    val rshared = fix(shared)
+    expect("parts shared", rshared.status == 2 && rshared.errAll().contains("shared/src/app/App.scala: the configurations that share the file edit it differently") && text(shared, "shared/src/app/App.scala") == emptyList,
+      s"exit ${rshared.status}: ${rshared.errAll()}")
+    val skipped = build(work, "parts-none", "teq.lock" -> lockWith(project("app", List("core"), scalafix = List("skip: true")) + project("core", Nil, scalafix = List("skip: true"))))
+    val skippedRecord = work.resolve("verb-parts-none.txt")
+    Files.writeString(skippedRecord, "doc job=0 key=app/compile path=stale\n")
+    val rskipped = Sh(teq, "fix", "--check").in(skipped).withEnv("TEQ_FIX_RECORD" -> skippedRecord.toString).timeout(300).check(false).run()
+    expect("parts none", rskipped.status == 0 && read(skippedRecord).isEmpty, s"exit ${rskipped.status}, the record ${read(skippedRecord).take(200)}: ${rskipped.errAll()}")
+    // `--rules` chooses among the rules the configuration discovers: a `file:` entry's rule by its name, and a shipped
+    // rule alone with the `file:` rule left out.
+    val counter = "package rules\nimport teq.fix.*\nfinal class Counter extends SyntacticRule(\"Counter\"):\n  override def fix(using doc: SyntacticDocument): Patch =\n    doc.tokens.find(_.text == \"counter\").map(t => Patch.lint(Diagnostic(\"found\", \"a counter\", t.pos))).asPatch\n"
+    val sel = build(work, "rules-selection", ".scalafix.conf" -> "rules = [DisableSyntax, \"file:rules/Counter.scala\"]\nDisableSyntax.noVars = true\n", "rules/Counter.scala" -> counter)
+    val rsel = fix(sel, "--rules", "Counter")
+    expect("rules selection", rsel.status == 1 && rsel.errAll().contains("app/src/app/App.scala:3:18: error: [Counter.found]") && !rsel.errAll().contains("DisableSyntax"), s"exit ${rsel.status}: ${rsel.errAll()}")
+    val rsel2 = fix(sel, "--rules", "DisableSyntax")
+    expect("rules selection shipped", rsel2.status == 1 && rsel2.errAll().contains("[DisableSyntax.var]") && !rsel2.errAll().contains("Counter"), s"exit ${rsel2.status}: ${rsel2.errAll()}")
     val rc2 = build(work, "relative-config", "core/.scalafix.conf" -> "rules = [\"file:rules/R.scala\"]\n",
       "core/rules/R.scala" -> "package rules\nimport teq.fix.*\nfinal class R extends SyntacticRule(\"R\"):\n  override def fix(using doc: SyntacticDocument): Patch = Patch.empty\n")
     val rrc = Sh(teq, "fix", "--config", ".scalafix.conf", "--check").in(rc2.resolve("core")).timeout(300).check(false).run()
@@ -339,9 +447,22 @@ object Verb:
     val s = build(work, "setting", ".scalafix.conf" -> "rules = [DisableSyntax]\nDisableSyntax.noVar = true\n")
     val rs = fix(s)
     expect("unknown setting", rs.status == 2 && rs.errAll().contains(".scalafix.conf:2:23: DisableSyntax.noVar: no such setting"), s"exit ${rs.status}: ${rs.errAll()}")
-    val h = build(work, "hocon", ".scalafix.conf" -> "include \"other.conf\"\nrules = [DisableSyntax]\n")
+    val h = build(work, "hocon", ".scalafix.conf" -> "include url(\"https://example.com/x.conf\")\nrules = [DisableSyntax]\n")
     val rh = fix(h)
-    expect("unsupported hocon", rh.status == 2 && rh.errAll().contains(".scalafix.conf:1:1: `include` is not supported"), s"exit ${rh.status}: ${rh.errAll()}")
+    expect("unsupported hocon", rh.status == 2 && rh.errAll().contains(".scalafix.conf:1:1: `include url(\"https://example.com/x.conf\")`: teq reads no URL"), s"exit ${rh.status}: ${rh.errAll()}")
+    // The configuration's includes and substitutions as typesafe-config resolves them: an included file's regex list
+    // extended by the including file's reference to it; an included file's error and its unread setting at their
+    // places there.
+    val inc = build(work, "include", ".scalafix.conf" -> "include \"base.conf\"\nDisableSyntax.regex = ${DisableSyntax.regex} [{ id = counter, pattern = \"counter\" }]\n",
+      "base.conf" -> "rules = [DisableSyntax]\nDisableSyntax.regex = [{ id = core, pattern = \"Core\" }]\n")
+    val ri = fix(inc)
+    expect("include", ri.status == 1 && ri.errAll().contains("[DisableSyntax.core]") && ri.errAll().contains("app/src/app/App.scala:3:18: error: [DisableSyntax.counter]"), s"exit ${ri.status}: ${ri.errAll()}")
+    val ie = build(work, "include-error", ".scalafix.conf" -> "include \"base.conf\"\n", "base.conf" -> "rules = [DisableSyntax]\nDisableSyntax.noVars = ${missing}\n")
+    val rie = fix(ie)
+    expect("include error", rie.status == 2 && rie.errAll().contains("base.conf:2:24: the substitution ${missing} has no value"), s"exit ${rie.status}: ${rie.errAll()}")
+    val iu = build(work, "include-setting", ".scalafix.conf" -> "include \"base.conf\"\n", "base.conf" -> "rules = [DisableSyntax]\nDisableSyntax.noVar = true\n")
+    val riu = fix(iu)
+    expect("include setting", riu.status == 2 && riu.errAll().contains("base.conf:2:23: DisableSyntax.noVar: no such setting"), s"exit ${riu.status}: ${riu.errAll()}")
     // The severity filters, scalafix's LintConfig: an error made a warning leaves exit 0; the error filter wins.
     val w = build(work, "warning", ".scalafix.conf" -> "rules = [DisableSyntax]\nDisableSyntax.noVars = true\nlint.warning.includes = \"DisableSyntax\"\n")
     val rw = fix(w)

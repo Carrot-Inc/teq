@@ -1,0 +1,1962 @@
+# The programs of scalameta 4.17.4's NewFunctionsSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 850 line 9 Type dialects.Scala3 :: type-lambda
+object W850 {
+  type T = [X, Y] =>> Map[Y, X]
+}
+#!scalac ok
+#!regions L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Type 16 45
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.Lambda 25 45
+            Type.ParamClause 25 31
+              Type.Param 26 27
+                Type.Name 26 27
+                Type.ParamClause 27 27
+                Type.Bounds 27 27
+              Type.Param 29 30
+                Type.Name 29 30
+                Type.ParamClause 30 30
+                Type.Bounds 30 30
+            Type.Apply 36 45
+              Type.Name 36 39
+              Type.ArgClause 39 45
+                Type.Name 40 41
+                Type.Name 43 44
+          Type.Bounds 23 23
+#!program 851 line 12 Type dialects.Scala3 :: type-lambda
+object W851 {
+  type T = [X >: L <: U] =>> R
+}
+#!scalac ok
+#!regions L44/
+#!layout
+Source 0 47
+  Defn.Object 0 46
+    Term.Name 7 11
+    Template 12 46
+      Template.Body 12 46
+        Defn.Type 16 44
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.Lambda 25 44
+            Type.ParamClause 25 38
+              Type.Param 26 37
+                Type.Name 26 27
+                Type.ParamClause 28 28
+                Type.Bounds 28 37
+                  Type.Name 31 32
+                  Type.Name 36 37
+            Type.Name 43 44
+          Type.Bounds 23 23
+#!program 852 line 15 Type dialects.Scala3 :: type-lambda
+object W852 {
+  type T = [X] =>> (X, X)
+}
+#!scalac ok
+#!regions L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Defn.Type 16 39
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.Lambda 25 39
+            Type.ParamClause 25 28
+              Type.Param 26 27
+                Type.Name 26 27
+                Type.ParamClause 27 27
+                Type.Bounds 27 27
+            Type.Tuple 33 39
+              Type.Name 34 35
+              Type.Name 37 38
+          Type.Bounds 23 23
+#!program 853 line 18 Type dialects.Scala3 :: type-lambda
+object W853 {
+  type T = [X] =>> [Y] =>> (X, Y)
+}
+#!scalac ok
+#!regions L47/
+#!layout
+Source 0 50
+  Defn.Object 0 49
+    Term.Name 7 11
+    Template 12 49
+      Template.Body 12 49
+        Defn.Type 16 47
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.Lambda 25 47
+            Type.ParamClause 25 28
+              Type.Param 26 27
+                Type.Name 26 27
+                Type.ParamClause 27 27
+                Type.Bounds 27 27
+            Type.Lambda 33 47
+              Type.ParamClause 33 36
+                Type.Param 34 35
+                  Type.Name 34 35
+                  Type.ParamClause 35 35
+                  Type.Bounds 35 35
+              Type.Tuple 41 47
+                Type.Name 42 43
+                Type.Name 45 46
+          Type.Bounds 23 23
+#!program 854 line 24 Stat dialects.Scala3 :: type-lambda-alias
+object W854 {
+type Tuple = [X] =>> (X, X)
+}
+#!scalac ok
+#!regions L41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 11
+    Template 12 43
+      Template.Body 12 43
+        Defn.Type 14 41
+          Type.Name 19 24
+          Type.ParamClause 25 25
+          Type.Lambda 27 41
+            Type.ParamClause 27 30
+              Type.Param 28 29
+                Type.Name 28 29
+                Type.ParamClause 29 29
+                Type.Bounds 29 29
+            Type.Tuple 35 41
+              Type.Name 36 37
+              Type.Name 39 40
+          Type.Bounds 25 25
+#!program 855 line 32 Stat dialects.Scala3 :: context-function-single
+object W855 {
+def table(init: Table ?=> Unit): Unit
+}
+#!scalac ok
+#!regions L51/
+#!layout
+Source 0 54
+  Defn.Object 0 53
+    Term.Name 7 11
+    Template 12 53
+      Template.Body 12 53
+        Decl.Def 14 51
+          Term.Name 18 23
+          Member.ParamClauseGroup 23 45
+            Type.ParamClause 23 23
+            Term.ParamClause 23 45
+              Term.Param 24 44
+                Term.Name 24 28
+                Type.ContextFunction 30 44
+                  Type.FuncParamClause 30 35
+                    Type.Name 30 35
+                  Type.Name 40 44
+          Type.Name 47 51
+#!program 856 line 42 Stat dialects.Scala3 :: context-function-multi
+object W856 {
+def table(init: (T1, List[T2]) ?=> Unit): Unit
+}
+#!scalac ok
+#!regions L60/
+#!layout
+Source 0 63
+  Defn.Object 0 62
+    Term.Name 7 11
+    Template 12 62
+      Template.Body 12 62
+        Decl.Def 14 60
+          Term.Name 18 23
+          Member.ParamClauseGroup 23 54
+            Type.ParamClause 23 23
+            Term.ParamClause 23 54
+              Term.Param 24 53
+                Term.Name 24 28
+                Type.ContextFunction 30 53
+                  Type.FuncParamClause 30 44
+                    Type.Name 31 33
+                    Type.Apply 35 43
+                      Type.Name 35 39
+                      Type.ArgClause 39 43
+                        Type.Name 40 42
+                  Type.Name 49 53
+          Type.Name 56 60
+#!program 857 line 52 Stat dialects.Scala3 :: context-function-as-typedef
+object W857 {
+type Executable[T] = ExecutionContext ?=> T
+}
+#!scalac ok
+#!regions L57/
+#!layout
+Source 0 60
+  Defn.Object 0 59
+    Term.Name 7 11
+    Template 12 59
+      Template.Body 12 59
+        Defn.Type 14 57
+          Type.Name 19 29
+          Type.ParamClause 29 32
+            Type.Param 30 31
+              Type.Name 30 31
+              Type.ParamClause 31 31
+              Type.Bounds 31 31
+          Type.ContextFunction 35 57
+            Type.FuncParamClause 35 51
+              Type.Name 35 51
+            Type.Name 56 57
+          Type.Bounds 33 33
+#!program 858 line 63 Stat dialects.Scala3 :: context-function-as-typedef
+object W858 {
+x match {
+  case t: (Context ?=> Symbol) @unchecked =>
+}
+}
+#!scalac ok
+#!regions L70/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Term.Match 14 70
+          Term.Name 14 15
+          Term.CasesBlock 22 70
+            Case 26 68
+              Pat.Typed 31 65
+                Pat.Var 31 32
+                  Term.Name 31 32
+                Type.Annotate 34 65
+                  Type.ContextFunction 35 53
+                    Type.FuncParamClause 35 42
+                      Type.Name 35 42
+                    Type.Name 47 53
+                  Mod.Annot 55 65
+                    Init 56 65
+                      Type.Name 56 65
+                      Name.Anonymous 66 66
+              Term.Block 69 69
+#!program 859 line 77 Stat dialects.Scala3 :: context-function-as-term
+object W859 {
+def fx: String ?=> Int = s ?=> 3
+}
+#!scalac ok
+#!regions L46/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 11
+    Template 12 48
+      Template.Body 12 48
+        Defn.Def 14 46
+          Term.Name 18 20
+          Type.ContextFunction 22 36
+            Type.FuncParamClause 22 28
+              Type.Name 22 28
+            Type.Name 33 36
+          Term.ContextFunction 39 46
+            Term.ParamClause 39 40
+              Term.Param 39 40
+                Term.Name 39 40
+            Lit.Int 45 46
+#!program 860 line 86 Stat dialects.Scala3 :: context-function-as-term
+object W860 {
+def fy: (String, Int) ?=> Int = (s, i) ?=> 3
+}
+#!scalac ok
+#!regions L58/
+#!layout
+Source 0 61
+  Defn.Object 0 60
+    Term.Name 7 11
+    Template 12 60
+      Template.Body 12 60
+        Defn.Def 14 58
+          Term.Name 18 20
+          Type.ContextFunction 22 43
+            Type.FuncParamClause 22 35
+              Type.Name 23 29
+              Type.Name 31 34
+            Type.Name 40 43
+          Term.ContextFunction 46 58
+            Term.ParamClause 46 52
+              Term.Param 47 48
+                Term.Name 47 48
+              Term.Param 50 51
+                Term.Name 50 51
+            Lit.Int 57 58
+#!program 861 line 97 Stat dialects.Scala3 :: polymorphic-func-term
+object W861 {
+val t0 = [T] => (ts: List[T]) => ts.headOption
+}
+#!scalac ok
+#!regions L60/
+#!layout
+Source 0 63
+  Defn.Object 0 62
+    Term.Name 7 11
+    Template 12 62
+      Template.Body 12 62
+        Defn.Val 14 60
+          Pat.Var 18 20
+            Term.Name 18 20
+          Term.PolyFunction 23 60
+            Type.ParamClause 23 26
+              Type.Param 24 25
+                Type.Name 24 25
+                Type.ParamClause 25 25
+                Type.Bounds 25 25
+            Term.Function 30 60
+              Term.ParamClause 30 43
+                Term.Param 31 42
+                  Term.Name 31 33
+                  Type.Apply 35 42
+                    Type.Name 35 39
+                    Type.ArgClause 39 42
+                      Type.Name 40 41
+              Term.Select 47 60
+                Term.Name 47 49
+                Term.Name 50 60
+#!program 862 line 105 Stat dialects.Scala3 :: polymorphic-func-term-identity
+object W862 {
+val pid = [T] => (t: T) => t
+}
+#!scalac ok
+#!regions L42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Defn.Val 14 42
+          Pat.Var 18 21
+            Term.Name 18 21
+          Term.PolyFunction 24 42
+            Type.ParamClause 24 27
+              Type.Param 25 26
+                Type.Name 25 26
+                Type.ParamClause 26 26
+                Type.Bounds 26 26
+            Term.Function 31 42
+              Term.ParamClause 31 37
+                Term.Param 32 36
+                  Term.Name 32 33
+                  Type.Name 35 36
+              Term.Name 41 42
+#!program 863 line 111 Stat dialects.Scala3 :: polymorphic-func-term-complex
+object W863 {
+val t1 = [F[_], G[_], T] => (ft: F[T], f: F[T] => G[T]) => f(ft)
+}
+#!scalac ok
+#!regions L78/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Defn.Val 14 78
+          Pat.Var 18 20
+            Term.Name 18 20
+          Term.PolyFunction 23 78
+            Type.ParamClause 23 38
+              Type.Param 24 28
+                Type.Name 24 25
+                Type.ParamClause 25 28
+                  Type.Param 26 27
+                    Name.Placeholder 26 27
+                    Type.ParamClause 27 27
+                    Type.Bounds 27 27
+                Type.Bounds 28 28
+              Type.Param 30 34
+                Type.Name 30 31
+                Type.ParamClause 31 34
+                  Type.Param 32 33
+                    Name.Placeholder 32 33
+                    Type.ParamClause 33 33
+                    Type.Bounds 33 33
+                Type.Bounds 34 34
+              Type.Param 36 37
+                Type.Name 36 37
+                Type.ParamClause 37 37
+                Type.Bounds 37 37
+            Term.Function 42 78
+              Term.ParamClause 42 69
+                Term.Param 43 51
+                  Term.Name 43 45
+                  Type.Apply 47 51
+                    Type.Name 47 48
+                    Type.ArgClause 48 51
+                      Type.Name 49 50
+                Term.Param 53 68
+                  Term.Name 53 54
+                  Type.Function 56 68
+                    Type.FuncParamClause 56 60
+                      Type.Apply 56 60
+                        Type.Name 56 57
+                        Type.ArgClause 57 60
+                          Type.Name 58 59
+                    Type.Apply 64 68
+                      Type.Name 64 65
+                      Type.ArgClause 65 68
+                        Type.Name 66 67
+              Term.Apply 73 78
+                Term.Name 73 74
+                Term.ArgClause 74 78
+                  Term.Name 75 77
+#!program 864 line 124 Stat dialects.Scala3 :: poly-function-type
+object W864 {
+type F0 = [T] => List[T] => Option[T]
+}
+#!scalac ok
+#!regions L51/
+#!layout
+Source 0 54
+  Defn.Object 0 53
+    Term.Name 7 11
+    Template 12 53
+      Template.Body 12 53
+        Defn.Type 14 51
+          Type.Name 19 21
+          Type.ParamClause 22 22
+          Type.PolyFunction 24 51
+            Type.ParamClause 24 27
+              Type.Param 25 26
+                Type.Name 25 26
+                Type.ParamClause 26 26
+                Type.Bounds 26 26
+            Type.Function 31 51
+              Type.FuncParamClause 31 38
+                Type.Apply 31 38
+                  Type.Name 31 35
+                  Type.ArgClause 35 38
+                    Type.Name 36 37
+              Type.Apply 42 51
+                Type.Name 42 48
+                Type.ArgClause 48 51
+                  Type.Name 49 50
+          Type.Bounds 22 22
+#!program 865 line 131 Stat dialects.Scala3 :: poly-function-type
+object W865 {
+def foo = {
+  f[[X] =>> String]
+}
+}
+#!scalac ok
+#!regions L45/ L47/
+#!layout
+Source 0 50
+  Defn.Object 0 49
+    Term.Name 7 11
+    Template 12 49
+      Template.Body 12 49
+        Defn.Def 14 47
+          Term.Name 18 21
+          Term.Block 24 47
+            Term.ApplyType 28 45
+              Term.Name 28 29
+              Type.ArgClause 29 45
+                Type.Lambda 30 44
+                  Type.ParamClause 30 33
+                    Type.Param 31 32
+                      Type.Name 31 32
+                      Type.ParamClause 32 32
+                      Type.Bounds 32 32
+                  Type.Name 38 44
+#!program 866 line 146 Stat dialects.Scala3 :: poly-function-type-method
+object W866 {
+def m[T](f: [U] => U => U, t: T) = f(t)
+}
+#!scalac ok
+#!regions L53/
+#!layout
+Source 0 56
+  Defn.Object 0 55
+    Term.Name 7 11
+    Template 12 55
+      Template.Body 12 55
+        Defn.Def 14 53
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 46
+            Type.ParamClause 19 22
+              Type.Param 20 21
+                Type.Name 20 21
+                Type.ParamClause 21 21
+                Type.Bounds 21 21
+            Term.ParamClause 22 46
+              Term.Param 23 39
+                Term.Name 23 24
+                Type.PolyFunction 26 39
+                  Type.ParamClause 26 29
+                    Type.Param 27 28
+                      Type.Name 27 28
+                      Type.ParamClause 28 28
+                      Type.Bounds 28 28
+                  Type.Function 33 39
+                    Type.FuncParamClause 33 34
+                      Type.Name 33 34
+                    Type.Name 38 39
+              Term.Param 41 45
+                Term.Name 41 42
+                Type.Name 44 45
+          Term.Apply 49 53
+            Term.Name 49 50
+            Term.ArgClause 50 53
+              Term.Name 51 52
+#!program 867 line 160 Stat dialects.Scala3 :: poly-function-type-duo
+object W867 {
+type F2 = [T, U] => (T, U) => Either[T, U]
+}
+#!scalac ok
+#!regions L56/
+#!layout
+Source 0 59
+  Defn.Object 0 58
+    Term.Name 7 11
+    Template 12 58
+      Template.Body 12 58
+        Defn.Type 14 56
+          Type.Name 19 21
+          Type.ParamClause 22 22
+          Type.PolyFunction 24 56
+            Type.ParamClause 24 30
+              Type.Param 25 26
+                Type.Name 25 26
+                Type.ParamClause 26 26
+                Type.Bounds 26 26
+              Type.Param 28 29
+                Type.Name 28 29
+                Type.ParamClause 29 29
+                Type.Bounds 29 29
+            Type.Function 34 56
+              Type.FuncParamClause 34 40
+                Type.Name 35 36
+                Type.Name 38 39
+              Type.Apply 44 56
+                Type.Name 44 50
+                Type.ArgClause 50 56
+                  Type.Name 51 52
+                  Type.Name 54 55
+          Type.Bounds 22 22
+#!program 868 line 174 Stat dialects.Scala3 :: poly-function-type-complex
+object W868 {
+type F1 = [F[_], G[_], T] => (F[T], F[T] => G[T]) => G[T]
+}
+#!scalac ok
+#!regions L71/
+#!layout
+Source 0 74
+  Defn.Object 0 73
+    Term.Name 7 11
+    Template 12 73
+      Template.Body 12 73
+        Defn.Type 14 71
+          Type.Name 19 21
+          Type.ParamClause 22 22
+          Type.PolyFunction 24 71
+            Type.ParamClause 24 39
+              Type.Param 25 29
+                Type.Name 25 26
+                Type.ParamClause 26 29
+                  Type.Param 27 28
+                    Name.Placeholder 27 28
+                    Type.ParamClause 28 28
+                    Type.Bounds 28 28
+                Type.Bounds 29 29
+              Type.Param 31 35
+                Type.Name 31 32
+                Type.ParamClause 32 35
+                  Type.Param 33 34
+                    Name.Placeholder 33 34
+                    Type.ParamClause 34 34
+                    Type.Bounds 34 34
+                Type.Bounds 35 35
+              Type.Param 37 38
+                Type.Name 37 38
+                Type.ParamClause 38 38
+                Type.Bounds 38 38
+            Type.Function 43 71
+              Type.FuncParamClause 43 63
+                Type.Apply 44 48
+                  Type.Name 44 45
+                  Type.ArgClause 45 48
+                    Type.Name 46 47
+                Type.Function 50 62
+                  Type.FuncParamClause 50 54
+                    Type.Apply 50 54
+                      Type.Name 50 51
+                      Type.ArgClause 51 54
+                        Type.Name 52 53
+                  Type.Apply 58 62
+                    Type.Name 58 59
+                    Type.ArgClause 59 62
+                      Type.Name 60 61
+              Type.Apply 67 71
+                Type.Name 67 68
+                Type.ArgClause 68 71
+                  Type.Name 69 70
+          Type.Bounds 22 22
+#!program 869 line 185 Stat dialects.Scala3 :: poly-context-function-type
+object W869 {
+type F0 = [T] => List[T] ?=> Option[T]
+}
+#!scalac ok
+#!regions L52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 11
+    Template 12 54
+      Template.Body 12 54
+        Defn.Type 14 52
+          Type.Name 19 21
+          Type.ParamClause 22 22
+          Type.PolyFunction 24 52
+            Type.ParamClause 24 27
+              Type.Param 25 26
+                Type.Name 25 26
+                Type.ParamClause 26 26
+                Type.Bounds 26 26
+            Type.ContextFunction 31 52
+              Type.FuncParamClause 31 38
+                Type.Apply 31 38
+                  Type.Name 31 35
+                  Type.ArgClause 35 38
+                    Type.Name 36 37
+              Type.Apply 43 52
+                Type.Name 43 49
+                Type.ArgClause 49 52
+                  Type.Name 50 51
+          Type.Bounds 22 22
+#!program 870 line 194 Stat dialects.Scala3 :: poly-context-function-complex
+object W870 {
+val t1 = [F[
+    _
+], T] =>
+  (
+      f: F[
+        T
+      ] => G[T]
+) => f(ft)
+}
+#!scalac ok
+#!regions I41/2 O94/ L94/
+#!layout
+Source 0 97
+  Defn.Object 0 96
+    Term.Name 7 11
+    Template 12 96
+      Template.Body 12 96
+        Defn.Val 14 94
+          Pat.Var 18 20
+            Term.Name 18 20
+          Term.PolyFunction 23 94
+            Type.ParamClause 23 38
+              Type.Param 24 34
+                Type.Name 24 25
+                Type.ParamClause 25 34
+                  Type.Param 31 32
+                    Name.Placeholder 31 32
+                    Type.ParamClause 33 33
+                    Type.Bounds 33 33
+                Type.Bounds 34 34
+              Type.Param 36 37
+                Type.Name 36 37
+                Type.ParamClause 37 37
+                Type.Bounds 37 37
+            Term.Function 44 94
+              Term.ParamClause 44 85
+                Term.Param 52 83
+                  Term.Name 52 53
+                  Type.Function 55 83
+                    Type.FuncParamClause 55 75
+                      Type.Apply 55 75
+                        Type.Name 55 56
+                        Type.ArgClause 56 75
+                          Type.Name 66 67
+                    Type.Apply 79 83
+                      Type.Name 79 80
+                      Type.ArgClause 80 83
+                        Type.Name 81 82
+              Term.Apply 89 94
+                Term.Name 89 90
+                Term.ArgClause 90 94
+                  Term.Name 91 93
+#!program 871 line 217 Stat dialects.Scala3 :: poly-function-indentation
+object W871 {
+val thisIsAPolymorphicFunction =
+  [
+      PolymorphicFunctionTypeParam
+  ] =>
+    (polymorphicFunctionParam: List[
+      T
+]) => ts.headOption
+}
+#!scalac ok
+#!regions I46/2 I92/4.2 O157/2 O157/ L157/
+#!layout
+Source 0 160
+  Defn.Object 0 159
+    Term.Name 7 11
+    Template 12 159
+      Template.Body 12 159
+        Defn.Val 14 157
+          Pat.Var 18 44
+            Term.Name 18 44
+          Term.PolyFunction 49 157
+            Type.ParamClause 49 89
+              Type.Param 57 85
+                Type.Name 57 85
+                Type.ParamClause 88 88
+                Type.Bounds 88 88
+            Term.Function 97 157
+              Term.ParamClause 97 140
+                Term.Param 98 139
+                  Term.Name 98 122
+                  Type.Apply 124 139
+                    Type.Name 124 128
+                    Type.ArgClause 128 139
+                      Type.Name 136 137
+              Term.Select 144 157
+                Term.Name 144 146
+                Term.Name 147 157
+#!program 872 line 238 Stat dialects.Scala3 :: dependent-type
+object W872 {
+val extractor: (e: Entry) => e.Key = extractKey
+}
+#!scalac ok
+#!regions L61/
+#!layout
+Source 0 64
+  Defn.Object 0 63
+    Term.Name 7 11
+    Template 12 63
+      Template.Body 12 63
+        Defn.Val 14 61
+          Pat.Var 18 27
+            Term.Name 18 27
+          Type.Function 29 48
+            Type.FuncParamClause 29 39
+              Type.TypedParam 30 38
+                Type.Name 30 31
+                Type.Name 33 38
+            Type.Select 43 48
+              Term.Name 43 44
+              Type.Name 45 48
+          Term.Name 51 61
+#!program 873 line 247 Stat dialects.Scala3 :: dependent-type-context
+object W873 {
+val extractor: (e: Entry) ?=> e.Key = extractKey
+}
+#!scalac ok
+#!regions L62/
+#!layout
+Source 0 65
+  Defn.Object 0 64
+    Term.Name 7 11
+    Template 12 64
+      Template.Body 12 64
+        Defn.Val 14 62
+          Pat.Var 18 27
+            Term.Name 18 27
+          Type.ContextFunction 29 49
+            Type.FuncParamClause 29 39
+              Type.TypedParam 30 38
+                Type.Name 30 31
+                Type.Name 33 38
+            Type.Select 44 49
+              Term.Name 44 45
+              Type.Name 46 49
+          Term.Name 52 62
+#!program 874 line 256 Stat dialects.Scala3 :: dependent-type-multi
+object W874 {
+val extractor: (e: Entry, f: Other) => e.Key = extractKey
+}
+#!scalac ok
+#!regions L71/
+#!layout
+Source 0 74
+  Defn.Object 0 73
+    Term.Name 7 11
+    Template 12 73
+      Template.Body 12 73
+        Defn.Val 14 71
+          Pat.Var 18 27
+            Term.Name 18 27
+          Type.Function 29 58
+            Type.FuncParamClause 29 49
+              Type.TypedParam 30 38
+                Type.Name 30 31
+                Type.Name 33 38
+              Type.TypedParam 40 48
+                Type.Name 40 41
+                Type.Name 43 48
+            Type.Select 53 58
+              Term.Name 53 54
+              Type.Name 55 58
+          Term.Name 61 71
+#!program 875 line 268 Stat dialects.Scala3 :: dependent-type-term
+object W875 {
+type T = (e: Entry) => e.Key
+}
+#!scalac ok
+#!regions L42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Defn.Type 14 42
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Type.Function 23 42
+            Type.FuncParamClause 23 33
+              Type.TypedParam 24 32
+                Type.Name 24 25
+                Type.Name 27 32
+            Type.Select 37 42
+              Term.Name 37 38
+              Type.Name 39 42
+          Type.Bounds 21 21
+#!program 876 line 276 Stat dialects.Scala3 :: dependent-type-term-context
+object W876 {
+type T = (e: Entry) ?=> e.Key
+}
+#!scalac ok
+#!regions L43/
+#!layout
+Source 0 46
+  Defn.Object 0 45
+    Term.Name 7 11
+    Template 12 45
+      Template.Body 12 45
+        Defn.Type 14 43
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Type.ContextFunction 23 43
+            Type.FuncParamClause 23 33
+              Type.TypedParam 24 32
+                Type.Name 24 25
+                Type.Name 27 32
+            Type.Select 38 43
+              Term.Name 38 39
+              Type.Name 40 43
+          Type.Bounds 21 21
+#!program 877 line 285 Stat dialects.Scala3 :: dependent-type-term-multi
+object W877 {
+type T = (e: Entry, o: Other[? <: P]) => e.Key
+}
+#!scalac ok
+#!regions L60/
+#!layout
+Source 0 63
+  Defn.Object 0 62
+    Term.Name 7 11
+    Template 12 62
+      Template.Body 12 62
+        Defn.Type 14 60
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Type.Function 23 60
+            Type.FuncParamClause 23 51
+              Type.TypedParam 24 32
+                Type.Name 24 25
+                Type.Name 27 32
+              Type.TypedParam 34 50
+                Type.Name 34 35
+                Type.Apply 37 50
+                  Type.Name 37 42
+                  Type.ArgClause 42 50
+                    Type.Wildcard 43 49
+                      Type.Bounds 45 49
+                        Type.Name 48 49
+            Type.Select 55 60
+              Term.Name 55 56
+              Type.Name 57 60
+          Type.Bounds 21 21
+#!program 878 line 298 Stat dialects.Scala3 :: dependent-type-arrow-after-nl
+object W878 {
+type T = 
+  (e: Entry) 
+  => e.Key
+
+}
+#!scalac ok
+#!regions I23/2 O49/
+#!layout
+Source 0 52
+  Defn.Object 0 51
+    Term.Name 7 11
+    Template 12 51
+      Template.Body 12 51
+        Defn.Type 14 48
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Type.Function 26 48
+            Type.FuncParamClause 26 36
+              Type.TypedParam 27 35
+                Type.Name 27 28
+                Type.Name 30 35
+            Type.Select 43 48
+              Term.Name 43 44
+              Type.Name 45 48
+          Type.Bounds 21 21
+#!program 879 line 324 Stat dialects.Scala3 :: context-function-arrow-after-nl
+object W879 {
+type Executable[T] =
+  ExecutionContext
+  ?=> T
+
+}
+#!scalac ok
+#!regions I34/2 L53/2 O62/
+#!layout
+Source 0 65
+  Defn.Object 0 64
+    Term.Name 7 11
+    Template 12 64
+      Template.Body 12 64
+        Defn.Type 14 61
+          Type.Name 19 29
+          Type.ParamClause 29 32
+            Type.Param 30 31
+              Type.Name 30 31
+              Type.ParamClause 31 31
+              Type.Bounds 31 31
+          Type.ContextFunction 37 61
+            Type.FuncParamClause 37 53
+              Type.Name 37 53
+            Type.Name 60 61
+          Type.Bounds 33 33
+#!program 880 line 340 Stat dialects.Scala3 :: context-function-arrow-after-nl with parens
+object W880 {
+type Executable[T] =
+  (ExecutionContext)
+  ?=> T
+
+}
+#!scalac ok
+#!regions I34/2 L55/2 O64/
+#!layout
+Source 0 67
+  Defn.Object 0 66
+    Term.Name 7 11
+    Template 12 66
+      Template.Body 12 66
+        Defn.Type 14 63
+          Type.Name 19 29
+          Type.ParamClause 29 32
+            Type.Param 30 31
+              Type.Name 30 31
+              Type.ParamClause 31 31
+              Type.Bounds 31 31
+          Type.ContextFunction 37 63
+            Type.FuncParamClause 37 55
+              Type.Name 38 54
+            Type.Name 62 63
+          Type.Bounds 33 33
+#!program 881 line 366 Stat dialects.Scala3 :: lambda-function-arrow-after-nl
+object W881 {
+type Tuple =
+  [X]
+  =>> (X, X)
+
+}
+#!scalac ok
+#!regions I26/2 L32/2 O46/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 11
+    Template 12 48
+      Template.Body 12 48
+        Defn.Type 14 45
+          Type.Name 19 24
+          Type.ParamClause 25 25
+          Type.Lambda 29 45
+            Type.ParamClause 29 32
+              Type.Param 30 31
+                Type.Name 30 31
+                Type.ParamClause 31 31
+                Type.Bounds 31 31
+            Type.Tuple 39 45
+              Type.Name 40 41
+              Type.Name 43 44
+          Type.Bounds 25 25
+#!program 882 line 382 Stat dialects.Scala3 :: lambda-function-arrow-after-nl no NL after =
+object W882 {
+type Tuple = [X]
+  =>> (X, X)
+
+}
+#!scalac ok
+#!regions L30/ F43/
+#!layout
+Source 0 47
+  Defn.Object 0 46
+    Term.Name 7 11
+    Template 12 46
+      Template.Body 12 46
+        Defn.Type 14 43
+          Type.Name 19 24
+          Type.ParamClause 25 25
+          Type.Lambda 27 43
+            Type.ParamClause 27 30
+              Type.Param 28 29
+                Type.Name 28 29
+                Type.ParamClause 29 29
+                Type.Bounds 29 29
+            Type.Tuple 37 43
+              Type.Name 38 39
+              Type.Name 41 42
+          Type.Bounds 25 25
+#!program 883 line 406 Stat dialects.Scala3 :: type-lambda-bounds
+object W883 {
+type U <: [X] =>> Any
+}
+#!scalac ok
+#!regions L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 11
+    Template 12 37
+      Template.Body 12 37
+        Decl.Type 14 35
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Type.Bounds 21 35
+            Type.Lambda 24 35
+              Type.ParamClause 24 27
+                Type.Param 25 26
+                  Type.Name 25 26
+                  Type.ParamClause 26 26
+                  Type.Bounds 26 26
+              Type.Name 32 35
+#!program 884 line 411 Stat dialects.Scala3 :: type Macro[X] = (=> Quotes) ?=> Expr[X]
+object W884 {
+type Macro[X] = (=> Quotes) ?=> Expr[X]
+}
+#!scalac ok
+#!regions L53/
+#!layout
+Source 0 56
+  Defn.Object 0 55
+    Term.Name 7 11
+    Template 12 55
+      Template.Body 12 55
+        Defn.Type 14 53
+          Type.Name 19 24
+          Type.ParamClause 24 27
+            Type.Param 25 26
+              Type.Name 25 26
+              Type.ParamClause 26 26
+              Type.Bounds 26 26
+          Type.ContextFunction 30 53
+            Type.FuncParamClause 30 41
+              Type.ByName 31 40
+                Type.Name 34 40
+            Type.Apply 46 53
+              Type.Name 46 50
+              Type.ArgClause 50 53
+                Type.Name 51 52
+          Type.Bounds 28 28
+#!program 885 line 421 Stat dialects.Scala3 :: type-lmabda-bounds
+object W885 {
+abstract class Repository[F[_]: [G[_]] =>> MonadCancel[G, Throwable]]
+}
+#!scalac ok
+#!regions L83/
+#!layout
+Source 0 86
+  Defn.Object 0 85
+    Term.Name 7 11
+    Template 12 85
+      Template.Body 12 85
+        Defn.Class 14 83
+          Mod.Abstract 14 22
+          Type.Name 29 39
+          Type.ParamClause 39 83
+            Type.Param 40 82
+              Type.Name 40 41
+              Type.ParamClause 41 44
+                Type.Param 42 43
+                  Name.Placeholder 42 43
+                  Type.ParamClause 43 43
+                  Type.Bounds 43 43
+              Type.Bounds 44 82
+                Type.Lambda 46 82
+                  Type.ParamClause 46 52
+                    Type.Param 47 51
+                      Type.Name 47 48
+                      Type.ParamClause 48 51
+                        Type.Param 49 50
+                          Name.Placeholder 49 50
+                          Type.ParamClause 50 50
+                          Type.Bounds 50 50
+                      Type.Bounds 51 51
+                  Type.Apply 57 82
+                    Type.Name 57 68
+                    Type.ArgClause 68 82
+                      Type.Name 69 70
+                      Type.Name 72 81
+          Ctor.Primary 83 83
+            Name.Anonymous 83 83
+          Template 83 83
+            Template.Body 83 83
+#!program 886 line 443 Stat dialects.Scala3 :: #3050 function without body
+object W886 {
+f{ (x1: A, x2: B => C) => }
+
+}
+#!scalac ok
+#!regions F41/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Term.Apply 14 41
+          Term.Name 14 15
+          Term.ArgClause 15 41
+            Term.Block 15 41
+              Term.Function 17 39
+                Term.ParamClause 17 36
+                  Term.Param 18 23
+                    Term.Name 18 20
+                    Type.Name 22 23
+                  Term.Param 25 35
+                    Term.Name 25 27
+                    Type.Function 29 35
+                      Type.FuncParamClause 29 30
+                        Type.Name 29 30
+                      Type.Name 34 35
+                Term.Block 40 40
+#!program 887 line 459 Type dialects.Scala3 :: #3996 functions: precedence 1
+object W887 {
+  type T = A => B => C => D
+}
+#!scalac ok
+#!regions L41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 11
+    Template 12 43
+      Template.Body 12 43
+        Defn.Type 16 41
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.Function 25 41
+            Type.FuncParamClause 25 26
+              Type.Name 25 26
+            Type.Function 30 41
+              Type.FuncParamClause 30 31
+                Type.Name 30 31
+              Type.Function 35 41
+                Type.FuncParamClause 35 36
+                  Type.Name 35 36
+                Type.Name 40 41
+          Type.Bounds 23 23
+#!program 888 line 466 Type dialects.Scala3 :: #3996 functions: precedence 2
+object W888 {
+  type T = (A => B) => (C => D)
+}
+#!scalac ok
+#!regions L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Type 16 45
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.Function 25 45
+            Type.FuncParamClause 25 33
+              Type.Function 26 32
+                Type.FuncParamClause 26 27
+                  Type.Name 26 27
+                Type.Name 31 32
+            Type.Function 38 44
+              Type.FuncParamClause 38 39
+                Type.Name 38 39
+              Type.Name 43 44
+          Type.Bounds 23 23
+#!program 889 line 473 Type dialects.Scala3 :: #3996 functions: precedence 3
+object W889 {
+  type T = A => (B => C) => D
+}
+#!scalac ok
+#!regions L43/
+#!layout
+Source 0 46
+  Defn.Object 0 45
+    Term.Name 7 11
+    Template 12 45
+      Template.Body 12 45
+        Defn.Type 16 43
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.Function 25 43
+            Type.FuncParamClause 25 26
+              Type.Name 25 26
+            Type.Function 30 43
+              Type.FuncParamClause 30 38
+                Type.Function 31 37
+                  Type.FuncParamClause 31 32
+                    Type.Name 31 32
+                  Type.Name 36 37
+              Type.Name 42 43
+          Type.Bounds 23 23
+#!program 890 line 480 Type dialects.Scala3 :: #3996 functions: precedence 4
+object W890 {
+  type T = (A => (B => C)) => D
+}
+#!scalac ok
+#!regions L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Type 16 45
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.Function 25 45
+            Type.FuncParamClause 25 40
+              Type.Function 26 39
+                Type.FuncParamClause 26 27
+                  Type.Name 26 27
+                Type.Function 32 38
+                  Type.FuncParamClause 32 33
+                    Type.Name 32 33
+                  Type.Name 37 38
+            Type.Name 44 45
+          Type.Bounds 23 23
+#!program 891 line 487 Type dialects.Scala3 :: #3996 functions: precedence 5
+object W891 {
+  type T = A => ((B => C) => D)
+}
+#!scalac ok
+#!regions L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Type 16 45
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.Function 25 45
+            Type.FuncParamClause 25 26
+              Type.Name 25 26
+            Type.Function 31 44
+              Type.FuncParamClause 31 39
+                Type.Function 32 38
+                  Type.FuncParamClause 32 33
+                    Type.Name 32 33
+                  Type.Name 37 38
+              Type.Name 43 44
+          Type.Bounds 23 23
+#!program 892 line 494 Type dialects.Scala3 :: #3996 context functions: precedence 1
+object W892 {
+  type T = A ?=> B ?=> C ?=> D
+}
+#!scalac ok
+#!regions L44/
+#!layout
+Source 0 47
+  Defn.Object 0 46
+    Term.Name 7 11
+    Template 12 46
+      Template.Body 12 46
+        Defn.Type 16 44
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ContextFunction 25 44
+            Type.FuncParamClause 25 26
+              Type.Name 25 26
+            Type.ContextFunction 31 44
+              Type.FuncParamClause 31 32
+                Type.Name 31 32
+              Type.ContextFunction 37 44
+                Type.FuncParamClause 37 38
+                  Type.Name 37 38
+                Type.Name 43 44
+          Type.Bounds 23 23
+#!program 893 line 501 Type dialects.Scala3 :: #3996 context functions: precedence 2
+object W893 {
+  type T = (A ?=> B) ?=> (C ?=> D)
+}
+#!scalac ok
+#!regions L48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Defn.Type 16 48
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ContextFunction 25 48
+            Type.FuncParamClause 25 34
+              Type.ContextFunction 26 33
+                Type.FuncParamClause 26 27
+                  Type.Name 26 27
+                Type.Name 32 33
+            Type.ContextFunction 40 47
+              Type.FuncParamClause 40 41
+                Type.Name 40 41
+              Type.Name 46 47
+          Type.Bounds 23 23
+#!program 894 line 508 Type dialects.Scala3 :: #3996 context functions: precedence 3
+object W894 {
+  type T = A ?=> (B ?=> C) ?=> D
+}
+#!scalac ok
+#!regions L46/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 11
+    Template 12 48
+      Template.Body 12 48
+        Defn.Type 16 46
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ContextFunction 25 46
+            Type.FuncParamClause 25 26
+              Type.Name 25 26
+            Type.ContextFunction 31 46
+              Type.FuncParamClause 31 40
+                Type.ContextFunction 32 39
+                  Type.FuncParamClause 32 33
+                    Type.Name 32 33
+                  Type.Name 38 39
+              Type.Name 45 46
+          Type.Bounds 23 23
+#!program 895 line 515 Type dialects.Scala3 :: #3996 context functions: precedence 4
+object W895 {
+  type T = (A ?=> (B ?=> C)) ?=> D
+}
+#!scalac ok
+#!regions L48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Defn.Type 16 48
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ContextFunction 25 48
+            Type.FuncParamClause 25 42
+              Type.ContextFunction 26 41
+                Type.FuncParamClause 26 27
+                  Type.Name 26 27
+                Type.ContextFunction 33 40
+                  Type.FuncParamClause 33 34
+                    Type.Name 33 34
+                  Type.Name 39 40
+            Type.Name 47 48
+          Type.Bounds 23 23
+#!program 896 line 522 Type dialects.Scala3 :: #3996 context functions: precedence 5
+object W896 {
+  type T = A ?=> ((B ?=> C) ?=> D)
+}
+#!scalac ok
+#!regions L48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Defn.Type 16 48
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ContextFunction 25 48
+            Type.FuncParamClause 25 26
+              Type.Name 25 26
+            Type.ContextFunction 32 47
+              Type.FuncParamClause 32 41
+                Type.ContextFunction 33 40
+                  Type.FuncParamClause 33 34
+                    Type.Name 33 34
+                  Type.Name 39 40
+              Type.Name 46 47
+          Type.Bounds 23 23
+#!program 897 line 533 Type dialects.Scala3Future :: #3996 pure functions: precedence 1
+object W897 {
+  type T = A -> B -> C -> D
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 11
+    Template 12 43
+      Template.Body 12 43
+        Defn.Type 16 41
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ApplyInfix 25 41
+            Type.ApplyInfix 25 36
+              Type.ApplyInfix 25 31
+                Type.Name 25 26
+                Type.Name 27 29
+                Type.Name 30 31
+              Type.Name 32 34
+              Type.Name 35 36
+            Type.Name 37 39
+            Type.Name 40 41
+          Type.Bounds 23 23
+#!program 898 line 541 Type dialects.Scala3Future :: #3996 pure functions: precedence 2
+object W898 {
+  type T = (A -> B) -> (C -> D)
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Type 16 45
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ApplyInfix 25 45
+            Type.ApplyInfix 26 32
+              Type.Name 26 27
+              Type.Name 28 30
+              Type.Name 31 32
+            Type.Name 34 36
+            Type.ApplyInfix 38 44
+              Type.Name 38 39
+              Type.Name 40 42
+              Type.Name 43 44
+          Type.Bounds 23 23
+#!program 899 line 549 Type dialects.Scala3Future :: #3996 pure functions: precedence 3
+object W899 {
+  type T = A -> (B -> C) -> D
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L43/
+#!layout
+Source 0 46
+  Defn.Object 0 45
+    Term.Name 7 11
+    Template 12 45
+      Template.Body 12 45
+        Defn.Type 16 43
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ApplyInfix 25 43
+            Type.ApplyInfix 25 37
+              Type.Name 25 26
+              Type.Name 27 29
+              Type.ApplyInfix 31 37
+                Type.Name 31 32
+                Type.Name 33 35
+                Type.Name 36 37
+            Type.Name 39 41
+            Type.Name 42 43
+          Type.Bounds 23 23
+#!program 900 line 557 Type dialects.Scala3Future :: #3996 pure functions: precedence 4
+object W900 {
+  type T = (A -> (B -> C)) -> D
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Type 16 45
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ApplyInfix 25 45
+            Type.ApplyInfix 26 38
+              Type.Name 26 27
+              Type.Name 28 30
+              Type.ApplyInfix 32 38
+                Type.Name 32 33
+                Type.Name 34 36
+                Type.Name 37 38
+            Type.Name 41 43
+            Type.Name 44 45
+          Type.Bounds 23 23
+#!program 901 line 565 Type dialects.Scala3Future :: #3996 pure functions: precedence 5
+object W901 {
+  type T = A -> ((B -> C) -> D)
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Type 16 45
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ApplyInfix 25 44
+            Type.Name 25 26
+            Type.Name 27 29
+            Type.ApplyInfix 31 44
+              Type.ApplyInfix 32 38
+                Type.Name 32 33
+                Type.Name 34 36
+                Type.Name 37 38
+              Type.Name 40 42
+              Type.Name 43 44
+          Type.Bounds 23 23
+#!program 902 line 573 Type dialects.Scala3Future :: #3996 pure context functions: precedence 1
+object W902 {
+  type T = A ?-> B ?-> C ?-> D
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L44/
+#!layout
+Source 0 47
+  Defn.Object 0 46
+    Term.Name 7 11
+    Template 12 46
+      Template.Body 12 46
+        Defn.Type 16 44
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ApplyInfix 25 44
+            Type.ApplyInfix 25 38
+              Type.ApplyInfix 25 32
+                Type.Name 25 26
+                Type.Name 27 30
+                Type.Name 31 32
+              Type.Name 33 36
+              Type.Name 37 38
+            Type.Name 39 42
+            Type.Name 43 44
+          Type.Bounds 23 23
+#!program 903 line 581 Type dialects.Scala3Future :: #3996 pure context functions: precedence 2
+object W903 {
+  type T = (A ?-> B) ?-> (C ?-> D)
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Defn.Type 16 48
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ApplyInfix 25 48
+            Type.ApplyInfix 26 33
+              Type.Name 26 27
+              Type.Name 28 31
+              Type.Name 32 33
+            Type.Name 35 38
+            Type.ApplyInfix 40 47
+              Type.Name 40 41
+              Type.Name 42 45
+              Type.Name 46 47
+          Type.Bounds 23 23
+#!program 904 line 589 Type dialects.Scala3Future :: #3996 pure context functions: precedence 3
+object W904 {
+  type T = A ?-> (B ?-> C) ?-> D
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L46/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 11
+    Template 12 48
+      Template.Body 12 48
+        Defn.Type 16 46
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ApplyInfix 25 46
+            Type.ApplyInfix 25 39
+              Type.Name 25 26
+              Type.Name 27 30
+              Type.ApplyInfix 32 39
+                Type.Name 32 33
+                Type.Name 34 37
+                Type.Name 38 39
+            Type.Name 41 44
+            Type.Name 45 46
+          Type.Bounds 23 23
+#!program 905 line 597 Type dialects.Scala3Future :: #3996 pure context functions: precedence 4
+object W905 {
+  type T = (A ?-> (B ?-> C)) ?-> D
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Defn.Type 16 48
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ApplyInfix 25 48
+            Type.ApplyInfix 26 40
+              Type.Name 26 27
+              Type.Name 28 31
+              Type.ApplyInfix 33 40
+                Type.Name 33 34
+                Type.Name 35 38
+                Type.Name 39 40
+            Type.Name 43 46
+            Type.Name 47 48
+          Type.Bounds 23 23
+#!program 906 line 605 Type dialects.Scala3Future :: #3996 pure context functions: precedence 5
+object W906 {
+  type T = A ?-> ((B ?-> C) ?-> D)
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Defn.Type 16 48
+          Type.Name 21 22
+          Type.ParamClause 23 23
+          Type.ApplyInfix 25 47
+            Type.Name 25 26
+            Type.Name 27 30
+            Type.ApplyInfix 32 47
+              Type.ApplyInfix 33 40
+                Type.Name 33 34
+                Type.Name 35 38
+                Type.Name 39 40
+              Type.Name 42 45
+              Type.Name 46 47
+          Type.Bounds 23 23
+#!program 907 line 613 Stat dialects.Scala3Future :: #3996 pure functions: 1
+object W907 {
+val func: A -> B = foo
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 11
+    Template 12 38
+      Template.Body 12 38
+        Defn.Val 14 36
+          Pat.Var 18 22
+            Term.Name 18 22
+          Type.ApplyInfix 24 30
+            Type.Name 24 25
+            Type.Name 26 28
+            Type.Name 29 30
+          Term.Name 33 36
+#!program 908 line 621 Stat dialects.Scala3Future :: #3996 pure functions: 2
+object W908 {
+def func(f: A -> B): Unit
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Decl.Def 14 39
+          Term.Name 18 22
+          Member.ParamClauseGroup 22 33
+            Type.ParamClause 22 22
+            Term.ParamClause 22 33
+              Term.Param 23 32
+                Term.Name 23 24
+                Type.ApplyInfix 26 32
+                  Type.Name 26 27
+                  Type.Name 28 30
+                  Type.Name 31 32
+          Type.Name 35 39
+#!program 909 line 636 Stat dialects.Scala3Future :: #3996 pure functions: 3
+object W909 {
+def map[T <: (A -> B)](f: T): A -> B = ???
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L56/
+#!layout
+Source 0 59
+  Defn.Object 0 58
+    Term.Name 7 11
+    Template 12 58
+      Template.Body 12 58
+        Defn.Def 14 56
+          Term.Name 18 21
+          Member.ParamClauseGroup 21 42
+            Type.ParamClause 21 36
+              Type.Param 22 35
+                Type.Name 22 23
+                Type.ParamClause 24 24
+                Type.Bounds 24 35
+                  Type.ApplyInfix 28 34
+                    Type.Name 28 29
+                    Type.Name 30 32
+                    Type.Name 33 34
+            Term.ParamClause 36 42
+              Term.Param 37 41
+                Term.Name 37 38
+                Type.Name 40 41
+          Type.ApplyInfix 44 50
+            Type.Name 44 45
+            Type.Name 46 48
+            Type.Name 49 50
+          Term.Name 53 56
+#!program 910 line 644 Stat dialects.Scala3Future :: #3996 pure context functions: 1
+object W910 {
+val func: A ?-> B = foo
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Val 14 37
+          Pat.Var 18 22
+            Term.Name 18 22
+          Type.ApplyInfix 24 31
+            Type.Name 24 25
+            Type.Name 26 29
+            Type.Name 30 31
+          Term.Name 34 37
+#!program 911 line 652 Stat dialects.Scala3Future :: #3996 pure context functions: 2
+object W911 {
+def func(f: A ?-> B): Unit
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L40/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 11
+    Template 12 42
+      Template.Body 12 42
+        Decl.Def 14 40
+          Term.Name 18 22
+          Member.ParamClauseGroup 22 34
+            Type.ParamClause 22 22
+            Term.ParamClause 22 34
+              Term.Param 23 33
+                Term.Name 23 24
+                Type.ApplyInfix 26 33
+                  Type.Name 26 27
+                  Type.Name 28 31
+                  Type.Name 32 33
+          Type.Name 36 40
+#!program 912 line 667 Stat dialects.Scala3Future :: #3996 pure context functions: 3
+object W912 {
+def map[T <: (A ?-> B)](f: T): A ?-> B = ???
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L58/
+#!layout
+Source 0 61
+  Defn.Object 0 60
+    Term.Name 7 11
+    Template 12 60
+      Template.Body 12 60
+        Defn.Def 14 58
+          Term.Name 18 21
+          Member.ParamClauseGroup 21 43
+            Type.ParamClause 21 37
+              Type.Param 22 36
+                Type.Name 22 23
+                Type.ParamClause 24 24
+                Type.Bounds 24 36
+                  Type.ApplyInfix 28 35
+                    Type.Name 28 29
+                    Type.Name 30 33
+                    Type.Name 34 35
+            Term.ParamClause 37 43
+              Term.Param 38 42
+                Term.Name 38 39
+                Type.Name 41 42
+          Type.ApplyInfix 45 52
+            Type.Name 45 46
+            Type.Name 47 50
+            Type.Name 51 52
+          Term.Name 55 58
+#!program 913 line 682 Stat dialects.Scala3Future :: #3996 pure context functions: 4
+object W913 {
+def map[T <: (A ?->{a, c} B)](f: T): A ?-> B = ???
+}
+#!scalac refuses: Illegal start of declaration
+#!dialect dialects.Scala3Future gives another tree
+#!regions L64/
+#!layout
+refused: illegal start of declaration
+#!program 914 line 690 Stat dialects.Scala3Future :: #3996 pure by-name: 1
+object W914 {
+def func(f: -> B): Unit
+}
+#!scalac refuses: ',' or ')' expected, but identifier found
+#!dialect dialects.Scala3Future gives another tree
+#!regions L37/
+#!layout
+refused: `identifier` expected but `)` found
+#!program 915 line 704 Stat dialects.Scala3Future :: #3996 pure by-name: 2 with capturing
+object W915 {
+def func(f: ->{a, b, c} B): Unit
+}
+#!scalac refuses: Illegal start of declaration
+#!dialect dialects.Scala3Future gives another tree
+#!regions L46/
+#!layout
+refused: illegal start of declaration
+#!program 916 line 726 Stat dialects.Scala3 :: #4226 brackets
+object W916 {
+def foo =
+  println()
+  [T] => (a: T) => a
+
+}
+#!scalac ok
+#!regions I23/2 L35/2 O57/
+#!layout
+Source 0 60
+  Defn.Object 0 59
+    Term.Name 7 11
+    Template 12 59
+      Template.Body 12 59
+        Defn.Def 14 56
+          Term.Name 18 21
+          Term.Block 26 56
+            Term.Apply 26 35
+              Term.Name 26 33
+              Term.ArgClause 33 35
+            Term.PolyFunction 38 56
+              Type.ParamClause 38 41
+                Type.Param 39 40
+                  Type.Name 39 40
+                  Type.ParamClause 40 40
+                  Type.Bounds 40 40
+              Term.Function 45 56
+                Term.ParamClause 45 51
+                  Term.Param 46 50
+                    Term.Name 46 47
+                    Type.Name 49 50
+                Term.Name 55 56
+#!program 917 line 742 Stat dialects.Scala3 :: #4226 parens
+object W917 {
+def foo =
+  println()
+  (a: T) => a
+
+}
+#!scalac ok
+#!regions I23/2 L35/2 O50/
+#!layout
+Source 0 53
+  Defn.Object 0 52
+    Term.Name 7 11
+    Template 12 52
+      Template.Body 12 52
+        Defn.Def 14 49
+          Term.Name 18 21
+          Term.Block 26 49
+            Term.Apply 26 35
+              Term.Name 26 33
+              Term.ArgClause 33 35
+            Term.Function 38 49
+              Term.ParamClause 38 44
+                Term.Param 39 43
+                  Term.Name 39 40
+                  Type.Name 42 43
+              Term.Name 48 49
+#!program 918 line 780 Stat dialects.Scala3 :: polymorphic-no-indent
+object W918 {
+def foo =
+  trait B extends F
+  [X, Y] => Z
+
+
+}
+#!scalac refuses: Implementation restriction: polymorphic function literals must have a value parameter
+#!regions I23/2 L43/2 O59/
+#!layout
+Source 0 62
+  Defn.Object 0 61
+    Term.Name 7 11
+    Template 12 61
+      Template.Body 12 61
+        Defn.Def 14 57
+          Term.Name 18 21
+          Term.Block 26 57
+            Defn.Trait 26 43
+              Type.Name 32 33
+              Type.ParamClause 34 34
+              Ctor.Primary 34 34
+                Name.Anonymous 34 34
+              Template 34 43
+                Init 42 43
+                  Type.Name 42 43
+                  Name.Anonymous 43 43
+                Template.Body 43 43
+            Term.PolyFunction 46 57
+              Type.ParamClause 46 52
+                Type.Param 47 48
+                  Type.Name 47 48
+                  Type.ParamClause 48 48
+                  Type.Bounds 48 48
+                Type.Param 50 51
+                  Type.Name 50 51
+                  Type.ParamClause 51 51
+                  Type.Bounds 51 51
+              Term.Name 56 57

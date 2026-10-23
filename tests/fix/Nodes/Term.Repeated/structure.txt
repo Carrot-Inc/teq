@@ -1,0 +1,79 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Repeated, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Repeated\n\nobject Term_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs.sum\n  val a = f(List(1)*)\n  val b = f(List(1): _*)\n"
+  stats Pkg syntax="package nodes.Term_Repeated\n\nobject Term_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs.sum\n  val a = f(List(1)*)\n  val b = f(List(1): _*)"
+    .stats = [Defn.Object "object Term_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs.sum\n  val a = f(List(1)*)\n  val b = f(List(1): _*)"]
+    ref Term.Select syntax="nodes.Term_Repeated"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Repeated" syntax="Term_Repeated"
+    body Pkg.Body syntax="object Term_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs.sum\n  val a = f(List(1)*)\n  val b = f(List(1): _*)"
+      stats Defn.Object syntax="object Term_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs.sum\n  val a = f(List(1)*)\n  val b = f(List(1): _*)"
+        mods Nil
+        name Term.Name value="Term_Repeated" syntax="Term_Repeated"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs.sum\n  val a = f(List(1)*)\n  val b = f(List(1): _*)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(xs: Int*) = xs.sum", Defn.Val "val a = f(List(1)*)", Defn.Val "val b = f(List(1): _*)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs.sum\n  val a = f(List(1)*)\n  val b = f(List(1): _*)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(xs: Int*) = xs.sum"
+              .paramClauses = [Term.ParamClause "(xs: Int*)"]
+              .paramss = [[Term.Param "xs: Int*"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(xs: Int*)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(xs: Int*)"
+                  values Term.Param syntax="xs: Int*"
+                    mods Nil
+                    name Term.Name value="xs" syntax="xs"
+                    decltpe Type.Repeated syntax="Int*"
+                      tpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Select syntax="xs.sum"
+                qual Term.Name value="xs" syntax="xs"
+                name Term.Name value="sum" syntax="sum"
+            stats Defn.Val syntax="val a = f(List(1)*)"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.Apply syntax="f(List(1)*)"
+                .args = [Term.Repeated "List(1)*"]
+                fun Term.Name value="f" syntax="f"
+                argClause Term.ArgClause syntax="(List(1)*)"
+                  values Term.Repeated syntax="List(1)*"
+                    expr Term.Apply syntax="List(1)"
+                      .args = [Lit.Int "1"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Term.ArgClause syntax="(1)"
+                        values Lit.Int value=1 syntax="1"
+                        mod None
+                  mod None
+            stats Defn.Val syntax="val b = f(List(1): _*)"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Term.Apply syntax="f(List(1): _*)"
+                .args = [Term.Repeated "List(1): _*"]
+                fun Term.Name value="f" syntax="f"
+                argClause Term.ArgClause syntax="(List(1): _*)"
+                  values Term.Repeated syntax="List(1): _*"
+                    expr Term.Apply syntax="List(1)"
+                      .args = [Lit.Int "1"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Term.ArgClause syntax="(1)"
+                        values Lit.Int value=1 syntax="1"
+                        mod None
+                  mod None
+          derives Nil

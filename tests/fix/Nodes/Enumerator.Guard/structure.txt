@@ -1,0 +1,64 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Enumerator.Guard, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Enumerator_Guard\n\nobject Enumerator_Guard:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1) if x > 0; if x < 2 yield x\n"
+  stats Pkg syntax="package nodes.Enumerator_Guard\n\nobject Enumerator_Guard:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1) if x > 0; if x < 2 yield x"
+    .stats = [Defn.Object "object Enumerator_Guard:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1) if x > 0; if x < 2 yield x"]
+    ref Term.Select syntax="nodes.Enumerator_Guard"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Enumerator_Guard" syntax="Enumerator_Guard"
+    body Pkg.Body syntax="object Enumerator_Guard:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1) if x > 0; if x < 2 yield x"
+      stats Defn.Object syntax="object Enumerator_Guard:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1) if x > 0; if x < 2 yield x"
+        mods Nil
+        name Term.Name value="Enumerator_Guard" syntax="Enumerator_Guard"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1) if x > 0; if x < 2 yield x"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = for x <- List(1) if x > 0; if x < 2 yield x"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1) if x > 0; if x < 2 yield x"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = for x <- List(1) if x > 0; if x < 2 yield x"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.ForYield syntax="for x <- List(1) if x > 0; if x < 2 yield x"
+                .enums = [Enumerator.Generator "x <- List(1)", Enumerator.Guard "if x > 0", Enumerator.Guard "if x < 2"]
+                enumsBlock Term.EnumeratorsBlock syntax="x <- List(1) if x > 0; if x < 2"
+                  enums Enumerator.Generator syntax="x <- List(1)"
+                    pat Pat.Var syntax="x"
+                      name Term.Name value="x" syntax="x"
+                    rhs Term.Apply syntax="List(1)"
+                      .args = [Lit.Int "1"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Term.ArgClause syntax="(1)"
+                        values Lit.Int value=1 syntax="1"
+                        mod None
+                  enums Enumerator.Guard syntax="if x > 0"
+                    cond Term.ApplyInfix syntax="x > 0"
+                      .args = [Lit.Int "0"]
+                      .targs = []
+                      lhs Term.Name value="x" syntax="x"
+                      op Term.Name value=">" syntax=">"
+                      targClause Type.ArgClause syntax=""
+                        values Nil
+                      argClause Term.ArgClause syntax="0"
+                        values Lit.Int value=0 syntax="0"
+                        mod None
+                  enums Enumerator.Guard syntax="if x < 2"
+                    cond Term.ApplyInfix syntax="x < 2"
+                      .args = [Lit.Int "2"]
+                      .targs = []
+                      lhs Term.Name value="x" syntax="x"
+                      op Term.Name value="<" syntax="<"
+                      targClause Type.ArgClause syntax=""
+                        values Nil
+                      argClause Term.ArgClause syntax="2"
+                        values Lit.Int value=2 syntax="2"
+                        mod None
+                body Term.Name value="x" syntax="x"
+          derives Nil

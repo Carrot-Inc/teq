@@ -7,6 +7,8 @@ pub mod engine;
 pub mod escape;
 pub mod host;
 pub mod nodes;
+pub mod parse;
 pub mod plan;
+pub mod scanner;
 pub mod service;
 pub mod source;

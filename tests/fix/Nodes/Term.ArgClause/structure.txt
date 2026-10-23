@@ -1,0 +1,92 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.ArgClause, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_ArgClause\n\nobject Term_ArgClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int, b: Int)(using c: Int) = a\n  given Int = 1\n  val x = f(1, 2)(using 3)\n  val y = f(1, 2)\n"
+  stats Pkg syntax="package nodes.Term_ArgClause\n\nobject Term_ArgClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int, b: Int)(using c: Int) = a\n  given Int = 1\n  val x = f(1, 2)(using 3)\n  val y = f(1, 2)"
+    .stats = [Defn.Object "object Term_ArgClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int, b: Int)(using c: Int) = a\n  given Int = 1\n  val x = f(1, 2)(using 3)\n  val y = f(1, 2)"]
+    ref Term.Select syntax="nodes.Term_ArgClause"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_ArgClause" syntax="Term_ArgClause"
+    body Pkg.Body syntax="object Term_ArgClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int, b: Int)(using c: Int) = a\n  given Int = 1\n  val x = f(1, 2)(using 3)\n  val y = f(1, 2)"
+      stats Defn.Object syntax="object Term_ArgClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int, b: Int)(using c: Int) = a\n  given Int = 1\n  val x = f(1, 2)(using 3)\n  val y = f(1, 2)"
+        mods Nil
+        name Term.Name value="Term_ArgClause" syntax="Term_ArgClause"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int, b: Int)(using c: Int) = a\n  given Int = 1\n  val x = f(1, 2)(using 3)\n  val y = f(1, 2)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(a: Int, b: Int)(using c: Int) = a", Defn.GivenAlias "given Int = 1", Defn.Val "val x = f(1, 2)(using 3)", Defn.Val "val y = f(1, 2)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int, b: Int)(using c: Int) = a\n  given Int = 1\n  val x = f(1, 2)(using 3)\n  val y = f(1, 2)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(a: Int, b: Int)(using c: Int) = a"
+              .paramClauses = [Term.ParamClause "(a: Int, b: Int)", Term.ParamClause "(using c: Int)"]
+              .paramss = [[Term.Param "a: Int", Term.Param "b: Int"], [Term.Param "c: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(a: Int, b: Int)(using c: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(a: Int, b: Int)"
+                  values Term.Param syntax="a: Int"
+                    mods Nil
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  values Term.Param syntax="b: Int"
+                    mods Nil
+                    name Term.Name value="b" syntax="b"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+                paramClauses Term.ParamClause syntax="(using c: Int)"
+                  values Term.Param syntax="c: Int"
+                    mods Mod.Using syntax="using"
+                    name Term.Name value="c" syntax="c"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod Mod.Using syntax="using"
+              decltpe None
+              body Term.Name value="a" syntax="a"
+            stats Defn.GivenAlias syntax="given Int = 1"
+              .paramClauses = []
+              .tparams = []
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              decltpe Type.Name value="Int" syntax="Int"
+              body Lit.Int value=1 syntax="1"
+            stats Defn.Val syntax="val x = f(1, 2)(using 3)"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Term.Apply syntax="f(1, 2)(using 3)"
+                .args = [Lit.Int "3"]
+                fun Term.Apply syntax="f(1, 2)"
+                  .args = [Lit.Int "1", Lit.Int "2"]
+                  fun Term.Name value="f" syntax="f"
+                  argClause Term.ArgClause syntax="(1, 2)"
+                    values Lit.Int value=1 syntax="1"
+                    values Lit.Int value=2 syntax="2"
+                    mod None
+                argClause Term.ArgClause syntax="(using 3)"
+                  values Lit.Int value=3 syntax="3"
+                  mod Mod.Using syntax="using"
+            stats Defn.Val syntax="val y = f(1, 2)"
+              mods Nil
+              pats Pat.Var syntax="y"
+                name Term.Name value="y" syntax="y"
+              decltpe None
+              rhs Term.Apply syntax="f(1, 2)"
+                .args = [Lit.Int "1", Lit.Int "2"]
+                fun Term.Name value="f" syntax="f"
+                argClause Term.ArgClause syntax="(1, 2)"
+                  values Lit.Int value=1 syntax="1"
+                  values Lit.Int value=2 syntax="2"
+                  mod None
+          derives Nil

@@ -1,0 +1,73 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Lit.Float, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_Float\n\nobject Lit_Float:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5f\n  val b = 2F\n  val c = -0.5f\n  val d = 1e2f\n  val e = -1e-7f\n  val f = 0.0f\n  val g = 1.50f\n"
+  stats Pkg syntax="package nodes.Lit_Float\n\nobject Lit_Float:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5f\n  val b = 2F\n  val c = -0.5f\n  val d = 1e2f\n  val e = -1e-7f\n  val f = 0.0f\n  val g = 1.50f"
+    .stats = [Defn.Object "object Lit_Float:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5f\n  val b = 2F\n  val c = -0.5f\n  val d = 1e2f\n  val e = -1e-7f\n  val f = 0.0f\n  val g = 1.50f"]
+    ref Term.Select syntax="nodes.Lit_Float"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_Float" syntax="Lit_Float"
+    body Pkg.Body syntax="object Lit_Float:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5f\n  val b = 2F\n  val c = -0.5f\n  val d = 1e2f\n  val e = -1e-7f\n  val f = 0.0f\n  val g = 1.50f"
+      stats Defn.Object syntax="object Lit_Float:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5f\n  val b = 2F\n  val c = -0.5f\n  val d = 1e2f\n  val e = -1e-7f\n  val f = 0.0f\n  val g = 1.50f"
+        mods Nil
+        name Term.Name value="Lit_Float" syntax="Lit_Float"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5f\n  val b = 2F\n  val c = -0.5f\n  val d = 1e2f\n  val e = -1e-7f\n  val f = 0.0f\n  val g = 1.50f"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = 1.5f", Defn.Val "val b = 2F", Defn.Val "val c = -0.5f", Defn.Val "val d = 1e2f", Defn.Val "val e = -1e-7f", Defn.Val "val f = 0.0f", Defn.Val "val g = 1.50f"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5f\n  val b = 2F\n  val c = -0.5f\n  val d = 1e2f\n  val e = -1e-7f\n  val f = 0.0f\n  val g = 1.50f"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = 1.5f"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Float format="1.5" syntax="1.5f"
+                .value = 1.5
+            stats Defn.Val syntax="val b = 2F"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Lit.Float format="2" syntax="2F"
+                .value = 2.0
+            stats Defn.Val syntax="val c = -0.5f"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Lit.Float format="-0.5" syntax="-0.5f"
+                .value = -0.5
+            stats Defn.Val syntax="val d = 1e2f"
+              mods Nil
+              pats Pat.Var syntax="d"
+                name Term.Name value="d" syntax="d"
+              decltpe None
+              rhs Lit.Float format="1E+2" syntax="1e2f"
+                .value = 100.0
+            stats Defn.Val syntax="val e = -1e-7f"
+              mods Nil
+              pats Pat.Var syntax="e"
+                name Term.Name value="e" syntax="e"
+              decltpe None
+              rhs Lit.Float format="-1E-7" syntax="-1e-7f"
+                .value = -1.0E-7
+            stats Defn.Val syntax="val f = 0.0f"
+              mods Nil
+              pats Pat.Var syntax="f"
+                name Term.Name value="f" syntax="f"
+              decltpe None
+              rhs Lit.Float format="0.0" syntax="0.0f"
+                .value = 0.0
+            stats Defn.Val syntax="val g = 1.50f"
+              mods Nil
+              pats Pat.Var syntax="g"
+                name Term.Name value="g" syntax="g"
+              decltpe None
+              rhs Lit.Float format="1.5" syntax="1.50f"
+                .value = 1.5
+          derives Nil

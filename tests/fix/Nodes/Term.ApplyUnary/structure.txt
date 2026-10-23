@@ -1,0 +1,69 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.ApplyUnary, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_ApplyUnary\n\nobject Term_ApplyUnary:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = -x\n  val b = !true == false\n  val c = ~x\n  val d = +x\n"
+  stats Pkg syntax="package nodes.Term_ApplyUnary\n\nobject Term_ApplyUnary:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = -x\n  val b = !true == false\n  val c = ~x\n  val d = +x"
+    .stats = [Defn.Object "object Term_ApplyUnary:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = -x\n  val b = !true == false\n  val c = ~x\n  val d = +x"]
+    ref Term.Select syntax="nodes.Term_ApplyUnary"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_ApplyUnary" syntax="Term_ApplyUnary"
+    body Pkg.Body syntax="object Term_ApplyUnary:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = -x\n  val b = !true == false\n  val c = ~x\n  val d = +x"
+      stats Defn.Object syntax="object Term_ApplyUnary:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = -x\n  val b = !true == false\n  val c = ~x\n  val d = +x"
+        mods Nil
+        name Term.Name value="Term_ApplyUnary" syntax="Term_ApplyUnary"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = -x\n  val b = !true == false\n  val c = ~x\n  val d = +x"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val x = 1", Defn.Val "val a = -x", Defn.Val "val b = !true == false", Defn.Val "val c = ~x", Defn.Val "val d = +x"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = -x\n  val b = !true == false\n  val c = ~x\n  val d = +x"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val x = 1"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Val syntax="val a = -x"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.ApplyUnary syntax="-x"
+                op Term.Name value="-" syntax="-"
+                arg Term.Name value="x" syntax="x"
+            stats Defn.Val syntax="val b = !true == false"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Term.ApplyInfix syntax="!true == false"
+                .args = [Lit.Boolean "false"]
+                .targs = []
+                lhs Lit.Boolean value=false syntax="!true"
+                op Term.Name value="==" syntax="=="
+                targClause Type.ArgClause syntax=""
+                  values Nil
+                argClause Term.ArgClause syntax="false"
+                  values Lit.Boolean value=false syntax="false"
+                  mod None
+            stats Defn.Val syntax="val c = ~x"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Term.ApplyUnary syntax="~x"
+                op Term.Name value="~" syntax="~"
+                arg Term.Name value="x" syntax="x"
+            stats Defn.Val syntax="val d = +x"
+              mods Nil
+              pats Pat.Var syntax="d"
+                name Term.Name value="d" syntax="d"
+              decltpe None
+              rhs Term.ApplyUnary syntax="+x"
+                op Term.Name value="+" syntax="+"
+                arg Term.Name value="x" syntax="x"
+          derives Nil

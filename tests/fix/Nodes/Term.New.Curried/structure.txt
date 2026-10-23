@@ -1,0 +1,85 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's CurriedNew probe, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_New_Curried\n\nclass Box(x: Int)(y: Int)\nobject Subject { val value: Box = new Box(1)(2) }\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Term_New_Curried\n\nclass Box(x: Int)(y: Int)\nobject Subject { val value: Box = new Box(1)(2) }\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Class "class Box(x: Int)(y: Int)", Defn.Object "object Subject { val value: Box = new Box(1)(2) }", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Term_New_Curried"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_New_Curried" syntax="Term_New_Curried"
+    body Pkg.Body syntax="class Box(x: Int)(y: Int)\nobject Subject { val value: Box = new Box(1)(2) }\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Class syntax="class Box(x: Int)(y: Int)"
+        .tparams = []
+        mods Nil
+        name Type.Name value="Box" syntax="Box"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax="(x: Int)(y: Int)"
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Term.ParamClause syntax="(x: Int)"
+            values Term.Param syntax="x: Int"
+              mods Nil
+              name Term.Name value="x" syntax="x"
+              decltpe Type.Name value="Int" syntax="Int"
+              default None
+            mod None
+          paramClauses Term.ParamClause syntax="(y: Int)"
+            values Term.Param syntax="y: Int"
+              mods Nil
+              name Term.Name value="y" syntax="y"
+              decltpe Type.Name value="Int" syntax="Int"
+              default None
+            mod None
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Object syntax="object Subject { val value: Box = new Box(1)(2) }"
+        mods Nil
+        name Term.Name value="Subject" syntax="Subject"
+        templ Template syntax="{ val value: Box = new Box(1)(2) }"
+          .self = Self ""
+          .stats = [Defn.Val "val value: Box = new Box(1)(2)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax="{ val value: Box = new Box(1)(2) }"
+            selfOpt None
+            stats Defn.Val syntax="val value: Box = new Box(1)(2)"
+              mods Nil
+              pats Pat.Var syntax="value"
+                name Term.Name value="value" syntax="value"
+              decltpe Type.Name value="Box" syntax="Box"
+              rhs Term.New syntax="new Box(1)(2)"
+                init Init syntax="Box(1)(2)"
+                  .argss = [[Lit.Int "1"], [Lit.Int "2"]]
+                  tpe Type.Name value="Box" syntax="Box"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Term.ArgClause syntax="(1)"
+                    values Lit.Int value=1 syntax="1"
+                    mod None
+                  argClauses Term.ArgClause syntax="(2)"
+                    values Lit.Int value=2 syntax="2"
+                    mod None
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil

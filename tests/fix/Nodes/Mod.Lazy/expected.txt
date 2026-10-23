@@ -1,0 +1,43 @@
+Nodes/Mod.Lazy/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.Lazy, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Lazy\n\nobject Mod_Lazy:\n  val marker = 0 // assert: DumpStructure.structure\n  lazy val a = 1\n  private lazy val b = 2\n"
+  stats Pkg syntax="package nodes.Mod_Lazy\n\nobject Mod_Lazy:\n  val marker = 0 // assert: DumpStructure.structure\n  lazy val a = 1\n  private lazy val b = 2"
+    .stats = [Defn.Object "object Mod_Lazy:\n  val marker = 0 // assert: DumpStructure.structure\n  lazy val a = 1\n  private lazy val b = 2"]
+    ref Term.Select syntax="nodes.Mod_Lazy"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Lazy" syntax="Mod_Lazy"
+    body Pkg.Body syntax="object Mod_Lazy:\n  val marker = 0 // assert: DumpStructure.structure\n  lazy val a = 1\n  private lazy val b = 2"
+      stats Defn.Object syntax="object Mod_Lazy:\n  val marker = 0 // assert: DumpStructure.structure\n  lazy val a = 1\n  private lazy val b = 2"
+        mods Nil
+        name Term.Name value="Mod_Lazy" syntax="Mod_Lazy"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  lazy val a = 1\n  private lazy val b = 2"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "lazy val a = 1", Defn.Val "private lazy val b = 2"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  lazy val a = 1\n  private lazy val b = 2"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="lazy val a = 1"
+              mods Mod.Lazy syntax="lazy"
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Val syntax="private lazy val b = 2"
+              mods Mod.Private syntax="private"
+                within Name.Anonymous syntax=""
+                  .value = ""
+              mods Mod.Lazy syntax="lazy"
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Lit.Int value=2 syntax="2"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

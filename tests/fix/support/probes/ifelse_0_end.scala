@@ -1,0 +1,8 @@
+object O:
+  def f =
+    if true then
+      1
+    else
+      2
+    // tail
+  end f

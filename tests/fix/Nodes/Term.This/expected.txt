@@ -1,0 +1,78 @@
+Nodes/Term.This/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.This, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_This\n\nobject Term_This:\n  val marker = 0 // assert: DumpStructure.structure\n  class C:\n    val x = 1\n    def f = this.x\n    def g = C.this.x\n"
+  stats Pkg syntax="package nodes.Term_This\n\nobject Term_This:\n  val marker = 0 // assert: DumpStructure.structure\n  class C:\n    val x = 1\n    def f = this.x\n    def g = C.this.x"
+    .stats = [Defn.Object "object Term_This:\n  val marker = 0 // assert: DumpStructure.structure\n  class C:\n    val x = 1\n    def f = this.x\n    def g = C.this.x"]
+    ref Term.Select syntax="nodes.Term_This"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_This" syntax="Term_This"
+    body Pkg.Body syntax="object Term_This:\n  val marker = 0 // assert: DumpStructure.structure\n  class C:\n    val x = 1\n    def f = this.x\n    def g = C.this.x"
+      stats Defn.Object syntax="object Term_This:\n  val marker = 0 // assert: DumpStructure.structure\n  class C:\n    val x = 1\n    def f = this.x\n    def g = C.this.x"
+        mods Nil
+        name Term.Name value="Term_This" syntax="Term_This"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C:\n    val x = 1\n    def f = this.x\n    def g = C.this.x"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class C:\n    val x = 1\n    def f = this.x\n    def g = C.this.x"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C:\n    val x = 1\n    def f = this.x\n    def g = C.this.x"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class C:\n    val x = 1\n    def f = this.x\n    def g = C.this.x"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    val x = 1\n    def f = this.x\n    def g = C.this.x"
+                .self = Self ""
+                .stats = [Defn.Val "val x = 1", Defn.Def "def f = this.x", Defn.Def "def g = C.this.x"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    val x = 1\n    def f = this.x\n    def g = C.this.x"
+                  selfOpt None
+                  stats Defn.Val syntax="val x = 1"
+                    mods Nil
+                    pats Pat.Var syntax="x"
+                      name Term.Name value="x" syntax="x"
+                    decltpe None
+                    rhs Lit.Int value=1 syntax="1"
+                  stats Defn.Def syntax="def f = this.x"
+                    .paramClauses = []
+                    .paramss = []
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="f" syntax="f"
+                    paramClauseGroups Nil
+                    decltpe None
+                    body Term.Select syntax="this.x"
+                      qual Term.This syntax="this"
+                        qual Name.Anonymous syntax=""
+                          .value = ""
+                      name Term.Name value="x" syntax="x"
+                  stats Defn.Def syntax="def g = C.this.x"
+                    .paramClauses = []
+                    .paramss = []
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="g" syntax="g"
+                    paramClauseGroups Nil
+                    decltpe None
+                    body Term.Select syntax="C.this.x"
+                      qual Term.This syntax="C.this"
+                        qual Name.Indeterminate value="C" syntax="C"
+                      name Term.Name value="x" syntax="x"
+                derives Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

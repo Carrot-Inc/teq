@@ -6,7 +6,7 @@
 pub(crate) mod archive;
 mod bignum;
 mod builtins;
-mod char_tables;
+pub(crate) mod char_tables;
 mod class;
 mod code;
 mod eval;

@@ -1,0 +1,3 @@
+Driver/RuleMetadata/input.scala:5:16: error: [Metadata.metadata]: Metadata linter=false rewrite=true experimental=true; DisableSyntax linter=true rewrite=false experimental=false
+  object O { val marker = 1 } // assert: Metadata.metadata
+                 ^^^^^^

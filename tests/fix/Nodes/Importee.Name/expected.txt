@@ -1,0 +1,53 @@
+Nodes/Importee.Name/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Importee.Name, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Importee_Name\n\nobject Importee_Name:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  import scala.util.Try\n  val t = Try(1)\n"
+  stats Pkg syntax="package nodes.Importee_Name\n\nobject Importee_Name:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  import scala.util.Try\n  val t = Try(1)"
+    .stats = [Defn.Object "object Importee_Name:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  import scala.util.Try\n  val t = Try(1)"]
+    ref Term.Select syntax="nodes.Importee_Name"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Importee_Name" syntax="Importee_Name"
+    body Pkg.Body syntax="object Importee_Name:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  import scala.util.Try\n  val t = Try(1)"
+      stats Defn.Object syntax="object Importee_Name:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  import scala.util.Try\n  val t = Try(1)"
+        mods Nil
+        name Term.Name value="Importee_Name" syntax="Importee_Name"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  import scala.util.Try\n  val t = Try(1)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Import "import scala.collection.mutable", Import "import scala.util.Try", Defn.Val "val t = Try(1)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  import scala.util.Try\n  val t = Try(1)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Import syntax="import scala.collection.mutable"
+              importers Importer syntax="scala.collection.mutable"
+                ref Term.Select syntax="scala.collection"
+                  qual Term.Name value="scala" syntax="scala"
+                  name Term.Name value="collection" syntax="collection"
+                importees Importee.Name syntax="mutable"
+                  name Name.Indeterminate value="mutable" syntax="mutable"
+            stats Import syntax="import scala.util.Try"
+              importers Importer syntax="scala.util.Try"
+                ref Term.Select syntax="scala.util"
+                  qual Term.Name value="scala" syntax="scala"
+                  name Term.Name value="util" syntax="util"
+                importees Importee.Name syntax="Try"
+                  name Name.Indeterminate value="Try" syntax="Try"
+            stats Defn.Val syntax="val t = Try(1)"
+              mods Nil
+              pats Pat.Var syntax="t"
+                name Term.Name value="t" syntax="t"
+              decltpe None
+              rhs Term.Apply syntax="Try(1)"
+                .args = [Lit.Int "1"]
+                fun Term.Name value="Try" syntax="Try"
+                argClause Term.ArgClause syntax="(1)"
+                  values Lit.Int value=1 syntax="1"
+                  mod None
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

@@ -1,0 +1,128 @@
+teq: 0.1.9
+format: 1
+binaries: {}
+inputs:
+  files: {}
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+jars:
+  org.scala-lang:scala-library:3.8.4: maven-central e44f14c38dba7da4d7050cbf72fbf9dcbb6f9e7d 9179090
+  org.scala-lang:scala3-library_3:3.8.4: maven-central ada8b099f5425afff3e9164afd6601bed4ef2e21 319
+java:
+  outputVersion: 17
+projects:
+  a:
+    base: a
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: core}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        flags:
+          ignoredScalacOptions: []
+          kindProjector: false
+          maxInlines: 32
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources: []
+        scalafix:
+          config: a.conf
+          skip: false
+        sources:
+          - shared/src
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: a/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - core/src
+        - shared/src
+    platform: jvm
+    scalaVersion: 3.8.4
+  b:
+    base: b
+    configurations:
+      compile:
+        classpath:
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        flags:
+          ignoredScalacOptions: []
+          kindProjector: false
+          maxInlines: 32
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources: []
+        scalafix:
+          config: a.conf
+          skip: false
+        sources:
+          - shared/src
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: b/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - shared/src
+    platform: jvm
+    scalaVersion: 3.8.4
+  core:
+    base: core
+    configurations:
+      compile:
+        classpath:
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        flags:
+          ignoredScalacOptions: []
+          kindProjector: false
+          maxInlines: 32
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources: []
+        scalafix:
+          config: a.conf
+          skip: false
+        sources:
+          - core/src
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: core/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - core/src
+    platform: jvm
+    scalaVersion: 3.8.4
+repositories:
+  - id: maven-central
+    url: https://repo1.maven.org/maven2/

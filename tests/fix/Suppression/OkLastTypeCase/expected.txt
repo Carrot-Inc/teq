@@ -1,0 +1,3 @@
+Suppression/OkLastTypeCase/input.scala:7:17: error: [FlagNumbers.number]: number
+      case Int => 1 // assert: FlagNumbers.number
+                  ^

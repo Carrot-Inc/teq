@@ -106,6 +106,25 @@ class ExportSuite extends munit.FunSuite {
     )
   }
 
+  test("a configuration's scalafix record: the file sbt-scalafix resolves there where it is not the root's, and its skip, as a block") {
+    def configurations(fields: Map[String, Json.Value]*) =
+      Json.Obj(Map("projects" -> Json.Obj(Map("p" -> Json.Obj(Map("configurations" -> Json.Obj(fields.zip(Seq("compile", "test")).map { case (f, c) => c -> (Json.Obj(f): Json.Value) }.toMap)))))))
+    assertEquals(
+      Lock.canonical(configurations(Export.scalafixField(Some("b/.scalafix.conf"), false), Export.scalafixField(None, true))),
+      """projects:
+        |  p:
+        |    configurations:
+        |      compile:
+        |        scalafix:
+        |          config: b/.scalafix.conf
+        |          skip: false
+        |      test:
+        |        scalafix:
+        |          skip: true
+        |""".stripMargin,
+    )
+  }
+
   test("the quoting predicate") {
     for (s <- Seq("a", "3.8.4", "org.typelevel:cats-core_3:2.13.0", "https://repo1.maven.org/maven2/", "ff15f2278065734035de325534184128c33eeba1", ".gitignore", "1.0@build")) assert(Lock.plain(s), s)
     for (s <- Seq("", "true", "yes", "on", "Null", "2", "1.0", "1e3", ".5", "2026-10-05", "10:30", "0x1F", "0b101", "-Xmx1g", "a:", "a b", "é", "a#b", "~")) assert(!Lock.plain(s), s)

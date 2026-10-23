@@ -1,0 +1,51 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's PrivateCtor probe, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Private_Ctor\n\nclass Subject private[Subject] (x: Int)\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Mod_Private_Ctor\n\nclass Subject private[Subject] (x: Int)\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Class "class Subject private[Subject] (x: Int)", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Mod_Private_Ctor"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Private_Ctor" syntax="Mod_Private_Ctor"
+    body Pkg.Body syntax="class Subject private[Subject] (x: Int)\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Class syntax="class Subject private[Subject] (x: Int)"
+        .tparams = []
+        mods Nil
+        name Type.Name value="Subject" syntax="Subject"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax="private[Subject] (x: Int)"
+          mods Mod.Private syntax="private[Subject]"
+            within Name.Indeterminate value="Subject" syntax="Subject"
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Term.ParamClause syntax="(x: Int)"
+            values Term.Param syntax="x: Int"
+              mods Nil
+              name Term.Name value="x" syntax="x"
+              decltpe Type.Name value="Int" syntax="Int"
+              default None
+            mod None
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil

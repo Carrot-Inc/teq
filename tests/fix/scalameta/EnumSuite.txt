@@ -1,0 +1,1182 @@
+# The programs of scalameta 4.17.4's EnumSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 233 line 18 Stat dialects.Scala3 :: enum
+object W233 {
+enum Color { case R, G }
+}
+#!scalac ok
+#!regions L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 11
+    Template 12 40
+      Template.Body 12 40
+        Defn.Enum 14 38
+          Type.Name 19 24
+          Type.ParamClause 25 25
+          Ctor.Primary 25 25
+            Name.Anonymous 25 25
+          Template 25 38
+            Template.Body 25 38
+              Defn.RepeatedEnumCase 27 36
+                Term.Name 32 33
+                Term.Name 35 36
+#!program 234 line 23 Stat dialects.Scala3 :: enum-private-case
+object W234 {
+enum Color { private case R; protected case G }
+}
+#!scalac ok
+#!regions L61/
+#!layout
+Source 0 64
+  Defn.Object 0 63
+    Term.Name 7 11
+    Template 12 63
+      Template.Body 12 63
+        Defn.Enum 14 61
+          Type.Name 19 24
+          Type.ParamClause 25 25
+          Ctor.Primary 25 25
+            Name.Anonymous 25 25
+          Template 25 61
+            Template.Body 25 61
+              Defn.EnumCase 27 41
+                Mod.Private 27 34
+                  Name.Anonymous 35 35
+                Term.Name 40 41
+                Type.ParamClause 41 41
+                Ctor.Primary 41 41
+                  Name.Anonymous 41 41
+              Defn.EnumCase 43 59
+                Mod.Protected 43 52
+                  Name.Anonymous 53 53
+                Term.Name 58 59
+                Type.ParamClause 60 60
+                Ctor.Primary 60 60
+                  Name.Anonymous 60 60
+#!program 235 line 56 Stat dialects.Scala3 :: enum-wrong-soft
+object W235 {
+enum Color:
+ open case R, G 
+}
+#!scalac refuses: end of statement expected but 'case' found
+#!regions I25/1 O42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Defn.Enum 14 41
+          Type.Name 19 24
+          Type.ParamClause 24 24
+          Ctor.Primary 24 24
+            Name.Anonymous 24 24
+          Template 24 41
+            Template.Body 24 41
+              Defn.RepeatedEnumCase 27 41
+                Mod.Open 27 31
+                Term.Name 37 38
+                Term.Name 40 41
+#!program 236 line 59 Stat dialects.Scala3 :: enum-parametrized
+object W236 {
+enum C(i: Int) { case R, G }
+}
+#!scalac ok
+#!regions L42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Defn.Enum 14 42
+          Type.Name 19 20
+          Type.ParamClause 20 20
+          Ctor.Primary 20 28
+            Name.Anonymous 20 20
+            Term.ParamClause 20 28
+              Term.Param 21 27
+                Term.Name 21 22
+                Type.Name 24 27
+          Template 29 42
+            Template.Body 29 42
+              Defn.RepeatedEnumCase 31 40
+                Term.Name 36 37
+                Term.Name 39 40
+#!program 237 line 63 Stat dialects.Scala3 :: enum-extends
+object W237 {
+enum C extends T with R { case R, G }
+}
+#!scalac ok
+#!regions L51/
+#!layout
+Source 0 54
+  Defn.Object 0 53
+    Term.Name 7 11
+    Template 12 53
+      Template.Body 12 53
+        Defn.Enum 14 51
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 51
+            Init 29 30
+              Type.Name 29 30
+              Name.Anonymous 31 31
+            Init 36 37
+              Type.Name 36 37
+              Name.Anonymous 38 38
+            Template.Body 38 51
+              Defn.RepeatedEnumCase 40 49
+                Term.Name 45 46
+                Term.Name 48 49
+#!program 238 line 67 Stat dialects.Scala3 :: enum-generics
+object W238 {
+enum C[X, Y] { case R, G }
+}
+#!scalac ok
+#!regions L40/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 11
+    Template 12 42
+      Template.Body 12 42
+        Defn.Enum 14 40
+          Type.Name 19 20
+          Type.ParamClause 20 26
+            Type.Param 21 22
+              Type.Name 21 22
+              Type.ParamClause 22 22
+              Type.Bounds 22 22
+            Type.Param 24 25
+              Type.Name 24 25
+              Type.ParamClause 25 25
+              Type.Bounds 25 25
+          Ctor.Primary 27 27
+            Name.Anonymous 27 27
+          Template 27 40
+            Template.Body 27 40
+              Defn.RepeatedEnumCase 29 38
+                Term.Name 34 35
+                Term.Name 37 38
+#!program 239 line 72 Stat dialects.Scala3 :: enum-no-case-allowed
+object W239 {
+enum Color { }
+}
+#!scalac ok
+#!regions L28/
+#!layout
+Source 0 31
+  Defn.Object 0 30
+    Term.Name 7 11
+    Template 12 30
+      Template.Body 12 30
+        Defn.Enum 14 28
+          Type.Name 19 24
+          Type.ParamClause 25 25
+          Ctor.Primary 25 25
+            Name.Anonymous 25 25
+          Template 25 28
+            Template.Body 25 28
+#!program 240 line 75 Stat dialects.Scala3 :: enum-no-case-allowed
+object W240 {
+enum Color { val PI = 314 }
+}
+#!scalac ok
+#!regions L41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 11
+    Template 12 43
+      Template.Body 12 43
+        Defn.Enum 14 41
+          Type.Name 19 24
+          Type.ParamClause 25 25
+          Ctor.Primary 25 25
+            Name.Anonymous 25 25
+          Template 25 41
+            Template.Body 25 41
+              Defn.Val 27 39
+                Pat.Var 31 33
+                  Term.Name 31 33
+                Lit.Int 36 39
+#!program 241 line 84 Stat dialects.Scala3 :: enum-single-case
+object W241 {
+enum Color { case R extends Color }
+}
+#!scalac ok
+#!regions L49/
+#!layout
+Source 0 52
+  Defn.Object 0 51
+    Term.Name 7 11
+    Template 12 51
+      Template.Body 12 51
+        Defn.Enum 14 49
+          Type.Name 19 24
+          Type.ParamClause 25 25
+          Ctor.Primary 25 25
+            Name.Anonymous 25 25
+          Template 25 49
+            Template.Body 25 49
+              Defn.EnumCase 27 47
+                Term.Name 32 33
+                Type.ParamClause 34 34
+                Ctor.Primary 34 34
+                  Name.Anonymous 34 34
+                Init 42 47
+                  Type.Name 42 47
+                  Name.Anonymous 48 48
+#!program 242 line 93 Stat dialects.Scala3 :: enum-other-stat
+object W242 {
+enum C { val PI=3; def r: Int = 4; case R }
+}
+#!scalac ok
+#!regions L57/
+#!layout
+Source 0 60
+  Defn.Object 0 59
+    Term.Name 7 11
+    Template 12 59
+      Template.Body 12 59
+        Defn.Enum 14 57
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 57
+            Template.Body 21 57
+              Defn.Val 23 31
+                Pat.Var 27 29
+                  Term.Name 27 29
+                Lit.Int 30 31
+              Defn.Def 33 47
+                Term.Name 37 38
+                Type.Name 40 43
+                Lit.Int 46 47
+              Defn.EnumCase 49 55
+                Term.Name 54 55
+                Type.ParamClause 56 56
+                Ctor.Primary 56 56
+                  Name.Anonymous 56 56
+#!program 243 line 121 Stat dialects.Scala3 :: enum-parse-option
+object W243 {
+
+enum Option[+T] {
+  case Some(x: T)
+  case None
+}
+
+}
+#!scalac ok
+#!regions L50/ L62/ F64/
+#!layout
+Source 0 68
+  Defn.Object 0 67
+    Term.Name 7 11
+    Template 12 67
+      Template.Body 12 67
+        Defn.Enum 15 64
+          Type.Name 20 26
+          Type.ParamClause 26 30
+            Type.Param 27 29
+              Mod.Covariant 27 28
+              Type.Name 28 29
+              Type.ParamClause 29 29
+              Type.Bounds 29 29
+          Ctor.Primary 31 31
+            Name.Anonymous 31 31
+          Template 31 64
+            Template.Body 31 64
+              Defn.EnumCase 35 50
+                Term.Name 40 44
+                Type.ParamClause 44 44
+                Ctor.Primary 44 50
+                  Name.Anonymous 44 44
+                  Term.ParamClause 44 50
+                    Term.Param 45 49
+                      Term.Name 45 46
+                      Type.Name 48 49
+              Defn.EnumCase 53 62
+                Term.Name 58 62
+                Type.ParamClause 62 62
+                Ctor.Primary 62 62
+                  Name.Anonymous 62 62
+#!program 244 line 140 Stat dialects.Scala3 :: enum-parse-option
+object W244 {
+
+enum Option[+T] {
+  case Some(x: T) extends Option[T]
+  case None extends Option[Nothing]
+}
+}
+#!scalac ok
+#!regions L68/ L104/ L106/
+#!layout
+Source 0 109
+  Defn.Object 0 108
+    Term.Name 7 11
+    Template 12 108
+      Template.Body 12 108
+        Defn.Enum 15 106
+          Type.Name 20 26
+          Type.ParamClause 26 30
+            Type.Param 27 29
+              Mod.Covariant 27 28
+              Type.Name 28 29
+              Type.ParamClause 29 29
+              Type.Bounds 29 29
+          Ctor.Primary 31 31
+            Name.Anonymous 31 31
+          Template 31 106
+            Template.Body 31 106
+              Defn.EnumCase 35 68
+                Term.Name 40 44
+                Type.ParamClause 44 44
+                Ctor.Primary 44 50
+                  Name.Anonymous 44 44
+                  Term.ParamClause 44 50
+                    Term.Param 45 49
+                      Term.Name 45 46
+                      Type.Name 48 49
+                Init 59 68
+                  Type.Apply 59 68
+                    Type.Name 59 65
+                    Type.ArgClause 65 68
+                      Type.Name 66 67
+                  Name.Anonymous 68 68
+              Defn.EnumCase 71 104
+                Term.Name 76 80
+                Type.ParamClause 81 81
+                Ctor.Primary 81 81
+                  Name.Anonymous 81 81
+                Init 89 104
+                  Type.Apply 89 104
+                    Type.Name 89 95
+                    Type.ArgClause 95 104
+                      Type.Name 96 103
+                  Name.Anonymous 104 104
+#!program 245 line 165 Stat dialects.Scala3 :: case-caseother-diff
+object W245 {
+
+enum X {
+  case R
+  v match {
+    case Unap => 1
+    case Unap => 2
+  }
+  case G
+}
+}
+#!scalac ok
+#!regions L32/ L63/ L82/ L86/ L95/ L97/
+#!layout
+Source 0 100
+  Defn.Object 0 99
+    Term.Name 7 11
+    Template 12 99
+      Template.Body 12 99
+        Defn.Enum 15 97
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Ctor.Primary 22 22
+            Name.Anonymous 22 22
+          Template 22 97
+            Template.Body 22 97
+              Defn.EnumCase 26 32
+                Term.Name 31 32
+                Type.ParamClause 32 32
+                Ctor.Primary 32 32
+                  Name.Anonymous 32 32
+              Term.Match 35 86
+                Term.Name 35 36
+                Term.CasesBlock 43 86
+                  Case 49 63
+                    Term.Name 54 58
+                    Lit.Int 62 63
+                  Case 68 82
+                    Term.Name 73 77
+                    Lit.Int 81 82
+              Defn.EnumCase 89 95
+                Term.Name 94 95
+                Type.ParamClause 95 95
+                Ctor.Primary 95 95
+                  Name.Anonymous 95 95
+#!program 246 line 197 Stat dialects.Scala3 :: case-match-interop
+object W246 {
+
+enum X {
+  case R
+  v match {
+    case 'a' |
+         'c' |
+         'e' => "OK"
+  }
+  case G
+}
+}
+#!scalac ok
+#!regions L32/ L95/ L99/ L108/ L110/
+#!layout
+Source 0 113
+  Defn.Object 0 112
+    Term.Name 7 11
+    Template 12 112
+      Template.Body 12 112
+        Defn.Enum 15 110
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Ctor.Primary 22 22
+            Name.Anonymous 22 22
+          Template 22 110
+            Template.Body 22 110
+              Defn.EnumCase 26 32
+                Term.Name 31 32
+                Type.ParamClause 32 32
+                Ctor.Primary 32 32
+                  Name.Anonymous 32 32
+              Term.Match 35 99
+                Term.Name 35 36
+                Term.CasesBlock 43 99
+                  Case 49 95
+                    Pat.Alternative 54 87
+                      Lit.Char 54 57
+                      Pat.Alternative 69 87
+                        Lit.Char 69 72
+                        Lit.Char 84 87
+                    Lit.String 91 95
+              Defn.EnumCase 102 108
+                Term.Name 107 108
+                Type.ParamClause 108 108
+                Ctor.Primary 108 108
+                  Name.Anonymous 108 108
+#!program 247 line 215 Stat dialects.Scala3 :: case-match-if-interop
+object W247 {
+
+enum X {
+  case R
+  v match {
+    case x
+       if x > 3 => "OK"
+  }
+  case G
+}
+}
+#!scalac ok
+#!regions L32/ L79/ L83/ L92/ L94/
+#!layout
+Source 0 97
+  Defn.Object 0 96
+    Term.Name 7 11
+    Template 12 96
+      Template.Body 12 96
+        Defn.Enum 15 94
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Ctor.Primary 22 22
+            Name.Anonymous 22 22
+          Template 22 94
+            Template.Body 22 94
+              Defn.EnumCase 26 32
+                Term.Name 31 32
+                Type.ParamClause 32 32
+                Ctor.Primary 32 32
+                  Name.Anonymous 32 32
+              Term.Match 35 83
+                Term.Name 35 36
+                Term.CasesBlock 43 83
+                  Case 49 79
+                    Pat.Var 54 55
+                      Term.Name 54 55
+                    Term.ApplyInfix 66 71
+                      Term.Name 66 67
+                      Term.Name 68 69
+                      Type.ArgClause 70 70
+                      Term.ArgClause 70 71
+                        Lit.Int 70 71
+                    Lit.String 75 79
+              Defn.EnumCase 86 92
+                Term.Name 91 92
+                Type.ParamClause 92 92
+                Ctor.Primary 92 92
+                  Name.Anonymous 92 92
+#!program 248 line 241 Stat dialects.Scala3 :: case-try-interop
+object W248 {
+
+enum X {
+  case R
+  try a() catch {
+    case 'a' |
+         'e' => "Recovered"
+    case 'c' => "ERROR"
+  }
+  case G
+}
+}
+#!scalac ok
+#!regions L32/ L93/ L117/ L121/ L130/ L132/
+#!layout
+Source 0 135
+  Defn.Object 0 134
+    Term.Name 7 11
+    Template 12 134
+      Template.Body 12 134
+        Defn.Enum 15 132
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Ctor.Primary 22 22
+            Name.Anonymous 22 22
+          Template 22 132
+            Template.Body 22 132
+              Defn.EnumCase 26 32
+                Term.Name 31 32
+                Type.ParamClause 32 32
+                Ctor.Primary 32 32
+                  Name.Anonymous 32 32
+              Term.Try 35 121
+                Term.Apply 39 42
+                  Term.Name 39 40
+                  Term.ArgClause 40 42
+                Term.CasesBlock 49 121
+                  Case 55 93
+                    Pat.Alternative 60 78
+                      Lit.Char 60 63
+                      Lit.Char 75 78
+                    Lit.String 82 93
+                  Case 98 117
+                    Lit.Char 103 106
+                    Lit.String 110 117
+              Defn.EnumCase 124 130
+                Term.Name 129 130
+                Type.ParamClause 130 130
+                Ctor.Primary 130 130
+                  Name.Anonymous 130 130
+#!program 249 line 249 Stat dialects.Scala3 :: case-repeated
+object W249 {
+enum E { case A, B, C }
+}
+#!scalac ok
+#!regions L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Enum 14 37
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 37
+            Template.Body 21 37
+              Defn.RepeatedEnumCase 23 35
+                Term.Name 28 29
+                Term.Name 31 32
+                Term.Name 34 35
+#!program 250 line 254 Stat dialects.Scala3 :: case-single
+object W250 {
+enum E { case A }
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 11
+    Template 12 33
+      Template.Body 12 33
+        Defn.Enum 14 31
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 31
+            Template.Body 21 31
+              Defn.EnumCase 23 29
+                Term.Name 28 29
+                Type.ParamClause 30 30
+                Ctor.Primary 30 30
+                  Name.Anonymous 30 30
+#!program 251 line 257 Stat dialects.Scala3 :: case-single
+object W251 {
+enum E { case A() }
+}
+#!scalac ok
+#!regions L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 11
+    Template 12 35
+      Template.Body 12 35
+        Defn.Enum 14 33
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 33
+            Template.Body 21 33
+              Defn.EnumCase 23 31
+                Term.Name 28 29
+                Type.ParamClause 29 29
+                Ctor.Primary 29 31
+                  Name.Anonymous 29 29
+                  Term.ParamClause 29 31
+#!program 252 line 262 Stat dialects.Scala3 :: case-arguments
+object W252 {
+enum Option { case Some(x: Int) }
+}
+#!scalac ok
+#!regions L47/
+#!layout
+Source 0 50
+  Defn.Object 0 49
+    Term.Name 7 11
+    Template 12 49
+      Template.Body 12 49
+        Defn.Enum 14 47
+          Type.Name 19 25
+          Type.ParamClause 26 26
+          Ctor.Primary 26 26
+            Name.Anonymous 26 26
+          Template 26 47
+            Template.Body 26 47
+              Defn.EnumCase 28 45
+                Term.Name 33 37
+                Type.ParamClause 37 37
+                Ctor.Primary 37 45
+                  Name.Anonymous 37 37
+                  Term.ParamClause 37 45
+                    Term.Param 38 44
+                      Term.Name 38 39
+                      Type.Name 41 44
+#!program 253 line 267 Stat dialects.Scala3 :: case-annotation
+object W253 {
+enum Option { @deprecated case Some(x: Int) }
+}
+#!scalac ok
+#!regions L59/
+#!layout
+Source 0 62
+  Defn.Object 0 61
+    Term.Name 7 11
+    Template 12 61
+      Template.Body 12 61
+        Defn.Enum 14 59
+          Type.Name 19 25
+          Type.ParamClause 26 26
+          Ctor.Primary 26 26
+            Name.Anonymous 26 26
+          Template 26 59
+            Template.Body 26 59
+              Defn.EnumCase 28 57
+                Mod.Annot 28 39
+                  Init 29 39
+                    Type.Name 29 39
+                    Name.Anonymous 40 40
+                Term.Name 45 49
+                Type.ParamClause 49 49
+                Ctor.Primary 49 57
+                  Name.Anonymous 49 49
+                  Term.ParamClause 49 57
+                    Term.Param 50 56
+                      Term.Name 50 51
+                      Type.Name 53 56
+#!program 254 line 281 Stat dialects.Scala3 :: case-generic
+object W254 {
+enum E { case A[X: Ord]() }
+}
+#!scalac ok
+#!regions L41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 11
+    Template 12 43
+      Template.Body 12 43
+        Defn.Enum 14 41
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 41
+            Template.Body 21 41
+              Defn.EnumCase 23 39
+                Term.Name 28 29
+                Type.ParamClause 29 37
+                  Type.Param 30 36
+                    Type.Name 30 31
+                    Type.ParamClause 31 31
+                    Type.Bounds 31 36
+                      Type.Name 33 36
+                Ctor.Primary 37 39
+                  Name.Anonymous 37 37
+                  Term.ParamClause 37 39
+#!program 255 line 284 Stat dialects.Scala3 :: case-generic
+object W255 {
+enum E { case A[X: Ord] }
+}
+#!scalac ok
+#!regions L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Defn.Enum 14 39
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 39
+            Template.Body 21 39
+              Defn.EnumCase 23 37
+                Term.Name 28 29
+                Type.ParamClause 29 37
+                  Type.Param 30 36
+                    Type.Name 30 31
+                    Type.ParamClause 31 31
+                    Type.Bounds 31 36
+                      Type.Name 33 36
+                Ctor.Primary 38 38
+                  Name.Anonymous 38 38
+#!program 256 line 290 Stat dialects.Scala3 :: case-extends
+object W256 {
+enum Option { case None extends Option[Nothing] }
+}
+#!scalac ok
+#!regions L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Enum 14 63
+          Type.Name 19 25
+          Type.ParamClause 26 26
+          Ctor.Primary 26 26
+            Name.Anonymous 26 26
+          Template 26 63
+            Template.Body 26 63
+              Defn.EnumCase 28 61
+                Term.Name 33 37
+                Type.ParamClause 38 38
+                Ctor.Primary 38 38
+                  Name.Anonymous 38 38
+                Init 46 61
+                  Type.Apply 46 61
+                    Type.Name 46 52
+                    Type.ArgClause 52 61
+                      Type.Name 53 60
+                  Name.Anonymous 62 62
+#!program 257 line 297 Stat dialects.Scala3 :: case-extends-argument
+object W257 {
+enum Color { case Red extends Color(65280) }
+}
+#!scalac ok
+#!regions L58/
+#!layout
+Source 0 61
+  Defn.Object 0 60
+    Term.Name 7 11
+    Template 12 60
+      Template.Body 12 60
+        Defn.Enum 14 58
+          Type.Name 19 24
+          Type.ParamClause 25 25
+          Ctor.Primary 25 25
+            Name.Anonymous 25 25
+          Template 25 58
+            Template.Body 25 58
+              Defn.EnumCase 27 56
+                Term.Name 32 35
+                Type.ParamClause 36 36
+                Ctor.Primary 36 36
+                  Name.Anonymous 36 36
+                Init 44 56
+                  Type.Name 44 49
+                  Name.Anonymous 49 49
+                  Term.ArgClause 49 56
+                    Lit.Int 50 55
+#!program 258 line 304 Stat dialects.Scala3 :: case-extends-argument-generic
+object W258 {
+enum Color { case Red[T](a: Int) extends Color(65280) }
+}
+#!scalac ok
+#!regions L69/
+#!layout
+Source 0 72
+  Defn.Object 0 71
+    Term.Name 7 11
+    Template 12 71
+      Template.Body 12 71
+        Defn.Enum 14 69
+          Type.Name 19 24
+          Type.ParamClause 25 25
+          Ctor.Primary 25 25
+            Name.Anonymous 25 25
+          Template 25 69
+            Template.Body 25 69
+              Defn.EnumCase 27 67
+                Term.Name 32 35
+                Type.ParamClause 35 38
+                  Type.Param 36 37
+                    Type.Name 36 37
+                    Type.ParamClause 37 37
+                    Type.Bounds 37 37
+                Ctor.Primary 38 46
+                  Name.Anonymous 38 38
+                  Term.ParamClause 38 46
+                    Term.Param 39 45
+                      Term.Name 39 40
+                      Type.Name 42 45
+                Init 55 67
+                  Type.Name 55 60
+                  Name.Anonymous 60 60
+                  Term.ArgClause 60 67
+                    Lit.Int 61 66
+#!program 259 line 335 Stat dialects.Scala3 :: enum-case-toplevel
+object W259 {
+class A { 
+  case Red[T](a: Int) extends Color(65280) 
+}
+}
+#!scalac refuses: Expected start of definition
+#!regions L68/ L70/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Defn.Class 14 70
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Ctor.Primary 22 22
+            Name.Anonymous 22 22
+          Template 22 70
+            Template.Body 22 70
+              Defn.EnumCase 27 67
+                Term.Name 32 35
+                Type.ParamClause 35 38
+                  Type.Param 36 37
+                    Type.Name 36 37
+                    Type.ParamClause 37 37
+                    Type.Bounds 37 37
+                Ctor.Primary 38 46
+                  Name.Anonymous 38 38
+                  Term.ParamClause 38 46
+                    Term.Param 39 45
+                      Term.Name 39 40
+                      Type.Name 42 45
+                Init 55 67
+                  Type.Name 55 60
+                  Name.Anonymous 60 60
+                  Term.ArgClause 60 67
+                    Lit.Int 61 66
+#!program 260 line 344 Stat dialects.Scala3 :: enum-colon
+object W260 {
+enum A:
+  case B, C
+
+}
+#!scalac ok
+#!regions I21/2 O34/
+#!layout
+Source 0 37
+  Defn.Object 0 36
+    Term.Name 7 11
+    Template 12 36
+      Template.Body 12 36
+        Defn.Enum 14 33
+          Type.Name 19 20
+          Type.ParamClause 20 20
+          Ctor.Primary 20 20
+            Name.Anonymous 20 20
+          Template 20 33
+            Template.Body 20 33
+              Defn.RepeatedEnumCase 24 33
+                Term.Name 29 30
+                Term.Name 32 33
+#!program 261 line 356 Stat dialects.Scala3 :: enum-annotated
+object W261 {
+@annot
+enum A:
+  case B, C
+
+}
+#!scalac ok
+#!regions L20/ I28/2 O41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 11
+    Template 12 43
+      Template.Body 12 43
+        Defn.Enum 14 40
+          Mod.Annot 14 20
+            Init 15 20
+              Type.Name 15 20
+              Name.Anonymous 20 20
+          Type.Name 26 27
+          Type.ParamClause 27 27
+          Ctor.Primary 27 27
+            Name.Anonymous 27 27
+          Template 27 40
+            Template.Body 27 40
+              Defn.RepeatedEnumCase 31 40
+                Term.Name 36 37
+                Term.Name 39 40
+#!program 262 line 372 Stat dialects.Scala3 :: enum-self-braces
+object W262 {
+enum A { self =>
+  case B(v: Int)
+  case C(v: String)
+}
+
+}
+#!scalac ok
+#!regions I30/2 L47/2 O67/ L67/ F69/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Defn.Enum 14 69
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 69
+            Template.Body 21 69
+              Self 23 30
+                Term.Name 23 27
+              Defn.EnumCase 33 47
+                Term.Name 38 39
+                Type.ParamClause 39 39
+                Ctor.Primary 39 47
+                  Name.Anonymous 39 39
+                  Term.ParamClause 39 47
+                    Term.Param 40 46
+                      Term.Name 40 41
+                      Type.Name 43 46
+              Defn.EnumCase 50 67
+                Term.Name 55 56
+                Type.ParamClause 56 56
+                Ctor.Primary 56 67
+                  Name.Anonymous 56 56
+                  Term.ParamClause 56 67
+                    Term.Param 57 66
+                      Term.Name 57 58
+                      Type.Name 60 66
+#!program 263 line 399 Stat dialects.Scala3 :: enum-self-indented
+object W263 {
+enum A:
+  self =>
+    case B(v: Int)
+    case C(v: String)
+  def fx: Int = 4
+
+}
+#!scalac ok
+#!regions I21/2 I31/4.2 L50/4.2 O72/2 L72/2 O91/
+#!layout
+Source 0 94
+  Defn.Object 0 93
+    Term.Name 7 11
+    Template 12 93
+      Template.Body 12 93
+        Defn.Enum 14 90
+          Type.Name 19 20
+          Type.ParamClause 20 20
+          Ctor.Primary 20 20
+            Name.Anonymous 20 20
+          Template 20 90
+            Template.Body 20 90
+              Self 24 31
+                Term.Name 24 28
+              Defn.EnumCase 36 50
+                Term.Name 41 42
+                Type.ParamClause 42 42
+                Ctor.Primary 42 50
+                  Name.Anonymous 42 42
+                  Term.ParamClause 42 50
+                    Term.Param 43 49
+                      Term.Name 43 44
+                      Type.Name 46 49
+              Defn.EnumCase 55 72
+                Term.Name 60 61
+                Type.ParamClause 61 61
+                Ctor.Primary 61 72
+                  Name.Anonymous 61 61
+                  Term.ParamClause 61 72
+                    Term.Param 62 71
+                      Term.Name 62 63
+                      Type.Name 65 71
+              Defn.Def 75 90
+                Term.Name 79 81
+                Type.Name 83 86
+                Lit.Int 89 90
+#!program 264 line 428 Stat dialects.Scala3 :: enum-colon-sep-after
+object W264 {
+object Main :
+  enum A {
+    case B, C
+  }
+  object X:
+    val x = "x"
+
+}
+#!scalac ok
+#!regions I27/2 L52/2 L56/2 I68/4.2 O85/2 O85/
+#!layout
+Source 0 88
+  Defn.Object 0 87
+    Term.Name 7 11
+    Template 12 87
+      Template.Body 12 87
+        Defn.Object 14 84
+          Term.Name 21 25
+          Template 26 84
+            Template.Body 26 84
+              Defn.Enum 30 56
+                Type.Name 35 36
+                Type.ParamClause 37 37
+                Ctor.Primary 37 37
+                  Name.Anonymous 37 37
+                Template 37 56
+                  Template.Body 37 56
+                    Defn.RepeatedEnumCase 43 52
+                      Term.Name 48 49
+                      Term.Name 51 52
+              Defn.Object 59 84
+                Term.Name 66 67
+                Template 67 84
+                  Template.Body 67 84
+                    Defn.Val 73 84
+                      Pat.Var 77 78
+                        Term.Name 77 78
+                      Lit.String 81 84
+#!program 265 line 454 Stat dialects.Scala3 :: enum-inside-indented
+object W265 {
+object Main:
+  enum A:
+    kind =>
+
+    case B, C
+
+  end A
+
+}
+#!scalac ok
+#!regions I26/2 I36/4.2 O64/2 F64/2 O73/
+#!layout
+Source 0 76
+  Defn.Object 0 75
+    Term.Name 7 11
+    Template 12 75
+      Template.Body 12 75
+        Defn.Object 14 72
+          Term.Name 21 25
+          Template 25 72
+            Template.Body 25 72
+              Defn.Enum 29 63
+                Type.Name 34 35
+                Type.ParamClause 35 35
+                Ctor.Primary 35 35
+                  Name.Anonymous 35 35
+                Template 35 63
+                  Template.Body 35 63
+                    Self 41 48
+                      Term.Name 41 45
+                    Defn.RepeatedEnumCase 54 63
+                      Term.Name 59 60
+                      Term.Name 62 63
+              Term.EndMarker 67 72
+                Term.Name 71 72
+#!program 266 line 487 Stat dialects.Scala3 :: enum-arrow-toplevel
+object W266 {
+enum T2Enum:
+  case Hmm
+  val a = () =>  
+    fx()
+    gx()
+
+}
+#!scalac ok
+#!regions I26/2 L37/2 I55/4.2 L64/4.2 O74/2 O74/
+#!layout
+Source 0 77
+  Defn.Object 0 76
+    Term.Name 7 11
+    Template 12 76
+      Template.Body 12 76
+        Defn.Enum 14 73
+          Type.Name 19 25
+          Type.ParamClause 25 25
+          Ctor.Primary 25 25
+            Name.Anonymous 25 25
+          Template 25 73
+            Template.Body 25 73
+              Defn.EnumCase 29 37
+                Term.Name 34 37
+                Type.ParamClause 37 37
+                Ctor.Primary 37 37
+                  Name.Anonymous 37 37
+              Defn.Val 40 73
+                Pat.Var 44 45
+                  Term.Name 44 45
+                Term.Function 48 73
+                  Term.ParamClause 48 50
+                  Term.Block 60 73
+                    Term.Apply 60 64
+                      Term.Name 60 62
+                      Term.ArgClause 62 64
+                    Term.Apply 69 73
+                      Term.Name 69 71
+                      Term.ArgClause 71 73
+#!program 267 line 504 Source dialects.Scala3 :: enum case outside an enum
+enum A
+case X
+#!scalac refuses: '{' expected, but 'end of statement' found
+#!regions L6/
+#!layout
+Source 0 14
+  Defn.Enum 0 6
+    Type.Name 5 6
+    Type.ParamClause 6 6
+    Ctor.Primary 6 6
+      Name.Anonymous 6 6
+    Template 6 6
+      Template.Body 6 6
+  Defn.EnumCase 7 13
+    Term.Name 12 13
+    Type.ParamClause 14 14
+    Ctor.Primary 14 14
+      Name.Anonymous 14 14
+#!program 268 line 515 Source dialects.Scala3 :: repeated enum case outside an enum
+enum A
+case X, Y
+#!scalac refuses: '{' expected, but 'end of statement' found
+#!regions L6/
+#!layout
+Source 0 17
+  Defn.Enum 0 6
+    Type.Name 5 6
+    Type.ParamClause 6 6
+    Ctor.Primary 6 6
+      Name.Anonymous 6 6
+    Template 6 6
+      Template.Body 6 6
+  Defn.RepeatedEnumCase 7 16
+    Term.Name 12 13
+    Term.Name 15 16

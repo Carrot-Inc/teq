@@ -1,0 +1,50 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.Final, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Final\n\nobject Mod_Final:\n  val marker = 0 // assert: DumpStructure.structure\n  final val a = 1\n  final class C\n"
+  stats Pkg syntax="package nodes.Mod_Final\n\nobject Mod_Final:\n  val marker = 0 // assert: DumpStructure.structure\n  final val a = 1\n  final class C"
+    .stats = [Defn.Object "object Mod_Final:\n  val marker = 0 // assert: DumpStructure.structure\n  final val a = 1\n  final class C"]
+    ref Term.Select syntax="nodes.Mod_Final"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Final" syntax="Mod_Final"
+    body Pkg.Body syntax="object Mod_Final:\n  val marker = 0 // assert: DumpStructure.structure\n  final val a = 1\n  final class C"
+      stats Defn.Object syntax="object Mod_Final:\n  val marker = 0 // assert: DumpStructure.structure\n  final val a = 1\n  final class C"
+        mods Nil
+        name Term.Name value="Mod_Final" syntax="Mod_Final"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  final val a = 1\n  final class C"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "final val a = 1", Defn.Class "final class C"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  final val a = 1\n  final class C"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="final val a = 1"
+              mods Mod.Final syntax="final"
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Class syntax="final class C"
+              .tparams = []
+              mods Mod.Final syntax="final"
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+          derives Nil

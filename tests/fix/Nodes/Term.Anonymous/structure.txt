@@ -1,0 +1,30 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Anonymous: an import of a name renamed, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Anonymous\nimport scala as s\n\nobject Term_Anonymous:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Term_Anonymous\nimport scala as s\n\nobject Term_Anonymous:\n  val marker = 0"
+    .stats = [Import "import scala as s", Defn.Object "object Term_Anonymous:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Term_Anonymous"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Anonymous" syntax="Term_Anonymous"
+    body Pkg.Body syntax="import scala as s\n\nobject Term_Anonymous:\n  val marker = 0"
+      stats Import syntax="import scala as s"
+        importers Importer syntax="scala as s"
+          ref Term.Anonymous syntax=""
+          importees Importee.Rename syntax="scala as s"
+            name Name.Indeterminate value="scala" syntax="scala"
+            rename Name.Indeterminate value="s" syntax="s"
+      stats Defn.Object syntax="object Term_Anonymous:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Term_Anonymous" syntax="Term_Anonymous"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil

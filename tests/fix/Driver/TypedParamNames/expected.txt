@@ -1,0 +1,9 @@
+Driver/TypedParamNames/input.scala:8:13: error: [TypedNames.name]: a b
+    type F = (`a b`: Int) => String // assert: TypedNames.name
+              ^^^^^^^^^^
+Driver/TypedParamNames/input.scala:10:5: error: [TypedNames.name]: c d
+      `c d`: Int, // assert: TypedNames.name
+      ^^^^^^^^^^
+Driver/TypedParamNames/input.scala:11:5: error: [TypedNames.name]: e
+      e: String // assert: TypedNames.name
+      ^^^^^^^^^

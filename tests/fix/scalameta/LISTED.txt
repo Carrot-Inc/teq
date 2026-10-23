@@ -1,0 +1,9 @@
+# The corpus's programs nodes::tests::scalameta_parse counts apart by name, each with its reason: a program whose
+# pieces teq's lexer, which the parser reads, makes otherwise than scalameta's tokenizer or does not keep, a defect
+# pinned as a pending case, and a Scala 2 form it reads as Scala 3 does (an XML literal). A program scalac's parser
+# refuses is counted apart unlisted; one listed that the parser reads as scalameta does leaves the list.
+# <suite> <program> <reason>
+MacroSuite 695 pinned as tests/pending-cases/scalameta-parser/MacroSuite_695.scala
+MacroSuite 701 pinned as tests/pending-cases/scalameta-parser/MacroSuite_701.scala
+MinorDottySuite 753 a Scala 2 form: an XML literal (dropped under -source:future)
+SignificantIndentationSuite 990 pinned as tests/pending-cases/scalameta-parser/SignificantIndentationSuite_990.scala

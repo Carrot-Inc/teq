@@ -1,0 +1,73 @@
+Nodes/Type.Project/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Type.Project, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_Project\n\nobject Type_Project:\n  val marker = 0 // assert: DumpStructure.structure\n  class O:\n    type I = Int\n  type P = O#I\n"
+  stats Pkg syntax="package nodes.Type_Project\n\nobject Type_Project:\n  val marker = 0 // assert: DumpStructure.structure\n  class O:\n    type I = Int\n  type P = O#I"
+    .stats = [Defn.Object "object Type_Project:\n  val marker = 0 // assert: DumpStructure.structure\n  class O:\n    type I = Int\n  type P = O#I"]
+    ref Term.Select syntax="nodes.Type_Project"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_Project" syntax="Type_Project"
+    body Pkg.Body syntax="object Type_Project:\n  val marker = 0 // assert: DumpStructure.structure\n  class O:\n    type I = Int\n  type P = O#I"
+      stats Defn.Object syntax="object Type_Project:\n  val marker = 0 // assert: DumpStructure.structure\n  class O:\n    type I = Int\n  type P = O#I"
+        mods Nil
+        name Term.Name value="Type_Project" syntax="Type_Project"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class O:\n    type I = Int\n  type P = O#I"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class O:\n    type I = Int", Defn.Type "type P = O#I"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class O:\n    type I = Int\n  type P = O#I"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class O:\n    type I = Int"
+              .tparams = []
+              mods Nil
+              name Type.Name value="O" syntax="O"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    type I = Int"
+                .self = Self ""
+                .stats = [Defn.Type "type I = Int"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    type I = Int"
+                  selfOpt None
+                  stats Defn.Type syntax="type I = Int"
+                    .tparams = []
+                    mods Nil
+                    name Type.Name value="I" syntax="I"
+                    tparamClause Type.ParamClause syntax=""
+                      values Nil
+                    body Type.Name value="Int" syntax="Int"
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                derives Nil
+            stats Defn.Type syntax="type P = O#I"
+              .tparams = []
+              mods Nil
+              name Type.Name value="P" syntax="P"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Project syntax="O#I"
+                qual Type.Name value="O" syntax="O"
+                name Type.Name value="I" syntax="I"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

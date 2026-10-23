@@ -205,7 +205,7 @@ pub(super) fn install(t: &mut Table) {
         let n = int(a, 1);
         on_doc(it, int(a, 0), |d| {
             node(d, n)?;
-            Ok(ints(d.tree.children(n as u32).iter().map(|&(_, c)| c as i32)))
+            Ok(ints(d.tree.written_children(n as u32).map(|(_, c)| c as i32)))
         })
     });
     reg!(t, "teq.fix.Native.field", |it, a| {
@@ -251,7 +251,7 @@ pub(super) fn install(t: &mut Table) {
                 if want[d.tree.nodes[n as usize].kind as usize] {
                     out.push(n as i32);
                 }
-                stack.extend(d.tree.children(n).iter().rev().map(|&(_, c)| c));
+                stack.extend(d.tree.written_children(n).rev().map(|(_, c)| c));
             }
             Ok(ints(out))
         })
@@ -265,7 +265,7 @@ pub(super) fn install(t: &mut Table) {
             let mut stack = vec![n as u32];
             while let Some(m) = stack.pop() {
                 out.push(m as i32);
-                stack.extend(d.tree.children(m).iter().rev().map(|&(_, c)| c));
+                stack.extend(d.tree.written_children(m).rev().map(|(_, c)| c));
             }
             Ok(ints(out))
         })

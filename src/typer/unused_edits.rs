@@ -143,6 +143,12 @@ fn find_from(b: &[u8], c: u8, from: usize) -> usize {
     b.get(from..).and_then(|rest| rest.iter().position(|&x| x == c)).map_or(usize::MAX, |i| from + i)
 }
 
+/// dotty's `editPosAt` of the deletion of the statement at `(start, end)`.
+pub(crate) fn deletion_at(text: &str, start: usize, end: usize) -> (usize, usize) {
+    let b = text.as_bytes();
+    edit_pos_at(b, &LineStarts::new(b), (start, end), true)
+}
+
 /// dotty's `editPosAt`: `(start, end)` with the rest of its line where that is blank; for a
 /// deletion of a line otherwise blank, the whole line, and a blank line before it where one
 /// follows it too.

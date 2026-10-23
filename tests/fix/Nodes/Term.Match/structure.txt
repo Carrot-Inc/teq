@@ -1,0 +1,84 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Match, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Match\n\nobject Term_Match:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 => \"a\"\n    case _ => \"b\"\n  inline def g(inline x: Int) = inline x match\n    case 1 => 2\n    case _ => 3\n"
+  stats Pkg syntax="package nodes.Term_Match\n\nobject Term_Match:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 => \"a\"\n    case _ => \"b\"\n  inline def g(inline x: Int) = inline x match\n    case 1 => 2\n    case _ => 3"
+    .stats = [Defn.Object "object Term_Match:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 => \"a\"\n    case _ => \"b\"\n  inline def g(inline x: Int) = inline x match\n    case 1 => 2\n    case _ => 3"]
+    ref Term.Select syntax="nodes.Term_Match"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Match" syntax="Term_Match"
+    body Pkg.Body syntax="object Term_Match:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 => \"a\"\n    case _ => \"b\"\n  inline def g(inline x: Int) = inline x match\n    case 1 => 2\n    case _ => 3"
+      stats Defn.Object syntax="object Term_Match:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 => \"a\"\n    case _ => \"b\"\n  inline def g(inline x: Int) = inline x match\n    case 1 => 2\n    case _ => 3"
+        mods Nil
+        name Term.Name value="Term_Match" syntax="Term_Match"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 => \"a\"\n    case _ => \"b\"\n  inline def g(inline x: Int) = inline x match\n    case 1 => 2\n    case _ => 3"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(x: Int) = x match\n    case 1 => \"a\"\n    case _ => \"b\"", Defn.Def "inline def g(inline x: Int) = inline x match\n    case 1 => 2\n    case _ => 3"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 => \"a\"\n    case _ => \"b\"\n  inline def g(inline x: Int) = inline x match\n    case 1 => 2\n    case _ => 3"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(x: Int) = x match\n    case 1 => \"a\"\n    case _ => \"b\""
+              .paramClauses = [Term.ParamClause "(x: Int)"]
+              .paramss = [[Term.Param "x: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Match syntax="x match\n    case 1 => \"a\"\n    case _ => \"b\""
+                .cases = [Case "case 1 => \"a\"", Case "case _ => \"b\""]
+                expr Term.Name value="x" syntax="x"
+                casesBlock Term.CasesBlock syntax="case 1 => \"a\"\n    case _ => \"b\""
+                  cases Case syntax="case 1 => \"a\""
+                    pat Lit.Int value=1 syntax="1"
+                    cond None
+                    body Lit.String value="a" syntax="\"a\""
+                  cases Case syntax="case _ => \"b\""
+                    pat Pat.Wildcard syntax="_"
+                    cond None
+                    body Lit.String value="b" syntax="\"b\""
+                mods Nil
+            stats Defn.Def syntax="inline def g(inline x: Int) = inline x match\n    case 1 => 2\n    case _ => 3"
+              .paramClauses = [Term.ParamClause "(inline x: Int)"]
+              .paramss = [[Term.Param "inline x: Int"]]
+              .tparams = []
+              mods Mod.Inline syntax="inline"
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Member.ParamClauseGroup syntax="(inline x: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(inline x: Int)"
+                  values Term.Param syntax="inline x: Int"
+                    mods Mod.Inline syntax="inline"
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Match syntax="inline x match\n    case 1 => 2\n    case _ => 3"
+                .cases = [Case "case 1 => 2", Case "case _ => 3"]
+                expr Term.Name value="x" syntax="x"
+                casesBlock Term.CasesBlock syntax="case 1 => 2\n    case _ => 3"
+                  cases Case syntax="case 1 => 2"
+                    pat Lit.Int value=1 syntax="1"
+                    cond None
+                    body Lit.Int value=2 syntax="2"
+                  cases Case syntax="case _ => 3"
+                    pat Pat.Wildcard syntax="_"
+                    cond None
+                    body Lit.Int value=3 syntax="3"
+                mods Mod.Inline syntax="inline"
+          derives Nil

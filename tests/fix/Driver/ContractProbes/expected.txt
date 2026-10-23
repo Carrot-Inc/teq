@@ -1,0 +1,60 @@
+Driver/ContractProbes/input.scala:17:30: error: [ContractProbes.given]: given definition
+  object GivenParen { trait T; given (T) with {} } // assert: ContractProbes.given
+                               ^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:20:3: error: [ContractProbes.block]: block body
+    def f = // assert: ContractProbes.block
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:26:3: error: [ContractProbes.block]: block body
+    def f = // assert: ContractProbes.block
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:32:3: error: [ContractProbes.block]: block body
+    def f = // assert: ContractProbes.block
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:48:44: error: [ContractProbes.else]: missing else
+        // end // assert: ContractProbes.else
+                                             ^
+Driver/ContractProbes/input.scala:52:3: error: [ContractProbes.block]: block body
+    def f = // assert: ContractProbes.block
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:58:3: error: [ContractProbes.block]: block body
+    def f = // assert: ContractProbes.block
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:66:7: error: [ContractProbes.cases]: cases holding a comment of its own line
+        case _ => 1 // assert: ContractProbes.cases
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:83:5: error: [ContractProbes.typeCases]: type cases holding a comment of its own line
+      case Int => String // assert: ContractProbes.typeCases
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:88:3: error: [ContractProbes.block]: block body
+    def f = // assert: ContractProbes.block
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:90:7: error: [ContractProbes.cases]: cases holding a comment of its own line
+        case _ => 1 // assert: ContractProbes.cases
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:98:5: error: [ContractProbes.cases]: cases holding a comment of its own line
+      case _ => 1 // assert: ContractProbes.cases
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:105:7: error: [ContractProbes.cases]: cases holding a comment of its own line
+        case _ => // assert: ContractProbes.cases
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:113:5: error: [ContractProbes.ctor]: constructor block holding a comment of its own line
+      this(1) // assert: ContractProbes.ctor
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:122:3: error: [ContractProbes.block]: block body
+    def f = // assert: ContractProbes.block
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:125:43: error: [ContractProbes.else]: missing else
+      // tail // assert: ContractProbes.else
+                                            ^
+Driver/ContractProbes/input.scala:129:3: error: [ContractProbes.block]: block body
+    def f = // assert: ContractProbes.block
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:135:3: error: [ContractProbes.block]: block body
+    def f = // assert: ContractProbes.block
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Driver/ContractProbes/input.scala:152:30: error: [ContractProbes.importee]: an importee named given
+    object Use { import Names.{`given`, *}; val n = `given` } // assert: ContractProbes.importee
+                               ^^^^^^^
+Driver/ContractProbes/input.scala:165:3: error: [ContractProbes.block]: block body
+    def f = // assert: ContractProbes.block
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

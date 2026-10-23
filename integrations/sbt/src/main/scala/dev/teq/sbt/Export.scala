@@ -282,6 +282,11 @@ private[sbt] object Export {
     if (c.evictions.isEmpty) Map.empty
     else Map("evictions" -> Json.Obj(c.evictions.map { case (asked, chosen) => asked -> (Json.Str(chosen): Json.Value) }.toMap))
 
+  /** A configuration's `scalafix`, written where the build uses sbt-scalafix: `config`, the file it resolves there
+    * (absent for the root's `.scalafix.conf`), and `skip`. */
+  private[sbt] def scalafixField(config: Option[String], skip: Boolean): Map[String, Json.Value] =
+    Map("scalafix" -> Json.Obj(config.map(c => "config" -> (Json.Str(c): Json.Value)).toMap + ("skip" -> Json.Bool(skip))))
+
   /** sbt-native-packager's plugins whose Docker stage the export carries. */
   private val Packaging = Seq("com.typesafe.sbt.packager.archetypes.JavaAppPackaging", "com.typesafe.sbt.packager.docker.DockerPlugin")
 
@@ -293,6 +298,9 @@ private[sbt] object Export {
     val docker: Def.Initialize[Task[Option[NativeStage]]] =
       if (Packaging.forall(labels)) Def.task(Some(DockerStage.of.value)) else Def.task(None)
     val structure = buildStructure.value
+    val scalafixSettings: Def.Initialize[Task[Option[Scalafix.Settings]]] =
+      if (labels(Scalafix.Label)) Def.task(Some(Scalafix.of.value))
+      else Def.task(Option.when(structure.allProjects.exists(_.autoPlugins.exists(_.label == Scalafix.Label)))(Scalafix.Disabled))
     val buildRoot = rootOf((LocalRootProject / baseDirectory).value)
     val project = thisProjectRef.value
     def scope(c: Configuration) = Scope(Select(project), Select(ConfigKey(c.name)), Zero, Zero)
@@ -334,6 +342,7 @@ private[sbt] object Export {
       val testCommands = (Test / teqGenerators).value.filterNot(commands.contains)
       val replacesSbt = Map("compile" -> (Compile / teqReplacesSbtGenerators).value, "test" -> (Test / teqReplacesSbtGenerators).value)
       val buildInfoBlock = generator.value
+      val scalafixOf = scalafixSettings.value
       val native = docker.value
       val aliases = teqRunAliases.value
       val declared = declaredMain.value
@@ -520,6 +529,10 @@ private[sbt] object Export {
       val excluded = testOptions.collect { case Tests.Exclude(names) => names }.flatten.distinct.sorted(using utf8)
       def context(forked: Boolean, dir: File, what: String) = if (forked) path(what, dir) else "."
       def envVars(vars: Map[String, String]) = Json.Obj(vars.map{ case (k, v) => k -> Json.Str(v)})
+      def scalafix(c: String) = scalafixOf.fold(Map.empty[String, Json.Value]) { s =>
+        val (file, skip) = s(c)
+        scalafixField(file.map(path("scalafixConfig", _)), skip)
+      }
 
       val configurations = Map(
         "compile" -> Json.Obj(Map(
@@ -529,7 +542,7 @@ private[sbt] object Export {
           "flags" -> compileFlags,
           "generators" -> Json.Arr(compileGenerators),
           "mainClasses" -> strings(mainClasses),
-        ) ++ generatorFields(Nil, resourceGeneratorsOf(compile)) ++ evictionsField(compile)),
+        ) ++ generatorFields(Nil, resourceGeneratorsOf(compile)) ++ evictionsField(compile) ++ scalafix("compile")),
         "runtime" -> Json.Obj(Map(
           "sources" -> strings(Nil),
           "resources" -> strings(Nil),
@@ -546,7 +559,7 @@ private[sbt] object Export {
           "javaOptions" -> strings(testJavaOptions),
           "frameworks" -> Json.Arr(frameworks.sortBy(_("class").str)(using utf8)),
           "exclude" -> strings(excluded),
-        ) ++ (if (js) scalaJSTest else Map("parallelism" -> parallelism(testParallel, testParallelism))) ++ generatorFields(testGenerators, resourceGeneratorsOf(test))),
+        ) ++ (if (js) scalaJSTest else Map("parallelism" -> parallelism(testParallel, testParallelism))) ++ generatorFields(testGenerators, resourceGeneratorsOf(test)) ++ scalafix("test")),
       )
 
       // sbt's managed source directories are not teq's: a project's generated sources are

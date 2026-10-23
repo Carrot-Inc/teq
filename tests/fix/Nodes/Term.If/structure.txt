@@ -1,0 +1,118 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.If, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_If\n\nobject Term_If:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(c: Boolean) = if c then 1 else 2\n  def g(c: Boolean) = if (c) 1 else 2\n  inline def h(inline c: Boolean) = inline if c then 1 else 2\n  def k(c: Boolean): Unit = if c then println()\n"
+  stats Pkg syntax="package nodes.Term_If\n\nobject Term_If:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(c: Boolean) = if c then 1 else 2\n  def g(c: Boolean) = if (c) 1 else 2\n  inline def h(inline c: Boolean) = inline if c then 1 else 2\n  def k(c: Boolean): Unit = if c then println()"
+    .stats = [Defn.Object "object Term_If:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(c: Boolean) = if c then 1 else 2\n  def g(c: Boolean) = if (c) 1 else 2\n  inline def h(inline c: Boolean) = inline if c then 1 else 2\n  def k(c: Boolean): Unit = if c then println()"]
+    ref Term.Select syntax="nodes.Term_If"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_If" syntax="Term_If"
+    body Pkg.Body syntax="object Term_If:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(c: Boolean) = if c then 1 else 2\n  def g(c: Boolean) = if (c) 1 else 2\n  inline def h(inline c: Boolean) = inline if c then 1 else 2\n  def k(c: Boolean): Unit = if c then println()"
+      stats Defn.Object syntax="object Term_If:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(c: Boolean) = if c then 1 else 2\n  def g(c: Boolean) = if (c) 1 else 2\n  inline def h(inline c: Boolean) = inline if c then 1 else 2\n  def k(c: Boolean): Unit = if c then println()"
+        mods Nil
+        name Term.Name value="Term_If" syntax="Term_If"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(c: Boolean) = if c then 1 else 2\n  def g(c: Boolean) = if (c) 1 else 2\n  inline def h(inline c: Boolean) = inline if c then 1 else 2\n  def k(c: Boolean): Unit = if c then println()"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(c: Boolean) = if c then 1 else 2", Defn.Def "def g(c: Boolean) = if (c) 1 else 2", Defn.Def "inline def h(inline c: Boolean) = inline if c then 1 else 2", Defn.Def "def k(c: Boolean): Unit = if c then println()"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(c: Boolean) = if c then 1 else 2\n  def g(c: Boolean) = if (c) 1 else 2\n  inline def h(inline c: Boolean) = inline if c then 1 else 2\n  def k(c: Boolean): Unit = if c then println()"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(c: Boolean) = if c then 1 else 2"
+              .paramClauses = [Term.ParamClause "(c: Boolean)"]
+              .paramss = [[Term.Param "c: Boolean"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(c: Boolean)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(c: Boolean)"
+                  values Term.Param syntax="c: Boolean"
+                    mods Nil
+                    name Term.Name value="c" syntax="c"
+                    decltpe Type.Name value="Boolean" syntax="Boolean"
+                    default None
+                  mod None
+              decltpe None
+              body Term.If syntax="if c then 1 else 2"
+                cond Term.Name value="c" syntax="c"
+                thenp Lit.Int value=1 syntax="1"
+                elsep Lit.Int value=2 syntax="2"
+                mods Nil
+            stats Defn.Def syntax="def g(c: Boolean) = if (c) 1 else 2"
+              .paramClauses = [Term.ParamClause "(c: Boolean)"]
+              .paramss = [[Term.Param "c: Boolean"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Member.ParamClauseGroup syntax="(c: Boolean)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(c: Boolean)"
+                  values Term.Param syntax="c: Boolean"
+                    mods Nil
+                    name Term.Name value="c" syntax="c"
+                    decltpe Type.Name value="Boolean" syntax="Boolean"
+                    default None
+                  mod None
+              decltpe None
+              body Term.If syntax="if (c) 1 else 2"
+                cond Term.Name value="c" syntax="c"
+                thenp Lit.Int value=1 syntax="1"
+                elsep Lit.Int value=2 syntax="2"
+                mods Nil
+            stats Defn.Def syntax="inline def h(inline c: Boolean) = inline if c then 1 else 2"
+              .paramClauses = [Term.ParamClause "(inline c: Boolean)"]
+              .paramss = [[Term.Param "inline c: Boolean"]]
+              .tparams = []
+              mods Mod.Inline syntax="inline"
+              name Term.Name value="h" syntax="h"
+              paramClauseGroups Member.ParamClauseGroup syntax="(inline c: Boolean)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(inline c: Boolean)"
+                  values Term.Param syntax="inline c: Boolean"
+                    mods Mod.Inline syntax="inline"
+                    name Term.Name value="c" syntax="c"
+                    decltpe Type.Name value="Boolean" syntax="Boolean"
+                    default None
+                  mod None
+              decltpe None
+              body Term.If syntax="inline if c then 1 else 2"
+                cond Term.Name value="c" syntax="c"
+                thenp Lit.Int value=1 syntax="1"
+                elsep Lit.Int value=2 syntax="2"
+                mods Mod.Inline syntax="inline"
+            stats Defn.Def syntax="def k(c: Boolean): Unit = if c then println()"
+              .paramClauses = [Term.ParamClause "(c: Boolean)"]
+              .paramss = [[Term.Param "c: Boolean"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="k" syntax="k"
+              paramClauseGroups Member.ParamClauseGroup syntax="(c: Boolean)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(c: Boolean)"
+                  values Term.Param syntax="c: Boolean"
+                    mods Nil
+                    name Term.Name value="c" syntax="c"
+                    decltpe Type.Name value="Boolean" syntax="Boolean"
+                    default None
+                  mod None
+              decltpe Type.Name value="Unit" syntax="Unit"
+              body Term.If syntax="if c then println()"
+                cond Term.Name value="c" syntax="c"
+                thenp Term.Apply syntax="println()"
+                  .args = []
+                  fun Term.Name value="println" syntax="println"
+                  argClause Term.ArgClause syntax="()"
+                    values Nil
+                    mod None
+                elsep Lit.Unit syntax=""
+                  .value = ()
+                mods Nil
+          derives Nil

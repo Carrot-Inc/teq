@@ -1003,6 +1003,9 @@ impl<'a> Parser<'a> {
         };
         let parents = self.parse_parents();
         let derives = self.parse_derives();
+        if self.syntax.keep && !derives.is_empty() {
+            self.ast.notes.derives.push((span.start, derives.iter().map(|&(t, _)| t).collect()));
+        }
         // A `:` that ends the header's line with no indented body after it, where no line is indented
         // further or indentation is not significant: dotty's `acceptIndent` past the colon (an end marker
         // right after it ends an empty body, which the lexer gives).
@@ -1318,6 +1321,7 @@ impl<'a> Parser<'a> {
         let derives_mark = self.pending_derives.len();
         let cases_mark = self.pending_cases.len();
         let defaults_mark = self.pending_defaults.len();
+        self.skip_separators();
         let (alias_indent, self_type, alias) = self.parse_self_alias();
         let language = self.language_open.len();
         self.statements(RecoverySite::TemplateBody, |p| {
@@ -1626,11 +1630,13 @@ impl<'a> Parser<'a> {
         if typed {
             self.bump();
             let start = self.span();
+            let outer = std::mem::replace(&mut self.in_self_type, true);
             let mut t = self.parse_inter_type();
             while self.eat(Tok::KwWith) {
                 let u = self.parse_inter_type();
                 t = self.ast.add_ty(TyExpr::Inter(t, u), start.to(self.prev_span()));
             }
+            self.in_self_type = outer;
             self_type = Some(t);
         }
         self.expect(Tok::Arrow);
@@ -1961,13 +1967,9 @@ impl<'a> Parser<'a> {
                 if !self.eat(Tok::KwWith) {
                     let msg = if self.at(Tok::ColonEol) { "'with' expected, but ':' found" } else { "'with' expected" };
                     self.error_at(self.span(), msg);
-                } else if self.eat(Tok::Indent) {
-                    let (alias_indent, _, named) = self.parse_self_alias();
+                } else if let Some((stmts, named)) = self.parse_given_with_body() {
                     self_alias = named;
-                    body = self.parse_given_body();
-                    if alias_indent {
-                        self.eat(Tok::Outdent);
-                    }
+                    body = stmts;
                 } else if self.at(Tok::LBrace) {
                     let (stmts, exports, _, named) = self.parse_template_body(false);
                     body = stmts;
@@ -2000,13 +2002,9 @@ impl<'a> Parser<'a> {
                 self.given_with_template();
             }
             self.bump();
-            if self.eat(Tok::Indent) {
-                let (alias_indent, _, named) = self.parse_self_alias();
+            if let Some((stmts, named)) = self.parse_given_with_body() {
                 self_alias = named;
-                body = self.parse_given_body();
-                if alias_indent {
-                    self.eat(Tok::Outdent);
-                }
+                body = stmts;
             }
         } else if self.at(Tok::ColonEol) {
             // A body after a colon is 3.6's syntax (`possibleTemplateStart`).
@@ -2057,11 +2055,21 @@ impl<'a> Parser<'a> {
         matches!(self.kind(), Tok::Newline | Tok::Semi | Tok::Outdent | Tok::RBrace | Tok::Eof)
     }
 
-    fn parse_given_body(&mut self) -> Vec<Stmt> {
+    /// A given's body after its `with`, the region the lexer opens for its braces or its lines: its statements and its
+    /// self alias.
+    fn parse_given_with_body(&mut self) -> Option<(Vec<Stmt>, Name)> {
+        if !self.eat(Tok::Indent) {
+            return None;
+        }
+        self.skip_separators();
+        let (alias_indent, _, named) = self.parse_self_alias();
         let mut body = Vec::new();
         self.statements(RecoverySite::GivenBody, |p| p.parse_block_stmt(&mut body));
         self.end_region();
-        body
+        if alias_indent {
+            self.eat(Tok::Outdent);
+        }
+        Some((body, named))
     }
 
     fn group_followed_by_arrow(&self, from: usize) -> bool {

@@ -1,0 +1,63 @@
+Nodes/Lit.Unit/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Lit.Unit, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_Unit\n\nobject Lit_Unit:\n  val marker = 0 // assert: DumpStructure.structure\n  val u = ()\n  def f(c: Boolean): Unit = if c then println(1)\n"
+  stats Pkg syntax="package nodes.Lit_Unit\n\nobject Lit_Unit:\n  val marker = 0 // assert: DumpStructure.structure\n  val u = ()\n  def f(c: Boolean): Unit = if c then println(1)"
+    .stats = [Defn.Object "object Lit_Unit:\n  val marker = 0 // assert: DumpStructure.structure\n  val u = ()\n  def f(c: Boolean): Unit = if c then println(1)"]
+    ref Term.Select syntax="nodes.Lit_Unit"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_Unit" syntax="Lit_Unit"
+    body Pkg.Body syntax="object Lit_Unit:\n  val marker = 0 // assert: DumpStructure.structure\n  val u = ()\n  def f(c: Boolean): Unit = if c then println(1)"
+      stats Defn.Object syntax="object Lit_Unit:\n  val marker = 0 // assert: DumpStructure.structure\n  val u = ()\n  def f(c: Boolean): Unit = if c then println(1)"
+        mods Nil
+        name Term.Name value="Lit_Unit" syntax="Lit_Unit"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val u = ()\n  def f(c: Boolean): Unit = if c then println(1)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val u = ()", Defn.Def "def f(c: Boolean): Unit = if c then println(1)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val u = ()\n  def f(c: Boolean): Unit = if c then println(1)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val u = ()"
+              mods Nil
+              pats Pat.Var syntax="u"
+                name Term.Name value="u" syntax="u"
+              decltpe None
+              rhs Lit.Unit syntax="()"
+                .value = ()
+            stats Defn.Def syntax="def f(c: Boolean): Unit = if c then println(1)"
+              .paramClauses = [Term.ParamClause "(c: Boolean)"]
+              .paramss = [[Term.Param "c: Boolean"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(c: Boolean)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(c: Boolean)"
+                  values Term.Param syntax="c: Boolean"
+                    mods Nil
+                    name Term.Name value="c" syntax="c"
+                    decltpe Type.Name value="Boolean" syntax="Boolean"
+                    default None
+                  mod None
+              decltpe Type.Name value="Unit" syntax="Unit"
+              body Term.If syntax="if c then println(1)"
+                cond Term.Name value="c" syntax="c"
+                thenp Term.Apply syntax="println(1)"
+                  .args = [Lit.Int "1"]
+                  fun Term.Name value="println" syntax="println"
+                  argClause Term.ArgClause syntax="(1)"
+                    values Lit.Int value=1 syntax="1"
+                    mod None
+                elsep Lit.Unit syntax=""
+                  .value = ()
+                mods Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

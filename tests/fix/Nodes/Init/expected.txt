@@ -1,0 +1,153 @@
+Nodes/Init/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Init, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Init\n\nobject Init:\n  val marker = 0 // assert: DumpStructure.structure\n  class B(x: Int)(y: Int)\n  trait T\n  class C extends B(1)(2) with T\n  class D extends B(1)(2), T\n"
+  stats Pkg syntax="package nodes.Init\n\nobject Init:\n  val marker = 0 // assert: DumpStructure.structure\n  class B(x: Int)(y: Int)\n  trait T\n  class C extends B(1)(2) with T\n  class D extends B(1)(2), T"
+    .stats = [Defn.Object "object Init:\n  val marker = 0 // assert: DumpStructure.structure\n  class B(x: Int)(y: Int)\n  trait T\n  class C extends B(1)(2) with T\n  class D extends B(1)(2), T"]
+    ref Term.Select syntax="nodes.Init"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Init" syntax="Init"
+    body Pkg.Body syntax="object Init:\n  val marker = 0 // assert: DumpStructure.structure\n  class B(x: Int)(y: Int)\n  trait T\n  class C extends B(1)(2) with T\n  class D extends B(1)(2), T"
+      stats Defn.Object syntax="object Init:\n  val marker = 0 // assert: DumpStructure.structure\n  class B(x: Int)(y: Int)\n  trait T\n  class C extends B(1)(2) with T\n  class D extends B(1)(2), T"
+        mods Nil
+        name Term.Name value="Init" syntax="Init"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class B(x: Int)(y: Int)\n  trait T\n  class C extends B(1)(2) with T\n  class D extends B(1)(2), T"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class B(x: Int)(y: Int)", Defn.Trait "trait T", Defn.Class "class C extends B(1)(2) with T", Defn.Class "class D extends B(1)(2), T"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class B(x: Int)(y: Int)\n  trait T\n  class C extends B(1)(2) with T\n  class D extends B(1)(2), T"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class B(x: Int)(y: Int)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="B" syntax="B"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(x: Int)(y: Int)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+                paramClauses Term.ParamClause syntax="(y: Int)"
+                  values Term.Param syntax="y: Int"
+                    mods Nil
+                    name Term.Name value="y" syntax="y"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Trait syntax="trait T"
+              .tparams = []
+              mods Nil
+              name Type.Name value="T" syntax="T"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Class syntax="class C extends B(1)(2) with T"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax="extends B(1)(2) with T"
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Init syntax="B(1)(2)"
+                  .argss = [[Lit.Int "1"], [Lit.Int "2"]]
+                  tpe Type.Name value="B" syntax="B"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Term.ArgClause syntax="(1)"
+                    values Lit.Int value=1 syntax="1"
+                    mod None
+                  argClauses Term.ArgClause syntax="(2)"
+                    values Lit.Int value=2 syntax="2"
+                    mod None
+                inits Init syntax="T"
+                  .argss = []
+                  tpe Type.Name value="T" syntax="T"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Class syntax="class D extends B(1)(2), T"
+              .tparams = []
+              mods Nil
+              name Type.Name value="D" syntax="D"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax="extends B(1)(2), T"
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Init syntax="B(1)(2)"
+                  .argss = [[Lit.Int "1"], [Lit.Int "2"]]
+                  tpe Type.Name value="B" syntax="B"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Term.ArgClause syntax="(1)"
+                    values Lit.Int value=1 syntax="1"
+                    mod None
+                  argClauses Term.ArgClause syntax="(2)"
+                    values Lit.Int value=2 syntax="2"
+                    mod None
+                inits Init syntax="T"
+                  .argss = []
+                  tpe Type.Name value="T" syntax="T"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

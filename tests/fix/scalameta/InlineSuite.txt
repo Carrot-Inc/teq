@@ -1,0 +1,744 @@
+# The programs of scalameta 4.17.4's InlineSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 605 line 15 Stat dialects.Scala3 :: inline-soft-keyword-pos
+object W605 {
+def f(inline: String): Unit
+}
+#!scalac ok
+#!regions L41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 11
+    Template 12 43
+      Template.Body 12 43
+        Decl.Def 14 41
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 35
+            Type.ParamClause 19 19
+            Term.ParamClause 19 35
+              Term.Param 20 34
+                Term.Name 20 26
+                Type.Name 28 34
+          Type.Name 37 41
+#!program 606 line 20 Stat dialects.Scala3 :: inline-soft-keyword-pos
+object W606 {
+inline def inline(inline: inline): inline
+}
+#!scalac ok
+#!regions L55/
+#!layout
+Source 0 58
+  Defn.Object 0 57
+    Term.Name 7 11
+    Template 12 57
+      Template.Body 12 57
+        Decl.Def 14 55
+          Mod.Inline 14 20
+          Term.Name 25 31
+          Member.ParamClauseGroup 31 47
+            Type.ParamClause 31 31
+            Term.ParamClause 31 47
+              Term.Param 32 46
+                Term.Name 32 38
+                Type.Name 40 46
+          Type.Name 49 55
+#!program 607 line 29 Stat dialects.Scala3 :: inline-soft-keyword-pos
+object W607 {
+inline def inline(inline param: inline): inline
+}
+#!scalac ok
+#!regions L61/
+#!layout
+Source 0 64
+  Defn.Object 0 63
+    Term.Name 7 11
+    Template 12 63
+      Template.Body 12 63
+        Decl.Def 14 61
+          Mod.Inline 14 20
+          Term.Name 25 31
+          Member.ParamClauseGroup 31 53
+            Type.ParamClause 31 31
+            Term.ParamClause 31 53
+              Term.Param 32 52
+                Mod.Inline 32 38
+                Term.Name 39 44
+                Type.Name 46 52
+          Type.Name 55 61
+#!program 608 line 38 Stat dialects.Scala3 :: inline-soft-keyword-pos
+object W608 {
+inline def inline(inline inline: inline): inline
+}
+#!scalac ok
+#!regions L62/
+#!layout
+Source 0 65
+  Defn.Object 0 64
+    Term.Name 7 11
+    Template 12 64
+      Template.Body 12 64
+        Decl.Def 14 62
+          Mod.Inline 14 20
+          Term.Name 25 31
+          Member.ParamClauseGroup 31 54
+            Type.ParamClause 31 31
+            Term.ParamClause 31 54
+              Term.Param 32 53
+                Mod.Inline 32 38
+                Term.Name 39 45
+                Type.Name 47 53
+          Type.Name 56 62
+#!program 609 line 47 Stat dialects.Scala3 :: inline-soft-keyword-pos
+object W609 {
+inline val inline = false
+}
+#!scalac ok
+#!regions L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Defn.Val 14 39
+          Mod.Inline 14 20
+          Pat.Var 25 31
+            Term.Name 25 31
+          Lit.Boolean 34 39
+#!program 610 line 52 Stat dialects.Scala3 :: inline-soft-keyword-pos
+object W610 {
+case class A(inline: Int)
+}
+#!scalac ok
+#!regions L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Defn.Class 14 39
+          Mod.Case 14 18
+          Type.Name 25 26
+          Type.ParamClause 26 26
+          Ctor.Primary 26 39
+            Name.Anonymous 26 26
+            Term.ParamClause 26 39
+              Term.Param 27 38
+                Term.Name 27 33
+                Type.Name 35 38
+          Template 39 39
+            Template.Body 39 39
+#!program 611 line 58 Stat dialects.Scala3 :: inline-def-object
+object W611 {
+object X { inline def f(inline sc: Str)(inline args: Any*): String = ??? }
+}
+#!scalac ok
+#!regions L88/
+#!layout
+Source 0 91
+  Defn.Object 0 90
+    Term.Name 7 11
+    Template 12 90
+      Template.Body 12 90
+        Defn.Object 14 88
+          Term.Name 21 22
+          Template 23 88
+            Template.Body 23 88
+              Defn.Def 25 86
+                Mod.Inline 25 31
+                Term.Name 36 37
+                Member.ParamClauseGroup 37 72
+                  Type.ParamClause 37 37
+                  Term.ParamClause 37 53
+                    Term.Param 38 52
+                      Mod.Inline 38 44
+                      Term.Name 45 47
+                      Type.Name 49 52
+                  Term.ParamClause 53 72
+                    Term.Param 54 71
+                      Mod.Inline 54 60
+                      Term.Name 61 65
+                      Type.Repeated 67 71
+                        Type.Name 67 70
+                Type.Name 74 80
+                Term.Name 83 86
+#!program 612 line 77 Stat dialects.Scala3 :: inline-mods-combination
+object W612 {
+object X { inline override protected def f(): Unit = ??? }
+}
+#!scalac ok
+#!regions L72/
+#!layout
+Source 0 75
+  Defn.Object 0 74
+    Term.Name 7 11
+    Template 12 74
+      Template.Body 12 74
+        Defn.Object 14 72
+          Term.Name 21 22
+          Template 23 72
+            Template.Body 23 72
+              Defn.Def 25 70
+                Mod.Inline 25 31
+                Mod.Override 32 40
+                Mod.Protected 41 50
+                  Name.Anonymous 51 51
+                Term.Name 55 56
+                Member.ParamClauseGroup 56 58
+                  Type.ParamClause 56 56
+                  Term.ParamClause 56 58
+                Type.Name 60 64
+                Term.Name 67 70
+#!program 613 line 90 Stat dialects.Scala3 :: inline-mods-combination
+object W613 {
+object X { final override inline protected def f(): Unit = ??? }
+}
+#!scalac ok
+#!regions L78/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Defn.Object 14 78
+          Term.Name 21 22
+          Template 23 78
+            Template.Body 23 78
+              Defn.Def 25 76
+                Mod.Final 25 30
+                Mod.Override 31 39
+                Mod.Inline 40 46
+                Mod.Protected 47 56
+                  Name.Anonymous 57 57
+                Term.Name 61 62
+                Member.ParamClauseGroup 62 64
+                  Type.ParamClause 62 62
+                  Term.ParamClause 62 64
+                Type.Name 66 70
+                Term.Name 73 76
+#!program 614 line 105 Stat dialects.Scala3 :: inline-mods-combination
+object W614 {
+case class Y(val inline: String, inline: Int)
+}
+#!scalac ok
+#!regions L59/
+#!layout
+Source 0 62
+  Defn.Object 0 61
+    Term.Name 7 11
+    Template 12 61
+      Template.Body 12 61
+        Defn.Class 14 59
+          Mod.Case 14 18
+          Type.Name 25 26
+          Type.ParamClause 26 26
+          Ctor.Primary 26 59
+            Name.Anonymous 26 26
+            Term.ParamClause 26 59
+              Term.Param 27 45
+                Mod.ValParam 27 30
+                Term.Name 31 37
+                Type.Name 39 45
+              Term.Param 47 58
+                Term.Name 47 53
+                Type.Name 55 58
+          Template 59 59
+            Template.Body 59 59
+#!program 615 line 116 Stat dialects.Scala3 :: inline-soft-ident
+object W615 {
+inline
+}
+#!scalac ok
+#!regions L20/
+#!layout
+Source 0 23
+  Defn.Object 0 22
+    Term.Name 7 11
+    Template 12 22
+      Template.Body 12 22
+        Term.Name 14 20
+#!program 616 line 118 Stat dialects.Scala3 :: inline-soft-ident
+object W616 {
+`inline`()
+}
+#!scalac ok
+#!regions L24/
+#!layout
+Source 0 27
+  Defn.Object 0 26
+    Term.Name 7 11
+    Template 12 26
+      Template.Body 12 26
+        Term.Apply 14 24
+          Term.Name 14 22
+          Term.ArgClause 22 24
+#!program 617 line 127 Stat dialects.Scala3 :: inline-soft-ident
+object W617 {
+object X { `inline` + 3 }
+}
+#!scalac ok
+#!regions L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Defn.Object 14 39
+          Term.Name 21 22
+          Template 23 39
+            Template.Body 23 39
+              Term.ApplyInfix 25 37
+                Term.Name 25 33
+                Term.Name 34 35
+                Type.ArgClause 36 36
+                Term.ArgClause 36 37
+                  Lit.Int 36 37
+#!program 618 line 133 Stat dialects.Scala3 :: inline-match
+object W618 {
+inline def g: Any = inline x match {
+  case x: String => (x, x) 
+  case x: Double => x
+}
+}
+#!scalac ok
+#!regions L78/ L100/ L102/
+#!layout
+Source 0 105
+  Defn.Object 0 104
+    Term.Name 7 11
+    Template 12 104
+      Template.Body 12 104
+        Defn.Def 14 102
+          Mod.Inline 14 20
+          Term.Name 25 26
+          Type.Name 28 31
+          Term.Match 34 102
+            Term.Name 41 42
+            Term.CasesBlock 49 102
+              Case 53 77
+                Pat.Typed 58 67
+                  Pat.Var 58 59
+                    Term.Name 58 59
+                  Type.Name 61 67
+                Term.Tuple 71 77
+                  Term.Name 72 73
+                  Term.Name 75 76
+              Case 81 100
+                Pat.Typed 86 95
+                  Pat.Var 86 87
+                    Term.Name 86 87
+                  Type.Name 89 95
+                Term.Name 99 100
+            Mod.Inline 34 40
+#!program 619 line 154 Stat dialects.Scala3 :: inline-match-paren
+object W619 {
+inline def g = inline (x) match {
+  case x => x
+}
+}
+#!scalac ok
+#!regions L61/ L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Def 14 63
+          Mod.Inline 14 20
+          Term.Name 25 26
+          Term.Match 29 63
+            Term.Name 37 38
+            Term.CasesBlock 46 63
+              Case 50 61
+                Pat.Var 55 56
+                  Term.Name 55 56
+                Term.Name 60 61
+            Mod.Inline 29 35
+#!program 620 line 170 Stat dialects.Scala3 :: inline-match-brace
+object W620 {
+inline def g = inline {x} match {
+  case x => x
+}
+}
+#!scalac ok
+#!regions L61/ L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Def 14 63
+          Mod.Inline 14 20
+          Term.Name 25 26
+          Term.Match 29 63
+            Term.Block 36 39
+              Term.Name 37 38
+            Term.CasesBlock 46 63
+              Case 50 61
+                Pat.Var 55 56
+                  Term.Name 55 56
+                Term.Name 60 61
+            Mod.Inline 29 35
+#!program 621 line 186 Stat dialects.Scala3 :: inline-match-block
+object W621 {
+inline def g = {
+  inline x match {
+    case x => x
+  }
+}
+}
+#!scalac ok
+#!regions L65/ L69/ L71/
+#!layout
+Source 0 74
+  Defn.Object 0 73
+    Term.Name 7 11
+    Template 12 73
+      Template.Body 12 73
+        Defn.Def 14 71
+          Mod.Inline 14 20
+          Term.Name 25 26
+          Term.Block 29 71
+            Term.Match 33 69
+              Term.Name 40 41
+              Term.CasesBlock 48 69
+                Case 54 65
+                  Pat.Var 59 60
+                    Term.Name 59 60
+                  Term.Name 64 65
+              Mod.Inline 33 39
+#!program 622 line 204 Stat dialects.Scala3 :: inline-match-block-paren
+object W622 {
+inline def g = {
+  inline (x) match {
+    case x => x
+  }
+}
+}
+#!scalac ok
+#!regions L67/ L71/ L73/
+#!layout
+Source 0 76
+  Defn.Object 0 75
+    Term.Name 7 11
+    Template 12 75
+      Template.Body 12 75
+        Defn.Def 14 73
+          Mod.Inline 14 20
+          Term.Name 25 26
+          Term.Block 29 73
+            Term.Match 33 71
+              Term.Name 41 42
+              Term.CasesBlock 50 71
+                Case 56 67
+                  Pat.Var 61 62
+                    Term.Name 61 62
+                  Term.Name 66 67
+              Mod.Inline 33 39
+#!program 623 line 222 Stat dialects.Scala3 :: inline-match-block-brace
+object W623 {
+inline def g = {
+  inline {x} match {
+    case x => x
+  }
+}
+}
+#!scalac ok
+#!regions L67/ L71/ L73/
+#!layout
+Source 0 76
+  Defn.Object 0 75
+    Term.Name 7 11
+    Template 12 75
+      Template.Body 12 75
+        Defn.Def 14 73
+          Mod.Inline 14 20
+          Term.Name 25 26
+          Term.Block 29 73
+            Term.Match 33 71
+              Term.Block 40 43
+                Term.Name 41 42
+              Term.CasesBlock 50 71
+                Case 56 67
+                  Pat.Var 61 62
+                    Term.Name 61 62
+                  Term.Name 66 67
+              Mod.Inline 33 39
+#!program 624 line 240 Stat dialects.Scala3 :: inline-match-new
+object W624 {
+inline def g = {
+  inline new X match {
+    case x => x
+  }
+}
+}
+#!scalac ok
+#!regions L69/ L73/ L75/
+#!layout
+Source 0 78
+  Defn.Object 0 77
+    Term.Name 7 11
+    Template 12 77
+      Template.Body 12 77
+        Defn.Def 14 75
+          Mod.Inline 14 20
+          Term.Name 25 26
+          Term.Block 29 75
+            Term.Match 33 73
+              Term.New 40 45
+                Init 44 45
+                  Type.Name 44 45
+                  Name.Anonymous 46 46
+              Term.CasesBlock 52 73
+                Case 58 69
+                  Pat.Var 63 64
+                    Term.Name 63 64
+                  Term.Name 68 69
+              Mod.Inline 33 39
+#!program 625 line 258 Stat dialects.Scala3 :: inline-if-method
+object W625 {
+def fn: Unit =
+    inline if cond then
+  truep
+
+}
+#!scalac ok
+#!regions I28/4 O61/
+#!layout
+Source 0 64
+  Defn.Object 0 63
+    Term.Name 7 11
+    Template 12 63
+      Template.Body 12 63
+        Defn.Def 14 60
+          Term.Name 18 20
+          Type.Name 22 26
+          Term.If 33 60
+            Term.Name 43 47
+            Term.Name 55 60
+            Lit.Unit 61 61
+            Mod.Inline 33 39
+#!program 626 line 275 Stat dialects.Scala3 :: inline-if-method-oneline
+object W626 {
+def fn: Unit = inline if cond then truep
+
+}
+#!scalac ok
+#!regions F54/
+#!layout
+Source 0 58
+  Defn.Object 0 57
+    Term.Name 7 11
+    Template 12 57
+      Template.Body 12 57
+        Defn.Def 14 54
+          Term.Name 18 20
+          Type.Name 22 26
+          Term.If 29 54
+            Term.Name 39 43
+            Term.Name 49 54
+            Lit.Unit 54 54
+            Mod.Inline 29 35
+#!program 627 line 290 Stat dialects.Scala3 :: transparent-inline
+object W627 {
+transparent inline def choose(b: Boolean): A =
+   if b then new A else new B
+
+}
+#!scalac ok
+#!regions I60/3 O91/
+#!layout
+Source 0 94
+  Defn.Object 0 93
+    Term.Name 7 11
+    Template 12 93
+      Template.Body 12 93
+        Defn.Def 14 90
+          Mod.Transparent 14 25
+          Mod.Inline 26 32
+          Term.Name 37 43
+          Member.ParamClauseGroup 43 55
+            Type.ParamClause 43 43
+            Term.ParamClause 43 55
+              Term.Param 44 54
+                Term.Name 44 45
+                Type.Name 47 54
+          Type.Name 57 58
+          Term.If 64 90
+            Term.Name 67 68
+            Term.New 74 79
+              Init 78 79
+                Type.Name 78 79
+                Name.Anonymous 80 80
+            Term.New 85 90
+              Init 89 90
+                Type.Name 89 90
+                Name.Anonymous 91 91
+#!program 628 line 305 Stat dialects.Scala3 :: transparent-trait
+object W628 {
+transparent trait S
+}
+#!scalac ok
+#!regions L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 11
+    Template 12 35
+      Template.Body 12 35
+        Defn.Trait 14 33
+          Mod.Transparent 14 25
+          Type.Name 32 33
+          Type.ParamClause 33 33
+          Ctor.Primary 33 33
+            Name.Anonymous 33 33
+          Template 33 33
+            Template.Body 33 33
+#!program 629 line 309 Stat dialects.Scala3 :: transparent-class
+object W629 {
+transparent class S
+}
+#!scalac ok
+#!regions L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 11
+    Template 12 35
+      Template.Body 12 35
+        Defn.Class 14 33
+          Mod.Transparent 14 25
+          Type.Name 32 33
+          Type.ParamClause 33 33
+          Ctor.Primary 33 33
+            Name.Anonymous 33 33
+          Template 33 33
+            Template.Body 33 33
+#!program 630 line 314 Stat dialects.Scala3 :: transparent-trait-newlines
+object W630 {
+transparent 
+
+trait S
+}
+#!scalac ok
+#!regions F26/ L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 11
+    Template 12 37
+      Template.Body 12 37
+        Defn.Trait 14 35
+          Mod.Transparent 14 25
+          Type.Name 34 35
+          Type.ParamClause 35 35
+          Ctor.Primary 35 35
+            Name.Anonymous 35 35
+          Template 35 35
+            Template.Body 35 35
+#!program 631 line 323 Stat dialects.Scala3 :: transparent-inline-with-constant
+object W631 {
+transparent inline def f: String =
+  inline 10 match
+    case _ =>
+      inline "foo" match
+        case x : String => x
+
+}
+#!scalac ok
+#!regions I48/2 I66/4.2 I80/6.4.2 I105/8.6.4.2 O135/6.4.2 O135/4.2 O135/2 O135/
+#!layout
+Source 0 138
+  Defn.Object 0 137
+    Term.Name 7 11
+    Template 12 137
+      Template.Body 12 137
+        Defn.Def 14 134
+          Mod.Transparent 14 25
+          Mod.Inline 26 32
+          Term.Name 37 38
+          Type.Name 40 46
+          Term.Match 51 134
+            Lit.Int 58 60
+            Term.CasesBlock 71 134
+              Case 71 134
+                Pat.Wildcard 76 77
+                Term.Match 87 134
+                  Lit.String 94 99
+                  Term.CasesBlock 114 134
+                    Case 114 134
+                      Pat.Typed 119 129
+                        Pat.Var 119 120
+                          Term.Name 119 120
+                        Type.Name 123 129
+                      Term.Name 133 134
+                  Mod.Inline 87 93
+            Mod.Inline 51 57
+#!program 632 line 360 Stat dialects.Scala3 :: transparent-inline-with-this
+object W632 {
+transparent inline def nat =
+  inline this match
+    case Zero    => ()
+    case Succ(p) => ()
+      
+
+}
+#!scalac ok
+#!regions I42/2 I62/4.2 L85/4.2 O116/2 O116/
+#!layout
+Source 0 119
+  Defn.Object 0 118
+    Term.Name 7 11
+    Template 12 118
+      Template.Body 12 118
+        Defn.Def 14 108
+          Mod.Transparent 14 25
+          Mod.Inline 26 32
+          Term.Name 37 40
+          Term.Match 45 108
+            Term.This 52 56
+              Name.Anonymous 52 52
+            Term.CasesBlock 67 108
+              Case 67 85
+                Term.Name 72 76
+                Lit.Unit 83 85
+              Case 90 108
+                Pat.Extract 95 102
+                  Term.Name 95 99
+                  Pat.ArgClause 99 102
+                    Pat.Var 100 101
+                      Term.Name 100 101
+                Lit.Unit 106 108
+            Mod.Inline 45 51
+#!program 633 line 389 Stat dialects.Scala3 :: transparent-inline-with-this
+object W633 {
+"static meta" - {
+   implicit inline def qm = ???
+}
+
+}
+#!scalac ok
+#!regions L63/ F65/
+#!layout
+Source 0 69
+  Defn.Object 0 68
+    Term.Name 7 11
+    Template 12 68
+      Template.Body 12 68
+        Term.ApplyInfix 14 65
+          Lit.String 14 27
+          Term.Name 28 29
+          Type.ArgClause 30 30
+          Term.ArgClause 30 65
+            Term.Block 30 65
+              Defn.Def 35 63
+                Mod.Implicit 35 43
+                Mod.Inline 44 50
+                Term.Name 55 57
+                Term.Name 60 63

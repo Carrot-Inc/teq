@@ -1,0 +1,54 @@
+Nodes/Pat.Wildcard/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pat.Wildcard, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pat_Wildcard\n\nobject Pat_Wildcard:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case _ => 0\n"
+  stats Pkg syntax="package nodes.Pat_Wildcard\n\nobject Pat_Wildcard:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case _ => 0"
+    .stats = [Defn.Object "object Pat_Wildcard:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case _ => 0"]
+    ref Term.Select syntax="nodes.Pat_Wildcard"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pat_Wildcard" syntax="Pat_Wildcard"
+    body Pkg.Body syntax="object Pat_Wildcard:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case _ => 0"
+      stats Defn.Object syntax="object Pat_Wildcard:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case _ => 0"
+        mods Nil
+        name Term.Name value="Pat_Wildcard" syntax="Pat_Wildcard"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case _ => 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(x: Int) = x match\n    case _ => 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case _ => 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(x: Int) = x match\n    case _ => 0"
+              .paramClauses = [Term.ParamClause "(x: Int)"]
+              .paramss = [[Term.Param "x: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Match syntax="x match\n    case _ => 0"
+                .cases = [Case "case _ => 0"]
+                expr Term.Name value="x" syntax="x"
+                casesBlock Term.CasesBlock syntax="case _ => 0"
+                  cases Case syntax="case _ => 0"
+                    pat Pat.Wildcard syntax="_"
+                    cond None
+                    body Lit.Int value=0 syntax="0"
+                mods Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

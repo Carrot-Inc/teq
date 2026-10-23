@@ -1,0 +1,64 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Case, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Case\n\nobject Case:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 if x > 0 => 2\n    case y => y\n"
+  stats Pkg syntax="package nodes.Case\n\nobject Case:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 if x > 0 => 2\n    case y => y"
+    .stats = [Defn.Object "object Case:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 if x > 0 => 2\n    case y => y"]
+    ref Term.Select syntax="nodes.Case"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Case" syntax="Case"
+    body Pkg.Body syntax="object Case:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 if x > 0 => 2\n    case y => y"
+      stats Defn.Object syntax="object Case:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 if x > 0 => 2\n    case y => y"
+        mods Nil
+        name Term.Name value="Case" syntax="Case"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 if x > 0 => 2\n    case y => y"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(x: Int) = x match\n    case 1 if x > 0 => 2\n    case y => y"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int) = x match\n    case 1 if x > 0 => 2\n    case y => y"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(x: Int) = x match\n    case 1 if x > 0 => 2\n    case y => y"
+              .paramClauses = [Term.ParamClause "(x: Int)"]
+              .paramss = [[Term.Param "x: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Match syntax="x match\n    case 1 if x > 0 => 2\n    case y => y"
+                .cases = [Case "case 1 if x > 0 => 2", Case "case y => y"]
+                expr Term.Name value="x" syntax="x"
+                casesBlock Term.CasesBlock syntax="case 1 if x > 0 => 2\n    case y => y"
+                  cases Case syntax="case 1 if x > 0 => 2"
+                    pat Lit.Int value=1 syntax="1"
+                    cond Term.ApplyInfix syntax="x > 0"
+                      .args = [Lit.Int "0"]
+                      .targs = []
+                      lhs Term.Name value="x" syntax="x"
+                      op Term.Name value=">" syntax=">"
+                      targClause Type.ArgClause syntax=""
+                        values Nil
+                      argClause Term.ArgClause syntax="0"
+                        values Lit.Int value=0 syntax="0"
+                        mod None
+                    body Lit.Int value=2 syntax="2"
+                  cases Case syntax="case y => y"
+                    pat Pat.Var syntax="y"
+                      name Term.Name value="y" syntax="y"
+                    cond None
+                    body Term.Name value="y" syntax="y"
+                mods Nil
+          derives Nil

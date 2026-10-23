@@ -1,0 +1,34 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pkg: a package clause and a package block, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pkg\npackage inner:\n  val y = 1\n\nobject Pkg:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Pkg\npackage inner:\n  val y = 1\n\nobject Pkg:\n  val marker = 0"
+    .stats = [Pkg "package inner:\n  val y = 1", Defn.Object "object Pkg:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Pkg"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pkg" syntax="Pkg"
+    body Pkg.Body syntax="package inner:\n  val y = 1\n\nobject Pkg:\n  val marker = 0"
+      stats Pkg syntax="package inner:\n  val y = 1"
+        .stats = [Defn.Val "val y = 1"]
+        ref Term.Name value="inner" syntax="inner"
+        body Pkg.Body syntax=":\n  val y = 1"
+          stats Defn.Val syntax="val y = 1"
+            mods Nil
+            pats Pat.Var syntax="y"
+              name Term.Name value="y" syntax="y"
+            decltpe None
+            rhs Lit.Int value=1 syntax="1"
+      stats Defn.Object syntax="object Pkg:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Pkg" syntax="Pkg"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil

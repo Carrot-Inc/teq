@@ -31,9 +31,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// The port's local changes: the configuration is decoded by hand where metaconfig derives it; scalameta's
-// `paramClauseGroups` are the definition's parameter clauses, a parameter's `Mod.Implicit` its clause's `implicit`;
-// `bfsCollectEach` is a pre-order `collect`, the lints' order being the printer's. `noXml` is decoded and reports
+// The port's local changes: the configuration is decoded by hand where metaconfig derives it; `bfsCollectEach` is a
+// pre-order `collect`, the lints' order being the printer's. `noXml` is decoded and reports
 // nothing: teq reads no XML literal (docs/FIX.md).
 package teq.fix.rules
 
@@ -168,6 +167,7 @@ final class DisableSyntax(config: DisableSyntaxConfig) extends SyntacticRule("Di
   def this() = this(DisableSyntaxConfig())
 
   override def description: String = "Reports an error for disabled features such as var or XML literals."
+  override def isLinter: Boolean = true
 
   override def withConfiguration(c: Configuration): Configured[Rule] =
     val section = c.conf.get("disableSyntax").getOrElse(c.conf.section("DisableSyntax"))
@@ -263,14 +263,20 @@ final class DisableSyntax(config: DisableSyntaxConfig) extends SyntacticRule("Di
 
   private def abstractWithVals(t: Tree): Option[List[Defn.Val]] =
     val stats = t match
-      case c: Defn.Class if c.mods.exists(_.isInstanceOf[Mod.Abstract]) => c.templ.stats
-      case c: Defn.Trait => c.templ.stats
+      case c: Defn.Class if c.mods.exists(_.isInstanceOf[Mod.Abstract]) => c.templ.body.stats
+      case c: Defn.Trait => c.templ.body.stats
       case _ => Nil
     val vals = stats.collect { case v: Defn.Val => v }
     if vals.isEmpty then None else Some(vals)
 
   private def defaultArgs(t: Tree): Option[List[Term]] = t match
-    case d: Defn.Def => Some(d.paramClauses.flatMap(_.values).flatMap(_.default))
+    case d: Defn.Def =>
+      Some(for
+        pg <- d.paramClauseGroups
+        pc <- pg.paramClauses
+        param <- pc.values
+        default <- param.default
+      yield default)
     case _ => None
 
   private def isProhibited(p: Pat): Boolean = p match
@@ -282,8 +288,8 @@ final class DisableSyntax(config: DisableSyntaxConfig) extends SyntacticRule("Di
     case v: Defn.Var => v.pats.find(isProhibited)
     case _ => None
 
-  // A parameter of an `implicit` clause carries scalameta's `Mod.Implicit`; one of a `using` clause does not.
-  private def hasNonImplicitParam(d: Defn.Def): Boolean = d.paramClauses.exists(_.values.exists(p => !p.isImplicit))
+  private def hasNonImplicitParam(d: Defn.Def): Boolean =
+    d.paramClauseGroups.exists(_.paramClauses.exists(_.values.exists(_.mods.forall(!_.isInstanceOf[Mod.Implicit]))))
 
   // The infix and the selected applications of `op` (scalafix's `Term.ApplyInfix.Initial(_, t @ Term.Name(op), _, _)` and
   // `Term.Apply.Initial(Term.Select(_, t @ Term.Name(op)), _)`): their operator's name.
@@ -321,8 +327,8 @@ final class DisableSyntax(config: DisableSyntaxConfig) extends SyntacticRule("Di
     case t if config.noUniversalEquality && selectedOp(t, "!=").isDefined =>
       List(Diagnostic("!=", config.noUniversalEqualityMessage, selectedOp(t, "!=").get.pos))
     // scalafix's `FinalizeMatcher`, by `orElse` after the cases above: it reads no setting, `noFinalize` none either.
-    case d: Defn.Def if d.name.value == "finalize" && (d.paramss == Nil || d.paramss == List(Nil)) =>
-      List(Diagnostic("noFinalize", "finalize should not be used", d.name.pos,
+    case Defn.Def.Initial(_, name @ Term.Name("finalize"), _, Nil | Nil :: Nil, _, _) =>
+      List(Diagnostic("noFinalize", "finalize should not be used", name.pos,
         "there is no guarantee that finalize will be called and\noverriding finalize incurs a performance penalty"))
     case _ => Nil
   }

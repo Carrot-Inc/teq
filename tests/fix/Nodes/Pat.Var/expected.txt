@@ -1,0 +1,78 @@
+Nodes/Pat.Var/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pat.Var, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pat_Var\n\nobject Pat_Var:\n  val marker = 0 // assert: DumpStructure.structure\n  val Some(x) = Option(1): @unchecked\n  def f(y: Int) = y match\n    case z => z\n"
+  stats Pkg syntax="package nodes.Pat_Var\n\nobject Pat_Var:\n  val marker = 0 // assert: DumpStructure.structure\n  val Some(x) = Option(1): @unchecked\n  def f(y: Int) = y match\n    case z => z"
+    .stats = [Defn.Object "object Pat_Var:\n  val marker = 0 // assert: DumpStructure.structure\n  val Some(x) = Option(1): @unchecked\n  def f(y: Int) = y match\n    case z => z"]
+    ref Term.Select syntax="nodes.Pat_Var"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pat_Var" syntax="Pat_Var"
+    body Pkg.Body syntax="object Pat_Var:\n  val marker = 0 // assert: DumpStructure.structure\n  val Some(x) = Option(1): @unchecked\n  def f(y: Int) = y match\n    case z => z"
+      stats Defn.Object syntax="object Pat_Var:\n  val marker = 0 // assert: DumpStructure.structure\n  val Some(x) = Option(1): @unchecked\n  def f(y: Int) = y match\n    case z => z"
+        mods Nil
+        name Term.Name value="Pat_Var" syntax="Pat_Var"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val Some(x) = Option(1): @unchecked\n  def f(y: Int) = y match\n    case z => z"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val Some(x) = Option(1): @unchecked", Defn.Def "def f(y: Int) = y match\n    case z => z"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val Some(x) = Option(1): @unchecked\n  def f(y: Int) = y match\n    case z => z"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val Some(x) = Option(1): @unchecked"
+              mods Nil
+              pats Pat.Extract syntax="Some(x)"
+                .args = [Pat.Var "x"]
+                fun Term.Name value="Some" syntax="Some"
+                argClause Pat.ArgClause syntax="(x)"
+                  values Pat.Var syntax="x"
+                    name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Term.Annotate syntax="Option(1): @unchecked"
+                expr Term.Apply syntax="Option(1)"
+                  .args = [Lit.Int "1"]
+                  fun Term.Name value="Option" syntax="Option"
+                  argClause Term.ArgClause syntax="(1)"
+                    values Lit.Int value=1 syntax="1"
+                    mod None
+                annots Mod.Annot syntax="@unchecked"
+                  init Init syntax="unchecked"
+                    .argss = []
+                    tpe Type.Name value="unchecked" syntax="unchecked"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    argClauses Nil
+            stats Defn.Def syntax="def f(y: Int) = y match\n    case z => z"
+              .paramClauses = [Term.ParamClause "(y: Int)"]
+              .paramss = [[Term.Param "y: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(y: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(y: Int)"
+                  values Term.Param syntax="y: Int"
+                    mods Nil
+                    name Term.Name value="y" syntax="y"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Match syntax="y match\n    case z => z"
+                .cases = [Case "case z => z"]
+                expr Term.Name value="y" syntax="y"
+                casesBlock Term.CasesBlock syntax="case z => z"
+                  cases Case syntax="case z => z"
+                    pat Pat.Var syntax="z"
+                      name Term.Name value="z" syntax="z"
+                    cond None
+                    body Term.Name value="z" syntax="z"
+                mods Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

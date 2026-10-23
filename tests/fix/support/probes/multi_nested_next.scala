@@ -1,0 +1,8 @@
+object O:
+  def f =
+    val x = 1
+    if true then
+      1
+      // inner
+    // outer
+  val z = 2

@@ -1,0 +1,68 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.TryWithHandler, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_TryWithHandler\n\nobject Term_TryWithHandler:\n  val marker = 0 // assert: DumpStructure.structure\n  val h: PartialFunction[Throwable, Int] = { case _ => 0 }\n  def f = try 1 catch h\n  def g = try 1 catch h finally println()\n"
+  stats Pkg syntax="package nodes.Term_TryWithHandler\n\nobject Term_TryWithHandler:\n  val marker = 0 // assert: DumpStructure.structure\n  val h: PartialFunction[Throwable, Int] = { case _ => 0 }\n  def f = try 1 catch h\n  def g = try 1 catch h finally println()"
+    .stats = [Defn.Object "object Term_TryWithHandler:\n  val marker = 0 // assert: DumpStructure.structure\n  val h: PartialFunction[Throwable, Int] = { case _ => 0 }\n  def f = try 1 catch h\n  def g = try 1 catch h finally println()"]
+    ref Term.Select syntax="nodes.Term_TryWithHandler"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_TryWithHandler" syntax="Term_TryWithHandler"
+    body Pkg.Body syntax="object Term_TryWithHandler:\n  val marker = 0 // assert: DumpStructure.structure\n  val h: PartialFunction[Throwable, Int] = { case _ => 0 }\n  def f = try 1 catch h\n  def g = try 1 catch h finally println()"
+      stats Defn.Object syntax="object Term_TryWithHandler:\n  val marker = 0 // assert: DumpStructure.structure\n  val h: PartialFunction[Throwable, Int] = { case _ => 0 }\n  def f = try 1 catch h\n  def g = try 1 catch h finally println()"
+        mods Nil
+        name Term.Name value="Term_TryWithHandler" syntax="Term_TryWithHandler"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val h: PartialFunction[Throwable, Int] = { case _ => 0 }\n  def f = try 1 catch h\n  def g = try 1 catch h finally println()"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val h: PartialFunction[Throwable, Int] = { case _ => 0 }", Defn.Def "def f = try 1 catch h", Defn.Def "def g = try 1 catch h finally println()"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val h: PartialFunction[Throwable, Int] = { case _ => 0 }\n  def f = try 1 catch h\n  def g = try 1 catch h finally println()"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val h: PartialFunction[Throwable, Int] = { case _ => 0 }"
+              mods Nil
+              pats Pat.Var syntax="h"
+                name Term.Name value="h" syntax="h"
+              decltpe Type.Apply syntax="PartialFunction[Throwable, Int]"
+                .args = [Type.Name "Throwable", Type.Name "Int"]
+                tpe Type.Name value="PartialFunction" syntax="PartialFunction"
+                argClause Type.ArgClause syntax="[Throwable, Int]"
+                  values Type.Name value="Throwable" syntax="Throwable"
+                  values Type.Name value="Int" syntax="Int"
+              rhs Term.PartialFunction syntax="{ case _ => 0 }"
+                cases Case syntax="case _ => 0"
+                  pat Pat.Wildcard syntax="_"
+                  cond None
+                  body Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f = try 1 catch h"
+              .paramClauses = []
+              .paramss = []
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Nil
+              decltpe None
+              body Term.TryWithHandler syntax="try 1 catch h"
+                expr Lit.Int value=1 syntax="1"
+                catchp Term.Name value="h" syntax="h"
+                finallyp None
+            stats Defn.Def syntax="def g = try 1 catch h finally println()"
+              .paramClauses = []
+              .paramss = []
+              .tparams = []
+              mods Nil
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Nil
+              decltpe None
+              body Term.TryWithHandler syntax="try 1 catch h finally println()"
+                expr Lit.Int value=1 syntax="1"
+                catchp Term.Name value="h" syntax="h"
+                finallyp Term.Apply syntax="println()"
+                  .args = []
+                  fun Term.Name value="println" syntax="println"
+                  argClause Term.ArgClause syntax="()"
+                    values Nil
+                    mod None
+          derives Nil

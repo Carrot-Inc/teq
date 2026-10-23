@@ -1,0 +1,52 @@
+Nodes/Lit.Long/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Lit.Long, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_Long\n\nobject Lit_Long:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1L\n  val b = 0x10L\n  val c = -2L\n  val d = 3l\n"
+  stats Pkg syntax="package nodes.Lit_Long\n\nobject Lit_Long:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1L\n  val b = 0x10L\n  val c = -2L\n  val d = 3l"
+    .stats = [Defn.Object "object Lit_Long:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1L\n  val b = 0x10L\n  val c = -2L\n  val d = 3l"]
+    ref Term.Select syntax="nodes.Lit_Long"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_Long" syntax="Lit_Long"
+    body Pkg.Body syntax="object Lit_Long:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1L\n  val b = 0x10L\n  val c = -2L\n  val d = 3l"
+      stats Defn.Object syntax="object Lit_Long:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1L\n  val b = 0x10L\n  val c = -2L\n  val d = 3l"
+        mods Nil
+        name Term.Name value="Lit_Long" syntax="Lit_Long"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1L\n  val b = 0x10L\n  val c = -2L\n  val d = 3l"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = 1L", Defn.Val "val b = 0x10L", Defn.Val "val c = -2L", Defn.Val "val d = 3l"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1L\n  val b = 0x10L\n  val c = -2L\n  val d = 3l"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = 1L"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Long value=1 syntax="1L"
+            stats Defn.Val syntax="val b = 0x10L"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Lit.Long value=16 syntax="0x10L"
+            stats Defn.Val syntax="val c = -2L"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Lit.Long value=-2 syntax="-2L"
+            stats Defn.Val syntax="val d = 3l"
+              mods Nil
+              pats Pat.Var syntax="d"
+                name Term.Name value="d" syntax="d"
+              decltpe None
+              rhs Lit.Long value=3 syntax="3l"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

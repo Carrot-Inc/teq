@@ -1,0 +1,137 @@
+Nodes/Ctor.Primary/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Ctor.Primary, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Ctor_Primary\n\nobject Ctor_Primary:\n  val marker = 0 // assert: DumpStructure.structure\n  class A private[Ctor_Primary] (x: Int)(y: Int)\n  class B protected (x: Int)\n  class C(using Int)\n  class D\n"
+  stats Pkg syntax="package nodes.Ctor_Primary\n\nobject Ctor_Primary:\n  val marker = 0 // assert: DumpStructure.structure\n  class A private[Ctor_Primary] (x: Int)(y: Int)\n  class B protected (x: Int)\n  class C(using Int)\n  class D"
+    .stats = [Defn.Object "object Ctor_Primary:\n  val marker = 0 // assert: DumpStructure.structure\n  class A private[Ctor_Primary] (x: Int)(y: Int)\n  class B protected (x: Int)\n  class C(using Int)\n  class D"]
+    ref Term.Select syntax="nodes.Ctor_Primary"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Ctor_Primary" syntax="Ctor_Primary"
+    body Pkg.Body syntax="object Ctor_Primary:\n  val marker = 0 // assert: DumpStructure.structure\n  class A private[Ctor_Primary] (x: Int)(y: Int)\n  class B protected (x: Int)\n  class C(using Int)\n  class D"
+      stats Defn.Object syntax="object Ctor_Primary:\n  val marker = 0 // assert: DumpStructure.structure\n  class A private[Ctor_Primary] (x: Int)(y: Int)\n  class B protected (x: Int)\n  class C(using Int)\n  class D"
+        mods Nil
+        name Term.Name value="Ctor_Primary" syntax="Ctor_Primary"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class A private[Ctor_Primary] (x: Int)(y: Int)\n  class B protected (x: Int)\n  class C(using Int)\n  class D"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class A private[Ctor_Primary] (x: Int)(y: Int)", Defn.Class "class B protected (x: Int)", Defn.Class "class C(using Int)", Defn.Class "class D"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class A private[Ctor_Primary] (x: Int)(y: Int)\n  class B protected (x: Int)\n  class C(using Int)\n  class D"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class A private[Ctor_Primary] (x: Int)(y: Int)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="A" syntax="A"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="private[Ctor_Primary] (x: Int)(y: Int)"
+                mods Mod.Private syntax="private[Ctor_Primary]"
+                  within Name.Indeterminate value="Ctor_Primary" syntax="Ctor_Primary"
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+                paramClauses Term.ParamClause syntax="(y: Int)"
+                  values Term.Param syntax="y: Int"
+                    mods Nil
+                    name Term.Name value="y" syntax="y"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Class syntax="class B protected (x: Int)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="B" syntax="B"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="protected (x: Int)"
+                mods Mod.Protected syntax="protected"
+                  within Name.Anonymous syntax=""
+                    .value = ""
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Class syntax="class C(using Int)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(using Int)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(using Int)"
+                  values Term.Param syntax="Int"
+                    mods Mod.Using syntax="using"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod Mod.Using syntax="using"
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Class syntax="class D"
+              .tparams = []
+              mods Nil
+              name Type.Name value="D" syntax="D"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

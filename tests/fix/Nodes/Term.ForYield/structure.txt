@@ -1,0 +1,71 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.ForYield, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_ForYield\n\nobject Term_ForYield:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); if x > 0 yield x\n  val b = for { x <- List(1) } yield x\n"
+  stats Pkg syntax="package nodes.Term_ForYield\n\nobject Term_ForYield:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); if x > 0 yield x\n  val b = for { x <- List(1) } yield x"
+    .stats = [Defn.Object "object Term_ForYield:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); if x > 0 yield x\n  val b = for { x <- List(1) } yield x"]
+    ref Term.Select syntax="nodes.Term_ForYield"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_ForYield" syntax="Term_ForYield"
+    body Pkg.Body syntax="object Term_ForYield:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); if x > 0 yield x\n  val b = for { x <- List(1) } yield x"
+      stats Defn.Object syntax="object Term_ForYield:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); if x > 0 yield x\n  val b = for { x <- List(1) } yield x"
+        mods Nil
+        name Term.Name value="Term_ForYield" syntax="Term_ForYield"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); if x > 0 yield x\n  val b = for { x <- List(1) } yield x"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = for x <- List(1); if x > 0 yield x", Defn.Val "val b = for { x <- List(1) } yield x"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = for x <- List(1); if x > 0 yield x\n  val b = for { x <- List(1) } yield x"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = for x <- List(1); if x > 0 yield x"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.ForYield syntax="for x <- List(1); if x > 0 yield x"
+                .enums = [Enumerator.Generator "x <- List(1)", Enumerator.Guard "if x > 0"]
+                enumsBlock Term.EnumeratorsBlock syntax="x <- List(1); if x > 0"
+                  enums Enumerator.Generator syntax="x <- List(1)"
+                    pat Pat.Var syntax="x"
+                      name Term.Name value="x" syntax="x"
+                    rhs Term.Apply syntax="List(1)"
+                      .args = [Lit.Int "1"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Term.ArgClause syntax="(1)"
+                        values Lit.Int value=1 syntax="1"
+                        mod None
+                  enums Enumerator.Guard syntax="if x > 0"
+                    cond Term.ApplyInfix syntax="x > 0"
+                      .args = [Lit.Int "0"]
+                      .targs = []
+                      lhs Term.Name value="x" syntax="x"
+                      op Term.Name value=">" syntax=">"
+                      targClause Type.ArgClause syntax=""
+                        values Nil
+                      argClause Term.ArgClause syntax="0"
+                        values Lit.Int value=0 syntax="0"
+                        mod None
+                body Term.Name value="x" syntax="x"
+            stats Defn.Val syntax="val b = for { x <- List(1) } yield x"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Term.ForYield syntax="for { x <- List(1) } yield x"
+                .enums = [Enumerator.Generator "x <- List(1)"]
+                enumsBlock Term.EnumeratorsBlock syntax="{ x <- List(1) }"
+                  enums Enumerator.Generator syntax="x <- List(1)"
+                    pat Pat.Var syntax="x"
+                      name Term.Name value="x" syntax="x"
+                    rhs Term.Apply syntax="List(1)"
+                      .args = [Lit.Int "1"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Term.ArgClause syntax="(1)"
+                        values Lit.Int value=1 syntax="1"
+                        mod None
+                body Term.Name value="x" syntax="x"
+          derives Nil

@@ -3,10 +3,13 @@
 //! `teq compile` types it under (`Export::widest`, and a configuration of its own where that key's closure holds
 //! none of its roots), each key's closure as one program with the resident's typing arguments
 //! (`Export::typing_args_with`), its generators run first under compile's policy (`generators::run`); only the
-//! selected projects' own source roots are edited, never a dependency's or a generated root.
+//! selected projects' own source roots are edited, never a dependency's or a generated root. A configuration's
+//! `scalafix` record (sbt-teq's export of sbt-scalafix's settings) names its configuration file, else the root's
+//! `.scalafix.conf`, and leaves out a configuration sbt-scalafix skips unless it is named; each file's configurations
+//! are a part of one run (`engine::run`), its rules on workers of their own.
 
-use super::export::{Export, Key};
-use crate::fix::engine::{self, Job, Setup};
+use super::export::{Configuration, Export, Key};
+use crate::fix::engine::{self, Job, Part, Setup};
 use std::path::{Path, PathBuf};
 
 pub fn run(export: &Export, args: &[String]) -> i32 {
@@ -56,51 +59,77 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
         eprintln!("teq fix: {} (projects: {})", unknown.join(", "), projects.join(", "));
         return 2;
     }
+    let skipped = |c: &Configuration| c.scalafix.as_ref().is_some_and(|s| s.skip);
     if selected.is_empty() {
-        selected = export.projects.iter().filter(|(_, p)| p.configurations.values().any(|c| !c.sources.is_empty())).map(|(n, _)| (n.clone(), None)).collect();
+        selected = export.projects.iter().filter(|(_, p)| p.configurations.values().any(|c| !c.sources.is_empty() && !skipped(c))).map(|(n, _)| (n.clone(), None)).collect();
     }
+    // The configuration file of a project's configuration: `--config`'s for all, else its `scalafix` record's, else the
+    // root's (`None`).
+    let file_of = |project: &str, c: &str| -> Option<String> {
+        if config.is_some() {
+            return None;
+        }
+        export.projects[project].configurations.get(c).and_then(|c| c.scalafix.as_ref()).and_then(|s| s.config.clone())
+    };
     let names: Vec<&str> = selected.iter().map(|(p, _)| p.as_str()).collect();
     if let Some(why) = super::refused(export, "compile", &names) {
         eprintln!("teq fix: {}", why);
         return 2;
     }
-    // Each project's keys, and the roots of its own each key edits.
-    let mut jobs: Vec<(Key, Vec<String>, Vec<PathBuf>)> = Vec::new();
+    // Each project's keys, by its configurations' file, and the roots of its own each key edits.
+    let mut jobs: Vec<(Key, Vec<String>, Vec<PathBuf>, Option<String>)> = Vec::new();
     for (project, configuration) in &selected {
         let p = &export.projects[project];
         let wanted: Vec<&String> = match configuration {
             Some(c) => vec![c],
-            None => p.configurations.iter().filter(|(_, c)| !c.sources.is_empty()).map(|(n, _)| n).collect(),
+            None => p.configurations.iter().filter(|(_, c)| !c.sources.is_empty() && !skipped(c)).map(|(n, _)| n).collect(),
         };
-        let mut keys: Vec<Key> = Vec::new();
-        if configuration.is_none() {
-            if let Some(w) = export.widest(project) {
-                keys.push(w);
+        let mut files: Vec<Option<String>> = Vec::new();
+        for f in wanted.iter().map(|c| file_of(project, c)) {
+            if !files.contains(&f) {
+                files.push(f);
             }
         }
-        for c in &wanted {
-            let roots = own_roots(export, project, c);
-            let covered = keys.iter().any(|k| {
-                let typed = export.roots(&export.closure(k));
-                roots.iter().all(|r| typed.contains(r))
-            });
-            if !covered {
-                keys.push(Key::new(project, c));
+        for file in files {
+            let group: Vec<&String> = wanted.iter().copied().filter(|c| file_of(project, c) == file).collect();
+            let mut keys: Vec<Key> = Vec::new();
+            if configuration.is_none() && group.len() == wanted.len() {
+                if let Some(w) = export.widest(project) {
+                    keys.push(w);
+                }
             }
-        }
-        for k in keys {
-            let typed = export.roots(&export.closure(&k));
-            let own: Vec<String> = wanted.iter().flat_map(|c| own_roots(export, project, c)).filter(|r| typed.contains(r)).collect();
-            jobs.push((k, own, generated(export, project)));
+            for c in &group {
+                let roots = own_roots(export, project, c);
+                let covered = keys.iter().any(|k| {
+                    let typed = export.roots(&export.closure(k));
+                    roots.iter().all(|r| typed.contains(r))
+                });
+                if !covered {
+                    keys.push(Key::new(project, c));
+                }
+            }
+            for k in keys {
+                let typed = export.roots(&export.closure(&k));
+                let own: Vec<String> = group.iter().flat_map(|c| own_roots(export, project, c)).filter(|r| typed.contains(r)).collect();
+                jobs.push((k, own, generated(export, project), file.clone()));
+            }
         }
     }
-    let (conf, config_dir) = match crate::fix::cli::configuration(config.as_deref(), &export.root) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("teq fix: {}", e);
-            return 2;
+    // The configurations the jobs read, each once, in the order the jobs first name them.
+    let mut confs: Vec<(Option<String>, crate::fix::config::Conf, PathBuf)> = Vec::new();
+    for (.., file) in &jobs {
+        if confs.iter().any(|(f, ..)| f == file) {
+            continue;
         }
-    };
+        let named = file.as_ref().map(|f| export.root.join(f).to_string_lossy().into_owned()).or_else(|| config.clone());
+        match crate::fix::cli::configuration(named.as_deref(), &export.root) {
+            Ok((conf, dir)) => confs.push((file.clone(), conf, dir)),
+            Err(e) => {
+                eprintln!("teq fix: {}", e);
+                return 2;
+            }
+        }
+    }
     // The run works from the build's root, as a resident does; its paths print from where it was started.
     if let Err(e) = std::env::set_current_dir(&export.root) {
         eprintln!("teq fix: cannot work from {}: {}", export.root.display(), e);
@@ -108,7 +137,7 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
     }
     let env = std::env::vars().filter(|(k, _)| k == "SOURCE_VERSION").collect();
     let mut engine_jobs = Vec::new();
-    for (key, own, generated) in &jobs {
+    for (key, own, generated, file) in &jobs {
         let closure = export.closure(key);
         match super::generators::run(export, &closure, export.path(&export.classes(key)), &env) {
             Ok(notes) => {
@@ -137,14 +166,14 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
         args.extend(threads.iter().cloned());
         let roots: Vec<String> = own.iter().map(|r| export.relative(&export.path(r))).collect();
         let generated = generated.iter().map(|g| export.relative(g)).collect();
-        engine_jobs.push(Job { args, roots: Some(roots), files: (!files.is_empty()).then(|| files.clone()), generated });
+        engine_jobs.push((file.clone(), Job { key: key.to_string(), args, roots: Some(roots), files: (!files.is_empty()).then(|| files.clone()), generated }));
     }
     // A file argument names an input of the selection: a source its projects' own roots hold that the program reads
     // (their exclusions applied, what a generator writes not), not merely a path under a root.
     if !files.is_empty() {
         let inputs: Vec<PathBuf> = engine_jobs
             .iter()
-            .flat_map(|j| engine::program_paths(j).into_iter().filter(|p| j.owns(p)))
+            .flat_map(|(_, j)| engine::program_paths(j).into_iter().filter(|p| j.owns(p)))
             .filter_map(|p| crate::source::canonicalize(Path::new(&p)).ok())
             .collect();
         for f in &files {
@@ -156,7 +185,9 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
         }
     }
     let display = (export.root != cwd).then(|| (export.root.clone(), cwd.clone()));
-    engine::run(Setup { conf, config_dir, rules, check, display }, engine_jobs)
+    // One run, each configuration file's jobs a part under its rules.
+    let parts = confs.into_iter().map(|(file, conf, config_dir)| Part { conf, config_dir, jobs: engine_jobs.iter().filter(|(f, _)| *f == file).map(|(_, j)| j.clone()).collect() }).collect();
+    engine::run(Setup { rules, check, display }, parts)
 }
 
 /// The source roots of a project's configuration that are its own: its `sources` less what its generators write.

@@ -1,0 +1,3 @@
+Driver/ExtensionSingleBody/input.scala:8:3: error: [ExtensionBody.body]: Defn.Def
+    extension (x: Int) // assert: ExtensionBody.body
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

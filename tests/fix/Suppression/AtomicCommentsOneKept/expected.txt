@@ -1,0 +1,3 @@
+Suppression/AtomicCommentsOneKept/input.scala:6:51: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+  import scala.collection.immutable./* scalafix:off RemoveListAtomic */ Set /* scalafix:on RemoveListAtomic */ // assert: UnusedScalafixSuppression
+                                                    ^^^^^^^^^^^^^^^^

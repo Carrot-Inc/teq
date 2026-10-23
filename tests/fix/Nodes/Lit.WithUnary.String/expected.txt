@@ -1,0 +1,79 @@
+Nodes/Lit.WithUnary.String/input.scala:14:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's UnaryString probe: a unary operator on a string literal, a `Lit.WithUnary` as scalameta 4.17.4's\n// `rawLiteral` makes it (structure.txt).\npackage nodes.Lit_WithUnary_String\n\nobject O:\n  extension (s: String) def unary_! : Int = s.length\n  val n = !\"hello\"\n  val m = !\"\"\"multi\"\"\"\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Lit_WithUnary_String\n\nobject O:\n  extension (s: String) def unary_! : Int = s.length\n  val n = !\"hello\"\n  val m = !\"\"\"multi\"\"\"\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Object "object O:\n  extension (s: String) def unary_! : Int = s.length\n  val n = !\"hello\"\n  val m = !\"\"\"multi\"\"\"", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Lit_WithUnary_String"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_WithUnary_String" syntax="Lit_WithUnary_String"
+    body Pkg.Body syntax="object O:\n  extension (s: String) def unary_! : Int = s.length\n  val n = !\"hello\"\n  val m = !\"\"\"multi\"\"\"\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Object syntax="object O:\n  extension (s: String) def unary_! : Int = s.length\n  val n = !\"hello\"\n  val m = !\"\"\"multi\"\"\""
+        mods Nil
+        name Term.Name value="O" syntax="O"
+        templ Template syntax=":\n  extension (s: String) def unary_! : Int = s.length\n  val n = !\"hello\"\n  val m = !\"\"\"multi\"\"\""
+          .self = Self ""
+          .stats = [Defn.ExtensionGroup "extension (s: String) def unary_! : Int = s.length", Defn.Val "val n = !\"hello\"", Defn.Val "val m = !\"\"\"multi\"\"\""]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  extension (s: String) def unary_! : Int = s.length\n  val n = !\"hello\"\n  val m = !\"\"\"multi\"\"\""
+            selfOpt None
+            stats Defn.ExtensionGroup syntax="extension (s: String) def unary_! : Int = s.length"
+              paramClauseGroup Member.ParamClauseGroup syntax="(s: String)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(s: String)"
+                  values Term.Param syntax="s: String"
+                    mods Nil
+                    name Term.Name value="s" syntax="s"
+                    decltpe Type.Name value="String" syntax="String"
+                    default None
+                  mod None
+              body Defn.Def syntax="def unary_! : Int = s.length"
+                .paramClauses = []
+                .paramss = []
+                .tparams = []
+                mods Nil
+                name Term.Name value="unary_!" syntax="unary_!"
+                paramClauseGroups Nil
+                decltpe Type.Name value="Int" syntax="Int"
+                body Term.Select syntax="s.length"
+                  qual Term.Name value="s" syntax="s"
+                  name Term.Name value="length" syntax="length"
+            stats Defn.Val syntax="val n = !\"hello\""
+              mods Nil
+              pats Pat.Var syntax="n"
+                name Term.Name value="n" syntax="n"
+              decltpe None
+              rhs Lit.WithUnary syntax="!\"hello\""
+                .value = ("!", "hello")
+                op Term.Name value="!" syntax="!"
+                arg Lit.String value="hello" syntax="\"hello\""
+            stats Defn.Val syntax="val m = !\"\"\"multi\"\"\""
+              mods Nil
+              pats Pat.Var syntax="m"
+                name Term.Name value="m" syntax="m"
+              decltpe None
+              rhs Lit.WithUnary syntax="!\"\"\"multi\"\"\""
+                .value = ("!", "multi")
+                op Term.Name value="!" syntax="!"
+                arg Lit.String value="multi" syntax="\"\"\"multi\"\"\""
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

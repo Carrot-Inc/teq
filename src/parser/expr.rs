@@ -396,9 +396,8 @@ impl<'a> Parser<'a> {
     fn parse_lambda_params(&mut self) -> ListRef {
         let mut params: Vec<LambdaParam> = Vec::new();
         // `implicit x => ...`, reported by the version (`Parsers.expr`, `blockStatSeq`).
-        let implicit = self.at(Tok::KwImplicit);
-        if implicit {
-            let at = self.bump().span;
+        let implicit = self.at(Tok::KwImplicit).then(|| self.bump().span);
+        if let Some(at) = implicit {
             self.migration(crate::source_version::Migration::Scala2Implicits, at, "`implicit` lambdas are no longer supported, use a lambda with `?=>` instead", crate::warnings::NO_ID);
         }
         if self.eat(Tok::LParen) {
@@ -420,8 +419,11 @@ impl<'a> Parser<'a> {
             self.expect(Tok::Arrow);
         }
         for p in &mut params {
-            p.implicit = implicit || contextual;
+            p.implicit = implicit.is_some() || contextual;
             p.contextual = contextual;
+            if let (Some(at), true) = (implicit, self.syntax.keep) {
+                self.ast.notes.implicit_lambdas.push((p.span.start, at));
+            }
         }
         push_list(&mut self.ast.lambda_params, &params)
     }
@@ -906,7 +908,12 @@ impl<'a> Parser<'a> {
         }
         stmts.push(Stmt::Expr(for_expr));
         let l = push_list(&mut self.ast.stmts, &stmts);
-        self.ast.add_expr(Expr::Block(l), span)
+        let block = self.ast.add_expr(Expr::Block(l), span);
+        if self.syntax.keep {
+            let written = push_list(&mut self.ast.enumerators, &enums);
+            self.ast.notes.for_leading_vals.push((block, written));
+        }
+        block
     }
 
     /// Distinguishes `for (a, b) <- pairs` from `for (x <- xs) do`, as dotc's
@@ -1275,7 +1282,7 @@ impl<'a> Parser<'a> {
                     let t = self.bump();
                     let text = &self.text[t.span.start as usize..t.span.end as usize];
                     let s = if raw {
-                        text.replace("$$", "$")
+                        super::dollar_escapes(text)
                     } else {
                         unescape(text, true, &mut self.errors, t.span)
                     };
@@ -1561,6 +1568,7 @@ impl<'a> Parser<'a> {
                 if let Expr::Assign(lhs, rhs) = self.ast.expr(only) {
                     if let Expr::Ident(n) = self.ast.expr(lhs) {
                         if self.source.enables_named_tuples() {
+                            self.note_named_field(lhs, rhs);
                             let nl = push_list(&mut self.ast.name_lists, &[n]);
                             let vl = push_list(&mut self.ast.expr_lists, &[rhs]);
                             let tuple = self.ast.add_expr(Expr::NamedTuple(nl, vl), span);
@@ -1591,6 +1599,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Under `Syntax::keep`, the name a named tuple's element `value` is written with (`named_fields`).
+    fn note_named_field(&mut self, name: ExprId, value: ExprId) {
+        if self.syntax.keep {
+            let at = self.ast.notes.named_fields.partition_point(|&(v, _)| v < value);
+            let span = self.ast.expr_span(name);
+            self.ast.notes.named_fields.insert(at, (value, span));
+        }
+    }
+
     /// `(a = x, b = y)`, every element an assignment to a name, is a named tuple.
     fn tuple_or_named(&mut self, l: ListRef, span: Span) -> ExprId {
         let items = self.ast.expr_list(l).to_vec();
@@ -1615,6 +1632,11 @@ impl<'a> Parser<'a> {
         if names.len() != items.len() {
             self.error_at(span, "Illegal combination of named and unnamed tuple elements");
             return self.ast.add_expr(Expr::Tuple(l), span);
+        }
+        for &e in &items {
+            if let Expr::Assign(lhs, rhs) = self.ast.expr(e) {
+                self.note_named_field(lhs, rhs);
+            }
         }
         let nl = push_list(&mut self.ast.name_lists, &names);
         let vl = push_list(&mut self.ast.expr_lists, &values);

@@ -137,8 +137,11 @@ thread stops. A second signal ends the program at once.
 build's sources, scalafix's rules and configuration with no sbt and no JVM: the rules are Scala under the
 interpreter, against the API of docs/FIX.md, over the trees and the typer the compiler made of the sources in the same
 process. The configuration is `.scalafix.conf` beside `teq.lock`, or `--config`'s file (its `rules`, each rule's
-settings, `lint.error`, `lint.warning`, `lint.info` and `lint.ignore`); `--rules` replaces its `rules`. Each project
-is typed as `teq compile` types it: its configurations under the keys a compile plans (`test` covering `compile` in
+settings, `lint.error`, `lint.warning`, `lint.info` and `lint.ignore`); `--rules` replaces its `rules`, a name
+chosen among the shipped rules and those of the configuration's `file:` entries. A configuration the lock's
+`scalafix` record (sbt-teq's export of sbt-scalafix's settings) gives a file of its own runs under that file, and one
+the record skips is left out unless named (docs/FIX.md, "Configuration"). Each project is typed as `teq
+compile` types it: its configurations under the keys a compile plans (`test` covering `compile` in
 an sbt build, each configuration its own in a Mill one), each key's closure one program with the resident's
 inputs, exclusions, class path, flags and per-root source versions, its generators run first under compile's
 policy (a command generator runs its program, which may be Java: the one JVM boundary). Only the projects' own
@@ -155,7 +158,8 @@ directory. Exit status: 0 when the run is complete and nothing is left (under `-
 lint); 1 when `--check` finds an edit or a lint, or an error-severity lint remains after the edits; 2 for an unknown
 project, file, rule or setting, a configuration teq does not read, a program that does not type, an analysis that
 is unavailable, a rule that fails, edits of two rules that overlap, or a file that cannot be written. `--check`
-writes nothing and names each file it would rewrite. A second run after a fixing run changes nothing. `--threads n`
+writes nothing, names each file it would rewrite and prints the lints of the files as they are (scalafix's
+`--check`), where a fixing run prints those of the files it writes, at their lines. A second run after a fixing run changes nothing. `--threads n`
 (or `--threads=n`) is compile's option, handed to every program the run types, over a project's own `threads`: the
 workers that type each program and those the rules run on (docs/FIX.md, "Patches, suppressions and rounds"); without
 it `TEQ_THREADS`, then compile's count for each program typed.

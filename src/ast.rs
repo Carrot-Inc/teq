@@ -635,9 +635,11 @@ pub struct SyntaxNotes {
     pub source: Option<Box<SourceKept>>,
     /// Under `Syntax::keep`: the names of the package clauses this AST's parse wrote, in order.
     pub package_names: Vec<Span>,
-    /// Under `Syntax::keep`: the parameters of each higher-kinded parameter's clause (`A` of `F[+A]`), nested
-    /// ones too, in source order.
-    pub hk_params: Vec<HkParam>,
+    /// Under `Syntax::keep`, on a package block's AST: its body as written, from its `{` or `:` to its `}` or its last
+    /// statement's end (scalameta's `Pkg.Body`).
+    pub package_body: Option<Span>,
+    /// Under `Syntax::keep`: each class's `derives` clause, by the start of the class's name: the types it derives.
+    pub derives: Vec<(u32, Vec<TyExprId>)>,
     /// Under `Syntax::keep`: each higher-kinded clause's owner (the start of the name before its `[`) and the end of
     /// its `]`.
     pub hk_clauses: Vec<(u32, u32)>,
@@ -662,9 +664,31 @@ pub struct SyntaxNotes {
     /// made over it (its bounds, `lambdaAbstract`), where one is not invariant: `boundsFromParams`' `paramVariance`,
     /// which the lambda's parameters take (`Worker::poly_params`).
     pub clause_variances: Vec<(TyExprId, Box<[i8]>)>,
-    /// A named function type's parameters (`(x: A) => B`): each one's type and the start of its name, ascending: where
-    /// the parameter's `ValDef` stands (`typedFunctionType.typedDependent`), a diagnostic of its signature there.
-    pub fun_param_starts: Vec<(TyExprId, u32)>,
+    /// A named function type's parameters (`(x: A) => B`) and a named tuple type's elements (`(a: A, b: B)`): each one's
+    /// type and the start of its name, ascending: where a parameter's `ValDef` stands (`typedFunctionType.typedDependent`),
+    /// a diagnostic of its signature there; under `Syntax::keep` an element's `Type.TypedParam` too.
+    pub named_type_starts: Vec<(TyExprId, u32)>,
+    /// Under `Syntax::keep`: the parentheses of each function type's parameters where written (`(A, B) => C`), by the
+    /// function, ascending (scalameta's `Type.FuncParamClause`).
+    pub fun_param_clauses: Vec<(TyExprId, Span)>,
+    /// Under `Syntax::keep`: where each refinement's declarations open after its parent (`T { .. }`'s `{`, `T:`'s `:`), by
+    /// the refinement, ascending (scalameta's `Stat.Block`).
+    pub refinement_bodies: Vec<(TyExprId, u32)>,
+    /// Under `Syntax::keep`: a definition's type parameter's context bounds as written, from the first colon to the last
+    /// bound or the closing brace (`A: {C as c, D}`), by the start of the parameter's name (scalameta's `Type.Bounds`).
+    pub context_bounds_written: Vec<(u32, Span)>,
+    /// Under `Syntax::keep`: the `implicit` of a lambda's `implicit x =>`, by the start of the parameter's name
+    /// (scalameta's `Mod.Implicit` of the parameter and of its clause).
+    pub implicit_lambdas: Vec<(u32, Span)>,
+    /// Under `Syntax::keep`: a `for` whose first enumerators are value definitions, by the block the parser makes of
+    /// them around the `for` of the rest, with its enumerators as written (scalameta's `Term.For` of them all).
+    pub for_leading_vals: Vec<(ExprId, ListRef)>,
+    /// Under `Syntax::keep`, on a package object's AST: where its `package` starts and its name (scalameta's
+    /// `Pkg.Object`).
+    pub package_object: Option<(u32, Span)>,
+    /// Under `Syntax::keep`: the name of each element of a named tuple (`(a = 1)`), by its value, ascending (scalameta's
+    /// `Term.Assign`).
+    pub named_fields: Vec<(ExprId, Span)>,
     /// The selections the parser made of a postfix operator (`xs size`), ascending: dotty's `PostfixOp(od, Ident(op))`,
     /// whose operator an identifier is (`parser::references_name`).
     pub postfix_ops: Vec<ExprId>,
@@ -679,14 +703,12 @@ pub struct SyntaxNotes {
 
 /// An annotation of a binder (`SyntaxNotes::binder_annots`): its clause, the binder's place in it, the binder's span
 /// as dotty's `TypeDef` has it (from its first annotation to its last bound: what a `@nowarn` among them covers,
-/// `registerNowarn(tree.sourcePos, mdef.span)`), the start of its name (by which the tree finds its `Mod.Annot`s), and
-/// the annotation.
+/// `registerNowarn(tree.sourcePos, mdef.span)`), and the annotation.
 #[derive(Clone, Copy, Debug)]
 pub struct BinderAnnot {
     pub clause: BinderClause,
     pub index: u32,
     pub span: Span,
-    pub name: u32,
     pub annot: Annot,
 }
 
@@ -704,17 +726,6 @@ pub enum BinderClause {
     PolyFun(TyExprId),
     /// A polymorphic function literal's.
     PolyLiteral(ExprId),
-}
-
-/// A parameter of a higher-kinded parameter's clause, kept for `teq fix`: its owner (the start of the name the clause
-/// follows), its name or `_`, its `+` or `-`, and its bounds.
-#[derive(Clone, Copy, Debug)]
-pub struct HkParam {
-    pub owner: u32,
-    pub name: Span,
-    pub variance: Option<Span>,
-    pub lower: Option<TyExprId>,
-    pub upper: Option<TyExprId>,
 }
 
 /// What the lexer read of a unit, kept for `teq fix` (`SyntaxNotes::source`).
@@ -834,7 +845,8 @@ pub struct Ast {
     /// A pattern in parentheses of its own (`(x)`, `(h: Accept)`, `((x: Int))` once), which the parser reads as the
     /// pattern: dotty's `Parens` (`Parsers.simplePattern`'s `makeTupleOrParens`), a node of the untyped trees
     /// `makePatDef` (`Ast::patdef_tuple`) and `makeFor`'s `isVarBinding` and `isIrrefutable` (`needs_no_filter`) read.
-    pub paren_pats: std::collections::HashSet<PatId, crate::intern::FxBuild>,
+    /// By pattern, ascending, each with its outermost parentheses and the layer they enclose (`Ast::paren_pat`).
+    pub paren_pats: Vec<(PatId, Span, Span)>,
     /// The vals a member's pattern definition derives for its variables (dotty's `derivedValDef`
     /// with its `PatternVar` attachment): pattern variables to the unused check, never reported.
     pub patdef_components: std::collections::HashSet<DefId, crate::intern::FxBuild>,
@@ -1127,7 +1139,7 @@ impl Ast {
             new_outers: crate::intern::FxMap::default(),
             given_binds: Default::default(),
             patdef_scrutinees: Default::default(),
-            paren_pats: Default::default(),
+            paren_pats: Vec::new(),
             patdef_components: Default::default(),
             patdef_holders: Default::default(),
             paren_annotated: Default::default(),
@@ -1306,7 +1318,21 @@ impl Ast {
         }
     }
 
-    /// The span as written of `e` (`written_args`) and the one with a level of parentheses unwrapped.
+    /// `p` collapsed out of the parentheses written over `outer` (`paren_pats`).
+    pub fn push_paren_pat(&mut self, p: PatId, outer: Span) {
+        let own = self.pat_spans[p.idx()];
+        push_layer(&mut self.paren_pats, p, outer, own);
+    }
+
+    /// The outermost parentheses of `p` and the layer they enclose, its own span where they are its only ones.
+    pub fn paren_pat(&self, p: PatId) -> Option<(Span, Span)> {
+        layer_of(&self.paren_pats, p)
+    }
+
+    pub fn is_paren_pat(&self, p: PatId) -> bool {
+        self.paren_pat(p).is_some()
+    }
+
     pub fn written_arg(&self, e: ExprId) -> Option<(Span, Span)> {
         let i = self.written_args.partition_point(|&(x, ..)| x <= e);
         i.checked_sub(1).map(|i| self.written_args[i]).filter(|&(x, ..)| x == e).map(|(_, written, inner)| (written, inner))
@@ -1353,7 +1379,7 @@ impl Ast {
         for &p in pats {
             let span = self.pat_spans[p.idx()];
             let (inner, ty) = match self.pat(p) {
-                Pat::Typed(inner, t) if !self.paren_pats.contains(&p) => (inner, Some(t)),
+                Pat::Typed(inner, t) if !self.is_paren_pat(p) => (inner, Some(t)),
                 Pat::Typed(..) => return None,
                 _ => (p, None),
             };
@@ -1582,4 +1608,18 @@ pub fn push_list<T: Copy>(pool: &mut Vec<T>, items: &[T]) -> ListRef {
     let start = pool.len() as u32;
     pool.extend_from_slice(items);
     ListRef { start, len: items.len() as u32 }
+}
+
+/// `id` collapsed out of the parentheses written over `outer`, in `layers` (ascending by id): its entry the outermost
+/// parentheses and the layer they enclose, `own` for the first.
+fn push_layer<I: Copy + Ord>(layers: &mut Vec<(I, Span, Span)>, id: I, outer: Span, own: Span) {
+    let at = layers.partition_point(|&(x, ..)| x < id);
+    match layers.get_mut(at) {
+        Some(e) if e.0 == id => *e = (id, outer, e.1),
+        _ => layers.insert(at, (id, outer, own)),
+    }
+}
+
+fn layer_of<I: Copy + Ord>(layers: &[(I, Span, Span)], id: I) -> Option<(Span, Span)> {
+    layers.binary_search_by_key(&id, |&(x, ..)| x).ok().map(|k| (layers[k].1, layers[k].2))
 }

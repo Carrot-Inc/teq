@@ -1,0 +1,120 @@
+Nodes/Type.ParamClause/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Type.ParamClause, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_ParamClause\n\nobject Type_ParamClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A, B](a: A, b: B) = a\n  class C[A]\n  def g(x: Int) = x\n"
+  stats Pkg syntax="package nodes.Type_ParamClause\n\nobject Type_ParamClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A, B](a: A, b: B) = a\n  class C[A]\n  def g(x: Int) = x"
+    .stats = [Defn.Object "object Type_ParamClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A, B](a: A, b: B) = a\n  class C[A]\n  def g(x: Int) = x"]
+    ref Term.Select syntax="nodes.Type_ParamClause"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_ParamClause" syntax="Type_ParamClause"
+    body Pkg.Body syntax="object Type_ParamClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A, B](a: A, b: B) = a\n  class C[A]\n  def g(x: Int) = x"
+      stats Defn.Object syntax="object Type_ParamClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A, B](a: A, b: B) = a\n  class C[A]\n  def g(x: Int) = x"
+        mods Nil
+        name Term.Name value="Type_ParamClause" syntax="Type_ParamClause"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A, B](a: A, b: B) = a\n  class C[A]\n  def g(x: Int) = x"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f[A, B](a: A, b: B) = a", Defn.Class "class C[A]", Defn.Def "def g(x: Int) = x"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A, B](a: A, b: B) = a\n  class C[A]\n  def g(x: Int) = x"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f[A, B](a: A, b: B) = a"
+              .paramClauses = [Term.ParamClause "(a: A, b: B)"]
+              .paramss = [[Term.Param "a: A", Term.Param "b: B"]]
+              .tparams = [Type.Param "A", Type.Param "B"]
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="[A, B](a: A, b: B)"
+                tparamClause Type.ParamClause syntax="[A, B]"
+                  values Type.Param syntax="A"
+                    .tparams = []
+                    mods Nil
+                    name Type.Name value="A" syntax="A"
+                    tparamClause Type.ParamClause syntax=""
+                      values Nil
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                  values Type.Param syntax="B"
+                    .tparams = []
+                    mods Nil
+                    name Type.Name value="B" syntax="B"
+                    tparamClause Type.ParamClause syntax=""
+                      values Nil
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                paramClauses Term.ParamClause syntax="(a: A, b: B)"
+                  values Term.Param syntax="a: A"
+                    mods Nil
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="A" syntax="A"
+                    default None
+                  values Term.Param syntax="b: B"
+                    mods Nil
+                    name Term.Name value="b" syntax="b"
+                    decltpe Type.Name value="B" syntax="B"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Name value="a" syntax="a"
+            stats Defn.Class syntax="class C[A]"
+              .tparams = [Type.Param "A"]
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax="[A]"
+                values Type.Param syntax="A"
+                  .tparams = []
+                  mods Nil
+                  name Type.Name value="A" syntax="A"
+                  tparamClause Type.ParamClause syntax=""
+                    values Nil
+                  bounds Type.Bounds syntax=""
+                    lo None
+                    hi None
+                    context Nil
+                    view Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Def syntax="def g(x: Int) = x"
+              .paramClauses = [Term.ParamClause "(x: Int)"]
+              .paramss = [[Term.Param "x: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Name value="x" syntax="x"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

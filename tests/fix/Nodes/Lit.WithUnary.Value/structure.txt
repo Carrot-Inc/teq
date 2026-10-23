@@ -1,0 +1,44 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's UnaryValue probe, its fields, values, syntax and derived accessors as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_WithUnary_Value\n\nobject O { val x = -'a' }\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Lit_WithUnary_Value\n\nobject O { val x = -'a' }\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Object "object O { val x = -'a' }", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Lit_WithUnary_Value"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_WithUnary_Value" syntax="Lit_WithUnary_Value"
+    body Pkg.Body syntax="object O { val x = -'a' }\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Object syntax="object O { val x = -'a' }"
+        mods Nil
+        name Term.Name value="O" syntax="O"
+        templ Template syntax="{ val x = -'a' }"
+          .self = Self ""
+          .stats = [Defn.Val "val x = -'a'"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax="{ val x = -'a' }"
+            selfOpt None
+            stats Defn.Val syntax="val x = -'a'"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Lit.WithUnary syntax="-'a'"
+                .value = ("-", "a")
+                op Term.Name value="-" syntax="-"
+                arg Lit.Char value="a" syntax="'a'"
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil

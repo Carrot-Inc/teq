@@ -1,0 +1,76 @@
+Nodes/Term.AnonymousFunction/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.AnonymousFunction, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_AnonymousFunction\n\nobject Term_AnonymousFunction:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ + 1)\n  val b: (Int, Int) => Int = _ + _\n"
+  stats Pkg syntax="package nodes.Term_AnonymousFunction\n\nobject Term_AnonymousFunction:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ + 1)\n  val b: (Int, Int) => Int = _ + _"
+    .stats = [Defn.Object "object Term_AnonymousFunction:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ + 1)\n  val b: (Int, Int) => Int = _ + _"]
+    ref Term.Select syntax="nodes.Term_AnonymousFunction"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_AnonymousFunction" syntax="Term_AnonymousFunction"
+    body Pkg.Body syntax="object Term_AnonymousFunction:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ + 1)\n  val b: (Int, Int) => Int = _ + _"
+      stats Defn.Object syntax="object Term_AnonymousFunction:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ + 1)\n  val b: (Int, Int) => Int = _ + _"
+        mods Nil
+        name Term.Name value="Term_AnonymousFunction" syntax="Term_AnonymousFunction"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ + 1)\n  val b: (Int, Int) => Int = _ + _"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = List(1).map(_ + 1)", Defn.Val "val b: (Int, Int) => Int = _ + _"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ + 1)\n  val b: (Int, Int) => Int = _ + _"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = List(1).map(_ + 1)"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.Apply syntax="List(1).map(_ + 1)"
+                .args = [Term.AnonymousFunction "_ + 1"]
+                fun Term.Select syntax="List(1).map"
+                  qual Term.Apply syntax="List(1)"
+                    .args = [Lit.Int "1"]
+                    fun Term.Name value="List" syntax="List"
+                    argClause Term.ArgClause syntax="(1)"
+                      values Lit.Int value=1 syntax="1"
+                      mod None
+                  name Term.Name value="map" syntax="map"
+                argClause Term.ArgClause syntax="(_ + 1)"
+                  values Term.AnonymousFunction syntax="_ + 1"
+                    body Term.ApplyInfix syntax="_ + 1"
+                      .args = [Lit.Int "1"]
+                      .targs = []
+                      lhs Term.Placeholder syntax="_"
+                      op Term.Name value="+" syntax="+"
+                      targClause Type.ArgClause syntax=""
+                        values Nil
+                      argClause Term.ArgClause syntax="1"
+                        values Lit.Int value=1 syntax="1"
+                        mod None
+                  mod None
+            stats Defn.Val syntax="val b: (Int, Int) => Int = _ + _"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe Type.Function syntax="(Int, Int) => Int"
+                paramClause Type.FuncParamClause syntax="(Int, Int)"
+                  values Type.Name value="Int" syntax="Int"
+                  values Type.Name value="Int" syntax="Int"
+                res Type.Name value="Int" syntax="Int"
+              rhs Term.AnonymousFunction syntax="_ + _"
+                body Term.ApplyInfix syntax="_ + _"
+                  .args = [Term.Placeholder "_"]
+                  .targs = []
+                  lhs Term.Placeholder syntax="_"
+                  op Term.Name value="+" syntax="+"
+                  targClause Type.ArgClause syntax=""
+                    values Nil
+                  argClause Term.ArgClause syntax="_"
+                    values Term.Placeholder syntax="_"
+                    mod None
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

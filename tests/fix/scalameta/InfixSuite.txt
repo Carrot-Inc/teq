@@ -1,0 +1,1195 @@
+# The programs of scalameta 4.17.4's InfixSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 570 line 8 Stat dialects.Scala3 :: simple-modifier
+object W570 {
+infix def a(param: Int) = param
+
+}
+#!scalac ok
+#!regions F45/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 11
+    Template 12 48
+      Template.Body 12 48
+        Defn.Def 14 45
+          Mod.Infix 14 19
+          Term.Name 24 25
+          Member.ParamClauseGroup 25 37
+            Type.ParamClause 25 25
+            Term.ParamClause 25 37
+              Term.Param 26 36
+                Term.Name 26 31
+                Type.Name 33 36
+          Term.Name 40 45
+#!program 571 line 21 Stat dialects.Scala3 :: infix-type-complex
+object W571 {
+class A:
+  infix type or[X, Y]
+  infix def x(a : Int): String or Int = 1
+
+}
+#!scalac ok
+#!regions I22/2 L44/2 O87/
+#!layout
+Source 0 90
+  Defn.Object 0 89
+    Term.Name 7 11
+    Template 12 89
+      Template.Body 12 89
+        Defn.Class 14 86
+          Type.Name 20 21
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 86
+            Template.Body 21 86
+              Decl.Type 25 44
+                Mod.Infix 25 30
+                Type.Name 36 38
+                Type.ParamClause 38 44
+                  Type.Param 39 40
+                    Type.Name 39 40
+                    Type.ParamClause 40 40
+                    Type.Bounds 40 40
+                  Type.Param 42 43
+                    Type.Name 42 43
+                    Type.ParamClause 43 43
+                    Type.Bounds 43 43
+                Type.Bounds 44 44
+              Defn.Def 47 86
+                Mod.Infix 47 52
+                Term.Name 57 58
+                Member.ParamClauseGroup 58 67
+                  Type.ParamClause 58 58
+                  Term.ParamClause 58 67
+                    Term.Param 59 66
+                      Term.Name 59 60
+                      Type.Name 63 66
+                Type.ApplyInfix 69 82
+                  Type.Name 69 75
+                  Type.Name 76 78
+                  Type.Name 79 82
+                Lit.Int 85 86
+#!program 572 line 53 Stat dialects.Scala3 :: infix-class
+object W572 {
+infix class A[B, C]
+}
+#!scalac ok
+#!regions L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 11
+    Template 12 35
+      Template.Body 12 35
+        Defn.Class 14 33
+          Mod.Infix 14 19
+          Type.Name 26 27
+          Type.ParamClause 27 33
+            Type.Param 28 29
+              Type.Name 28 29
+              Type.ParamClause 29 29
+              Type.Bounds 29 29
+            Type.Param 31 32
+              Type.Name 31 32
+              Type.ParamClause 32 32
+              Type.Bounds 32 32
+          Ctor.Primary 33 33
+            Name.Anonymous 33 33
+          Template 33 33
+            Template.Body 33 33
+#!program 573 line 57 Stat dialects.Scala3 :: infix-trait
+object W573 {
+infix trait A[B, C]
+}
+#!scalac ok
+#!regions L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 11
+    Template 12 35
+      Template.Body 12 35
+        Defn.Trait 14 33
+          Mod.Infix 14 19
+          Type.Name 26 27
+          Type.ParamClause 27 33
+            Type.Param 28 29
+              Type.Name 28 29
+              Type.ParamClause 29 29
+              Type.Bounds 29 29
+            Type.Param 31 32
+              Type.Name 31 32
+              Type.ParamClause 32 32
+              Type.Bounds 32 32
+          Ctor.Primary 33 33
+            Name.Anonymous 33 33
+          Template 33 33
+            Template.Body 33 33
+#!program 574 line 62 Stat dialects.Scala3 :: infix-identifier
+object W574 {
+infix def infix(infix: infix): infix = new infix {}
+}
+#!scalac ok
+#!regions L65/
+#!layout
+Source 0 68
+  Defn.Object 0 67
+    Term.Name 7 11
+    Template 12 67
+      Template.Body 12 67
+        Defn.Def 14 65
+          Mod.Infix 14 19
+          Term.Name 24 29
+          Member.ParamClauseGroup 29 43
+            Type.ParamClause 29 29
+            Term.ParamClause 29 43
+              Term.Param 30 42
+                Term.Name 30 35
+                Type.Name 37 42
+          Type.Name 45 50
+          Term.NewAnonymous 53 65
+            Template 57 65
+              Init 57 62
+                Type.Name 57 62
+                Name.Anonymous 63 63
+              Template.Body 63 65
+#!program 575 line 73 Stat dialects.Scala3 :: extension-method
+object W575 {
+extension (i: Int) infix def zero(other: Int): Int = 0
+}
+#!scalac ok
+#!regions L68/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 11
+    Template 12 70
+      Template.Body 12 70
+        Defn.ExtensionGroup 14 68
+          Member.ParamClauseGroup 24 32
+            Type.ParamClause 24 24
+            Term.ParamClause 24 32
+              Term.Param 25 31
+                Term.Name 25 26
+                Type.Name 28 31
+          Defn.Def 33 68
+            Mod.Infix 33 38
+            Term.Name 43 47
+            Member.ParamClauseGroup 47 59
+              Type.ParamClause 47 47
+              Term.ParamClause 47 59
+                Term.Param 48 58
+                  Term.Name 48 53
+                  Type.Name 55 58
+            Type.Name 61 64
+            Lit.Int 67 68
+#!program 576 line 90 Stat dialects.Scala3 :: issue-2880 1
+object W576 {
+Flow {
+    b.add()
+
+    input_< ~> filtering
+      ~> removeItems.in0
+    ~> removeItems
+}
+
+}
+#!scalac ok
+#!regions F32/ X58/ X83/ L102/ F104/
+#!layout
+Source 0 108
+  Defn.Object 0 107
+    Term.Name 7 11
+    Template 12 107
+      Template.Body 12 107
+        Term.Apply 14 104
+          Term.Name 14 18
+          Term.ArgClause 19 104
+            Term.Block 19 104
+              Term.Apply 25 32
+                Term.Select 25 30
+                  Term.Name 25 26
+                  Term.Name 27 30
+                Term.ArgClause 30 32
+              Term.ApplyInfix 38 102
+                Term.ApplyInfix 38 83
+                  Term.ApplyInfix 38 58
+                    Term.Name 38 45
+                    Term.Name 46 48
+                    Type.ArgClause 49 49
+                    Term.ArgClause 49 58
+                      Term.Name 49 58
+                  Term.Name 65 67
+                  Type.ArgClause 68 68
+                  Term.ArgClause 68 83
+                    Term.Select 68 83
+                      Term.Name 68 79
+                      Term.Name 80 83
+                Term.Name 88 90
+                Type.ArgClause 91 91
+                Term.ArgClause 91 102
+                  Term.Name 91 102
+#!program 577 line 124 Stat dialects.Scala3 :: issue-2880 2
+object W577 {
+Flow {
+  def foo =
+    b.add()
+
+    input_< ~> filtering
+     ~> removeItems1
+    ~> removeItems2
+}
+
+}
+#!scalac ok
+#!regions I32/4 F44/4 X70/4 X91/4 O111/ L111/ F113/
+#!layout
+Source 0 117
+  Defn.Object 0 116
+    Term.Name 7 11
+    Template 12 116
+      Template.Body 12 116
+        Term.Apply 14 113
+          Term.Name 14 18
+          Term.ArgClause 19 113
+            Term.Block 19 113
+              Defn.Def 23 111
+                Term.Name 27 30
+                Term.Block 37 111
+                  Term.Apply 37 44
+                    Term.Select 37 42
+                      Term.Name 37 38
+                      Term.Name 39 42
+                    Term.ArgClause 42 44
+                  Term.ApplyInfix 50 111
+                    Term.ApplyInfix 50 91
+                      Term.ApplyInfix 50 70
+                        Term.Name 50 57
+                        Term.Name 58 60
+                        Type.ArgClause 61 61
+                        Term.ArgClause 61 70
+                          Term.Name 61 70
+                      Term.Name 76 78
+                      Type.ArgClause 79 79
+                      Term.ArgClause 79 91
+                        Term.Name 79 91
+                    Term.Name 96 98
+                    Type.ArgClause 99 99
+                    Term.ArgClause 99 111
+                      Term.Name 99 111
+#!program 578 line 163 Stat dialects.Scala3 :: scala3 infix syntax 1
+object W578 {
+val str = "hello"
+  ++ " world"
+  ++ "!"
+
+}
+#!scalac ok
+#!regions X31/ X45/ F54/
+#!layout
+Source 0 58
+  Defn.Object 0 57
+    Term.Name 7 11
+    Template 12 57
+      Template.Body 12 57
+        Defn.Val 14 54
+          Pat.Var 18 21
+            Term.Name 18 21
+          Term.ApplyInfix 24 54
+            Term.ApplyInfix 24 45
+              Lit.String 24 31
+              Term.Name 34 36
+              Type.ArgClause 37 37
+              Term.ArgClause 37 45
+                Lit.String 37 45
+            Term.Name 48 50
+            Type.ArgClause 51 51
+            Term.ArgClause 51 54
+              Lit.String 51 54
+#!program 579 line 181 Stat dialects.Scala3 :: scala3 infix syntax 2
+object W579 {
+def condition =
+  x > 0
+  ||
+  xs.exists(_ > 0)
+  || xs.isEmpty
+
+}
+#!scalac ok
+#!regions I29/2 X37/2 L42/2 X61/2 O78/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Defn.Def 14 77
+          Term.Name 18 27
+          Term.ApplyInfix 32 77
+            Term.ApplyInfix 32 61
+              Term.ApplyInfix 32 37
+                Term.Name 32 33
+                Term.Name 34 35
+                Type.ArgClause 36 36
+                Term.ArgClause 36 37
+                  Lit.Int 36 37
+              Term.Name 40 42
+              Type.ArgClause 45 45
+              Term.ArgClause 45 61
+                Term.Apply 45 61
+                  Term.Select 45 54
+                    Term.Name 45 47
+                    Term.Name 48 54
+                  Term.ArgClause 54 61
+                    Term.AnonymousFunction 55 60
+                      Term.ApplyInfix 55 60
+                        Term.Placeholder 55 56
+                        Term.Name 57 58
+                        Type.ArgClause 59 59
+                        Term.ArgClause 59 60
+                          Lit.Int 59 60
+            Term.Name 64 66
+            Type.ArgClause 67 67
+            Term.ArgClause 67 77
+              Term.Select 67 77
+                Term.Name 67 69
+                Term.Name 70 77
+#!program 580 line 213 Stat dialects.Scala3 :: scala3 infix syntax 3.1
+object W580 {
+{
+  freezing
+    | boiling
+}
+
+}
+#!scalac ok
+#!regions X26/ L40/ F42/
+#!layout
+Source 0 46
+  Defn.Object 0 45
+    Term.Name 7 11
+    Template 12 45
+      Template.Body 12 45
+        Term.Block 14 42
+          Term.ApplyInfix 18 40
+            Term.Name 18 26
+            Term.Name 31 32
+            Type.ArgClause 33 33
+            Term.ArgClause 33 40
+              Term.Name 33 40
+#!program 581 line 229 Stat dialects.Scala3 :: scala3 infix syntax 3.2
+object W581 {
+{
+  freezing
+
+    | boiling
+}
+
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions F26/ L41/ F43/
+#!layout
+Source 0 47
+  Defn.Object 0 46
+    Term.Name 7 11
+    Template 12 46
+      Template.Body 12 46
+        Term.Block 14 43
+          Term.Name 18 26
+          Term.SelectPostfix 32 41
+            Term.Name 32 33
+            Term.Name 34 41
+#!program 582 line 245 Stat dialects.Scala3 :: scala3 infix syntax 3.2.1
+object W582 {
+{
+  freezing
+
+    `|` boiling
+}
+
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions F26/ L43/ F45/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 11
+    Template 12 48
+      Template.Body 12 48
+        Term.Block 14 45
+          Term.Name 18 26
+          Term.SelectPostfix 32 43
+            Term.Name 32 35
+            Term.Name 36 43
+#!program 583 line 261 Stat dialects.Scala3 :: scala3 infix syntax 3.2.2
+object W583 {
+{
+  freezing
+
+    | !
+}
+
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions F26/ L35/ F37/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 11
+    Template 12 40
+      Template.Body 12 40
+        Term.Block 14 37
+          Term.Name 18 26
+          Term.SelectPostfix 32 35
+            Term.Name 32 33
+            Term.Name 34 35
+#!program 584 line 277 Stat dialects.Scala3 :: scala3 infix syntax 3.2.3
+object W584 {
+{
+  freezing
+
+    `|` !
+}
+
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions F26/ L37/ F39/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 11
+    Template 12 42
+      Template.Body 12 42
+        Term.Block 14 39
+          Term.Name 18 26
+          Term.SelectPostfix 32 37
+            Term.Name 32 35
+            Term.Name 36 37
+#!program 585 line 293 Stat dialects.Scala3 :: scala3 infix syntax 3.2.4
+object W585 {
+{
+  freezing
+
+    | |
+}
+
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions F26/ L35/ F37/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 11
+    Template 12 40
+      Template.Body 12 40
+        Term.Block 14 37
+          Term.Name 18 26
+          Term.SelectPostfix 32 35
+            Term.Name 32 33
+            Term.Name 34 35
+#!program 586 line 309 Stat dialects.Scala3 :: scala3 infix syntax 3.2.5
+object W586 {
+{
+  freezing
+
+    `|` |
+}
+
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions F26/ L37/ F39/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 11
+    Template 12 42
+      Template.Body 12 42
+        Term.Block 14 39
+          Term.Name 18 26
+          Term.SelectPostfix 32 37
+            Term.Name 32 35
+            Term.Name 36 37
+#!program 587 line 325 Stat dialects.Scala3 :: scala3 infix syntax 3.3
+object W587 {
+{
+  freezing
+    |
+    boiling
+}
+
+}
+#!scalac ok
+#!regions X26/ L32/ L44/ F46/
+#!layout
+Source 0 50
+  Defn.Object 0 49
+    Term.Name 7 11
+    Template 12 49
+      Template.Body 12 49
+        Term.Block 14 46
+          Term.ApplyInfix 18 44
+            Term.Name 18 26
+            Term.Name 31 32
+            Type.ArgClause 37 37
+            Term.ArgClause 37 44
+              Term.Name 37 44
+#!program 588 line 355 Stat dialects.Scala3 :: scala3 infix syntax 3.4
+object W588 {
+{
+  freezing
+  |
+  boiling
+}
+
+}
+#!scalac ok
+#!regions X26/ L30/ L40/ F42/
+#!layout
+Source 0 46
+  Defn.Object 0 45
+    Term.Name 7 11
+    Template 12 45
+      Template.Body 12 45
+        Term.Block 14 42
+          Term.ApplyInfix 18 40
+            Term.Name 18 26
+            Term.Name 29 30
+            Type.ArgClause 33 33
+            Term.ArgClause 33 40
+              Term.Name 33 40
+#!program 589 line 388 Stat dialects.Scala3 :: scala3 infix syntax 3.6 comment
+object W589 {
+{
+  freezing /*
+    c1 */ // c2
+  |
+  boiling
+}
+
+}
+#!scalac ok
+#!regions X45/ L49/ L59/ F61/
+#!layout
+Source 0 65
+  Defn.Object 0 64
+    Term.Name 7 11
+    Template 12 64
+      Template.Body 12 64
+        Term.Block 14 61
+          Term.ApplyInfix 18 59
+            Term.Name 18 26
+            Term.Name 48 49
+            Type.ArgClause 52 52
+            Term.ArgClause 52 59
+              Term.Name 52 59
+#!program 590 line 415 Stat dialects.Scala3 :: scala3 infix syntax 3.7 comment
+object W590 {
+{
+  freezing
+  // c1
+  /*
+    c2
+  */ |
+  boiling
+}
+
+}
+#!scalac ok
+#!regions X37/ L53/ L63/ F65/
+#!layout
+Source 0 69
+  Defn.Object 0 68
+    Term.Name 7 11
+    Template 12 68
+      Template.Body 12 68
+        Term.Block 14 65
+          Term.ApplyInfix 18 63
+            Term.Name 18 26
+            Term.Name 52 53
+            Type.ArgClause 56 56
+            Term.ArgClause 56 63
+              Term.Name 56 63
+#!program 591 line 443 Stat dialects.Scala3 :: scala3 infix syntax 3.8 comment
+object W591 {
+{
+  freezing
+  // c1
+  /*
+    c2
+  */
+  |
+  boiling
+}
+
+}
+#!scalac ok
+#!regions X51/ L55/ L65/ F67/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 11
+    Template 12 70
+      Template.Body 12 70
+        Term.Block 14 67
+          Term.ApplyInfix 18 65
+            Term.Name 18 26
+            Term.Name 54 55
+            Type.ArgClause 58 58
+            Term.ArgClause 58 65
+              Term.Name 58 65
+#!program 592 line 447 Stat dialects.Scala3 :: scala3 infix syntax 4
+object W592 {
+{
+  freezing
+    !boiling
+}
+
+}
+#!scalac ok
+#!regions L26/ L39/ F41/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Term.Block 14 41
+          Term.Name 18 26
+          Term.ApplyUnary 31 39
+            Term.Name 31 32
+            Term.Name 32 39
+#!program 593 line 464 Stat dialects.Scala3 :: scala3 infix syntax 5.1
+object W593 {
+{
+  println("hello")
+  ???
+  ??? match {
+    case 0 => 1
+  }
+}
+
+}
+#!scalac ok
+#!regions L34/ L40/ L70/ L74/ F76/
+#!layout
+Source 0 80
+  Defn.Object 0 79
+    Term.Name 7 11
+    Template 12 79
+      Template.Body 12 79
+        Term.Block 14 76
+          Term.Apply 18 34
+            Term.Name 18 25
+            Term.ArgClause 25 34
+              Lit.String 26 33
+          Term.Name 37 40
+          Term.Match 43 74
+            Term.Name 43 46
+            Term.CasesBlock 53 74
+              Case 59 70
+                Lit.Int 64 65
+                Lit.Int 69 70
+#!program 594 line 514 Stat dialects.Scala3 :: scala3 infix syntax 5.2
+object W594 {
+{
+  println("hello")
+    ???
+    ??? match {
+      case 0 => 1
+    }
+}
+
+}
+#!scalac ok
+#!regions L34/ L42/ L76/ L82/ F84/
+#!layout
+Source 0 88
+  Defn.Object 0 87
+    Term.Name 7 11
+    Template 12 87
+      Template.Body 12 87
+        Term.Block 14 84
+          Term.Apply 18 34
+            Term.Name 18 25
+            Term.ArgClause 25 34
+              Lit.String 26 33
+          Term.Name 39 42
+          Term.Match 47 82
+            Term.Name 47 50
+            Term.CasesBlock 57 82
+              Case 65 76
+                Lit.Int 70 71
+                Lit.Int 75 76
+#!program 595 line 518 Stat dialects.Scala3 :: scala3 infix syntax 6
+object W595 {
+{
+  def toBeContinued(altToken: Token): Boolean =
+    inline def canContinue =
+      !in.canStartStatTokens.contains(in.token)  // not statement, so take as continued expr
+    || followedByToken(altToken)                 // scan ahead to see whether we find a `then` or `do`
+
+    !in.isNewLine       // a newline token means the expression is finished
+    && !migrateTo3      // old syntax
+    && canContinue
+  end toBeContinued
+}
+
+}
+#!scalac ok
+#!regions I63/4 I92/6.4 O185/4 X185/4 F288/4 X365/4 X403/4 O422/ L422/ L442/ F444/
+#!layout
+Source 0 448
+  Defn.Object 0 447
+    Term.Name 7 11
+    Template 12 447
+      Template.Body 12 447
+        Term.Block 14 444
+          Defn.Def 18 422
+            Term.Name 22 35
+            Member.ParamClauseGroup 35 52
+              Type.ParamClause 35 35
+              Term.ParamClause 35 52
+                Term.Param 36 51
+                  Term.Name 36 44
+                  Type.Name 46 51
+            Type.Name 54 61
+            Term.Block 68 422
+              Defn.Def 68 218
+                Mod.Inline 68 74
+                Term.Name 79 90
+                Term.ApplyInfix 99 218
+                  Term.ApplyUnary 99 140
+                    Term.Name 99 100
+                    Term.Apply 100 140
+                      Term.Select 100 130
+                        Term.Select 100 121
+                          Term.Name 100 102
+                          Term.Name 103 121
+                        Term.Name 122 130
+                      Term.ArgClause 130 140
+                        Term.Select 131 139
+                          Term.Name 131 133
+                          Term.Name 134 139
+                  Term.Name 190 192
+                  Type.ArgClause 193 193
+                  Term.ArgClause 193 218
+                    Term.Apply 193 218
+                      Term.Name 193 208
+                      Term.ArgClause 208 218
+                        Term.Name 209 217
+              Term.ApplyInfix 294 422
+                Term.ApplyInfix 294 384
+                  Term.ApplyUnary 294 307
+                    Term.Name 294 295
+                    Term.Select 295 307
+                      Term.Name 295 297
+                      Term.Name 298 307
+                  Term.Name 370 372
+                  Type.ArgClause 373 373
+                  Term.ArgClause 373 384
+                    Term.ApplyUnary 373 384
+                      Term.Name 373 374
+                      Term.Name 374 384
+                Term.Name 408 410
+                Type.ArgClause 411 411
+                Term.ArgClause 411 422
+                  Term.Name 411 422
+          Term.EndMarker 425 442
+            Term.Name 429 442
+#!program 596 line 590 Stat dialects.Scala3 :: #3051 scala3 leading infix syntax
+object W596 {
+val httpRoutes2 = (MetricsApp() ++ HomeApp() ++ GreetingApp())
+      @@ Middleware.cors(corsConfig)
+      @@ Middleware.metrics(MetricsApp.pathLabelMapper)
+      @@ Middleware.debug
+
+}
+#!scalac ok
+#!regions X76/ X113/ X169/ F195/
+#!layout
+Source 0 199
+  Defn.Object 0 198
+    Term.Name 7 11
+    Template 12 198
+      Template.Body 12 198
+        Defn.Val 14 195
+          Pat.Var 18 29
+            Term.Name 18 29
+          Term.ApplyInfix 32 195
+            Term.ApplyInfix 32 169
+              Term.ApplyInfix 32 113
+                Term.ApplyInfix 33 75
+                  Term.ApplyInfix 33 58
+                    Term.Apply 33 45
+                      Term.Name 33 43
+                      Term.ArgClause 43 45
+                    Term.Name 46 48
+                    Type.ArgClause 49 49
+                    Term.ArgClause 49 58
+                      Term.Apply 49 58
+                        Term.Name 49 56
+                        Term.ArgClause 56 58
+                  Term.Name 59 61
+                  Type.ArgClause 62 62
+                  Term.ArgClause 62 75
+                    Term.Apply 62 75
+                      Term.Name 62 73
+                      Term.ArgClause 73 75
+                Term.Name 83 85
+                Type.ArgClause 86 86
+                Term.ArgClause 86 113
+                  Term.Apply 86 113
+                    Term.Select 86 101
+                      Term.Name 86 96
+                      Term.Name 97 101
+                    Term.ArgClause 101 113
+                      Term.Name 102 112
+              Term.Name 120 122
+              Type.ArgClause 123 123
+              Term.ArgClause 123 169
+                Term.Apply 123 169
+                  Term.Select 123 141
+                    Term.Name 123 133
+                    Term.Name 134 141
+                  Term.ArgClause 141 169
+                    Term.Select 142 168
+                      Term.Name 142 152
+                      Term.Name 153 168
+            Term.Name 176 178
+            Type.ArgClause 179 179
+            Term.ArgClause 179 195
+              Term.Select 179 195
+                Term.Name 179 189
+                Term.Name 190 195
+#!program 597 line 631 Case dialects.Scala3 :: case: break before `|`
+object W597 {
+  def w(x: Any) = x match {
+case 'a'
+   | 'A' =>
+
+}
+}
+#!scalac ok
+#!regions L65/
+#!layout
+Source 0 68
+  Defn.Object 0 67
+    Term.Name 7 11
+    Template 12 67
+      Template.Body 12 67
+        Defn.Def 16 65
+          Term.Name 20 21
+          Member.ParamClauseGroup 21 29
+            Type.ParamClause 21 21
+            Term.ParamClause 21 29
+              Term.Param 22 28
+                Term.Name 22 23
+                Type.Name 25 28
+          Term.Match 32 65
+            Term.Name 32 33
+            Term.CasesBlock 40 65
+              Case 42 62
+                Pat.Alternative 47 59
+                  Lit.Char 47 50
+                  Lit.Char 56 59
+                Term.Block 64 64
+#!program 598 line 669 Stat dialects.Scala3 :: scalafmt #3720 different leading infix indentations
+object W598 {
+
+object a:
+  def mtd =
+    abc(
+        arg1
+    )
+    ++
+    abc(arg2)
+      ++
+        abc(arg3)
+  ++
+    abc(arg4)
+
+}
+#!scalac ok
+#!regions I24/2 I36/4.2 X64/4.2 L71/4.2 X85/4.2 L94/4.2 O112/2 X112/2 L117/2 O132/
+#!layout
+Source 0 135
+  Defn.Object 0 134
+    Term.Name 7 11
+    Template 12 134
+      Template.Body 12 134
+        Defn.Object 15 131
+          Term.Name 22 23
+          Template 23 131
+            Template.Body 23 131
+              Defn.Def 27 131
+                Term.Name 31 34
+                Term.ApplyInfix 41 131
+                  Term.ApplyInfix 41 112
+                    Term.ApplyInfix 41 85
+                      Term.Apply 41 64
+                        Term.Name 41 44
+                        Term.ArgClause 44 64
+                          Term.Name 54 58
+                      Term.Name 69 71
+                      Type.ArgClause 76 76
+                      Term.ArgClause 76 85
+                        Term.Apply 76 85
+                          Term.Name 76 79
+                          Term.ArgClause 79 85
+                            Term.Name 80 84
+                    Term.Name 92 94
+                    Type.ArgClause 103 103
+                    Term.ArgClause 103 112
+                      Term.Apply 103 112
+                        Term.Name 103 106
+                        Term.ArgClause 106 112
+                          Term.Name 107 111
+                  Term.Name 115 117
+                  Type.ArgClause 122 122
+                  Term.ArgClause 122 131
+                    Term.Apply 122 131
+                      Term.Name 122 125
+                      Term.ArgClause 125 131
+                        Term.Name 126 130
+#!program 599 line 696 Stat dialects.Scala3 :: scalafmt #3825 1
+object W599 {
+object a:
+  foo
+    .map: i =>
+      i + 1
+    *> bar
+
+}
+#!scalac ok
+#!regions I23/2 I44/6.2 O56/2 X56/2 O68/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 11
+    Template 12 70
+      Template.Body 12 70
+        Defn.Object 14 67
+          Term.Name 21 22
+          Template 22 67
+            Template.Body 22 67
+              Term.ApplyInfix 26 67
+                Term.Apply 26 56
+                  Term.Select 26 38
+                    Term.Name 26 29
+                    Term.Name 35 38
+                  Term.ArgClause 38 56
+                    Term.Block 38 56
+                      Term.Function 40 56
+                        Term.ParamClause 40 41
+                          Term.Param 40 41
+                            Term.Name 40 41
+                        Term.ApplyInfix 51 56
+                          Term.Name 51 52
+                          Term.Name 53 54
+                          Type.ArgClause 55 55
+                          Term.ArgClause 55 56
+                            Lit.Int 55 56
+                Term.Name 61 63
+                Type.ArgClause 64 64
+                Term.ArgClause 64 67
+                  Term.Name 64 67
+#!program 600 line 747 Stat dialects.Scala3 :: scalafmt #3825 2
+object W600 {
+object a:
+  object b:
+    foo
+      .map: i =>
+        i + 1
+          + 2
+        + 3
+      *> bar
+    baz
+  qux
+
+}
+#!scalac ok
+#!regions I23/2 I35/4.2 I60/8.4.2 X74/8.4.2 X88/8.4.2 O100/4.2 X100/4.2 L113/4.2 O121/2 L121/2 O128/
+#!layout
+Source 0 131
+  Defn.Object 0 130
+    Term.Name 7 11
+    Template 12 130
+      Template.Body 12 130
+        Defn.Object 14 127
+          Term.Name 21 22
+          Template 22 127
+            Template.Body 22 127
+              Defn.Object 26 121
+                Term.Name 33 34
+                Template 34 121
+                  Template.Body 34 121
+                    Term.ApplyInfix 40 113
+                      Term.Apply 40 100
+                        Term.Select 40 54
+                          Term.Name 40 43
+                          Term.Name 51 54
+                        Term.ArgClause 54 100
+                          Term.Block 54 100
+                            Term.Function 56 100
+                              Term.ParamClause 56 57
+                                Term.Param 56 57
+                                  Term.Name 56 57
+                              Term.ApplyInfix 69 100
+                                Term.ApplyInfix 69 88
+                                  Term.ApplyInfix 69 74
+                                    Term.Name 69 70
+                                    Term.Name 71 72
+                                    Type.ArgClause 73 73
+                                    Term.ArgClause 73 74
+                                      Lit.Int 73 74
+                                  Term.Name 85 86
+                                  Type.ArgClause 87 87
+                                  Term.ArgClause 87 88
+                                    Lit.Int 87 88
+                                Term.Name 97 98
+                                Type.ArgClause 99 99
+                                Term.ArgClause 99 100
+                                  Lit.Int 99 100
+                      Term.Name 107 109
+                      Type.ArgClause 110 110
+                      Term.ArgClause 110 113
+                        Term.Name 110 113
+                    Term.Name 118 121
+              Term.Name 124 127
+#!program 601 line 789 Stat dialects.Scala3 :: #3948 1
+object W601 {
+object Hello {
+  buffer
+    += new Object()
+    += new Object
+}
+
+}
+#!scalac ok
+#!regions X37/ X57/ L75/ F77/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Defn.Object 14 77
+          Term.Name 21 26
+          Template 27 77
+            Template.Body 27 77
+              Term.ApplyInfix 31 75
+                Term.ApplyInfix 31 57
+                  Term.Name 31 37
+                  Term.Name 42 44
+                  Type.ArgClause 45 45
+                  Term.ArgClause 45 57
+                    Term.New 45 57
+                      Init 49 57
+                        Type.Name 49 55
+                        Name.Anonymous 55 55
+                        Term.ArgClause 55 57
+                Term.Name 62 64
+                Type.ArgClause 65 65
+                Term.ArgClause 65 75
+                  Term.New 65 75
+                    Init 69 75
+                      Type.Name 69 75
+                      Name.Anonymous 75 75
+#!program 602 line 852 Stat dialects.Scala3 :: #3948 2
+object W602 {
+object Hello {
+  buffer
+    += new Object() with Foo {
+      def toString() = "foo"
+    }
+    += new Object
+}
+
+}
+#!scalac ok
+#!regions X37/ L97/ X103/ L121/ F123/
+#!layout
+Source 0 127
+  Defn.Object 0 126
+    Term.Name 7 11
+    Template 12 126
+      Template.Body 12 126
+        Defn.Object 14 123
+          Term.Name 21 26
+          Template 27 123
+            Template.Body 27 123
+              Term.ApplyInfix 31 121
+                Term.ApplyInfix 31 103
+                  Term.Name 31 37
+                  Term.Name 42 44
+                  Type.ArgClause 45 45
+                  Term.ArgClause 45 103
+                    Term.NewAnonymous 45 103
+                      Template 49 103
+                        Init 49 57
+                          Type.Name 49 55
+                          Name.Anonymous 55 55
+                          Term.ArgClause 55 57
+                        Init 63 66
+                          Type.Name 63 66
+                          Name.Anonymous 67 67
+                        Template.Body 67 103
+                          Defn.Def 75 97
+                            Term.Name 79 87
+                            Member.ParamClauseGroup 87 89
+                              Type.ParamClause 87 87
+                              Term.ParamClause 87 89
+                            Lit.String 92 97
+                Term.Name 108 110
+                Type.ArgClause 111 111
+                Term.ArgClause 111 121
+                  Term.New 111 121
+                    Init 115 121
+                      Type.Name 115 121
+                      Name.Anonymous 121 121
+#!program 603 line 862 Stat dialects.Scala3 :: infix with inline type args
+object W603 {
+a op [T]
+  b
+
+}
+#!scalac refuses: expression expected but '[' found
+#!regions L22/ F26/
+#!layout
+Source 0 30
+  Defn.Object 0 29
+    Term.Name 7 11
+    Template 12 29
+      Template.Body 12 29
+        Term.ApplyInfix 14 26
+          Term.Name 14 15
+          Term.Name 16 18
+          Type.ArgClause 19 22
+            Type.Name 20 21
+          Term.ArgClause 25 26
+            Term.Name 25 26
+#!program 604 line 873 Stat dialects.Scala3 :: infix with indented type args
+object W604 {
+a op
+  [T]
+  b
+
+}
+#!scalac refuses: expression expected but '[' found
+#!regions L18/ L24/ F28/
+#!layout
+Source 0 32
+  Defn.Object 0 31
+    Term.Name 7 11
+    Template 12 31
+      Template.Body 12 31
+        Term.ApplyInfix 14 28
+          Term.Name 14 15
+          Term.Name 16 18
+          Type.ArgClause 21 24
+            Type.Name 22 23
+          Term.ArgClause 27 28
+            Term.Name 27 28
