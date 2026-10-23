@@ -1,0 +1,9 @@
+Driver/StablePatterns/input.scala:11:10: error: [StablePatterns.pattern]: Term.Name true
+      case `w` => 1 // assert: StablePatterns.pattern
+           ^^^
+Driver/StablePatterns/input.scala:12:10: error: [StablePatterns.pattern]: Term.Select true
+      case O.v => 2 // assert: StablePatterns.pattern
+           ^^^
+Driver/StablePatterns/input.scala:13:10: error: [StablePatterns.pattern]: Pat.Wildcard true
+      case _ => 3 // assert: StablePatterns.pattern
+           ^

@@ -166,8 +166,10 @@ scalafix rules, as tests/fix/REFERENCES.md lists them file by file:
 This product includes a port, in src/fix/plan.rs, of the leading-comment scan (`begComment`,
 scalameta/parsers' ScalametaParser.scala) and of `canEndStat` (ScannerTokens.scala) of scalameta
 (https://github.com/scalameta/scalameta, tag v4.17.4, commit 51efeb6b0fc0c8e7c7232167fa99f7d2ee8403b1),
-the parser scalafix 41cf798 reads files with, Copyright (c) 2014-2018 EPFL and Copyright (c) 2016-2018
-Twitter, Inc., licensed under the BSD 3-Clause License. Its license:
+the parser scalafix 41cf798 reads files with, and the test programs under tests/fix/scalameta, taken from
+its parser tests for the Scala 3 dialect (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty),
+Copyright (c) 2014-2018 EPFL and Copyright (c) 2016-2018 Twitter, Inc., licensed under the BSD 3-Clause
+License. Its license:
 
     Copyright (c) 2014-2018 EPFL
     Copyright (c) 2016-2018 Twitter, Inc.

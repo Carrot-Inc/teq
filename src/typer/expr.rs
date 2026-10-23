@@ -6643,11 +6643,11 @@ pub(super) fn is_id_pattern(ast: &ast::Ast, p: ast::PatId) -> bool {
         Pat::StableId(e) => matches!(ast.expr(e), Expr::Ident(_)),
         _ => false,
     };
-    if ast.paren_pats.contains(&p) {
+    if ast.is_paren_pat(p) {
         return false;
     }
     match ast.pat(p) {
-        Pat::Typed(inner, _) => !ast.paren_pats.contains(&inner) && (ident(inner) || matches!(ast.pat(inner), Pat::Wildcard)),
+        Pat::Typed(inner, _) => !ast.is_paren_pat(inner) && (ident(inner) || matches!(ast.pat(inner), Pat::Wildcard)),
         _ => ident(p),
     }
 }
@@ -6663,7 +6663,7 @@ fn nested_given_alias(ast: &ast::Ast, range: std::ops::Range<u32>) -> bool {
 /// a body is dotty's `Ident`.
 fn is_nested_given_pattern(ast: &ast::Ast, p: ast::PatId) -> bool {
     match ast.pat(p) {
-        Pat::Bind(_, Some(body)) if !ast.paren_pats.contains(&p) => has_given_bind(ast, body),
+        Pat::Bind(_, Some(body)) if !ast.is_paren_pat(p) => has_given_bind(ast, body),
         _ => has_given_bind(ast, p),
     }
 }
@@ -6701,7 +6701,7 @@ fn needs_no_filter(ast: &ast::Ast, pat: ast::PatId, rhs: ExprId) -> bool {
     // A pattern in parentheses is a `Parens`, neither.
     fn var_binding(ast: &ast::Ast, p: ast::PatId) -> bool {
         match ast.pat(p) {
-            Pat::Bind(_, Some(inner)) if !ast.paren_pats.contains(&p) && ast.given_binds.contains(&p) => var_binding(ast, inner),
+            Pat::Bind(_, Some(inner)) if !ast.is_paren_pat(p) && ast.given_binds.contains(&p) => var_binding(ast, inner),
             _ => is_id_pattern(ast, p),
         }
     }

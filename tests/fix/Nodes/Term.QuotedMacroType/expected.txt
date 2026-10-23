@@ -1,0 +1,92 @@
+Nodes/Term.QuotedMacroType/input.scala:9:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.QuotedMacroType, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_QuotedMacroType\nimport scala.quoted.*\n\nobject Term_QuotedMacroType:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[T](t: Type[T])(using Quotes): Int = t match\n    case '[List[a]] => 1\n    case _ => 0\n"
+  stats Pkg syntax="package nodes.Term_QuotedMacroType\nimport scala.quoted.*\n\nobject Term_QuotedMacroType:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[T](t: Type[T])(using Quotes): Int = t match\n    case '[List[a]] => 1\n    case _ => 0"
+    .stats = [Import "import scala.quoted.*", Defn.Object "object Term_QuotedMacroType:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[T](t: Type[T])(using Quotes): Int = t match\n    case '[List[a]] => 1\n    case _ => 0"]
+    ref Term.Select syntax="nodes.Term_QuotedMacroType"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_QuotedMacroType" syntax="Term_QuotedMacroType"
+    body Pkg.Body syntax="import scala.quoted.*\n\nobject Term_QuotedMacroType:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[T](t: Type[T])(using Quotes): Int = t match\n    case '[List[a]] => 1\n    case _ => 0"
+      stats Import syntax="import scala.quoted.*"
+        importers Importer syntax="scala.quoted.*"
+          ref Term.Select syntax="scala.quoted"
+            qual Term.Name value="scala" syntax="scala"
+            name Term.Name value="quoted" syntax="quoted"
+          importees Importee.Wildcard syntax="*"
+      stats Defn.Object syntax="object Term_QuotedMacroType:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[T](t: Type[T])(using Quotes): Int = t match\n    case '[List[a]] => 1\n    case _ => 0"
+        mods Nil
+        name Term.Name value="Term_QuotedMacroType" syntax="Term_QuotedMacroType"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f[T](t: Type[T])(using Quotes): Int = t match\n    case '[List[a]] => 1\n    case _ => 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f[T](t: Type[T])(using Quotes): Int = t match\n    case '[List[a]] => 1\n    case _ => 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f[T](t: Type[T])(using Quotes): Int = t match\n    case '[List[a]] => 1\n    case _ => 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f[T](t: Type[T])(using Quotes): Int = t match\n    case '[List[a]] => 1\n    case _ => 0"
+              .paramClauses = [Term.ParamClause "(t: Type[T])", Term.ParamClause "(using Quotes)"]
+              .paramss = [[Term.Param "t: Type[T]"], [Term.Param "Quotes"]]
+              .tparams = [Type.Param "T"]
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="[T](t: Type[T])(using Quotes)"
+                tparamClause Type.ParamClause syntax="[T]"
+                  values Type.Param syntax="T"
+                    .tparams = []
+                    mods Nil
+                    name Type.Name value="T" syntax="T"
+                    tparamClause Type.ParamClause syntax=""
+                      values Nil
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                paramClauses Term.ParamClause syntax="(t: Type[T])"
+                  values Term.Param syntax="t: Type[T]"
+                    mods Nil
+                    name Term.Name value="t" syntax="t"
+                    decltpe Type.Apply syntax="Type[T]"
+                      .args = [Type.Name "T"]
+                      tpe Type.Name value="Type" syntax="Type"
+                      argClause Type.ArgClause syntax="[T]"
+                        values Type.Name value="T" syntax="T"
+                    default None
+                  mod None
+                paramClauses Term.ParamClause syntax="(using Quotes)"
+                  values Term.Param syntax="Quotes"
+                    mods Mod.Using syntax="using"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    decltpe Type.Name value="Quotes" syntax="Quotes"
+                    default None
+                  mod Mod.Using syntax="using"
+              decltpe Type.Name value="Int" syntax="Int"
+              body Term.Match syntax="t match\n    case '[List[a]] => 1\n    case _ => 0"
+                .cases = [Case "case '[List[a]] => 1", Case "case _ => 0"]
+                expr Term.Name value="t" syntax="t"
+                casesBlock Term.CasesBlock syntax="case '[List[a]] => 1\n    case _ => 0"
+                  cases Case syntax="case '[List[a]] => 1"
+                    pat Pat.Macro syntax="'[List[a]]"
+                      body Term.QuotedMacroType syntax="'[List[a]]"
+                        tpe Type.Apply syntax="List[a]"
+                          .args = [Type.Name "a"]
+                          tpe Type.Name value="List" syntax="List"
+                          argClause Type.ArgClause syntax="[a]"
+                            values Type.Name value="a" syntax="a"
+                    cond None
+                    body Lit.Int value=1 syntax="1"
+                  cases Case syntax="case _ => 0"
+                    pat Pat.Wildcard syntax="_"
+                    cond None
+                    body Lit.Int value=0 syntax="0"
+                mods Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

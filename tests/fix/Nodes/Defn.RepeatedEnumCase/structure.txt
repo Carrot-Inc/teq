@@ -1,0 +1,48 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Defn.RepeatedEnumCase, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Defn_RepeatedEnumCase\n\nobject Defn_RepeatedEnumCase:\n  val marker = 0 // assert: DumpStructure.structure\n  enum E:\n    case A, B, C\n"
+  stats Pkg syntax="package nodes.Defn_RepeatedEnumCase\n\nobject Defn_RepeatedEnumCase:\n  val marker = 0 // assert: DumpStructure.structure\n  enum E:\n    case A, B, C"
+    .stats = [Defn.Object "object Defn_RepeatedEnumCase:\n  val marker = 0 // assert: DumpStructure.structure\n  enum E:\n    case A, B, C"]
+    ref Term.Select syntax="nodes.Defn_RepeatedEnumCase"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Defn_RepeatedEnumCase" syntax="Defn_RepeatedEnumCase"
+    body Pkg.Body syntax="object Defn_RepeatedEnumCase:\n  val marker = 0 // assert: DumpStructure.structure\n  enum E:\n    case A, B, C"
+      stats Defn.Object syntax="object Defn_RepeatedEnumCase:\n  val marker = 0 // assert: DumpStructure.structure\n  enum E:\n    case A, B, C"
+        mods Nil
+        name Term.Name value="Defn_RepeatedEnumCase" syntax="Defn_RepeatedEnumCase"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  enum E:\n    case A, B, C"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Enum "enum E:\n    case A, B, C"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  enum E:\n    case A, B, C"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Enum syntax="enum E:\n    case A, B, C"
+              .tparams = []
+              mods Nil
+              name Type.Name value="E" syntax="E"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    case A, B, C"
+                .self = Self ""
+                .stats = [Defn.RepeatedEnumCase "case A, B, C"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    case A, B, C"
+                  selfOpt None
+                  stats Defn.RepeatedEnumCase syntax="case A, B, C"
+                    mods Nil
+                    cases Term.Name value="A" syntax="A"
+                    cases Term.Name value="B" syntax="B"
+                    cases Term.Name value="C" syntax="C"
+                derives Nil
+          derives Nil

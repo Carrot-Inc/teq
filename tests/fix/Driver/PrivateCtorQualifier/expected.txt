@@ -1,0 +1,3 @@
+Driver/PrivateCtorQualifier/input.scala:6:15: error: [AccessNames.names]: Subject
+  class Subject private[Subject] (x: Int) // assert: AccessNames.names
+                ^^^^^^^^^^^^^^^^

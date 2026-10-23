@@ -1,0 +1,72 @@
+Nodes/Pat.Bind/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pat.Bind, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pat_Bind\n\nobject Pat_Bind:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Option[Int]) = x match\n    case s @ Some(_) => s\n    case n @ None => n\n"
+  stats Pkg syntax="package nodes.Pat_Bind\n\nobject Pat_Bind:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Option[Int]) = x match\n    case s @ Some(_) => s\n    case n @ None => n"
+    .stats = [Defn.Object "object Pat_Bind:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Option[Int]) = x match\n    case s @ Some(_) => s\n    case n @ None => n"]
+    ref Term.Select syntax="nodes.Pat_Bind"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pat_Bind" syntax="Pat_Bind"
+    body Pkg.Body syntax="object Pat_Bind:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Option[Int]) = x match\n    case s @ Some(_) => s\n    case n @ None => n"
+      stats Defn.Object syntax="object Pat_Bind:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Option[Int]) = x match\n    case s @ Some(_) => s\n    case n @ None => n"
+        mods Nil
+        name Term.Name value="Pat_Bind" syntax="Pat_Bind"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Option[Int]) = x match\n    case s @ Some(_) => s\n    case n @ None => n"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(x: Option[Int]) = x match\n    case s @ Some(_) => s\n    case n @ None => n"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Option[Int]) = x match\n    case s @ Some(_) => s\n    case n @ None => n"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(x: Option[Int]) = x match\n    case s @ Some(_) => s\n    case n @ None => n"
+              .paramClauses = [Term.ParamClause "(x: Option[Int])"]
+              .paramss = [[Term.Param "x: Option[Int]"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: Option[Int])"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: Option[Int])"
+                  values Term.Param syntax="x: Option[Int]"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Apply syntax="Option[Int]"
+                      .args = [Type.Name "Int"]
+                      tpe Type.Name value="Option" syntax="Option"
+                      argClause Type.ArgClause syntax="[Int]"
+                        values Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Match syntax="x match\n    case s @ Some(_) => s\n    case n @ None => n"
+                .cases = [Case "case s @ Some(_) => s", Case "case n @ None => n"]
+                expr Term.Name value="x" syntax="x"
+                casesBlock Term.CasesBlock syntax="case s @ Some(_) => s\n    case n @ None => n"
+                  cases Case syntax="case s @ Some(_) => s"
+                    pat Pat.Bind syntax="s @ Some(_)"
+                      lhs Pat.Var syntax="s"
+                        name Term.Name value="s" syntax="s"
+                      rhs Pat.Extract syntax="Some(_)"
+                        .args = [Pat.Wildcard "_"]
+                        fun Term.Name value="Some" syntax="Some"
+                        argClause Pat.ArgClause syntax="(_)"
+                          values Pat.Wildcard syntax="_"
+                    cond None
+                    body Term.Name value="s" syntax="s"
+                  cases Case syntax="case n @ None => n"
+                    pat Pat.Bind syntax="n @ None"
+                      lhs Pat.Var syntax="n"
+                        name Term.Name value="n" syntax="n"
+                      rhs Term.Name value="None" syntax="None"
+                    cond None
+                    body Term.Name value="n" syntax="n"
+                mods Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

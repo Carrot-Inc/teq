@@ -1,0 +1,49 @@
+Nodes/Importee.Unimport/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Importee.Unimport, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Importee_Unimport\n\nobject Importee_Unimport:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => _, *}\n  val s = Set(1)\n"
+  stats Pkg syntax="package nodes.Importee_Unimport\n\nobject Importee_Unimport:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => _, *}\n  val s = Set(1)"
+    .stats = [Defn.Object "object Importee_Unimport:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => _, *}\n  val s = Set(1)"]
+    ref Term.Select syntax="nodes.Importee_Unimport"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Importee_Unimport" syntax="Importee_Unimport"
+    body Pkg.Body syntax="object Importee_Unimport:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => _, *}\n  val s = Set(1)"
+      stats Defn.Object syntax="object Importee_Unimport:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => _, *}\n  val s = Set(1)"
+        mods Nil
+        name Term.Name value="Importee_Unimport" syntax="Importee_Unimport"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => _, *}\n  val s = Set(1)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Import "import scala.collection.mutable.{Map => _, *}", Defn.Val "val s = Set(1)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable.{Map => _, *}\n  val s = Set(1)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Import syntax="import scala.collection.mutable.{Map => _, *}"
+              importers Importer syntax="scala.collection.mutable.{Map => _, *}"
+                ref Term.Select syntax="scala.collection.mutable"
+                  qual Term.Select syntax="scala.collection"
+                    qual Term.Name value="scala" syntax="scala"
+                    name Term.Name value="collection" syntax="collection"
+                  name Term.Name value="mutable" syntax="mutable"
+                importees Importee.Unimport syntax="Map => _"
+                  name Name.Indeterminate value="Map" syntax="Map"
+                importees Importee.Wildcard syntax="*"
+            stats Defn.Val syntax="val s = Set(1)"
+              mods Nil
+              pats Pat.Var syntax="s"
+                name Term.Name value="s" syntax="s"
+              decltpe None
+              rhs Term.Apply syntax="Set(1)"
+                .args = [Lit.Int "1"]
+                fun Term.Name value="Set" syntax="Set"
+                argClause Term.ArgClause syntax="(1)"
+                  values Lit.Int value=1 syntax="1"
+                  mod None
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

@@ -10,11 +10,11 @@ use crate::token::{Tok, Token};
 pub(super) type BinderBound = (usize, TyExprId, Name, Span);
 
 /// A clause's binders' annotations before its node is made: each the binder's index, its span (its first annotation
-/// to its last bound), the start of its name, the annotation (`BinderAnnot`); and the clause's binders' names, kept
-/// where one of them is annotated (`SyntaxNotes::binder_names`).
+/// to its last bound), the annotation (`BinderAnnot`); and the clause's binders' names, kept where one of them is
+/// annotated (`SyntaxNotes::binder_names`).
 #[derive(Default, Clone)]
 pub(super) struct BinderAnnotations {
-    annots: Vec<(u32, Span, u32, Annot)>,
+    annots: Vec<(u32, Span, Annot)>,
     names: Vec<Span>,
 }
 
@@ -71,10 +71,14 @@ impl<'a> Parser<'a> {
                 TyExpr::NamedTuple(names, l) => (l, Some(names)),
                 _ => (push_list(&mut self.ast.ty_lists, &[t]), None),
             };
+            let clause = matches!(self.ast.ty(t), TyExpr::Tuple(_) | TyExpr::NamedTuple(..)).then(|| self.ast.ty_spans[t.idx()]);
             let ret = self.parse_type();
             let span = start.to(self.prev_span());
             let node = if ctx { TyExpr::CtxFun(params, ret) } else { TyExpr::Fun(params, ret) };
             let id = self.ast.add_ty(node, span);
+            if let (Some(clause), true) = (clause, self.syntax.keep) {
+                self.ast.notes.fun_param_clauses.push((id, clause));
+            }
             if let Some(names) = names {
                 self.ast.fun_param_names.push((id, names));
             }
@@ -238,8 +242,6 @@ impl<'a> Parser<'a> {
     /// and is bounded by a type lambda over that clause, `[Z] =>> Any` where it declares no upper
     /// bound (dotty's `F <: [Z] =>> Any`), which carries its kind to typing.
     pub(super) fn parse_type_params_of_lambda(&mut self) -> (Vec<Name>, Vec<LambdaBounds>, Vec<BinderBound>, BinderAnnotations) {
-        // The clause's `[`, by which the source-preserving mode keeps its binders (`lambdaAbstract`'s `TypeDef`s).
-        let clause = self.span().start;
         self.expect(Tok::LBracket);
         let mut params = Vec::new();
         let mut bounds = Vec::new();
@@ -279,11 +281,8 @@ impl<'a> Parser<'a> {
                 }
             }
             let binder = Span::new(binder_start, self.prev_span().end);
-            annotated.annots.extend(annots.iter().map(|&a| ((params.len() - 1) as u32, binder, name.start, a)));
+            annotated.annots.extend(annots.iter().map(|&a| ((params.len() - 1) as u32, binder, a)));
             annotated.names.push(name);
-            if self.syntax.keep {
-                self.keep_hk_param(clause, name, None, *bounds.last().unwrap());
-            }
             if !self.list_continues(Tok::RBracket, &mut cut) {
                 break;
             }
@@ -305,7 +304,7 @@ impl<'a> Parser<'a> {
         if annotated.annots.is_empty() {
             return;
         }
-        let records = annotated.annots.into_iter().map(|(index, span, name, annot)| BinderAnnot { clause, index, span, name, annot });
+        let records = annotated.annots.into_iter().map(|(index, span, annot)| BinderAnnot { clause, index, span, annot });
         self.ast.notes.binder_annots.extend(records);
         self.ast.notes.binder_names.extend(annotated.names.into_iter().enumerate().map(|(i, s)| (clause, i as u32, s)));
     }
@@ -412,6 +411,15 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// The written parameters' parentheses of `fun` those of `to`, which stands for it (`fun_param_clauses`).
+    fn keep_fun_clause(&mut self, fun: TyExprId, to: TyExprId) {
+        let clauses = &self.ast.notes.fun_param_clauses;
+        if let Ok(k) = clauses.binary_search_by_key(&fun, |&(t, _)| t) {
+            let span = clauses[k].1;
+            self.ast.notes.fun_param_clauses.push((to, span));
+        }
+    }
+
     /// `makePolyFunctionType`'s parameters: each one the function type does not name is `x$n` by its place
     /// (`makeSyntheticParameter(n + 1, p)`), so that the result names it and the evidences' clause keeps it.
     fn name_poly_fun_params(&mut self, fun: TyExprId) {
@@ -457,6 +465,7 @@ impl<'a> Parser<'a> {
             let joined: Vec<TyExprId> = evidence.into_iter().chain(vparam_types).collect();
             let l = push_list(&mut self.ast.ty_lists, &joined);
             let id = self.ast.add_ty(TyExpr::CtxFun(l, res), span);
+            self.keep_fun_clause(fun, id);
             let all: Vec<Name> = evidence_names.into_iter().chain(own_names).collect();
             named_fun(self, id, &all);
             return id;
@@ -466,6 +475,7 @@ impl<'a> Parser<'a> {
         let ctx_res = self.ast.add_ty(TyExpr::CtxFun(l, res), res_span);
         named_fun(self, ctx_res, &evidence_names);
         let id = self.ast.add_ty(TyExpr::Fun(vparams, ctx_res), span);
+        self.keep_fun_clause(fun, id);
         if !own_names.is_empty() {
             named_fun(self, id, &own_names);
         }
@@ -520,7 +530,6 @@ impl<'a> Parser<'a> {
             // does not read, so a `^` or `{` there stays a parse error.
             let binder_start = self.span().start;
             let annots = self.parse_annots();
-            let mark = self.span();
             hk_variances.push(if self.eat_op(names::PLUS) {
                 1
             } else if self.eat_op(names::MINUS) {
@@ -541,12 +550,8 @@ impl<'a> Parser<'a> {
                 self.illegal_context_bounds();
             }
             let binder = Span::new(binder_start, self.prev_span().end);
-            annotated.annots.extend(annots.iter().map(|&a| ((inner.len() - 1) as u32, binder, name.start, a)));
+            annotated.annots.extend(annots.iter().map(|&a| ((inner.len() - 1) as u32, binder, a)));
             annotated.names.push(name);
-            if self.syntax.keep {
-                let variance = (*hk_variances.last().unwrap() != 0).then_some(mark);
-                self.keep_hk_param(owner, name, variance, *inner_bounds.last().unwrap());
-            }
             if !self.eat(Tok::Comma) {
                 break;
             }
@@ -556,14 +561,6 @@ impl<'a> Parser<'a> {
             self.ast.notes.hk_clauses.push((owner, self.prev_span().end));
         }
         (inner, inner_bounds, hk_variances, annotated)
-    }
-
-    /// Under `Syntax::keep`: a parameter of a higher-kinded parameter's clause where it was written
-    /// (`SyntaxNotes::hk_params`), as dotty's `typeParamClause` keeps the nested clause.
-    #[cold]
-    #[inline(never)]
-    fn keep_hk_param(&mut self, owner: u32, name: Span, variance: Option<Span>, (lower, upper): LambdaBounds) {
-        self.ast.notes.hk_params.push(crate::ast::HkParam { owner, name, variance, lower, upper });
     }
 
     /// A colon's context bounds where none is allowed (a higher-kinded parameter's, `Parsers.typeParam`): parsed as
@@ -829,6 +826,7 @@ impl<'a> Parser<'a> {
                 // The types inside are types wherever the parentheses stand: a `{` refines, `with`
                 // intersects, as in dotty's `argTypes` (a parent's restrictions are `constrApp`'s).
                 let template_type = std::mem::replace(&mut self.template_type, false);
+                let in_self_type = std::mem::replace(&mut self.in_self_type, false);
                 let mark = self.ty_scratch.len();
                 // `(a: A, b: B)` is a named tuple, or the parameters of a dependent function type.
                 let mut names: Vec<Name> = Vec::new();
@@ -863,14 +861,18 @@ impl<'a> Parser<'a> {
                 }
                 self.expect(Tok::RParen);
                 self.template_type = template_type;
-                let is_fun_params = matches!(self.kind(), Tok::Arrow | Tok::CtxArrow);
-                if is_fun_params && !starts.is_empty() {
-                    self.ast.notes.fun_param_starts.extend(starts);
+                self.in_self_type = in_self_type;
+                let is_fun_params = !in_self_type && matches!(self.kind(), Tok::Arrow | Tok::CtxArrow);
+                let count = self.ty_scratch.len() - mark;
+                if is_fun_params || names.len() == count {
+                    for start in starts {
+                        let at = self.ast.notes.named_type_starts.partition_point(|&(t, _)| t < start.0);
+                        self.ast.notes.named_type_starts.insert(at, start);
+                    }
                 }
                 if let (Some(arrow), false) = (by_name, is_fun_params) {
                     self.error_at(arrow, "a by-name type can only be the type of a parameter");
                 }
-                let count = self.ty_scratch.len() - mark;
                 if !names.is_empty() && (!is_fun_params || names.len() == count) {
                     if names.len() != count {
                         self.error_at(start.to(self.prev_span()), "Illegal combination of named and unnamed tuple elements");
@@ -914,8 +916,11 @@ impl<'a> Parser<'a> {
                 }
                 Tok::OpIdent if self.tok().name == names::HASH && self.kind_at(1) == Tok::Ident => {
                     self.bump();
-                    let n = self.bump().name;
-                    t = self.ast.add_ty(TyExpr::Project(t, n), start.to(self.prev_span()));
+                    let name = self.bump();
+                    t = self.ast.add_ty(TyExpr::Project(t, name.name), start.to(self.prev_span()));
+                    if self.syntax.keep {
+                        self.ast.ty_name_spans.push((t, name.span));
+                    }
                 }
                 Tok::At => {
                     let annots = self.parse_inline_annots();
@@ -969,8 +974,12 @@ impl<'a> Parser<'a> {
                         && self.kind_at(1) == Tok::Indent
                         && matches!(self.kind_at(2), Tok::KwType | Tok::KwDef | Tok::KwVal | Tok::KwVar) =>
                 {
+                    let open = self.span().start;
                     let members = self.parse_refinement();
                     t = self.ast.add_ty(TyExpr::Refined(t, members), start.to(self.prev_span()));
+                    if self.syntax.keep {
+                        self.ast.notes.refinement_bodies.push((t, open));
+                    }
                 }
                 _ => return t,
             }
@@ -1191,6 +1200,7 @@ impl<'a> Parser<'a> {
             // A colon after a bound that braces do not enclose is reported by the version
             // (`Parsers.contextBounds`, at the colon).
             let mut after_bound = false;
+            let first_colon = self.at(Tok::Colon).then(|| self.span().start);
             while self.at(Tok::Colon) {
                 let colon = self.bump().span;
                 if after_bound {
@@ -1210,6 +1220,9 @@ impl<'a> Parser<'a> {
                     let b = self.parse_inter_type();
                     self.push_context_bound(&mut tp, b);
                 }
+            }
+            if let (Some(colon), true) = (first_colon, self.syntax.keep) {
+                self.ast.notes.context_bounds_written.push((tp.span.start, Span::new(colon, self.prev_span().end)));
             }
             if name != names::EMPTY {
                 out.push(tp);

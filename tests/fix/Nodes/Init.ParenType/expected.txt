@@ -1,0 +1,79 @@
+Nodes/Init.ParenType/input.scala:11:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's NewValue probe, its fields, values, syntax and derived accessors as scalameta 4.17.4's (structure.txt).\npackage nodes.Init_ParenType\n\nclass Box(x: Int)\nobject O { val b = new (Box)(1) }\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Init_ParenType\n\nclass Box(x: Int)\nobject O { val b = new (Box)(1) }\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Class "class Box(x: Int)", Defn.Object "object O { val b = new (Box)(1) }", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Init_ParenType"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Init_ParenType" syntax="Init_ParenType"
+    body Pkg.Body syntax="class Box(x: Int)\nobject O { val b = new (Box)(1) }\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Class syntax="class Box(x: Int)"
+        .tparams = []
+        mods Nil
+        name Type.Name value="Box" syntax="Box"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax="(x: Int)"
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Term.ParamClause syntax="(x: Int)"
+            values Term.Param syntax="x: Int"
+              mods Nil
+              name Term.Name value="x" syntax="x"
+              decltpe Type.Name value="Int" syntax="Int"
+              default None
+            mod None
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Object syntax="object O { val b = new (Box)(1) }"
+        mods Nil
+        name Term.Name value="O" syntax="O"
+        templ Template syntax="{ val b = new (Box)(1) }"
+          .self = Self ""
+          .stats = [Defn.Val "val b = new (Box)(1)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax="{ val b = new (Box)(1) }"
+            selfOpt None
+            stats Defn.Val syntax="val b = new (Box)(1)"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Term.New syntax="new (Box)(1)"
+                init Init syntax="(Box)(1)"
+                  .argss = [[Lit.Int "1"]]
+                  tpe Type.Name value="Box" syntax="Box"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Term.ArgClause syntax="(1)"
+                    values Lit.Int value=1 syntax="1"
+                    mod None
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

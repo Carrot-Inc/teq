@@ -294,6 +294,10 @@ final class Configuration(val conf: Conf)
 /** A rule: its name, its configuration, and what it makes of a document. */
 abstract class Rule(val name: String):
   def description: String = ""
+  /** scalafix's metadata for its documentation: a linter, a rewrite, a rule subject to breaking changes. */
+  def isLinter: Boolean = false
+  def isRewrite: Boolean = false
+  def isExperimental: Boolean = false
   def withConfiguration(config: Configuration): Configured[Rule] = Configured.Ok(this)
   private[fix] def run(doc: SemanticDocument): Patch
 

@@ -1,0 +1,46 @@
+Nodes/Lit.Char/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Lit.Char, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_Char\n\nobject Lit_Char:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 'a'\n  val b = '\\n'\n  val c = '\\u0041'\n"
+  stats Pkg syntax="package nodes.Lit_Char\n\nobject Lit_Char:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 'a'\n  val b = '\\n'\n  val c = '\\u0041'"
+    .stats = [Defn.Object "object Lit_Char:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 'a'\n  val b = '\\n'\n  val c = '\\u0041'"]
+    ref Term.Select syntax="nodes.Lit_Char"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_Char" syntax="Lit_Char"
+    body Pkg.Body syntax="object Lit_Char:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 'a'\n  val b = '\\n'\n  val c = '\\u0041'"
+      stats Defn.Object syntax="object Lit_Char:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 'a'\n  val b = '\\n'\n  val c = '\\u0041'"
+        mods Nil
+        name Term.Name value="Lit_Char" syntax="Lit_Char"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 'a'\n  val b = '\\n'\n  val c = '\\u0041'"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = 'a'", Defn.Val "val b = '\\n'", Defn.Val "val c = '\\u0041'"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 'a'\n  val b = '\\n'\n  val c = '\\u0041'"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = 'a'"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Char value="a" syntax="'a'"
+            stats Defn.Val syntax="val b = '\\n'"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Lit.Char value="\n" syntax="'\\n'"
+            stats Defn.Val syntax="val c = '\\u0041'"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Lit.Char value="A" syntax="'\\u0041'"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

@@ -295,7 +295,7 @@ impl<'a> Parser<'a> {
                     }
                     1 if !matches!(self.ast.pat(self.ast.pat_list(l)[0]), Pat::NamedField(..)) => {
                         let only = self.ast.pat_list(l)[0];
-                        self.ast.paren_pats.insert(only);
+                        self.ast.push_paren_pat(only, span);
                         only
                     }
                     _ => self.ast.add_pat(Pat::Tuple(l), span),
@@ -334,7 +334,7 @@ impl<'a> Parser<'a> {
                 Tok::StrPart => {
                     let t = self.bump();
                     let text = &self.text[t.span.start as usize..t.span.end as usize];
-                    let s = if raw { text.replace("$$", "$") } else { unescape(text, true, &mut self.errors, t.span) };
+                    let s = if raw { super::dollar_escapes(text) } else { unescape(text, true, &mut self.errors, t.span) };
                     parts.push(self.ast.add_str(s));
                     spans.push(t.span);
                 }

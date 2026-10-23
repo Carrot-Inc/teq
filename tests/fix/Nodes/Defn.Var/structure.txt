@@ -1,0 +1,54 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Defn.Var, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Defn_Var\n\nobject Defn_Var:\n  val marker = 0 // assert: DumpStructure.structure\n  var a = 1\n  var b: Int = 2\n  var c: Int = _\n  private var d = 3\n"
+  stats Pkg syntax="package nodes.Defn_Var\n\nobject Defn_Var:\n  val marker = 0 // assert: DumpStructure.structure\n  var a = 1\n  var b: Int = 2\n  var c: Int = _\n  private var d = 3"
+    .stats = [Defn.Object "object Defn_Var:\n  val marker = 0 // assert: DumpStructure.structure\n  var a = 1\n  var b: Int = 2\n  var c: Int = _\n  private var d = 3"]
+    ref Term.Select syntax="nodes.Defn_Var"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Defn_Var" syntax="Defn_Var"
+    body Pkg.Body syntax="object Defn_Var:\n  val marker = 0 // assert: DumpStructure.structure\n  var a = 1\n  var b: Int = 2\n  var c: Int = _\n  private var d = 3"
+      stats Defn.Object syntax="object Defn_Var:\n  val marker = 0 // assert: DumpStructure.structure\n  var a = 1\n  var b: Int = 2\n  var c: Int = _\n  private var d = 3"
+        mods Nil
+        name Term.Name value="Defn_Var" syntax="Defn_Var"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  var a = 1\n  var b: Int = 2\n  var c: Int = _\n  private var d = 3"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Var "var a = 1", Defn.Var "var b: Int = 2", Defn.Var "var c: Int = _", Defn.Var "private var d = 3"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  var a = 1\n  var b: Int = 2\n  var c: Int = _\n  private var d = 3"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Var syntax="var a = 1"
+              .rhs = Some(Lit.Int "1")
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              body Lit.Int value=1 syntax="1"
+            stats Defn.Var syntax="var b: Int = 2"
+              .rhs = Some(Lit.Int "2")
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe Type.Name value="Int" syntax="Int"
+              body Lit.Int value=2 syntax="2"
+            stats Defn.Var syntax="var c: Int = _"
+              .rhs = None
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe Type.Name value="Int" syntax="Int"
+              body Term.Placeholder syntax="_"
+            stats Defn.Var syntax="private var d = 3"
+              .rhs = Some(Lit.Int "3")
+              mods Mod.Private syntax="private"
+                within Name.Anonymous syntax=""
+                  .value = ""
+              pats Pat.Var syntax="d"
+                name Term.Name value="d" syntax="d"
+              decltpe None
+              body Lit.Int value=3 syntax="3"
+          derives Nil

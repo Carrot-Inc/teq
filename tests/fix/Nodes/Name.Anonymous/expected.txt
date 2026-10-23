@@ -1,0 +1,88 @@
+Nodes/Name.Anonymous/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Name.Anonymous: an anonymous parameter, constructor, init and given, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Name_Anonymous\n\nobject Name_Anonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Int) = 1\n  class C\n  val n = new C\n  given Int = 1\n"
+  stats Pkg syntax="package nodes.Name_Anonymous\n\nobject Name_Anonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Int) = 1\n  class C\n  val n = new C\n  given Int = 1"
+    .stats = [Defn.Object "object Name_Anonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Int) = 1\n  class C\n  val n = new C\n  given Int = 1"]
+    ref Term.Select syntax="nodes.Name_Anonymous"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Name_Anonymous" syntax="Name_Anonymous"
+    body Pkg.Body syntax="object Name_Anonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Int) = 1\n  class C\n  val n = new C\n  given Int = 1"
+      stats Defn.Object syntax="object Name_Anonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Int) = 1\n  class C\n  val n = new C\n  given Int = 1"
+        mods Nil
+        name Term.Name value="Name_Anonymous" syntax="Name_Anonymous"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Int) = 1\n  class C\n  val n = new C\n  given Int = 1"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(using Int) = 1", Defn.Class "class C", Defn.Val "val n = new C", Defn.GivenAlias "given Int = 1"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Int) = 1\n  class C\n  val n = new C\n  given Int = 1"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(using Int) = 1"
+              .paramClauses = [Term.ParamClause "(using Int)"]
+              .paramss = [[Term.Param "Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(using Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(using Int)"
+                  values Term.Param syntax="Int"
+                    mods Mod.Using syntax="using"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod Mod.Using syntax="using"
+              decltpe None
+              body Lit.Int value=1 syntax="1"
+            stats Defn.Class syntax="class C"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Val syntax="val n = new C"
+              mods Nil
+              pats Pat.Var syntax="n"
+                name Term.Name value="n" syntax="n"
+              decltpe None
+              rhs Term.New syntax="new C"
+                init Init syntax="C"
+                  .argss = []
+                  tpe Type.Name value="C" syntax="C"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+            stats Defn.GivenAlias syntax="given Int = 1"
+              .paramClauses = []
+              .tparams = []
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              decltpe Type.Name value="Int" syntax="Int"
+              body Lit.Int value=1 syntax="1"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

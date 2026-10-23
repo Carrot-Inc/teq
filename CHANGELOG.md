@@ -26,6 +26,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 - `teq fix` runs scalafix's rules over a build's sources with no sbt and no JVM, each program typed over compile's
   workers, the output the one-worker run's ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md),
   [the command line](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
+- `teq fix` gives a rule scalameta 4.17's tree (its argument and parameter clauses, template and package bodies, no
+  node of parentheses) and plans patches as scalafix does: an importee's removal as token removals, two rules' edits
+  of one token merged ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
+- `teq fix` reads a configuration's `include`s and `${...}` substitutions as typesafe-config resolves them, `--rules`
+  chooses among the shipped rules and the configuration's `file:` rules, and `--check` prints the lints at the files'
+  own lines ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
+- sbt-teq records in `teq.lock` the configuration file sbt-scalafix reads for each configuration and whether it skips
+  it, and `teq fix` runs each configuration under its file and leaves the skipped ones out
+  ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md),
+  [the lockfile](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
 
 <details>
 <summary>Conformance with scalac and the JDK</summary>
@@ -39,6 +49,7 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   in the interpreter matches a mutable sequence, its rest an immutable one, as scalac's does.
 - A condition's signal and an interrupt of its waiter are arbitrated as the JDK's `ConditionObject` arbitrates
   them, and a sleeper's deadline is kept when another wait's timer was cancelled before it.
+- `$"` in an interpolated string is a quote, as scalac reads it.
 
 </details>
 

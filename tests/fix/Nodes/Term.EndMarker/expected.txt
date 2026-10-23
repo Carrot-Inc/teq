@@ -1,0 +1,52 @@
+Nodes/Term.EndMarker/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.EndMarker, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_EndMarker\n\nobject Term_EndMarker:\n  val marker = 0 // assert: DumpStructure.structure\n  def f =\n    1\n  end f\n  val g =\n    if true then 1\n    else 2\n    end if\n"
+  stats Pkg syntax="package nodes.Term_EndMarker\n\nobject Term_EndMarker:\n  val marker = 0 // assert: DumpStructure.structure\n  def f =\n    1\n  end f\n  val g =\n    if true then 1\n    else 2\n    end if"
+    .stats = [Defn.Object "object Term_EndMarker:\n  val marker = 0 // assert: DumpStructure.structure\n  def f =\n    1\n  end f\n  val g =\n    if true then 1\n    else 2\n    end if"]
+    ref Term.Select syntax="nodes.Term_EndMarker"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_EndMarker" syntax="Term_EndMarker"
+    body Pkg.Body syntax="object Term_EndMarker:\n  val marker = 0 // assert: DumpStructure.structure\n  def f =\n    1\n  end f\n  val g =\n    if true then 1\n    else 2\n    end if"
+      stats Defn.Object syntax="object Term_EndMarker:\n  val marker = 0 // assert: DumpStructure.structure\n  def f =\n    1\n  end f\n  val g =\n    if true then 1\n    else 2\n    end if"
+        mods Nil
+        name Term.Name value="Term_EndMarker" syntax="Term_EndMarker"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f =\n    1\n  end f\n  val g =\n    if true then 1\n    else 2\n    end if"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f =\n    1", Term.EndMarker "end f", Defn.Val "val g =\n    if true then 1\n    else 2\n    end if"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f =\n    1\n  end f\n  val g =\n    if true then 1\n    else 2\n    end if"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f =\n    1"
+              .paramClauses = []
+              .paramss = []
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Nil
+              decltpe None
+              body Lit.Int value=1 syntax="1"
+            stats Term.EndMarker syntax="end f"
+              name Term.Name value="f" syntax="f"
+            stats Defn.Val syntax="val g =\n    if true then 1\n    else 2\n    end if"
+              mods Nil
+              pats Pat.Var syntax="g"
+                name Term.Name value="g" syntax="g"
+              decltpe None
+              rhs Term.Block syntax="if true then 1\n    else 2\n    end if"
+                stats Term.If syntax="if true then 1\n    else 2"
+                  cond Lit.Boolean value=true syntax="true"
+                  thenp Lit.Int value=1 syntax="1"
+                  elsep Lit.Int value=2 syntax="2"
+                  mods Nil
+                stats Term.EndMarker syntax="end if"
+                  name Term.Name value="if" syntax="if"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

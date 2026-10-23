@@ -1,0 +1,51 @@
+Nodes/Term.Assign/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Assign, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Assign\n\nobject Term_Assign:\n  val marker = 0 // assert: DumpStructure.structure\n  var x = 1\n  def f() = x = 2\n"
+  stats Pkg syntax="package nodes.Term_Assign\n\nobject Term_Assign:\n  val marker = 0 // assert: DumpStructure.structure\n  var x = 1\n  def f() = x = 2"
+    .stats = [Defn.Object "object Term_Assign:\n  val marker = 0 // assert: DumpStructure.structure\n  var x = 1\n  def f() = x = 2"]
+    ref Term.Select syntax="nodes.Term_Assign"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Assign" syntax="Term_Assign"
+    body Pkg.Body syntax="object Term_Assign:\n  val marker = 0 // assert: DumpStructure.structure\n  var x = 1\n  def f() = x = 2"
+      stats Defn.Object syntax="object Term_Assign:\n  val marker = 0 // assert: DumpStructure.structure\n  var x = 1\n  def f() = x = 2"
+        mods Nil
+        name Term.Name value="Term_Assign" syntax="Term_Assign"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  var x = 1\n  def f() = x = 2"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Var "var x = 1", Defn.Def "def f() = x = 2"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  var x = 1\n  def f() = x = 2"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Var syntax="var x = 1"
+              .rhs = Some(Lit.Int "1")
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              body Lit.Int value=1 syntax="1"
+            stats Defn.Def syntax="def f() = x = 2"
+              .paramClauses = [Term.ParamClause "()"]
+              .paramss = [[]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="()"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="()"
+                  values Nil
+                  mod None
+              decltpe None
+              body Term.Assign syntax="x = 2"
+                lhs Term.Name value="x" syntax="x"
+                rhs Lit.Int value=2 syntax="2"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

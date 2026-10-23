@@ -1,0 +1,3 @@
+shared/src/Shared.scala:2:17: error: [DisableSyntax.var]: mutable state should be avoided
+  object Shared { var counter = 1 }
+                  ^^^

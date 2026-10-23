@@ -1,0 +1,129 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Param, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Param\n\nobject Term_Param:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int = 1, y: => Int, z: Int*) = x\n  class C(val a: Int, var b: Int, private val c: Int = 2)\n  inline def g(inline x: Int) = x\n  def h(implicit i: Int) = i\n"
+  stats Pkg syntax="package nodes.Term_Param\n\nobject Term_Param:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int = 1, y: => Int, z: Int*) = x\n  class C(val a: Int, var b: Int, private val c: Int = 2)\n  inline def g(inline x: Int) = x\n  def h(implicit i: Int) = i"
+    .stats = [Defn.Object "object Term_Param:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int = 1, y: => Int, z: Int*) = x\n  class C(val a: Int, var b: Int, private val c: Int = 2)\n  inline def g(inline x: Int) = x\n  def h(implicit i: Int) = i"]
+    ref Term.Select syntax="nodes.Term_Param"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Param" syntax="Term_Param"
+    body Pkg.Body syntax="object Term_Param:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int = 1, y: => Int, z: Int*) = x\n  class C(val a: Int, var b: Int, private val c: Int = 2)\n  inline def g(inline x: Int) = x\n  def h(implicit i: Int) = i"
+      stats Defn.Object syntax="object Term_Param:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int = 1, y: => Int, z: Int*) = x\n  class C(val a: Int, var b: Int, private val c: Int = 2)\n  inline def g(inline x: Int) = x\n  def h(implicit i: Int) = i"
+        mods Nil
+        name Term.Name value="Term_Param" syntax="Term_Param"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int = 1, y: => Int, z: Int*) = x\n  class C(val a: Int, var b: Int, private val c: Int = 2)\n  inline def g(inline x: Int) = x\n  def h(implicit i: Int) = i"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(x: Int = 1, y: => Int, z: Int*) = x", Defn.Class "class C(val a: Int, var b: Int, private val c: Int = 2)", Defn.Def "inline def g(inline x: Int) = x", Defn.Def "def h(implicit i: Int) = i"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: Int = 1, y: => Int, z: Int*) = x\n  class C(val a: Int, var b: Int, private val c: Int = 2)\n  inline def g(inline x: Int) = x\n  def h(implicit i: Int) = i"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(x: Int = 1, y: => Int, z: Int*) = x"
+              .paramClauses = [Term.ParamClause "(x: Int = 1, y: => Int, z: Int*)"]
+              .paramss = [[Term.Param "x: Int = 1", Term.Param "y: => Int", Term.Param "z: Int*"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: Int = 1, y: => Int, z: Int*)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: Int = 1, y: => Int, z: Int*)"
+                  values Term.Param syntax="x: Int = 1"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default Lit.Int value=1 syntax="1"
+                  values Term.Param syntax="y: => Int"
+                    mods Nil
+                    name Term.Name value="y" syntax="y"
+                    decltpe Type.ByName syntax="=> Int"
+                      tpe Type.Name value="Int" syntax="Int"
+                    default None
+                  values Term.Param syntax="z: Int*"
+                    mods Nil
+                    name Term.Name value="z" syntax="z"
+                    decltpe Type.Repeated syntax="Int*"
+                      tpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Name value="x" syntax="x"
+            stats Defn.Class syntax="class C(val a: Int, var b: Int, private val c: Int = 2)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(val a: Int, var b: Int, private val c: Int = 2)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(val a: Int, var b: Int, private val c: Int = 2)"
+                  values Term.Param syntax="val a: Int"
+                    mods Mod.ValParam syntax="val"
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  values Term.Param syntax="var b: Int"
+                    mods Mod.VarParam syntax="var"
+                    name Term.Name value="b" syntax="b"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  values Term.Param syntax="private val c: Int = 2"
+                    mods Mod.Private syntax="private"
+                      within Name.Anonymous syntax=""
+                        .value = ""
+                    mods Mod.ValParam syntax="val"
+                    name Term.Name value="c" syntax="c"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default Lit.Int value=2 syntax="2"
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Def syntax="inline def g(inline x: Int) = x"
+              .paramClauses = [Term.ParamClause "(inline x: Int)"]
+              .paramss = [[Term.Param "inline x: Int"]]
+              .tparams = []
+              mods Mod.Inline syntax="inline"
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Member.ParamClauseGroup syntax="(inline x: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(inline x: Int)"
+                  values Term.Param syntax="inline x: Int"
+                    mods Mod.Inline syntax="inline"
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Name value="x" syntax="x"
+            stats Defn.Def syntax="def h(implicit i: Int) = i"
+              .paramClauses = [Term.ParamClause "(implicit i: Int)"]
+              .paramss = [[Term.Param "i: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="h" syntax="h"
+              paramClauseGroups Member.ParamClauseGroup syntax="(implicit i: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(implicit i: Int)"
+                  values Term.Param syntax="i: Int"
+                    mods Mod.Implicit syntax="implicit"
+                    name Term.Name value="i" syntax="i"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod Mod.Implicit syntax="implicit"
+              decltpe None
+              body Term.Name value="i" syntax="i"
+          derives Nil

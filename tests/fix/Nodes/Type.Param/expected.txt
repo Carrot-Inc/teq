@@ -1,0 +1,182 @@
+Nodes/Type.Param/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Type.Param, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_Param\n\nobject Type_Param:\n  val marker = 0 // assert: DumpStructure.structure\n  class C[+A, -B, D[_], E <: AnyRef]\n  def f[A, F[_]](a: F[A]) = a\n  type T[X] = List[X]\n"
+  stats Pkg syntax="package nodes.Type_Param\n\nobject Type_Param:\n  val marker = 0 // assert: DumpStructure.structure\n  class C[+A, -B, D[_], E <: AnyRef]\n  def f[A, F[_]](a: F[A]) = a\n  type T[X] = List[X]"
+    .stats = [Defn.Object "object Type_Param:\n  val marker = 0 // assert: DumpStructure.structure\n  class C[+A, -B, D[_], E <: AnyRef]\n  def f[A, F[_]](a: F[A]) = a\n  type T[X] = List[X]"]
+    ref Term.Select syntax="nodes.Type_Param"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_Param" syntax="Type_Param"
+    body Pkg.Body syntax="object Type_Param:\n  val marker = 0 // assert: DumpStructure.structure\n  class C[+A, -B, D[_], E <: AnyRef]\n  def f[A, F[_]](a: F[A]) = a\n  type T[X] = List[X]"
+      stats Defn.Object syntax="object Type_Param:\n  val marker = 0 // assert: DumpStructure.structure\n  class C[+A, -B, D[_], E <: AnyRef]\n  def f[A, F[_]](a: F[A]) = a\n  type T[X] = List[X]"
+        mods Nil
+        name Term.Name value="Type_Param" syntax="Type_Param"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C[+A, -B, D[_], E <: AnyRef]\n  def f[A, F[_]](a: F[A]) = a\n  type T[X] = List[X]"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class C[+A, -B, D[_], E <: AnyRef]", Defn.Def "def f[A, F[_]](a: F[A]) = a", Defn.Type "type T[X] = List[X]"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C[+A, -B, D[_], E <: AnyRef]\n  def f[A, F[_]](a: F[A]) = a\n  type T[X] = List[X]"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class C[+A, -B, D[_], E <: AnyRef]"
+              .tparams = [Type.Param "+A", Type.Param "-B", Type.Param "D[_]", Type.Param "E <: AnyRef"]
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax="[+A, -B, D[_], E <: AnyRef]"
+                values Type.Param syntax="+A"
+                  .tparams = []
+                  mods Mod.Covariant syntax="+"
+                  name Type.Name value="A" syntax="A"
+                  tparamClause Type.ParamClause syntax=""
+                    values Nil
+                  bounds Type.Bounds syntax=""
+                    lo None
+                    hi None
+                    context Nil
+                    view Nil
+                values Type.Param syntax="-B"
+                  .tparams = []
+                  mods Mod.Contravariant syntax="-"
+                  name Type.Name value="B" syntax="B"
+                  tparamClause Type.ParamClause syntax=""
+                    values Nil
+                  bounds Type.Bounds syntax=""
+                    lo None
+                    hi None
+                    context Nil
+                    view Nil
+                values Type.Param syntax="D[_]"
+                  .tparams = [Type.Param "_"]
+                  mods Nil
+                  name Type.Name value="D" syntax="D"
+                  tparamClause Type.ParamClause syntax="[_]"
+                    values Type.Param syntax="_"
+                      .tparams = []
+                      mods Nil
+                      name Name.Placeholder syntax="_"
+                        .value = "_"
+                      tparamClause Type.ParamClause syntax=""
+                        values Nil
+                      bounds Type.Bounds syntax=""
+                        lo None
+                        hi None
+                        context Nil
+                        view Nil
+                  bounds Type.Bounds syntax=""
+                    lo None
+                    hi None
+                    context Nil
+                    view Nil
+                values Type.Param syntax="E <: AnyRef"
+                  .tparams = []
+                  mods Nil
+                  name Type.Name value="E" syntax="E"
+                  tparamClause Type.ParamClause syntax=""
+                    values Nil
+                  bounds Type.Bounds syntax="<: AnyRef"
+                    lo None
+                    hi Type.Name value="AnyRef" syntax="AnyRef"
+                    context Nil
+                    view Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Def syntax="def f[A, F[_]](a: F[A]) = a"
+              .paramClauses = [Term.ParamClause "(a: F[A])"]
+              .paramss = [[Term.Param "a: F[A]"]]
+              .tparams = [Type.Param "A", Type.Param "F[_]"]
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="[A, F[_]](a: F[A])"
+                tparamClause Type.ParamClause syntax="[A, F[_]]"
+                  values Type.Param syntax="A"
+                    .tparams = []
+                    mods Nil
+                    name Type.Name value="A" syntax="A"
+                    tparamClause Type.ParamClause syntax=""
+                      values Nil
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                  values Type.Param syntax="F[_]"
+                    .tparams = [Type.Param "_"]
+                    mods Nil
+                    name Type.Name value="F" syntax="F"
+                    tparamClause Type.ParamClause syntax="[_]"
+                      values Type.Param syntax="_"
+                        .tparams = []
+                        mods Nil
+                        name Name.Placeholder syntax="_"
+                          .value = "_"
+                        tparamClause Type.ParamClause syntax=""
+                          values Nil
+                        bounds Type.Bounds syntax=""
+                          lo None
+                          hi None
+                          context Nil
+                          view Nil
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                paramClauses Term.ParamClause syntax="(a: F[A])"
+                  values Term.Param syntax="a: F[A]"
+                    mods Nil
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Apply syntax="F[A]"
+                      .args = [Type.Name "A"]
+                      tpe Type.Name value="F" syntax="F"
+                      argClause Type.ArgClause syntax="[A]"
+                        values Type.Name value="A" syntax="A"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Name value="a" syntax="a"
+            stats Defn.Type syntax="type T[X] = List[X]"
+              .tparams = [Type.Param "X"]
+              mods Nil
+              name Type.Name value="T" syntax="T"
+              tparamClause Type.ParamClause syntax="[X]"
+                values Type.Param syntax="X"
+                  .tparams = []
+                  mods Nil
+                  name Type.Name value="X" syntax="X"
+                  tparamClause Type.ParamClause syntax=""
+                    values Nil
+                  bounds Type.Bounds syntax=""
+                    lo None
+                    hi None
+                    context Nil
+                    view Nil
+              body Type.Apply syntax="List[X]"
+                .args = [Type.Name "X"]
+                tpe Type.Name value="List" syntax="List"
+                argClause Type.ArgClause syntax="[X]"
+                  values Type.Name value="X" syntax="X"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

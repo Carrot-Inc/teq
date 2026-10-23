@@ -1,0 +1,68 @@
+Nodes/Defn.ExtensionGroup.Single/input.scala:12:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's SingleExtension probe, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Defn_ExtensionGroup_Single\n\nobject Subject:\n  extension (x: Int)\n    def twice: Int = x + x\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Defn_ExtensionGroup_Single\n\nobject Subject:\n  extension (x: Int)\n    def twice: Int = x + x\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Object "object Subject:\n  extension (x: Int)\n    def twice: Int = x + x", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Defn_ExtensionGroup_Single"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Defn_ExtensionGroup_Single" syntax="Defn_ExtensionGroup_Single"
+    body Pkg.Body syntax="object Subject:\n  extension (x: Int)\n    def twice: Int = x + x\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Object syntax="object Subject:\n  extension (x: Int)\n    def twice: Int = x + x"
+        mods Nil
+        name Term.Name value="Subject" syntax="Subject"
+        templ Template syntax=":\n  extension (x: Int)\n    def twice: Int = x + x"
+          .self = Self ""
+          .stats = [Defn.ExtensionGroup "extension (x: Int)\n    def twice: Int = x + x"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  extension (x: Int)\n    def twice: Int = x + x"
+            selfOpt None
+            stats Defn.ExtensionGroup syntax="extension (x: Int)\n    def twice: Int = x + x"
+              paramClauseGroup Member.ParamClauseGroup syntax="(x: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              body Defn.Def syntax="def twice: Int = x + x"
+                .paramClauses = []
+                .paramss = []
+                .tparams = []
+                mods Nil
+                name Term.Name value="twice" syntax="twice"
+                paramClauseGroups Nil
+                decltpe Type.Name value="Int" syntax="Int"
+                body Term.ApplyInfix syntax="x + x"
+                  .args = [Term.Name "x"]
+                  .targs = []
+                  lhs Term.Name value="x" syntax="x"
+                  op Term.Name value="+" syntax="+"
+                  targClause Type.ArgClause syntax=""
+                    values Nil
+                  argClause Term.ArgClause syntax="x"
+                    values Term.Name value="x" syntax="x"
+                    mod None
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

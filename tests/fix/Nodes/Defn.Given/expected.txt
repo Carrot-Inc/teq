@@ -1,0 +1,222 @@
+Nodes/Defn.Given/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Defn.Given, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Defn_Given\n\nobject Defn_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  trait Show[A]:\n    def show(a: A): String\n  given Show[Int] with\n    def show(a: Int) = a.toString\n  given named: Show[String] with\n    def show(a: String) = a\n  given [A]: Show[List[A]] with\n    def show(a: List[A]) = \"\"\n"
+  stats Pkg syntax="package nodes.Defn_Given\n\nobject Defn_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  trait Show[A]:\n    def show(a: A): String\n  given Show[Int] with\n    def show(a: Int) = a.toString\n  given named: Show[String] with\n    def show(a: String) = a\n  given [A]: Show[List[A]] with\n    def show(a: List[A]) = \"\""
+    .stats = [Defn.Object "object Defn_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  trait Show[A]:\n    def show(a: A): String\n  given Show[Int] with\n    def show(a: Int) = a.toString\n  given named: Show[String] with\n    def show(a: String) = a\n  given [A]: Show[List[A]] with\n    def show(a: List[A]) = \"\""]
+    ref Term.Select syntax="nodes.Defn_Given"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Defn_Given" syntax="Defn_Given"
+    body Pkg.Body syntax="object Defn_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  trait Show[A]:\n    def show(a: A): String\n  given Show[Int] with\n    def show(a: Int) = a.toString\n  given named: Show[String] with\n    def show(a: String) = a\n  given [A]: Show[List[A]] with\n    def show(a: List[A]) = \"\""
+      stats Defn.Object syntax="object Defn_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  trait Show[A]:\n    def show(a: A): String\n  given Show[Int] with\n    def show(a: Int) = a.toString\n  given named: Show[String] with\n    def show(a: String) = a\n  given [A]: Show[List[A]] with\n    def show(a: List[A]) = \"\""
+        mods Nil
+        name Term.Name value="Defn_Given" syntax="Defn_Given"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  trait Show[A]:\n    def show(a: A): String\n  given Show[Int] with\n    def show(a: Int) = a.toString\n  given named: Show[String] with\n    def show(a: String) = a\n  given [A]: Show[List[A]] with\n    def show(a: List[A]) = \"\""
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Trait "trait Show[A]:\n    def show(a: A): String", Defn.Given "given Show[Int] with\n    def show(a: Int) = a.toString", Defn.Given "given named: Show[String] with\n    def show(a: String) = a", Defn.Given "given [A]: Show[List[A]] with\n    def show(a: List[A]) = \"\""]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  trait Show[A]:\n    def show(a: A): String\n  given Show[Int] with\n    def show(a: Int) = a.toString\n  given named: Show[String] with\n    def show(a: String) = a\n  given [A]: Show[List[A]] with\n    def show(a: List[A]) = \"\""
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Trait syntax="trait Show[A]:\n    def show(a: A): String"
+              .tparams = [Type.Param "A"]
+              mods Nil
+              name Type.Name value="Show" syntax="Show"
+              tparamClause Type.ParamClause syntax="[A]"
+                values Type.Param syntax="A"
+                  .tparams = []
+                  mods Nil
+                  name Type.Name value="A" syntax="A"
+                  tparamClause Type.ParamClause syntax=""
+                    values Nil
+                  bounds Type.Bounds syntax=""
+                    lo None
+                    hi None
+                    context Nil
+                    view Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    def show(a: A): String"
+                .self = Self ""
+                .stats = [Decl.Def "def show(a: A): String"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    def show(a: A): String"
+                  selfOpt None
+                  stats Decl.Def syntax="def show(a: A): String"
+                    .paramClauses = [Term.ParamClause "(a: A)"]
+                    .paramss = [[Term.Param "a: A"]]
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="show" syntax="show"
+                    paramClauseGroups Member.ParamClauseGroup syntax="(a: A)"
+                      tparamClause Type.ParamClause syntax=""
+                        values Nil
+                      paramClauses Term.ParamClause syntax="(a: A)"
+                        values Term.Param syntax="a: A"
+                          mods Nil
+                          name Term.Name value="a" syntax="a"
+                          decltpe Type.Name value="A" syntax="A"
+                          default None
+                        mod None
+                    decltpe Type.Name value="String" syntax="String"
+                derives Nil
+            stats Defn.Given syntax="given Show[Int] with\n    def show(a: Int) = a.toString"
+              .paramClauses = []
+              .tparams = []
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              templ Template syntax="Show[Int] with\n    def show(a: Int) = a.toString"
+                .self = Self ""
+                .stats = [Defn.Def "def show(a: Int) = a.toString"]
+                earlyClause None
+                inits Init syntax="Show[Int]"
+                  .argss = []
+                  tpe Type.Apply syntax="Show[Int]"
+                    .args = [Type.Name "Int"]
+                    tpe Type.Name value="Show" syntax="Show"
+                    argClause Type.ArgClause syntax="[Int]"
+                      values Type.Name value="Int" syntax="Int"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax="def show(a: Int) = a.toString"
+                  selfOpt None
+                  stats Defn.Def syntax="def show(a: Int) = a.toString"
+                    .paramClauses = [Term.ParamClause "(a: Int)"]
+                    .paramss = [[Term.Param "a: Int"]]
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="show" syntax="show"
+                    paramClauseGroups Member.ParamClauseGroup syntax="(a: Int)"
+                      tparamClause Type.ParamClause syntax=""
+                        values Nil
+                      paramClauses Term.ParamClause syntax="(a: Int)"
+                        values Term.Param syntax="a: Int"
+                          mods Nil
+                          name Term.Name value="a" syntax="a"
+                          decltpe Type.Name value="Int" syntax="Int"
+                          default None
+                        mod None
+                    decltpe None
+                    body Term.Select syntax="a.toString"
+                      qual Term.Name value="a" syntax="a"
+                      name Term.Name value="toString" syntax="toString"
+                derives Nil
+            stats Defn.Given syntax="given named: Show[String] with\n    def show(a: String) = a"
+              .paramClauses = []
+              .tparams = []
+              mods Nil
+              name Term.Name value="named" syntax="named"
+              paramClauseGroups Nil
+              templ Template syntax="Show[String] with\n    def show(a: String) = a"
+                .self = Self ""
+                .stats = [Defn.Def "def show(a: String) = a"]
+                earlyClause None
+                inits Init syntax="Show[String]"
+                  .argss = []
+                  tpe Type.Apply syntax="Show[String]"
+                    .args = [Type.Name "String"]
+                    tpe Type.Name value="Show" syntax="Show"
+                    argClause Type.ArgClause syntax="[String]"
+                      values Type.Name value="String" syntax="String"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax="def show(a: String) = a"
+                  selfOpt None
+                  stats Defn.Def syntax="def show(a: String) = a"
+                    .paramClauses = [Term.ParamClause "(a: String)"]
+                    .paramss = [[Term.Param "a: String"]]
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="show" syntax="show"
+                    paramClauseGroups Member.ParamClauseGroup syntax="(a: String)"
+                      tparamClause Type.ParamClause syntax=""
+                        values Nil
+                      paramClauses Term.ParamClause syntax="(a: String)"
+                        values Term.Param syntax="a: String"
+                          mods Nil
+                          name Term.Name value="a" syntax="a"
+                          decltpe Type.Name value="String" syntax="String"
+                          default None
+                        mod None
+                    decltpe None
+                    body Term.Name value="a" syntax="a"
+                derives Nil
+            stats Defn.Given syntax="given [A]: Show[List[A]] with\n    def show(a: List[A]) = \"\""
+              .paramClauses = []
+              .tparams = [Type.Param "A"]
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Member.ParamClauseGroup syntax="[A]"
+                tparamClause Type.ParamClause syntax="[A]"
+                  values Type.Param syntax="A"
+                    .tparams = []
+                    mods Nil
+                    name Type.Name value="A" syntax="A"
+                    tparamClause Type.ParamClause syntax=""
+                      values Nil
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                paramClauses Nil
+              templ Template syntax="Show[List[A]] with\n    def show(a: List[A]) = \"\""
+                .self = Self ""
+                .stats = [Defn.Def "def show(a: List[A]) = \"\""]
+                earlyClause None
+                inits Init syntax="Show[List[A]]"
+                  .argss = []
+                  tpe Type.Apply syntax="Show[List[A]]"
+                    .args = [Type.Apply "List[A]"]
+                    tpe Type.Name value="Show" syntax="Show"
+                    argClause Type.ArgClause syntax="[List[A]]"
+                      values Type.Apply syntax="List[A]"
+                        .args = [Type.Name "A"]
+                        tpe Type.Name value="List" syntax="List"
+                        argClause Type.ArgClause syntax="[A]"
+                          values Type.Name value="A" syntax="A"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax="def show(a: List[A]) = \"\""
+                  selfOpt None
+                  stats Defn.Def syntax="def show(a: List[A]) = \"\""
+                    .paramClauses = [Term.ParamClause "(a: List[A])"]
+                    .paramss = [[Term.Param "a: List[A]"]]
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="show" syntax="show"
+                    paramClauseGroups Member.ParamClauseGroup syntax="(a: List[A])"
+                      tparamClause Type.ParamClause syntax=""
+                        values Nil
+                      paramClauses Term.ParamClause syntax="(a: List[A])"
+                        values Term.Param syntax="a: List[A]"
+                          mods Nil
+                          name Term.Name value="a" syntax="a"
+                          decltpe Type.Apply syntax="List[A]"
+                            .args = [Type.Name "A"]
+                            tpe Type.Name value="List" syntax="List"
+                            argClause Type.ArgClause syntax="[A]"
+                              values Type.Name value="A" syntax="A"
+                          default None
+                        mod None
+                    decltpe None
+                    body Lit.String value="" syntax="\"\""
+                derives Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

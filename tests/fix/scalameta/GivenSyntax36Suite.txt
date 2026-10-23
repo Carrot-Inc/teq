@@ -1,0 +1,2686 @@
+# The programs of scalameta 4.17.4's GivenSyntax36Suite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 443 line 11 Stat dialects.Scala3 :: named-bounds
+object W443 {
+def reduce[A: Monoid as mm](xs: A): A = ???
+
+}
+#!scalac ok
+#!regions F57/
+#!layout
+Source 0 61
+  Defn.Object 0 60
+    Term.Name 7 11
+    Template 12 60
+      Template.Body 12 60
+        Defn.Def 14 57
+          Term.Name 18 24
+          Member.ParamClauseGroup 24 48
+            Type.ParamClause 24 41
+              Type.Param 25 40
+                Type.Name 25 26
+                Type.ParamClause 26 26
+                Type.Bounds 26 40
+                  Type.BoundsAlias 28 40
+                    Type.Name 38 40
+                    Type.Name 28 34
+            Term.ParamClause 41 48
+              Term.Param 42 47
+                Term.Name 42 44
+                Type.Name 46 47
+          Type.Name 50 51
+          Term.Name 54 57
+#!program 444 line 39 Stat dialects.Scala3 :: agregate-bounds
+object W444 {
+trait A { def showMax[X: {Ordering, Show}](x: X, y: X): String }
+}
+#!scalac ok
+#!regions L78/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Defn.Trait 14 78
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Ctor.Primary 22 22
+            Name.Anonymous 22 22
+          Template 22 78
+            Template.Body 22 78
+              Decl.Def 24 76
+                Term.Name 28 35
+                Member.ParamClauseGroup 35 68
+                  Type.ParamClause 35 56
+                    Type.Param 36 55
+                      Type.Name 36 37
+                      Type.ParamClause 37 37
+                      Type.Bounds 37 55
+                        Type.Name 40 48
+                        Type.Name 50 54
+                  Term.ParamClause 56 68
+                    Term.Param 57 61
+                      Term.Name 57 58
+                      Type.Name 60 61
+                    Term.Param 63 67
+                      Term.Name 63 64
+                      Type.Name 66 67
+                Type.Name 70 76
+#!program 445 line 60 Stat dialects.Scala3 :: agregate-bounds-named
+object W445 {
+trait A { def showMax[X: {Ordering as ordering, Show as show}](x: X, y: X): String }
+}
+#!scalac ok
+#!regions L98/
+#!layout
+Source 0 101
+  Defn.Object 0 100
+    Term.Name 7 11
+    Template 12 100
+      Template.Body 12 100
+        Defn.Trait 14 98
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Ctor.Primary 22 22
+            Name.Anonymous 22 22
+          Template 22 98
+            Template.Body 22 98
+              Decl.Def 24 96
+                Term.Name 28 35
+                Member.ParamClauseGroup 35 88
+                  Type.ParamClause 35 76
+                    Type.Param 36 75
+                      Type.Name 36 37
+                      Type.ParamClause 37 37
+                      Type.Bounds 37 75
+                        Type.BoundsAlias 40 60
+                          Type.Name 52 60
+                          Type.Name 40 48
+                        Type.BoundsAlias 62 74
+                          Type.Name 70 74
+                          Type.Name 62 66
+                  Term.ParamClause 76 88
+                    Term.Param 77 81
+                      Term.Name 77 78
+                      Type.Name 80 81
+                    Term.Param 83 87
+                      Term.Name 83 84
+                      Type.Name 86 87
+                Type.Name 90 96
+#!program 446 line 64 Stat dialects.Scala3 :: deferred
+object W446 {
+trait Sorted:
+  type Element
+  given Ord[Element] = compiletime.deferred
+
+}
+#!scalac ok
+#!regions I27/2 L42/2 O87/
+#!layout
+Source 0 90
+  Defn.Object 0 89
+    Term.Name 7 11
+    Template 12 89
+      Template.Body 12 89
+        Defn.Trait 14 86
+          Type.Name 20 26
+          Type.ParamClause 26 26
+          Ctor.Primary 26 26
+            Name.Anonymous 26 26
+          Template 26 86
+            Template.Body 26 86
+              Decl.Type 30 42
+                Type.Name 35 42
+                Type.ParamClause 42 42
+                Type.Bounds 42 42
+              Defn.GivenAlias 45 86
+                Name.Anonymous 51 51
+                Type.Apply 51 63
+                  Type.Name 51 54
+                  Type.ArgClause 54 63
+                    Type.Name 55 62
+                Term.Select 66 86
+                  Term.Name 66 77
+                  Term.Name 78 86
+#!program 447 line 89 Stat dialects.Scala3 :: poly-function
+object W447 {
+type Comparer = [X: Ord] => (x: X, y: X) => Boolean
+
+}
+#!scalac ok
+#!regions F65/
+#!layout
+Source 0 69
+  Defn.Object 0 68
+    Term.Name 7 11
+    Template 12 68
+      Template.Body 12 68
+        Defn.Type 14 65
+          Type.Name 19 27
+          Type.ParamClause 28 28
+          Type.PolyFunction 30 65
+            Type.ParamClause 30 38
+              Type.Param 31 37
+                Type.Name 31 32
+                Type.ParamClause 32 32
+                Type.Bounds 32 37
+                  Type.Name 34 37
+            Type.Function 42 65
+              Type.FuncParamClause 42 54
+                Type.TypedParam 43 47
+                  Type.Name 43 44
+                  Type.Name 46 47
+                Type.TypedParam 49 53
+                  Type.Name 49 50
+                  Type.Name 52 53
+              Type.Name 58 65
+          Type.Bounds 28 28
+#!program 448 line 104 Stat dialects.Scala3 :: poly-function-val
+object W448 {
+val less: Comparer = [X: Ord as ord] => (x: X, y: X) =>
+  ord.compare(x, y) < 0
+
+}
+#!scalac ok
+#!regions I69/2 O94/
+#!layout
+Source 0 97
+  Defn.Object 0 96
+    Term.Name 7 11
+    Template 12 96
+      Template.Body 12 96
+        Defn.Val 14 93
+          Pat.Var 18 22
+            Term.Name 18 22
+          Type.Name 24 32
+          Term.PolyFunction 35 93
+            Type.ParamClause 35 50
+              Type.Param 36 49
+                Type.Name 36 37
+                Type.ParamClause 37 37
+                Type.Bounds 37 49
+                  Type.BoundsAlias 39 49
+                    Type.Name 46 49
+                    Type.Name 39 42
+            Term.Function 54 93
+              Term.ParamClause 54 66
+                Term.Param 55 59
+                  Term.Name 55 56
+                  Type.Name 58 59
+                Term.Param 61 65
+                  Term.Name 61 62
+                  Type.Name 64 65
+              Term.ApplyInfix 72 93
+                Term.Apply 72 89
+                  Term.Select 72 83
+                    Term.Name 72 75
+                    Term.Name 76 83
+                  Term.ArgClause 83 89
+                    Term.Name 84 85
+                    Term.Name 87 88
+                Term.Name 90 91
+                Type.ArgClause 92 92
+                Term.ArgClause 92 93
+                  Lit.Int 92 93
+#!program 449 line 127 Stat dialects.Scala3 :: given
+object W449 {
+given Ord[Int] with
+   def compare(x: Int, y: Int) = ???
+
+}
+#!scalac ok
+#!regions I33/3 O71/
+#!layout
+Source 0 74
+  Defn.Object 0 73
+    Term.Name 7 11
+    Template 12 73
+      Template.Body 12 73
+        Defn.Given 14 70
+          Name.Anonymous 20 20
+          Template 20 70
+            Init 20 28
+              Type.Apply 20 28
+                Type.Name 20 23
+                Type.ArgClause 23 28
+                  Type.Name 24 27
+              Name.Anonymous 29 29
+            Template.Body 37 70
+              Defn.Def 37 70
+                Term.Name 41 48
+                Member.ParamClauseGroup 48 64
+                  Type.ParamClause 48 48
+                  Term.ParamClause 48 64
+                    Term.Param 49 55
+                      Term.Name 49 50
+                      Type.Name 52 55
+                    Term.Param 57 63
+                      Term.Name 57 58
+                      Type.Name 60 63
+                Term.Name 67 70
+#!program 450 line 148 Stat dialects.Scala3 :: given-context
+object W450 {
+given [A: Ord]: Ord[List[A]] with
+  def compare(x: List[A], y: List[A]) = ???
+
+}
+#!scalac ok
+#!regions I47/2 O92/
+#!layout
+Source 0 95
+  Defn.Object 0 94
+    Term.Name 7 11
+    Template 12 94
+      Template.Body 12 94
+        Defn.Given 14 91
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 28
+            Type.ParamClause 20 28
+              Type.Param 21 27
+                Type.Name 21 22
+                Type.ParamClause 22 22
+                Type.Bounds 22 27
+                  Type.Name 24 27
+          Template 30 91
+            Init 30 42
+              Type.Apply 30 42
+                Type.Name 30 33
+                Type.ArgClause 33 42
+                  Type.Apply 34 41
+                    Type.Name 34 38
+                    Type.ArgClause 38 41
+                      Type.Name 39 40
+              Name.Anonymous 43 43
+            Template.Body 50 91
+              Defn.Def 50 91
+                Term.Name 54 61
+                Member.ParamClauseGroup 61 85
+                  Type.ParamClause 61 61
+                  Term.ParamClause 61 85
+                    Term.Param 62 72
+                      Term.Name 62 63
+                      Type.Apply 65 72
+                        Type.Name 65 69
+                        Type.ArgClause 69 72
+                          Type.Name 70 71
+                    Term.Param 74 84
+                      Term.Name 74 75
+                      Type.Apply 77 84
+                        Type.Name 77 81
+                        Type.ArgClause 81 84
+                          Type.Name 82 83
+                Term.Name 88 91
+#!program 451 line 158 Stat dialects.Scala3 :: given-context-using
+object W451 {
+given [A](using Ord[A]): Ord[List[A]] with
+  def compare(x: List[A], y: List[A]) = ???
+
+}
+#!scalac ok
+#!regions I56/2 O101/
+#!layout
+Source 0 104
+  Defn.Object 0 103
+    Term.Name 7 11
+    Template 12 103
+      Template.Body 12 103
+        Defn.Given 14 100
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 37
+            Type.ParamClause 20 23
+              Type.Param 21 22
+                Type.Name 21 22
+                Type.ParamClause 22 22
+                Type.Bounds 22 22
+            Term.ParamClause 23 37
+              Term.Param 30 36
+                Mod.Using 24 29
+                Name.Anonymous 30 30
+                Type.Apply 30 36
+                  Type.Name 30 33
+                  Type.ArgClause 33 36
+                    Type.Name 34 35
+              Mod.Using 24 29
+          Template 39 100
+            Init 39 51
+              Type.Apply 39 51
+                Type.Name 39 42
+                Type.ArgClause 42 51
+                  Type.Apply 43 50
+                    Type.Name 43 47
+                    Type.ArgClause 47 50
+                      Type.Name 48 49
+              Name.Anonymous 52 52
+            Template.Body 59 100
+              Defn.Def 59 100
+                Term.Name 63 70
+                Member.ParamClauseGroup 70 94
+                  Type.ParamClause 70 70
+                  Term.ParamClause 70 94
+                    Term.Param 71 81
+                      Term.Name 71 72
+                      Type.Apply 74 81
+                        Type.Name 74 78
+                        Type.ArgClause 78 81
+                          Type.Name 79 80
+                    Term.Param 83 93
+                      Term.Name 83 84
+                      Type.Apply 86 93
+                        Type.Name 86 90
+                        Type.ArgClause 90 93
+                          Type.Name 91 92
+                Term.Name 97 100
+#!program 452 line 175 Stat dialects.Scala3 :: given-context-using-named
+object W452 {
+given [A](using ord: Ord[A]): Ord[List[A]] with
+  def compare(x: List[A], y: List[A]) = ???
+
+}
+#!scalac ok
+#!regions I61/2 O106/
+#!layout
+Source 0 109
+  Defn.Object 0 108
+    Term.Name 7 11
+    Template 12 108
+      Template.Body 12 108
+        Defn.Given 14 105
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 42
+            Type.ParamClause 20 23
+              Type.Param 21 22
+                Type.Name 21 22
+                Type.ParamClause 22 22
+                Type.Bounds 22 22
+            Term.ParamClause 23 42
+              Term.Param 30 41
+                Mod.Using 24 29
+                Term.Name 30 33
+                Type.Apply 35 41
+                  Type.Name 35 38
+                  Type.ArgClause 38 41
+                    Type.Name 39 40
+              Mod.Using 24 29
+          Template 44 105
+            Init 44 56
+              Type.Apply 44 56
+                Type.Name 44 47
+                Type.ArgClause 47 56
+                  Type.Apply 48 55
+                    Type.Name 48 52
+                    Type.ArgClause 52 55
+                      Type.Name 53 54
+              Name.Anonymous 57 57
+            Template.Body 64 105
+              Defn.Def 64 105
+                Term.Name 68 75
+                Member.ParamClauseGroup 75 99
+                  Type.ParamClause 75 75
+                  Term.ParamClause 75 99
+                    Term.Param 76 86
+                      Term.Name 76 77
+                      Type.Apply 79 86
+                        Type.Name 79 83
+                        Type.ArgClause 83 86
+                          Type.Name 84 85
+                    Term.Param 88 98
+                      Term.Name 88 89
+                      Type.Apply 91 98
+                        Type.Name 91 95
+                        Type.ArgClause 95 98
+                          Type.Name 96 97
+                Term.Name 102 105
+#!program 453 line 189 Stat dialects.Scala3 :: given-simple-alias
+object W453 {
+given Ord[Int] = IntOrd()
+}
+#!scalac ok
+#!regions L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Defn.GivenAlias 14 39
+          Name.Anonymous 20 20
+          Type.Apply 20 28
+            Type.Name 20 23
+            Type.ArgClause 23 28
+              Type.Name 24 27
+          Term.Apply 31 39
+            Term.Name 31 37
+            Term.ArgClause 37 39
+#!program 454 line 194 Stat dialects.Scala3 :: given-alias-context-bound
+object W454 {
+given [A: Ord]: Ord[List[A]] = ListOrd[A]
+}
+#!scalac ok
+#!regions L55/
+#!layout
+Source 0 58
+  Defn.Object 0 57
+    Term.Name 7 11
+    Template 12 57
+      Template.Body 12 57
+        Defn.GivenAlias 14 55
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 28
+            Type.ParamClause 20 28
+              Type.Param 21 27
+                Type.Name 21 22
+                Type.ParamClause 22 22
+                Type.Bounds 22 27
+                  Type.Name 24 27
+          Type.Apply 30 42
+            Type.Name 30 33
+            Type.ArgClause 33 42
+              Type.Apply 34 41
+                Type.Name 34 38
+                Type.ArgClause 38 41
+                  Type.Name 39 40
+          Term.ApplyType 45 55
+            Term.Name 45 52
+            Type.ArgClause 52 55
+              Type.Name 53 54
+#!program 455 line 205 Stat dialects.Scala3 :: given-alias-context-param
+object W455 {
+given [A](using Ord[A]): Ord[List[A]] = ListOrd[A]
+}
+#!scalac ok
+#!regions L64/
+#!layout
+Source 0 67
+  Defn.Object 0 66
+    Term.Name 7 11
+    Template 12 66
+      Template.Body 12 66
+        Defn.GivenAlias 14 64
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 37
+            Type.ParamClause 20 23
+              Type.Param 21 22
+                Type.Name 21 22
+                Type.ParamClause 22 22
+                Type.Bounds 22 22
+            Term.ParamClause 23 37
+              Term.Param 30 36
+                Mod.Using 24 29
+                Name.Anonymous 30 30
+                Type.Apply 30 36
+                  Type.Name 30 33
+                  Type.ArgClause 33 36
+                    Type.Name 34 35
+              Mod.Using 24 29
+          Type.Apply 39 51
+            Type.Name 39 42
+            Type.ArgClause 42 51
+              Type.Apply 43 50
+                Type.Name 43 47
+                Type.ArgClause 47 50
+                  Type.Name 48 49
+          Term.ApplyType 54 64
+            Term.Name 54 61
+            Type.ArgClause 61 64
+              Type.Name 62 63
+#!program 456 line 215 Stat dialects.Scala3 :: given-by-name
+object W456 {
+given [DummySoItsByName]: Context = curCtx
+}
+#!scalac ok
+#!regions L56/
+#!layout
+Source 0 59
+  Defn.Object 0 58
+    Term.Name 7 11
+    Template 12 58
+      Template.Body 12 58
+        Defn.GivenAlias 14 56
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 38
+            Type.ParamClause 20 38
+              Type.Param 21 37
+                Type.Name 21 37
+                Type.ParamClause 37 37
+                Type.Bounds 37 37
+          Type.Name 40 47
+          Term.Name 50 56
+#!program 457 line 220 Stat dialects.Scala3 :: given-named
+object W457 {
+given intOrd: Ord[Int] with
+   def compare(x: Int, y: Int) = ???
+
+}
+#!scalac ok
+#!regions I41/3 O79/
+#!layout
+Source 0 82
+  Defn.Object 0 81
+    Term.Name 7 11
+    Template 12 81
+      Template.Body 12 81
+        Defn.Given 14 78
+          Term.Name 20 26
+          Template 28 78
+            Init 28 36
+              Type.Apply 28 36
+                Type.Name 28 31
+                Type.ArgClause 31 36
+                  Type.Name 32 35
+              Name.Anonymous 37 37
+            Template.Body 45 78
+              Defn.Def 45 78
+                Term.Name 49 56
+                Member.ParamClauseGroup 56 72
+                  Type.ParamClause 56 56
+                  Term.ParamClause 56 72
+                    Term.Param 57 63
+                      Term.Name 57 58
+                      Type.Name 60 63
+                    Term.Param 65 71
+                      Term.Name 65 66
+                      Type.Name 68 71
+                Term.Name 75 78
+#!program 458 line 229 Stat dialects.Scala3 :: given-context-named
+object W458 {
+given listOrd[A: Ord]: Ord[List[A]] with
+  def compare(x: List[A], y: List[A]) = ???
+
+}
+#!scalac ok
+#!regions I54/2 O99/
+#!layout
+Source 0 102
+  Defn.Object 0 101
+    Term.Name 7 11
+    Template 12 101
+      Template.Body 12 101
+        Defn.Given 14 98
+          Term.Name 20 27
+          Member.ParamClauseGroup 27 35
+            Type.ParamClause 27 35
+              Type.Param 28 34
+                Type.Name 28 29
+                Type.ParamClause 29 29
+                Type.Bounds 29 34
+                  Type.Name 31 34
+          Template 37 98
+            Init 37 49
+              Type.Apply 37 49
+                Type.Name 37 40
+                Type.ArgClause 40 49
+                  Type.Apply 41 48
+                    Type.Name 41 45
+                    Type.ArgClause 45 48
+                      Type.Name 46 47
+              Name.Anonymous 50 50
+            Template.Body 57 98
+              Defn.Def 57 98
+                Term.Name 61 68
+                Member.ParamClauseGroup 68 92
+                  Type.ParamClause 68 68
+                  Term.ParamClause 68 92
+                    Term.Param 69 79
+                      Term.Name 69 70
+                      Type.Apply 72 79
+                        Type.Name 72 76
+                        Type.ArgClause 76 79
+                          Type.Name 77 78
+                    Term.Param 81 91
+                      Term.Name 81 82
+                      Type.Apply 84 91
+                        Type.Name 84 88
+                        Type.ArgClause 88 91
+                          Type.Name 89 90
+                Term.Name 95 98
+#!program 459 line 240 Stat dialects.Scala3 :: given-context-using
+object W459 {
+given listOrd[A](using Ord[A]): Ord[List[A]] with
+  def compare(x: List[A], y: List[A]) = ???
+
+}
+#!scalac ok
+#!regions I63/2 O108/
+#!layout
+Source 0 111
+  Defn.Object 0 110
+    Term.Name 7 11
+    Template 12 110
+      Template.Body 12 110
+        Defn.Given 14 107
+          Term.Name 20 27
+          Member.ParamClauseGroup 27 44
+            Type.ParamClause 27 30
+              Type.Param 28 29
+                Type.Name 28 29
+                Type.ParamClause 29 29
+                Type.Bounds 29 29
+            Term.ParamClause 30 44
+              Term.Param 37 43
+                Mod.Using 31 36
+                Name.Anonymous 37 37
+                Type.Apply 37 43
+                  Type.Name 37 40
+                  Type.ArgClause 40 43
+                    Type.Name 41 42
+              Mod.Using 31 36
+          Template 46 107
+            Init 46 58
+              Type.Apply 46 58
+                Type.Name 46 49
+                Type.ArgClause 49 58
+                  Type.Apply 50 57
+                    Type.Name 50 54
+                    Type.ArgClause 54 57
+                      Type.Name 55 56
+              Name.Anonymous 59 59
+            Template.Body 66 107
+              Defn.Def 66 107
+                Term.Name 70 77
+                Member.ParamClauseGroup 77 101
+                  Type.ParamClause 77 77
+                  Term.ParamClause 77 101
+                    Term.Param 78 88
+                      Term.Name 78 79
+                      Type.Apply 81 88
+                        Type.Name 81 85
+                        Type.ArgClause 85 88
+                          Type.Name 86 87
+                    Term.Param 90 100
+                      Term.Name 90 91
+                      Type.Apply 93 100
+                        Type.Name 93 97
+                        Type.ArgClause 97 100
+                          Type.Name 98 99
+                Term.Name 104 107
+#!program 460 line 256 Stat dialects.Scala3 :: given-context-using-named
+object W460 {
+given listOrd[A](using ord: Ord[A]): Ord[List[A]] with
+  def compare(x: List[A], y: List[A]) = ???
+
+}
+#!scalac ok
+#!regions I68/2 O113/
+#!layout
+Source 0 116
+  Defn.Object 0 115
+    Term.Name 7 11
+    Template 12 115
+      Template.Body 12 115
+        Defn.Given 14 112
+          Term.Name 20 27
+          Member.ParamClauseGroup 27 49
+            Type.ParamClause 27 30
+              Type.Param 28 29
+                Type.Name 28 29
+                Type.ParamClause 29 29
+                Type.Bounds 29 29
+            Term.ParamClause 30 49
+              Term.Param 37 48
+                Mod.Using 31 36
+                Term.Name 37 40
+                Type.Apply 42 48
+                  Type.Name 42 45
+                  Type.ArgClause 45 48
+                    Type.Name 46 47
+              Mod.Using 31 36
+          Template 51 112
+            Init 51 63
+              Type.Apply 51 63
+                Type.Name 51 54
+                Type.ArgClause 54 63
+                  Type.Apply 55 62
+                    Type.Name 55 59
+                    Type.ArgClause 59 62
+                      Type.Name 60 61
+              Name.Anonymous 64 64
+            Template.Body 71 112
+              Defn.Def 71 112
+                Term.Name 75 82
+                Member.ParamClauseGroup 82 106
+                  Type.ParamClause 82 82
+                  Term.ParamClause 82 106
+                    Term.Param 83 93
+                      Term.Name 83 84
+                      Type.Apply 86 93
+                        Type.Name 86 90
+                        Type.ArgClause 90 93
+                          Type.Name 91 92
+                    Term.Param 95 105
+                      Term.Name 95 96
+                      Type.Apply 98 105
+                        Type.Name 98 102
+                        Type.ArgClause 102 105
+                          Type.Name 103 104
+                Term.Name 109 112
+#!program 461 line 271 Stat dialects.Scala3 :: given-simple-alias-named
+object W461 {
+given intOrd: Ord[Int] = IntOrd()
+}
+#!scalac ok
+#!regions L47/
+#!layout
+Source 0 50
+  Defn.Object 0 49
+    Term.Name 7 11
+    Template 12 49
+      Template.Body 12 49
+        Defn.GivenAlias 14 47
+          Term.Name 20 26
+          Type.Apply 28 36
+            Type.Name 28 31
+            Type.ArgClause 31 36
+              Type.Name 32 35
+          Term.Apply 39 47
+            Term.Name 39 45
+            Term.ArgClause 45 47
+#!program 462 line 276 Stat dialects.Scala3 :: given-alias-context-bound-named
+object W462 {
+given listOrd[A: Ord]: Ord[List[A]] = ListOrd[A]
+}
+#!scalac ok
+#!regions L62/
+#!layout
+Source 0 65
+  Defn.Object 0 64
+    Term.Name 7 11
+    Template 12 64
+      Template.Body 12 64
+        Defn.GivenAlias 14 62
+          Term.Name 20 27
+          Member.ParamClauseGroup 27 35
+            Type.ParamClause 27 35
+              Type.Param 28 34
+                Type.Name 28 29
+                Type.ParamClause 29 29
+                Type.Bounds 29 34
+                  Type.Name 31 34
+          Type.Apply 37 49
+            Type.Name 37 40
+            Type.ArgClause 40 49
+              Type.Apply 41 48
+                Type.Name 41 45
+                Type.ArgClause 45 48
+                  Type.Name 46 47
+          Term.ApplyType 52 62
+            Term.Name 52 59
+            Type.ArgClause 59 62
+              Type.Name 60 61
+#!program 463 line 287 Stat dialects.Scala3 :: given-alias-context-param-named
+object W463 {
+given listOrd[A](using Ord[A]): Ord[List[A]] = ListOrd[A]
+}
+#!scalac ok
+#!regions L71/
+#!layout
+Source 0 74
+  Defn.Object 0 73
+    Term.Name 7 11
+    Template 12 73
+      Template.Body 12 73
+        Defn.GivenAlias 14 71
+          Term.Name 20 27
+          Member.ParamClauseGroup 27 44
+            Type.ParamClause 27 30
+              Type.Param 28 29
+                Type.Name 28 29
+                Type.ParamClause 29 29
+                Type.Bounds 29 29
+            Term.ParamClause 30 44
+              Term.Param 37 43
+                Mod.Using 31 36
+                Name.Anonymous 37 37
+                Type.Apply 37 43
+                  Type.Name 37 40
+                  Type.ArgClause 40 43
+                    Type.Name 41 42
+              Mod.Using 31 36
+          Type.Apply 46 58
+            Type.Name 46 49
+            Type.ArgClause 49 58
+              Type.Apply 50 57
+                Type.Name 50 54
+                Type.ArgClause 54 57
+                  Type.Name 55 56
+          Term.ApplyType 61 71
+            Term.Name 61 68
+            Type.ArgClause 68 71
+              Type.Name 69 70
+#!program 464 line 298 Stat dialects.Scala3 :: given-by-name-named
+object W464 {
+given context[DummySoItsByName]: Context = curCtx
+}
+#!scalac ok
+#!regions L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.GivenAlias 14 63
+          Term.Name 20 27
+          Member.ParamClauseGroup 27 45
+            Type.ParamClause 27 45
+              Type.Param 28 44
+                Type.Name 28 44
+                Type.ParamClause 44 44
+                Type.Bounds 44 44
+          Type.Name 47 54
+          Term.Name 57 63
+#!program 465 line 303 Stat dialects.Scala3 :: given-abstract-named
+object W465 {
+given context: Context
+}
+#!scalac ok
+#!regions L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 11
+    Template 12 38
+      Template.Body 12 38
+        Decl.Given 14 36
+          Term.Name 20 27
+          Type.Name 29 36
+#!program 466 line 321 Stat dialects.Scala3 :: Simple anonymous typeclass, coloneol
+object W466 {
+given Ord[Int]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I29/2 O46/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 11
+    Template 12 48
+      Template.Body 12 48
+        Defn.Given 14 45
+          Name.Anonymous 20 20
+          Template 20 45
+            Init 20 28
+              Type.Apply 20 28
+                Type.Name 20 23
+                Type.ArgClause 23 28
+                  Type.Name 24 27
+              Name.Anonymous 28 28
+            Template.Body 28 45
+              Defn.Def 32 45
+                Term.Name 36 39
+                Term.Name 42 45
+#!program 467 line 337 Stat dialects.Scala3 :: Simple anonymous typeclass, braces
+object W467 {
+given Ord[Int] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L46/ F48/
+#!layout
+Source 0 52
+  Defn.Object 0 51
+    Term.Name 7 11
+    Template 12 51
+      Template.Body 12 51
+        Defn.Given 14 48
+          Name.Anonymous 20 20
+          Template 20 48
+            Init 20 28
+              Type.Apply 20 28
+                Type.Name 20 23
+                Type.ArgClause 23 28
+                  Type.Name 24 27
+              Name.Anonymous 29 29
+            Template.Body 29 48
+              Defn.Def 33 46
+                Term.Name 37 40
+                Term.Name 43 46
+#!program 468 line 352 Stat dialects.Scala3 :: Simple named typeclass, coloneol
+object W468 {
+given ord: Ord[Int]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I34/2 O51/
+#!layout
+Source 0 54
+  Defn.Object 0 53
+    Term.Name 7 11
+    Template 12 53
+      Template.Body 12 53
+        Defn.Given 14 50
+          Term.Name 20 23
+          Template 25 50
+            Init 25 33
+              Type.Apply 25 33
+                Type.Name 25 28
+                Type.ArgClause 28 33
+                  Type.Name 29 32
+              Name.Anonymous 33 33
+            Template.Body 33 50
+              Defn.Def 37 50
+                Term.Name 41 44
+                Term.Name 47 50
+#!program 469 line 368 Stat dialects.Scala3 :: Simple named typeclass, braces
+object W469 {
+given ord: Ord[Int] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L51/ F53/
+#!layout
+Source 0 57
+  Defn.Object 0 56
+    Term.Name 7 11
+    Template 12 56
+      Template.Body 12 56
+        Defn.Given 14 53
+          Term.Name 20 23
+          Template 25 53
+            Init 25 33
+              Type.Apply 25 33
+                Type.Name 25 28
+                Type.ArgClause 28 33
+                  Type.Name 29 32
+              Name.Anonymous 34 34
+            Template.Body 34 53
+              Defn.Def 38 51
+                Term.Name 42 45
+                Term.Name 48 51
+#!program 470 line 385 Stat dialects.Scala3 :: Parameterized anonymous typeclass with context bound, coloneol
+object W470 {
+given [A : Ord] => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I46/2 O63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Given 14 62
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 32
+            Type.ParamClause 20 29
+              Type.Param 21 28
+                Type.Name 21 22
+                Type.ParamClause 23 23
+                Type.Bounds 23 28
+                  Type.Name 25 28
+          Template 33 62
+            Init 33 45
+              Type.Apply 33 45
+                Type.Name 33 36
+                Type.ArgClause 36 45
+                  Type.Apply 37 44
+                    Type.Name 37 41
+                    Type.ArgClause 41 44
+                      Type.Name 42 43
+              Name.Anonymous 45 45
+            Template.Body 45 62
+              Defn.Def 49 62
+                Term.Name 53 56
+                Term.Name 59 62
+#!program 471 line 402 Stat dialects.Scala3 :: Parameterized anonymous typeclass with context bound, braces
+object W471 {
+given [A : Ord] => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L63/ F65/
+#!layout
+Source 0 69
+  Defn.Object 0 68
+    Term.Name 7 11
+    Template 12 68
+      Template.Body 12 68
+        Defn.Given 14 65
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 32
+            Type.ParamClause 20 29
+              Type.Param 21 28
+                Type.Name 21 22
+                Type.ParamClause 23 23
+                Type.Bounds 23 28
+                  Type.Name 25 28
+          Template 33 65
+            Init 33 45
+              Type.Apply 33 45
+                Type.Name 33 36
+                Type.ArgClause 36 45
+                  Type.Apply 37 44
+                    Type.Name 37 41
+                    Type.ArgClause 41 44
+                      Type.Name 42 43
+              Name.Anonymous 46 46
+            Template.Body 46 65
+              Defn.Def 50 63
+                Term.Name 54 57
+                Term.Name 60 63
+#!program 472 line 418 Stat dialects.Scala3 :: Parameterized named typeclass with context bound, coloneol
+object W472 {
+given ord: [A : Ord] => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I51/2 O68/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 11
+    Template 12 70
+      Template.Body 12 70
+        Defn.Given 14 67
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 37
+            Type.ParamClause 25 34
+              Type.Param 26 33
+                Type.Name 26 27
+                Type.ParamClause 28 28
+                Type.Bounds 28 33
+                  Type.Name 30 33
+          Template 38 67
+            Init 38 50
+              Type.Apply 38 50
+                Type.Name 38 41
+                Type.ArgClause 41 50
+                  Type.Apply 42 49
+                    Type.Name 42 46
+                    Type.ArgClause 46 49
+                      Type.Name 47 48
+              Name.Anonymous 50 50
+            Template.Body 50 67
+              Defn.Def 54 67
+                Term.Name 58 61
+                Term.Name 64 67
+#!program 473 line 435 Stat dialects.Scala3 :: Parameterized named typeclass with context bound, braces
+object W473 {
+given ord: [A : Ord] => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L68/ F70/
+#!layout
+Source 0 74
+  Defn.Object 0 73
+    Term.Name 7 11
+    Template 12 73
+      Template.Body 12 73
+        Defn.Given 14 70
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 37
+            Type.ParamClause 25 34
+              Type.Param 26 33
+                Type.Name 26 27
+                Type.ParamClause 28 28
+                Type.Bounds 28 33
+                  Type.Name 30 33
+          Template 38 70
+            Init 38 50
+              Type.Apply 38 50
+                Type.Name 38 41
+                Type.ArgClause 41 50
+                  Type.Apply 42 49
+                    Type.Name 42 46
+                    Type.ArgClause 46 49
+                      Type.Name 47 48
+              Name.Anonymous 51 51
+            Template.Body 51 70
+              Defn.Def 55 68
+                Term.Name 59 62
+                Term.Name 65 68
+#!program 474 line 452 Stat dialects.Scala3 :: Parameterized anonymous typeclass with context bound, coloneol
+object W474 {
+given [A : Ord] => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I46/2 O63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Given 14 62
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 32
+            Type.ParamClause 20 29
+              Type.Param 21 28
+                Type.Name 21 22
+                Type.ParamClause 23 23
+                Type.Bounds 23 28
+                  Type.Name 25 28
+          Template 33 62
+            Init 33 45
+              Type.Apply 33 45
+                Type.Name 33 36
+                Type.ArgClause 36 45
+                  Type.Apply 37 44
+                    Type.Name 37 41
+                    Type.ArgClause 41 44
+                      Type.Name 42 43
+              Name.Anonymous 45 45
+            Template.Body 45 62
+              Defn.Def 49 62
+                Term.Name 53 56
+                Term.Name 59 62
+#!program 475 line 469 Stat dialects.Scala3 :: Parameterized anonymous typeclass with context bound, braces
+object W475 {
+given [A : Ord] => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L63/ F65/
+#!layout
+Source 0 69
+  Defn.Object 0 68
+    Term.Name 7 11
+    Template 12 68
+      Template.Body 12 68
+        Defn.Given 14 65
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 32
+            Type.ParamClause 20 29
+              Type.Param 21 28
+                Type.Name 21 22
+                Type.ParamClause 23 23
+                Type.Bounds 23 28
+                  Type.Name 25 28
+          Template 33 65
+            Init 33 45
+              Type.Apply 33 45
+                Type.Name 33 36
+                Type.ArgClause 36 45
+                  Type.Apply 37 44
+                    Type.Name 37 41
+                    Type.ArgClause 41 44
+                      Type.Name 42 43
+              Name.Anonymous 46 46
+            Template.Body 46 65
+              Defn.Def 50 63
+                Term.Name 54 57
+                Term.Name 60 63
+#!program 476 line 485 Stat dialects.Scala3 :: Parameterized named typeclass with context bound, coloneol
+object W476 {
+given ord: [A : Ord] => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I51/2 O68/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 11
+    Template 12 70
+      Template.Body 12 70
+        Defn.Given 14 67
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 37
+            Type.ParamClause 25 34
+              Type.Param 26 33
+                Type.Name 26 27
+                Type.ParamClause 28 28
+                Type.Bounds 28 33
+                  Type.Name 30 33
+          Template 38 67
+            Init 38 50
+              Type.Apply 38 50
+                Type.Name 38 41
+                Type.ArgClause 41 50
+                  Type.Apply 42 49
+                    Type.Name 42 46
+                    Type.ArgClause 46 49
+                      Type.Name 47 48
+              Name.Anonymous 50 50
+            Template.Body 50 67
+              Defn.Def 54 67
+                Term.Name 58 61
+                Term.Name 64 67
+#!program 477 line 502 Stat dialects.Scala3 :: Parameterized named typeclass with context bound, braces
+object W477 {
+given ord: [A : Ord] => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L68/ F70/
+#!layout
+Source 0 74
+  Defn.Object 0 73
+    Term.Name 7 11
+    Template 12 73
+      Template.Body 12 73
+        Defn.Given 14 70
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 37
+            Type.ParamClause 25 34
+              Type.Param 26 33
+                Type.Name 26 27
+                Type.ParamClause 28 28
+                Type.Bounds 28 33
+                  Type.Name 30 33
+          Template 38 70
+            Init 38 50
+              Type.Apply 38 50
+                Type.Name 38 41
+                Type.ArgClause 41 50
+                  Type.Apply 42 49
+                    Type.Name 42 46
+                    Type.ArgClause 46 49
+                      Type.Name 47 48
+              Name.Anonymous 51 51
+            Template.Body 51 70
+              Defn.Def 55 68
+                Term.Name 59 62
+                Term.Name 65 68
+#!program 478 line 519 Stat dialects.Scala3 :: Parameterized anonymous typeclass with named context parameter, coloneol
+object W478 {
+given [A] => (ord: Ord[A]) => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I57/2 O74/
+#!layout
+Source 0 77
+  Defn.Object 0 76
+    Term.Name 7 11
+    Template 12 76
+      Template.Body 12 76
+        Defn.Given 14 73
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 43
+            Type.ParamClause 20 23
+              Type.Param 21 22
+                Type.Name 21 22
+                Type.ParamClause 22 22
+                Type.Bounds 22 22
+            Term.ParamClause 27 40
+              Term.Param 28 39
+                Term.Name 28 31
+                Type.Apply 33 39
+                  Type.Name 33 36
+                  Type.ArgClause 36 39
+                    Type.Name 37 38
+          Template 44 73
+            Init 44 56
+              Type.Apply 44 56
+                Type.Name 44 47
+                Type.ArgClause 47 56
+                  Type.Apply 48 55
+                    Type.Name 48 52
+                    Type.ArgClause 52 55
+                      Type.Name 53 54
+              Name.Anonymous 56 56
+            Template.Body 56 73
+              Defn.Def 60 73
+                Term.Name 64 67
+                Term.Name 70 73
+#!program 479 line 536 Stat dialects.Scala3 :: Parameterized anonymous typeclass with named context parameter, braces
+object W479 {
+given [A] => (ord: Ord[A]) => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L74/ F76/
+#!layout
+Source 0 80
+  Defn.Object 0 79
+    Term.Name 7 11
+    Template 12 79
+      Template.Body 12 79
+        Defn.Given 14 76
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 43
+            Type.ParamClause 20 23
+              Type.Param 21 22
+                Type.Name 21 22
+                Type.ParamClause 22 22
+                Type.Bounds 22 22
+            Term.ParamClause 27 40
+              Term.Param 28 39
+                Term.Name 28 31
+                Type.Apply 33 39
+                  Type.Name 33 36
+                  Type.ArgClause 36 39
+                    Type.Name 37 38
+          Template 44 76
+            Init 44 56
+              Type.Apply 44 56
+                Type.Name 44 47
+                Type.ArgClause 47 56
+                  Type.Apply 48 55
+                    Type.Name 48 52
+                    Type.ArgClause 52 55
+                      Type.Name 53 54
+              Name.Anonymous 57 57
+            Template.Body 57 76
+              Defn.Def 61 74
+                Term.Name 65 68
+                Term.Name 71 74
+#!program 480 line 552 Stat dialects.Scala3 :: Parameterized named typeclass with named context parameter, coloneol
+object W480 {
+given ord: [A] => (ord: Ord[A]) => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I62/2 O79/
+#!layout
+Source 0 82
+  Defn.Object 0 81
+    Term.Name 7 11
+    Template 12 81
+      Template.Body 12 81
+        Defn.Given 14 78
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 48
+            Type.ParamClause 25 28
+              Type.Param 26 27
+                Type.Name 26 27
+                Type.ParamClause 27 27
+                Type.Bounds 27 27
+            Term.ParamClause 32 45
+              Term.Param 33 44
+                Term.Name 33 36
+                Type.Apply 38 44
+                  Type.Name 38 41
+                  Type.ArgClause 41 44
+                    Type.Name 42 43
+          Template 49 78
+            Init 49 61
+              Type.Apply 49 61
+                Type.Name 49 52
+                Type.ArgClause 52 61
+                  Type.Apply 53 60
+                    Type.Name 53 57
+                    Type.ArgClause 57 60
+                      Type.Name 58 59
+              Name.Anonymous 61 61
+            Template.Body 61 78
+              Defn.Def 65 78
+                Term.Name 69 72
+                Term.Name 75 78
+#!program 481 line 569 Stat dialects.Scala3 :: Parameterized named typeclass with named context parameter, braces
+object W481 {
+given ord: [A] => (ord: Ord[A]) => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L79/ F81/
+#!layout
+Source 0 85
+  Defn.Object 0 84
+    Term.Name 7 11
+    Template 12 84
+      Template.Body 12 84
+        Defn.Given 14 81
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 48
+            Type.ParamClause 25 28
+              Type.Param 26 27
+                Type.Name 26 27
+                Type.ParamClause 27 27
+                Type.Bounds 27 27
+            Term.ParamClause 32 45
+              Term.Param 33 44
+                Term.Name 33 36
+                Type.Apply 38 44
+                  Type.Name 38 41
+                  Type.ArgClause 41 44
+                    Type.Name 42 43
+          Template 49 81
+            Init 49 61
+              Type.Apply 49 61
+                Type.Name 49 52
+                Type.ArgClause 52 61
+                  Type.Apply 53 60
+                    Type.Name 53 57
+                    Type.ArgClause 57 60
+                      Type.Name 58 59
+              Name.Anonymous 62 62
+            Template.Body 62 81
+              Defn.Def 66 79
+                Term.Name 70 73
+                Term.Name 76 79
+#!program 482 line 586 Stat dialects.Scala3 :: Parameterized anonymous typeclass with anonymous context parameter, coloneol
+object W482 {
+given [A] => (Ord[A]) => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I52/2 O69/
+#!layout
+Source 0 72
+  Defn.Object 0 71
+    Term.Name 7 11
+    Template 12 71
+      Template.Body 12 71
+        Defn.Given 14 68
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 38
+            Type.ParamClause 20 23
+              Type.Param 21 22
+                Type.Name 21 22
+                Type.ParamClause 22 22
+                Type.Bounds 22 22
+            Term.ParamClause 27 35
+              Term.Param 28 34
+                Name.Anonymous 28 28
+                Type.Apply 28 34
+                  Type.Name 28 31
+                  Type.ArgClause 31 34
+                    Type.Name 32 33
+          Template 39 68
+            Init 39 51
+              Type.Apply 39 51
+                Type.Name 39 42
+                Type.ArgClause 42 51
+                  Type.Apply 43 50
+                    Type.Name 43 47
+                    Type.ArgClause 47 50
+                      Type.Name 48 49
+              Name.Anonymous 51 51
+            Template.Body 51 68
+              Defn.Def 55 68
+                Term.Name 59 62
+                Term.Name 65 68
+#!program 483 line 603 Stat dialects.Scala3 :: Parameterized anonymous typeclass with anonymous context parameter, braces
+object W483 {
+given [A] => (Ord[A]) => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L69/ F71/
+#!layout
+Source 0 75
+  Defn.Object 0 74
+    Term.Name 7 11
+    Template 12 74
+      Template.Body 12 74
+        Defn.Given 14 71
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 38
+            Type.ParamClause 20 23
+              Type.Param 21 22
+                Type.Name 21 22
+                Type.ParamClause 22 22
+                Type.Bounds 22 22
+            Term.ParamClause 27 35
+              Term.Param 28 34
+                Name.Anonymous 28 28
+                Type.Apply 28 34
+                  Type.Name 28 31
+                  Type.ArgClause 31 34
+                    Type.Name 32 33
+          Template 39 71
+            Init 39 51
+              Type.Apply 39 51
+                Type.Name 39 42
+                Type.ArgClause 42 51
+                  Type.Apply 43 50
+                    Type.Name 43 47
+                    Type.ArgClause 47 50
+                      Type.Name 48 49
+              Name.Anonymous 52 52
+            Template.Body 52 71
+              Defn.Def 56 69
+                Term.Name 60 63
+                Term.Name 66 69
+#!program 484 line 619 Stat dialects.Scala3 :: Parameterized named typeclass with anonymous context parameter, coloneol
+object W484 {
+given ord: [A] => (Ord[A]) => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I57/2 O74/
+#!layout
+Source 0 77
+  Defn.Object 0 76
+    Term.Name 7 11
+    Template 12 76
+      Template.Body 12 76
+        Defn.Given 14 73
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 43
+            Type.ParamClause 25 28
+              Type.Param 26 27
+                Type.Name 26 27
+                Type.ParamClause 27 27
+                Type.Bounds 27 27
+            Term.ParamClause 32 40
+              Term.Param 33 39
+                Name.Anonymous 33 33
+                Type.Apply 33 39
+                  Type.Name 33 36
+                  Type.ArgClause 36 39
+                    Type.Name 37 38
+          Template 44 73
+            Init 44 56
+              Type.Apply 44 56
+                Type.Name 44 47
+                Type.ArgClause 47 56
+                  Type.Apply 48 55
+                    Type.Name 48 52
+                    Type.ArgClause 52 55
+                      Type.Name 53 54
+              Name.Anonymous 56 56
+            Template.Body 56 73
+              Defn.Def 60 73
+                Term.Name 64 67
+                Term.Name 70 73
+#!program 485 line 636 Stat dialects.Scala3 :: Parameterized named typeclass with anonymous context parameter, braces
+object W485 {
+given ord: [A] => (Ord[A]) => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L74/ F76/
+#!layout
+Source 0 80
+  Defn.Object 0 79
+    Term.Name 7 11
+    Template 12 79
+      Template.Body 12 79
+        Defn.Given 14 76
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 43
+            Type.ParamClause 25 28
+              Type.Param 26 27
+                Type.Name 26 27
+                Type.ParamClause 27 27
+                Type.Bounds 27 27
+            Term.ParamClause 32 40
+              Term.Param 33 39
+                Name.Anonymous 33 33
+                Type.Apply 33 39
+                  Type.Name 33 36
+                  Type.ArgClause 36 39
+                    Type.Name 37 38
+          Template 44 76
+            Init 44 56
+              Type.Apply 44 56
+                Type.Name 44 47
+                Type.ArgClause 47 56
+                  Type.Apply 48 55
+                    Type.Name 48 52
+                    Type.ArgClause 52 55
+                      Type.Name 53 54
+              Name.Anonymous 57 57
+            Template.Body 57 76
+              Defn.Def 61 74
+                Term.Name 65 68
+                Term.Name 71 74
+#!program 486 line 654 Stat dialects.Scala3 :: context a lambda function, coloneol
+object W486 {
+given ord: ([A] =>> Ord[A]) => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I58/2 O75/
+#!layout
+Source 0 78
+  Defn.Object 0 77
+    Term.Name 7 11
+    Template 12 77
+      Template.Body 12 77
+        Defn.Given 14 74
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 44
+            Type.ParamClause 25 25
+            Term.ParamClause 25 41
+              Term.Param 26 40
+                Name.Anonymous 26 26
+                Type.Lambda 26 40
+                  Type.ParamClause 26 29
+                    Type.Param 27 28
+                      Type.Name 27 28
+                      Type.ParamClause 28 28
+                      Type.Bounds 28 28
+                  Type.Apply 34 40
+                    Type.Name 34 37
+                    Type.ArgClause 37 40
+                      Type.Name 38 39
+          Template 45 74
+            Init 45 57
+              Type.Apply 45 57
+                Type.Name 45 48
+                Type.ArgClause 48 57
+                  Type.Apply 49 56
+                    Type.Name 49 53
+                    Type.ArgClause 53 56
+                      Type.Name 54 55
+              Name.Anonymous 57 57
+            Template.Body 57 74
+              Defn.Def 61 74
+                Term.Name 65 68
+                Term.Name 71 74
+#!program 487 line 671 Stat dialects.Scala3 :: context a lambda function, braces
+object W487 {
+given ord: ([A] =>> Ord[A]) => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L75/ F77/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Defn.Given 14 77
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 44
+            Type.ParamClause 25 25
+            Term.ParamClause 25 41
+              Term.Param 26 40
+                Name.Anonymous 26 26
+                Type.Lambda 26 40
+                  Type.ParamClause 26 29
+                    Type.Param 27 28
+                      Type.Name 27 28
+                      Type.ParamClause 28 28
+                      Type.Bounds 28 28
+                  Type.Apply 34 40
+                    Type.Name 34 37
+                    Type.ArgClause 37 40
+                      Type.Name 38 39
+          Template 45 77
+            Init 45 57
+              Type.Apply 45 57
+                Type.Name 45 48
+                Type.ArgClause 48 57
+                  Type.Apply 49 56
+                    Type.Name 49 53
+                    Type.ArgClause 53 56
+                      Type.Name 54 55
+              Name.Anonymous 58 58
+            Template.Body 58 77
+              Defn.Def 62 75
+                Term.Name 66 69
+                Term.Name 72 75
+#!program 488 line 690 Stat dialects.Scala3 :: context a poly function, coloneol
+object W488 {
+given ord: ([A] => (Ord[A]) => Ord[List[A]]) => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I75/2 O92/
+#!layout
+Source 0 95
+  Defn.Object 0 94
+    Term.Name 7 11
+    Template 12 94
+      Template.Body 12 94
+        Defn.Given 14 91
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 61
+            Type.ParamClause 25 25
+            Term.ParamClause 25 58
+              Term.Param 26 57
+                Name.Anonymous 26 26
+                Type.PolyFunction 26 57
+                  Type.ParamClause 26 29
+                    Type.Param 27 28
+                      Type.Name 27 28
+                      Type.ParamClause 28 28
+                      Type.Bounds 28 28
+                  Type.Function 33 57
+                    Type.FuncParamClause 33 41
+                      Type.Apply 34 40
+                        Type.Name 34 37
+                        Type.ArgClause 37 40
+                          Type.Name 38 39
+                    Type.Apply 45 57
+                      Type.Name 45 48
+                      Type.ArgClause 48 57
+                        Type.Apply 49 56
+                          Type.Name 49 53
+                          Type.ArgClause 53 56
+                            Type.Name 54 55
+          Template 62 91
+            Init 62 74
+              Type.Apply 62 74
+                Type.Name 62 65
+                Type.ArgClause 65 74
+                  Type.Apply 66 73
+                    Type.Name 66 70
+                    Type.ArgClause 70 73
+                      Type.Name 71 72
+              Name.Anonymous 74 74
+            Template.Body 74 91
+              Defn.Def 78 91
+                Term.Name 82 85
+                Term.Name 88 91
+#!program 489 line 710 Stat dialects.Scala3 :: context a poly function, braces
+object W489 {
+given ord: ([A] => (Ord[A]) => Ord[List[A]]) => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L92/ F94/
+#!layout
+Source 0 98
+  Defn.Object 0 97
+    Term.Name 7 11
+    Template 12 97
+      Template.Body 12 97
+        Defn.Given 14 94
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 61
+            Type.ParamClause 25 25
+            Term.ParamClause 25 58
+              Term.Param 26 57
+                Name.Anonymous 26 26
+                Type.PolyFunction 26 57
+                  Type.ParamClause 26 29
+                    Type.Param 27 28
+                      Type.Name 27 28
+                      Type.ParamClause 28 28
+                      Type.Bounds 28 28
+                  Type.Function 33 57
+                    Type.FuncParamClause 33 41
+                      Type.Apply 34 40
+                        Type.Name 34 37
+                        Type.ArgClause 37 40
+                          Type.Name 38 39
+                    Type.Apply 45 57
+                      Type.Name 45 48
+                      Type.ArgClause 48 57
+                        Type.Apply 49 56
+                          Type.Name 49 53
+                          Type.ArgClause 53 56
+                            Type.Name 54 55
+          Template 62 94
+            Init 62 74
+              Type.Apply 62 74
+                Type.Name 62 65
+                Type.ArgClause 65 74
+                  Type.Apply 66 73
+                    Type.Name 66 70
+                    Type.ArgClause 70 73
+                      Type.Name 71 72
+              Name.Anonymous 75 75
+            Template.Body 75 94
+              Defn.Def 79 92
+                Term.Name 83 86
+                Term.Name 89 92
+#!program 490 line 729 Stat dialects.Scala3 :: given type a function, coloneol
+object W490 {
+given ord: [A] => (Ord[A] => Ord[List[A]]):
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I57/2 O74/
+#!layout
+Source 0 77
+  Defn.Object 0 76
+    Term.Name 7 11
+    Template 12 76
+      Template.Body 12 76
+        Defn.Given 14 73
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 31
+            Type.ParamClause 25 28
+              Type.Param 26 27
+                Type.Name 26 27
+                Type.ParamClause 27 27
+                Type.Bounds 27 27
+          Template 33 73
+            Init 33 56
+              Type.Function 33 55
+                Type.FuncParamClause 33 39
+                  Type.Apply 33 39
+                    Type.Name 33 36
+                    Type.ArgClause 36 39
+                      Type.Name 37 38
+                Type.Apply 43 55
+                  Type.Name 43 46
+                  Type.ArgClause 46 55
+                    Type.Apply 47 54
+                      Type.Name 47 51
+                      Type.ArgClause 51 54
+                        Type.Name 52 53
+              Name.Anonymous 56 56
+            Template.Body 56 73
+              Defn.Def 60 73
+                Term.Name 64 67
+                Term.Name 70 73
+#!program 491 line 749 Stat dialects.Scala3 :: given type a function, braces
+object W491 {
+given ord: [A] => (Ord[A] => Ord[List[A]]) {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L74/ F76/
+#!layout
+Source 0 80
+  Defn.Object 0 79
+    Term.Name 7 11
+    Template 12 79
+      Template.Body 12 79
+        Defn.Given 14 76
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 31
+            Type.ParamClause 25 28
+              Type.Param 26 27
+                Type.Name 26 27
+                Type.ParamClause 27 27
+                Type.Bounds 27 27
+          Template 33 76
+            Init 33 56
+              Type.Function 33 55
+                Type.FuncParamClause 33 39
+                  Type.Apply 33 39
+                    Type.Name 33 36
+                    Type.ArgClause 36 39
+                      Type.Name 37 38
+                Type.Apply 43 55
+                  Type.Name 43 46
+                  Type.ArgClause 46 55
+                    Type.Apply 47 54
+                      Type.Name 47 51
+                      Type.ArgClause 51 54
+                        Type.Name 52 53
+              Name.Anonymous 57 57
+            Template.Body 57 76
+              Defn.Def 61 74
+                Term.Name 65 68
+                Term.Name 71 74
+#!program 492 line 767 Stat dialects.Scala3 :: named, param clause first, coloneol
+object W492 {
+given ord: (a: A) => Ord[A] => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I58/2 O75/
+#!layout
+Source 0 78
+  Defn.Object 0 77
+    Term.Name 7 11
+    Template 12 77
+      Template.Body 12 77
+        Defn.Given 14 74
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 44
+            Type.ParamClause 25 25
+            Term.ParamClause 25 31
+              Term.Param 26 30
+                Term.Name 26 27
+                Type.Name 29 30
+            Term.ParamClause 35 41
+              Term.Param 35 41
+                Name.Anonymous 35 35
+                Type.Apply 35 41
+                  Type.Name 35 38
+                  Type.ArgClause 38 41
+                    Type.Name 39 40
+          Template 45 74
+            Init 45 57
+              Type.Apply 45 57
+                Type.Name 45 48
+                Type.ArgClause 48 57
+                  Type.Apply 49 56
+                    Type.Name 49 53
+                    Type.ArgClause 53 56
+                      Type.Name 54 55
+              Name.Anonymous 57 57
+            Template.Body 57 74
+              Defn.Def 61 74
+                Term.Name 65 68
+                Term.Name 71 74
+#!program 493 line 784 Stat dialects.Scala3 :: named, param clause first, braces
+object W493 {
+given ord: (a: A) => Ord[A] => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L75/ F77/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Defn.Given 14 77
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 44
+            Type.ParamClause 25 25
+            Term.ParamClause 25 31
+              Term.Param 26 30
+                Term.Name 26 27
+                Type.Name 29 30
+            Term.ParamClause 35 41
+              Term.Param 35 41
+                Name.Anonymous 35 35
+                Type.Apply 35 41
+                  Type.Name 35 38
+                  Type.ArgClause 38 41
+                    Type.Name 39 40
+          Template 45 77
+            Init 45 57
+              Type.Apply 45 57
+                Type.Name 45 48
+                Type.ArgClause 48 57
+                  Type.Apply 49 56
+                    Type.Name 49 53
+                    Type.ArgClause 53 56
+                      Type.Name 54 55
+              Name.Anonymous 58 58
+            Template.Body 58 77
+              Defn.Def 62 75
+                Term.Name 66 69
+                Term.Name 72 75
+#!program 494 line 800 Stat dialects.Scala3 :: anonymous, param clause first, coloneol
+object W494 {
+given (a: A) => Ord[A] => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I53/2 O70/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Defn.Given 14 69
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 39
+            Type.ParamClause 20 20
+            Term.ParamClause 20 26
+              Term.Param 21 25
+                Term.Name 21 22
+                Type.Name 24 25
+            Term.ParamClause 30 36
+              Term.Param 30 36
+                Name.Anonymous 30 30
+                Type.Apply 30 36
+                  Type.Name 30 33
+                  Type.ArgClause 33 36
+                    Type.Name 34 35
+          Template 40 69
+            Init 40 52
+              Type.Apply 40 52
+                Type.Name 40 43
+                Type.ArgClause 43 52
+                  Type.Apply 44 51
+                    Type.Name 44 48
+                    Type.ArgClause 48 51
+                      Type.Name 49 50
+              Name.Anonymous 52 52
+            Template.Body 52 69
+              Defn.Def 56 69
+                Term.Name 60 63
+                Term.Name 66 69
+#!program 495 line 817 Stat dialects.Scala3 :: anonymous, param clause first, braces
+object W495 {
+given (a: A) => Ord[A] => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L70/ F72/
+#!layout
+Source 0 76
+  Defn.Object 0 75
+    Term.Name 7 11
+    Template 12 75
+      Template.Body 12 75
+        Defn.Given 14 72
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 39
+            Type.ParamClause 20 20
+            Term.ParamClause 20 26
+              Term.Param 21 25
+                Term.Name 21 22
+                Type.Name 24 25
+            Term.ParamClause 30 36
+              Term.Param 30 36
+                Name.Anonymous 30 30
+                Type.Apply 30 36
+                  Type.Name 30 33
+                  Type.ArgClause 33 36
+                    Type.Name 34 35
+          Template 40 72
+            Init 40 52
+              Type.Apply 40 52
+                Type.Name 40 43
+                Type.ArgClause 43 52
+                  Type.Apply 44 51
+                    Type.Name 44 48
+                    Type.ArgClause 48 51
+                      Type.Name 49 50
+              Name.Anonymous 53 53
+            Template.Body 53 72
+              Defn.Def 57 70
+                Term.Name 61 64
+                Term.Name 67 70
+#!program 496 line 835 Stat dialects.Scala3 :: named, func arg types, coloneol
+object W496 {
+given ord: (A) => Ord[A] => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I55/2 O72/
+#!layout
+Source 0 75
+  Defn.Object 0 74
+    Term.Name 7 11
+    Template 12 74
+      Template.Body 12 74
+        Defn.Given 14 71
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 41
+            Type.ParamClause 25 25
+            Term.ParamClause 25 28
+              Term.Param 26 27
+                Name.Anonymous 26 26
+                Type.Name 26 27
+            Term.ParamClause 32 38
+              Term.Param 32 38
+                Name.Anonymous 32 32
+                Type.Apply 32 38
+                  Type.Name 32 35
+                  Type.ArgClause 35 38
+                    Type.Name 36 37
+          Template 42 71
+            Init 42 54
+              Type.Apply 42 54
+                Type.Name 42 45
+                Type.ArgClause 45 54
+                  Type.Apply 46 53
+                    Type.Name 46 50
+                    Type.ArgClause 50 53
+                      Type.Name 51 52
+              Name.Anonymous 54 54
+            Template.Body 54 71
+              Defn.Def 58 71
+                Term.Name 62 65
+                Term.Name 68 71
+#!program 497 line 852 Stat dialects.Scala3 :: named, func arg types, braces
+object W497 {
+given ord: (A) => Ord[A] => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L72/ F74/
+#!layout
+Source 0 78
+  Defn.Object 0 77
+    Term.Name 7 11
+    Template 12 77
+      Template.Body 12 77
+        Defn.Given 14 74
+          Term.Name 20 23
+          Member.ParamClauseGroup 25 41
+            Type.ParamClause 25 25
+            Term.ParamClause 25 28
+              Term.Param 26 27
+                Name.Anonymous 26 26
+                Type.Name 26 27
+            Term.ParamClause 32 38
+              Term.Param 32 38
+                Name.Anonymous 32 32
+                Type.Apply 32 38
+                  Type.Name 32 35
+                  Type.ArgClause 35 38
+                    Type.Name 36 37
+          Template 42 74
+            Init 42 54
+              Type.Apply 42 54
+                Type.Name 42 45
+                Type.ArgClause 45 54
+                  Type.Apply 46 53
+                    Type.Name 46 50
+                    Type.ArgClause 50 53
+                      Type.Name 51 52
+              Name.Anonymous 55 55
+            Template.Body 55 74
+              Defn.Def 59 72
+                Term.Name 63 66
+                Term.Name 69 72
+#!program 498 line 868 Stat dialects.Scala3 :: anonymous, func arg types, coloneol
+object W498 {
+given (A) => Ord[A] => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I50/2 O67/
+#!layout
+Source 0 70
+  Defn.Object 0 69
+    Term.Name 7 11
+    Template 12 69
+      Template.Body 12 69
+        Defn.Given 14 66
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 36
+            Type.ParamClause 20 20
+            Term.ParamClause 20 23
+              Term.Param 21 22
+                Name.Anonymous 21 21
+                Type.Name 21 22
+            Term.ParamClause 27 33
+              Term.Param 27 33
+                Name.Anonymous 27 27
+                Type.Apply 27 33
+                  Type.Name 27 30
+                  Type.ArgClause 30 33
+                    Type.Name 31 32
+          Template 37 66
+            Init 37 49
+              Type.Apply 37 49
+                Type.Name 37 40
+                Type.ArgClause 40 49
+                  Type.Apply 41 48
+                    Type.Name 41 45
+                    Type.ArgClause 45 48
+                      Type.Name 46 47
+              Name.Anonymous 49 49
+            Template.Body 49 66
+              Defn.Def 53 66
+                Term.Name 57 60
+                Term.Name 63 66
+#!program 499 line 885 Stat dialects.Scala3 :: anonymous, func arg types, braces
+object W499 {
+given (A) => Ord[A] => Ord[List[A]] {
+  def foo = ???
+}
+
+}
+#!scalac ok
+#!regions L67/ F69/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Defn.Given 14 69
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 36
+            Type.ParamClause 20 20
+            Term.ParamClause 20 23
+              Term.Param 21 22
+                Name.Anonymous 21 21
+                Type.Name 21 22
+            Term.ParamClause 27 33
+              Term.Param 27 33
+                Name.Anonymous 27 27
+                Type.Apply 27 33
+                  Type.Name 27 30
+                  Type.ArgClause 30 33
+                    Type.Name 31 32
+          Template 37 69
+            Init 37 49
+              Type.Apply 37 49
+                Type.Name 37 40
+                Type.ArgClause 40 49
+                  Type.Apply 41 48
+                    Type.Name 41 45
+                    Type.ArgClause 45 48
+                      Type.Name 46 47
+              Name.Anonymous 50 50
+            Template.Body 50 69
+              Defn.Def 54 67
+                Term.Name 58 61
+                Term.Name 64 67
+#!program 500 line 903 Stat dialects.Scala3 :: breaks after arrow 1
+object W500 {
+given (A) =>
+  Ord[A] =>
+  Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac refuses: an identifier expected, but indent found
+#!regions I54/2 O71/
+#!layout
+Source 0 74
+  Defn.Object 0 73
+    Term.Name 7 11
+    Template 12 73
+      Template.Body 12 73
+        Defn.Given 14 70
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 38
+            Type.ParamClause 20 20
+            Term.ParamClause 20 23
+              Term.Param 21 22
+                Name.Anonymous 21 21
+                Type.Name 21 22
+            Term.ParamClause 29 35
+              Term.Param 29 35
+                Name.Anonymous 29 29
+                Type.Apply 29 35
+                  Type.Name 29 32
+                  Type.ArgClause 32 35
+                    Type.Name 33 34
+          Template 41 70
+            Init 41 53
+              Type.Apply 41 53
+                Type.Name 41 44
+                Type.ArgClause 44 53
+                  Type.Apply 45 52
+                    Type.Name 45 49
+                    Type.ArgClause 49 52
+                      Type.Name 50 51
+              Name.Anonymous 53 53
+            Template.Body 53 70
+              Defn.Def 57 70
+                Term.Name 61 64
+                Term.Name 67 70
+#!program 501 line 920 Stat dialects.Scala3 :: breaks after arrow 2
+object W501 {
+given (a: A =>
+  Ord[A]) => Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac ok
+#!regions I28/2 O36/ I55/2 O72/
+#!layout
+Source 0 75
+  Defn.Object 0 74
+    Term.Name 7 11
+    Template 12 74
+      Template.Body 12 74
+        Defn.Given 14 71
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 41
+            Type.ParamClause 20 20
+            Term.ParamClause 20 38
+              Term.Param 21 37
+                Term.Name 21 22
+                Type.Function 24 37
+                  Type.FuncParamClause 24 25
+                    Type.Name 24 25
+                  Type.Apply 31 37
+                    Type.Name 31 34
+                    Type.ArgClause 34 37
+                      Type.Name 35 36
+          Template 42 71
+            Init 42 54
+              Type.Apply 42 54
+                Type.Name 42 45
+                Type.ArgClause 45 54
+                  Type.Apply 46 53
+                    Type.Name 46 50
+                    Type.ArgClause 50 53
+                      Type.Name 51 52
+              Name.Anonymous 54 54
+            Template.Body 54 71
+              Defn.Def 58 71
+                Term.Name 62 65
+                Term.Name 68 71
+#!program 502 line 938 Stat dialects.Scala3 :: breaks after arrow 3
+object W502 {
+given (a: A =>
+  Ord[A]) =>
+  Ord[List[A]]:
+  def foo = ???
+
+}
+#!scalac refuses: an identifier expected, but indent found
+#!regions I28/2 O36/ I57/2 O74/
+#!layout
+Source 0 77
+  Defn.Object 0 76
+    Term.Name 7 11
+    Template 12 76
+      Template.Body 12 76
+        Defn.Given 14 73
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 41
+            Type.ParamClause 20 20
+            Term.ParamClause 20 38
+              Term.Param 21 37
+                Term.Name 21 22
+                Type.Function 24 37
+                  Type.FuncParamClause 24 25
+                    Type.Name 24 25
+                  Type.Apply 31 37
+                    Type.Name 31 34
+                    Type.ArgClause 34 37
+                      Type.Name 35 36
+          Template 44 73
+            Init 44 56
+              Type.Apply 44 56
+                Type.Name 44 47
+                Type.ArgClause 47 56
+                  Type.Apply 48 55
+                    Type.Name 48 52
+                    Type.ArgClause 52 55
+                      Type.Name 53 54
+              Name.Anonymous 56 56
+            Template.Body 56 73
+              Defn.Def 60 73
+                Term.Name 64 67
+                Term.Name 70 73
+#!program 503 line 965 Stat dialects.Scala3 :: import given is not a given
+object W503 {
+object a:
+  import scala.util.chaining.given
+  import scala.util.control.{
+     ControlThrowable, NonFatal}
+
+}
+#!scalac ok
+#!regions I23/2 L58/2 O122/
+#!layout
+Source 0 125
+  Defn.Object 0 124
+    Term.Name 7 11
+    Template 12 124
+      Template.Body 12 124
+        Defn.Object 14 121
+          Term.Name 21 22
+          Template 22 121
+            Template.Body 22 121
+              Import 26 58
+                Importer 33 58
+                  Term.Select 33 52
+                    Term.Select 33 43
+                      Term.Name 33 38
+                      Term.Name 39 43
+                    Term.Name 44 52
+                  Importee.GivenAll 53 58
+              Import 61 121
+                Importer 68 121
+                  Term.Select 68 86
+                    Term.Select 68 78
+                      Term.Name 68 73
+                      Term.Name 74 78
+                    Term.Name 79 86
+                  Importee.Name 94 110
+                    Name.Indeterminate 94 110
+                  Importee.Name 112 120
+                    Name.Indeterminate 112 120
+#!program 504 line 988 Stat dialects.Scala3 :: given decl
+object W504 {
+object a:
+  given TreeMethods: TreeMethods
+  trait TreeMethods {}
+
+}
+#!scalac ok
+#!regions I23/2 L56/2 O80/
+#!layout
+Source 0 83
+  Defn.Object 0 82
+    Term.Name 7 11
+    Template 12 82
+      Template.Body 12 82
+        Defn.Object 14 79
+          Term.Name 21 22
+          Template 22 79
+            Template.Body 22 79
+              Decl.Given 26 56
+                Term.Name 32 43
+                Type.Name 45 56
+              Defn.Trait 59 79
+                Type.Name 65 76
+                Type.ParamClause 77 77
+                Ctor.Primary 77 77
+                  Name.Anonymous 77 77
+                Template 77 79
+                  Template.Body 77 79
+#!program 505 line 1001 Stat dialects.Scala3 :: #4091 given
+object W505 {
+given List[Int] => Object {}
+}
+#!scalac ok
+#!regions L42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Defn.Given 14 42
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 32
+            Type.ParamClause 20 20
+            Term.ParamClause 20 29
+              Term.Param 20 29
+                Name.Anonymous 20 20
+                Type.Apply 20 29
+                  Type.Name 20 24
+                  Type.ArgClause 24 29
+                    Type.Name 25 28
+          Template 33 42
+            Init 33 39
+              Type.Name 33 39
+              Name.Anonymous 40 40
+            Template.Body 40 42
+#!program 506 line 1040 Stat dialects.Scala3 :: #4190 given
+object W506 {
+def m =
+  given Random(1)
+  for _ <- 1 to 10 do
+    foo("Hello"):
+      for i <- 0 to 10 yield i
+
+}
+#!scalac ok
+#!regions I21/2 L39/2 I61/4.2 I79/6.4.2 O111/4.2 O111/2 O111/
+#!layout
+Source 0 114
+  Defn.Object 0 113
+    Term.Name 7 11
+    Template 12 113
+      Template.Body 12 113
+        Defn.Def 14 110
+          Term.Name 18 19
+          Term.Block 24 110
+            Defn.Given 24 39
+              Name.Anonymous 30 30
+              Template 30 39
+                Init 30 39
+                  Type.Name 30 36
+                  Name.Anonymous 36 36
+                  Term.ArgClause 36 39
+                    Lit.Int 37 38
+                Template.Body 39 39
+            Term.For 42 110
+              Term.EnumeratorsBlock 46 58
+                Enumerator.Generator 46 58
+                  Pat.Wildcard 46 47
+                  Term.ApplyInfix 51 58
+                    Lit.Int 51 52
+                    Term.Name 53 55
+                    Type.ArgClause 56 56
+                    Term.ArgClause 56 58
+                      Lit.Int 56 58
+              Term.Apply 66 110
+                Term.Apply 66 78
+                  Term.Name 66 69
+                  Term.ArgClause 69 78
+                    Lit.String 70 77
+                Term.ArgClause 78 110
+                  Term.Block 78 110
+                    Term.ForYield 86 110
+                      Term.EnumeratorsBlock 90 102
+                        Enumerator.Generator 90 102
+                          Pat.Var 90 91
+                            Term.Name 90 91
+                          Term.ApplyInfix 95 102
+                            Lit.Int 95 96
+                            Term.Name 97 99
+                            Type.ArgClause 100 100
+                            Term.ArgClause 100 102
+                              Lit.Int 100 102
+                      Term.Name 109 110
+#!program 507 line 1044 Stat dialects.Scala3 :: abstract-given-anonymous
+object W507 {
+given Ord[Int]
+}
+#!scalac ok
+#!regions L28/
+#!layout
+Source 0 31
+  Defn.Object 0 30
+    Term.Name 7 11
+    Template 12 30
+      Template.Body 12 30
+        Decl.GivenAnonymous 14 28
+          Name.Anonymous 20 20
+          Type.Apply 20 28
+            Type.Name 20 23
+            Type.ArgClause 23 28
+              Type.Name 24 27
+#!program 508 line 1045 Stat dialects.Scala3 :: abstract-given-anonymous
+object W508 {
+given [T](using ord: Ord[T]): Ord[Set[T]]
+}
+#!scalac refuses: Anonymous given cannot be abstract, or maybe you want to define a concrete given and are missing a `()` argument?
+#!regions L55/
+#!layout
+Source 0 58
+  Defn.Object 0 57
+    Term.Name 7 11
+    Template 12 57
+      Template.Body 12 57
+        Decl.GivenAnonymous 14 55
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 42
+            Type.ParamClause 20 23
+              Type.Param 21 22
+                Type.Name 21 22
+                Type.ParamClause 22 22
+                Type.Bounds 22 22
+            Term.ParamClause 23 42
+              Term.Param 30 41
+                Mod.Using 24 29
+                Term.Name 30 33
+                Type.Apply 35 41
+                  Type.Name 35 38
+                  Type.ArgClause 38 41
+                    Type.Name 39 40
+              Mod.Using 24 29
+          Type.Apply 44 55
+            Type.Name 44 47
+            Type.ArgClause 47 55
+              Type.Apply 48 54
+                Type.Name 48 51
+                Type.ArgClause 51 54
+                  Type.Name 52 53
+#!program 509 line 1051 Stat dialects.Scala3 :: abstract-given-anonymous
+object W509 {
+given (using Ord[String]): Ord[Int]
+}
+#!scalac refuses: Anonymous given cannot be abstract, or maybe you want to define a concrete given and are missing a `()` argument?
+#!regions L49/
+#!layout
+Source 0 52
+  Defn.Object 0 51
+    Term.Name 7 11
+    Template 12 51
+      Template.Body 12 51
+        Decl.GivenAnonymous 14 49
+          Name.Anonymous 20 20
+          Member.ParamClauseGroup 20 39
+            Type.ParamClause 20 20
+            Term.ParamClause 20 39
+              Term.Param 27 38
+                Mod.Using 21 26
+                Name.Anonymous 27 27
+                Type.Apply 27 38
+                  Type.Name 27 30
+                  Type.ArgClause 30 38
+                    Type.Name 31 37
+              Mod.Using 21 26
+          Type.Apply 41 49
+            Type.Name 41 44
+            Type.ArgClause 44 49
+              Type.Name 45 48
+#!program 510 line 1071 Stat dialects.Scala3 :: #4532
+object W510 {
+given A[Int] & B[Int] = new A[Int] with B[Int] {}
+
+}
+#!scalac ok
+#!regions F63/
+#!layout
+Source 0 67
+  Defn.Object 0 66
+    Term.Name 7 11
+    Template 12 66
+      Template.Body 12 66
+        Defn.GivenAlias 14 63
+          Name.Anonymous 20 20
+          Type.ApplyInfix 20 35
+            Type.Apply 20 26
+              Type.Name 20 21
+              Type.ArgClause 21 26
+                Type.Name 22 25
+            Type.Name 27 28
+            Type.Apply 29 35
+              Type.Name 29 30
+              Type.ArgClause 30 35
+                Type.Name 31 34
+          Term.NewAnonymous 38 63
+            Template 42 63
+              Init 42 48
+                Type.Apply 42 48
+                  Type.Name 42 43
+                  Type.ArgClause 43 48
+                    Type.Name 44 47
+                Name.Anonymous 49 49
+              Init 54 60
+                Type.Apply 54 60
+                  Type.Name 54 55
+                  Type.ArgClause 55 60
+                    Type.Name 56 59
+                Name.Anonymous 61 61
+              Template.Body 61 63

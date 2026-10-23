@@ -1,0 +1,66 @@
+Nodes/Mod.Using/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.Using, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Using\n\nobject Mod_Using:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using a: Int) = a\n  given Int = 1\n  val b = f(using 2)\n"
+  stats Pkg syntax="package nodes.Mod_Using\n\nobject Mod_Using:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using a: Int) = a\n  given Int = 1\n  val b = f(using 2)"
+    .stats = [Defn.Object "object Mod_Using:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using a: Int) = a\n  given Int = 1\n  val b = f(using 2)"]
+    ref Term.Select syntax="nodes.Mod_Using"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Using" syntax="Mod_Using"
+    body Pkg.Body syntax="object Mod_Using:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using a: Int) = a\n  given Int = 1\n  val b = f(using 2)"
+      stats Defn.Object syntax="object Mod_Using:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using a: Int) = a\n  given Int = 1\n  val b = f(using 2)"
+        mods Nil
+        name Term.Name value="Mod_Using" syntax="Mod_Using"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using a: Int) = a\n  given Int = 1\n  val b = f(using 2)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(using a: Int) = a", Defn.GivenAlias "given Int = 1", Defn.Val "val b = f(using 2)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using a: Int) = a\n  given Int = 1\n  val b = f(using 2)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(using a: Int) = a"
+              .paramClauses = [Term.ParamClause "(using a: Int)"]
+              .paramss = [[Term.Param "a: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(using a: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(using a: Int)"
+                  values Term.Param syntax="a: Int"
+                    mods Mod.Using syntax="using"
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod Mod.Using syntax="using"
+              decltpe None
+              body Term.Name value="a" syntax="a"
+            stats Defn.GivenAlias syntax="given Int = 1"
+              .paramClauses = []
+              .tparams = []
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              decltpe Type.Name value="Int" syntax="Int"
+              body Lit.Int value=1 syntax="1"
+            stats Defn.Val syntax="val b = f(using 2)"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Term.Apply syntax="f(using 2)"
+                .args = [Lit.Int "2"]
+                fun Term.Name value="f" syntax="f"
+                argClause Term.ArgClause syntax="(using 2)"
+                  values Lit.Int value=2 syntax="2"
+                  mod Mod.Using syntax="using"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

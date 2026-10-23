@@ -496,7 +496,7 @@ impl<'a> Cmp<'a> {
         use Pat::*;
         // A pattern in parentheses of its own is dotty's `Parens` (`Ast::paren_pats`), which `makeLambda`'s
         // `IdPattern` and `isVarBinding` read: `K` and `(K)` differ.
-        if self.old.paren_pats.contains(&a) != self.new.paren_pats.contains(&b) {
+        if self.old.is_paren_pat(a) != self.new.is_paren_pat(b) {
             return false;
         }
         match (self.old.pat(a), self.new.pat(b)) {

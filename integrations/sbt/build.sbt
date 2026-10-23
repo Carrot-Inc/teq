@@ -22,6 +22,8 @@ addSbtPlugin("org.scala-js" % "sbt-scalajs" % "1.22.0")
 addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.13.1" % Provided)
 // For the export of sbt-native-packager's Docker stage (DockerStage), reached only in a build that has it.
 addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.11.7" % Provided)
+// For the export of sbt-scalafix's configuration files and skips (Scalafix), reached only in a build that has it.
+addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.14.7" % Provided)
 
 // The compiler the plugin is released with, the checkout's (Cargo.toml's): the default teqVersion.
 def compilerOf(base: File): String =

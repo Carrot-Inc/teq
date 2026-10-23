@@ -1,0 +1,73 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Type.Function, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_Function\n\nobject Type_Function:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int => Int\n  type B = (Int, Int) => Int\n  type C = Int => Int => Int\n"
+  stats Pkg syntax="package nodes.Type_Function\n\nobject Type_Function:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int => Int\n  type B = (Int, Int) => Int\n  type C = Int => Int => Int"
+    .stats = [Defn.Object "object Type_Function:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int => Int\n  type B = (Int, Int) => Int\n  type C = Int => Int => Int"]
+    ref Term.Select syntax="nodes.Type_Function"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_Function" syntax="Type_Function"
+    body Pkg.Body syntax="object Type_Function:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int => Int\n  type B = (Int, Int) => Int\n  type C = Int => Int => Int"
+      stats Defn.Object syntax="object Type_Function:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int => Int\n  type B = (Int, Int) => Int\n  type C = Int => Int => Int"
+        mods Nil
+        name Term.Name value="Type_Function" syntax="Type_Function"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int => Int\n  type B = (Int, Int) => Int\n  type C = Int => Int => Int"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Type "type A = Int => Int", Defn.Type "type B = (Int, Int) => Int", Defn.Type "type C = Int => Int => Int"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int => Int\n  type B = (Int, Int) => Int\n  type C = Int => Int => Int"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Type syntax="type A = Int => Int"
+              .tparams = []
+              mods Nil
+              name Type.Name value="A" syntax="A"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Function syntax="Int => Int"
+                paramClause Type.FuncParamClause syntax="Int"
+                  values Type.Name value="Int" syntax="Int"
+                res Type.Name value="Int" syntax="Int"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Type syntax="type B = (Int, Int) => Int"
+              .tparams = []
+              mods Nil
+              name Type.Name value="B" syntax="B"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Function syntax="(Int, Int) => Int"
+                paramClause Type.FuncParamClause syntax="(Int, Int)"
+                  values Type.Name value="Int" syntax="Int"
+                  values Type.Name value="Int" syntax="Int"
+                res Type.Name value="Int" syntax="Int"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Type syntax="type C = Int => Int => Int"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Function syntax="Int => Int => Int"
+                paramClause Type.FuncParamClause syntax="Int"
+                  values Type.Name value="Int" syntax="Int"
+                res Type.Function syntax="Int => Int"
+                  paramClause Type.FuncParamClause syntax="Int"
+                    values Type.Name value="Int" syntax="Int"
+                  res Type.Name value="Int" syntax="Int"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+          derives Nil

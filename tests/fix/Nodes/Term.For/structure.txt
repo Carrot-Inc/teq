@@ -1,0 +1,86 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.For, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_For\n\nobject Term_For:\n  val marker = 0 // assert: DumpStructure.structure\n  def f() = for x <- List(1) do println(x)\n  def g() = for (x <- List(1)) println(x)\n"
+  stats Pkg syntax="package nodes.Term_For\n\nobject Term_For:\n  val marker = 0 // assert: DumpStructure.structure\n  def f() = for x <- List(1) do println(x)\n  def g() = for (x <- List(1)) println(x)"
+    .stats = [Defn.Object "object Term_For:\n  val marker = 0 // assert: DumpStructure.structure\n  def f() = for x <- List(1) do println(x)\n  def g() = for (x <- List(1)) println(x)"]
+    ref Term.Select syntax="nodes.Term_For"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_For" syntax="Term_For"
+    body Pkg.Body syntax="object Term_For:\n  val marker = 0 // assert: DumpStructure.structure\n  def f() = for x <- List(1) do println(x)\n  def g() = for (x <- List(1)) println(x)"
+      stats Defn.Object syntax="object Term_For:\n  val marker = 0 // assert: DumpStructure.structure\n  def f() = for x <- List(1) do println(x)\n  def g() = for (x <- List(1)) println(x)"
+        mods Nil
+        name Term.Name value="Term_For" syntax="Term_For"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f() = for x <- List(1) do println(x)\n  def g() = for (x <- List(1)) println(x)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f() = for x <- List(1) do println(x)", Defn.Def "def g() = for (x <- List(1)) println(x)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f() = for x <- List(1) do println(x)\n  def g() = for (x <- List(1)) println(x)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f() = for x <- List(1) do println(x)"
+              .paramClauses = [Term.ParamClause "()"]
+              .paramss = [[]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="()"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="()"
+                  values Nil
+                  mod None
+              decltpe None
+              body Term.For syntax="for x <- List(1) do println(x)"
+                .enums = [Enumerator.Generator "x <- List(1)"]
+                enumsBlock Term.EnumeratorsBlock syntax="x <- List(1)"
+                  enums Enumerator.Generator syntax="x <- List(1)"
+                    pat Pat.Var syntax="x"
+                      name Term.Name value="x" syntax="x"
+                    rhs Term.Apply syntax="List(1)"
+                      .args = [Lit.Int "1"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Term.ArgClause syntax="(1)"
+                        values Lit.Int value=1 syntax="1"
+                        mod None
+                body Term.Apply syntax="println(x)"
+                  .args = [Term.Name "x"]
+                  fun Term.Name value="println" syntax="println"
+                  argClause Term.ArgClause syntax="(x)"
+                    values Term.Name value="x" syntax="x"
+                    mod None
+            stats Defn.Def syntax="def g() = for (x <- List(1)) println(x)"
+              .paramClauses = [Term.ParamClause "()"]
+              .paramss = [[]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Member.ParamClauseGroup syntax="()"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="()"
+                  values Nil
+                  mod None
+              decltpe None
+              body Term.For syntax="for (x <- List(1)) println(x)"
+                .enums = [Enumerator.Generator "x <- List(1)"]
+                enumsBlock Term.EnumeratorsBlock syntax="(x <- List(1))"
+                  enums Enumerator.Generator syntax="x <- List(1)"
+                    pat Pat.Var syntax="x"
+                      name Term.Name value="x" syntax="x"
+                    rhs Term.Apply syntax="List(1)"
+                      .args = [Lit.Int "1"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Term.ArgClause syntax="(1)"
+                        values Lit.Int value=1 syntax="1"
+                        mod None
+                body Term.Apply syntax="println(x)"
+                  .args = [Term.Name "x"]
+                  fun Term.Name value="println" syntax="println"
+                  argClause Term.ArgClause syntax="(x)"
+                    values Term.Name value="x" syntax="x"
+                    mod None
+          derives Nil

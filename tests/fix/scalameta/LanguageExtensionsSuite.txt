@@ -1,0 +1,11 @@
+# The programs of scalameta 4.17.4's LanguageExtensionsSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 655 line 23 Stat dialects.Scala3.withAllowTrackedParameters(true) :: tracked modifier for val param of class
+object W655 {
+class Vec(tracked val size: Int)
+}
+#!scalac refuses: ':' expected, but 'val' found
+#!dialect dialects.Scala3.withAllowTrackedParameters(true) gives another tree
+#!regions L46/
+#!layout
+refused: `)` expected but `val` found

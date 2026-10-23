@@ -1,0 +1,939 @@
+# The programs of scalameta 4.17.4's ExtensionMethodsSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 299 line 25 BlockStat dialects.Scala3 :: simple-method
+object W299 {
+  def w = {
+extension (c: Circle) def crc: Int = 2
+}
+}
+#!scalac ok
+#!regions L64/ L66/
+#!layout
+Source 0 69
+  Defn.Object 0 68
+    Term.Name 7 11
+    Template 12 68
+      Template.Body 12 68
+        Defn.Def 16 66
+          Term.Name 20 21
+          Term.Block 24 66
+            Defn.ExtensionGroup 26 64
+              Member.ParamClauseGroup 36 47
+                Type.ParamClause 36 36
+                Term.ParamClause 36 47
+                  Term.Param 37 46
+                    Term.Name 37 38
+                    Type.Name 40 46
+              Defn.Def 48 64
+                Term.Name 52 55
+                Type.Name 57 60
+                Lit.Int 63 64
+#!program 300 line 31 BlockStat dialects.Scala3 :: modifier-method
+object W300 {
+  def w = {
+extension (c: Circle) private def crc: Int = 2
+}
+}
+#!scalac ok
+#!regions L72/ L74/
+#!layout
+Source 0 77
+  Defn.Object 0 76
+    Term.Name 7 11
+    Template 12 76
+      Template.Body 12 76
+        Defn.Def 16 74
+          Term.Name 20 21
+          Term.Block 24 74
+            Defn.ExtensionGroup 26 72
+              Member.ParamClauseGroup 36 47
+                Type.ParamClause 36 36
+                Term.ParamClause 36 47
+                  Term.Param 37 46
+                    Term.Name 37 38
+                    Type.Name 40 46
+              Defn.Def 48 72
+                Mod.Private 48 55
+                  Name.Anonymous 56 56
+                Term.Name 60 63
+                Type.Name 65 68
+                Lit.Int 71 72
+#!program 301 line 43 BlockStat dialects.Scala3 :: simple-method-indent
+object W301 {
+  def w = {
+extension (c: Circle)
+  def crc: Int = 2
+
+}
+}
+#!scalac ok
+#!regions I47/2 O67/ L69/
+#!layout
+Source 0 72
+  Defn.Object 0 71
+    Term.Name 7 11
+    Template 12 71
+      Template.Body 12 71
+        Defn.Def 16 69
+          Term.Name 20 21
+          Term.Block 24 69
+            Defn.ExtensionGroup 26 66
+              Member.ParamClauseGroup 36 47
+                Type.ParamClause 36 36
+                Term.ParamClause 36 47
+                  Term.Param 37 46
+                    Term.Name 37 38
+                    Type.Name 40 46
+              Defn.Def 50 66
+                Term.Name 54 57
+                Type.Name 59 62
+                Lit.Int 65 66
+#!program 302 line 57 BlockStat dialects.Scala3 :: modifier-method-indent
+object W302 {
+  def w = {
+extension (c: Circle)
+  private def crc: Int = 2
+
+}
+}
+#!scalac ok
+#!regions I47/2 O75/ L77/
+#!layout
+Source 0 80
+  Defn.Object 0 79
+    Term.Name 7 11
+    Template 12 79
+      Template.Body 12 79
+        Defn.Def 16 77
+          Term.Name 20 21
+          Term.Block 24 77
+            Defn.ExtensionGroup 26 74
+              Member.ParamClauseGroup 36 47
+                Type.ParamClause 36 36
+                Term.ParamClause 36 47
+                  Term.Param 37 46
+                    Term.Name 37 38
+                    Type.Name 40 46
+              Defn.Def 50 74
+                Mod.Private 50 57
+                  Name.Anonymous 58 58
+                Term.Name 62 65
+                Type.Name 67 70
+                Lit.Int 73 74
+#!program 303 line 73 BlockStat dialects.Scala3 :: multiple-methods-indent
+object W303 {
+  def w = {
+extension (c: Circle)
+  def cra: Int = 2
+  def crb: String = "3"
+  def crc: Boolean = 4
+
+}
+}
+#!scalac ok
+#!regions I47/2 L66/2 L90/2 O114/ L116/
+#!layout
+Source 0 119
+  Defn.Object 0 118
+    Term.Name 7 11
+    Template 12 118
+      Template.Body 12 118
+        Defn.Def 16 116
+          Term.Name 20 21
+          Term.Block 24 116
+            Defn.ExtensionGroup 26 113
+              Member.ParamClauseGroup 36 47
+                Type.ParamClause 36 36
+                Term.ParamClause 36 47
+                  Term.Param 37 46
+                    Term.Name 37 38
+                    Type.Name 40 46
+              Term.Block 50 113
+                Defn.Def 50 66
+                  Term.Name 54 57
+                  Type.Name 59 62
+                  Lit.Int 65 66
+                Defn.Def 69 90
+                  Term.Name 73 76
+                  Type.Name 78 84
+                  Lit.String 87 90
+                Defn.Def 93 113
+                  Term.Name 97 100
+                  Type.Name 102 109
+                  Lit.Int 112 113
+#!program 304 line 90 BlockStat dialects.Scala3 :: simple-method-braces
+object W304 {
+  def w = {
+extension (c: Circle) {
+  def crc: Int = 2
+}
+
+}
+}
+#!scalac ok
+#!regions L68/ F70/ L73/
+#!layout
+Source 0 76
+  Defn.Object 0 75
+    Term.Name 7 11
+    Template 12 75
+      Template.Body 12 75
+        Defn.Def 16 73
+          Term.Name 20 21
+          Term.Block 24 73
+            Defn.ExtensionGroup 26 70
+              Member.ParamClauseGroup 36 47
+                Type.ParamClause 36 36
+                Term.ParamClause 36 47
+                  Term.Param 37 46
+                    Term.Name 37 38
+                    Type.Name 40 46
+              Term.Block 48 70
+                Defn.Def 52 68
+                  Term.Name 56 59
+                  Type.Name 61 64
+                  Lit.Int 67 68
+#!program 305 line 116 BlockStat dialects.Scala3 :: extension-using-single
+object W305 {
+  def w = {
+extension (c: Circle)(using Context, x: Int) {
+  def crc: Int = 2
+}
+
+}
+}
+#!scalac refuses: ')' expected, but ':' found
+#!regions L91/ F93/ L96/
+#!layout
+Source 0 99
+  Defn.Object 0 98
+    Term.Name 7 11
+    Template 12 98
+      Template.Body 12 98
+        Defn.Def 16 96
+          Term.Name 20 21
+          Term.Block 24 96
+            Defn.ExtensionGroup 26 93
+              Member.ParamClauseGroup 36 70
+                Type.ParamClause 36 36
+                Term.ParamClause 36 47
+                  Term.Param 37 46
+                    Term.Name 37 38
+                    Type.Name 40 46
+                Term.ParamClause 47 70
+                  Term.Param 54 61
+                    Mod.Using 48 53
+                    Name.Anonymous 54 54
+                    Type.Name 54 61
+                  Term.Param 63 69
+                    Mod.Using 48 53
+                    Term.Name 63 64
+                    Type.Name 66 69
+                  Mod.Using 48 53
+              Term.Block 71 93
+                Defn.Def 75 91
+                  Term.Name 79 82
+                  Type.Name 84 87
+                  Lit.Int 90 91
+#!program 306 line 139 BlockStat dialects.Scala3 :: extension-using-newline
+object W306 {
+  def w = {
+extension (c: Circle)
+  (using Context, x: Int) 
+{
+  def crc: Int = 2
+}
+
+}
+}
+#!scalac refuses: ')' expected, but ':' found
+#!regions L95/ F97/ L100/
+#!layout
+Source 0 103
+  Defn.Object 0 102
+    Term.Name 7 11
+    Template 12 102
+      Template.Body 12 102
+        Defn.Def 16 100
+          Term.Name 20 21
+          Term.Block 24 100
+            Defn.ExtensionGroup 26 97
+              Member.ParamClauseGroup 36 73
+                Type.ParamClause 36 36
+                Term.ParamClause 36 47
+                  Term.Param 37 46
+                    Term.Name 37 38
+                    Type.Name 40 46
+                Term.ParamClause 50 73
+                  Term.Param 57 64
+                    Mod.Using 51 56
+                    Name.Anonymous 57 57
+                    Type.Name 57 64
+                  Term.Param 66 72
+                    Mod.Using 51 56
+                    Term.Name 66 67
+                    Type.Name 69 72
+                  Mod.Using 51 56
+              Term.Block 75 97
+                Defn.Def 79 95
+                  Term.Name 83 86
+                  Type.Name 88 91
+                  Lit.Int 94 95
+#!program 307 line 160 BlockStat dialects.Scala3 :: extension-using-multi
+object W307 {
+  def w = {
+extension (c: Circle)(using Context, x: Int)(using y: String, File) {
+  def crc: Int = 2
+}
+
+}
+}
+#!scalac refuses: ')' expected, but ':' found
+#!regions L114/ F116/ L119/
+#!layout
+Source 0 122
+  Defn.Object 0 121
+    Term.Name 7 11
+    Template 12 121
+      Template.Body 12 121
+        Defn.Def 16 119
+          Term.Name 20 21
+          Term.Block 24 119
+            Defn.ExtensionGroup 26 116
+              Member.ParamClauseGroup 36 93
+                Type.ParamClause 36 36
+                Term.ParamClause 36 47
+                  Term.Param 37 46
+                    Term.Name 37 38
+                    Type.Name 40 46
+                Term.ParamClause 47 70
+                  Term.Param 54 61
+                    Mod.Using 48 53
+                    Name.Anonymous 54 54
+                    Type.Name 54 61
+                  Term.Param 63 69
+                    Mod.Using 48 53
+                    Term.Name 63 64
+                    Type.Name 66 69
+                  Mod.Using 48 53
+                Term.ParamClause 70 93
+                  Term.Param 77 86
+                    Mod.Using 71 76
+                    Term.Name 77 78
+                    Type.Name 80 86
+                  Term.Param 88 92
+                    Mod.Using 71 76
+                    Name.Anonymous 88 88
+                    Type.Name 88 92
+                  Mod.Using 71 76
+              Term.Block 94 116
+                Defn.Def 98 114
+                  Term.Name 102 105
+                  Type.Name 107 110
+                  Lit.Int 113 114
+#!program 308 line 172 BlockStat dialects.Scala3 :: extension-additional-comment
+object W308 {
+  def w = {
+extension (a: Int)
+
+
+    /** */
+
+
+    def double = a * 2
+    
+    /** */
+
+}
+}
+#!scalac ok
+#!regions I59/4 O99/ L101/
+#!layout
+Source 0 104
+  Defn.Object 0 103
+    Term.Name 7 11
+    Template 12 103
+      Template.Body 12 103
+        Defn.Def 16 101
+          Term.Name 20 21
+          Term.Block 24 101
+            Defn.ExtensionGroup 26 98
+              Member.ParamClauseGroup 36 44
+                Type.ParamClause 36 36
+                Term.ParamClause 36 44
+                  Term.Param 37 43
+                    Term.Name 37 38
+                    Type.Name 40 43
+              Term.Block 64 98
+                Defn.Def 64 82
+                  Term.Name 68 74
+                  Term.ApplyInfix 77 82
+                    Term.Name 77 78
+                    Term.Name 79 80
+                    Type.ArgClause 81 81
+                    Term.ArgClause 81 82
+                      Lit.Int 81 82
+#!program 309 line 206 BlockStat dialects.Scala3 :: extension-named-method
+object W309 {
+  def w = {
+object A {
+  def extension(a: Int) = a + 2
+  `extension`(2)
+}
+}
+}
+#!scalac ok
+#!regions L68/ L85/ L87/ L89/
+#!layout
+Source 0 92
+  Defn.Object 0 91
+    Term.Name 7 11
+    Template 12 91
+      Template.Body 12 91
+        Defn.Def 16 89
+          Term.Name 20 21
+          Term.Block 24 89
+            Defn.Object 26 87
+              Term.Name 33 34
+              Template 35 87
+                Template.Body 35 87
+                  Defn.Def 39 68
+                    Term.Name 43 52
+                    Member.ParamClauseGroup 52 60
+                      Type.ParamClause 52 52
+                      Term.ParamClause 52 60
+                        Term.Param 53 59
+                          Term.Name 53 54
+                          Type.Name 56 59
+                    Term.ApplyInfix 63 68
+                      Term.Name 63 64
+                      Term.Name 65 66
+                      Type.ArgClause 67 67
+                      Term.ArgClause 67 68
+                        Lit.Int 67 68
+                  Term.Apply 71 85
+                    Term.Name 71 82
+                    Term.ArgClause 82 85
+                      Lit.Int 83 84
+#!program 310 line 229 BlockStat dialects.Scala3 :: extension-named-method
+object W310 {
+  def w = {
+extension + 3
+}
+}
+#!scalac ok
+#!regions L39/ L41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 11
+    Template 12 43
+      Template.Body 12 43
+        Defn.Def 16 41
+          Term.Name 20 21
+          Term.Block 24 41
+            Term.ApplyInfix 26 39
+              Term.Name 26 35
+              Term.Name 36 37
+              Type.ArgClause 38 38
+              Term.ArgClause 38 39
+                Lit.Int 38 39
+#!program 311 line 231 BlockStat dialects.Scala3 :: extension-named-method
+object W311 {
+  def w = {
+def extension(x: extension): extension = x
+}
+}
+#!scalac ok
+#!regions L68/ L70/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Defn.Def 16 70
+          Term.Name 20 21
+          Term.Block 24 70
+            Defn.Def 26 68
+              Term.Name 30 39
+              Member.ParamClauseGroup 39 53
+                Type.ParamClause 39 39
+                Term.ParamClause 39 53
+                  Term.Param 40 52
+                    Term.Name 40 41
+                    Type.Name 43 52
+              Type.Name 55 64
+              Term.Name 67 68
+#!program 312 line 240 BlockStat dialects.Scala3 :: extension-named-method
+object W312 {
+  def w = {
+extension.extension(3)
+}
+}
+#!scalac ok
+#!regions L48/ L50/
+#!layout
+Source 0 53
+  Defn.Object 0 52
+    Term.Name 7 11
+    Template 12 52
+      Template.Body 12 52
+        Defn.Def 16 50
+          Term.Name 20 21
+          Term.Block 24 50
+            Term.Apply 26 48
+              Term.Select 26 45
+                Term.Name 26 35
+                Term.Name 36 45
+              Term.ArgClause 45 48
+                Lit.Int 46 47
+#!program 313 line 244 BlockStat dialects.Scala3 :: method-type-params
+object W313 {
+  def w = {
+extension [T](xs: List[T]) def sumBy[U](t: T): U = ???
+}
+}
+#!scalac ok
+#!regions L80/ L82/
+#!layout
+Source 0 85
+  Defn.Object 0 84
+    Term.Name 7 11
+    Template 12 84
+      Template.Body 12 84
+        Defn.Def 16 82
+          Term.Name 20 21
+          Term.Block 24 82
+            Defn.ExtensionGroup 26 80
+              Member.ParamClauseGroup 36 52
+                Type.ParamClause 36 39
+                  Type.Param 37 38
+                    Type.Name 37 38
+                    Type.ParamClause 38 38
+                    Type.Bounds 38 38
+                Term.ParamClause 39 52
+                  Term.Param 40 51
+                    Term.Name 40 42
+                    Type.Apply 44 51
+                      Type.Name 44 48
+                      Type.ArgClause 48 51
+                        Type.Name 49 50
+              Defn.Def 53 80
+                Term.Name 57 62
+                Member.ParamClauseGroup 62 71
+                  Type.ParamClause 62 65
+                    Type.Param 63 64
+                      Type.Name 63 64
+                      Type.ParamClause 64 64
+                      Type.Bounds 64 64
+                  Term.ParamClause 65 71
+                    Term.Param 66 70
+                      Term.Name 66 67
+                      Type.Name 69 70
+                Type.Name 73 74
+                Term.Name 77 80
+#!program 314 line 261 BlockStat dialects.Scala3 :: method-using-before
+object W314 {
+  def w = {
+extension (using a: Int)(b: Int) def hello = a + b
+}
+}
+#!scalac ok
+#!regions L76/ L78/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Defn.Def 16 78
+          Term.Name 20 21
+          Term.Block 24 78
+            Defn.ExtensionGroup 26 76
+              Member.ParamClauseGroup 36 58
+                Type.ParamClause 36 36
+                Term.ParamClause 36 50
+                  Term.Param 43 49
+                    Mod.Using 37 42
+                    Term.Name 43 44
+                    Type.Name 46 49
+                  Mod.Using 37 42
+                Term.ParamClause 50 58
+                  Term.Param 51 57
+                    Term.Name 51 52
+                    Type.Name 54 57
+              Defn.Def 59 76
+                Term.Name 63 68
+                Term.ApplyInfix 71 76
+                  Term.Name 71 72
+                  Term.Name 73 74
+                  Type.ArgClause 75 75
+                  Term.ArgClause 75 76
+                    Term.Name 75 76
+#!program 315 line 269 BlockStat dialects.Scala3 :: method-multi-using
+object W315 {
+  def w = {
+extension 
+  (
+    using a: Int
+  )
+  (
+    b: Int
+  )
+  (
+    using c: String
+  ) 
+    def hello = a + b + c.toInt
+}
+}
+#!scalac ok
+#!regions I109/4 O141/ L141/ L143/
+#!layout
+Source 0 146
+  Defn.Object 0 145
+    Term.Name 7 11
+    Template 12 145
+      Template.Body 12 145
+        Defn.Def 16 143
+          Term.Name 20 21
+          Term.Block 24 143
+            Defn.ExtensionGroup 26 141
+              Member.ParamClauseGroup 39 108
+                Type.ParamClause 39 39
+                Term.ParamClause 39 61
+                  Term.Param 51 57
+                    Mod.Using 45 50
+                    Term.Name 51 52
+                    Type.Name 54 57
+                  Mod.Using 45 50
+                Term.ParamClause 64 80
+                  Term.Param 70 76
+                    Term.Name 70 71
+                    Type.Name 73 76
+                Term.ParamClause 83 108
+                  Term.Param 95 104
+                    Mod.Using 89 94
+                    Term.Name 95 96
+                    Type.Name 98 104
+                  Mod.Using 89 94
+              Defn.Def 114 141
+                Term.Name 118 123
+                Term.ApplyInfix 126 141
+                  Term.ApplyInfix 126 131
+                    Term.Name 126 127
+                    Term.Name 128 129
+                    Type.ArgClause 130 130
+                    Term.ArgClause 130 131
+                      Term.Name 130 131
+                  Term.Name 132 133
+                  Type.ArgClause 134 134
+                  Term.ArgClause 134 141
+                    Term.Select 134 141
+                      Term.Name 134 135
+                      Term.Name 136 141
+#!program 316 line 302 BlockStat dialects.Scala3 :: private-export
+object W316 {
+  def w = {
+extension (i: Int)
+  private def richInt = RichInt(i)
+  export richInt.*
+
+}
+}
+#!scalac ok
+#!regions I44/2 L79/2 O99/ L101/
+#!layout
+Source 0 104
+  Defn.Object 0 103
+    Term.Name 7 11
+    Template 12 103
+      Template.Body 12 103
+        Defn.Def 16 101
+          Term.Name 20 21
+          Term.Block 24 101
+            Defn.ExtensionGroup 26 98
+              Member.ParamClauseGroup 36 44
+                Type.ParamClause 36 36
+                Term.ParamClause 36 44
+                  Term.Param 37 43
+                    Term.Name 37 38
+                    Type.Name 40 43
+              Term.Block 47 98
+                Defn.Def 47 79
+                  Mod.Private 47 54
+                    Name.Anonymous 55 55
+                  Term.Name 59 66
+                  Term.Apply 69 79
+                    Term.Name 69 76
+                    Term.ArgClause 76 79
+                      Term.Name 77 78
+                Export 82 98
+                  Importer 89 98
+                    Term.Name 89 96
+                    Importee.Wildcard 97 98
+#!program 317 line 332 BlockStat dialects.Scala3 :: #3215 1
+object W317 {
+  def w = {
+  extension (x: X)
+
+    def foo: Foo =
+      getFoo
+    end foo
+
+    def bar: Bar =
+      getBar
+    end bar
+
+}
+}
+#!scalac ok
+#!regions I45/4 I64/6.4 O77/4 L77/4 F89/4 I109/6.4 O122/4 L122/4 O135/ L137/
+#!layout
+Source 0 140
+  Defn.Object 0 139
+    Term.Name 7 11
+    Template 12 139
+      Template.Body 12 139
+        Defn.Def 16 137
+          Term.Name 20 21
+          Term.Block 24 137
+            Defn.ExtensionGroup 28 134
+              Member.ParamClauseGroup 38 44
+                Type.ParamClause 38 38
+                Term.ParamClause 38 44
+                  Term.Param 39 43
+                    Term.Name 39 40
+                    Type.Name 42 43
+              Term.Block 50 134
+                Defn.Def 50 77
+                  Term.Name 54 57
+                  Type.Name 59 62
+                  Term.Name 71 77
+                Term.EndMarker 82 89
+                  Term.Name 86 89
+                Defn.Def 95 122
+                  Term.Name 99 102
+                  Type.Name 104 107
+                  Term.Name 116 122
+                Term.EndMarker 127 134
+                  Term.Name 131 134
+#!program 318 line 365 BlockStat dialects.Scala3 :: #3215 2
+object W318 {
+  def w = {
+object MtagsEnrichments extends ScalametaCommonEnrichments:
+  extension (x: X)
+
+    def foo: Foo =
+      getFoo
+    end foo
+
+    def bar: Bar =
+      getBar
+    end bar
+
+}
+}
+#!scalac ok
+#!regions I85/2 I105/4.2 I124/6.4.2 O137/4.2 L137/4.2 F149/4.2 I169/6.4.2 O182/4.2 L182/4.2 O195/2 O195/ L197/
+#!layout
+Source 0 200
+  Defn.Object 0 199
+    Term.Name 7 11
+    Template 12 199
+      Template.Body 12 199
+        Defn.Def 16 197
+          Term.Name 20 21
+          Term.Block 24 197
+            Defn.Object 26 194
+              Term.Name 33 49
+              Template 50 194
+                Init 58 84
+                  Type.Name 58 84
+                  Name.Anonymous 84 84
+                Template.Body 84 194
+                  Defn.ExtensionGroup 88 194
+                    Member.ParamClauseGroup 98 104
+                      Type.ParamClause 98 98
+                      Term.ParamClause 98 104
+                        Term.Param 99 103
+                          Term.Name 99 100
+                          Type.Name 102 103
+                    Term.Block 110 194
+                      Defn.Def 110 137
+                        Term.Name 114 117
+                        Type.Name 119 122
+                        Term.Name 131 137
+                      Term.EndMarker 142 149
+                        Term.Name 146 149
+                      Defn.Def 155 182
+                        Term.Name 159 162
+                        Type.Name 164 167
+                        Term.Name 176 182
+                      Term.EndMarker 187 194
+                        Term.Name 191 194
+#!program 319 line 408 BlockStat dialects.Scala3 :: #3215 3
+object W319 {
+  def w = {
+object MtagsEnrichments extends ScalametaCommonEnrichments {
+  extension (x: X)
+
+    def foo: Foo =
+      getFoo
+    end foo
+
+    def bar: Bar =
+      getBar
+    end bar
+}
+
+}
+}
+#!scalac ok
+#!regions I106/4 I125/6.4 O138/4 L138/4 F150/4 I170/6.4 O183/4 L183/4 O195/ L195/ F197/ L200/
+#!layout
+Source 0 203
+  Defn.Object 0 202
+    Term.Name 7 11
+    Template 12 202
+      Template.Body 12 202
+        Defn.Def 16 200
+          Term.Name 20 21
+          Term.Block 24 200
+            Defn.Object 26 197
+              Term.Name 33 49
+              Template 50 197
+                Init 58 84
+                  Type.Name 58 84
+                  Name.Anonymous 85 85
+                Template.Body 85 197
+                  Defn.ExtensionGroup 89 195
+                    Member.ParamClauseGroup 99 105
+                      Type.ParamClause 99 99
+                      Term.ParamClause 99 105
+                        Term.Param 100 104
+                          Term.Name 100 101
+                          Type.Name 103 104
+                    Term.Block 111 195
+                      Defn.Def 111 138
+                        Term.Name 115 118
+                        Type.Name 120 123
+                        Term.Name 132 138
+                      Term.EndMarker 143 150
+                        Term.Name 147 150
+                      Defn.Def 156 183
+                        Term.Name 160 163
+                        Type.Name 165 168
+                        Term.Name 177 183
+                      Term.EndMarker 188 195
+                        Term.Name 192 195
+#!program 320 line 452 BlockStat dialects.Scala3 :: #3231 1
+object W320 {
+  def w = {
+object A {
+  self =>
+  extension (x: X)
+    @annoFoo
+    def foo: Foo =
+      getFoo
+
+    @annoBar
+    def bar: Bar =
+      getBar
+}
+
+}
+}
+#!scalac ok
+#!regions I65/4 L78/4 I97/6.4 O111/4 F111/4 L124/4 I143/6.4 O156/4 O156/ L156/ F158/ L161/
+#!layout
+Source 0 164
+  Defn.Object 0 163
+    Term.Name 7 11
+    Template 12 163
+      Template.Body 12 163
+        Defn.Def 16 161
+          Term.Name 20 21
+          Term.Block 24 161
+            Defn.Object 26 158
+              Term.Name 33 34
+              Template 35 158
+                Template.Body 35 158
+                  Self 39 46
+                    Term.Name 39 43
+                  Defn.ExtensionGroup 49 156
+                    Member.ParamClauseGroup 59 65
+                      Type.ParamClause 59 59
+                      Term.ParamClause 59 65
+                        Term.Param 60 64
+                          Term.Name 60 61
+                          Type.Name 63 64
+                    Term.Block 70 156
+                      Defn.Def 70 110
+                        Mod.Annot 70 78
+                          Init 71 78
+                            Type.Name 71 78
+                            Name.Anonymous 78 78
+                        Term.Name 87 90
+                        Type.Name 92 95
+                        Term.Name 104 110
+                      Defn.Def 116 156
+                        Mod.Annot 116 124
+                          Init 117 124
+                            Type.Name 117 124
+                            Name.Anonymous 124 124
+                        Term.Name 133 136
+                        Type.Name 138 141
+                        Term.Name 150 156
+#!program 321 line 504 BlockStat dialects.Scala3 :: #3231 2
+object W321 {
+  def w = {
+object A {
+  self =>
+  extension (x: X)
+    private def foo: Foo =
+      getFoo
+
+    protected def bar: Bar =
+      getBar
+}
+
+}
+}
+#!scalac ok
+#!regions I65/4 I92/6.4 O106/4 F106/4 I135/6.4 O148/4 O148/ L148/ F150/ L153/
+#!layout
+Source 0 156
+  Defn.Object 0 155
+    Term.Name 7 11
+    Template 12 155
+      Template.Body 12 155
+        Defn.Def 16 153
+          Term.Name 20 21
+          Term.Block 24 153
+            Defn.Object 26 150
+              Term.Name 33 34
+              Template 35 150
+                Template.Body 35 150
+                  Self 39 46
+                    Term.Name 39 43
+                  Defn.ExtensionGroup 49 148
+                    Member.ParamClauseGroup 59 65
+                      Type.ParamClause 59 59
+                      Term.ParamClause 59 65
+                        Term.Param 60 64
+                          Term.Name 60 61
+                          Type.Name 63 64
+                    Term.Block 70 148
+                      Defn.Def 70 105
+                        Mod.Private 70 77
+                          Name.Anonymous 78 78
+                        Term.Name 82 85
+                        Type.Name 87 90
+                        Term.Name 99 105
+                      Defn.Def 111 148
+                        Mod.Protected 111 120
+                          Name.Anonymous 121 121
+                        Term.Name 125 128
+                        Type.Name 130 133
+                        Term.Name 142 148

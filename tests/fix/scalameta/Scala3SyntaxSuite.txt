@@ -1,0 +1,270 @@
+# The programs of scalameta 4.17.4's Scala3SyntaxSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 960 line 9 Stat dialects.Scala3 :: given intOrd: Ord[Int] with  { def f(): Int = 1 }
+object W960 {
+given intOrd: Ord[Int] with 
+{ def f(): Int = 1 }
+}
+#!scalac ok
+#!regions L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Given 14 63
+          Term.Name 20 26
+          Template 28 63
+            Init 28 36
+              Type.Apply 28 36
+                Type.Name 28 31
+                Type.ArgClause 31 36
+                  Type.Name 32 35
+              Name.Anonymous 37 37
+            Template.Body 43 63
+              Defn.Def 45 61
+                Term.Name 49 50
+                Member.ParamClauseGroup 50 52
+                  Type.ParamClause 50 50
+                  Term.ParamClause 50 52
+                Type.Name 54 57
+                Lit.Int 60 61
+#!program 961 line 13 Stat dialects.Scala3 :: given intOrd: Ord[Int] with  { def f(): Int = 1 }
+object W961 {
+given intOrd: Ord[Int] with 
+{ def f(): Int = 1 }
+}
+#!scalac ok
+#!regions L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Given 14 63
+          Term.Name 20 26
+          Template 28 63
+            Init 28 36
+              Type.Apply 28 36
+                Type.Name 28 31
+                Type.ArgClause 31 36
+                  Type.Name 32 35
+              Name.Anonymous 37 37
+            Template.Body 43 63
+              Defn.Def 45 61
+                Term.Name 49 50
+                Member.ParamClauseGroup 50 52
+                  Type.ParamClause 50 50
+                  Term.ParamClause 50 52
+                Type.Name 54 57
+                Lit.Int 60 61
+#!program 962 line 23 Stat dialects.Scala3 :: private final given intOrd: Ord[Int] with  { def f(): Int = 1 }
+object W962 {
+private final given intOrd: Ord[Int] with 
+{ def f(): Int = 1 }
+}
+#!scalac ok
+#!regions L77/
+#!layout
+Source 0 80
+  Defn.Object 0 79
+    Term.Name 7 11
+    Template 12 79
+      Template.Body 12 79
+        Defn.Given 14 77
+          Mod.Private 14 21
+            Name.Anonymous 22 22
+          Mod.Final 22 27
+          Term.Name 34 40
+          Template 42 77
+            Init 42 50
+              Type.Apply 42 50
+                Type.Name 42 45
+                Type.ArgClause 45 50
+                  Type.Name 46 49
+              Name.Anonymous 51 51
+            Template.Body 57 77
+              Defn.Def 59 75
+                Term.Name 63 64
+                Member.ParamClauseGroup 64 66
+                  Type.ParamClause 64 64
+                  Term.ParamClause 64 66
+                Type.Name 68 71
+                Lit.Int 74 75
+#!program 963 line 27 Stat dialects.Scala3 :: private final given intOrd: Ord[Int] with  { def f(): Int = 1 }
+object W963 {
+private final given intOrd: Ord[Int] with 
+{ def f(): Int = 1 }
+}
+#!scalac ok
+#!regions L77/
+#!layout
+Source 0 80
+  Defn.Object 0 79
+    Term.Name 7 11
+    Template 12 79
+      Template.Body 12 79
+        Defn.Given 14 77
+          Mod.Private 14 21
+            Name.Anonymous 22 22
+          Mod.Final 22 27
+          Term.Name 34 40
+          Template 42 77
+            Init 42 50
+              Type.Apply 42 50
+                Type.Name 42 45
+                Type.ArgClause 45 50
+                  Type.Name 46 49
+              Name.Anonymous 51 51
+            Template.Body 57 77
+              Defn.Def 59 75
+                Term.Name 63 64
+                Member.ParamClauseGroup 64 66
+                  Type.ParamClause 64 64
+                  Term.ParamClause 64 66
+                Type.Name 68 71
+                Lit.Int 74 75
+#!program 964 line 39 Stat dialects.Scala3 :: enum C extends A with B { case D }
+object W964 {
+enum C extends A with B { case D }
+}
+#!scalac ok
+#!regions L48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Defn.Enum 14 48
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 48
+            Init 29 30
+              Type.Name 29 30
+              Name.Anonymous 31 31
+            Init 36 37
+              Type.Name 36 37
+              Name.Anonymous 38 38
+            Template.Body 38 48
+              Defn.EnumCase 40 46
+                Term.Name 45 46
+                Type.ParamClause 47 47
+                Ctor.Primary 47 47
+                  Name.Anonymous 47 47
+#!program 965 line 42 Stat dialects.Scala3 :: enum C extends A with B { case D }
+object W965 {
+enum C extends A with B { case D }
+}
+#!scalac ok
+#!regions L48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Defn.Enum 14 48
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 48
+            Init 29 30
+              Type.Name 29 30
+              Name.Anonymous 31 31
+            Init 36 37
+              Type.Name 36 37
+              Name.Anonymous 38 38
+            Template.Body 38 48
+              Defn.EnumCase 40 46
+                Term.Name 45 46
+                Type.ParamClause 47 47
+                Ctor.Primary 47 47
+                  Name.Anonymous 47 47
+#!program 966 line 53 Stat dialects.Scala3 :: protected enum C extends A with B { case D }
+object W966 {
+protected enum C extends A with B { case D }
+}
+#!scalac ok
+#!regions L58/
+#!layout
+Source 0 61
+  Defn.Object 0 60
+    Term.Name 7 11
+    Template 12 60
+      Template.Body 12 60
+        Defn.Enum 14 58
+          Mod.Protected 14 23
+            Name.Anonymous 24 24
+          Type.Name 29 30
+          Type.ParamClause 31 31
+          Ctor.Primary 31 31
+            Name.Anonymous 31 31
+          Template 31 58
+            Init 39 40
+              Type.Name 39 40
+              Name.Anonymous 41 41
+            Init 46 47
+              Type.Name 46 47
+              Name.Anonymous 48 48
+            Template.Body 48 58
+              Defn.EnumCase 50 56
+                Term.Name 55 56
+                Type.ParamClause 57 57
+                Ctor.Primary 57 57
+                  Name.Anonymous 57 57
+#!program 967 line 56 Stat dialects.Scala3 :: protected enum C extends A with B { case D }
+object W967 {
+protected enum C extends A with B { case D }
+}
+#!scalac ok
+#!regions L58/
+#!layout
+Source 0 61
+  Defn.Object 0 60
+    Term.Name 7 11
+    Template 12 60
+      Template.Body 12 60
+        Defn.Enum 14 58
+          Mod.Protected 14 23
+            Name.Anonymous 24 24
+          Type.Name 29 30
+          Type.ParamClause 31 31
+          Ctor.Primary 31 31
+            Name.Anonymous 31 31
+          Template 31 58
+            Init 39 40
+              Type.Name 39 40
+              Name.Anonymous 41 41
+            Init 46 47
+              Type.Name 46 47
+              Name.Anonymous 48 48
+            Template.Body 48 58
+              Defn.EnumCase 50 56
+                Term.Name 55 56
+                Type.ParamClause 57 57
+                Ctor.Primary 57 57
+                  Name.Anonymous 57 57
+#!program 968 line 64 Stat dialects.Scala3 :: given intOrd: Ord[Int]
+object W968 {
+given intOrd: Ord[Int]
+}
+#!scalac ok
+#!regions L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 11
+    Template 12 38
+      Template.Body 12 38
+        Decl.Given 14 36
+          Term.Name 20 26
+          Type.Apply 28 36
+            Type.Name 28 31
+            Type.ArgClause 31 36
+              Type.Name 32 35

@@ -1,0 +1,68 @@
+Nodes/Term.QuotedMacroExpr/input.scala:9:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.QuotedMacroExpr, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_QuotedMacroExpr\nimport scala.quoted.*\n\nobject Term_QuotedMacroExpr:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Quotes): Expr[Int] = '{ 1 + 1 }\n"
+  stats Pkg syntax="package nodes.Term_QuotedMacroExpr\nimport scala.quoted.*\n\nobject Term_QuotedMacroExpr:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Quotes): Expr[Int] = '{ 1 + 1 }"
+    .stats = [Import "import scala.quoted.*", Defn.Object "object Term_QuotedMacroExpr:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Quotes): Expr[Int] = '{ 1 + 1 }"]
+    ref Term.Select syntax="nodes.Term_QuotedMacroExpr"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_QuotedMacroExpr" syntax="Term_QuotedMacroExpr"
+    body Pkg.Body syntax="import scala.quoted.*\n\nobject Term_QuotedMacroExpr:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Quotes): Expr[Int] = '{ 1 + 1 }"
+      stats Import syntax="import scala.quoted.*"
+        importers Importer syntax="scala.quoted.*"
+          ref Term.Select syntax="scala.quoted"
+            qual Term.Name value="scala" syntax="scala"
+            name Term.Name value="quoted" syntax="quoted"
+          importees Importee.Wildcard syntax="*"
+      stats Defn.Object syntax="object Term_QuotedMacroExpr:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Quotes): Expr[Int] = '{ 1 + 1 }"
+        mods Nil
+        name Term.Name value="Term_QuotedMacroExpr" syntax="Term_QuotedMacroExpr"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Quotes): Expr[Int] = '{ 1 + 1 }"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(using Quotes): Expr[Int] = '{ 1 + 1 }"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(using Quotes): Expr[Int] = '{ 1 + 1 }"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(using Quotes): Expr[Int] = '{ 1 + 1 }"
+              .paramClauses = [Term.ParamClause "(using Quotes)"]
+              .paramss = [[Term.Param "Quotes"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(using Quotes)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(using Quotes)"
+                  values Term.Param syntax="Quotes"
+                    mods Mod.Using syntax="using"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    decltpe Type.Name value="Quotes" syntax="Quotes"
+                    default None
+                  mod Mod.Using syntax="using"
+              decltpe Type.Apply syntax="Expr[Int]"
+                .args = [Type.Name "Int"]
+                tpe Type.Name value="Expr" syntax="Expr"
+                argClause Type.ArgClause syntax="[Int]"
+                  values Type.Name value="Int" syntax="Int"
+              body Term.QuotedMacroExpr syntax="'{ 1 + 1 }"
+                body Term.Block syntax="{ 1 + 1 }"
+                  stats Term.ApplyInfix syntax="1 + 1"
+                    .args = [Lit.Int "1"]
+                    .targs = []
+                    lhs Lit.Int value=1 syntax="1"
+                    op Term.Name value="+" syntax="+"
+                    targClause Type.ArgClause syntax=""
+                      values Nil
+                    argClause Term.ArgClause syntax="1"
+                      values Lit.Int value=1 syntax="1"
+                      mod None
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

@@ -26,10 +26,6 @@ pub struct DocView {
     /// A file where an expansion was made, a macro's or an inline method's: NoUnusedImports removes nothing there
     /// (docs/FIX.md, "NoUnusedImports").
     pub expanded: bool,
-    /// The file's import selectors as the parser recorded them, in source order, which the planner's import edits read
-    /// (`typer::unused_edits`), and each importee node's selector.
-    pub imports: Vec<crate::ast::Import>,
-    pub importee_of: Vec<(u32, usize)>,
 }
 
 /// Offsets in UTF-8 bytes and in UTF-16 units, the interpreter's (`text.rs`): the pairs where they part, after each

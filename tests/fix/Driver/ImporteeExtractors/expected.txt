@@ -1,0 +1,9 @@
+Driver/ImporteeExtractors/input.scala:9:11: error: [Importees.given]: given Int
+  import O.{given Int} // assert: Importees.given
+            ^^^^^^^^^
+Driver/ImporteeExtractors/input.scala:10:10: error: [Importees.givenAll]: given
+  import O.given // assert: Importees.givenAll
+           ^^^^^
+Driver/ImporteeExtractors/input.scala:11:10: error: [Importees.wildcard]: *
+  import O.* // assert: Importees.wildcard
+           ^

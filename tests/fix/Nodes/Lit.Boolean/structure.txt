@@ -1,0 +1,42 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Lit.Boolean, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_Boolean\n\nobject Lit_Boolean:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = true\n  val b = false\n  val c = !true\n"
+  stats Pkg syntax="package nodes.Lit_Boolean\n\nobject Lit_Boolean:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = true\n  val b = false\n  val c = !true"
+    .stats = [Defn.Object "object Lit_Boolean:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = true\n  val b = false\n  val c = !true"]
+    ref Term.Select syntax="nodes.Lit_Boolean"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_Boolean" syntax="Lit_Boolean"
+    body Pkg.Body syntax="object Lit_Boolean:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = true\n  val b = false\n  val c = !true"
+      stats Defn.Object syntax="object Lit_Boolean:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = true\n  val b = false\n  val c = !true"
+        mods Nil
+        name Term.Name value="Lit_Boolean" syntax="Lit_Boolean"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = true\n  val b = false\n  val c = !true"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = true", Defn.Val "val b = false", Defn.Val "val c = !true"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = true\n  val b = false\n  val c = !true"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = true"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Boolean value=true syntax="true"
+            stats Defn.Val syntax="val b = false"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Lit.Boolean value=false syntax="false"
+            stats Defn.Val syntax="val c = !true"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Lit.Boolean value=false syntax="!true"
+          derives Nil

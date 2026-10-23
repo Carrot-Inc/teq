@@ -1,0 +1,195 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Super, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Super\n\nobject Term_Super:\n  val marker = 0 // assert: DumpStructure.structure\n  class B:\n    def f = 1\n  trait T:\n    def f = 2\n  class C extends B with T:\n    override def f = super.f + super[B].f + C.this.hashCode\n  class E extends B with T:\n    override def f = super[/* mix */ B].f\n"
+  stats Pkg syntax="package nodes.Term_Super\n\nobject Term_Super:\n  val marker = 0 // assert: DumpStructure.structure\n  class B:\n    def f = 1\n  trait T:\n    def f = 2\n  class C extends B with T:\n    override def f = super.f + super[B].f + C.this.hashCode\n  class E extends B with T:\n    override def f = super[/* mix */ B].f"
+    .stats = [Defn.Object "object Term_Super:\n  val marker = 0 // assert: DumpStructure.structure\n  class B:\n    def f = 1\n  trait T:\n    def f = 2\n  class C extends B with T:\n    override def f = super.f + super[B].f + C.this.hashCode\n  class E extends B with T:\n    override def f = super[/* mix */ B].f"]
+    ref Term.Select syntax="nodes.Term_Super"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Super" syntax="Term_Super"
+    body Pkg.Body syntax="object Term_Super:\n  val marker = 0 // assert: DumpStructure.structure\n  class B:\n    def f = 1\n  trait T:\n    def f = 2\n  class C extends B with T:\n    override def f = super.f + super[B].f + C.this.hashCode\n  class E extends B with T:\n    override def f = super[/* mix */ B].f"
+      stats Defn.Object syntax="object Term_Super:\n  val marker = 0 // assert: DumpStructure.structure\n  class B:\n    def f = 1\n  trait T:\n    def f = 2\n  class C extends B with T:\n    override def f = super.f + super[B].f + C.this.hashCode\n  class E extends B with T:\n    override def f = super[/* mix */ B].f"
+        mods Nil
+        name Term.Name value="Term_Super" syntax="Term_Super"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class B:\n    def f = 1\n  trait T:\n    def f = 2\n  class C extends B with T:\n    override def f = super.f + super[B].f + C.this.hashCode\n  class E extends B with T:\n    override def f = super[/* mix */ B].f"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class B:\n    def f = 1", Defn.Trait "trait T:\n    def f = 2", Defn.Class "class C extends B with T:\n    override def f = super.f + super[B].f + C.this.hashCode", Defn.Class "class E extends B with T:\n    override def f = super[/* mix */ B].f"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class B:\n    def f = 1\n  trait T:\n    def f = 2\n  class C extends B with T:\n    override def f = super.f + super[B].f + C.this.hashCode\n  class E extends B with T:\n    override def f = super[/* mix */ B].f"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class B:\n    def f = 1"
+              .tparams = []
+              mods Nil
+              name Type.Name value="B" syntax="B"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    def f = 1"
+                .self = Self ""
+                .stats = [Defn.Def "def f = 1"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    def f = 1"
+                  selfOpt None
+                  stats Defn.Def syntax="def f = 1"
+                    .paramClauses = []
+                    .paramss = []
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="f" syntax="f"
+                    paramClauseGroups Nil
+                    decltpe None
+                    body Lit.Int value=1 syntax="1"
+                derives Nil
+            stats Defn.Trait syntax="trait T:\n    def f = 2"
+              .tparams = []
+              mods Nil
+              name Type.Name value="T" syntax="T"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    def f = 2"
+                .self = Self ""
+                .stats = [Defn.Def "def f = 2"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    def f = 2"
+                  selfOpt None
+                  stats Defn.Def syntax="def f = 2"
+                    .paramClauses = []
+                    .paramss = []
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="f" syntax="f"
+                    paramClauseGroups Nil
+                    decltpe None
+                    body Lit.Int value=2 syntax="2"
+                derives Nil
+            stats Defn.Class syntax="class C extends B with T:\n    override def f = super.f + super[B].f + C.this.hashCode"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax="extends B with T:\n    override def f = super.f + super[B].f + C.this.hashCode"
+                .self = Self ""
+                .stats = [Defn.Def "override def f = super.f + super[B].f + C.this.hashCode"]
+                earlyClause None
+                inits Init syntax="B"
+                  .argss = []
+                  tpe Type.Name value="B" syntax="B"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                inits Init syntax="T"
+                  .argss = []
+                  tpe Type.Name value="T" syntax="T"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax=":\n    override def f = super.f + super[B].f + C.this.hashCode"
+                  selfOpt None
+                  stats Defn.Def syntax="override def f = super.f + super[B].f + C.this.hashCode"
+                    .paramClauses = []
+                    .paramss = []
+                    .tparams = []
+                    mods Mod.Override syntax="override"
+                    name Term.Name value="f" syntax="f"
+                    paramClauseGroups Nil
+                    decltpe None
+                    body Term.ApplyInfix syntax="super.f + super[B].f + C.this.hashCode"
+                      .args = [Term.Select "C.this.hashCode"]
+                      .targs = []
+                      lhs Term.ApplyInfix syntax="super.f + super[B].f"
+                        .args = [Term.Select "super[B].f"]
+                        .targs = []
+                        lhs Term.Select syntax="super.f"
+                          qual Term.Super syntax="super"
+                            thisp Name.Anonymous syntax=""
+                              .value = ""
+                            superp Name.Anonymous syntax=""
+                              .value = ""
+                          name Term.Name value="f" syntax="f"
+                        op Term.Name value="+" syntax="+"
+                        targClause Type.ArgClause syntax=""
+                          values Nil
+                        argClause Term.ArgClause syntax="super[B].f"
+                          values Term.Select syntax="super[B].f"
+                            qual Term.Super syntax="super[B]"
+                              thisp Name.Anonymous syntax=""
+                                .value = ""
+                              superp Name.Indeterminate value="B" syntax="B"
+                            name Term.Name value="f" syntax="f"
+                          mod None
+                      op Term.Name value="+" syntax="+"
+                      targClause Type.ArgClause syntax=""
+                        values Nil
+                      argClause Term.ArgClause syntax="C.this.hashCode"
+                        values Term.Select syntax="C.this.hashCode"
+                          qual Term.This syntax="C.this"
+                            qual Name.Indeterminate value="C" syntax="C"
+                          name Term.Name value="hashCode" syntax="hashCode"
+                        mod None
+                derives Nil
+            stats Defn.Class syntax="class E extends B with T:\n    override def f = super[/* mix */ B].f"
+              .tparams = []
+              mods Nil
+              name Type.Name value="E" syntax="E"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax="extends B with T:\n    override def f = super[/* mix */ B].f"
+                .self = Self ""
+                .stats = [Defn.Def "override def f = super[/* mix */ B].f"]
+                earlyClause None
+                inits Init syntax="B"
+                  .argss = []
+                  tpe Type.Name value="B" syntax="B"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                inits Init syntax="T"
+                  .argss = []
+                  tpe Type.Name value="T" syntax="T"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax=":\n    override def f = super[/* mix */ B].f"
+                  selfOpt None
+                  stats Defn.Def syntax="override def f = super[/* mix */ B].f"
+                    .paramClauses = []
+                    .paramss = []
+                    .tparams = []
+                    mods Mod.Override syntax="override"
+                    name Term.Name value="f" syntax="f"
+                    paramClauseGroups Nil
+                    decltpe None
+                    body Term.Select syntax="super[/* mix */ B].f"
+                      qual Term.Super syntax="super[/* mix */ B]"
+                        thisp Name.Anonymous syntax=""
+                          .value = ""
+                        superp Name.Indeterminate value="B" syntax="B"
+                      name Term.Name value="f" syntax="f"
+                derives Nil
+          derives Nil

@@ -1,0 +1,85 @@
+Nodes/Term.ParamClause/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.ParamClause, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_ParamClause\n\nobject Term_ParamClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(using b: Int)(implicit c: String) = a\n  def g(using Int, String) = 1\n"
+  stats Pkg syntax="package nodes.Term_ParamClause\n\nobject Term_ParamClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(using b: Int)(implicit c: String) = a\n  def g(using Int, String) = 1"
+    .stats = [Defn.Object "object Term_ParamClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(using b: Int)(implicit c: String) = a\n  def g(using Int, String) = 1"]
+    ref Term.Select syntax="nodes.Term_ParamClause"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_ParamClause" syntax="Term_ParamClause"
+    body Pkg.Body syntax="object Term_ParamClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(using b: Int)(implicit c: String) = a\n  def g(using Int, String) = 1"
+      stats Defn.Object syntax="object Term_ParamClause:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(using b: Int)(implicit c: String) = a\n  def g(using Int, String) = 1"
+        mods Nil
+        name Term.Name value="Term_ParamClause" syntax="Term_ParamClause"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(using b: Int)(implicit c: String) = a\n  def g(using Int, String) = 1"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(a: Int)(using b: Int)(implicit c: String) = a", Defn.Def "def g(using Int, String) = 1"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(using b: Int)(implicit c: String) = a\n  def g(using Int, String) = 1"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(a: Int)(using b: Int)(implicit c: String) = a"
+              .paramClauses = [Term.ParamClause "(a: Int)", Term.ParamClause "(using b: Int)", Term.ParamClause "(implicit c: String)"]
+              .paramss = [[Term.Param "a: Int"], [Term.Param "b: Int"], [Term.Param "c: String"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(a: Int)(using b: Int)(implicit c: String)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(a: Int)"
+                  values Term.Param syntax="a: Int"
+                    mods Nil
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+                paramClauses Term.ParamClause syntax="(using b: Int)"
+                  values Term.Param syntax="b: Int"
+                    mods Mod.Using syntax="using"
+                    name Term.Name value="b" syntax="b"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod Mod.Using syntax="using"
+                paramClauses Term.ParamClause syntax="(implicit c: String)"
+                  values Term.Param syntax="c: String"
+                    mods Mod.Implicit syntax="implicit"
+                    name Term.Name value="c" syntax="c"
+                    decltpe Type.Name value="String" syntax="String"
+                    default None
+                  mod Mod.Implicit syntax="implicit"
+              decltpe None
+              body Term.Name value="a" syntax="a"
+            stats Defn.Def syntax="def g(using Int, String) = 1"
+              .paramClauses = [Term.ParamClause "(using Int, String)"]
+              .paramss = [[Term.Param "Int", Term.Param "String"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Member.ParamClauseGroup syntax="(using Int, String)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(using Int, String)"
+                  values Term.Param syntax="Int"
+                    mods Mod.Using syntax="using"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  values Term.Param syntax="String"
+                    mods Mod.Using syntax="using"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    decltpe Type.Name value="String" syntax="String"
+                    default None
+                  mod Mod.Using syntax="using"
+              decltpe None
+              body Lit.Int value=1 syntax="1"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

@@ -111,7 +111,11 @@
 # fails on a build's failure or a mismatch the list CHAIN_KNOWN names does not list (none when it is unset, which the
 # line's result says); and with --app and APP_CYPRESS, the application's end-to-end suite run by that script over the
 # binary's own build of the application (its services, its API, its served bundle, the ports 8080 and 9500), which fails
-# on a failing spec (app-cypress; skipped without the script). One line runs only when --only or --with names it, at a
+# on a failing spec (app-cypress; skipped without the script); and with --app, the application's lint and rewrite rules
+# under teq fix over its pinned snapshot (bench/app/fix.sh: `teq fix --check` in a copy with every configured rule,
+# its documents against the frozen manifest of what scalafix covers, the rules' fixtures), skipped while the snapshot predates the rules'
+# migration, the application's commit app_fix_since below, as git answers it, and failed where git cannot answer
+# (app-fix). One line runs only when --only or --with names it, at a
 # release and nightly: app-scalac, scalac 3.8.4 as the oracle of teq's diagnostics on the API's main and test lists
 # (tests/scalac-oracle.sh, then bench/app/api-scalac-diff.sh with the lists' scalacOptions APP_SCALAC_OPTIONS and
 # APP_TEST_SCALAC_OPTIONS, both into the attempt's directory), which fails on a difference the list SCALAC_KNOWN does
@@ -244,7 +248,24 @@ pieced="lsp:4 jvm-watch:2 modules:2 split:2"
 # pieces_of <suite>: its number of pieces, nothing for a suite run whole.
 pieces_of() { local spec; for spec in $pieced; do [ "${spec%%:*}" != "$1" ] || echo "${spec#*:}"; done; }
 compare="budget runtime sentinel"
-local_lines="records no-caps size instructions instructions-derive app-api-time memory asymptotics app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
+local_lines="records no-caps size instructions instructions-derive app-api-time memory asymptotics app-export app-export-accept app-api app-api-test app-chain app-cypress app-fix app-scalac"
+# The application's first commit with its rules under teq fix, which the app-fix line waits for in the pinned snapshot;
+# empty until the application has merged them.
+app_fix_since=
+# app_fix_pin <checkout> <commit>: whether the checkout's HEAD holds the rules' migration <commit>: `holds` where git
+# finds the commit its ancestor, `predates` where git finds it none or no commit is named; else, status 1, git's error,
+# a lookup that fails (a shallow checkout without the commit) being no answer.
+app_fix_pin() {
+  [ -n "$2" ] || { echo predates; return 0; }
+  local err code
+  err=$(git -C "$1" merge-base --is-ancestor "$2" HEAD 2>&1)
+  code=$?
+  case $code in
+    0) echo holds ;;
+    1) echo predates ;;
+    *) echo "the migration's ancestry not known (git exit $code): $(echo "$err" | head -1)"; return 1 ;;
+  esac
+}
 project_lines="lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test tyrian-export tyrian-compile tyrian-test tyrian-run indigo-export indigo-compile indigo-test indigo-run"
 # The lines run only when --only or --with names them: the scalac oracle, at a release and nightly. The reference
 # projects' lines run in every gate (the owner's ruling, 2026-10-16: every reference project in, the gate never weakened
@@ -539,6 +560,19 @@ local_line() {
         result app-cypress local $(($(now) - s)) $code "$(tail -1 "$out/app-cypress.log")" "$file"
       fi
       ;;
+    app-fix)
+      if [ -z "$app" ]; then
+        result app-fix local 0 skip "needs --app" "$file"
+      elif ! fix_pin=$(app_fix_pin "$(app_root)" "$app_fix_since"); then
+        result app-fix local 0 1 "$fix_pin" "$file"
+      elif [ "$fix_pin" = predates ]; then
+        result app-fix local 0 skip "the pinned snapshot predates the rules' migration${app_fix_since:+ ($app_fix_since)}" "$file"
+      else
+        timeout 2700 "$root/bench/app/fix.sh" "$(app_root)" "$bin" "$out/app-fix" > "$out/app-fix.log" 2>&1
+        code=$?
+        result app-fix local $(($(now) - s)) $code "$(tail -1 "$out/app-fix.log")" "$file"
+      fi
+      ;;
     app-scalac)
       if [ -z "$app" ]; then
         result app-scalac local 0 skip "needs --app" "$file"
@@ -652,6 +686,7 @@ local_half() {
   wait
   local_line app-api-time
   local_line app-cypress
+  local_line app-fix
   local_line memory
   local_line asymptotics
   now > "$out/local.ended"

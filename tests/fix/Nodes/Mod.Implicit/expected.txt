@@ -1,0 +1,78 @@
+Nodes/Mod.Implicit/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.Implicit, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Implicit\n\nobject Mod_Implicit:\n  val marker = 0 // assert: DumpStructure.structure\n  implicit val a: Int = 1\n  def f(implicit b: Int) = b\n  implicit class C(x: Int)\n"
+  stats Pkg syntax="package nodes.Mod_Implicit\n\nobject Mod_Implicit:\n  val marker = 0 // assert: DumpStructure.structure\n  implicit val a: Int = 1\n  def f(implicit b: Int) = b\n  implicit class C(x: Int)"
+    .stats = [Defn.Object "object Mod_Implicit:\n  val marker = 0 // assert: DumpStructure.structure\n  implicit val a: Int = 1\n  def f(implicit b: Int) = b\n  implicit class C(x: Int)"]
+    ref Term.Select syntax="nodes.Mod_Implicit"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Implicit" syntax="Mod_Implicit"
+    body Pkg.Body syntax="object Mod_Implicit:\n  val marker = 0 // assert: DumpStructure.structure\n  implicit val a: Int = 1\n  def f(implicit b: Int) = b\n  implicit class C(x: Int)"
+      stats Defn.Object syntax="object Mod_Implicit:\n  val marker = 0 // assert: DumpStructure.structure\n  implicit val a: Int = 1\n  def f(implicit b: Int) = b\n  implicit class C(x: Int)"
+        mods Nil
+        name Term.Name value="Mod_Implicit" syntax="Mod_Implicit"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  implicit val a: Int = 1\n  def f(implicit b: Int) = b\n  implicit class C(x: Int)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "implicit val a: Int = 1", Defn.Def "def f(implicit b: Int) = b", Defn.Class "implicit class C(x: Int)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  implicit val a: Int = 1\n  def f(implicit b: Int) = b\n  implicit class C(x: Int)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="implicit val a: Int = 1"
+              mods Mod.Implicit syntax="implicit"
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe Type.Name value="Int" syntax="Int"
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Def syntax="def f(implicit b: Int) = b"
+              .paramClauses = [Term.ParamClause "(implicit b: Int)"]
+              .paramss = [[Term.Param "b: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(implicit b: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(implicit b: Int)"
+                  values Term.Param syntax="b: Int"
+                    mods Mod.Implicit syntax="implicit"
+                    name Term.Name value="b" syntax="b"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod Mod.Implicit syntax="implicit"
+              decltpe None
+              body Term.Name value="b" syntax="b"
+            stats Defn.Class syntax="implicit class C(x: Int)"
+              .tparams = []
+              mods Mod.Implicit syntax="implicit"
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(x: Int)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

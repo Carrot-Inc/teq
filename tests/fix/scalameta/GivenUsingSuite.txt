@@ -1,0 +1,1938 @@
+# The programs of scalameta 4.17.4's GivenUsingSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 511 line 30 BlockStat dialects.Scala35 :: given-named
+object W511 {
+  def w = {
+given intOrd: Ord[Int] with { def f(): Int = 1 }
+}
+}
+#!scalac ok
+#!regions L74/ L76/
+#!layout
+Source 0 79
+  Defn.Object 0 78
+    Term.Name 7 11
+    Template 12 78
+      Template.Body 12 78
+        Defn.Def 16 76
+          Term.Name 20 21
+          Term.Block 24 76
+            Defn.Given 26 74
+              Term.Name 32 38
+              Template 40 74
+                Init 40 48
+                  Type.Apply 40 48
+                    Type.Name 40 43
+                    Type.ArgClause 43 48
+                      Type.Name 44 47
+                  Name.Anonymous 49 49
+                Template.Body 54 74
+                  Defn.Def 56 72
+                    Term.Name 60 61
+                    Member.ParamClauseGroup 61 63
+                      Type.ParamClause 61 61
+                      Term.ParamClause 61 63
+                    Type.Name 65 68
+                    Lit.Int 71 72
+#!program 512 line 35 BlockStat dialects.Scala35 :: given-named-newline
+object W512 {
+  def w = {
+given intOrd: Ord[Int] with 
+{ def f(): Int = 1 }
+}
+}
+#!scalac ok
+#!regions L75/ L77/
+#!layout
+Source 0 80
+  Defn.Object 0 79
+    Term.Name 7 11
+    Template 12 79
+      Template.Body 12 79
+        Defn.Def 16 77
+          Term.Name 20 21
+          Term.Block 24 77
+            Defn.Given 26 75
+              Term.Name 32 38
+              Template 40 75
+                Init 40 48
+                  Type.Apply 40 48
+                    Type.Name 40 43
+                    Type.ArgClause 43 48
+                      Type.Name 44 47
+                  Name.Anonymous 49 49
+                Template.Body 55 75
+                  Defn.Def 57 73
+                    Term.Name 61 62
+                    Member.ParamClauseGroup 62 64
+                      Type.ParamClause 62 62
+                      Term.ParamClause 62 64
+                    Type.Name 66 69
+                    Lit.Int 72 73
+#!program 513 line 40 BlockStat dialects.Scala35 :: given-anonymous
+object W513 {
+  def w = {
+given Ord[Int] with { def f(): Int = 1 }
+}
+}
+#!scalac ok
+#!regions L66/ L68/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 11
+    Template 12 70
+      Template.Body 12 70
+        Defn.Def 16 68
+          Term.Name 20 21
+          Term.Block 24 68
+            Defn.Given 26 66
+              Name.Anonymous 32 32
+              Template 32 66
+                Init 32 40
+                  Type.Apply 32 40
+                    Type.Name 32 35
+                    Type.ArgClause 35 40
+                      Type.Name 36 39
+                  Name.Anonymous 41 41
+                Template.Body 46 66
+                  Defn.Def 48 64
+                    Term.Name 52 53
+                    Member.ParamClauseGroup 53 55
+                      Type.ParamClause 53 53
+                      Term.ParamClause 53 55
+                    Type.Name 57 60
+                    Lit.Int 63 64
+#!program 514 line 56 BlockStat dialects.Scala35 :: given-multiple-inheritance
+object W514 {
+  def w = {
+given intM: Ord[Int] with Eq[Int] with { def fx = 3 }
+}
+}
+#!scalac ok
+#!regions L79/ L81/
+#!layout
+Source 0 84
+  Defn.Object 0 83
+    Term.Name 7 11
+    Template 12 83
+      Template.Body 12 83
+        Defn.Def 16 81
+          Term.Name 20 21
+          Term.Block 24 81
+            Defn.Given 26 79
+              Term.Name 32 36
+              Template 38 79
+                Init 38 46
+                  Type.Apply 38 46
+                    Type.Name 38 41
+                    Type.ArgClause 41 46
+                      Type.Name 42 45
+                  Name.Anonymous 47 47
+                Init 52 59
+                  Type.Apply 52 59
+                    Type.Name 52 54
+                    Type.ArgClause 54 59
+                      Type.Name 55 58
+                  Name.Anonymous 60 60
+                Template.Body 65 79
+                  Defn.Def 67 77
+                    Term.Name 71 73
+                    Lit.Int 76 77
+#!program 515 line 58 BlockStat dialects.Scala35 :: given-multiple-inheritance
+object W515 {
+  def w = {
+given intM: Ord[Int] with
+ Eq[Int] with { def fx = 3 }
+}
+}
+#!scalac refuses: end of statement expected but 'with' found
+#!regions L80/ L82/
+#!layout
+Source 0 85
+  Defn.Object 0 84
+    Term.Name 7 11
+    Template 12 84
+      Template.Body 12 84
+        Defn.Def 16 82
+          Term.Name 20 21
+          Term.Block 24 82
+            Defn.Given 26 80
+              Term.Name 32 36
+              Template 38 80
+                Init 38 46
+                  Type.Apply 38 46
+                    Type.Name 38 41
+                    Type.ArgClause 41 46
+                      Type.Name 42 45
+                  Name.Anonymous 47 47
+                Init 53 60
+                  Type.Apply 53 60
+                    Type.Name 53 55
+                    Type.ArgClause 55 60
+                      Type.Name 56 59
+                  Name.Anonymous 61 61
+                Template.Body 66 80
+                  Defn.Def 68 78
+                    Term.Name 72 74
+                    Lit.Int 77 78
+#!program 516 line 65 BlockStat dialects.Scala35 :: given-override-def
+object W516 {
+  def w = {
+given intOrd: Ord[Int] 
+ with { override def f(): Int = 1 }
+}
+}
+#!scalac ok
+#!regions L85/ L87/
+#!layout
+Source 0 90
+  Defn.Object 0 89
+    Term.Name 7 11
+    Template 12 89
+      Template.Body 12 89
+        Defn.Def 16 87
+          Term.Name 20 21
+          Term.Block 24 87
+            Defn.Given 26 85
+              Term.Name 32 38
+              Template 40 85
+                Init 40 48
+                  Type.Apply 40 48
+                    Type.Name 40 43
+                    Type.ArgClause 43 48
+                      Type.Name 44 47
+                  Name.Anonymous 51 51
+                Template.Body 56 85
+                  Defn.Def 58 83
+                    Mod.Override 58 66
+                    Term.Name 71 72
+                    Member.ParamClauseGroup 72 74
+                      Type.ParamClause 72 72
+                      Term.ParamClause 72 74
+                    Type.Name 76 79
+                    Lit.Int 82 83
+#!program 517 line 77 BlockStat dialects.Scala35 :: given-override-def-colon-newline
+object W517 {
+  def w = {
+given intOrd
+   : Ord[Int] with {
+  def fn = ()
+}
+
+}
+}
+#!scalac ok
+#!regions L73/ F75/ L78/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Defn.Def 16 78
+          Term.Name 20 21
+          Term.Block 24 78
+            Defn.Given 26 75
+              Term.Name 32 38
+              Template 44 75
+                Init 44 52
+                  Type.Apply 44 52
+                    Type.Name 44 47
+                    Type.ArgClause 47 52
+                      Type.Name 48 51
+                  Name.Anonymous 53 53
+                Template.Body 58 75
+                  Defn.Def 62 73
+                    Term.Name 66 68
+                    Lit.Unit 71 73
+#!program 518 line 94 BlockStat dialects.Scala35 :: given-override-def
+object W518 {
+  def w = {
+  given Facade.SimpleFacade[Json] with
+    override def jnull = ???
+    override def jtrue = ???
+
+}
+}
+#!scalac ok
+#!regions I64/4 L93/4 O123/ L125/
+#!layout
+Source 0 128
+  Defn.Object 0 127
+    Term.Name 7 11
+    Template 12 127
+      Template.Body 12 127
+        Defn.Def 16 125
+          Term.Name 20 21
+          Term.Block 24 125
+            Defn.Given 28 122
+              Name.Anonymous 34 34
+              Template 34 122
+                Init 34 59
+                  Type.Apply 34 59
+                    Type.Select 34 53
+                      Term.Name 34 40
+                      Type.Name 41 53
+                    Type.ArgClause 53 59
+                      Type.Name 54 58
+                  Name.Anonymous 60 60
+                Template.Body 69 122
+                  Defn.Def 69 93
+                    Mod.Override 69 77
+                    Term.Name 82 87
+                    Term.Name 90 93
+                  Defn.Def 98 122
+                    Mod.Override 98 106
+                    Term.Name 111 116
+                    Term.Name 119 122
+#!program 519 line 121 BlockStat dialects.Scala35 :: given-self
+object W519 {
+  def w = {
+given intOrd: Ord[Int] with { current => }
+}
+}
+#!scalac ok
+#!regions L68/ L70/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Defn.Def 16 70
+          Term.Name 20 21
+          Term.Block 24 70
+            Defn.Given 26 68
+              Term.Name 32 38
+              Template 40 68
+                Init 40 48
+                  Type.Apply 40 48
+                    Type.Name 40 43
+                    Type.ArgClause 43 48
+                      Type.Name 44 47
+                  Name.Anonymous 49 49
+                Template.Body 54 68
+                  Self 56 66
+                    Term.Name 56 63
+#!program 520 line 129 BlockStat dialects.Scala35 :: given-selftype
+object W520 {
+  def w = {
+given intOrd: Ord[Int] with { current: Ord[Int] => }
+}
+}
+#!scalac ok
+#!regions L78/ L80/
+#!layout
+Source 0 83
+  Defn.Object 0 82
+    Term.Name 7 11
+    Template 12 82
+      Template.Body 12 82
+        Defn.Def 16 80
+          Term.Name 20 21
+          Term.Block 24 80
+            Defn.Given 26 78
+              Term.Name 32 38
+              Template 40 78
+                Init 40 48
+                  Type.Apply 40 48
+                    Type.Name 40 43
+                    Type.ArgClause 43 48
+                      Type.Name 44 47
+                  Name.Anonymous 49 49
+                Template.Body 54 78
+                  Self 56 76
+                    Term.Name 56 63
+                    Type.Apply 65 73
+                      Type.Name 65 68
+                      Type.ArgClause 68 73
+                        Type.Name 69 72
+#!program 521 line 133 BlockStat dialects.Scala35 :: given-generic-named
+object W521 {
+  def w = {
+given listOrd[T]: Ord[List[T]] with { def f(): Int = 1 }
+}
+}
+#!scalac ok
+#!regions L82/ L84/
+#!layout
+Source 0 87
+  Defn.Object 0 86
+    Term.Name 7 11
+    Template 12 86
+      Template.Body 12 86
+        Defn.Def 16 84
+          Term.Name 20 21
+          Term.Block 24 84
+            Defn.Given 26 82
+              Term.Name 32 39
+              Member.ParamClauseGroup 39 42
+                Type.ParamClause 39 42
+                  Type.Param 40 41
+                    Type.Name 40 41
+                    Type.ParamClause 41 41
+                    Type.Bounds 41 41
+              Template 44 82
+                Init 44 56
+                  Type.Apply 44 56
+                    Type.Name 44 47
+                    Type.ArgClause 47 56
+                      Type.Apply 48 55
+                        Type.Name 48 52
+                        Type.ArgClause 52 55
+                          Type.Name 53 54
+                  Name.Anonymous 57 57
+                Template.Body 62 82
+                  Defn.Def 64 80
+                    Term.Name 68 69
+                    Member.ParamClauseGroup 69 71
+                      Type.ParamClause 69 69
+                      Term.ParamClause 69 71
+                    Type.Name 73 76
+                    Lit.Int 79 80
+#!program 522 line 142 BlockStat dialects.Scala35 :: given-generic-anonymous
+object W522 {
+  def w = {
+given Ord[List[T]] with { def f(): Int = 1 }
+}
+}
+#!scalac ok
+#!regions L70/ L72/
+#!layout
+Source 0 75
+  Defn.Object 0 74
+    Term.Name 7 11
+    Template 12 74
+      Template.Body 12 74
+        Defn.Def 16 72
+          Term.Name 20 21
+          Term.Block 24 72
+            Defn.Given 26 70
+              Name.Anonymous 32 32
+              Template 32 70
+                Init 32 44
+                  Type.Apply 32 44
+                    Type.Name 32 35
+                    Type.ArgClause 35 44
+                      Type.Apply 36 43
+                        Type.Name 36 40
+                        Type.ArgClause 40 43
+                          Type.Name 41 42
+                  Name.Anonymous 45 45
+                Template.Body 50 70
+                  Defn.Def 52 68
+                    Term.Name 56 57
+                    Member.ParamClauseGroup 57 59
+                      Type.ParamClause 57 57
+                      Term.ParamClause 57 59
+                    Type.Name 61 64
+                    Lit.Int 67 68
+#!program 523 line 147 BlockStat dialects.Scala35 :: given-generic-anonymous
+object W523 {
+  def w = {
+given noCaller: Caller(???) with
+  override def computeValue() = ()
+
+}
+}
+#!scalac ok
+#!regions I58/2 O94/ L96/
+#!layout
+Source 0 99
+  Defn.Object 0 98
+    Term.Name 7 11
+    Template 12 98
+      Template.Body 12 98
+        Defn.Def 16 96
+          Term.Name 20 21
+          Term.Block 24 96
+            Defn.Given 26 93
+              Term.Name 32 40
+              Template 42 93
+                Init 42 53
+                  Type.Name 42 48
+                  Name.Anonymous 48 48
+                  Term.ArgClause 48 53
+                    Term.Name 49 52
+                Template.Body 61 93
+                  Defn.Def 61 93
+                    Mod.Override 61 69
+                    Term.Name 74 86
+                    Member.ParamClauseGroup 86 88
+                      Type.ParamClause 86 86
+                      Term.ParamClause 86 88
+                    Lit.Unit 91 93
+#!program 524 line 167 BlockStat dialects.Scala35 :: given-empty-anon
+object W524 {
+  def w = {
+given C(1) with {}
+
+}
+}
+#!scalac ok
+#!regions F44/ L47/
+#!layout
+Source 0 50
+  Defn.Object 0 49
+    Term.Name 7 11
+    Template 12 49
+      Template.Body 12 49
+        Defn.Def 16 47
+          Term.Name 20 21
+          Term.Block 24 47
+            Defn.Given 26 44
+              Name.Anonymous 32 32
+              Template 32 44
+                Init 32 36
+                  Type.Name 32 33
+                  Name.Anonymous 33 33
+                  Term.ArgClause 33 36
+                    Lit.Int 34 35
+                Template.Body 42 44
+#!program 525 line 175 BlockStat dialects.Scala35 :: given-empty-anon-parens
+object W525 {
+  def w = {
+given C(1)
+
+}
+}
+#!scalac ok
+#!regions F36/ L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Defn.Def 16 39
+          Term.Name 20 21
+          Term.Block 24 39
+            Defn.Given 26 36
+              Name.Anonymous 32 32
+              Template 32 36
+                Init 32 36
+                  Type.Name 32 33
+                  Name.Anonymous 33 33
+                  Term.ArgClause 33 36
+                    Lit.Int 34 35
+                Template.Body 36 36
+#!program 526 line 182 BlockStat dialects.Scala35 :: given-empty-anon-empty-parens
+object W526 {
+  def w = {
+given C()
+
+}
+}
+#!scalac ok
+#!regions F35/ L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 11
+    Template 12 40
+      Template.Body 12 40
+        Defn.Def 16 38
+          Term.Name 20 21
+          Term.Block 24 38
+            Defn.Given 26 35
+              Name.Anonymous 32 32
+              Template 32 35
+                Init 32 35
+                  Type.Name 32 33
+                  Name.Anonymous 33 33
+                  Term.ArgClause 33 35
+                Template.Body 35 35
+#!program 527 line 189 BlockStat dialects.Scala35 :: given-empty-anon-no-parens
+object W527 {
+  def w = {
+given C with {}
+
+}
+}
+#!scalac ok
+#!regions F41/ L44/
+#!layout
+Source 0 47
+  Defn.Object 0 46
+    Term.Name 7 11
+    Template 12 46
+      Template.Body 12 46
+        Defn.Def 16 44
+          Term.Name 20 21
+          Term.Block 24 44
+            Defn.Given 26 41
+              Name.Anonymous 32 32
+              Template 32 41
+                Init 32 33
+                  Type.Name 32 33
+                  Name.Anonymous 34 34
+                Template.Body 39 41
+#!program 528 line 196 BlockStat dialects.Scala35 :: given-empty
+object W528 {
+  def w = {
+given t1[T]: E[T]("low") with {}
+
+}
+}
+#!scalac ok
+#!regions F58/ L61/
+#!layout
+Source 0 64
+  Defn.Object 0 63
+    Term.Name 7 11
+    Template 12 63
+      Template.Body 12 63
+        Defn.Def 16 61
+          Term.Name 20 21
+          Term.Block 24 61
+            Defn.Given 26 58
+              Term.Name 32 34
+              Member.ParamClauseGroup 34 37
+                Type.ParamClause 34 37
+                  Type.Param 35 36
+                    Type.Name 35 36
+                    Type.ParamClause 36 36
+                    Type.Bounds 36 36
+              Template 39 58
+                Init 39 50
+                  Type.Apply 39 43
+                    Type.Name 39 40
+                    Type.ArgClause 40 43
+                      Type.Name 41 42
+                  Name.Anonymous 43 43
+                  Term.ArgClause 43 50
+                    Lit.String 44 49
+                Template.Body 56 58
+#!program 529 line 219 BlockStat dialects.Scala35 :: given-extension
+object W529 {
+  def w = {
+given x: AnyRef with
+      extension (y: String)
+         def f (y: Int): Boolean = false
+
+}
+}
+#!scalac ok
+#!regions I46/6 I74/9.6 O116/6 O116/ L118/
+#!layout
+Source 0 121
+  Defn.Object 0 120
+    Term.Name 7 11
+    Template 12 120
+      Template.Body 12 120
+        Defn.Def 16 118
+          Term.Name 20 21
+          Term.Block 24 118
+            Defn.Given 26 115
+              Term.Name 32 33
+              Template 35 115
+                Init 35 41
+                  Type.Name 35 41
+                  Name.Anonymous 42 42
+                Template.Body 53 115
+                  Defn.ExtensionGroup 53 115
+                    Member.ParamClauseGroup 63 74
+                      Type.ParamClause 63 63
+                      Term.ParamClause 63 74
+                        Term.Param 64 73
+                          Term.Name 64 65
+                          Type.Name 67 73
+                    Defn.Def 84 115
+                      Term.Name 88 89
+                      Member.ParamClauseGroup 90 98
+                        Type.ParamClause 90 90
+                        Term.ParamClause 90 98
+                          Term.Param 91 97
+                            Term.Name 91 92
+                            Type.Name 94 97
+                      Type.Name 100 107
+                      Lit.Boolean 110 115
+#!program 530 line 243 BlockStat dialects.Scala35 :: given-inline
+object W530 {
+  def w = {
+inline given intOrd: Ord[Int] with { def f(): Int = 1 }
+}
+}
+#!scalac ok
+#!regions L81/ L83/
+#!layout
+Source 0 86
+  Defn.Object 0 85
+    Term.Name 7 11
+    Template 12 85
+      Template.Body 12 85
+        Defn.Def 16 83
+          Term.Name 20 21
+          Term.Block 24 83
+            Defn.Given 26 81
+              Mod.Inline 26 32
+              Term.Name 39 45
+              Template 47 81
+                Init 47 55
+                  Type.Apply 47 55
+                    Type.Name 47 50
+                    Type.ArgClause 50 55
+                      Type.Name 51 54
+                  Name.Anonymous 56 56
+                Template.Body 61 81
+                  Defn.Def 63 79
+                    Term.Name 67 68
+                    Member.ParamClauseGroup 68 70
+                      Type.ParamClause 68 68
+                      Term.ParamClause 68 70
+                    Type.Name 72 75
+                    Lit.Int 78 79
+#!program 531 line 256 BlockStat dialects.Scala35 :: given-with-import
+object W531 {
+  def w = {
+given intOrd: Ord[Int] with
+  import math.max as maxF
+  def f(): Int = 1
+
+}
+}
+#!scalac ok
+#!regions I53/2 L79/2 O99/ L101/
+#!layout
+Source 0 104
+  Defn.Object 0 103
+    Term.Name 7 11
+    Template 12 103
+      Template.Body 12 103
+        Defn.Def 16 101
+          Term.Name 20 21
+          Term.Block 24 101
+            Defn.Given 26 98
+              Term.Name 32 38
+              Template 40 98
+                Init 40 48
+                  Type.Apply 40 48
+                    Type.Name 40 43
+                    Type.ArgClause 43 48
+                      Type.Name 44 47
+                  Name.Anonymous 49 49
+                Template.Body 56 98
+                  Import 56 79
+                    Importer 63 79
+                      Term.Name 63 67
+                      Importee.Rename 68 79
+                        Name.Indeterminate 68 71
+                        Name.Indeterminate 75 79
+                  Defn.Def 82 98
+                    Term.Name 86 87
+                    Member.ParamClauseGroup 87 89
+                      Type.ParamClause 87 87
+                      Term.ParamClause 87 89
+                    Type.Name 91 94
+                    Lit.Int 97 98
+#!program 532 line 284 BlockStat dialects.Scala35 :: given-with-export
+object W532 {
+  def w = {
+given intOrd: Ord[Int] with
+  export math.max
+  def f(): Int = 1
+
+}
+}
+#!scalac ok
+#!regions I53/2 L71/2 O91/ L93/
+#!layout
+Source 0 96
+  Defn.Object 0 95
+    Term.Name 7 11
+    Template 12 95
+      Template.Body 12 95
+        Defn.Def 16 93
+          Term.Name 20 21
+          Term.Block 24 93
+            Defn.Given 26 90
+              Term.Name 32 38
+              Template 40 90
+                Init 40 48
+                  Type.Apply 40 48
+                    Type.Name 40 43
+                    Type.ArgClause 43 48
+                      Type.Name 44 47
+                  Name.Anonymous 49 49
+                Template.Body 56 90
+                  Export 56 71
+                    Importer 63 71
+                      Term.Name 63 67
+                      Importee.Name 68 71
+                        Name.Indeterminate 68 71
+                  Defn.Def 74 90
+                    Term.Name 78 79
+                    Member.ParamClauseGroup 79 81
+                      Type.ParamClause 79 79
+                      Term.ParamClause 79 81
+                    Type.Name 83 86
+                    Lit.Int 89 90
+#!program 533 line 312 BlockStat dialects.Scala35 :: given-with-empty-refinement
+object W533 {
+  def w = {
+given {} with
+  extension [T](t: T) def hello = ""
+
+}
+}
+#!scalac ok
+#!regions I39/2 O77/ L79/
+#!layout
+Source 0 82
+  Defn.Object 0 81
+    Term.Name 7 11
+    Template 12 81
+      Template.Body 12 81
+        Defn.Def 16 79
+          Term.Name 20 21
+          Term.Block 24 79
+            Defn.Given 26 76
+              Name.Anonymous 32 32
+              Template 32 76
+                Init 32 34
+                  Type.Refine 32 34
+                    Stat.Block 32 34
+                  Name.Anonymous 35 35
+                Template.Body 42 76
+                  Defn.ExtensionGroup 42 76
+                    Member.ParamClauseGroup 52 61
+                      Type.ParamClause 52 55
+                        Type.Param 53 54
+                          Type.Name 53 54
+                          Type.ParamClause 54 54
+                          Type.Bounds 54 54
+                      Term.ParamClause 55 61
+                        Term.Param 56 60
+                          Term.Name 56 57
+                          Type.Name 59 60
+                    Defn.Def 62 76
+                      Term.Name 66 71
+                      Lit.String 74 76
+#!program 534 line 339 BlockStat dialects.Scala35 :: given-alias-named
+object W534 {
+  def w = {
+given global: Option[Int] = Some(3)
+}
+}
+#!scalac ok
+#!regions L61/ L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Def 16 63
+          Term.Name 20 21
+          Term.Block 24 63
+            Defn.GivenAlias 26 61
+              Term.Name 32 38
+              Type.Apply 40 51
+                Type.Name 40 46
+                Type.ArgClause 46 51
+                  Type.Name 47 50
+              Term.Apply 54 61
+                Term.Name 54 58
+                Term.ArgClause 58 61
+                  Lit.Int 59 60
+#!program 535 line 349 BlockStat dialects.Scala35 :: given-alias-anonymous
+object W535 {
+  def w = {
+given Option[Int] = Some(3)
+}
+}
+#!scalac ok
+#!regions L53/ L55/
+#!layout
+Source 0 58
+  Defn.Object 0 57
+    Term.Name 7 11
+    Template 12 57
+      Template.Body 12 57
+        Defn.Def 16 55
+          Term.Name 20 21
+          Term.Block 24 55
+            Defn.GivenAlias 26 53
+              Name.Anonymous 32 32
+              Type.Apply 32 43
+                Type.Name 32 38
+                Type.ArgClause 38 43
+                  Type.Name 39 42
+              Term.Apply 46 53
+                Term.Name 46 50
+                Term.ArgClause 50 53
+                  Lit.Int 51 52
+#!program 536 line 353 BlockStat dialects.Scala35 :: given-alias-anon-or
+object W536 {
+  def w = {
+given (Cancelable & Movable) = ???
+}
+}
+#!scalac ok
+#!regions L60/ L62/
+#!layout
+Source 0 65
+  Defn.Object 0 64
+    Term.Name 7 11
+    Template 12 64
+      Template.Body 12 64
+        Defn.Def 16 62
+          Term.Name 20 21
+          Term.Block 24 62
+            Defn.GivenAlias 26 60
+              Name.Anonymous 32 32
+              Type.ApplyInfix 33 53
+                Type.Name 33 43
+                Type.Name 44 45
+                Type.Name 46 53
+              Term.Name 57 60
+#!program 537 line 358 BlockStat dialects.Scala35 :: given-alias-block
+object W537 {
+  def w = {
+given global: Option[Int] = { def f(): Int = 1; Some(3) }
+}
+}
+#!scalac ok
+#!regions L83/ L85/
+#!layout
+Source 0 88
+  Defn.Object 0 87
+    Term.Name 7 11
+    Template 12 87
+      Template.Body 12 87
+        Defn.Def 16 85
+          Term.Name 20 21
+          Term.Block 24 85
+            Defn.GivenAlias 26 83
+              Term.Name 32 38
+              Type.Apply 40 51
+                Type.Name 40 46
+                Type.ArgClause 46 51
+                  Type.Name 47 50
+              Term.Block 54 83
+                Defn.Def 56 72
+                  Term.Name 60 61
+                  Member.ParamClauseGroup 61 63
+                    Type.ParamClause 61 61
+                    Term.ParamClause 61 63
+                  Type.Name 65 68
+                  Lit.Int 71 72
+                Term.Apply 74 81
+                  Term.Name 74 78
+                  Term.ArgClause 78 81
+                    Lit.Int 79 80
+#!program 538 line 372 BlockStat dialects.Scala35 :: given-alias-using-named
+object W538 {
+  def w = {
+given ordInt(using ord: Ord[Int]): Ord[List[Int]] = ???
+}
+}
+#!scalac ok
+#!regions L81/ L83/
+#!layout
+Source 0 86
+  Defn.Object 0 85
+    Term.Name 7 11
+    Template 12 85
+      Template.Body 12 85
+        Defn.Def 16 83
+          Term.Name 20 21
+          Term.Block 24 83
+            Defn.GivenAlias 26 81
+              Term.Name 32 38
+              Member.ParamClauseGroup 38 59
+                Type.ParamClause 38 38
+                Term.ParamClause 38 59
+                  Term.Param 45 58
+                    Mod.Using 39 44
+                    Term.Name 45 48
+                    Type.Apply 50 58
+                      Type.Name 50 53
+                      Type.ArgClause 53 58
+                        Type.Name 54 57
+                  Mod.Using 39 44
+              Type.Apply 61 75
+                Type.Name 61 64
+                Type.ArgClause 64 75
+                  Type.Apply 65 74
+                    Type.Name 65 69
+                    Type.ArgClause 69 74
+                      Type.Name 70 73
+              Term.Name 78 81
+#!program 539 line 383 BlockStat dialects.Scala35 :: given-alias-using-anonymous
+object W539 {
+  def w = {
+given (using ord: Ord[Int]): Ord[List[Int]] = ???
+}
+}
+#!scalac ok
+#!regions L75/ L77/
+#!layout
+Source 0 80
+  Defn.Object 0 79
+    Term.Name 7 11
+    Template 12 79
+      Template.Body 12 79
+        Defn.Def 16 77
+          Term.Name 20 21
+          Term.Block 24 77
+            Defn.GivenAlias 26 75
+              Name.Anonymous 32 32
+              Member.ParamClauseGroup 32 53
+                Type.ParamClause 32 32
+                Term.ParamClause 32 53
+                  Term.Param 39 52
+                    Mod.Using 33 38
+                    Term.Name 39 42
+                    Type.Apply 44 52
+                      Type.Name 44 47
+                      Type.ArgClause 47 52
+                        Type.Name 48 51
+                  Mod.Using 33 38
+              Type.Apply 55 69
+                Type.Name 55 58
+                Type.ArgClause 58 69
+                  Type.Apply 59 68
+                    Type.Name 59 63
+                    Type.ArgClause 63 68
+                      Type.Name 64 67
+              Term.Name 72 75
+#!program 540 line 393 BlockStat dialects.Scala35 :: given-alias-inline
+object W540 {
+  def w = {
+inline given intOrd: Ord[Int] = ???
+}
+}
+#!scalac ok
+#!regions L61/ L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Def 16 63
+          Term.Name 20 21
+          Term.Block 24 63
+            Defn.GivenAlias 26 61
+              Mod.Inline 26 32
+              Term.Name 39 45
+              Type.Apply 47 55
+                Type.Name 47 50
+                Type.ArgClause 50 55
+                  Type.Name 51 54
+              Term.Name 58 61
+#!program 541 line 397 BlockStat dialects.Scala35 :: given-alias-type-apply
+object W541 {
+  def w = {
+object AppliedName:
+  given Conversion[AppliedName, Expr.Apply[Id]] = _.toExpr
+
+}
+}
+#!scalac ok
+#!regions I45/2 O105/ L107/
+#!layout
+Source 0 110
+  Defn.Object 0 109
+    Term.Name 7 11
+    Template 12 109
+      Template.Body 12 109
+        Defn.Def 16 107
+          Term.Name 20 21
+          Term.Block 24 107
+            Defn.Object 26 104
+              Term.Name 33 44
+              Template 44 104
+                Template.Body 44 104
+                  Defn.GivenAlias 48 104
+                    Name.Anonymous 54 54
+                    Type.Apply 54 93
+                      Type.Name 54 64
+                      Type.ArgClause 64 93
+                        Type.Name 65 76
+                        Type.Apply 78 92
+                          Type.Select 78 88
+                            Term.Name 78 82
+                            Type.Name 83 88
+                          Type.ArgClause 88 92
+                            Type.Name 89 91
+                    Term.AnonymousFunction 96 104
+                      Term.Select 96 104
+                        Term.Placeholder 96 97
+                        Term.Name 98 104
+#!program 542 line 421 BlockStat dialects.Scala35 :: abstract-given
+object W542 {
+  def w = {
+given intOrd: Ord[Int]
+}
+}
+#!scalac ok
+#!regions L48/ L50/
+#!layout
+Source 0 53
+  Defn.Object 0 52
+    Term.Name 7 11
+    Template 12 52
+      Template.Body 12 52
+        Defn.Def 16 50
+          Term.Name 20 21
+          Term.Block 24 50
+            Decl.Given 26 48
+              Term.Name 32 38
+              Type.Apply 40 48
+                Type.Name 40 43
+                Type.ArgClause 43 48
+                  Type.Name 44 47
+#!program 543 line 425 BlockStat dialects.Scala35 :: abstract-given-inline
+object W543 {
+  def w = {
+inline given intOrd: Ord[Int]
+}
+}
+#!scalac ok
+#!regions L55/ L57/
+#!layout
+Source 0 60
+  Defn.Object 0 59
+    Term.Name 7 11
+    Template 12 59
+      Template.Body 12 59
+        Defn.Def 16 57
+          Term.Name 20 21
+          Term.Block 24 57
+            Decl.Given 26 55
+              Mod.Inline 26 32
+              Term.Name 39 45
+              Type.Apply 47 55
+                Type.Name 47 50
+                Type.ArgClause 50 55
+                  Type.Name 51 54
+#!program 544 line 430 BlockStat dialects.Scala35 :: abstract-given-depend
+object W544 {
+  def w = {
+given setOrd[T](using ord: Ord[T]): Ord[Set[T]]
+}
+}
+#!scalac ok
+#!regions L73/ L75/
+#!layout
+Source 0 78
+  Defn.Object 0 77
+    Term.Name 7 11
+    Template 12 77
+      Template.Body 12 77
+        Defn.Def 16 75
+          Term.Name 20 21
+          Term.Block 24 75
+            Decl.Given 26 73
+              Term.Name 32 38
+              Member.ParamClauseGroup 38 60
+                Type.ParamClause 38 41
+                  Type.Param 39 40
+                    Type.Name 39 40
+                    Type.ParamClause 40 40
+                    Type.Bounds 40 40
+                Term.ParamClause 41 60
+                  Term.Param 48 59
+                    Mod.Using 42 47
+                    Term.Name 48 51
+                    Type.Apply 53 59
+                      Type.Name 53 56
+                      Type.ArgClause 56 59
+                        Type.Name 57 58
+                  Mod.Using 42 47
+              Type.Apply 62 73
+                Type.Name 62 65
+                Type.ArgClause 65 73
+                  Type.Apply 66 72
+                    Type.Name 66 69
+                    Type.ArgClause 69 72
+                      Type.Name 70 71
+#!program 545 line 466 BlockStat dialects.Scala35 :: given without sig and type in parens looking like a param clause
+object W545 {
+  def w = {
+given (using[String]) with Eq[Int] with {
+  def foo = ???
+}
+
+}
+}
+#!scalac ok
+#!regions L83/ F85/ L88/
+#!layout
+Source 0 91
+  Defn.Object 0 90
+    Term.Name 7 11
+    Template 12 90
+      Template.Body 12 90
+        Defn.Def 16 88
+          Term.Name 20 21
+          Term.Block 24 88
+            Defn.Given 26 85
+              Name.Anonymous 32 32
+              Template 32 85
+                Init 32 47
+                  Type.Apply 33 46
+                    Type.Name 33 38
+                    Type.ArgClause 38 46
+                      Type.Name 39 45
+                  Name.Anonymous 48 48
+                Init 53 60
+                  Type.Apply 53 60
+                    Type.Name 53 55
+                    Type.ArgClause 55 60
+                      Type.Name 56 59
+                  Name.Anonymous 61 61
+                Template.Body 66 85
+                  Defn.Def 70 83
+                    Term.Name 74 77
+                    Term.Name 80 83
+#!program 546 line 473 BlockStat dialects.Scala35 :: using-named
+object W546 {
+  def w = {
+def f(a: Int)(using ord: UInt): Int = ???
+}
+}
+#!scalac ok
+#!regions L67/ L69/
+#!layout
+Source 0 72
+  Defn.Object 0 71
+    Term.Name 7 11
+    Template 12 71
+      Template.Body 12 71
+        Defn.Def 16 69
+          Term.Name 20 21
+          Term.Block 24 69
+            Defn.Def 26 67
+              Term.Name 30 31
+              Member.ParamClauseGroup 31 56
+                Type.ParamClause 31 31
+                Term.ParamClause 31 39
+                  Term.Param 32 38
+                    Term.Name 32 33
+                    Type.Name 35 38
+                Term.ParamClause 39 56
+                  Term.Param 46 55
+                    Mod.Using 40 45
+                    Term.Name 46 49
+                    Type.Name 51 55
+                  Mod.Using 40 45
+              Type.Name 58 61
+              Term.Name 64 67
+#!program 547 line 482 BlockStat dialects.Scala35 :: using-anonymous
+object W547 {
+  def w = {
+def f(a: Int)(using UInt): Int = ???
+}
+}
+#!scalac ok
+#!regions L62/ L64/
+#!layout
+Source 0 67
+  Defn.Object 0 66
+    Term.Name 7 11
+    Template 12 66
+      Template.Body 12 66
+        Defn.Def 16 64
+          Term.Name 20 21
+          Term.Block 24 64
+            Defn.Def 26 62
+              Term.Name 30 31
+              Member.ParamClauseGroup 31 51
+                Type.ParamClause 31 31
+                Term.ParamClause 31 39
+                  Term.Param 32 38
+                    Term.Name 32 33
+                    Type.Name 35 38
+                Term.ParamClause 39 51
+                  Term.Param 46 50
+                    Mod.Using 40 45
+                    Name.Anonymous 46 46
+                    Type.Name 46 50
+                  Mod.Using 40 45
+              Type.Name 53 56
+              Term.Name 59 62
+#!program 548 line 492 BlockStat dialects.Scala35 :: using-multiple-parens
+object W548 {
+  def w = {
+def f(a: Int)(using ui: UInt)(using us: UString): Boolean = ???
+}
+}
+#!scalac ok
+#!regions L89/ L91/
+#!layout
+Source 0 94
+  Defn.Object 0 93
+    Term.Name 7 11
+    Template 12 93
+      Template.Body 12 93
+        Defn.Def 16 91
+          Term.Name 20 21
+          Term.Block 24 91
+            Defn.Def 26 89
+              Term.Name 30 31
+              Member.ParamClauseGroup 31 74
+                Type.ParamClause 31 31
+                Term.ParamClause 31 39
+                  Term.Param 32 38
+                    Term.Name 32 33
+                    Type.Name 35 38
+                Term.ParamClause 39 55
+                  Term.Param 46 54
+                    Mod.Using 40 45
+                    Term.Name 46 48
+                    Type.Name 50 54
+                  Mod.Using 40 45
+                Term.ParamClause 55 74
+                  Term.Param 62 73
+                    Mod.Using 56 61
+                    Term.Name 62 64
+                    Type.Name 66 73
+                  Mod.Using 56 61
+              Type.Name 76 83
+              Term.Name 86 89
+#!program 549 line 504 BlockStat dialects.Scala35 :: using-multiple-parens
+object W549 {
+  def w = {
+def f(a: Int)(using UInt)(using UString): Boolean = ???
+}
+}
+#!scalac ok
+#!regions L81/ L83/
+#!layout
+Source 0 86
+  Defn.Object 0 85
+    Term.Name 7 11
+    Template 12 85
+      Template.Body 12 85
+        Defn.Def 16 83
+          Term.Name 20 21
+          Term.Block 24 83
+            Defn.Def 26 81
+              Term.Name 30 31
+              Member.ParamClauseGroup 31 66
+                Type.ParamClause 31 31
+                Term.ParamClause 31 39
+                  Term.Param 32 38
+                    Term.Name 32 33
+                    Type.Name 35 38
+                Term.ParamClause 39 51
+                  Term.Param 46 50
+                    Mod.Using 40 45
+                    Name.Anonymous 46 46
+                    Type.Name 46 50
+                  Mod.Using 40 45
+                Term.ParamClause 51 66
+                  Term.Param 58 65
+                    Mod.Using 52 57
+                    Name.Anonymous 58 58
+                    Type.Name 58 65
+                  Mod.Using 52 57
+              Type.Name 68 75
+              Term.Name 78 81
+#!program 550 line 516 BlockStat dialects.Scala35 :: using-many-single-paren
+object W550 {
+  def w = {
+def f(a: Int)(using ui: UInt, us: => UString): Boolean = ???
+}
+}
+#!scalac ok
+#!regions L86/ L88/
+#!layout
+Source 0 91
+  Defn.Object 0 90
+    Term.Name 7 11
+    Template 12 90
+      Template.Body 12 90
+        Defn.Def 16 88
+          Term.Name 20 21
+          Term.Block 24 88
+            Defn.Def 26 86
+              Term.Name 30 31
+              Member.ParamClauseGroup 31 71
+                Type.ParamClause 31 31
+                Term.ParamClause 31 39
+                  Term.Param 32 38
+                    Term.Name 32 33
+                    Type.Name 35 38
+                Term.ParamClause 39 71
+                  Term.Param 46 54
+                    Mod.Using 40 45
+                    Term.Name 46 48
+                    Type.Name 50 54
+                  Term.Param 56 70
+                    Mod.Using 40 45
+                    Term.Name 56 58
+                    Type.ByName 60 70
+                      Type.Name 63 70
+                  Mod.Using 40 45
+              Type.Name 73 80
+              Term.Name 83 86
+#!program 551 line 524 BlockStat dialects.Scala35 :: using-many-single-paren
+object W551 {
+  def w = {
+def f(a: Int)(using UInt, UString): Boolean = ???
+}
+}
+#!scalac ok
+#!regions L75/ L77/
+#!layout
+Source 0 80
+  Defn.Object 0 79
+    Term.Name 7 11
+    Template 12 79
+      Template.Body 12 79
+        Defn.Def 16 77
+          Term.Name 20 21
+          Term.Block 24 77
+            Defn.Def 26 75
+              Term.Name 30 31
+              Member.ParamClauseGroup 31 60
+                Type.ParamClause 31 31
+                Term.ParamClause 31 39
+                  Term.Param 32 38
+                    Term.Name 32 33
+                    Type.Name 35 38
+                Term.ParamClause 39 60
+                  Term.Param 46 50
+                    Mod.Using 40 45
+                    Name.Anonymous 46 46
+                    Type.Name 46 50
+                  Term.Param 52 59
+                    Mod.Using 40 45
+                    Name.Anonymous 52 52
+                    Type.Name 52 59
+                  Mod.Using 40 45
+              Type.Name 62 69
+              Term.Name 72 75
+#!program 552 line 535 BlockStat dialects.Scala35 :: using-complex
+object W552 {
+  def w = {
+def f(x: String)(using Int)(y: String)(using b: Int): Unit = ???
+}
+}
+#!scalac ok
+#!regions L90/ L92/
+#!layout
+Source 0 95
+  Defn.Object 0 94
+    Term.Name 7 11
+    Template 12 94
+      Template.Body 12 94
+        Defn.Def 16 92
+          Term.Name 20 21
+          Term.Block 24 92
+            Defn.Def 26 90
+              Term.Name 30 31
+              Member.ParamClauseGroup 31 78
+                Type.ParamClause 31 31
+                Term.ParamClause 31 42
+                  Term.Param 32 41
+                    Term.Name 32 33
+                    Type.Name 35 41
+                Term.ParamClause 42 53
+                  Term.Param 49 52
+                    Mod.Using 43 48
+                    Name.Anonymous 49 49
+                    Type.Name 49 52
+                  Mod.Using 43 48
+                Term.ParamClause 53 64
+                  Term.Param 54 63
+                    Term.Name 54 55
+                    Type.Name 57 63
+                Term.ParamClause 64 78
+                  Term.Param 71 77
+                    Mod.Using 65 70
+                    Term.Name 71 72
+                    Type.Name 74 77
+                  Mod.Using 65 70
+              Type.Name 80 84
+              Term.Name 87 90
+#!program 553 line 556 BlockStat dialects.Scala35 :: using-lambda-method-parameter
+object W553 {
+  def w = {
+LazyBody { (using ctx: Context) => 3 }
+}
+}
+#!scalac refuses: not a legal formal parameter for a function literal
+#!regions L64/ L66/
+#!layout
+Source 0 69
+  Defn.Object 0 68
+    Term.Name 7 11
+    Template 12 68
+      Template.Body 12 68
+        Defn.Def 16 66
+          Term.Name 20 21
+          Term.Block 24 66
+            Term.Apply 26 64
+              Term.Name 26 34
+              Term.ArgClause 35 64
+                Term.Block 35 64
+                  Term.Function 37 62
+                    Term.ParamClause 37 57
+                      Term.Param 38 56
+                        Mod.Using 38 43
+                        Term.Name 44 47
+                        Type.Name 49 56
+                      Mod.Using 38 43
+                    Lit.Int 61 62
+#!program 554 line 564 BlockStat dialects.Scala35 :: using-named-with-by-name-parameter
+object W554 {
+  def w = {
+def f(using a: => Int): Unit = ???
+}
+}
+#!scalac ok
+#!regions L60/ L62/
+#!layout
+Source 0 65
+  Defn.Object 0 64
+    Term.Name 7 11
+    Template 12 64
+      Template.Body 12 64
+        Defn.Def 16 62
+          Term.Name 20 21
+          Term.Block 24 62
+            Defn.Def 26 60
+              Term.Name 30 31
+              Member.ParamClauseGroup 31 48
+                Type.ParamClause 31 31
+                Term.ParamClause 31 48
+                  Term.Param 38 47
+                    Mod.Using 32 37
+                    Term.Name 38 39
+                    Type.ByName 41 47
+                      Type.Name 44 47
+                  Mod.Using 32 37
+              Type.Name 50 54
+              Term.Name 57 60
+#!program 555 line 569 BlockStat dialects.Scala35 :: using-call-site
+object W555 {
+  def w = {
+val a = f()(using a)(using 3, true)
+}
+}
+#!scalac ok
+#!regions L61/ L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Def 16 63
+          Term.Name 20 21
+          Term.Block 24 63
+            Defn.Val 26 61
+              Pat.Var 30 31
+                Term.Name 30 31
+              Term.Apply 34 61
+                Term.Apply 34 46
+                  Term.Apply 34 37
+                    Term.Name 34 35
+                    Term.ArgClause 35 37
+                  Term.ArgClause 37 46
+                    Term.Name 44 45
+                    Mod.Using 38 43
+                Term.ArgClause 46 61
+                  Lit.Int 53 54
+                  Lit.Boolean 56 60
+                  Mod.Using 47 52
+#!program 556 line 577 BlockStat dialects.Scala35 :: using-anonymous-method
+object W556 {
+  def w = {
+val fun = (using ctx: Context) => ctx.open
+}
+}
+#!scalac refuses: not a legal formal parameter for a function literal
+#!regions L68/ L70/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Defn.Def 16 70
+          Term.Name 20 21
+          Term.Block 24 70
+            Defn.Val 26 68
+              Pat.Var 30 33
+                Term.Name 30 33
+              Term.Function 36 68
+                Term.ParamClause 36 56
+                  Term.Param 37 55
+                    Mod.Using 37 42
+                    Term.Name 43 46
+                    Type.Name 48 55
+                  Mod.Using 37 42
+                Term.Select 60 68
+                  Term.Name 60 63
+                  Term.Name 64 68
+#!program 557 line 584 BlockStat dialects.Scala35 :: using-anonymous-method
+object W557 {
+  def w = {
+val fun = (using ctx) => ctx.open
+}
+}
+#!scalac refuses: ',' or ')' expected, but identifier found
+#!regions L59/ L61/
+#!layout
+Source 0 64
+  Defn.Object 0 63
+    Term.Name 7 11
+    Template 12 63
+      Template.Body 12 63
+        Defn.Def 16 61
+          Term.Name 20 21
+          Term.Block 24 61
+            Defn.Val 26 59
+              Pat.Var 30 33
+                Term.Name 30 33
+              Term.Function 36 59
+                Term.ParamClause 36 47
+                  Term.Param 37 46
+                    Mod.Using 37 42
+                    Term.Name 43 46
+                  Mod.Using 37 42
+                Term.Select 51 59
+                  Term.Name 51 54
+                  Term.Name 55 59
+#!program 558 line 591 BlockStat dialects.Scala35 :: using-anonymous-method
+object W558 {
+  def w = {
+val fun = (using _: Context) => ctx.open
+}
+}
+#!scalac refuses: not a legal formal parameter for a function literal
+#!regions L66/ L68/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 11
+    Template 12 70
+      Template.Body 12 70
+        Defn.Def 16 68
+          Term.Name 20 21
+          Term.Block 24 68
+            Defn.Val 26 66
+              Pat.Var 30 33
+                Term.Name 30 33
+              Term.Function 36 66
+                Term.ParamClause 36 54
+                  Term.Param 37 53
+                    Mod.Using 37 42
+                    Name.Placeholder 43 44
+                    Type.Name 46 53
+                  Mod.Using 37 42
+                Term.Select 58 66
+                  Term.Name 58 61
+                  Term.Name 62 66
+#!program 559 line 600 BlockStat dialects.Scala35 :: given-pat
+object W559 {
+  def w = {
+pair match {
+  case (ctx @ given Context, y) =>
+}
+
+}
+}
+#!scalac ok
+#!regions F75/ L78/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Defn.Def 16 78
+          Term.Name 20 21
+          Term.Block 24 78
+            Term.Match 26 75
+              Term.Name 26 30
+              Term.CasesBlock 37 75
+                Case 41 73
+                  Pat.Tuple 46 70
+                    Pat.Bind 47 66
+                      Pat.Var 47 50
+                        Term.Name 47 50
+                      Pat.Given 53 66
+                        Type.Name 59 66
+                    Pat.Var 68 69
+                      Term.Name 68 69
+                  Term.Block 74 74
+#!program 560 line 615 BlockStat dialects.Scala35 :: given-pat-new
+object W560 {
+  def w = {
+pair match {
+ case ctx @ given Context => new Provider
+ case ctx @ given (Context => String) => new Provider
+}
+
+}
+}
+#!scalac ok
+#!regions L80/ L134/ F136/ L139/
+#!layout
+Source 0 142
+  Defn.Object 0 141
+    Term.Name 7 11
+    Template 12 141
+      Template.Body 12 141
+        Defn.Def 16 139
+          Term.Name 20 21
+          Term.Block 24 139
+            Term.Match 26 136
+              Term.Name 26 30
+              Term.CasesBlock 37 136
+                Case 40 80
+                  Pat.Bind 45 64
+                    Pat.Var 45 48
+                      Term.Name 45 48
+                    Pat.Given 51 64
+                      Type.Name 57 64
+                  Term.New 68 80
+                    Init 72 80
+                      Type.Name 72 80
+                      Name.Anonymous 80 80
+                Case 82 134
+                  Pat.Bind 87 118
+                    Pat.Var 87 90
+                      Term.Name 87 90
+                    Pat.Given 93 118
+                      Type.Function 100 117
+                        Type.FuncParamClause 100 107
+                          Type.Name 100 107
+                        Type.Name 111 117
+                  Term.New 122 134
+                    Init 126 134
+                      Type.Name 126 134
+                      Name.Anonymous 134 134
+#!program 561 line 642 BlockStat dialects.Scala35 :: given-pat-for
+object W561 {
+  def w = {
+for given Context <- applicationContexts do a
+
+}
+}
+#!scalac ok
+#!regions F71/ L74/
+#!layout
+Source 0 77
+  Defn.Object 0 76
+    Term.Name 7 11
+    Template 12 76
+      Template.Body 12 76
+        Defn.Def 16 74
+          Term.Name 20 21
+          Term.Block 24 74
+            Term.For 26 71
+              Term.EnumeratorsBlock 30 66
+                Enumerator.Generator 30 66
+                  Pat.Given 30 43
+                    Type.Name 36 43
+                  Term.Name 47 66
+              Term.Name 70 71
+#!program 562 line 658 BlockStat dialects.Scala35 :: import-given
+object W562 {
+  def w = {
+import File.given
+}
+}
+#!scalac ok
+#!regions L43/ L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Def 16 45
+          Term.Name 20 21
+          Term.Block 24 45
+            Import 26 43
+              Importer 33 43
+                Term.Name 33 37
+                Importee.GivenAll 38 43
+#!program 563 line 662 BlockStat dialects.Scala35 :: import-given
+object W563 {
+  def w = {
+import File.{ *, given }
+}
+}
+#!scalac ok
+#!regions L50/ L52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 11
+    Template 12 54
+      Template.Body 12 54
+        Defn.Def 16 52
+          Term.Name 20 21
+          Term.Block 24 52
+            Import 26 50
+              Importer 33 50
+                Term.Name 33 37
+                Importee.Wildcard 40 41
+                Importee.GivenAll 43 48
+#!program 564 line 666 BlockStat dialects.Scala35 :: import-given
+object W564 {
+  def w = {
+import File.{ given, * }
+}
+}
+#!scalac ok
+#!regions L50/ L52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 11
+    Template 12 54
+      Template.Body 12 54
+        Defn.Def 16 52
+          Term.Name 20 21
+          Term.Block 24 52
+            Import 26 50
+              Importer 33 50
+                Term.Name 33 37
+                Importee.GivenAll 40 45
+                Importee.Wildcard 47 48
+#!program 565 line 670 BlockStat dialects.Scala35 :: import-given
+object W565 {
+  def w = {
+import File.{ given TC }
+}
+}
+#!scalac ok
+#!regions L50/ L52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 11
+    Template 12 54
+      Template.Body 12 54
+        Defn.Def 16 52
+          Term.Name 20 21
+          Term.Block 24 52
+            Import 26 50
+              Importer 33 50
+                Term.Name 33 37
+                Importee.Given 40 48
+                  Type.Name 46 48
+#!program 566 line 674 BlockStat dialects.Scala35 :: import-given
+object W566 {
+  def w = {
+import File.{ given TC, given AC, * }
+}
+}
+#!scalac ok
+#!regions L63/ L65/
+#!layout
+Source 0 68
+  Defn.Object 0 67
+    Term.Name 7 11
+    Template 12 67
+      Template.Body 12 67
+        Defn.Def 16 65
+          Term.Name 20 21
+          Term.Block 24 65
+            Import 26 63
+              Importer 33 63
+                Term.Name 33 37
+                Importee.Given 40 48
+                  Type.Name 46 48
+                Importee.Given 50 58
+                  Type.Name 56 58
+                Importee.Wildcard 60 61
+#!program 567 line 679 BlockStat dialects.Scala35 :: import-given
+object W567 {
+  def w = {
+import Instances.{ im, given Ordering[?] }
+}
+}
+#!scalac ok
+#!regions L68/ L70/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Defn.Def 16 70
+          Term.Name 20 21
+          Term.Block 24 70
+            Import 26 68
+              Importer 33 68
+                Term.Name 33 42
+                Importee.Name 45 47
+                  Name.Indeterminate 45 47
+                Importee.Given 49 66
+                  Type.Apply 55 66
+                    Type.Name 55 63
+                    Type.ArgClause 63 66
+                      Type.Wildcard 64 65
+                        Type.Bounds 65 65
+#!program 568 line 688 BlockStat dialects.Scala35 :: lazy given
+object W568 {
+  def w = {
+lazy given foo: Foo = ???
+}
+}
+#!scalac ok
+#!regions L51/ L53/
+#!layout
+Source 0 56
+  Defn.Object 0 55
+    Term.Name 7 11
+    Template 12 55
+      Template.Body 12 55
+        Defn.Def 16 53
+          Term.Name 20 21
+          Term.Block 24 53
+            Defn.GivenAlias 26 51
+              Mod.Lazy 26 30
+              Term.Name 37 40
+              Type.Name 42 45
+              Term.Name 48 51
+#!program 569 line 721 BlockStat dialects.Scala35 :: scalafmt #4764
+object W569 {
+  def w = {
+object a:
+  def foo =
+    bar:
+      case given String =>
+  end foo
+
+}
+}
+#!scalac ok
+#!regions I35/2 I47/4.2 I56/6.4.2 O83/4.2 O83/2 O94/ L96/
+#!layout
+Source 0 99
+  Defn.Object 0 98
+    Term.Name 7 11
+    Template 12 98
+      Template.Body 12 98
+        Defn.Def 16 96
+          Term.Name 20 21
+          Term.Block 24 96
+            Defn.Object 26 93
+              Term.Name 33 34
+              Template 34 93
+                Template.Body 34 93
+                  Defn.Def 38 83
+                    Term.Name 42 45
+                    Term.Apply 52 83
+                      Term.Name 52 55
+                      Term.ArgClause 55 83
+                        Term.PartialFunction 55 83
+                          Case 63 83
+                            Pat.Given 68 80
+                              Type.Name 74 80
+                            Term.Block 83 83
+                  Term.EndMarker 86 93
+                    Term.Name 90 93

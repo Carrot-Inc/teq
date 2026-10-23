@@ -1,0 +1,22 @@
+// Program 701 of tests/fix/scalameta, from scalameta 4.17.4's MacroSuite (line 203, "macro-splice-this-within-quote:
+// '{ $this }"): scalac 3.8.4's parser accepts it, teq's reports "unterminated character literal". The expectation is
+// scalameta's tree under dialects.Scala3, which teq fix's tree answers to: a node a line, its start and end in
+// UTF-16 units from the program's first line below.
+//   Source 0 42
+//     Defn.Object 0 41
+//       Term.Name 7 11
+//       Template 12 41
+//         Template.Body 12 41
+//           Defn.Def 16 39
+//             Term.Name 20 21
+//             Term.Block 24 39
+//               Term.QuotedMacroExpr 26 37
+//                 Term.Block 28 37
+//                   Term.SplicedMacroExpr 30 35
+//                     Term.This 30 35
+//                       Name.Anonymous 30 30
+object W701 {
+  def w = {
+' { $this }
+}
+}

@@ -1,0 +1,45 @@
+Nodes/Pkg.Object/input.scala:10:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pkg.Object: a package object, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pkg_Object\npackage object pkgobj:\n  val z = 1\n\nobject Pkg_Object:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Pkg_Object\npackage object pkgobj:\n  val z = 1\n\nobject Pkg_Object:\n  val marker = 0"
+    .stats = [Pkg.Object "package object pkgobj:\n  val z = 1", Defn.Object "object Pkg_Object:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Pkg_Object"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pkg_Object" syntax="Pkg_Object"
+    body Pkg.Body syntax="package object pkgobj:\n  val z = 1\n\nobject Pkg_Object:\n  val marker = 0"
+      stats Pkg.Object syntax="package object pkgobj:\n  val z = 1"
+        mods Nil
+        name Term.Name value="pkgobj" syntax="pkgobj"
+        templ Template syntax=":\n  val z = 1"
+          .self = Self ""
+          .stats = [Defn.Val "val z = 1"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val z = 1"
+            selfOpt None
+            stats Defn.Val syntax="val z = 1"
+              mods Nil
+              pats Pat.Var syntax="z"
+                name Term.Name value="z" syntax="z"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+          derives Nil
+      stats Defn.Object syntax="object Pkg_Object:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Pkg_Object" syntax="Pkg_Object"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

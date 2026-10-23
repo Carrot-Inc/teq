@@ -1,0 +1,3 @@
+shared/src/Shared.scala:1:1: error: [Visit.first]: first shared-file visit
+  // Shared by a and b, the project rule's first visit a's.
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

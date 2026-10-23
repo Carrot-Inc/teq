@@ -1,0 +1,1858 @@
+# The programs of scalameta 4.17.4's TypeSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 1092 line 17 Stat dialects.Scala3 :: with-type
+object W1092 {
+type A = AnyRef with
+  type T>: Null
+
+}
+#!scalac ok
+#!regions I35/2 O52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 12
+    Template 13 54
+      Template.Body 13 54
+        Defn.Type 15 51
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Type.Refine 24 51
+            Type.Name 24 30
+            Stat.Block 38 51
+              Decl.Type 38 51
+                Type.Name 43 44
+                Type.ParamClause 44 44
+                Type.Bounds 44 51
+                  Type.Name 47 51
+          Type.Bounds 22 22
+#!program 1093 line 36 Stat dialects.Scala3 :: with-type2
+object W1093 {
+type A = AnyRef with Product with
+  type T>: Null
+
+}
+#!scalac ok
+#!regions I48/2 O65/
+#!layout
+Source 0 68
+  Defn.Object 0 67
+    Term.Name 7 12
+    Template 13 67
+      Template.Body 13 67
+        Defn.Type 15 64
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Type.Refine 24 64
+            Type.With 24 43
+              Type.Name 24 30
+              Type.Name 36 43
+            Stat.Block 51 64
+              Decl.Type 51 64
+                Type.Name 56 57
+                Type.ParamClause 57 57
+                Type.Bounds 57 64
+                  Type.Name 60 64
+          Type.Bounds 22 22
+#!program 1094 line 58 Stat dialects.Scala3 :: with-type3
+object W1094 {
+type A = Product with
+  type T>: Null
+  with
+    type D <: Product
+
+}
+#!scalac ok
+#!regions I36/2 I59/4.2 O82/2 O82/
+#!layout
+Source 0 85
+  Defn.Object 0 84
+    Term.Name 7 12
+    Template 13 84
+      Template.Body 13 84
+        Defn.Type 15 81
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Type.Refine 24 81
+            Type.Name 24 31
+            Stat.Block 39 81
+              Decl.Type 39 81
+                Type.Name 44 45
+                Type.ParamClause 45 45
+                Type.Bounds 45 81
+                  Type.Refine 48 81
+                    Type.Name 48 52
+                    Stat.Block 64 81
+                      Decl.Type 64 81
+                        Type.Name 69 70
+                        Type.ParamClause 71 71
+                        Type.Bounds 71 81
+                          Type.Name 74 81
+          Type.Bounds 22 22
+#!program 1095 line 91 Stat dialects.Scala3 :: coloneol-type3
+object W1095 {
+type A = Product:
+  type T>: Null:
+    type D <: Product
+
+}
+#!scalac ok
+#!regions I32/2 I49/4.2 O72/2 O72/
+#!layout
+Source 0 75
+  Defn.Object 0 74
+    Term.Name 7 12
+    Template 13 74
+      Template.Body 13 74
+        Defn.Type 15 71
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Type.Refine 24 71
+            Type.Name 24 31
+            Stat.Block 31 71
+              Decl.Type 35 71
+                Type.Name 40 41
+                Type.ParamClause 41 41
+                Type.Bounds 41 71
+                  Type.Refine 44 71
+                    Type.Name 44 48
+                    Stat.Block 48 71
+                      Decl.Type 54 71
+                        Type.Name 59 60
+                        Type.ParamClause 61 61
+                        Type.Bounds 61 71
+                          Type.Name 64 71
+          Type.Bounds 22 22
+#!program 1096 line 135 Stat dialects.Scala3 :: with-indent-error
+object W1096 {
+type A = Product
+  type T>: Null
+
+}
+#!scalac ok
+#!regions L31/ F47/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 12
+    Template 13 50
+      Template.Body 13 50
+        Defn.Type 15 31
+          Type.Name 20 21
+          Type.ParamClause 22 22
+          Type.Name 24 31
+          Type.Bounds 22 22
+        Decl.Type 34 47
+          Type.Name 39 40
+          Type.ParamClause 40 40
+          Type.Bounds 40 47
+            Type.Name 43 47
+#!program 1097 line 144 Stat dialects.Scala3 :: with-followed-by-brace-indent
+object W1097 {
+type AA = String with Int with
+    type T>: Null
+      {
+        type T>: Int
+      }
+
+}
+#!scalac ok
+#!regions I45/4 L63/4 L92/4 O101/
+#!layout
+Source 0 104
+  Defn.Object 0 103
+    Term.Name 7 12
+    Template 13 103
+      Template.Body 13 103
+        Defn.Type 15 100
+          Type.Name 20 22
+          Type.ParamClause 23 23
+          Type.Refine 25 100
+            Type.With 25 40
+              Type.Name 25 31
+              Type.Name 37 40
+            Stat.Block 50 100
+              Decl.Type 50 100
+                Type.Name 55 56
+                Type.ParamClause 56 56
+                Type.Bounds 56 100
+                  Type.Refine 59 100
+                    Type.Name 59 63
+                    Stat.Block 70 100
+                      Decl.Type 80 92
+                        Type.Name 85 86
+                        Type.ParamClause 86 86
+                        Type.Bounds 86 92
+                          Type.Name 89 92
+          Type.Bounds 23 23
+#!program 1098 line 179 Stat dialects.Scala3 :: coloneol-followed-by-brace-indent
+object W1098 {
+type AA = String with Int:
+    type T>: Null:
+        type T>: Int
+
+}
+#!scalac ok
+#!regions I41/4 I60/8.4 O82/4 O82/
+#!layout
+Source 0 85
+  Defn.Object 0 84
+    Term.Name 7 12
+    Template 13 84
+      Template.Body 13 84
+        Defn.Type 15 81
+          Type.Name 20 22
+          Type.ParamClause 23 23
+          Type.Refine 25 81
+            Type.With 25 40
+              Type.Name 25 31
+              Type.Name 37 40
+            Stat.Block 40 81
+              Decl.Type 46 81
+                Type.Name 51 52
+                Type.ParamClause 52 52
+                Type.Bounds 52 81
+                  Type.Refine 55 81
+                    Type.Name 55 59
+                    Stat.Block 59 81
+                      Decl.Type 69 81
+                        Type.Name 74 75
+                        Type.ParamClause 75 75
+                        Type.Bounds 75 81
+                          Type.Name 78 81
+          Type.Bounds 23 23
+#!program 1099 line 211 Stat dialects.Scala3 :: with-followed-by-brace
+object W1099 {
+{
+  type AA = String with Int with
+    type T>: Null
+  {
+    type T>: Int
+  }
+}
+
+}
+#!scalac ok
+#!regions I49/4 O67/ L67/ L88/ L92/ F94/
+#!layout
+Source 0 98
+  Defn.Object 0 97
+    Term.Name 7 12
+    Template 13 97
+      Template.Body 13 97
+        Term.Block 15 94
+          Defn.Type 19 67
+            Type.Name 24 26
+            Type.ParamClause 27 27
+            Type.Refine 29 67
+              Type.With 29 44
+                Type.Name 29 35
+                Type.Name 41 44
+              Stat.Block 54 67
+                Decl.Type 54 67
+                  Type.Name 59 60
+                  Type.ParamClause 60 60
+                  Type.Bounds 60 67
+                    Type.Name 63 67
+            Type.Bounds 27 27
+          Term.Block 70 92
+            Decl.Type 76 88
+              Type.Name 81 82
+              Type.ParamClause 82 82
+              Type.Bounds 82 88
+                Type.Name 85 88
+#!program 1100 line 246 Type dialects.Scala3 :: T
+object W1100 {
+  type T = T
+}
+#!scalac ok
+#!regions L27/
+#!layout
+Source 0 30
+  Defn.Object 0 29
+    Term.Name 7 12
+    Template 13 29
+      Template.Body 13 29
+        Defn.Type 17 27
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Name 26 27
+          Type.Bounds 24 24
+#!program 1101 line 248 Type dialects.Scala3 :: F[T]
+object W1101 {
+  type T = F[T]
+}
+#!scalac ok
+#!regions L30/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 12
+    Template 13 32
+      Template.Body 13 32
+        Defn.Type 17 30
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 30
+            Type.Name 26 27
+            Type.ArgClause 27 30
+              Type.Name 28 29
+          Type.Bounds 24 24
+#!program 1102 line 250 Type dialects.Scala3 :: F#T
+object W1102 {
+  type T = F#T
+}
+#!scalac ok
+#!regions L29/
+#!layout
+Source 0 32
+  Defn.Object 0 31
+    Term.Name 7 12
+    Template 13 31
+      Template.Body 13 31
+        Defn.Type 17 29
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Project 26 29
+            Type.Name 26 27
+            Type.Name 28 29
+          Type.Bounds 24 24
+#!program 1103 line 252 Type dialects.Scala3 :: A \/ B
+object W1103 {
+  type T = A \/ B
+}
+#!scalac ok
+#!regions L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 12
+    Template 13 34
+      Template.Body 13 34
+        Defn.Type 17 32
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.ApplyInfix 26 32
+            Type.Name 26 27
+            Type.Name 28 30
+            Type.Name 31 32
+          Type.Bounds 24 24
+#!program 1104 line 254 Type dialects.Scala3 :: A * B
+object W1104 {
+  type T = A * B
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 12
+    Template 13 33
+      Template.Body 13 33
+        Defn.Type 17 31
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.ApplyInfix 26 31
+            Type.Name 26 27
+            Type.Name 28 29
+            Type.Name 30 31
+          Type.Bounds 24 24
+#!program 1105 line 256 Type dialects.Scala3 :: A * B + C
+object W1105 {
+  type T = A * B + C
+}
+#!scalac ok
+#!regions L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 12
+    Template 13 37
+      Template.Body 13 37
+        Defn.Type 17 35
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.ApplyInfix 26 35
+            Type.ApplyInfix 26 31
+              Type.Name 26 27
+              Type.Name 28 29
+              Type.Name 30 31
+            Type.Name 32 33
+            Type.Name 34 35
+          Type.Bounds 24 24
+#!program 1106 line 258 Type dialects.Scala3 :: A + B * C
+object W1106 {
+  type T = A + B * C
+}
+#!scalac ok
+#!regions L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 12
+    Template 13 37
+      Template.Body 13 37
+        Defn.Type 17 35
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.ApplyInfix 26 35
+            Type.Name 26 27
+            Type.Name 28 29
+            Type.ApplyInfix 30 35
+              Type.Name 30 31
+              Type.Name 32 33
+              Type.Name 34 35
+          Type.Bounds 24 24
+#!program 1107 line 261 Type dialects.Scala3 :: A * B + C / D
+object W1107 {
+  type T = A * B + C / D
+}
+#!scalac ok
+#!regions L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 12
+    Template 13 41
+      Template.Body 13 41
+        Defn.Type 17 39
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.ApplyInfix 26 39
+            Type.ApplyInfix 26 31
+              Type.Name 26 27
+              Type.Name 28 29
+              Type.Name 30 31
+            Type.Name 32 33
+            Type.ApplyInfix 34 39
+              Type.Name 34 35
+              Type.Name 36 37
+              Type.Name 38 39
+          Type.Bounds 24 24
+#!program 1108 line 264 Type dialects.Scala3 :: f.T
+object W1108 {
+  type T = f.T
+}
+#!scalac ok
+#!regions L29/
+#!layout
+Source 0 32
+  Defn.Object 0 31
+    Term.Name 7 12
+    Template 13 31
+      Template.Body 13 31
+        Defn.Type 17 29
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Select 26 29
+            Term.Name 26 27
+            Type.Name 28 29
+          Type.Bounds 24 24
+#!program 1109 line 266 Type dialects.Scala3 :: f.type
+object W1109 {
+  type T = f.type
+}
+#!scalac ok
+#!regions L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 12
+    Template 13 34
+      Template.Body 13 34
+        Defn.Type 17 32
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Singleton 26 32
+            Term.Name 26 27
+          Type.Bounds 24 24
+#!program 1110 line 268 Type dialects.Scala3 :: super.T
+object W1110 {
+  type T = super.T
+}
+#!scalac ok
+#!regions L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 12
+    Template 13 35
+      Template.Body 13 35
+        Defn.Type 17 33
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Select 26 33
+            Term.Super 26 31
+              Name.Anonymous 26 26
+              Name.Anonymous 31 31
+            Type.Name 32 33
+          Type.Bounds 24 24
+#!program 1111 line 270 Type dialects.Scala3 :: this.T
+object W1111 {
+  type T = this.T
+}
+#!scalac ok
+#!regions L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 12
+    Template 13 34
+      Template.Body 13 34
+        Defn.Type 17 32
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Select 26 32
+            Term.This 26 30
+              Name.Anonymous 26 26
+            Type.Name 31 32
+          Type.Bounds 24 24
+#!program 1112 line 272 Type dialects.Scala3 :: (A, B)
+object W1112 {
+  type T = (A, B)
+}
+#!scalac ok
+#!regions L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 12
+    Template 13 34
+      Template.Body 13 34
+        Defn.Type 17 32
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Tuple 26 32
+            Type.Name 27 28
+            Type.Name 30 31
+          Type.Bounds 24 24
+#!program 1113 line 275 Type dialects.Scala3 :: (A, B) => C
+object W1113 {
+  type T = (A, B) => C
+}
+#!scalac ok
+#!regions L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 12
+    Template 13 39
+      Template.Body 13 39
+        Defn.Type 17 37
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Function 26 37
+            Type.FuncParamClause 26 32
+              Type.Name 27 28
+              Type.Name 30 31
+            Type.Name 36 37
+          Type.Bounds 24 24
+#!program 1114 line 278 Type dialects.Scala3 :: T @foo
+object W1114 {
+  type T = T @foo
+}
+#!scalac ok
+#!regions L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 12
+    Template 13 34
+      Template.Body 13 34
+        Defn.Type 17 32
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Annotate 26 32
+            Type.Name 26 27
+            Mod.Annot 28 32
+              Init 29 32
+                Type.Name 29 32
+                Name.Anonymous 32 32
+          Type.Bounds 24 24
+#!program 1115 line 280 Type dialects.Scala3 :: A with B
+object W1115 {
+  type T = A with B
+}
+#!scalac ok
+#!regions L34/
+#!layout
+Source 0 37
+  Defn.Object 0 36
+    Term.Name 7 12
+    Template 13 36
+      Template.Body 13 36
+        Defn.Type 17 34
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.With 26 34
+            Type.Name 26 27
+            Type.Name 33 34
+          Type.Bounds 24 24
+#!program 1116 line 283 Type dialects.Scala3 :: A & B is not a special type
+object W1116 {
+  type T = A & B
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 12
+    Template 13 33
+      Template.Body 13 33
+        Defn.Type 17 31
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.ApplyInfix 26 31
+            Type.Name 26 27
+            Type.Name 28 29
+            Type.Name 30 31
+          Type.Bounds 24 24
+#!program 1117 line 286 Type dialects.Scala3 :: A with B {}
+object W1117 {
+  type T = A with B {}
+}
+#!scalac ok
+#!regions L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 12
+    Template 13 39
+      Template.Body 13 39
+        Defn.Type 17 37
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Refine 26 37
+            Type.With 26 34
+              Type.Name 26 27
+              Type.Name 33 34
+            Stat.Block 35 37
+          Type.Bounds 24 24
+#!program 1118 line 288 Type dialects.Scala3 :: {}
+object W1118 {
+  type T = {}
+}
+#!scalac ok
+#!regions L28/
+#!layout
+Source 0 31
+  Defn.Object 0 30
+    Term.Name 7 12
+    Template 13 30
+      Template.Body 13 30
+        Defn.Type 17 28
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Refine 26 28
+            Stat.Block 26 28
+          Type.Bounds 24 24
+#!program 1119 line 290 Type dialects.Scala3 :: A { def x: A; val y: B; type C }
+object W1119 {
+  type T = A { def x: Int; val y: B; type C }
+}
+#!scalac ok
+#!regions L60/
+#!layout
+Source 0 63
+  Defn.Object 0 62
+    Term.Name 7 12
+    Template 13 62
+      Template.Body 13 62
+        Defn.Type 17 60
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Refine 26 60
+            Type.Name 26 27
+            Stat.Block 28 60
+              Decl.Def 30 40
+                Term.Name 34 35
+                Type.Name 37 40
+              Decl.Val 42 50
+                Pat.Var 46 47
+                  Term.Name 46 47
+                Type.Name 49 50
+              Decl.Type 52 58
+                Type.Name 57 58
+                Type.ParamClause 59 59
+                Type.Bounds 59 59
+          Type.Bounds 24 24
+#!program 1120 line 301 Type dialects.Scala31 :: F[_ >: lo <: hi]
+object W1120 {
+  type T = F[_ >: lo <: hi]
+}
+#!scalac ok
+#!regions L42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 12
+    Template 13 44
+      Template.Body 13 44
+        Defn.Type 17 42
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 42
+            Type.Name 26 27
+            Type.ArgClause 27 42
+              Type.Wildcard 28 41
+                Type.Bounds 30 41
+                  Type.Name 33 35
+                  Type.Name 39 41
+          Type.Bounds 24 24
+#!program 1121 line 302 Type dialects.Scala31 :: F[_ >: lo <: hi]
+object W1121 {
+  type T = F[? >: lo <: hi]
+}
+#!scalac ok
+#!regions L42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 12
+    Template 13 44
+      Template.Body 13 44
+        Defn.Type 17 42
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 42
+            Type.Name 26 27
+            Type.ArgClause 27 42
+              Type.Wildcard 28 41
+                Type.Bounds 30 41
+                  Type.Name 33 35
+                  Type.Name 39 41
+          Type.Bounds 24 24
+#!program 1122 line 308 Type dialects.Scala31 :: F[_ >: lo
+object W1122 {
+  type T = F[_ >: lo]
+}
+#!scalac ok
+#!regions L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 12
+    Template 13 38
+      Template.Body 13 38
+        Defn.Type 17 36
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 36
+            Type.Name 26 27
+            Type.ArgClause 27 36
+              Type.Wildcard 28 35
+                Type.Bounds 30 35
+                  Type.Name 33 35
+          Type.Bounds 24 24
+#!program 1123 line 309 Type dialects.Scala31 :: F[_ >: lo
+object W1123 {
+  type T = F[? >: lo]
+}
+#!scalac ok
+#!regions L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 12
+    Template 13 38
+      Template.Body 13 38
+        Defn.Type 17 36
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 36
+            Type.Name 26 27
+            Type.ArgClause 27 36
+              Type.Wildcard 28 35
+                Type.Bounds 30 35
+                  Type.Name 33 35
+          Type.Bounds 24 24
+#!program 1124 line 315 Type dialects.Scala31 :: F[_ <: hi]
+object W1124 {
+  type T = F[_ <: hi]
+}
+#!scalac ok
+#!regions L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 12
+    Template 13 38
+      Template.Body 13 38
+        Defn.Type 17 36
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 36
+            Type.Name 26 27
+            Type.ArgClause 27 36
+              Type.Wildcard 28 35
+                Type.Bounds 30 35
+                  Type.Name 33 35
+          Type.Bounds 24 24
+#!program 1125 line 316 Type dialects.Scala31 :: F[_ <: hi]
+object W1125 {
+  type T = F[? <: hi]
+}
+#!scalac ok
+#!regions L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 12
+    Template 13 38
+      Template.Body 13 38
+        Defn.Type 17 36
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 36
+            Type.Name 26 27
+            Type.ArgClause 27 36
+              Type.Wildcard 28 35
+                Type.Bounds 30 35
+                  Type.Name 33 35
+          Type.Bounds 24 24
+#!program 1126 line 322 Type dialects.Scala31 :: F[?]
+object W1126 {
+  type T = F[?]
+}
+#!scalac ok
+#!regions L30/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 12
+    Template 13 32
+      Template.Body 13 32
+        Defn.Type 17 30
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 30
+            Type.Name 26 27
+            Type.ArgClause 27 30
+              Type.Wildcard 28 29
+                Type.Bounds 29 29
+          Type.Bounds 24 24
+#!program 1127 line 323 Type dialects.Scala31 :: F[?]
+object W1127 {
+  type T = F[_]
+}
+#!scalac ok
+#!regions L30/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 12
+    Template 13 32
+      Template.Body 13 32
+        Defn.Type 17 30
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 30
+            Type.Name 26 27
+            Type.ArgClause 27 30
+              Type.Wildcard 28 29
+                Type.Bounds 29 29
+          Type.Bounds 24 24
+#!program 1128 line 328 Type dialects.Scala3Future :: F[_]
+object W1128 {
+  type T = F[_]
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L30/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 12
+    Template 13 32
+      Template.Body 13 32
+        Defn.Type 17 30
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 30
+            Type.Name 26 27
+            Type.ArgClause 27 30
+              Type.Wildcard 28 29
+                Type.Bounds 29 29
+          Type.Bounds 24 24
+#!program 1129 line 329 Type dialects.Scala3Future :: F[_]
+object W1129 {
+  type T = F[+_]
+}
+#!scalac refuses: ',' or ']' expected, but '_' found
+#!dialect dialects.Scala3Future gives another tree
+#!regions L31/
+#!layout
+refused: `]` expected but `_` found
+#!program 1130 line 330 Type dialects.Scala3Future :: F[_]
+object W1130 {
+  type T = F[-_]
+}
+#!scalac refuses: ',' or ']' expected, but '_' found
+#!dialect dialects.Scala3Future gives another tree
+#!regions L31/
+#!layout
+refused: `]` expected but `_` found
+#!program 1131 line 350 Type dialects.Scala31 :: F[*]
+object W1131 {
+  type T = F[*]
+}
+#!scalac ok
+#!regions L30/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 12
+    Template 13 32
+      Template.Body 13 32
+        Defn.Type 17 30
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.AnonymousLambda 26 30
+            Type.Apply 26 30
+              Type.Name 26 27
+              Type.ArgClause 27 30
+                Type.AnonymousParam 28 29
+          Type.Bounds 24 24
+#!program 1132 line 351 Type dialects.Scala31 :: F[*]
+object W1132 {
+  type T = F[+*]
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 12
+    Template 13 33
+      Template.Body 13 33
+        Defn.Type 17 31
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.AnonymousLambda 26 31
+            Type.Apply 26 31
+              Type.Name 26 27
+              Type.ArgClause 27 31
+                Type.AnonymousParam 28 30
+                  Mod.Covariant 28 30
+          Type.Bounds 24 24
+#!program 1133 line 352 Type dialects.Scala31 :: F[*]
+object W1133 {
+  type T = F[-*]
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 12
+    Template 13 33
+      Template.Body 13 33
+        Defn.Type 17 31
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.AnonymousLambda 26 31
+            Type.Apply 26 31
+              Type.Name 26 27
+              Type.ArgClause 27 31
+                Type.AnonymousParam 28 30
+                  Mod.Contravariant 28 30
+          Type.Bounds 24 24
+#!program 1134 line 360 Type dialects.Scala31 :: F[`*`]
+object W1134 {
+  type T = F[`*`]
+}
+#!scalac ok
+#!regions L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 12
+    Template 13 34
+      Template.Body 13 34
+        Defn.Type 17 32
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 32
+            Type.Name 26 27
+            Type.ArgClause 27 32
+              Type.Name 28 31
+          Type.Bounds 24 24
+#!program 1135 line 361 Type dialects.Scala31 :: F[`*`]
+object W1135 {
+  type T = F[`+*`]
+}
+#!scalac ok
+#!regions L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 12
+    Template 13 35
+      Template.Body 13 35
+        Defn.Type 17 33
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 33
+            Type.Name 26 27
+            Type.ArgClause 27 33
+              Type.Name 28 32
+          Type.Bounds 24 24
+#!program 1136 line 362 Type dialects.Scala31 :: F[`*`]
+object W1136 {
+  type T = F[`-*`]
+}
+#!scalac ok
+#!regions L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 12
+    Template 13 35
+      Template.Body 13 35
+        Defn.Type 17 33
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Apply 26 33
+            Type.Name 26 27
+            Type.ArgClause 27 33
+              Type.Name 28 32
+          Type.Bounds 24 24
+#!program 1137 line 365 Type dialects.Scala3 :: F[T] forSome { type T }
+object W1137 {
+  type T = F[T] forSome { type T }
+}
+#!scalac refuses: Existential types are no longer supported -
+#!regions L49/
+#!layout
+Source 0 52
+  Defn.Object 0 51
+    Term.Name 7 12
+    Template 13 51
+      Template.Body 13 51
+        Defn.Type 17 49
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Existential 26 49
+            Type.Apply 26 30
+              Type.Name 26 27
+              Type.ArgClause 27 30
+                Type.Name 28 29
+            Stat.Block 39 49
+              Decl.Type 41 47
+                Type.Name 46 47
+                Type.ParamClause 48 48
+                Type.Bounds 48 48
+          Type.Bounds 24 24
+#!program 1138 line 370 Type dialects.Scala3 :: a.T forSome { val a: A }
+object W1138 {
+  type T = a.T forSome { val a: A }
+}
+#!scalac refuses: Existential types are no longer supported -
+#!regions L50/
+#!layout
+Source 0 53
+  Defn.Object 0 52
+    Term.Name 7 12
+    Template 13 52
+      Template.Body 13 52
+        Defn.Type 17 50
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Existential 26 50
+            Type.Select 26 29
+              Term.Name 26 27
+              Type.Name 28 29
+            Stat.Block 38 50
+              Decl.Val 40 48
+                Pat.Var 44 45
+                  Term.Name 44 45
+                Type.Name 47 48
+          Type.Bounds 24 24
+#!program 1139 line 375 Type dialects.Scala3 :: A | B is not a special type
+object W1139 {
+  type T = A | B
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 12
+    Template 13 33
+      Template.Body 13 33
+        Defn.Type 17 31
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.ApplyInfix 26 31
+            Type.Name 26 27
+            Type.Name 28 29
+            Type.Name 30 31
+          Type.Bounds 24 24
+#!program 1140 line 380 Type dialects.Scala3 :: s"42.type [$dialect]"
+object W1140 {
+  type T = 42
+}
+#!scalac ok
+#!regions L28/
+#!layout
+Source 0 31
+  Defn.Object 0 30
+    Term.Name 7 12
+    Template 13 30
+      Template.Body 13 30
+        Defn.Type 17 28
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Lit.Int 26 28
+          Type.Bounds 24 24
+#!program 1141 line 381 Type dialects.Scala3 :: s"42.type [$dialect]"
+object W1141 {
+  type T = -42
+}
+#!scalac ok
+#!regions L29/
+#!layout
+Source 0 32
+  Defn.Object 0 31
+    Term.Name 7 12
+    Template 13 31
+      Template.Body 13 31
+        Defn.Type 17 29
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Lit.Int 26 29
+          Type.Bounds 24 24
+#!program 1142 line 382 Type dialects.Scala3 :: s"42.type [$dialect]"
+object W1142 {
+  type T = 42L
+}
+#!scalac ok
+#!regions L29/
+#!layout
+Source 0 32
+  Defn.Object 0 31
+    Term.Name 7 12
+    Template 13 31
+      Template.Body 13 31
+        Defn.Type 17 29
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Lit.Long 26 29
+          Type.Bounds 24 24
+#!program 1143 line 383 Type dialects.Scala3 :: s"42.type [$dialect]"
+object W1143 {
+  type T = 42.0f
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 12
+    Template 13 33
+      Template.Body 13 33
+        Defn.Type 17 31
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Lit.Float 26 31
+          Type.Bounds 24 24
+#!program 1144 line 384 Type dialects.Scala3 :: s"42.type [$dialect]"
+object W1144 {
+  type T = -42.0f
+}
+#!scalac ok
+#!regions L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 12
+    Template 13 34
+      Template.Body 13 34
+        Defn.Type 17 32
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Lit.Float 26 32
+          Type.Bounds 24 24
+#!program 1145 line 385 Type dialects.Scala3 :: s"42.type [$dialect]"
+object W1145 {
+  type T = 42.0d
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 12
+    Template 13 33
+      Template.Body 13 33
+        Defn.Type 17 31
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Lit.Double 26 31
+          Type.Bounds 24 24
+#!program 1146 line 386 Type dialects.Scala3 :: s"42.type [$dialect]"
+object W1146 {
+  type T = -42.0d
+}
+#!scalac ok
+#!regions L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 12
+    Template 13 34
+      Template.Body 13 34
+        Defn.Type 17 32
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Lit.Double 26 32
+          Type.Bounds 24 24
+#!program 1147 line 387 Type dialects.Scala3 :: s"42.type [$dialect]"
+object W1147 {
+  type T = "42"
+}
+#!scalac ok
+#!regions L30/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 12
+    Template 13 32
+      Template.Body 13 32
+        Defn.Type 17 30
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Lit.String 26 30
+          Type.Bounds 24 24
+#!program 1148 line 388 Type dialects.Scala3 :: s"42.type [$dialect]"
+object W1148 {
+  type T = true
+}
+#!scalac ok
+#!regions L30/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 12
+    Template 13 32
+      Template.Body 13 32
+        Defn.Type 17 30
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Lit.Boolean 26 30
+          Type.Bounds 24 24
+#!program 1149 line 389 Type dialects.Scala3 :: s"42.type [$dialect]"
+object W1149 {
+  type T = false
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 12
+    Template 13 33
+      Template.Body 13 33
+        Defn.Type 17 31
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Lit.Boolean 26 31
+          Type.Bounds 24 24
+#!program 1150 line 412 Type dialects.Scala213Source3 :: plus-minus-then-underscore-source3
+object W1150 {
+  type T = Option[- _]
+}
+#!scalac refuses: ',' or ']' expected, but '_' found
+#!dialect dialects.Scala213Source3 gives another tree
+#!regions L37/
+#!layout
+refused: `]` expected but `_` found
+#!program 1151 line 435 Stat dialects.Scala30 :: #3162 [scala30] higher-kinded is not wildcard 1
+object W1151 {
+def foo[A <: C[_]] = bar.baz[_, F[_]]
+}
+#!scalac refuses: Unbound wildcard type
+#!regions L52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 12
+    Template 13 54
+      Template.Body 13 54
+        Defn.Def 15 52
+          Term.Name 19 22
+          Member.ParamClauseGroup 22 33
+            Type.ParamClause 22 33
+              Type.Param 23 32
+                Type.Name 23 24
+                Type.ParamClause 25 25
+                Type.Bounds 25 32
+                  Type.AnonymousLambda 28 32
+                    Type.Apply 28 32
+                      Type.Name 28 29
+                      Type.ArgClause 29 32
+                        Type.AnonymousParam 30 31
+          Term.ApplyType 36 52
+            Term.Select 36 43
+              Term.Name 36 39
+              Term.Name 40 43
+            Type.ArgClause 43 52
+              Type.Wildcard 44 45
+                Type.Bounds 45 45
+              Type.AnonymousLambda 47 51
+                Type.Apply 47 51
+                  Type.Name 47 48
+                  Type.ArgClause 48 51
+                    Type.AnonymousParam 49 50
+#!program 1152 line 451 Stat dialects.Scala3.withAllowUnderscoreAsTypePlaceholder(true) :: #3162 [scala3+] higher-kinded is not wildcard 1
+object W1152 {
+def foo[A <: C[_]] = bar.baz[_, F[_]]
+}
+#!scalac refuses: Unbound wildcard type
+#!dialect dialects.Scala3.withAllowUnderscoreAsTypePlaceholder(true) gives another tree
+#!regions L52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 12
+    Template 13 54
+      Template.Body 13 54
+        Defn.Def 15 52
+          Term.Name 19 22
+          Member.ParamClauseGroup 22 33
+            Type.ParamClause 22 33
+              Type.Param 23 32
+                Type.Name 23 24
+                Type.ParamClause 25 25
+                Type.Bounds 25 32
+                  Type.AnonymousLambda 28 32
+                    Type.Apply 28 32
+                      Type.Name 28 29
+                      Type.ArgClause 29 32
+                        Type.AnonymousParam 30 31
+          Term.ApplyType 36 52
+            Term.Select 36 43
+              Term.Name 36 39
+              Term.Name 40 43
+            Type.ArgClause 43 52
+              Type.Wildcard 44 45
+                Type.Bounds 45 45
+              Type.AnonymousLambda 47 51
+                Type.Apply 47 51
+                  Type.Name 47 48
+                  Type.ArgClause 48 51
+                    Type.AnonymousParam 49 50
+#!program 1153 line 467 Stat dialects.Scala30 :: #3162 [scala30] higher-kinded is not wildcard 2
+object W1153 {
+gr.pure[Resource[F, _]]
+}
+#!scalac ok
+#!regions L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 12
+    Template 13 40
+      Template.Body 13 40
+        Term.ApplyType 15 38
+          Term.Select 15 22
+            Term.Name 15 17
+            Term.Name 18 22
+          Type.ArgClause 22 38
+            Type.AnonymousLambda 23 37
+              Type.Apply 23 37
+                Type.Name 23 31
+                Type.ArgClause 31 37
+                  Type.Name 32 33
+                  Type.AnonymousParam 35 36
+#!program 1154 line 475 Stat dialects.Scala3.withAllowUnderscoreAsTypePlaceholder(true) :: #3162 [scala3+] higher-kinded is not wildcard 2
+object W1154 {
+gr.pure[Resource[F, _]]
+}
+#!scalac ok
+#!regions L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 12
+    Template 13 40
+      Template.Body 13 40
+        Term.ApplyType 15 38
+          Term.Select 15 22
+            Term.Name 15 17
+            Term.Name 18 22
+          Type.ArgClause 22 38
+            Type.AnonymousLambda 23 37
+              Type.Apply 23 37
+                Type.Name 23 31
+                Type.ArgClause 31 37
+                  Type.Name 32 33
+                  Type.AnonymousParam 35 36
+#!program 1155 line 483 Stat dialects.Scala3 :: star-dot
+object W1155 {
+
+given Conversion[*.type, List[*.type]] with
+  def apply(ast: *.type) = ast :: Nil
+
+}
+#!scalac ok
+#!regions I59/2 O98/
+#!layout
+Source 0 101
+  Defn.Object 0 100
+    Term.Name 7 12
+    Template 13 100
+      Template.Body 13 100
+        Defn.Given 16 97
+          Name.Anonymous 22 22
+          Template 22 97
+            Init 22 54
+              Type.Apply 22 54
+                Type.Name 22 32
+                Type.ArgClause 32 54
+                  Type.Singleton 33 39
+                    Term.Name 33 34
+                  Type.Apply 41 53
+                    Type.Name 41 45
+                    Type.ArgClause 45 53
+                      Type.Singleton 46 52
+                        Term.Name 46 47
+              Name.Anonymous 55 55
+            Template.Body 62 97
+              Defn.Def 62 97
+                Term.Name 66 71
+                Member.ParamClauseGroup 71 84
+                  Type.ParamClause 71 71
+                  Term.ParamClause 71 84
+                    Term.Param 72 83
+                      Term.Name 72 75
+                      Type.Singleton 77 83
+                        Term.Name 77 78
+                Term.ApplyInfix 87 97
+                  Term.Name 87 90
+                  Term.Name 91 93
+                  Type.ArgClause 94 94
+                  Term.ArgClause 94 97
+                    Term.Name 94 97
+#!program 1156 line 509 Type dialects.Scala3 :: #3672 [scala3] ***
+object W1156 {
+  type T = ***
+}
+#!scalac ok
+#!regions L29/
+#!layout
+Source 0 32
+  Defn.Object 0 31
+    Term.Name 7 12
+    Template 13 31
+      Template.Body 13 31
+        Defn.Type 17 29
+          Type.Name 22 23
+          Type.ParamClause 24 24
+          Type.Name 26 29
+          Type.Bounds 24 24
+#!program 1157 line 518 Stat dialects.Scala38 :: into-trait
+object W1157 {
+into trait T
+}
+#!scalac refuses: Preview `into` may only be used when compiling with the `-preview` compiler flag
+#!regions L27/
+#!layout
+Source 0 30
+  Defn.Object 0 29
+    Term.Name 7 12
+    Template 13 29
+      Template.Body 13 29
+        Defn.Trait 15 27
+          Mod.Into 15 19
+          Type.Name 26 27
+          Type.ParamClause 27 27
+          Ctor.Primary 27 27
+            Name.Anonymous 27 27
+          Template 27 27
+            Template.Body 27 27
+#!program 1158 line 525 Stat dialects.Scala38 :: into-class
+object W1158 {
+into class Test
+}
+#!scalac refuses: Preview `into` may only be used when compiling with the `-preview` compiler flag
+#!regions L30/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 12
+    Template 13 32
+      Template.Body 13 32
+        Defn.Class 15 30
+          Mod.Into 15 19
+          Type.Name 26 30
+          Type.ParamClause 30 30
+          Ctor.Primary 30 30
+            Name.Anonymous 30 30
+          Template 30 30
+            Template.Body 30 30
+#!program 1159 line 542 Stat dialects.Scala38 :: into-enum
+object W1159 {
+into enum Foo:
+  case Bar
+
+}
+#!scalac refuses: Preview `into` may only be used when compiling with the `-preview` compiler flag
+#!regions I29/2 O41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 12
+    Template 13 43
+      Template.Body 13 43
+        Defn.Enum 15 40
+          Mod.Into 15 19
+          Type.Name 25 28
+          Type.ParamClause 28 28
+          Ctor.Primary 28 28
+            Name.Anonymous 28 28
+          Template 28 40
+            Template.Body 28 40
+              Defn.EnumCase 32 40
+                Term.Name 37 40
+                Type.ParamClause 41 41
+                Ctor.Primary 41 41
+                  Name.Anonymous 41 41
+#!program 1160 line 593 Stat dialects.Scala38 :: into-type
+object W1160 {
+object Test:
+  into opaque type U = Int
+
+}
+#!scalac refuses: Preview `into` may only be used when compiling with the `-preview` compiler flag
+#!regions I27/2 O55/
+#!layout
+Source 0 58
+  Defn.Object 0 57
+    Term.Name 7 12
+    Template 13 57
+      Template.Body 13 57
+        Defn.Object 15 54
+          Term.Name 22 26
+          Template 26 54
+            Template.Body 26 54
+              Defn.Type 30 54
+                Mod.Into 30 34
+                Mod.Opaque 35 41
+                Type.Name 47 48
+                Type.ParamClause 49 49
+                Type.Name 51 54
+                Type.Bounds 49 49
+#!program 1161 line 613 Stat dialects.Scala3 :: #3998
+object W1161 {
+val xs1 = construct[Coll = List, Elem = Int](1, 2, 3)
+}
+#!scalac ok
+#!regions L68/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 12
+    Template 13 70
+      Template.Body 13 70
+        Defn.Val 15 68
+          Pat.Var 19 22
+            Term.Name 19 22
+          Term.Apply 25 68
+            Term.ApplyType 25 59
+              Term.Name 25 34
+              Type.ArgClause 34 59
+                Type.Assign 35 46
+                  Type.Name 35 39
+                  Type.Name 42 46
+                Type.Assign 48 58
+                  Type.Name 48 52
+                  Type.Name 55 58
+            Term.ArgClause 59 68
+              Lit.Int 60 61
+              Lit.Int 63 64
+              Lit.Int 66 67
+#!program 1162 line 624 Stat dialects.Scala3Future :: #3996 capture checking: 1
+object W1162 {
+class Logger(fs: FileSystem^)
+}
+#!scalac refuses: ',' or ')' expected, but identifier found
+#!dialect dialects.Scala3Future gives another tree
+#!regions L44/
+#!layout
+refused: `identifier` expected but `)` found
+#!program 1163 line 632 Stat dialects.Scala3Future :: #3996 capture checking: 2
+object W1163 {
+val l: Logger^{fs} = Logger(fs)
+}
+#!scalac refuses: Illegal start of declaration
+#!dialect dialects.Scala3Future gives another tree
+#!regions L46/
+#!layout
+refused: illegal start of declaration
+#!program 1164 line 640 Stat dialects.Scala3Future :: #3996 capture checking: 3
+object W1164 {
+def tail: LazyList[A]^{this}
+}
+#!scalac refuses: Illegal start of declaration (possible cause: missing `=` in front of current method body)
+#!dialect dialects.Scala3Future gives another tree
+#!regions L43/
+#!layout
+refused: illegal start of declaration (possible cause: missing `=' in front of current method body)
+#!program 1165 line 655 Stat dialects.Scala3Future :: #3996 capture checking: 4
+object W1165 {
+def p: Pair[Int ->{ct} String, Logger^{fs}] = Pair(x, y)
+}
+#!scalac refuses: Illegal start of declaration (possible cause: missing `=` in front of current method body)
+#!dialect dialects.Scala3Future gives another tree
+#!regions L71/
+#!layout
+refused: illegal start of declaration (possible cause: missing `=' in front of current method body)
+#!program 1166 line 675 Stat dialects.Scala3Future :: #3996 capture checking: 5
+object W1166 {
+def foo[A](t: NThread)(fn: Foo^{t} ?->{this} A^{this}): A^{this} = ???
+}
+#!scalac refuses: Illegal start of declaration
+#!dialect dialects.Scala3Future gives another tree
+#!regions L85/
+#!layout
+refused: illegal start of declaration
+#!program 1167 line 685 Stat dialects.Scala3Future :: #3996 capture checking: 6 polymorphism
+object W1167 {
+def apply[B^](a: Foo^{B^}): Foo^{B^} = a
+}
+#!scalac refuses: ',' or ']' expected, but identifier found
+#!dialect dialects.Scala3Future gives another tree
+#!regions L55/
+#!layout
+refused: `]` expected but `identifier` found
+#!program 1168 line 693 Stat dialects.Scala3Future :: #4385 capture checking: empty
+object W1168 {
+def foo(a: A^{}): Unit
+}
+#!scalac ok
+#!dialect dialects.Scala3Future gives another tree
+#!regions L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 12
+    Template 13 39
+      Template.Body 13 39
+        Decl.Def 15 37
+          Term.Name 19 22
+          Member.ParamClauseGroup 22 31
+            Type.ParamClause 22 22
+            Term.ParamClause 22 31
+              Term.Param 23 30
+                Term.Name 23 24
+                Type.ApplyInfix 26 30
+                  Type.Name 26 27
+                  Type.Name 27 28
+                  Type.Refine 28 30
+                    Stat.Block 28 30
+          Type.Name 33 37
+#!program 1169 line 710 Stat dialects.Scala3 :: scala36 type member context bounds 1
+object W1169 {
+trait Foo:
+  type Key : cats.Show
+
+}
+#!scalac ok
+#!regions I25/2 O49/
+#!layout
+Source 0 52
+  Defn.Object 0 51
+    Term.Name 7 12
+    Template 13 51
+      Template.Body 13 51
+        Defn.Trait 15 48
+          Type.Name 21 24
+          Type.ParamClause 24 24
+          Ctor.Primary 24 24
+            Name.Anonymous 24 24
+          Template 24 48
+            Template.Body 24 48
+              Decl.Type 28 48
+                Type.Name 33 36
+                Type.ParamClause 37 37
+                Type.Bounds 37 48
+                  Type.Select 39 48
+                    Term.Name 39 43
+                    Type.Name 44 48
+#!program 1170 line 732 Stat dialects.Scala3 :: scala36 type member context bounds 2
+object W1170 {
+trait Foo:
+  type Value : {cats.Show, cats.Traverse}
+
+}
+#!scalac ok
+#!regions I25/2 O68/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 12
+    Template 13 70
+      Template.Body 13 70
+        Defn.Trait 15 67
+          Type.Name 21 24
+          Type.ParamClause 24 24
+          Ctor.Primary 24 24
+            Name.Anonymous 24 24
+          Template 24 67
+            Template.Body 24 67
+              Decl.Type 28 67
+                Type.Name 33 38
+                Type.ParamClause 39 39
+                Type.Bounds 39 67
+                  Type.Select 42 51
+                    Term.Name 42 46
+                    Type.Name 47 51
+                  Type.Select 53 66
+                    Term.Name 53 57
+                    Type.Name 58 66
+#!program 1171 line 781 Stat dialects.Scala3 :: scalaz folded/unfolded refined type
+object W1171 {
+def foldStep(
+    onGosub: ~>[
+      ({ type l[a] = (S[a], a => Free[S, A]) })#l,
+      ({ type l[a] = B })#l
+    ]
+): B = ???
+
+}
+#!scalac ok
+#!regions F141/
+#!layout
+Source 0 145
+  Defn.Object 0 144
+    Term.Name 7 12
+    Template 13 144
+      Template.Body 13 144
+        Defn.Def 15 141
+          Term.Name 19 27
+          Member.ParamClauseGroup 27 132
+            Type.ParamClause 27 27
+            Term.ParamClause 27 132
+              Term.Param 33 130
+                Term.Name 33 40
+                Type.Apply 42 130
+                  Type.Name 42 44
+                  Type.ArgClause 44 130
+                    Type.Project 52 95
+                      Type.Refine 53 92
+                        Stat.Block 53 92
+                          Defn.Type 55 90
+                            Type.Name 60 61
+                            Type.ParamClause 61 64
+                              Type.Param 62 63
+                                Type.Name 62 63
+                                Type.ParamClause 63 63
+                                Type.Bounds 63 63
+                            Type.Tuple 67 90
+                              Type.Apply 68 72
+                                Type.Name 68 69
+                                Type.ArgClause 69 72
+                                  Type.Name 70 71
+                              Type.Function 74 89
+                                Type.FuncParamClause 74 75
+                                  Type.Name 74 75
+                                Type.Apply 79 89
+                                  Type.Name 79 83
+                                  Type.ArgClause 83 89
+                                    Type.Name 84 85
+                                    Type.Name 87 88
+                            Type.Bounds 65 65
+                      Type.Name 94 95
+                    Type.Project 103 124
+                      Type.Refine 104 121
+                        Stat.Block 104 121
+                          Defn.Type 106 119
+                            Type.Name 111 112
+                            Type.ParamClause 112 115
+                              Type.Param 113 114
+                                Type.Name 113 114
+                                Type.ParamClause 114 114
+                                Type.Bounds 114 114
+                            Type.Name 118 119
+                            Type.Bounds 116 116
+                      Type.Name 123 124
+          Type.Name 134 135
+          Term.Name 138 141
+#!program 1172 line 799 Stat dialects.Scala3 :: scalaz folded/unfolded refined type
+object W1172 {
+def foldStep(
+    onGosub: ~>[
+      (
+        {
+          type l[a] = (S[a], a => Free[S, A])
+        }
+      )#l,
+      (
+        {
+          type l[a] = B
+        }
+      )#l
+    ]
+): B = ???
+
+}
+#!scalac ok
+#!regions L109/ L172/ F209/
+#!layout
+Source 0 213
+  Defn.Object 0 212
+    Term.Name 7 12
+    Template 13 212
+      Template.Body 13 212
+        Defn.Def 15 209
+          Term.Name 19 27
+          Member.ParamClauseGroup 27 200
+            Type.ParamClause 27 27
+            Term.ParamClause 27 200
+              Term.Param 33 198
+                Term.Name 33 40
+                Type.Apply 42 198
+                  Type.Name 42 44
+                  Type.ArgClause 44 198
+                    Type.Project 52 129
+                      Type.Refine 62 119
+                        Stat.Block 62 119
+                          Defn.Type 74 109
+                            Type.Name 79 80
+                            Type.ParamClause 80 83
+                              Type.Param 81 82
+                                Type.Name 81 82
+                                Type.ParamClause 82 82
+                                Type.Bounds 82 82
+                            Type.Tuple 86 109
+                              Type.Apply 87 91
+                                Type.Name 87 88
+                                Type.ArgClause 88 91
+                                  Type.Name 89 90
+                              Type.Function 93 108
+                                Type.FuncParamClause 93 94
+                                  Type.Name 93 94
+                                Type.Apply 98 108
+                                  Type.Name 98 102
+                                  Type.ArgClause 102 108
+                                    Type.Name 103 104
+                                    Type.Name 106 107
+                            Type.Bounds 84 84
+                      Type.Name 128 129
+                    Type.Project 137 192
+                      Type.Refine 147 182
+                        Stat.Block 147 182
+                          Defn.Type 159 172
+                            Type.Name 164 165
+                            Type.ParamClause 165 168
+                              Type.Param 166 167
+                                Type.Name 166 167
+                                Type.ParamClause 167 167
+                                Type.Bounds 167 167
+                            Type.Name 171 172
+                            Type.Bounds 169 169
+                      Type.Name 191 192
+          Type.Name 202 203
+          Term.Name 206 209

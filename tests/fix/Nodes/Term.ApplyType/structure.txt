@@ -1,0 +1,79 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.ApplyType, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_ApplyType\n\nobject Term_ApplyType:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A](a: A) = a\n  val x = f[Int](1)\n  val y = List.empty[Int]\n"
+  stats Pkg syntax="package nodes.Term_ApplyType\n\nobject Term_ApplyType:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A](a: A) = a\n  val x = f[Int](1)\n  val y = List.empty[Int]"
+    .stats = [Defn.Object "object Term_ApplyType:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A](a: A) = a\n  val x = f[Int](1)\n  val y = List.empty[Int]"]
+    ref Term.Select syntax="nodes.Term_ApplyType"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_ApplyType" syntax="Term_ApplyType"
+    body Pkg.Body syntax="object Term_ApplyType:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A](a: A) = a\n  val x = f[Int](1)\n  val y = List.empty[Int]"
+      stats Defn.Object syntax="object Term_ApplyType:\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A](a: A) = a\n  val x = f[Int](1)\n  val y = List.empty[Int]"
+        mods Nil
+        name Term.Name value="Term_ApplyType" syntax="Term_ApplyType"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A](a: A) = a\n  val x = f[Int](1)\n  val y = List.empty[Int]"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f[A](a: A) = a", Defn.Val "val x = f[Int](1)", Defn.Val "val y = List.empty[Int]"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f[A](a: A) = a\n  val x = f[Int](1)\n  val y = List.empty[Int]"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f[A](a: A) = a"
+              .paramClauses = [Term.ParamClause "(a: A)"]
+              .paramss = [[Term.Param "a: A"]]
+              .tparams = [Type.Param "A"]
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="[A](a: A)"
+                tparamClause Type.ParamClause syntax="[A]"
+                  values Type.Param syntax="A"
+                    .tparams = []
+                    mods Nil
+                    name Type.Name value="A" syntax="A"
+                    tparamClause Type.ParamClause syntax=""
+                      values Nil
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                paramClauses Term.ParamClause syntax="(a: A)"
+                  values Term.Param syntax="a: A"
+                    mods Nil
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="A" syntax="A"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Name value="a" syntax="a"
+            stats Defn.Val syntax="val x = f[Int](1)"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Term.Apply syntax="f[Int](1)"
+                .args = [Lit.Int "1"]
+                fun Term.ApplyType syntax="f[Int]"
+                  .targs = [Type.Name "Int"]
+                  fun Term.Name value="f" syntax="f"
+                  targClause Type.ArgClause syntax="[Int]"
+                    values Type.Name value="Int" syntax="Int"
+                argClause Term.ArgClause syntax="(1)"
+                  values Lit.Int value=1 syntax="1"
+                  mod None
+            stats Defn.Val syntax="val y = List.empty[Int]"
+              mods Nil
+              pats Pat.Var syntax="y"
+                name Term.Name value="y" syntax="y"
+              decltpe None
+              rhs Term.ApplyType syntax="List.empty[Int]"
+                .targs = [Type.Name "Int"]
+                fun Term.Select syntax="List.empty"
+                  qual Term.Name value="List" syntax="List"
+                  name Term.Name value="empty" syntax="empty"
+                targClause Type.ArgClause syntax="[Int]"
+                  values Type.Name value="Int" syntax="Int"
+          derives Nil

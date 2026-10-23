@@ -1,0 +1,63 @@
+Nodes/Pat.Interpolate/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pat.Interpolate, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pat_Interpolate\n\nobject Pat_Interpolate:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: String) = x match\n    case s\"a${y}b\" => y\n    case _ => \"\"\n"
+  stats Pkg syntax="package nodes.Pat_Interpolate\n\nobject Pat_Interpolate:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: String) = x match\n    case s\"a${y}b\" => y\n    case _ => \"\""
+    .stats = [Defn.Object "object Pat_Interpolate:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: String) = x match\n    case s\"a${y}b\" => y\n    case _ => \"\""]
+    ref Term.Select syntax="nodes.Pat_Interpolate"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pat_Interpolate" syntax="Pat_Interpolate"
+    body Pkg.Body syntax="object Pat_Interpolate:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: String) = x match\n    case s\"a${y}b\" => y\n    case _ => \"\""
+      stats Defn.Object syntax="object Pat_Interpolate:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: String) = x match\n    case s\"a${y}b\" => y\n    case _ => \"\""
+        mods Nil
+        name Term.Name value="Pat_Interpolate" syntax="Pat_Interpolate"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: String) = x match\n    case s\"a${y}b\" => y\n    case _ => \"\""
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(x: String) = x match\n    case s\"a${y}b\" => y\n    case _ => \"\""]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: String) = x match\n    case s\"a${y}b\" => y\n    case _ => \"\""
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(x: String) = x match\n    case s\"a${y}b\" => y\n    case _ => \"\""
+              .paramClauses = [Term.ParamClause "(x: String)"]
+              .paramss = [[Term.Param "x: String"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: String)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: String)"
+                  values Term.Param syntax="x: String"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="String" syntax="String"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Match syntax="x match\n    case s\"a${y}b\" => y\n    case _ => \"\""
+                .cases = [Case "case s\"a${y}b\" => y", Case "case _ => \"\""]
+                expr Term.Name value="x" syntax="x"
+                casesBlock Term.CasesBlock syntax="case s\"a${y}b\" => y\n    case _ => \"\""
+                  cases Case syntax="case s\"a${y}b\" => y"
+                    pat Pat.Interpolate syntax="s\"a${y}b\""
+                      prefix Term.Name value="s" syntax="s"
+                      parts Lit.String value="a" syntax="a"
+                      parts Lit.String value="b" syntax="b"
+                      args Pat.Var syntax="y"
+                        name Term.Name value="y" syntax="y"
+                    cond None
+                    body Term.Name value="y" syntax="y"
+                  cases Case syntax="case _ => \"\""
+                    pat Pat.Wildcard syntax="_"
+                    cond None
+                    body Lit.String value="" syntax="\"\""
+                mods Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

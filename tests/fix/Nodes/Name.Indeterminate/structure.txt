@@ -1,0 +1,57 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Name.Indeterminate, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Name_Indeterminate\n\nobject Name_Indeterminate:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  class C:\n    private[Name_Indeterminate] val x = 1\n"
+  stats Pkg syntax="package nodes.Name_Indeterminate\n\nobject Name_Indeterminate:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  class C:\n    private[Name_Indeterminate] val x = 1"
+    .stats = [Defn.Object "object Name_Indeterminate:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  class C:\n    private[Name_Indeterminate] val x = 1"]
+    ref Term.Select syntax="nodes.Name_Indeterminate"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Name_Indeterminate" syntax="Name_Indeterminate"
+    body Pkg.Body syntax="object Name_Indeterminate:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  class C:\n    private[Name_Indeterminate] val x = 1"
+      stats Defn.Object syntax="object Name_Indeterminate:\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  class C:\n    private[Name_Indeterminate] val x = 1"
+        mods Nil
+        name Term.Name value="Name_Indeterminate" syntax="Name_Indeterminate"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  class C:\n    private[Name_Indeterminate] val x = 1"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Import "import scala.collection.mutable", Defn.Class "class C:\n    private[Name_Indeterminate] val x = 1"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  import scala.collection.mutable\n  class C:\n    private[Name_Indeterminate] val x = 1"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Import syntax="import scala.collection.mutable"
+              importers Importer syntax="scala.collection.mutable"
+                ref Term.Select syntax="scala.collection"
+                  qual Term.Name value="scala" syntax="scala"
+                  name Term.Name value="collection" syntax="collection"
+                importees Importee.Name syntax="mutable"
+                  name Name.Indeterminate value="mutable" syntax="mutable"
+            stats Defn.Class syntax="class C:\n    private[Name_Indeterminate] val x = 1"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    private[Name_Indeterminate] val x = 1"
+                .self = Self ""
+                .stats = [Defn.Val "private[Name_Indeterminate] val x = 1"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    private[Name_Indeterminate] val x = 1"
+                  selfOpt None
+                  stats Defn.Val syntax="private[Name_Indeterminate] val x = 1"
+                    mods Mod.Private syntax="private[Name_Indeterminate]"
+                      within Name.Indeterminate value="Name_Indeterminate" syntax="Name_Indeterminate"
+                    pats Pat.Var syntax="x"
+                      name Term.Name value="x" syntax="x"
+                    decltpe None
+                    rhs Lit.Int value=1 syntax="1"
+                derives Nil
+          derives Nil

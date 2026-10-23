@@ -1,0 +1,61 @@
+Nodes/Term.Name/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Name, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Name\n\nobject Term_Name:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val `a b` = 2\n  val y = x + `a b`\n  val `type` = 3\n"
+  stats Pkg syntax="package nodes.Term_Name\n\nobject Term_Name:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val `a b` = 2\n  val y = x + `a b`\n  val `type` = 3"
+    .stats = [Defn.Object "object Term_Name:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val `a b` = 2\n  val y = x + `a b`\n  val `type` = 3"]
+    ref Term.Select syntax="nodes.Term_Name"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Name" syntax="Term_Name"
+    body Pkg.Body syntax="object Term_Name:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val `a b` = 2\n  val y = x + `a b`\n  val `type` = 3"
+      stats Defn.Object syntax="object Term_Name:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val `a b` = 2\n  val y = x + `a b`\n  val `type` = 3"
+        mods Nil
+        name Term.Name value="Term_Name" syntax="Term_Name"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val `a b` = 2\n  val y = x + `a b`\n  val `type` = 3"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val x = 1", Defn.Val "val `a b` = 2", Defn.Val "val y = x + `a b`", Defn.Val "val `type` = 3"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val `a b` = 2\n  val y = x + `a b`\n  val `type` = 3"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val x = 1"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Val syntax="val `a b` = 2"
+              mods Nil
+              pats Pat.Var syntax="`a b`"
+                name Term.Name value="a b" syntax="`a b`"
+              decltpe None
+              rhs Lit.Int value=2 syntax="2"
+            stats Defn.Val syntax="val y = x + `a b`"
+              mods Nil
+              pats Pat.Var syntax="y"
+                name Term.Name value="y" syntax="y"
+              decltpe None
+              rhs Term.ApplyInfix syntax="x + `a b`"
+                .args = [Term.Name "`a b`"]
+                .targs = []
+                lhs Term.Name value="x" syntax="x"
+                op Term.Name value="+" syntax="+"
+                targClause Type.ArgClause syntax=""
+                  values Nil
+                argClause Term.ArgClause syntax="`a b`"
+                  values Term.Name value="a b" syntax="`a b`"
+                  mod None
+            stats Defn.Val syntax="val `type` = 3"
+              mods Nil
+              pats Pat.Var syntax="`type`"
+                name Term.Name value="type" syntax="`type`"
+              decltpe None
+              rhs Lit.Int value=3 syntax="3"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

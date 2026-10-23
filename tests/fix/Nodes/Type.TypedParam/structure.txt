@@ -1,0 +1,81 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Type.TypedParam, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_TypedParam\n\nobject Type_TypedParam:\n  val marker = 0 // assert: DumpStructure.structure\n  type F = (x: Int) => x.type\n  type N = (a: Int, b: String)\n  type Q = (`a b`: Int) => String\n"
+  stats Pkg syntax="package nodes.Type_TypedParam\n\nobject Type_TypedParam:\n  val marker = 0 // assert: DumpStructure.structure\n  type F = (x: Int) => x.type\n  type N = (a: Int, b: String)\n  type Q = (`a b`: Int) => String"
+    .stats = [Defn.Object "object Type_TypedParam:\n  val marker = 0 // assert: DumpStructure.structure\n  type F = (x: Int) => x.type\n  type N = (a: Int, b: String)\n  type Q = (`a b`: Int) => String"]
+    ref Term.Select syntax="nodes.Type_TypedParam"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_TypedParam" syntax="Type_TypedParam"
+    body Pkg.Body syntax="object Type_TypedParam:\n  val marker = 0 // assert: DumpStructure.structure\n  type F = (x: Int) => x.type\n  type N = (a: Int, b: String)\n  type Q = (`a b`: Int) => String"
+      stats Defn.Object syntax="object Type_TypedParam:\n  val marker = 0 // assert: DumpStructure.structure\n  type F = (x: Int) => x.type\n  type N = (a: Int, b: String)\n  type Q = (`a b`: Int) => String"
+        mods Nil
+        name Term.Name value="Type_TypedParam" syntax="Type_TypedParam"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type F = (x: Int) => x.type\n  type N = (a: Int, b: String)\n  type Q = (`a b`: Int) => String"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Type "type F = (x: Int) => x.type", Defn.Type "type N = (a: Int, b: String)", Defn.Type "type Q = (`a b`: Int) => String"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type F = (x: Int) => x.type\n  type N = (a: Int, b: String)\n  type Q = (`a b`: Int) => String"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Type syntax="type F = (x: Int) => x.type"
+              .tparams = []
+              mods Nil
+              name Type.Name value="F" syntax="F"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Function syntax="(x: Int) => x.type"
+                paramClause Type.FuncParamClause syntax="(x: Int)"
+                  values Type.TypedParam syntax="x: Int"
+                    name Type.Name value="x" syntax="x"
+                    typ Type.Name value="Int" syntax="Int"
+                    mods Nil
+                res Type.Singleton syntax="x.type"
+                  ref Term.Name value="x" syntax="x"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Type syntax="type N = (a: Int, b: String)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="N" syntax="N"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Tuple syntax="(a: Int, b: String)"
+                args Type.TypedParam syntax="a: Int"
+                  name Type.Name value="a" syntax="a"
+                  typ Type.Name value="Int" syntax="Int"
+                  mods Nil
+                args Type.TypedParam syntax="b: String"
+                  name Type.Name value="b" syntax="b"
+                  typ Type.Name value="String" syntax="String"
+                  mods Nil
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Type syntax="type Q = (`a b`: Int) => String"
+              .tparams = []
+              mods Nil
+              name Type.Name value="Q" syntax="Q"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Function syntax="(`a b`: Int) => String"
+                paramClause Type.FuncParamClause syntax="(`a b`: Int)"
+                  values Type.TypedParam syntax="`a b`: Int"
+                    name Type.Name value="a b" syntax="`a b`"
+                    typ Type.Name value="Int" syntax="Int"
+                    mods Nil
+                res Type.Name value="String" syntax="String"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+          derives Nil

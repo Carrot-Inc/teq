@@ -1,0 +1,66 @@
+Nodes/Type.Annotate/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Type.Annotate, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_Annotate\n\nobject Type_Annotate:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int @unchecked\n  val x: List[Int @unchecked] = Nil\n"
+  stats Pkg syntax="package nodes.Type_Annotate\n\nobject Type_Annotate:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int @unchecked\n  val x: List[Int @unchecked] = Nil"
+    .stats = [Defn.Object "object Type_Annotate:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int @unchecked\n  val x: List[Int @unchecked] = Nil"]
+    ref Term.Select syntax="nodes.Type_Annotate"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_Annotate" syntax="Type_Annotate"
+    body Pkg.Body syntax="object Type_Annotate:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int @unchecked\n  val x: List[Int @unchecked] = Nil"
+      stats Defn.Object syntax="object Type_Annotate:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int @unchecked\n  val x: List[Int @unchecked] = Nil"
+        mods Nil
+        name Term.Name value="Type_Annotate" syntax="Type_Annotate"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int @unchecked\n  val x: List[Int @unchecked] = Nil"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Type "type A = Int @unchecked", Defn.Val "val x: List[Int @unchecked] = Nil"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type A = Int @unchecked\n  val x: List[Int @unchecked] = Nil"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Type syntax="type A = Int @unchecked"
+              .tparams = []
+              mods Nil
+              name Type.Name value="A" syntax="A"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Annotate syntax="Int @unchecked"
+                tpe Type.Name value="Int" syntax="Int"
+                annots Mod.Annot syntax="@unchecked"
+                  init Init syntax="unchecked"
+                    .argss = []
+                    tpe Type.Name value="unchecked" syntax="unchecked"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    argClauses Nil
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Val syntax="val x: List[Int @unchecked] = Nil"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe Type.Apply syntax="List[Int @unchecked]"
+                .args = [Type.Annotate "Int @unchecked"]
+                tpe Type.Name value="List" syntax="List"
+                argClause Type.ArgClause syntax="[Int @unchecked]"
+                  values Type.Annotate syntax="Int @unchecked"
+                    tpe Type.Name value="Int" syntax="Int"
+                    annots Mod.Annot syntax="@unchecked"
+                      init Init syntax="unchecked"
+                        .argss = []
+                        tpe Type.Name value="unchecked" syntax="unchecked"
+                        name Name.Anonymous syntax=""
+                          .value = ""
+                        argClauses Nil
+              rhs Term.Name value="Nil" syntax="Nil"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

@@ -1,0 +1,71 @@
+Nodes/Pat.Assign/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pat.Assign, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pat_Assign\n\nobject Pat_Assign:\n  val marker = 0 // assert: DumpStructure.structure\n  val p = (a = 1, b = 2)\n  val r = p match\n    case (a = x, b = y) => x + y\n"
+  stats Pkg syntax="package nodes.Pat_Assign\n\nobject Pat_Assign:\n  val marker = 0 // assert: DumpStructure.structure\n  val p = (a = 1, b = 2)\n  val r = p match\n    case (a = x, b = y) => x + y"
+    .stats = [Defn.Object "object Pat_Assign:\n  val marker = 0 // assert: DumpStructure.structure\n  val p = (a = 1, b = 2)\n  val r = p match\n    case (a = x, b = y) => x + y"]
+    ref Term.Select syntax="nodes.Pat_Assign"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pat_Assign" syntax="Pat_Assign"
+    body Pkg.Body syntax="object Pat_Assign:\n  val marker = 0 // assert: DumpStructure.structure\n  val p = (a = 1, b = 2)\n  val r = p match\n    case (a = x, b = y) => x + y"
+      stats Defn.Object syntax="object Pat_Assign:\n  val marker = 0 // assert: DumpStructure.structure\n  val p = (a = 1, b = 2)\n  val r = p match\n    case (a = x, b = y) => x + y"
+        mods Nil
+        name Term.Name value="Pat_Assign" syntax="Pat_Assign"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val p = (a = 1, b = 2)\n  val r = p match\n    case (a = x, b = y) => x + y"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val p = (a = 1, b = 2)", Defn.Val "val r = p match\n    case (a = x, b = y) => x + y"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val p = (a = 1, b = 2)\n  val r = p match\n    case (a = x, b = y) => x + y"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val p = (a = 1, b = 2)"
+              mods Nil
+              pats Pat.Var syntax="p"
+                name Term.Name value="p" syntax="p"
+              decltpe None
+              rhs Term.Tuple syntax="(a = 1, b = 2)"
+                args Term.Assign syntax="a = 1"
+                  lhs Term.Name value="a" syntax="a"
+                  rhs Lit.Int value=1 syntax="1"
+                args Term.Assign syntax="b = 2"
+                  lhs Term.Name value="b" syntax="b"
+                  rhs Lit.Int value=2 syntax="2"
+            stats Defn.Val syntax="val r = p match\n    case (a = x, b = y) => x + y"
+              mods Nil
+              pats Pat.Var syntax="r"
+                name Term.Name value="r" syntax="r"
+              decltpe None
+              rhs Term.Match syntax="p match\n    case (a = x, b = y) => x + y"
+                .cases = [Case "case (a = x, b = y) => x + y"]
+                expr Term.Name value="p" syntax="p"
+                casesBlock Term.CasesBlock syntax="case (a = x, b = y) => x + y"
+                  cases Case syntax="case (a = x, b = y) => x + y"
+                    pat Pat.Tuple syntax="(a = x, b = y)"
+                      args Pat.Assign syntax="a = x"
+                        name Term.Name value="a" syntax="a"
+                        rhs Pat.Var syntax="x"
+                          name Term.Name value="x" syntax="x"
+                      args Pat.Assign syntax="b = y"
+                        name Term.Name value="b" syntax="b"
+                        rhs Pat.Var syntax="y"
+                          name Term.Name value="y" syntax="y"
+                    cond None
+                    body Term.ApplyInfix syntax="x + y"
+                      .args = [Term.Name "y"]
+                      .targs = []
+                      lhs Term.Name value="x" syntax="x"
+                      op Term.Name value="+" syntax="+"
+                      targClause Type.ArgClause syntax=""
+                        values Nil
+                      argClause Term.ArgClause syntax="y"
+                        values Term.Name value="y" syntax="y"
+                        mod None
+                mods Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

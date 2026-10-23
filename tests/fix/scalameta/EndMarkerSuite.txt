@@ -1,0 +1,516 @@
+# The programs of scalameta 4.17.4's EndMarkerSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 214 line 8 Stat dialects.Scala3 :: end-marker
+object W214 {
+end token
+}
+#!scalac refuses: misaligned end marker
+#!regions L23/
+#!layout
+Source 0 26
+  Defn.Object 0 25
+    Term.Name 7 11
+    Template 12 25
+      Template.Body 12 25
+        Term.EndMarker 14 23
+          Term.Name 18 23
+#!program 215 line 9 Stat dialects.Scala3 :: end-marker
+object W215 {
+end match
+}
+#!scalac refuses: misaligned end marker
+#!regions L23/
+#!layout
+Source 0 26
+  Defn.Object 0 25
+    Term.Name 7 11
+    Template 12 25
+      Template.Body 12 25
+        Term.EndMarker 14 23
+          Term.Name 18 23
+#!program 216 line 26 Source dialects.Scala3 :: end-marker-toplevel
+object a:
+  init()
+end a
+
+type K = Map
+#!scalac ok
+#!regions I9/2 O18/ L18/ F24/
+#!layout
+Source 0 39
+  Defn.Object 0 18
+    Term.Name 7 8
+    Template 8 18
+      Template.Body 8 18
+        Term.Apply 12 18
+          Term.Name 12 16
+          Term.ArgClause 16 18
+  Term.EndMarker 19 24
+    Term.Name 23 24
+  Defn.Type 26 38
+    Type.Name 31 32
+    Type.ParamClause 33 33
+    Type.Name 35 38
+    Type.Bounds 33 33
+#!program 217 line 41 Source dialects.Scala3 :: end-marker-extension
+extension (a: Int)
+  def b = a + 1
+end extension
+
+type K = Map
+#!scalac ok
+#!regions I18/2 O34/ L34/ F48/
+#!layout
+Source 0 63
+  Defn.ExtensionGroup 0 34
+    Member.ParamClauseGroup 10 18
+      Type.ParamClause 10 10
+      Term.ParamClause 10 18
+        Term.Param 11 17
+          Term.Name 11 12
+          Type.Name 14 17
+    Defn.Def 21 34
+      Term.Name 25 26
+      Term.ApplyInfix 29 34
+        Term.Name 29 30
+        Term.Name 31 32
+        Type.ArgClause 33 33
+        Term.ArgClause 33 34
+          Lit.Int 33 34
+  Term.EndMarker 35 48
+    Term.Name 39 48
+  Defn.Type 50 62
+    Type.Name 55 56
+    Type.ParamClause 57 57
+    Type.Name 59 62
+    Type.Bounds 57 57
+#!program 218 line 53 Stat dialects.Scala3 :: end-nomarker
+object W218 {
+lista append end
+}
+#!scalac ok
+#!regions L30/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 11
+    Template 12 32
+      Template.Body 12 32
+        Term.ApplyInfix 14 30
+          Term.Name 14 19
+          Term.Name 20 26
+          Type.ArgClause 27 27
+          Term.ArgClause 27 30
+            Term.Name 27 30
+#!program 219 line 55 Stat dialects.Scala3 :: end-nomarker
+object W219 {
+lista end 3
+}
+#!scalac ok
+#!regions L25/
+#!layout
+Source 0 28
+  Defn.Object 0 27
+    Term.Name 7 11
+    Template 12 27
+      Template.Body 12 27
+        Term.ApplyInfix 14 25
+          Term.Name 14 19
+          Term.Name 20 23
+          Type.ArgClause 24 24
+          Term.ArgClause 24 25
+            Lit.Int 24 25
+#!program 220 line 57 Stat dialects.Scala3 :: end-nomarker
+object W220 {
+end + 3
+}
+#!scalac ok
+#!regions L21/
+#!layout
+Source 0 24
+  Defn.Object 0 23
+    Term.Name 7 11
+    Template 12 23
+      Template.Body 12 23
+        Term.ApplyInfix 14 21
+          Term.Name 14 17
+          Term.Name 18 19
+          Type.ArgClause 20 20
+          Term.ArgClause 20 21
+            Lit.Int 20 21
+#!program 221 line 65 Stat dialects.Scala3 :: end-nomarker
+object W221 {
+def a: B = {
+  b append end
+  b
+}
+
+}
+#!scalac ok
+#!regions L41/ L45/ F47/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Defn.Def 14 47
+          Term.Name 18 19
+          Type.Name 21 22
+          Term.Block 25 47
+            Term.ApplyInfix 29 41
+              Term.Name 29 30
+              Term.Name 31 37
+              Type.ArgClause 38 38
+              Term.ArgClause 38 41
+                Term.Name 38 41
+            Term.Name 44 45
+#!program 222 line 85 Stat dialects.Scala3 :: end-for-no-indent
+object W222 {
+
+def a(): Unit = {
+  end for
+  val x = 3
+}
+
+}
+#!scalac refuses: misaligned end marker
+#!regions L42/ L54/ F56/
+#!layout
+Source 0 60
+  Defn.Object 0 59
+    Term.Name 7 11
+    Template 12 59
+      Template.Body 12 59
+        Defn.Def 15 56
+          Term.Name 19 20
+          Member.ParamClauseGroup 20 22
+            Type.ParamClause 20 20
+            Term.ParamClause 20 22
+          Type.Name 24 28
+          Term.Block 31 56
+            Term.EndMarker 35 42
+              Term.Name 39 42
+            Defn.Val 45 54
+              Pat.Var 49 50
+                Term.Name 49 50
+              Lit.Int 53 54
+#!program 223 line 105 Stat dialects.Scala3 :: if-then-end-ident
+object W223 {
+if limit < end then
+   val aa = 1
+
+}
+#!scalac ok
+#!regions I33/3 O48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Term.If 14 47
+          Term.ApplyInfix 17 28
+            Term.Name 17 22
+            Term.Name 23 24
+            Type.ArgClause 25 25
+            Term.ArgClause 25 28
+              Term.Name 25 28
+          Term.Block 37 47
+            Defn.Val 37 47
+              Pat.Var 41 43
+                Term.Name 41 43
+              Lit.Int 46 47
+          Lit.Unit 49 49
+#!program 224 line 140 Source dialects.Scala3 :: match-with-end
+val a = this match
+      case a =>
+         that match
+            case b => bb
+            case c => cc
+         end match
+      case b =>
+         that match
+            case c => cc
+            case _ => dd
+#!scalac ok
+#!regions I18/6 I34/9.6 I54/12.9.6 L79/12.9.6 O104/9.6 L104/9.6 O123/6 L123/6 I139/9.6 I159/12.9.6 L184/12.9.6 O209/9.6 O209/6 O209/
+#!layout
+Source 0 210
+  Defn.Val 0 209
+    Pat.Var 4 5
+      Term.Name 4 5
+    Term.Match 8 209
+      Term.This 8 12
+        Name.Anonymous 8 8
+      Term.CasesBlock 25 209
+        Case 25 123
+          Pat.Var 30 31
+            Term.Name 30 31
+          Term.Block 44 123
+            Term.Match 44 104
+              Term.Name 44 48
+              Term.CasesBlock 67 104
+                Case 67 79
+                  Pat.Var 72 73
+                    Term.Name 72 73
+                  Term.Name 77 79
+                Case 92 104
+                  Pat.Var 97 98
+                    Term.Name 97 98
+                  Term.Name 102 104
+            Term.EndMarker 114 123
+              Term.Name 118 123
+        Case 130 209
+          Pat.Var 135 136
+            Term.Name 135 136
+          Term.Match 149 209
+            Term.Name 149 153
+            Term.CasesBlock 172 209
+              Case 172 184
+                Pat.Var 177 178
+                  Term.Name 177 178
+                Term.Name 182 184
+              Case 197 209
+                Pat.Wildcard 202 203
+                Term.Name 207 209
+#!program 225 line 197 Stat dialects.Scala3 :: val-with-end
+object W225 {
+object a:
+  val (foo, boo) =
+    bar
+    baz
+  end val
+  val (foo2, boo3) =
+    bar
+    baz
+  end val
+
+}
+#!scalac ok
+#!regions I23/2 I42/4.2 L50/4.2 O58/2 L58/2 L68/2 I89/4.2 L97/4.2 O105/2 L105/2 O116/
+#!layout
+Source 0 119
+  Defn.Object 0 118
+    Term.Name 7 11
+    Template 12 118
+      Template.Body 12 118
+        Defn.Object 14 115
+          Term.Name 21 22
+          Template 22 115
+            Template.Body 22 115
+              Defn.Val 26 58
+                Pat.Tuple 30 40
+                  Pat.Var 31 34
+                    Term.Name 31 34
+                  Pat.Var 36 39
+                    Term.Name 36 39
+                Term.Block 47 58
+                  Term.Name 47 50
+                  Term.Name 55 58
+              Term.EndMarker 61 68
+                Term.Name 65 68
+              Defn.Val 71 105
+                Pat.Tuple 75 87
+                  Pat.Var 76 80
+                    Term.Name 76 80
+                  Pat.Var 82 86
+                    Term.Name 82 86
+                Term.Block 94 105
+                  Term.Name 94 97
+                  Term.Name 102 105
+              Term.EndMarker 108 115
+                Term.Name 112 115
+#!program 226 line 220 Source dialects.Scala3 :: object-empty-body-end-marker
+object Foo:
+end Foo
+#!scalac ok
+#!regions I11/0 O11/
+#!layout
+Source 0 20
+  Defn.Object 0 11
+    Term.Name 7 10
+    Template 10 11
+      Template.Body 10 11
+  Term.EndMarker 12 19
+    Term.Name 16 19
+#!program 227 line 229 Source dialects.Scala3 :: class-empty-body-end-marker
+class Foo:
+end Foo
+#!scalac ok
+#!regions I10/0 O10/
+#!layout
+Source 0 19
+  Defn.Class 0 10
+    Type.Name 6 9
+    Type.ParamClause 9 9
+    Ctor.Primary 9 9
+      Name.Anonymous 9 9
+    Template 9 10
+      Template.Body 9 10
+  Term.EndMarker 11 18
+    Term.Name 15 18
+#!program 228 line 241 Source dialects.Scala3 :: trait-empty-body-end-marker
+trait Foo:
+end Foo
+#!scalac ok
+#!regions I10/0 O10/
+#!layout
+Source 0 19
+  Defn.Trait 0 10
+    Type.Name 6 9
+    Type.ParamClause 9 9
+    Ctor.Primary 9 9
+      Name.Anonymous 9 9
+    Template 9 10
+      Template.Body 9 10
+  Term.EndMarker 11 18
+    Term.Name 15 18
+#!program 229 line 292 Stat dialects.Scala3 :: #3366 not an end marker
+object W229 {
+x.end match
+    case _ => ()
+
+}
+#!scalac ok
+#!regions I25/4 O43/
+#!layout
+Source 0 46
+  Defn.Object 0 45
+    Term.Name 7 11
+    Template 12 45
+      Template.Body 12 45
+        Term.Match 14 42
+          Term.Select 14 19
+            Term.Name 14 15
+            Term.Name 16 19
+          Term.CasesBlock 30 42
+            Case 30 42
+              Pat.Wildcard 35 36
+              Lit.Unit 40 42
+#!program 230 line 350 Source dialects.Scala3 :: scalafmt#4098
+class FmtTest:
+
+  private val const = 3
+
+  def testBrokenMatch(s: String) =
+    s match
+      case "hello" =>
+        val a = 1
+    end match
+  
+end FmtTest
+#!scalac ok
+#!regions I15/2 F39/2 I75/4.2 I87/6.4.2 I109/8.6.4.2 O127/6.4.2 O127/4.2 L127/4.2 O144/2 O144/ F144/
+#!layout
+Source 0 157
+  Defn.Class 0 141
+    Type.Name 6 13
+    Type.ParamClause 13 13
+    Ctor.Primary 13 13
+      Name.Anonymous 13 13
+    Template 13 141
+      Template.Body 13 141
+        Defn.Val 18 39
+          Mod.Private 18 25
+            Name.Anonymous 26 26
+          Pat.Var 30 35
+            Term.Name 30 35
+          Lit.Int 38 39
+        Defn.Def 43 141
+          Term.Name 47 62
+          Member.ParamClauseGroup 62 73
+            Type.ParamClause 62 62
+            Term.ParamClause 62 73
+              Term.Param 63 72
+                Term.Name 63 64
+                Type.Name 66 72
+          Term.Block 80 141
+            Term.Match 80 127
+              Term.Name 80 81
+              Term.CasesBlock 94 127
+                Case 94 127
+                  Lit.String 99 106
+                  Term.Block 118 127
+                    Defn.Val 118 127
+                      Pat.Var 122 123
+                        Term.Name 122 123
+                      Lit.Int 126 127
+            Term.EndMarker 132 141
+              Term.Name 136 141
+  Term.EndMarker 145 156
+    Term.Name 149 156
+#!program 231 line 371 Stat dialects.Scala3 :: def body contains end, but not end marker
+object W231 {
+object A:
+  def foo = bar == end ||
+    baz
+
+}
+#!scalac ok
+#!regions I23/2 L49/2 O58/
+#!layout
+Source 0 61
+  Defn.Object 0 60
+    Term.Name 7 11
+    Template 12 60
+      Template.Body 12 60
+        Defn.Object 14 57
+          Term.Name 21 22
+          Template 22 57
+            Template.Body 22 57
+              Defn.Def 26 57
+                Term.Name 30 33
+                Term.ApplyInfix 36 57
+                  Term.ApplyInfix 36 46
+                    Term.Name 36 39
+                    Term.Name 40 42
+                    Type.ArgClause 43 43
+                    Term.ArgClause 43 46
+                      Term.Name 43 46
+                  Term.Name 47 49
+                  Type.ArgClause 49 49
+                  Term.ArgClause 54 57
+                    Term.Name 54 57
+#!program 232 line 411 Stat dialects.Scala3 :: match with end marker
+object W232 {
+tree match
+  case foo =>
+    if bar then
+      baz match
+        case qux =>
+          quux
+      end match
+  case _ =>
+
+}
+#!scalac ok
+#!regions I24/2 I38/4.2 I54/6.4.2 I70/8.6.4.2 I90/10.8.6.4.2 O105/8.6.4.2 O105/6.4.2 L105/6.4.2 O121/4.2 O121/2 L121/2 O134/
+#!layout
+Source 0 137
+  Defn.Object 0 136
+    Term.Name 7 11
+    Template 12 136
+      Template.Body 12 136
+        Term.Match 14 133
+          Term.Name 14 18
+          Term.CasesBlock 27 133
+            Case 27 121
+              Pat.Var 32 35
+                Term.Name 32 35
+              Term.If 43 121
+                Term.Name 46 49
+                Term.Block 61 121
+                  Term.Match 61 105
+                    Term.Name 61 64
+                    Term.CasesBlock 79 105
+                      Case 79 105
+                        Pat.Var 84 87
+                          Term.Name 84 87
+                        Term.Name 101 105
+                  Term.EndMarker 112 121
+                    Term.Name 116 121
+                Lit.Unit 121 121
+            Case 124 133
+              Pat.Wildcard 129 130
+              Term.Block 134 134

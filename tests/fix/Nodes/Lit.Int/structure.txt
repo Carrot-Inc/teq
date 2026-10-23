@@ -1,0 +1,54 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Lit.Int, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_Int\n\nobject Lit_Int:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  val b = 0x1F\n  val c = 1_000\n  val d = -1\n  val e = 0\n"
+  stats Pkg syntax="package nodes.Lit_Int\n\nobject Lit_Int:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  val b = 0x1F\n  val c = 1_000\n  val d = -1\n  val e = 0"
+    .stats = [Defn.Object "object Lit_Int:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  val b = 0x1F\n  val c = 1_000\n  val d = -1\n  val e = 0"]
+    ref Term.Select syntax="nodes.Lit_Int"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_Int" syntax="Lit_Int"
+    body Pkg.Body syntax="object Lit_Int:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  val b = 0x1F\n  val c = 1_000\n  val d = -1\n  val e = 0"
+      stats Defn.Object syntax="object Lit_Int:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  val b = 0x1F\n  val c = 1_000\n  val d = -1\n  val e = 0"
+        mods Nil
+        name Term.Name value="Lit_Int" syntax="Lit_Int"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  val b = 0x1F\n  val c = 1_000\n  val d = -1\n  val e = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = 1", Defn.Val "val b = 0x1F", Defn.Val "val c = 1_000", Defn.Val "val d = -1", Defn.Val "val e = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  val b = 0x1F\n  val c = 1_000\n  val d = -1\n  val e = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = 1"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Val syntax="val b = 0x1F"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Lit.Int value=31 syntax="0x1F"
+            stats Defn.Val syntax="val c = 1_000"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Lit.Int value=1000 syntax="1_000"
+            stats Defn.Val syntax="val d = -1"
+              mods Nil
+              pats Pat.Var syntax="d"
+                name Term.Name value="d" syntax="d"
+              decltpe None
+              rhs Lit.Int value=-1 syntax="-1"
+            stats Defn.Val syntax="val e = 0"
+              mods Nil
+              pats Pat.Var syntax="e"
+                name Term.Name value="e" syntax="e"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil

@@ -1,0 +1,54 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.Transparent, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Transparent\n\nobject Mod_Transparent:\n  val marker = 0 // assert: DumpStructure.structure\n  transparent inline def f = 1\n  transparent trait T\n"
+  stats Pkg syntax="package nodes.Mod_Transparent\n\nobject Mod_Transparent:\n  val marker = 0 // assert: DumpStructure.structure\n  transparent inline def f = 1\n  transparent trait T"
+    .stats = [Defn.Object "object Mod_Transparent:\n  val marker = 0 // assert: DumpStructure.structure\n  transparent inline def f = 1\n  transparent trait T"]
+    ref Term.Select syntax="nodes.Mod_Transparent"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Transparent" syntax="Mod_Transparent"
+    body Pkg.Body syntax="object Mod_Transparent:\n  val marker = 0 // assert: DumpStructure.structure\n  transparent inline def f = 1\n  transparent trait T"
+      stats Defn.Object syntax="object Mod_Transparent:\n  val marker = 0 // assert: DumpStructure.structure\n  transparent inline def f = 1\n  transparent trait T"
+        mods Nil
+        name Term.Name value="Mod_Transparent" syntax="Mod_Transparent"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  transparent inline def f = 1\n  transparent trait T"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "transparent inline def f = 1", Defn.Trait "transparent trait T"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  transparent inline def f = 1\n  transparent trait T"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="transparent inline def f = 1"
+              .paramClauses = []
+              .paramss = []
+              .tparams = []
+              mods Mod.Transparent syntax="transparent"
+              mods Mod.Inline syntax="inline"
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Nil
+              decltpe None
+              body Lit.Int value=1 syntax="1"
+            stats Defn.Trait syntax="transparent trait T"
+              .tparams = []
+              mods Mod.Transparent syntax="transparent"
+              name Type.Name value="T" syntax="T"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+          derives Nil

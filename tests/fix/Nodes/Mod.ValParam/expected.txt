@@ -1,0 +1,80 @@
+Nodes/Mod.ValParam/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.ValParam, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_ValParam\n\nobject Mod_ValParam:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(val a: Int)\n  case class D(val b: Int)\n"
+  stats Pkg syntax="package nodes.Mod_ValParam\n\nobject Mod_ValParam:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(val a: Int)\n  case class D(val b: Int)"
+    .stats = [Defn.Object "object Mod_ValParam:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(val a: Int)\n  case class D(val b: Int)"]
+    ref Term.Select syntax="nodes.Mod_ValParam"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_ValParam" syntax="Mod_ValParam"
+    body Pkg.Body syntax="object Mod_ValParam:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(val a: Int)\n  case class D(val b: Int)"
+      stats Defn.Object syntax="object Mod_ValParam:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(val a: Int)\n  case class D(val b: Int)"
+        mods Nil
+        name Term.Name value="Mod_ValParam" syntax="Mod_ValParam"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C(val a: Int)\n  case class D(val b: Int)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class C(val a: Int)", Defn.Class "case class D(val b: Int)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C(val a: Int)\n  case class D(val b: Int)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class C(val a: Int)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(val a: Int)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(val a: Int)"
+                  values Term.Param syntax="val a: Int"
+                    mods Mod.ValParam syntax="val"
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Class syntax="case class D(val b: Int)"
+              .tparams = []
+              mods Mod.Case syntax="case"
+              name Type.Name value="D" syntax="D"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(val b: Int)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(val b: Int)"
+                  values Term.Param syntax="val b: Int"
+                    mods Mod.ValParam syntax="val"
+                    name Term.Name value="b" syntax="b"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

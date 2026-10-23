@@ -4,3 +4,8 @@
 /teq.lock text eol=lf
 # A probe whose lines end in CRLF, a line comment's `\r` before its line's end (tests/source-version/runs.txt).
 /tests/source-version/probes/comment_crlf.scala -text
+# The fix corpus's probes whose lines end in CRLF or CR, and the corpus file holding them.
+/tests/fix/support/probes/comment_crlf.scala -text
+/tests/fix/support/probes/newline_found_cr.scala -text
+/tests/fix/support/probes/newline_found_crlf.scala -text
+/tests/fix/scalameta/Probes.txt -text

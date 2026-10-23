@@ -1,0 +1,129 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Lit.Double, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_Double\n\nobject Lit_Double:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5\n  val b = 2.0d\n  val c = 1e3\n  val d = -1.5\n  val e = .5\n  val f = 1D\n  val g = -1e-7\n  val h = 0.00\n  val i = -0.0\n  val j = 1.50\n  val k = 1e0\n  val l = 100.0e-2\n  val m = 1_000.5\n  val n = 12e5\n  val o = -2.5e-3\n"
+  stats Pkg syntax="package nodes.Lit_Double\n\nobject Lit_Double:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5\n  val b = 2.0d\n  val c = 1e3\n  val d = -1.5\n  val e = .5\n  val f = 1D\n  val g = -1e-7\n  val h = 0.00\n  val i = -0.0\n  val j = 1.50\n  val k = 1e0\n  val l = 100.0e-2\n  val m = 1_000.5\n  val n = 12e5\n  val o = -2.5e-3"
+    .stats = [Defn.Object "object Lit_Double:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5\n  val b = 2.0d\n  val c = 1e3\n  val d = -1.5\n  val e = .5\n  val f = 1D\n  val g = -1e-7\n  val h = 0.00\n  val i = -0.0\n  val j = 1.50\n  val k = 1e0\n  val l = 100.0e-2\n  val m = 1_000.5\n  val n = 12e5\n  val o = -2.5e-3"]
+    ref Term.Select syntax="nodes.Lit_Double"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_Double" syntax="Lit_Double"
+    body Pkg.Body syntax="object Lit_Double:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5\n  val b = 2.0d\n  val c = 1e3\n  val d = -1.5\n  val e = .5\n  val f = 1D\n  val g = -1e-7\n  val h = 0.00\n  val i = -0.0\n  val j = 1.50\n  val k = 1e0\n  val l = 100.0e-2\n  val m = 1_000.5\n  val n = 12e5\n  val o = -2.5e-3"
+      stats Defn.Object syntax="object Lit_Double:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5\n  val b = 2.0d\n  val c = 1e3\n  val d = -1.5\n  val e = .5\n  val f = 1D\n  val g = -1e-7\n  val h = 0.00\n  val i = -0.0\n  val j = 1.50\n  val k = 1e0\n  val l = 100.0e-2\n  val m = 1_000.5\n  val n = 12e5\n  val o = -2.5e-3"
+        mods Nil
+        name Term.Name value="Lit_Double" syntax="Lit_Double"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5\n  val b = 2.0d\n  val c = 1e3\n  val d = -1.5\n  val e = .5\n  val f = 1D\n  val g = -1e-7\n  val h = 0.00\n  val i = -0.0\n  val j = 1.50\n  val k = 1e0\n  val l = 100.0e-2\n  val m = 1_000.5\n  val n = 12e5\n  val o = -2.5e-3"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = 1.5", Defn.Val "val b = 2.0d", Defn.Val "val c = 1e3", Defn.Val "val d = -1.5", Defn.Val "val e = .5", Defn.Val "val f = 1D", Defn.Val "val g = -1e-7", Defn.Val "val h = 0.00", Defn.Val "val i = -0.0", Defn.Val "val j = 1.50", Defn.Val "val k = 1e0", Defn.Val "val l = 100.0e-2", Defn.Val "val m = 1_000.5", Defn.Val "val n = 12e5", Defn.Val "val o = -2.5e-3"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1.5\n  val b = 2.0d\n  val c = 1e3\n  val d = -1.5\n  val e = .5\n  val f = 1D\n  val g = -1e-7\n  val h = 0.00\n  val i = -0.0\n  val j = 1.50\n  val k = 1e0\n  val l = 100.0e-2\n  val m = 1_000.5\n  val n = 12e5\n  val o = -2.5e-3"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = 1.5"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Double format="1.5" syntax="1.5"
+                .value = 1.5
+            stats Defn.Val syntax="val b = 2.0d"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Lit.Double format="2.0" syntax="2.0d"
+                .value = 2.0
+            stats Defn.Val syntax="val c = 1e3"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Lit.Double format="1E+3" syntax="1e3"
+                .value = 1000.0
+            stats Defn.Val syntax="val d = -1.5"
+              mods Nil
+              pats Pat.Var syntax="d"
+                name Term.Name value="d" syntax="d"
+              decltpe None
+              rhs Lit.Double format="-1.5" syntax="-1.5"
+                .value = -1.5
+            stats Defn.Val syntax="val e = .5"
+              mods Nil
+              pats Pat.Var syntax="e"
+                name Term.Name value="e" syntax="e"
+              decltpe None
+              rhs Lit.Double format="0.5" syntax=".5"
+                .value = 0.5
+            stats Defn.Val syntax="val f = 1D"
+              mods Nil
+              pats Pat.Var syntax="f"
+                name Term.Name value="f" syntax="f"
+              decltpe None
+              rhs Lit.Double format="1" syntax="1D"
+                .value = 1.0
+            stats Defn.Val syntax="val g = -1e-7"
+              mods Nil
+              pats Pat.Var syntax="g"
+                name Term.Name value="g" syntax="g"
+              decltpe None
+              rhs Lit.Double format="-1E-7" syntax="-1e-7"
+                .value = -1.0E-7
+            stats Defn.Val syntax="val h = 0.00"
+              mods Nil
+              pats Pat.Var syntax="h"
+                name Term.Name value="h" syntax="h"
+              decltpe None
+              rhs Lit.Double format="0" syntax="0.00"
+                .value = 0.0
+            stats Defn.Val syntax="val i = -0.0"
+              mods Nil
+              pats Pat.Var syntax="i"
+                name Term.Name value="i" syntax="i"
+              decltpe None
+              rhs Lit.Double format="0.0" syntax="-0.0"
+                .value = 0.0
+            stats Defn.Val syntax="val j = 1.50"
+              mods Nil
+              pats Pat.Var syntax="j"
+                name Term.Name value="j" syntax="j"
+              decltpe None
+              rhs Lit.Double format="1.5" syntax="1.50"
+                .value = 1.5
+            stats Defn.Val syntax="val k = 1e0"
+              mods Nil
+              pats Pat.Var syntax="k"
+                name Term.Name value="k" syntax="k"
+              decltpe None
+              rhs Lit.Double format="1" syntax="1e0"
+                .value = 1.0
+            stats Defn.Val syntax="val l = 100.0e-2"
+              mods Nil
+              pats Pat.Var syntax="l"
+                name Term.Name value="l" syntax="l"
+              decltpe None
+              rhs Lit.Double format="1" syntax="100.0e-2"
+                .value = 1.0
+            stats Defn.Val syntax="val m = 1_000.5"
+              mods Nil
+              pats Pat.Var syntax="m"
+                name Term.Name value="m" syntax="m"
+              decltpe None
+              rhs Lit.Double format="1000.5" syntax="1_000.5"
+                .value = 1000.5
+            stats Defn.Val syntax="val n = 12e5"
+              mods Nil
+              pats Pat.Var syntax="n"
+                name Term.Name value="n" syntax="n"
+              decltpe None
+              rhs Lit.Double format="1.2E+6" syntax="12e5"
+                .value = 1200000.0
+            stats Defn.Val syntax="val o = -2.5e-3"
+              mods Nil
+              pats Pat.Var syntax="o"
+                name Term.Name value="o" syntax="o"
+              decltpe None
+              rhs Lit.Double format="-0.0025" syntax="-2.5e-3"
+                .value = -0.0025
+          derives Nil

@@ -1715,7 +1715,8 @@ impl<'a> Lexer<'a> {
                 return;
             } else if b == b'$' {
                 let n = self.peek(1);
-                if n == b'$' {
+                // `$$` and `$"`, the character after the `$` (dotty's `getStringPart`).
+                if n == b'$' || n == b'"' {
                     self.pos += 2;
                 } else if n == b'{' {
                     self.push(Tok::StrPart, part_start, self.pos);

@@ -1,0 +1,44 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Block, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Block\n\nobject Term_Block:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = { val b = 1; b }\n  val c = {\n    1\n  }\n"
+  stats Pkg syntax="package nodes.Term_Block\n\nobject Term_Block:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = { val b = 1; b }\n  val c = {\n    1\n  }"
+    .stats = [Defn.Object "object Term_Block:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = { val b = 1; b }\n  val c = {\n    1\n  }"]
+    ref Term.Select syntax="nodes.Term_Block"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Block" syntax="Term_Block"
+    body Pkg.Body syntax="object Term_Block:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = { val b = 1; b }\n  val c = {\n    1\n  }"
+      stats Defn.Object syntax="object Term_Block:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = { val b = 1; b }\n  val c = {\n    1\n  }"
+        mods Nil
+        name Term.Name value="Term_Block" syntax="Term_Block"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = { val b = 1; b }\n  val c = {\n    1\n  }"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = { val b = 1; b }", Defn.Val "val c = {\n    1\n  }"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = { val b = 1; b }\n  val c = {\n    1\n  }"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = { val b = 1; b }"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.Block syntax="{ val b = 1; b }"
+                stats Defn.Val syntax="val b = 1"
+                  mods Nil
+                  pats Pat.Var syntax="b"
+                    name Term.Name value="b" syntax="b"
+                  decltpe None
+                  rhs Lit.Int value=1 syntax="1"
+                stats Term.Name value="b" syntax="b"
+            stats Defn.Val syntax="val c = {\n    1\n  }"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Term.Block syntax="{\n    1\n  }"
+                stats Lit.Int value=1 syntax="1"
+          derives Nil

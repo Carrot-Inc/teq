@@ -1,0 +1,61 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Decl.Given, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Decl_Given\n\nobject Decl_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    given x: Int\n    given ord: Ordering[Int]\n"
+  stats Pkg syntax="package nodes.Decl_Given\n\nobject Decl_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    given x: Int\n    given ord: Ordering[Int]"
+    .stats = [Defn.Object "object Decl_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    given x: Int\n    given ord: Ordering[Int]"]
+    ref Term.Select syntax="nodes.Decl_Given"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Decl_Given" syntax="Decl_Given"
+    body Pkg.Body syntax="object Decl_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    given x: Int\n    given ord: Ordering[Int]"
+      stats Defn.Object syntax="object Decl_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    given x: Int\n    given ord: Ordering[Int]"
+        mods Nil
+        name Term.Name value="Decl_Given" syntax="Decl_Given"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    given x: Int\n    given ord: Ordering[Int]"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Trait "trait T:\n    given x: Int\n    given ord: Ordering[Int]"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  trait T:\n    given x: Int\n    given ord: Ordering[Int]"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Trait syntax="trait T:\n    given x: Int\n    given ord: Ordering[Int]"
+              .tparams = []
+              mods Nil
+              name Type.Name value="T" syntax="T"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    given x: Int\n    given ord: Ordering[Int]"
+                .self = Self ""
+                .stats = [Decl.Given "given x: Int", Decl.Given "given ord: Ordering[Int]"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    given x: Int\n    given ord: Ordering[Int]"
+                  selfOpt None
+                  stats Decl.Given syntax="given x: Int"
+                    .paramClauses = []
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    paramClauseGroups Nil
+                    decltpe Type.Name value="Int" syntax="Int"
+                  stats Decl.Given syntax="given ord: Ordering[Int]"
+                    .paramClauses = []
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="ord" syntax="ord"
+                    paramClauseGroups Nil
+                    decltpe Type.Apply syntax="Ordering[Int]"
+                      .args = [Type.Name "Int"]
+                      tpe Type.Name value="Ordering" syntax="Ordering"
+                      argClause Type.ArgClause syntax="[Int]"
+                        values Type.Name value="Int" syntax="Int"
+                derives Nil
+          derives Nil

@@ -1,0 +1,98 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.Annot, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Annot\n\nobject Mod_Annot:\n  val marker = 0 // assert: DumpStructure.structure\n  @deprecated(\"x\") def f = 1\n  @deprecated(\"y\", \"1.0\") @inline def g = 2\n  class C(@deprecated x: Int)\n"
+  stats Pkg syntax="package nodes.Mod_Annot\n\nobject Mod_Annot:\n  val marker = 0 // assert: DumpStructure.structure\n  @deprecated(\"x\") def f = 1\n  @deprecated(\"y\", \"1.0\") @inline def g = 2\n  class C(@deprecated x: Int)"
+    .stats = [Defn.Object "object Mod_Annot:\n  val marker = 0 // assert: DumpStructure.structure\n  @deprecated(\"x\") def f = 1\n  @deprecated(\"y\", \"1.0\") @inline def g = 2\n  class C(@deprecated x: Int)"]
+    ref Term.Select syntax="nodes.Mod_Annot"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Annot" syntax="Mod_Annot"
+    body Pkg.Body syntax="object Mod_Annot:\n  val marker = 0 // assert: DumpStructure.structure\n  @deprecated(\"x\") def f = 1\n  @deprecated(\"y\", \"1.0\") @inline def g = 2\n  class C(@deprecated x: Int)"
+      stats Defn.Object syntax="object Mod_Annot:\n  val marker = 0 // assert: DumpStructure.structure\n  @deprecated(\"x\") def f = 1\n  @deprecated(\"y\", \"1.0\") @inline def g = 2\n  class C(@deprecated x: Int)"
+        mods Nil
+        name Term.Name value="Mod_Annot" syntax="Mod_Annot"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  @deprecated(\"x\") def f = 1\n  @deprecated(\"y\", \"1.0\") @inline def g = 2\n  class C(@deprecated x: Int)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "@deprecated(\"x\") def f = 1", Defn.Def "@deprecated(\"y\", \"1.0\") @inline def g = 2", Defn.Class "class C(@deprecated x: Int)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  @deprecated(\"x\") def f = 1\n  @deprecated(\"y\", \"1.0\") @inline def g = 2\n  class C(@deprecated x: Int)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="@deprecated(\"x\") def f = 1"
+              .paramClauses = []
+              .paramss = []
+              .tparams = []
+              mods Mod.Annot syntax="@deprecated(\"x\")"
+                init Init syntax="deprecated(\"x\")"
+                  .argss = [[Lit.String "\"x\""]]
+                  tpe Type.Name value="deprecated" syntax="deprecated"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Term.ArgClause syntax="(\"x\")"
+                    values Lit.String value="x" syntax="\"x\""
+                    mod None
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Nil
+              decltpe None
+              body Lit.Int value=1 syntax="1"
+            stats Defn.Def syntax="@deprecated(\"y\", \"1.0\") @inline def g = 2"
+              .paramClauses = []
+              .paramss = []
+              .tparams = []
+              mods Mod.Annot syntax="@deprecated(\"y\", \"1.0\")"
+                init Init syntax="deprecated(\"y\", \"1.0\")"
+                  .argss = [[Lit.String "\"y\"", Lit.String "\"1.0\""]]
+                  tpe Type.Name value="deprecated" syntax="deprecated"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Term.ArgClause syntax="(\"y\", \"1.0\")"
+                    values Lit.String value="y" syntax="\"y\""
+                    values Lit.String value="1.0" syntax="\"1.0\""
+                    mod None
+              mods Mod.Annot syntax="@inline"
+                init Init syntax="inline"
+                  .argss = []
+                  tpe Type.Name value="inline" syntax="inline"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Nil
+              decltpe None
+              body Lit.Int value=2 syntax="2"
+            stats Defn.Class syntax="class C(@deprecated x: Int)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(@deprecated x: Int)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(@deprecated x: Int)"
+                  values Term.Param syntax="@deprecated x: Int"
+                    mods Mod.Annot syntax="@deprecated"
+                      init Init syntax="deprecated"
+                        .argss = []
+                        tpe Type.Name value="deprecated" syntax="deprecated"
+                        name Name.Anonymous syntax=""
+                          .value = ""
+                        argClauses Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+          derives Nil

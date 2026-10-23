@@ -1,0 +1,59 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Placeholder: a placeholder and a var initialized to its default, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Placeholder\n\nobject Term_Placeholder:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ * 2)\n  var b: Int = _\n"
+  stats Pkg syntax="package nodes.Term_Placeholder\n\nobject Term_Placeholder:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ * 2)\n  var b: Int = _"
+    .stats = [Defn.Object "object Term_Placeholder:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ * 2)\n  var b: Int = _"]
+    ref Term.Select syntax="nodes.Term_Placeholder"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Placeholder" syntax="Term_Placeholder"
+    body Pkg.Body syntax="object Term_Placeholder:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ * 2)\n  var b: Int = _"
+      stats Defn.Object syntax="object Term_Placeholder:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ * 2)\n  var b: Int = _"
+        mods Nil
+        name Term.Name value="Term_Placeholder" syntax="Term_Placeholder"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ * 2)\n  var b: Int = _"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = List(1).map(_ * 2)", Defn.Var "var b: Int = _"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = List(1).map(_ * 2)\n  var b: Int = _"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = List(1).map(_ * 2)"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.Apply syntax="List(1).map(_ * 2)"
+                .args = [Term.AnonymousFunction "_ * 2"]
+                fun Term.Select syntax="List(1).map"
+                  qual Term.Apply syntax="List(1)"
+                    .args = [Lit.Int "1"]
+                    fun Term.Name value="List" syntax="List"
+                    argClause Term.ArgClause syntax="(1)"
+                      values Lit.Int value=1 syntax="1"
+                      mod None
+                  name Term.Name value="map" syntax="map"
+                argClause Term.ArgClause syntax="(_ * 2)"
+                  values Term.AnonymousFunction syntax="_ * 2"
+                    body Term.ApplyInfix syntax="_ * 2"
+                      .args = [Lit.Int "2"]
+                      .targs = []
+                      lhs Term.Placeholder syntax="_"
+                      op Term.Name value="*" syntax="*"
+                      targClause Type.ArgClause syntax=""
+                        values Nil
+                      argClause Term.ArgClause syntax="2"
+                        values Lit.Int value=2 syntax="2"
+                        mod None
+                  mod None
+            stats Defn.Var syntax="var b: Int = _"
+              .rhs = None
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe Type.Name value="Int" syntax="Int"
+              body Term.Placeholder syntax="_"
+          derives Nil

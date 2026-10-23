@@ -1,0 +1,416 @@
+# The programs of scalameta 4.17.4's MatchTypeSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 734 line 10 BlockStat dialects.Scala3 :: simple
+object W734 {
+  def w = {
+type Elem[X] = X match {
+  case String => Char
+  case Array[t] => t
+}
+
+}
+}
+#!scalac ok
+#!regions L72/ L93/ F95/ L98/
+#!layout
+Source 0 101
+  Defn.Object 0 100
+    Term.Name 7 11
+    Template 12 100
+      Template.Body 12 100
+        Defn.Def 16 98
+          Term.Name 20 21
+          Term.Block 24 98
+            Defn.Type 26 95
+              Type.Name 31 35
+              Type.ParamClause 35 38
+                Type.Param 36 37
+                  Type.Name 36 37
+                  Type.ParamClause 37 37
+                  Type.Bounds 37 37
+              Type.Match 41 95
+                Type.Name 41 42
+                Type.CasesBlock 49 95
+                  TypeCase 53 72
+                    Type.Name 58 64
+                    Type.Name 68 72
+                  TypeCase 75 93
+                    Type.Apply 80 88
+                      Type.Name 80 85
+                      Type.ArgClause 85 88
+                        Type.Name 86 87
+                    Type.Name 92 93
+              Type.Bounds 39 39
+#!program 735 line 28 BlockStat dialects.Scala3 :: simple-indentation
+object W735 {
+  def w = {
+type Elem[X] = 
+  X match
+    case String => 
+      Char
+    case Array[t] => t
+
+}
+}
+#!scalac ok
+#!regions I41/2 I51/4.2 I71/6.4.2 O82/4.2 L82/4.2 O106/2 O106/ L108/
+#!layout
+Source 0 111
+  Defn.Object 0 110
+    Term.Name 7 11
+    Template 12 110
+      Template.Body 12 110
+        Defn.Def 16 108
+          Term.Name 20 21
+          Term.Block 24 108
+            Defn.Type 26 105
+              Type.Name 31 35
+              Type.ParamClause 35 38
+                Type.Param 36 37
+                  Type.Name 36 37
+                  Type.ParamClause 37 37
+                  Type.Bounds 37 37
+              Type.Match 44 105
+                Type.Name 44 45
+                Type.CasesBlock 56 105
+                  TypeCase 56 82
+                    Type.Name 61 67
+                    Type.Name 78 82
+                  TypeCase 87 105
+                    Type.Apply 92 100
+                      Type.Name 92 97
+                      Type.ArgClause 97 100
+                        Type.Name 98 99
+                    Type.Name 104 105
+              Type.Bounds 39 39
+#!program 736 line 54 BlockStat dialects.Scala3 :: tuple
+object W736 {
+  def w = {
+type Head[X <: Tuple] = X match {
+  case (x1, ?) => x1
+}
+
+}
+}
+#!scalac ok
+#!regions L80/ F82/ L85/
+#!layout
+Source 0 88
+  Defn.Object 0 87
+    Term.Name 7 11
+    Template 12 87
+      Template.Body 12 87
+        Defn.Def 16 85
+          Term.Name 20 21
+          Term.Block 24 85
+            Defn.Type 26 82
+              Type.Name 31 35
+              Type.ParamClause 35 47
+                Type.Param 36 46
+                  Type.Name 36 37
+                  Type.ParamClause 38 38
+                  Type.Bounds 38 46
+                    Type.Name 41 46
+              Type.Match 50 82
+                Type.Name 50 51
+                Type.CasesBlock 58 82
+                  TypeCase 62 80
+                    Type.Tuple 67 74
+                      Type.Name 68 70
+                      Type.Wildcard 72 73
+                        Type.Bounds 73 73
+                    Type.Name 78 80
+              Type.Bounds 48 48
+#!program 737 line 68 BlockStat dialects.Scala3 :: recursive
+object W737 {
+  def w = {
+type Len[X] <: Int = X match {
+  case Unit => 0
+  case x *: xs => S[Len[xs]]
+}
+
+}
+}
+#!scalac ok
+#!regions L73/ L102/ F104/ L107/
+#!layout
+Source 0 110
+  Defn.Object 0 109
+    Term.Name 7 11
+    Template 12 109
+      Template.Body 12 109
+        Defn.Def 16 107
+          Term.Name 20 21
+          Term.Block 24 107
+            Defn.Type 26 104
+              Type.Name 31 34
+              Type.ParamClause 34 37
+                Type.Param 35 36
+                  Type.Name 35 36
+                  Type.ParamClause 36 36
+                  Type.Bounds 36 36
+              Type.Match 47 104
+                Type.Name 47 48
+                Type.CasesBlock 55 104
+                  TypeCase 59 73
+                    Type.Name 64 68
+                    Lit.Int 72 73
+                  TypeCase 76 102
+                    Type.ApplyInfix 81 88
+                      Type.Name 81 82
+                      Type.Name 83 85
+                      Type.Name 86 88
+                    Type.Apply 92 102
+                      Type.Name 92 93
+                      Type.ArgClause 93 102
+                        Type.Apply 94 101
+                          Type.Name 94 97
+                          Type.ArgClause 97 101
+                            Type.Name 98 100
+              Type.Bounds 38 44
+                Type.Name 41 44
+#!program 738 line 90 BlockStat dialects.Scala3 :: concat
+object W738 {
+  def w = {
+type Concat[X <: Tuple, Y <: Tuple] <: Tuple = X match {
+  case Unit => Y
+  case x1 *: xs1 => x1 *: Concat[xs1, Y]
+}
+
+}
+}
+#!scalac ok
+#!regions L99/ L140/ F142/ L145/
+#!layout
+Source 0 148
+  Defn.Object 0 147
+    Term.Name 7 11
+    Template 12 147
+      Template.Body 12 147
+        Defn.Def 16 145
+          Term.Name 20 21
+          Term.Block 24 145
+            Defn.Type 26 142
+              Type.Name 31 37
+              Type.ParamClause 37 61
+                Type.Param 38 48
+                  Type.Name 38 39
+                  Type.ParamClause 40 40
+                  Type.Bounds 40 48
+                    Type.Name 43 48
+                Type.Param 50 60
+                  Type.Name 50 51
+                  Type.ParamClause 52 52
+                  Type.Bounds 52 60
+                    Type.Name 55 60
+              Type.Match 73 142
+                Type.Name 73 74
+                Type.CasesBlock 81 142
+                  TypeCase 85 99
+                    Type.Name 90 94
+                    Type.Name 98 99
+                  TypeCase 102 140
+                    Type.ApplyInfix 107 116
+                      Type.Name 107 109
+                      Type.Name 110 112
+                      Type.Name 113 116
+                    Type.ApplyInfix 120 140
+                      Type.Name 120 122
+                      Type.Name 123 125
+                      Type.Apply 126 140
+                        Type.Name 126 132
+                        Type.ArgClause 132 140
+                          Type.Name 133 136
+                          Type.Name 138 139
+              Type.Bounds 62 70
+                Type.Name 65 70
+#!program 739 line 112 BlockStat dialects.Scala3 :: indent
+object W739 {
+  def w = {
+type Elem[X] = X match
+  case String => Char
+  case Array[t] => t
+
+
+}
+}
+#!scalac ok
+#!regions I48/2 L70/2 O93/ L95/
+#!layout
+Source 0 98
+  Defn.Object 0 97
+    Term.Name 7 11
+    Template 12 97
+      Template.Body 12 97
+        Defn.Def 16 95
+          Term.Name 20 21
+          Term.Block 24 95
+            Defn.Type 26 91
+              Type.Name 31 35
+              Type.ParamClause 35 38
+                Type.Param 36 37
+                  Type.Name 36 37
+                  Type.ParamClause 37 37
+                  Type.Bounds 37 37
+              Type.Match 41 91
+                Type.Name 41 42
+                Type.CasesBlock 51 91
+                  TypeCase 51 70
+                    Type.Name 56 62
+                    Type.Name 66 70
+                  TypeCase 73 91
+                    Type.Apply 78 86
+                      Type.Name 78 83
+                      Type.ArgClause 83 86
+                        Type.Name 84 85
+                    Type.Name 90 91
+              Type.Bounds 39 39
+#!program 740 line 136 BlockStat dialects.Scala3 :: double-newline
+object W740 {
+  def w = {
+object match_types:
+
+  type Combine[Left, Right] = Left match
+    case Unit => Right
+
+    case ? => Left
+
+}
+}
+#!scalac refuses: Unbound wildcard type
+#!regions I46/2 I87/4.2 F110/4.2 O131/2 O131/ L133/
+#!layout
+Source 0 136
+  Defn.Object 0 135
+    Term.Name 7 11
+    Template 12 135
+      Template.Body 12 135
+        Defn.Def 16 133
+          Term.Name 20 21
+          Term.Block 24 133
+            Defn.Object 26 130
+              Term.Name 33 44
+              Template 44 130
+                Template.Body 44 130
+                  Defn.Type 49 130
+                    Type.Name 54 61
+                    Type.ParamClause 61 74
+                      Type.Param 62 66
+                        Type.Name 62 66
+                        Type.ParamClause 66 66
+                        Type.Bounds 66 66
+                      Type.Param 68 73
+                        Type.Name 68 73
+                        Type.ParamClause 73 73
+                        Type.Bounds 73 73
+                    Type.Match 77 130
+                      Type.Name 77 81
+                      Type.CasesBlock 92 130
+                        TypeCase 92 110
+                          Type.Name 97 101
+                          Type.Name 105 110
+                        TypeCase 116 130
+                          Type.Name 121 122
+                          Type.Name 126 130
+                    Type.Bounds 75 75
+#!program 741 line 171 BlockStat dialects.Scala3Future :: wildcard
+object W741 {
+  def w = {
+object match_types:
+  type Combine[L, R] = L match
+    case Foo[_] => L
+    case Bar[?] => L
+    case _ => R
+    case ? => L
+
+}
+}
+#!scalac refuses: Unbound wildcard type
+#!dialect dialects.Scala3Future gives another tree
+#!regions I45/2 I76/4.2 L97/4.2 L118/4.2 L134/4.2 O151/2 O151/ L153/
+#!layout
+Source 0 156
+  Defn.Object 0 155
+    Term.Name 7 11
+    Template 12 155
+      Template.Body 12 155
+        Defn.Def 16 153
+          Term.Name 20 21
+          Term.Block 24 153
+            Defn.Object 26 150
+              Term.Name 33 44
+              Template 44 150
+                Template.Body 44 150
+                  Defn.Type 48 150
+                    Type.Name 53 60
+                    Type.ParamClause 60 66
+                      Type.Param 61 62
+                        Type.Name 61 62
+                        Type.ParamClause 62 62
+                        Type.Bounds 62 62
+                      Type.Param 64 65
+                        Type.Name 64 65
+                        Type.ParamClause 65 65
+                        Type.Bounds 65 65
+                    Type.Match 69 150
+                      Type.Name 69 70
+                      Type.CasesBlock 81 150
+                        TypeCase 81 97
+                          Type.Apply 86 92
+                            Type.Name 86 89
+                            Type.ArgClause 89 92
+                              Type.Wildcard 90 91
+                                Type.Bounds 91 91
+                          Type.Name 96 97
+                        TypeCase 102 118
+                          Type.Apply 107 113
+                            Type.Name 107 110
+                            Type.ArgClause 110 113
+                              Type.Wildcard 111 112
+                                Type.Bounds 112 112
+                          Type.Name 117 118
+                        TypeCase 123 134
+                          Type.PatWildcard 128 129
+                          Type.Name 133 134
+                        TypeCase 139 150
+                          Type.Name 144 145
+                          Type.Name 149 150
+                    Type.Bounds 67 67
+#!program 742 line 233 BlockStat dialects.Scala3 :: #4015
+object W742 {
+  def w = {
+type T1 = A[[T] =>> T match
+    case _ => Int]
+
+}
+}
+#!scalac ok
+#!regions I53/4 O68/ F72/ L75/
+#!layout
+Source 0 78
+  Defn.Object 0 77
+    Term.Name 7 11
+    Template 12 77
+      Template.Body 12 77
+        Defn.Def 16 75
+          Term.Name 20 21
+          Term.Block 24 75
+            Defn.Type 26 72
+              Type.Name 31 33
+              Type.ParamClause 34 34
+              Type.Apply 36 72
+                Type.Name 36 37
+                Type.ArgClause 37 72
+                  Type.Lambda 38 71
+                    Type.ParamClause 38 41
+                      Type.Param 39 40
+                        Type.Name 39 40
+                        Type.ParamClause 40 40
+                        Type.Bounds 40 40
+                    Type.Match 46 71
+                      Type.Name 46 47
+                      Type.CasesBlock 58 71
+                        TypeCase 58 71
+                          Type.PatWildcard 63 64
+                          Type.Name 68 71
+              Type.Bounds 34 34

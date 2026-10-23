@@ -12,7 +12,7 @@
 
 use super::config::Conf;
 use super::host::{self, Asker, DocView, Host, Results, Severity, Utf16};
-use super::nodes::{self, K};
+use super::nodes;
 use super::plan::{self, Plan, Printed};
 use super::service::{Answer as SemAnswer, Ask, SemQuery, SemReply};
 use crate::source::{FileId, SourceFile, Span};
@@ -20,16 +20,21 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
-/// What a run asks: the configuration, the rules, whether it only checks.
+/// What a run asks beside its parts: the rules, whether it only checks.
 pub struct Setup {
-    pub conf: Conf,
-    /// Where a relative `file:` entry of the configuration starts.
-    pub config_dir: PathBuf,
-    /// `--rules`, which replaces the configuration's `rules`.
+    /// `--rules`, which replaces each configuration's `rules`.
     pub rules: Option<Vec<String>>,
     pub check: bool,
     /// Where the run works (the build's root) and the directory its paths print from, where they differ.
     pub display: Option<(PathBuf, PathBuf)>,
+}
+
+/// A configuration file and the jobs typed under it: a part of one run, its rules on rule workers of its own.
+pub struct Part {
+    pub conf: Conf,
+    /// Where a relative `file:` entry of the configuration starts.
+    pub config_dir: PathBuf,
+    pub jobs: Vec<Job>,
 }
 
 /// `path` (the program's, from the working directory) as printed: from the directory the paths print from.
@@ -55,6 +60,8 @@ fn relative(to: &Path, from: &Path) -> Option<String> {
 /// A program to type and the files of it the run reads and edits.
 #[derive(Clone)]
 pub struct Job {
+    /// The build's key the job types (`app/test`), as the record names it.
+    pub key: String,
     /// The compiler's arguments, `teq compiler check`'s: the inputs and the options.
     pub args: Vec<String>,
     /// The editable files: those under these roots (as the program's paths start), every file where none.
@@ -134,6 +141,8 @@ struct Boot {
     conf: Conf,
     config_dir: PathBuf,
     requested: Vec<String>,
+    /// The `file:` entries whose rules the requested names choose among, beside the shipped ones.
+    sources: Vec<String>,
 }
 
 /// The rule workers: threads of the fix engine's own, so that none carries a compile worker's builtin table or caches,
@@ -306,14 +315,16 @@ struct Outcome {
     plan: Plan,
 }
 
-/// Runs `jobs` under `setup`; the run's exit status (docs/CLI.md, "teq fix").
-pub fn run(setup: Setup, jobs: Vec<Job>) -> i32 {
+/// Runs every part's jobs as one run: each under its configuration's rules, all planned over the files as read, their
+/// plans merged as the jobs of one part's are, and what is refused refused before anything is written; the run's exit
+/// status (docs/CLI.md, "teq fix").
+pub fn run(setup: Setup, parts: Vec<Part>) -> i32 {
     // `TEQ_FIX_INPUTS=<file>`: each job's inputs as the compiler resolves them (`program_paths`: the roots, the links
     // followed, the exclusions applied), a line `<job>\t<path>` each, written and nothing else done: the corpus a
     // measurement runs over, as bench/fix/run.sh takes its identity.
     if let Some(file) = std::env::var_os("TEQ_FIX_INPUTS") {
         let mut out = String::new();
-        for (k, job) in jobs.iter().enumerate() {
+        for (k, job) in parts.iter().flat_map(|p| &p.jobs).enumerate() {
             for p in program_paths(job) {
                 out.push_str(&format!("{}\t{}\n", k, p));
             }
@@ -326,62 +337,117 @@ pub fn run(setup: Setup, jobs: Vec<Job>) -> i32 {
             }
         };
     }
-    let requested = match requested_rules(&setup) {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("teq fix: {}", e);
-            return 2;
-        }
-    };
-    // The lint filters decoded before any rule runs: a setting that does not decode refuses the run.
-    let lints = match LintConfig::of(&setup.conf) {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("teq fix: {}", e);
-            return 2;
-        }
-    };
-    record_open();
-    // The threads the typings' merges drop what they gave back on are waited for between typings (`round`).
-    crate::crew::keep_given_back();
-    let boot = Boot { conf: setup.conf.clone(), config_dir: setup.config_dir.clone(), requested };
-    std::thread::scope(|scope| {
-        let mut pool = match Pool::new(scope, boot) {
-            Ok(p) => p,
+    // Every part's rules and lint filters decoded before any rule runs: a setting that does not decode refuses the run.
+    let mut prepared = Vec::new();
+    for part in &parts {
+        let (requested, sources) = match requested_rules(&part.conf, &setup.rules) {
+            Ok(r) => r,
             Err(e) => {
                 eprintln!("teq fix: {}", e);
-                record_close();
                 return 2;
             }
         };
-        let code = drive(&setup, &lints, &jobs, &mut pool);
-        drop(pool);
-        code
-    })
-}
-
-fn requested_rules(setup: &Setup) -> Result<Vec<String>, String> {
-    if let Some(r) = &setup.rules {
-        return Ok(r.clone());
+        let lints = match LintConfig::of(&part.conf) {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("teq fix: {}", e);
+                return 2;
+            }
+        };
+        prepared.push((Boot { conf: part.conf.clone(), config_dir: part.config_dir.clone(), requested, sources }, lints));
     }
-    let node = setup.conf.at(&["rules"]).or_else(|| setup.conf.at(&["rule"]));
-    match node {
-        Some(n) => setup.conf.strings(n),
-        None => Err(format!("{}: no rules: the configuration names none (`rules = [...]`) and --rules is not given", setup.conf.file)),
-    }
-}
-
-fn drive(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mut Pool<'_, '_>) -> i32 {
+    // A run of no part writes its record all the same, empty.
+    record_open();
+    // The threads the typings' merges drop what they gave back on are waited for between typings (`round`).
+    crate::crew::keep_given_back();
     let started = std::time::Instant::now();
-    let code = drive_rounds(setup, lint_config, jobs, pool);
+    let (code, workers) = std::thread::scope(|scope| {
+        let mut driven = Vec::new();
+        let mut first_job = 0;
+        for (part, (boot, lints)) in parts.iter().zip(prepared) {
+            match Pool::new(scope, boot) {
+                Ok(pool) => driven.push(Driven { part, first_job, lints, pool, infos: Vec::new(), names: Vec::new(), semantic_rules: Vec::new(), semantic: false, kept: HashMap::new() }),
+                Err(e) => {
+                    eprintln!("teq fix: {}", e);
+                    return (2, 0);
+                }
+            }
+            first_job += part.jobs.len();
+        }
+        let code = drive_rounds(&setup, &mut driven);
+        (code, driven.iter().map(|d| d.pool.to.len()).max().unwrap_or(0))
+    });
     record_close();
     if std::env::var_os("TEQ_FIX_TRACE").is_some() {
         TIMES.with(|t| {
             let (t, held) = (t.get(), crate::alloc::held());
-            eprintln!("fix: {:.0} ms in all: the rules' program {:.0} ms, typing {:.0} ms, the rules {:.0} ms on {} worker{} (their documents {:.0} ms, {:.0} ms of CPU, the longest {:.0} ms), planning {:.0} ms, the SemanticDB answers {:.0} ms; the allocator reserved {} MB, its requests over 32 KB at most {} MB", started.elapsed().as_secs_f64() * 1e3, t[0] * 1e3, t[1] * 1e3, t[2] * 1e3, pool.to.len(), if pool.to.len() == 1 { "" } else { "s" }, t[4] * 1e3, t[6] * 1e3, t[5] * 1e3, t[3] * 1e3, t[7] * 1e3, held.reserved >> 20, held.large_peak >> 20);
+            eprintln!("fix: {:.0} ms in all: the rules' program {:.0} ms, typing {:.0} ms, the rules {:.0} ms on {} worker{} (their documents {:.0} ms, {:.0} ms of CPU, the longest {:.0} ms), planning {:.0} ms, the SemanticDB answers {:.0} ms; the allocator reserved {} MB, its requests over 32 KB at most {} MB", started.elapsed().as_secs_f64() * 1e3, t[0] * 1e3, t[1] * 1e3, t[2] * 1e3, workers, if workers == 1 { "" } else { "s" }, t[4] * 1e3, t[6] * 1e3, t[5] * 1e3, t[3] * 1e3, t[7] * 1e3, held.reserved >> 20, held.large_peak >> 20);
         });
     }
     code
+}
+
+/// A part as the run drives it: its rule workers, the rules their lead configured, its lint filters, and the rules'
+/// results of round one, which round two reuses.
+struct Driven<'p, 'scope, 'env> {
+    part: &'p Part,
+    /// The run's number of the part's first job (the record's `job`).
+    first_job: usize,
+    lints: LintConfig,
+    pool: Pool<'scope, 'env>,
+    infos: Vec<RuleInfo>,
+    names: Vec<String>,
+    semantic_rules: Vec<bool>,
+    /// Whether a semantic rule is configured: the typings then read the unused imports.
+    semantic: bool,
+    /// By the run's number of the job and the file: a file several jobs read has each job's results.
+    kept: HashMap<(usize, String), Results>,
+}
+
+/// The rules asked for, `--rules`' or else the configuration's, and the `file:` entries whose rules a name may choose:
+/// the configuration's and those asked for, so that `--rules` selects among the rules the configuration discovers.
+fn requested_rules(conf: &Conf, rules: &Option<Vec<String>>) -> Result<(Vec<String>, Vec<String>), String> {
+    let configured = match conf.at(&["rules"]).or_else(|| conf.at(&["rule"])) {
+        Some(n) => Some(conf.strings(n)?),
+        None => None,
+    };
+    let requested = match (rules, &configured) {
+        (Some(r), _) => r.clone(),
+        (None, Some(c)) => c.clone(),
+        (None, None) => return Err(format!("{}: no rules: the configuration names none (`rules = [...]`) and --rules is not given", conf.file)),
+    };
+    let mut sources: Vec<String> = Vec::new();
+    for r in configured.iter().flatten().chain(&requested) {
+        if r.starts_with("file:") && !sources.contains(r) {
+            sources.push(r.clone());
+        }
+    }
+    Ok((requested, sources))
+}
+
+/// The rules `entries` ask for among `available`, in their order: a name, or every rule of a `file:` source; and the
+/// entries that name none.
+fn choose(available: &[(String, Option<String>, crate::interp::Value)], entries: &[String], config_dir: &Path) -> (Vec<(String, crate::interp::Value, bool)>, Vec<String>) {
+    let mut chosen = Vec::new();
+    let mut unknown = Vec::new();
+    for req in entries {
+        if let Some(p) = req.strip_prefix("file:") {
+            let dir = config_dir.join(p);
+            let of_file: Vec<&(String, Option<String>, crate::interp::Value)> = available.iter().filter(|(_, f, _)| f.as_ref().is_some_and(|f| Path::new(f).starts_with(&dir) || Path::new(f) == dir)).collect();
+            if of_file.is_empty() {
+                unknown.push(req.clone());
+            }
+            for (n, _, v) in of_file {
+                chosen.push((n.clone(), v.clone(), false));
+            }
+        } else {
+            match available.iter().find(|(n, _, _)| n == req) {
+                Some((n, f, v)) => chosen.push((n.clone(), v.clone(), f.is_none())),
+                None => unknown.push(req.clone()),
+            }
+        }
+    }
+    (chosen, unknown)
 }
 
 thread_local! {
@@ -450,50 +516,59 @@ fn add_time(k: usize, d: f64) {
     });
 }
 
-fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mut Pool<'_, '_>) -> i32 {
-    let ready = std::time::Instant::now();
-    let infos = match pool.from.recv() {
-        Ok(FromRules::Ready(_, Ok(infos), boot)) => {
-            record(format_args!("worker w=0 ready_us={} boot_us={}", now_us(), boot));
-            infos
-        }
-        Ok(FromRules::Ready(_, Err(e), _)) => {
-            eprintln!("{}", e.trim_end());
-            return 2;
-        }
-        _ => {
-            eprintln!("teq fix: the rule thread ended");
-            return 2;
-        }
-    };
-    timed(0, ready);
-    pool.ready[0] = true;
-    // The rules teq ships keep no state across documents (fix-speed's table, §1): their run takes several workers. A
-    // project rule's instance may (Count's visits, Stale's kept token): its run keeps the lead alone.
-    pool.eligible = infos.iter().all(|i| i.shipped);
-    pool.limit = if pool.eligible { requested_workers(jobs) } else { 1 };
-    let mut base = 0u32;
-    let names: Vec<String> = infos.iter().map(|i| i.name.clone()).collect();
-    let semantic_rules: Vec<bool> = infos.iter().map(|i| i.semantic).collect();
-    // A semantic rule configured, or the SemanticDB dump: the typings read the unused imports (`-Wunused:imports`),
-    // which the record says, so that a comparison with `teq compiler check` asks the same of it (bench/fix/parity.sh).
-    let semantic = semantic_rules.contains(&true) || semanticdb_dump().is_some();
-    record(format_args!("run eligible={} workers={} semantic={}", pool.eligible as u8, pool.limit, semantic as u8));
-    let mut gen = 0u32;
-    // Round one, over the files as read; the rules' results kept for round two.
-    let mut first: Vec<(usize, Vec<Outcome>)> = Vec::new();
-    let mut kept: HashMap<String, Results> = HashMap::new();
-    for (k, job) in jobs.iter().enumerate() {
-        let earlier = Earlier { results: &HashMap::new(), semantic: &semantic_rules };
-        match round((k, 1), job, &HashMap::new(), semantic, &mut gen, &mut base, &names, &infos, &setup.display, pool, earlier, Some(&mut kept)) {
-            Ok(outcomes) => first.push((k, outcomes)),
-            Err(e) => {
-                eprint!("{}", e);
+fn drive_rounds(setup: &Setup, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
+    for d in driven.iter_mut() {
+        let ready = std::time::Instant::now();
+        let infos = match d.pool.from.recv() {
+            Ok(FromRules::Ready(_, Ok(infos), boot)) => {
+                record(format_args!("worker w=0 ready_us={} boot_us={}", now_us(), boot));
+                infos
+            }
+            Ok(FromRules::Ready(_, Err(e), _)) => {
+                eprintln!("{}", e.trim_end());
                 return 2;
+            }
+            _ => {
+                eprintln!("teq fix: the rule thread ended");
+                return 2;
+            }
+        };
+        timed(0, ready);
+        d.pool.ready[0] = true;
+        // The rules teq ships keep no state across documents (fix-speed's table, §1): their run takes several workers.
+        // A project rule's instance may (Count's visits, Stale's kept token): its run keeps the lead alone.
+        d.pool.eligible = infos.iter().all(|i| i.shipped);
+        d.pool.limit = if d.pool.eligible { requested_workers(&d.part.jobs) } else { 1 };
+        d.names = infos.iter().map(|i| i.name.clone()).collect();
+        d.semantic_rules = infos.iter().map(|i| i.semantic).collect();
+        // A semantic rule configured, or the SemanticDB dump: the typings read the unused imports (`-Wunused:imports`),
+        // which the record says, so that a comparison with `teq compiler check` asks the same of it (bench/fix/parity.sh).
+        d.semantic = d.semantic_rules.contains(&true) || semanticdb_dump().is_some();
+        d.infos = infos;
+        record(format_args!("run eligible={} workers={} semantic={}", d.pool.eligible as u8, d.pool.limit, d.semantic as u8));
+    }
+    let mut base = 0u32;
+    let mut gen = 0u32;
+    // Round one, every part's jobs over the files as read; the rules' results kept for round two.
+    let mut first: Vec<(usize, usize, Vec<Outcome>)> = Vec::new();
+    for (p, d) in driven.iter_mut().enumerate() {
+        for (j, job) in d.part.jobs.iter().enumerate() {
+            let k = d.first_job + j;
+            let earlier = Earlier { job: k, results: &HashMap::new(), semantic: &d.semantic_rules };
+            match round((k, 1), job, &HashMap::new(), d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, Some(&mut d.kept)) {
+                Ok(mut outcomes) => {
+                    record_documents((k, 1), job, &d.part.conf.file, &outcomes, &d.lints);
+                    d.lints.apply(&mut outcomes);
+                    first.push((p, j, outcomes));
+                }
+                Err(e) => {
+                    eprint!("{}", e);
+                    return 2;
+                }
             }
         }
     }
-    let mut by_path = match merge(first.iter().flat_map(|(_, o)| o.iter())) {
+    let mut by_path = match merge(first.iter().flat_map(|(.., o)| o.iter())) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("{}", e);
@@ -504,19 +579,37 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mu
         return code;
     }
     // Round two, where round one edits: the files as round one leaves them, typed again, every job whose program reads
-    // one of them (a dependent's too, whose own files are as they were); only the imports those edits left unused may
-    // be removed there, and a job that no longer types refuses the whole plan before anything is written.
+    // one of them (a dependent's too, whose own files are as they were, another part's among them); only the imports
+    // those edits left unused may be removed there, and a job that no longer types refuses the whole plan before
+    // anything is written. A job it does not revisit reads none of them, so it edited none: its round-one outcomes stand
+    // beside the revisited jobs' in the merge, their lints among a shared file's, as the next run would give them.
     let changed: HashMap<String, String> = by_path.values().filter(|o| !o.plan.edits.is_empty()).map(|o| (o.file.clone(), plan::apply(&o.text, &o.plan.edits))).collect();
     let mut finals: HashMap<String, (String, Plan)> = HashMap::new();
     if !changed.is_empty() {
         let mut second: Vec<Outcome> = Vec::new();
-        for (k, _) in &first {
-            if !program_paths(&jobs[*k]).iter().any(|p| changed.contains_key(p)) {
+        // The files whose round-two edit is another rule's than NoUnusedImports, with that rule.
+        let mut own: HashMap<String, String> = HashMap::new();
+        for (p, j, outcomes) in first {
+            let d = &mut driven[p];
+            let job = &d.part.jobs[j];
+            if !program_paths(job).iter().any(|x| changed.contains_key(x)) {
+                second.extend(outcomes);
                 continue;
             }
-            let earlier = Earlier { results: &kept, semantic: &semantic_rules };
-            match round((*k, 2), &jobs[*k], &changed, semantic, &mut gen, &mut base, &names, &infos, &setup.display, pool, earlier, None) {
-                Ok(o) => second.extend(o),
+            let k = d.first_job + j;
+            let earlier = Earlier { job: k, results: &d.kept, semantic: &d.semantic_rules };
+            match round((k, 2), job, &changed, d.semantic, &mut gen, &mut base, &d.names, &d.infos, &setup.display, &mut d.pool, earlier, None) {
+                Ok(mut o) => {
+                    record_documents((k, 2), job, &d.part.conf.file, &o, &d.lints);
+                    for x in &o {
+                        let rule = x.plan.edits.iter().flat_map(|(_, _, rules)| rules.iter()).map(|&r| d.names[r as usize].as_str()).find(|n| *n != "NoUnusedImports");
+                        if let Some(rule) = rule {
+                            own.entry(x.doc_path.clone()).or_insert_with(|| rule.to_string());
+                        }
+                    }
+                    d.lints.apply(&mut o);
+                    second.extend(o);
+                }
                 Err(e) => {
                     eprintln!("teq fix: the program does not type after the rules' edits ({}):", rules_of(&by_path, &changed));
                     eprint!("{}", e);
@@ -537,12 +630,11 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mu
         // In the paths' order, so that the file a refusal names is the same in every run.
         let mut second: Vec<(String, Outcome)> = second.into_iter().collect();
         second.sort_by(|a, b| a.0.cmp(&b.0));
-        for (path, o) in second {
-            if let Some(&(_, _, ref rules)) = o.plan.edits.iter().find(|(_, _, rules)| rules.iter().any(|&r| names[r as usize] != "NoUnusedImports")) {
-                let rule = rules.iter().map(|&r| names[r as usize].as_str()).find(|n| *n != "NoUnusedImports").unwrap_or("");
-                eprintln!("{}: the rule {} rewrites its own output: a second run would change the file again", path, rule);
-                return 2;
-            }
+        if let Some((path, rule)) = second.iter().find_map(|(path, _)| own.get(path).map(|r| (path, r))) {
+            eprintln!("{}: the rule {} rewrites its own output: a second run would change the file again", path, rule);
+            return 2;
+        }
+        for (_, o) in second {
             let after = plan::apply(&o.text, &o.plan.edits);
             let lints = shifted(&o.plan.lints, &o.plan.edits);
             finals.insert(o.file.clone(), (after, Plan { edits: Vec::new(), lints, refused: Vec::new() }));
@@ -552,7 +644,8 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mu
             finals.entry(p.clone()).or_insert_with(|| (t.clone(), Plan::default()));
         }
     }
-    // The outcome: per file its final text where it changes, its lints.
+    // The outcome: per file its final text where it changes, its lints: those of the last round at the lines of the
+    // text written, or in check mode, which writes nothing, round one's at the file's own lines (scalafix's `--check`).
     let mut shown: Vec<(String, String, Printed)> = Vec::new();
     let mut writes: Vec<(String, String)> = Vec::new();
     let mut paths: Vec<String> = by_path.keys().cloned().collect();
@@ -564,15 +657,11 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mu
                 if text != o.text {
                     writes.push((o.file.clone(), text.clone()));
                 }
-                (text, p.lints)
+                if setup.check { (o.text.clone(), o.plan.lints) } else { (text, p.lints) }
             }
             None => (o.text.clone(), o.plan.lints),
         };
-        for mut l in lints {
-            match lint_config.severity(&l.id, l.severity) {
-                Some(s) => l.severity = s,
-                None => continue,
-            }
+        for l in lints {
             shown.push((path.clone(), text.clone(), l));
         }
     }
@@ -592,6 +681,30 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mu
         1
     } else {
         0
+    }
+}
+
+/// The record's `doc` line of each document of a job's round, with the job's key and the configuration file, and a
+/// `lint` line of each lint that job gave it, before the jobs' lints of one file are merged (`merge`), so that a
+/// comparison with scalafix, which prints a lint once per task that gave it, can count them.
+fn record_documents((k, r): (usize, u32), job: &Job, conf: &str, outcomes: &[Outcome], lint_config: &LintConfig) {
+    if !RECORD.with(|w| w.borrow().is_some()) {
+        return;
+    }
+    for o in outcomes {
+        let lints: Vec<(&Printed, Severity)> = o.plan.lints.iter().filter_map(|l| lint_config.severity(&l.id, l.severity).map(|s| (l, s))).collect();
+        record(format_args!("doc job={} key={} conf={} round={} lints={} path={}", k, job.key, conf, r, lints.len(), o.doc_path));
+        for (l, severity) in lints {
+            let (line, col, _) = crate::source::locate(&o.text, l.span.start as usize);
+            let severity = match severity {
+                Severity::Info => "info",
+                Severity::Warning => "warning",
+                Severity::Error => "error",
+            };
+            let mut message = String::new();
+            crate::watch::json_string(&l.message, &mut message);
+            record(format_args!("lint job={} round={} line={} col={} start={} end={} severity={} id={} path={} message={}", k, r, line, col, l.span.start, l.span.end, severity, l.id, o.doc_path, message));
+        }
     }
 }
 
@@ -667,15 +780,23 @@ fn shifted(lints: &[Printed], edits: &[(Span, String, Vec<u32>)]) -> Vec<Printed
     out
 }
 
-/// Round one's results per file, and which rules are semantic: in round two a file round one left as it was reads
-/// alike, so that only its semantic rules may answer otherwise (the unused imports of a program another file's edits
-/// changed); the other rules' results there are round one's.
+/// Round one's results per job and file, and which rules are semantic: in round two a file round one left as it was
+/// reads alike, so that only its semantic rules may answer otherwise (the unused imports of a program another file's
+/// edits changed); the other rules' results there are those the same job's round one gave, a rule's state another
+/// job's visit changed no part of them.
 struct Earlier<'a> {
-    results: &'a HashMap<String, Results>,
+    /// The run's number of the job the round types.
+    job: usize,
+    results: &'a HashMap<(usize, String), Results>,
     semantic: &'a [bool],
 }
 
 impl Earlier<'_> {
+    /// The job's round-one results of `file`.
+    fn of(&self, file: &str) -> Option<&Results> {
+        self.results.get(&(self.job, file.to_string()))
+    }
+
     /// Round one's results of the rules that are not semantic, with `later`'s of the semantic ones, each rule's in the
     /// order it made them and the rules in theirs, as one run of every rule over the document gives them.
     fn joined(&self, earlier: &Results, later: Results) -> Results {
@@ -697,10 +818,10 @@ impl Earlier<'_> {
 
 /// A round of `job`: its program typed with `overrides` standing for files, its editable documents handed to the
 /// workers, each document's results planned in the documents' order (`consume`); round one keeps each file's results
-/// in `kept`. `base` numbers the atomic groups as one counter over the whole run would: each document's are numbered
+/// in `kept`, under the job's number. `base` numbers the atomic groups as one counter over the whole run would: each document's are numbered
 /// from 1 on its worker, then offset by the groups of the documents planned before it.
 #[allow(clippy::too_many_arguments)]
-fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, semantic: bool, gen: &mut u32, base: &mut u32, names: &[String], infos: &[RuleInfo], display: &Option<(PathBuf, PathBuf)>, pool: &mut Pool<'_, '_>, earlier: Earlier<'_>, mut kept: Option<&mut HashMap<String, Results>>) -> Result<Vec<Outcome>, String> {
+fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, semantic: bool, gen: &mut u32, base: &mut u32, names: &[String], infos: &[RuleInfo], display: &Option<(PathBuf, PathBuf)>, pool: &mut Pool<'_, '_>, earlier: Earlier<'_>, mut kept: Option<&mut HashMap<(usize, String), Results>>) -> Result<Vec<Outcome>, String> {
     let first_gen = *gen;
     // Every rule worker started is ready before a typing begins: its bootstrap types the rules' program at one worker,
     // which sets the interpreter's process-wide watch (`interp::WATCHING`) a typing of several workers depends on.
@@ -810,7 +931,7 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
             let slot = pending.remove(at).expect("a pending document");
             let w = idle.pop().expect("an idle worker");
             let d = docs[slot].take().expect("a document handed out once");
-            let semantic_only = !overrides.contains_key(&d.file) && earlier.results.contains_key(&d.file);
+            let semantic_only = !overrides.contains_key(&d.file) && earlier.of(&d.file).is_some();
             let asker = Asker { job: k as u32, round: r, slot: slot as u32, gen: d.gen, worker: w as u32 };
             record(format_args!("dispatch slot={} gen={} worker={} at_us={}", slot, d.gen, w, now_us()));
             let first = !std::mem::replace(&mut handed[w], true);
@@ -905,7 +1026,7 @@ fn record_attempts(k: usize, r: u32, attempts: &[Attempt], waited: std::time::Du
 
 /// A document's results planned: its atomic groups numbered after those planned before it, round one's results of a
 /// file round two's semantic rules alone ran over joined with theirs, the trace's line, the plan.
-fn consume(a: Answer, overrides: &HashMap<String, String>, earlier: &Earlier<'_>, names: &[String], base: &mut u32, kept: Option<&mut HashMap<String, Results>>) -> Outcome {
+fn consume(a: Answer, overrides: &HashMap<String, String>, earlier: &Earlier<'_>, names: &[String], base: &mut u32, kept: Option<&mut HashMap<(usize, String), Results>>) -> Outcome {
     let Answer { mut results, view, groups, .. } = a;
     let offset = |g: &mut u32| {
         if *g != 0 {
@@ -925,7 +1046,7 @@ fn consume(a: Answer, overrides: &HashMap<String, String>, earlier: &Earlier<'_>
     }
     *base += groups;
     let (file, path, text) = (view.file.clone(), view.path.clone(), view.text.clone());
-    let before = if overrides.contains_key(&file) { None } else { earlier.results.get(&file) };
+    let before = if overrides.contains_key(&file) { None } else { earlier.of(&file) };
     let results = match before {
         Some(b) => earlier.joined(b, results),
         None => results,
@@ -940,7 +1061,7 @@ fn consume(a: Answer, overrides: &HashMap<String, String>, earlier: &Earlier<'_>
     let p = plan::plan(&view, &results, names);
     timed(3, planning);
     if let Some(k) = kept {
-        k.insert(file.clone(), results);
+        k.insert((earlier.job, file.clone()), results);
     }
     Outcome { file, doc_path: path, text, plan: p }
 }
@@ -1310,9 +1431,7 @@ fn documents_of(typer: &mut crate::typer::Typer<'_>, sources: &crate::source::So
         // The file's entries: its own and its package blocks', which an expansion's site and a diagnostic name.
         let entries: Vec<usize> = std::iter::once(i).chain(blocks_of.get(i).into_iter().flatten().copied()).collect();
         let ours = |f: FileId| entries.contains(&(f.0 as usize));
-        let file_asts: Vec<&crate::ast::Ast> = entries.iter().map(|&b| &asts[b]).collect();
-        let first = file_asts[0];
-        let Some(kept) = first.notes.source.as_deref() else { continue };
+        let Some(kept) = asts[i].notes.source.as_deref() else { continue };
         // A script's document is its own text: its tokens and nodes inside it, those of the wrapper left out.
         let script = written.get(&f.path);
         let text: &str = script.map_or(&f.text, String::as_str);
@@ -1321,14 +1440,17 @@ fn documents_of(typer: &mut crate::typer::Typer<'_>, sources: &crate::source::So
             end_markers: kept.end_markers.iter().filter(|m| m.end as usize <= s.len()).copied().collect(),
         });
         let tokens = super::source::editable(text, own.as_ref().unwrap_or(kept)).map_err(|at| format!("teq fix: {}: the source the parser kept misses the byte at {}\n", f.path, at))?;
-        let mut tree = nodes::build(&f.text, &file_asts, kept, typer.interner);
-        if let Some(s) = script {
-            tree = tree.within(s.len() as u32);
-        }
+        // The tree is scalameta's parse of the document's text, a script's alone under the dialect with top-level
+        // terms (scalafix's `ScalafixConfig.dialectForFile`); a program it refuses is refused as scalafix refuses it.
+        let dialect = if script.is_some() { super::parse::Dialect::SCALA3.with_allow_toplevel_terms() } else { super::parse::Dialect::SCALA3 };
+        let tree = match super::parse::parse(text, &tokens, dialect) {
+            Ok(t) => t,
+            Err(super::parse::Stop::Refused(at, message)) => return Err(refusal(&shown_path(display, &f.path), text, at, &message)),
+            Err(super::parse::Stop::NotYet(production)) => return Err(format!("teq fix: {}: scalameta's `{}` is not ported\n", f.path, production)),
+        };
         if std::env::var_os("TEQ_FIX_TREE").is_some() {
             eprint!("{}:\n{}", f.path, tree.show(text));
         }
-        let (imports, importee_of) = imports_of(&file_asts, &tree);
         let unused = if !semantic {
             Err("no semantic rule is configured, so the run reads no unused imports".to_string())
         } else if withheld {
@@ -1336,7 +1458,7 @@ fn documents_of(typer: &mut crate::typer::Typer<'_>, sources: &crate::source::So
         } else {
             let mut nodes_of = Vec::new();
             for d in typer.diags.items.iter().filter(|d| ours(d.file) && d.unnecessary && d.msg == "unused import") {
-                match tree.nodes.iter().position(|n| n.span == d.span && is_importee(n.kind)) {
+                match tree.nodes.iter().position(|n| n.span == d.span && nodes::is_importee(n.kind)) {
                     Some(n) => nodes_of.push(n as u32),
                     None => return Err(format!("teq fix: {}: an unused import at {:?} is no importee of the file's tree\n", f.path, d.span)),
                 }
@@ -1366,8 +1488,6 @@ fn documents_of(typer: &mut crate::typer::Typer<'_>, sources: &crate::source::So
             tree,
             unused,
             expanded: expanded.iter().any(|&e| ours(e)),
-            imports,
-            importee_of,
         });
     }
     Ok(out)
@@ -1380,29 +1500,11 @@ fn semanticdb_dump() -> Option<PathBuf> {
     std::env::var_os("TEQ_FIX_SEMANTICDB").map(PathBuf::from)
 }
 
-fn is_importee(k: K) -> bool {
-    matches!(k, K::ImporteeName | K::ImporteeRename | K::ImporteeUnimport | K::ImporteeWildcard | K::ImporteeGiven | K::ImporteeGivenAll)
-}
-
-/// The file's import selectors in source order, each once (a package block's AST copies its file's), and each
-/// importee node's selector.
-fn imports_of(asts: &[&crate::ast::Ast], tree: &nodes::Tree) -> (Vec<crate::ast::Import>, Vec<(u32, usize)>) {
-    let mut sels: Vec<crate::ast::Import> = Vec::new();
-    for a in asts {
-        for s in a.imports.iter().chain(&a.local_imports).chain(&a.language_imports) {
-            if !sels.iter().any(|x| x.span == s.span && x.selector_span == s.selector_span) {
-                sels.push(s.clone());
-            }
-        }
-    }
-    sels.sort_by_key(|s| (s.span.start, s.selector_span.start));
-    let mut of = Vec::new();
-    for (k, s) in sels.iter().enumerate() {
-        if let Some(n) = tree.nodes.iter().position(|n| n.span == s.selector_span && is_importee(n.kind)) {
-            of.push((n as u32, k));
-        }
-    }
-    (sels, of)
+/// A document scalameta's parser refuses, as the compiler prints an error: its place, the message, the line and a caret.
+fn refusal(path: &str, text: &str, at: u32, message: &str) -> String {
+    let files = [SourceFile { path: path.to_string(), text: text.to_string(), is_std: false, key: path.to_string() }];
+    let d = crate::source::Diagnostic::plain(FileId(0), Span::new(at, at), message.to_string(), false, false);
+    crate::source::render_shown(&[crate::source::Shown { d: std::borrow::Cow::Owned(d), level: crate::source::Level::Error, order: 0 }], &files, &[])
 }
 
 /// The lints as the compiler prints its diagnostics (`source::render_shown`): `<file>:<line>:<col>: <severity>:
@@ -1532,6 +1634,19 @@ impl LintConfig {
     }
 
     /// The severity of a lint of `id`, its own unless configured; none for an ignored one.
+    /// The outcomes' lints at the severity the configuration gives each, those it ignores dropped.
+    fn apply(&self, outcomes: &mut [Outcome]) {
+        for o in outcomes {
+            o.plan.lints = std::mem::take(&mut o.plan.lints)
+                .into_iter()
+                .filter_map(|mut l| {
+                    l.severity = self.severity(&l.id, l.severity)?;
+                    Some(l)
+                })
+                .collect();
+        }
+    }
+
     fn severity(&self, id: &str, own: Severity) -> Option<Severity> {
         if self.ignore.as_ref().is_some_and(|f| f.matches(id)) {
             return None;
@@ -1578,15 +1693,17 @@ fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc:
     }
     let booting = std::time::Instant::now();
     let since = |t: std::time::Instant| t.elapsed().as_micros() as u64;
-    let Boot { conf, config_dir, requested } = boot;
+    let Boot { conf, config_dir, requested, sources } = boot;
     host::install(Host { doc: None, results: Results::default(), conf: conf.clone(), read: vec![false; conf.nodes.len()], groups: 0, asker: None, sem: None, queries: 0 });
-    let sources: Vec<(String, PathBuf)> = requested.iter().filter_map(|r| r.strip_prefix("file:").map(|p| (r.clone(), config_dir.join(p)))).collect();
+    let sources: Vec<(String, PathBuf)> = sources.iter().filter_map(|r| r.strip_prefix("file:").map(|p| (r.clone(), config_dir.join(p)))).collect();
     let mut files: Vec<PathBuf> = Vec::new();
     for (_, p) in &sources {
         files.extend(scala_files(p));
     }
-    // A path of the worker's own: another worker removes its directory while this one may still read its entry.
-    let temp = std::env::temp_dir().join(format!("teq-fix-{}-{}", std::process::id(), worker));
+    // A path of the worker's own, a part's worker beside another's: another worker removes its directory while this
+    // one may still read its entry.
+    static STARTED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let temp = std::env::temp_dir().join(format!("teq-fix-{}-{}", std::process::id(), STARTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
     let entry = temp.join("entry.scala");
     if let Err(e) = std::fs::create_dir_all(&temp).and_then(|_| std::fs::write(&entry, ENTRY)) {
         let _ = tx.send(FromRules::Ready(worker, Err(format!("teq fix: cannot write {}: {}", entry.display(), e)), since(booting)));
@@ -1684,26 +1801,7 @@ fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc:
             let name = interp.call_method(module.clone(), syms[1], vec![r.clone()]).map_err(|f| failure(&mut interp, f))?;
             available.push((interp.describe_value(&name), Some(path.clone()), r));
         }
-        // The rules asked for, in the configuration's order: a name, or every rule of a `file:` source.
-        let mut chosen: Vec<(String, crate::interp::Value, bool)> = Vec::new();
-        let mut unknown: Vec<String> = Vec::new();
-        for req in &requested {
-            if let Some(p) = req.strip_prefix("file:") {
-                let dir = config_dir.join(p);
-                let of_file: Vec<&(String, Option<String>, crate::interp::Value)> = available.iter().filter(|(_, f, _)| f.as_ref().is_some_and(|f| Path::new(f).starts_with(&dir) || Path::new(f) == dir)).collect();
-                if of_file.is_empty() {
-                    unknown.push(req.clone());
-                }
-                for (n, _, v) in of_file {
-                    chosen.push((n.clone(), v.clone(), false));
-                }
-            } else {
-                match available.iter().find(|(n, _, _)| n == req) {
-                    Some((n, f, v)) => chosen.push((n.clone(), v.clone(), f.is_none())),
-                    None => unknown.push(req.clone()),
-                }
-            }
-        }
+        let (chosen, unknown) = choose(&available, &requested, &config_dir);
         if !unknown.is_empty() {
             let known: Vec<&str> = available.iter().map(|(n, _, _)| n.as_str()).collect();
             return Err(format!("teq fix: unknown rule{} {} (the rules: {})", if unknown.len() == 1 { "" } else { "s" }, unknown.join(", "), known.join(", ")));
@@ -1823,11 +1921,7 @@ fn unread_settings(h: &Host, infos: &[RuleInfo]) -> Vec<String> {
     // The sections the configured rules read: each one's by its name, and any other a rule's decoding read (an alias,
     // `disableSyntax`); a section no configured rule reads is ignored, as scalafix ignores it.
     if let Value::Obj(fields) = &h.conf.nodes[0].value {
-        for (i, (k, v)) in fields.iter().enumerate() {
-            // A key's last occurrence is its value (`Conf::field`).
-            if fields[i + 1..].iter().any(|(later, _)| later == k) {
-                continue;
-            }
+        for (k, v) in fields {
             let configured = infos.iter().any(|r| r.name == *k);
             if configured || h.read.get(*v as usize).copied().unwrap_or(false) {
                 walk(h, *v, k, &mut out);

@@ -197,6 +197,18 @@ pub struct Configuration {
     /// the key of the jar the classpath holds in its place (`evictions`, none when absent): what a
     /// script's `//> using dep` of the version asked resolves to (`scriptdeps.rs`).
     pub evictions: BTreeMap<String, String>,
+    /// sbt-scalafix's view of the configuration (`scalafix`, absent where the build does not use it): the configuration
+    /// file it resolves there (`scalafixConfig`) and whether it skips the configuration (`scalafix / skip`, or a project
+    /// without the plugin), which `teq fix` follows.
+    pub scalafix: Option<Scalafix>,
+}
+
+/// A configuration's `scalafix` record.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Scalafix {
+    /// The configuration file, relative to the build's root; the root's `.scalafix.conf` where absent.
+    pub config: Option<String>,
+    pub skip: bool,
 }
 
 impl Configuration {
@@ -1694,6 +1706,7 @@ fn configuration(value: &Value) -> Result<Configuration, Refusal> {
         transitive: value.get("transitive").and_then(Value::bool) != Some(false),
         runtime_classpath,
         evictions: string_map(value.get("evictions")),
+        scalafix: value.get("scalafix").map(|s| Scalafix { config: s.get("config").and_then(Value::str).map(str::to_string), skip: s.get("skip").and_then(Value::bool) == Some(true) }),
     })
 }
 

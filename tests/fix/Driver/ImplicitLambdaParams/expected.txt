@@ -1,0 +1,9 @@
+Driver/ImplicitLambdaParams/input.scala:7:29: warning: [ImplicitParams.clause]: `implicit x` mod implicit: `implicit x` mods implicit
+    val block: Int => Int = { implicit x => x } // assert: ImplicitParams.clause
+                              ^^^^^^^^^^
+Driver/ImplicitLambdaParams/input.scala:8:26: warning: [ImplicitParams.clause]: `implicit y` mod implicit: `implicit y` mods implicit
+    val expr: Int => Int = implicit y => y // assert: ImplicitParams.clause
+                           ^^^^^^^^^^
+Driver/ImplicitLambdaParams/input.scala:9:13: warning: [ImplicitParams.clause]: `(implicit z: Int)` mod implicit: `z: Int` mods implicit
+    def method(implicit z: Int): Int = z // assert: ImplicitParams.clause
+              ^^^^^^^^^^^^^^^^^

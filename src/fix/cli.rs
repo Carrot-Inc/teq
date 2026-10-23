@@ -1,7 +1,7 @@
 //! The command lines of `teq compiler fix` and `teq fix` (docs/CLI.md).
 
 use super::config::{self, Conf};
-use super::engine::{self, Job, Setup};
+use super::engine::{self, Job, Part, Setup};
 use std::path::{Path, PathBuf};
 
 /// `teq fix`'s own flags out of `args`.
@@ -69,8 +69,7 @@ pub fn configuration(named: Option<&str>, dir: &Path) -> Result<(Conf, PathBuf),
             p
         }
     };
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {}", path.display(), e))?;
-    let conf = config::parse(&path.to_string_lossy(), &text)?;
+    let conf = config::load(&path)?;
     let base = path.parent().map(Path::to_path_buf).filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| PathBuf::from("."));
     // Absolute, so that a `file:` entry resolves beside the configuration after `teq fix` works from the build's root.
     let base = std::path::absolute(&base).unwrap_or(base);
@@ -104,7 +103,8 @@ pub fn compiler_fix(args: &[String]) -> ! {
         }
     };
     rest.extend(flags.threads_args());
-    let code = engine::run(Setup { conf, config_dir, rules: flags.rules, check: flags.check, display: None }, vec![Job { args: rest, roots: None, files: None, generated: Vec::new() }]);
+    let job = Job { key: "compiler".to_string(), args: rest, roots: None, files: None, generated: Vec::new() };
+    let code = engine::run(Setup { rules: flags.rules, check: flags.check, display: None }, vec![Part { conf, config_dir, jobs: vec![job] }]);
     std::process::exit(code)
 }
 

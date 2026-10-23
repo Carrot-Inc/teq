@@ -1,0 +1,69 @@
+Nodes/Pat.Repeated/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pat.Repeated, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pat_Repeated\n\nobject Pat_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case List(first, rest*) => rest\n    case _ => Nil\n"
+  stats Pkg syntax="package nodes.Pat_Repeated\n\nobject Pat_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case List(first, rest*) => rest\n    case _ => Nil"
+    .stats = [Defn.Object "object Pat_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case List(first, rest*) => rest\n    case _ => Nil"]
+    ref Term.Select syntax="nodes.Pat_Repeated"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pat_Repeated" syntax="Pat_Repeated"
+    body Pkg.Body syntax="object Pat_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case List(first, rest*) => rest\n    case _ => Nil"
+      stats Defn.Object syntax="object Pat_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case List(first, rest*) => rest\n    case _ => Nil"
+        mods Nil
+        name Term.Name value="Pat_Repeated" syntax="Pat_Repeated"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case List(first, rest*) => rest\n    case _ => Nil"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(x: List[Int]) = x match\n    case List(first, rest*) => rest\n    case _ => Nil"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case List(first, rest*) => rest\n    case _ => Nil"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(x: List[Int]) = x match\n    case List(first, rest*) => rest\n    case _ => Nil"
+              .paramClauses = [Term.ParamClause "(x: List[Int])"]
+              .paramss = [[Term.Param "x: List[Int]"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: List[Int])"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: List[Int])"
+                  values Term.Param syntax="x: List[Int]"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Apply syntax="List[Int]"
+                      .args = [Type.Name "Int"]
+                      tpe Type.Name value="List" syntax="List"
+                      argClause Type.ArgClause syntax="[Int]"
+                        values Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Match syntax="x match\n    case List(first, rest*) => rest\n    case _ => Nil"
+                .cases = [Case "case List(first, rest*) => rest", Case "case _ => Nil"]
+                expr Term.Name value="x" syntax="x"
+                casesBlock Term.CasesBlock syntax="case List(first, rest*) => rest\n    case _ => Nil"
+                  cases Case syntax="case List(first, rest*) => rest"
+                    pat Pat.Extract syntax="List(first, rest*)"
+                      .args = [Pat.Var "first", Pat.Repeated "rest*"]
+                      fun Term.Name value="List" syntax="List"
+                      argClause Pat.ArgClause syntax="(first, rest*)"
+                        values Pat.Var syntax="first"
+                          name Term.Name value="first" syntax="first"
+                        values Pat.Repeated syntax="rest*"
+                          name Term.Name value="rest" syntax="rest"
+                    cond None
+                    body Term.Name value="rest" syntax="rest"
+                  cases Case syntax="case _ => Nil"
+                    pat Pat.Wildcard syntax="_"
+                    cond None
+                    body Term.Name value="Nil" syntax="Nil"
+                mods Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

@@ -1,0 +1,91 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pat.Macro, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pat_Macro\nimport scala.quoted.*\n\nobject Pat_Macro:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = e match\n    case '{ ($x: Int) + 1 } => x\n    case _ => e\n"
+  stats Pkg syntax="package nodes.Pat_Macro\nimport scala.quoted.*\n\nobject Pat_Macro:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = e match\n    case '{ ($x: Int) + 1 } => x\n    case _ => e"
+    .stats = [Import "import scala.quoted.*", Defn.Object "object Pat_Macro:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = e match\n    case '{ ($x: Int) + 1 } => x\n    case _ => e"]
+    ref Term.Select syntax="nodes.Pat_Macro"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pat_Macro" syntax="Pat_Macro"
+    body Pkg.Body syntax="import scala.quoted.*\n\nobject Pat_Macro:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = e match\n    case '{ ($x: Int) + 1 } => x\n    case _ => e"
+      stats Import syntax="import scala.quoted.*"
+        importers Importer syntax="scala.quoted.*"
+          ref Term.Select syntax="scala.quoted"
+            qual Term.Name value="scala" syntax="scala"
+            name Term.Name value="quoted" syntax="quoted"
+          importees Importee.Wildcard syntax="*"
+      stats Defn.Object syntax="object Pat_Macro:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = e match\n    case '{ ($x: Int) + 1 } => x\n    case _ => e"
+        mods Nil
+        name Term.Name value="Pat_Macro" syntax="Pat_Macro"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = e match\n    case '{ ($x: Int) + 1 } => x\n    case _ => e"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(e: Expr[Int])(using Quotes): Expr[Int] = e match\n    case '{ ($x: Int) + 1 } => x\n    case _ => e"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = e match\n    case '{ ($x: Int) + 1 } => x\n    case _ => e"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(e: Expr[Int])(using Quotes): Expr[Int] = e match\n    case '{ ($x: Int) + 1 } => x\n    case _ => e"
+              .paramClauses = [Term.ParamClause "(e: Expr[Int])", Term.ParamClause "(using Quotes)"]
+              .paramss = [[Term.Param "e: Expr[Int]"], [Term.Param "Quotes"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(e: Expr[Int])(using Quotes)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(e: Expr[Int])"
+                  values Term.Param syntax="e: Expr[Int]"
+                    mods Nil
+                    name Term.Name value="e" syntax="e"
+                    decltpe Type.Apply syntax="Expr[Int]"
+                      .args = [Type.Name "Int"]
+                      tpe Type.Name value="Expr" syntax="Expr"
+                      argClause Type.ArgClause syntax="[Int]"
+                        values Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+                paramClauses Term.ParamClause syntax="(using Quotes)"
+                  values Term.Param syntax="Quotes"
+                    mods Mod.Using syntax="using"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    decltpe Type.Name value="Quotes" syntax="Quotes"
+                    default None
+                  mod Mod.Using syntax="using"
+              decltpe Type.Apply syntax="Expr[Int]"
+                .args = [Type.Name "Int"]
+                tpe Type.Name value="Expr" syntax="Expr"
+                argClause Type.ArgClause syntax="[Int]"
+                  values Type.Name value="Int" syntax="Int"
+              body Term.Match syntax="e match\n    case '{ ($x: Int) + 1 } => x\n    case _ => e"
+                .cases = [Case "case '{ ($x: Int) + 1 } => x", Case "case _ => e"]
+                expr Term.Name value="e" syntax="e"
+                casesBlock Term.CasesBlock syntax="case '{ ($x: Int) + 1 } => x\n    case _ => e"
+                  cases Case syntax="case '{ ($x: Int) + 1 } => x"
+                    pat Pat.Macro syntax="'{ ($x: Int) + 1 }"
+                      body Term.QuotedMacroExpr syntax="'{ ($x: Int) + 1 }"
+                        body Term.Block syntax="{ ($x: Int) + 1 }"
+                          stats Term.ApplyInfix syntax="($x: Int) + 1"
+                            .args = [Lit.Int "1"]
+                            .targs = []
+                            lhs Term.Ascribe syntax="$x: Int"
+                              expr Term.SplicedMacroExpr syntax="$x"
+                                body Term.Name value="x" syntax="$x"
+                              tpe Type.Name value="Int" syntax="Int"
+                            op Term.Name value="+" syntax="+"
+                            targClause Type.ArgClause syntax=""
+                              values Nil
+                            argClause Term.ArgClause syntax="1"
+                              values Lit.Int value=1 syntax="1"
+                              mod None
+                    cond None
+                    body Term.Name value="x" syntax="x"
+                  cases Case syntax="case _ => e"
+                    pat Pat.Wildcard syntax="_"
+                    cond None
+                    body Term.Name value="e" syntax="e"
+                mods Nil
+          derives Nil

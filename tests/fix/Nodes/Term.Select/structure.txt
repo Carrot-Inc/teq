@@ -1,0 +1,49 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Select, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Select\n\nobject Term_Select:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = scala.math.Pi\n  val b = List(1).head.toString\n"
+  stats Pkg syntax="package nodes.Term_Select\n\nobject Term_Select:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = scala.math.Pi\n  val b = List(1).head.toString"
+    .stats = [Defn.Object "object Term_Select:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = scala.math.Pi\n  val b = List(1).head.toString"]
+    ref Term.Select syntax="nodes.Term_Select"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Select" syntax="Term_Select"
+    body Pkg.Body syntax="object Term_Select:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = scala.math.Pi\n  val b = List(1).head.toString"
+      stats Defn.Object syntax="object Term_Select:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = scala.math.Pi\n  val b = List(1).head.toString"
+        mods Nil
+        name Term.Name value="Term_Select" syntax="Term_Select"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = scala.math.Pi\n  val b = List(1).head.toString"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = scala.math.Pi", Defn.Val "val b = List(1).head.toString"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = scala.math.Pi\n  val b = List(1).head.toString"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = scala.math.Pi"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.Select syntax="scala.math.Pi"
+                qual Term.Select syntax="scala.math"
+                  qual Term.Name value="scala" syntax="scala"
+                  name Term.Name value="math" syntax="math"
+                name Term.Name value="Pi" syntax="Pi"
+            stats Defn.Val syntax="val b = List(1).head.toString"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Term.Select syntax="List(1).head.toString"
+                qual Term.Select syntax="List(1).head"
+                  qual Term.Apply syntax="List(1)"
+                    .args = [Lit.Int "1"]
+                    fun Term.Name value="List" syntax="List"
+                    argClause Term.ArgClause syntax="(1)"
+                      values Lit.Int value=1 syntax="1"
+                      mod None
+                  name Term.Name value="head" syntax="head"
+                name Term.Name value="toString" syntax="toString"
+          derives Nil

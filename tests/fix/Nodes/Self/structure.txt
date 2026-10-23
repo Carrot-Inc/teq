@@ -1,0 +1,111 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Self, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Self\n\nobject Self:\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  trait S:\n    self: A =>\n  trait T:\n    this: A =>\n  trait V:\n    self =>\n"
+  stats Pkg syntax="package nodes.Self\n\nobject Self:\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  trait S:\n    self: A =>\n  trait T:\n    this: A =>\n  trait V:\n    self =>"
+    .stats = [Defn.Object "object Self:\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  trait S:\n    self: A =>\n  trait T:\n    this: A =>\n  trait V:\n    self =>"]
+    ref Term.Select syntax="nodes.Self"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Self" syntax="Self"
+    body Pkg.Body syntax="object Self:\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  trait S:\n    self: A =>\n  trait T:\n    this: A =>\n  trait V:\n    self =>"
+      stats Defn.Object syntax="object Self:\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  trait S:\n    self: A =>\n  trait T:\n    this: A =>\n  trait V:\n    self =>"
+        mods Nil
+        name Term.Name value="Self" syntax="Self"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  trait S:\n    self: A =>\n  trait T:\n    this: A =>\n  trait V:\n    self =>"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Trait "trait A", Defn.Trait "trait S:\n    self: A =>", Defn.Trait "trait T:\n    this: A =>", Defn.Trait "trait V:\n    self =>"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  trait A\n  trait S:\n    self: A =>\n  trait T:\n    this: A =>\n  trait V:\n    self =>"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Trait syntax="trait A"
+              .tparams = []
+              mods Nil
+              name Type.Name value="A" syntax="A"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Trait syntax="trait S:\n    self: A =>"
+              .tparams = []
+              mods Nil
+              name Type.Name value="S" syntax="S"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    self: A =>"
+                .self = Self "self: A =>"
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    self: A =>"
+                  selfOpt Self syntax="self: A =>"
+                    name Term.Name value="self" syntax="self"
+                    decltpe Type.Name value="A" syntax="A"
+                  stats Nil
+                derives Nil
+            stats Defn.Trait syntax="trait T:\n    this: A =>"
+              .tparams = []
+              mods Nil
+              name Type.Name value="T" syntax="T"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    this: A =>"
+                .self = Self "this: A =>"
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    this: A =>"
+                  selfOpt Self syntax="this: A =>"
+                    name Name.This syntax="this"
+                      .value = "this"
+                    decltpe Type.Name value="A" syntax="A"
+                  stats Nil
+                derives Nil
+            stats Defn.Trait syntax="trait V:\n    self =>"
+              .tparams = []
+              mods Nil
+              name Type.Name value="V" syntax="V"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    self =>"
+                .self = Self "self =>"
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    self =>"
+                  selfOpt Self syntax="self =>"
+                    name Term.Name value="self" syntax="self"
+                    decltpe None
+                  stats Nil
+                derives Nil
+          derives Nil

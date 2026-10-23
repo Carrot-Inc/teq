@@ -7613,7 +7613,7 @@ impl<'a> Worker<'a> {
         // `Parens`, no `Tuple`, and the filter's lambda (`makePatFilter`) has two cases: neither is converted. Each
         // element's type is `protoFormal`'s, fully defined (`solve_if_var`).
         let untupled: Option<Vec<TypeId>> = match binder {
-            ForBinder::Pat(p) | ForBinder::CasePat(p) | ForBinder::Always(p) if ptys.len() > 1 && !matches!(rest, ForRest::Filter) && !self.cur_ast().paren_pats.contains(&p) => match self.cur_ast().pat(p) {
+            ForBinder::Pat(p) | ForBinder::CasePat(p) | ForBinder::Always(p) if ptys.len() > 1 && !matches!(rest, ForRest::Filter) && !self.cur_ast().is_paren_pat(p) => match self.cur_ast().pat(p) {
                 Pat::Tuple(elems) if elems.len as usize == ptys.len() => Some(ptys.iter().map(|&t| self.solve_if_var(t)).collect()),
                 _ => None,
             },
@@ -7626,7 +7626,7 @@ impl<'a> Worker<'a> {
             ForBinder::Pat(p) | ForBinder::CasePat(p) | ForBinder::Always(p) => match self.cur_ast().pat(p) {
                 Pat::Tuple(elems) => {
                     let ast = self.cur_ast();
-                    ast.pat_list(elems).iter().all(|&e| super::expr::is_id_pattern(ast, e) || (matches!(ast.pat(e), Pat::Wildcard) && !ast.paren_pats.contains(&e)))
+                    ast.pat_list(elems).iter().all(|&e| super::expr::is_id_pattern(ast, e) || (matches!(ast.pat(e), Pat::Wildcard) && !ast.is_paren_pat(e)))
                 }
                 _ => false,
             },
@@ -7864,10 +7864,10 @@ impl<'a> Worker<'a> {
             on_selector(ast, pat, &mut out);
         }
         if let Pat::Tuple(elems) = ast.pat(pat) {
-            if elems.len > 22 && !ast.paren_pats.contains(&pat) { // dotty's MaxImplementedFunctionArity
+            if elems.len > 22 && !ast.is_paren_pat(pat) { // dotty's MaxImplementedFunctionArity
                 for &e in ast.pat_list(elems) {
                     if let Pat::Bind(_, Some(t)) = ast.pat(e) {
-                        if matches!(ast.pat(t), Pat::Typed(..)) && !ast.paren_pats.contains(&t) {
+                        if matches!(ast.pat(t), Pat::Typed(..)) && !ast.is_paren_pat(t) {
                             out.push(t);
                         }
                     }

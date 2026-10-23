@@ -120,6 +120,9 @@ pub struct Parser<'a> {
     package_blocks: Vec<Ast>,
     /// Set while a parent or the type after `new` is parsed, where braces start a class body.
     template_type: bool,
+    /// Set while a self alias's type is parsed (`self: T =>`), whose `=>` ends it: there a type in parentheses is the
+    /// type (dotty's `selfType` reads an `infixType`, where `(T)` is `Parens`), never a function's parameters.
+    in_self_type: bool,
     /// How many quotes enclose the expression being parsed, less the splices inside them; an
     /// identifier `$x` is a splice where this is positive.
     quote_level: u32,
@@ -238,6 +241,7 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         pending_defaults: Vec::new(),
         package_blocks: Vec::new(),
         template_type: false,
+        in_self_type: false,
         quote_level: 0,
         quote_pattern: false,
         in_match_pattern: false,
@@ -1239,10 +1243,18 @@ impl<'a> Parser<'a> {
         if !(self.at(Tok::ColonEol) && self.kind_at(1) == Tok::Indent) {
             return false;
         }
+        let body_start = self.span().start;
         self.bump();
         self.bump();
         self.statements(RecoverySite::TopLevel, |p| p.parse_top_stmt());
+        let last = self.prev_span().end;
         self.end_region();
+        if self.syntax.keep {
+            // A brace's region ends at its `}`, an indented one at its last statement.
+            let close = self.prev_span();
+            let end = if close.end > close.start && close.start >= last { close.end } else { last };
+            self.ast.notes.package_body = Some(Span::new(body_start, end));
+        }
         true
     }
 
@@ -1291,10 +1303,14 @@ impl<'a> Parser<'a> {
     /// as a package block. Its parents are those of an `object package` in that block, whose
     /// members the lookups of the package fall back to.
     fn parse_package_object(&mut self) {
+        let start = self.span().start;
         self.bump();
         self.bump();
         let (name, span) = self.expect_ident();
         let outer = self.open_package_block();
+        if self.syntax.keep {
+            self.ast.notes.package_object = Some((start, span));
+        }
         self.ast.package.push(name);
         self.ast.package_clauses.push(self.ast.package.len() as u32);
         let parents = self.parse_parents();
@@ -1751,16 +1767,34 @@ fn low_surrogate_escape(chars: &mut std::iter::Peekable<std::str::Chars>) -> Opt
     Some(low)
 }
 
-pub fn unescape(s: &str, interpolated: bool, errors: &mut Vec<(Span, String)>, at: Span) -> String {
-    if !s.contains('\\') && !(interpolated && s.contains("$$")) {
+/// An interpolation part's `$$` and `$"`, the character after the `$` (dotty's `getStringPart`), in a raw one too.
+pub fn dollar_escapes(s: &str) -> String {
+    if !s.contains('$') {
         return s.to_string();
     }
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
-        if c == '$' && interpolated && chars.peek() == Some(&'$') {
-            chars.next();
-            out.push('$');
+        match (c, chars.peek()) {
+            ('$', Some(&next)) if next == '$' || next == '"' => {
+                out.push(next);
+                chars.next();
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+pub fn unescape(s: &str, interpolated: bool, errors: &mut Vec<(Span, String)>, at: Span) -> String {
+    if !s.contains('\\') && !(interpolated && (s.contains("$$") || s.contains("$\""))) {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '$' && interpolated && matches!(chars.peek(), Some(&'$') | Some(&'"')) {
+            out.push(chars.next().unwrap_or('$'));
         } else if c == '\\' {
             match chars.next() {
                 Some('n') => out.push('\n'),

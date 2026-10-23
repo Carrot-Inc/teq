@@ -1,0 +1,386 @@
+# The programs of scalameta 4.17.4's ErasedDefsSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 269 line 23 Stat dialects.Scala3 :: class with erased params
+object W269 {
+class ClassWithErasedEv(erased ev: Ev, x: Int) {}
+}
+#!scalac refuses: ':' expected, but identifier found
+#!regions L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Class 14 63
+          Type.Name 20 37
+          Type.ParamClause 37 37
+          Ctor.Primary 37 60
+            Name.Anonymous 37 37
+            Term.ParamClause 37 60
+              Term.Param 38 51
+                Mod.Erased 38 44
+                Term.Name 45 47
+                Type.Name 49 51
+              Term.Param 53 59
+                Term.Name 53 54
+                Type.Name 56 59
+          Template 61 63
+            Template.Body 61 63
+#!program 270 line 28 Stat dialects.Scala3 :: def with erased params
+object W270 {
+def methodWithErasedEv(erased ev: Ev, x: Int): Int = x + 2
+}
+#!scalac refuses: ':' expected, but identifier found
+#!regions L72/
+#!layout
+Source 0 75
+  Defn.Object 0 74
+    Term.Name 7 11
+    Template 12 74
+      Template.Body 12 74
+        Defn.Def 14 72
+          Term.Name 18 36
+          Member.ParamClauseGroup 36 59
+            Type.ParamClause 36 36
+            Term.ParamClause 36 59
+              Term.Param 37 50
+                Mod.Erased 37 43
+                Term.Name 44 46
+                Type.Name 48 50
+              Term.Param 52 58
+                Term.Name 52 53
+                Type.Name 55 58
+          Type.Name 61 64
+          Term.ApplyInfix 67 72
+            Term.Name 67 68
+            Term.Name 69 70
+            Type.ArgClause 71 71
+            Term.ArgClause 71 72
+              Lit.Int 71 72
+#!program 271 line 40 Stat dialects.Scala3 :: val with erased lambda
+object W271 {
+val lambdaWithErasedEv: (erased Ev, Int) => Int = (erased ev, x) => x + 2
+}
+#!scalac refuses: ')' expected, but identifier found
+#!regions L87/
+#!layout
+Source 0 90
+  Defn.Object 0 89
+    Term.Name 7 11
+    Template 12 89
+      Template.Body 12 89
+        Defn.Val 14 87
+          Pat.Var 18 36
+            Term.Name 18 36
+          Type.Function 38 61
+            Type.FuncParamClause 38 54
+              Type.FunctionArg 39 48
+                Mod.Erased 39 45
+                Type.Name 46 48
+              Type.Name 50 53
+            Type.Name 58 61
+          Term.Function 64 87
+            Term.ParamClause 64 78
+              Term.Param 65 74
+                Mod.Erased 65 71
+                Term.Name 72 74
+              Term.Param 76 77
+                Term.Name 76 77
+            Term.ApplyInfix 82 87
+              Term.Name 82 83
+              Term.Name 84 85
+              Type.ArgClause 86 86
+              Term.ArgClause 86 87
+                Lit.Int 86 87
+#!program 272 line 50 Stat dialects.Scala3 :: erased val
+object W272 {
+erased val erasedEvidence: Ev = null
+}
+#!scalac refuses: end of statement expected but 'val' found
+#!regions L50/
+#!layout
+Source 0 53
+  Defn.Object 0 52
+    Term.Name 7 11
+    Template 12 52
+      Template.Body 12 52
+        Defn.Val 14 50
+          Mod.Erased 14 20
+          Pat.Var 25 39
+            Term.Name 25 39
+          Type.Name 41 43
+          Lit.Null 46 50
+#!program 273 line 57 Stat dialects.Scala3 :: def with only one erased param
+object W273 {
+def methodWithErasedEv(x: Int, erased ev: Ev): Int = ???
+}
+#!scalac refuses: ':' expected, but identifier found
+#!regions L70/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Defn.Def 14 70
+          Term.Name 18 36
+          Member.ParamClauseGroup 36 59
+            Type.ParamClause 36 36
+            Term.ParamClause 36 59
+              Term.Param 37 43
+                Term.Name 37 38
+                Type.Name 40 43
+              Term.Param 45 58
+                Mod.Erased 45 51
+                Term.Name 52 54
+                Type.Name 56 58
+          Type.Name 61 64
+          Term.Name 67 70
+#!program 274 line 69 Stat dialects.Scala3 :: def with both using and erased
+object W274 {
+def turnedOn(using erased ev: IsOff[S]): Machine[On] = new Machine[On]
+}
+#!scalac refuses: an identifier expected, but ':' found
+#!regions L84/
+#!layout
+Source 0 87
+  Defn.Object 0 86
+    Term.Name 7 11
+    Template 12 86
+      Template.Body 12 86
+        Defn.Def 14 84
+          Term.Name 18 26
+          Member.ParamClauseGroup 26 53
+            Type.ParamClause 26 26
+            Term.ParamClause 26 53
+              Term.Param 33 52
+                Mod.Using 27 32
+                Mod.Erased 33 39
+                Term.Name 40 42
+                Type.Apply 44 52
+                  Type.Name 44 49
+                  Type.ArgClause 49 52
+                    Type.Name 50 51
+              Mod.Using 27 32
+          Type.Apply 55 66
+            Type.Name 55 62
+            Type.ArgClause 62 66
+              Type.Name 63 65
+          Term.New 69 84
+            Init 73 84
+              Type.Apply 73 84
+                Type.Name 73 80
+                Type.ArgClause 80 84
+                  Type.Name 81 83
+              Name.Anonymous 84 84
+#!program 275 line 81 Stat dialects.Scala3 :: erased class
+object W275 {
+erased class CanRead
+}
+#!scalac refuses: end of statement expected but 'class' found
+#!regions L34/
+#!layout
+Source 0 37
+  Defn.Object 0 36
+    Term.Name 7 11
+    Template 12 36
+      Template.Body 12 36
+        Defn.Class 14 34
+          Mod.Erased 14 20
+          Type.Name 27 34
+          Type.ParamClause 34 34
+          Ctor.Primary 34 34
+            Name.Anonymous 34 34
+          Template 34 34
+            Template.Body 34 34
+#!program 276 line 86 Stat dialects.Scala3 :: erased given
+object W276 {
+erased given IsEmpty[Empty] = new IsEmpty[Empty]
+}
+#!scalac refuses: end of statement expected but 'given' found
+#!regions L62/
+#!layout
+Source 0 65
+  Defn.Object 0 64
+    Term.Name 7 11
+    Template 12 64
+      Template.Body 12 64
+        Defn.GivenAlias 14 62
+          Mod.Erased 14 20
+          Name.Anonymous 27 27
+          Type.Apply 27 41
+            Type.Name 27 34
+            Type.ArgClause 34 41
+              Type.Name 35 40
+          Term.New 44 62
+            Init 48 62
+              Type.Apply 48 62
+                Type.Name 48 55
+                Type.ArgClause 55 62
+                  Type.Name 56 61
+              Name.Anonymous 62 62
+#!program 277 line 100 Stat dialects.Scala3 :: erased param in lambda as argument
+object W277 {
+List(1, 2, 3).map {
+  (using erased i: Int) => i
+}
+}
+#!scalac refuses: not a legal formal parameter for a function literal
+#!regions L62/ L64/
+#!layout
+Source 0 67
+  Defn.Object 0 66
+    Term.Name 7 11
+    Template 12 66
+      Template.Body 12 66
+        Term.Apply 14 64
+          Term.Select 14 31
+            Term.Apply 14 27
+              Term.Name 14 18
+              Term.ArgClause 18 27
+                Lit.Int 19 20
+                Lit.Int 22 23
+                Lit.Int 25 26
+            Term.Name 28 31
+          Term.ArgClause 32 64
+            Term.Block 32 64
+              Term.Function 36 62
+                Term.ParamClause 36 57
+                  Term.Param 37 56
+                    Mod.Using 37 42
+                    Mod.Erased 43 49
+                    Term.Name 50 51
+                    Type.Name 53 56
+                  Mod.Using 37 42
+                Term.Name 61 62
+#!program 278 line 108 Stat dialects.Scala3 :: anonymous-method 1
+object W278 {
+val fun = (using erased ctx: Context) => ctx.open
+}
+#!scalac refuses: not a legal formal parameter for a function literal
+#!regions L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Val 14 63
+          Pat.Var 18 21
+            Term.Name 18 21
+          Term.Function 24 63
+            Term.ParamClause 24 51
+              Term.Param 25 50
+                Mod.Using 25 30
+                Mod.Erased 31 37
+                Term.Name 38 41
+                Type.Name 43 50
+              Mod.Using 25 30
+            Term.Select 55 63
+              Term.Name 55 58
+              Term.Name 59 63
+#!program 279 line 118 Stat dialects.Scala3 :: anonymous-method 2
+object W279 {
+val fun = (using erased ctx) => ctx.open
+}
+#!scalac refuses: not a legal formal parameter for a function literal
+#!regions L54/
+#!layout
+Source 0 57
+  Defn.Object 0 56
+    Term.Name 7 11
+    Template 12 56
+      Template.Body 12 56
+        Defn.Val 14 54
+          Pat.Var 18 21
+            Term.Name 18 21
+          Term.Function 24 54
+            Term.ParamClause 24 42
+              Term.Param 25 41
+                Mod.Using 25 30
+                Mod.Erased 31 37
+                Term.Name 38 41
+              Mod.Using 25 30
+            Term.Select 46 54
+              Term.Name 46 49
+              Term.Name 50 54
+#!program 280 line 128 Stat dialects.Scala3 :: anonymous-method 3
+object W280 {
+val fun = (using erased _: Context) => ctx.open
+}
+#!scalac refuses: not a legal formal parameter for a function literal
+#!regions L61/
+#!layout
+Source 0 64
+  Defn.Object 0 63
+    Term.Name 7 11
+    Template 12 63
+      Template.Body 12 63
+        Defn.Val 14 61
+          Pat.Var 18 21
+            Term.Name 18 21
+          Term.Function 24 61
+            Term.ParamClause 24 49
+              Term.Param 25 48
+                Mod.Using 25 30
+                Mod.Erased 31 37
+                Name.Placeholder 38 39
+                Type.Name 41 48
+              Mod.Using 25 30
+            Term.Select 53 61
+              Term.Name 53 56
+              Term.Name 57 61
+#!program 281 line 142 Stat dialects.Scala3 :: lambda-method-parameter
+object W281 {
+LazyBody {
+  (using erased ctx: Context) => 3
+}
+
+}
+#!scalac refuses: not a legal formal parameter for a function literal
+#!regions L59/ F61/
+#!layout
+Source 0 65
+  Defn.Object 0 64
+    Term.Name 7 11
+    Template 12 64
+      Template.Body 12 64
+        Term.Apply 14 61
+          Term.Name 14 22
+          Term.ArgClause 23 61
+            Term.Block 23 61
+              Term.Function 27 59
+                Term.ParamClause 27 54
+                  Term.Param 28 53
+                    Mod.Using 28 33
+                    Mod.Erased 34 40
+                    Term.Name 41 44
+                    Type.Name 46 53
+                  Mod.Using 28 33
+                Lit.Int 58 59
+#!program 282 line 150 Stat dialects.Scala3 :: dependent-type
+object W282 {
+val extractor: (erased e: Entry) => e.Key = extractKey
+}
+#!scalac refuses: an identifier expected, but ':' found
+#!regions L68/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 11
+    Template 12 70
+      Template.Body 12 70
+        Defn.Val 14 68
+          Pat.Var 18 27
+            Term.Name 18 27
+          Type.Function 29 55
+            Type.FuncParamClause 29 46
+              Type.TypedParam 30 45
+                Type.Name 37 38
+                Type.Name 40 45
+                Mod.Erased 30 36
+            Type.Select 50 55
+              Term.Name 50 51
+              Type.Name 52 55
+          Term.Name 58 68

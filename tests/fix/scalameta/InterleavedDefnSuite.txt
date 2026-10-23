@@ -1,0 +1,273 @@
+# The programs of scalameta 4.17.4's InterleavedDefnSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 646 line 11 Stat dialects.Scala3 :: def x = 2
+object W646 {
+def x = 2
+}
+#!scalac ok
+#!regions L23/
+#!layout
+Source 0 26
+  Defn.Object 0 25
+    Term.Name 7 11
+    Template 12 25
+      Template.Body 12 25
+        Defn.Def 14 23
+          Term.Name 18 19
+          Lit.Int 22 23
+#!program 647 line 13 Stat dialects.Scala3 :: def x[A <: B] = 2
+object W647 {
+def x[A <: B] = 2
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 11
+    Template 12 33
+      Template.Body 12 33
+        Defn.Def 14 31
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 27
+            Type.ParamClause 19 27
+              Type.Param 20 26
+                Type.Name 20 21
+                Type.ParamClause 22 22
+                Type.Bounds 22 26
+                  Type.Name 25 26
+          Lit.Int 30 31
+#!program 648 line 17 Stat dialects.Scala3 :: def x[A: B] = 2
+object W648 {
+def x[A: B] = 2
+}
+#!scalac ok
+#!regions L29/
+#!layout
+Source 0 32
+  Defn.Object 0 31
+    Term.Name 7 11
+    Template 12 31
+      Template.Body 12 31
+        Defn.Def 14 29
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 25
+            Type.ParamClause 19 25
+              Type.Param 20 24
+                Type.Name 20 21
+                Type.ParamClause 21 21
+                Type.Bounds 21 24
+                  Type.Name 23 24
+          Lit.Int 28 29
+#!program 649 line 22 Stat dialects.Scala3 :: def f(a: Int)(implicit b: Int) = a + b
+object W649 {
+def f(a: Int)(implicit b: Int) = a + b
+}
+#!scalac ok
+#!regions L52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 11
+    Template 12 54
+      Template.Body 12 54
+        Defn.Def 14 52
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 44
+            Type.ParamClause 19 19
+            Term.ParamClause 19 27
+              Term.Param 20 26
+                Term.Name 20 21
+                Type.Name 23 26
+            Term.ParamClause 27 44
+              Term.Param 37 43
+                Mod.Implicit 28 36
+                Term.Name 37 38
+                Type.Name 40 43
+              Mod.Implicit 28 36
+          Term.ApplyInfix 47 52
+            Term.Name 47 48
+            Term.Name 49 50
+            Type.ArgClause 51 51
+            Term.ArgClause 51 52
+              Term.Name 51 52
+#!program 650 line 32 Stat dialects.Scala3 :: def f(x: Int) = macro impl
+object W650 {
+def f(x: Int) = macro impl
+}
+#!scalac ok
+#!regions L40/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 11
+    Template 12 42
+      Template.Body 12 42
+        Defn.Macro 14 40
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 27
+            Type.ParamClause 19 19
+            Term.ParamClause 19 27
+              Term.Param 20 26
+                Term.Name 20 21
+                Type.Name 23 26
+          Term.Name 36 40
+#!program 651 line 37 Stat dialects.Scala3 :: def f(x: Int): Int = macro impl
+object W651 {
+def f(x: Int): Int = macro impl
+}
+#!scalac ok
+#!regions L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Macro 14 45
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 27
+            Type.ParamClause 19 19
+            Term.ParamClause 19 27
+              Term.Param 20 26
+                Term.Name 20 21
+                Type.Name 23 26
+          Type.Name 29 32
+          Term.Name 41 45
+#!program 652 line 48 Stat dialects.Scala3 :: braces-in-functions
+object W652 {
+def f = { (n: Int) =>
+  {
+    for {
+      _ <- scala.util.Success(123)
+    } yield 42
+  }.recover(???)
+}
+}
+#!scalac ok
+#!regions I35/2 L84/2 L99/2 O116/ L116/ L118/
+#!layout
+Source 0 121
+  Defn.Object 0 120
+    Term.Name 7 11
+    Template 12 120
+      Template.Body 12 120
+        Defn.Def 14 118
+          Term.Name 18 19
+          Term.Block 22 118
+            Term.Function 24 116
+              Term.ParamClause 24 32
+                Term.Param 25 31
+                  Term.Name 25 26
+                  Type.Name 28 31
+              Term.Apply 38 116
+                Term.Select 38 111
+                  Term.Block 38 103
+                    Term.ForYield 44 99
+                      Term.EnumeratorsBlock 48 90
+                        Enumerator.Generator 56 84
+                          Pat.Wildcard 56 57
+                          Term.Apply 61 84
+                            Term.Select 61 79
+                              Term.Select 61 71
+                                Term.Name 61 66
+                                Term.Name 67 71
+                              Term.Name 72 79
+                            Term.ArgClause 79 84
+                              Lit.Int 80 83
+                      Lit.Int 97 99
+                  Term.Name 104 111
+                Term.ArgClause 111 116
+                  Term.Name 112 115
+#!program 653 line 85 Stat dialects.Scala3 :: def f[A](a: A, as: A*)[B]: B = ???
+object W653 {
+def f[A](a: A, as: A*)[B]: B = ???
+}
+#!scalac ok
+#!regions L48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 11
+    Template 12 50
+      Template.Body 12 50
+        Defn.Def 14 48
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 36
+            Type.ParamClause 19 22
+              Type.Param 20 21
+                Type.Name 20 21
+                Type.ParamClause 21 21
+                Type.Bounds 21 21
+            Term.ParamClause 22 36
+              Term.Param 23 27
+                Term.Name 23 24
+                Type.Name 26 27
+              Term.Param 29 35
+                Term.Name 29 31
+                Type.Repeated 33 35
+                  Type.Name 33 34
+          Member.ParamClauseGroup 36 39
+            Type.ParamClause 36 39
+              Type.Param 37 38
+                Type.Name 37 38
+                Type.ParamClause 38 38
+                Type.Bounds 38 38
+          Type.Name 41 42
+          Term.Name 45 48
+#!program 654 line 105 Stat dialects.Scala3 :: def f[A](a: A, as: A*)[B](b: B, bs: B*)[C](implicit c: C): B = ???
+object W654 {
+def f[A](a: A, as: A*)[B](b: B, bs: B*)[C](implicit c: C): B = ???
+}
+#!scalac ok
+#!regions L80/
+#!layout
+Source 0 83
+  Defn.Object 0 82
+    Term.Name 7 11
+    Template 12 82
+      Template.Body 12 82
+        Defn.Def 14 80
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 36
+            Type.ParamClause 19 22
+              Type.Param 20 21
+                Type.Name 20 21
+                Type.ParamClause 21 21
+                Type.Bounds 21 21
+            Term.ParamClause 22 36
+              Term.Param 23 27
+                Term.Name 23 24
+                Type.Name 26 27
+              Term.Param 29 35
+                Term.Name 29 31
+                Type.Repeated 33 35
+                  Type.Name 33 34
+          Member.ParamClauseGroup 36 53
+            Type.ParamClause 36 39
+              Type.Param 37 38
+                Type.Name 37 38
+                Type.ParamClause 38 38
+                Type.Bounds 38 38
+            Term.ParamClause 39 53
+              Term.Param 40 44
+                Term.Name 40 41
+                Type.Name 43 44
+              Term.Param 46 52
+                Term.Name 46 48
+                Type.Repeated 50 52
+                  Type.Name 50 51
+          Member.ParamClauseGroup 53 71
+            Type.ParamClause 53 56
+              Type.Param 54 55
+                Type.Name 54 55
+                Type.ParamClause 55 55
+                Type.Bounds 55 55
+            Term.ParamClause 56 71
+              Term.Param 66 70
+                Mod.Implicit 57 65
+                Term.Name 66 67
+                Type.Name 69 70
+              Mod.Implicit 57 65
+          Type.Name 73 74
+          Term.Name 77 80

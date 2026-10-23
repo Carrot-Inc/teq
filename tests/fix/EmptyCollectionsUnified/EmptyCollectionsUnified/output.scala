@@ -14,10 +14,10 @@ object EmptyCollectionsUnified {
     }
 
     // should not rewrite Nil when used with infix operator
-    val f = 1 :: Nil
+    val f = 1 :: List.empty
 
     // should not rewrite Nil when used with :: operator
-    val g = ::(1, Nil)
+    val g = ::(1, List.empty)
 
     val h: List[Int] = List.empty
 

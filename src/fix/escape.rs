@@ -206,15 +206,14 @@ impl Escapes {
             .collect();
         let line_start = |at: u32| d.text[..at as usize].rfind('\n').map_or(0, |i| i as u32 + 1);
         if d.text.contains("scalafix:ok") {
-            // The trees an ok anchor trails, outermost first (`tree.foreach` of `t.endComment`): from the start of the
-            // owner's first line to its end.
-            let trailing = trailing_comments(d);
+            // The trees an ok anchor trails, in pre-order (`tree.foreach` of `t.endComment`, the comments the parser
+            // gives the tree): from the start of the tree's first line to its end.
             let mut order: Vec<u32> = (0..d.tree.nodes.len() as u32).collect();
             preorder(d, &mut order);
             for n in order {
                 let node = d.tree.nodes[n as usize];
-                let Some(cs) = trailing.get(&node.span.end) else { continue };
-                for &(span, ref value) in cs {
+                let Some(ec) = node.end_comment else { continue };
+                for &(span, ref value) in comments.iter().filter(|(s, _)| s.start >= ec.start && s.end <= ec.end) {
                     if let Some((Anchor::Ok, rules)) = anchor(value) {
                         if visited.insert(span.start) {
                             let start = line_start(node.span.start);
@@ -292,33 +291,6 @@ fn filters(rules: &[(String, usize)], anchor: Span, base: u32, start: u32, end: 
         .collect()
 }
 
-/// The comments after each token on its line (`AssociatedComments`' trailing ones), by the end of the token they
-/// trail: a comma does not take them from the token before it.
-fn trailing_comments(d: &DocView) -> std::collections::HashMap<u32, Vec<(Span, String)>> {
-    let mut out: std::collections::HashMap<u32, Vec<(Span, String)>> = std::collections::HashMap::new();
-    let mut last: Option<u32> = None;
-    let mut leading = true;
-    for p in &d.tokens {
-        match p.kind {
-            Kind::Comment => {
-                if !leading {
-                    if let Some(end) = last {
-                        out.entry(end).or_default().push((p.span, comment_value(&d.text[p.span.start as usize..p.span.end as usize]).to_string()));
-                    }
-                }
-            }
-            Kind::LF | Kind::CRLF => leading = true,
-            Kind::Space | Kind::Tab | Kind::CR | Kind::FF | Kind::Bom | Kind::Shebang => {}
-            Kind::Tok(crate::token::Tok::Comma) => leading = false,
-            _ => {
-                last = Some(p.span.end);
-                leading = false;
-            }
-        }
-    }
-    out
-}
-
 /// The nodes in pre-order from the root, outermost first.
 fn preorder(d: &DocView, out: &mut Vec<u32>) {
     out.clear();
@@ -326,7 +298,7 @@ fn preorder(d: &DocView, out: &mut Vec<u32>) {
     let mut stack = vec![root];
     while let Some(n) = stack.pop() {
         out.push(n);
-        for &(_, c) in d.tree.children(n).iter().rev() {
+        for (_, c) in d.tree.written_children(n).rev() {
             stack.push(c);
         }
     }
@@ -393,6 +365,15 @@ impl Tracker {
     }
 }
 
+/// The values of the argument clauses of an application or an `Init`, in order.
+fn clause_values(t: &super::nodes::Tree, n: u32) -> Vec<u32> {
+    t.children(n)
+        .iter()
+        .filter(|&&(_, c)| t.nodes[c as usize].kind == K::TermArgClause)
+        .flat_map(|&(_, c)| t.children(c).iter().filter(|e| e.0 == super::nodes::F::Values).map(|e| e.1))
+        .collect()
+}
+
 /// `AnnotatedEscapes`: each definition's `@SuppressWarnings(Array(rules))` over the definition's range.
 fn annotated(d: &DocView) -> Vec<Filter> {
     let t = &d.tree;
@@ -417,7 +398,7 @@ fn annotated(d: &DocView) -> Vec<Filter> {
             continue;
         }
         // The one argument `Array(...)`, its string literals the rules.
-        let args: Vec<u32> = kids[1..].iter().map(|c| c.1).collect();
+        let args: Vec<u32> = clause_values(t, init);
         let [array] = args[..] else { continue };
         if t.nodes[array as usize].kind != K::TermApply {
             continue;
@@ -429,8 +410,8 @@ fn annotated(d: &DocView) -> Vec<Filter> {
         let owner_span = t.nodes[owner as usize].span;
         let mut all = Vec::new();
         let mut one = Vec::new();
-        for &(f, lit) in t.children(array) {
-            if f != super::nodes::F::Args || t.nodes[lit as usize].kind != K::LitString {
+        for lit in clause_values(t, array) {
+            if t.nodes[lit as usize].kind != K::LitString {
                 continue;
             }
             let rule = t.value(lit).unwrap_or("").to_string();

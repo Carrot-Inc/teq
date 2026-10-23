@@ -1,0 +1,21 @@
+Driver/LiteralUnits/input.scala:7:15: warning: [LiteralUnits.string]: length 5: 104 101 108 108 111
+    val plain = "hello" // assert: LiteralUnits.string
+                ^^^^^^^
+Driver/LiteralUnits/input.scala:8:14: warning: [LiteralUnits.string]: length 1: 55296
+    val lone = "\uD800" // assert: LiteralUnits.string
+               ^^^^^^^^
+Driver/LiteralUnits/input.scala:9:14: warning: [LiteralUnits.string]: length 2: 55357 56832
+    val pair = "😀" // assert: LiteralUnits.string
+               ^^^^^^
+Driver/LiteralUnits/input.scala:10:16: warning: [LiteralUnits.string]: length 3: 97 55296 98
+    val part = s"a\uD800b" // assert: LiteralUnits.string
+                 ^^^^^^^^
+Driver/LiteralUnits/input.scala:11:17: warning: [LiteralUnits.string]: length 6: 92 117 68 56 48 48
+    val raw = raw"\uD800" // assert: LiteralUnits.string
+                  ^^^^^^
+Driver/LiteralUnits/input.scala:12:11: warning: [LiteralUnits.char]: 55296
+    val c = '\uD800' // assert: LiteralUnits.char
+            ^^^^^^^^
+Driver/LiteralUnits/input.scala:13:11: warning: [LiteralUnits.char]: 97
+    val d = 'a' // assert: LiteralUnits.char
+            ^^^

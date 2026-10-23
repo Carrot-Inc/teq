@@ -1,0 +1,63 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Type.Repeated, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_Repeated\n\nobject Type_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs\n  def g(xs: => Int*) = 1\n"
+  stats Pkg syntax="package nodes.Type_Repeated\n\nobject Type_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs\n  def g(xs: => Int*) = 1"
+    .stats = [Defn.Object "object Type_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs\n  def g(xs: => Int*) = 1"]
+    ref Term.Select syntax="nodes.Type_Repeated"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_Repeated" syntax="Type_Repeated"
+    body Pkg.Body syntax="object Type_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs\n  def g(xs: => Int*) = 1"
+      stats Defn.Object syntax="object Type_Repeated:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs\n  def g(xs: => Int*) = 1"
+        mods Nil
+        name Term.Name value="Type_Repeated" syntax="Type_Repeated"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs\n  def g(xs: => Int*) = 1"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(xs: Int*) = xs", Defn.Def "def g(xs: => Int*) = 1"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(xs: Int*) = xs\n  def g(xs: => Int*) = 1"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(xs: Int*) = xs"
+              .paramClauses = [Term.ParamClause "(xs: Int*)"]
+              .paramss = [[Term.Param "xs: Int*"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(xs: Int*)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(xs: Int*)"
+                  values Term.Param syntax="xs: Int*"
+                    mods Nil
+                    name Term.Name value="xs" syntax="xs"
+                    decltpe Type.Repeated syntax="Int*"
+                      tpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Name value="xs" syntax="xs"
+            stats Defn.Def syntax="def g(xs: => Int*) = 1"
+              .paramClauses = [Term.ParamClause "(xs: => Int*)"]
+              .paramss = [[Term.Param "xs: => Int*"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="g" syntax="g"
+              paramClauseGroups Member.ParamClauseGroup syntax="(xs: => Int*)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(xs: => Int*)"
+                  values Term.Param syntax="xs: => Int*"
+                    mods Nil
+                    name Term.Name value="xs" syntax="xs"
+                    decltpe Type.ByName syntax="=> Int*"
+                      tpe Type.Repeated syntax="Int*"
+                        tpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Lit.Int value=1 syntax="1"
+          derives Nil

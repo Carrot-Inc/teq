@@ -1,0 +1,9 @@
+DisableSyntax/ScalametaLayout/input.scala:15:23: error: [DisableSyntax.defaultArgs]: Default args makes it hard to use methods as functions.
+    def braced(x: Int = { 1 }) = x /* assert: DisableSyntax.defaultArgs
+                        ^^^^^
+DisableSyntax/ScalametaLayout/input.scala:21:3: error: [DisableSyntax.implicitConversion]: implicit conversions weaken type safety and always can be replaced by explicit conversions
+    implicit def usingOne(using foo: Int): String = foo.toString // assert: DisableSyntax.implicitConversion
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+DisableSyntax/ScalametaLayout/input.scala:24:3: error: [DisableSyntax.valInAbstract]: val definitions in traits/abstract classes may cause initialization bugs
+    val x = 1 // assert: DisableSyntax.valInAbstract
+    ^^^^^^^^^

@@ -1,0 +1,57 @@
+Nodes/Term.PolyFunction/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.PolyFunction, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_PolyFunction\n\nobject Term_PolyFunction:\n  val marker = 0 // assert: DumpStructure.structure\n  val f = [A] => (a: A) => a\n"
+  stats Pkg syntax="package nodes.Term_PolyFunction\n\nobject Term_PolyFunction:\n  val marker = 0 // assert: DumpStructure.structure\n  val f = [A] => (a: A) => a"
+    .stats = [Defn.Object "object Term_PolyFunction:\n  val marker = 0 // assert: DumpStructure.structure\n  val f = [A] => (a: A) => a"]
+    ref Term.Select syntax="nodes.Term_PolyFunction"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_PolyFunction" syntax="Term_PolyFunction"
+    body Pkg.Body syntax="object Term_PolyFunction:\n  val marker = 0 // assert: DumpStructure.structure\n  val f = [A] => (a: A) => a"
+      stats Defn.Object syntax="object Term_PolyFunction:\n  val marker = 0 // assert: DumpStructure.structure\n  val f = [A] => (a: A) => a"
+        mods Nil
+        name Term.Name value="Term_PolyFunction" syntax="Term_PolyFunction"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val f = [A] => (a: A) => a"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val f = [A] => (a: A) => a"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val f = [A] => (a: A) => a"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val f = [A] => (a: A) => a"
+              mods Nil
+              pats Pat.Var syntax="f"
+                name Term.Name value="f" syntax="f"
+              decltpe None
+              rhs Term.PolyFunction syntax="[A] => (a: A) => a"
+                .tparams = [Type.Param "A"]
+                tparamClause Type.ParamClause syntax="[A]"
+                  values Type.Param syntax="A"
+                    .tparams = []
+                    mods Nil
+                    name Type.Name value="A" syntax="A"
+                    tparamClause Type.ParamClause syntax=""
+                      values Nil
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                body Term.Function syntax="(a: A) => a"
+                  .params = [Term.Param "a: A"]
+                  paramClause Term.ParamClause syntax="(a: A)"
+                    values Term.Param syntax="a: A"
+                      mods Nil
+                      name Term.Name value="a" syntax="a"
+                      decltpe Type.Name value="A" syntax="A"
+                      default None
+                    mod None
+                  body Term.Name value="a" syntax="a"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

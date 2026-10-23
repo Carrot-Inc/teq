@@ -1,0 +1,6 @@
+Driver/AnonymousParams/input.scala:6:15: error: [ParamNames.name]: Name.Anonymous ``
+  class C(using Int) /* assert: ParamNames.name
+                ^^^
+Driver/AnonymousParams/input.scala:12:7: error: [ParamNames.name]: Term.Name `x`
+        x: Int /* assert: ParamNames.name
+        ^^^^^^

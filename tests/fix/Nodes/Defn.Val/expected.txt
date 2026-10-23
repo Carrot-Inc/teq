@@ -1,0 +1,62 @@
+Nodes/Defn.Val/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Defn.Val, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Defn_Val\n\nobject Defn_Val:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  private lazy val b: Int = 2\n  val (c, d) = (1, 2)\n  val e, f = 3\n"
+  stats Pkg syntax="package nodes.Defn_Val\n\nobject Defn_Val:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  private lazy val b: Int = 2\n  val (c, d) = (1, 2)\n  val e, f = 3"
+    .stats = [Defn.Object "object Defn_Val:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  private lazy val b: Int = 2\n  val (c, d) = (1, 2)\n  val e, f = 3"]
+    ref Term.Select syntax="nodes.Defn_Val"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Defn_Val" syntax="Defn_Val"
+    body Pkg.Body syntax="object Defn_Val:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  private lazy val b: Int = 2\n  val (c, d) = (1, 2)\n  val e, f = 3"
+      stats Defn.Object syntax="object Defn_Val:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  private lazy val b: Int = 2\n  val (c, d) = (1, 2)\n  val e, f = 3"
+        mods Nil
+        name Term.Name value="Defn_Val" syntax="Defn_Val"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  private lazy val b: Int = 2\n  val (c, d) = (1, 2)\n  val e, f = 3"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = 1", Defn.Val "private lazy val b: Int = 2", Defn.Val "val (c, d) = (1, 2)", Defn.Val "val e, f = 3"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = 1\n  private lazy val b: Int = 2\n  val (c, d) = (1, 2)\n  val e, f = 3"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = 1"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Val syntax="private lazy val b: Int = 2"
+              mods Mod.Private syntax="private"
+                within Name.Anonymous syntax=""
+                  .value = ""
+              mods Mod.Lazy syntax="lazy"
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe Type.Name value="Int" syntax="Int"
+              rhs Lit.Int value=2 syntax="2"
+            stats Defn.Val syntax="val (c, d) = (1, 2)"
+              mods Nil
+              pats Pat.Tuple syntax="(c, d)"
+                args Pat.Var syntax="c"
+                  name Term.Name value="c" syntax="c"
+                args Pat.Var syntax="d"
+                  name Term.Name value="d" syntax="d"
+              decltpe None
+              rhs Term.Tuple syntax="(1, 2)"
+                args Lit.Int value=1 syntax="1"
+                args Lit.Int value=2 syntax="2"
+            stats Defn.Val syntax="val e, f = 3"
+              mods Nil
+              pats Pat.Var syntax="e"
+                name Term.Name value="e" syntax="e"
+              pats Pat.Var syntax="f"
+                name Term.Name value="f" syntax="f"
+              decltpe None
+              rhs Lit.Int value=3 syntax="3"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

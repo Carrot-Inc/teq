@@ -1,0 +1,59 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Importee.Given, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Importee_Given\n\nobject Importee_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  object G:\n    given Ordering[Int] = Ordering.Int\n  import G.given Ordering[Int]\n"
+  stats Pkg syntax="package nodes.Importee_Given\n\nobject Importee_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  object G:\n    given Ordering[Int] = Ordering.Int\n  import G.given Ordering[Int]"
+    .stats = [Defn.Object "object Importee_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  object G:\n    given Ordering[Int] = Ordering.Int\n  import G.given Ordering[Int]"]
+    ref Term.Select syntax="nodes.Importee_Given"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Importee_Given" syntax="Importee_Given"
+    body Pkg.Body syntax="object Importee_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  object G:\n    given Ordering[Int] = Ordering.Int\n  import G.given Ordering[Int]"
+      stats Defn.Object syntax="object Importee_Given:\n  val marker = 0 // assert: DumpStructure.structure\n  object G:\n    given Ordering[Int] = Ordering.Int\n  import G.given Ordering[Int]"
+        mods Nil
+        name Term.Name value="Importee_Given" syntax="Importee_Given"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  object G:\n    given Ordering[Int] = Ordering.Int\n  import G.given Ordering[Int]"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Object "object G:\n    given Ordering[Int] = Ordering.Int", Import "import G.given Ordering[Int]"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  object G:\n    given Ordering[Int] = Ordering.Int\n  import G.given Ordering[Int]"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Object syntax="object G:\n    given Ordering[Int] = Ordering.Int"
+              mods Nil
+              name Term.Name value="G" syntax="G"
+              templ Template syntax=":\n    given Ordering[Int] = Ordering.Int"
+                .self = Self ""
+                .stats = [Defn.GivenAlias "given Ordering[Int] = Ordering.Int"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    given Ordering[Int] = Ordering.Int"
+                  selfOpt None
+                  stats Defn.GivenAlias syntax="given Ordering[Int] = Ordering.Int"
+                    .paramClauses = []
+                    .tparams = []
+                    mods Nil
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    paramClauseGroups Nil
+                    decltpe Type.Apply syntax="Ordering[Int]"
+                      .args = [Type.Name "Int"]
+                      tpe Type.Name value="Ordering" syntax="Ordering"
+                      argClause Type.ArgClause syntax="[Int]"
+                        values Type.Name value="Int" syntax="Int"
+                    body Term.Select syntax="Ordering.Int"
+                      qual Term.Name value="Ordering" syntax="Ordering"
+                      name Term.Name value="Int" syntax="Int"
+                derives Nil
+            stats Import syntax="import G.given Ordering[Int]"
+              importers Importer syntax="G.given Ordering[Int]"
+                ref Term.Name value="G" syntax="G"
+                importees Importee.Given syntax="given Ordering[Int]"
+                  tpe Type.Apply syntax="Ordering[Int]"
+                    .args = [Type.Name "Int"]
+                    tpe Type.Name value="Ordering" syntax="Ordering"
+                    argClause Type.ArgClause syntax="[Int]"
+                      values Type.Name value="Int" syntax="Int"
+          derives Nil

@@ -1,0 +1,46 @@
+Nodes/Lit.Double.Negative/input.scala:10:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// The pass's DecimalValue probe, its fields, values, syntax and derived accessors as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_Double_Negative\n\nobject O { val x = -1e-7 }\n\nobject Marker:\n  val marker = 0 // assert: DumpStructure.structure\n"
+  stats Pkg syntax="package nodes.Lit_Double_Negative\n\nobject O { val x = -1e-7 }\n\nobject Marker:\n  val marker = 0"
+    .stats = [Defn.Object "object O { val x = -1e-7 }", Defn.Object "object Marker:\n  val marker = 0"]
+    ref Term.Select syntax="nodes.Lit_Double_Negative"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_Double_Negative" syntax="Lit_Double_Negative"
+    body Pkg.Body syntax="object O { val x = -1e-7 }\n\nobject Marker:\n  val marker = 0"
+      stats Defn.Object syntax="object O { val x = -1e-7 }"
+        mods Nil
+        name Term.Name value="O" syntax="O"
+        templ Template syntax="{ val x = -1e-7 }"
+          .self = Self ""
+          .stats = [Defn.Val "val x = -1e-7"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax="{ val x = -1e-7 }"
+            selfOpt None
+            stats Defn.Val syntax="val x = -1e-7"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Lit.Double format="-1E-7" syntax="-1e-7"
+                .value = -1.0E-7
+          derives Nil
+      stats Defn.Object syntax="object Marker:\n  val marker = 0"
+        mods Nil
+        name Term.Name value="Marker" syntax="Marker"
+        templ Template syntax=":\n  val marker = 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

@@ -42,20 +42,41 @@ otherwise, and under `--check` 1 where there is a lint or an edit.
 | `Suppression/<name>` for `AnchorAnnotationMixed`, `AnchorDescription`, `AnchorDoubleOn`, `AnchorEOF`, `AnchorIntervals`, `AnchorOverlapping`, `AnchorRange`, `AnchorUnused`, `AnchorWildcard`, `AnnotationFullyQualified`, `AnnotationScopes`, `AnnotationUnused`, `AnnotationWithNonLiteralValue`, `Issue507` | `scalafix-tests/input/src/main/scala/test/escapeHatch/<name>.scala` | the rules `"class:scalafix.test.NoDummy"` and `"class:scalafix.test.NoNull"` named as `"file:../../support/NoDummy.scala"` and `"file:../../support/NoNull.scala"`, the test rules ported to teq's API (scalafix loads them from its test class path); `AnnotationScopes`: the class `DummyClass_2` whose primary constructor carries the annotation removed with its two assertions (defect 3) |
 | `CatsImplicitsImport/CatsImplicitsImportTest` | xuwei-k: `input/src/main/scala/fix/CatsImplicitsImportTest.scala` | cats 2.13.0 (`jars`) where the reference's build names its own cats |
 | `TypelevelAs/AsTests` | typelevel: `modules/cats/input/src/main/scala/fix/AsTests.scala` | likewise |
-| `EmptyCollectionsUnified/EmptyCollectionsUnified` | scalafix-unified: `input/src/main/scala/test/EmptyCollectionsUnified.scala` and `output/src/main/scala/test/EmptyCollectionsUnified.scala` | the `val k` whose pattern is `::(_, Nil)` removed from both (defect 4) |
+| `EmptyCollectionsUnified/EmptyCollectionsUnified` | scalafix-unified: `input/src/main/scala/test/EmptyCollectionsUnified.scala` and `output/src/main/scala/test/EmptyCollectionsUnified.scala` | the `val k` whose pattern is `::(_, Nil)` removed from both (defect 4); `1 :: Nil` and `::(1, Nil)` rewritten to `List.empty` in the output, which the repository records under scalameta 4.4.32 (its build's), where an argument's parent is its application: under 4.17 it is a `Term.ArgClause`, so the rule's `::` cases match nothing, and scalafix 0.14.7 with the rule's 0.0.8 jar rewrites both |
 
 ## teq's own cases
 
 - `NoUnusedImports/<name>`: the programs of `tests/warnings/edits/` (scalac 3.8.4's `-Wunused:imports` cases),
-  each with the rule's header, its `output.scala` what `tests/warnings/expected/edits/<name>.scala` records scalac's
-  `-rewrite` to leave (`hiding`: both imports gone, as one run of the rule removes what scalac's removes in two;
+  each with the rule's header, its `output.scala` what scalafix-cli 0.14.7 leaves of it with a rule removing the same
+  importees through `removeImportee` (`ImportPatchOps`' token removals), with dotty's deletion of an import's line
+  (`editPosAt`'s blank line, in `one` and `blank_lines`): what `tests/warnings/expected/edits/<name>.scala` records
+  scalac's `-rewrite` to leave but in `block`, `comments` and `nested_comment` (`hiding`: both imports gone, as one run
+  of the rule removes what scalac's removes in two;
   `crlf`: the kept selector's import ending in the line's CRLF, where scalac's `editPosAt` leaves an LF, docs/FIX.md); `macro_expansion` (from `tests/warnings/probes/macro_expansion`), a file where a derived macro
   expands, its definitions beside it (`En.scala`), its importee the warning `NoUnusedImports.unverified`; `after_rewrite`, the second round; `after_rewrite_other_file`, the second round over a file the first
   did not edit (`Other.scala`), its lint and its suppression the first round's.
 - `NoUnusedImports/crlf_one_kept`: a CRLF file whose clause keeps one selector, written as that selector's import with
-  its line's CRLF (the review's probe of `380470c41`).
+  its line's CRLF (the review's probe of `380470c41`); `rename_kept` (a clause left with one rename keeps its braces)
+  and `comment_after_comma` (an importee after a line comment that follows the comma before it: scalafix-cli 0.14.7
+  removes it without that comma, a text that does not parse, and teq writes dotty's `checkImports` edit, as
+  `comment_before_last` does for the last importee), from scalafix's `ImportPatchOps` at v0.14.7; `trailing_comma_kept`
+  (the review of `252f52716`), Scala's trailing comma kept with scalafix's edit, its output scalafix-core 0.14.9's.
+- `Merge/<name>`: the planner's merge of the rules' edits on one token (`PatchInternals.merge`) and the line break a
+  deleted import's line loses, beside a rule that sorts the leading imports (`support/SortBlock.scala`): an unused
+  import in the middle, the last, the first after a code line, a blank line and a comment, a clause's importee;
+  `DedupSort`, a token one rule removes (`support/DedupImports.scala`) and the sorting rule adds to. `SharedLints`
+  (the review of `0c12b7579`), a build's case: a file two configuration files' configurations share, one of them
+  revisited by round two, the other's lint on it printed by the first run as by the second; `SharedState` (the review
+  of `2f7c9255a`), a project rule whose lint depends on its visits, the revisited job's shared file joined with that
+  job's own round-one results.
+- `Suppression/AtomicCommentsBetween`, `AtomicCommentsOneKept` and `AtomicCommentsApart` (the review of `4fd7f3293`)
+  as scalafix-cli 0.14.7 leaves them with a rule removing `List` atomically: the removal touches no anchor and is
+  applied, the anchors suppressing nothing; in `AtomicCommentsApart` `List` goes without a comma, which teq writes as
+  dotty's `checkImports` edit.
 - `Driver/<name>`: the driver's own cases, each a probe of the review of `380470c41`: `StalePatch` (a patch made from
-  another document refused, `refused.txt`), `LiteralSuffixes` (a literal's suffix in its tree's span and its
+  another document refused, `refused.txt`), `Extractors` (the review of `e9bffbf79`: `Defn.Var`'s legacy `rhs`, Some and None, and the formats and value
+  `Lit.Double`, `Lit.Float` and `Lit.String` give as `String`s, as scalameta 4.17.4's), `LiteralUnits` (the review of `2f7c9255a`: a string's value a `String`, the literals' UTF-16
+  units as scalameta 4.17.4 reads them, a lone surrogate's in a string, a part and a char), `LiteralSuffixes` (a literal's suffix in its tree's span and its
   ancestors'), `TieOrder` (two patches at one start, refused in dotty's order), `CRComment` (a line comment ending at a
   lone CR, `Lone.scala`); their rules are in `support/`.
 - The probes of the review of `a24540c28`: `NoUnusedImports/macro_expansion_block` (`macro_expansion` in a package
@@ -108,6 +129,34 @@ otherwise, and under `--check` 1 where there is a lint or an edit.
   error), `marks/` (a wildcard, a hiding selector, a given and a name marked by readers in other files), `withheld/`,
   `records/` (an inline expansion and overloads), `blocks/` (CRLF, braced packages), `phase-errors/`, `round2/`; their
   rule `support/Print.scala` prints its configuration.
+- The cases of app-fix-rules (the tree laid out as scalameta 4.17.0's): `Driver/LayoutPackages`, `LayoutTemplates`,
+  `LayoutClauses`, `LayoutDefinitions`, `LayoutTerms` and `LayoutPatternsAndTypes`, each with the layout
+  `support/MetaDump.scala` prints of its input under scalameta 4.17.0 (`scalameta.txt`), read against teq's;
+  `DisableSyntax/ScalametaLayout` and `ExtensionFinalize` (the rule's checks over that layout), their lints those
+  scalafix-cli 0.14.7 reports over the same inputs; `Driver/RuleMetadata` (`Rule`'s `isLinter`, `isRewrite` and
+  `isExperimental`, a rule's own and DisableSyntax's, a linter as its source declares; rule `support/Metadata.scala`).
+  `Driver/CheckPositions`: `--check` prints round one's lints at the input's lines (scalafix's `--check`), a rewrite
+  its last round's at the lines of the file it writes.
+  `Driver/ImporteeExtractors`: `Importee.Given(tpe)` and `GivenAll()` as scalameta's extractors (rule
+  `support/Importees.scala`).
+  `Driver/StablePatterns`: a stable identifier as a case's pattern, its `Term.Name` or `Term.Select` a `Pat` as
+  scalameta's (rule `support/StablePatterns.scala`).
+  `Driver/LayoutParenTerms`, `LayoutParenPatterns` and `LayoutParenTypes`: a term, a pattern and a type in parentheses
+  at every grammar position, against scalameta 4.17.4's layout; the ledger of the parser's parentheses (the pass over
+  `2865c7af2`) added a parameter's type in every clause, a dependent function type's named parameter, an argument's
+  ascription, a guard's condition and a colon argument's body. `Driver/ReplaceLambdaParam` (rule
+  `support/ReplaceLambdaParam.scala`): an ordinary and a colon argument's lambda parameter of a parenthesized type
+  replaced whole, scalafix-core 0.14.9's output. The review of `e0d4a9c4f`: `Driver/LayoutAnnotateImplicit` (each
+  written annotation ascription its own `Term.Annotate`, an implicit lambda's `Mod.Implicit`s, against scalameta's
+  layout), `ImplicitLambdaParams` (the clause's and the parameter's syntax and modifiers, rule
+  `support/ImplicitParams.scala`), `ReplaceImplicitParam` and `UnwrapNestedAnnotate` (rules
+  `support/ReplaceImplicitParam.scala`, `support/UnwrapAnnotate.scala`, scalafix-core 0.14.9's outputs).
+  `Suppression/OkLastStatement`: an ok anchor trailing the last statement of a colon body is that statement's
+  `endComment` alone, scalameta 4.17.0's parser sharing a trailing comment up to a block (`atPosWithBody`).
+  `Driver/AnonymousParams`: an anonymous parameter's name, scalameta's `Name.Anonymous` (rule `support/ParamNames.scala`).
+  The verb's `include`, `include error` and `include setting` checks: the configuration read as typesafe-config
+  1.4.6 reads it under metaconfig 0.18.6, whose results over the cases of src/fix/config.rs's tests were recorded by
+  running both over the same files.
 
 ## Fixtures not taken
 

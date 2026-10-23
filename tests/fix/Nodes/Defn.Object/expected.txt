@@ -1,0 +1,74 @@
+Nodes/Defn.Object/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Defn.Object, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Defn_Object\n\nobject Defn_Object:\n  val marker = 0 // assert: DumpStructure.structure\n  object A\n  case object B\n  object C extends Serializable:\n    val x = 1\n"
+  stats Pkg syntax="package nodes.Defn_Object\n\nobject Defn_Object:\n  val marker = 0 // assert: DumpStructure.structure\n  object A\n  case object B\n  object C extends Serializable:\n    val x = 1"
+    .stats = [Defn.Object "object Defn_Object:\n  val marker = 0 // assert: DumpStructure.structure\n  object A\n  case object B\n  object C extends Serializable:\n    val x = 1"]
+    ref Term.Select syntax="nodes.Defn_Object"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Defn_Object" syntax="Defn_Object"
+    body Pkg.Body syntax="object Defn_Object:\n  val marker = 0 // assert: DumpStructure.structure\n  object A\n  case object B\n  object C extends Serializable:\n    val x = 1"
+      stats Defn.Object syntax="object Defn_Object:\n  val marker = 0 // assert: DumpStructure.structure\n  object A\n  case object B\n  object C extends Serializable:\n    val x = 1"
+        mods Nil
+        name Term.Name value="Defn_Object" syntax="Defn_Object"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  object A\n  case object B\n  object C extends Serializable:\n    val x = 1"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Object "object A", Defn.Object "case object B", Defn.Object "object C extends Serializable:\n    val x = 1"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  object A\n  case object B\n  object C extends Serializable:\n    val x = 1"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Object syntax="object A"
+              mods Nil
+              name Term.Name value="A" syntax="A"
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Object syntax="case object B"
+              mods Mod.Case syntax="case"
+              name Term.Name value="B" syntax="B"
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Object syntax="object C extends Serializable:\n    val x = 1"
+              mods Nil
+              name Term.Name value="C" syntax="C"
+              templ Template syntax="extends Serializable:\n    val x = 1"
+                .self = Self ""
+                .stats = [Defn.Val "val x = 1"]
+                earlyClause None
+                inits Init syntax="Serializable"
+                  .argss = []
+                  tpe Type.Name value="Serializable" syntax="Serializable"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+                body Template.Body syntax=":\n    val x = 1"
+                  selfOpt None
+                  stats Defn.Val syntax="val x = 1"
+                    mods Nil
+                    pats Pat.Var syntax="x"
+                      name Term.Name value="x" syntax="x"
+                    decltpe None
+                    rhs Lit.Int value=1 syntax="1"
+                derives Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

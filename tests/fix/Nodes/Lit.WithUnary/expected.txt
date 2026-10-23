@@ -1,0 +1,46 @@
+Nodes/Lit.WithUnary/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Lit.WithUnary, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_WithUnary\n\nobject Lit_WithUnary:\n  val marker = 0 // assert: DumpStructure.structure\n  val c = -'a'\n  val d = +'b'\n"
+  stats Pkg syntax="package nodes.Lit_WithUnary\n\nobject Lit_WithUnary:\n  val marker = 0 // assert: DumpStructure.structure\n  val c = -'a'\n  val d = +'b'"
+    .stats = [Defn.Object "object Lit_WithUnary:\n  val marker = 0 // assert: DumpStructure.structure\n  val c = -'a'\n  val d = +'b'"]
+    ref Term.Select syntax="nodes.Lit_WithUnary"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_WithUnary" syntax="Lit_WithUnary"
+    body Pkg.Body syntax="object Lit_WithUnary:\n  val marker = 0 // assert: DumpStructure.structure\n  val c = -'a'\n  val d = +'b'"
+      stats Defn.Object syntax="object Lit_WithUnary:\n  val marker = 0 // assert: DumpStructure.structure\n  val c = -'a'\n  val d = +'b'"
+        mods Nil
+        name Term.Name value="Lit_WithUnary" syntax="Lit_WithUnary"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val c = -'a'\n  val d = +'b'"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val c = -'a'", Defn.Val "val d = +'b'"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val c = -'a'\n  val d = +'b'"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val c = -'a'"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Lit.WithUnary syntax="-'a'"
+                .value = ("-", "a")
+                op Term.Name value="-" syntax="-"
+                arg Lit.Char value="a" syntax="'a'"
+            stats Defn.Val syntax="val d = +'b'"
+              mods Nil
+              pats Pat.Var syntax="d"
+                name Term.Name value="d" syntax="d"
+              decltpe None
+              rhs Lit.WithUnary syntax="+'b'"
+                .value = ("+", "b")
+                op Term.Name value="+" syntax="+"
+                arg Lit.Char value="b" syntax="'b'"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

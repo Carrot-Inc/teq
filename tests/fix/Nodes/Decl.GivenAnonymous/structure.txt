@@ -1,0 +1,90 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Decl.GivenAnonymous, its fields as scalameta 4.17.4's (structure.txt): a given of no body, which scalac 3.8.4 makes\n// an instance of its type.\npackage nodes.Decl_GivenAnonymous\n\ntrait Show\ntrait Eq[A]\n\nobject Decl_GivenAnonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  given Show\n  given Eq[Int]\n"
+  stats Pkg syntax="package nodes.Decl_GivenAnonymous\n\ntrait Show\ntrait Eq[A]\n\nobject Decl_GivenAnonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  given Show\n  given Eq[Int]"
+    .stats = [Defn.Trait "trait Show", Defn.Trait "trait Eq[A]", Defn.Object "object Decl_GivenAnonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  given Show\n  given Eq[Int]"]
+    ref Term.Select syntax="nodes.Decl_GivenAnonymous"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Decl_GivenAnonymous" syntax="Decl_GivenAnonymous"
+    body Pkg.Body syntax="trait Show\ntrait Eq[A]\n\nobject Decl_GivenAnonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  given Show\n  given Eq[Int]"
+      stats Defn.Trait syntax="trait Show"
+        .tparams = []
+        mods Nil
+        name Type.Name value="Show" syntax="Show"
+        tparamClause Type.ParamClause syntax=""
+          values Nil
+        ctor Ctor.Primary syntax=""
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Nil
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Trait syntax="trait Eq[A]"
+        .tparams = [Type.Param "A"]
+        mods Nil
+        name Type.Name value="Eq" syntax="Eq"
+        tparamClause Type.ParamClause syntax="[A]"
+          values Type.Param syntax="A"
+            .tparams = []
+            mods Nil
+            name Type.Name value="A" syntax="A"
+            tparamClause Type.ParamClause syntax=""
+              values Nil
+            bounds Type.Bounds syntax=""
+              lo None
+              hi None
+              context Nil
+              view Nil
+        ctor Ctor.Primary syntax=""
+          mods Nil
+          name Name.Anonymous syntax=""
+            .value = ""
+          paramClauses Nil
+        templ Template syntax=""
+          .self = Self ""
+          .stats = []
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=""
+            selfOpt None
+            stats Nil
+          derives Nil
+      stats Defn.Object syntax="object Decl_GivenAnonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  given Show\n  given Eq[Int]"
+        mods Nil
+        name Term.Name value="Decl_GivenAnonymous" syntax="Decl_GivenAnonymous"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  given Show\n  given Eq[Int]"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Decl.GivenAnonymous "given Show", Decl.GivenAnonymous "given Eq[Int]"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  given Show\n  given Eq[Int]"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Decl.GivenAnonymous syntax="given Show"
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              decltpe Type.Name value="Show" syntax="Show"
+            stats Decl.GivenAnonymous syntax="given Eq[Int]"
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              decltpe Type.Apply syntax="Eq[Int]"
+                .args = [Type.Name "Int"]
+                tpe Type.Name value="Eq" syntax="Eq"
+                argClause Type.ArgClause syntax="[Int]"
+                  values Type.Name value="Int" syntax="Int"
+          derives Nil

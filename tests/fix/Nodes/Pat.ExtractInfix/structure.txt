@@ -1,0 +1,65 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Pat.ExtractInfix, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Pat_ExtractInfix\n\nobject Pat_ExtractInfix:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case h :: t => h\n    case _ => 0\n"
+  stats Pkg syntax="package nodes.Pat_ExtractInfix\n\nobject Pat_ExtractInfix:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case h :: t => h\n    case _ => 0"
+    .stats = [Defn.Object "object Pat_ExtractInfix:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case h :: t => h\n    case _ => 0"]
+    ref Term.Select syntax="nodes.Pat_ExtractInfix"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Pat_ExtractInfix" syntax="Pat_ExtractInfix"
+    body Pkg.Body syntax="object Pat_ExtractInfix:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case h :: t => h\n    case _ => 0"
+      stats Defn.Object syntax="object Pat_ExtractInfix:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case h :: t => h\n    case _ => 0"
+        mods Nil
+        name Term.Name value="Pat_ExtractInfix" syntax="Pat_ExtractInfix"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case h :: t => h\n    case _ => 0"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(x: List[Int]) = x match\n    case h :: t => h\n    case _ => 0"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(x: List[Int]) = x match\n    case h :: t => h\n    case _ => 0"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(x: List[Int]) = x match\n    case h :: t => h\n    case _ => 0"
+              .paramClauses = [Term.ParamClause "(x: List[Int])"]
+              .paramss = [[Term.Param "x: List[Int]"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(x: List[Int])"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(x: List[Int])"
+                  values Term.Param syntax="x: List[Int]"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Apply syntax="List[Int]"
+                      .args = [Type.Name "Int"]
+                      tpe Type.Name value="List" syntax="List"
+                      argClause Type.ArgClause syntax="[Int]"
+                        values Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Match syntax="x match\n    case h :: t => h\n    case _ => 0"
+                .cases = [Case "case h :: t => h", Case "case _ => 0"]
+                expr Term.Name value="x" syntax="x"
+                casesBlock Term.CasesBlock syntax="case h :: t => h\n    case _ => 0"
+                  cases Case syntax="case h :: t => h"
+                    pat Pat.ExtractInfix syntax="h :: t"
+                      .rhs = [Pat.Var "t"]
+                      lhs Pat.Var syntax="h"
+                        name Term.Name value="h" syntax="h"
+                      op Term.Name value="::" syntax="::"
+                      argClause Pat.ArgClause syntax="t"
+                        values Pat.Var syntax="t"
+                          name Term.Name value="t" syntax="t"
+                    cond None
+                    body Term.Name value="h" syntax="h"
+                  cases Case syntax="case _ => 0"
+                    pat Pat.Wildcard syntax="_"
+                    cond None
+                    body Lit.Int value=0 syntax="0"
+                mods Nil
+          derives Nil

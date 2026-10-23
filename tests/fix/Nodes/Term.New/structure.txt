@@ -1,0 +1,174 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.New, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_New\n\nobject Term_New:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)(b: Int)\n  class D[A](a: A)\n  class E\n  val c = new C(1)(2)\n  val d = new D[Int](1)\n  val e = new E\n  val f = new E()\n"
+  stats Pkg syntax="package nodes.Term_New\n\nobject Term_New:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)(b: Int)\n  class D[A](a: A)\n  class E\n  val c = new C(1)(2)\n  val d = new D[Int](1)\n  val e = new E\n  val f = new E()"
+    .stats = [Defn.Object "object Term_New:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)(b: Int)\n  class D[A](a: A)\n  class E\n  val c = new C(1)(2)\n  val d = new D[Int](1)\n  val e = new E\n  val f = new E()"]
+    ref Term.Select syntax="nodes.Term_New"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_New" syntax="Term_New"
+    body Pkg.Body syntax="object Term_New:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)(b: Int)\n  class D[A](a: A)\n  class E\n  val c = new C(1)(2)\n  val d = new D[Int](1)\n  val e = new E\n  val f = new E()"
+      stats Defn.Object syntax="object Term_New:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)(b: Int)\n  class D[A](a: A)\n  class E\n  val c = new C(1)(2)\n  val d = new D[Int](1)\n  val e = new E\n  val f = new E()"
+        mods Nil
+        name Term.Name value="Term_New" syntax="Term_New"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)(b: Int)\n  class D[A](a: A)\n  class E\n  val c = new C(1)(2)\n  val d = new D[Int](1)\n  val e = new E\n  val f = new E()"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class C(a: Int)(b: Int)", Defn.Class "class D[A](a: A)", Defn.Class "class E", Defn.Val "val c = new C(1)(2)", Defn.Val "val d = new D[Int](1)", Defn.Val "val e = new E", Defn.Val "val f = new E()"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)(b: Int)\n  class D[A](a: A)\n  class E\n  val c = new C(1)(2)\n  val d = new D[Int](1)\n  val e = new E\n  val f = new E()"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class C(a: Int)(b: Int)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(a: Int)(b: Int)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(a: Int)"
+                  values Term.Param syntax="a: Int"
+                    mods Nil
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+                paramClauses Term.ParamClause syntax="(b: Int)"
+                  values Term.Param syntax="b: Int"
+                    mods Nil
+                    name Term.Name value="b" syntax="b"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Class syntax="class D[A](a: A)"
+              .tparams = [Type.Param "A"]
+              mods Nil
+              name Type.Name value="D" syntax="D"
+              tparamClause Type.ParamClause syntax="[A]"
+                values Type.Param syntax="A"
+                  .tparams = []
+                  mods Nil
+                  name Type.Name value="A" syntax="A"
+                  tparamClause Type.ParamClause syntax=""
+                    values Nil
+                  bounds Type.Bounds syntax=""
+                    lo None
+                    hi None
+                    context Nil
+                    view Nil
+              ctor Ctor.Primary syntax="(a: A)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(a: A)"
+                  values Term.Param syntax="a: A"
+                    mods Nil
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="A" syntax="A"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Class syntax="class E"
+              .tparams = []
+              mods Nil
+              name Type.Name value="E" syntax="E"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Val syntax="val c = new C(1)(2)"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Term.New syntax="new C(1)(2)"
+                init Init syntax="C(1)(2)"
+                  .argss = [[Lit.Int "1"], [Lit.Int "2"]]
+                  tpe Type.Name value="C" syntax="C"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Term.ArgClause syntax="(1)"
+                    values Lit.Int value=1 syntax="1"
+                    mod None
+                  argClauses Term.ArgClause syntax="(2)"
+                    values Lit.Int value=2 syntax="2"
+                    mod None
+            stats Defn.Val syntax="val d = new D[Int](1)"
+              mods Nil
+              pats Pat.Var syntax="d"
+                name Term.Name value="d" syntax="d"
+              decltpe None
+              rhs Term.New syntax="new D[Int](1)"
+                init Init syntax="D[Int](1)"
+                  .argss = [[Lit.Int "1"]]
+                  tpe Type.Apply syntax="D[Int]"
+                    .args = [Type.Name "Int"]
+                    tpe Type.Name value="D" syntax="D"
+                    argClause Type.ArgClause syntax="[Int]"
+                      values Type.Name value="Int" syntax="Int"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Term.ArgClause syntax="(1)"
+                    values Lit.Int value=1 syntax="1"
+                    mod None
+            stats Defn.Val syntax="val e = new E"
+              mods Nil
+              pats Pat.Var syntax="e"
+                name Term.Name value="e" syntax="e"
+              decltpe None
+              rhs Term.New syntax="new E"
+                init Init syntax="E"
+                  .argss = []
+                  tpe Type.Name value="E" syntax="E"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Nil
+            stats Defn.Val syntax="val f = new E()"
+              mods Nil
+              pats Pat.Var syntax="f"
+                name Term.Name value="f" syntax="f"
+              decltpe None
+              rhs Term.New syntax="new E()"
+                init Init syntax="E()"
+                  .argss = [[]]
+                  tpe Type.Name value="E" syntax="E"
+                  name Name.Anonymous syntax=""
+                    .value = ""
+                  argClauses Term.ArgClause syntax="()"
+                    values Nil
+                    mod None
+          derives Nil

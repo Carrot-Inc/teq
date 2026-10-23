@@ -1,0 +1,98 @@
+Nodes/Mod.Private/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.Private: unqualified, qualified and this-qualified, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Private\n\nobject Mod_Private:\n  val marker = 0 // assert: DumpStructure.structure\n  private val a = 1\n  private[Mod_Private] val b = 2\n  class C:\n    private[this] val c = 3\n  class D private[/* note */ Mod_Private] (x: Int)\n"
+  stats Pkg syntax="package nodes.Mod_Private\n\nobject Mod_Private:\n  val marker = 0 // assert: DumpStructure.structure\n  private val a = 1\n  private[Mod_Private] val b = 2\n  class C:\n    private[this] val c = 3\n  class D private[/* note */ Mod_Private] (x: Int)"
+    .stats = [Defn.Object "object Mod_Private:\n  val marker = 0 // assert: DumpStructure.structure\n  private val a = 1\n  private[Mod_Private] val b = 2\n  class C:\n    private[this] val c = 3\n  class D private[/* note */ Mod_Private] (x: Int)"]
+    ref Term.Select syntax="nodes.Mod_Private"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Private" syntax="Mod_Private"
+    body Pkg.Body syntax="object Mod_Private:\n  val marker = 0 // assert: DumpStructure.structure\n  private val a = 1\n  private[Mod_Private] val b = 2\n  class C:\n    private[this] val c = 3\n  class D private[/* note */ Mod_Private] (x: Int)"
+      stats Defn.Object syntax="object Mod_Private:\n  val marker = 0 // assert: DumpStructure.structure\n  private val a = 1\n  private[Mod_Private] val b = 2\n  class C:\n    private[this] val c = 3\n  class D private[/* note */ Mod_Private] (x: Int)"
+        mods Nil
+        name Term.Name value="Mod_Private" syntax="Mod_Private"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  private val a = 1\n  private[Mod_Private] val b = 2\n  class C:\n    private[this] val c = 3\n  class D private[/* note */ Mod_Private] (x: Int)"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "private val a = 1", Defn.Val "private[Mod_Private] val b = 2", Defn.Class "class C:\n    private[this] val c = 3", Defn.Class "class D private[/* note */ Mod_Private] (x: Int)"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  private val a = 1\n  private[Mod_Private] val b = 2\n  class C:\n    private[this] val c = 3\n  class D private[/* note */ Mod_Private] (x: Int)"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="private val a = 1"
+              mods Mod.Private syntax="private"
+                within Name.Anonymous syntax=""
+                  .value = ""
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Val syntax="private[Mod_Private] val b = 2"
+              mods Mod.Private syntax="private[Mod_Private]"
+                within Name.Indeterminate value="Mod_Private" syntax="Mod_Private"
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Lit.Int value=2 syntax="2"
+            stats Defn.Class syntax="class C:\n    private[this] val c = 3"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    private[this] val c = 3"
+                .self = Self ""
+                .stats = [Defn.Val "private[this] val c = 3"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    private[this] val c = 3"
+                  selfOpt None
+                  stats Defn.Val syntax="private[this] val c = 3"
+                    mods Mod.Private syntax="private[this]"
+                      within Term.This syntax="this"
+                        qual Name.Anonymous syntax=""
+                          .value = ""
+                    pats Pat.Var syntax="c"
+                      name Term.Name value="c" syntax="c"
+                    decltpe None
+                    rhs Lit.Int value=3 syntax="3"
+                derives Nil
+            stats Defn.Class syntax="class D private[/* note */ Mod_Private] (x: Int)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="D" syntax="D"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="private[/* note */ Mod_Private] (x: Int)"
+                mods Mod.Private syntax="private[/* note */ Mod_Private]"
+                  within Name.Indeterminate value="Mod_Private" syntax="Mod_Private"
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(x: Int)"
+                  values Term.Param syntax="x: Int"
+                    mods Nil
+                    name Term.Name value="x" syntax="x"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

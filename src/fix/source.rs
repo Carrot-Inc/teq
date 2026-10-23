@@ -473,14 +473,13 @@ mod tests {
 
     #[test]
     fn modifiers_and_variances_where_written() {
-        // The tree finds them over the kept tokens; the parser records none of them.
+        // The tree finds them over the kept tokens; the compiler's parser records none of them.
         use crate::fix::nodes::K;
         let text = "object O {\n  final implicit val a: Int = 1\n  class C[+A, -B]\n  @deprecated(\"x\") private[O] def f = 2\n}\n";
         let interner = crate::intern::Interner::new();
         let (asts, _) = crate::frontend::parse_one(text, &interner, crate::parser::Syntax { keep: true, index: true, ..Default::default() });
         let kept = asts[0].notes.source.as_deref().expect("the source kept");
-        let refs: Vec<&crate::ast::Ast> = asts.iter().collect();
-        let tree = crate::fix::nodes::build(text, &refs, kept, &interner);
+        let tree = crate::fix::parse::parse(text, &editable(text, kept).unwrap(), crate::fix::parse::Dialect::SCALA3).ok().expect("the tree");
         let mut written: Vec<(u32, &str)> = tree
             .nodes
             .iter()
@@ -488,7 +487,7 @@ mod tests {
             .map(|n| (n.span.start, &text[n.span.start as usize..n.span.end as usize]))
             .collect();
         written.sort();
-        assert_eq!(written.iter().map(|w| w.1).collect::<Vec<_>>(), ["final", "implicit", "+", "-", "private"]);
+        assert_eq!(written.iter().map(|w| w.1).collect::<Vec<_>>(), ["final", "implicit", "+", "-", "private[O]"]);
         let (plain, _) = crate::frontend::parse_one(text, &interner, crate::parser::Syntax::default());
         assert!(plain[0].notes.source.is_none());
     }

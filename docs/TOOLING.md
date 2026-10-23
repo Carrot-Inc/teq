@@ -144,7 +144,9 @@ session of a closure types that configuration's roots, `--source-at`), the gener
 `runtime` and `test`, a JVM test context's `parallelism` among it, "Tests." below; and `compile`'s `evictions`,
 absent where there is none: each dependency the build declares at a version its resolution did not choose, by its
 key, with the key of the jar chosen in its place, which a script's `//> using dep` of the declared version resolves
-to under `teq interp`), the `run`, `dev` and `stage`
+to under `teq interp`; and `compile`'s and `test`'s `scalafix` where a project of the build enables sbt-scalafix,
+`config`, the file sbt-scalafix resolves there (`scalafixConfig`, absent for the root's `.scalafix.conf`), and `skip`,
+true where `scalafix / skip` holds or the project lacks the plugin, which `teq fix` follows), the `run`, `dev` and `stage`
 blocks the verbs read, and the description the plugin's own tasks build from. A Mill build's configurations say
 more (below, "The export of a Mill build"): `transitive: false`, the classpath's products the whole of what the
 sources see; a test configuration's `runtimeClasspath`, what its suites run on where that is not its classpath,

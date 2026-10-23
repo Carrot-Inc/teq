@@ -1,0 +1,51 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Mod.Abstract, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Mod_Abstract\n\nobject Mod_Abstract:\n  val marker = 0 // assert: DumpStructure.structure\n  abstract class C:\n    def f: Int\n"
+  stats Pkg syntax="package nodes.Mod_Abstract\n\nobject Mod_Abstract:\n  val marker = 0 // assert: DumpStructure.structure\n  abstract class C:\n    def f: Int"
+    .stats = [Defn.Object "object Mod_Abstract:\n  val marker = 0 // assert: DumpStructure.structure\n  abstract class C:\n    def f: Int"]
+    ref Term.Select syntax="nodes.Mod_Abstract"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Mod_Abstract" syntax="Mod_Abstract"
+    body Pkg.Body syntax="object Mod_Abstract:\n  val marker = 0 // assert: DumpStructure.structure\n  abstract class C:\n    def f: Int"
+      stats Defn.Object syntax="object Mod_Abstract:\n  val marker = 0 // assert: DumpStructure.structure\n  abstract class C:\n    def f: Int"
+        mods Nil
+        name Term.Name value="Mod_Abstract" syntax="Mod_Abstract"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  abstract class C:\n    def f: Int"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "abstract class C:\n    def f: Int"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  abstract class C:\n    def f: Int"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="abstract class C:\n    def f: Int"
+              .tparams = []
+              mods Mod.Abstract syntax="abstract"
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=":\n    def f: Int"
+                .self = Self ""
+                .stats = [Decl.Def "def f: Int"]
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=":\n    def f: Int"
+                  selfOpt None
+                  stats Decl.Def syntax="def f: Int"
+                    .paramClauses = []
+                    .paramss = []
+                    .tparams = []
+                    mods Nil
+                    name Term.Name value="f" syntax="f"
+                    paramClauseGroups Nil
+                    decltpe Type.Name value="Int" syntax="Int"
+                derives Nil
+          derives Nil

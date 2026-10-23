@@ -1,0 +1,92 @@
+Nodes/Term.Apply/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Apply, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Apply\n\nobject Term_Apply:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(b: Int) = a\n  val x = f(1)(2)\n  val y = List(1, 2)\n  val z = println()\n"
+  stats Pkg syntax="package nodes.Term_Apply\n\nobject Term_Apply:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(b: Int) = a\n  val x = f(1)(2)\n  val y = List(1, 2)\n  val z = println()"
+    .stats = [Defn.Object "object Term_Apply:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(b: Int) = a\n  val x = f(1)(2)\n  val y = List(1, 2)\n  val z = println()"]
+    ref Term.Select syntax="nodes.Term_Apply"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Apply" syntax="Term_Apply"
+    body Pkg.Body syntax="object Term_Apply:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(b: Int) = a\n  val x = f(1)(2)\n  val y = List(1, 2)\n  val z = println()"
+      stats Defn.Object syntax="object Term_Apply:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(b: Int) = a\n  val x = f(1)(2)\n  val y = List(1, 2)\n  val z = println()"
+        mods Nil
+        name Term.Name value="Term_Apply" syntax="Term_Apply"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(b: Int) = a\n  val x = f(1)(2)\n  val y = List(1, 2)\n  val z = println()"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(a: Int)(b: Int) = a", Defn.Val "val x = f(1)(2)", Defn.Val "val y = List(1, 2)", Defn.Val "val z = println()"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(a: Int)(b: Int) = a\n  val x = f(1)(2)\n  val y = List(1, 2)\n  val z = println()"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(a: Int)(b: Int) = a"
+              .paramClauses = [Term.ParamClause "(a: Int)", Term.ParamClause "(b: Int)"]
+              .paramss = [[Term.Param "a: Int"], [Term.Param "b: Int"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(a: Int)(b: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(a: Int)"
+                  values Term.Param syntax="a: Int"
+                    mods Nil
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+                paramClauses Term.ParamClause syntax="(b: Int)"
+                  values Term.Param syntax="b: Int"
+                    mods Nil
+                    name Term.Name value="b" syntax="b"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              decltpe None
+              body Term.Name value="a" syntax="a"
+            stats Defn.Val syntax="val x = f(1)(2)"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Term.Apply syntax="f(1)(2)"
+                .args = [Lit.Int "2"]
+                fun Term.Apply syntax="f(1)"
+                  .args = [Lit.Int "1"]
+                  fun Term.Name value="f" syntax="f"
+                  argClause Term.ArgClause syntax="(1)"
+                    values Lit.Int value=1 syntax="1"
+                    mod None
+                argClause Term.ArgClause syntax="(2)"
+                  values Lit.Int value=2 syntax="2"
+                  mod None
+            stats Defn.Val syntax="val y = List(1, 2)"
+              mods Nil
+              pats Pat.Var syntax="y"
+                name Term.Name value="y" syntax="y"
+              decltpe None
+              rhs Term.Apply syntax="List(1, 2)"
+                .args = [Lit.Int "1", Lit.Int "2"]
+                fun Term.Name value="List" syntax="List"
+                argClause Term.ArgClause syntax="(1, 2)"
+                  values Lit.Int value=1 syntax="1"
+                  values Lit.Int value=2 syntax="2"
+                  mod None
+            stats Defn.Val syntax="val z = println()"
+              mods Nil
+              pats Pat.Var syntax="z"
+                name Term.Name value="z" syntax="z"
+              decltpe None
+              rhs Term.Apply syntax="println()"
+                .args = []
+                fun Term.Name value="println" syntax="println"
+                argClause Term.ArgClause syntax="()"
+                  values Nil
+                  mod None
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

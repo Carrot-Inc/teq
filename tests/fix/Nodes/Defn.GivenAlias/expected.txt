@@ -1,0 +1,89 @@
+Nodes/Defn.GivenAlias/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Defn.GivenAlias, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Defn_GivenAlias\n\nobject Defn_GivenAlias:\n  val marker = 0 // assert: DumpStructure.structure\n  given Int = 1\n  given x: String = \"\"\n  given [A]: List[A] = Nil\n  given (using i: Int): Long = 1L\n"
+  stats Pkg syntax="package nodes.Defn_GivenAlias\n\nobject Defn_GivenAlias:\n  val marker = 0 // assert: DumpStructure.structure\n  given Int = 1\n  given x: String = \"\"\n  given [A]: List[A] = Nil\n  given (using i: Int): Long = 1L"
+    .stats = [Defn.Object "object Defn_GivenAlias:\n  val marker = 0 // assert: DumpStructure.structure\n  given Int = 1\n  given x: String = \"\"\n  given [A]: List[A] = Nil\n  given (using i: Int): Long = 1L"]
+    ref Term.Select syntax="nodes.Defn_GivenAlias"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Defn_GivenAlias" syntax="Defn_GivenAlias"
+    body Pkg.Body syntax="object Defn_GivenAlias:\n  val marker = 0 // assert: DumpStructure.structure\n  given Int = 1\n  given x: String = \"\"\n  given [A]: List[A] = Nil\n  given (using i: Int): Long = 1L"
+      stats Defn.Object syntax="object Defn_GivenAlias:\n  val marker = 0 // assert: DumpStructure.structure\n  given Int = 1\n  given x: String = \"\"\n  given [A]: List[A] = Nil\n  given (using i: Int): Long = 1L"
+        mods Nil
+        name Term.Name value="Defn_GivenAlias" syntax="Defn_GivenAlias"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  given Int = 1\n  given x: String = \"\"\n  given [A]: List[A] = Nil\n  given (using i: Int): Long = 1L"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.GivenAlias "given Int = 1", Defn.GivenAlias "given x: String = \"\"", Defn.GivenAlias "given [A]: List[A] = Nil", Defn.GivenAlias "given (using i: Int): Long = 1L"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  given Int = 1\n  given x: String = \"\"\n  given [A]: List[A] = Nil\n  given (using i: Int): Long = 1L"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.GivenAlias syntax="given Int = 1"
+              .paramClauses = []
+              .tparams = []
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Nil
+              decltpe Type.Name value="Int" syntax="Int"
+              body Lit.Int value=1 syntax="1"
+            stats Defn.GivenAlias syntax="given x: String = \"\""
+              .paramClauses = []
+              .tparams = []
+              mods Nil
+              name Term.Name value="x" syntax="x"
+              paramClauseGroups Nil
+              decltpe Type.Name value="String" syntax="String"
+              body Lit.String value="" syntax="\"\""
+            stats Defn.GivenAlias syntax="given [A]: List[A] = Nil"
+              .paramClauses = []
+              .tparams = [Type.Param "A"]
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Member.ParamClauseGroup syntax="[A]"
+                tparamClause Type.ParamClause syntax="[A]"
+                  values Type.Param syntax="A"
+                    .tparams = []
+                    mods Nil
+                    name Type.Name value="A" syntax="A"
+                    tparamClause Type.ParamClause syntax=""
+                      values Nil
+                    bounds Type.Bounds syntax=""
+                      lo None
+                      hi None
+                      context Nil
+                      view Nil
+                paramClauses Nil
+              decltpe Type.Apply syntax="List[A]"
+                .args = [Type.Name "A"]
+                tpe Type.Name value="List" syntax="List"
+                argClause Type.ArgClause syntax="[A]"
+                  values Type.Name value="A" syntax="A"
+              body Term.Name value="Nil" syntax="Nil"
+            stats Defn.GivenAlias syntax="given (using i: Int): Long = 1L"
+              .paramClauses = [Term.ParamClause "(using i: Int)"]
+              .tparams = []
+              mods Nil
+              name Name.Anonymous syntax=""
+                .value = ""
+              paramClauseGroups Member.ParamClauseGroup syntax="(using i: Int)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(using i: Int)"
+                  values Term.Param syntax="i: Int"
+                    mods Mod.Using syntax="using"
+                    name Term.Name value="i" syntax="i"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod Mod.Using syntax="using"
+              decltpe Type.Name value="Long" syntax="Long"
+              body Lit.Long value=1 syntax="1L"
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

@@ -1,0 +1,58 @@
+Nodes/Type.Tuple/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Type.Tuple, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Type_Tuple\n\nobject Type_Tuple:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = (Int, String)\n  type B = (Int, (String, Boolean))\n"
+  stats Pkg syntax="package nodes.Type_Tuple\n\nobject Type_Tuple:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = (Int, String)\n  type B = (Int, (String, Boolean))"
+    .stats = [Defn.Object "object Type_Tuple:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = (Int, String)\n  type B = (Int, (String, Boolean))"]
+    ref Term.Select syntax="nodes.Type_Tuple"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Type_Tuple" syntax="Type_Tuple"
+    body Pkg.Body syntax="object Type_Tuple:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = (Int, String)\n  type B = (Int, (String, Boolean))"
+      stats Defn.Object syntax="object Type_Tuple:\n  val marker = 0 // assert: DumpStructure.structure\n  type A = (Int, String)\n  type B = (Int, (String, Boolean))"
+        mods Nil
+        name Term.Name value="Type_Tuple" syntax="Type_Tuple"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type A = (Int, String)\n  type B = (Int, (String, Boolean))"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Type "type A = (Int, String)", Defn.Type "type B = (Int, (String, Boolean))"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  type A = (Int, String)\n  type B = (Int, (String, Boolean))"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Type syntax="type A = (Int, String)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="A" syntax="A"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Tuple syntax="(Int, String)"
+                args Type.Name value="Int" syntax="Int"
+                args Type.Name value="String" syntax="String"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+            stats Defn.Type syntax="type B = (Int, (String, Boolean))"
+              .tparams = []
+              mods Nil
+              name Type.Name value="B" syntax="B"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              body Type.Tuple syntax="(Int, (String, Boolean))"
+                args Type.Name value="Int" syntax="Int"
+                args Type.Tuple syntax="(String, Boolean)"
+                  args Type.Name value="String" syntax="String"
+                  args Type.Name value="Boolean" syntax="Boolean"
+              bounds Type.Bounds syntax=""
+                lo None
+                hi None
+                context Nil
+                view Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

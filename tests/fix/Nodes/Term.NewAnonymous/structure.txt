@@ -1,0 +1,145 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.NewAnonymous, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_NewAnonymous\n\nobject Term_NewAnonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)\n  trait T\n  val a = new C(1) { val y = 2 }\n  val b = new C(1) with T {}\n  val c = new T {}\n"
+  stats Pkg syntax="package nodes.Term_NewAnonymous\n\nobject Term_NewAnonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)\n  trait T\n  val a = new C(1) { val y = 2 }\n  val b = new C(1) with T {}\n  val c = new T {}"
+    .stats = [Defn.Object "object Term_NewAnonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)\n  trait T\n  val a = new C(1) { val y = 2 }\n  val b = new C(1) with T {}\n  val c = new T {}"]
+    ref Term.Select syntax="nodes.Term_NewAnonymous"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_NewAnonymous" syntax="Term_NewAnonymous"
+    body Pkg.Body syntax="object Term_NewAnonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)\n  trait T\n  val a = new C(1) { val y = 2 }\n  val b = new C(1) with T {}\n  val c = new T {}"
+      stats Defn.Object syntax="object Term_NewAnonymous:\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)\n  trait T\n  val a = new C(1) { val y = 2 }\n  val b = new C(1) with T {}\n  val c = new T {}"
+        mods Nil
+        name Term.Name value="Term_NewAnonymous" syntax="Term_NewAnonymous"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)\n  trait T\n  val a = new C(1) { val y = 2 }\n  val b = new C(1) with T {}\n  val c = new T {}"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Class "class C(a: Int)", Defn.Trait "trait T", Defn.Val "val a = new C(1) { val y = 2 }", Defn.Val "val b = new C(1) with T {}", Defn.Val "val c = new T {}"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  class C(a: Int)\n  trait T\n  val a = new C(1) { val y = 2 }\n  val b = new C(1) with T {}\n  val c = new T {}"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Class syntax="class C(a: Int)"
+              .tparams = []
+              mods Nil
+              name Type.Name value="C" syntax="C"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax="(a: Int)"
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Term.ParamClause syntax="(a: Int)"
+                  values Term.Param syntax="a: Int"
+                    mods Nil
+                    name Term.Name value="a" syntax="a"
+                    decltpe Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Trait syntax="trait T"
+              .tparams = []
+              mods Nil
+              name Type.Name value="T" syntax="T"
+              tparamClause Type.ParamClause syntax=""
+                values Nil
+              ctor Ctor.Primary syntax=""
+                mods Nil
+                name Name.Anonymous syntax=""
+                  .value = ""
+                paramClauses Nil
+              templ Template syntax=""
+                .self = Self ""
+                .stats = []
+                earlyClause None
+                inits Nil
+                body Template.Body syntax=""
+                  selfOpt None
+                  stats Nil
+                derives Nil
+            stats Defn.Val syntax="val a = new C(1) { val y = 2 }"
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.NewAnonymous syntax="new C(1) { val y = 2 }"
+                templ Template syntax="C(1) { val y = 2 }"
+                  .self = Self ""
+                  .stats = [Defn.Val "val y = 2"]
+                  earlyClause None
+                  inits Init syntax="C(1)"
+                    .argss = [[Lit.Int "1"]]
+                    tpe Type.Name value="C" syntax="C"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    argClauses Term.ArgClause syntax="(1)"
+                      values Lit.Int value=1 syntax="1"
+                      mod None
+                  body Template.Body syntax="{ val y = 2 }"
+                    selfOpt None
+                    stats Defn.Val syntax="val y = 2"
+                      mods Nil
+                      pats Pat.Var syntax="y"
+                        name Term.Name value="y" syntax="y"
+                      decltpe None
+                      rhs Lit.Int value=2 syntax="2"
+                  derives Nil
+            stats Defn.Val syntax="val b = new C(1) with T {}"
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Term.NewAnonymous syntax="new C(1) with T {}"
+                templ Template syntax="C(1) with T {}"
+                  .self = Self ""
+                  .stats = []
+                  earlyClause None
+                  inits Init syntax="C(1)"
+                    .argss = [[Lit.Int "1"]]
+                    tpe Type.Name value="C" syntax="C"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    argClauses Term.ArgClause syntax="(1)"
+                      values Lit.Int value=1 syntax="1"
+                      mod None
+                  inits Init syntax="T"
+                    .argss = []
+                    tpe Type.Name value="T" syntax="T"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    argClauses Nil
+                  body Template.Body syntax="{}"
+                    selfOpt None
+                    stats Nil
+                  derives Nil
+            stats Defn.Val syntax="val c = new T {}"
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Term.NewAnonymous syntax="new T {}"
+                templ Template syntax="T {}"
+                  .self = Self ""
+                  .stats = []
+                  earlyClause None
+                  inits Init syntax="T"
+                    .argss = []
+                    tpe Type.Name value="T" syntax="T"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    argClauses Nil
+                  body Template.Body syntax="{}"
+                    selfOpt None
+                    stats Nil
+                  derives Nil
+          derives Nil

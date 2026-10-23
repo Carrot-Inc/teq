@@ -1,0 +1,365 @@
+# The programs of scalameta 4.17.4's InterleavedDeclSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 634 line 12 Stat dialects.Scala3 :: def f: Unit
+object W634 {
+def f: Unit
+}
+#!scalac ok
+#!regions L25/
+#!layout
+Source 0 28
+  Defn.Object 0 27
+    Term.Name 7 11
+    Template 12 27
+      Template.Body 12 27
+        Decl.Def 14 25
+          Term.Name 18 19
+          Type.Name 21 25
+#!program 635 line 15 Stat dialects.Scala3 :: def f(x: Int): Unit
+object W635 {
+def f(x: Int): Unit
+}
+#!scalac ok
+#!regions L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 11
+    Template 12 35
+      Template.Body 12 35
+        Decl.Def 14 33
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 27
+            Type.ParamClause 19 19
+            Term.ParamClause 19 27
+              Term.Param 20 26
+                Term.Name 20 21
+                Type.Name 23 26
+          Type.Name 29 33
+#!program 636 line 19 Stat dialects.Scala3 :: def f(x: Int*): Unit
+object W636 {
+def f(x: Int*): Unit
+}
+#!scalac ok
+#!regions L34/
+#!layout
+Source 0 37
+  Defn.Object 0 36
+    Term.Name 7 11
+    Template 12 36
+      Template.Body 12 36
+        Decl.Def 14 34
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 28
+            Type.ParamClause 19 19
+            Term.ParamClause 19 28
+              Term.Param 20 27
+                Term.Name 20 21
+                Type.Repeated 23 27
+                  Type.Name 23 26
+          Type.Name 30 34
+#!program 637 line 24 Stat dialects.Scala3 :: def f(x: => Int): Unit
+object W637 {
+def f(x: => Int): Unit
+}
+#!scalac ok
+#!regions L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 11
+    Template 12 38
+      Template.Body 12 38
+        Decl.Def 14 36
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 30
+            Type.ParamClause 19 19
+            Term.ParamClause 19 30
+              Term.Param 20 29
+                Term.Name 20 21
+                Type.ByName 23 29
+                  Type.Name 26 29
+          Type.Name 32 36
+#!program 638 line 28 Stat dialects.Scala3 :: def f(implicit x: Int): Unit
+object W638 {
+def f(implicit x: Int): Unit
+}
+#!scalac ok
+#!regions L42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Decl.Def 14 42
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 36
+            Type.ParamClause 19 19
+            Term.ParamClause 19 36
+              Term.Param 29 35
+                Mod.Implicit 20 28
+                Term.Name 29 30
+                Type.Name 32 35
+              Mod.Implicit 20 28
+          Type.Name 38 42
+#!program 639 line 36 Stat dialects.Scala3 :: def f: X
+object W639 {
+def f: X
+}
+#!scalac ok
+#!regions L22/
+#!layout
+Source 0 25
+  Defn.Object 0 24
+    Term.Name 7 11
+    Template 12 24
+      Template.Body 12 24
+        Decl.Def 14 22
+          Term.Name 18 19
+          Type.Name 21 22
+#!program 640 line 39 Stat dialects.Scala3 :: def f[T]: T
+object W640 {
+def f[T]: T
+}
+#!scalac ok
+#!regions L25/
+#!layout
+Source 0 28
+  Defn.Object 0 27
+    Term.Name 7 11
+    Template 12 27
+      Template.Body 12 27
+        Decl.Def 14 25
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 22
+            Type.ParamClause 19 22
+              Type.Param 20 21
+                Type.Name 20 21
+                Type.ParamClause 21 21
+                Type.Bounds 21 21
+          Type.Name 24 25
+#!program 641 line 49 Stat dialects.Scala3 :: def f[A](a: A, as: A*)[B]: B
+object W641 {
+def f[A](a: A, as: A*)[B]: B
+}
+#!scalac ok
+#!regions L42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Decl.Def 14 42
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 36
+            Type.ParamClause 19 22
+              Type.Param 20 21
+                Type.Name 20 21
+                Type.ParamClause 21 21
+                Type.Bounds 21 21
+            Term.ParamClause 22 36
+              Term.Param 23 27
+                Term.Name 23 24
+                Type.Name 26 27
+              Term.Param 29 35
+                Term.Name 29 31
+                Type.Repeated 33 35
+                  Type.Name 33 34
+          Member.ParamClauseGroup 36 39
+            Type.ParamClause 36 39
+              Type.Param 37 38
+                Type.Name 37 38
+                Type.ParamClause 38 38
+                Type.Bounds 38 38
+          Type.Name 41 42
+#!program 642 line 65 Stat dialects.Scala3 :: def f[A](a: A, as: A*)[B](b: B, bs: B*)[C](implicit c: C): B
+object W642 {
+def f[A](a: A, as: A*)[B](b: B, bs: B*)[C](implicit c: C): B
+}
+#!scalac ok
+#!regions L74/
+#!layout
+Source 0 77
+  Defn.Object 0 76
+    Term.Name 7 11
+    Template 12 76
+      Template.Body 12 76
+        Decl.Def 14 74
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 36
+            Type.ParamClause 19 22
+              Type.Param 20 21
+                Type.Name 20 21
+                Type.ParamClause 21 21
+                Type.Bounds 21 21
+            Term.ParamClause 22 36
+              Term.Param 23 27
+                Term.Name 23 24
+                Type.Name 26 27
+              Term.Param 29 35
+                Term.Name 29 31
+                Type.Repeated 33 35
+                  Type.Name 33 34
+          Member.ParamClauseGroup 36 53
+            Type.ParamClause 36 39
+              Type.Param 37 38
+                Type.Name 37 38
+                Type.ParamClause 38 38
+                Type.Bounds 38 38
+            Term.ParamClause 39 53
+              Term.Param 40 44
+                Term.Name 40 41
+                Type.Name 43 44
+              Term.Param 46 52
+                Term.Name 46 48
+                Type.Repeated 50 52
+                  Type.Name 50 51
+          Member.ParamClauseGroup 53 71
+            Type.ParamClause 53 56
+              Type.Param 54 55
+                Type.Name 54 55
+                Type.ParamClause 55 55
+                Type.Bounds 55 55
+            Term.ParamClause 56 71
+              Term.Param 66 70
+                Mod.Implicit 57 65
+                Term.Name 66 67
+                Type.Name 69 70
+              Mod.Implicit 57 65
+          Type.Name 73 74
+#!program 643 line 87 Stat dialects.Scala3 :: f[A](a: A, as: A*)[B](b: B, bs: B*)[C](implicit c: C): B [def with breaks]
+object W643 {
+def f
+  [A]
+  (a: A, as: A*)
+  [B]
+  (b: B, bs: B*)
+  [C]
+  (implicit c: C)
+  : B
+
+}
+#!scalac ok
+#!regions F95/
+#!layout
+Source 0 99
+  Defn.Object 0 98
+    Term.Name 7 11
+    Template 12 98
+      Template.Body 12 98
+        Decl.Def 14 95
+          Term.Name 18 19
+          Member.ParamClauseGroup 22 42
+            Type.ParamClause 22 25
+              Type.Param 23 24
+                Type.Name 23 24
+                Type.ParamClause 24 24
+                Type.Bounds 24 24
+            Term.ParamClause 28 42
+              Term.Param 29 33
+                Term.Name 29 30
+                Type.Name 32 33
+              Term.Param 35 41
+                Term.Name 35 37
+                Type.Repeated 39 41
+                  Type.Name 39 40
+          Member.ParamClauseGroup 45 65
+            Type.ParamClause 45 48
+              Type.Param 46 47
+                Type.Name 46 47
+                Type.ParamClause 47 47
+                Type.Bounds 47 47
+            Term.ParamClause 51 65
+              Term.Param 52 56
+                Term.Name 52 53
+                Type.Name 55 56
+              Term.Param 58 64
+                Term.Name 58 60
+                Type.Repeated 62 64
+                  Type.Name 62 63
+          Member.ParamClauseGroup 68 89
+            Type.ParamClause 68 71
+              Type.Param 69 70
+                Type.Name 69 70
+                Type.ParamClause 70 70
+                Type.Bounds 70 70
+            Term.ParamClause 74 89
+              Term.Param 84 88
+                Mod.Implicit 75 83
+                Term.Name 84 85
+                Type.Name 87 88
+              Mod.Implicit 75 83
+          Type.Name 94 95
+#!program 644 line 106 Stat dialects.Scala3 :: f[A](a: A, as: A*)[B](b: B, bs: B*)[C](implicit c: C): B [run with breaks before LP]
+object W644 {
+f[A]
+  (a1, a2)[B]
+  (b1, b2, b3)[C]
+
+}
+#!scalac ok
+#!regions L18/ L32/ F50/
+#!layout
+Source 0 54
+  Defn.Object 0 53
+    Term.Name 7 11
+    Template 12 53
+      Template.Body 12 53
+        Term.ApplyType 14 50
+          Term.Apply 14 47
+            Term.ApplyType 14 32
+              Term.Apply 14 29
+                Term.ApplyType 14 18
+                  Term.Name 14 15
+                  Type.ArgClause 15 18
+                    Type.Name 16 17
+                Term.ArgClause 21 29
+                  Term.Name 22 24
+                  Term.Name 26 28
+              Type.ArgClause 29 32
+                Type.Name 30 31
+            Term.ArgClause 35 47
+              Term.Name 36 38
+              Term.Name 40 42
+              Term.Name 44 46
+          Type.ArgClause 47 50
+            Type.Name 48 49
+#!program 645 line 121 Stat dialects.Scala3 :: f[A](a: A, as: A*)[B](b: B, bs: B*)[C](implicit c: C): B [run with breaks]
+object W645 {
+f
+  [A]
+  (a1, a2)
+  [B]
+  (b1, b2, b3)
+  [C]
+
+}
+#!scalac ok
+#!regions L15/ L21/ L32/ L38/ L53/ F59/
+#!layout
+Source 0 63
+  Defn.Object 0 62
+    Term.Name 7 11
+    Template 12 62
+      Template.Body 12 62
+        Term.ApplyType 14 59
+          Term.Apply 14 53
+            Term.ApplyType 14 38
+              Term.Apply 14 32
+                Term.ApplyType 14 21
+                  Term.Name 14 15
+                  Type.ArgClause 18 21
+                    Type.Name 19 20
+                Term.ArgClause 24 32
+                  Term.Name 25 27
+                  Term.Name 29 31
+              Type.ArgClause 35 38
+                Type.Name 36 37
+            Term.ArgClause 41 53
+              Term.Name 42 44
+              Term.Name 46 48
+              Term.Name 50 52
+          Type.ArgClause 56 59
+            Type.Name 57 58

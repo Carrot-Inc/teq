@@ -1,0 +1,48 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Lit.String, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Lit_String\n\nobject Lit_String:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = \"x\"\n  val b = \"a\\tb\"\n  val c = \"\"\"multi\n  line\"\"\"\n  val d = \"\"\n"
+  stats Pkg syntax="package nodes.Lit_String\n\nobject Lit_String:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = \"x\"\n  val b = \"a\\tb\"\n  val c = \"\"\"multi\n  line\"\"\"\n  val d = \"\""
+    .stats = [Defn.Object "object Lit_String:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = \"x\"\n  val b = \"a\\tb\"\n  val c = \"\"\"multi\n  line\"\"\"\n  val d = \"\""]
+    ref Term.Select syntax="nodes.Lit_String"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Lit_String" syntax="Lit_String"
+    body Pkg.Body syntax="object Lit_String:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = \"x\"\n  val b = \"a\\tb\"\n  val c = \"\"\"multi\n  line\"\"\"\n  val d = \"\""
+      stats Defn.Object syntax="object Lit_String:\n  val marker = 0 // assert: DumpStructure.structure\n  val a = \"x\"\n  val b = \"a\\tb\"\n  val c = \"\"\"multi\n  line\"\"\"\n  val d = \"\""
+        mods Nil
+        name Term.Name value="Lit_String" syntax="Lit_String"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = \"x\"\n  val b = \"a\\tb\"\n  val c = \"\"\"multi\n  line\"\"\"\n  val d = \"\""
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val a = \"x\"", Defn.Val "val b = \"a\\tb\"", Defn.Val "val c = \"\"\"multi\n  line\"\"\"", Defn.Val "val d = \"\""]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val a = \"x\"\n  val b = \"a\\tb\"\n  val c = \"\"\"multi\n  line\"\"\"\n  val d = \"\""
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val a = \"x\""
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Lit.String value="x" syntax="\"x\""
+            stats Defn.Val syntax="val b = \"a\\tb\""
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Lit.String value="a\tb" syntax="\"a\\tb\""
+            stats Defn.Val syntax="val c = \"\"\"multi\n  line\"\"\""
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Lit.String value="multi\n  line" syntax="\"\"\"multi\n  line\"\"\""
+            stats Defn.Val syntax="val d = \"\""
+              mods Nil
+              pats Pat.Var syntax="d"
+                name Term.Name value="d" syntax="d"
+              decltpe None
+              rhs Lit.String value="" syntax="\"\""
+          derives Nil

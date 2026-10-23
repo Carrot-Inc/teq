@@ -1,0 +1,77 @@
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.SplicedMacroExpr, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_SplicedMacroExpr\nimport scala.quoted.*\n\nobject Term_SplicedMacroExpr:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = '{ ${ e } + 1 }\n"
+  stats Pkg syntax="package nodes.Term_SplicedMacroExpr\nimport scala.quoted.*\n\nobject Term_SplicedMacroExpr:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = '{ ${ e } + 1 }"
+    .stats = [Import "import scala.quoted.*", Defn.Object "object Term_SplicedMacroExpr:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = '{ ${ e } + 1 }"]
+    ref Term.Select syntax="nodes.Term_SplicedMacroExpr"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_SplicedMacroExpr" syntax="Term_SplicedMacroExpr"
+    body Pkg.Body syntax="import scala.quoted.*\n\nobject Term_SplicedMacroExpr:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = '{ ${ e } + 1 }"
+      stats Import syntax="import scala.quoted.*"
+        importers Importer syntax="scala.quoted.*"
+          ref Term.Select syntax="scala.quoted"
+            qual Term.Name value="scala" syntax="scala"
+            name Term.Name value="quoted" syntax="quoted"
+          importees Importee.Wildcard syntax="*"
+      stats Defn.Object syntax="object Term_SplicedMacroExpr:\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = '{ ${ e } + 1 }"
+        mods Nil
+        name Term.Name value="Term_SplicedMacroExpr" syntax="Term_SplicedMacroExpr"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = '{ ${ e } + 1 }"
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Def "def f(e: Expr[Int])(using Quotes): Expr[Int] = '{ ${ e } + 1 }"]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  def f(e: Expr[Int])(using Quotes): Expr[Int] = '{ ${ e } + 1 }"
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Def syntax="def f(e: Expr[Int])(using Quotes): Expr[Int] = '{ ${ e } + 1 }"
+              .paramClauses = [Term.ParamClause "(e: Expr[Int])", Term.ParamClause "(using Quotes)"]
+              .paramss = [[Term.Param "e: Expr[Int]"], [Term.Param "Quotes"]]
+              .tparams = []
+              mods Nil
+              name Term.Name value="f" syntax="f"
+              paramClauseGroups Member.ParamClauseGroup syntax="(e: Expr[Int])(using Quotes)"
+                tparamClause Type.ParamClause syntax=""
+                  values Nil
+                paramClauses Term.ParamClause syntax="(e: Expr[Int])"
+                  values Term.Param syntax="e: Expr[Int]"
+                    mods Nil
+                    name Term.Name value="e" syntax="e"
+                    decltpe Type.Apply syntax="Expr[Int]"
+                      .args = [Type.Name "Int"]
+                      tpe Type.Name value="Expr" syntax="Expr"
+                      argClause Type.ArgClause syntax="[Int]"
+                        values Type.Name value="Int" syntax="Int"
+                    default None
+                  mod None
+                paramClauses Term.ParamClause syntax="(using Quotes)"
+                  values Term.Param syntax="Quotes"
+                    mods Mod.Using syntax="using"
+                    name Name.Anonymous syntax=""
+                      .value = ""
+                    decltpe Type.Name value="Quotes" syntax="Quotes"
+                    default None
+                  mod Mod.Using syntax="using"
+              decltpe Type.Apply syntax="Expr[Int]"
+                .args = [Type.Name "Int"]
+                tpe Type.Name value="Expr" syntax="Expr"
+                argClause Type.ArgClause syntax="[Int]"
+                  values Type.Name value="Int" syntax="Int"
+              body Term.QuotedMacroExpr syntax="'{ ${ e } + 1 }"
+                body Term.Block syntax="{ ${ e } + 1 }"
+                  stats Term.ApplyInfix syntax="${ e } + 1"
+                    .args = [Lit.Int "1"]
+                    .targs = []
+                    lhs Term.SplicedMacroExpr syntax="${ e }"
+                      body Term.Block syntax="{ e }"
+                        stats Term.Name value="e" syntax="e"
+                    op Term.Name value="+" syntax="+"
+                    targClause Type.ArgClause syntax=""
+                      values Nil
+                    argClause Term.ArgClause syntax="1"
+                      values Lit.Int value=1 syntax="1"
+                      mod None
+          derives Nil

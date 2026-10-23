@@ -1,0 +1,1919 @@
+# The programs of scalameta 4.17.4's MacroSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 656 line 23 BlockStat dialects.Scala3 :: parse-single-quote-character
+object W656 {
+  def w = {
+val a = 'c'
+}
+}
+#!scalac ok
+#!regions L37/ L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Defn.Def 16 39
+          Term.Name 20 21
+          Term.Block 24 39
+            Defn.Val 26 37
+              Pat.Var 30 31
+                Term.Name 30 31
+              Lit.Char 34 37
+#!program 657 line 26 BlockStat dialects.Scala3 :: parse-single-quote-space
+object W657 {
+  def w = {
+' { 'ax }
+}
+}
+#!scalac refuses: symbol literal 'ax is no longer supported,
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.QuotedMacroExpr 26 35
+              Term.Block 28 35
+                Term.QuotedMacroExpr 30 33
+                  Term.Name 31 33
+#!program 658 line 31 BlockStat dialects.Scala3 :: macro-quote-expr: '{ 'ax }
+object W658 {
+  def w = {
+'{ 'ax }
+}
+}
+#!scalac refuses: symbol literal 'ax is no longer supported,
+#!regions L34/ L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 11
+    Template 12 38
+      Template.Body 12 38
+        Defn.Def 16 36
+          Term.Name 20 21
+          Term.Block 24 36
+            Term.QuotedMacroExpr 26 34
+              Term.Block 27 34
+                Term.QuotedMacroExpr 29 32
+                  Term.Name 30 32
+#!program 659 line 34 BlockStat dialects.Scala3 :: macro-quote-expr: '{ 'a + 'b }
+object W659 {
+  def w = {
+'{ 'a + 'b }
+}
+}
+#!scalac refuses: symbol literal 'a is no longer supported,
+#!regions L38/ L40/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 11
+    Template 12 42
+      Template.Body 12 42
+        Defn.Def 16 40
+          Term.Name 20 21
+          Term.Block 24 40
+            Term.QuotedMacroExpr 26 38
+              Term.Block 27 38
+                Term.ApplyInfix 29 36
+                  Term.QuotedMacroExpr 29 31
+                    Term.Name 30 31
+                  Term.Name 32 33
+                  Type.ArgClause 34 34
+                  Term.ArgClause 34 36
+                    Term.QuotedMacroExpr 34 36
+                      Term.Name 35 36
+#!program 660 line 39 BlockStat dialects.Scala3 :: macro-quote-expr: '{ 'a + 'b + 'c }
+object W660 {
+  def w = {
+'{ 'a + 'b + 'c }
+}
+}
+#!scalac refuses: symbol literal 'a is no longer supported,
+#!regions L43/ L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Def 16 45
+          Term.Name 20 21
+          Term.Block 24 45
+            Term.QuotedMacroExpr 26 43
+              Term.Block 27 43
+                Term.ApplyInfix 29 41
+                  Term.ApplyInfix 29 36
+                    Term.QuotedMacroExpr 29 31
+                      Term.Name 30 31
+                    Term.Name 32 33
+                    Type.ArgClause 34 34
+                    Term.ArgClause 34 36
+                      Term.QuotedMacroExpr 34 36
+                        Term.Name 35 36
+                  Term.Name 37 38
+                  Type.ArgClause 39 39
+                  Term.ArgClause 39 41
+                    Term.QuotedMacroExpr 39 41
+                      Term.Name 40 41
+#!program 661 line 47 BlockStat dialects.Scala3 :: macro-quote-expr: '{ Int.MinValue }
+object W661 {
+  def w = {
+'{ Int.MinValue }
+}
+}
+#!scalac ok
+#!regions L43/ L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Def 16 45
+          Term.Name 20 21
+          Term.Block 24 45
+            Term.QuotedMacroExpr 26 43
+              Term.Block 27 43
+                Term.Select 29 41
+                  Term.Name 29 32
+                  Term.Name 33 41
+#!program 662 line 50 BlockStat dialects.Scala3 :: macro-quote-expr: '{ (x: T) => 'x }
+object W662 {
+  def w = {
+'{ (x: T) => 'x }
+}
+}
+#!scalac refuses: symbol literal 'x is no longer supported,
+#!regions L43/ L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Def 16 45
+          Term.Name 20 21
+          Term.Block 24 45
+            Term.QuotedMacroExpr 26 43
+              Term.Block 27 43
+                Term.Function 29 41
+                  Term.ParamClause 29 35
+                    Term.Param 30 34
+                      Term.Name 30 31
+                      Type.Name 33 34
+                  Term.QuotedMacroExpr 39 41
+                    Term.Name 40 41
+#!program 663 line 55 BlockStat dialects.Scala3 :: macro-quote-expr: f('{ 2 })
+object W663 {
+  def w = {
+f('{ 2 })
+}
+}
+#!scalac ok
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.Apply 26 35
+              Term.Name 26 27
+              Term.ArgClause 27 35
+                Term.QuotedMacroExpr 28 34
+                  Term.Block 29 34
+                    Lit.Int 31 32
+#!program 664 line 59 BlockStat dialects.Scala3 :: macro-quote-expr: if (b) '{ true } else '{ false }
+object W664 {
+  def w = {
+if (b) '{ true } else '{ false }
+}
+}
+#!scalac ok
+#!regions L58/ L60/
+#!layout
+Source 0 63
+  Defn.Object 0 62
+    Term.Name 7 11
+    Template 12 62
+      Template.Body 12 62
+        Defn.Def 16 60
+          Term.Name 20 21
+          Term.Block 24 60
+            Term.If 26 58
+              Term.Name 30 31
+              Term.QuotedMacroExpr 33 42
+                Term.Block 34 42
+                  Lit.Boolean 36 40
+              Term.QuotedMacroExpr 48 58
+                Term.Block 49 58
+                  Lit.Boolean 51 56
+#!program 665 line 65 BlockStat dialects.Scala3 :: macro-quote-expr: '{ val y = a; ${ env } }
+object W665 {
+  def w = {
+'{ val y = a; ${ env } }
+}
+}
+#!scalac ok
+#!regions L50/ L52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 11
+    Template 12 54
+      Template.Body 12 54
+        Defn.Def 16 52
+          Term.Name 20 21
+          Term.Block 24 52
+            Term.QuotedMacroExpr 26 50
+              Term.Block 27 50
+                Defn.Val 29 38
+                  Pat.Var 33 34
+                    Term.Name 33 34
+                  Term.Name 37 38
+                Term.SplicedMacroExpr 40 48
+                  Term.Block 41 48
+                    Term.Name 43 46
+#!program 666 line 72 BlockStat dialects.Scala3 :: macro-quote-expr: x match { case 'c => 1 }
+object W666 {
+  def w = {
+x match { case 'c => 1 }
+}
+}
+#!scalac refuses: symbol literal 'c is no longer supported,
+#!regions L50/ L52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 11
+    Template 12 54
+      Template.Body 12 54
+        Defn.Def 16 52
+          Term.Name 20 21
+          Term.Block 24 52
+            Term.Match 26 50
+              Term.Name 26 27
+              Term.CasesBlock 34 50
+                Case 36 48
+                  Pat.Macro 41 43
+                    Term.QuotedMacroExpr 41 43
+                      Term.Name 42 43
+                  Lit.Int 47 48
+#!program 667 line 79 BlockStat dialects.Scala3 :: macro-quote-expr: x match { case '{ a } => 1 }
+object W667 {
+  def w = {
+x match { case '{ a } => 1 }
+}
+}
+#!scalac ok
+#!regions L54/ L56/
+#!layout
+Source 0 59
+  Defn.Object 0 58
+    Term.Name 7 11
+    Template 12 58
+      Template.Body 12 58
+        Defn.Def 16 56
+          Term.Name 20 21
+          Term.Block 24 56
+            Term.Match 26 54
+              Term.Name 26 27
+              Term.CasesBlock 34 54
+                Case 36 52
+                  Pat.Macro 41 47
+                    Term.QuotedMacroExpr 41 47
+                      Term.Block 42 47
+                        Term.Name 44 45
+                  Lit.Int 51 52
+#!program 668 line 86 BlockStat dialects.Scala3 :: macro-quote-expr: x match { case '{ $${bind@'{a}} } => 1 }
+object W668 {
+  def w = {
+x match { case '{ ${bind@'{a}} } => 1 }
+}
+}
+#!scalac ok
+#!regions L65/ L67/
+#!layout
+Source 0 70
+  Defn.Object 0 69
+    Term.Name 7 11
+    Template 12 69
+      Template.Body 12 69
+        Defn.Def 16 67
+          Term.Name 20 21
+          Term.Block 24 67
+            Term.Match 26 65
+              Term.Name 26 27
+              Term.CasesBlock 34 65
+                Case 36 63
+                  Pat.Macro 41 58
+                    Term.QuotedMacroExpr 41 58
+                      Term.Block 42 58
+                        Term.SplicedMacroPat 44 56
+                          Pat.Bind 45 56
+                            Pat.Var 46 50
+                              Term.Name 46 50
+                            Pat.Macro 51 55
+                              Term.QuotedMacroExpr 51 55
+                                Term.Block 52 55
+                                  Term.Name 53 54
+                  Lit.Int 62 63
+#!program 669 line 102 BlockStat dialects.Scala3 :: macro-brackets
+object W669 {
+  def w = {
+tpr.asType match {
+  case '[ t ] =>
+    getTypeTree[t]
+}
+}
+}
+#!scalac ok
+#!regions L80/ L82/ L84/
+#!layout
+Source 0 87
+  Defn.Object 0 86
+    Term.Name 7 11
+    Template 12 86
+      Template.Body 12 86
+        Defn.Def 16 84
+          Term.Name 20 21
+          Term.Block 24 84
+            Term.Match 26 82
+              Term.Select 26 36
+                Term.Name 26 29
+                Term.Name 30 36
+              Term.CasesBlock 43 82
+                Case 47 80
+                  Pat.Macro 52 58
+                    Term.QuotedMacroType 52 58
+                      Type.Name 55 56
+                  Term.ApplyType 66 80
+                    Term.Name 66 77
+                    Type.ArgClause 77 80
+                      Type.Name 78 79
+#!program 670 line 124 BlockStat dialects.Scala3 :: macro-quote-multiline
+object W670 {
+  def w = {
+'{
+  1 + 3
+  'x + 3
+  zzz
+}
+}
+}
+#!scalac refuses: symbol literal 'x is no longer supported,
+#!regions L36/ L45/ L51/ L53/ L55/
+#!layout
+Source 0 58
+  Defn.Object 0 57
+    Term.Name 7 11
+    Template 12 57
+      Template.Body 12 57
+        Defn.Def 16 55
+          Term.Name 20 21
+          Term.Block 24 55
+            Term.QuotedMacroExpr 26 53
+              Term.Block 27 53
+                Term.ApplyInfix 31 36
+                  Lit.Int 31 32
+                  Term.Name 33 34
+                  Type.ArgClause 35 35
+                  Term.ArgClause 35 36
+                    Lit.Int 35 36
+                Term.ApplyInfix 39 45
+                  Term.QuotedMacroExpr 39 41
+                    Term.Name 40 41
+                  Term.Name 42 43
+                  Type.ArgClause 44 44
+                  Term.ArgClause 44 45
+                    Lit.Int 44 45
+                Term.Name 48 51
+#!program 671 line 132 BlockStat dialects.Scala3 :: macro-quote-type: '[ Map[Int, String] ]
+object W671 {
+  def w = {
+'[ Map[Int, String] ]
+}
+}
+#!scalac ok
+#!regions L47/ L49/
+#!layout
+Source 0 52
+  Defn.Object 0 51
+    Term.Name 7 11
+    Template 12 51
+      Template.Body 12 51
+        Defn.Def 16 49
+          Term.Name 20 21
+          Term.Block 24 49
+            Term.QuotedMacroType 26 47
+              Type.Apply 29 45
+                Type.Name 29 32
+                Type.ArgClause 32 45
+                  Type.Name 33 36
+                  Type.Name 38 44
+#!program 672 line 136 BlockStat dialects.Scala3 :: macro-quote-type: '[ List[${ summon[Type[T]] }] ]
+object W672 {
+  def w = {
+'[ List[${ summon[Type[T]] }] ]
+}
+}
+#!scalac refuses: Type splicing with `$` in quotes not supported anymore
+#!regions L57/ L59/
+#!layout
+Source 0 62
+  Defn.Object 0 61
+    Term.Name 7 11
+    Template 12 61
+      Template.Body 12 61
+        Defn.Def 16 59
+          Term.Name 20 21
+          Term.Block 24 59
+            Term.QuotedMacroType 26 57
+              Type.Apply 29 55
+                Type.Name 29 33
+                Type.ArgClause 33 55
+                  Type.Macro 34 54
+                    Term.SplicedMacroExpr 34 54
+                      Term.Block 35 54
+                        Term.ApplyType 37 52
+                          Term.Name 37 43
+                          Type.ArgClause 43 52
+                            Type.Apply 44 51
+                              Type.Name 44 48
+                              Type.ArgClause 48 51
+                                Type.Name 49 50
+#!program 673 line 141 BlockStat dialects.Scala3 :: macro-quote-type: '[ Show[$tp] ]
+object W673 {
+  def w = {
+'[ Show[$tp] ]
+}
+}
+#!scalac refuses: Type splicing with `$` in quotes not supported anymore
+#!regions L40/ L42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Defn.Def 16 42
+          Term.Name 20 21
+          Term.Block 24 42
+            Term.QuotedMacroType 26 40
+              Type.Apply 29 38
+                Type.Name 29 33
+                Type.ArgClause 33 38
+                  Type.Macro 34 37
+                    Term.SplicedMacroExpr 34 37
+                      Term.Name 34 37
+#!program 674 line 148 BlockStat dialects.Scala3 :: macro-quote-id-by-itself: 'x
+object W674 {
+  def w = {
+ 'x 
+}
+}
+#!scalac refuses: symbol literal 'x is no longer supported,
+#!regions L30/ L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 11
+    Template 12 34
+      Template.Body 12 34
+        Defn.Def 16 32
+          Term.Name 20 21
+          Term.Block 24 32
+            Term.QuotedMacroExpr 27 29
+              Term.Name 28 29
+#!program 675 line 149 BlockStat dialects.Scala3 :: macro-quote-id-by-itself: 'x
+object W675 {
+  def w = {
+' x
+}
+}
+#!scalac refuses: '{' expected, but identifier found
+#!regions L29/ L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 11
+    Template 12 33
+      Template.Body 12 33
+        Defn.Def 16 31
+          Term.Name 20 21
+          Term.Block 24 31
+            Term.QuotedMacroExpr 26 29
+              Term.Name 28 29
+#!program 676 line 150 BlockStat dialects.Scala3 :: macro-quote-id-by-itself: 'x
+object W676 {
+  def w = {
+'`x`
+}
+}
+#!scalac refuses: Illegal start of statement
+#!regions L30/ L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 11
+    Template 12 34
+      Template.Body 12 34
+        Defn.Def 16 32
+          Term.Name 20 21
+          Term.Block 24 32
+            Term.QuotedMacroExpr 26 30
+              Term.Name 27 30
+#!program 677 line 151 BlockStat dialects.Scala3 :: macro-quote-id-by-itself: 'x
+object W677 {
+  def w = {
+' `x`
+}
+}
+#!scalac refuses: '{' expected, but identifier found
+#!regions L31/ L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 11
+    Template 12 35
+      Template.Body 12 35
+        Defn.Def 16 33
+          Term.Name 20 21
+          Term.Block 24 33
+            Term.QuotedMacroExpr 26 31
+              Term.Name 28 31
+#!program 678 line 152 BlockStat dialects.Scala3 :: macro-quote-id-by-itself: 'x
+object W678 {
+  def w = {
+`'x`
+}
+}
+#!scalac ok
+#!regions L30/ L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 11
+    Template 12 34
+      Template.Body 12 34
+        Defn.Def 16 32
+          Term.Name 20 21
+          Term.Block 24 32
+            Term.Name 26 30
+#!program 679 line 158 BlockStat dialects.Scala3 :: macro-quote-id-within-quote: '{ 'x }
+object W679 {
+  def w = {
+'{ 'x }
+}
+}
+#!scalac refuses: symbol literal 'x is no longer supported,
+#!regions L33/ L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 11
+    Template 12 37
+      Template.Body 12 37
+        Defn.Def 16 35
+          Term.Name 20 21
+          Term.Block 24 35
+            Term.QuotedMacroExpr 26 33
+              Term.Block 27 33
+                Term.QuotedMacroExpr 29 31
+                  Term.Name 30 31
+#!program 680 line 159 BlockStat dialects.Scala3 :: macro-quote-id-within-quote: '{ 'x }
+object W680 {
+  def w = {
+' { 'x }
+}
+}
+#!scalac refuses: symbol literal 'x is no longer supported,
+#!regions L34/ L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 11
+    Template 12 38
+      Template.Body 12 38
+        Defn.Def 16 36
+          Term.Name 20 21
+          Term.Block 24 36
+            Term.QuotedMacroExpr 26 34
+              Term.Block 28 34
+                Term.QuotedMacroExpr 30 32
+                  Term.Name 31 32
+#!program 681 line 160 BlockStat dialects.Scala3 :: macro-quote-id-within-quote: '{ 'x }
+object W681 {
+  def w = {
+' { ' x }
+}
+}
+#!scalac refuses: '{' expected, but identifier found
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.QuotedMacroExpr 26 35
+              Term.Block 28 35
+                Term.QuotedMacroExpr 30 33
+                  Term.Name 32 33
+#!program 682 line 161 BlockStat dialects.Scala3 :: macro-quote-id-within-quote: '{ 'x }
+object W682 {
+  def w = {
+'{ '`x` }
+}
+}
+#!scalac refuses: Illegal start of statement
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.QuotedMacroExpr 26 35
+              Term.Block 27 35
+                Term.QuotedMacroExpr 29 33
+                  Term.Name 30 33
+#!program 683 line 162 BlockStat dialects.Scala3 :: macro-quote-id-within-quote: '{ 'x }
+object W683 {
+  def w = {
+'{ ' `x` }
+}
+}
+#!scalac refuses: '{' expected, but identifier found
+#!regions L36/ L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 11
+    Template 12 40
+      Template.Body 12 40
+        Defn.Def 16 38
+          Term.Name 20 21
+          Term.Block 24 38
+            Term.QuotedMacroExpr 26 36
+              Term.Block 27 36
+                Term.QuotedMacroExpr 29 34
+                  Term.Name 31 34
+#!program 684 line 164 BlockStat dialects.Scala3 :: macro-quote-id-within-quote: '{ 'x }
+object W684 {
+  def w = {
+'{ `'x` }
+}
+}
+#!scalac ok
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.QuotedMacroExpr 26 35
+              Term.Block 27 35
+                Term.Name 29 33
+#!program 685 line 170 BlockStat dialects.Scala3 :: macro-quote-id-within-splice: ${ 'x }
+object W685 {
+  def w = {
+${ 'x }
+}
+}
+#!scalac ok
+#!regions L33/ L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 11
+    Template 12 37
+      Template.Body 12 37
+        Defn.Def 16 35
+          Term.Name 20 21
+          Term.Block 24 35
+            Term.SplicedMacroExpr 26 33
+              Term.Block 27 33
+                Term.QuotedMacroExpr 29 31
+                  Term.Name 30 31
+#!program 686 line 171 BlockStat dialects.Scala3 :: macro-quote-id-within-splice: ${ 'x }
+object W686 {
+  def w = {
+$ { 'x }
+}
+}
+#!scalac ok
+#!regions L34/ L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 11
+    Template 12 38
+      Template.Body 12 38
+        Defn.Def 16 36
+          Term.Name 20 21
+          Term.Block 24 36
+            Term.SplicedMacroExpr 26 34
+              Term.Block 28 34
+                Term.QuotedMacroExpr 30 32
+                  Term.Name 31 32
+#!program 687 line 172 BlockStat dialects.Scala3 :: macro-quote-id-within-splice: ${ 'x }
+object W687 {
+  def w = {
+$ { ' x }
+}
+}
+#!scalac refuses: '{' expected, but identifier found
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.SplicedMacroExpr 26 35
+              Term.Block 28 35
+                Term.QuotedMacroExpr 30 33
+                  Term.Name 32 33
+#!program 688 line 173 BlockStat dialects.Scala3 :: macro-quote-id-within-splice: ${ 'x }
+object W688 {
+  def w = {
+${ '`x` }
+}
+}
+#!scalac refuses: Illegal start of statement
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.SplicedMacroExpr 26 35
+              Term.Block 27 35
+                Term.QuotedMacroExpr 29 33
+                  Term.Name 30 33
+#!program 689 line 174 BlockStat dialects.Scala3 :: macro-quote-id-within-splice: ${ 'x }
+object W689 {
+  def w = {
+${ ' `x` }
+}
+}
+#!scalac refuses: '{' expected, but identifier found
+#!regions L36/ L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 11
+    Template 12 40
+      Template.Body 12 40
+        Defn.Def 16 38
+          Term.Name 20 21
+          Term.Block 24 38
+            Term.SplicedMacroExpr 26 36
+              Term.Block 27 36
+                Term.QuotedMacroExpr 29 34
+                  Term.Name 31 34
+#!program 690 line 176 BlockStat dialects.Scala3 :: macro-quote-id-within-splice: ${ 'x }
+object W690 {
+  def w = {
+${ `'x` }
+}
+}
+#!scalac ok
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.SplicedMacroExpr 26 35
+              Term.Block 27 35
+                Term.Name 29 33
+#!program 691 line 182 BlockStat dialects.Scala3 :: macro-quote-this-within-splice: ${ 'this }
+object W691 {
+  def w = {
+${ 'this }
+}
+}
+#!scalac ok
+#!regions L36/ L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 11
+    Template 12 40
+      Template.Body 12 40
+        Defn.Def 16 38
+          Term.Name 20 21
+          Term.Block 24 38
+            Term.SplicedMacroExpr 26 36
+              Term.Block 27 36
+                Term.QuotedMacroExpr 29 34
+                  Term.This 30 34
+                    Name.Anonymous 30 30
+#!program 692 line 183 BlockStat dialects.Scala3 :: macro-quote-this-within-splice: ${ 'this }
+object W692 {
+  def w = {
+$ { 'this }
+}
+}
+#!scalac ok
+#!regions L37/ L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Defn.Def 16 39
+          Term.Name 20 21
+          Term.Block 24 39
+            Term.SplicedMacroExpr 26 37
+              Term.Block 28 37
+                Term.QuotedMacroExpr 30 35
+                  Term.This 31 35
+                    Name.Anonymous 31 31
+#!program 693 line 184 BlockStat dialects.Scala3 :: macro-quote-this-within-splice: ${ 'this }
+object W693 {
+  def w = {
+$ { ' this }
+}
+}
+#!scalac refuses: '{' expected, but 'this' found
+#!regions L38/ L40/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 11
+    Template 12 42
+      Template.Body 12 42
+        Defn.Def 16 40
+          Term.Name 20 21
+          Term.Block 24 40
+            Term.SplicedMacroExpr 26 38
+              Term.Block 28 38
+                Term.QuotedMacroExpr 30 36
+                  Term.This 32 36
+                    Name.Anonymous 32 32
+#!program 694 line 190 BlockStat dialects.Scala3 :: macro-splice-id-within-quote: '{ $x }
+object W694 {
+  def w = {
+'{ $x }
+}
+}
+#!scalac ok
+#!regions L33/ L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 11
+    Template 12 37
+      Template.Body 12 37
+        Defn.Def 16 35
+          Term.Name 20 21
+          Term.Block 24 35
+            Term.QuotedMacroExpr 26 33
+              Term.Block 27 33
+                Term.SplicedMacroExpr 29 31
+                  Term.Name 29 31
+#!program 695 line 191 BlockStat dialects.Scala3 :: macro-splice-id-within-quote: '{ $x }
+object W695 {
+  def w = {
+' { $x }
+}
+}
+#!scalac ok
+#!regions L34/ L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 11
+    Template 12 38
+      Template.Body 12 38
+        Defn.Def 16 36
+          Term.Name 20 21
+          Term.Block 24 36
+            Term.QuotedMacroExpr 26 34
+              Term.Block 28 34
+                Term.SplicedMacroExpr 30 32
+                  Term.Name 30 32
+#!program 696 line 192 BlockStat dialects.Scala3 :: macro-splice-id-within-quote: '{ $x }
+object W696 {
+  def w = {
+' { $ x }
+}
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.QuotedMacroExpr 26 35
+              Term.Block 28 35
+                Term.SplicedMacroExpr 30 33
+                  Term.Name 32 33
+#!program 697 line 193 BlockStat dialects.Scala3 :: macro-splice-id-within-quote: '{ $x }
+object W697 {
+  def w = {
+'{ $`x` }
+}
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.QuotedMacroExpr 26 35
+              Term.Block 27 35
+                Term.SplicedMacroExpr 29 33
+                  Term.Name 30 33
+#!program 698 line 194 BlockStat dialects.Scala3 :: macro-splice-id-within-quote: '{ $x }
+object W698 {
+  def w = {
+'{ $ `x` }
+}
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions L36/ L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 11
+    Template 12 40
+      Template.Body 12 40
+        Defn.Def 16 38
+          Term.Name 20 21
+          Term.Block 24 38
+            Term.QuotedMacroExpr 26 36
+              Term.Block 27 36
+                Term.SplicedMacroExpr 29 34
+                  Term.Name 31 34
+#!program 699 line 196 BlockStat dialects.Scala3 :: macro-splice-id-within-quote: '{ $x }
+object W699 {
+  def w = {
+'{ `$x` }
+}
+}
+#!scalac ok
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.QuotedMacroExpr 26 35
+              Term.Block 27 35
+                Term.Name 29 33
+#!program 700 line 202 BlockStat dialects.Scala3 :: macro-splice-this-within-quote: '{ $this }
+object W700 {
+  def w = {
+'{ $this }
+}
+}
+#!scalac ok
+#!regions L36/ L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 11
+    Template 12 40
+      Template.Body 12 40
+        Defn.Def 16 38
+          Term.Name 20 21
+          Term.Block 24 38
+            Term.QuotedMacroExpr 26 36
+              Term.Block 27 36
+                Term.SplicedMacroExpr 29 34
+                  Term.This 29 34
+                    Name.Anonymous 29 29
+#!program 701 line 203 BlockStat dialects.Scala3 :: macro-splice-this-within-quote: '{ $this }
+object W701 {
+  def w = {
+' { $this }
+}
+}
+#!scalac ok
+#!regions L37/ L39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 11
+    Template 12 41
+      Template.Body 12 41
+        Defn.Def 16 39
+          Term.Name 20 21
+          Term.Block 24 39
+            Term.QuotedMacroExpr 26 37
+              Term.Block 28 37
+                Term.SplicedMacroExpr 30 35
+                  Term.This 30 35
+                    Name.Anonymous 30 30
+#!program 702 line 204 BlockStat dialects.Scala3 :: macro-splice-this-within-quote: '{ $this }
+object W702 {
+  def w = {
+' { $ this }
+}
+}
+#!scalac refuses: end of statement expected but 'this' found
+#!regions L38/ L40/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 11
+    Template 12 42
+      Template.Body 12 42
+        Defn.Def 16 40
+          Term.Name 20 21
+          Term.Block 24 40
+            Term.QuotedMacroExpr 26 38
+              Term.Block 28 38
+                Term.SplicedMacroExpr 30 36
+                  Term.This 32 36
+                    Name.Anonymous 32 32
+#!program 703 line 210 BlockStat dialects.Scala3 :: macro-splice-id-within-splice: ${ $x }
+object W703 {
+  def w = {
+${ $x }
+}
+}
+#!scalac ok
+#!regions L33/ L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 11
+    Template 12 37
+      Template.Body 12 37
+        Defn.Def 16 35
+          Term.Name 20 21
+          Term.Block 24 35
+            Term.SplicedMacroExpr 26 33
+              Term.Block 27 33
+                Term.Name 29 31
+#!program 704 line 211 BlockStat dialects.Scala3 :: macro-splice-id-within-splice: ${ $x }
+object W704 {
+  def w = {
+$ { $x }
+}
+}
+#!scalac ok
+#!regions L34/ L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 11
+    Template 12 38
+      Template.Body 12 38
+        Defn.Def 16 36
+          Term.Name 20 21
+          Term.Block 24 36
+            Term.SplicedMacroExpr 26 34
+              Term.Block 28 34
+                Term.Name 30 32
+#!program 705 line 213 BlockStat dialects.Scala3 :: macro-splice-id-within-splice: ${ $x }
+object W705 {
+  def w = {
+$ { $ x }
+}
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.SplicedMacroExpr 26 35
+              Term.Block 28 35
+                Term.SelectPostfix 30 33
+                  Term.Name 30 31
+                  Term.Name 32 33
+#!program 706 line 214 BlockStat dialects.Scala3 :: macro-splice-id-within-splice: ${ $x }
+object W706 {
+  def w = {
+${ $`x` }
+}
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.SplicedMacroExpr 26 35
+              Term.Block 27 35
+                Term.SelectPostfix 29 33
+                  Term.Name 29 30
+                  Term.Name 30 33
+#!program 707 line 215 BlockStat dialects.Scala3 :: macro-splice-id-within-splice: ${ $x }
+object W707 {
+  def w = {
+${ $ `x` }
+}
+}
+#!scalac refuses: end of statement expected but identifier found
+#!regions L36/ L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 11
+    Template 12 40
+      Template.Body 12 40
+        Defn.Def 16 38
+          Term.Name 20 21
+          Term.Block 24 38
+            Term.SplicedMacroExpr 26 36
+              Term.Block 27 36
+                Term.SelectPostfix 29 34
+                  Term.Name 29 30
+                  Term.Name 31 34
+#!program 708 line 217 BlockStat dialects.Scala3 :: macro-splice-id-within-splice: ${ $x }
+object W708 {
+  def w = {
+${ `$x` }
+}
+}
+#!scalac ok
+#!regions L35/ L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 11
+    Template 12 39
+      Template.Body 12 39
+        Defn.Def 16 37
+          Term.Name 20 21
+          Term.Block 24 37
+            Term.SplicedMacroExpr 26 35
+              Term.Block 27 35
+                Term.Name 29 33
+#!program 709 line 220 BlockStat dialects.Scala3 :: macro-splice: ${ powerCode('x) }
+object W709 {
+  def w = {
+${ powerCode('x) }
+}
+}
+#!scalac ok
+#!regions L44/ L46/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 11
+    Template 12 48
+      Template.Body 12 48
+        Defn.Def 16 46
+          Term.Name 20 21
+          Term.Block 24 46
+            Term.SplicedMacroExpr 26 44
+              Term.Block 27 44
+                Term.Apply 29 42
+                  Term.Name 29 38
+                  Term.ArgClause 38 42
+                    Term.QuotedMacroExpr 39 41
+                      Term.Name 40 41
+#!program 710 line 226 BlockStat dialects.Scala3 :: macro-splice: ${ val x = 'y; println(d); 1 }
+object W710 {
+  def w = {
+${ val x = 'y; println(d); 1 }
+}
+}
+#!scalac ok
+#!regions L56/ L58/
+#!layout
+Source 0 61
+  Defn.Object 0 60
+    Term.Name 7 11
+    Template 12 60
+      Template.Body 12 60
+        Defn.Def 16 58
+          Term.Name 20 21
+          Term.Block 24 58
+            Term.SplicedMacroExpr 26 56
+              Term.Block 27 56
+                Defn.Val 29 39
+                  Pat.Var 33 34
+                    Term.Name 33 34
+                  Term.QuotedMacroExpr 37 39
+                    Term.Name 38 39
+                Term.Apply 41 51
+                  Term.Name 41 48
+                  Term.ArgClause 48 51
+                    Term.Name 49 50
+                Lit.Int 53 54
+#!program 711 line 236 BlockStat dialects.Scala3 :: macro-splice: ${ assertImpl('{ x != $y }) }
+object W711 {
+  def w = {
+${ assertImpl('{ x != $y }) }
+}
+}
+#!scalac ok
+#!regions L55/ L57/
+#!layout
+Source 0 60
+  Defn.Object 0 59
+    Term.Name 7 11
+    Template 12 59
+      Template.Body 12 59
+        Defn.Def 16 57
+          Term.Name 20 21
+          Term.Block 24 57
+            Term.SplicedMacroExpr 26 55
+              Term.Block 27 55
+                Term.Apply 29 53
+                  Term.Name 29 39
+                  Term.ArgClause 39 53
+                    Term.QuotedMacroExpr 40 52
+                      Term.Block 41 52
+                        Term.ApplyInfix 43 50
+                          Term.Name 43 44
+                          Term.Name 45 47
+                          Type.ArgClause 48 48
+                          Term.ArgClause 48 50
+                            Term.SplicedMacroExpr 48 50
+                              Term.Name 48 50
+#!program 712 line 249 BlockStat dialects.Scala3 :: macro-splice-multiline
+object W712 {
+  def w = {
+${
+  val x = 'y
+  println(d)
+  1
+}
+}
+}
+#!scalac ok
+#!regions L41/ L54/ L58/ L60/ L62/
+#!layout
+Source 0 65
+  Defn.Object 0 64
+    Term.Name 7 11
+    Template 12 64
+      Template.Body 12 64
+        Defn.Def 16 62
+          Term.Name 20 21
+          Term.Block 24 62
+            Term.SplicedMacroExpr 26 60
+              Term.Block 27 60
+                Defn.Val 31 41
+                  Pat.Var 35 36
+                    Term.Name 35 36
+                  Term.QuotedMacroExpr 39 41
+                    Term.Name 40 41
+                Term.Apply 44 54
+                  Term.Name 44 51
+                  Term.ArgClause 51 54
+                    Term.Name 52 53
+                Lit.Int 57 58
+#!program 713 line 258 BlockStat dialects.Scala3 :: non-macro-dollar-ident
+object W713 {
+  def w = {
+a.map($d => $d.a)
+}
+}
+#!scalac ok
+#!regions L43/ L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 11
+    Template 12 47
+      Template.Body 12 47
+        Defn.Def 16 45
+          Term.Name 20 21
+          Term.Block 24 45
+            Term.Apply 26 43
+              Term.Select 26 31
+                Term.Name 26 27
+                Term.Name 28 31
+              Term.ArgClause 31 43
+                Term.Function 32 42
+                  Term.ParamClause 32 34
+                    Term.Param 32 34
+                      Term.Name 32 34
+                  Term.Select 38 42
+                    Term.Name 38 40
+                    Term.Name 41 42
+#!program 714 line 263 BlockStat dialects.Scala3 :: non-macro-dollar-type
+object W714 {
+  def w = {
+type $F2 = [$T] => $T => Option[$T]
+}
+}
+#!scalac ok
+#!regions L61/ L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Def 16 63
+          Term.Name 20 21
+          Term.Block 24 63
+            Defn.Type 26 61
+              Type.Name 31 34
+              Type.ParamClause 35 35
+              Type.PolyFunction 37 61
+                Type.ParamClause 37 41
+                  Type.Param 38 40
+                    Type.Name 38 40
+                    Type.ParamClause 40 40
+                    Type.Bounds 40 40
+                Type.Function 45 61
+                  Type.FuncParamClause 45 47
+                    Type.Name 45 47
+                  Type.Apply 51 61
+                    Type.Name 51 57
+                    Type.ArgClause 57 61
+                      Type.Name 58 60
+              Type.Bounds 35 35
+#!program 715 line 273 BlockStat dialects.Scala3 :: macro-quote-complex: 1
+object W715 {
+  def w = {
+'{ ClassTag[T](${ Expr(ct.runtimeClass.asInstanceOf[Class[T]]) }) }
+}
+}
+#!scalac ok
+#!regions L93/ L95/
+#!layout
+Source 0 98
+  Defn.Object 0 97
+    Term.Name 7 11
+    Template 12 97
+      Template.Body 12 97
+        Defn.Def 16 95
+          Term.Name 20 21
+          Term.Block 24 95
+            Term.QuotedMacroExpr 26 93
+              Term.Block 27 93
+                Term.Apply 29 91
+                  Term.ApplyType 29 40
+                    Term.Name 29 37
+                    Type.ArgClause 37 40
+                      Type.Name 38 39
+                  Term.ArgClause 40 91
+                    Term.SplicedMacroExpr 41 90
+                      Term.Block 42 90
+                        Term.Apply 44 88
+                          Term.Name 44 48
+                          Term.ArgClause 48 88
+                            Term.ApplyType 49 87
+                              Term.Select 49 77
+                                Term.Select 49 64
+                                  Term.Name 49 51
+                                  Term.Name 52 64
+                                Term.Name 65 77
+                              Type.ArgClause 77 87
+                                Type.Apply 78 86
+                                  Type.Name 78 83
+                                  Type.ArgClause 83 86
+                                    Type.Name 84 85
+#!program 716 line 285 BlockStat dialects.Scala3 :: macro-quote-complex: 2
+object W716 {
+  def w = {
+'{ ${ summon[H].toExpr(tup.head) } *: ${ summon[T].toExpr(tup.tail) } }
+}
+}
+#!scalac ok
+#!regions L97/ L99/
+#!layout
+Source 0 102
+  Defn.Object 0 101
+    Term.Name 7 11
+    Template 12 101
+      Template.Body 12 101
+        Defn.Def 16 99
+          Term.Name 20 21
+          Term.Block 24 99
+            Term.QuotedMacroExpr 26 97
+              Term.Block 27 97
+                Term.ApplyInfix 29 95
+                  Term.SplicedMacroExpr 29 60
+                    Term.Block 30 60
+                      Term.Apply 32 58
+                        Term.Select 32 48
+                          Term.ApplyType 32 41
+                            Term.Name 32 38
+                            Type.ArgClause 38 41
+                              Type.Name 39 40
+                          Term.Name 42 48
+                        Term.ArgClause 48 58
+                          Term.Select 49 57
+                            Term.Name 49 52
+                            Term.Name 53 57
+                  Term.Name 61 63
+                  Type.ArgClause 64 64
+                  Term.ArgClause 64 95
+                    Term.SplicedMacroExpr 64 95
+                      Term.Block 65 95
+                        Term.Apply 67 93
+                          Term.Select 67 83
+                            Term.ApplyType 67 76
+                              Term.Name 67 73
+                              Type.ArgClause 73 76
+                                Type.Name 74 75
+                            Term.Name 77 83
+                          Term.ArgClause 83 93
+                            Term.Select 84 92
+                              Term.Name 84 87
+                              Term.Name 88 92
+#!program 717 line 299 BlockStat dialects.Scala3 :: simpler
+object W717 {
+  def w = {
+'{ val x: Int = ${ (q2) ?=> a } }
+}
+}
+#!scalac ok
+#!regions L59/ L61/
+#!layout
+Source 0 64
+  Defn.Object 0 63
+    Term.Name 7 11
+    Template 12 63
+      Template.Body 12 63
+        Defn.Def 16 61
+          Term.Name 20 21
+          Term.Block 24 61
+            Term.QuotedMacroExpr 26 59
+              Term.Block 27 59
+                Defn.Val 29 57
+                  Pat.Var 33 34
+                    Term.Name 33 34
+                  Type.Name 36 39
+                  Term.SplicedMacroExpr 42 57
+                    Term.Block 43 57
+                      Term.ContextFunction 45 55
+                        Term.ParamClause 45 49
+                          Term.Param 46 48
+                            Term.Name 46 48
+                        Term.Name 54 55
+#!program 718 line 311 BlockStat dialects.Scala3 :: no-name
+object W718 {
+  def w = {
+'{ val x: Int = $ }
+}
+}
+#!scalac ok
+#!regions L45/ L47/
+#!layout
+Source 0 50
+  Defn.Object 0 49
+    Term.Name 7 11
+    Template 12 49
+      Template.Body 12 49
+        Defn.Def 16 47
+          Term.Name 20 21
+          Term.Block 24 47
+            Term.QuotedMacroExpr 26 45
+              Term.Block 27 45
+                Defn.Val 29 43
+                  Pat.Var 33 34
+                    Term.Name 33 34
+                  Type.Name 36 39
+                  Term.Name 42 43
+#!program 719 line 314 BlockStat dialects.Scala3 :: no-name
+object W719 {
+  def w = {
+${ val x: Int = $ }
+}
+}
+#!scalac ok
+#!regions L45/ L47/
+#!layout
+Source 0 50
+  Defn.Object 0 49
+    Term.Name 7 11
+    Template 12 49
+      Template.Body 12 49
+        Defn.Def 16 47
+          Term.Name 20 21
+          Term.Block 24 47
+            Term.SplicedMacroExpr 26 45
+              Term.Block 27 45
+                Defn.Val 29 43
+                  Pat.Var 33 34
+                    Term.Name 33 34
+                  Type.Name 36 39
+                  Term.Name 42 43
+#!program 720 line 322 BlockStat dialects.Scala3 :: #3610 1
+object W720 {
+  def w = {
+'[ List[Int] ]
+}
+}
+#!scalac ok
+#!regions L40/ L42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 11
+    Template 12 44
+      Template.Body 12 44
+        Defn.Def 16 42
+          Term.Name 20 21
+          Term.Block 24 42
+            Term.QuotedMacroType 26 40
+              Type.Apply 29 38
+                Type.Name 29 33
+                Type.ArgClause 33 38
+                  Type.Name 34 37
+#!program 721 line 330 BlockStat dialects.Scala3 :: #3610 2
+object W721 {
+  def w = {
+'[ type t = Int; List[t] ]
+}
+}
+#!scalac ok
+#!regions L52/ L54/
+#!layout
+Source 0 57
+  Defn.Object 0 56
+    Term.Name 7 11
+    Template 12 56
+      Template.Body 12 56
+        Defn.Def 16 54
+          Term.Name 20 21
+          Term.Block 24 54
+            Term.QuotedMacroType 26 52
+              Type.Block 29 50
+                Defn.Type 29 41
+                  Type.Name 34 35
+                  Type.ParamClause 36 36
+                  Type.Name 38 41
+                  Type.Bounds 36 36
+                Type.Apply 43 50
+                  Type.Name 43 47
+                  Type.ArgClause 47 50
+                    Type.Name 48 49
+#!program 722 line 339 BlockStat dialects.Scala3 :: #3610 3
+object W722 {
+  def w = {
+'[ type tail <: Tuple; *:[Int, tail] ]
+}
+}
+#!scalac ok
+#!regions L64/ L66/
+#!layout
+Source 0 69
+  Defn.Object 0 68
+    Term.Name 7 11
+    Template 12 68
+      Template.Body 12 68
+        Defn.Def 16 66
+          Term.Name 20 21
+          Term.Block 24 66
+            Term.QuotedMacroType 26 64
+              Type.Block 29 62
+                Decl.Type 29 47
+                  Type.Name 34 38
+                  Type.ParamClause 39 39
+                  Type.Bounds 39 47
+                    Type.Name 42 47
+                Type.Apply 49 62
+                  Type.Name 49 51
+                  Type.ArgClause 51 62
+                    Type.Name 52 55
+                    Type.Name 57 61
+#!program 723 line 346 BlockStat dialects.Scala3 :: #6483-metals splice
+object W723 {
+  def w = {
+${ fn }[Int](0)
+}
+}
+#!scalac ok
+#!regions L41/ L43/
+#!layout
+Source 0 46
+  Defn.Object 0 45
+    Term.Name 7 11
+    Template 12 45
+      Template.Body 12 45
+        Defn.Def 16 43
+          Term.Name 20 21
+          Term.Block 24 43
+            Term.Apply 26 41
+              Term.ApplyType 26 38
+                Term.SplicedMacroExpr 26 33
+                  Term.Block 27 33
+                    Term.Name 29 31
+                Type.ArgClause 33 38
+                  Type.Name 34 37
+              Term.ArgClause 38 41
+                Lit.Int 39 40
+#!program 724 line 347 BlockStat dialects.Scala3 :: #6483-metals splice
+object W724 {
+  def w = {
+( ${ fn } )[Int](0)
+}
+}
+#!scalac ok
+#!regions L45/ L47/
+#!layout
+Source 0 50
+  Defn.Object 0 49
+    Term.Name 7 11
+    Template 12 49
+      Template.Body 12 49
+        Defn.Def 16 47
+          Term.Name 20 21
+          Term.Block 24 47
+            Term.Apply 26 45
+              Term.ApplyType 26 42
+                Term.SplicedMacroExpr 28 35
+                  Term.Block 29 35
+                    Term.Name 31 33
+                Type.ArgClause 37 42
+                  Type.Name 38 41
+              Term.ArgClause 42 45
+                Lit.Int 43 44
+#!program 725 line 356 BlockStat dialects.Scala3 :: #6483-metals splice in braces
+object W725 {
+  def w = {
+{
+  ${ fn }
+}[Int](0)
+}
+}
+#!scalac ok
+#!regions L37/ L47/ L49/
+#!layout
+Source 0 52
+  Defn.Object 0 51
+    Term.Name 7 11
+    Template 12 51
+      Template.Body 12 51
+        Defn.Def 16 49
+          Term.Name 20 21
+          Term.Block 24 49
+            Term.Apply 26 47
+              Term.ApplyType 26 44
+                Term.Block 26 39
+                  Term.SplicedMacroExpr 30 37
+                    Term.Block 31 37
+                      Term.Name 33 35
+                Type.ArgClause 39 44
+                  Type.Name 40 43
+              Term.ArgClause 44 47
+                Lit.Int 45 46
+#!program 726 line 370 BlockStat dialects.Scala3 :: #6483-metals poly in parens
+object W726 {
+  def w = {
+([B] => (c: B) => fn[B](c))[Int](0)
+}
+}
+#!scalac ok
+#!regions L61/ L63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Defn.Def 16 63
+          Term.Name 20 21
+          Term.Block 24 63
+            Term.Apply 26 61
+              Term.ApplyType 26 58
+                Term.PolyFunction 27 52
+                  Type.ParamClause 27 30
+                    Type.Param 28 29
+                      Type.Name 28 29
+                      Type.ParamClause 29 29
+                      Type.Bounds 29 29
+                  Term.Function 34 52
+                    Term.ParamClause 34 40
+                      Term.Param 35 39
+                        Term.Name 35 36
+                        Type.Name 38 39
+                    Term.Apply 44 52
+                      Term.ApplyType 44 49
+                        Term.Name 44 46
+                        Type.ArgClause 46 49
+                          Type.Name 47 48
+                      Term.ArgClause 49 52
+                        Term.Name 50 51
+                Type.ArgClause 53 58
+                  Type.Name 54 57
+              Term.ArgClause 58 61
+                Lit.Int 59 60
+#!program 727 line 388 BlockStat dialects.Scala3 :: #6483-metals poly in braces
+object W727 {
+  def w = {
+{
+  [B] => (c: B) => fn[B](c)
+}[Int](0)
+
+}
+}
+#!scalac ok
+#!regions L55/ F65/ L68/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 11
+    Template 12 70
+      Template.Body 12 70
+        Defn.Def 16 68
+          Term.Name 20 21
+          Term.Block 24 68
+            Term.Apply 26 65
+              Term.ApplyType 26 62
+                Term.Block 26 57
+                  Term.PolyFunction 30 55
+                    Type.ParamClause 30 33
+                      Type.Param 31 32
+                        Type.Name 31 32
+                        Type.ParamClause 32 32
+                        Type.Bounds 32 32
+                    Term.Function 37 55
+                      Term.ParamClause 37 43
+                        Term.Param 38 42
+                          Term.Name 38 39
+                          Type.Name 41 42
+                      Term.Apply 47 55
+                        Term.ApplyType 47 52
+                          Term.Name 47 49
+                          Type.ArgClause 49 52
+                            Type.Name 50 51
+                        Term.ArgClause 52 55
+                          Term.Name 53 54
+                Type.ArgClause 57 62
+                  Type.Name 58 61
+              Term.ArgClause 62 65
+                Lit.Int 63 64
+#!program 728 line 408 BlockStat dialects.Scala3.withAllowSpliceAndQuote(false).withAllowSymbolLiterals(true) :: 'foo with modified dialects
+object W728 {
+  def w = {
+'foo
+}
+}
+#!scalac refuses: symbol literal 'foo is no longer supported,
+#!dialect dialects.Scala3.withAllowSpliceAndQuote(false).withAllowSymbolLiterals(true) gives another tree
+#!regions L30/ L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 11
+    Template 12 34
+      Template.Body 12 34
+        Defn.Def 16 32
+          Term.Name 20 21
+          Term.Block 24 32
+            Term.QuotedMacroExpr 26 30
+              Term.Name 27 30
+#!program 729 line 413 BlockStat dialects.Scala3.withAllowSymbolLiterals(false).withAllowSpliceAndQuote(true) :: 'foo with modified dialects
+object W729 {
+  def w = {
+'foo
+}
+}
+#!scalac refuses: symbol literal 'foo is no longer supported,
+#!regions L30/ L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 11
+    Template 12 34
+      Template.Body 12 34
+        Defn.Def 16 32
+          Term.Name 20 21
+          Term.Block 24 32
+            Term.QuotedMacroExpr 26 30
+              Term.Name 27 30
+#!program 730 line 420 BlockStat dialects.Scala3 :: 'foo with modified dialects
+object W730 {
+  def w = {
+'foo
+}
+}
+#!scalac refuses: symbol literal 'foo is no longer supported,
+#!regions L30/ L32/
+#!layout
+Source 0 35
+  Defn.Object 0 34
+    Term.Name 7 11
+    Template 12 34
+      Template.Body 12 34
+        Defn.Def 16 32
+          Term.Name 20 21
+          Term.Block 24 32
+            Term.QuotedMacroExpr 26 30
+              Term.Name 27 30
+#!program 731 line 440 BlockStat dialects.Scala3.withAllowSpliceAndQuote(false).withAllowSymbolLiterals(true) :: 'this with modified dialects
+object W731 {
+  def w = {
+'this
+}
+}
+#!scalac refuses: symbol literal 'this is no longer supported,
+#!dialect dialects.Scala3.withAllowSpliceAndQuote(false).withAllowSymbolLiterals(true) gives another tree
+#!regions L31/ L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 11
+    Template 12 35
+      Template.Body 12 35
+        Defn.Def 16 33
+          Term.Name 20 21
+          Term.Block 24 33
+            Term.QuotedMacroExpr 26 31
+              Term.This 27 31
+                Name.Anonymous 27 27
+#!program 732 line 445 BlockStat dialects.Scala3.withAllowSymbolLiterals(false).withAllowSpliceAndQuote(true) :: 'this with modified dialects
+object W732 {
+  def w = {
+'this
+}
+}
+#!scalac refuses: symbol literal 'this is no longer supported,
+#!regions L31/ L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 11
+    Template 12 35
+      Template.Body 12 35
+        Defn.Def 16 33
+          Term.Name 20 21
+          Term.Block 24 33
+            Term.QuotedMacroExpr 26 31
+              Term.This 27 31
+                Name.Anonymous 27 27
+#!program 733 line 452 BlockStat dialects.Scala3 :: 'this with modified dialects
+object W733 {
+  def w = {
+'this
+}
+}
+#!scalac refuses: symbol literal 'this is no longer supported,
+#!regions L31/ L33/
+#!layout
+Source 0 36
+  Defn.Object 0 35
+    Term.Name 7 11
+    Template 12 35
+      Template.Body 12 35
+        Defn.Def 16 33
+          Term.Name 20 21
+          Term.Block 24 33
+            Term.QuotedMacroExpr 26 31
+              Term.This 27 31
+                Name.Anonymous 27 27

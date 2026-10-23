@@ -1,0 +1,132 @@
+Nodes/Term.Interpolate/input.scala:8:3: error: [DumpStructure.structure]: BEGIN
+- Source syntax="/*\nrules = [\"file:../../support/DumpStructure.scala\"]\n*/\n// Term.Interpolate, its fields as scalameta 4.17.4's (structure.txt).\npackage nodes.Term_Interpolate\n\nobject Term_Interpolate:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = s\"a${x}b$x\"\n  val b = f\"$x%d\"\n  val c = raw\"a\\nb\"\n  val d = s\"\"\"t$x\n  u\"\"\"\n  val e = s\"$$\"\n  val f = raw\"a$$b\\n\"\n  val g = s\"\"\"q$$r\nt\"\"\"\n  val h = s\"a\\tb$x\"\n  val i = s\"\\u0041$x\"\n  val j = s\"$\"quote\"\n"
+  stats Pkg syntax="package nodes.Term_Interpolate\n\nobject Term_Interpolate:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = s\"a${x}b$x\"\n  val b = f\"$x%d\"\n  val c = raw\"a\\nb\"\n  val d = s\"\"\"t$x\n  u\"\"\"\n  val e = s\"$$\"\n  val f = raw\"a$$b\\n\"\n  val g = s\"\"\"q$$r\nt\"\"\"\n  val h = s\"a\\tb$x\"\n  val i = s\"\\u0041$x\"\n  val j = s\"$\"quote\""
+    .stats = [Defn.Object "object Term_Interpolate:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = s\"a${x}b$x\"\n  val b = f\"$x%d\"\n  val c = raw\"a\\nb\"\n  val d = s\"\"\"t$x\n  u\"\"\"\n  val e = s\"$$\"\n  val f = raw\"a$$b\\n\"\n  val g = s\"\"\"q$$r\nt\"\"\"\n  val h = s\"a\\tb$x\"\n  val i = s\"\\u0041$x\"\n  val j = s\"$\"quote\""]
+    ref Term.Select syntax="nodes.Term_Interpolate"
+      qual Term.Name value="nodes" syntax="nodes"
+      name Term.Name value="Term_Interpolate" syntax="Term_Interpolate"
+    body Pkg.Body syntax="object Term_Interpolate:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = s\"a${x}b$x\"\n  val b = f\"$x%d\"\n  val c = raw\"a\\nb\"\n  val d = s\"\"\"t$x\n  u\"\"\"\n  val e = s\"$$\"\n  val f = raw\"a$$b\\n\"\n  val g = s\"\"\"q$$r\nt\"\"\"\n  val h = s\"a\\tb$x\"\n  val i = s\"\\u0041$x\"\n  val j = s\"$\"quote\""
+      stats Defn.Object syntax="object Term_Interpolate:\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = s\"a${x}b$x\"\n  val b = f\"$x%d\"\n  val c = raw\"a\\nb\"\n  val d = s\"\"\"t$x\n  u\"\"\"\n  val e = s\"$$\"\n  val f = raw\"a$$b\\n\"\n  val g = s\"\"\"q$$r\nt\"\"\"\n  val h = s\"a\\tb$x\"\n  val i = s\"\\u0041$x\"\n  val j = s\"$\"quote\""
+        mods Nil
+        name Term.Name value="Term_Interpolate" syntax="Term_Interpolate"
+        templ Template syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = s\"a${x}b$x\"\n  val b = f\"$x%d\"\n  val c = raw\"a\\nb\"\n  val d = s\"\"\"t$x\n  u\"\"\"\n  val e = s\"$$\"\n  val f = raw\"a$$b\\n\"\n  val g = s\"\"\"q$$r\nt\"\"\"\n  val h = s\"a\\tb$x\"\n  val i = s\"\\u0041$x\"\n  val j = s\"$\"quote\""
+          .self = Self ""
+          .stats = [Defn.Val "val marker = 0", Defn.Val "val x = 1", Defn.Val "val a = s\"a${x}b$x\"", Defn.Val "val b = f\"$x%d\"", Defn.Val "val c = raw\"a\\nb\"", Defn.Val "val d = s\"\"\"t$x\n  u\"\"\"", Defn.Val "val e = s\"$$\"", Defn.Val "val f = raw\"a$$b\\n\"", Defn.Val "val g = s\"\"\"q$$r\nt\"\"\"", Defn.Val "val h = s\"a\\tb$x\"", Defn.Val "val i = s\"\\u0041$x\"", Defn.Val "val j = s\"$\"quote\""]
+          earlyClause None
+          inits Nil
+          body Template.Body syntax=":\n  val marker = 0 // assert: DumpStructure.structure\n  val x = 1\n  val a = s\"a${x}b$x\"\n  val b = f\"$x%d\"\n  val c = raw\"a\\nb\"\n  val d = s\"\"\"t$x\n  u\"\"\"\n  val e = s\"$$\"\n  val f = raw\"a$$b\\n\"\n  val g = s\"\"\"q$$r\nt\"\"\"\n  val h = s\"a\\tb$x\"\n  val i = s\"\\u0041$x\"\n  val j = s\"$\"quote\""
+            selfOpt None
+            stats Defn.Val syntax="val marker = 0"
+              mods Nil
+              pats Pat.Var syntax="marker"
+                name Term.Name value="marker" syntax="marker"
+              decltpe None
+              rhs Lit.Int value=0 syntax="0"
+            stats Defn.Val syntax="val x = 1"
+              mods Nil
+              pats Pat.Var syntax="x"
+                name Term.Name value="x" syntax="x"
+              decltpe None
+              rhs Lit.Int value=1 syntax="1"
+            stats Defn.Val syntax="val a = s\"a${x}b$x\""
+              mods Nil
+              pats Pat.Var syntax="a"
+                name Term.Name value="a" syntax="a"
+              decltpe None
+              rhs Term.Interpolate syntax="s\"a${x}b$x\""
+                prefix Term.Name value="s" syntax="s"
+                parts Lit.String value="a" syntax="a"
+                parts Lit.String value="b" syntax="b"
+                parts Lit.String value="" syntax=""
+                args Term.Block syntax="{x}"
+                  stats Term.Name value="x" syntax="x"
+                args Term.Name value="x" syntax="x"
+            stats Defn.Val syntax="val b = f\"$x%d\""
+              mods Nil
+              pats Pat.Var syntax="b"
+                name Term.Name value="b" syntax="b"
+              decltpe None
+              rhs Term.Interpolate syntax="f\"$x%d\""
+                prefix Term.Name value="f" syntax="f"
+                parts Lit.String value="" syntax=""
+                parts Lit.String value="%d" syntax="%d"
+                args Term.Name value="x" syntax="x"
+            stats Defn.Val syntax="val c = raw\"a\\nb\""
+              mods Nil
+              pats Pat.Var syntax="c"
+                name Term.Name value="c" syntax="c"
+              decltpe None
+              rhs Term.Interpolate syntax="raw\"a\\nb\""
+                prefix Term.Name value="raw" syntax="raw"
+                parts Lit.String value="a\\nb" syntax="a\\nb"
+                args Nil
+            stats Defn.Val syntax="val d = s\"\"\"t$x\n  u\"\"\""
+              mods Nil
+              pats Pat.Var syntax="d"
+                name Term.Name value="d" syntax="d"
+              decltpe None
+              rhs Term.Interpolate syntax="s\"\"\"t$x\n  u\"\"\""
+                prefix Term.Name value="s" syntax="s"
+                parts Lit.String value="t" syntax="t"
+                parts Lit.String value="\n  u" syntax="\n  u"
+                args Term.Name value="x" syntax="x"
+            stats Defn.Val syntax="val e = s\"$$\""
+              mods Nil
+              pats Pat.Var syntax="e"
+                name Term.Name value="e" syntax="e"
+              decltpe None
+              rhs Term.Interpolate syntax="s\"$$\""
+                prefix Term.Name value="s" syntax="s"
+                parts Lit.String value="$" syntax="$$"
+                args Nil
+            stats Defn.Val syntax="val f = raw\"a$$b\\n\""
+              mods Nil
+              pats Pat.Var syntax="f"
+                name Term.Name value="f" syntax="f"
+              decltpe None
+              rhs Term.Interpolate syntax="raw\"a$$b\\n\""
+                prefix Term.Name value="raw" syntax="raw"
+                parts Lit.String value="a$b\\n" syntax="a$$b\\n"
+                args Nil
+            stats Defn.Val syntax="val g = s\"\"\"q$$r\nt\"\"\""
+              mods Nil
+              pats Pat.Var syntax="g"
+                name Term.Name value="g" syntax="g"
+              decltpe None
+              rhs Term.Interpolate syntax="s\"\"\"q$$r\nt\"\"\""
+                prefix Term.Name value="s" syntax="s"
+                parts Lit.String value="q$r\nt" syntax="q$$r\nt"
+                args Nil
+            stats Defn.Val syntax="val h = s\"a\\tb$x\""
+              mods Nil
+              pats Pat.Var syntax="h"
+                name Term.Name value="h" syntax="h"
+              decltpe None
+              rhs Term.Interpolate syntax="s\"a\\tb$x\""
+                prefix Term.Name value="s" syntax="s"
+                parts Lit.String value="a\\tb" syntax="a\\tb"
+                parts Lit.String value="" syntax=""
+                args Term.Name value="x" syntax="x"
+            stats Defn.Val syntax="val i = s\"\\u0041$x\""
+              mods Nil
+              pats Pat.Var syntax="i"
+                name Term.Name value="i" syntax="i"
+              decltpe None
+              rhs Term.Interpolate syntax="s\"\\u0041$x\""
+                prefix Term.Name value="s" syntax="s"
+                parts Lit.String value="A" syntax="\\u0041"
+                parts Lit.String value="" syntax=""
+                args Term.Name value="x" syntax="x"
+            stats Defn.Val syntax="val j = s\"$\"quote\""
+              mods Nil
+              pats Pat.Var syntax="j"
+                name Term.Name value="j" syntax="j"
+              decltpe None
+              rhs Term.Interpolate syntax="s\"$\"quote\""
+                prefix Term.Name value="s" syntax="s"
+                parts Lit.String value="\"quote" syntax="$\"quote"
+                args Nil
+          derives Nil
+END
+    val marker = 0 // assert: DumpStructure.structure
+    ^^^^^^^^^^^^^^

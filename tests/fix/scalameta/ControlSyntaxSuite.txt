@@ -1,0 +1,6554 @@
+# The programs of scalameta 4.17.4's ControlSyntaxSuite (tests/shared/src/test/scala/scala/meta/tests/parsers/dotty, BSD
+# 3-Clause, teq's NOTICE), each wrapped, scalameta's layout of it and scalac 3.8.4's parse (support/ScalametaCorpus.scala).
+#!program 9 line 14 Stat dialects.Scala3 :: old-if-single1
+object W9 {
+if (cond) -a else a
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 9
+    Template 10 33
+      Template.Body 10 33
+        Term.If 12 31
+          Term.Name 16 20
+          Term.ApplyUnary 22 24
+            Term.Name 22 23
+            Term.Name 23 24
+          Term.Name 30 31
+#!program 10 line 24 Stat dialects.Scala3 :: old-if-else-single1
+object W10 {
+if (cond) fx
+else gx
+
+}
+#!scalac ok
+#!regions F33/
+#!layout
+Source 0 37
+  Defn.Object 0 36
+    Term.Name 7 10
+    Template 11 36
+      Template.Body 11 36
+        Term.If 13 33
+          Term.Name 17 21
+          Term.Name 23 25
+          Term.Name 31 33
+#!program 11 line 37 Stat dialects.Scala3 :: old-if-else-single2
+object W11 {
+if (cond)
+  fx
+else
+  gx
+
+}
+#!scalac ok
+#!regions I22/2 O27/ I32/2 O38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 10
+    Template 11 40
+      Template.Body 11 40
+        Term.If 13 37
+          Term.Name 17 21
+          Term.Name 25 27
+          Term.Name 35 37
+#!program 12 line 52 Stat dialects.Scala3 :: old-if-else-braces
+object W12 {
+if (cond) {
+  fa1
+  fa2
+} else {
+  fb1
+  fb2
+}
+
+}
+#!scalac ok
+#!regions L30/ L36/ L51/ L57/ F59/
+#!layout
+Source 0 63
+  Defn.Object 0 62
+    Term.Name 7 10
+    Template 11 62
+      Template.Body 11 62
+        Term.If 13 59
+          Term.Name 17 21
+          Term.Block 23 38
+            Term.Name 27 30
+            Term.Name 33 36
+          Term.Block 44 59
+            Term.Name 48 51
+            Term.Name 54 57
+#!program 13 line 63 Stat dialects.Scala3 :: new-if-else-single1
+object W13 {
+if cond then fx
+else gx
+
+}
+#!scalac ok
+#!regions F36/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 10
+    Template 11 39
+      Template.Body 11 39
+        Term.If 13 36
+          Term.Name 16 20
+          Term.Name 26 28
+          Term.Name 34 36
+#!program 14 line 76 Stat dialects.Scala3 :: new-if-else-single2
+object W14 {
+if cond then
+  fx
+else 
+  gx
+
+}
+#!scalac ok
+#!regions I25/2 O30/ I36/2 O42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 10
+    Template 11 44
+      Template.Body 11 44
+        Term.If 13 41
+          Term.Name 16 20
+          Term.Name 28 30
+          Term.Name 39 41
+#!program 15 line 89 Stat dialects.Scala3 :: new-if-single1
+object W15 {
+if cond1
+   && (cond2)
+then
+  gx
+
+}
+#!scalac ok
+#!regions X21/ L35/ I40/2 O46/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 10
+    Template 11 48
+      Template.Body 11 48
+        Term.If 13 45
+          Term.ApplyInfix 16 35
+            Term.Name 16 21
+            Term.Name 25 27
+            Type.ArgClause 28 28
+            Term.ArgClause 28 35
+              Term.Name 29 34
+          Term.Name 43 45
+          Lit.Unit 47 47
+#!program 16 line 99 Stat dialects.Scala3 :: new-if-single2
+object W16 {
+if (cond1) || cond2(a1) then ok
+
+}
+#!scalac ok
+#!regions F44/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 10
+    Template 11 47
+      Template.Body 11 47
+        Term.If 13 44
+          Term.ApplyInfix 16 36
+            Term.Name 17 22
+            Term.Name 24 26
+            Type.ArgClause 27 27
+            Term.ArgClause 27 36
+              Term.Apply 27 36
+                Term.Name 27 32
+                Term.ArgClause 32 36
+                  Term.Name 33 35
+          Term.Name 42 44
+          Lit.Unit 44 44
+#!program 17 line 108 Stat dialects.Scala3 :: new-if-single3
+object W17 {
+if (cond1).cont then ok
+}
+#!scalac ok
+#!regions L36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 10
+    Template 11 38
+      Template.Body 11 38
+        Term.If 13 36
+          Term.Select 16 28
+            Term.Name 17 22
+            Term.Name 24 28
+          Term.Name 34 36
+          Lit.Unit 36 36
+#!program 18 line 126 Stat dialects.Scala3 :: new-if-expr-without-then
+object W18 {
+{
+  if (x > 0) && (y > 0)
+    x += 1
+}
+
+}
+#!scalac ok
+#!regions L38/ L49/ F51/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 10
+    Template 11 54
+      Template.Body 11 54
+        Term.Block 13 51
+          Term.If 17 38
+            Term.ApplyInfix 21 26
+              Term.Name 21 22
+              Term.Name 23 24
+              Type.ArgClause 25 25
+              Term.ArgClause 25 26
+                Lit.Int 25 26
+            Term.Apply 28 38
+              Term.Name 28 30
+              Term.ArgClause 31 38
+                Term.ApplyInfix 32 37
+                  Term.Name 32 33
+                  Term.Name 34 35
+                  Type.ArgClause 36 36
+                  Term.ArgClause 36 37
+                    Lit.Int 36 37
+            Lit.Unit 38 38
+          Term.ApplyInfix 43 49
+            Term.Name 43 44
+            Term.Name 45 47
+            Type.ArgClause 48 48
+            Term.ArgClause 48 49
+              Lit.Int 48 49
+#!program 19 line 170 Stat dialects.Scala3 :: new-if-else-multiple
+object W19 {
+if cond then
+  fx1
+  fx2
+else 
+  gx1
+  gx2
+
+}
+#!scalac ok
+#!regions I25/2 L31/2 O37/ I43/2 L49/2 O56/
+#!layout
+Source 0 59
+  Defn.Object 0 58
+    Term.Name 7 10
+    Template 11 58
+      Template.Body 11 58
+        Term.If 13 55
+          Term.Name 16 20
+          Term.Block 28 37
+            Term.Name 28 31
+            Term.Name 34 37
+          Term.Block 46 55
+            Term.Name 46 49
+            Term.Name 52 55
+#!program 20 line 184 Stat dialects.Scala3 :: if-else-in-parens-1
+object W20 {
+fx(
+  if (cond)
+    A
+  else
+    B)
+
+}
+#!scalac ok
+#!regions I28/4 O34/ I41/4 O46/ F48/
+#!layout
+Source 0 52
+  Defn.Object 0 51
+    Term.Name 7 10
+    Template 11 51
+      Template.Body 11 51
+        Term.Apply 13 48
+          Term.Name 13 15
+          Term.ArgClause 15 48
+            Term.If 19 47
+              Term.Name 23 27
+              Term.Name 33 34
+              Term.Name 46 47
+#!program 21 line 208 Stat dialects.Scala3 :: if-else-in-parens-2
+object W21 {
+fx(
+  if cond then
+    A1
+    A2
+  else
+    B1
+    B2)
+
+}
+#!scalac ok
+#!regions I31/4 L38/4 O45/ I52/4 L59/4 O64/ F67/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 10
+    Template 11 70
+      Template.Body 11 70
+        Term.Apply 13 67
+          Term.Name 13 15
+          Term.ArgClause 15 67
+            Term.If 19 66
+              Term.Name 22 26
+              Term.Block 36 45
+                Term.Name 36 38
+                Term.Name 43 45
+              Term.Block 57 66
+                Term.Name 57 59
+                Term.Name 64 66
+#!program 22 line 226 Stat dialects.Scala3 :: new-if-indented
+object W22 {
+if (cond)
+  fx1
+  fx2
+
+}
+#!scalac ok
+#!regions I22/2 L28/2 O35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 10
+    Template 11 37
+      Template.Body 11 37
+        Term.If 13 34
+          Term.Name 17 21
+          Term.Block 25 34
+            Term.Name 25 28
+            Term.Name 31 34
+          Lit.Unit 36 36
+#!program 23 line 263 Stat dialects.Scala3 :: if-else-in-parens-3
+object W23 {
+fx(
+  if cond then
+    A1
+    A2
+  else
+    B1
+    B2,
+  secondArg
+)
+
+}
+#!scalac ok
+#!regions I31/4 L38/4 O45/ I52/4 L59/4 O64/ F81/
+#!layout
+Source 0 85
+  Defn.Object 0 84
+    Term.Name 7 10
+    Template 11 84
+      Template.Body 11 84
+        Term.Apply 13 81
+          Term.Name 13 15
+          Term.ArgClause 15 81
+            Term.If 19 66
+              Term.Name 22 26
+              Term.Block 36 45
+                Term.Name 36 38
+                Term.Name 43 45
+              Term.Block 57 66
+                Term.Name 57 59
+                Term.Name 64 66
+            Term.Name 70 79
+#!program 24 line 286 Stat dialects.Scala3 :: old-try-finally1
+object W24 {
+try { fx }
+finally { ok }
+
+}
+#!scalac ok
+#!regions F38/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 10
+    Template 11 41
+      Template.Body 11 41
+        Term.Try 13 38
+          Term.Block 17 23
+            Term.Name 19 21
+          Term.Block 32 38
+            Term.Name 34 36
+#!program 25 line 297 Stat dialects.Scala3 :: old-try-finally2
+object W25 {
+try fx
+finally ok
+
+}
+#!scalac ok
+#!regions F30/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 10
+    Template 11 33
+      Template.Body 11 33
+        Term.Try 13 30
+          Term.Name 17 19
+          Term.Name 28 30
+#!program 26 line 310 Stat dialects.Scala3 :: new-try-finally-single
+object W26 {
+try
+  fx
+finally
+  ok
+
+}
+#!scalac ok
+#!regions I16/2 O21/ I29/2 O35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 10
+    Template 11 37
+      Template.Body 11 37
+        Term.Try 13 34
+          Term.Name 19 21
+          Term.Name 32 34
+#!program 27 line 333 Stat dialects.Scala3 :: new-try-finally-multiple
+object W27 {
+try
+  fx
+  fy
+finally
+  ok1
+  ok2
+
+}
+#!scalac ok
+#!regions I16/2 L21/2 O26/ I34/2 L40/2 O47/
+#!layout
+Source 0 50
+  Defn.Object 0 49
+    Term.Name 7 10
+    Template 11 49
+      Template.Body 11 49
+        Term.Try 13 46
+          Term.Block 19 26
+            Term.Name 19 21
+            Term.Name 24 26
+          Term.Block 37 46
+            Term.Name 37 40
+            Term.Name 43 46
+#!program 28 line 347 Stat dialects.Scala3 :: old-try-catch-single
+object W28 {
+try fx 
+catch { case x => 1 }
+
+}
+#!scalac ok
+#!regions F42/
+#!layout
+Source 0 46
+  Defn.Object 0 45
+    Term.Name 7 10
+    Template 11 45
+      Template.Body 11 45
+        Term.Try 13 42
+          Term.Name 17 19
+          Term.CasesBlock 27 42
+            Case 29 40
+              Pat.Var 34 35
+                Term.Name 34 35
+              Lit.Int 39 40
+#!program 29 line 366 Stat dialects.Scala3 :: old-try-catch-multi
+object W29 {
+try fx 
+catch {
+  case x => 1
+  case y => 2
+}
+
+}
+#!scalac ok
+#!regions L42/ L56/ F58/
+#!layout
+Source 0 62
+  Defn.Object 0 61
+    Term.Name 7 10
+    Template 11 61
+      Template.Body 11 61
+        Term.Try 13 58
+          Term.Name 17 19
+          Term.CasesBlock 27 58
+            Case 31 42
+              Pat.Var 36 37
+                Term.Name 36 37
+              Lit.Int 41 42
+            Case 45 56
+              Pat.Var 50 51
+                Term.Name 50 51
+              Lit.Int 55 56
+#!program 30 line 388 Stat dialects.Scala3 :: new-try-catch-multi
+object W30 {
+try
+  fx 
+  fy
+catch { case x => ct }
+
+}
+#!scalac ok
+#!regions I16/2 L22/2 O27/ F50/
+#!layout
+Source 0 54
+  Defn.Object 0 53
+    Term.Name 7 10
+    Template 11 53
+      Template.Body 11 53
+        Term.Try 13 50
+          Term.Block 19 27
+            Term.Name 19 21
+            Term.Name 25 27
+          Term.CasesBlock 34 50
+            Case 36 48
+              Pat.Var 41 42
+                Term.Name 41 42
+              Term.Name 46 48
+#!program 31 line 403 Stat dialects.Scala3 :: new-catch-single1
+object W31 {
+try fx
+catch case x => ct
+
+}
+#!scalac ok
+#!regions I26/0 O39/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 10
+    Template 11 41
+      Template.Body 11 41
+        Term.Try 13 38
+          Term.Name 17 19
+          Term.CasesBlock 26 38
+            Case 26 38
+              Pat.Var 31 32
+                Term.Name 31 32
+              Term.Name 36 38
+#!program 32 line 423 Stat dialects.Scala3 :: new-catch-single2
+object W32 {
+try fx
+catch
+  case x =>
+    fa
+    fb
+
+}
+#!scalac ok
+#!regions I25/2 I37/4.2 L44/4.2 O52/2 O52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 10
+    Template 11 54
+      Template.Body 11 54
+        Term.Try 13 51
+          Term.Name 17 19
+          Term.CasesBlock 28 51
+            Case 28 51
+              Pat.Var 33 34
+                Term.Name 33 34
+              Term.Block 42 51
+                Term.Name 42 44
+                Term.Name 49 51
+#!program 33 line 452 Stat dialects.Scala3 :: new-catch-multi
+object W33 {
+try fx
+catch
+  case x =>
+    xa
+    xb
+  case y => yab
+  case z =>
+    za
+    zb
+
+}
+#!scalac ok
+#!regions I25/2 I37/4.2 L44/4.2 O51/2 L51/2 L67/2 I79/4.2 L86/4.2 O94/2 O94/
+#!layout
+Source 0 97
+  Defn.Object 0 96
+    Term.Name 7 10
+    Template 11 96
+      Template.Body 11 96
+        Term.Try 13 93
+          Term.Name 17 19
+          Term.CasesBlock 28 93
+            Case 28 51
+              Pat.Var 33 34
+                Term.Name 33 34
+              Term.Block 42 51
+                Term.Name 42 44
+                Term.Name 49 51
+            Case 54 67
+              Pat.Var 59 60
+                Term.Name 59 60
+              Term.Name 64 67
+            Case 70 93
+              Pat.Var 75 76
+                Term.Name 75 76
+              Term.Block 84 93
+                Term.Name 84 86
+                Term.Name 91 93
+#!program 34 line 471 Stat dialects.Scala3 :: new-catch-handler-nl
+object W34 {
+try
+  foo
+catch
+  bar
+
+}
+#!scalac ok
+#!regions I16/2 O22/ F34/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 10
+    Template 11 37
+      Template.Body 11 37
+        Term.TryWithHandler 13 34
+          Term.Name 19 22
+          Term.Name 31 34
+#!program 35 line 486 Stat dialects.Scala3 :: new-catch-handler-finally-nl
+object W35 {
+try
+  foo
+catch
+  bar
+finally
+  baz
+
+}
+#!scalac ok
+#!regions I16/2 O22/ I42/2 O49/
+#!layout
+Source 0 52
+  Defn.Object 0 51
+    Term.Name 7 10
+    Template 11 51
+      Template.Body 11 51
+        Term.TryWithHandler 13 48
+          Term.Name 19 22
+          Term.Name 31 34
+          Term.Name 45 48
+#!program 36 line 507 Stat dialects.Scala3 :: new-catch-finally-single
+object W36 {
+try fx
+catch case x =>
+  ax
+  bx
+finally
+  fx
+
+}
+#!scalac ok
+#!regions I26/0 I35/2.0 L40/2.0 O45/0 O45/ I53/2 O59/
+#!layout
+Source 0 62
+  Defn.Object 0 61
+    Term.Name 7 10
+    Template 11 61
+      Template.Body 11 61
+        Term.Try 13 58
+          Term.Name 17 19
+          Term.CasesBlock 26 45
+            Case 26 45
+              Pat.Var 31 32
+                Term.Name 31 32
+              Term.Block 38 45
+                Term.Name 38 40
+                Term.Name 43 45
+          Term.Name 56 58
+#!program 37 line 536 Stat dialects.Scala3 :: new-catch-inside-catch
+object W37 {
+{
+  try fx
+  catch case x =>
+    try fy
+    catch case y =>
+    throw ex
+  finally fxclose
+}
+
+}
+#!scalac ok
+#!regions I32/2 I41/4.2 I63/4.4.2 O85/4.2 O85/2 O85/ L103/ F105/
+#!layout
+Source 0 109
+  Defn.Object 0 108
+    Term.Name 7 10
+    Template 11 108
+      Template.Body 11 108
+        Term.Block 13 105
+          Term.Try 17 103
+            Term.Name 21 23
+            Term.CasesBlock 32 85
+              Case 32 85
+                Pat.Var 37 38
+                  Term.Name 37 38
+                Term.Try 46 85
+                  Term.Name 50 52
+                  Term.CasesBlock 63 85
+                    Case 63 85
+                      Pat.Var 68 69
+                        Term.Name 68 69
+                      Term.Throw 77 85
+                        Term.Name 83 85
+            Term.Name 96 103
+#!program 38 line 588 Stat dialects.Scala3 :: catch after `end for` and `end match`
+object W38 {
+object a:
+   try
+      for (i <- foo)
+        foo
+      end for
+      foo match
+         case foo =>
+      end match
+   catch
+      case f =>
+
+}
+#!scalac ok
+#!regions I22/3 I29/6.3 I50/8.6.3 O62/6.3 L62/6.3 L76/6.3 I92/9.6.3 O113/6.3 O129/3 I138/6.3 O155/3 O155/
+#!layout
+Source 0 158
+  Defn.Object 0 157
+    Term.Name 7 10
+    Template 11 157
+      Template.Body 11 157
+        Defn.Object 13 154
+          Term.Name 20 21
+          Template 21 154
+            Template.Body 21 154
+              Term.Try 26 154
+                Term.Block 36 129
+                  Term.For 36 62
+                    Term.EnumeratorsBlock 40 50
+                      Enumerator.Generator 41 49
+                        Pat.Var 41 42
+                          Term.Name 41 42
+                        Term.Name 46 49
+                    Term.Name 59 62
+                  Term.EndMarker 69 76
+                    Term.Name 73 76
+                  Term.Match 83 113
+                    Term.Name 83 86
+                    Term.CasesBlock 102 113
+                      Case 102 113
+                        Pat.Var 107 110
+                          Term.Name 107 110
+                        Term.Block 113 113
+                  Term.EndMarker 120 129
+                    Term.Name 124 129
+                Term.CasesBlock 145 154
+                  Case 145 154
+                    Pat.Var 150 151
+                      Term.Name 150 151
+                    Term.Block 155 155
+#!program 39 line 602 Stat dialects.Scala3 :: #3532 nested try-finally on same line
+object W39 {
+try try Right(f()) finally iter.close()
+finally arena.close()
+
+}
+#!scalac ok
+#!regions F74/
+#!layout
+Source 0 78
+  Defn.Object 0 77
+    Term.Name 7 10
+    Template 11 77
+      Template.Body 11 77
+        Term.Try 13 74
+          Term.Try 17 52
+            Term.Apply 21 31
+              Term.Name 21 26
+              Term.ArgClause 26 31
+                Term.Apply 27 30
+                  Term.Name 27 28
+                  Term.ArgClause 28 30
+            Term.Apply 40 52
+              Term.Select 40 50
+                Term.Name 40 44
+                Term.Name 45 50
+              Term.ArgClause 50 52
+          Term.Apply 61 74
+            Term.Select 61 72
+              Term.Name 61 66
+              Term.Name 67 72
+            Term.ArgClause 72 74
+#!program 40 line 618 Stat dialects.Scala3 :: #3532 nested try-finally without catch
+object W40 {
+try
+  try Right(f())
+  finally iter.close()
+finally arena.close()
+
+}
+#!scalac ok
+#!regions I16/2 O56/ F78/
+#!layout
+Source 0 82
+  Defn.Object 0 81
+    Term.Name 7 10
+    Template 11 81
+      Template.Body 11 81
+        Term.Try 13 78
+          Term.Try 19 56
+            Term.Apply 23 33
+              Term.Name 23 28
+              Term.ArgClause 28 33
+                Term.Apply 29 32
+                  Term.Name 29 30
+                  Term.ArgClause 30 32
+            Term.Apply 44 56
+              Term.Select 44 54
+                Term.Name 44 48
+                Term.Name 49 54
+              Term.ArgClause 54 56
+          Term.Apply 65 78
+            Term.Select 65 76
+              Term.Name 65 70
+              Term.Name 71 76
+            Term.ArgClause 76 78
+#!program 41 line 648 Stat dialects.Scala3 :: #3532 nested try-finally, oneline catch
+object W41 {
+try
+  try Right(f())
+  catch case NonFatal(ex) => Left(???)
+  finally iter.close()
+finally arena.close()
+
+}
+#!scalac ok
+#!regions I16/2 I42/2.2 O72/2 O95/ F117/
+#!layout
+Source 0 121
+  Defn.Object 0 120
+    Term.Name 7 10
+    Template 11 120
+      Template.Body 11 120
+        Term.Try 13 117
+          Term.Try 19 95
+            Term.Apply 23 33
+              Term.Name 23 28
+              Term.ArgClause 28 33
+                Term.Apply 29 32
+                  Term.Name 29 30
+                  Term.ArgClause 30 32
+            Term.CasesBlock 42 72
+              Case 42 72
+                Pat.Extract 47 59
+                  Term.Name 47 55
+                  Pat.ArgClause 55 59
+                    Pat.Var 56 58
+                      Term.Name 56 58
+                Term.Apply 63 72
+                  Term.Name 63 67
+                  Term.ArgClause 67 72
+                    Term.Name 68 71
+            Term.Apply 83 95
+              Term.Select 83 93
+                Term.Name 83 87
+                Term.Name 88 93
+              Term.ArgClause 93 95
+          Term.Apply 104 117
+            Term.Select 104 115
+              Term.Name 104 109
+              Term.Name 110 115
+            Term.ArgClause 115 117
+#!program 42 line 679 Stat dialects.Scala3 :: #3532 nested try-finally, catch with non-indented case
+object W42 {
+try
+  try Right(f())
+  catch
+  case NonFatal(ex) => Left(???)
+  finally iter.close()
+finally arena.close()
+
+}
+#!scalac ok
+#!regions I16/2 I41/2.2 O74/2 O97/ F119/
+#!layout
+Source 0 123
+  Defn.Object 0 122
+    Term.Name 7 10
+    Template 11 122
+      Template.Body 11 122
+        Term.Try 13 119
+          Term.Try 19 97
+            Term.Apply 23 33
+              Term.Name 23 28
+              Term.ArgClause 28 33
+                Term.Apply 29 32
+                  Term.Name 29 30
+                  Term.ArgClause 30 32
+            Term.CasesBlock 44 74
+              Case 44 74
+                Pat.Extract 49 61
+                  Term.Name 49 57
+                  Pat.ArgClause 57 61
+                    Pat.Var 58 60
+                      Term.Name 58 60
+                Term.Apply 65 74
+                  Term.Name 65 69
+                  Term.ArgClause 69 74
+                    Term.Name 70 73
+            Term.Apply 85 97
+              Term.Select 85 95
+                Term.Name 85 89
+                Term.Name 90 95
+              Term.ArgClause 95 97
+          Term.Apply 106 119
+            Term.Select 106 117
+              Term.Name 106 111
+              Term.Name 112 117
+            Term.ArgClause 117 119
+#!program 43 line 710 Stat dialects.Scala3 :: #3532 nested try-finally, catch with indented case
+object W43 {
+try
+  try Right(f())
+  catch
+    case NonFatal(ex) => Left(???)
+  finally iter.close()
+finally arena.close()
+
+}
+#!scalac ok
+#!regions I16/2 I41/4.2 O76/2 O99/ F121/
+#!layout
+Source 0 125
+  Defn.Object 0 124
+    Term.Name 7 10
+    Template 11 124
+      Template.Body 11 124
+        Term.Try 13 121
+          Term.Try 19 99
+            Term.Apply 23 33
+              Term.Name 23 28
+              Term.ArgClause 28 33
+                Term.Apply 29 32
+                  Term.Name 29 30
+                  Term.ArgClause 30 32
+            Term.CasesBlock 46 76
+              Case 46 76
+                Pat.Extract 51 63
+                  Term.Name 51 59
+                  Pat.ArgClause 59 63
+                    Pat.Var 60 62
+                      Term.Name 60 62
+                Term.Apply 67 76
+                  Term.Name 67 71
+                  Term.ArgClause 71 76
+                    Term.Name 72 75
+            Term.Apply 87 99
+              Term.Select 87 97
+                Term.Name 87 91
+                Term.Name 92 97
+              Term.ArgClause 97 99
+          Term.Apply 108 121
+            Term.Select 108 119
+              Term.Name 108 113
+              Term.Name 114 119
+            Term.ArgClause 119 121
+#!program 44 line 742 Stat dialects.Scala3 :: #3532 nested try, inner with catch, outer with finally
+object W44 {
+try
+  try Right(f())
+  catch
+    case NonFatal(ex) => Left(???)
+finally arena.close()
+
+}
+#!scalac ok
+#!regions I16/2 I41/4.2 O76/2 O76/ F98/
+#!layout
+Source 0 102
+  Defn.Object 0 101
+    Term.Name 7 10
+    Template 11 101
+      Template.Body 11 101
+        Term.Try 13 98
+          Term.Try 19 76
+            Term.Apply 23 33
+              Term.Name 23 28
+              Term.ArgClause 28 33
+                Term.Apply 29 32
+                  Term.Name 29 30
+                  Term.ArgClause 30 32
+            Term.CasesBlock 46 76
+              Case 46 76
+                Pat.Extract 51 63
+                  Term.Name 51 59
+                  Pat.ArgClause 59 63
+                    Pat.Var 60 62
+                      Term.Name 60 62
+                Term.Apply 67 76
+                  Term.Name 67 71
+                  Term.ArgClause 71 76
+                    Term.Name 72 75
+          Term.Apply 85 98
+            Term.Select 85 96
+              Term.Name 85 90
+              Term.Name 91 96
+            Term.ArgClause 96 98
+#!program 45 line 767 Stat dialects.Scala3 :: #3532 nested try-finally, try with multiline non-indented expr 1
+object W45 {
+try
+  try { 1 + 2 }
+    + 3
+  finally iter.close()
+finally arena.close()
+
+}
+#!scalac ok
+#!regions I16/2 X32/2 O63/ F85/
+#!layout
+Source 0 89
+  Defn.Object 0 88
+    Term.Name 7 10
+    Template 11 88
+      Template.Body 11 88
+        Term.Try 13 85
+          Term.Try 19 63
+            Term.ApplyInfix 23 40
+              Term.Block 23 32
+                Term.ApplyInfix 25 30
+                  Lit.Int 25 26
+                  Term.Name 27 28
+                  Type.ArgClause 29 29
+                  Term.ArgClause 29 30
+                    Lit.Int 29 30
+              Term.Name 37 38
+              Type.ArgClause 39 39
+              Term.ArgClause 39 40
+                Lit.Int 39 40
+            Term.Apply 51 63
+              Term.Select 51 61
+                Term.Name 51 55
+                Term.Name 56 61
+              Term.ArgClause 61 63
+          Term.Apply 72 85
+            Term.Select 72 83
+              Term.Name 72 77
+              Term.Name 78 83
+            Term.ArgClause 83 85
+#!program 46 line 792 Stat dialects.Scala3 :: #3532 nested try-finally, try with multiline non-indented expr 2
+object W46 {
+try
+  try { 1 + 2 }
+    .foo
+  finally iter.close()
+finally arena.close()
+
+}
+#!scalac ok
+#!regions I16/2 O64/ F86/
+#!layout
+Source 0 90
+  Defn.Object 0 89
+    Term.Name 7 10
+    Template 11 89
+      Template.Body 11 89
+        Term.Try 13 86
+          Term.Try 19 64
+            Term.Select 23 41
+              Term.Block 23 32
+                Term.ApplyInfix 25 30
+                  Lit.Int 25 26
+                  Term.Name 27 28
+                  Type.ArgClause 29 29
+                  Term.ArgClause 29 30
+                    Lit.Int 29 30
+              Term.Name 38 41
+            Term.Apply 52 64
+              Term.Select 52 62
+                Term.Name 52 56
+                Term.Name 57 62
+              Term.ArgClause 62 64
+          Term.Apply 73 86
+            Term.Select 73 84
+              Term.Name 73 78
+              Term.Name 79 84
+            Term.ArgClause 84 86
+#!program 47 line 823 Stat dialects.Scala3 :: #3532 nested bare try, outer without catch
+object W47 {
+try
+  try 1
+    + 2
+finally foo
+
+}
+#!scalac ok
+#!regions I16/2 X24/2 O32/ F44/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 10
+    Template 11 47
+      Template.Body 11 47
+        Term.Try 13 44
+          Term.Try 19 32
+            Term.ApplyInfix 23 32
+              Lit.Int 23 24
+              Term.Name 29 30
+              Type.ArgClause 31 31
+              Term.ArgClause 31 32
+                Lit.Int 31 32
+          Term.Name 41 44
+#!program 48 line 847 Stat dialects.Scala3 :: #3532 nested bare try, outer with catch
+object W48 {
+try
+  try 1
+    + 2
+catch
+  case NonFatal(ex) => 3
+finally foo
+
+}
+#!scalac ok
+#!regions I16/2 X24/2 O32/ I38/2 O63/ F75/
+#!layout
+Source 0 79
+  Defn.Object 0 78
+    Term.Name 7 10
+    Template 11 78
+      Template.Body 11 78
+        Term.Try 13 75
+          Term.Try 19 32
+            Term.ApplyInfix 23 32
+              Lit.Int 23 24
+              Term.Name 29 30
+              Type.ArgClause 31 31
+              Term.ArgClause 31 32
+                Lit.Int 31 32
+          Term.CasesBlock 41 63
+            Case 41 63
+              Pat.Extract 46 58
+                Term.Name 46 54
+                Pat.ArgClause 54 58
+                  Pat.Var 55 57
+                    Term.Name 55 57
+              Lit.Int 62 63
+          Term.Name 72 75
+#!program 49 line 856 Stat dialects.Scala3 :: old-for-single1
+object W49 {
+for (i <- 1 to 3) work
+}
+#!scalac ok
+#!regions L35/
+#!layout
+Source 0 38
+  Defn.Object 0 37
+    Term.Name 7 10
+    Template 11 37
+      Template.Body 11 37
+        Term.For 13 35
+          Term.EnumeratorsBlock 17 30
+            Enumerator.Generator 18 29
+              Pat.Var 18 19
+                Term.Name 18 19
+              Term.ApplyInfix 23 29
+                Lit.Int 23 24
+                Term.Name 25 27
+                Type.ArgClause 28 28
+                Term.ArgClause 28 29
+                  Lit.Int 28 29
+          Term.Name 31 35
+#!program 50 line 864 Stat dialects.Scala3 :: old-for-single2
+object W50 {
+for (i <- 1 to 10 if i < 4) work
+}
+#!scalac ok
+#!regions L45/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 10
+    Template 11 47
+      Template.Body 11 47
+        Term.For 13 45
+          Term.EnumeratorsBlock 17 40
+            Enumerator.Generator 18 30
+              Pat.Var 18 19
+                Term.Name 18 19
+              Term.ApplyInfix 23 30
+                Lit.Int 23 24
+                Term.Name 25 27
+                Type.ArgClause 28 28
+                Term.ArgClause 28 30
+                  Lit.Int 28 30
+            Enumerator.Guard 31 39
+              Term.ApplyInfix 34 39
+                Term.Name 34 35
+                Term.Name 36 37
+                Type.ArgClause 38 38
+                Term.ArgClause 38 39
+                  Lit.Int 38 39
+          Term.Name 41 45
+#!program 51 line 881 Stat dialects.Scala3 :: old-for-multi
+object W51 {
+for {
+  i <- gen
+  if i < 4
+} work
+
+}
+#!scalac ok
+#!regions L29/ L40/ F47/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 10
+    Template 11 50
+      Template.Body 11 50
+        Term.For 13 47
+          Term.EnumeratorsBlock 17 42
+            Enumerator.Generator 21 29
+              Pat.Var 21 22
+                Term.Name 21 22
+              Term.Name 26 29
+            Enumerator.Guard 32 40
+              Term.ApplyInfix 35 40
+                Term.Name 35 36
+                Term.Name 37 38
+                Type.ArgClause 39 39
+                Term.ArgClause 39 40
+                  Lit.Int 39 40
+          Term.Name 43 47
+#!program 52 line 892 Stat dialects.Scala3 :: old-for-yield-single1
+object W52 {
+for (i <- 1 to 3) yield i
+}
+#!scalac ok
+#!regions L38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 10
+    Template 11 40
+      Template.Body 11 40
+        Term.ForYield 13 38
+          Term.EnumeratorsBlock 17 30
+            Enumerator.Generator 18 29
+              Pat.Var 18 19
+                Term.Name 18 19
+              Term.ApplyInfix 23 29
+                Lit.Int 23 24
+                Term.Name 25 27
+                Type.ArgClause 28 28
+                Term.ArgClause 28 29
+                  Lit.Int 28 29
+          Term.Name 37 38
+#!program 53 line 900 Stat dialects.Scala3 :: old-for-yield-single2
+object W53 {
+for { i <- gen } yield i
+}
+#!scalac ok
+#!regions L37/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 10
+    Template 11 39
+      Template.Body 11 39
+        Term.ForYield 13 37
+          Term.EnumeratorsBlock 17 29
+            Enumerator.Generator 19 27
+              Pat.Var 19 20
+                Term.Name 19 20
+              Term.Name 24 27
+          Term.Name 36 37
+#!program 54 line 912 Stat dialects.Scala3 :: old-for-yield-multi1
+object W54 {
+for (i <- gen) yield {a; b}
+}
+#!scalac ok
+#!regions L40/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 10
+    Template 11 42
+      Template.Body 11 42
+        Term.ForYield 13 40
+          Term.EnumeratorsBlock 17 27
+            Enumerator.Generator 18 26
+              Pat.Var 18 19
+                Term.Name 18 19
+              Term.Name 23 26
+          Term.Block 34 40
+            Term.Name 35 36
+            Term.Name 38 39
+#!program 55 line 929 Stat dialects.Scala3 :: old-for-yield-multi2
+object W55 {
+for {
+  i <- gen
+  if i < 4
+} yield { aa; bb }
+
+}
+#!scalac ok
+#!regions L29/ L40/ F59/
+#!layout
+Source 0 63
+  Defn.Object 0 62
+    Term.Name 7 10
+    Template 11 62
+      Template.Body 11 62
+        Term.ForYield 13 59
+          Term.EnumeratorsBlock 17 42
+            Enumerator.Generator 21 29
+              Pat.Var 21 22
+                Term.Name 21 22
+              Term.Name 26 29
+            Enumerator.Guard 32 40
+              Term.ApplyInfix 35 40
+                Term.Name 35 36
+                Term.Name 37 38
+                Type.ArgClause 39 39
+                Term.ArgClause 39 40
+                  Lit.Int 39 40
+          Term.Block 49 59
+            Term.Name 51 53
+            Term.Name 55 57
+#!program 56 line 941 Stat dialects.Scala3 :: new-fordo-single1
+object W56 {
+for a <- gen do fx
+}
+#!scalac ok
+#!regions L31/
+#!layout
+Source 0 34
+  Defn.Object 0 33
+    Term.Name 7 10
+    Template 11 33
+      Template.Body 11 33
+        Term.For 13 31
+          Term.EnumeratorsBlock 17 25
+            Enumerator.Generator 17 25
+              Pat.Var 17 18
+                Term.Name 17 18
+              Term.Name 22 25
+          Term.Name 29 31
+#!program 57 line 953 Stat dialects.Scala3 :: new-fordo-single2
+object W57 {
+for
+  a <- gen
+do fx
+
+}
+#!scalac ok
+#!regions I16/2 O27/ L27/ F33/
+#!layout
+Source 0 37
+  Defn.Object 0 36
+    Term.Name 7 10
+    Template 11 36
+      Template.Body 11 36
+        Term.For 13 33
+          Term.EnumeratorsBlock 19 27
+            Enumerator.Generator 19 27
+              Pat.Var 19 20
+                Term.Name 19 20
+              Term.Name 24 27
+          Term.Name 31 33
+#!program 58 line 964 Stat dialects.Scala3 :: new-fordo-single3
+object W58 {
+for a <- gen if cnd
+do fx
+
+}
+#!scalac ok
+#!regions L32/ F38/
+#!layout
+Source 0 42
+  Defn.Object 0 41
+    Term.Name 7 10
+    Template 11 41
+      Template.Body 11 41
+        Term.For 13 38
+          Term.EnumeratorsBlock 17 32
+            Enumerator.Generator 17 25
+              Pat.Var 17 18
+                Term.Name 17 18
+              Term.Name 22 25
+            Enumerator.Guard 26 32
+              Term.Name 29 32
+          Term.Name 36 38
+#!program 59 line 977 Stat dialects.Scala3 :: new-fordo-single4
+object W59 {
+for a <- gen
+do
+  fx
+
+}
+#!scalac ok
+#!regions L25/ I28/2 O34/
+#!layout
+Source 0 37
+  Defn.Object 0 36
+    Term.Name 7 10
+    Template 11 36
+      Template.Body 11 36
+        Term.For 13 33
+          Term.EnumeratorsBlock 17 25
+            Enumerator.Generator 17 25
+              Pat.Var 17 18
+                Term.Name 17 18
+              Term.Name 22 25
+          Term.Name 31 33
+#!program 60 line 990 Stat dialects.Scala3 :: new-fordo-multi1
+object W60 {
+for
+  a <- x
+  b <- y
+do fx
+
+}
+#!scalac ok
+#!regions I16/2 L25/2 O34/ L34/ F40/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 10
+    Template 11 43
+      Template.Body 11 43
+        Term.For 13 40
+          Term.EnumeratorsBlock 19 34
+            Enumerator.Generator 19 25
+              Pat.Var 19 20
+                Term.Name 19 20
+              Term.Name 24 25
+            Enumerator.Generator 28 34
+              Pat.Var 28 29
+                Term.Name 28 29
+              Term.Name 33 34
+          Term.Name 38 40
+#!program 61 line 1014 Stat dialects.Scala3 :: new-fordo-multi2
+object W61 {
+for
+  a <- x
+  b <- y
+do
+  fx
+  fy
+
+}
+#!scalac ok
+#!regions I16/2 L25/2 O34/ L34/ I37/2 L42/2 O48/
+#!layout
+Source 0 51
+  Defn.Object 0 50
+    Term.Name 7 10
+    Template 11 50
+      Template.Body 11 50
+        Term.For 13 47
+          Term.EnumeratorsBlock 19 34
+            Enumerator.Generator 19 25
+              Pat.Var 19 20
+                Term.Name 19 20
+              Term.Name 24 25
+            Enumerator.Generator 28 34
+              Pat.Var 28 29
+                Term.Name 28 29
+              Term.Name 33 34
+          Term.Block 40 47
+            Term.Name 40 42
+            Term.Name 45 47
+#!program 62 line 1035 Stat dialects.Scala3 :: new-for-indented-without-do
+object W62 {
+for ( a <- x )
+  fx
+  fy
+
+}
+#!scalac ok
+#!regions I27/2 L32/2 O38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 10
+    Template 11 40
+      Template.Body 11 40
+        Term.For 13 37
+          Term.EnumeratorsBlock 17 27
+            Enumerator.Generator 19 25
+              Pat.Var 19 20
+                Term.Name 19 20
+              Term.Name 24 25
+          Term.Block 30 37
+            Term.Name 30 32
+            Term.Name 35 37
+#!program 63 line 1052 Stat dialects.Scala3 :: new-for-indented-without-do2
+object W63 {
+for { a <- x }
+  fx
+  fy
+
+}
+#!scalac ok
+#!regions I27/2 L32/2 O38/
+#!layout
+Source 0 41
+  Defn.Object 0 40
+    Term.Name 7 10
+    Template 11 40
+      Template.Body 11 40
+        Term.For 13 37
+          Term.EnumeratorsBlock 17 27
+            Enumerator.Generator 19 25
+              Pat.Var 19 20
+                Term.Name 19 20
+              Term.Name 24 25
+          Term.Block 30 37
+            Term.Name 30 32
+            Term.Name 35 37
+#!program 64 line 1065 Stat dialects.Scala3 :: new-for-yield-single1
+object W64 {
+for
+  a <- x
+  b <- y
+yield fx
+
+}
+#!scalac ok
+#!regions I16/2 L25/2 O34/ F43/
+#!layout
+Source 0 47
+  Defn.Object 0 46
+    Term.Name 7 10
+    Template 11 46
+      Template.Body 11 46
+        Term.ForYield 13 43
+          Term.EnumeratorsBlock 19 34
+            Enumerator.Generator 19 25
+              Pat.Var 19 20
+                Term.Name 19 20
+              Term.Name 24 25
+            Enumerator.Generator 28 34
+              Pat.Var 28 29
+                Term.Name 28 29
+              Term.Name 33 34
+          Term.Name 41 43
+#!program 65 line 1080 Stat dialects.Scala3 :: new-for-yield-single2
+object W65 {
+for a <- gen if cnd
+yield fx
+
+}
+#!scalac ok
+#!regions F41/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 10
+    Template 11 44
+      Template.Body 11 44
+        Term.ForYield 13 41
+          Term.EnumeratorsBlock 17 32
+            Enumerator.Generator 17 25
+              Pat.Var 17 18
+                Term.Name 17 18
+              Term.Name 22 25
+            Enumerator.Guard 26 32
+              Term.Name 29 32
+          Term.Name 39 41
+#!program 66 line 1093 Stat dialects.Scala3 :: new-for-yield-single3
+object W66 {
+for a <- gen if cnd
+yield
+  fx
+
+}
+#!scalac ok
+#!regions I38/2 O44/
+#!layout
+Source 0 47
+  Defn.Object 0 46
+    Term.Name 7 10
+    Template 11 46
+      Template.Body 11 46
+        Term.ForYield 13 43
+          Term.EnumeratorsBlock 17 32
+            Enumerator.Generator 17 25
+              Pat.Var 17 18
+                Term.Name 17 18
+              Term.Name 22 25
+            Enumerator.Guard 26 32
+              Term.Name 29 32
+          Term.Name 41 43
+#!program 67 line 1114 Stat dialects.Scala3 :: new-for-yield-multi
+object W67 {
+for
+  a <- x
+  b <- y
+yield
+  fx
+  fy
+
+}
+#!scalac ok
+#!regions I16/2 L25/2 O34/ I40/2 L45/2 O51/
+#!layout
+Source 0 54
+  Defn.Object 0 53
+    Term.Name 7 10
+    Template 11 53
+      Template.Body 11 53
+        Term.ForYield 13 50
+          Term.EnumeratorsBlock 19 34
+            Enumerator.Generator 19 25
+              Pat.Var 19 20
+                Term.Name 19 20
+              Term.Name 24 25
+            Enumerator.Generator 28 34
+              Pat.Var 28 29
+                Term.Name 28 29
+              Term.Name 33 34
+          Term.Block 43 50
+            Term.Name 43 45
+            Term.Name 48 50
+#!program 68 line 1131 Stat dialects.Scala3 :: new-for-case1
+object W68 {
+for case a: TP <- iter do
+  echo
+
+}
+#!scalac ok
+#!regions I38/2 O46/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 10
+    Template 11 48
+      Template.Body 11 48
+        Term.For 13 45
+          Term.EnumeratorsBlock 17 35
+            Enumerator.CaseGenerator 17 35
+              Pat.Typed 22 27
+                Pat.Var 22 23
+                  Term.Name 22 23
+                Type.Name 25 27
+              Term.Name 31 35
+          Term.Name 41 45
+#!program 69 line 1145 Stat dialects.Scala3 :: new-for-case2
+object W69 {
+for case a: TP <- iter if cnd do
+  echo
+
+}
+#!scalac ok
+#!regions I45/2 O53/
+#!layout
+Source 0 56
+  Defn.Object 0 55
+    Term.Name 7 10
+    Template 11 55
+      Template.Body 11 55
+        Term.For 13 52
+          Term.EnumeratorsBlock 17 42
+            Enumerator.CaseGenerator 17 35
+              Pat.Typed 22 27
+                Pat.Var 22 23
+                  Term.Name 22 23
+                Type.Name 25 27
+              Term.Name 31 35
+            Enumerator.Guard 36 42
+              Term.Name 39 42
+          Term.Name 48 52
+#!program 70 line 1164 Stat dialects.Scala3 :: new-for-case3
+object W70 {
+for
+  x <- gen
+  case a1: TP <- iter1
+  if cnd
+  case a2: TP <- iter2
+do fn
+
+}
+#!scalac ok
+#!regions I16/2 L27/2 L50/2 L59/2 O82/ L82/ F88/
+#!layout
+Source 0 92
+  Defn.Object 0 91
+    Term.Name 7 10
+    Template 11 91
+      Template.Body 11 91
+        Term.For 13 88
+          Term.EnumeratorsBlock 19 82
+            Enumerator.Generator 19 27
+              Pat.Var 19 20
+                Term.Name 19 20
+              Term.Name 24 27
+            Enumerator.CaseGenerator 30 50
+              Pat.Typed 35 41
+                Pat.Var 35 37
+                  Term.Name 35 37
+                Type.Name 39 41
+              Term.Name 45 50
+            Enumerator.Guard 53 59
+              Term.Name 56 59
+            Enumerator.CaseGenerator 62 82
+              Pat.Typed 67 73
+                Pat.Var 67 69
+                  Term.Name 67 69
+                Type.Name 71 73
+              Term.Name 77 82
+          Term.Name 86 88
+#!program 71 line 1183 Stat dialects.Scala3 :: for-new
+object W71 {
+for i <- gen
+    x = 3
+    if (cnd1) && cnd2
+yield work
+
+}
+#!scalac ok
+#!regions L25/ L35/ F68/
+#!layout
+Source 0 72
+  Defn.Object 0 71
+    Term.Name 7 10
+    Template 11 71
+      Template.Body 11 71
+        Term.ForYield 13 68
+          Term.EnumeratorsBlock 17 57
+            Enumerator.Generator 17 25
+              Pat.Var 17 18
+                Term.Name 17 18
+              Term.Name 22 25
+            Enumerator.Val 30 35
+              Pat.Var 30 31
+                Term.Name 30 31
+              Lit.Int 34 35
+            Enumerator.Guard 40 57
+              Term.ApplyInfix 43 57
+                Term.Name 44 48
+                Term.Name 50 52
+                Type.ArgClause 53 53
+                Term.ArgClause 53 57
+                  Term.Name 53 57
+          Term.Name 64 68
+#!program 72 line 1201 Stat dialects.Scala3 :: multiline-for
+object W72 {
+for (a,b) <- gen
+  if a < 5
+  c <- otherGen
+yield c
+
+}
+#!scalac ok
+#!regions L29/ L40/ F64/
+#!layout
+Source 0 68
+  Defn.Object 0 67
+    Term.Name 7 10
+    Template 11 67
+      Template.Body 11 67
+        Term.ForYield 13 64
+          Term.EnumeratorsBlock 17 56
+            Enumerator.Generator 17 29
+              Pat.Tuple 17 22
+                Pat.Var 18 19
+                  Term.Name 18 19
+                Pat.Var 20 21
+                  Term.Name 20 21
+              Term.Name 26 29
+            Enumerator.Guard 32 40
+              Term.ApplyInfix 35 40
+                Term.Name 35 36
+                Term.Name 37 38
+                Type.ArgClause 39 39
+                Term.ArgClause 39 40
+                  Lit.Int 39 40
+            Enumerator.Generator 43 56
+              Pat.Var 43 44
+                Term.Name 43 44
+              Term.Name 48 56
+          Term.Name 63 64
+#!program 73 line 1219 Stat dialects.Scala3 :: oneline-for
+object W73 {
+for (arg, param) <- args.zip(vparams) yield
+  arg
+
+}
+#!scalac ok
+#!regions I56/2 O63/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 10
+    Template 11 65
+      Template.Body 11 65
+        Term.ForYield 13 62
+          Term.EnumeratorsBlock 17 50
+            Enumerator.Generator 17 50
+              Pat.Tuple 17 29
+                Pat.Var 18 21
+                  Term.Name 18 21
+                Pat.Var 23 28
+                  Term.Name 23 28
+              Term.Apply 33 50
+                Term.Select 33 41
+                  Term.Name 33 37
+                  Term.Name 38 41
+                Term.ArgClause 41 50
+                  Term.Name 42 49
+          Term.Name 59 62
+#!program 74 line 1245 Stat dialects.Scala3 :: #3713 cond in parens within enums
+object W74 {
+for (m <- decls
+    if oneCond
+      && (cond)
+      && satisfiable) {}
+
+
+}
+#!scalac ok
+#!regions F84/
+#!layout
+Source 0 89
+  Defn.Object 0 88
+    Term.Name 7 10
+    Template 11 88
+      Template.Body 11 88
+        Term.For 13 84
+          Term.EnumeratorsBlock 17 81
+            Enumerator.Generator 18 28
+              Pat.Var 18 19
+                Term.Name 18 19
+              Term.Name 23 28
+            Enumerator.Guard 33 80
+              Term.ApplyInfix 36 80
+                Term.ApplyInfix 36 59
+                  Term.Name 36 43
+                  Term.Name 50 52
+                  Type.ArgClause 53 53
+                  Term.ArgClause 53 59
+                    Term.Name 54 58
+                Term.Name 66 68
+                Type.ArgClause 69 69
+                Term.ArgClause 69 80
+                  Term.Name 69 80
+          Term.Block 82 84
+#!program 75 line 1263 Stat dialects.Scala3 :: enum-val-first-ok-1
+object W75 {
+for {
+  a = 1
+  b <- Some(2)
+} yield a + b
+
+}
+#!scalac ok
+#!regions L26/ L41/ F55/
+#!layout
+Source 0 59
+  Defn.Object 0 58
+    Term.Name 7 10
+    Template 11 58
+      Template.Body 11 58
+        Term.ForYield 13 55
+          Term.EnumeratorsBlock 17 43
+            Enumerator.Val 21 26
+              Pat.Var 21 22
+                Term.Name 21 22
+              Lit.Int 25 26
+            Enumerator.Generator 29 41
+              Pat.Var 29 30
+                Term.Name 29 30
+              Term.Apply 34 41
+                Term.Name 34 38
+                Term.ArgClause 38 41
+                  Lit.Int 39 40
+          Term.ApplyInfix 50 55
+            Term.Name 50 51
+            Term.Name 52 53
+            Type.ArgClause 54 54
+            Term.ArgClause 54 55
+              Term.Name 54 55
+#!program 76 line 1283 Stat dialects.Scala3 :: enum-val-first-ok-2
+object W76 {
+for {
+  a = 1
+  b <- Some(2)
+  c = 3
+} yield a + b + c
+
+}
+#!scalac ok
+#!regions L26/ L41/ L49/ F67/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 10
+    Template 11 70
+      Template.Body 11 70
+        Term.ForYield 13 67
+          Term.EnumeratorsBlock 17 51
+            Enumerator.Val 21 26
+              Pat.Var 21 22
+                Term.Name 21 22
+              Lit.Int 25 26
+            Enumerator.Generator 29 41
+              Pat.Var 29 30
+                Term.Name 29 30
+              Term.Apply 34 41
+                Term.Name 34 38
+                Term.ArgClause 38 41
+                  Lit.Int 39 40
+            Enumerator.Val 44 49
+              Pat.Var 44 45
+                Term.Name 44 45
+              Lit.Int 48 49
+          Term.ApplyInfix 58 67
+            Term.ApplyInfix 58 63
+              Term.Name 58 59
+              Term.Name 60 61
+              Type.ArgClause 62 62
+              Term.ArgClause 62 63
+                Term.Name 62 63
+            Term.Name 64 65
+            Type.ArgClause 66 66
+            Term.ArgClause 66 67
+              Term.Name 66 67
+#!program 77 line 1303 Stat dialects.Scala3 :: enum-val-first-ok-3
+object W77 {
+for {
+  a = 1
+  b = 3
+  c <- Some(4)
+} yield a + b + c
+
+}
+#!scalac ok
+#!regions L26/ L34/ L49/ F67/
+#!layout
+Source 0 71
+  Defn.Object 0 70
+    Term.Name 7 10
+    Template 11 70
+      Template.Body 11 70
+        Term.ForYield 13 67
+          Term.EnumeratorsBlock 17 51
+            Enumerator.Val 21 26
+              Pat.Var 21 22
+                Term.Name 21 22
+              Lit.Int 25 26
+            Enumerator.Val 29 34
+              Pat.Var 29 30
+                Term.Name 29 30
+              Lit.Int 33 34
+            Enumerator.Generator 37 49
+              Pat.Var 37 38
+                Term.Name 37 38
+              Term.Apply 42 49
+                Term.Name 42 46
+                Term.ArgClause 46 49
+                  Lit.Int 47 48
+          Term.ApplyInfix 58 67
+            Term.ApplyInfix 58 63
+              Term.Name 58 59
+              Term.Name 60 61
+              Type.ArgClause 62 62
+              Term.ArgClause 62 63
+                Term.Name 62 63
+            Term.Name 64 65
+            Type.ArgClause 66 66
+            Term.ArgClause 66 67
+              Term.Name 66 67
+#!program 78 line 1325 Stat dialects.Scala3 :: enum-val-first-ok-4
+object W78 {
+for {
+  a = 1
+  b <- Some(2)
+  c = 3
+  d <- Some(4)
+} yield a + b + c + d
+
+}
+#!scalac ok
+#!regions L26/ L41/ L49/ L64/ F86/
+#!layout
+Source 0 90
+  Defn.Object 0 89
+    Term.Name 7 10
+    Template 11 89
+      Template.Body 11 89
+        Term.ForYield 13 86
+          Term.EnumeratorsBlock 17 66
+            Enumerator.Val 21 26
+              Pat.Var 21 22
+                Term.Name 21 22
+              Lit.Int 25 26
+            Enumerator.Generator 29 41
+              Pat.Var 29 30
+                Term.Name 29 30
+              Term.Apply 34 41
+                Term.Name 34 38
+                Term.ArgClause 38 41
+                  Lit.Int 39 40
+            Enumerator.Val 44 49
+              Pat.Var 44 45
+                Term.Name 44 45
+              Lit.Int 48 49
+            Enumerator.Generator 52 64
+              Pat.Var 52 53
+                Term.Name 52 53
+              Term.Apply 57 64
+                Term.Name 57 61
+                Term.ArgClause 61 64
+                  Lit.Int 62 63
+          Term.ApplyInfix 73 86
+            Term.ApplyInfix 73 82
+              Term.ApplyInfix 73 78
+                Term.Name 73 74
+                Term.Name 75 76
+                Type.ArgClause 77 77
+                Term.ArgClause 77 78
+                  Term.Name 77 78
+              Term.Name 79 80
+              Type.ArgClause 81 81
+              Term.ArgClause 81 82
+                Term.Name 81 82
+            Term.Name 83 84
+            Type.ArgClause 85 85
+            Term.ArgClause 85 86
+              Term.Name 85 86
+#!program 79 line 1349 Stat dialects.Scala3 :: enum-val-first-ok-5
+object W79 {
+for {
+  a = 1
+  b <- Some(2)
+  if b > 0
+  c = 3
+  d <- Some(4)
+} yield a + b + c + d
+
+}
+#!scalac ok
+#!regions L26/ L41/ L52/ L60/ L75/ F97/
+#!layout
+Source 0 101
+  Defn.Object 0 100
+    Term.Name 7 10
+    Template 11 100
+      Template.Body 11 100
+        Term.ForYield 13 97
+          Term.EnumeratorsBlock 17 77
+            Enumerator.Val 21 26
+              Pat.Var 21 22
+                Term.Name 21 22
+              Lit.Int 25 26
+            Enumerator.Generator 29 41
+              Pat.Var 29 30
+                Term.Name 29 30
+              Term.Apply 34 41
+                Term.Name 34 38
+                Term.ArgClause 38 41
+                  Lit.Int 39 40
+            Enumerator.Guard 44 52
+              Term.ApplyInfix 47 52
+                Term.Name 47 48
+                Term.Name 49 50
+                Type.ArgClause 51 51
+                Term.ArgClause 51 52
+                  Lit.Int 51 52
+            Enumerator.Val 55 60
+              Pat.Var 55 56
+                Term.Name 55 56
+              Lit.Int 59 60
+            Enumerator.Generator 63 75
+              Pat.Var 63 64
+                Term.Name 63 64
+              Term.Apply 68 75
+                Term.Name 68 72
+                Term.ArgClause 72 75
+                  Lit.Int 73 74
+          Term.ApplyInfix 84 97
+            Term.ApplyInfix 84 93
+              Term.ApplyInfix 84 89
+                Term.Name 84 85
+                Term.Name 86 87
+                Type.ArgClause 88 88
+                Term.ArgClause 88 89
+                  Term.Name 88 89
+              Term.Name 90 91
+              Type.ArgClause 92 92
+              Term.ArgClause 92 93
+                Term.Name 92 93
+            Term.Name 94 95
+            Type.ArgClause 96 96
+            Term.ArgClause 96 97
+              Term.Name 96 97
+#!program 80 line 1373 Stat dialects.Scala3 :: enum-val-first-ok-6
+object W80 {
+for {
+  a = 1
+  b <- Some(2)
+  c = 3
+  if b > 0
+  d <- Some(4)
+} yield a + b + c + d
+
+}
+#!scalac ok
+#!regions L26/ L41/ L49/ L60/ L75/ F97/
+#!layout
+Source 0 101
+  Defn.Object 0 100
+    Term.Name 7 10
+    Template 11 100
+      Template.Body 11 100
+        Term.ForYield 13 97
+          Term.EnumeratorsBlock 17 77
+            Enumerator.Val 21 26
+              Pat.Var 21 22
+                Term.Name 21 22
+              Lit.Int 25 26
+            Enumerator.Generator 29 41
+              Pat.Var 29 30
+                Term.Name 29 30
+              Term.Apply 34 41
+                Term.Name 34 38
+                Term.ArgClause 38 41
+                  Lit.Int 39 40
+            Enumerator.Val 44 49
+              Pat.Var 44 45
+                Term.Name 44 45
+              Lit.Int 48 49
+            Enumerator.Guard 52 60
+              Term.ApplyInfix 55 60
+                Term.Name 55 56
+                Term.Name 57 58
+                Type.ArgClause 59 59
+                Term.ArgClause 59 60
+                  Lit.Int 59 60
+            Enumerator.Generator 63 75
+              Pat.Var 63 64
+                Term.Name 63 64
+              Term.Apply 68 75
+                Term.Name 68 72
+                Term.ArgClause 72 75
+                  Lit.Int 73 74
+          Term.ApplyInfix 84 97
+            Term.ApplyInfix 84 93
+              Term.ApplyInfix 84 89
+                Term.Name 84 85
+                Term.Name 86 87
+                Type.ArgClause 88 88
+                Term.ArgClause 88 89
+                  Term.Name 88 89
+              Term.Name 90 91
+              Type.ArgClause 92 92
+              Term.ArgClause 92 93
+                Term.Name 92 93
+            Term.Name 94 95
+            Type.ArgClause 96 96
+            Term.ArgClause 96 97
+              Term.Name 96 97
+#!program 81 line 1393 Stat dialects.Scala3 :: enum-val-first-ok-7
+object W81 {
+for {
+  a = 1
+  if b > 0
+  b <- Some(2)
+} yield a + b
+
+}
+#!scalac refuses: pattern expected
+#!regions L26/ L37/ L52/ F66/
+#!layout
+Source 0 70
+  Defn.Object 0 69
+    Term.Name 7 10
+    Template 11 69
+      Template.Body 11 69
+        Term.ForYield 13 66
+          Term.EnumeratorsBlock 17 54
+            Enumerator.Val 21 26
+              Pat.Var 21 22
+                Term.Name 21 22
+              Lit.Int 25 26
+            Enumerator.Guard 29 37
+              Term.ApplyInfix 32 37
+                Term.Name 32 33
+                Term.Name 34 35
+                Type.ArgClause 36 36
+                Term.ArgClause 36 37
+                  Lit.Int 36 37
+            Enumerator.Generator 40 52
+              Pat.Var 40 41
+                Term.Name 40 41
+              Term.Apply 45 52
+                Term.Name 45 49
+                Term.ArgClause 49 52
+                  Lit.Int 50 51
+          Term.ApplyInfix 61 66
+            Term.Name 61 62
+            Term.Name 63 64
+            Type.ArgClause 65 65
+            Term.ArgClause 65 66
+              Term.Name 65 66
+#!program 82 line 1430 Stat dialects.Scala3 :: enum-val-first-ok-9
+object W82 {
+for {
+  a = 1
+  b = 3
+  if b > 0
+  c <- Some(2)
+} yield a + b + c
+
+}
+#!scalac refuses: pattern expected
+#!regions L26/ L34/ L45/ L60/ F78/
+#!layout
+Source 0 82
+  Defn.Object 0 81
+    Term.Name 7 10
+    Template 11 81
+      Template.Body 11 81
+        Term.ForYield 13 78
+          Term.EnumeratorsBlock 17 62
+            Enumerator.Val 21 26
+              Pat.Var 21 22
+                Term.Name 21 22
+              Lit.Int 25 26
+            Enumerator.Val 29 34
+              Pat.Var 29 30
+                Term.Name 29 30
+              Lit.Int 33 34
+            Enumerator.Guard 37 45
+              Term.ApplyInfix 40 45
+                Term.Name 40 41
+                Term.Name 42 43
+                Type.ArgClause 44 44
+                Term.ArgClause 44 45
+                  Lit.Int 44 45
+            Enumerator.Generator 48 60
+              Pat.Var 48 49
+                Term.Name 48 49
+              Term.Apply 53 60
+                Term.Name 53 57
+                Term.ArgClause 57 60
+                  Lit.Int 58 59
+          Term.ApplyInfix 69 78
+            Term.ApplyInfix 69 74
+              Term.Name 69 70
+              Term.Name 71 72
+              Type.ArgClause 73 73
+              Term.ArgClause 73 74
+                Term.Name 73 74
+            Term.Name 75 76
+            Type.ArgClause 77 77
+            Term.ArgClause 77 78
+              Term.Name 77 78
+#!program 83 line 1441 Stat dialects.Scala3 :: enum-val-first-ok-10
+object W83 {
+for {
+  a = 1
+} yield a
+
+}
+#!scalac refuses: pattern expected
+#!regions L26/ F36/
+#!layout
+Source 0 40
+  Defn.Object 0 39
+    Term.Name 7 10
+    Template 11 39
+      Template.Body 11 39
+        Term.ForYield 13 36
+          Term.EnumeratorsBlock 17 28
+            Enumerator.Val 21 26
+              Pat.Var 21 22
+                Term.Name 21 22
+              Lit.Int 25 26
+          Term.Name 35 36
+#!program 84 line 1450 Stat dialects.Scala3 :: old-while-single
+object W84 {
+while (cond) fx
+}
+#!scalac ok
+#!regions L28/
+#!layout
+Source 0 31
+  Defn.Object 0 30
+    Term.Name 7 10
+    Template 11 30
+      Template.Body 11 30
+        Term.While 13 28
+          Term.Name 20 24
+          Term.Name 26 28
+#!program 85 line 1460 Stat dialects.Scala3 :: old-while-multi
+object W85 {
+while (cond) {
+  fx
+  fy
+}
+
+}
+#!scalac ok
+#!regions L32/ L37/ F39/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 10
+    Template 11 42
+      Template.Body 11 42
+        Term.While 13 39
+          Term.Name 20 24
+          Term.Block 26 39
+            Term.Name 30 32
+            Term.Name 35 37
+#!program 86 line 1468 Stat dialects.Scala3 :: new-while-single1
+object W86 {
+while cond do fx
+
+}
+#!scalac ok
+#!regions F29/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 10
+    Template 11 32
+      Template.Body 11 32
+        Term.While 13 29
+          Term.Name 19 23
+          Term.Name 27 29
+#!program 87 line 1477 Stat dialects.Scala3 :: new-while-single2
+object W87 {
+while cond
+do fx
+
+}
+#!scalac ok
+#!regions L23/ F29/
+#!layout
+Source 0 33
+  Defn.Object 0 32
+    Term.Name 7 10
+    Template 11 32
+      Template.Body 11 32
+        Term.While 13 29
+          Term.Name 19 23
+          Term.Name 27 29
+#!program 88 line 1491 Stat dialects.Scala3 :: new-while-indented-witout-do
+object W88 {
+while (cond)
+  fx
+  gx
+
+}
+#!scalac ok
+#!regions I25/2 L30/2 O36/
+#!layout
+Source 0 39
+  Defn.Object 0 38
+    Term.Name 7 10
+    Template 11 38
+      Template.Body 11 38
+        Term.While 13 35
+          Term.Name 20 24
+          Term.Block 28 35
+            Term.Name 28 30
+            Term.Name 33 35
+#!program 89 line 1511 Stat dialects.Scala3 :: new-while-multi
+object W89 {
+while
+  fx +
+  fy
+do
+  fx
+  fy
+
+}
+#!scalac ok
+#!regions I18/2 L25/2 O30/ L30/ I33/2 L38/2 O44/
+#!layout
+Source 0 47
+  Defn.Object 0 46
+    Term.Name 7 10
+    Template 11 46
+      Template.Body 11 46
+        Term.While 13 43
+          Term.ApplyInfix 21 30
+            Term.Name 21 23
+            Term.Name 24 25
+            Type.ArgClause 25 25
+            Term.ArgClause 28 30
+              Term.Name 28 30
+          Term.Block 36 43
+            Term.Name 36 38
+            Term.Name 41 43
+#!program 90 line 1534 Stat dialects.Scala3 :: new-while-multistat
+object W90 {
+while
+  s1
+  s2
+do
+  fx
+  fy
+
+}
+#!scalac ok
+#!regions I18/2 L23/2 O28/ L28/ I31/2 L36/2 O42/
+#!layout
+Source 0 45
+  Defn.Object 0 44
+    Term.Name 7 10
+    Template 11 44
+      Template.Body 11 44
+        Term.While 13 41
+          Term.Block 21 28
+            Term.Name 21 23
+            Term.Name 26 28
+          Term.Block 34 41
+            Term.Name 34 36
+            Term.Name 39 41
+#!program 91 line 1552 Stat dialects.Scala3 :: while-parens-yet-do
+object W91 {
+def read(): String = {
+  while (cond) do {}
+  other()
+}
+
+}
+#!scalac ok
+#!regions L56/ L66/ F68/
+#!layout
+Source 0 72
+  Defn.Object 0 71
+    Term.Name 7 10
+    Template 11 71
+      Template.Body 11 71
+        Defn.Def 13 68
+          Term.Name 17 21
+          Member.ParamClauseGroup 21 23
+            Type.ParamClause 21 21
+            Term.ParamClause 21 23
+          Type.Name 25 31
+          Term.Block 34 68
+            Term.While 38 56
+              Term.Name 45 49
+              Term.Block 54 56
+            Term.Apply 59 66
+              Term.Name 59 64
+              Term.ArgClause 64 66
+#!program 92 line 1569 Stat dialects.Scala3 :: while-cond-expr-do
+object W92 {
+  while (x > 0) && (y > 0) do
+    x += 1
+
+}
+#!scalac ok
+#!regions I42/4 O54/
+#!layout
+Source 0 57
+  Defn.Object 0 56
+    Term.Name 7 10
+    Template 11 56
+      Template.Body 11 56
+        Term.While 15 53
+          Term.ApplyInfix 21 39
+            Term.ApplyInfix 22 27
+              Term.Name 22 23
+              Term.Name 24 25
+              Type.ArgClause 26 26
+              Term.ArgClause 26 27
+                Lit.Int 26 27
+            Term.Name 29 31
+            Type.ArgClause 32 32
+            Term.ArgClause 32 39
+              Term.ApplyInfix 33 38
+                Term.Name 33 34
+                Term.Name 35 36
+                Type.ArgClause 37 37
+                Term.ArgClause 37 38
+                  Lit.Int 37 38
+          Term.ApplyInfix 47 53
+            Term.Name 47 48
+            Term.Name 49 51
+            Type.ArgClause 52 52
+            Term.ArgClause 52 53
+              Lit.Int 52 53
+#!program 93 line 1583 Stat dialects.Scala3 :: while-cond-expr-lf-do
+object W93 {
+  while (x > 0) && (y > 0)
+  do
+    x += 1
+
+}
+#!scalac ok
+#!regions L39/ I44/4 O56/
+#!layout
+Source 0 59
+  Defn.Object 0 58
+    Term.Name 7 10
+    Template 11 58
+      Template.Body 11 58
+        Term.While 15 55
+          Term.ApplyInfix 21 39
+            Term.ApplyInfix 22 27
+              Term.Name 22 23
+              Term.Name 24 25
+              Type.ArgClause 26 26
+              Term.ArgClause 26 27
+                Lit.Int 26 27
+            Term.Name 29 31
+            Type.ArgClause 32 32
+            Term.ArgClause 32 39
+              Term.ApplyInfix 33 38
+                Term.Name 33 34
+                Term.Name 35 36
+                Type.ArgClause 37 37
+                Term.ArgClause 37 38
+                  Lit.Int 37 38
+          Term.ApplyInfix 49 55
+            Term.Name 49 50
+            Term.Name 51 53
+            Type.ArgClause 54 54
+            Term.ArgClause 54 55
+              Lit.Int 54 55
+#!program 94 line 1600 Stat dialects.Scala3 :: while-cond-expr-do [non symbolic op]
+object W94 {
+  while (x > 0) and (y > 0) do
+    x += 1
+
+}
+#!scalac ok
+#!regions I43/4 O55/
+#!layout
+Source 0 58
+  Defn.Object 0 57
+    Term.Name 7 10
+    Template 11 57
+      Template.Body 11 57
+        Term.While 15 54
+          Term.ApplyInfix 21 40
+            Term.ApplyInfix 22 27
+              Term.Name 22 23
+              Term.Name 24 25
+              Type.ArgClause 26 26
+              Term.ArgClause 26 27
+                Lit.Int 26 27
+            Term.Name 29 32
+            Type.ArgClause 33 33
+            Term.ArgClause 33 40
+              Term.ApplyInfix 34 39
+                Term.Name 34 35
+                Term.Name 36 37
+                Type.ArgClause 38 38
+                Term.ArgClause 38 39
+                  Lit.Int 38 39
+          Term.ApplyInfix 48 54
+            Term.Name 48 49
+            Term.Name 50 52
+            Type.ArgClause 53 53
+            Term.ArgClause 53 54
+              Lit.Int 53 54
+#!program 95 line 1607 Stat dialects.Scala3 :: while-cond-expr-do [non symbolic op]
+object W95 {
+  while (x > 0) and (y > 0)
+  do
+    x += 1
+
+}
+#!scalac ok
+#!regions L40/ I45/4 O57/
+#!layout
+Source 0 60
+  Defn.Object 0 59
+    Term.Name 7 10
+    Template 11 59
+      Template.Body 11 59
+        Term.While 15 56
+          Term.ApplyInfix 21 40
+            Term.ApplyInfix 22 27
+              Term.Name 22 23
+              Term.Name 24 25
+              Type.ArgClause 26 26
+              Term.ArgClause 26 27
+                Lit.Int 26 27
+            Term.Name 29 32
+            Type.ArgClause 33 33
+            Term.ArgClause 33 40
+              Term.ApplyInfix 34 39
+                Term.Name 34 35
+                Term.Name 36 37
+                Type.ArgClause 38 38
+                Term.ArgClause 38 39
+                  Lit.Int 38 39
+          Term.ApplyInfix 50 56
+            Term.Name 50 51
+            Term.Name 52 54
+            Type.ArgClause 55 55
+            Term.ArgClause 55 56
+              Lit.Int 55 56
+#!program 96 line 1628 Stat dialects.Scala3 :: if-cond-expr-with-apply-type
+object W96 {
+if (sym == defn.BooleanClass) classOf[Boolean]
+else if (sym == defn.ByteClass) classOf[Byte]
+
+}
+#!scalac ok
+#!regions F105/
+#!layout
+Source 0 109
+  Defn.Object 0 108
+    Term.Name 7 10
+    Template 11 108
+      Template.Body 11 108
+        Term.If 13 105
+          Term.ApplyInfix 17 41
+            Term.Name 17 20
+            Term.Name 21 23
+            Type.ArgClause 24 24
+            Term.ArgClause 24 41
+              Term.Select 24 41
+                Term.Name 24 28
+                Term.Name 29 41
+          Term.ApplyType 43 59
+            Term.Name 43 50
+            Type.ArgClause 50 59
+              Type.Name 51 58
+          Term.If 65 105
+            Term.ApplyInfix 69 90
+              Term.Name 69 72
+              Term.Name 73 75
+              Type.ArgClause 76 76
+              Term.ArgClause 76 90
+                Term.Select 76 90
+                  Term.Name 76 80
+                  Term.Name 81 90
+            Term.ApplyType 92 105
+              Term.Name 92 99
+              Type.ArgClause 99 105
+                Type.Name 100 104
+            Lit.Unit 105 105
+#!program 97 line 1652 Stat dialects.Scala3 :: if-cond-expr-with-block
+object W97 {
+if (sym == defn.BooleanClass) { classOf[Boolean] }
+else if (sym == defn.ByteClass) classOf[Byte]
+
+}
+#!scalac ok
+#!regions F109/
+#!layout
+Source 0 113
+  Defn.Object 0 112
+    Term.Name 7 10
+    Template 11 112
+      Template.Body 11 112
+        Term.If 13 109
+          Term.ApplyInfix 17 41
+            Term.Name 17 20
+            Term.Name 21 23
+            Type.ArgClause 24 24
+            Term.ArgClause 24 41
+              Term.Select 24 41
+                Term.Name 24 28
+                Term.Name 29 41
+          Term.Block 43 63
+            Term.ApplyType 45 61
+              Term.Name 45 52
+              Type.ArgClause 52 61
+                Type.Name 53 60
+          Term.If 69 109
+            Term.ApplyInfix 73 94
+              Term.Name 73 76
+              Term.Name 77 79
+              Type.ArgClause 80 80
+              Term.ArgClause 80 94
+                Term.Select 80 94
+                  Term.Name 80 84
+                  Term.Name 85 94
+            Term.ApplyType 96 109
+              Term.Name 96 103
+              Type.ArgClause 103 109
+                Type.Name 104 108
+            Lit.Unit 109 109
+#!program 98 line 1668 Stat dialects.Scala3 :: while-cond-expr-without-do
+object W98 {
+{
+  while (x > 0) && (y > 0)
+    x += 1
+}
+
+}
+#!scalac ok
+#!regions L41/ L52/ F54/
+#!layout
+Source 0 58
+  Defn.Object 0 57
+    Term.Name 7 10
+    Template 11 57
+      Template.Body 11 57
+        Term.Block 13 54
+          Term.While 17 41
+            Term.ApplyInfix 24 29
+              Term.Name 24 25
+              Term.Name 26 27
+              Type.ArgClause 28 28
+              Term.ArgClause 28 29
+                Lit.Int 28 29
+            Term.Apply 31 41
+              Term.Name 31 33
+              Term.ArgClause 34 41
+                Term.ApplyInfix 35 40
+                  Term.Name 35 36
+                  Term.Name 37 38
+                  Type.ArgClause 39 39
+                  Term.ArgClause 39 40
+                    Lit.Int 39 40
+          Term.ApplyInfix 46 52
+            Term.Name 46 47
+            Term.Name 48 50
+            Type.ArgClause 51 51
+            Term.ArgClause 51 52
+              Lit.Int 51 52
+#!program 99 line 1701 Stat dialects.Scala3 :: right-arrow-indentation-block
+object W99 {
+class A { slf =>
+
+  val x = 3
+}
+
+}
+#!scalac ok
+#!regions I30/2 O42/ L42/ F44/
+#!layout
+Source 0 48
+  Defn.Object 0 47
+    Term.Name 7 10
+    Template 11 47
+      Template.Body 11 47
+        Defn.Class 13 44
+          Type.Name 19 20
+          Type.ParamClause 21 21
+          Ctor.Primary 21 21
+            Name.Anonymous 21 21
+          Template 21 44
+            Template.Body 21 44
+              Self 23 29
+                Term.Name 23 26
+              Defn.Val 33 42
+                Pat.Var 37 38
+                  Term.Name 37 38
+                Lit.Int 41 42
+#!program 100 line 1721 Stat dialects.Scala3 :: old-match-case-empty
+object W100 {
+x match {
+  case 1 =>
+  case 2 =>
+}
+
+}
+#!scalac ok
+#!regions F49/
+#!layout
+Source 0 53
+  Defn.Object 0 52
+    Term.Name 7 11
+    Template 12 52
+      Template.Body 12 52
+        Term.Match 14 49
+          Term.Name 14 15
+          Term.CasesBlock 22 49
+            Case 26 35
+              Lit.Int 31 32
+              Term.Block 38 38
+            Case 38 47
+              Lit.Int 43 44
+              Term.Block 48 48
+#!program 101 line 1731 Stat dialects.Scala3 :: old-match-case-oneline
+object W101 {
+x match {
+  case 1 => "1"
+  case 2 => "2"
+}
+
+}
+#!scalac ok
+#!regions L39/ L55/ F57/
+#!layout
+Source 0 61
+  Defn.Object 0 60
+    Term.Name 7 11
+    Template 12 60
+      Template.Body 12 60
+        Term.Match 14 57
+          Term.Name 14 15
+          Term.CasesBlock 22 57
+            Case 26 39
+              Lit.Int 31 32
+              Lit.String 36 39
+            Case 42 55
+              Lit.Int 47 48
+              Lit.String 52 55
+#!program 102 line 1747 Stat dialects.Scala3 :: old-match-case-multiline
+object W102 {
+x match {
+  case 1 =>
+    a1
+    b1
+  case 2 =>
+    a2
+    b2
+}
+
+}
+#!scalac ok
+#!regions L42/ L49/ L68/ L75/ F77/
+#!layout
+Source 0 81
+  Defn.Object 0 80
+    Term.Name 7 11
+    Template 12 80
+      Template.Body 12 80
+        Term.Match 14 77
+          Term.Name 14 15
+          Term.CasesBlock 22 77
+            Case 26 49
+              Lit.Int 31 32
+              Term.Block 40 49
+                Term.Name 40 42
+                Term.Name 47 49
+            Case 52 75
+              Lit.Int 57 58
+              Term.Block 66 75
+                Term.Name 66 68
+                Term.Name 73 75
+#!program 103 line 1766 Stat dialects.Scala3 :: old-match-case-inside
+object W103 {
+x match {
+  case 1 =>
+    y match {
+      case 5 => "5"
+      case 6 => "6"
+    }
+  case 2 =>
+    "2"
+}
+
+}
+#!scalac ok
+#!regions L69/ L89/ L95/ L115/ F117/
+#!layout
+Source 0 121
+  Defn.Object 0 120
+    Term.Name 7 11
+    Template 12 120
+      Template.Body 12 120
+        Term.Match 14 117
+          Term.Name 14 15
+          Term.CasesBlock 22 117
+            Case 26 95
+              Lit.Int 31 32
+              Term.Match 40 95
+                Term.Name 40 41
+                Term.CasesBlock 48 95
+                  Case 56 69
+                    Lit.Int 61 62
+                    Lit.String 66 69
+                  Case 76 89
+                    Lit.Int 81 82
+                    Lit.String 86 89
+            Case 98 115
+              Lit.Int 103 104
+              Lit.String 112 115
+#!program 104 line 1785 Stat dialects.Scala3 :: new-match-case-empty
+object W104 {
+x match
+  case 1 =>
+  case 2 =>
+
+}
+#!scalac ok
+#!regions I21/2 O46/
+#!layout
+Source 0 49
+  Defn.Object 0 48
+    Term.Name 7 11
+    Template 12 48
+      Template.Body 12 48
+        Term.Match 14 45
+          Term.Name 14 15
+          Term.CasesBlock 24 45
+            Case 24 33
+              Lit.Int 29 30
+              Term.Block 36 36
+            Case 36 45
+              Lit.Int 41 42
+              Term.Block 46 46
+#!program 105 line 1802 Stat dialects.Scala3 :: new-match-case-oneline
+object W105 {
+x match
+  case 1 => "1"
+  case 2 => "2"
+
+}
+#!scalac ok
+#!regions I21/2 L37/2 O54/
+#!layout
+Source 0 57
+  Defn.Object 0 56
+    Term.Name 7 11
+    Template 12 56
+      Template.Body 12 56
+        Term.Match 14 53
+          Term.Name 14 15
+          Term.CasesBlock 24 53
+            Case 24 37
+              Lit.Int 29 30
+              Lit.String 34 37
+            Case 40 53
+              Lit.Int 45 46
+              Lit.String 50 53
+#!program 106 line 1827 Stat dialects.Scala3 :: new-match-case-multiline
+object W106 {
+x match
+  case 1 =>
+    a1
+    b1
+  case 2 =>
+    a2
+    b2
+
+}
+#!scalac ok
+#!regions I21/2 I33/4.2 L40/4.2 O47/2 L47/2 I59/4.2 L66/4.2 O74/2 O74/
+#!layout
+Source 0 77
+  Defn.Object 0 76
+    Term.Name 7 11
+    Template 12 76
+      Template.Body 12 76
+        Term.Match 14 73
+          Term.Name 14 15
+          Term.CasesBlock 24 73
+            Case 24 47
+              Lit.Int 29 30
+              Term.Block 38 47
+                Term.Name 38 40
+                Term.Name 45 47
+            Case 50 73
+              Lit.Int 55 56
+              Term.Block 64 73
+                Term.Name 64 66
+                Term.Name 71 73
+#!program 107 line 1850 Stat dialects.Scala3 :: old-match-case-one-align
+object W107 {
+cond match {
+  case a =>
+  fa
+  case b =>
+  fb
+}
+
+}
+#!scalac ok
+#!regions L43/ L60/ F62/
+#!layout
+Source 0 66
+  Defn.Object 0 65
+    Term.Name 7 11
+    Template 12 65
+      Template.Body 12 65
+        Term.Match 14 62
+          Term.Name 14 18
+          Term.CasesBlock 25 62
+            Case 29 43
+              Pat.Var 34 35
+                Term.Name 34 35
+              Term.Name 41 43
+            Case 46 60
+              Pat.Var 51 52
+                Term.Name 51 52
+              Term.Name 58 60
+#!program 108 line 1875 Stat dialects.Scala3 :: new-match-case-oneline-align
+object W108 {
+def fx: String = {
+  x match
+  case 1 => "OK"
+  case 2 => "ERROR"
+  val c = "123"
+  c
+}
+
+}
+#!scalac ok
+#!regions I42/2 L59/2 O79/ L79/ L95/ L99/ F101/
+#!layout
+Source 0 105
+  Defn.Object 0 104
+    Term.Name 7 11
+    Template 12 104
+      Template.Body 12 104
+        Defn.Def 14 101
+          Term.Name 18 20
+          Type.Name 22 28
+          Term.Block 31 101
+            Term.Match 35 79
+              Term.Name 35 36
+              Term.CasesBlock 45 79
+                Case 45 59
+                  Lit.Int 50 51
+                  Lit.String 55 59
+                Case 62 79
+                  Lit.Int 67 68
+                  Lit.String 72 79
+            Defn.Val 82 95
+              Pat.Var 86 87
+                Term.Name 86 87
+              Lit.String 90 95
+            Term.Name 98 99
+#!program 109 line 1906 Stat dialects.Scala3 :: new-match-case-oneline-align-newline
+object W109 {
+def fx: String = {
+  x match
+  case 2 =>
+    "ERROR"
+  end match
+}
+
+}
+#!scalac ok
+#!regions I42/2 I54/4.2 O66/2 O66/ L66/ L78/ F80/
+#!layout
+Source 0 84
+  Defn.Object 0 83
+    Term.Name 7 11
+    Template 12 83
+      Template.Body 12 83
+        Defn.Def 14 80
+          Term.Name 18 20
+          Type.Name 22 28
+          Term.Block 31 80
+            Term.Match 35 66
+              Term.Name 35 36
+              Term.CasesBlock 45 66
+                Case 45 66
+                  Lit.Int 50 51
+                  Lit.String 59 66
+            Term.EndMarker 69 78
+              Term.Name 73 78
+#!program 110 line 1929 Stat dialects.Scala3 :: unsure-correct
+object W110 {
+try func match
+  case A => Accept
+  catch case ex => Error
+
+}
+#!scalac ok
+#!regions I28/2 O47/ I56/0 O73/
+#!layout
+Source 0 76
+  Defn.Object 0 75
+    Term.Name 7 11
+    Template 12 75
+      Template.Body 12 75
+        Term.Try 14 72
+          Term.Match 18 47
+            Term.Name 18 22
+            Term.CasesBlock 31 47
+              Case 31 47
+                Term.Name 36 37
+                Term.Name 41 47
+          Term.CasesBlock 56 72
+            Case 56 72
+              Pat.Var 61 63
+                Term.Name 61 63
+              Term.Name 67 72
+#!program 111 line 1944 Stat dialects.Scala3 :: case-match-ignore-indent
+object W111 {
+x match {
+  case x =>
+     a()
+   b()
+}
+
+}
+#!scalac ok
+#!regions L44/ L51/ F53/
+#!layout
+Source 0 57
+  Defn.Object 0 56
+    Term.Name 7 11
+    Template 12 56
+      Template.Body 12 56
+        Term.Match 14 53
+          Term.Name 14 15
+          Term.CasesBlock 22 53
+            Case 26 51
+              Pat.Var 31 32
+                Term.Name 31 32
+              Term.Block 41 51
+                Term.Apply 41 44
+                  Term.Name 41 42
+                  Term.ArgClause 42 44
+                Term.Apply 48 51
+                  Term.Name 48 49
+                  Term.ArgClause 49 51
+#!program 112 line 1976 Stat dialects.Scala3 :: match-chained unindented
+object W112 {
+xs match {
+  case Nil => "empty"
+  case x :: xs1 => "nonempty"
+} match {
+  case "empty" => 0
+  case "nonempty" => 1
+}
+
+}
+#!scalac ok
+#!regions L46/ L76/ L106/ L129/ F131/
+#!layout
+Source 0 135
+  Defn.Object 0 134
+    Term.Name 7 11
+    Template 12 134
+      Template.Body 12 134
+        Term.Match 14 131
+          Term.Match 14 78
+            Term.Name 14 16
+            Term.CasesBlock 23 78
+              Case 27 46
+                Term.Name 32 35
+                Lit.String 39 46
+              Case 49 76
+                Pat.ExtractInfix 54 62
+                  Pat.Var 54 55
+                    Term.Name 54 55
+                  Term.Name 56 58
+                  Pat.ArgClause 59 62
+                    Pat.Var 59 62
+                      Term.Name 59 62
+                Lit.String 66 76
+          Term.CasesBlock 85 131
+            Case 89 106
+              Lit.String 94 101
+              Lit.Int 105 106
+            Case 109 129
+              Lit.String 114 124
+              Lit.Int 128 129
+#!program 113 line 1988 Stat dialects.Scala3 :: match-chained unindented
+object W113 {
+xs match
+case Nil => "empty"
+case x :: xs1 => "nonempty"
+match
+case "empty" => 0
+case "nonempty" => 1
+
+}
+#!scalac ok
+#!regions I22/0 L42/0 O70/ I76/0 L94/0 O116/
+#!layout
+Source 0 119
+  Defn.Object 0 118
+    Term.Name 7 11
+    Template 12 118
+      Template.Body 12 118
+        Term.Match 14 115
+          Term.Match 14 70
+            Term.Name 14 16
+            Term.CasesBlock 23 70
+              Case 23 42
+                Term.Name 28 31
+                Lit.String 35 42
+              Case 43 70
+                Pat.ExtractInfix 48 56
+                  Pat.Var 48 49
+                    Term.Name 48 49
+                  Term.Name 50 52
+                  Pat.ArgClause 53 56
+                    Pat.Var 53 56
+                      Term.Name 53 56
+                Lit.String 60 70
+          Term.CasesBlock 77 115
+            Case 77 94
+              Lit.String 82 89
+              Lit.Int 93 94
+            Case 95 115
+              Lit.String 100 110
+              Lit.Int 114 115
+#!program 114 line 2023 Stat dialects.Scala3 :: match-chained indented
+object W114 {
+xs match {
+  case Nil => "empty"
+  case x :: xs1 => "nonempty" match {
+    case "empty" => 0
+    case "nonempty" => 1
+  }
+}
+
+}
+#!scalac ok
+#!regions L46/ L106/ L131/ L135/ F137/
+#!layout
+Source 0 141
+  Defn.Object 0 140
+    Term.Name 7 11
+    Template 12 140
+      Template.Body 12 140
+        Term.Match 14 137
+          Term.Name 14 16
+          Term.CasesBlock 23 137
+            Case 27 46
+              Term.Name 32 35
+              Lit.String 39 46
+            Case 49 135
+              Pat.ExtractInfix 54 62
+                Pat.Var 54 55
+                  Term.Name 54 55
+                Term.Name 56 58
+                Pat.ArgClause 59 62
+                  Pat.Var 59 62
+                    Term.Name 59 62
+              Term.Match 66 135
+                Lit.String 66 76
+                Term.CasesBlock 83 135
+                  Case 89 106
+                    Lit.String 94 101
+                    Lit.Int 105 106
+                  Case 111 131
+                    Lit.String 116 126
+                    Lit.Int 130 131
+#!program 115 line 2035 Stat dialects.Scala3 :: match-chained indented
+object W115 {
+xs match
+  case Nil => "empty"
+  case x :: xs1 => "nonempty"
+  match
+    case "empty" => 0
+    case "nonempty" => 1
+
+
+}
+#!scalac ok
+#!regions I22/2 L44/2 I82/4.2 L104/4.2 O131/2 O131/
+#!layout
+Source 0 134
+  Defn.Object 0 133
+    Term.Name 7 11
+    Template 12 133
+      Template.Body 12 133
+        Term.Match 14 129
+          Term.Name 14 16
+          Term.CasesBlock 25 129
+            Case 25 44
+              Term.Name 30 33
+              Lit.String 37 44
+            Case 47 129
+              Pat.ExtractInfix 52 60
+                Pat.Var 52 53
+                  Term.Name 52 53
+                Term.Name 54 56
+                Pat.ArgClause 57 60
+                  Pat.Var 57 60
+                    Term.Name 57 60
+              Term.Match 64 129
+                Lit.String 64 74
+                Term.CasesBlock 87 129
+                  Case 87 104
+                    Lit.String 92 99
+                    Lit.Int 103 104
+                  Case 109 129
+                    Lit.String 114 124
+                    Lit.Int 128 129
+#!program 116 line 2049 Stat dialects.Scala3 :: match-chained-complex
+object W116 {
+val hello = xs match {
+  case Nil => "empty"
+  case x :: xs1 => "nonempty"
+} startsWith "empty" match {
+  case true => 0
+  case false => 1
+}
+
+}
+#!scalac ok
+#!regions L58/ L88/ L134/ L152/ F154/
+#!layout
+Source 0 158
+  Defn.Object 0 157
+    Term.Name 7 11
+    Template 12 157
+      Template.Body 12 157
+        Defn.Val 14 154
+          Pat.Var 18 23
+            Term.Name 18 23
+          Term.Match 26 154
+            Term.ApplyInfix 26 109
+              Term.Match 26 90
+                Term.Name 26 28
+                Term.CasesBlock 35 90
+                  Case 39 58
+                    Term.Name 44 47
+                    Lit.String 51 58
+                  Case 61 88
+                    Pat.ExtractInfix 66 74
+                      Pat.Var 66 67
+                        Term.Name 66 67
+                      Term.Name 68 70
+                      Pat.ArgClause 71 74
+                        Pat.Var 71 74
+                          Term.Name 71 74
+                    Lit.String 78 88
+              Term.Name 91 101
+              Type.ArgClause 102 102
+              Term.ArgClause 102 109
+                Lit.String 102 109
+            Term.CasesBlock 116 154
+              Case 120 134
+                Lit.Boolean 125 129
+                Lit.Int 133 134
+              Case 137 152
+                Lit.Boolean 142 147
+                Lit.Int 151 152
+#!program 117 line 2090 Stat dialects.Scala3 :: match-chained-complex-operator 1
+object W117 {
+val hello = xs match
+  case Nil => 0
+  case x :: xs1 => 1
++ 1 match
+  case 1 => true
+  case 2 => false
+
+}
+#!scalac refuses: end of statement expected but identifier found - did you intend to apply an infix operator? If so, wrap the right operand in parentheses or in a block.
+#!regions I34/2 L50/2 O71/ X71/ I81/2 L98/2 O117/
+#!layout
+Source 0 120
+  Defn.Object 0 119
+    Term.Name 7 11
+    Template 12 119
+      Template.Body 12 119
+        Defn.Val 14 116
+          Pat.Var 18 23
+            Term.Name 18 23
+          Term.Match 26 116
+            Term.ApplyInfix 26 75
+              Term.Match 26 71
+                Term.Name 26 28
+                Term.CasesBlock 37 71
+                  Case 37 50
+                    Term.Name 42 45
+                    Lit.Int 49 50
+                  Case 53 71
+                    Pat.ExtractInfix 58 66
+                      Pat.Var 58 59
+                        Term.Name 58 59
+                      Term.Name 60 62
+                      Pat.ArgClause 63 66
+                        Pat.Var 63 66
+                          Term.Name 63 66
+                    Lit.Int 70 71
+              Term.Name 72 73
+              Type.ArgClause 74 74
+              Term.ArgClause 74 75
+                Lit.Int 74 75
+            Term.CasesBlock 84 116
+              Case 84 98
+                Lit.Int 89 90
+                Lit.Boolean 94 98
+              Case 101 116
+                Lit.Int 106 107
+                Lit.Boolean 111 116
+#!program 118 line 2129 Stat dialects.Scala3 :: match-chained-complex-operator 2
+object W118 {
+val hello = 1 + xs match
+  case Nil => 0
+  case x :: xs1 => 1
++ 1 match
+  case 1 => true
+  case 2 => false
+
+}
+#!scalac refuses: end of statement expected but identifier found - did you intend to apply an infix operator? If so, wrap the right operand in parentheses or in a block.
+#!regions I38/2 L54/2 O75/ X75/ I85/2 L102/2 O121/
+#!layout
+Source 0 124
+  Defn.Object 0 123
+    Term.Name 7 11
+    Template 12 123
+      Template.Body 12 123
+        Defn.Val 14 120
+          Pat.Var 18 23
+            Term.Name 18 23
+          Term.Match 26 120
+            Term.ApplyInfix 26 79
+              Term.Match 26 75
+                Term.ApplyInfix 26 32
+                  Lit.Int 26 27
+                  Term.Name 28 29
+                  Type.ArgClause 30 30
+                  Term.ArgClause 30 32
+                    Term.Name 30 32
+                Term.CasesBlock 41 75
+                  Case 41 54
+                    Term.Name 46 49
+                    Lit.Int 53 54
+                  Case 57 75
+                    Pat.ExtractInfix 62 70
+                      Pat.Var 62 63
+                        Term.Name 62 63
+                      Term.Name 64 66
+                      Pat.ArgClause 67 70
+                        Pat.Var 67 70
+                          Term.Name 67 70
+                    Lit.Int 74 75
+              Term.Name 76 77
+              Type.ArgClause 78 78
+              Term.ArgClause 78 79
+                Lit.Int 78 79
+            Term.CasesBlock 88 120
+              Case 88 102
+                Lit.Int 93 94
+                Lit.Boolean 98 102
+              Case 105 120
+                Lit.Int 110 111
+                Lit.Boolean 115 120
+#!program 119 line 2168 Stat dialects.Scala3 :: match-chained-complex-operator 3
+object W119 {
+val hello =
+  1 + xs match
+    case Nil => 0
+    case x :: xs1 => 1
+  + 1 match
+    case 1 => true
+    case 2 => false
+
+}
+#!scalac refuses: end of statement expected but identifier found - did you intend to apply an infix operator? If so, wrap the right operand in parentheses or in a block.
+#!regions I25/2 I40/4.2 L58/4.2 O81/2 X81/2 I93/4.2 L112/4.2 O133/2 O133/
+#!layout
+Source 0 136
+  Defn.Object 0 135
+    Term.Name 7 11
+    Template 12 135
+      Template.Body 12 135
+        Defn.Val 14 132
+          Pat.Var 18 23
+            Term.Name 18 23
+          Term.Match 28 132
+            Term.ApplyInfix 28 87
+              Term.Match 28 81
+                Term.ApplyInfix 28 34
+                  Lit.Int 28 29
+                  Term.Name 30 31
+                  Type.ArgClause 32 32
+                  Term.ArgClause 32 34
+                    Term.Name 32 34
+                Term.CasesBlock 45 81
+                  Case 45 58
+                    Term.Name 50 53
+                    Lit.Int 57 58
+                  Case 63 81
+                    Pat.ExtractInfix 68 76
+                      Pat.Var 68 69
+                        Term.Name 68 69
+                      Term.Name 70 72
+                      Pat.ArgClause 73 76
+                        Pat.Var 73 76
+                          Term.Name 73 76
+                    Lit.Int 80 81
+              Term.Name 84 85
+              Type.ArgClause 86 86
+              Term.ArgClause 86 87
+                Lit.Int 86 87
+            Term.CasesBlock 98 132
+              Case 98 112
+                Lit.Int 103 104
+                Lit.Boolean 108 112
+              Case 117 132
+                Lit.Int 122 123
+                Lit.Boolean 127 132
+#!program 120 line 2208 Stat dialects.Scala3 :: match-chained-complex-operator 4
+object W120 {
+val hello = 1 foo xs match
+  case Nil => 0
+  case x :: xs1 => 1
+`foo` 1 match
+  case 1 => true
+  case 2 => false
+
+
+}
+#!scalac ok
+#!regions I40/2 L56/2 O77/ X77/ I91/2 L108/2 O128/
+#!layout
+Source 0 131
+  Defn.Object 0 130
+    Term.Name 7 11
+    Template 12 130
+      Template.Body 12 130
+        Defn.Val 14 126
+          Pat.Var 18 23
+            Term.Name 18 23
+          Term.Match 26 126
+            Term.ApplyInfix 26 85
+              Term.Match 26 77
+                Term.ApplyInfix 26 34
+                  Lit.Int 26 27
+                  Term.Name 28 31
+                  Type.ArgClause 32 32
+                  Term.ArgClause 32 34
+                    Term.Name 32 34
+                Term.CasesBlock 43 77
+                  Case 43 56
+                    Term.Name 48 51
+                    Lit.Int 55 56
+                  Case 59 77
+                    Pat.ExtractInfix 64 72
+                      Pat.Var 64 65
+                        Term.Name 64 65
+                      Term.Name 66 68
+                      Pat.ArgClause 69 72
+                        Pat.Var 69 72
+                          Term.Name 69 72
+                    Lit.Int 76 77
+              Term.Name 78 83
+              Type.ArgClause 84 84
+              Term.ArgClause 84 85
+                Lit.Int 84 85
+            Term.CasesBlock 94 126
+              Case 94 108
+                Lit.Int 99 100
+                Lit.Boolean 104 108
+              Case 111 126
+                Lit.Int 116 117
+                Lit.Boolean 121 126
+#!program 121 line 2247 Stat dialects.Scala3 :: match-chained-complex-operator 5
+object W121 {
+val hello = 1 foo xs match
+case Nil => 0
+case x :: xs1 => 1
+`foo` 1 match
+  case 1 => true
+  case 2 => false
+
+
+}
+#!scalac ok
+#!regions I40/0 L54/0 O73/ X73/ I87/2 L104/2 O124/
+#!layout
+Source 0 127
+  Defn.Object 0 126
+    Term.Name 7 11
+    Template 12 126
+      Template.Body 12 126
+        Defn.Val 14 122
+          Pat.Var 18 23
+            Term.Name 18 23
+          Term.Match 26 122
+            Term.ApplyInfix 26 81
+              Term.Match 26 73
+                Term.ApplyInfix 26 34
+                  Lit.Int 26 27
+                  Term.Name 28 31
+                  Type.ArgClause 32 32
+                  Term.ArgClause 32 34
+                    Term.Name 32 34
+                Term.CasesBlock 41 73
+                  Case 41 54
+                    Term.Name 46 49
+                    Lit.Int 53 54
+                  Case 55 73
+                    Pat.ExtractInfix 60 68
+                      Pat.Var 60 61
+                        Term.Name 60 61
+                      Term.Name 62 64
+                      Pat.ArgClause 65 68
+                        Pat.Var 65 68
+                          Term.Name 65 68
+                    Lit.Int 72 73
+              Term.Name 74 79
+              Type.ArgClause 80 80
+              Term.ArgClause 80 81
+                Lit.Int 80 81
+            Term.CasesBlock 90 122
+              Case 90 104
+                Lit.Int 95 96
+                Lit.Boolean 100 104
+              Case 107 122
+                Lit.Int 112 113
+                Lit.Boolean 117 122
+#!program 122 line 2286 Stat dialects.Scala3 :: match-non-chained-complex-operator 6
+object W122 {
+{
+  val hello = 1 foo xs match
+  case Nil => 0
+  case x :: xs1 => 1
+  end match
+  `foo` match
+  case 1 => true
+  case 2 => false
+}
+
+}
+#!scalac refuses: misaligned end marker
+#!regions I44/2 L60/2 O81/ L81/ L93/ I107/2 L124/2 O142/ L142/ F144/
+#!layout
+Source 0 148
+  Defn.Object 0 147
+    Term.Name 7 11
+    Template 12 147
+      Template.Body 12 147
+        Term.Block 14 144
+          Defn.Val 18 81
+            Pat.Var 22 27
+              Term.Name 22 27
+            Term.Match 30 81
+              Term.ApplyInfix 30 38
+                Lit.Int 30 31
+                Term.Name 32 35
+                Type.ArgClause 36 36
+                Term.ArgClause 36 38
+                  Term.Name 36 38
+              Term.CasesBlock 47 81
+                Case 47 60
+                  Term.Name 52 55
+                  Lit.Int 59 60
+                Case 63 81
+                  Pat.ExtractInfix 68 76
+                    Pat.Var 68 69
+                      Term.Name 68 69
+                    Term.Name 70 72
+                    Pat.ArgClause 73 76
+                      Pat.Var 73 76
+                        Term.Name 73 76
+                  Lit.Int 80 81
+          Term.EndMarker 84 93
+            Term.Name 88 93
+          Term.Match 96 142
+            Term.Name 96 101
+            Term.CasesBlock 110 142
+              Case 110 124
+                Lit.Int 115 116
+                Lit.Boolean 120 124
+              Case 127 142
+                Lit.Int 132 133
+                Lit.Boolean 137 142
+#!program 123 line 2327 Stat dialects.Scala3 :: match-nested
+object W123 {
+foo match
+  case a =>
+    bar match
+      case aa =>
+  case b =>
+    baz
+
+}
+#!scalac ok
+#!regions I23/2 I35/4.2 I49/6.4.2 O66/4.2 O66/2 I78/4.2 O87/2 O87/
+#!layout
+Source 0 90
+  Defn.Object 0 89
+    Term.Name 7 11
+    Template 12 89
+      Template.Body 12 89
+        Term.Match 14 86
+          Term.Name 14 17
+          Term.CasesBlock 26 86
+            Case 26 66
+              Pat.Var 31 32
+                Term.Name 31 32
+              Term.Match 40 66
+                Term.Name 40 43
+                Term.CasesBlock 56 66
+                  Case 56 66
+                    Pat.Var 61 63
+                      Term.Name 61 63
+                    Term.Block 66 66
+            Case 69 86
+              Pat.Var 74 75
+                Term.Name 74 75
+              Term.Name 83 86
+#!program 124 line 2378 Stat dialects.Scala3 :: match-nested multi-level dedent
+object W124 {
+x match
+  case a =>
+    b match
+      case c =>
+        d match
+          case e => 1
+  case _ => 2
+
+}
+#!scalac ok
+#!regions I21/2 I33/4.2 I45/6.4.2 I61/8.6.4.2 I77/10.8.6.4.2 O99/8.6.4.2 O99/6.4.2 O99/4.2 O99/2 L99/2 O114/
+#!layout
+Source 0 117
+  Defn.Object 0 116
+    Term.Name 7 11
+    Template 12 116
+      Template.Body 12 116
+        Term.Match 14 113
+          Term.Name 14 15
+          Term.CasesBlock 24 113
+            Case 24 99
+              Pat.Var 29 30
+                Term.Name 29 30
+              Term.Match 38 99
+                Term.Name 38 39
+                Term.CasesBlock 52 99
+                  Case 52 99
+                    Pat.Var 57 58
+                      Term.Name 57 58
+                    Term.Match 70 99
+                      Term.Name 70 71
+                      Term.CasesBlock 88 99
+                        Case 88 99
+                          Pat.Var 93 94
+                            Term.Name 93 94
+                          Lit.Int 98 99
+            Case 102 113
+              Pat.Wildcard 107 108
+              Lit.Int 112 113
+#!program 125 line 2411 Stat dialects.Scala3 :: sub-case: single inline in braces
+object W125 {
+d match {
+  case Some(m) if m.content match case c: T => 1
+  case _ => 2
+}
+
+}
+#!scalac refuses: '{' expected, but 'case' found
+#!regions I58/3 O72/ L86/ F88/
+#!layout
+Source 0 92
+  Defn.Object 0 91
+    Term.Name 7 11
+    Template 12 91
+      Template.Body 12 91
+        Term.Match 14 88
+          Term.Name 14 15
+          Term.CasesBlock 22 88
+            Case 26 72
+              Pat.Extract 31 38
+                Term.Name 31 35
+                Pat.ArgClause 35 38
+                  Pat.Var 36 37
+                    Term.Name 36 37
+              Term.SubMatch 42 72
+                Term.Select 42 51
+                  Term.Name 42 43
+                  Term.Name 44 51
+                Term.CasesBlock 58 72
+                  Case 58 72
+                    Pat.Typed 63 67
+                      Pat.Var 63 64
+                        Term.Name 63 64
+                      Type.Name 66 67
+                    Lit.Int 71 72
+            Case 75 86
+              Pat.Wildcard 80 81
+              Lit.Int 85 86
+#!program 126 line 2439 Stat dialects.Scala3 :: sub-case: single inline, braceless outer
+object W126 {
+d match
+  case Some(m) if m.content match case c: T => 1
+  case _ => 2
+
+}
+#!scalac refuses: '{' expected, but 'case' found
+#!regions I21/2 I56/3.2 O70/2 O85/
+#!layout
+Source 0 88
+  Defn.Object 0 87
+    Term.Name 7 11
+    Template 12 87
+      Template.Body 12 87
+        Term.Match 14 84
+          Term.Name 14 15
+          Term.CasesBlock 24 84
+            Case 24 70
+              Pat.Extract 29 36
+                Term.Name 29 33
+                Pat.ArgClause 33 36
+                  Pat.Var 34 35
+                    Term.Name 34 35
+              Term.SubMatch 40 70
+                Term.Select 40 49
+                  Term.Name 40 41
+                  Term.Name 42 49
+                Term.CasesBlock 56 70
+                  Case 56 70
+                    Pat.Typed 61 65
+                      Pat.Var 61 62
+                        Term.Name 61 62
+                      Type.Name 64 65
+                    Lit.Int 69 70
+            Case 73 84
+              Pat.Wildcard 78 79
+              Lit.Int 83 84
+#!program 127 line 2466 Stat dialects.Scala3 :: sub-case: boolean guard then sub-match in braces
+object W127 {
+d match {
+  case Some(m) if cond if m.content match case c: T => 1
+  case _ => 2
+}
+
+}
+#!scalac refuses: '{' expected, but 'case' found
+#!regions I66/3 O80/ L80/ L94/ F96/
+#!layout
+Source 0 100
+  Defn.Object 0 99
+    Term.Name 7 11
+    Template 12 99
+      Template.Body 12 99
+        Term.Match 14 96
+          Term.Name 14 15
+          Term.CasesBlock 22 96
+            Case 26 80
+              Pat.Extract 31 38
+                Term.Name 31 35
+                Pat.ArgClause 35 38
+                  Pat.Var 36 37
+                    Term.Name 36 37
+              Term.Name 42 46
+              Term.SubMatch 50 80
+                Term.Select 50 59
+                  Term.Name 50 51
+                  Term.Name 52 59
+                Term.CasesBlock 66 80
+                  Case 66 80
+                    Pat.Typed 71 75
+                      Pat.Var 71 72
+                        Term.Name 71 72
+                      Type.Name 74 75
+                    Lit.Int 79 80
+            Case 83 94
+              Pat.Wildcard 88 89
+              Lit.Int 93 94
+#!program 128 line 2495 Stat dialects.Scala3 :: sub-case: indented multi sub-case
+object W128 {
+d match
+  case Some(x) if x.version match
+    case Stable(m, n) if m > 2 => 1
+    case Legacy => 2
+  case _ => 3
+
+}
+#!scalac refuses: '=>' expected, but 'case' found
+#!regions I21/2 I55/4.2 L91/4.2 O112/2 O127/
+#!layout
+Source 0 130
+  Defn.Object 0 129
+    Term.Name 7 11
+    Template 12 129
+      Template.Body 12 129
+        Term.Match 14 126
+          Term.Name 14 15
+          Term.CasesBlock 24 126
+            Case 24 112
+              Pat.Extract 29 36
+                Term.Name 29 33
+                Pat.ArgClause 33 36
+                  Pat.Var 34 35
+                    Term.Name 34 35
+              Term.SubMatch 40 112
+                Term.Select 40 49
+                  Term.Name 40 41
+                  Term.Name 42 49
+                Term.CasesBlock 60 112
+                  Case 60 91
+                    Pat.Extract 65 77
+                      Term.Name 65 71
+                      Pat.ArgClause 71 77
+                        Pat.Var 72 73
+                          Term.Name 72 73
+                        Pat.Var 75 76
+                          Term.Name 75 76
+                    Term.ApplyInfix 81 86
+                      Term.Name 81 82
+                      Term.Name 83 84
+                      Type.ArgClause 85 85
+                      Term.ArgClause 85 86
+                        Lit.Int 85 86
+                    Lit.Int 90 91
+                  Case 96 112
+                    Term.Name 101 107
+                    Lit.Int 111 112
+            Case 115 126
+              Pat.Wildcard 120 121
+              Lit.Int 125 126
+#!program 129 line 2536 Stat dialects.Scala3 :: sub-case: nested sub-sub-match
+object W129 {
+x match {
+  case a if b match {
+    case c if d match {
+      case e => 1
+    }
+  }
+  case _ => 2
+}
+
+}
+#!scalac refuses: '=>' expected, but '}' found
+#!regions L87/ L111/ F113/
+#!layout
+Source 0 117
+  Defn.Object 0 116
+    Term.Name 7 11
+    Template 12 116
+      Template.Body 12 116
+        Term.Match 14 113
+          Term.Name 14 15
+          Term.CasesBlock 22 113
+            Case 26 97
+              Pat.Var 31 32
+                Term.Name 31 32
+              Term.SubMatch 36 97
+                Term.Name 36 37
+                Term.CasesBlock 44 97
+                  Case 50 93
+                    Pat.Var 55 56
+                      Term.Name 55 56
+                    Term.SubMatch 60 93
+                      Term.Name 60 61
+                      Term.CasesBlock 68 93
+                        Case 76 87
+                          Pat.Var 81 82
+                            Term.Name 81 82
+                          Lit.Int 86 87
+            Case 100 111
+              Pat.Wildcard 105 106
+              Lit.Int 110 111
+#!program 130 line 2562 Stat dialects.Scala3 :: sub-case: match-as-operator guard with => stays a guard
+object W130 {
+x match { case foo if bar match { case baz => true } => 1 }
+}
+#!scalac ok
+#!regions L73/
+#!layout
+Source 0 76
+  Defn.Object 0 75
+    Term.Name 7 11
+    Template 12 75
+      Template.Body 12 75
+        Term.Match 14 73
+          Term.Name 14 15
+          Term.CasesBlock 22 73
+            Case 24 71
+              Pat.Var 29 32
+                Term.Name 29 32
+              Term.Match 36 66
+                Term.Name 36 39
+                Term.CasesBlock 46 66
+                  Case 48 64
+                    Pat.Var 53 56
+                      Term.Name 53 56
+                    Lit.Boolean 60 64
+              Lit.Int 70 71
+#!program 131 line 2590 Stat dialects.Scala3 :: sub-case: nested sub-sub-match, braceless
+object W131 {
+x match
+  case a if b match
+    case c if d match
+      case e => 1
+  case _ => 2
+
+}
+#!scalac refuses: '=>' expected, but 'case' found
+#!regions I21/2 I41/4.2 I63/6.4.2 O81/4.2 O81/2 O96/
+#!layout
+Source 0 99
+  Defn.Object 0 98
+    Term.Name 7 11
+    Template 12 98
+      Template.Body 12 98
+        Term.Match 14 95
+          Term.Name 14 15
+          Term.CasesBlock 24 95
+            Case 24 81
+              Pat.Var 29 30
+                Term.Name 29 30
+              Term.SubMatch 34 81
+                Term.Name 34 35
+                Term.CasesBlock 46 81
+                  Case 46 81
+                    Pat.Var 51 52
+                      Term.Name 51 52
+                    Term.SubMatch 56 81
+                      Term.Name 56 57
+                      Term.CasesBlock 70 81
+                        Case 70 81
+                          Pat.Var 75 76
+                            Term.Name 75 76
+                          Lit.Int 80 81
+            Case 84 95
+              Pat.Wildcard 89 90
+              Lit.Int 94 95
+#!program 132 line 2605 Stat dialects.Scala3 :: if-then-else with parens in cond and leading infix
+object W132 {
+def foo =
+  if (bar eq baz)
+                && (qux != xyz)
+  then
+          found
+  else
+          notfound
+
+}
+#!scalac ok
+#!regions I23/2 X41/2 L73/2 I80/10.2 O96/2 I103/10.2 O123/2 O123/
+#!layout
+Source 0 126
+  Defn.Object 0 125
+    Term.Name 7 11
+    Template 12 125
+      Template.Body 12 125
+        Defn.Def 14 122
+          Term.Name 18 21
+          Term.If 26 122
+            Term.ApplyInfix 29 73
+              Term.ApplyInfix 30 40
+                Term.Name 30 33
+                Term.Name 34 36
+                Type.ArgClause 37 37
+                Term.ArgClause 37 40
+                  Term.Name 37 40
+              Term.Name 58 60
+              Type.ArgClause 61 61
+              Term.ArgClause 61 73
+                Term.ApplyInfix 62 72
+                  Term.Name 62 65
+                  Term.Name 66 68
+                  Type.ArgClause 69 69
+                  Term.ArgClause 69 72
+                    Term.Name 69 72
+            Term.Name 91 96
+            Term.Name 114 122
+#!program 133 line 2637 Stat dialects.Scala3 :: if-then-else with parens in cond and non-leading infix
+object W133 {
+def foo =
+  if (bar eq baz)
+                .qux
+  then
+          found
+  else
+          notfound
+
+}
+#!scalac ok
+#!regions I23/2 L62/2 I69/10.2 O85/2 I92/10.2 O112/2 O112/
+#!layout
+Source 0 115
+  Defn.Object 0 114
+    Term.Name 7 11
+    Template 12 114
+      Template.Body 12 114
+        Defn.Def 14 111
+          Term.Name 18 21
+          Term.If 26 111
+            Term.Select 29 62
+              Term.ApplyInfix 30 40
+                Term.Name 30 33
+                Term.Name 34 36
+                Type.ArgClause 37 37
+                Term.ArgClause 37 40
+                  Term.Name 37 40
+              Term.Name 59 62
+            Term.Name 80 85
+            Term.Name 103 111
+#!program 134 line 2670 Stat dialects.Scala3 :: match-dot
+object W134 {
+if xs.match {
+  case Nil => false
+  case _ => true
+}
+then "nonempty"
+else "empty"
+
+}
+#!scalac ok
+#!regions L47/ L64/ L66/ F95/
+#!layout
+Source 0 99
+  Defn.Object 0 98
+    Term.Name 7 11
+    Template 12 98
+      Template.Body 12 98
+        Term.If 14 95
+          Term.SelectMatch 17 66
+            Term.Name 17 19
+            Term.CasesBlock 26 66
+              Case 30 47
+                Term.Name 35 38
+                Lit.Boolean 42 47
+              Case 50 64
+                Pat.Wildcard 55 56
+                Lit.Boolean 60 64
+          Lit.String 72 82
+          Lit.String 88 95
+#!program 135 line 2699 Stat dialects.Scala3 :: match-dot-def
+object W135 {
+def mtch(x: Int): String =
+   x.match {
+     case 1 => "1"
+     case _ => "ERR"
+   }.trim()
+
+}
+#!scalac ok
+#!regions I40/3 L72/3 L93/3 O106/
+#!layout
+Source 0 109
+  Defn.Object 0 108
+    Term.Name 7 11
+    Template 12 108
+      Template.Body 12 108
+        Defn.Def 14 105
+          Term.Name 18 22
+          Member.ParamClauseGroup 22 30
+            Type.ParamClause 22 22
+            Term.ParamClause 22 30
+              Term.Param 23 29
+                Term.Name 23 24
+                Type.Name 26 29
+          Type.Name 32 38
+          Term.Apply 44 105
+            Term.Select 44 103
+              Term.SelectMatch 44 98
+                Term.Name 44 45
+                Term.CasesBlock 52 98
+                  Case 59 72
+                    Lit.Int 64 65
+                    Lit.String 69 72
+                  Case 78 93
+                    Pat.Wildcard 83 84
+                    Lit.String 88 93
+              Term.Name 99 103
+            Term.ArgClause 103 105
+#!program 136 line 2725 Stat dialects.Scala3 :: catch-case-in-paren
+object W136 {
+fx(p1,
+   try func()
+   catch case x => ok())
+
+}
+#!scalac ok
+#!regions I44/0 O57/ F59/
+#!layout
+Source 0 63
+  Defn.Object 0 62
+    Term.Name 7 11
+    Template 12 62
+      Template.Body 12 62
+        Term.Apply 14 59
+          Term.Name 14 16
+          Term.ArgClause 16 59
+            Term.Name 17 19
+            Term.Try 24 58
+              Term.Apply 28 34
+                Term.Name 28 32
+                Term.ArgClause 32 34
+              Term.CasesBlock 44 58
+                Case 44 58
+                  Pat.Var 49 50
+                    Term.Name 49 50
+                  Term.Apply 54 58
+                    Term.Name 54 56
+                    Term.ArgClause 56 58
+#!program 137 line 2747 Stat dialects.Scala3 :: match-braces-LFLF
+object W137 {
+a match {
+  case A() =>
+    succ
+
+  case _ => fail
+}
+
+}
+#!scalac ok
+#!regions F46/ L64/ F66/
+#!layout
+Source 0 70
+  Defn.Object 0 69
+    Term.Name 7 11
+    Template 12 69
+      Template.Body 12 69
+        Term.Match 14 66
+          Term.Name 14 15
+          Term.CasesBlock 22 66
+            Case 26 46
+              Pat.Extract 31 34
+                Term.Name 31 32
+                Pat.ArgClause 32 34
+              Term.Name 42 46
+            Case 50 64
+              Pat.Wildcard 55 56
+              Term.Name 60 64
+#!program 138 line 2773 Stat dialects.Scala3 :: match-last-empty
+object W138 {
+object Z:
+  a match
+    case A() =>
+      succ
+    case _ =>
+  
+  val x = 0
+
+}
+#!scalac ok
+#!regions I23/2 I33/4.2 I49/6.4.2 O60/4.2 L60/4.2 O77/2 F77/2 O90/
+#!layout
+Source 0 93
+  Defn.Object 0 92
+    Term.Name 7 11
+    Template 12 92
+      Template.Body 12 92
+        Defn.Object 14 89
+          Term.Name 21 22
+          Template 22 89
+            Template.Body 22 89
+              Term.Match 26 74
+                Term.Name 26 27
+                Term.CasesBlock 38 74
+                  Case 38 60
+                    Pat.Extract 43 46
+                      Term.Name 43 44
+                      Pat.ArgClause 44 46
+                    Term.Name 56 60
+                  Case 65 74
+                    Pat.Wildcard 70 71
+                    Term.Block 77 77
+              Defn.Val 80 89
+                Pat.Var 84 85
+                  Term.Name 84 85
+                Lit.Int 88 89
+#!program 139 line 2788 Stat dialects.Scala3 :: if-infix
+object W139 {
+if (1) max 10 gt 0
+
+then
+  1
+else
+  2
+
+}
+#!scalac ok
+#!regions F32/ I38/2 O42/ I47/2 O52/
+#!layout
+Source 0 55
+  Defn.Object 0 54
+    Term.Name 7 11
+    Template 12 54
+      Template.Body 12 54
+        Term.If 14 51
+          Term.ApplyInfix 17 32
+            Term.ApplyInfix 17 27
+              Lit.Int 18 19
+              Term.Name 21 24
+              Type.ArgClause 25 25
+              Term.ArgClause 25 27
+                Lit.Int 25 27
+            Term.Name 28 30
+            Type.ArgClause 31 31
+            Term.ArgClause 31 32
+              Lit.Int 31 32
+          Lit.Int 41 42
+          Lit.Int 50 51
+#!program 140 line 2801 Stat dialects.Scala3 :: no-real-indentation
+object W140 {
+object Test:
+  try List(1, 2, 3) match
+  case x :: xs => println(x)
+  case Nil => println("Nil")
+  catch
+  case ex: java.io.IOException => println(ex)
+  case ex: Throwable => throw ex
+  end try
+
+}
+#!scalac ok
+#!regions I26/2 I52/2.2 L81/2.2 O110/2 I118/2.2 L164/2.2 O197/2 L197/2 O208/
+#!layout
+Source 0 211
+  Defn.Object 0 210
+    Term.Name 7 11
+    Template 12 210
+      Template.Body 12 210
+        Defn.Object 14 207
+          Term.Name 21 25
+          Template 25 207
+            Template.Body 25 207
+              Term.Try 29 197
+                Term.Match 33 110
+                  Term.Apply 33 46
+                    Term.Name 33 37
+                    Term.ArgClause 37 46
+                      Lit.Int 38 39
+                      Lit.Int 41 42
+                      Lit.Int 44 45
+                  Term.CasesBlock 55 110
+                    Case 55 81
+                      Pat.ExtractInfix 60 67
+                        Pat.Var 60 61
+                          Term.Name 60 61
+                        Term.Name 62 64
+                        Pat.ArgClause 65 67
+                          Pat.Var 65 67
+                            Term.Name 65 67
+                      Term.Apply 71 81
+                        Term.Name 71 78
+                        Term.ArgClause 78 81
+                          Term.Name 79 80
+                    Case 84 110
+                      Term.Name 89 92
+                      Term.Apply 96 110
+                        Term.Name 96 103
+                        Term.ArgClause 103 110
+                          Lit.String 104 109
+                Term.CasesBlock 121 197
+                  Case 121 164
+                    Pat.Typed 126 149
+                      Pat.Var 126 128
+                        Term.Name 126 128
+                      Type.Select 130 149
+                        Term.Select 130 137
+                          Term.Name 130 134
+                          Term.Name 135 137
+                        Type.Name 138 149
+                    Term.Apply 153 164
+                      Term.Name 153 160
+                      Term.ArgClause 160 164
+                        Term.Name 161 163
+                  Case 167 197
+                    Pat.Typed 172 185
+                      Pat.Var 172 174
+                        Term.Name 172 174
+                      Type.Name 176 185
+                    Term.Throw 189 197
+                      Term.Name 195 197
+              Term.EndMarker 200 207
+                Term.Name 204 207
+#!program 141 line 2860 Stat dialects.Scala3 :: comma-indent
+object W141 {
+def f(x: Int) =
+  assert(
+    if x > 0 then
+      true
+    else
+      if x < 0 then
+        true
+      else
+        false, "fail")
+
+}
+#!scalac ok
+#!regions I29/2 I57/6.2 O68/2 I77/6.2 I97/8.6.2 O110/6.2 I121/8.6.2 O130/6.2 O130/2 O145/
+#!layout
+Source 0 148
+  Defn.Object 0 147
+    Term.Name 7 11
+    Template 12 147
+      Template.Body 12 147
+        Defn.Def 14 144
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 27
+            Type.ParamClause 19 19
+            Term.ParamClause 19 27
+              Term.Param 20 26
+                Term.Name 20 21
+                Type.Name 23 26
+          Term.Apply 32 144
+            Term.Name 32 38
+            Term.ArgClause 38 144
+              Term.If 44 135
+                Term.ApplyInfix 47 52
+                  Term.Name 47 48
+                  Term.Name 49 50
+                  Type.ArgClause 51 51
+                  Term.ArgClause 51 52
+                    Lit.Int 51 52
+                Lit.Boolean 64 68
+                Term.If 84 135
+                  Term.ApplyInfix 87 92
+                    Term.Name 87 88
+                    Term.Name 89 90
+                    Type.ArgClause 91 91
+                    Term.ArgClause 91 92
+                      Lit.Int 91 92
+                  Lit.Boolean 106 110
+                  Lit.Boolean 130 135
+              Lit.String 137 143
+#!program 142 line 2895 Stat dialects.Scala3 :: if-then 1
+object W142 {
+object foo:
+  def bar =
+    if map:
+      op(c == true)
+    then err(context)
+
+}
+#!scalac ok
+#!regions I25/2 I37/4.2 I49/6.4.2 O69/4.2 L69/4.2 O92/2 O92/
+#!layout
+Source 0 95
+  Defn.Object 0 94
+    Term.Name 7 11
+    Template 12 94
+      Template.Body 12 94
+        Defn.Object 14 91
+          Term.Name 21 24
+          Template 24 91
+            Template.Body 24 91
+              Defn.Def 28 91
+                Term.Name 32 35
+                Term.If 42 91
+                  Term.Apply 45 69
+                    Term.Name 45 48
+                    Term.ArgClause 48 69
+                      Term.Block 48 69
+                        Term.Apply 56 69
+                          Term.Name 56 58
+                          Term.ArgClause 58 69
+                            Term.ApplyInfix 59 68
+                              Term.Name 59 60
+                              Term.Name 61 63
+                              Type.ArgClause 64 64
+                              Term.ArgClause 64 68
+                                Lit.Boolean 64 68
+                  Term.Apply 79 91
+                    Term.Name 79 82
+                    Term.ArgClause 82 91
+                      Term.Name 83 90
+                  Lit.Unit 92 92
+#!program 143 line 2929 Stat dialects.Scala3 :: if-then 2
+object W143 {
+object foo:
+  def bar =
+    if (a + b) { op(c == true) } then err(context)
+
+}
+#!scalac ok
+#!regions I25/2 I37/4.2 O89/2 O89/
+#!layout
+Source 0 92
+  Defn.Object 0 91
+    Term.Name 7 11
+    Template 12 91
+      Template.Body 12 91
+        Defn.Object 14 88
+          Term.Name 21 24
+          Template 24 88
+            Template.Body 24 88
+              Defn.Def 28 88
+                Term.Name 32 35
+                Term.If 42 88
+                  Term.Apply 45 70
+                    Term.ApplyInfix 46 51
+                      Term.Name 46 47
+                      Term.Name 48 49
+                      Type.ArgClause 50 50
+                      Term.ArgClause 50 51
+                        Term.Name 50 51
+                    Term.ArgClause 53 70
+                      Term.Block 53 70
+                        Term.Apply 55 68
+                          Term.Name 55 57
+                          Term.ArgClause 57 68
+                            Term.ApplyInfix 58 67
+                              Term.Name 58 59
+                              Term.Name 60 62
+                              Type.ArgClause 63 63
+                              Term.ArgClause 63 67
+                                Lit.Boolean 63 67
+                  Term.Apply 76 88
+                    Term.Name 76 79
+                    Term.ArgClause 79 88
+                      Term.Name 80 87
+                  Lit.Unit 89 89
+#!program 144 line 2964 Stat dialects.Scala3 :: if-then 3
+object W144 {
+object foo:
+  def bar =
+    if (a + b) op c == true then err(context)
+
+}
+#!scalac ok
+#!regions I25/2 I37/4.2 O84/2 O84/
+#!layout
+Source 0 87
+  Defn.Object 0 86
+    Term.Name 7 11
+    Template 12 86
+      Template.Body 12 86
+        Defn.Object 14 83
+          Term.Name 21 24
+          Template 24 83
+            Template.Body 24 83
+              Defn.Def 28 83
+                Term.Name 32 35
+                Term.If 42 83
+                  Term.ApplyInfix 45 65
+                    Term.ApplyInfix 46 51
+                      Term.Name 46 47
+                      Term.Name 48 49
+                      Type.ArgClause 50 50
+                      Term.ArgClause 50 51
+                        Term.Name 50 51
+                    Term.Name 53 55
+                    Type.ArgClause 56 56
+                    Term.ArgClause 56 65
+                      Term.ApplyInfix 56 65
+                        Term.Name 56 57
+                        Term.Name 58 60
+                        Type.ArgClause 61 61
+                        Term.ArgClause 61 65
+                          Lit.Boolean 61 65
+                  Term.Apply 71 83
+                    Term.Name 71 74
+                    Term.ArgClause 74 83
+                      Term.Name 75 82
+                  Lit.Unit 84 84
+#!program 145 line 2992 Stat dialects.Scala3 :: if-then 4
+object W145 {
+object foo:
+  def bar =
+    if (a + b) op c err(context)
+
+}
+#!scalac ok
+#!regions I25/2 I37/4.2 O71/2 O71/
+#!layout
+Source 0 74
+  Defn.Object 0 73
+    Term.Name 7 11
+    Template 12 73
+      Template.Body 12 73
+        Defn.Object 14 70
+          Term.Name 21 24
+          Template 24 70
+            Template.Body 24 70
+              Defn.Def 28 70
+                Term.Name 32 35
+                Term.If 42 70
+                  Term.ApplyInfix 46 51
+                    Term.Name 46 47
+                    Term.Name 48 49
+                    Type.ArgClause 50 50
+                    Term.ArgClause 50 51
+                      Term.Name 50 51
+                  Term.ApplyInfix 53 70
+                    Term.Name 53 55
+                    Term.Name 56 57
+                    Type.ArgClause 58 58
+                    Term.ArgClause 58 70
+                      Term.Apply 58 70
+                        Term.Name 58 61
+                        Term.ArgClause 61 70
+                          Term.Name 62 69
+                  Lit.Unit 71 71
+#!program 146 line 3020 Stat dialects.Scala3 :: if-then 5
+object W146 {
+object foo:
+  def bar =
+    if (a + b) (op c err(context))
+
+}
+#!scalac ok
+#!regions I25/2 I37/4.2 O73/2 O73/
+#!layout
+Source 0 76
+  Defn.Object 0 75
+    Term.Name 7 11
+    Template 12 75
+      Template.Body 12 75
+        Defn.Object 14 72
+          Term.Name 21 24
+          Template 24 72
+            Template.Body 24 72
+              Defn.Def 28 72
+                Term.Name 32 35
+                Term.If 42 72
+                  Term.ApplyInfix 46 51
+                    Term.Name 46 47
+                    Term.Name 48 49
+                    Type.ArgClause 50 50
+                    Term.ArgClause 50 51
+                      Term.Name 50 51
+                  Term.ApplyInfix 54 71
+                    Term.Name 54 56
+                    Term.Name 57 58
+                    Type.ArgClause 59 59
+                    Term.ArgClause 59 71
+                      Term.Apply 59 71
+                        Term.Name 59 62
+                        Term.ArgClause 62 71
+                          Term.Name 63 70
+                  Lit.Unit 73 73
+#!program 147 line 3069 Stat dialects.Scala3 :: if-then 6
+object W147 {
+object a {
+  constraint.contains(tl) || other.isRemovable(tl) || {
+          val tvars = tl.paramRefs.map(other.typeVarOfParam(_)).collect { case tv: TypeVar => tv }
+          if this.isCommittable then
+            tvars.foreach(tvar => if !tvar.inst.exists && !isOwnedAnywhere(this, tvar) then includeVar(tvar))
+          typeComparer.addToConstraint(tl, tvars)
+        }
+}
+
+}
+#!scalac ok
+#!regions L179/ I216/12 O326/ L326/ L376/ L386/ F388/
+#!layout
+Source 0 392
+  Defn.Object 0 391
+    Term.Name 7 11
+    Template 12 391
+      Template.Body 12 391
+        Defn.Object 14 388
+          Term.Name 21 22
+          Template 23 388
+            Template.Body 23 388
+              Term.ApplyInfix 27 386
+                Term.ApplyInfix 27 75
+                  Term.Apply 27 50
+                    Term.Select 27 46
+                      Term.Name 27 37
+                      Term.Name 38 46
+                    Term.ArgClause 46 50
+                      Term.Name 47 49
+                  Term.Name 51 53
+                  Type.ArgClause 54 54
+                  Term.ArgClause 54 75
+                    Term.Apply 54 75
+                      Term.Select 54 71
+                        Term.Name 54 59
+                        Term.Name 60 71
+                      Term.ArgClause 71 75
+                        Term.Name 72 74
+                Term.Name 76 78
+                Type.ArgClause 79 79
+                Term.ArgClause 79 386
+                  Term.Block 79 386
+                    Defn.Val 91 179
+                      Pat.Var 95 100
+                        Term.Name 95 100
+                      Term.Apply 103 179
+                        Term.Select 103 152
+                          Term.Apply 103 144
+                            Term.Select 103 119
+                              Term.Select 103 115
+                                Term.Name 103 105
+                                Term.Name 106 115
+                              Term.Name 116 119
+                            Term.ArgClause 119 144
+                              Term.AnonymousFunction 120 143
+                                Term.Apply 120 143
+                                  Term.Select 120 140
+                                    Term.Name 120 125
+                                    Term.Name 126 140
+                                  Term.ArgClause 140 143
+                                    Term.Placeholder 141 142
+                          Term.Name 145 152
+                        Term.ArgClause 153 179
+                          Term.PartialFunction 153 179
+                            Case 155 177
+                              Pat.Typed 160 171
+                                Pat.Var 160 162
+                                  Term.Name 160 162
+                                Type.Name 164 171
+                              Term.Name 175 177
+                    Term.If 190 326
+                      Term.Select 193 211
+                        Term.This 193 197
+                          Name.Anonymous 193 193
+                        Term.Name 198 211
+                      Term.Apply 229 326
+                        Term.Select 229 242
+                          Term.Name 229 234
+                          Term.Name 235 242
+                        Term.ArgClause 242 326
+                          Term.Function 243 325
+                            Term.ParamClause 243 247
+                              Term.Param 243 247
+                                Term.Name 243 247
+                            Term.If 251 325
+                              Term.ApplyInfix 254 303
+                                Term.ApplyUnary 254 271
+                                  Term.Name 254 255
+                                  Term.Select 255 271
+                                    Term.Select 255 264
+                                      Term.Name 255 259
+                                      Term.Name 260 264
+                                    Term.Name 265 271
+                                Term.Name 272 274
+                                Type.ArgClause 275 275
+                                Term.ArgClause 275 303
+                                  Term.ApplyUnary 275 303
+                                    Term.Name 275 276
+                                    Term.Apply 276 303
+                                      Term.Name 276 291
+                                      Term.ArgClause 291 303
+                                        Term.This 292 296
+                                          Name.Anonymous 292 292
+                                        Term.Name 298 302
+                              Term.Apply 309 325
+                                Term.Name 309 319
+                                Term.ArgClause 319 325
+                                  Term.Name 320 324
+                              Lit.Unit 325 325
+                      Lit.Unit 326 326
+                    Term.Apply 337 376
+                      Term.Select 337 365
+                        Term.Name 337 349
+                        Term.Name 350 365
+                      Term.ArgClause 365 376
+                        Term.Name 366 368
+                        Term.Name 370 375
+#!program 148 line 3148 Stat dialects.Scala3 :: if-then 7
+object W148 {
+
+  private def genScalaClass(td: TypeDef): js.ClassDef = {
+    val hashedDefs = ir.Hashers.hashMemberDefs(allMemberDefs)
+
+    val kind =
+      if (isStaticModule(sym)) ClassKind.ModuleClass
+      else if (isHijacked) ClassKind.HijackedClass
+      else ClassKind.Class
+  }
+
+}
+#!scalac ok
+#!regions F134/ I150/6 O281/ L281/ F285/
+#!layout
+Source 0 289
+  Defn.Object 0 288
+    Term.Name 7 11
+    Template 12 288
+      Template.Body 12 288
+        Defn.Def 17 285
+          Mod.Private 17 24
+            Name.Anonymous 25 25
+          Term.Name 29 42
+          Member.ParamClauseGroup 42 55
+            Type.ParamClause 42 42
+            Term.ParamClause 42 55
+              Term.Param 43 54
+                Term.Name 43 45
+                Type.Name 47 54
+          Type.Select 57 68
+            Term.Name 57 59
+            Type.Name 60 68
+          Term.Block 71 285
+            Defn.Val 77 134
+              Pat.Var 81 91
+                Term.Name 81 91
+              Term.Apply 94 134
+                Term.Select 94 119
+                  Term.Select 94 104
+                    Term.Name 94 96
+                    Term.Name 97 104
+                  Term.Name 105 119
+                Term.ArgClause 119 134
+                  Term.Name 120 133
+            Defn.Val 140 281
+              Pat.Var 144 148
+                Term.Name 144 148
+              Term.If 157 281
+                Term.Apply 161 180
+                  Term.Name 161 175
+                  Term.ArgClause 175 180
+                    Term.Name 176 179
+                Term.Select 182 203
+                  Term.Name 182 191
+                  Term.Name 192 203
+                Term.If 215 281
+                  Term.Name 219 229
+                  Term.Select 231 254
+                    Term.Name 231 240
+                    Term.Name 241 254
+                  Term.Select 266 281
+                    Term.Name 266 275
+                    Term.Name 276 281
+#!program 149 line 3184 Stat dialects.Scala3 :: try catch with case guard
+object W149 {
+arg match {
+  case arg: Showable =>
+    try arg.show
+    catch {
+      case ex: CyclicReference => "... (caught cyclic reference) ..."
+      case NonFatal(ex)
+      if !ctx.mode.is(Mode.PrintShowExceptions) &&
+         !ctx.settings.YshowPrintErrors.value =>
+        val msg = ex match
+          case te: TypeError => te.toMessage
+          case _ => ex.getMessage
+        s"[cannot display due to $msg, raw string = ${arg.toString}]"
+    }
+  case _ => String.valueOf(arg)
+}
+
+}
+#!scalac ok
+#!regions L148/ I299/10 L344/10 O378/ L378/ L448/ L454/ L486/ F488/
+#!layout
+Source 0 492
+  Defn.Object 0 491
+    Term.Name 7 11
+    Template 12 491
+      Template.Body 12 491
+        Term.Match 14 488
+          Term.Name 14 17
+          Term.CasesBlock 24 488
+            Case 28 454
+              Pat.Typed 33 46
+                Pat.Var 33 36
+                  Term.Name 33 36
+                Type.Name 38 46
+              Term.Try 54 454
+                Term.Select 58 66
+                  Term.Name 58 61
+                  Term.Name 62 66
+                Term.CasesBlock 77 454
+                  Case 85 148
+                    Pat.Typed 90 109
+                      Pat.Var 90 92
+                        Term.Name 90 92
+                      Type.Name 94 109
+                    Lit.String 113 148
+                  Case 155 448
+                    Pat.Extract 160 172
+                      Term.Name 160 168
+                      Pat.ArgClause 168 172
+                        Pat.Var 169 171
+                          Term.Name 169 171
+                    Term.ApplyInfix 182 269
+                      Term.ApplyUnary 182 220
+                        Term.Name 182 183
+                        Term.Apply 183 220
+                          Term.Select 183 194
+                            Term.Select 183 191
+                              Term.Name 183 186
+                              Term.Name 187 191
+                            Term.Name 192 194
+                          Term.ArgClause 194 220
+                            Term.Select 195 219
+                              Term.Name 195 199
+                              Term.Name 200 219
+                      Term.Name 221 223
+                      Type.ArgClause 233 233
+                      Term.ArgClause 233 269
+                        Term.ApplyUnary 233 269
+                          Term.Name 233 234
+                          Term.Select 234 269
+                            Term.Select 234 263
+                              Term.Select 234 246
+                                Term.Name 234 237
+                                Term.Name 238 246
+                              Term.Name 247 263
+                            Term.Name 264 269
+                    Term.Block 281 448
+                      Defn.Val 281 378
+                        Pat.Var 285 288
+                          Term.Name 285 288
+                        Term.Match 291 378
+                          Term.Name 291 293
+                          Term.CasesBlock 310 378
+                            Case 310 344
+                              Pat.Typed 315 328
+                                Pat.Var 315 317
+                                  Term.Name 315 317
+                                Type.Name 319 328
+                              Term.Select 332 344
+                                Term.Name 332 334
+                                Term.Name 335 344
+                            Case 355 378
+                              Pat.Wildcard 360 361
+                              Term.Select 365 378
+                                Term.Name 365 367
+                                Term.Name 368 378
+                      Term.Interpolate 387 448
+                        Term.Name 387 388
+                        Lit.String 389 412
+                        Lit.String 416 431
+                        Lit.String 446 447
+                        Term.Name 413 416
+                        Term.Block 432 446
+                          Term.Select 433 445
+                            Term.Name 433 436
+                            Term.Name 437 445
+            Case 457 486
+              Pat.Wildcard 462 463
+              Term.Apply 467 486
+                Term.Select 467 481
+                  Term.Name 467 473
+                  Term.Name 474 481
+                Term.ArgClause 481 486
+                  Term.Name 482 485
+#!program 150 line 3279 Stat dialects.Scala3 :: partial function with guard
+object W150 {
+val tvars = targs.filter(_.isInstanceOf[InferredTypeTree]).tpes.collect {
+  case tvar: TypeVar
+  if !tvar.isInstantiated &&
+     ctx.typerState.ownedVars.contains(tvar) &&
+     !locked.contains(tvar) => tvar
+}
+
+}
+#!scalac ok
+#!regions L221/ F223/
+#!layout
+Source 0 227
+  Defn.Object 0 226
+    Term.Name 7 11
+    Template 12 226
+      Template.Body 12 226
+        Defn.Val 14 223
+          Pat.Var 18 23
+            Term.Name 18 23
+          Term.Apply 26 223
+            Term.Select 26 85
+              Term.Select 26 77
+                Term.Apply 26 72
+                  Term.Select 26 38
+                    Term.Name 26 31
+                    Term.Name 32 38
+                  Term.ArgClause 38 72
+                    Term.AnonymousFunction 39 71
+                      Term.ApplyType 39 71
+                        Term.Select 39 53
+                          Term.Placeholder 39 40
+                          Term.Name 41 53
+                        Type.ArgClause 53 71
+                          Type.Name 54 70
+                Term.Name 73 77
+              Term.Name 78 85
+            Term.ArgClause 86 223
+              Term.PartialFunction 86 223
+                Case 90 221
+                  Pat.Typed 95 108
+                    Pat.Var 95 99
+                      Term.Name 95 99
+                    Type.Name 101 108
+                  Term.ApplyInfix 114 213
+                    Term.ApplyInfix 114 182
+                      Term.ApplyUnary 114 134
+                        Term.Name 114 115
+                        Term.Select 115 134
+                          Term.Name 115 119
+                          Term.Name 120 134
+                      Term.Name 135 137
+                      Type.ArgClause 143 143
+                      Term.ArgClause 143 182
+                        Term.Apply 143 182
+                          Term.Select 143 176
+                            Term.Select 143 167
+                              Term.Select 143 157
+                                Term.Name 143 146
+                                Term.Name 147 157
+                              Term.Name 158 167
+                            Term.Name 168 176
+                          Term.ArgClause 176 182
+                            Term.Name 177 181
+                    Term.Name 183 185
+                    Type.ArgClause 191 191
+                    Term.ArgClause 191 213
+                      Term.ApplyUnary 191 213
+                        Term.Name 191 192
+                        Term.Apply 192 213
+                          Term.Select 192 207
+                            Term.Name 192 198
+                            Term.Name 199 207
+                          Term.ArgClause 207 213
+                            Term.Name 208 212
+                  Term.Name 217 221
+#!program 151 line 3332 Stat dialects.Scala3 :: nested if else without indent
+object W151 {
+if columnsVar != null then columnsVar.toInt
+else if Properties.isWin then
+  if ansiconVar != null then
+    ansiconVar.toInt
+  else defaultWidth
+else defaultWidth
+
+}
+#!scalac ok
+#!regions I87/2 I116/4.2 O137/2 O157/ F175/
+#!layout
+Source 0 179
+  Defn.Object 0 178
+    Term.Name 7 11
+    Template 12 178
+      Template.Body 12 178
+        Term.If 14 175
+          Term.ApplyInfix 17 35
+            Term.Name 17 27
+            Term.Name 28 30
+            Type.ArgClause 31 31
+            Term.ArgClause 31 35
+              Lit.Null 31 35
+          Term.Select 41 57
+            Term.Name 41 51
+            Term.Name 52 57
+          Term.If 63 175
+            Term.Select 66 82
+              Term.Name 66 76
+              Term.Name 77 82
+            Term.If 90 157
+              Term.ApplyInfix 93 111
+                Term.Name 93 103
+                Term.Name 104 106
+                Type.ArgClause 107 107
+                Term.ArgClause 107 111
+                  Lit.Null 107 111
+              Term.Select 121 137
+                Term.Name 121 131
+                Term.Name 132 137
+              Term.Name 145 157
+            Term.Name 163 175
+#!program 152 line 3363 Stat dialects.Scala3 :: if-then without else
+object W152 {
+object foo:
+  private def assertBounds(context: String) =
+    if idx >= query.length then err(context)
+
+  private def err(problem: String) =
+    throw new QueryParseException(query, idx, problem)
+
+}
+#!scalac ok
+#!regions I25/2 I71/4.2 O117/2 F117/2 I154/4.2 O210/2 O210/
+#!layout
+Source 0 213
+  Defn.Object 0 212
+    Term.Name 7 11
+    Template 12 212
+      Template.Body 12 212
+        Defn.Object 14 209
+          Term.Name 21 24
+          Template 24 209
+            Template.Body 24 209
+              Defn.Def 28 116
+                Mod.Private 28 35
+                  Name.Anonymous 36 36
+                Term.Name 40 52
+                Member.ParamClauseGroup 52 69
+                  Type.ParamClause 52 52
+                  Term.ParamClause 52 69
+                    Term.Param 53 68
+                      Term.Name 53 60
+                      Type.Name 62 68
+                Term.If 76 116
+                  Term.ApplyInfix 79 98
+                    Term.Name 79 82
+                    Term.Name 83 85
+                    Type.ArgClause 86 86
+                    Term.ArgClause 86 98
+                      Term.Select 86 98
+                        Term.Name 86 91
+                        Term.Name 92 98
+                  Term.Apply 104 116
+                    Term.Name 104 107
+                    Term.ArgClause 107 116
+                      Term.Name 108 115
+                  Lit.Unit 117 117
+              Defn.Def 120 209
+                Mod.Private 120 127
+                  Name.Anonymous 128 128
+                Term.Name 132 135
+                Member.ParamClauseGroup 135 152
+                  Type.ParamClause 135 135
+                  Term.ParamClause 135 152
+                    Term.Param 136 151
+                      Term.Name 136 143
+                      Type.Name 145 151
+                Term.Throw 159 209
+                  Term.New 165 209
+                    Init 169 209
+                      Type.Name 169 188
+                      Name.Anonymous 188 188
+                      Term.ArgClause 188 209
+                        Term.Name 189 194
+                        Term.Name 196 199
+                        Term.Name 201 208
+#!program 153 line 3412 Stat dialects.Scala3 :: old-style if
+object W153 {
+while (idx < str.length)
+  if ((str charAt idx) != '$' || isEscaped)
+    idx += 1
+  else
+    idx
+
+}
+#!scalac ok
+#!regions I38/2 I82/4.2 O95/2 I102/4.2 O111/2 O111/
+#!layout
+Source 0 114
+  Defn.Object 0 113
+    Term.Name 7 11
+    Template 12 113
+      Template.Body 12 113
+        Term.While 14 110
+          Term.ApplyInfix 21 37
+            Term.Name 21 24
+            Term.Name 25 26
+            Type.ArgClause 27 27
+            Term.ArgClause 27 37
+              Term.Select 27 37
+                Term.Name 27 30
+                Term.Name 31 37
+          Term.If 41 110
+            Term.ApplyInfix 45 81
+              Term.ApplyInfix 45 68
+                Term.ApplyInfix 46 60
+                  Term.Name 46 49
+                  Term.Name 50 56
+                  Type.ArgClause 57 57
+                  Term.ArgClause 57 60
+                    Term.Name 57 60
+                Term.Name 62 64
+                Type.ArgClause 65 65
+                Term.ArgClause 65 68
+                  Lit.Char 65 68
+              Term.Name 69 71
+              Type.ArgClause 72 72
+              Term.ArgClause 72 81
+                Term.Name 72 81
+            Term.ApplyInfix 87 95
+              Term.Name 87 90
+              Term.Name 91 93
+              Type.ArgClause 94 94
+              Term.ArgClause 94 95
+                Lit.Int 94 95
+            Term.Name 107 110
+#!program 154 line 3439 Stat dialects.Scala3 :: old-style for and if
+object W154 {
+for (c <- str)
+    if (c == '\n') { line += 1; char = 0 } else { char += 1 }
+
+}
+#!scalac ok
+#!regions I28/4 O91/
+#!layout
+Source 0 94
+  Defn.Object 0 93
+    Term.Name 7 11
+    Template 12 93
+      Template.Body 12 93
+        Term.For 14 90
+          Term.EnumeratorsBlock 18 28
+            Enumerator.Generator 19 27
+              Pat.Var 19 20
+                Term.Name 19 20
+              Term.Name 24 27
+          Term.If 33 90
+            Term.ApplyInfix 37 46
+              Term.Name 37 38
+              Term.Name 39 41
+              Type.ArgClause 42 42
+              Term.ArgClause 42 46
+                Lit.Char 42 46
+            Term.Block 48 71
+              Term.ApplyInfix 50 59
+                Term.Name 50 54
+                Term.Name 55 57
+                Type.ArgClause 58 58
+                Term.ArgClause 58 59
+                  Lit.Int 58 59
+              Term.Assign 61 69
+                Term.Name 61 65
+                Lit.Int 68 69
+            Term.Block 77 90
+              Term.ApplyInfix 79 88
+                Term.Name 79 83
+                Term.Name 84 86
+                Type.ArgClause 87 87
+                Term.ArgClause 87 88
+                  Lit.Int 87 88
+#!program 155 line 3486 Stat dialects.Scala3 :: several if-then, some nested
+object W155 {
+classDef
+      .foreach {
+        case typeSymbol: Symbol =>
+          if typ then {
+            // foo
+          }
+          if typeDef then
+            if typJava then {
+              // foo
+            }
+        case _ =>
+    }
+
+}
+#!scalac ok
+#!regions L129/ I155/12 O220/ L220/ F244/
+#!layout
+Source 0 248
+  Defn.Object 0 247
+    Term.Name 7 11
+    Template 12 247
+      Template.Body 12 247
+        Term.Apply 14 244
+          Term.Select 14 37
+            Term.Name 14 22
+            Term.Name 30 37
+          Term.ArgClause 38 244
+            Term.PartialFunction 38 244
+              Case 48 220
+                Pat.Typed 53 71
+                  Pat.Var 53 63
+                    Term.Name 53 63
+                  Type.Name 65 71
+                Term.Block 85 220
+                  Term.If 85 129
+                    Term.Name 88 91
+                    Term.Block 97 129
+                    Lit.Unit 129 129
+                  Term.If 140 220
+                    Term.Name 143 150
+                    Term.If 168 220
+                      Term.Name 171 178
+                      Term.Block 184 220
+                      Lit.Unit 220 220
+                    Lit.Unit 220 220
+              Case 229 238
+                Pat.Wildcard 234 235
+                Term.Block 243 243
+#!program 156 line 3521 Stat dialects.Scala3 :: old-style if, with outdent
+object W156 {
+if (indexes.size > 1)
+          val msg = s"ERROR: Multiple index pages for doc found ${indexes.map(_.file)}"
+          report.error(msg)
+
+}
+#!scalac ok
+#!regions I35/10 L123/10 O152/
+#!layout
+Source 0 155
+  Defn.Object 0 154
+    Term.Name 7 11
+    Template 12 154
+      Template.Body 12 154
+        Term.If 14 151
+          Term.ApplyInfix 18 34
+            Term.Select 18 30
+              Term.Name 18 25
+              Term.Name 26 30
+            Term.Name 31 32
+            Type.ArgClause 33 33
+            Term.ArgClause 33 34
+              Lit.Int 33 34
+          Term.Block 46 151
+            Defn.Val 46 123
+              Pat.Var 50 53
+                Term.Name 50 53
+              Term.Interpolate 56 123
+                Term.Name 56 57
+                Lit.String 58 100
+                Lit.String 122 122
+                Term.Block 101 122
+                  Term.Apply 102 121
+                    Term.Select 102 113
+                      Term.Name 102 109
+                      Term.Name 110 113
+                    Term.ArgClause 113 121
+                      Term.AnonymousFunction 114 120
+                        Term.Select 114 120
+                          Term.Placeholder 114 115
+                          Term.Name 116 120
+            Term.Apply 134 151
+              Term.Select 134 146
+                Term.Name 134 140
+                Term.Name 141 146
+              Term.ArgClause 146 151
+                Term.Name 147 150
+          Lit.Unit 153 153
+#!program 157 line 3558 Stat dialects.Scala3 :: if-then in parens
+object W157 {
+{
+  if this then
+    tvars.foreach(tvar => if !tvar then includeVar(tvar))
+  typeComparer.addToConstraint(tvars)
+}
+
+}
+#!scalac ok
+#!regions I30/4 O88/ L88/ L126/ F128/
+#!layout
+Source 0 132
+  Defn.Object 0 131
+    Term.Name 7 11
+    Template 12 131
+      Template.Body 12 131
+        Term.Block 14 128
+          Term.If 18 88
+            Term.This 21 25
+              Name.Anonymous 21 21
+            Term.Apply 35 88
+              Term.Select 35 48
+                Term.Name 35 40
+                Term.Name 41 48
+              Term.ArgClause 48 88
+                Term.Function 49 87
+                  Term.ParamClause 49 53
+                    Term.Param 49 53
+                      Term.Name 49 53
+                  Term.If 57 87
+                    Term.ApplyUnary 60 65
+                      Term.Name 60 61
+                      Term.Name 61 65
+                    Term.Apply 71 87
+                      Term.Name 71 81
+                      Term.ArgClause 81 87
+                        Term.Name 82 86
+                    Lit.Unit 87 87
+            Lit.Unit 88 88
+          Term.Apply 91 126
+            Term.Select 91 119
+              Term.Name 91 103
+              Term.Name 104 119
+            Term.ArgClause 119 126
+              Term.Name 120 125
+#!program 158 line 3594 Stat dialects.Scala3 :: for-if in parens
+object W158 {
+{
+  val abstractTypeNames =
+    for (parent <- parents; mbr <- parent.abstractTypeMembers if qualifies(mbr.symbol))
+    yield mbr.name.asTypeName
+
+  for name <- abstractTypeNames do
+    foo
+}
+
+}
+#!scalac ok
+#!regions I41/4 O160/ F160/ I195/4 O203/ L203/ F205/
+#!layout
+Source 0 209
+  Defn.Object 0 208
+    Term.Name 7 11
+    Template 12 208
+      Template.Body 12 208
+        Term.Block 14 205
+          Defn.Val 18 159
+            Pat.Var 22 39
+              Term.Name 22 39
+            Term.ForYield 46 159
+              Term.EnumeratorsBlock 50 129
+                Enumerator.Generator 51 68
+                  Pat.Var 51 57
+                    Term.Name 51 57
+                  Term.Name 61 68
+                Enumerator.Generator 70 103
+                  Pat.Var 70 73
+                    Term.Name 70 73
+                  Term.Select 77 103
+                    Term.Name 77 83
+                    Term.Name 84 103
+                Enumerator.Guard 104 128
+                  Term.Apply 107 128
+                    Term.Name 107 116
+                    Term.ArgClause 116 128
+                      Term.Select 117 127
+                        Term.Name 117 120
+                        Term.Name 121 127
+              Term.Select 140 159
+                Term.Select 140 148
+                  Term.Name 140 143
+                  Term.Name 144 148
+                Term.Name 149 159
+          Term.For 163 203
+            Term.EnumeratorsBlock 167 192
+              Enumerator.Generator 167 192
+                Pat.Var 167 171
+                  Term.Name 167 171
+                Term.Name 175 192
+            Term.Name 200 203
+#!program 159 line 3629 Stat dialects.Scala3 :: several nested if, with () as body
+object W159 {
+
+  if !other
+  then
+    if (member)
+      ()
+    else
+      overrideError()
+  else
+    checkOverrideDeprecated()
+
+}
+#!scalac ok
+#!regions L26/ I33/4 I49/6.4 O58/4 I67/6.4 O89/4 O89/ I96/4 O127/
+#!layout
+Source 0 130
+  Defn.Object 0 129
+    Term.Name 7 11
+    Template 12 129
+      Template.Body 12 129
+        Term.If 17 126
+          Term.ApplyUnary 20 26
+            Term.Name 20 21
+            Term.Name 21 26
+          Term.If 38 89
+            Term.Name 42 48
+            Lit.Unit 56 58
+            Term.Apply 74 89
+              Term.Name 74 87
+              Term.ArgClause 87 89
+          Term.Apply 101 126
+            Term.Name 101 124
+            Term.ArgClause 124 126
+#!program 160 line 3676 Stat dialects.Scala3 :: match with dedented single case
+object W160 {
+val a = this match
+      case a =>
+         that match
+        case b => bb
+         end match
+      case b =>
+         that match
+        case c => cc
+
+}
+#!scalac refuses: '{' expected, but 'case' found
+#!regions I32/6 I48/9.6 I68/8.9.6 L89/8.9.6 O108/9.6 O108/6 L108/6 I124/9.6 I144/8.9.6 O166/9.6 O166/6 O166/
+#!layout
+Source 0 169
+  Defn.Object 0 168
+    Term.Name 7 11
+    Template 12 168
+      Template.Body 12 168
+        Defn.Val 14 165
+          Pat.Var 18 19
+            Term.Name 18 19
+          Term.Match 22 165
+            Term.This 22 26
+              Name.Anonymous 22 22
+            Term.CasesBlock 39 165
+              Case 39 108
+                Pat.Var 44 45
+                  Term.Name 44 45
+                Term.Match 58 108
+                  Term.Name 58 62
+                  Term.CasesBlock 77 108
+                    Case 77 108
+                      Pat.Var 82 83
+                        Term.Name 82 83
+                      Term.Block 87 108
+                        Term.Name 87 89
+                        Term.EndMarker 99 108
+                          Term.Name 103 108
+              Case 115 165
+                Pat.Var 120 121
+                  Term.Name 120 121
+                Term.Match 134 165
+                  Term.Name 134 138
+                  Term.CasesBlock 153 165
+                    Case 153 165
+                      Pat.Var 158 159
+                        Term.Name 158 159
+                      Term.Name 163 165
+#!program 161 line 3716 Stat dialects.Scala3 :: single-line try within catch case, then another case
+object W161 {
+try foo
+catch
+case _ =>
+    try bar finally qux
+    try bar catch baz finally qux
+    try bar catch case _ => baz finally qux
+case xyz =>
+
+}
+#!scalac ok
+#!regions I27/0 I37/4.0 L61/4.0 L95/4.0 I114/4.4.0 O124/4.0 O139/0 L139/0 O152/
+#!layout
+Source 0 155
+  Defn.Object 0 154
+    Term.Name 7 11
+    Template 12 154
+      Template.Body 12 154
+        Term.Try 14 151
+          Term.Name 18 21
+          Term.CasesBlock 28 151
+            Case 28 139
+              Pat.Wildcard 33 34
+              Term.Block 42 139
+                Term.Try 42 61
+                  Term.Name 46 49
+                  Term.Name 58 61
+                Term.TryWithHandler 66 95
+                  Term.Name 70 73
+                  Term.Name 80 83
+                  Term.Name 92 95
+                Term.Try 100 139
+                  Term.Name 104 107
+                  Term.CasesBlock 114 127
+                    Case 114 127
+                      Pat.Wildcard 119 120
+                      Term.Name 124 127
+                  Term.Name 136 139
+            Case 140 151
+              Pat.Var 145 148
+                Term.Name 145 148
+              Term.Block 152 152
+#!program 162 line 3754 Stat dialects.Scala3 :: single-line try within catch case, then finally
+object W162 {
+try foo
+catch
+case _ =>
+    try bar finally qux
+    try bar catch baz finally qux
+    try bar catch case _ => baz finally qux
+finally xyz
+
+}
+#!scalac ok
+#!regions I27/0 I37/4.0 L61/4.0 L95/4.0 I114/4.4.0 O124/4.0 O139/0 O139/ F151/
+#!layout
+Source 0 155
+  Defn.Object 0 154
+    Term.Name 7 11
+    Template 12 154
+      Template.Body 12 154
+        Term.Try 14 151
+          Term.Name 18 21
+          Term.CasesBlock 28 139
+            Case 28 139
+              Pat.Wildcard 33 34
+              Term.Block 42 139
+                Term.Try 42 61
+                  Term.Name 46 49
+                  Term.Name 58 61
+                Term.TryWithHandler 66 95
+                  Term.Name 70 73
+                  Term.Name 80 83
+                  Term.Name 92 95
+                Term.Try 100 139
+                  Term.Name 104 107
+                  Term.CasesBlock 114 127
+                    Case 114 127
+                      Pat.Wildcard 119 120
+                      Term.Name 124 127
+                  Term.Name 136 139
+          Term.Name 148 151
+#!program 163 line 3777 Stat dialects.Scala3 :: #3220
+object W163 {
+for {
+  case (a, b) <- pairs
+  x <- a to b
+} yield x
+
+}
+#!scalac ok
+#!regions L42/ L56/ F66/
+#!layout
+Source 0 70
+  Defn.Object 0 69
+    Term.Name 7 11
+    Template 12 69
+      Template.Body 12 69
+        Term.ForYield 14 66
+          Term.EnumeratorsBlock 18 58
+            Enumerator.CaseGenerator 22 42
+              Pat.Tuple 27 33
+                Pat.Var 28 29
+                  Term.Name 28 29
+                Pat.Var 31 32
+                  Term.Name 31 32
+              Term.Name 37 42
+            Enumerator.Generator 45 56
+              Pat.Var 45 46
+                Term.Name 45 46
+              Term.ApplyInfix 50 56
+                Term.Name 50 51
+                Term.Name 52 54
+                Type.ArgClause 55 55
+                Term.ArgClause 55 56
+                  Term.Name 55 56
+          Term.Name 65 66
+#!program 164 line 3803 Stat dialects.Scala3 :: #3224
+object W164 {
+for {
+  x2 <- x1
+} yield x2
+  .x3 {
+    case x4
+        if x5.x6
+          .x7(x8) =>
+        x9
+  }
+
+}
+#!scalac ok
+#!regions L30/ L110/ F114/
+#!layout
+Source 0 118
+  Defn.Object 0 117
+    Term.Name 7 11
+    Template 12 117
+      Template.Body 12 117
+        Term.ForYield 14 114
+          Term.EnumeratorsBlock 18 32
+            Enumerator.Generator 22 30
+              Pat.Var 22 24
+                Term.Name 22 24
+              Term.Name 28 30
+          Term.Apply 39 114
+            Term.Select 39 47
+              Term.Name 39 41
+              Term.Name 45 47
+            Term.ArgClause 48 114
+              Term.PartialFunction 48 114
+                Case 54 110
+                  Pat.Var 59 61
+                    Term.Name 59 61
+                  Term.Apply 73 96
+                    Term.Select 73 92
+                      Term.Select 73 78
+                        Term.Name 73 75
+                        Term.Name 76 78
+                      Term.Name 90 92
+                    Term.ArgClause 92 96
+                      Term.Name 93 95
+                  Term.Name 108 110
+#!program 165 line 3858 Case dialects.Scala3 :: scalafmt #3790 case
+object W165 {
+  def w(x: Any) = x match {
+case 1 =>
+  println(2)
+  (3, 4)
+
+}
+}
+#!scalac ok
+#!regions L64/ F73/ L76/
+#!layout
+Source 0 79
+  Defn.Object 0 78
+    Term.Name 7 11
+    Template 12 78
+      Template.Body 12 78
+        Defn.Def 16 76
+          Term.Name 20 21
+          Member.ParamClauseGroup 21 29
+            Type.ParamClause 21 21
+            Term.ParamClause 21 29
+              Term.Param 22 28
+                Term.Name 22 23
+                Type.Name 25 28
+          Term.Match 32 76
+            Term.Name 32 33
+            Term.CasesBlock 40 76
+              Case 42 73
+                Lit.Int 47 48
+                Term.Block 54 73
+                  Term.Apply 54 64
+                    Term.Name 54 61
+                    Term.ArgClause 61 64
+                      Lit.Int 62 63
+                  Term.Tuple 67 73
+                    Lit.Int 68 69
+                    Lit.Int 71 72
+#!program 166 line 3893 Stat dialects.Scala3 :: scalafmt #3790 match optional braces
+object W166 {
+def foo =
+  bar match
+  case 1 =>
+    println(2)
+    (3, 4)
+  baz
+
+}
+#!scalac ok
+#!regions I23/2 I35/2.2 I47/4.2.2 L62/4.2.2 O73/2.2 O73/2 L73/2 O80/
+#!layout
+Source 0 83
+  Defn.Object 0 82
+    Term.Name 7 11
+    Template 12 82
+      Template.Body 12 82
+        Defn.Def 14 79
+          Term.Name 18 21
+          Term.Block 26 79
+            Term.Match 26 73
+              Term.Name 26 29
+              Term.CasesBlock 38 73
+                Case 38 73
+                  Lit.Int 43 44
+                  Term.Block 52 73
+                    Term.Apply 52 62
+                      Term.Name 52 59
+                      Term.ArgClause 59 62
+                        Lit.Int 60 61
+                    Term.Tuple 67 73
+                      Lit.Int 68 69
+                      Lit.Int 71 72
+            Term.Name 76 79
+#!program 167 line 3931 Stat dialects.Scala3 :: scalafmt #3790 match optional braces, and case class following in case body
+object W167 {
+def foo =
+  bar match
+  case 1 =>
+    println(2)
+    (3, 4)
+    case class A(a: Int)
+
+}
+#!scalac ok
+#!regions I23/2 I35/2.2 I47/4.2.2 L62/4.2.2 L73/4.2.2 O99/2.2 O99/2 O99/
+#!layout
+Source 0 102
+  Defn.Object 0 101
+    Term.Name 7 11
+    Template 12 101
+      Template.Body 12 101
+        Defn.Def 14 98
+          Term.Name 18 21
+          Term.Match 26 98
+            Term.Name 26 29
+            Term.CasesBlock 38 98
+              Case 38 98
+                Lit.Int 43 44
+                Term.Block 52 98
+                  Term.Apply 52 62
+                    Term.Name 52 59
+                    Term.ArgClause 59 62
+                      Lit.Int 60 61
+                  Term.Tuple 67 73
+                    Lit.Int 68 69
+                    Lit.Int 71 72
+                  Defn.Class 78 98
+                    Mod.Case 78 82
+                    Type.Name 89 90
+                    Type.ParamClause 90 90
+                    Ctor.Primary 90 98
+                      Name.Anonymous 90 90
+                      Term.ParamClause 90 98
+                        Term.Param 91 97
+                          Term.Name 91 92
+                          Type.Name 94 97
+                    Template 99 99
+                      Template.Body 99 99
+#!program 168 line 3966 Stat dialects.Scala3 :: scalafmt #3790 match optional braces, and case class following after case body
+object W168 {
+def foo =
+  bar match
+  case 1 =>
+    println(2)
+    (3, 4)
+  case class A(a: Int)
+
+}
+#!scalac ok
+#!regions I23/2 I35/2.2 I47/4.2.2 L62/4.2.2 O73/2.2 O73/2 L73/2 O97/
+#!layout
+Source 0 100
+  Defn.Object 0 99
+    Term.Name 7 11
+    Template 12 99
+      Template.Body 12 99
+        Defn.Def 14 96
+          Term.Name 18 21
+          Term.Block 26 96
+            Term.Match 26 73
+              Term.Name 26 29
+              Term.CasesBlock 38 73
+                Case 38 73
+                  Lit.Int 43 44
+                  Term.Block 52 73
+                    Term.Apply 52 62
+                      Term.Name 52 59
+                      Term.ArgClause 59 62
+                        Lit.Int 60 61
+                    Term.Tuple 67 73
+                      Lit.Int 68 69
+                      Lit.Int 71 72
+            Defn.Class 76 96
+              Mod.Case 76 80
+              Type.Name 87 88
+              Type.ParamClause 88 88
+              Ctor.Primary 88 96
+                Name.Anonymous 88 88
+                Term.ParamClause 88 96
+                  Term.Param 89 95
+                    Term.Name 89 90
+                    Type.Name 92 95
+              Template 97 97
+                Template.Body 97 97
+#!program 169 line 4000 Stat dialects.Scala3 :: scalafmt #3790 match actual braces
+object W169 {
+def foo =
+  bar match {
+  case 1 =>
+    println(2)
+    (3, 4)
+  baz}
+
+}
+#!scalac ok
+#!regions I23/2 L64/2 L75/2 O83/
+#!layout
+Source 0 86
+  Defn.Object 0 85
+    Term.Name 7 11
+    Template 12 85
+      Template.Body 12 85
+        Defn.Def 14 82
+          Term.Name 18 21
+          Term.Match 26 82
+            Term.Name 26 29
+            Term.CasesBlock 36 82
+              Case 40 81
+                Lit.Int 45 46
+                Term.Block 54 81
+                  Term.Apply 54 64
+                    Term.Name 54 61
+                    Term.ArgClause 61 64
+                      Lit.Int 62 63
+                  Term.Tuple 69 75
+                    Lit.Int 70 71
+                    Lit.Int 73 74
+                  Term.Name 78 81
+#!program 170 line 4029 Stat dialects.Scala3.withAllowSignificantIndentation(false) :: scalafmt #3941 no significant indentation with quiet syntax: if-then 1
+object W170 {
+def demo() = {
+  if true then greet()
+  else
+    sayGoodbye()
+    openDoor()
+}
+
+}
+#!scalac ok
+#!dialect dialects.Scala3.withAllowSignificantIndentation(false) gives another tree
+#!regions I58/4 L75/4 O90/ L90/ F92/
+#!layout
+Source 0 96
+  Defn.Object 0 95
+    Term.Name 7 11
+    Template 12 95
+      Template.Body 12 95
+        Defn.Def 14 92
+          Term.Name 18 22
+          Member.ParamClauseGroup 22 24
+            Type.ParamClause 22 22
+            Term.ParamClause 22 24
+          Term.Block 27 92
+            Term.If 31 90
+              Lit.Boolean 34 38
+              Term.Apply 44 51
+                Term.Name 44 49
+                Term.ArgClause 49 51
+              Term.Block 63 90
+                Term.Apply 63 75
+                  Term.Name 63 73
+                  Term.ArgClause 73 75
+                Term.Apply 80 90
+                  Term.Name 80 88
+                  Term.ArgClause 88 90
+#!program 171 line 4065 Stat dialects.Scala3.withAllowSignificantIndentation(false) :: scalafmt #3941 no significant indentation with quiet syntax: if-then 2
+object W171 {
+def demo() = {
+  if (a + b)
+    == (c + d)
+  then greet()
+  else
+    sayGoodbye()
+    openDoor()
+}
+
+}
+#!scalac ok
+#!dialect dialects.Scala3.withAllowSignificantIndentation(false) gives another tree
+#!regions X41/ L56/ I78/4 L95/4 O110/ L110/ F112/
+#!layout
+Source 0 116
+  Defn.Object 0 115
+    Term.Name 7 11
+    Template 12 115
+      Template.Body 12 115
+        Defn.Def 14 112
+          Term.Name 18 22
+          Member.ParamClauseGroup 22 24
+            Type.ParamClause 22 22
+            Term.ParamClause 22 24
+          Term.Block 27 112
+            Term.If 31 110
+              Term.ApplyInfix 34 56
+                Term.ApplyInfix 35 40
+                  Term.Name 35 36
+                  Term.Name 37 38
+                  Type.ArgClause 39 39
+                  Term.ArgClause 39 40
+                    Term.Name 39 40
+                Term.Name 46 48
+                Type.ArgClause 49 49
+                Term.ArgClause 49 56
+                  Term.ApplyInfix 50 55
+                    Term.Name 50 51
+                    Term.Name 52 53
+                    Type.ArgClause 54 54
+                    Term.ArgClause 54 55
+                      Term.Name 54 55
+              Term.Apply 64 71
+                Term.Name 64 69
+                Term.ArgClause 69 71
+              Term.Block 83 110
+                Term.Apply 83 95
+                  Term.Name 83 93
+                  Term.ArgClause 93 95
+                Term.Apply 100 110
+                  Term.Name 100 108
+                  Term.ArgClause 108 110
+#!program 172 line 4090 Stat dialects.Scala3.withAllowSignificantIndentation(false) :: scalafmt #3941 no significant indentation with quiet syntax: while-do 1
+object W172 {
+def demo() = {
+  while true do
+    sayGoodbye()
+    openDoor()
+}
+
+}
+#!scalac ok
+#!dialect dialects.Scala3.withAllowSignificantIndentation(false) gives another tree
+#!regions I44/4 L61/4 O76/ L76/ F78/
+#!layout
+Source 0 82
+  Defn.Object 0 81
+    Term.Name 7 11
+    Template 12 81
+      Template.Body 12 81
+        Defn.Def 14 78
+          Term.Name 18 22
+          Member.ParamClauseGroup 22 24
+            Type.ParamClause 22 22
+            Term.ParamClause 22 24
+          Term.Block 27 78
+            Term.While 31 76
+              Lit.Boolean 37 41
+              Term.Block 49 76
+                Term.Apply 49 61
+                  Term.Name 49 59
+                  Term.ArgClause 59 61
+                Term.Apply 66 76
+                  Term.Name 66 74
+                  Term.ArgClause 74 76
+#!program 173 line 4123 Stat dialects.Scala3.withAllowSignificantIndentation(false) :: scalafmt #3941 no significant indentation with quiet syntax: while-do 2
+object W173 {
+def demo() = {
+  while (a + b)
+    == (c + d)
+  do
+    sayGoodbye()
+    openDoor()
+}
+
+}
+#!scalac ok
+#!dialect dialects.Scala3.withAllowSignificantIndentation(false) gives another tree
+#!regions X44/ L59/ I64/4 L81/4 O96/ L96/ F98/
+#!layout
+Source 0 102
+  Defn.Object 0 101
+    Term.Name 7 11
+    Template 12 101
+      Template.Body 12 101
+        Defn.Def 14 98
+          Term.Name 18 22
+          Member.ParamClauseGroup 22 24
+            Type.ParamClause 22 22
+            Term.ParamClause 22 24
+          Term.Block 27 98
+            Term.While 31 96
+              Term.ApplyInfix 37 59
+                Term.ApplyInfix 38 43
+                  Term.Name 38 39
+                  Term.Name 40 41
+                  Type.ArgClause 42 42
+                  Term.ArgClause 42 43
+                    Term.Name 42 43
+                Term.Name 49 51
+                Type.ArgClause 52 52
+                Term.ArgClause 52 59
+                  Term.ApplyInfix 53 58
+                    Term.Name 53 54
+                    Term.Name 55 56
+                    Type.ArgClause 57 57
+                    Term.ArgClause 57 58
+                      Term.Name 57 58
+              Term.Block 69 96
+                Term.Apply 69 81
+                  Term.Name 69 79
+                  Term.ArgClause 79 81
+                Term.Apply 86 96
+                  Term.Name 86 94
+                  Term.ArgClause 94 96
+#!program 174 line 4155 Stat dialects.Scala3 :: indent in enumerator
+object W174 {
+object a:
+      val abstractTypeNames =
+        for (
+          parent <-
+           parents;
+          mbr <- parent.abstractTypeMembers if qualifies(mbr.symbol))
+        yield mbr.name.asTypeName
+
+}
+#!scalac refuses: ')' expected, but identifier found
+#!regions I23/6 I53/8.6 I87/11.8.6 O107/8.6 O212/6 O212/
+#!layout
+Source 0 215
+  Defn.Object 0 214
+    Term.Name 7 11
+    Template 12 214
+      Template.Body 12 214
+        Defn.Object 14 211
+          Term.Name 21 22
+          Template 22 211
+            Template.Body 22 211
+              Defn.Val 30 211
+                Pat.Var 34 51
+                  Term.Name 34 51
+                Term.ForYield 62 211
+                  Term.EnumeratorsBlock 66 177
+                    Enumerator.Generator 78 107
+                      Pat.Var 78 84
+                        Term.Name 78 84
+                      Term.Name 99 106
+                    Enumerator.Generator 118 151
+                      Pat.Var 118 121
+                        Term.Name 118 121
+                      Term.Select 125 151
+                        Term.Name 125 131
+                        Term.Name 132 151
+                    Enumerator.Guard 152 176
+                      Term.Apply 155 176
+                        Term.Name 155 164
+                        Term.ArgClause 164 176
+                          Term.Select 165 175
+                            Term.Name 165 168
+                            Term.Name 169 175
+                  Term.Select 192 211
+                    Term.Select 192 200
+                      Term.Name 192 195
+                      Term.Name 196 200
+                    Term.Name 201 211
+#!program 175 line 4182 Stat dialects.Scala3 :: terminate inline case on newline and same indent
+object W175 {
+object a:
+   try foo
+   catch case ex => new Bar()
+   private[io] def baz = qux
+
+}
+#!scalac ok
+#!regions I23/3 I44/3.3 O64/3 L64/3 O94/
+#!layout
+Source 0 97
+  Defn.Object 0 96
+    Term.Name 7 11
+    Template 12 96
+      Template.Body 12 96
+        Defn.Object 14 93
+          Term.Name 21 22
+          Template 22 93
+            Template.Body 22 93
+              Term.Try 27 64
+                Term.Name 31 34
+                Term.CasesBlock 44 64
+                  Case 44 64
+                    Pat.Var 49 51
+                      Term.Name 49 51
+                    Term.New 55 64
+                      Init 59 64
+                        Type.Name 59 62
+                        Name.Anonymous 62 62
+                        Term.ArgClause 62 64
+              Defn.Def 68 93
+                Mod.Private 68 79
+                  Name.Indeterminate 76 78
+                Term.Name 84 87
+                Term.Name 90 93
+#!program 176 line 4199 Stat dialects.Scala3 :: break after <- in for-yield
+object W176 {
+object a:
+  for foo <-
+    bar
+  yield
+    foo
+
+}
+#!scalac ok
+#!regions I23/2 I36/4.2 O44/2 I52/4.2 O61/2 O61/
+#!layout
+Source 0 64
+  Defn.Object 0 63
+    Term.Name 7 11
+    Template 12 63
+      Template.Body 12 63
+        Defn.Object 14 60
+          Term.Name 21 22
+          Template 22 60
+            Template.Body 22 60
+              Term.ForYield 26 60
+                Term.EnumeratorsBlock 30 44
+                  Enumerator.Generator 30 44
+                    Pat.Var 30 33
+                      Term.Name 30 33
+                    Term.Name 41 44
+                Term.Name 57 60
+#!program 177 line 4222 Stat dialects.Scala3 :: outdent inlinw try-finally opt-braces
+object W177 {
+object a:
+  def foo =
+      try bar &&
+          baz
+      finally qux
+
+}
+#!scalac ok
+#!regions I23/2 I35/6.2 L52/6.2 O85/2 O85/
+#!layout
+Source 0 88
+  Defn.Object 0 87
+    Term.Name 7 11
+    Template 12 87
+      Template.Body 12 87
+        Defn.Object 14 84
+          Term.Name 21 22
+          Template 22 84
+            Template.Body 22 84
+              Defn.Def 26 84
+                Term.Name 30 33
+                Term.Try 42 84
+                  Term.ApplyInfix 46 66
+                    Term.Name 46 49
+                    Term.Name 50 52
+                    Type.ArgClause 52 52
+                    Term.ArgClause 63 66
+                      Term.Name 63 66
+                  Term.Name 81 84
+#!program 178 line 4252 Stat dialects.Scala3 :: outdent inlinw try-finally in braces
+object W178 {
+object a:
+  def foo = {
+      try bar &&
+          baz
+      finally qux
+  }
+
+}
+#!scalac ok
+#!regions I23/2 L54/2 L86/2 O91/
+#!layout
+Source 0 94
+  Defn.Object 0 93
+    Term.Name 7 11
+    Template 12 93
+      Template.Body 12 93
+        Defn.Object 14 90
+          Term.Name 21 22
+          Template 22 90
+            Template.Body 22 90
+              Defn.Def 26 90
+                Term.Name 30 33
+                Term.Block 36 90
+                  Term.Try 44 86
+                    Term.ApplyInfix 48 68
+                      Term.Name 48 51
+                      Term.Name 52 54
+                      Type.ArgClause 54 54
+                      Term.ArgClause 65 68
+                        Term.Name 65 68
+                    Term.Name 83 86
+#!program 179 line 4318 Stat dialects.Scala3 :: #3979 w/ grouped whitespace
+object W179 {
+for {
+  _ <-
+    if (a) {
+      b
+    } else {
+      c
+    }
+
+  _ <- d
+} yield e
+
+}
+#!scalac ok
+#!regions I26/4 L47/4 L68/4 O75/ F75/ L84/ F94/
+#!layout
+Source 0 98
+  Defn.Object 0 97
+    Term.Name 7 11
+    Template 12 97
+      Template.Body 12 97
+        Term.ForYield 14 94
+          Term.EnumeratorsBlock 18 86
+            Enumerator.Generator 22 74
+              Pat.Wildcard 22 23
+              Term.If 31 74
+                Term.Name 35 36
+                Term.Block 38 53
+                  Term.Name 46 47
+                Term.Block 59 74
+                  Term.Name 67 68
+            Enumerator.Generator 78 84
+              Pat.Wildcard 78 79
+              Term.Name 83 84
+          Term.Name 93 94
+#!program 180 line 4384 Stat dialects.Scala3 :: #3979 w/ granular whitespace
+object W180 {
+for {
+  _ <-
+    if (a) {
+      b
+    } else {
+      c
+    }
+
+  _ <- d
+} yield e
+
+}
+#!scalac ok
+#!regions I26/4 L47/4 L68/4 O75/ F75/ L84/ F94/
+#!layout
+Source 0 98
+  Defn.Object 0 97
+    Term.Name 7 11
+    Template 12 97
+      Template.Body 12 97
+        Term.ForYield 14 94
+          Term.EnumeratorsBlock 18 86
+            Enumerator.Generator 22 74
+              Pat.Wildcard 22 23
+              Term.If 31 74
+                Term.Name 35 36
+                Term.Block 38 53
+                  Term.Name 46 47
+                Term.Block 59 74
+                  Term.Name 67 68
+            Enumerator.Generator 78 84
+              Pat.Wildcard 78 79
+              Term.Name 83 84
+          Term.Name 93 94
+#!program 181 line 4449 Stat dialects.Scala3 :: #4008
+object W181 {
+for
+    _ <- Option(42).map: _ =>
+      ???
+
+    _ <- Option(43)
+yield ()
+
+
+}
+#!scalac ok
+#!regions I17/4 I47/6.4 O58/4 F58/4 O78/ F87/
+#!layout
+Source 0 92
+  Defn.Object 0 91
+    Term.Name 7 11
+    Template 12 91
+      Template.Body 12 91
+        Term.ForYield 14 87
+          Term.EnumeratorsBlock 22 78
+            Enumerator.Generator 22 57
+              Pat.Wildcard 22 23
+              Term.Apply 27 57
+                Term.Select 27 41
+                  Term.Apply 27 37
+                    Term.Name 27 33
+                    Term.ArgClause 33 37
+                      Lit.Int 34 36
+                  Term.Name 38 41
+                Term.ArgClause 41 57
+                  Term.Block 41 57
+                    Term.Function 43 57
+                      Term.ParamClause 43 44
+                        Term.Param 43 44
+                          Name.Placeholder 43 44
+                      Term.Name 54 57
+            Enumerator.Generator 63 78
+              Pat.Wildcard 63 64
+              Term.Apply 68 78
+                Term.Name 68 74
+                Term.ArgClause 74 78
+                  Lit.Int 75 77
+          Lit.Unit 85 87
+#!program 182 line 4475 Stat dialects.Scala3 :: #4177
+object W182 {
+val foo = test(
+  try 1
+  catch case _ => 2,
+  "bar"
+)
+
+}
+#!scalac ok
+#!regions I46/2 O58/ F68/
+#!layout
+Source 0 72
+  Defn.Object 0 71
+    Term.Name 7 11
+    Template 12 71
+      Template.Body 12 71
+        Defn.Val 14 68
+          Pat.Var 18 21
+            Term.Name 18 21
+          Term.Apply 24 68
+            Term.Name 24 28
+            Term.ArgClause 28 68
+              Term.Try 32 58
+                Lit.Int 36 37
+                Term.CasesBlock 46 58
+                  Case 46 57
+                    Pat.Wildcard 51 52
+                    Lit.Int 56 57
+              Lit.String 61 66
+#!program 183 line 4508 Source dialects.Scala3 :: #4214
+package object scope:
+  val result = for
+    x <- twice:
+         "4".toInt
+  yield x
+#!scalac ok
+#!regions I21/2 I40/4.2 I56/9.4.2 O75/4.2 O75/2 O85/
+#!layout
+Source 0 86
+  Pkg.Object 0 85
+    Term.Name 15 20
+    Template 20 85
+      Template.Body 20 85
+        Defn.Val 24 85
+          Pat.Var 28 34
+            Term.Name 28 34
+          Term.ForYield 37 85
+            Term.EnumeratorsBlock 45 75
+              Enumerator.Generator 45 75
+                Pat.Var 45 46
+                  Term.Name 45 46
+                Term.Apply 50 75
+                  Term.Name 50 55
+                  Term.ArgClause 55 75
+                    Term.Block 55 75
+                      Term.Select 66 75
+                        Lit.String 66 69
+                        Term.Name 70 75
+            Term.Name 84 85
+#!program 184 line 4528 Stat dialects.Scala3 :: #4421 unindented
+object W184 {
+for
+given Foo <- frob
+yield
+  identity:
+    sql""
+
+}
+#!scalac ok
+#!regions I41/2 I53/4.2 O64/2 O64/
+#!layout
+Source 0 67
+  Defn.Object 0 66
+    Term.Name 7 11
+    Template 12 66
+      Template.Body 12 66
+        Term.ForYield 14 63
+          Term.EnumeratorsBlock 18 35
+            Enumerator.Generator 18 35
+              Pat.Given 18 27
+                Type.Name 24 27
+              Term.Name 31 35
+          Term.Apply 44 63
+            Term.Name 44 52
+            Term.ArgClause 52 63
+              Term.Block 52 63
+                Term.Interpolate 58 63
+                  Term.Name 58 61
+                  Lit.String 62 62
+#!program 185 line 4548 Stat dialects.Scala3 :: #4421 indented
+object W185 {
+for
+  given Foo <- frob
+yield
+  identity:
+    sql""
+
+}
+#!scalac ok
+#!regions I17/2 O37/ I43/2 I55/4.2 O66/2 O66/
+#!layout
+Source 0 69
+  Defn.Object 0 68
+    Term.Name 7 11
+    Template 12 68
+      Template.Body 12 68
+        Term.ForYield 14 65
+          Term.EnumeratorsBlock 20 37
+            Enumerator.Generator 20 37
+              Pat.Given 20 29
+                Type.Name 26 29
+              Term.Name 33 37
+          Term.Apply 46 65
+            Term.Name 46 54
+            Term.ArgClause 54 65
+              Term.Block 54 65
+                Term.Interpolate 60 65
+                  Term.Name 60 63
+                  Lit.String 64 64
+#!program 186 line 4569 Stat dialects.Scala3 :: #4421 in braces
+object W186 {
+for {
+  given Foo <- frob
+}
+yield
+  identity:
+    sql""
+
+}
+#!scalac ok
+#!regions L39/ I47/2 I59/4.2 O70/2 O70/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Term.ForYield 14 69
+          Term.EnumeratorsBlock 18 41
+            Enumerator.Generator 22 39
+              Pat.Given 22 31
+                Type.Name 28 31
+              Term.Name 35 39
+          Term.Apply 50 69
+            Term.Name 50 58
+            Term.ArgClause 58 69
+              Term.Block 58 69
+                Term.Interpolate 64 69
+                  Term.Name 64 67
+                  Lit.String 68 68
+#!program 187 line 4590 Stat dialects.Scala3 :: #4421 in parens
+object W187 {
+for (
+  given Foo <- frob
+)
+yield
+  identity:
+    sql""
+
+}
+#!scalac refuses: ')' expected, but '<-' found
+#!regions I47/2 I59/4.2 O70/2 O70/
+#!layout
+Source 0 73
+  Defn.Object 0 72
+    Term.Name 7 11
+    Template 12 72
+      Template.Body 12 72
+        Term.ForYield 14 69
+          Term.EnumeratorsBlock 18 41
+            Enumerator.Generator 22 39
+              Pat.Given 22 31
+                Type.Name 28 31
+              Term.Name 35 39
+          Term.Apply 50 69
+            Term.Name 50 58
+            Term.ArgClause 58 69
+              Term.Block 58 69
+                Term.Interpolate 64 69
+                  Term.Name 64 67
+                  Lit.String 68 68
+#!program 188 line 4603 Stat dialects.Scala3 :: #4515
+object W188 {
+def f(b: Boolean): Int => Int = if (b) (a: Int) => a else identity
+}
+#!scalac ok
+#!regions L80/
+#!layout
+Source 0 83
+  Defn.Object 0 82
+    Term.Name 7 11
+    Template 12 82
+      Template.Body 12 82
+        Defn.Def 14 80
+          Term.Name 18 19
+          Member.ParamClauseGroup 19 31
+            Type.ParamClause 19 19
+            Term.ParamClause 19 31
+              Term.Param 20 30
+                Term.Name 20 21
+                Type.Name 23 30
+          Type.Function 33 43
+            Type.FuncParamClause 33 36
+              Type.Name 33 36
+            Type.Name 40 43
+          Term.If 46 80
+            Term.Name 50 51
+            Term.Function 53 66
+              Term.ParamClause 53 61
+                Term.Param 54 60
+                  Term.Name 54 55
+                  Type.Name 57 60
+              Term.Name 65 66
+            Term.Name 72 80
+#!program 189 line 4610 Stat dialects.Scala3 :: #4664 if
+object W189 {
+if (a, b) == pair then ???
+}
+#!scalac ok
+#!regions L40/
+#!layout
+Source 0 43
+  Defn.Object 0 42
+    Term.Name 7 11
+    Template 12 42
+      Template.Body 12 42
+        Term.If 14 40
+          Term.ApplyInfix 17 31
+            Term.Tuple 17 23
+              Term.Name 18 19
+              Term.Name 21 22
+            Term.Name 24 26
+            Type.ArgClause 27 27
+            Term.ArgClause 27 31
+              Term.Name 27 31
+          Term.Name 37 40
+          Lit.Unit 40 40
+#!program 190 line 4617 Stat dialects.Scala3 :: #4664 while
+object W190 {
+while (a, b) == pair do ???
+}
+#!scalac ok
+#!regions L41/
+#!layout
+Source 0 44
+  Defn.Object 0 43
+    Term.Name 7 11
+    Template 12 43
+      Template.Body 12 43
+        Term.While 14 41
+          Term.ApplyInfix 20 34
+            Term.Tuple 20 26
+              Term.Name 21 22
+              Term.Name 24 25
+            Term.Name 27 29
+            Type.ArgClause 30 30
+            Term.ArgClause 30 34
+              Term.Name 30 34
+          Term.Name 38 41
