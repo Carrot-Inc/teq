@@ -599,7 +599,7 @@ run_case() {
         differs=$(diff -rq "$sub/whole" "$sub/$m" | sed "s|$sub/||g" | head -5)
         [ -z "$differs" ] || { ok=0; detail="$detail$m alone: $differs"$'\n'; }
         if [ -f "$dir/run.txt" ] && [ -n "$main" ]; then
-          got=$(timeout 60 java -cp "$sub/$m:$SL" "$main" 2>&1)
+          got=$(timeout 60 java -XX:-UsePerfData -cp "$sub/$m:$SL" "$main" 2>&1)
           [ "$got" = "$(cat "$dir/run.txt")" ] || { ok=0; detail="$detail$m alone runs: $(head -3 <<< "$got")"$'\n'; }
         fi
       done
@@ -789,8 +789,8 @@ PY
       "$teq" compiler build --target jvm -o "$out/$name/whole.jar" --sourceroot "$dir" --classpath "$SL" "${all_srcs[@]}" > "$out/$name.run-whole.log" 2>&1 || { ok=0; detail="$(cat "$out/$name.run-whole.log")"; }
       "$teq" compiler build --target jvm -o "$out/$name/main.jar" --sourceroot "$(sroot "$down")" --classpath "$SL:$jdirs" "${down_srcs[@]}" > "$out/$name.run-split.log" 2>&1 || { ok=0; detail="$detail$(cat "$out/$name.run-split.log")"; }
       if [ $ok = 1 ]; then
-        whole_out=$(timeout 60 java -cp "$out/$name/whole.jar:$SL" TeqMain 2>&1)
-        split_out=$(timeout 60 java -cp "$out/$name/main.jar:$jdirs:$SL" TeqMain 2>&1)
+        whole_out=$(timeout 60 java -XX:-UsePerfData -cp "$out/$name/whole.jar:$SL" TeqMain 2>&1)
+        split_out=$(timeout 60 java -XX:-UsePerfData -cp "$out/$name/main.jar:$jdirs:$SL" TeqMain 2>&1)
         if [ "$whole_out" != "$expected" ] || [ "$split_out" != "$expected" ]; then
           ok=0
           detail="whole: $whole_out"$'\n'"split: $split_out"$'\n'"expected: $expected"
@@ -922,7 +922,7 @@ PY
     fi
     if [ $ok = 1 ]; then
       main=$(main_class "${down_srcs[@]}")
-      got=$(timeout 60 java -cp "$out/$name/scalac-$down:$jdirs:$SL" "$main" 2>&1)
+      got=$(timeout 60 java -XX:-UsePerfData -cp "$out/$name/scalac-$down:$jdirs:$SL" "$main" 2>&1)
       [ "$got" = "$expected" ] || { ok=0; detail="$main printed: $got"$'\n'"expected: $expected"; }
     fi
     result "$name" scalac-run $ok "$detail"
@@ -949,7 +949,7 @@ PY
       lsrcs=()
       while IFS= read -r f; do lsrcs+=("$f"); done < <(sources "$dir/$last")
       main=$(main_class "${lsrcs[@]}")
-      got=$(timeout 60 java -cp "$cp:$SL" "$main" 2>&1)
+      got=$(timeout 60 java -XX:-UsePerfData -cp "$cp:$SL" "$main" 2>&1)
       [ "$got" = "$(cat "$dir/run.txt")" ] || { ok=0; detail="$main printed: $got"$'\n'"expected: $(cat "$dir/run.txt")"; }
     fi
     result "$name" over-scalac $ok "$detail"
@@ -1020,7 +1020,7 @@ PY
       [ $side = cross ] && { [ -d "$out/$name/client-scalac" ] || { ok=0; detail="no client of the scalac side"; }; }
       [ $side = cross ] && side_dir=client-scalac || side_dir=client-$side
       if [ $ok = 1 ]; then
-        got=$(timeout 60 java -cp "$out/$name/$side_dir:$rcp:$SL" "$main" 2>&1)
+        got=$(timeout 60 java -XX:-UsePerfData -cp "$out/$name/$side_dir:$rcp:$SL" "$main" 2>&1)
         [ "$got" = "$want" ] || { ok=0; detail="$main printed: $got"$'\n'"expected: $want"; }
       fi
       result "$name" "scalac-client-$side" $ok "$detail"
@@ -1128,7 +1128,7 @@ if [ -n "$every_case" ]; then
         done
       done
       if [ $have_java = 1 ] && "$teq" compiler build --target jvm -o "$od/use.jar" --classpath "$od/out:$SL" "$od/Use.scala" >> "$od/log" 2>&1; then
-        got=$(timeout 60 java -cp "$od/use.jar:$od/out:$SL" run 2>&1)
+        got=$(timeout 60 java -XX:-UsePerfData -cp "$od/use.jar:$od/out:$SL" run 2>&1)
         [ "$got" = 43 ] || { ok=0; detail="${detail}the downstream printed: $(head -3 <<< "$got")"$'\n'; }
       elif [ $have_java = 1 ]; then
         ok=0
@@ -1161,10 +1161,10 @@ if [ -n "$every_case" ]; then
       if [ $have_java = 1 ]; then
         "$teq" compiler build --target jvm -o "$od/use.jar" --classpath "$od/out:$SL" "$od/Use.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the downstream's build failed"$'\n'; }
         diff -r "$od/before" "$od/out" > /dev/null && [ ! -d "$od/out.teq-stage" ] || { ok=0; detail="${detail}the directory is not the last publication's: $(diff -rq "$od/before" "$od/out" | head -3)"$'\n'; }
-        got=$(timeout 60 java -cp "$od/use.jar:$od/out:$SL" run 2>&1)
+        got=$(timeout 60 java -XX:-UsePerfData -cp "$od/use.jar:$od/out:$SL" run 2>&1)
         [ "$got" = 1 ] || { ok=0; detail="${detail}the downstream over the undone directory printed: $(head -3 <<< "$got")"$'\n'; }
         "$teq" compiler build "${own[@]}" "$od/A.scala" >> "$od/log" 2>&1 || { ok=0; detail="${detail}the next publication failed"$'\n'; }
-        got=$(timeout 60 java -cp "$od/use.jar:$od/out:$SL" run 2>&1)
+        got=$(timeout 60 java -XX:-UsePerfData -cp "$od/use.jar:$od/out:$SL" run 2>&1)
         [ "$got" = 2 ] || { ok=0; detail="${detail}the downstream over the next publication printed: $(head -3 <<< "$got")"$'\n'; }
       fi
     else
@@ -1254,7 +1254,7 @@ print(' '.join(sorted(f for f in fs if not os.path.exists(os.path.join(d, f)))))
         lb=$od/$n
         runs() {
           local got
-          got=$(timeout 60 java -cp "$od/use:$2:$od/ap:$SL" "osd.$main" 2>&1)
+          got=$(timeout 60 java -XX:-UsePerfData -cp "$od/use:$2:$od/ap:$SL" "osd.$main" 2>&1)
           [ "$got" = 2 ] || { ok=0; detail="$detail$n, $1: the consumer printed $(head -2 <<< "$got")"$'\n'; }
         }
         same() { diff -r "$2" "$3" > /dev/null || { ok=0; detail="$detail$n, $1: $(diff -rq "$2" "$3" | head -3)"$'\n'; }; }
@@ -1325,7 +1325,7 @@ print(' '.join(sorted(f for f in fs if not os.path.exists(os.path.join(d, f)))))
     qb --products "$qd/whole" --classpath "$SL" "$qd/a/Mac.scala" "$qd/b/Use.scala" "$qd/d/Later.scala" || { ok=0; detail="${detail}the whole build failed"$'\n'; }
     if [ $ok = 1 ] && [ $have_java = 1 ]; then
       for cp in "split:$qd/dp:$qd/bp:$qd/ap" "whole:$qd/whole"; do
-        got=$(timeout 60 java -cp "${cp#*:}:$SL" qmd.later 2>&1)
+        got=$(timeout 60 java -XX:-UsePerfData -cp "${cp#*:}:$SL" qmd.later 2>&1)
         [ "$got" = 16 ] || { ok=0; detail="$detail${cp%%:*}: the caller printed $(head -2 <<< "$got")"$'\n'; }
       done
     elif [ $ok = 1 ]; then
@@ -1409,7 +1409,7 @@ fi
 if [ $have_scalac = 1 ] && [ -s "$out/fromtasty.jobs" ]; then
   . tests/support/gate-reader.sh
   reader=$(gate_reader "$out/reader" 2> "$out/fromtasty.err") &&
-    (cd "$out" && timeout 300 java -cp "$reader" gate fromtasty.jobs > fromtasty.out 2>> fromtasty.err)
+    (cd "$out" && timeout 300 java -XX:-UsePerfData -cp "$reader" gate fromtasty.jobs > fromtasty.out 2>> fromtasty.err)
   while IFS=$'\t' read -r _ job _; do
     jcase=${job%% *}
     jcheck=${job#* }

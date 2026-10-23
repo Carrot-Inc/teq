@@ -156,7 +156,7 @@ entry_points() {
       fail=1
     fi
     while read -r m; do
-      printf '%s: %s\n' "$m" "$(timeout 30 java -cp "out/classpath/$name:$SL" "$m" a b 2>&1)"
+      printf '%s: %s\n' "$m" "$(timeout 30 java -XX:-UsePerfData -cp "out/classpath/$name:$SL" "$m" a b 2>&1)"
     done < "$entry/mains" > "out/classpath/$name.launched"
     if diff -q "$entry/launched.expected" "out/classpath/$name.launched" > /dev/null; then passed=$((passed + 1)); else
       echo "FAIL $entry: launched by name"
