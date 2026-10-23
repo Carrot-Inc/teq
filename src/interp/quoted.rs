@@ -256,7 +256,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// an export and the merge, whichever run or view made it.
     fn val_type_ref(&self, t: TypeId) -> Option<SymId> {
         match self.typer.types.get(t) {
-            Type::Term(sym) if self.typer.types.is_unshared(t) => Some(sym),
+            Type::Term(sym) if self.typer.types.is_unshared(self.typer.types.underlying(t)) => Some(sym),
             _ => None,
         }
     }
@@ -955,7 +955,7 @@ impl<'m> Matcher<'m> {
             (TExpr::ToStr(a1, _), TExpr::ToStr(a2, _)) | (TExpr::Spread(a1), TExpr::Spread(a2)) | (TExpr::Return(a1), TExpr::Return(a2)) | (TExpr::Throw(a1, _), TExpr::Throw(a2, _)) => self.expr(it, a1, a2),
             (TExpr::Js(s1, a1), TExpr::Js(s2, a2)) => it.prog().strings[s1.idx()] == it.prog().strings[s2.idx()] && self.list(it, a1, a2),
             (TExpr::TypeTest(a1, t1), TExpr::TypeTest(a2, t2)) => self.expr(it, a1, a2) && it.prog().tests[t1.idx()] == it.prog().tests[t2.idx()],
-            (TExpr::Cast(a1, _, t1), TExpr::Cast(a2, _, t2)) => t1 == t2 && self.expr(it, a1, a2),
+            (TExpr::Cast(a1, _, t1), TExpr::Cast(a2, _, t2)) => it.typer.types.same(t1, t2) && self.expr(it, a1, a2),
             (TExpr::Index(a1, i1), TExpr::Index(a2, i2)) => i1 == i2 && self.expr(it, a1, a2),
             (TExpr::Block(st1, r1), TExpr::Block(st2, r2)) => {
                 if st1.len != st2.len {
@@ -1269,7 +1269,7 @@ impl<'m> Matcher<'m> {
         let (gathered, trivial) = if above { (self.type_bounds[i].hi.clone(), ANY) } else { (self.type_bounds[i].lo.clone(), NOTHING) };
         let mut bounds: Vec<TypeId> = Vec::new();
         for t in std::iter::once(declared).chain(gathered) {
-            if t == trivial || bounds.iter().any(|&l| l == t || it.typer.is_same(l, t)) {
+            if it.typer.types.same(t, trivial) || bounds.iter().any(|&l| l == t || it.typer.is_same(l, t)) {
                 continue;
             }
             bounds.push(t);
@@ -1479,6 +1479,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             None => SymRef::None,
         };
+        let prim = prim.map(|(op, result, l, r)| (op, self.typer.types.underlying(result), l, r));
         let key: super::OperatorKey = (name, method, prim, owner);
         let found = self.records.operators.iter().find(|(k, _)| *k == key).map(|&(_, at)| at);
         if let Some(at) = found {
@@ -1570,7 +1571,7 @@ impl<'a, 't> Interp<'a, 't> {
                 }),
                 TExpr::Long(v) => View::Literal(Value::Long(v)),
                 TExpr::Double(v) => View::Literal(match self.prog().type_of(e).map(|ty| self.typer.widen_lit(ty)) {
-                    Some(t) if t == self.typer.b.t_float => Value::Float(v as f32),
+                    Some(t) if self.typer.types.canonical(t) == self.typer.b.t_float => Value::Float(v as f32),
                     _ => Value::Double(v),
                 }),
                 TExpr::Bool(v) => View::Literal(Value::Bool(v)),
@@ -2621,7 +2622,10 @@ impl<'a, 't> Interp<'a, 't> {
                 if let (TExpr::Local(s) | TExpr::Static(s), false) = (self.prog().expr(e), cast) {
                     if matches!(self.syms().sym(s).kind, SymKind::Val | SymKind::Param) && self.typer.sig_of(s).tparams.is_empty() {
                         let declared = self.typer.sig_of(s).ret;
-                        if self.prog().type_of(e).map_or(true, |ty| self.typer.zonk(ty) == declared) {
+                        if self.prog().type_of(e).map_or(true, |ty| {
+                            let z = self.typer.zonk(ty);
+                            self.typer.types.same(z, declared)
+                        }) {
                             return Ok(self.typer.types.mk(Type::Term(s)));
                         }
                     }
@@ -2850,7 +2854,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// The self of the recursive type `rt` as a value outside its binder: a val of the type,
     /// made once per type.
     fn rec_marker(&mut self, rt: TypeId) -> TypeId {
-        if let Some(&s) = self.rec_markers.get(&rt) {
+        if let Some(&s) = self.rec_markers.get(&self.typer.types.canonical(rt)) {
             return self.typer.types.mk(Type::Term(s));
         }
         let name = self.typer.interner.intern("z");
@@ -2861,7 +2865,7 @@ impl<'a, 't> Interp<'a, 't> {
         info.sig = Some(sig);
         info.state().done_fresh();
         drop(info);
-        self.rec_markers.insert(rt, sym);
+        self.rec_markers.insert(self.typer.types.canonical(rt), sym);
         self.rec_binders.insert(sym, rt);
         self.typer.types.mk(Type::Term(sym))
     }
@@ -4637,7 +4641,10 @@ fn install_trees(it: &mut Table) {
         let s = it.tree_symbol(original)?;
         let name = it.str_arg(a, 2)?;
         let rhs = it.tree_arg(a, 3)?;
-        let same_rhs = matches!(rhs, TreeRef::Type(t) if t == it.type_def_rhs(s));
+        let same_rhs = matches!(rhs, TreeRef::Type(t) if {
+            let r = it.type_def_rhs(s);
+            it.typer.types.same(t, r)
+        });
         if *name != *it.symbol_name(s) || !same_rhs {
             return it.unsupported("TypeDef.copy with another name or right-hand side");
         }
@@ -5190,7 +5197,7 @@ impl<'a, 't> Interp<'a, 't> {
             Type::This(c) => SymRef::Class(c),
             Type::Term(s) | Type::Select(_, s) => {
                 let ret = self.typer.sig_of(s).ret;
-                if ret == t { SymRef::None } else { self.type_symbol(ret) }
+                if self.typer.types.same(ret, t) { SymRef::None } else { self.type_symbol(ret) }
             }
             Type::Lambda(_, b) | Type::Poly(_, b) => self.type_symbol(b),
             Type::Refined(p, _) | Type::AppMember(p, _) | Type::Rec(p) | Type::Annotated(p) => self.type_symbol(p),
@@ -5432,7 +5439,7 @@ impl<'a, 't> Interp<'a, 't> {
         let t = match self.typer.types.get(t) {
             Type::Term(s) | Type::Select(_, s) => {
                 let ret = self.typer.sig_of(s).ret;
-                if ret == t { t } else { self.widen_type(ret) }
+                if self.typer.types.same(ret, t) { t } else { self.widen_type(ret) }
             }
             _ => t,
         };
@@ -5679,7 +5686,8 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     fn method_type(&mut self, m: MethodTypeRepr) -> TypeId {
-        if let Some(&t) = self.records.method_type_ids.get(&m) {
+        let key = MethodTypeRepr { types: m.types.iter().map(|&x| self.typer.types.canonical(x)).collect(), result: self.typer.types.canonical(m.result), ..m.clone() };
+        if let Some(&t) = self.records.method_type_ids.get(&key) {
             #[cfg(debug_assertions)]
             crate::types::view::cached("Records' method types", t);
             return t;
@@ -5688,9 +5696,9 @@ impl<'a, 't> Interp<'a, 't> {
         for &x in m.types.iter().chain([&m.result]) {
             crate::types::view::cached("Records' method types", x);
         }
-        let desc = format!("<method>{}", self.records.method_types.push(m.clone()));
+        let desc = format!("<method>{}", self.records.method_types.push(m));
         let t = self.typer.types.blocked(&desc);
-        self.records.method_type_ids.insert(m, t);
+        self.records.method_type_ids.insert(key, t);
         t
     }
 
@@ -5712,7 +5720,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// The binder `id`, of type `t`, whole: an equal method type made later is it.
     fn finish_method_binder(&mut self, id: u32, t: TypeId) {
         if let Some(m) = self.records.method_types.get(id) {
-            let whole = m.clone();
+            let whole = MethodTypeRepr { types: m.types.iter().map(|&x| self.typer.types.canonical(x)).collect(), result: self.typer.types.canonical(m.result), ..m.clone() };
             self.records.method_type_ids.entry(whole).or_insert(t);
         }
     }
@@ -5814,16 +5822,17 @@ fn install_types(it: &mut Table) {
     });
     q!(it, "Reflect.TypeReprMethods.TypeRepr.<:<", |it, a| {
         let (x, y) = (it.type_arg(a, 0)?, it.type_arg(a, 1)?);
-        if let Some(b) = it.typer.reflect_memo().and_then(|m| m.hit(|m| m.conforms.get(&(x, y)).copied().or_else(|| m.shared.as_ref().and_then(|sh| read(&sh.conforms, &(x, y)))))) {
+        let key = (it.typer.types.canonical(x), it.typer.types.canonical(y));
+        if let Some(b) = it.typer.reflect_memo().and_then(|m| m.hit(|m| m.conforms.get(&key).copied().or_else(|| m.shared.as_ref().and_then(|sh| read(&sh.conforms, &key))))) {
             return Ok(Value::Bool(b));
         }
         let b = it.conforms(x, y);
         // A type with variables or an unshared path is the worker's to read.
         let shareable = [x, y].iter().all(|&t| before_fork(t.0) && !it.typer.types.has_vars(t) && !it.typer.types.is_unshared(t));
         if let Some(m) = it.typer.reflect_memo() {
-            m.conforms.insert((x, y), b);
+            m.conforms.insert(key, b);
             if let Some(sh) = m.shared.as_ref().filter(|_| shareable) {
-                write(&sh.conforms, (x, y), b);
+                write(&sh.conforms, key, b);
             }
         }
         Ok(Value::Bool(b))
@@ -6541,7 +6550,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// The refinement `Refinement(parent, name, info)` makes: `refinement_info` read backwards.
     fn refinement_of_info(&mut self, name: crate::intern::Name, info: TypeId) -> R<Refinement> {
         if let Some((lo, hi)) = self.typer.types.wild_bounds(info) {
-            return Ok(if lo == hi { Refinement::Alias(name, hi) } else { Refinement::Bounds(name, lo, hi) });
+            return Ok(if self.typer.types.same(lo, hi) { Refinement::Alias(name, hi) } else { Refinement::Bounds(name, lo, hi) });
         }
         let span = self.macro_ctx.as_ref().map_or(Span::default(), |c| c.site_span);
         let file = self.typer.env.file;
@@ -9027,11 +9036,11 @@ impl<'a, 't> Interp<'a, 't> {
             Type::Wild => out.push_str("?"),
             Type::BoundedWild(lo, hi) => {
                 out.push('?');
-                if lo != NOTHING {
+                if self.typer.types.canonical(lo) != NOTHING {
                     out.push_str(" >: ");
                     self.show_type_into(lo, out);
                 }
-                if hi != ANY {
+                if self.typer.types.canonical(hi) != ANY {
                     out.push_str(" <: ");
                     self.show_type_into(hi, out);
                 }

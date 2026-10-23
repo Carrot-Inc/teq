@@ -1780,10 +1780,10 @@ impl<'w, 'a> P<'w, 'a> {
         // The parents the desugaring gave the class (`ClassInfo::desugared_parents`) are written
         // after the source's, below, in scalac's spelling.
         let written = &info.parents[..info.parents.len() - info.desugared_parents as usize];
-        let parents: Vec<TypeId> = written.iter().copied().filter(|&p| p != self.w.b.t_any_ref).collect();
+        let parents: Vec<TypeId> = written.iter().copied().filter(|&p| self.w.types.underlying(p) != self.w.b.t_any_ref).collect();
         let first_is_class = parents.first().map_or(false, |&p| !self.is_trait_type(p));
         let calls = info.kind != ClassKind::Trait;
-        if info.value_class && !parents.iter().any(|&p| p == self.w.b.t_any_val) {
+        if info.value_class && !parents.iter().any(|&p| self.w.types.underlying(p) == self.w.b.t_any_val) {
             if calls {
                 let t = self.w.b.t_any_val;
                 self.parent_call(c, t);
@@ -2257,7 +2257,7 @@ impl<'w, 'a> P<'w, 'a> {
             // bounds end with the variances of those parameters.
             self.buf.byte(TYPEBOUNDS);
             let b = self.buf.begin_length();
-            let lower = if info.lower == NOTHING || info.lower == ERROR { NOTHING } else { info.lower };
+            let lower = if self.w.types.underlying(info.lower) == NOTHING || info.lower == ERROR { NOTHING } else { info.lower };
             match self.w.types.get(lower) {
                 Type::Lambda(ps, body) => {
                     let ps: Vec<TypeId> = self.w.types.items(ps).to_vec();
@@ -2821,6 +2821,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// widens: the constant's, as scalac pickles it, so that a reader and zinc's hash of the
     /// member see the value.
     fn constant_type(&self, s: SymId, widened: TypeId) -> Option<TypeId> {
+        let widened = self.w.types.underlying(widened);
         let b = &self.w.b;
         let (lit, class) = match self.w.constant_value(s)? {
             crate::tir::TExpr::Int(i) => (LitVal::Int(i), b.t_int),
@@ -3669,7 +3670,7 @@ impl<'w, 'a> P<'w, 'a> {
                     // The getter's type as its completion gave it (`inferredResultType`), the
                     // parameter's where nothing refers to the method's type parameters.
                     let gty = crate::typer::getters::getter_type(&self.w.getters, &self.w.syms, crate::tir::DefaultOf::Method(s), starts[ci] + k).unwrap_or(p.ty);
-                    self.default_getter(&name, index, &sig.tparams, &declared[..pos], gty, gty == p.ty, info.mods & mods::PRIVATE != 0, false, exported, inline, producer, default);
+                    self.default_getter(&name, index, &sig.tparams, &declared[..pos], gty, self.canonical(gty) == self.canonical(p.ty), info.mods & mods::PRIVATE != 0, false, exported, inline, producer, default);
                 }
                 index += 1;
             }
@@ -4188,7 +4189,7 @@ impl<'w, 'a> P<'w, 'a> {
                 info.parents[..info.parents.len() - info.desugared_parents as usize].to_vec()
             })
             .unwrap_or_default();
-        let declared: Vec<TypeId> = declared.into_iter().filter(|&t| t != self.w.b.t_any_ref).collect();
+        let declared: Vec<TypeId> = declared.into_iter().filter(|&t| self.w.types.underlying(t) != self.w.b.t_any_ref).collect();
         if obj.synthetic {
             let t = self.w.b.t_any_ref;
             self.parent_as_anyref = true;
@@ -4398,7 +4399,7 @@ impl<'w, 'a> P<'w, 'a> {
                 if p.has_default {
                     let default = typed.get(index as usize).copied().flatten();
                     let gty = crate::typer::getters::getter_type(&self.w.getters, &self.w.syms, crate::tir::DefaultOf::Ctor(k), index as usize).unwrap_or(p.ty);
-                    self.default_getter("<init>", index, &tparams, &clauses[..ci], gty, gty == p.ty, false, false, false, false, Producer::Default, default);
+                    self.default_getter("<init>", index, &tparams, &clauses[..ci], gty, self.canonical(gty) == self.canonical(p.ty), false, false, false, false, Producer::Default, default);
                 }
                 index += 1;
             }
@@ -4418,7 +4419,7 @@ impl<'w, 'a> P<'w, 'a> {
                     if p.has_default {
                         let default = typed.get(index as usize).copied().flatten();
                         let gty = crate::typer::getters::getter_type(&self.w.getters, &self.w.syms, crate::tir::DefaultOf::Method(s), index as usize).unwrap_or(p.ty);
-                        self.default_getter("<init>", index, &tparams, &sig.clauses[..ci], gty, gty == p.ty, false, false, false, false, Producer::Default, default);
+                        self.default_getter("<init>", index, &tparams, &sig.clauses[..ci], gty, self.canonical(gty) == self.canonical(p.ty), false, false, false, false, Producer::Default, default);
                     }
                     index += 1;
                 }
@@ -5290,7 +5291,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.enclosing.push(k);
         let object_t = self.object_type();
         // A class parent is its constructor call, else `Object()` before the traits.
-        let parents: Vec<TypeId> = info.parents.iter().copied().filter(|&p| p != object_t).collect();
+        let parents: Vec<TypeId> = info.parents.iter().copied().filter(|&p| self.w.types.underlying(p) != object_t).collect();
         let first_class = parents.first().copied().filter(|&p| !self.is_trait_type(p));
         match first_class {
             Some(p) => self.parent_call(k, p),
@@ -5823,13 +5824,15 @@ impl<'w, 'a> P<'w, 'a> {
 
     fn ty(&mut self, t: TypeId) {
         let t = self.w.zonk(t);
+        let t = self.w.types.underlying(t);
         // An opaque type's external reference outside its defining scope is the reference any
         // type there writes (`TYPEREF T (TERMREF A)`), shared as one.
         let t = match self.w.types.get(t) {
-            Type::Nested(_, inner) if self.external_written_bare(inner) => inner,
+            Type::Nested(_, inner) if self.external_written_bare(inner) => self.w.types.underlying(inner),
             _ => t,
         };
-        if let Some(&a) = self.shared.get(&t) {
+        let key = self.canonical(t);
+        if let Some(&a) = self.shared.get(&key) {
             self.shared_type_at(a);
             return;
         }
@@ -5843,9 +5846,31 @@ impl<'w, 'a> P<'w, 'a> {
             _ => true,
         };
         if !self.placed && shareable {
-            self.shared.insert(t, at);
+            self.shared.insert(key, at);
         }
         self.placed |= outer;
+    }
+
+    /// `t` with no retained form at any depth (`TypeStore::retained`): the key it shares its canonical twin's address by.
+    fn canonical(&self, t: TypeId) -> TypeId {
+        let t = self.w.types.underlying(t);
+        if !self.w.semantic {
+            return t;
+        }
+        // Rebuilt as written, never collapsed (`map_parts` would join them): the key names what `type_now` writes.
+        let (a, b) = match self.w.types.get(t) {
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => (a, b),
+            _ => return self.w.types.map_parts(t, &mut |x| self.canonical(x)),
+        };
+        let (na, nb) = (self.canonical(a), self.canonical(b));
+        if na == a && nb == b {
+            return t;
+        }
+        match self.w.types.get(t) {
+            Type::Union(_, _, k) => self.w.types.mk(Type::Union(na, nb, k)),
+            Type::Inter(..) => self.w.types.mk(Type::Inter(na, nb)),
+            _ => self.w.types.mk(Type::BoundedWild(na, nb)),
+        }
     }
 
     /// Whether `inner` is an opaque type of an object or of a file's top level written outside

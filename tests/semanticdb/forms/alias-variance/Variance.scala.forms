@@ -1,0 +1,5 @@
+Variance.map: Y
+Variance.co: Out[Any]
+Variance.contra: In[Nothing]
+Variance.inv: Box[?]
+Variance.nested: Box[? >: In[Any] <: In[Nothing]]

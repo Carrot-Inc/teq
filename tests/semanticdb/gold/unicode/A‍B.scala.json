@@ -1,0 +1,15 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "A‍B.scala",
+  "text": "",
+  "md5": "2542F928F8897DBA31E2B59362802E5A",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"_empty_/UnicodeFile.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"UnicodeFile","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"_empty_/UnicodeFile."},"declarations":{"symlinks":["_empty_/UnicodeFile.`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":0,"start_character":7,"end_line":0,"end_character":18},"symbol":"_empty_/UnicodeFile.","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

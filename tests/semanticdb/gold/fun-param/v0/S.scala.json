@@ -1,0 +1,35 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "S.scala",
+  "text": "",
+  "md5": "17C7CC2639A61278387400249441DC5E",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"local0","language":"SCALA","kind":"PARAMETER","properties":0,"display_name":"x","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"local1","language":"SCALA","kind":"LOCAL","properties":1024,"display_name":"x","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"local2","language":"SCALA","kind":"LOCAL","properties":0,"display_name":"f","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":["local0"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"fp/S.outer().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"outer","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"fp/S.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"S","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"fp/S."},"declarations":{"symlinks":["fp/S.`<init>`().","fp/S.outer()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":15,"end_line":2,"end_character":18},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":13,"end_line":3,"end_character":16},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":10,"end_line":3,"end_character":11},"symbol":"local0","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":19,"end_line":3,"end_character":22},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":10,"end_line":4,"end_character":11},"symbol":"local1","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":9,"end_line":5,"end_character":10},"symbol":"local1","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":11,"end_line":5,"end_character":12},"symbol":"scala/Int#`>`(+3).","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":20,"end_line":5,"end_character":21},"symbol":"local2","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":26,"end_line":5,"end_character":27},"symbol":"local1","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":28,"end_line":5,"end_character":29},"symbol":"scala/Int#`-`(+3).","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":22,"end_line":5,"end_character":23},"symbol":"local0","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":8,"end_line":3,"end_character":9},"symbol":"local2","role":"DEFINITION"},
+    {"range":{"start_line":6,"start_character":4,"end_line":6,"end_character":5},"symbol":"local2","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":6,"end_line":6,"end_character":7},"symbol":"local0","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":11},"symbol":"fp/S.outer().","role":"DEFINITION"},
+    {"range":{"start_line":1,"start_character":7,"end_line":1,"end_character":8},"symbol":"fp/S.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":10},"symbol":"fp/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

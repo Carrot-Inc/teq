@@ -1,0 +1,22 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "P18Pkg.scala",
+  "text": "",
+  "md5": "57780884BEB01973335D47D033DF1066",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"a/b/c/X.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"X","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"a/b/c/X."},"declarations":{"symlinks":["a/b/c/X.`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"a/b/c/d/Y.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Y","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"a/b/c/d/Y."},"declarations":{"symlinks":["a/b/c/d/Y.`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":7,"end_line":2,"end_character":8},"symbol":"a/b/c/X.","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":9,"end_line":4,"end_character":10},"symbol":"a/b/c/d/Y.","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":8,"end_line":3,"end_character":9},"symbol":"a/b/c/d/","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":4,"end_line":5,"end_character":5},"symbol":"a/b/c/d/","role":"REFERENCE"},
+    {"range":{"start_line":1,"start_character":8,"end_line":1,"end_character":9},"symbol":"a/b/c/","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":9},"symbol":"a/","role":"REFERENCE"},
+    {"range":{"start_line":0,"start_character":10,"end_line":0,"end_character":11},"symbol":"a/b/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

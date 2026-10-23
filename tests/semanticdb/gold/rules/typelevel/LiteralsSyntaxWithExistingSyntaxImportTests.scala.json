@@ -1,0 +1,26 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "LiteralsSyntaxWithExistingSyntaxImportTests.scala",
+  "text": "",
+  "md5": "E8ECBFC4E76D572147F859CBB0FD2E86",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"fix/LiteralsSyntaxWithExistingSyntaxImportTests.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"LiteralsSyntaxWithExistingSyntaxImportTests","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"fix/LiteralsSyntaxWithExistingSyntaxImportTests."},"declarations":{"symlinks":["fix/LiteralsSyntaxWithExistingSyntaxImportTests.`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":6,"start_character":7,"end_line":6,"end_character":10},"symbol":"org/","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":11,"end_line":6,"end_character":17},"symbol":"org/http4s/","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":18,"end_line":6,"end_character":21},"symbol":"org/http4s/Uri.","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":18,"end_line":6,"end_character":21},"symbol":"org/http4s/Uri#","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":7,"end_line":7,"end_character":10},"symbol":"org/","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":11,"end_line":7,"end_character":17},"symbol":"org/http4s/","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":18,"end_line":7,"end_character":24},"symbol":"org/http4s/syntax/","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":25,"end_line":7,"end_character":28},"symbol":"org/http4s/syntax/package.all.","role":"REFERENCE"},
+    {"range":{"start_line":10,"start_character":2,"end_line":10,"end_character":5},"symbol":"org/http4s/Uri.","role":"REFERENCE"},
+    {"range":{"start_line":10,"start_character":6,"end_line":10,"end_character":22},"symbol":"org/http4s/Uri.unsafeFromString().","role":"REFERENCE"},
+    {"range":{"start_line":9,"start_character":7,"end_line":9,"end_character":50},"symbol":"fix/LiteralsSyntaxWithExistingSyntaxImportTests.","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":8,"end_line":4,"end_character":11},"symbol":"fix/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

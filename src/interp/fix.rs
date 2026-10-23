@@ -7,6 +7,7 @@ use super::value::{ArrayCell, Value};
 use super::{Interp, R};
 use crate::fix::config::Value as Conf;
 use crate::fix::host::{with_host, DocView, Edit, Host, ImportOp, Lint, Op, Severity};
+use crate::fix::service::{Answer, Ask};
 use crate::fix::nodes::{FIELD_NAMES, KIND_NAMES, NONE};
 use crate::source::Span;
 use std::rc::Rc;
@@ -67,6 +68,42 @@ fn on_host(it: &mut Interp<'_, '_>, f: impl FnOnce(&mut Host) -> Result<Value, S
         Some(Err(msg)) => it.throw_named("IllegalStateException", &msg),
         None => it.throw_named("IllegalStateException", "teq.fix runs under teq fix alone"),
     }
+}
+
+/// The answer of the round's SemanticDB service (`fix::service`) to the question `ask` makes of the document `gen`, read
+/// by `read`, or the exception a rule meets where there is none: a stale handle, a run with no semantic rule, the
+/// service's failure or its refusal.
+fn query(it: &mut Interp<'_, '_>, gen: i32, ask: impl FnOnce(&DocView) -> Result<Ask, String>, read: impl FnOnce(Answer) -> Result<Value, String>) -> R {
+    let asked = with_host(|h| {
+        let d = match &h.doc {
+            Some(d) if d.gen as i32 == gen => d,
+            Some(_) => return Err("a tree or token of another document than the one the rule reads".to_string()),
+            None => return Err("no document is read".to_string()),
+        };
+        let ask = ask(d)?;
+        let link = h.sem.clone().ok_or("no semantic rule is configured, so the run answers no SemanticDB question")?;
+        let a = h.asker.ok_or("no document is read")?;
+        h.queries += 1;
+        Ok((link, (a.job, a.round, a.gen), ask))
+    });
+    let answer = match asked {
+        None => return it.throw_named("IllegalStateException", "teq.fix runs under teq fix alone"),
+        Some(Err(msg)) => return it.throw_named("IllegalStateException", &msg),
+        Some(Ok((link, key, ask))) => crate::fix::service::ask(&link, key, ask),
+    };
+    match answer.and_then(read) {
+        Ok(v) => Ok(v),
+        Err(msg) => it.throw_named("IllegalStateException", &msg),
+    }
+}
+
+/// The refusal of an answer to another question than `what`'s.
+fn other(what: &str) -> String {
+    format!("the SemanticDB service answered another question than {}'s", what)
+}
+
+fn bytes(b: Vec<u8>) -> Value {
+    Value::Array(ArrayCell::new(b.into_iter().map(|x| Value::Byte(x as i8)).collect()))
 }
 
 fn node(d: &DocView, n: i32) -> Result<&crate::fix::nodes::Node, String> {
@@ -272,6 +309,38 @@ pub(super) fn install(t: &mut Table) {
         })
     });
     reg!(t, "teq.fix.Native.expanded", |it, a| on_doc(it, int(a, 0), |d| Ok(Value::Bool(d.expanded))));
+    reg!(t, "teq.fix.Native.docSymbols", |it, a| {
+        query(it, int(a, 0), |_| Ok(Ask::Doc), |r| match r {
+            Answer::Doc(b) => Ok(bytes(b)),
+            _ => Err(other("docSymbols")),
+        })
+    });
+    reg!(t, "teq.fix.Native.symbolsAt", |it, a| {
+        let (start, end) = (int(a, 1), int(a, 2));
+        query(
+            it,
+            int(a, 0),
+            |d| {
+                let units = d.utf16.units(d.text.len() as u32) as i32;
+                if start < 0 || end < start || end > units {
+                    return Err(format!("no range [{}, {}) of {}", start, end, d.path));
+                }
+                Ok(Ask::Symbols { start: d.utf16.bytes(start as u32), end: d.utf16.bytes(end as u32) })
+            },
+            |r| match r {
+                Answer::Symbols(v) => Ok(strings(v)),
+                _ => Err(other("symbolsAt")),
+            },
+        )
+    });
+    reg!(t, "teq.fix.Native.info", |it, a| {
+        let symbol = text(a, 1);
+        query(it, int(a, 0), |_| Ok(Ask::Info { symbol }), |r| match r {
+            Answer::Info(Some(b)) => Ok(bytes(b)),
+            Answer::Info(None) => Ok(Value::Null),
+            _ => Err(other("info")),
+        })
+    });
     reg!(t, "teq.fix.Native.addLeft", |it, a| edit(it, a, Op::Left));
     reg!(t, "teq.fix.Native.addRight", |it, a| edit(it, a, Op::Right));
     reg!(t, "teq.fix.Native.removeToken", |it, a| edit(it, a, Op::Remove));

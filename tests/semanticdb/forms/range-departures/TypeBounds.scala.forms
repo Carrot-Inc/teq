@@ -1,0 +1,3 @@
+TypeBounds.map: B
+TypeBounds.upperIn: TbInv[? <: TbIn[Nothing]]
+TypeBounds.lowerOut: TbInv[? >: TbOut[Nothing]]

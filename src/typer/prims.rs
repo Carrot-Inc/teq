@@ -191,6 +191,7 @@ impl<'a> Worker<'a> {
     }
 
     pub fn is_primitive(&self, t: TypeId) -> bool {
+        let t = self.canon_head(t);
         self.is_numeric(t).is_some() || t == self.b.t_boolean || t == self.b.t_string || t == self.b.t_unit
     }
 
@@ -215,7 +216,7 @@ impl<'a> Worker<'a> {
     /// every expected type.
     #[inline]
     pub(super) fn is_primitive_type_id(&self, t: TypeId) -> bool {
-        self.b.primitive_ids.checked_shr(t.0).is_some_and(|bits| bits & 1 != 0)
+        self.b.primitive_ids.checked_shr(self.canon(t).0).is_some_and(|bits| bits & 1 != 0)
     }
 
     #[inline(always)]
@@ -305,7 +306,7 @@ impl<'a> Worker<'a> {
         // wildcard pattern takes), its primitive the unboxing's.
         // A type parameter bounded by a primitive erases to it (`TypeErasure`), as an alias does.
         let prim = if self.is_primitive_type_id(ty) { ty } else { self.erased_primitive(ty).unwrap_or_else(|| self.dealias(ty)) };
-        if !self.is_primitive(prim) || prim == self.b.t_unit {
+        if !self.is_primitive(prim) || self.canon(prim) == self.b.t_unit {
             return te;
         }
         if !self.result_erases(sym) {
@@ -454,6 +455,7 @@ impl<'a> Worker<'a> {
         if matches!(self.types.get(to), Type::Lit(_)) {
             return false;
         }
+        let (from, to) = (self.canon(from), self.canon(to));
         match (self.is_numeric(from), self.is_numeric(to)) {
             (Some(f), Some(t)) => widens(f, t),
             _ => false,
@@ -661,16 +663,17 @@ impl<'a> Worker<'a> {
         let solved = self.instantiate_receiver_var(solved);
         let widened = self.dealias(solved);
         let prim_lty = self.operator_type(widened);
+        let prim_lty = self.canon(prim_lty);
         // `(l && r)(ev)`: a Boolean's `&&` short-circuits and its result is applied to the lists
         // as a value; on anything else `&&` is a method, whose further clauses the lists fill
         // (zio-test's `TestTrace.&&` takes `A <:< Boolean`).
-        if matches!(op, names::AMPAMP | names::BARBAR) && self.dealias(prim_lty) == self.b.t_boolean {
+        if matches!(op, names::AMPAMP | names::BARBAR) && self.dealias_canonical(prim_lty) == self.b.t_boolean {
             let tr = self.check_right_operand(op, tl, r);
             let prim = if op == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
             let te = self.prog.add(TExpr::Prim(prim, tl, tr));
             return Some(self.apply_callee(super::apply::Callee::Value(te, self.b.t_boolean), None, lists, span, expected));
         }
-        if (self.is_primitive(prim_lty) || prim_lty == self.b.t_string) && classify(op).is_some() {
+        if (self.is_primitive(prim_lty) || self.canon(prim_lty) == self.b.t_string) && classify(op).is_some() {
             let (te, ty) = self.binop_or_member(op, tl, prim_lty, widened, r, FunEnd::operand_at(op_end), span, None);
             let ty = self.const_folded(te, ty, op, tl, lty);
             return Some(self.apply_callee(super::apply::Callee::Value(te, ty), None, lists, span, expected));
@@ -769,6 +772,7 @@ impl<'a> Worker<'a> {
         // an intersection with a primitive (`n: Int & T` of a typed pattern) has the primitive's,
         // and a type parameter bounded by a primitive or `String` its bound's.
         let prim_lty = self.operator_type(widened);
+        let prim_lty = self.canon(prim_lty);
         let (te, ty) = self.binop_or_member(op, tl, prim_lty, lty, r, FunEnd::operand_at(op_end), span, expected);
         (te, self.const_folded(te, ty, op, tl, own_ty))
     }
@@ -779,7 +783,7 @@ impl<'a> Worker<'a> {
         let mut t = t;
         for _ in 0..8 {
             let Type::Param(p) = self.types.get(t) else { return None };
-            let upper = self.dealias(self.syms.tparam(p).upper);
+            let upper = self.dealias_canonical(self.syms.tparam(p).upper);
             if upper == self.b.t_boolean || upper == self.b.t_string || self.is_numeric(upper).is_some() {
                 return Some(upper);
             }
@@ -798,12 +802,12 @@ impl<'a> Worker<'a> {
         // class's operators, its members those of its join (`OrType.join`).
         if let Type::Union(..) = self.types.get(t) {
             let j = self.union_join(t)?;
-            let j = self.dealias(j);
+            let j = self.dealias_canonical(j);
             return (j == self.b.t_boolean || j == self.b.t_string || self.is_numeric(j).is_some()).then_some(j);
         }
         let Type::Inter(a, b) = self.types.get(t) else { return None };
         for side in [a, b] {
-            let side = self.dealias(side);
+            let side = self.dealias_canonical(side);
             if side == self.b.t_boolean || side == self.b.t_string || self.is_numeric(side).is_some() {
                 return Some(side);
             }
@@ -829,7 +833,7 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
         // The short-circuit operators of a Boolean, which `b ||= c` reaches as `b = b || c`.
-        if (op == names::AMPAMP || op == names::BARBAR) && self.dealias(prim_lty) == self.b.t_boolean {
+        if (op == names::AMPAMP || op == names::BARBAR) && self.dealias_canonical(prim_lty) == self.b.t_boolean {
             let mark = if op == names::AMPAMP { self.push_tested(tl) } else { self.tested.len() };
             let (tr, typed, rty) = self.checked_operand_typed(r, self.b.t_boolean);
             self.pop_tested(mark);
@@ -881,7 +885,7 @@ impl<'a> Worker<'a> {
         span: Span,
     ) -> Option<(TExprId, TypeId)> {
         let (Some(lrank), Some(class)) = (self.is_numeric(lty), classify(op)) else { return None };
-        if self.is_numeric(rty).is_some() || rty == self.b.t_string {
+        if self.is_numeric(rty).is_some() || self.canon(rty) == self.b.t_string {
             return None;
         }
         for rank in [R_BYTE, R_SHORT, R_CHAR, R_INT, R_LONG, R_FLOAT, R_DOUBLE] {
@@ -1162,9 +1166,11 @@ impl<'a> Worker<'a> {
         let lty = self.solve_in(lty);
         let lty = self.dealias(lty);
         let lty = self.union_as_class(lty);
+        let lty = self.canon(lty);
         let rty = self.solve_in(rty);
         let rty = self.dealias(rty);
         let rty = self.union_as_class(rty);
+        let rty = self.canon(rty);
         if self.unused.on() {
             self.mark_can_equal(lty, rty);
         }
@@ -1303,8 +1309,8 @@ impl<'a> Worker<'a> {
     /// The part of the rule that needs no given: `Some(true)` when the instance is predefined,
     /// `Some(false)` when a standard type rules the comparison out, `None` when a given decides.
     fn can_equal_predefined(&mut self, l: TypeId, r: TypeId, span: Span) -> Option<bool> {
-        let l = self.deref(l);
-        let r = self.deref(r);
+        let l = self.deref_canonical(l);
+        let r = self.deref_canonical(r);
         if l == ERROR || r == ERROR || l == NOTHING || r == NOTHING {
             return Some(true);
         }
@@ -1449,27 +1455,57 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether `t` names a type parameter: any one, or one of `tps` when given.
+    #[inline(always)]
     pub fn mentions_tparam_of(&self, t: TypeId, tps: Option<&[TParamId]>) -> bool {
+        if self.semantic {
+            return self.mentions_tparam_of_retaining(t, tps);
+        }
+        self.mentions_tparam_of_in::<false>(t, tps)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn mentions_tparam_of_retaining(&self, t: TypeId, tps: Option<&[TParamId]>) -> bool {
+        self.mentions_tparam_of_in::<true>(t, tps)
+    }
+
+    /// `mentions_tparam_of` in a typing whose types may carry retained forms (`FORMS`, the semantic typing) or not.
+    fn mentions_tparam_of_in<const FORMS: bool>(&self, t: TypeId, tps: Option<&[TParamId]>) -> bool {
+        // A retained form first: its record's types, then what it is made over (`existsPart`: no annotation's
+        // arguments).
+        if FORMS {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.mentions_tparam_of_form(t, tps, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Param(p) => tps.map_or(true, |tps| tps.contains(&p)),
             Type::AppParam(p, args) => {
-                tps.map_or(true, |tps| tps.contains(&p)) || self.types.items(args).iter().any(|&a| self.mentions_tparam_of(a, tps))
+                tps.map_or(true, |tps| tps.contains(&p)) || self.types.items(args).iter().any(|&a| self.mentions_tparam_of_in::<FORMS>(a, tps))
             }
             // Through every part of the type (a refinement's, a path's prefix, an annotation's
             // parent, a match type's cases), as dotty's `existsPart` walks it.
             _ => {
                 let mut parts = Vec::new();
                 self.types.parts(t, &mut parts);
-                parts.into_iter().any(|part| self.mentions_tparam_of(part, tps))
+                parts.into_iter().any(|part| self.mentions_tparam_of_in::<FORMS>(part, tps))
             }
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn mentions_tparam_of_form(&self, t: TypeId, tps: Option<&[TParamId]>, under: TypeId, r: crate::types::RetainId) -> bool {
+        let mut ctx = vec![super::FORM_MENTIONS_TPARAM, tps.is_some() as u32];
+        ctx.extend(tps.unwrap_or(&[]).iter().map(|p| p.0));
+        self.types.ask_form_once(&ctx, t, under, r, false, &mut |x| self.mentions_tparam_of_in::<true>(x, tps))
     }
 
     /// Built-in binary operators on primitives.
     fn prim_binop(&mut self, op: Name, tl: TExprId, lty: TypeId, r: ExprId, span: Span) -> Binop {
         let b_string = self.b.t_string;
         let b_bool = self.b.t_boolean;
-        if lty == b_string {
+        if self.same_type(lty, b_string) {
             if op == names::PLUS {
                 let (tr, rty) = self.typed_operand(r, None);
                 let rty = self.solve_in(rty);
@@ -1487,7 +1523,7 @@ impl<'a> Worker<'a> {
             }
             return Binop::NotBuiltin;
         }
-        if lty == b_bool {
+        if self.same_type(lty, b_bool) {
             let prim = match op {
                 names::AMP => PrimOp::BoolStrictAnd,
                 names::BAR => PrimOp::BoolStrictOr,
@@ -1515,6 +1551,7 @@ impl<'a> Worker<'a> {
         let (b_string, b_bool) = (self.b.t_string, self.b.t_boolean);
         let lty = self.widen_path(lty);
         let lty = self.widen_lit(lty);
+        let lty = self.canon(lty);
         let rty = self.widen_path(rty);
         let rty = self.widen_lit(rty);
         if lty == b_string {
@@ -1523,12 +1560,12 @@ impl<'a> Worker<'a> {
                 let l = self.prog.list(&[tl, rs]);
                 return Some((self.prog.add(TExpr::StrConcat(l)), b_string));
             }
-            if classify(op) == Some(OpClass::Compare) && self.deref(rty) == b_string {
+            if classify(op) == Some(OpClass::Compare) && self.deref_canonical(rty) == b_string {
                 return Some((self.prog.add(TExpr::Prim(compare_op(op), tl, tr)), b_bool));
             }
             return None;
         }
-        if lty == b_bool && self.deref(rty) == b_bool {
+        if lty == b_bool && self.deref_canonical(rty) == b_bool {
             let prim = match op {
                 names::AMP => PrimOp::BoolStrictAnd,
                 names::BAR => PrimOp::BoolStrictOr,
@@ -1571,6 +1608,7 @@ impl<'a> Worker<'a> {
             _ => self.numeric_bound(rty),
         }
         .unwrap_or(rty);
+        let rty = self.canon(rty);
         if rty == b_string && op == names::PLUS {
             let ls = self.to_str(tl, lty);
             let l = self.prog.list(&[ls, tr]);
@@ -1621,7 +1659,7 @@ impl<'a> Worker<'a> {
     /// connectives, the arithmetic, comparison, bit and shift operators of a number, `+` and
     /// the comparisons of a String.
     pub(super) fn prim_op_applies(&mut self, t: TypeId, op: Name) -> bool {
-        let t = self.dealias(t);
+        let t = self.dealias_canonical(t);
         if t == self.b.t_boolean {
             return matches!(op, names::UNARY_BANG | names::AMPAMP | names::BARBAR | names::AMP | names::BAR | names::CARET);
         }
@@ -1643,7 +1681,8 @@ impl<'a> Worker<'a> {
     pub(super) fn stands_for_string(&mut self, t: TypeId) -> bool {
         let t = self.primitive_side(t).unwrap_or(t);
         let t = self.dealias(t);
-        self.widen_lit(t) == self.b.t_string
+        let t = self.widen_lit(t);
+        self.canon(t) == self.b.t_string
     }
 
     /// The argument of `String.+` passed by its name, `x$0`, as the one it names.
@@ -1752,7 +1791,7 @@ impl<'a> Worker<'a> {
         let v = self.folded_as(v, ty);
         let lit = self.types.lit(v);
         let _ = te;
-        if self.widen_lit(lit) == self.widen_lit(ty) {
+        if self.widen_lit(lit) == self.widen_lit(self.canon(ty)) {
             lit
         } else {
             ty
@@ -1767,8 +1806,10 @@ impl<'a> Worker<'a> {
         let ty = self.deref_keeping(ty);
         match self.types.get(ty) {
             Type::Lit(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::Inter(..) | Type::Union(..) | Type::Match(..) | Type::Alias(..) => true,
-            // A literal typed at a class (a hint's) is the class's operand alone; `null` is typed `Null`.
-            _ => self.prog.is_widened(e) || ty == self.b.t_null && matches!(self.prog.expr(e), TExpr::Null),
+            // A literal typed at a class (a hint's) is the class's operand alone; `null` is typed `Null` (read by its class,
+            // which a retained form shares with its canonical type).
+            Type::Class(c, _) if c == self.b.null => self.prog.is_widened(e) || matches!(self.prog.expr(e), TExpr::Null),
+            _ => self.prog.is_widened(e),
         }
     }
 
@@ -1853,6 +1894,7 @@ impl<'a> Worker<'a> {
     /// its `ByteTag` or `ShortTag`; else an `Int`.
     fn narrowed_literal(&mut self, v: i32, ty: TypeId) -> LitVal {
         let ty = self.deref_keeping(ty);
+        let ty = self.canon_head(ty);
         if ty == self.b.t_byte {
             if let Ok(b) = i8::try_from(v) {
                 return LitVal::Byte(b);
@@ -2172,7 +2214,7 @@ impl<'a> Worker<'a> {
             Some(typed) => typed,
             None => self.type_expr(r, Some(expected)),
         };
-        if cached.is_none() && expected == self.b.t_unit {
+        if cached.is_none() && self.canon(expected) == self.b.t_unit {
             self.warn_discarded(r, te, ty);
         }
         let span = self.cur_ast().expr_span(r);
@@ -2333,7 +2375,7 @@ impl<'a> Worker<'a> {
         let unit = Erased::Of(self.b.unit, 0);
         // An ascription to `Unit` is adapted to the primitive (`Erasure.Typer.typedTyped`,
         // `Boxing.adaptToType`): the value then `()`, `null` included.
-        if self.dealias(to) == self.b.t_unit {
+        if self.dealias_canonical(to) == self.b.t_unit {
             return if source == unit { CastLowering::Same } else { CastLowering::Unit };
         }
         if self.erased_conforms(source, target) {
@@ -2510,7 +2552,7 @@ impl<'a> Worker<'a> {
     }
 
     pub(super) fn zero_of(&mut self, t: TypeId) -> Option<TExprId> {
-        let t = self.dealias(t);
+        let t = self.dealias_canonical(t);
         let b = &self.b;
         let zero = if t == b.t_int || t == b.t_byte || t == b.t_short {
             TExpr::Int(0)
@@ -2788,7 +2830,7 @@ impl<'a> Worker<'a> {
                 // A receiver whose static type is a primitive has the primitive's class, as scalac
                 // rewrites it (`1.getClass` is `classOf[Int]`, `int` printed); it runs for its effects.
                 // A constant's is its class's (`classOf[Boolean]` for `true`).
-                let class = self.widen_lit(recv_ty);
+                let class = self.widen_lit(self.canon_head(recv_ty));
                 let primitive = self.is_numeric(class).is_some() || class == self.b.t_boolean || class == self.b.t_unit;
                 if primitive {
                     // `ConstFold.Apply`'s `getClass` of a primitive value: the class constant (`Constant(qual.tpe.widen)`).

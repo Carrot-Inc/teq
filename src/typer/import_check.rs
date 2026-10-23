@@ -379,7 +379,7 @@ impl<'a> Worker<'a> {
     /// .isCompiletimeAppliedType`): `scala.compiletime.ops.S`, `scala.NamedTuple.From`, or a type
     /// of the `ops` objects (`any`, `int`, `long`, `float`, `double`, `boolean`, `string`) among
     /// the names each declares (`compiletimePackage*Types`), whichever record teq's std gives it.
-    fn compiletime_applied(&self, t: TypeId) -> bool {
+    pub(super) fn compiletime_applied(&self, t: TypeId) -> bool {
         let (name, owner) = match self.types.get(t) {
             Type::Alias(a, args) if !self.types.items(args).is_empty() => (self.syms.alias(a).name, self.syms.alias(a).owner),
             Type::AppMember(m, args) if !self.types.items(args).is_empty() => match self.types.get(m) {
@@ -483,7 +483,7 @@ impl<'a> Worker<'a> {
                         Type::Refined(p, _) | Type::Rec(p) | Type::Annotated(p) => self.class_symbols(p),
                         Type::Param(p) => {
                             let hi = self.syms.tparam(p).upper;
-                            if hi == ANY { Vec::new() } else { self.class_symbols(hi) }
+                            if self.canon(hi) == ANY { Vec::new() } else { self.class_symbols(hi) }
                         }
                         _ => Vec::new(),
                     },
@@ -818,7 +818,7 @@ impl<'a> Worker<'a> {
                 match (x.0, y.0) {
                     (Some(p), Some(q)) => {
                         let (p, q) = (self.zonk(p), self.zonk(q));
-                        if p == q { (Some(p), None) } else { (Some(p), Some(q)) }
+                        if self.same_type(p, q) { (Some(p), None) } else { (Some(p), Some(q)) }
                     }
                     (Some(p), None) | (None, Some(p)) => (Some(p), None),
                     (None, None) => (None, None),

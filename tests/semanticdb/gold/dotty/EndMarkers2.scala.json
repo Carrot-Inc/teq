@@ -1,0 +1,20 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "EndMarkers2.scala",
+  "text": "",
+  "md5": "F63F4A858E300BF84D22105C5D557F94",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"endmarkers2/package.Foo#","language":"SCALA","kind":"TYPE","properties":0,"display_name":"Foo","signature":{"kind":"TypeSignature","type_parameters":null,"lower_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Unit#","type_arguments":[]},"upper_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Unit#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"endmarkers2/package.","language":"SCALA","kind":"PACKAGE_OBJECT","properties":8,"display_name":"endmarkers2","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"endmarkers2/package."},"declarations":{"symlinks":["endmarkers2/package.`<init>`().","endmarkers2/package.Foo#"],"hardlinks":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":3,"start_character":4,"end_line":3,"end_character":8},"symbol":"scala/Unit#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":7,"end_line":2,"end_character":10},"symbol":"endmarkers2/package.Foo#","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":6,"end_line":4,"end_character":9},"symbol":"endmarkers2/package.Foo#","role":"REFERENCE"},
+    {"range":{"start_line":0,"start_character":15,"end_line":0,"end_character":26},"symbol":"endmarkers2/package.","role":"DEFINITION"},
+    {"range":{"start_line":6,"start_character":4,"end_line":6,"end_character":15},"symbol":"endmarkers2/package.","role":"REFERENCE"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

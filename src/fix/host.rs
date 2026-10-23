@@ -144,6 +144,11 @@ pub struct Host {
     pub groups: u32,
     /// Who reads the current document.
     pub asker: Option<Asker>,
+    /// Where the current document's SemanticDB questions go: its round's service (`fix::service`), where a semantic
+    /// rule is configured.
+    pub sem: Option<std::sync::mpsc::Sender<super::service::SemQuery>>,
+    /// The questions the current document's rules asked.
+    pub queries: u32,
 }
 
 thread_local! {

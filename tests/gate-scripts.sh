@@ -60,7 +60,8 @@
 #            binary naming the revision asked for and running TEQ), on a copy of this tree in a repository of its
 #            own: the first shard's machine builds the head and the others take its binary, one whose
 #            copy is spoilt refuses it and builds; the machine whose pool line holds lila is left to the project
-#            lines, which fail there without the checkout, and fail as not run without such a machine; the eighteen
+#            lines, which fail there without the checkout, and fail as not run without such a machine; a file whose
+#            name git quotes mirrored with the head's tree; the eighteen
 #            project lines run unnamed on the holder of the five projects, --without leaving one out; --record
 #            leaves tests/gate-times.txt as it was after a failing run and records the suites' times after a passing
 #            one; the last line is the gate's total; and with five machines the comparison (bench/pairs.py a stand-in
@@ -732,10 +733,13 @@ landing=$work/landing
 scripts=$PWD/tests/gate-agent
 # The landing: this tree's files in a repository of their own (the tree may be a mirror without one), the
 # comparison's stand-in, and bench/reference.txt naming the landing's first commit, so that every revision the gate
-# resolves is the landing's.
+# resolves is the landing's. The list is NUL-separated, a name git would quote (tests/semanticdb's `unicode` group
+# holds one) taken as it is; one is planted beside them, and the machines' copies of the head are to hold it.
+quoted=tests/gate-agent/$(printf 'A\342\200\215B.txt')
 mkdir -p "$landing" && git -C "$landing" init -q &&
-  { git ls-files -co --exclude-standard 2> /dev/null || find . -type f ! -path './out/*' ! -path './target/*' ! -path './.git/*'; } |
-  tar -cf - -T - | tar -xf - -C "$landing" && cp tests/gate-agent/pairs.py "$landing/bench/pairs.py" &&
+  { git ls-files -z -co --exclude-standard 2> /dev/null || find . -type f ! -path './out/*' ! -path './target/*' ! -path './.git/*' -print0; } |
+  tar --null -cf - -T - | tar -xf - -C "$landing" && cp tests/gate-agent/pairs.py "$landing/bench/pairs.py" &&
+  echo "a name git quotes" > "$landing/$quoted" &&
   git -C "$landing" add -A && git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -m "the tree" &&
   echo "reference $(git -C "$landing" rev-parse --short HEAD) 2026-10-14 ceiling 1.20 the landing's own" >> "$landing/bench/reference.txt" &&
   git -C "$landing" -c user.name=gate-scripts -c user.email=gate-scripts@localhost commit -q -a -m "the reference" ||
@@ -795,6 +799,8 @@ check "driver: the builder's head shipped, a spoilt copy refused, lila's line on
   row parser "m[123]" "$log" | grep -q " ok " && row fold "m[123]" "$log" | grep -q " ok " && row planted "m[123]" "$log" | grep -q " ok " &&
   ! grep -q "^claim  *h1 " "$log" && grep -q "^gate: no times recorded" "$log" && [ "$times_before" = "$(cat "$landing/tests/gate-times.txt")" ] &&
   grep -q "^gate: [0-9]*m[0-9]*s from its first command to its last, within thirty minutes" "$log"'
+check "driver: a file whose name git quotes reaches the machines with the head's tree" "$log" eval \
+  '! grep -q "rsync" "$log" && [ -f "$agent/machines/m1/rw/teq/$quoted" ] && [ -f "$agent/machines/m2/rw/teq/$quoted" ]'
 gate "$work/driver-2.log" "$(printf 'm1 free\nm2 free')" --only fold,lila-run
 code=$?
 log=$work/driver-2.log

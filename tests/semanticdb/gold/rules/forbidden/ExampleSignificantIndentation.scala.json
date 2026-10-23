@@ -1,0 +1,40 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "ExampleSignificantIndentation.scala",
+  "text": "",
+  "md5": "61F15F44BF6DB088B1A641A16E297E04",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"fix/ExampleSignificantIndentation.now.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"now","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/time/Instant#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"fix/ExampleSignificantIndentation.s.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"s","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/util/Date#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"fix/ExampleSignificantIndentation.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"ExampleSignificantIndentation","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"fix/ExampleSignificantIndentation."},"declarations":{"symlinks":["fix/ExampleSignificantIndentation.`<init>`().","fix/ExampleSignificantIndentation.now.","fix/ExampleSignificantIndentation.s."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":11,"start_character":7,"end_line":11,"end_character":11},"symbol":"java/","role":"REFERENCE"},
+    {"range":{"start_line":11,"start_character":12,"end_line":11,"end_character":16},"symbol":"java/time/","role":"REFERENCE"},
+    {"range":{"start_line":11,"start_character":17,"end_line":11,"end_character":24},"symbol":"java/time/Instant#","role":"REFERENCE"},
+    {"range":{"start_line":15,"start_character":7,"end_line":15,"end_character":11},"symbol":"java/","role":"REFERENCE"},
+    {"range":{"start_line":15,"start_character":12,"end_line":15,"end_character":16},"symbol":"java/util/","role":"REFERENCE"},
+    {"range":{"start_line":15,"start_character":17,"end_line":15,"end_character":21},"symbol":"java/util/Date#","role":"REFERENCE"},
+    {"range":{"start_line":21,"start_character":12,"end_line":21,"end_character":19},"symbol":"java/time/Instant#","role":"REFERENCE"},
+    {"range":{"start_line":21,"start_character":20,"end_line":21,"end_character":23},"symbol":"java/time/Instant#now().","role":"REFERENCE"},
+    {"range":{"start_line":21,"start_character":6,"end_line":21,"end_character":9},"symbol":"fix/ExampleSignificantIndentation.now.","role":"DEFINITION"},
+    {"range":{"start_line":25,"start_character":10,"end_line":25,"end_character":14},"symbol":"java/util/Date#","role":"REFERENCE"},
+    {"range":{"start_line":25,"start_character":15,"end_line":25,"end_character":19},"symbol":"java/util/Date#from().","role":"REFERENCE"},
+    {"range":{"start_line":25,"start_character":20,"end_line":25,"end_character":23},"symbol":"fix/ExampleSignificantIndentation.now.","role":"REFERENCE"},
+    {"range":{"start_line":25,"start_character":6,"end_line":25,"end_character":7},"symbol":"fix/ExampleSignificantIndentation.s.","role":"DEFINITION"},
+    {"range":{"start_line":26,"start_character":2,"end_line":26,"end_character":6},"symbol":"java/","role":"REFERENCE"},
+    {"range":{"start_line":26,"start_character":7,"end_line":26,"end_character":11},"symbol":"java/math/","role":"REFERENCE"},
+    {"range":{"start_line":26,"start_character":12,"end_line":26,"end_character":22},"symbol":"java/math/BigDecimal#","role":"REFERENCE"},
+    {"range":{"start_line":26,"start_character":23,"end_line":26,"end_character":30},"symbol":"java/math/BigDecimal#valueOf(+1).","role":"REFERENCE"},
+    {"range":{"start_line":30,"start_character":2,"end_line":30,"end_character":9},"symbol":"scala/Predef.println(+1).","role":"REFERENCE"},
+    {"range":{"start_line":30,"start_character":10,"end_line":30,"end_character":14},"symbol":"java/","role":"REFERENCE"},
+    {"range":{"start_line":30,"start_character":15,"end_line":30,"end_character":19},"symbol":"java/math/","role":"REFERENCE"},
+    {"range":{"start_line":30,"start_character":20,"end_line":30,"end_character":30},"symbol":"java/math/BigDecimal#","role":"REFERENCE"},
+    {"range":{"start_line":30,"start_character":31,"end_line":30,"end_character":34},"symbol":"java/math/BigDecimal#ONE.","role":"REFERENCE"},
+    {"range":{"start_line":20,"start_character":7,"end_line":20,"end_character":36},"symbol":"fix/ExampleSignificantIndentation.","role":"DEFINITION"},
+    {"range":{"start_line":9,"start_character":8,"end_line":9,"end_character":11},"symbol":"fix/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

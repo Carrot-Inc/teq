@@ -135,10 +135,10 @@ impl<'a> Worker<'a> {
         let params = self.syms.class(c).tparams.clone();
         let subst: Subst = params.iter().copied().zip(items.iter().copied()).collect();
         for (&p, &a) in params.iter().zip(&items) {
-            if binders.contains(&a) {
+            if binders.contains(&self.canon(a)) {
                 let Type::Param(b) = self.types.get(a) else { continue };
                 let upper = self.syms.tparam(p).upper;
-                if upper != ANY && self.syms.tparam(b).upper == ANY {
+                if self.canon(upper) != ANY && self.canon(self.syms.tparam(b).upper) == ANY {
                     let upper = self.types.subst(upper, &subst);
                     self.syms.tparams[b.idx()].upper = upper;
                 }
@@ -310,6 +310,7 @@ impl<'a> Worker<'a> {
     /// The match type `t`, shown as `shown`, reduced to the body of the case its scrutinee
     /// selects; None where it is stuck.
     pub fn reduce_match(&mut self, t: TypeId, shown: TypeId) -> Option<TypeId> {
+        let t = self.canon(t);
         let Type::Match(scrut, m) = self.types.get(t) else { return None };
         let cacheable = !self.types.has_vars(t) && self.gadt.is_empty() && !self.matches.recording;
         if cacheable {
@@ -392,10 +393,10 @@ impl<'a> Worker<'a> {
                         );
                         for &(n, lo, hi) in &fails {
                             msg.push_str(&format!("\n    {}", t.name_str(n)));
-                            if lo != NOTHING {
+                            if t.types.canonical(lo) != NOTHING {
                                 msg.push_str(&format!(" >: {}", t.show(lo)));
                             }
-                            if hi != ANY {
+                            if t.types.canonical(hi) != ANY {
                                 msg.push_str(&format!(" <: {}", t.show(hi)));
                             }
                         }
@@ -735,7 +736,7 @@ impl<'a> Worker<'a> {
     fn param_is_field(&mut self, c: ClassId, p: TParamId) -> bool {
         self.complete_class(c);
         let param = self.types.param(p);
-        self.syms.class(c).ctor.iter().any(|clause| clause.params.iter().any(|f| f.ty == param))
+        self.syms.class(c).ctor.iter().any(|clause| clause.params.iter().any(|f| self.same_type(f.ty, param)))
     }
 
     fn cannot_be_nothing(&mut self, t: TypeId) -> bool {
@@ -848,6 +849,11 @@ impl<'a> Worker<'a> {
             return t;
         }
         let t = self.deref(t);
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.normalize_form(t, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Match(..) => match self.reduce_match(t, t) {
                 Some(r) => self.after_reduction(t, t, r, true),
@@ -935,10 +941,17 @@ impl<'a> Worker<'a> {
         }
     }
 
+    #[cold]
+    #[inline(never)]
+    fn normalize_form(&mut self, t: TypeId, under: TypeId, r: RetainId) -> TypeId {
+        self.map_form(&[super::FORM_NORMALIZE], t, under, r, &mut |w, x| w.normalize(x))
+    }
+
     /// What the reduction `r` of the match type `t` goes on to: reduced again at its head, or
     /// normalized throughout with `deep`; the match type stays on the stack meanwhile, so that
     /// a reduction that comes back to it is reported and stops.
     fn after_reduction(&mut self, t: TypeId, shown: TypeId, r: TypeId, deep: bool) -> TypeId {
+        let t = self.canon(t);
         if self.matches.stack.iter().any(|&(open, _)| open == t) || self.matches.stack.len() >= MAX_DEPTH {
             self.report_match_recursion(shown);
             return shown;
@@ -1020,7 +1033,7 @@ impl<'a> Worker<'a> {
             Type::Match(..) => Some(t),
             Type::Alias(a, args) => {
                 let expansion = self.alias_expansion(a, args)?;
-                matches!(self.types.get(expansion), Type::Match(..)).then_some(expansion)
+                matches!(self.types.get(expansion), Type::Match(..)).then_some(self.canon_head(expansion))
             }
             _ => None,
         }
@@ -1121,7 +1134,7 @@ impl<'a> Worker<'a> {
 
     /// `case P => T` as scalac prints it.
     fn show_case(&mut self, c: MatchCase) -> String {
-        if c.pattern == ANY {
+        if self.canon(c.pattern) == ANY {
             return format!("case _ => {}", self.show(c.body));
         }
         format!("case {} => {}", self.show(c.pattern), self.show(c.body))

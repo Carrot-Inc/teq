@@ -212,6 +212,14 @@ impl<'a> Worker<'a> {
                             if !self.types.has_paths(x) {
                                 continue;
                             }
+                            // A retained form's record's types and what it is made over.
+                            if self.semantic {
+                                if let Some((under, r)) = self.types.form_of(x) {
+                                    stack.extend(self.types.retention_types(r, false));
+                                    stack.push(under);
+                                    continue;
+                                }
+                            }
                             if let Type::Term(v) | Type::Select(_, v) = self.types.get(x) {
                                 out.push(self.types.mk(Type::Term(v)));
                             }
@@ -1319,6 +1327,12 @@ impl<'a> Worker<'a> {
         if self.types.has_paths(t) {
             return false;
         }
+        // A retained form first: its record's types and what it is made over, each closed.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.closed_type_form(t, stored, under, r);
+            }
+        }
         let all = |l: crate::types::TList| self.types.items(l).iter().all(|&a| self.closed_type(a, stored));
         match self.types.get(t) {
             Type::Any | Type::Nothing | Type::Lit(_) => true,
@@ -1327,6 +1341,14 @@ impl<'a> Worker<'a> {
             Type::Union(a, b, _) | Type::Inter(a, b) => self.closed_type(a, stored) && self.closed_type(b, stored),
             _ => false,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn closed_type_form(&self, t: TypeId, stored: &[ClassId], under: TypeId, r: crate::types::RetainId) -> bool {
+        let mut ctx = vec![super::FORM_CLOSED_TYPE];
+        ctx.extend(stored.iter().map(|c| c.0));
+        self.types.in_pass(&ctx, t, || (self.types.retention_types(r, false).into_iter().all(|x| self.closed_type(x, stored)) && self.closed_type(under, stored)) as u32) != 0
     }
 
     /// The start of a copy of a stored body (`instantiate_definition`'s contract): the fresh type
@@ -1444,6 +1466,11 @@ impl<'a> Worker<'a> {
 
     /// `t` with each class of a stored body that `classes` maps replaced by its copy.
     pub(super) fn with_class_copies(&mut self, t: TypeId, classes: &FxMap<ClassId, ClassId>) -> TypeId {
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.with_class_copies_form(t, classes, under, r);
+            }
+        }
         let class = |c: ClassId| classes.get(&c).copied().unwrap_or(c);
         let list = |w: &mut Self, l: crate::types::TList| -> Option<crate::types::TList> {
             let items = w.types.items(l).to_vec();
@@ -1473,6 +1500,16 @@ impl<'a> Worker<'a> {
             }
             _ => t,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn with_class_copies_form(&mut self, t: TypeId, classes: &FxMap<ClassId, ClassId>, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let mut pairs: Vec<(u32, u32)> = classes.iter().map(|(a, b)| (a.0, b.0)).collect();
+        pairs.sort_unstable();
+        let mut ctx = vec![super::FORM_CLASS_COPIES];
+        ctx.extend(pairs.into_iter().flat_map(|(a, b)| [a, b]));
+        self.map_form(&ctx, t, under, r, &mut |w, x| w.with_class_copies(x, classes))
     }
 
     /// The binders `binders` of the stored body, those not renamed yet, each renamed to a fresh

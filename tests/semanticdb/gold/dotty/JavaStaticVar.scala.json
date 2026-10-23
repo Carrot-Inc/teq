@@ -1,0 +1,25 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "JavaStaticVar.scala",
+  "text": "",
+  "md5": "C977EBDC3DE0CA86E711B9CF4D83337D",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"example/ScalaFoo#javaStaticVarFoo.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"javaStaticVarFoo","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/ScalaFoo#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"example/ScalaFoo#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/ScalaFoo#","language":"SCALA","kind":"CLASS","properties":0,"display_name":"ScalaFoo","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"example/ScalaFoo#","type_arguments":[]},"declarations":{"symlinks":["example/ScalaFoo#`<init>`().","example/ScalaFoo#javaStaticVarFoo."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":7,"end_line":2,"end_character":10},"symbol":"com/","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":11,"end_line":2,"end_character":17},"symbol":"com/javacp/","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":18,"end_line":2,"end_character":31},"symbol":"com/javacp/JavaStaticVar#","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":25,"end_line":5,"end_character":38},"symbol":"com/javacp/JavaStaticVar#","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":39,"end_line":5,"end_character":42},"symbol":"com/javacp/JavaStaticVar#foo.","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":6,"end_line":5,"end_character":22},"symbol":"example/ScalaFoo#javaStaticVarFoo.","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":2,"end_line":5,"end_character":2},"symbol":"example/ScalaFoo#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":6,"end_line":4,"end_character":14},"symbol":"example/ScalaFoo#","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":15},"symbol":"example/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

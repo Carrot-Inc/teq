@@ -1,0 +1,3 @@
+Outer.annotated: Box[Int @Ann]
+Lib.outer: Outer
+Lib.annotated: Box[Int @Ann]

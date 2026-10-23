@@ -1087,8 +1087,9 @@ impl<'a> Worker<'a> {
     /// does: a using clause gives way to its result, another clause makes a function type of its
     /// parameters to the rest.
     pub(super) fn matches_import_bound(&mut self, given: GivenRef, bound: TypeId) -> bool {
-        if bound == ANY || bound == NOTHING {
-            return bound == ANY;
+        let canonical = self.canon_head(bound);
+        if canonical == ANY || canonical == NOTHING {
+            return canonical == ANY;
         }
         let mark = self.attempt();
         let fits = match self.open_given_sig(given) {
@@ -1340,8 +1341,9 @@ impl<'a> Worker<'a> {
     fn implicit_scope_givens(&mut self, t: TypeId, wanted: Wanted, out: &mut Vec<GivenRef>) {
         let ground = !self.types.has_vars(t);
         let (tag, id) = wanted.key();
+        let key = (t, tag, id);
         if ground {
-            if let Some(list) = self.implicit_scope_givens.get(&(t, tag, id)).filter(|l| !l.opaque || self.transparent.is_empty()) {
+            if let Some(list) = self.implicit_scope_givens.get(&key).filter(|l| !l.opaque || self.transparent.is_empty()) {
                 let list = list.clone();
                 self.given_tree.restricted += list.restricted as u32;
                 if list.plain {
@@ -1399,7 +1401,7 @@ impl<'a> Worker<'a> {
                 opaque,
                 givens: selected.into_boxed_slice(),
             };
-            self.implicit_scope_givens.insert((t, tag, id), Arc::new(list));
+            self.implicit_scope_givens.insert(key, Arc::new(list));
         }
     }
 
@@ -1548,6 +1550,12 @@ impl<'a> Worker<'a> {
         if depth > 16 {
             return t;
         }
+        // A retained form first: what it is made over at this depth and its record's types as its parts.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.mark_external_opaques_form(t, marks, depth, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Class(c, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
@@ -1568,6 +1576,15 @@ impl<'a> Worker<'a> {
             }
             _ => t,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn mark_external_opaques_form(&mut self, t: TypeId, marks: &[ClassId], depth: u32, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let types = self.types.clone();
+        let nu = self.mark_external_opaques(under, marks, depth);
+        let nr = types.map_retention(r, &mut |x| self.mark_external_opaques(x, marks, depth + 1));
+        types.form_over(t, under, r, nu, nr)
     }
 
     fn implicit_scope_objects_now(&mut self, t: TypeId) -> (Vec<GivenScope>, bool, bool) {
@@ -1592,7 +1609,7 @@ impl<'a> Worker<'a> {
             if let Some(val) = module.filter(|_| named_through) {
                 for p in through {
                     let path = self.types.mk(Type::Select(p, val));
-                    if !paths.contains(&path) {
+                    if !paths.iter().any(|&x| self.same_type(x, path)) {
                         paths.push(path);
                     }
                 }
@@ -1648,7 +1665,7 @@ impl<'a> Worker<'a> {
                     }
                 }
                 _ => {
-                    if !seen.paths.contains(&p) {
+                    if !seen.paths.iter().any(|&x| self.same_type(x, p)) {
                         seen.paths.push(p);
                     }
                 }
@@ -1743,14 +1760,14 @@ impl<'a> Worker<'a> {
                 // of a trait's `E` in `object Test extends T`).
                 if matches!(self.types.get(p), Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Object) {
                     if let Some(c) = self.class_of(class) {
-                        if !seen.through.contains(&(c, p)) {
+                        if !seen.through.iter().any(|&(k, q)| k == c && self.same_type(q, p)) {
                             seen.through.push((c, p));
                         }
                     }
                     self.classes_in(p, out, seen);
                 } else if self.types.is_path(p) {
                     if let Some(c) = self.class_of(class) {
-                        if !seen.through.contains(&(c, p)) {
+                        if !seen.through.iter().any(|&(k, q)| k == c && self.same_type(q, p)) {
                             seen.through.push((c, p));
                         }
                     }
@@ -2211,7 +2228,7 @@ impl<'a> Worker<'a> {
         // reduces to (`(Eq |: Derived)[Int]` as `OrElse[Eq[Int], Derived[Eq[Int]]]`); an
         // application inside an argument stays, since a candidate's `F[T]` unifies with it.
         let target = match self.types.head_reducible(self.types.get(target)) {
-            true => self.reduce_head(target).unwrap_or(target),
+            true => self.reduce_head(self.canon_head(target)).unwrap_or(target),
             false => target,
         };
         // The unresolved type has been reported already; searching for it would only produce
@@ -2551,6 +2568,12 @@ impl<'a> Worker<'a> {
     /// literals and parameters only: no path, alias, match type or abstract member, which a
     /// site could read otherwise.
     fn closed_result(&self, t: TypeId) -> bool {
+        // A retained form first: its record's types and what it is made over, each closed.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.closed_result_form(t, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Class(c, args) => !(args != EMPTY_LIST && self.types.is_op_class(c)) && self.types.items(args).iter().all(|&a| self.closed_result(a)),
             Type::Refined(parent, r) => {
@@ -2566,6 +2589,12 @@ impl<'a> Worker<'a> {
             Type::Union(a, b, _) | Type::Inter(a, b) => self.closed_result(a) && self.closed_result(b),
             _ => false,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn closed_result_form(&self, t: TypeId, under: TypeId, r: crate::types::RetainId) -> bool {
+        self.types.in_pass(&[super::FORM_CLOSED_RESULT], t, || (self.types.retention_types(r, false).into_iter().all(|x| self.closed_result(x)) && self.closed_result(under)) as u32) != 0
     }
 
     /// Whether a search of `target` may read or keep a memoised result, or why not: the
@@ -2771,7 +2800,7 @@ impl<'a> Worker<'a> {
         if let Some(p) = prof {
             self.profile.set_ctx(p, (file, context));
         }
-        let entry = self.given_fast.get(&(target, file, context)).filter(|(_, words)| **words == *self.given_context).map(|(e, _)| e.clone());
+        let entry = self.given_fast.get(&(self.canon(target), file, context)).filter(|(_, words)| **words == *self.given_context).map(|(e, _)| e.clone());
         let Some(entry) = entry else {
             if let Some(p) = prof {
                 self.profile.set_memo(p, Memo::Miss);
@@ -2874,7 +2903,7 @@ impl<'a> Worker<'a> {
         let entry = Arc::new(GivenResult { expr, ty, consulted, opened, depth, byname, tries, winners });
         let (file, context) = self.context_key();
         let words = self.given_context.clone().into_boxed_slice();
-        self.given_fast.insert((target, file, context), (entry, words));
+        self.given_fast.insert((self.canon(target), file, context), (entry, words));
         keep
     }
 
@@ -3215,7 +3244,17 @@ impl<'a> Worker<'a> {
         if self.syms.sym(given.0).state() == Completion::InProgress {
             self.read_in_progress(InProgress::SignatureInProgress);
         }
-        let memo_key = (memoised && !vars && (self.settled_owner(given.0) || self.module_site_fixed(given))).then(|| (given.0, given.1.memo_code(), target));
+        let memo_key = (memoised && !vars && (self.settled_owner(given.0) || self.module_site_fixed(given))).then(|| {
+            // The key's identities read as canonical types where a retained form may exist, the flag read once.
+            if !self.semantic {
+                return (given.0, given.1.memo_code(), target);
+            }
+            let scope = match given.1 {
+                GivenScope::Path(p) => GivenScope::Path(self.types.canonical(p)),
+                scope => scope,
+            };
+            (given.0, scope.memo_code(), self.types.canonical(target))
+        });
         if let Some(&fits) = memo_key.and_then(|k| self.given_fits.get(&k)) {
             self.profile.given.shape_cached += self.profile.on as u64;
             debug_assert!(
@@ -3669,7 +3708,7 @@ impl<'a> Worker<'a> {
                     let mut args = Vec::with_capacity(self.types.items(gargs).len());
                     for k in 0..self.types.items(gargs).len() {
                         let y = self.types.items(gargs)[k];
-                        let y = if matches!(self.types.get(y), Type::Lit(_)) { self.widen_lit(y) } else { y };
+                        let y = if matches!(self.types.get(y), Type::Lit(_)) { self.widen_lit(self.canon_head(y)) } else { y };
                         let arg = match self.types.get(y) {
                             _ if head_dependent(self, y) => HeadArg::Dependent,
                             Type::Param(_) => HeadArg::Open,
@@ -3870,7 +3909,9 @@ impl<'a> Worker<'a> {
     /// same candidate meets the same target without open variables: it does unless the
     /// candidate's type or bounds mention a path or a type parameter of an enclosing class,
     /// which the scope of the search would read (`fit_decision` rules the members of generic
-    /// owners out before asking).
+    /// owners out before asking). Out of line: the candidate loop (`level_eligible`) meets it at
+    /// the shape pass alone (39K of the 622K candidates of bench's realistic-api).
+    #[inline(never)]
     fn fits_target(&mut self, given: GivenRef, target: TypeId) -> (bool, bool) {
         let Some((site, subst, sig)) = self.open_given_sig(given) else { return (false, false) };
         if let Some(reference) = self.given_reference(given.0, site, &sig, target) {
@@ -3924,11 +3965,24 @@ impl<'a> Worker<'a> {
     #[cold]
     #[inline(never)]
     fn singleton_part_of(&mut self, t: TypeId) -> bool {
+        // A retained form first: its record's types, then what it is made over (an object's record holds none: its
+        // class's type, as the typer reads it).
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.singleton_part_of_form(t, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::This(_) | Type::Term(_) | Type::Select(..) => true,
             Type::Union(a, b, _) | Type::Inter(a, b) => self.has_singleton_part(a) || self.has_singleton_part(b),
             _ => false,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn singleton_part_of_form(&mut self, t: TypeId, under: TypeId, r: crate::types::RetainId) -> bool {
+        self.ask_form(&[super::FORM_SINGLETON_PART], t, under, r, &mut |w, x| w.has_singleton_part(x))
     }
 
     /// The path a stable candidate is, read on the receiver its site gives (`given_reference`).
@@ -4443,6 +4497,11 @@ impl<'a> Worker<'a> {
     /// scalac's intermediate scheme prepares the types it compares.
     fn flip_contravariant(&mut self, t: TypeId) -> TypeId {
         let t = self.deref(t);
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.flip_contravariant_form(t, under, r);
+            }
+        }
         let Type::Class(c, args) = self.types.get(t) else { return t };
         let items: Vec<TypeId> = self.types.items(args).to_vec();
         if items.is_empty() {
@@ -4464,6 +4523,12 @@ impl<'a> Worker<'a> {
             })
             .collect();
         self.types.class(c, &mapped)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn flip_contravariant_form(&mut self, t: TypeId, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        self.map_form(&[super::FORM_FLIP_CONTRAVARIANT], t, under, r, &mut |w, x| w.flip_contravariant(x))
     }
 
     /// Whether `g` could be applied to the using parameters of `other`.
@@ -4492,7 +4557,7 @@ impl<'a> Worker<'a> {
     /// each with its own rule.
     fn open_given(&mut self, g: SymId, target: TypeId) -> OpenGiven {
         let (size, classes, wild) = match self.measured_target {
-            Some((t, size, classes, wild)) if t == target => (size, classes, wild),
+            Some((t, size, classes, wild)) if self.same_type(t, target) => (size, classes, wild),
             _ => {
                 let size = self.type_size(target, &mut Vec::new());
                 let classes = self.covering_classes(target, &mut Default::default());
@@ -4550,14 +4615,14 @@ impl<'a> Worker<'a> {
                 let parent = self.type_size(parent, seen);
                 let info = match self.types.refinement(r) {
                     Refinement::Alias(_, x) | Refinement::Val(_, _, x) => self.type_size(x, seen),
-                    Refinement::Bounds(_, lo, hi) if lo == hi => self.type_size(lo, seen),
+                    Refinement::Bounds(_, lo, hi) if self.same_type(lo, hi) => self.type_size(lo, seen),
                     Refinement::Bounds(_, lo, hi) => self.type_size(lo, seen) + self.type_size(hi, seen),
                     Refinement::Term(_, _, types) => args_size(self, types, seen),
                 };
                 1 + parent + info
             }
             Type::Union(a, b, _) | Type::Inter(a, b) => self.type_size(a, seen) + self.type_size(b, seen),
-            Type::BoundedWild(lo, hi) if lo == hi => self.type_size(lo, seen),
+            Type::BoundedWild(lo, hi) if self.same_type(lo, hi) => self.type_size(lo, seen),
             Type::BoundedWild(lo, hi) => self.type_size(lo, seen) + self.type_size(hi, seen),
             Type::Lambda(_, body) | Type::Rec(body) | Type::Select(body, _) | Type::Member(body, _) => self.type_size(body, seen),
             Type::Nested(prefix, class) => self.type_size(prefix, seen) + self.type_size(class, seen),
@@ -4672,6 +4737,11 @@ impl<'a> Worker<'a> {
     /// (`wild_same`).
     fn wild_approx(&mut self, t: TypeId, seen: &mut Vec<TVarId>) -> TypeId {
         let t = self.deref(t);
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.wild_approx_form(t, seen, under, r);
+            }
+        }
         let list = |w: &mut Self, args: TList, seen: &mut Vec<TVarId>| -> TList {
             let items = w.types.items(args).to_vec();
             let approx: Vec<TypeId> = items.into_iter().map(|a| w.wild_approx(a, seen)).collect();
@@ -4750,6 +4820,14 @@ impl<'a> Worker<'a> {
         }
     }
 
+    #[cold]
+    #[inline(never)]
+    fn wild_approx_form(&mut self, t: TypeId, seen: &mut Vec<TVarId>, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let mut ctx = vec![super::FORM_WILD_APPROX];
+        ctx.extend(seen.iter().map(|v| v.0));
+        self.map_form(&ctx, t, under, r, &mut |w, x| w.wild_approx(x, seen))
+    }
+
     /// dotty's `=:=` between two targets' approximations (`wildTp =:= wildPt`): a wildcard is the
     /// same as a type within its bounds and two wildcards are the same when each one's lower
     /// bound is below the other's upper (`TypeComparer`'s `WildcardType` cases, frozen); two
@@ -4809,6 +4887,11 @@ impl<'a> Worker<'a> {
     /// wildcard without bounds: the shape `same_signature` compares two givens' declared types by.
     fn blank_shape(&mut self, t: TypeId) -> TypeId {
         let t = self.deref(t);
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.blank_shape_form(t, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Class(c, args) => {
                 let items = self.types.items(args);
@@ -4836,6 +4919,12 @@ impl<'a> Worker<'a> {
             }
             _ => t,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn blank_shape_form(&mut self, t: TypeId, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        self.map_form(&[super::FORM_BLANK_SHAPE], t, under, r, &mut |w, x| w.blank_shape(x))
     }
 
     /// scalac's divergence rule (`Implicits.checkDivergence`): the request diverges when the same
@@ -4894,6 +4983,11 @@ impl<'a> Worker<'a> {
             return t;
         }
         let t = self.deref(t);
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.target_shape_form(t, seen, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Var(v) => {
                 if seen.contains(&v) {
@@ -4913,6 +5007,14 @@ impl<'a> Worker<'a> {
             }
             _ => t,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn target_shape_form(&mut self, t: TypeId, seen: &mut Vec<TVarId>, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let mut ctx = vec![super::FORM_TARGET_SHAPE];
+        ctx.extend(seen.iter().map(|v| v.0));
+        self.map_form(&ctx, t, under, r, &mut |w, x| w.target_shape(x, seen))
     }
 
     /// Builds a reference to the given, resolving its own using clauses recursively. With
@@ -5030,7 +5132,7 @@ impl<'a> Worker<'a> {
             }
             let (l, u) = (info.lower[0], info.upper[0]);
             let (l, u) = (self.zonk(l), self.zonk(u));
-            if l == u && !self.types.has_vars(l) && l != ERROR {
+            if self.same_type(l, u) && !self.types.has_vars(l) && l != ERROR {
                 self.instantiate(self.tvars.id(v), l);
             }
         }

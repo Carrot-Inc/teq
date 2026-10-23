@@ -2015,6 +2015,13 @@ impl<'c, 'a> Collector<'c, 'a> {
             return;
         }
         let t = if self.w.types.has_vars(t) { self.w.zonk(t) } else { t };
+        // A retained form first: what its record names (an alias, an annotation's class) and its record's types, then
+        // what it is made over.
+        if self.w.semantic {
+            if let Some((under, r)) = self.w.types.form_of(t) {
+                return self.type_deps_form(under, r);
+            }
+        }
         match self.w.types.get(t) {
             Type::Any => self.named_builtin("Any"),
             Type::Nothing => self.named_builtin("Nothing"),
@@ -2151,6 +2158,20 @@ impl<'c, 'a> Collector<'c, 'a> {
                 }
             }
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn type_deps_form(&mut self, under: TypeId, r: crate::types::RetainId) {
+        match self.w.types.retention(r) {
+            crate::types::Retention::Alias(a, _) => self.named_alias(a),
+            crate::types::Retention::Annot(c, _) => self.named_class(c),
+            crate::types::Retention::Written(_) | crate::types::Retention::Object(_) => {}
+        }
+        for x in self.w.types.retention_types(r, true) {
+            self.type_deps(x);
+        }
+        self.type_deps(under);
     }
 
     /// What the traversal under way has met: the tree's memo, or with a type parameter bound
@@ -4211,7 +4232,7 @@ impl<'c, 'a> Collector<'c, 'a> {
         let Some(&first) = items.first() else { return };
         let string = self.w.b.t_string;
         let head = items.first().and_then(|&h| self.rendered(h));
-        let mut left_is_string = head.map_or(true, |t| t == string);
+        let mut left_is_string = head.map_or(true, |t| self.w.types.same(t, string));
         for i in 1..items.len() {
             let left = if i == 1 { first } else { items[i - 1] };
             let _ = left;

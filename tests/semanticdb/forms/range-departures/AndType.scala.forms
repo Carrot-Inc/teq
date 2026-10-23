@@ -1,0 +1,3 @@
+AndR.both: AndInv[K & CharSequence]
+AndType.r: AndR[String] & AndR[Int]
+AndType.both: AndInv[? >: String | Int & CharSequence <: String & Int]

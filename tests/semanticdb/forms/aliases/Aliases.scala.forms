@@ -1,0 +1,3 @@
+Aliases.annotated: A[Int]
+Aliases.map: Y
+Aliases.inInv: In[Nothing]

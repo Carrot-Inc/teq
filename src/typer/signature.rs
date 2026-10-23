@@ -1388,7 +1388,7 @@ impl<'a> Worker<'a> {
     /// What an extractor's result `rty` matches: each component's type, the last repeated for
     /// an `unapplySeq`.
     fn extracted_components(&mut self, rty: TypeId, seq: bool) -> Option<Vec<(TypeId, bool)>> {
-        if rty == self.b.t_boolean {
+        if self.canon(rty) == self.b.t_boolean {
             return Some(Vec::new());
         }
         let option = self.b.option.and_then(|o| self.base_type(rty, o));
@@ -1708,12 +1708,12 @@ impl<'a> Worker<'a> {
                 let name = super::complete::spelled(&self.name_str(self.syms.tparam(tp).name));
                 out.push(&name);
                 let (upper, lower) = (self.syms.tparam(tp).upper, self.syms.tparam(tp).lower);
-                if lower != NOTHING {
+                if self.canon(lower) != NOTHING {
                     let t = self.types.subst(lower, &s.subst);
                     let t = self.show(t);
                     out.push(&format!(" >: {}", t));
                 }
-                if upper != ANY {
+                if self.canon(upper) != ANY {
                     let t = self.types.subst(upper, &s.subst);
                     let t = self.show(t);
                     out.push(&format!(" <: {}", t));

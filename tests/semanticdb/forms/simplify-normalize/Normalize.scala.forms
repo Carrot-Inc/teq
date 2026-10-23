@@ -1,0 +1,6 @@
+Normalize.bounded: Box[? <: M[A]]
+Normalize.result: Box[? <: String]
+Normalize.poly: [X] => (x$1: X) => M[A]
+Normalize.resultPoly: [X] => (x$1: X) => M[Int]
+Normalize.refined: AnyRef{def f(x: A): M[A]}
+Normalize.resultRefined: AnyRef{def f(x: Int): M[Int]}

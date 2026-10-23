@@ -1437,7 +1437,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             TExpr::Long(v) => _ = b.emit(Op::Long(v)),
             TExpr::Double(v) => {
-                let float = self.prog().type_of(e).is_some_and(|t| self.typer.widen_lit(t) == self.typer.b.t_float);
+                let float = self.prog().type_of(e).is_some_and(|t| self.typer.types.canonical(self.typer.widen_lit(t)) == self.typer.b.t_float);
                 b.emit(if float { Op::Float(v as f32) } else { Op::Double(v) });
             }
             TExpr::Bool(v) => _ = b.emit(Op::Bool(v)),

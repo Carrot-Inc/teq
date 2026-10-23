@@ -1,0 +1,44 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Access.scala",
+  "text": "",
+  "md5": "8F63265615511B001AD93C75FAE9B31E",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"example/Access#m1().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"m1","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}}},"annotations":[],"access":{"kind":"PrivateThisAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Access#m2().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"m2","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}}},"annotations":[],"access":{"kind":"PrivateThisAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Access#m3().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"m3","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}}},"annotations":[],"access":{"kind":"PrivateWithinAccess","symbol":"example/Access#"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Access#m4().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"m4","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}}},"annotations":[],"access":{"kind":"ProtectedAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Access#m5().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"m5","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}}},"annotations":[],"access":{"kind":"ProtectedThisAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Access#m6().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"m6","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}}},"annotations":[],"access":{"kind":"ProtectedWithinAccess","symbol":"example/"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Access#m7().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"m7","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Access#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"example/Access#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Access#","language":"SCALA","kind":"CLASS","properties":0,"display_name":"Access","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"example/Access#","type_arguments":[]},"declarations":{"symlinks":["example/Access#`<init>`().","example/Access#m1().","example/Access#m2().","example/Access#m3().","example/Access#m4().","example/Access#m5().","example/Access#m6().","example/Access#m7()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":3,"start_character":19,"end_line":3,"end_character":22},"symbol":"scala/Predef.`???`().","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":14,"end_line":3,"end_character":16},"symbol":"example/Access#m1().","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":25,"end_line":4,"end_character":28},"symbol":"scala/Predef.`???`().","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":20,"end_line":4,"end_character":22},"symbol":"example/Access#m2().","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":27,"end_line":5,"end_character":30},"symbol":"scala/Predef.`???`().","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":22,"end_line":5,"end_character":24},"symbol":"example/Access#m3().","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":10,"end_line":5,"end_character":16},"symbol":"example/Access#","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":21,"end_line":6,"end_character":24},"symbol":"scala/Predef.`???`().","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":16,"end_line":6,"end_character":18},"symbol":"example/Access#m4().","role":"DEFINITION"},
+    {"range":{"start_line":7,"start_character":27,"end_line":7,"end_character":30},"symbol":"scala/Predef.`???`().","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":22,"end_line":7,"end_character":24},"symbol":"example/Access#m5().","role":"DEFINITION"},
+    {"range":{"start_line":8,"start_character":30,"end_line":8,"end_character":33},"symbol":"scala/Predef.`???`().","role":"REFERENCE"},
+    {"range":{"start_line":8,"start_character":25,"end_line":8,"end_character":27},"symbol":"example/Access#m6().","role":"DEFINITION"},
+    {"range":{"start_line":8,"start_character":12,"end_line":8,"end_character":19},"symbol":"example/","role":"REFERENCE"},
+    {"range":{"start_line":9,"start_character":11,"end_line":9,"end_character":14},"symbol":"scala/Predef.`???`().","role":"REFERENCE"},
+    {"range":{"start_line":9,"start_character":6,"end_line":9,"end_character":8},"symbol":"example/Access#m7().","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":2,"end_line":3,"end_character":2},"symbol":"example/Access#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":12},"symbol":"example/Access#","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":15},"symbol":"example/","role":"DEFINITION"}
+  ],
+  "diagnostics": [
+    {"range":{"start_line":7,"start_character":11,"end_line":7,"end_character":17},"severity":"WARNING","message":"Ignoring [this] qualifier.\nThe syntax `protected[this]` will be deprecated in the future; just write `protected` instead.\nSee: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html\nThis construct can be rewritten automatically under -rewrite -source 3.4-migration."},
+    {"range":{"start_line":4,"start_character":9,"end_line":4,"end_character":15},"severity":"WARNING","message":"Ignoring [this] qualifier.\nThe syntax `private[this]` will be deprecated in the future; just write `private` instead.\nSee: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html\nThis construct can be rewritten automatically under -rewrite -source 3.4-migration."}
+  ],
+  "synthetics": []
+}

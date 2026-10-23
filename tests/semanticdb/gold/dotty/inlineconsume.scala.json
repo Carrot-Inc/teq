@@ -1,0 +1,25 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "inlineconsume.scala",
+  "text": "",
+  "md5": "A04A264C98BC15EC0FD064787925C4F3",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"inlineconsume/Foo#test().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"test","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Unit#","type_arguments":[]}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"inlineconsume/Foo#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"inlineconsume/Foo#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"inlineconsume/Foo#","language":"SCALA","kind":"CLASS","properties":0,"display_name":"Foo","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"inlineconsume/Foo#","type_arguments":[]},"declarations":{"symlinks":["inlineconsume/Foo#`<init>`().","inlineconsume/Foo#test()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":7,"end_line":2,"end_character":17},"symbol":"inlinedefs/","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":18,"end_line":2,"end_character":28},"symbol":"inlinedefs/FakePredef.","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":29,"end_line":2,"end_character":35},"symbol":"inlinedefs/FakePredef.assert().","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":13,"end_line":5,"end_character":19},"symbol":"inlinedefs/FakePredef.assert().","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":22,"end_line":5,"end_character":23},"symbol":"scala/Int#`>`(+3).","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":6,"end_line":5,"end_character":10},"symbol":"inlineconsume/Foo#test().","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":2,"end_line":5,"end_character":2},"symbol":"inlineconsume/Foo#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":6,"end_line":4,"end_character":9},"symbol":"inlineconsume/Foo#","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":21},"symbol":"inlineconsume/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

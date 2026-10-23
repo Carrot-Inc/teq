@@ -797,7 +797,7 @@ impl<'a> Worker<'a> {
         }
         // dotty's `Synthesizer.synthesizedValueOf`, of the argument dealiased: a constant, `Unit`,
         // a stable path (`valueOf[x.type]`, its constant where it is one) or a `this` type.
-        let arg = self.deref_alias(arg);
+        let arg = self.deref_alias_canonical(arg);
         let float = self.b.t_float;
         let value = match self.types.get(arg) {
             // A `Float` constant is a `Double` node of its value (`literal_expr`), typed `Float`
@@ -813,7 +813,7 @@ impl<'a> Worker<'a> {
             _ if arg == self.b.t_unit => self.prog.add(TExpr::Unit),
             // A `Float` constant val (of the constant type `1.0f` or of `Float`) is held as a
             // `Double` literal: its path is read.
-            Type::Term(s) | Type::Select(_, s) if self.constant_of(s).is_some() && { let ret = self.sig_of(s).ret; self.widen_lit(ret) != float } && self.path_expr(arg).is_some() => {
+            Type::Term(s) | Type::Select(_, s) if self.constant_of(s).is_some() && { let ret = self.sig_of(s).ret; self.canon(self.widen_lit(ret)) != float } && self.path_expr(arg).is_some() => {
                 let literal = self.constant_of(s)?;
                 self.prog.add(literal)
             }

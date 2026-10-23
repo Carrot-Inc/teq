@@ -99,9 +99,26 @@ impl<'a> Worker<'a> {
 
     pub fn this_prefix(&mut self, c: ClassId) -> TypeId {
         if self.syms.class(c).kind == ClassKind::Object {
-            self.types.class(c, &[])
+            let t = self.types.class(c, &[]);
+            // Under semantic typing an object's own `this` is retained as written, dotty's `ThisType` of the
+            // module class, apart from a reference to the object (`object_ref`).
+            if self.semantic {
+                let this = self.types.mk(Type::This(c));
+                return self.types.retained(t, Retention::Written(this));
+            }
+            t
         } else {
             self.types.mk(Type::This(c))
+        }
+    }
+
+    /// The object `c` referenced as a value: its class's type, retained under semantic typing as dotty's `TermRef`
+    /// of the module.
+    pub fn object_ref(&mut self, c: ClassId) -> TypeId {
+        let t = self.types.class(c, &[]);
+        match self.syms.class(c).module_sym {
+            Some(m) if self.semantic => self.types.retained(t, Retention::Object(m)),
+            _ => t,
         }
     }
 
@@ -390,6 +407,7 @@ impl<'a> Worker<'a> {
 
     /// Whether the bounds of the member `name` through `prefix` are being resolved up the stack.
     pub(super) fn bounds_lookup_in_progress(&self, prefix: TypeId, name: Name) -> bool {
+        let prefix = self.canon(prefix);
         self.lookups.iter().any(|&(p, n, bounds)| bounds && p == prefix && n == name)
     }
 
@@ -421,7 +439,7 @@ impl<'a> Worker<'a> {
         }
         self.dep_budget -= 1;
         self.dep_depth += 1;
-        self.lookups.push((prefix, name, false));
+        self.lookups.push((self.canon(prefix), name, false));
         true
     }
 
@@ -573,7 +591,7 @@ impl<'a> Worker<'a> {
         self.leave_lookup();
         // An alias that comes back to itself through the members it names (`type A = z.B` and
         // `type B = z.A` on two sides of `z`'s type) is a cycle.
-        if matches!(found, Some(MemberInfo::Alias(x)) if matches!(self.types.get(x), Type::Member(p, n) if p == prefix && n == name)) {
+        if matches!(found, Some(MemberInfo::Alias(x)) if matches!(self.types.get(x), Type::Member(p, n) if self.same_type(p, prefix) && n == name)) {
             self.dep_exhausted = true;
             self.report_member_cycle(prefix, name, true);
         }
@@ -724,6 +742,11 @@ impl<'a> Worker<'a> {
     /// refinements' parents, intersections, unions and what a path or a parameter stands for)
     /// opened at `anchor`; a path or a parameter whose underlying type has none stays itself.
     pub(super) fn fix_recs(&mut self, anchor: TypeId, t: TypeId) -> TypeId {
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.fix_recs_form(anchor, t, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Rec(body) => {
                 let opened = self.opened_rec(body, anchor);
@@ -761,6 +784,12 @@ impl<'a> Worker<'a> {
         }
     }
 
+    #[cold]
+    #[inline(never)]
+    fn fix_recs_form(&mut self, anchor: TypeId, t: TypeId, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        self.map_form(&[super::FORM_FIX_RECS, anchor.0], t, under, r, &mut |w, x| w.fix_recs(anchor, x))
+    }
+
     /// The body of a `Rec` opened at `prefix`, each member the prefix fixes replaced by what it
     /// equals.
     pub(super) fn opened_rec(&mut self, body: TypeId, prefix: TypeId) -> TypeId {
@@ -774,16 +803,21 @@ impl<'a> Worker<'a> {
         if !self.types.has_paths(t) {
             return t;
         }
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.fix_members_through_form(t, prefix, under, r);
+            }
+        }
         match self.types.get(t) {
             // A member named inside its own expansion stays named, as a class's match type alias
             // does (`Type::Alias`): its cases name it (`h *: OutInner[t]`), and it is reduced
             // where it is applied, one step at a time.
-            Type::Member(p, n) if p == prefix && self.lookups.iter().any(|&(q, m, _)| q == prefix && m == n) => t,
-            Type::Member(p, n) if p == prefix => self.member_type(prefix, n).unwrap_or(t),
+            Type::Member(p, n) if self.same_type(p, prefix) && self.lookups.iter().any(|&(q, m, _)| self.same_type(q, prefix) && m == n) => t,
+            Type::Member(p, n) if self.same_type(p, prefix) => self.member_type(prefix, n).unwrap_or(t),
             // A val selected through the prefix is the prefix's member of its name (a
             // `TermRef`'s denotation, made again on its new prefix): `k.a` of `K`'s `a`, which
             // overrides the parent's the refinement named.
-            Type::Select(p, s) if p == prefix => {
+            Type::Select(p, s) if self.same_type(p, prefix) => {
                 let name = self.syms.sym(s).name;
                 let mut under = if self.types.is_path(prefix) { self.widen_path(prefix) } else { prefix };
                 // The class part: a refinement's own members are not re-resolved, and a
@@ -816,6 +850,12 @@ impl<'a> Worker<'a> {
                 types.map_parts(t, &mut |x| next.next().unwrap_or(x))
             }
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn fix_members_through_form(&mut self, t: TypeId, prefix: TypeId, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        self.map_form(&[super::FORM_FIX_MEMBERS, prefix.0], t, under, r, &mut |w, x| w.fix_members_through(x, prefix))
     }
 
     /// An intersection's member declared abstract on one side and `other` on the other: an
@@ -1002,7 +1042,8 @@ impl<'a> Worker<'a> {
     /// with their bounds seen, its cases with the owner's parameters and `this` substituted,
     /// its recursion pointing at the copy.
     fn derived_match_alias(&mut self, a: AliasId, prefix: TypeId, subst: &Subst, c: ClassId) -> AliasId {
-        if let Some(&d) = self.derived_aliases.get(&(a, prefix)) {
+        let key = (a, self.canon(prefix));
+        if let Some(&d) = self.derived_aliases.get(&key) {
             debug_assert!(!(self.forked && self.syms.aliases.holding() && a.0 < crate::arena::LOCAL_BASE) || d.0 < crate::arena::LOCAL_BASE, "the loader's lock holder found a worker's own copy of a shared match alias");
             return d;
         }
@@ -1018,7 +1059,7 @@ impl<'a> Worker<'a> {
                 let base_subst: Subst = subst.iter().map(|&(p, t)| (p, w.types.translate(view, t))).collect();
                 w.derived_match_alias(a, base_prefix, &base_subst, c)
             });
-            self.derived_aliases.insert((a, prefix), d);
+            self.derived_aliases.insert(key, d);
             return d;
         }
         let (name, owner, file, tparams, deprecated) = {
@@ -1030,7 +1071,7 @@ impl<'a> Worker<'a> {
         let js = self.syms.aliases[a.idx()].js;
         self.syms.aliases.push(AliasInfo { name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated, js, exported: false, declared_rhs: crate::tir::NO_TYPE, completion_noted: false });
         self.syms.alias_cells.set(d.0, Completion::Done);
-        self.derived_aliases.insert((a, prefix), d);
+        self.derived_aliases.insert(key, d);
         let seen = |t: &mut Self, ty: TypeId| -> TypeId {
             let ty = t.types.subst(ty, subst);
             t.as_seen_from(ty, prefix, c)
@@ -1160,6 +1201,13 @@ impl<'a> Worker<'a> {
     /// `subst` binds (an inline body's `Kind.this.LiftP[F, T]` expanded on `K0`) applying
     /// the copy seen through the class instantiated by the substitution.
     pub fn specialise_aliases(&mut self, t: TypeId, subst: &Subst) -> TypeId {
+        // A retained form first: what it is made over and its record mapped, an alias record's alias specialised as a
+        // `Type::Alias`'s is.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.specialise_aliases_form(t, subst, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Alias(a, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
@@ -1200,6 +1248,24 @@ impl<'a> Worker<'a> {
         }
     }
 
+    #[cold]
+    #[inline(never)]
+    fn specialise_aliases_form(&mut self, t: TypeId, subst: &Subst, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let mut ctx = vec![super::FORM_SPECIALISE_ALIASES];
+        ctx.extend(subst.iter().flat_map(|&(p, x)| [p.0, x.0]));
+        let types = self.types.clone();
+        return TypeId(types.in_pass(&ctx, t, || {
+            let nu = self.specialise_aliases(under, subst);
+            let mut nr = types.map_retention(r, &mut |x| self.specialise_aliases(x, subst));
+            if let crate::types::Retention::Alias(a, args) = types.retention(nr) {
+                if let Some(b) = self.specialised_alias(a, subst) {
+                    nr = types.retain(crate::types::Retention::Alias(b, args));
+                }
+            }
+            types.form_over(t, under, r, nu, nr).0
+        }));
+    }
+
     /// The copy of the match-type alias `a` for the owner class instantiated by `subst`, where
     /// the substitution binds a parameter of that class.
     fn specialised_alias(&mut self, a: AliasId, subst: &Subst) -> Option<AliasId> {
@@ -1217,6 +1283,12 @@ impl<'a> Worker<'a> {
 
     /// `t` with every application of the alias `from` applying `to` instead.
     fn redirect_alias(&mut self, t: TypeId, from: AliasId, to: AliasId) -> TypeId {
+        // A retained form first: what it is made over and its record mapped, an alias record of `from` made `to`'s.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.redirect_alias_form(t, from, to, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Alias(a, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
@@ -1276,6 +1348,22 @@ impl<'a> Worker<'a> {
         }
     }
 
+    #[cold]
+    #[inline(never)]
+    fn redirect_alias_form(&mut self, t: TypeId, from: AliasId, to: AliasId, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let types = self.types.clone();
+        return TypeId(types.in_pass(&[super::FORM_REDIRECT_ALIAS, from.0, to.0], t, || {
+            let nu = self.redirect_alias(under, from, to);
+            let mut nr = types.map_retention(r, &mut |x| self.redirect_alias(x, from, to));
+            if let crate::types::Retention::Alias(a, args) = types.retention(nr) {
+                if a == from {
+                    nr = types.retain(crate::types::Retention::Alias(to, args));
+                }
+            }
+            types.form_over(t, under, r, nu, nr).0
+        }));
+    }
+
     /// The bounds of an abstract member type, `Any` and `Nothing` when it has none.
     pub fn member_bounds(&mut self, t: TypeId) -> (TypeId, TypeId) {
         match self.types.get(t) {
@@ -1329,7 +1417,7 @@ impl<'a> Worker<'a> {
         let value = match self.constant_value(s)? {
             crate::tir::TExpr::Int(v) => LitVal::Int(v),
             crate::tir::TExpr::Long(v) => LitVal::Long(v),
-            crate::tir::TExpr::Double(v) if ret == self.b.t_float => LitVal::Float((v as f32).to_bits()),
+            crate::tir::TExpr::Double(v) if self.canon(ret) == self.b.t_float => LitVal::Float((v as f32).to_bits()),
             crate::tir::TExpr::Double(v) => LitVal::Double(v.to_bits()),
             crate::tir::TExpr::Bool(v) => LitVal::Bool(v),
             crate::tir::TExpr::Char(v) => LitVal::Char(v),
@@ -1668,13 +1756,56 @@ impl<'a> Worker<'a> {
     }
 
     fn rebase(&mut self, t: TypeId, r: &Rebase) -> TypeId {
+        if self.semantic {
+            return self.rebase_retaining(t, r);
+        }
+        self.rebase_in::<false>(t, r)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn rebase_retaining(&mut self, t: TypeId, r: &Rebase) -> TypeId {
+        self.rebase_in::<true>(t, r)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn rebase_form(&mut self, t: TypeId, under: TypeId, rr: crate::types::RetainId, r: &Rebase) -> TypeId {
+        let mut ctx = match r.this_of {
+            Some((c, p)) => vec![1, c.0, p.0],
+            None => vec![0],
+        };
+        ctx.push(r.approx as u32 | (r.own as u32) << 1 | (r.keep as u32) << 2);
+        ctx.extend(r.terms.iter().flat_map(|&(s, p)| [s.0, p.0]));
+        if let Some(done) = self.form_passes.rebase.get(&ctx, t) {
+            return done;
+        }
+        self.form_passes.rebase.enter();
+        let nu = self.rebase(under, r);
+        let types = self.types.clone();
+        let nr = types.map_retention(rr, &mut |x| self.rebase(x, r));
+        let out = types.form_over(t, under, rr, nu, nr);
+        self.form_passes.rebase.leave(&ctx, t, out);
+        out
+    }
+
+    /// `rebase` in a typing whose types may carry retained forms (`FORMS`, the semantic typing) or not.
+    fn rebase_in<const FORMS: bool>(&mut self, t: TypeId, r: &Rebase) -> TypeId {
         if !self.types.has_paths(t) {
             return t;
+        }
+        // A retained form first: what it is made over and its record rebased, the paths only the record names among
+        // them (its flags carry them).
+        if FORMS {
+            let d = self.deref_keeping(t);
+            if let Some((under, rr)) = self.types.form_of(d) {
+                return self.rebase_form(d, under, rr, r);
+            }
         }
         // An annotated type is mapped under its annotation (`TypeMap`'s `derivedAnnotatedType`).
         let t = self.deref_keeping(t);
         if let Type::Annotated(u) = self.types.get(t) {
-            let u = self.rebase(u, r);
+            let u = self.rebase_in::<FORMS>(u, r);
             return self.types.mk(Type::Annotated(u));
         }
         match self.types.get(t) {
@@ -1694,7 +1825,7 @@ impl<'a> Worker<'a> {
             // its own expansion (`mkInstances` for a field's type under `mkInstances`).
             Type::Term(s) => r.terms.iter().rev().find(|&&(p, _)| p == s).map_or(t, |&(_, path)| path),
             Type::Select(p, s) => {
-                let np = self.rebase(p, r);
+                let np = self.rebase_in::<FORMS>(p, r);
                 if np == p {
                     t
                 } else if r.approx && matches!(self.types.get(np), Type::Var(_)) {
@@ -1743,7 +1874,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Member(p, name) => {
-                let np = self.rebase(p, r);
+                let np = self.rebase_in::<FORMS>(p, r);
                 if np == p {
                     t
                 } else if r.approx && matches!(self.types.get(np), Type::Var(_)) {
@@ -1767,9 +1898,9 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::AppMember(m, args) => {
-                let nm = self.rebase(m, r);
+                let nm = self.rebase_in::<FORMS>(m, r);
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
-                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase(a, r)).collect();
+                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase_in::<FORMS>(a, r)).collect();
                 if nm == m && nargs == items {
                     t
                 } else {
@@ -1778,13 +1909,13 @@ impl<'a> Worker<'a> {
             }
             Type::Class(c, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
-                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase(a, r)).collect();
+                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase_in::<FORMS>(a, r)).collect();
                 if self.types.is_path_class(c) && self.syms.class(c).kind != ClassKind::Opaque {
                     // An inner class's bare type is its type through its owner's `this`, which
                     // the rebase may move.
                     if let Owner::Class(o) = self.syms.class(c).owner {
                         let this = self.types.mk(Type::This(o));
-                        let np = self.rebase(this, r);
+                        let np = self.rebase_in::<FORMS>(this, r);
                         if np != this {
                             let class = self.types.class(c, &nargs);
                             return self.nested_type(np, class);
@@ -1803,20 +1934,20 @@ impl<'a> Worker<'a> {
             Type::Ctor(c) if self.syms.class(c).kind != ClassKind::Opaque => {
                 let Owner::Class(o) = self.syms.class(c).owner else { return t };
                 let this = self.types.mk(Type::This(o));
-                let np = self.rebase(this, r);
+                let np = self.rebase_in::<FORMS>(this, r);
                 if np == this {
                     return t;
                 }
                 self.inner_class_through(c, np).unwrap_or(t)
             }
             Type::Nested(p, class) => {
-                let np = self.rebase(p, r);
+                let np = self.rebase_in::<FORMS>(p, r);
                 if r.approx && np != p && matches!(self.types.get(np), Type::Var(_)) {
                     return self.approx_member(t);
                 }
                 let Type::Class(c, args) = self.types.get(class) else { return t };
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
-                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase(a, r)).collect();
+                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase_in::<FORMS>(a, r)).collect();
                 if np == p && nargs == items {
                     return t;
                 }
@@ -1825,52 +1956,52 @@ impl<'a> Worker<'a> {
             }
             Type::AppParam(p, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
-                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase(a, r)).collect();
+                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase_in::<FORMS>(a, r)).collect();
                 let l = self.types.list(&nargs);
                 self.types.mk(Type::AppParam(p, l))
             }
             Type::AppVar(v, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
-                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase(a, r)).collect();
+                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase_in::<FORMS>(a, r)).collect();
                 let l = self.types.list(&nargs);
                 self.types.mk(Type::AppVar(v, l))
             }
             Type::Lambda(ps, body) => {
-                let nb = self.rebase(body, r);
+                let nb = self.rebase_in::<FORMS>(body, r);
                 self.types.mk(Type::Lambda(ps, nb))
             }
             // The bounds with the function type, as `TypeMap.mapOverLambda` maps both.
             Type::Poly(ps, body) => {
-                let nb = self.rebase(body, r);
+                let nb = self.rebase_in::<FORMS>(body, r);
                 let nps = self.map_poly_bounds(ps, &mut |w, x| w.rebase(x, r));
                 self.types.mk(Type::Poly(nps, nb))
             }
             Type::Union(a, b, soft) => {
-                let (na, nb) = (self.rebase(a, r), self.rebase(b, r));
+                let (na, nb) = (self.rebase_in::<FORMS>(a, r), self.rebase_in::<FORMS>(b, r));
                 self.types.union_as(soft, na, nb)
             }
             Type::Inter(a, b) => {
-                let (na, nb) = (self.rebase(a, r), self.rebase(b, r));
+                let (na, nb) = (self.rebase_in::<FORMS>(a, r), self.rebase_in::<FORMS>(b, r));
                 self.types.inter(na, nb)
             }
             Type::Refined(p, rf) => {
-                let np = self.rebase(p, r);
+                let np = self.rebase_in::<FORMS>(p, r);
                 let nrf = match self.types.refinement(rf) {
                     Refinement::Alias(n, rhs) => {
-                        let a = Refinement::Alias(n, self.rebase(rhs, r));
+                        let a = Refinement::Alias(n, self.rebase_in::<FORMS>(rhs, r));
                         self.types.refine(a)
                     }
                     Refinement::Bounds(n, lo, hi) => {
-                        let b = Refinement::Bounds(n, self.rebase(lo, r), self.rebase(hi, r));
+                        let b = Refinement::Bounds(n, self.rebase_in::<FORMS>(lo, r), self.rebase_in::<FORMS>(hi, r));
                         self.types.refine(b)
                     }
                     Refinement::Val(n, s, ty) => {
-                        let v = Refinement::Val(n, s, self.rebase(ty, r));
+                        let v = Refinement::Val(n, s, self.rebase_in::<FORMS>(ty, r));
                         self.types.refine(v)
                     }
                     Refinement::Term(n, s, l) => {
                         let items: Vec<TypeId> = self.types.items(l).to_vec();
-                        let z: Vec<TypeId> = items.into_iter().map(|a| self.rebase(a, r)).collect();
+                        let z: Vec<TypeId> = items.into_iter().map(|a| self.rebase_in::<FORMS>(a, r)).collect();
                         let l = self.types.list(&z);
                         self.types.refine(Refinement::Term(n, s, l))
                     }
@@ -1879,20 +2010,20 @@ impl<'a> Worker<'a> {
             }
             Type::Alias(a, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
-                let nargs: Vec<TypeId> = items.iter().map(|&x| self.rebase(x, r)).collect();
+                let nargs: Vec<TypeId> = items.iter().map(|&x| self.rebase_in::<FORMS>(x, r)).collect();
                 let l = self.types.list(&nargs);
                 self.types.mk(Type::Alias(a, l))
             }
             Type::Match(s, m) => {
-                let ns = self.rebase(s, r);
+                let ns = self.rebase_in::<FORMS>(s, r);
                 let (cases, bound) = {
                     let info = self.types.match_info(m);
                     (info.cases.to_vec(), info.bound)
                 };
-                let nb = self.rebase(bound, r);
+                let nb = self.rebase_in::<FORMS>(bound, r);
                 let ncases: Vec<MatchCase> = cases
                     .iter()
-                    .map(|c| MatchCase { binders: c.binders, pattern: self.rebase(c.pattern, r), body: self.rebase(c.body, r) })
+                    .map(|c| MatchCase { binders: c.binders, pattern: self.rebase_in::<FORMS>(c.pattern, r), body: self.rebase_in::<FORMS>(c.body, r) })
                     .collect();
                 self.types.match_type(ns, &ncases, nb)
             }
@@ -1986,7 +2117,7 @@ impl<'a> Worker<'a> {
         let refined = matches!(self.types.get(declared), Type::Refined(..));
         let path = self.path_of(recv).filter(|&p| {
             let under = self.widen_path(p);
-            if refined && under != ty {
+            if refined && !self.same_type(under, ty) {
                 return false;
             }
             match self.class_of(ty) {
@@ -2077,7 +2208,7 @@ impl<'a> Worker<'a> {
         let with_sym = |t: &mut Self, prefix: Option<TypeId>, s: SymId| {
             let info = t.syms.sym(s);
             match info.kind {
-                SymKind::Object(c) => Ok(t.types.class(c, &[])),
+                SymKind::Object(c) => Ok(t.object_ref(c)),
                 SymKind::Var => Err("a variable"),
                 // A def with only using clauses (`quotes.reflect.Term`) stands for its result,
                 // as scalac reads `transparent inline def quotes(using q: Quotes): q.type`.
@@ -2104,7 +2235,7 @@ impl<'a> Worker<'a> {
                 }),
             }
         };
-        let object = |t: &mut Self, c: ClassId| (t.syms.class(c).kind == ClassKind::Object).then(|| t.types.class(c, &[]));
+        let object = |t: &mut Self, c: ClassId| (t.syms.class(c).kind == ClassKind::Object).then(|| t.object_ref(c));
         match r {
             TermRef::Local(s) | TermRef::Global(s) => with_sym(self, None, s),
             TermRef::ModuleMember(c, s) => {
@@ -2139,7 +2270,7 @@ impl<'a> Worker<'a> {
         match self.types.refinement(r) {
             Refinement::Alias(name, rhs) => match self.member_in_type(t, name, t) {
                 Some(MemberInfo::Alias(a)) => self.is_same(a, rhs),
-                Some(MemberInfo::Bounds(lo, hi)) if lo == hi => self.is_same(lo, rhs),
+                Some(MemberInfo::Bounds(lo, hi)) if self.same_type(lo, hi) => self.is_same(lo, rhs),
                 // The abstract member of a path is the path's own: `v.R` for a `v` whose
                 // class declares `type R`.
                 Some(MemberInfo::Bounds(..)) if self.types.is_path(t) => {

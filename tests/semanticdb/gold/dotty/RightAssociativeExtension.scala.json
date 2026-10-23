@@ -1,0 +1,32 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "RightAssociativeExtension.scala",
+  "text": "",
+  "md5": "3335D8907C4144932B35740C74EA7C80",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"ext/RightAssociativeExtension$package.`:*:`().(i)","language":"SCALA","kind":"PARAMETER","properties":0,"display_name":"i","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"ext/RightAssociativeExtension$package.`:*:`().(s)","language":"SCALA","kind":"PARAMETER","properties":0,"display_name":"s","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Predef.String#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"ext/RightAssociativeExtension$package.`:*:`().","language":"SCALA","kind":"METHOD","properties":0,"display_name":":*:","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":["ext/RightAssociativeExtension$package.`:*:`().(i)"],"hardlinks":[]},{"symlinks":["ext/RightAssociativeExtension$package.`:*:`().(s)"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Tuple2#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Predef.String#","type_arguments":[]},{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"ext/RightAssociativeExtension$package.b.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"b","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Tuple2#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Predef.String#","type_arguments":[]},{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"ext/RightAssociativeExtension$package.","language":"SCALA","kind":"PACKAGE_OBJECT","properties":8,"display_name":"ext","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"ext/RightAssociativeExtension$package."},"declarations":{"symlinks":["ext/RightAssociativeExtension$package.`<init>`().","ext/RightAssociativeExtension$package.`:*:`().","ext/RightAssociativeExtension$package.b."],"hardlinks":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":3,"start_character":14,"end_line":3,"end_character":17},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":11,"end_line":3,"end_character":12},"symbol":"ext/RightAssociativeExtension$package.`:*:`().(i)","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":14,"end_line":2,"end_character":20},"symbol":"scala/Predef.String#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":11,"end_line":2,"end_character":12},"symbol":"ext/RightAssociativeExtension$package.`:*:`().(s)","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":21,"end_line":3,"end_character":27},"symbol":"scala/Predef.String#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":29,"end_line":3,"end_character":32},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":37,"end_line":3,"end_character":38},"symbol":"ext/RightAssociativeExtension$package.`:*:`().(s)","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":40,"end_line":3,"end_character":41},"symbol":"ext/RightAssociativeExtension$package.`:*:`().(i)","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":6,"end_line":3,"end_character":9},"symbol":"ext/RightAssociativeExtension$package.`:*:`().","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":14,"end_line":5,"end_character":17},"symbol":"ext/RightAssociativeExtension$package.`:*:`().","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":4,"end_line":5,"end_character":5},"symbol":"ext/RightAssociativeExtension$package.b.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":11},"symbol":"ext/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": [
+    {"range":{"start_line":3,"start_character":36,"end_line":3,"end_character":42},"tree":{"kind":"ApplyTree","function":{"kind":"TypeApplyTree","function":{"kind":"SelectTree","qualifier":{"kind":"IdTree","symbol":"scala/Tuple2."},"id":{"symbol":"scala/Tuple2.apply()."}},"type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Predef.String#","type_arguments":[]},{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}]},"arguments":[{"kind":"OriginalTree","range":{"start_line":3,"start_character":36,"end_line":3,"end_character":42}}],"properties":0}}
+  ]
+}

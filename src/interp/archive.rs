@@ -105,6 +105,13 @@ impl Digest {
     }
 }
 
+/// The MD5 digest of `data`: a SemanticDB document's `md5` (`typer::semanticdb`).
+pub(crate) fn md5(data: &[u8]) -> [u8; 16] {
+    let mut d = Md5::new();
+    d.update(data);
+    d.finish()
+}
+
 /// MD5 (RFC 1321).
 struct Md5 {
     state: [u32; 4],

@@ -1,0 +1,16 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "EmptyObject.scala",
+  "text": "",
+  "md5": "482E9CD7D17CD0260B417033AB8D86F6",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"example/EmptyObject.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"EmptyObject","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"example/EmptyObject."},"declarations":{"symlinks":["example/EmptyObject.`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":7,"end_line":2,"end_character":18},"symbol":"example/EmptyObject.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":15},"symbol":"example/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

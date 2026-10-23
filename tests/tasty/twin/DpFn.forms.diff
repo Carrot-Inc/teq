@@ -1,4 +1,0 @@
-3c3
-<   def inspect[T](files: List[String])(fn: String ?=> List[Option[Nothing & String]] => T { def apply(using ctx: String): List[Option[ctx.type]] => T }): T = {
----
->   def inspect[T](files: List[String])(fn: String ?=> List[Option[Nothing]] => T { def apply(using ctx: String): List[Option[ctx.type]] => T }): T = {

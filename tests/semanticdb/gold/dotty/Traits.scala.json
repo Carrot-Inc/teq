@@ -1,0 +1,43 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Traits.scala",
+  "text": "",
+  "md5": "2272EA59605AD3904D26E6C82F5C347D",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"traits/T#x().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"x","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"traits/T#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/T#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"traits/T#","language":"SCALA","kind":"TRAIT","properties":0,"display_name":"T","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/T#","type_arguments":[]},"declarations":{"symlinks":["traits/T#`<init>`().","traits/T#x()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"traits/U#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/U#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"traits/U#","language":"SCALA","kind":"TRAIT","properties":16,"display_name":"U","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/U#","type_arguments":[]},"declarations":{"symlinks":["traits/U#`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"local0","language":"SCALA","kind":"CLASS","properties":8,"display_name":"$anon","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]},{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/U#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"local0","type_arguments":[]},"declarations":{"symlinks":["local1"],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"traits/U.u().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"u","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/U#","type_arguments":[]}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"traits/U.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"U","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"traits/U."},"declarations":{"symlinks":["traits/U.`<init>`().","traits/U.u()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"traits/C#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/C#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"traits/C#","language":"SCALA","kind":"CLASS","properties":0,"display_name":"C","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/C#","type_arguments":[]},"declarations":{"symlinks":["traits/C#`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"local2","language":"SCALA","kind":"SELF_PARAMETER","properties":0,"display_name":"self","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/C#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"traits/V#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/V#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"traits/V#","language":"SCALA","kind":"TRAIT","properties":0,"display_name":"V","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"IntersectionType","types":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/C#","type_arguments":[]},{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"traits/V#","type_arguments":[]}]},"declarations":{"symlinks":["traits/V#`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":3,"start_character":6,"end_line":3,"end_character":7},"symbol":"traits/T#x().","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":2,"end_line":3,"end_character":2},"symbol":"traits/T#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":7},"symbol":"traits/T#","role":"DEFINITION"},
+    {"range":{"start_line":6,"start_character":0,"end_line":6,"end_character":0},"symbol":"traits/U#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":6,"start_character":13,"end_line":6,"end_character":14},"symbol":"traits/U#","role":"DEFINITION"},
+    {"range":{"start_line":8,"start_character":9,"end_line":8,"end_character":10},"symbol":"traits/U#","role":"REFERENCE"},
+    {"range":{"start_line":8,"start_character":17,"end_line":8,"end_character":18},"symbol":"traits/U#","role":"REFERENCE"},
+    {"range":{"start_line":8,"start_character":13,"end_line":8,"end_character":13},"symbol":"local0","role":"DEFINITION"},
+    {"range":{"start_line":8,"start_character":6,"end_line":8,"end_character":7},"symbol":"traits/U.u().","role":"DEFINITION"},
+    {"range":{"start_line":7,"start_character":7,"end_line":7,"end_character":8},"symbol":"traits/U.","role":"DEFINITION"},
+    {"range":{"start_line":11,"start_character":0,"end_line":11,"end_character":0},"symbol":"traits/C#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":11,"start_character":6,"end_line":11,"end_character":7},"symbol":"traits/C#","role":"DEFINITION"},
+    {"range":{"start_line":12,"start_character":16,"end_line":12,"end_character":17},"symbol":"traits/C#","role":"REFERENCE"},
+    {"range":{"start_line":12,"start_character":10,"end_line":12,"end_character":14},"symbol":"local2","role":"DEFINITION"},
+    {"range":{"start_line":12,"start_character":10,"end_line":12,"end_character":10},"symbol":"traits/V#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":12,"start_character":6,"end_line":12,"end_character":7},"symbol":"traits/V#","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":14},"symbol":"traits/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

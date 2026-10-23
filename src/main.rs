@@ -163,19 +163,22 @@ pub(crate) fn read_program(opts: &Options, paths: Vec<String>, roots: &intern::F
 /// `read_program`, each file's text `given` its path and what the disk holds: `teq fix`'s second round hands its
 /// rewritten texts in, and keeps a script's text as written before the wrapper is appended for typing.
 pub(crate) fn read_program_with(opts: &Options, paths: Vec<String>, roots: &intern::FxMap<String, String>, mut given: impl FnMut(&str, String) -> String) -> Result<Vec<SourceFile>, String> {
+    read_program_from(opts, paths, roots, |path| match std::fs::read_to_string(path) {
+        Ok(text) => Ok(given(path, text)),
+        Err(e) => Err(format!("cannot read {}: {}", path, e)),
+    })
+}
+
+/// `read_program_with` over the texts `read` gives each path (a `teq fix` round's, `fix::engine`), not the disk's.
+pub(crate) fn read_program_from(opts: &Options, paths: Vec<String>, roots: &intern::FxMap<String, String>, mut read: impl FnMut(&str) -> Result<String, String>) -> Result<Vec<SourceFile>, String> {
     let mut program: Vec<SourceFile> = Vec::new();
     let keys = program_keys(opts, paths.iter().map(String::as_str));
     for (path, key) in paths.into_iter().zip(keys) {
-        match std::fs::read_to_string(&path) {
-            Ok(text) => {
-                let text = given(&path, text);
-                let root = roots.get(&path).map(String::as_str);
-                let package = script_package(&path, root);
-                let text = script::loaded_as(&path, planted::plant_clock(text, program.len()), &package, &script_path(opts, &path, root));
-                program.push(SourceFile { path, text, is_std: false, key })
-            }
-            Err(e) => return Err(format!("cannot read {}: {}", path, e)),
-        }
+        let text = read(&path)?;
+        let root = roots.get(&path).map(String::as_str);
+        let package = script_package(&path, root);
+        let text = script::loaded_as(&path, planted::plant_clock(text, program.len()), &package, &script_path(opts, &path, root));
+        program.push(SourceFile { path, text, is_std: false, key })
     }
     Ok(program)
 }
@@ -188,6 +191,10 @@ pub(crate) fn configure_typer(typer: &mut typer::Typer<'_>, opts: &Options, asts
     typer.macro_state_per_worker = opts.macro_state_per_worker;
     crate::measure::set_macro_state_per_worker(opts.macro_state_per_worker);
     typer.dialect = opts.dialect;
+    if opts.semantic_types {
+        typer.w.semantic = true;
+        typer.threads = 1;
+    }
     typer.diags.policy = std::sync::Arc::new(opts.policy());
     if opts.wunused_imports {
         typer.unused.mode = typer::unused::Mode::Warn;
@@ -620,6 +627,10 @@ pub(crate) struct Options {
     pub diagnostics_append: bool,
     /// `--no-outline`: every inline expansion and anonymous class written at its site.
     pub no_outline: bool,
+    /// `--semantic-types`: the typing `teq fix`'s SemanticDB forms read, the typer keeping dotty's distinctions as
+    /// retained forms (`Worker::semantic`), with one worker; for the identity run of tests/semanticdb (a check's
+    /// diagnostics and a build's output alike with and without it).
+    pub semantic_types: bool,
     pub syntax: parser::Syntax,
     /// `--source` was given: a directive's `-source` does not override it (`directives::using_source`).
     pub source_given: bool,
@@ -1008,6 +1019,7 @@ pub(crate) fn parse_file_options(command: &str, args: &[String]) -> Options {
         diagnostics: None,
         diagnostics_append: false,
         no_outline: false,
+        semantic_types: false,
         syntax: parser::Syntax::default(),
         source_given: false,
         source_at: Vec::new(),
@@ -1161,6 +1173,7 @@ pub(crate) fn parse_file_options(command: &str, args: &[String]) -> Options {
                 None => usage_for(command),
             },
             "--no-outline" => o.no_outline = true,
+            "--semantic-types" => o.semantic_types = true,
             "--kind-projector" => o.syntax.kind_projector = true,
             "--profile" => o.profile = true,
             _ if a.starts_with("--profile=") => {
@@ -3482,6 +3495,8 @@ pub(crate) fn with_typed_program<R: Send>(name: &str, text: &str, flags: &[&str]
             let files = Sources::new(files);
             let mut typer = typer::Typer::new(&asts, &files, &mut interner);
             typer.threads = 1;
+            // `--semantic-types`: the typer keeps the retained forms teq fix's documents read.
+            typer.w.semantic = opts.semantic_types;
             install_std(&mut typer, std, &selected, &blocks_of, scalajs_unlocked);
             open_classpath(&opts, &mut typer, cp, jar_files, jdk_file);
             typer.dialect = opts.dialect;

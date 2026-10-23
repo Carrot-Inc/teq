@@ -239,6 +239,7 @@ impl Ast {
             + array(&self.recoveries)
             + array(&self.inline_annots)
             + array(&self.type_annots)
+            + array(&self.annotated_instances)
             + array(&self.cut_args)
             + array(&self.broken_cases)
             + array(&self.braced)

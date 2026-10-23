@@ -16,7 +16,7 @@ macro_rules! id_type {
         }
     )*};
 }
-id_type!(TypeId, TList, ClassId, SymId, TParamId, TVarId, PkgId, AliasId, LitId, BlockedId, RefineId, MatchId);
+id_type!(TypeId, TList, ClassId, SymId, TParamId, TVarId, PkgId, AliasId, LitId, BlockedId, RefineId, MatchId, RetainId);
 
 /// A type variable is a worker's: the worker's tag in the high byte, the variable's index in
 /// the worker's table below (`typer::TVars`). Two workers' variables never share a type.
@@ -174,6 +174,90 @@ impl Refinement {
     }
 }
 
+/// The retained forms of a store: each form's canonical type and record, the form of each, and `canonical`'s answers.
+#[derive(Default)]
+struct Forms {
+    of: crate::intern::FxMap<TypeId, (TypeId, RetainId)>,
+    by: crate::intern::FxMap<(TypeId, RetainId), TypeId>,
+    canon: crate::intern::FxMap<TypeId, TypeId>,
+    /// The maps' and questions' passes over retained forms (`FormPass`, `in_pass`), one a kind (the first word of a
+    /// pass's context: the store's `PASS_*`, the typer's `typer::FORM_*`), each with its own depth, so that a pass of one
+    /// kind ends with its outermost form whatever another kind's pass around it.
+    pass: crate::intern::FxMap<u32, FormPass<u32>>,
+}
+
+/// The kinds of the store's passes over retained forms (`TypeStore::in_pass`), the first word of a pass's context.
+const PASS_SUBST: u32 = 1;
+const PASS_NAMES_TERM: u32 = 2;
+const PASS_NAMES_TPARAM: u32 = 3;
+const PASS_REPLACE: u32 = 4;
+const PASS_REC_THIS: u32 = 5;
+const PASS_ABSTRACT_REC: u32 = 6;
+const PASS_LOWER_PAST: u32 = 7;
+const PASS_REFERS_TO_REC: u32 = 8;
+const PASS_MEMBER_OF: u32 = 9;
+
+/// What a map made of the retained forms it met in its pass under way, by the map's context: an alias's arguments,
+/// which its record keeps, are parts of the type the form is made over too, so a map meets each again in both, and
+/// a form nested in the arguments of forms nested in its own is met more often at each level (dotty's maps visit an
+/// application's arguments alone, the expansion `AppliedType.superType` derived from them). A map whose answer for a
+/// form is the same at each meeting in a pass maps it once; the table is dropped when the pass's outermost form is
+/// done.
+pub struct FormPass<V> {
+    depth: u32,
+    done: crate::intern::FxMap<Box<[u32]>, crate::intern::FxMap<TypeId, V>>,
+}
+
+impl<V> Default for FormPass<V> {
+    fn default() -> Self {
+        FormPass { depth: 0, done: Default::default() }
+    }
+}
+
+impl<V: Copy> FormPass<V> {
+    /// What the pass made of `t` in the context `ctx`, where it met it before.
+    pub fn get(&self, ctx: &[u32], t: TypeId) -> Option<V> {
+        self.done.get(ctx)?.get(&t).copied()
+    }
+
+    /// A form's map begins.
+    pub fn enter(&mut self) {
+        self.depth += 1;
+    }
+
+    /// A form's map ends with `v`, the table dropped where it is the pass's outermost.
+    pub fn leave(&mut self, ctx: &[u32], t: TypeId, v: V) {
+        self.depth -= 1;
+        if self.depth == 0 {
+            self.done.clear();
+        } else if let Some(m) = self.done.get_mut(ctx) {
+            m.insert(t, v);
+        } else {
+            self.done.entry(ctx.into()).or_default().insert(t, v);
+        }
+    }
+}
+
+/// What a retained form keeps of the type dotty's typer gives (tests/semanticdb/TABLE.md, section 6): a type of
+/// its own whose entry is its canonical type's (`TypeStore::retained`), so that the typer, which reads the entry,
+/// sees the canonical type.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Retention {
+    /// A reference to an alias kept unexpanded, applied to the arguments (dotty's `TypeRef(prefix, alias)` or
+    /// `AppliedType` of it): `Predef.String`, `scala.List`, a program's alias. Never made for an alias teq keeps
+    /// by name as `Type::Alias` (a match type's, `alias_by_name`'s).
+    Alias(AliasId, TList),
+    /// A type annotation of this class (dotty's `AnnotatedType`; SemanticDB reads the annotation's class alone), with the
+    /// types of its arguments' trees (`tpd.allArguments`, each node's), which a map maps as `Annotation.mapWith` does
+    /// (`map_retention`, `map_annotation`); none for an annotation without arguments.
+    Annot(ClassId, TList),
+    /// An object's singleton (dotty's `TermRef` of the module), apart from its module class's type.
+    Object(SymId),
+    /// The written form the canonical type collapses: a wildcard argument of a variant parameter, a match type
+    /// before its reduction, a union or an intersection before its simplification, `Matchable`.
+    Written(TypeId),
+}
+
 /// A `Double` or a `Float` is kept as its bits so that the value can be hashed.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum LitVal {
@@ -278,19 +362,24 @@ pub const EMPTY_LIST: TList = TList(0);
 /// has to see from its receiver), a match type or an applied type-level operation (what the
 /// typer reduces before the type is stored or compared), or an applied higher-kinded type
 /// parameter.
-const WILD_BIT: u8 = 1;
-const VARS_BIT: u8 = 2;
-const PATHS_BIT: u8 = 4;
-const REDUCIBLE_BIT: u8 = 8;
-const APP_PARAM_BIT: u8 = 16;
+/// The bits of a type's flags.
+type Flags = u16;
+const WILD_BIT: Flags = 1;
+const VARS_BIT: Flags = 2;
+const PATHS_BIT: Flags = 4;
+const REDUCIBLE_BIT: Flags = 8;
+const APP_PARAM_BIT: Flags = 16;
 /// The type mentions an id of a worker's own chunk (`arena::LOCAL_BASE` on), which the merge
 /// renumbers: the type is made again under the new ids then (`merge.rs`).
-const LOCAL_BIT: u8 = 32;
+const LOCAL_BIT: Flags = 32;
 /// The type is a path kept apart from the index (`TypeStore::term_unshared`): its provenance,
 /// read wherever the type is and passed on to nothing made of it (`flags_of`).
-const UNSHARED_BIT: u8 = 64;
+const UNSHARED_BIT: Flags = 64;
 /// A `RecThis` occurs in the type, bound or free: what opening a `Rec` rewrites.
-const REC_BIT: u8 = 128;
+const REC_BIT: Flags = 128;
+/// An intersection or a union occurs in the type: what `TypeOps.simplify` merges (`&`, `|`), the typer's simplification
+/// walking only a type that holds one (`Worker::simplified`).
+const SET_OP_BIT: Flags = 256;
 /// The blocked type the workers' merge writes over a base entry that named a worker's id and that
 /// it made again under the new ids (`TypeStore::retire_remade`), which nothing else makes: such
 /// an entry is told by its type, no type from there on, kept out of the indexes and of every scan
@@ -298,7 +387,7 @@ const REC_BIT: u8 = 128;
 const RETIRED: &str = "a type of the workers' that their merge made again";
 
 #[inline]
-fn local_id(id: u32) -> u8 {
+fn local_id(id: u32) -> Flags {
     if id >= crate::arena::LOCAL_BASE { LOCAL_BIT } else { 0 }
 }
 
@@ -318,7 +407,7 @@ pub struct TypeStore {
     serial: Serial,
     types: SlabVec<Type>,
     type_index: Table,
-    flags: SlabVec<u8>,
+    flags: SlabVec<Flags>,
     lists: SlabVec<Box<[TypeId]>>,
     list_index: Table,
     lits: SlabVec<LitVal>,
@@ -331,6 +420,15 @@ pub struct TypeStore {
     term_refinements: AtomicBool,
     matches: SlabVec<MatchInfo>,
     match_index: Table,
+    /// The records of the retained forms (`Retention`), each once: no overlay holds one (they are made with one
+    /// worker), so they live outside the sub-stores the overlays mirror.
+    retentions: SlabVec<Retention>,
+    retain_index: Table,
+    /// Whether a retained form was ever made: until then `form_of`, `underlying` and `canonical` are a read of this
+    /// flag.
+    retaining: AtomicBool,
+    /// The retained forms (`retained`), made with one worker.
+    forms: std::sync::Mutex<Forms>,
     /// Per class, whether it is an operation of `scala.compiletime.ops`, evaluated on literal
     /// arguments; set by the typer once the standard library is entered.
     op_classes: SlabVec<AtomicBool>,
@@ -373,6 +471,8 @@ impl TypeStore {
             + self.matches.held()
             + self.matches.as_slice().iter().map(|m| m.cases.len() * std::mem::size_of::<MatchCase>()).sum::<usize>()
             + self.match_index.held()
+            + self.retentions.held()
+            + self.retain_index.held()
             + self.apart_ref().map_or(0, |a| a.held())
             + self.op_classes.held()
             + self.path_classes.held()
@@ -402,6 +502,10 @@ impl TypeStore {
             term_refinements: AtomicBool::new(false),
             matches: SlabVec::with_capacity(16),
             match_index: Table::with_capacity(16),
+            retentions: SlabVec::with_capacity(16),
+            retain_index: Table::with_capacity(16),
+            retaining: AtomicBool::new(false),
+            forms: std::sync::Mutex::new(Forms::default()),
             op_classes: SlabVec::with_capacity(64),
             path_classes: SlabVec::with_capacity(64),
             op_local: UnsafeCell::new(SharedMap::new()),
@@ -440,6 +544,8 @@ impl TypeStore {
             self.blocked.release_retired();
             self.refinements.release_retired();
             self.matches.release_retired();
+            self.retentions.release_retired();
+            self.retain_index.release_retired();
             self.op_classes.release_retired();
             self.path_classes.release_retired();
             for table in [&self.type_index, &self.list_index, &self.lit_index, &self.blocked_index, &self.refine_index, &self.match_index] {
@@ -514,15 +620,15 @@ impl TypeStore {
     /// class marks of the store it is made in, once, when it is made; a part's provenance
     /// (`UNSHARED_BIT`) is its own.
     #[inline(always)]
-    fn flags_of(&self, t: Type) -> u8 {
+    fn flags_of(&self, t: Type) -> Flags {
         self.flags_of_parts(t) & !UNSHARED_BIT
     }
 
     #[inline(always)]
-    fn flags_of_parts(&self, t: Type) -> u8 {
+    fn flags_of_parts(&self, t: Type) -> Flags {
         // A prefix or a refinement passes on what it mentions except a wildcard, which counts
         // only where it is a type argument.
-        const THROUGH_PREFIX: u8 = VARS_BIT | PATHS_BIT | REDUCIBLE_BIT | LOCAL_BIT | REC_BIT;
+        const THROUGH_PREFIX: Flags = VARS_BIT | PATHS_BIT | REDUCIBLE_BIT | LOCAL_BIT | REC_BIT | SET_OP_BIT;
         match t {
             Type::Wild => WILD_BIT,
             Type::BoundedWild(lo, hi) => WILD_BIT | self.entry_flag(lo) | self.entry_flag(hi),
@@ -551,7 +657,7 @@ impl TypeStore {
                 let local = params.iter().fold(0, |acc, &a| acc | self.entry_flag(a)) & LOCAL_BIT;
                 self.entry_flag(b) | bounds.iter().fold(local, |acc, &a| acc | self.entry_flag(a))
             }
-            Type::Union(a, b, _) | Type::Inter(a, b) => self.entry_flag(a) | self.entry_flag(b),
+            Type::Union(a, b, _) | Type::Inter(a, b) => SET_OP_BIT | self.entry_flag(a) | self.entry_flag(b),
             Type::AppMember(m, args) => {
                 let args = self.list_flags(args);
                 ((self.entry_flag(m) | args) & THROUGH_PREFIX) | (args & APP_PARAM_BIT)
@@ -590,7 +696,7 @@ impl TypeStore {
     /// one representative of it (`unshared_copy`).
     #[cold]
     #[inline(never)]
-    fn unshared_apart(&self, sym: SymId, flags: u8, origin: Option<TypeId>) -> TypeId {
+    fn unshared_apart(&self, sym: SymId, flags: Flags, origin: Option<TypeId>) -> TypeId {
         let apart = self.apart_ref().expect("the overlays");
         let id = match self.overlay_here() {
             Some(ov) => {
@@ -661,7 +767,7 @@ impl TypeStore {
 
     /// The flags of a list of types, joined.
     #[inline]
-    fn list_flags(&self, l: TList) -> u8 {
+    fn list_flags(&self, l: TList) -> Flags {
         self.entry_items(l).iter().fold(0, |acc, &a| acc | self.entry_flag(a))
     }
 
@@ -888,6 +994,208 @@ impl TypeStore {
         RefineId(id)
     }
 
+    /// The record of a retained form, each once. Made with one worker alone (`retained`): never while the overlays
+    /// are on.
+    pub fn retain(&self, r: Retention) -> RetainId {
+        assert!(!self.overlaid.load(Ordering::Relaxed), "a retained form is made with one worker");
+        let h = hash_of(&r);
+        let find = || self.retain_index.find(h, |i| *self.retentions.get(i as usize) == r);
+        if let Some(id) = find() {
+            return RetainId(id);
+        }
+        let held = self.insert_lock().ok().flatten();
+        if held.is_some() {
+            if let Some(id) = find() {
+                return RetainId(id);
+            }
+        }
+        let id = self.retentions.push(r) as u32;
+        self.retain_index.insert(h, id);
+        self.retaining.store(true, Ordering::Relaxed);
+        RetainId(id)
+    }
+
+    /// What a retained form keeps.
+    #[inline]
+    pub fn retention(&self, r: RetainId) -> Retention {
+        *self.retentions.get(r.idx())
+    }
+
+    /// `under` with `r` retained over it: a type of its own whose entry is `under`'s variant and flags, so that
+    /// whatever reads a type's shape reads the canonical type, and which the index never holds (`mk` answers with
+    /// the canonical type); one for each `under` and record.
+    pub fn retained(&self, under: TypeId, r: Retention) -> TypeId {
+        let id = self.retain(r);
+        self.retained_as(under, id)
+    }
+
+    /// `under` with the record `id` retained over it (`retained`).
+    pub fn retained_by(&self, under: TypeId, id: RetainId) -> TypeId {
+        self.retained_as(under, id)
+    }
+
+    fn retained_as(&self, under: TypeId, id: RetainId) -> TypeId {
+        if let Some(&f) = self.forms.lock().unwrap().by.get(&(under, id)) {
+            return f;
+        }
+        let _held = self.insert_lock().expect("a retained form is made with one worker");
+        // The canonical type's flags, and the variables, paths, recursive selves, applied parameters and workers' ids
+        // only the record mentions (a phantom alias's argument): what the maps and questions are gated on reaches the
+        // record too. Wildcards and reductions are the canonical type's.
+        let mut flags = *self.flags.get(under.idx());
+        let deps = |x: TypeId| self.entry_flag(x) & (VARS_BIT | PATHS_BIT | REC_BIT | APP_PARAM_BIT | LOCAL_BIT | SET_OP_BIT);
+        match self.retention(id) {
+            Retention::Alias(_, args) => flags |= self.entry_items(args).iter().fold(0, |a, &x| a | deps(x)),
+            Retention::Written(w) => flags |= deps(w),
+            Retention::Annot(_, args) => flags |= self.entry_items(args).iter().fold(0, |a, &x| a | deps(x)),
+            Retention::Object(_) => {}
+        }
+        let f = TypeId(self.types.push(self.get(under)) as u32);
+        self.flags.push(flags);
+        let mut forms = self.forms.lock().unwrap();
+        forms.of.insert(f, (under, id));
+        forms.by.insert((under, id), f);
+        f
+    }
+
+    /// `Type.isExactlyNothing` (Types.scala 246-254 at 3.8.4): `Nothing` itself, an intersection either side of which is
+    /// exactly `Nothing`, a union both sides of which are; no other type, an alias, an annotation or a variable not looked
+    /// through (a retained form is neither).
+    pub fn is_exactly_nothing(&self, t: TypeId) -> bool {
+        if t == NOTHING {
+            return true;
+        }
+        if self.form_of(t).is_some() {
+            return false;
+        }
+        match self.get(t) {
+            Type::Inter(a, b) => self.is_exactly_nothing(a) || self.is_exactly_nothing(b),
+            Type::Union(a, b, _) => self.is_exactly_nothing(a) && self.is_exactly_nothing(b),
+            _ => false,
+        }
+    }
+
+    /// The type a retained form is made over and its record; `None` for any other type.
+    #[inline]
+    pub fn form_of(&self, t: TypeId) -> Option<(TypeId, RetainId)> {
+        if !self.retaining.load(Ordering::Relaxed) {
+            return None;
+        }
+        self.form_of_retained(t)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn form_of_retained(&self, t: TypeId) -> Option<(TypeId, RetainId)> {
+        self.forms.lock().unwrap().of.get(&t).copied()
+    }
+
+    /// The canonical type under the retained forms at the head of `t`: what a reader of the type's identity reads
+    /// where its parts' forms do not matter.
+    #[inline]
+    pub fn underlying(&self, t: TypeId) -> TypeId {
+        if !self.retaining.load(Ordering::Relaxed) {
+            return t;
+        }
+        self.underlying_retained(t)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn underlying_retained(&self, mut t: TypeId) -> TypeId {
+        let forms = self.forms.lock().unwrap();
+        while let Some(&(u, _)) = forms.of.get(&t) {
+            t = u;
+        }
+        t
+    }
+
+    /// `t` with no retained form anywhere in it: what an identity reads (a compare of two types, a table's key), where
+    /// `underlying` sees through the forms at the head alone (`Array[Predef.String]` is `Array[String]`).
+    #[inline]
+    pub fn canonical(&self, t: TypeId) -> TypeId {
+        if !self.retaining.load(Ordering::Relaxed) {
+            return t;
+        }
+        self.canonical_retained(t)
+    }
+
+    /// Whether `a` and `b` are one type, their retained forms aside: `canonical(a) == canonical(b)`.
+    #[inline]
+    pub fn same(&self, a: TypeId, b: TypeId) -> bool {
+        a == b || self.retaining.load(Ordering::Relaxed) && self.canonical_retained(a) == self.canonical_retained(b)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn canonical_retained(&self, t: TypeId) -> TypeId {
+        if let Some(&c) = self.forms.lock().unwrap().canon.get(&t) {
+            return c;
+        }
+        let u = self.underlying_retained(t);
+        let c = self.map_parts(u, &mut |x| self.canonical(x));
+        self.forms.lock().unwrap().canon.insert(t, c);
+        c
+    }
+
+    /// A retained form `t` over `under` with the record `r`, mapped to `nu` and `nr`: the form itself where neither
+    /// changed, else the form over them (substitution and the parts' maps keep a retained form over their mapped
+    /// parts, as dotty's maps keep a `TypeRef`).
+    pub fn form_over(&self, t: TypeId, under: TypeId, r: RetainId, nu: TypeId, nr: RetainId) -> TypeId {
+        if nu == under && nr == r {
+            t
+        } else if nu == ERROR {
+            ERROR
+        } else {
+            self.retained_as(nu, nr)
+        }
+    }
+
+    /// A retention with its types mapped by `f`, the same record where none changed.
+    pub fn map_retention(&self, r: RetainId, f: &mut dyn FnMut(TypeId) -> TypeId) -> RetainId {
+        let mapped = match self.retention(r) {
+            Retention::Alias(a, args) => {
+                let items: Vec<TypeId> = self.entry_items(args).to_vec();
+                let mapped: Vec<TypeId> = items.iter().map(|&x| f(x)).collect();
+                if mapped == items { return r }
+                Retention::Alias(a, self.list(&mapped))
+            }
+            Retention::Written(w) => {
+                let nw = f(w);
+                if nw == w { return r }
+                Retention::Written(nw)
+            }
+            // `Annotation.mapWith` (Annotations.scala 63-82 at 3.8.4) with a map that makes no range: no arguments, the
+            // annotation itself; a type of an argument's tree changed, the annotation over the trees mapped; else itself.
+            Retention::Annot(c, args) => {
+                if args == EMPTY_LIST { return r }
+                let items: Vec<TypeId> = self.entry_items(args).to_vec();
+                let mapped: Vec<TypeId> = items.iter().map(|&x| f(x)).collect();
+                if mapped == items { return r }
+                Retention::Annot(c, self.list(&mapped))
+            }
+            Retention::Object(_) => return r,
+        };
+        self.retain(mapped)
+    }
+
+    /// `Annotation.mapWith` (Annotations.scala 63-82 at 3.8.4) of the retained annotation `r` under an approximating map
+    /// (`ApproximatingTypeMap`), whose `f` answers `None` where it makes a range: a type of an argument's tree a range,
+    /// `None`, dotty's `EmptyAnnotation`, which `derivedAnnotatedType` leaves the parent alone for; another changed, the
+    /// annotation over the trees mapped; else the annotation itself. Any other record is `map_retention`'s.
+    pub fn map_annotation(&self, r: RetainId, f: &mut dyn FnMut(TypeId) -> Option<TypeId>) -> Option<RetainId> {
+        let Retention::Annot(c, args) = self.retention(r) else { return Some(r) };
+        if args == EMPTY_LIST {
+            return Some(r);
+        }
+        let items: Vec<TypeId> = self.entry_items(args).to_vec();
+        let mut mapped = Vec::with_capacity(items.len());
+        for &x in &items {
+            mapped.push(f(x)?);
+        }
+        if mapped == items { Some(r) } else { Some(self.retain(Retention::Annot(c, self.list(&mapped)))) }
+    }
+
     /// A `val` refinement of type `ty`, which the symbol of `r` has as its signature.
     #[inline]
     #[cfg_attr(debug_assertions, track_caller)]
@@ -903,7 +1211,7 @@ impl TypeStore {
     }
 
     /// The flags of the types a refinement mentions.
-    fn refinement_flags(&self, r: RefineId) -> u8 {
+    fn refinement_flags(&self, r: RefineId) -> Flags {
         match self.entry_refinement(r) {
             Refinement::Alias(_, t) => self.entry_flag(t),
             Refinement::Val(_, s, t) => self.entry_flag(t) | local_id(s.0),
@@ -1002,11 +1310,11 @@ impl TypeStore {
 
     /// The refinements of a type, outermost last, and the parent under them.
     pub fn refinements_of(&self, t: TypeId) -> (TypeId, Vec<RefineId>) {
-        let mut t = t;
+        let mut t = self.underlying(t);
         let mut out = Vec::new();
         while let Type::Refined(p, r) = self.get(t) {
             out.push(r);
-            t = p;
+            t = self.underlying(p);
         }
         out.reverse();
         (t, out)
@@ -1018,67 +1326,126 @@ impl TypeStore {
         self.flag(t) & PATHS_BIT != 0
     }
 
-    /// Whether a path in the type is over one of `terms`.
+    /// Whether a path in the type is over one of `terms`, as dotty's accumulators ask it (`TypeAccumulator`, which does
+    /// not go into an annotation's arguments, `applyToAnnot`, Types.scala 6933 at 3.8.4).
+    #[inline]
     pub fn names_term(&self, t: TypeId, terms: &[SymId]) -> bool {
+        self.names_term_in(t, terms, false)
+    }
+
+    /// `names_term` with the types of a retained annotation's arguments' trees too: whether a map over `terms` meets
+    /// one anywhere it maps (`Annotation.mapWith` maps them), or a method's result depends on one
+    /// (`MethodType.dependencyStatus`'s `refersToParamOf`, Types.scala 4135).
+    #[inline]
+    pub fn names_term_mapped(&self, t: TypeId, terms: &[SymId]) -> bool {
+        self.names_term_in(t, terms, true)
+    }
+
+    fn names_term_in(&self, t: TypeId, terms: &[SymId], annotations: bool) -> bool {
         if !self.has_paths(t) {
             return false;
         }
-        let list = |l: TList| self.items(l).iter().any(|&x| self.names_term(x, terms));
+        // A retained form first: its record's types, then what it is made over (`Phantom[x.type]` over `Int` names `x`).
+        if self.retaining.load(Ordering::Relaxed) {
+            if let Some((under, r)) = self.form_of_retained(t) {
+                return self.names_term_form(t, under, r, terms, annotations);
+            }
+        }
+        let list = |l: TList| self.items(l).iter().any(|&x| self.names_term_in(x, terms, annotations));
         match self.get(t) {
             Type::Term(s) => terms.contains(&s),
-            Type::Select(p, s) => terms.contains(&s) || self.names_term(p, terms),
-            Type::Member(p, _) => self.names_term(p, terms),
-            Type::Nested(p, c) => self.names_term(p, terms) || self.names_term(c, terms),
-            Type::AppMember(m, args) => self.names_term(m, terms) || list(args),
+            Type::Select(p, s) => terms.contains(&s) || self.names_term_in(p, terms, annotations),
+            Type::Member(p, _) => self.names_term_in(p, terms, annotations),
+            Type::Nested(p, c) => self.names_term_in(p, terms, annotations) || self.names_term_in(c, terms, annotations),
+            Type::AppMember(m, args) => self.names_term_in(m, terms, annotations) || list(args),
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => list(args),
-            Type::Lambda(ps, b) | Type::Poly(ps, b) => list(ps) || self.names_term(b, terms),
-            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.names_term(a, terms) || self.names_term(b, terms),
+            Type::Lambda(ps, b) | Type::Poly(ps, b) => list(ps) || self.names_term_in(b, terms, annotations),
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.names_term_in(a, terms, annotations) || self.names_term_in(b, terms, annotations),
             Type::Refined(p, r) => {
-                self.names_term(p, terms)
+                self.names_term_in(p, terms, annotations)
                     || match self.refinement(r) {
-                        Refinement::Alias(_, x) => self.names_term(x, terms),
-                        Refinement::Bounds(_, lo, hi) => self.names_term(lo, terms) || self.names_term(hi, terms),
+                        Refinement::Alias(_, x) => self.names_term_in(x, terms, annotations),
+                        Refinement::Bounds(_, lo, hi) => self.names_term_in(lo, terms, annotations) || self.names_term_in(hi, terms, annotations),
                         Refinement::Term(_, _, l) => list(l),
-                        Refinement::Val(_, _, x) => self.names_term(x, terms),
+                        Refinement::Val(_, _, x) => self.names_term_in(x, terms, annotations),
                     }
             }
-            Type::Rec(b) | Type::Annotated(b) => self.names_term(b, terms),
+            Type::Rec(b) | Type::Annotated(b) => self.names_term_in(b, terms, annotations),
             Type::Match(s, m) => {
                 let info = self.match_info(m);
-                self.names_term(s, terms) || self.names_term(info.bound, terms) || info.cases.iter().any(|c| self.names_term(c.pattern, terms) || self.names_term(c.body, terms))
+                self.names_term_in(s, terms, annotations) || self.names_term_in(info.bound, terms, annotations) || info.cases.iter().any(|c| self.names_term_in(c.pattern, terms, annotations) || self.names_term_in(c.body, terms, annotations))
             }
             _ => false,
         }
     }
 
-    /// Whether `t` names one of the type parameters `tparams` anywhere in it, as `names_term`
-    /// asks of term parameters.
-    pub fn names_tparam(&self, t: TypeId, tparams: &[TParamId]) -> bool {
-        let list = |l: TList| self.items(l).iter().any(|&x| self.names_tparam(x, tparams));
+    /// Whether `t` names one of the type parameters `tparams` anywhere a map over them meets them, as `names_term_mapped`
+    /// asks of term parameters (the types of a retained annotation's arguments' trees among them).
+    #[inline]
+    pub fn names_tparam_mapped(&self, t: TypeId, tparams: &[TParamId]) -> bool {
+        self.names_tparam_in(t, tparams, true)
+    }
+
+    fn names_tparam_in(&self, t: TypeId, tparams: &[TParamId], annotations: bool) -> bool {
+        // A retained form first, as `names_term` reads it.
+        if self.retaining.load(Ordering::Relaxed) {
+            if let Some((under, r)) = self.form_of_retained(t) {
+                return self.names_tparam_form(t, under, r, tparams, annotations);
+            }
+        }
+        let list = |l: TList| self.items(l).iter().any(|&x| self.names_tparam_in(x, tparams, annotations));
         match self.get(t) {
             Type::Param(p) => tparams.contains(&p),
             Type::AppParam(p, args) => tparams.contains(&p) || list(args),
-            Type::Member(p, _) => self.names_tparam(p, tparams),
-            Type::Nested(p, c) => self.names_tparam(p, tparams) || self.names_tparam(c, tparams),
-            Type::AppMember(m, args) => self.names_tparam(m, tparams) || list(args),
+            Type::Member(p, _) => self.names_tparam_in(p, tparams, annotations),
+            Type::Nested(p, c) => self.names_tparam_in(p, tparams, annotations) || self.names_tparam_in(c, tparams, annotations),
+            Type::AppMember(m, args) => self.names_tparam_in(m, tparams, annotations) || list(args),
             Type::Class(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => list(args),
-            Type::Lambda(ps, b) | Type::Poly(ps, b) => list(ps) || self.names_tparam(b, tparams),
-            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.names_tparam(a, tparams) || self.names_tparam(b, tparams),
+            Type::Lambda(ps, b) | Type::Poly(ps, b) => list(ps) || self.names_tparam_in(b, tparams, annotations),
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.names_tparam_in(a, tparams, annotations) || self.names_tparam_in(b, tparams, annotations),
             Type::Refined(p, r) => {
-                self.names_tparam(p, tparams)
+                self.names_tparam_in(p, tparams, annotations)
                     || match self.refinement(r) {
-                        Refinement::Alias(_, x) => self.names_tparam(x, tparams),
-                        Refinement::Bounds(_, lo, hi) => self.names_tparam(lo, tparams) || self.names_tparam(hi, tparams),
+                        Refinement::Alias(_, x) => self.names_tparam_in(x, tparams, annotations),
+                        Refinement::Bounds(_, lo, hi) => self.names_tparam_in(lo, tparams, annotations) || self.names_tparam_in(hi, tparams, annotations),
                         Refinement::Term(_, _, l) => list(l),
-                        Refinement::Val(_, _, x) => self.names_tparam(x, tparams),
+                        Refinement::Val(_, _, x) => self.names_tparam_in(x, tparams, annotations),
                     }
             }
-            Type::Rec(b) | Type::Annotated(b) => self.names_tparam(b, tparams),
+            Type::Rec(b) | Type::Annotated(b) => self.names_tparam_in(b, tparams, annotations),
             Type::Match(s, m) => {
                 let info = self.match_info(m);
-                self.names_tparam(s, tparams) || self.names_tparam(info.bound, tparams) || info.cases.iter().any(|c| self.names_tparam(c.pattern, tparams) || self.names_tparam(c.body, tparams))
+                self.names_tparam_in(s, tparams, annotations) || self.names_tparam_in(info.bound, tparams, annotations) || info.cases.iter().any(|c| self.names_tparam_in(c.pattern, tparams, annotations) || self.names_tparam_in(c.body, tparams, annotations))
             }
             _ => false,
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn names_term_form(&self, t: TypeId, under: TypeId, r: RetainId, terms: &[SymId], annotations: bool) -> bool {
+        let mut ctx = vec![PASS_NAMES_TERM, annotations as u32];
+        ctx.extend(terms.iter().map(|s| s.0));
+        self.in_pass(&ctx, t, || (self.retention_types(r, annotations).iter().any(|&x| self.names_term_in(x, terms, annotations)) || self.names_term_in(under, terms, annotations)) as u32) != 0
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn names_tparam_form(&self, t: TypeId, under: TypeId, r: RetainId, tparams: &[TParamId], annotations: bool) -> bool {
+        let mut ctx = vec![PASS_NAMES_TPARAM, annotations as u32];
+        ctx.extend(tparams.iter().map(|p| p.0));
+        self.in_pass(&ctx, t, || (self.retention_types(r, annotations).iter().any(|&x| self.names_tparam_in(x, tparams, annotations)) || self.names_tparam_in(under, tparams, annotations)) as u32) != 0
+    }
+
+    /// The types a retained record holds: an alias's arguments, a written type, and with `annotations` the types of an
+    /// annotation's arguments' trees, which a map maps (`Annotation.mapWith`) and dotty's accumulators do not go into
+    /// (`applyToAnnot`); none of an object's symbol.
+    pub fn retention_types(&self, r: RetainId, annotations: bool) -> Vec<TypeId> {
+        match self.retention(r) {
+            Retention::Alias(_, args) => self.entry_items(args).to_vec(),
+            Retention::Annot(_, args) if annotations => self.entry_items(args).to_vec(),
+            Retention::Written(w) => vec![w],
+            Retention::Annot(..) | Retention::Object(_) => Vec::new(),
         }
     }
 
@@ -1125,12 +1492,25 @@ impl TypeStore {
         self.flag(t) & WILD_BIT != 0
     }
 
-    /// The wildcard `? >: lo <: hi`: without bounds the plain one, with equal bounds the type.
+    /// The wildcard `? >: lo <: hi`: without bounds the plain one, with the two bounds one type that type (dotty's
+    /// `range`, `lo eq hi`: the retained form's identity, never the canonical type's). Two bounds that are distinct
+    /// retained forms over one canonical type (`Int @Ann` and `Int @Other`) are that canonical type, as without
+    /// retained forms, the written wildcard of both kept over it.
     pub fn bounded_wild(&self, lo: TypeId, hi: TypeId) -> TypeId {
         if lo == hi {
             return lo;
         }
-        if lo == NOTHING && hi == ANY {
+        let (ul, uh) = (self.canonical(lo), self.canonical(hi));
+        if ul == uh {
+            let written = self.mk(Type::BoundedWild(lo, hi));
+            return self.retained(ul, Retention::Written(written));
+        }
+        if ul == NOTHING && uh == ANY {
+            // Bounds with retained forms (`? <: Any @Ann`) are the plain wildcard, the bounds written kept over it.
+            if lo != ul || hi != uh {
+                let written = self.mk(Type::BoundedWild(lo, hi));
+                return self.retained(WILD, Retention::Written(written));
+            }
             return WILD;
         }
         self.mk(Type::BoundedWild(lo, hi))
@@ -1170,14 +1550,14 @@ impl TypeStore {
 
     #[inline]
     #[cfg_attr(debug_assertions, track_caller)]
-    fn flag(&self, t: TypeId) -> u8 {
+    fn flag(&self, t: TypeId) -> Flags {
         #[cfg(debug_assertions)]
         view::read(self, Sub::Types, t.0);
         self.entry_flag(t)
     }
 
     #[inline]
-    fn entry_flag(&self, t: TypeId) -> u8 {
+    fn entry_flag(&self, t: TypeId) -> Flags {
         self.flags[t.idx()]
     }
 
@@ -1275,26 +1655,28 @@ impl TypeStore {
 
     /// A union of a kind, as the one a map rebuilds was (`derivedOrType`).
     pub fn union_as(&self, kind: UnionKind, a: TypeId, b: TypeId) -> TypeId {
-        if a == b || b == NOTHING {
+        let (ua, ub) = (self.canonical(a), self.canonical(b));
+        if ua == ub || ub == NOTHING {
             return a;
         }
-        if a == NOTHING {
+        if ua == NOTHING {
             return b;
         }
-        if a == ERROR || b == ERROR {
+        if ua == ERROR || ub == ERROR {
             return ERROR;
         }
         self.mk(Type::Union(a, b, kind))
     }
 
     pub fn inter(&self, a: TypeId, b: TypeId) -> TypeId {
-        if a == b || b == ANY {
+        let (ua, ub) = (self.canonical(a), self.canonical(b));
+        if ua == ub || ub == ANY {
             return a;
         }
-        if a == ANY {
+        if ua == ANY {
             return b;
         }
-        if a == ERROR || b == ERROR {
+        if ua == ERROR || ub == ERROR {
             return ERROR;
         }
         self.mk(Type::Inter(a, b))
@@ -1356,8 +1738,14 @@ impl TypeStore {
     /// Whether an unresolved type occurs anywhere inside `t`.
     /// Whether `t` names a type member through `prefix` (`Member(prefix, _)`).
     pub fn mentions_member_of(&self, t: TypeId, prefix: TypeId) -> bool {
+        // A retained form first, as `refers_to_rec` reads it.
+        if self.retaining.load(Ordering::Relaxed) {
+            if let Some((under, r)) = self.form_of_retained(t) {
+                return self.mentions_member_of_form(t, prefix, under, r);
+            }
+        }
         match self.get(t) {
-            Type::Member(p, _) => p == prefix || self.mentions_member_of(p, prefix),
+            Type::Member(p, _) => self.canonical(p) == self.canonical(prefix) || self.mentions_member_of(p, prefix),
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
                 self.items(args).iter().any(|&a| self.mentions_member_of(a, prefix))
             }
@@ -1368,6 +1756,12 @@ impl TypeStore {
             Type::Refined(p, r) => self.mentions_member_of(p, prefix) || self.refinement_types(r).into_iter().any(|a| self.mentions_member_of(a, prefix)),
             _ => false,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn mentions_member_of_form(&self, t: TypeId, prefix: TypeId, under: TypeId, r: RetainId) -> bool {
+        self.ask_form_once(&[PASS_MEMBER_OF, self.canonical(prefix).0], t, under, r, false, &mut |x| self.mentions_member_of(x, prefix))
     }
 
     pub fn contains_error(&self, t: TypeId) -> bool {
@@ -1401,6 +1795,14 @@ impl TypeStore {
     }
 
     pub fn subst_list(&self, l: TList, s: &Subst) -> TList {
+        if self.retaining.load(Ordering::Relaxed) {
+            return self.subst_list_in::<true>(l, s);
+        }
+        self.subst_list_in::<false>(l, s)
+    }
+
+    /// `subst_list` in a store whose types may carry retained forms (`FORMS`) or not.
+    fn subst_list_in<const FORMS: bool>(&self, l: TList, s: &Subst) -> TList {
         if l == EMPTY_LIST {
             return l;
         }
@@ -1408,7 +1810,7 @@ impl TypeStore {
         let mut out: Option<Vec<TypeId>> = None;
         for i in 0..n {
             let item = self.items(l)[i];
-            let new = self.subst(item, s);
+            let new = self.subst_in::<FORMS>(item, s);
             if new != item && out.is_none() {
                 out = Some(self.items(l).to_vec());
             }
@@ -1426,6 +1828,29 @@ impl TypeStore {
         if s.is_empty() {
             return t;
         }
+        if self.retaining.load(Ordering::Relaxed) {
+            return self.subst_retaining(t, s);
+        }
+        self.subst_in::<false>(t, s)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn subst_retaining(&self, t: TypeId, s: &Subst) -> TypeId {
+        self.subst_in::<true>(t, s)
+    }
+
+    /// `subst` in a store whose types may carry retained forms (`FORMS`, the semantic typing's) or not, the store's flag
+    /// read once a walk.
+    fn subst_in<const FORMS: bool>(&self, t: TypeId, s: &Subst) -> TypeId {
+        // A retained form first: what it is made over and its record's types substituted, before the canonical leaf's
+        // replacement and the unchanged result (dotty's `Substituters.substParams` through `TypeMap.mapOver`: an
+        // annotation's parent, an alias's arguments), what only the record mentions among them.
+        if FORMS {
+            if let Some((under, r)) = self.form_of_retained(t) {
+                return self.subst_form(t, under, r, s);
+            }
+        }
         match self.get(t) {
             Type::Any
             | Type::Nothing
@@ -1441,7 +1866,7 @@ impl TypeStore {
             | Type::Decl(_) => t,
             Type::Param(p) => s.iter().find(|(q, _)| *q == p).map_or(t, |&(_, r)| r),
             Type::Select(p, sym) => {
-                let np = self.subst(p, s);
+                let np = self.subst_in::<FORMS>(p, s);
                 if np == p {
                     t
                 } else {
@@ -1449,7 +1874,7 @@ impl TypeStore {
                 }
             }
             Type::Member(p, name) => {
-                let np = self.subst(p, s);
+                let np = self.subst_in::<FORMS>(p, s);
                 if np == p {
                     t
                 } else {
@@ -1457,7 +1882,7 @@ impl TypeStore {
                 }
             }
             Type::Nested(p, c) => {
-                let (np, nc) = (self.subst(p, s), self.subst(c, s));
+                let (np, nc) = (self.subst_in::<FORMS>(p, s), self.subst_in::<FORMS>(c, s));
                 if np == p && nc == c {
                     t
                 } else {
@@ -1465,7 +1890,7 @@ impl TypeStore {
                 }
             }
             Type::AppMember(m, args) => {
-                let (nm, n) = (self.subst(m, s), self.subst_list(args, s));
+                let (nm, n) = (self.subst_in::<FORMS>(m, s), self.subst_list_in::<FORMS>(args, s));
                 if nm == m && n == args {
                     t
                 } else {
@@ -1474,7 +1899,7 @@ impl TypeStore {
                 }
             }
             Type::Refined(p, r) => {
-                let np = self.subst(p, s);
+                let np = self.subst_in::<FORMS>(p, s);
                 let nr = self.subst_refinement(r, s);
                 if np == p && nr == r {
                     t
@@ -1484,11 +1909,11 @@ impl TypeStore {
             }
             // A substitution's replacements are closed, so the binder captures none of them.
             Type::Annotated(b) => {
-                let nb = self.subst(b, s);
+                let nb = self.subst_in::<FORMS>(b, s);
                 if nb == b { t } else { self.mk(Type::Annotated(nb)) }
             }
             Type::Rec(b) => {
-                let nb = self.subst(b, s);
+                let nb = self.subst_in::<FORMS>(b, s);
                 if nb == b {
                     t
                 } else {
@@ -1496,7 +1921,7 @@ impl TypeStore {
                 }
             }
             Type::Class(c, args) => {
-                let n = self.subst_list(args, s);
+                let n = self.subst_list_in::<FORMS>(args, s);
                 if n == args {
                     t
                 } else {
@@ -1504,7 +1929,7 @@ impl TypeStore {
                 }
             }
             Type::AppParam(p, args) => {
-                let n = self.subst_list(args, s);
+                let n = self.subst_list_in::<FORMS>(args, s);
                 match s.iter().find(|(q, _)| *q == p) {
                     Some(&(_, ctor)) => {
                         let items: Vec<TypeId> = self.items(n).to_vec();
@@ -1515,7 +1940,7 @@ impl TypeStore {
                 }
             }
             Type::AppVar(v, args) => {
-                let n = self.subst_list(args, s);
+                let n = self.subst_list_in::<FORMS>(args, s);
                 if n == args {
                     t
                 } else {
@@ -1526,7 +1951,7 @@ impl TypeStore {
             // seen through a projection holds the lambda being reduced in its prefix.
             Type::Lambda(ps, body) => {
                 let inner = self.unshadowed(ps, s);
-                let b = self.subst(body, inner.as_ref().unwrap_or(s));
+                let b = self.subst_in::<FORMS>(body, inner.as_ref().unwrap_or(s));
                 if b == body {
                     t
                 } else {
@@ -1537,10 +1962,10 @@ impl TypeStore {
                 // Its list holds the parameters, then their bounds: the parameters alone bind.
                 let inner = self.unshadowed_among(self.poly_params(ps), s);
                 let s = inner.as_ref().unwrap_or(s);
-                let b = self.subst(body, s);
+                let b = self.subst_in::<FORMS>(body, s);
                 let items = self.items(ps).to_vec();
                 let k = items.len() / 3;
-                let mapped: Vec<TypeId> = items.iter().enumerate().map(|(i, &x)| if i < k { x } else { self.subst(x, s) }).collect();
+                let mapped: Vec<TypeId> = items.iter().enumerate().map(|(i, &x)| if i < k { x } else { self.subst_in::<FORMS>(x, s) }).collect();
                 let nps = if mapped == items { ps } else { self.list(&mapped) };
                 if b == body && nps == ps {
                     t
@@ -1549,7 +1974,7 @@ impl TypeStore {
                 }
             }
             Type::Union(a, b, soft) => {
-                let (na, nb) = (self.subst(a, s), self.subst(b, s));
+                let (na, nb) = (self.subst_in::<FORMS>(a, s), self.subst_in::<FORMS>(b, s));
                 if na == a && nb == b {
                     t
                 } else {
@@ -1557,7 +1982,7 @@ impl TypeStore {
                 }
             }
             Type::Inter(a, b) => {
-                let (na, nb) = (self.subst(a, s), self.subst(b, s));
+                let (na, nb) = (self.subst_in::<FORMS>(a, s), self.subst_in::<FORMS>(b, s));
                 if na == a && nb == b {
                     t
                 } else {
@@ -1565,7 +1990,7 @@ impl TypeStore {
                 }
             }
             Type::BoundedWild(lo, hi) => {
-                let (nl, nh) = (self.subst(lo, s), self.subst(hi, s));
+                let (nl, nh) = (self.subst_in::<FORMS>(lo, s), self.subst_in::<FORMS>(hi, s));
                 if nl == lo && nh == hi {
                     t
                 } else {
@@ -1573,7 +1998,7 @@ impl TypeStore {
                 }
             }
             Type::Alias(a, args) => {
-                let n = self.subst_list(args, s);
+                let n = self.subst_list_in::<FORMS>(args, s);
                 if n == args {
                     t
                 } else {
@@ -1581,19 +2006,19 @@ impl TypeStore {
                 }
             }
             Type::Match(scrut, m) => {
-                let ns = self.subst(scrut, s);
+                let ns = self.subst_in::<FORMS>(scrut, s);
                 let (cases, bound) = {
                     let info = self.match_info(m);
                     (info.cases.to_vec(), info.bound)
                 };
-                let nb = self.subst(bound, s);
+                let nb = self.subst_in::<FORMS>(bound, s);
                 let mut changed = ns != scrut || nb != bound;
                 let ncases: Vec<MatchCase> = cases
                     .iter()
                     .map(|c| {
                         let inner = self.unshadowed(c.binders, s);
                         let s = inner.as_ref().unwrap_or(s);
-                        let (p, b) = (self.subst(c.pattern, s), self.subst(c.body, s));
+                        let (p, b) = (self.subst_in::<FORMS>(c.pattern, s), self.subst_in::<FORMS>(c.body, s));
                         changed |= p != c.pattern || b != c.body;
                         MatchCase { binders: c.binders, pattern: p, body: b }
                     })
@@ -1609,7 +2034,16 @@ impl TypeStore {
 
     /// `t` with each type of `pairs` replaced by its partner, wherever it stands as a part.
     pub fn replace(&self, t: TypeId, pairs: &[(TypeId, TypeId)]) -> TypeId {
-        if let Some(&(_, to)) = pairs.iter().find(|&&(from, _)| from == t) {
+        // A retained form first, before the pairs are compared: what it is made over and its record replaced, as dotty's
+        // `Substituters.subst` compares a `NamedType` alone and maps an `AnnotatedType` through `TypeMap.mapOver`, the
+        // annotation over its replaced parent (`p.T @Ann` with `p.T` replaced by `Int` is `Int @Ann`).
+        if self.retaining.load(Ordering::Relaxed) {
+            if let Some((under, r)) = self.form_of_retained(t) {
+                return self.replace_form(t, pairs, under, r);
+            }
+        }
+        let ut = self.canonical(t);
+        if let Some(&(_, to)) = pairs.iter().find(|&&(from, _)| self.canonical(from) == ut) {
             return to;
         }
         if !self.has_paths(t) {
@@ -1661,6 +2095,14 @@ impl TypeStore {
         }
     }
 
+    #[cold]
+    #[inline(never)]
+    fn replace_form(&self, t: TypeId, pairs: &[(TypeId, TypeId)], under: TypeId, r: RetainId) -> TypeId {
+        let mut ctx = vec![PASS_REPLACE];
+        ctx.extend(pairs.iter().flat_map(|&(a, b)| [a.0, b.0]));
+        self.map_form_once(&ctx, t, under, r, &mut |x| self.replace(x, pairs))
+    }
+
     /// `s` without the parameters the binder list `ps` binds (a lambda's, a polymorphic
     /// function's, a match case's), where it maps one of them: None where none is shadowed.
     fn unshadowed(&self, ps: TList, s: &Subst) -> Option<Subst> {
@@ -1685,6 +2127,69 @@ impl TypeStore {
     /// `t` with each direct part through `f` (a refinement's types and a match type's cases
     /// included), made again only where a part changed.
     pub fn map_parts(&self, t: TypeId, f: &mut dyn FnMut(TypeId) -> TypeId) -> TypeId {
+        // A retained form first: what it is made over through `f` whole, as `TypeMap.mapOver` maps an annotated type's
+        // parent, and its record's types, as `subst`.
+        if self.retaining.load(Ordering::Relaxed) {
+            if let Some((under, r)) = self.form_of_retained(t) {
+                return self.map_parts_form(t, under, r, f);
+            }
+        }
+        self.map_parts_variant(t, f)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn subst_form(&self, t: TypeId, under: TypeId, r: RetainId, s: &Subst) -> TypeId {
+        let mut ctx = vec![PASS_SUBST];
+        ctx.extend(s.iter().flat_map(|&(p, x)| [p.0, x.0]));
+        TypeId(self.in_pass(&ctx, t, || {
+            let nu = self.subst(under, s);
+            let nr = self.map_retention(r, &mut |x| self.subst(x, s));
+            self.form_over(t, under, r, nu, nr).0
+        }))
+    }
+
+    /// The retained form `t` over `under` with the record `r` mapped by `f` once in the pass `ctx` names: what it is made
+    /// over and its record's types through `f`, the form over them (`map_parts`'s retained arm, `form_over`).
+    pub fn map_form_once(&self, ctx: &[u32], t: TypeId, under: TypeId, r: RetainId, f: &mut dyn FnMut(TypeId) -> TypeId) -> TypeId {
+        TypeId(self.in_pass(ctx, t, || {
+            let nu = f(under);
+            let nr = self.map_retention(r, &mut |x| f(x));
+            self.form_over(t, under, r, nu, nr).0
+        }))
+    }
+
+    /// Whether `p` holds of a type of the retained form `t`'s record (an annotation's arguments' with `annotations`,
+    /// `retention_types`) or of what it is made over, the record first, asked once in the pass `ctx` names.
+    pub fn ask_form_once(&self, ctx: &[u32], t: TypeId, under: TypeId, r: RetainId, annotations: bool, p: &mut dyn FnMut(TypeId) -> bool) -> bool {
+        self.in_pass(ctx, t, || (self.retention_types(r, annotations).iter().any(|&x| p(x)) || p(under)) as u32) != 0
+    }
+
+    /// `compute`'s answer for the retained form `t` in the pass under way of the store's map or question `ctx` names
+    /// (its kind, `PASS_*`, and its context), computed once in the pass (`FormPass`).
+    pub fn in_pass(&self, ctx: &[u32], t: TypeId, compute: impl FnOnce() -> u32) -> u32 {
+        {
+            let mut forms = self.forms.lock().unwrap();
+            let pass = forms.pass.entry(ctx[0]).or_default();
+            if let Some(done) = pass.get(ctx, t) {
+                return done;
+            }
+            pass.enter();
+        }
+        let out = compute();
+        self.forms.lock().unwrap().pass.entry(ctx[0]).or_default().leave(ctx, t, out);
+        out
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn map_parts_form(&self, t: TypeId, under: TypeId, r: RetainId, f: &mut dyn FnMut(TypeId) -> TypeId) -> TypeId {
+        let nu = f(under);
+        let nr = self.map_retention(r, f);
+        self.form_over(t, under, r, nu, nr)
+    }
+
+    fn map_parts_variant(&self, t: TypeId, f: &mut dyn FnMut(TypeId) -> TypeId) -> TypeId {
         let list = |ts: &Self, l: TList, f: &mut dyn FnMut(TypeId) -> TypeId| {
             if l == EMPTY_LIST {
                 return l;
@@ -1826,6 +2331,11 @@ impl TypeStore {
         if !self.has_rec_this(t) {
             return t;
         }
+        if self.retaining.load(Ordering::Relaxed) {
+            if let Some((under, r)) = self.form_of_retained(t) {
+                return self.subst_rec_this_form(t, depth, prefix, under, r);
+            }
+        }
         match self.get(t) {
             Type::RecThis(k) if k == depth => prefix,
             Type::RecThis(k) if k > depth => self.mk(Type::RecThis(k - 1)),
@@ -1838,6 +2348,12 @@ impl TypeStore {
         }
     }
 
+    #[cold]
+    #[inline(never)]
+    fn subst_rec_this_form(&self, t: TypeId, depth: u32, prefix: TypeId, under: TypeId, r: RetainId) -> TypeId {
+        self.map_form_once(&[PASS_REC_THIS, depth, prefix.0], t, under, r, &mut |x| self.subst_rec_this(x, depth, prefix))
+    }
+
     /// `t` with each occurrence of the path `this` read as the self of a binder about to be put
     /// around it (`RecType.apply`'s `parentExp` applied to the new type's `recThis`):
     /// `RecThis(k)` at `k` binders inside.
@@ -1846,11 +2362,16 @@ impl TypeStore {
     }
 
     fn abstract_rec_at(&self, t: TypeId, this: TypeId, depth: u32) -> TypeId {
-        if t == this {
+        if self.canonical(t) == self.canonical(this) {
             return self.mk(Type::RecThis(depth));
         }
         if !self.has_paths(t) {
             return t;
+        }
+        if self.retaining.load(Ordering::Relaxed) {
+            if let Some((under, r)) = self.form_of_retained(t) {
+                return self.abstract_rec_at_form(t, this, depth, under, r);
+            }
         }
         match self.get(t) {
             Type::Rec(b) => {
@@ -1859,6 +2380,12 @@ impl TypeStore {
             }
             _ => self.map_parts(t, &mut |x| self.abstract_rec_at(x, this, depth)),
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn abstract_rec_at_form(&self, t: TypeId, this: TypeId, depth: u32, under: TypeId, r: RetainId) -> TypeId {
+        self.map_form_once(&[PASS_ABSTRACT_REC, this.0, depth], t, under, r, &mut |x| self.abstract_rec_at(x, this, depth))
     }
 
     /// The body of a `Rec` on the spine of a refined chain about to be bound by another, merged
@@ -1872,6 +2399,11 @@ impl TypeStore {
         if !self.has_rec_this(t) {
             return t;
         }
+        if self.retaining.load(Ordering::Relaxed) {
+            if let Some((under, r)) = self.form_of_retained(t) {
+                return self.lower_past_form(t, depth, under, r);
+            }
+        }
         match self.get(t) {
             Type::RecThis(k) if k > depth => self.mk(Type::RecThis(k - 1)),
             Type::RecThis(_) => t,
@@ -1883,11 +2415,24 @@ impl TypeStore {
         }
     }
 
+    #[cold]
+    #[inline(never)]
+    fn lower_past_form(&self, t: TypeId, depth: u32, under: TypeId, r: RetainId) -> TypeId {
+        self.map_form_once(&[PASS_LOWER_PAST, depth], t, under, r, &mut |x| self.lower_past(x, depth))
+    }
+
     /// Whether `RecThis(depth)` occurs in `t`, the binder `depth` levels out: `RecType`'s
     /// `isReferredToBy`.
     pub fn refers_to_rec(&self, t: TypeId, depth: u32) -> bool {
         if !self.has_rec_this(t) {
             return false;
+        }
+        // A retained form first, its record read before what it is made over (`TypeAccumulator`: no annotation's
+        // arguments).
+        if self.retaining.load(Ordering::Relaxed) {
+            if let Some((under, r)) = self.form_of_retained(t) {
+                return self.refers_to_rec_form(t, depth, under, r);
+            }
         }
         match self.get(t) {
             Type::RecThis(k) => k == depth,
@@ -1901,6 +2446,12 @@ impl TypeStore {
                 found
             }
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn refers_to_rec_form(&self, t: TypeId, depth: u32, under: TypeId, r: RetainId) -> bool {
+        self.ask_form_once(&[PASS_REFERS_TO_REC, depth], t, under, r, false, &mut |x| self.refers_to_rec(x, depth))
     }
 
     fn subst_refinement(&self, r: RefineId, s: &Subst) -> RefineId {
@@ -1917,6 +2468,12 @@ impl TypeStore {
     #[inline]
     pub fn has_vars(&self, t: TypeId) -> bool {
         self.flag(t) & VARS_BIT != 0
+    }
+
+    /// Whether an intersection or a union occurs anywhere in `t` (`SET_OP_BIT`).
+    #[inline]
+    pub fn has_set_op(&self, t: TypeId) -> bool {
+        self.flag(t) & SET_OP_BIT != 0
     }
 }
 
@@ -1993,7 +2550,7 @@ pub struct Overlay {
     /// The store the overlay is in, which outlives it (it owns it).
     store: *const TypeStore,
     types: Region<Type>,
-    flags: Region<u8>,
+    flags: Region<Flags>,
     lists: Region<Box<[TypeId]>>,
     lits: Region<LitVal>,
     blocked: Region<Box<str>>,
@@ -2188,7 +2745,7 @@ impl Overlay {
         [self.types.len(), self.lists.len(), self.lits.len(), self.blocked.len(), self.refinements.len(), self.matches.len()]
     }
 
-    fn push_type(&self, t: Type, flags: u8) -> TypeId {
+    fn push_type(&self, t: Type, flags: Flags) -> TypeId {
         let i = self.types.push(t);
         self.flags.push(flags);
         TypeId(self.base + i as u32)
@@ -2387,6 +2944,10 @@ impl TypeStore {
             term_refinements: AtomicBool::new(self.term_refinements.load(Ordering::Relaxed)),
             matches: SlabVec::with_capacity(self.matches.len() + 16),
             match_index: Table::with_capacity(self.matches.len() + 16),
+            retentions: SlabVec::with_capacity(self.retentions.len() + 16),
+            retain_index: Table::with_capacity(self.retentions.len() + 16),
+            retaining: AtomicBool::new(self.retaining.load(Ordering::Relaxed)),
+            forms: std::sync::Mutex::new(Forms::default()),
             op_classes: SlabVec::with_capacity(self.op_classes.len()),
             path_classes: SlabVec::with_capacity(self.path_classes.len()),
             op_local: UnsafeCell::new(SharedMap::new()),
@@ -2397,11 +2958,13 @@ impl TypeStore {
             reclaiming: std::sync::Mutex::new(None),
         };
         let retired = self.blocked_found(RETIRED);
+        let forms = self.forms.lock().unwrap();
         for i in 0..self.types.len() {
             let t = *self.types.get(i);
             s.types.push(t);
             s.flags.push(*self.flags.get(i));
-            if *self.flags.get(i) & UNSHARED_BIT == 0 && !matches!(t, Type::Blocked(b) if Some(b) == retired) {
+            // A retained form is not its canonical type's entry: the index holds that alone.
+            if *self.flags.get(i) & UNSHARED_BIT == 0 && !matches!(t, Type::Blocked(b) if Some(b) == retired) && !forms.of.contains_key(&TypeId(i as u32)) {
                 s.type_index.insert(hash_of(&t), i as u32);
             }
         }
@@ -2429,6 +2992,11 @@ impl TypeStore {
             let m = self.matches.get(i).clone();
             s.match_index.insert(hash_of(&m), i as u32);
             s.matches.push(m);
+        }
+        for i in 0..self.retentions.len() {
+            let r = *self.retentions.get(i);
+            s.retain_index.insert(hash_of(&r), i as u32);
+            s.retentions.push(r);
         }
         for (from, to) in [(&self.op_classes, &s.op_classes), (&self.path_classes, &s.path_classes)] {
             for i in 0..from.len() {
@@ -2518,7 +3086,7 @@ impl TypeStore {
         let entries = LOCAL_BASE as usize + workers * WORKER_SPAN as usize;
         let sizes = [
             SlabVec::<Type>::mapping_bytes(entries),
-            SlabVec::<u8>::mapping_bytes(entries),
+            SlabVec::<Flags>::mapping_bytes(entries),
             SlabVec::<Box<[TypeId]>>::mapping_bytes(entries),
             SlabVec::<LitVal>::mapping_bytes(entries),
             SlabVec::<Box<str>>::mapping_bytes(entries),
@@ -4135,6 +4703,197 @@ mod tests {
     /// A class through its prefix nests the class's own type (`Nested`), as a member does its
     /// prefix, so that `Type` keeps its three words and a class nested in no class is made as
     /// before: a third payload word would take it to sixteen bytes.
+    /// A retained form is a type of its own whose entry is its canonical type's: one per canonical type and
+    /// record, never what `mk` answers, the same type as its canonical one at any depth (`same`, `canonical`), kept
+    /// over its mapped parts by `map_parts`.
+    #[test]
+    fn a_retained_form_reads_as_its_canonical_type() {
+        let s = TypeStore::new();
+        let string = s.class(ClassId(40), &[]);
+        assert_eq!(s.form_of(string), None);
+        let alias = Retention::Alias(AliasId(3), EMPTY_LIST);
+        let f = s.retained(string, alias);
+        assert!(f != string && s.get(f) == s.get(string) && s.flag(f) == s.flag(string));
+        assert_eq!(s.retained(string, alias), f);
+        assert_eq!(s.form_of(f), Some((string, s.retain(alias))));
+        assert_eq!(s.mk(s.get(f)), string);
+        assert_eq!((s.underlying(f), s.canonical(f)), (string, string));
+        let (list, list_f) = (s.class(ClassId(41), &[string]), s.class(ClassId(41), &[f]));
+        assert!(list != list_f && s.same(list, list_f) && s.canonical(list_f) == list && s.underlying(list_f) == list_f);
+        // A form over a form, an annotation over an alias.
+        let g = s.retained(f, Retention::Annot(ClassId(42), EMPTY_LIST));
+        assert_eq!((s.underlying(g), s.canonical(g)), (string, string));
+        // `map_parts` keeps the form where its canonical type changes, the form itself where it does not.
+        let int = s.class(ClassId(43), &[]);
+        let h = s.retained(list, Retention::Alias(AliasId(4), s.list(&[string])));
+        assert_eq!(s.map_parts(h, &mut |x| x), h);
+        let mapped = deep(&s, h, &|x| (x == string).then_some(int));
+        assert_eq!(s.form_of(mapped).map(|(u, r)| (u, s.retention(r))), Some((s.class(ClassId(41), &[int]), Retention::Alias(AliasId(4), s.list(&[int])))));
+    }
+
+    /// A map as dotty's `TypeMap` makes one: `f`'s answer where it has one, else `map_parts` with the map itself
+    /// (`mapOver`).
+    fn deep(s: &TypeStore, t: TypeId, f: &dyn Fn(TypeId) -> Option<TypeId>) -> TypeId {
+        f(t).unwrap_or_else(|| s.map_parts(t, &mut |x| deep(s, x, f)))
+    }
+
+    /// The pass over c14fd75e1's store sequences. `A @Ann` mapped `A -> Int` is `Int @Ann`, the map applied to the
+    /// annotation's whole parent (`TypeMap.mapOver`'s `AnnotatedType` branch), where the parent is a leaf too; a phantom
+    /// alias's argument is named though its canonical type names none (`Phantom[P]` over `Int` names `P`,
+    /// `Phantom[x.type]` names `x`), the record read before the canonical leaf.
+    #[test]
+    fn a_retained_form_is_mapped_through_its_parent_and_asked_through_its_record() {
+        let s = TypeStore::new();
+        let (a, int) = (TParamId(7), s.class(ClassId(51), &[]));
+        let ann = Retention::Annot(ClassId(52), EMPTY_LIST);
+        let annotated = s.retained(s.param(a), ann);
+        let mut seen = Vec::new();
+        let mapped = s.map_parts(annotated, &mut |x| {
+            seen.push(x);
+            if x == s.param(a) { int } else { x }
+        });
+        assert_eq!(seen, vec![s.param(a)]);
+        assert_eq!(s.form_of(mapped).map(|(u, r)| (u, s.retention(r))), Some((int, ann)));
+        assert_eq!(s.canonical(mapped), int);
+        let p = TParamId(9);
+        let phantom = s.retained(int, Retention::Alias(AliasId(4), s.list(&[s.param(p)])));
+        assert!(s.names_tparam_mapped(phantom, &[p]) && !s.names_tparam_mapped(int, &[p]));
+        let x = SymId(3);
+        let path = s.mk(Type::Term(x));
+        let phantom_path = s.retained(int, Retention::Alias(AliasId(4), s.list(&[path])));
+        assert!(s.has_paths(phantom_path) && s.names_term(phantom_path, &[x]));
+        assert!(!s.names_term(phantom_path, &[SymId(4)]));
+    }
+
+    /// `replace` of a path's member under a retained annotation: the annotation kept over the replacement, as dotty's
+    /// `Substituters.subst` maps an `AnnotatedType` through `TypeMap.mapOver` (the pass over 317e8fb73's store sequence).
+    #[test]
+    fn replacement_keeps_an_annotation_over_the_replaced_member() {
+        let s = TypeStore::new();
+        let int = s.class(ClassId(51), &[]);
+        let member = s.mk(Type::Member(s.mk(Type::Term(SymId(3))), crate::intern::Name(5)));
+        let ann = Retention::Annot(ClassId(52), EMPTY_LIST);
+        let annotated = s.retained(member, ann);
+        let replaced = s.replace(annotated, &[(member, int)]);
+        assert_eq!(s.form_of(replaced).map(|(u, r)| (u, s.retention(r))), Some((int, ann)));
+        assert_eq!(s.replace(member, &[(member, int)]), int);
+    }
+
+    /// `Type.isExactlyNothing`: `Nothing`, an intersection with either side exactly `Nothing`, a union with both; an
+    /// annotated or aliased `Nothing` is none (Types.scala 246-254).
+    #[test]
+    fn exactly_nothing_as_dotty_tests_it() {
+        let s = TypeStore::new();
+        let string = s.class(ClassId(54), &[]);
+        let and = |a, b| s.mk(Type::Inter(a, b));
+        let or = |a, b| s.mk(Type::Union(a, b, UnionKind::Hard));
+        assert!(s.is_exactly_nothing(NOTHING) && !s.is_exactly_nothing(string));
+        assert!(s.is_exactly_nothing(and(string, NOTHING)) && s.is_exactly_nothing(and(NOTHING, string)));
+        assert!(!s.is_exactly_nothing(or(NOTHING, string)) && s.is_exactly_nothing(or(NOTHING, and(string, NOTHING))));
+        assert!(!s.is_exactly_nothing(s.retained(NOTHING, Retention::Annot(ClassId(52), EMPTY_LIST))));
+        assert!(!s.is_exactly_nothing(s.retained(NOTHING, Retention::Alias(AliasId(4), EMPTY_LIST))));
+    }
+
+    /// `Option[A] @a @b` substituted or mapped to `Option[Int]` keeps both annotations, the inner one first, as
+    /// dotty's `TypeMap.mapOver` keeps each `AnnotatedType` over its mapped parent (`derivedAnnotatedType`).
+    #[test]
+    fn a_retained_chain_is_kept_through_substitution_and_the_maps() {
+        let s = TypeStore::new();
+        let (option, int, a) = (ClassId(50), s.class(ClassId(51), &[]), TParamId(7));
+        let opt_a = s.class(option, &[s.param(a)]);
+        let (ann_a, ann_b) = (Retention::Annot(ClassId(52), EMPTY_LIST), Retention::Annot(ClassId(53), EMPTY_LIST));
+        let twice = s.retained(s.retained(opt_a, ann_a), ann_b);
+        let opt_int = s.class(option, &[int]);
+        let chain = |t: TypeId| {
+            let mut out = Vec::new();
+            let mut cur = t;
+            while let Some((u, r)) = s.form_of(cur) {
+                out.push(s.retention(r));
+                cur = u;
+            }
+            (out, cur)
+        };
+        let subst = s.subst(twice, &vec![(a, int)]);
+        assert_eq!(chain(subst), (vec![ann_b, ann_a], opt_int));
+        let mapped = deep(&s, twice, &|x| (x == s.param(a)).then_some(int));
+        assert_eq!(chain(mapped), (vec![ann_b, ann_a], opt_int));
+        // Unchanged, the form is itself.
+        assert_eq!(s.subst(twice, &vec![(TParamId(8), int)]), twice);
+    }
+
+    /// A retained form is traversed before its canonical leaf: an annotation over a type parameter outlives the
+    /// parameter's replacement (`A @Ann` at `A := Int` is `Int @Ann`), a phantom alias's arguments are substituted
+    /// though its canonical type names none of them (`type Phantom[A] = Int` at `A := String`), and a variable only
+    /// the record holds counts among the form's (the probes of the pass over 2f3b147c1).
+    #[test]
+    fn a_retained_record_is_substituted_before_the_canonical_leaf() {
+        let s = TypeStore::new();
+        let (a, int, string) = (TParamId(7), s.class(ClassId(51), &[]), s.class(ClassId(54), &[]));
+        let pa = s.param(a);
+        let ann = Retention::Annot(ClassId(52), EMPTY_LIST);
+        let annotated = s.subst(s.retained(pa, ann), &vec![(a, int)]);
+        assert_eq!(s.form_of(annotated).map(|(u, r)| (u, s.retention(r))), Some((int, ann)));
+        let phantom = s.retained(int, Retention::Alias(AliasId(4), s.list(&[pa])));
+        let at_string = Some((int, Retention::Alias(AliasId(4), s.list(&[string]))));
+        assert_eq!(s.form_of(s.subst(phantom, &vec![(a, string)])).map(|(u, r)| (u, s.retention(r))), at_string);
+        let mapped = deep(&s, phantom, &|x| (x == pa).then_some(string));
+        assert_eq!(s.form_of(mapped).map(|(u, r)| (u, s.retention(r))), at_string);
+        let var = s.mk(Type::Var(TVarId(0)));
+        let phantom_var = s.retained(int, Retention::Alias(AliasId(4), s.list(&[var])));
+        assert!(s.has_vars(phantom_var) && !s.has_vars(int));
+        assert_eq!(s.canonical(phantom_var), int);
+    }
+
+    /// A form nested in the arguments of the forms nested in its own (`type L2[T] = L[L[T]]` up to `L6`, 32 lists
+    /// deep) is substituted once in a pass (`FormPass`), into what substituting each meeting of it makes: the chain
+    /// over the argument (tests/cases/intersection_member_lambdas under `--semantic-types`).
+    #[test]
+    fn a_chain_of_applied_aliases_is_substituted_once_a_form() {
+        fn l(s: &TypeStore, j: u32, x: TypeId) -> TypeId {
+            let under = if j == 1 { s.class(ClassId(41), &[x]) } else { let inner = l(s, j - 1, x); l(s, j - 1, inner) };
+            s.retained(under, Retention::Alias(AliasId(j), s.list(&[x])))
+        }
+        let s = TypeStore::new();
+        let (a, int) = (TParamId(7), s.class(ClassId(51), &[]));
+        let six = l(&s, 6, s.param(a));
+        let sub = vec![(a, int)];
+        let mapped = s.subst(six, &sub);
+        assert_eq!(mapped, l(&s, 6, int));
+        assert_eq!(s.canonical(mapped), s.subst(s.canonical(six), &sub));
+        assert_eq!(s.map_parts(six, &mut |x| x), six);
+    }
+
+    /// A wildcard whose bounds keep retained forms, `? <: Any @Ann`, is the plain wildcard, the written bounds kept
+    /// over it (`ApproximatingTypeMap.derivedAnnotatedType`'s range, the pass over 2f3b147c1's Ranges.scala).
+    #[test]
+    fn an_annotated_wildcard_is_the_plain_one_with_its_written_bounds() {
+        let s = TypeStore::new();
+        let ann = Retention::Annot(ClassId(52), EMPTY_LIST);
+        let (lo, hi) = (s.retained(NOTHING, ann), s.retained(ANY, ann));
+        let w = s.bounded_wild(NOTHING, hi);
+        assert!(w != WILD && s.get(w) == Type::Wild && s.canonical(w) == WILD);
+        let Some((under, r)) = s.form_of(w) else { panic!("no form") };
+        assert_eq!((under, s.retention(r)), (WILD, Retention::Written(s.mk(Type::BoundedWild(NOTHING, hi)))));
+        assert_eq!(s.bounded_wild(NOTHING, ANY), WILD);
+        assert_eq!(s.canonical(s.bounded_wild(lo, hi)), WILD);
+    }
+
+    /// Two bounds that are distinct retained forms over one canonical type (`Int @Ann`, `Int @Other`) stay two: the
+    /// canonical type is that one type, as without retained forms, the written wildcard of both retained over it
+    /// (`ApproximatingTypeMap.range`'s `lo eq hi`, the pass over c0dbae640's Bounds.scala); one form twice is itself.
+    #[test]
+    fn bounds_over_one_canonical_type_stay_two_forms() {
+        let s = TypeStore::new();
+        let int = s.class(ClassId(53), &[]);
+        let (lo, hi) = (s.retained(int, Retention::Annot(ClassId(52), EMPTY_LIST)), s.retained(int, Retention::Annot(ClassId(54), EMPTY_LIST)));
+        let w = s.bounded_wild(lo, hi);
+        assert_eq!(s.canonical(w), int);
+        let Some((under, r)) = s.form_of(w) else { panic!("no form") };
+        assert_eq!((under, s.retention(r)), (int, Retention::Written(s.mk(Type::BoundedWild(lo, hi)))));
+        assert_eq!(s.bounded_wild(lo, lo), lo);
+        assert_eq!(s.bounded_wild(int, int), int);
+    }
+
     #[test]
     fn a_type_is_three_words() {
         assert_eq!(std::mem::size_of::<Type>(), 12);

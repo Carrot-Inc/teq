@@ -1,0 +1,33 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Imports.scala",
+  "text": "",
+  "md5": "C77088C07EE7635951981DFB71D5DE45",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"_empty_/Imports$package.m.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"m","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/collection/immutable/HashMap#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]},{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Imports$package.","language":"SCALA","kind":"PACKAGE_OBJECT","properties":8,"display_name":"_empty_","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"_empty_/Imports$package."},"declarations":{"symlinks":["_empty_/Imports$package.`<init>`().","_empty_/Imports$package.m."],"hardlinks":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":0,"start_character":7,"end_line":0,"end_character":12},"symbol":"scala/","role":"REFERENCE"},
+    {"range":{"start_line":0,"start_character":13,"end_line":0,"end_character":17},"symbol":"scala/util/","role":"REFERENCE"},
+    {"range":{"start_line":0,"start_character":18,"end_line":0,"end_character":25},"symbol":"scala/util/control/","role":"REFERENCE"},
+    {"range":{"start_line":0,"start_character":26,"end_line":0,"end_character":34},"symbol":"scala/util/control/NonFatal.","role":"REFERENCE"},
+    {"range":{"start_line":1,"start_character":7,"end_line":1,"end_character":12},"symbol":"scala/","role":"REFERENCE"},
+    {"range":{"start_line":1,"start_character":13,"end_line":1,"end_character":23},"symbol":"scala/collection/","role":"REFERENCE"},
+    {"range":{"start_line":1,"start_character":24,"end_line":1,"end_character":33},"symbol":"scala/collection/immutable/","role":"REFERENCE"},
+    {"range":{"start_line":1,"start_character":35,"end_line":1,"end_character":42},"symbol":"scala/collection/immutable/HashMap.","role":"REFERENCE"},
+    {"range":{"start_line":1,"start_character":35,"end_line":1,"end_character":42},"symbol":"scala/collection/immutable/HashMap#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":7,"end_line":3,"end_character":9},"symbol":"scala/collection/immutable/HashMap#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":10,"end_line":3,"end_character":13},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":15,"end_line":3,"end_character":18},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":22,"end_line":3,"end_character":24},"symbol":"scala/collection/immutable/HashMap.","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":25,"end_line":3,"end_character":28},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":30,"end_line":3,"end_character":33},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":4,"end_line":3,"end_character":5},"symbol":"_empty_/Imports$package.m.","role":"DEFINITION"}
+  ],
+  "diagnostics": [
+    {"range":{"start_line":0,"start_character":26,"end_line":0,"end_character":34},"severity":"WARNING","message":"unused import"}
+  ],
+  "synthetics": []
+}

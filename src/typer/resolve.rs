@@ -827,15 +827,15 @@ impl<'a> Worker<'a> {
             bound = match t {
                 None => ANY,
                 Some(t) if bound == NOTHING => t,
-                Some(t) if t == ERROR || bound == ANY || bound == ERROR => bound,
+                Some(t) if t == ERROR || self.canon(bound) == ANY || bound == ERROR => bound,
                 Some(t) => self.types.union(bound, t),
             };
-            if bound == ANY || bound == ERROR {
+            if self.canon(bound) == ANY || bound == ERROR {
                 break;
             }
         }
         let own = own.filter(|&t| t != ERROR);
-        (own, (bound != ANY && bound != ERROR).then_some(bound))
+        (own, (self.canon(bound) != ANY && bound != ERROR).then_some(bound))
     }
 
     /// The first segment is a name in scope where the import stands, earlier imports included.
@@ -2187,7 +2187,7 @@ impl<'a> Worker<'a> {
                 Type::Ctor(k) if params.is_empty() => return Some(TypeRef::Class(k)),
                 _ => return Some(TypeRef::Alias(a)),
             };
-            if self.types.items(args) != params.as_slice() {
+            if self.types.items(args).len() != params.len() || self.types.items(args).iter().zip(&params).any(|(&x, &y)| !self.same_type(x, y)) {
                 return Some(TypeRef::Alias(a));
             }
             r = head;
@@ -3277,7 +3277,8 @@ impl<'a> Worker<'a> {
                 if self.union_alias(a) && self.private_alias_prefix.is_none() {
                     if let Type::Union(x, y, _) = self.types.get(self.syms.aliases[a.idx()].rhs) {
                         let named = self.types.union_as(UnionKind::Named, x, y);
-                        return self.in_expansion(named);
+                        let named = self.in_expansion(named);
+                        return self.retain_alias(named, a);
                     }
                 }
                 // A private alias named where a companion's `apply` is seen from a receiver is the
@@ -3293,7 +3294,8 @@ impl<'a> Worker<'a> {
                 // 438-440), so `type Checked = Option[Int] @RuntimeChecked` exempts nothing it names.
                 let info = &self.syms.aliases[a.idx()];
                 let rhs = self.types.unannotated(info.rhs);
-                let t = if info.tparams.is_empty() || info.rhs == ERROR {
+                let parameterized = !(info.tparams.is_empty() || info.rhs == ERROR);
+                let t = if !parameterized {
                     rhs
                 } else {
                     let tparams = info.tparams.clone();
@@ -3301,7 +3303,16 @@ impl<'a> Worker<'a> {
                     let l = self.types.list(&ps);
                     self.types.mk(Type::Lambda(l, rhs))
                 };
-                self.in_expansion(t)
+                let t = self.in_expansion(t);
+                if parameterized {
+                    // Applied, the alias is retained with its arguments where `TyExpr::Apply` applies it.
+                    if self.semantic {
+                        self.semantic_alias_ctor = Some(a);
+                    }
+                    t
+                } else {
+                    self.retain_alias(t, a)
+                }
             }
             TypeRef::Member(c, name) => {
                 let prefix = match self.inline_this_of(c) {
@@ -3328,6 +3339,16 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+    }
+
+    /// `t`, the expansion of a reference to the alias `a`, with the reference retained over it where the typer
+    /// types for teq fix's SemanticDB forms (`Worker::semantic`): dotty's `TypeRef` of the alias, which its
+    /// `widen` and its signatures keep (TypeOps.scala 264-267 at 3.8.4).
+    fn retain_alias(&mut self, t: TypeId, a: AliasId) -> TypeId {
+        if !self.semantic || t == ERROR {
+            return t;
+        }
+        self.types.retained(t, Retention::Alias(a, EMPTY_LIST))
     }
 
     /// The term member `name` of the value an import opens: named, through its wildcard (no
@@ -3782,11 +3803,11 @@ impl<'a> Worker<'a> {
 
     /// A union whose operands are one type, or declare views: the union as written, operands kept.
     fn note_declared_union(&mut self, id: TyExprId, (a, x): (TyExprId, TypeId), (b, y): (TyExprId, TypeId)) {
-        if x != y && self.declared_views.is_empty() {
+        if !self.same_type(x, y) && self.declared_views.is_empty() {
             return;
         }
         let (va, vb) = (self.declared_of(a), self.declared_of(b));
-        if x == y || va.is_some() || vb.is_some() {
+        if self.same_type(x, y) || va.is_some() || vb.is_some() {
             let view = self.types.mk(Type::Union(va.unwrap_or(x), vb.unwrap_or(y), UnionKind::Hard));
             self.note_declared(id, view);
         }
@@ -4065,7 +4086,9 @@ impl<'a> Worker<'a> {
                         Err(resolved) => operands = Some(resolved),
                     }
                 }
+                self.semantic_alias_ctor = None;
                 let ctor = self.resolve_type_ctor(f);
+                let alias_ctor = self.semantic_alias_ctor.take();
                 if !ast.notes.infix_type_ops.is_empty() && ast.notes.infix_type_ops.binary_search(&f).is_ok() {
                     self.infix_type_written(f);
                 }
@@ -4179,10 +4202,15 @@ impl<'a> Worker<'a> {
                 if self.declaring > 0 && t != ERROR && !self.declared_views.is_empty() {
                     self.note_declared_application(id, f, ctor, &arg_ids, &resolved);
                 }
-                if !self.transparent.is_empty() {
-                    return self.applied_external_opaque(f, t);
+                let t = if !self.transparent.is_empty() { self.applied_external_opaque(f, t) } else { t };
+                match alias_ctor {
+                    // An eta-reduction's application is its right side (`appliedTo`'s `followAlias`): no alias kept.
+                    Some(a) if t != ERROR && !self.alias_follows(a) => {
+                        let args = self.types.list(&resolved);
+                        self.types.retained(t, Retention::Alias(a, args))
+                    }
+                    _ => t,
                 }
-                t
             }
             TyExpr::Fun(params, ret) | TyExpr::CtxFun(params, ret) if ast.fun_param_names(id).is_some() => {
                 let names = ast.fun_param_names(id).unwrap_or_default();
@@ -4288,10 +4316,22 @@ impl<'a> Worker<'a> {
                 if self.declaring > 0 && !self.declared_views.is_empty() {
                     self.note_declared_through(id, t);
                 }
-                if inner != ERROR && self.runtime_checked_annot(class) && !matches!(self.types.get(inner), Type::Annotated(_)) {
-                    self.types.mk(Type::Annotated(inner))
-                } else {
-                    inner
+                let annot = class.map(|path| self.annotation_class(path));
+                let checked = annot.map_or(true, |k| k.is_some_and(|k| self.class_path(k) == "scala.annotation.internal.RuntimeChecked"));
+                let t = if inner != ERROR && checked && !matches!(self.types.get(inner), Type::Annotated(_)) { self.types.mk(Type::Annotated(inner)) } else { inner };
+                // Under semantic typing the annotation is retained, dotty's `AnnotatedType` (TypeOps reads its class),
+                // with the types of its arguments' trees, which a map maps (`Annotation.mapWith`).
+                match annot {
+                    Some(Some(k)) if self.semantic && t != ERROR => {
+                        let file = self.env.file;
+                        let instances = &self.ast(file).annotated_instances;
+                        let at = instances.partition_point(|&(x, _)| x < id);
+                        let instance = instances.get(at).filter(|&&(x, _)| x == id).map(|&(_, e)| e);
+                        let args = instance.map(|e| self.annotation_argument_types(file, e)).unwrap_or_default();
+                        let args = self.types.list(&args);
+                        self.types.retained(t, Retention::Annot(k, args))
+                    }
+                    _ => t,
                 }
             }
             TyExpr::Repeated(t) => self.resolve_type(t),
@@ -4609,7 +4649,7 @@ impl<'a> Worker<'a> {
                 // A higher-kinded member keeps its parameters in its upper bound, `[A] =>> Any`
                 // where none is written, as dotty's `TypeBounds` over an `HKTypeLambda`: their
                 // variances are the member's.
-                let (lo, hi) = (if lo == NOTHING { lo } else { over(self, lo) }, if hi == ANY && ids.is_empty() { hi } else { over(self, hi) });
+                let (lo, hi) = (if self.canon(lo) == NOTHING { lo } else { over(self, lo) }, if self.canon(hi) == ANY && ids.is_empty() { hi } else { over(self, hi) });
                 Refinement::Bounds(name, lo, hi)
             }
         };
@@ -4855,6 +4895,12 @@ impl<'a> Worker<'a> {
             return false;
         }
         *budget -= 1;
+        // A retained form first: its record's types, then what it is made over.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.own_cyclic_form(depth, variance, cycle_ok, nested_ok, own, locked, budget, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Member(p, n) if matches!(self.types.get(p), Type::RecThis(k) if k == depth) => {
                 let Some(&(_, info)) = own.iter().find(|&&(m, _)| m == n) else { return false };
@@ -4913,13 +4959,21 @@ impl<'a> Worker<'a> {
             _ => {
                 let types = self.types.clone();
                 let mut parts = Vec::new();
-                types.map_parts(t, &mut |x| {
+                types.map_parts(types.underlying(t), &mut |x| {
                     parts.push(x);
                     x
                 });
                 parts.into_iter().any(|x| self.own_cyclic(x, depth, variance, cycle_ok, nested_ok, own, locked, budget))
             }
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn own_cyclic_form(&mut self, depth: u32, variance: i8, cycle_ok: bool, nested_ok: bool, own: &[(Name, Refinement)], locked: &mut Vec<Name>, budget: &mut u32, under: TypeId, r: crate::types::RetainId) -> bool {
+        let parts = self.types.retention_types(r, false);
+        return parts.into_iter().any(|x| self.own_cyclic(x, depth, variance, cycle_ok, nested_ok, own, locked, budget))
+            || self.own_cyclic(under, depth, variance, cycle_ok, nested_ok, own, locked, budget);
     }
 
     /// The term members of a refinement of `parent` as dotty's `Typer.typedRefinedTypeTree`
@@ -5390,7 +5444,7 @@ impl<'a> Worker<'a> {
             // both to the bound's parameters), when the bounds of a parameter given as the
             // argument (`Attr[E]` in a class over `E[x] <: Event[x]`) are resolved.
             if arity > 0 {
-                if upper != ANY && !self.is_body_file(self.env.file) {
+                if self.canon(upper) != ANY && !self.is_body_file(self.env.file) {
                     let u = self.types.subst(upper, &subst);
                     let (file, transparent) = (self.env.file, self.transparent.clone());
                     let of_body = self.diags.of_bodies;
@@ -5399,14 +5453,14 @@ impl<'a> Worker<'a> {
                 }
                 continue;
             }
-            if upper == ANY && lower == NOTHING {
+            if self.canon(upper) == ANY && self.canon(lower) == NOTHING {
                 continue;
             }
-            let upper = (upper != ANY).then(|| {
+            let upper = (self.canon(upper) != ANY).then(|| {
                 let u = self.types.subst(upper, &subst);
                 seen(self, u)
             });
-            let lower = (lower != NOTHING).then(|| {
+            let lower = (self.canon(lower) != NOTHING).then(|| {
                 let l = self.types.subst(lower, &subst);
                 seen(self, l)
             });
@@ -5721,7 +5775,7 @@ impl<'a> Worker<'a> {
             // A local object stands for itself as its class type, as a top-level one does.
             Some(Ok(p)) => match self.types.get(p) {
                 Type::Term(s) => match self.local_module_of_sym(s) {
-                    Some(c) => self.types.class(c, &[]),
+                    Some(c) => self.object_ref(c),
                     None => p,
                 },
                 _ => p,
@@ -5749,7 +5803,7 @@ impl<'a> Worker<'a> {
         self.sig_of(s);
         match self.types.get(p) {
             Type::Term(s) => match self.local_module_of_sym(s) {
-                Some(c) => self.types.class(c, &[]),
+                Some(c) => self.object_ref(c),
                 None => p,
             },
             _ => p,
@@ -5921,7 +5975,8 @@ impl<'a> Worker<'a> {
                 // it is spelled as, which scalac erases a parameter it bounds to (`Product`).
                 let (t, view) = if upper { self.declared_view(b, |w| w.resolve_declared_type(b)) } else { (self.resolve_type(b), crate::tir::NO_TYPE) };
                 let t = self.declared_chain(t, view);
-                if t == itself || self.eta_reduce(t) == itself {
+                let u = self.canon(t);
+                if u == itself || self.eta_reduce(u) == itself {
                     let msg = format!("cyclic reference involving type {}", self.name_str(tp.name));
                     self.error(tp.span, msg);
                     continue;
@@ -6481,7 +6536,7 @@ impl<'a> Worker<'a> {
             // Its right side and bounds are typed in the alias's own context, which owns a lambda's binders there.
             let type_def = t.type_def_frames.replace(below);
             let over = |t: &mut Self, ty: TypeId| {
-                if ids.is_empty() || ty == ANY || ty == NOTHING {
+                if ids.is_empty() || t.types.canonical(ty) == ANY || t.types.canonical(ty) == NOTHING {
                     return ty;
                 }
                 let ps: Vec<TypeId> = ids.iter().map(|&(_, p)| t.types.param(p)).collect();
@@ -7171,7 +7226,7 @@ impl<'a> Worker<'a> {
         // A trait whose first parent is `Any` as resolved, written so or through an alias, is
         // universal (`mods::UNIVERSAL`): dotty's `Namer.ensureFirstIsClass` keeps a real class
         // first, where a trait first gets `Object` before it.
-        if kind == ClassKind::Trait && parents.first().is_some_and(|&(t, _)| self.dealias(t) == ANY) {
+        if kind == ClassKind::Trait && parents.first().is_some_and(|&(t, _)| self.dealias_canonical(t) == ANY) {
             self.syms.class_mut(c).mods |= mods::UNIVERSAL;
         }
         if self.desugared_parents(c, kind, &mut parents) {
@@ -7625,7 +7680,7 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
-            let pt = self.deref_alias(pt);
+            let pt = self.deref_alias_canonical(pt);
             parent_failed |= pt == ERROR;
             // A class nested in a class, through its prefix (`extends H.o.I`, an alias of it): its
             // base types are seen from the prefix, as dotty's `baseType` of a parent `TypeRef`.
@@ -8068,7 +8123,7 @@ impl<'a> Worker<'a> {
             let (bc, bt) = base[i];
             match base[i + 1..].iter().find(|&&(x, _)| x == bc) {
                 Some(&(_, later)) => {
-                    if later != bt {
+                    if !self.same_type(later, bt) {
                         // A conflict, which a class that is no trait may not have, is met too: the instances'
                         // intersection (`base_type_of`).
                         if self.conflicting_instantiations(bc, bt, later) {
@@ -8140,7 +8195,7 @@ impl<'a> Worker<'a> {
             let Some(inst) = self.parent_base_instance(p, bc) else { continue };
             met = Some(match met {
                 None => inst,
-                Some(m) if m == inst => m,
+                Some(m) if self.same_type(m, inst) => m,
                 Some(m) => {
                     if self.instances_settle(c, done, m) && self.instances_settle(c, done, inst) {
                         self.meet_instances(bc, m, inst)
@@ -8243,7 +8298,7 @@ impl<'a> Worker<'a> {
             return a;
         }
         match (self.types.get(a), self.types.get(b)) {
-            (Type::Nested(p, x), Type::Nested(q, y)) if p == q => {
+            (Type::Nested(p, x), Type::Nested(q, y)) if self.same_type(p, q) => {
                 let met = self.meet_instances(bc, x, y);
                 return if met == x { a } else { self.types.mk(Type::Nested(p, met)) };
             }

@@ -1,0 +1,2 @@
+Ranges.map: B
+Ranges.escaped: Inv[? <: Any @Ann]

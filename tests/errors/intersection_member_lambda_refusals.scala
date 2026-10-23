@@ -1,4 +1,4 @@
-// expect: 12:81: error: type mismatch: found List[Int | String], required Nothing
+// expect: 12:81: error: type mismatch: found List[Int | String], required Nothing & Any
 // expect: 14:63: error: type mismatch: found [T <: Int | String] => (x$1: T) => T, required [T <: Int & String] => (x$1: T) => T
 // expect: 16:42: error: type mismatch: found List[Int] & Option[Int], required Boolean
 // expect: 3 errors found

@@ -2166,7 +2166,7 @@ impl<'a, 't> Interp<'a, 't> {
         if matches!(m, Member::Missing) && self.name(self.syms().sym(s).name) == "valueOf" && matches!(self.runtime_class_name(class).as_ref(), "scala.String$" | "java.lang.String$") {
             let takes_chars = self.syms().sym(s).sig.as_ref().and_then(|sig| sig.clauses.first()).and_then(|c| c.params.first()).map(|p| p.ty);
             let takes_chars = takes_chars.map_or(false, |t| match self.typer.types.get(t) {
-                Type::Class(c, args) if c == self.typer.b.array => self.typer.types.items(args).first().copied() == Some(self.typer.b.t_char),
+                Type::Class(c, args) if c == self.typer.b.array => self.typer.types.items(args).first().map(|&x| self.typer.types.canonical(x)) == Some(self.typer.b.t_char),
                 _ => false,
             });
             return (Member::StringValueOf(takes_chars), name);

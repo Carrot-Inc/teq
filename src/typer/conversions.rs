@@ -165,9 +165,11 @@ impl<'a> Worker<'a> {
         for i in 0..self.tvars[v].lower.len() {
             let l = self.tvars[v].lower[i];
             let l = self.zonk(l);
+            let l = self.canon(l);
             for j in 0..self.tvars[v].upper.len() {
                 let u = self.tvars[v].upper[j];
-                if self.zonk(u) == l {
+                let u = self.zonk(u);
+                if self.same_type(u, l) {
                     return true;
                 }
             }
@@ -180,7 +182,8 @@ impl<'a> Worker<'a> {
     /// `declared` where every one of them was open, so that the variances are the parameters'.
     #[inline(never)]
     fn nonvariant_params(&mut self, declared: TypeId, to: TypeId, subst: &Subst, made: &std::ops::Range<usize>) -> std::sync::Arc<[TParamId]> {
-        if let Some(ps) = self.conversion_nonvariant.get(&declared) {
+        let key = declared;
+        if let Some(ps) = self.conversion_nonvariant.get(&key) {
             return ps.clone();
         }
         let open = made.clone().all(|v| self.tvars[self.tvars.id(v)].inst.is_none());
@@ -196,7 +199,7 @@ impl<'a> Worker<'a> {
         }
         let ps: std::sync::Arc<[TParamId]> = ps.into();
         if open && !self.types.has_vars(declared) {
-            self.conversion_nonvariant.insert(declared, ps.clone());
+            self.conversion_nonvariant.insert(key, ps.clone());
         }
         ps
     }
@@ -595,10 +598,11 @@ impl<'a> Worker<'a> {
         // One method reached through one value is one candidate, however many imports of the
         // value (`import v.*` twice) bring it.
         let values = &self.import_values;
+        let types = &self.types;
         let key = |&(g, via): &ConvRef| match via {
             Via::Value(v) => (g, 2, values[v.0 as usize].0 .0),
             Via::Module(m) => (g, 1, m.0),
-            Via::Path(p) => (g, 3, p.0),
+            Via::Path(p) => (g, 3, types.canonical(p).0),
             Via::Scope => (g, 0, 0),
         };
         for level in &mut levels {
@@ -645,7 +649,7 @@ impl<'a> Worker<'a> {
         for &tp in &shape.tparams {
             let info = self.syms.tparam(tp);
             let (upper, lower) = (info.upper, info.lower);
-            if upper != ANY || lower != NOTHING {
+            if self.canon(upper) != ANY || self.canon(lower) != NOTHING {
                 let var = self.types.param(tp);
                 let var = self.types.subst(var, &subst);
                 let (upper, lower) = (self.types.subst(upper, &subst), self.types.subst(lower, &subst));
@@ -1251,7 +1255,7 @@ impl<'a> Worker<'a> {
             }
             let info = self.syms.tparam(tp);
             let (upper, lower) = (info.upper, info.lower);
-            if upper != ANY || lower != NOTHING {
+            if self.canon(upper) != ANY || self.canon(lower) != NOTHING {
                 let var = self.types.param(tp);
                 let var = self.types.subst(var, &subst_b);
                 let (upper, lower) = (self.types.subst(upper, &subst_b), self.types.subst(lower, &subst_b));
@@ -1434,7 +1438,7 @@ impl<'a> Worker<'a> {
     /// the two types takes it there; dotc's `inferView`.
     /// A view is never applied to `null` or to an expression of type `Nothing`, as under scalac.
     fn is_bottom(&mut self, t: TypeId) -> bool {
-        let t = self.deref(t);
+        let t = self.deref_canonical(t);
         t == NOTHING || t == self.b.t_null
     }
 
@@ -1470,9 +1474,9 @@ impl<'a> Worker<'a> {
         for u in self.upper_bounds_through_vars(v) {
             let u = self.zonk(u);
             let u = self.wild_approx_vars(u, &mut vec![v]);
-            target = if target == ANY { u } else { self.types.inter(target, u) };
+            target = if self.canon(target) == ANY { u } else { self.types.inter(target, u) };
         }
-        if target == ANY {
+        if self.canon(target) == ANY {
             return None;
         }
         let mark = self.attempt();
@@ -1499,6 +1503,11 @@ impl<'a> Worker<'a> {
             return t;
         }
         let t = self.deref(t);
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.wild_approx_vars_form(t, seen, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Var(v) => {
                 if seen.contains(&v) {
@@ -1540,8 +1549,8 @@ impl<'a> Worker<'a> {
                 // two bounds (`TypeAlias`).
                 let (la, ha) = self.wild_part_bounds(a, a);
                 let (lb, hb) = self.wild_part_bounds(b, b);
-                let lo = if la == NOTHING || lb == NOTHING { NOTHING } else { self.types.inter(la, lb) };
-                let hi = if ha == ANY || hb == ANY { ANY } else { self.types.union_as(soft, ha, hb) };
+                let lo = if self.canon(la) == NOTHING || self.canon(lb) == NOTHING { NOTHING } else { self.types.inter(la, lb) };
+                let hi = if self.canon(ha) == ANY || self.canon(hb) == ANY { ANY } else { self.types.union_as(soft, ha, hb) };
                 self.types.bounded_wild(lo, hi)
             }
             Type::Inter(a, b) => {
@@ -1558,6 +1567,14 @@ impl<'a> Worker<'a> {
             }
             _ => t,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn wild_approx_vars_form(&mut self, t: TypeId, seen: &mut Vec<TVarId>, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let mut ctx = vec![super::FORM_WILD_APPROX_VARS];
+        ctx.extend(seen.iter().map(|v| v.0));
+        self.map_form(&ctx, t, under, r, &mut |w, x| w.wild_approx_vars(x, seen))
     }
 
     fn is_wild(&self, t: TypeId) -> bool {
@@ -1587,7 +1604,7 @@ impl<'a> Worker<'a> {
         if actual == ERROR || expected == ERROR || self.types.contains_error(expected) || self.is_bottom(actual) {
             return None;
         }
-        let target = self.deref(expected);
+        let target = self.deref_canonical(expected);
         if matches!(self.types.get(target), Type::Var(_) | Type::AppVar(..)) || target == ANY {
             return None;
         }

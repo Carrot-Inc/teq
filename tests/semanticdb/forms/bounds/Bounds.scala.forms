@@ -1,0 +1,5 @@
+Bounds.map: B
+Bounds.eq: Inv[? >: Int @Ann <: Int @Other]
+Bounds.eqAnn: Inv[? >: Int @Ann @Third <: Int @Other @Third]
+Bounds.lower: Inv[? >: String @Ann @Third <: Any @Other @Third]
+Bounds.triple: Inv[? <: Any @Ann @Other @Third]

@@ -486,6 +486,7 @@ impl<'a> Worker<'a> {
             }
             _ => t,
         };
+        let t = self.canon(t);
         if t == self.b.t_string || t == self.b.t_char {
             StrKind::Str
         } else if t == self.b.t_int || t == self.b.t_boolean || t == self.b.t_byte || t == self.b.t_short {
@@ -503,7 +504,7 @@ impl<'a> Worker<'a> {
     pub(super) fn str_conversion(&mut self, ty: TypeId) -> Option<StrKind> {
         match self.str_kind(ty) {
             // A Char is a String already in JavaScript, and a `char` on the JVM and in the interpreter.
-            StrKind::Str if (self.jvm || self.interp) && self.dealias(ty) == self.b.t_char => Some(StrKind::Str),
+            StrKind::Str if (self.jvm || self.interp) && self.dealias_canonical(ty) == self.b.t_char => Some(StrKind::Str),
             StrKind::Str => None,
             kind => Some(kind),
         }
@@ -525,7 +526,7 @@ impl<'a> Worker<'a> {
     pub fn to_string_call(&mut self, te: TExprId, ty: TypeId) -> TExprId {
         match self.str_conversion(ty) {
             Some(kind) => self.prog.to_string_call(te, kind),
-            None if self.dealias(ty) == self.b.t_char => te,
+            None if self.dealias_canonical(ty) == self.b.t_char => te,
             None => self.prog.to_string_call(te, StrKind::Str),
         }
     }
@@ -538,7 +539,7 @@ impl<'a> Worker<'a> {
     /// ascription's operand, a constant converted by the adaptation included.
     pub(super) fn check_expr_adapted(&mut self, e: ExprId, expected: TypeId) -> (TExprId, TypeId) {
         let (te, ty) = self.type_expr(e, Some(expected));
-        if expected == self.b.t_unit {
+        if self.canon(expected) == self.b.t_unit {
             self.warn_discarded(e, te, ty);
         }
         let span = self.cur_ast().expr_span(e);
@@ -548,7 +549,7 @@ impl<'a> Worker<'a> {
     /// `check_expr`, with the type the expression had before it was adapted.
     pub fn check_expr_own(&mut self, e: ExprId, expected: TypeId) -> (TExprId, TypeId) {
         let (te, ty) = self.type_expr(e, Some(expected));
-        if expected == self.b.t_unit {
+        if self.canon(expected) == self.b.t_unit {
             self.warn_discarded(e, te, ty);
         }
         let span = self.cur_ast().expr_span(e);
@@ -566,7 +567,7 @@ impl<'a> Worker<'a> {
 
     /// scalac's warning for a pure value that a `Unit` swallows: `def f(): Unit = 5`.
     pub fn warn_discarded(&mut self, e: ExprId, te: TExprId, ty: TypeId) {
-        let ty = self.deref(ty);
+        let ty = self.deref_canonical(ty);
         let mut value = te;
         while let TExpr::Block(_, res) = self.prog.expr(value) {
             value = res;
@@ -589,7 +590,7 @@ impl<'a> Worker<'a> {
     /// One whose typing failed past `mark` is checked for neither, as dotty checks no erroneous
     /// tree (a parser's recovery leaves such statements).
     pub fn warn_pure_statement(&mut self, e: ExprId, te: TExprId, ty: TypeId, mark: (usize, u32)) {
-        let ty = self.deref(ty);
+        let ty = self.deref_canonical(ty);
         if ty == self.b.t_unit || ty == ERROR || !self.pure_value(te) || self.failed_since(mark) {
             return;
         }
@@ -673,11 +674,11 @@ impl<'a> Worker<'a> {
     /// The value adapted to the expected type, with the type it has then: its own where it
     /// conforms as it stands by subtyping, the expected one where an adaptation gave it that.
     pub fn adapt_typed(&mut self, te: TExprId, actual: TypeId, expected: TypeId, span: Span) -> (TExprId, TypeId) {
-        let exp = self.deref(expected);
+        let exp = self.deref_canonical(expected);
         // An argument typed before its parameter was known, of the parameter's primitive type.
         let te = if self.is_primitive_type_id(exp) || self.param_erases_to_primitive(exp) { self.unbox_erased(te, actual) } else { te };
         if exp == self.b.t_unit {
-            let act = self.deref(actual);
+            let act = self.deref_canonical(actual);
             if act == self.b.t_unit || act == NOTHING {
                 return (te, expected);
             }
@@ -685,11 +686,11 @@ impl<'a> Worker<'a> {
             let unit = self.prog.add(TExpr::Unit);
             return (self.prog.add(TExpr::Block(stmts, unit)), expected);
         }
-        if actual == exp && !self.is_unresolved_member(actual) {
+        if self.same_type(actual, exp) && !self.is_unresolved_member(actual) {
             return (te, expected);
         }
         // A constant where its class is expected, the commonest adaptation of a literal.
-        if matches!(self.types.get(actual), Type::Lit(_)) && self.widen_lit(actual) == exp {
+        if matches!(self.types.get(actual), Type::Lit(_)) && self.widen_lit(self.canon(actual)) == exp {
             return (te, actual);
         }
         if let Some((applied, ty)) = self.apply_context_function(te, actual, exp, span) {
@@ -880,6 +881,13 @@ impl<'a> Worker<'a> {
             return t;
         }
         let t = self.deref(t);
+        // A retained form first: what it is made over at this depth and its record's types as its parts (an alias's
+        // arguments in an invariant place), the form over them.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.reported_type_form(t, variance, depth, fbounded, under, r);
+            }
+        }
         let d = depth + 1;
         match self.types.get(t) {
             Type::Var(v) if variance != 0 => {
@@ -919,6 +927,15 @@ impl<'a> Worker<'a> {
             }
             _ => t,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn reported_type_form(&mut self, t: TypeId, variance: i8, depth: u32, fbounded: &mut bool, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let types = self.types.clone();
+        let nu = self.reported_type(under, variance, depth, fbounded);
+        let nr = types.map_retention(r, &mut |x| self.reported_type(x, 0, depth + 1, fbounded));
+        types.form_over(t, under, r, nu, nr)
     }
 
     pub fn adapt(&mut self, te: TExprId, actual: TypeId, expected: TypeId, span: Span) -> TExprId {
@@ -1094,6 +1111,7 @@ impl<'a> Worker<'a> {
     /// is a `Float` where one is expected, as scalac folds it; a `Char` literal narrows to the
     /// `Byte` or `Short` it fits (`Array[Byte]('G', 'I')`).
     fn narrow_literal(&mut self, te: TExprId, act: TypeId, target: TypeId) -> Option<TExprId> {
+        let (act, target) = (self.canon(act), self.canon(target));
         // A plain call of a constant type still pending is its literal for the narrowing, as
         // scalac's typer folds it: expanded first; one of `Int` is no
         // constant, and one the narrowing does not take stays pending. One whose expansion failed,
@@ -1190,7 +1208,8 @@ impl<'a> Worker<'a> {
             for v in vars {
                 for i in 0..self.tvars[v].upper.len() {
                     let u = self.tvars[v].upper[i];
-                    let u = self.deref(u);
+                    // A bound keeps the retained forms (`is_sub`): read as its canonical type, the class a number takes.
+                    let u = self.deref_canonical(u);
                     match self.types.get(u) {
                         Type::Var(w) => next.push(w),
                         Type::Union(..) if unions => {
@@ -1395,6 +1414,7 @@ impl<'a> Worker<'a> {
         loop {
             let d = self.deref_alias(t);
             let d = self.strip_null(d);
+            let d = self.canon_head(d);
             if seen.contains(&d) {
                 return d;
             }
@@ -1413,11 +1433,11 @@ impl<'a> Worker<'a> {
                 }
                 Type::Param(p) => {
                     let lo = self.syms.tparam(p).lower;
-                    if lo == NOTHING || lo == ERROR { return d } else { lo }
+                    if self.canon(lo) == NOTHING || lo == ERROR { return d } else { lo }
                 }
                 Type::Member(..) | Type::Decl(_) => {
                     let (lo, _) = self.member_bounds(d);
-                    if lo == NOTHING || lo == ERROR || lo == d { return d } else { lo }
+                    if self.canon(lo) == NOTHING || lo == ERROR || lo == d { return d } else { lo }
                 }
                 _ => return d,
             };
@@ -1534,10 +1554,10 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Union(a, b, _) => {
-                if self.deref_alias(a) == NOTHING {
+                if self.deref_alias_canonical(a) == NOTHING {
                     return self.class_symbol(b);
                 }
-                if self.deref_alias(b) == NOTHING {
+                if self.deref_alias_canonical(b) == NOTHING {
                     return self.class_symbol(a);
                 }
                 let (x, y) = (self.class_symbol(a), self.class_symbol(b));
@@ -1720,10 +1740,10 @@ impl<'a> Worker<'a> {
         if ty == of {
             return true;
         }
-        let t = self.deref(ty);
+        let t = self.deref_canonical(ty);
         match self.types.get(t) {
-            Type::Class(c, _) => t == of || (self.syms.class(c).kind == ClassKind::Opaque && self.dealias(t) == of),
-            _ => self.dealias(t) == of,
+            Type::Class(c, _) => t == of || (self.syms.class(c).kind == ClassKind::Opaque && self.dealias_canonical(t) == of),
+            _ => self.dealias_canonical(t) == of,
         }
     }
 
@@ -1932,7 +1952,7 @@ impl<'a> Worker<'a> {
                 // a refinement, an annotation read through): a union is none (its numeric alternative is
                 // `adaptToSubType`'s `convertTo` to the union, or the view's), a variable its upper bound where that is a
                 // primitive class (`classBound`'s constraint entry, `hi.classSymbol`).
-                let mut exp = expected.map(|t| self.deref(t));
+                let mut exp = expected.map(|t| self.deref_canonical(t));
                 match exp.map(|t| self.types.get(t)) {
                     Some(Type::Var(var)) => exp = self.numeric_upper_bound(var, false),
                     Some(Type::Union(..)) => exp = None,
@@ -2261,12 +2281,12 @@ impl<'a> Worker<'a> {
                 // node with that type recorded, which its ascription to a reference type would record
                 // over, boxing it as the literal's own class: the block keeps the narrow type.
                 let narrowed_literal = matches!(self.prog.expr(te), TExpr::Int(_) | TExpr::Double(_))
-                    && self.prog.type_of(te).map_or(false, |it| [self.b.t_byte, self.b.t_short, self.b.t_char, self.b.t_float].contains(&it) && it != t);
+                    && self.prog.type_of(te).map(|it| self.canon(it)).map_or(false, |it| [self.b.t_byte, self.b.t_short, self.b.t_char, self.b.t_float].contains(&it) && !self.same_type(it, t));
                 // A plain call still pending, whose node its expansion takes later, keeps the type
                 // the typing gave it (a widening) under the ascription's.
-                let pending_call = self.prog.type_of(te).map_or(false, |it| it != t && self.is_numeric(it).is_some()) && self.is_pending_call(te);
+                let pending_call = self.prog.type_of(te).map_or(false, |it| !self.same_type(it, t) && self.is_numeric(it).is_some()) && self.is_pending_call(te);
                 let node = match self.prog.type_of(te) {
-                    Some(inner_ty) if (inner_ty == self.b.t_double || narrowed_literal || pending_call) && self.is_numeric(t).is_none() && self.quote.level == 0 => {
+                    Some(inner_ty) if (self.canon(inner_ty) == self.b.t_double || narrowed_literal || pending_call) && self.is_numeric(t).is_none() && self.quote.level == 0 => {
                         self.prog.add(TExpr::Block(crate::ast::ListRef::EMPTY, te))
                     }
                     _ => te,
@@ -2567,7 +2587,7 @@ impl<'a> Worker<'a> {
             // `Float` converts (`Constants.convertTo` takes no `Double` to a `Float`), as a
             // branch's or a block's result is.
             let typed_exp = match exp {
-                Some(x) if self.deref(x) == self.b.t_float && self.decimal_result(id) => None,
+                Some(x) if self.deref_canonical(x) == self.b.t_float && self.decimal_result(id) => None,
                 _ => exp,
             };
             let (te, ty) = self.type_expr(id, typed_exp);
@@ -3016,7 +3036,7 @@ impl<'a> Worker<'a> {
             Type::Ctor(c) | Type::Class(c, _) => c,
             // `new T[A]` for `type T[A] = C[A]`, a parameterised alias of a class (scala-library's
             // `scala.::` over `immutable.::`).
-            Type::Lambda(ps, rhs) if matches!(self.types.get(rhs), Type::Class(_, args) if self.types.items(args).iter().zip(self.types.items(ps)).all(|(a, p)| a == p) && self.types.items(args).len() == self.types.items(ps).len()) => {
+            Type::Lambda(ps, rhs) if matches!(self.types.get(rhs), Type::Class(_, args) if self.types.items(args).iter().zip(self.types.items(ps)).all(|(&a, &p)| self.same_type(a, p)) && self.types.items(args).len() == self.types.items(ps).len()) => {
                 match self.types.get(rhs) {
                     Type::Class(c, _) => c,
                     _ => unreachable!(),
@@ -3261,6 +3281,7 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let class = self.widen_lit(ty);
+            let class = self.canon(class);
             if self.is_numeric(class).is_none() {
                 return;
             }
@@ -3976,7 +3997,7 @@ impl<'a> Worker<'a> {
         let unit = self.b.t_unit;
         let bounded = (0..self.tvars[v].upper.len()).any(|i| {
             let u = self.tvars[v].upper[i];
-            self.deref(u) == unit
+            self.deref_canonical(u) == unit
         });
         if !bounded {
             return None;
@@ -4002,7 +4023,7 @@ impl<'a> Worker<'a> {
         // A function type with a `Unit` result discards the value (`attach(runner.receive _)`
         // where a `String => Unit` is expected of a method answering an `Option`).
         let unit = self.b.t_unit;
-        if self.dealias(exp) == unit {
+        if self.dealias_canonical(exp) == unit {
             return (self.adapt(te, ty, unit, span), unit);
         }
         match self.convert_to_typed(te, ty, exp, span, false) {
@@ -4257,6 +4278,15 @@ impl<'a> Worker<'a> {
             if seen.insert(t, ()).is_some() {
                 continue;
             }
+            // A retained form's record's types and what it is made over (no annotation's arguments: the accumulator's
+            // `applyToAnnot`).
+            if self.semantic {
+                if let Some((under, r)) = self.types.form_of(t) {
+                    work.extend(self.types.retention_types(r, false));
+                    work.push(under);
+                    continue;
+                }
+            }
             match self.types.get(t) {
                 Type::Term(s) => {
                     if self.block_term(s, locals) {
@@ -4411,7 +4441,7 @@ impl<'a> Worker<'a> {
         let solved = self.solve_if_var(t);
         let head = self.deref(t);
         let still_open = matches!(self.types.get(head), Type::Var(_));
-        if solved == NOTHING && still_open {
+        if self.canon(solved) == NOTHING && still_open {
             self.solve_maximized_in(t)
         } else {
             solved
@@ -4455,7 +4485,7 @@ impl<'a> Worker<'a> {
                 let info = t.syms.tparam(p);
                 info.variance == 1 && info.arity == 0
             });
-            covariant && t.deref(a) == NOTHING
+            covariant && t.deref_canonical(a) == NOTHING
         };
         if !(0..n).any(|i| empty_covariant(self, i)) {
             return None;
@@ -4826,7 +4856,7 @@ impl<'a> Worker<'a> {
     pub fn type_expr_adapted(&mut self, e: ExprId, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let Some(exp) = self.concrete_expected(expected) else { return self.type_expr(e, expected) };
         let (te, ty) = self.type_expr(e, Some(exp));
-        if exp == self.b.t_unit {
+        if self.canon(exp) == self.b.t_unit {
             self.warn_discarded(e, te, ty);
         }
         let span = self.cur_ast().expr_span(e);
@@ -4848,7 +4878,7 @@ impl<'a> Worker<'a> {
         let mut acc = NOTHING;
         for &t in branches {
             // A branch that throws joins to the other branch.
-            if t == NOTHING {
+            if self.canon(t) == NOTHING {
                 continue;
             }
             if t == ERROR || self.types.has_vars(t) {
@@ -4882,7 +4912,11 @@ impl<'a> Worker<'a> {
         }
         let bounds: Vec<TypeId> = info.lower.iter().chain(info.upper.iter()).copied().collect();
         let first = self.zonk(bounds[0]);
-        if first == ERROR || self.types.has_vars(first) || !bounds[1..].iter().all(|&b| self.zonk(b) == first) {
+        let canonical = self.canon(first);
+        if first == ERROR || self.types.has_vars(first) || !bounds[1..].iter().all(|&b| {
+            let z = self.zonk(b);
+            self.same_type(z, canonical)
+        }) {
             return false;
         }
         self.instantiate(v, first);
@@ -5362,11 +5396,29 @@ impl<'a> Worker<'a> {
     /// 1081), not the name. `None`, a type read from TASTy, was checked by its full name there.
     pub(super) fn runtime_checked_annot(&mut self, class: Option<crate::ast::TyExprId>) -> bool {
         let Some(path) = class else { return true };
+        self.annotation_class(path).is_some_and(|k| self.class_path(k) == "scala.annotation.internal.RuntimeChecked")
+    }
+
+    /// The class an annotation's path names (`annotation_type_class`), what it reports dropped.
+    pub(super) fn annotation_class(&mut self, path: crate::ast::TyExprId) -> Option<ClassId> {
         let mark = self.diags.items.len();
         let resolved = self.resolve_type_ctor(path);
-        let resolved = self.dealias(resolved);
         self.drop_reported_since(mark);
-        matches!(self.types.get(resolved), Type::Class(k, _) | Type::Ctor(k) if self.class_path(k) == "scala.annotation.internal.RuntimeChecked")
+        self.annotation_type_class(resolved)
+    }
+
+    /// `Annotations.annotClass` (Annotations.scala 18-20 at 3.8.4) of an annotation's type: its constructor's owner,
+    /// `tree.tpe.typeSymbol` (Types.scala 617-623), the class a class reference names through its prefix (`outer.Ann`,
+    /// an inner class selected through a path) and through the proxies: an applied type's constructor, an alias's
+    /// right side, an annotated type's parent, a variable's instance. The source's annotation and the loader's
+    /// pickled one take it alike.
+    pub(super) fn annotation_type_class(&mut self, t: TypeId) -> Option<ClassId> {
+        let t = self.dealias(t);
+        match self.types.get(t) {
+            Type::Class(k, _) | Type::Ctor(k) => Some(k),
+            Type::Nested(_, class) | Type::Annotated(class) => self.annotation_type_class(class),
+            _ => None,
+        }
     }
 
     /// `pt.hasAnnotation(RuntimeCheckedAnnot)` (Types.scala 438-439) of a type as typed: the
@@ -5396,7 +5448,7 @@ impl<'a> Worker<'a> {
             let w = self.widen_path(u);
             self.widen_lit(w)
         } else if matches!(self.types.get(u), Type::Lit(_)) {
-            self.widen_lit(u)
+            self.widen_lit(self.canon_head(u))
         } else {
             t
         }
@@ -5442,7 +5494,7 @@ impl<'a> Worker<'a> {
             Type::Annotated(u) => (true, u),
             _ => (false, z),
         };
-        if self.deref(under) == NOTHING {
+        if self.deref_canonical(under) == NOTHING {
             return None;
         }
         let ascribed = written.map_or(false, |w| self.cur_ast().is_ascription(w));
@@ -6196,7 +6248,7 @@ impl<'a> Worker<'a> {
         if a == b {
             return true;
         }
-        if self.sames.as_ref().is_some_and(|m| m.get(&a) == Some(&b)) {
+        if self.sames.as_ref().is_some_and(|m| m.get(&self.canon(a)) == Some(&self.canon(b))) {
             return true;
         }
         self.same_level += 1;
@@ -6211,8 +6263,9 @@ impl<'a> Worker<'a> {
             self.sames = saved;
         }
         if res {
+            let (ub, ua) = (self.canon(b), self.canon(a));
             if let Some(m) = self.sames.as_mut() {
-                m.insert(b, a);
+                m.insert(ub, ua);
             }
         }
         res

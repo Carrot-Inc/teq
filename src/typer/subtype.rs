@@ -277,6 +277,89 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// `deref`'s answer as an identity reads it (a compare, a table's key): the canonical type, no retained form
+    /// in it (`Worker::semantic`'s typing), which `deref` keeps since its readers of the shape read through one.
+    #[inline]
+    pub fn deref_canonical(&mut self, t: TypeId) -> TypeId {
+        let t = self.deref(t);
+        self.canon(t)
+    }
+
+    /// `dealias`'s answer as an identity reads it.
+    #[inline]
+    pub fn dealias_canonical(&mut self, t: TypeId) -> TypeId {
+        let t = self.dealias(t);
+        self.canon(t)
+    }
+
+    /// `deref_alias`'s answer as an identity reads it.
+    #[inline]
+    pub fn deref_alias_canonical(&mut self, t: TypeId) -> TypeId {
+        let t = self.deref_alias(t);
+        self.canon(t)
+    }
+
+    /// `TypeStore::canonical` where a retained form may exist (`semantic`, under which alone one is made), `t` itself
+    /// otherwise: the typer's own flag read, where the store's is behind its handle.
+    #[inline(always)]
+    pub fn canon(&self, t: TypeId) -> TypeId {
+        if self.semantic { self.types.canonical(t) } else { t }
+    }
+
+    /// `is_sub`'s first steps under semantic typing, out of the way of the typing without retained forms: the
+    /// canonical pair its identities read (`Err`), and before them a non-refining annotation compared by its parent,
+    /// as `TypeComparer` orders it (TypeComparer.scala at 3.8.4): `firstTry`'s arm for an `AnnotatedType` on the right
+    /// (373-374), so that a variable on the left takes the parent as its upper bound; then `secondTry`'s on the left
+    /// (565-566), which a variable on the right meets before `thirdTry` constrains it (`firstTry`'s `BoundType` arm,
+    /// 357-359, then `compareTypeParamRef`, 655), so that its lower bound takes the parent too. A refining annotation
+    /// (`isRefining`) is compared as the type it is.
+    #[cold]
+    #[inline(never)]
+    fn is_sub_retained(&mut self, a: TypeId, b: TypeId, alias_path: bool) -> Result<bool, (TypeId, TypeId)> {
+        let (ia, ib) = (self.types.canonical(a), self.types.canonical(b));
+        if ia != ib {
+            if let Some(p) = self.unrefining_annotation_parent(b) {
+                self.alias_bound_as_path = alias_path;
+                return Ok(self.is_sub(a, p));
+            }
+            if let Some(p) = self.unrefining_annotation_parent(a) {
+                self.alias_bound_as_path = alias_path;
+                return Ok(self.is_sub(p, b));
+            }
+        }
+        Err((ia, ib))
+    }
+
+    /// The parent of `t` where it is a retained annotation that refines nothing (`AnnotatedType.parent`), `None` for any
+    /// other type.
+    fn unrefining_annotation_parent(&mut self, t: TypeId) -> Option<TypeId> {
+        let (under, r) = self.types.form_of(t)?;
+        match self.types.retention(r) {
+            crate::types::Retention::Annot(k, _) if !self.refining_annotation(k) => Some(under),
+            _ => None,
+        }
+    }
+
+    /// `AnnotatedType.isRefining` (Types.scala 5905-5911 at 3.8.4): the annotation's class derives from
+    /// `scala.annotation.RefiningAnnotation`.
+    fn refining_annotation(&mut self, k: ClassId) -> bool {
+        self.complete_class(k);
+        let bases: Vec<ClassId> = self.syms.class(k).base_types.iter().map(|&(c, _)| c).collect();
+        bases.into_iter().any(|c| self.class_path(c) == "scala.annotation.RefiningAnnotation")
+    }
+
+    /// `TypeStore::same` where a retained form may exist, the ids' equality otherwise.
+    #[inline(always)]
+    pub fn same_type(&self, a: TypeId, b: TypeId) -> bool {
+        a == b || self.semantic && self.types.same(a, b)
+    }
+
+    /// `TypeStore::underlying` where a retained form may exist, `t` itself otherwise.
+    #[inline(always)]
+    pub fn canon_head(&self, t: TypeId) -> TypeId {
+        if self.semantic { self.types.underlying(t) } else { t }
+    }
+
     /// The type under an annotation at the head of `t`, through instantiated variables: what a
     /// map maps under the annotation it keeps (`TypeMap`'s `derivedAnnotatedType`), where the
     /// shape `deref` gives sees through it.
@@ -318,7 +401,7 @@ impl<'a> Worker<'a> {
         let t = self.deref(t);
         match self.types.get(t) {
             Type::Alias(a, args) if !self.is_match_alias(a) && !self.is_curried_alias(a) => match self.alias_expansion(a, args) {
-                Some(e) if e != t => self.deref_alias(e),
+                Some(e) if !self.same_type(e, t) => self.deref_alias(e),
                 _ => t,
             },
             _ => t,
@@ -365,6 +448,13 @@ impl<'a> Worker<'a> {
             return t;
         }
         let t = self.deref_keeping(t);
+        // A retained form first: what it is made over and its record zonked, the variables only the record holds
+        // among them (its flags carry them).
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.zonk_form(t, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Annotated(u) => {
                 let u = self.zonk(u);
@@ -456,6 +546,197 @@ impl<'a> Worker<'a> {
             }
             _ => t,
         }
+    }
+
+    /// The retained form `t` over `under` with the record `r` mapped by `f` once in the pass `ctx` names (its kind,
+    /// `FORM_*`, and the map's context): what it is made over and its record's types through `f`, the form over them,
+    /// as `TypeStore::map_parts` keeps a form (dotty's `TypeMap.mapOver` of the type it stands for).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn map_form(&mut self, ctx: &[u32], t: TypeId, under: TypeId, r: crate::types::RetainId, f: &mut dyn FnMut(&mut Self, TypeId) -> TypeId) -> TypeId {
+        let types = self.types.clone();
+        TypeId(types.in_pass(ctx, t, || {
+            let nu = f(self, under);
+            let nr = types.map_retention(r, &mut |x| f(self, x));
+            types.form_over(t, under, r, nu, nr).0
+        }))
+    }
+
+    /// Whether `p` holds of the retained form `t` over `under` with the record `r`: of its record's types (no
+    /// annotation's arguments, which dotty's accumulators do not go into, `applyToAnnot`), then of what it is made over,
+    /// asked once in the pass `ctx` names (`TypeStore::ask_form_once`). A collector's `p` answers `false` to visit all.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn ask_form(&mut self, ctx: &[u32], t: TypeId, under: TypeId, r: crate::types::RetainId, p: &mut dyn FnMut(&mut Self, TypeId) -> bool) -> bool {
+        let types = self.types.clone();
+        types.ask_form_once(ctx, t, under, r, false, &mut |x| p(self, x))
+    }
+
+    /// The types of the retained record `r` a variance-reading accumulator visits, each with its variance relative to the
+    /// form: an alias's arguments at its parameters' variances (dotty's `AppliedType` arguments), a written type at the
+    /// form's own; an annotation's arguments not (`applyToAnnot`).
+    pub(super) fn form_parts_at(&self, r: crate::types::RetainId) -> Vec<(TypeId, i8)> {
+        match self.types.retention(r) {
+            crate::types::Retention::Alias(a, args) => {
+                let signs = self.alias_param_signs(a);
+                self.types.items(args).iter().enumerate().map(|(i, &x)| (x, signs.get(i).copied().unwrap_or(0))).collect()
+            }
+            crate::types::Retention::Written(w) => vec![(w, 1)],
+            crate::types::Retention::Annot(..) | crate::types::Retention::Object(_) => Vec::new(),
+        }
+    }
+
+    /// The variance signs of the alias `a`'s parameters as dotty reads them (`LambdaParam.paramVarianceSign`,
+    /// Types.scala 4682-4690 at 3.8.4): declared for a match alias or where one of them carries a `+` or `-`
+    /// (`HKTypeLambda.boundsFromParams`, 4578-4612; teq's opaque types are classes), else structural
+    /// (`Variances.setStructuralVariances`, 30-45): each parameter `Bivariant` until an occurrence in the right side
+    /// narrows it to that occurrence's variance, and `varianceToInt` reads one never narrowed as covariant.
+    pub(super) fn alias_param_signs(&self, a: AliasId) -> Vec<i8> {
+        self.alias_param_signs_in(a, &mut Vec::new())
+    }
+
+    /// `alias_param_signs` within the aliases `aliases` whose right sides are being read: one of them met again (two
+    /// aliases naming each other) reads as declared.
+    fn alias_param_signs_in(&self, a: AliasId, aliases: &mut Vec<AliasId>) -> Vec<i8> {
+        let info = &self.syms.aliases[a.idx()];
+        let declared: Vec<i8> = info.tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
+        if declared.iter().any(|&v| v != 0) || info.rhs == ERROR || matches!(self.types.get(self.types.unannotated(info.rhs)), Type::Match(..)) {
+            return declared;
+        }
+        let (mut tparams, mut rhs) = (info.tparams.clone(), self.types.unannotated(info.rhs));
+        // An alias taking no parameters of its own takes its right side's (`typeParams` of a `TypeRef` to an alias reads
+        // its info): a class constructor's, declared; a type lambda's, over its body.
+        if tparams.is_empty() {
+            match self.types.get(rhs) {
+                Type::Ctor(c) => return self.syms.class(c).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect(),
+                Type::Lambda(l, body) => {
+                    tparams = self.lambda_param_kinds(l).0;
+                    let declared: Vec<i8> = tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
+                    if declared.iter().any(|&v| v != 0) {
+                        return declared;
+                    }
+                    rhs = body;
+                }
+                _ => return Vec::new(),
+            }
+        }
+        if aliases.contains(&a) {
+            return declared;
+        }
+        let mut allowed = vec![(true, true); tparams.len()];
+        aliases.push(a);
+        self.narrow_variances(rhs, 1, &tparams, &mut allowed, aliases);
+        aliases.pop();
+        allowed.into_iter().map(|(co, contra)| if co { 1 } else if contra { -1 } else { 0 }).collect()
+    }
+
+    /// `setStructuralVariances`' traversal (a `TypeTraverser`, its variance as `TypeAccumulator.foldOver` keeps it): an
+    /// occurrence of one of `tparams` at `v` narrows what it allows (`storedVariance &= varianceFromInt(variance)`).
+    fn narrow_variances(&self, t: TypeId, v: i8, tparams: &[TParamId], allowed: &mut [(bool, bool)], aliases: &mut Vec<AliasId>) {
+        let at = |w: &Self, x: TypeId, v: i8, allowed: &mut [(bool, bool)], aliases: &mut Vec<AliasId>| w.narrow_variances(x, v, tparams, allowed, aliases);
+        match self.types.get(t) {
+            Type::Param(p) | Type::AppParam(p, _) if tparams.contains(&p) => {
+                let i = tparams.iter().position(|&q| q == p).unwrap();
+                if v <= 0 {
+                    allowed[i].0 = false;
+                }
+                if v >= 0 {
+                    allowed[i].1 = false;
+                }
+                if let Type::AppParam(_, args) = self.types.get(t) {
+                    for &x in self.types.items(args) {
+                        at(self, x, 0, allowed, aliases);
+                    }
+                }
+            }
+            Type::Class(k, args) => {
+                let variances: Vec<i8> = self.syms.class(k).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
+                for (i, &x) in self.types.items(args).iter().enumerate() {
+                    at(self, x, v * variances.get(i).copied().unwrap_or(0), allowed, aliases);
+                }
+            }
+            Type::Alias(b, args) => {
+                let signs = self.alias_param_signs_in(b, aliases);
+                for (i, &x) in self.types.items(args).iter().enumerate() {
+                    at(self, x, v * signs.get(i).copied().unwrap_or(0), allowed, aliases);
+                }
+            }
+            Type::Union(x, y, _) | Type::Inter(x, y) => {
+                at(self, x, v, allowed, aliases);
+                at(self, y, v, allowed, aliases);
+            }
+            Type::BoundedWild(lo, hi) => {
+                at(self, lo, -v, allowed, aliases);
+                at(self, hi, v, allowed, aliases);
+            }
+            // A prefix at the variance's positive part (`applyToPrefix`).
+            Type::Select(p, _) | Type::Member(p, _) => at(self, p, v.max(0), allowed, aliases),
+            Type::Lambda(_, body) | Type::Annotated(body) | Type::Rec(body) => at(self, body, v, allowed, aliases),
+            Type::Refined(p, r) => {
+                at(self, p, v, allowed, aliases);
+                match self.types.refinement(r) {
+                    Refinement::Alias(_, rhs) => at(self, rhs, 0, allowed, aliases),
+                    Refinement::Bounds(_, lo, hi) => {
+                        at(self, lo, -v, allowed, aliases);
+                        at(self, hi, v, allowed, aliases);
+                    }
+                    Refinement::Val(_, _, ty) => at(self, ty, v, allowed, aliases),
+                    Refinement::Term(_, _, l) => {
+                        for x in self.types.items(l).to_vec() {
+                            at(self, x, v, allowed, aliases);
+                        }
+                    }
+                }
+            }
+            // Any other part at no variance: an occurrence there allows neither direction.
+            _ => {
+                let mut parts = Vec::new();
+                self.types.parts(t, &mut parts);
+                for x in parts {
+                    at(self, x, 0, allowed, aliases);
+                }
+            }
+        }
+    }
+
+    /// `TypeApplications.appliedTo`'s `followAlias` (TypeApplications.scala 374-397 at 3.8.4): an application of the alias
+    /// `a` whose right side applies a constructor to `a`'s own parameters in their order (an eta-reduction), or applies a
+    /// compile-time operation (`isCompiletimeAppliedType`), is its right side instantiated, no application of the alias.
+    /// The test reads the right side as written (`dealiased.resType match case AppliedType(..)`): an annotated one
+    /// (`type A[T] = Box[T] @Mark`, an `AnnotatedType`, a retained annotation over the application here) is no
+    /// application, so the alias's application stays.
+    pub(super) fn alias_follows(&self, a: AliasId) -> bool {
+        let info = &self.syms.aliases[a.idx()];
+        if info.tparams.is_empty() || info.rhs == ERROR {
+            return false;
+        }
+        let rhs = info.rhs;
+        let annotated = matches!(self.types.get(rhs), Type::Annotated(_))
+            || self.types.form_of(rhs).is_some_and(|(_, r)| matches!(self.types.retention(r), crate::types::Retention::Annot(..)));
+        if annotated {
+            return false;
+        }
+        let args = match self.types.get(rhs) {
+            Type::Class(_, args) | Type::AppParam(_, args) | Type::AppMember(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => args,
+            _ => return false,
+        };
+        let items = self.types.items(args);
+        items.len() == info.tparams.len() && items.iter().zip(&info.tparams).all(|(&x, &p)| self.types.get(x) == Type::Param(p)) || self.compiletime_applied(rhs)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn zonk_form(&mut self, t: TypeId, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        if let Some(done) = self.form_passes.zonk.get(&[], t) {
+            return done;
+        }
+        self.form_passes.zonk.enter();
+        let nu = self.zonk(under);
+        let types = self.types.clone();
+        let nr = types.map_retention(r, &mut |x| self.zonk(x));
+        let out = types.form_over(t, under, r, nu, nr);
+        self.form_passes.zonk.leave(&[], t, out);
+        out
     }
 
     pub(super) fn is_unresolved_member(&self, t: TypeId) -> bool {
@@ -599,8 +880,29 @@ impl<'a> Worker<'a> {
         None
     }
 
+    /// Whether `t` is among `v`'s recorded upper (`upper`) or lower bounds already: dotty's `addOneBound`
+    /// widens the entry by `lo | bound` (narrows it by `hi & bound`), which adds nothing for a type equal to one
+    /// recorded. Under semantic typing the identity is the canonical type's (`same_type`): two retained forms over
+    /// one type (a pickled annotation kept over a loaded member's type, met again through another path) are one
+    /// bound, not a new one each time.
+    #[inline(always)]
+    fn bound_recorded(&self, v: TVarId, t: TypeId, upper: bool) -> bool {
+        if self.semantic {
+            return self.bound_recorded_canonically(v, t, upper);
+        }
+        if upper { self.tvars[v].upper.contains(&t) } else { self.tvars[v].lower.contains(&t) }
+    }
+
+    /// `bound_recorded` under semantic typing, out of the way of the typing without retained forms.
+    #[cold]
+    #[inline(never)]
+    fn bound_recorded_canonically(&self, v: TVarId, t: TypeId, upper: bool) -> bool {
+        let bounds = if upper { &self.tvars[v].upper } else { &self.tvars[v].lower };
+        bounds.iter().any(|&x| self.same_type(x, t))
+    }
+
     fn add_upper(&mut self, v: TVarId, b: TypeId) -> bool {
-        if self.tvars[v].upper.contains(&b) {
+        if self.bound_recorded(v, b, true) {
             return true;
         }
         if let Type::Var(w) = self.types.get(b) {
@@ -667,7 +969,7 @@ impl<'a> Worker<'a> {
     /// left to right; none of `Any` above or `Nothing` below, and none an open variable (dotty's
     /// `stripParams` keeps those in the ordering).
     fn bound_operands(&mut self, t: TypeId, upper: bool, out: &mut Vec<TypeId>) {
-        let t = self.deref(t);
+        let t = self.deref_canonical(t);
         match self.types.get(t) {
             Type::Inter(a, b) if upper => {
                 self.bound_operands(a, upper, out);
@@ -784,7 +1086,7 @@ impl<'a> Worker<'a> {
             let v_ty = self.types.mk(Type::Var(v));
             return self.add_upper(w, v_ty);
         }
-        if self.tvars[v].lower.contains(&a) {
+        if self.bound_recorded(v, a, false) {
             return true;
         }
         self.tvars[v].lower.push(a);
@@ -881,15 +1183,26 @@ impl<'a> Worker<'a> {
         let alias_path = std::mem::take(&mut self.alias_bound_as_path);
         let a = self.deref(a);
         let b = self.deref(b);
+        // The identities below read a retained form (`Worker::semantic`'s typing) as its canonical type; the comparison
+        // itself keeps the forms, which a variable's bounds record as dotty's constraint keeps the types, a
+        // non-refining annotation first compared by its parent (`is_sub_retained`).
+        let (ia, ib) = if self.semantic {
+            match self.is_sub_retained(a, b, alias_path) {
+                Ok(answer) => return answer,
+                Err(pair) => pair,
+            }
+        } else {
+            (a, b)
+        };
         // An unknown type argument is read as `Any` and written as `Nothing`; two of them
         // need not be the same type. A member a path cannot resolve conforms to nothing, not
         // even to another reference to it.
-        if a == b {
-            return a != WILD && !self.is_unresolved_member(a);
+        if ia == ib {
+            return ia != WILD && !self.is_unresolved_member(a);
         }
         // A constant against its own class, the commonest comparison a literal meets.
         if let Type::Lit(_) = self.types.get(a) {
-            if self.widen_lit(a) == b {
+            if self.widen_lit(ia) == ib {
                 return true;
             }
         }
@@ -898,25 +1211,25 @@ impl<'a> Worker<'a> {
         if self.loaded.is_some() && self.wildcards_agree(a, b) && self.is_body_file(self.env.file) {
             return true;
         }
-        if a == WILD {
+        if ia == WILD {
             return self.is_sub(ANY, b);
         }
-        if b == WILD {
+        if ib == WILD {
             return self.is_sub(a, NOTHING);
         }
-        if a == self.b.t_null && !matches!(self.types.get(b), Type::Var(_) | Type::Error | Type::BoundedWild(..)) {
+        if ia == self.b.t_null && !matches!(self.types.get(b), Type::Var(_) | Type::Error | Type::BoundedWild(..)) {
             return self.null_conforms(b);
         }
-        if b == self.b.t_any_ref && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) {
+        if ib == self.b.t_any_ref && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) {
             return self.is_reference(a);
         }
-        if b == self.b.t_any_val && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) {
+        if ib == self.b.t_any_val && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) {
             return self.is_value(a);
         }
-        if b == self.b.t_singleton && b != ERROR && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) {
+        if ib == self.b.t_singleton && ib != ERROR && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) {
             return self.is_singleton_type(a);
         }
-        if (b == self.b.t_product || b == self.b.t_equals) && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) && self.is_product(a) {
+        if (ib == self.b.t_product || ib == self.b.t_equals) && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) && self.is_product(a) {
             return true;
         }
         let (ta, tb) = (self.types.get(a), self.types.get(b));
@@ -1006,7 +1319,7 @@ impl<'a> Worker<'a> {
             // to `String` with the instance; a stable path's type keeps the alias
             // (`alias_bound_as_path`), as the path's `TermRef` widens to its declared type.
             (Type::Var(v), _) => {
-                if self.tvars[v].upper.contains(&b) {
+                if self.bound_recorded(v, b, true) {
                     return true;
                 }
                 let b = self.alias_underlying(b);
@@ -1014,7 +1327,7 @@ impl<'a> Worker<'a> {
             }
             (_, Type::Var(v)) => {
                 // A bound recorded already (a path's alias) is not narrowed by its underlying type.
-                if self.tvars[v].lower.contains(&a) {
+                if self.bound_recorded(v, a, false) {
                     return true;
                 }
                 let a = if alias_path { a } else { self.alias_underlying(a) };
@@ -1238,7 +1551,7 @@ impl<'a> Worker<'a> {
                     Type::Class(_, args1) => args1,
                     // A base its parents give at invariant arguments that differ, their instances' intersection
                     // (dotty's `glb`'s `AndType`): either instance conforming.
-                    Type::Inter(x, y) if base != a => return self.is_sub(x, b) || self.is_sub(y, b),
+                    Type::Inter(x, y) if !self.same_type(base, a) => return self.is_sub(x, b) || self.is_sub(y, b),
                     // `p.C` against the bare `C`, its type through its owner's `this`.
                     Type::Nested(p1, class1) => {
                         let (Type::Class(_, args1), Owner::Class(o)) = (self.types.get(class1), self.syms.class(c2).owner) else { return false };
@@ -1261,7 +1574,7 @@ impl<'a> Worker<'a> {
                     .collect();
                 let bounded = self.types.has_wild(b);
                 for i in 0..xs.len().min(ys.len()) {
-                    if ys[i] == WILD {
+                    if self.canon(ys[i]) == WILD {
                         continue;
                     }
                     if let (true, Type::BoundedWild(lo, hi)) = (bounded, self.types.get(ys[i])) {
@@ -1453,11 +1766,11 @@ impl<'a> Worker<'a> {
                 },
                 Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
                     let upper = self.member_upper(a);
-                    upper != a && upper != ANY && self.is_sub(upper, b)
+                    !self.same_type(upper, a) && upper != ANY && self.is_sub(upper, b)
                 }
                 Type::This(_) | Type::Term(_) | Type::Select(..) => {
                     let under = self.path_underlying(a);
-                    under != a && self.is_sub(under, b)
+                    !self.same_type(under, a) && self.is_sub(under, b)
                 }
                 Type::Refined(parent, _) => self.is_sub(parent, b),
                 Type::Rec(body) => {
@@ -1525,9 +1838,9 @@ impl<'a> Worker<'a> {
             return None;
         }
         match self.types.get(t) {
-            Type::This(_) => Some(t),
+            Type::This(_) => Some(self.canon_head(t)),
             // An object stands for itself as its class type.
-            Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => Some(t),
+            Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => Some(self.canon(t)),
             Type::Term(v) => match self.declared_singleton(v) {
                 Some(u) => self.stable_path(u, depth + 1),
                 // A static object's module is the object, as its class type stands for it (dotty
@@ -1535,14 +1848,16 @@ impl<'a> Worker<'a> {
                 // path an export's forwarders see the members through (`internal.JamConfig`).
                 None => match self.syms.sym(v).kind {
                     SymKind::Object(c) if !self.is_inner_class(c) => Some(self.types.class(c, &[])),
-                    _ => Some(t),
+                    _ => Some(self.canon_head(t)),
                 },
             },
             Type::Select(p, v) => {
                 let np = self.stable_path(p, depth + 1)?;
                 match self.declared_singleton(v) {
                     Some(u) => self.stable_path(u, depth + 1),
-                    None if np == p => Some(t),
+                    None if np == p => Some(self.canon(t)),
+                    // A retained form at the prefix: the path the canonical prefix gives.
+                    None if self.same_type(np, p) => Some(self.types.mk(Type::Select(np, v))),
                     // Read on the object the prefix names (`alias.U` of an `alias: O.type` is `O.U`).
                     None => Some(match self.types.get(np) {
                         Type::Class(o, _) => self.object_member_path(o, v),
@@ -1675,7 +1990,7 @@ impl<'a> Worker<'a> {
     fn is_sub_dependent_inner(&mut self, a: TypeId, b: TypeId) -> bool {
         let (ta, tb) = (self.types.get(a), self.types.get(b));
         match (ta, tb) {
-            (Type::AppMember(m, xs), Type::AppMember(n, ys)) if m == n || self.member_through_prefix(m, n) => {
+            (Type::AppMember(m, xs), Type::AppMember(n, ys)) if self.same_type(m, n) || self.member_through_prefix(m, n) => {
                 let mut variances = self.member_variances(m);
                 if variances.is_empty() {
                     variances = self.refined_member_variances(m);
@@ -1744,11 +2059,11 @@ impl<'a> Worker<'a> {
                             }
                         }
                         let under = self.path_underlying(a);
-                        under != a && self.is_sub(under, b)
+                        !self.same_type(under, a) && self.is_sub(under, b)
                     }
                     Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
                         let (_, upper) = self.member_bounds(a);
-                        upper != a && self.is_sub(upper, b)
+                        !self.same_type(upper, a) && self.is_sub(upper, b)
                     }
                     Type::Param(p) => {
                         let upper = self.syms.tparam(p).upper;
@@ -1786,7 +2101,7 @@ impl<'a> Worker<'a> {
             Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
                 let (lower, _) = self.member_bounds(b);
                 let mark = self.snapshot();
-                if lower != NOTHING && lower != b && self.is_sub(a, lower) {
+                if lower != NOTHING && !self.same_type(lower, b) && self.is_sub(a, lower) {
                     return true;
                 }
                 self.rollback(&mark);
@@ -1814,11 +2129,11 @@ impl<'a> Worker<'a> {
         match ta {
             Type::This(_) | Type::Term(_) | Type::Select(..) => {
                 let under = self.path_underlying(a);
-                under != a && self.is_sub(under, b)
+                !self.same_type(under, a) && self.is_sub(under, b)
             }
             Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
                 let (_, upper) = self.member_bounds(a);
-                upper != a && self.is_sub(upper, b)
+                !self.same_type(upper, a) && self.is_sub(upper, b)
             }
             Type::Refined(parent, _) => self.is_sub(parent, b),
             Type::Rec(body) => {
@@ -1874,7 +2189,7 @@ impl<'a> Worker<'a> {
             merged.push(match variance {
                 1 => self.types.inter(xs[i], ys[i]),
                 -1 => self.types.union(xs[i], ys[i]),
-                _ if xs[i] == ys[i] => xs[i],
+                _ if self.same_type(xs[i], ys[i]) => xs[i],
                 _ => return None,
             });
         }
@@ -2091,11 +2406,18 @@ impl<'a> Worker<'a> {
 
     pub(super) fn eta_reduce(&mut self, t: TypeId) -> TypeId {
         let Type::Lambda(ps, body) = self.types.get(t) else { return t };
+        // The binders as the arguments, a retained form over a binder too.
+        let binders = |w: &Self, args: TList| {
+            args == ps || {
+                let (xs, ys) = (w.types.items(args), w.types.items(ps));
+                xs.len() == ys.len() && xs != ys && xs.iter().zip(ys).all(|(&x, &y)| w.types.same(x, y))
+            }
+        };
         match self.types.get(body) {
-            Type::Class(c, args) if args == ps => self.types.mk(Type::Ctor(c)),
-            Type::AppParam(p, args) if args == ps => self.types.param(p),
+            Type::Class(c, args) if binders(self, args) => self.types.mk(Type::Ctor(c)),
+            Type::AppParam(p, args) if binders(self, args) => self.types.param(p),
             // `[A] =>> Impl.Type[A]` is the abstract type constructor itself.
-            Type::AppMember(m, args) if args == ps => m,
+            Type::AppMember(m, args) if binders(self, args) => m,
             _ => t,
         }
     }
@@ -2217,7 +2539,7 @@ impl<'a> Worker<'a> {
             }
             let base = self.types.subst(bt, &subst);
             // `Tuple1[X]`'s base `X *: EmptyTuple` reduces back to it.
-            if base == a || self.reduce_head(base) == Some(a) {
+            if self.same_type(base, a) || self.reduce_head(base).map(|r| self.canon(r)) == Some(a) {
                 continue;
             }
             let mark = self.snapshot();
@@ -2322,6 +2644,7 @@ impl<'a> Worker<'a> {
     /// such a type are those of.
     #[inline(never)]
     pub fn dependent_underlying(&mut self, t: TypeId) -> Option<TypeId> {
+        let t = self.canon_head(t);
         match self.types.get(t) {
             Type::This(_) | Type::Term(_) | Type::Select(..) => {
                 let under = self.path_underlying(t);
@@ -2398,7 +2721,7 @@ impl<'a> Worker<'a> {
                 // The captured type lies within the wildcard's bounds, or else the parameter's
                 // declared bound, which a member selected through it has (`x.get.bar` on a
                 // `Box[?]` for `Box[D <: Foo]`).
-                if hi != ANY {
+                if self.canon(hi) != ANY {
                     self.syms.tparams[p.idx()].upper = hi;
                 } else if let Some(upper) = params.get(i).map(|&q| self.syms.tparam(q).upper) {
                     if matches!(self.types.get(upper), Type::Class(_, bargs) if self.types.items(bargs).is_empty()) {
@@ -2434,11 +2757,12 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The type of a `val` or `def` without a declared type: fully defined and widened
-    /// (`Namer.inferredResultType`'s `widenInferred(tp, pt, Widen.Unions)`).
+    /// The type of a `val` or `def` without a declared type: fully defined, simplified and widened
+    /// (`Namer.inferredResultType`'s `TypeOps.simplify` and `widenInferred(tp, pt, Widen.Unions)`).
     pub fn solve_inferred(&mut self, t: TypeId) -> TypeId {
         let t = self.fully_defined(t);
-        let t = self.normalize(t);
+        // `TypeOps.simplify(tp.widenTermRefExpr)` before `widenInferred`.
+        let t = self.simplified(t);
         let t = self.widen_lit(t);
         self.widen_unions(t)
     }
@@ -2488,6 +2812,13 @@ impl<'a> Worker<'a> {
     /// stands where this does not follow it (an invariant position outside an argument, a type
     /// it does not take apart).
     fn subst_approx(&mut self, t: TypeId, tparams: &[TParamId], args: &[TypeId], variance: i8, as_arg: bool) -> Option<TypeId> {
+        // A retained form first: what it is made over and its record's types (an alias's arguments in an invariant
+        // place) through the map, none where one of them has none.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.subst_approx_form(t, tparams, args, variance, as_arg, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Param(p) => {
                 let Some(i) = tparams.iter().position(|&q| q == p) else { return Some(t) };
@@ -2526,6 +2857,27 @@ impl<'a> Worker<'a> {
             Type::Any | Type::Nothing | Type::Error | Type::Lit(_) | Type::Ctor(_) | Type::This(_) | Type::Term(_) | Type::Decl(_) | Type::Blocked(_) | Type::Wild => Some(t),
             _ => None,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn subst_approx_form(&mut self, t: TypeId, tparams: &[TParamId], args: &[TypeId], variance: i8, as_arg: bool, under: TypeId, r: crate::types::RetainId) -> Option<TypeId> {
+        let mut ctx = vec![super::FORM_SUBST_APPROX, variance as u32, as_arg as u32];
+        ctx.extend(tparams.iter().map(|p| p.0).chain(args.iter().map(|a| a.0)));
+        let types = self.types.clone();
+        let out = types.in_pass(&ctx, t, || {
+            let Some(nu) = self.subst_approx(under, tparams, args, variance, as_arg) else { return u32::MAX };
+            let mut failed = false;
+            let nr = types.map_retention(r, &mut |x| match self.subst_approx(x, tparams, args, 0, true) {
+                Some(y) => y,
+                None => {
+                    failed = true;
+                    x
+                }
+            });
+            if failed { u32::MAX } else { types.form_over(t, under, r, nu, nr).0 }
+        });
+        (out != u32::MAX).then_some(TypeId(out))
     }
 
     /// The rank of a numeric primitive type, a constant's by its class (dotty's
@@ -2623,7 +2975,7 @@ impl<'a> Worker<'a> {
                 c == self.b.any_ref
                     || c == self.b.any_val
                     || matches!(self.interner.get(self.syms.class(c).name), "Matchable" | "Object")
-                    || self.is_transparent_trait_type(j)
+                    || self.is_transparent_trait_type(self.canon_head(j))
             }
             _ => false,
         }
@@ -2765,7 +3117,7 @@ impl<'a> Worker<'a> {
                 1 if self.soft_lub => self.soft_lub(xs[i], ys[i]),
                 1 => self.lub(xs[i], ys[i]),
                 -1 => self.contravariant_meet(xs[i], ys[i]),
-                _ if xs[i] == ys[i] => xs[i],
+                _ if self.same_type(xs[i], ys[i]) => xs[i],
                 // The join for member selection reads differing invariant arguments as a
                 // bounded wildcard, dotc's `lubArgs`: `? >: glb <: lub` of the two, each read
                 // through the bounds it may carry from an earlier join.
@@ -2780,7 +3132,7 @@ impl<'a> Worker<'a> {
         let Owner::Class(o) = self.syms.class(c).owner else { return Some(class) };
         let this = self.types.mk(Type::This(o));
         let (px, py) = (px.unwrap_or(this), py.unwrap_or(this));
-        let prefix = if px == py { px } else { self.types.union(px, py) };
+        let prefix = if self.same_type(px, py) { px } else { self.types.union(px, py) };
         Some(self.nested_type(prefix, class))
     }
 
@@ -2856,6 +3208,7 @@ impl<'a> Worker<'a> {
     /// Whether `t` conforms to `Singleton`, as scalac's stable types and those bounded by it
     /// do: a literal type, a path, `Nothing`, a parameter or member bounded by `Singleton`.
     fn is_singleton_type(&mut self, t: TypeId) -> bool {
+        let t = self.canon_head(t);
         match self.types.get(t) {
             Type::Lit(_) | Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Nothing => true,
             Type::Class(c, _) => self.syms.class(c).kind == ClassKind::Object,
@@ -2865,7 +3218,7 @@ impl<'a> Worker<'a> {
             }
             Type::Member(..) | Type::Decl(_) => {
                 let upper = self.member_upper(t);
-                upper != ANY && upper != t && self.bound_is_singleton(upper)
+                upper != ANY && !self.same_type(upper, t) && self.bound_is_singleton(upper)
             }
             Type::Refined(p, _) => self.is_sub(p, self.b.t_singleton),
             Type::Rec(body) => self.is_sub(body, self.b.t_singleton),
@@ -3021,7 +3374,7 @@ impl<'a> Worker<'a> {
         // is then settled by the outer one.
         for w in outer_lowers {
             let w_ty = self.types.mk(Type::Var(w));
-            if choice == NOTHING {
+            if self.canon(choice) == NOTHING {
                 choice = w_ty;
                 continue;
             }
@@ -3038,7 +3391,7 @@ impl<'a> Worker<'a> {
         // Lower bounds that amount to `Nothing` say nothing, as scalac reads them: the choice is
         // the upper bounds' then, where there are any. A kind alone, a type lambda ending in
         // `Any` (`F[X, Y <: X]`'s), is no upper bound (dotc's `hasUpperBound`, `isTopOfSomeKind`).
-        if choice == NOTHING && !uppers.is_empty() {
+        if self.canon(choice) == NOTHING && !uppers.is_empty() {
             let kinds_only: Vec<TypeId>;
             let bounding: &[TypeId] = if uppers.iter().any(|&u| self.kind_alone(u)) {
                 kinds_only = uppers.iter().copied().filter(|&u| !self.kind_alone(u)).collect();
@@ -3053,7 +3406,7 @@ impl<'a> Worker<'a> {
         // Bounded by nothing but itself (an inner application's variable unified with it) and
         // used only contravariantly in the result, it is maximised as an unconstrained one is:
         // `RIn2` of zio's `a ++ ZLayer.scoped(z)` is `Any`.
-        if choice == NOTHING && lowers.is_empty() && uppers.is_empty() && result.map_or(false, |r| self.var_variances(r).iter().any(|&(w, s)| w == v && s == -1)) {
+        if self.canon(choice) == NOTHING && lowers.is_empty() && uppers.is_empty() && result.map_or(false, |r| self.var_variances(r).iter().any(|&(w, s)| w == v && s == -1)) {
             choice = ANY;
         }
         // A join that escapes the upper bounds (e.g. `Any` for `Int | String`) gives way to the
@@ -3091,7 +3444,7 @@ impl<'a> Worker<'a> {
     /// nothing (dotc's `isTopOfSomeKind`).
     fn kind_alone(&self, t: TypeId) -> bool {
         match self.types.get(t) {
-            Type::Lambda(_, body) => body == ANY || self.kind_alone(body),
+            Type::Lambda(_, body) => self.canon(body) == ANY || self.kind_alone(body),
             _ => false,
         }
     }
@@ -3125,7 +3478,7 @@ impl<'a> Worker<'a> {
     fn taken_from_below(&mut self, v: TVarId, uppers: &[TypeId], result: TypeId) -> bool {
         let mut vars = false;
         for &u in uppers {
-            let u = self.deref(u);
+            let u = self.deref_canonical(u);
             match self.types.get(u) {
                 Type::Var(_) => vars = true,
                 _ if u == ANY => {}
@@ -3291,7 +3644,7 @@ impl<'a> Worker<'a> {
             return false;
         }
         uppers.iter().any(|&u| {
-            let u = self.deref(u);
+            let u = self.deref_canonical(u);
             if u == ANY || matches!(self.types.get(u), Type::Var(_) | Type::AppVar(..) | Type::Error) {
                 return false;
             }
@@ -3307,7 +3660,7 @@ impl<'a> Worker<'a> {
             return l;
         }
         if let (Some(x), Some(y)) = (self.is_numeric(acc), self.is_numeric(l)) {
-            if acc != l && self.harmonizes(v) {
+            if !self.same_type(acc, l) && self.harmonizes(v) {
                 return self.rank_type(x.max(y).max(super::prims::R_INT));
             }
         }
@@ -3348,8 +3701,8 @@ impl<'a> Worker<'a> {
             }
         }
         match outer.as_slice() {
-            [w] if acc == ANY => self.types.mk(Type::Var(*w)),
-            [_, _, ..] if acc == ANY => self.choice_from_uppers(v, uppers, true),
+            [w] if self.canon(acc) == ANY => self.types.mk(Type::Var(*w)),
+            [_, _, ..] if self.canon(acc) == ANY => self.choice_from_uppers(v, uppers, true),
             _ => acc,
         }
     }
@@ -3570,6 +3923,11 @@ impl<'a> Worker<'a> {
         if !self.types.has_vars(t) {
             return;
         }
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.collect_match_alias_vars_form(t, out, under, r);
+            }
+        }
         let parts: Vec<TypeId> = match self.types.get(t) {
             Type::Alias(a, _) if self.is_match_alias_application(a) => {
                 let mut vars = Vec::new();
@@ -3600,6 +3958,15 @@ impl<'a> Worker<'a> {
         for q in parts {
             self.collect_match_alias_vars(q, out);
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn collect_match_alias_vars_form(&mut self, t: TypeId, out: &mut Vec<TVarId>, under: TypeId, r: crate::types::RetainId) {
+        self.ask_form(&[super::FORM_MATCH_ALIAS_VARS], t, under, r, &mut |w, x| {
+            w.collect_match_alias_vars(x, out);
+            false
+        });
     }
 
     /// The argument of `S[arg]`, `scala.compiletime.ops.int`'s successor.
@@ -3698,6 +4065,151 @@ impl<'a> Worker<'a> {
         true
     }
 
+    /// `TypeOps.simplify` (TypeOps.scala 133-206 at 3.8.4) of a term's type, the mode an inferred result is simplified in
+    /// (`Namer.inferredResultType`; a tree's type, `Typer.simplify`'s `tree.tpe.simplified`, is not yet): what reduces
+    /// normalized (`tryNormalize`: a match type, a match alias, a type-level operation; teq's `normalize`, not under a
+    /// GADT's constraint, `MatchType.thatReducesUsingGadt`); an intersection the meet of its sides (`&`, `glb`), a union
+    /// their lub (`TypeComparer.lub`, `merged_lub`); a retained `@uncheckedVariance` dropped; every other type mapped over
+    /// its parts (`SimplifyMap.mapOver`). A prefix fixing a member is no case here: teq's store replaces such a member by
+    /// what it equals when the type is made (`reduceProjection`'s work), and a variable's instance is the zonk's.
+    /// Interim: default-getter-result-type's `TypeOps.simplify`, ported whole, replaces it at this branch's rebase
+    /// after that part lands (tests/semanticdb/forms-rebase.txt).
+    pub(super) fn simplified(&mut self, t: TypeId) -> TypeId {
+        let reducible = !self.simplifying_normal && self.types.is_reducible(t) && self.gadt.is_empty();
+        if !reducible && !self.types.has_set_op(t) {
+            return t;
+        }
+        if !reducible {
+            return self.simplified_closed(t);
+        }
+        // dotty reduces a step (`tryNormalize`) and simplifies what that gives, reducing on inside it; teq's `normalize`
+        // reduces throughout, so what it leaves reducible is stuck, or a recursion it reported (`after_reduction`, where
+        // dotty's simplify ends in `RecursionOverflow`), and is reduced no more.
+        let n = self.normalize(t);
+        if !self.types.has_set_op(n) {
+            return n;
+        }
+        let normal = std::mem::replace(&mut self.simplifying_normal, true);
+        let s = self.simplified_closed(n);
+        self.simplifying_normal = normal;
+        s
+    }
+
+    /// `simplified` of a type holding an intersection or a union, its results for a closed type (no variable, path or
+    /// worker's id, under no GADT constraint or opaque type's transparency) kept: the same union met again is merged
+    /// once. A normal form's result is its own either way, nothing in it reducing.
+    fn simplified_closed(&mut self, t: TypeId) -> TypeId {
+        let closed = !self.types.has_vars(t) && !self.types.has_paths(t) && !self.types.mentions_local(t) && self.gadt.is_empty() && self.transparent.is_empty();
+        if closed {
+            if let Some(&s) = self.simplified_memo.get(&t) {
+                return s;
+            }
+            let s = self.simplified_set_ops(t);
+            self.simplified_memo.insert(t, s);
+            return s;
+        }
+        self.simplified_set_ops(t)
+    }
+
+    /// `simplified` of a type holding an intersection or a union, what reduces in it reduced.
+    fn simplified_set_ops(&mut self, t: TypeId) -> TypeId {
+        if self.semantic {
+            let d = self.deref_keeping(t);
+            if let Some((under, r)) = self.types.form_of(d) {
+                return self.simplified_form(d, under, r);
+            }
+        }
+        let t = self.deref(t);
+        match self.types.get(t) {
+            Type::Inter(a, b) => {
+                let (a, b) = (self.simplified(a), self.simplified(b));
+                self.glb(a, b)
+            }
+            Type::Union(a, b, kind) => {
+                let (a, b) = (self.simplified(a), self.simplified(b));
+                self.merged_lub(a, b, kind)
+            }
+            // A method type is simplified no further (`MethodicType`: its type parameters' variables added, which
+            // teq's zonk does): a polymorphic function type's `apply`, a method refinement's signature over its
+            // simplified parent.
+            Type::Poly(..) => t,
+            Type::Refined(p, r) if matches!(self.types.refinement(r), Refinement::Term(..)) => {
+                let np = self.simplified(p);
+                if np == p { t } else { self.types.mk(Type::Refined(np, r)) }
+            }
+            _ => {
+                let types = self.types.clone();
+                types.map_parts(t, &mut |x| self.simplified(x))
+            }
+        }
+    }
+
+    /// `simplified` of a retained form: an `@uncheckedVariance` its parent simplified (`TypeOps.simplify`'s
+    /// `AnnotatedType` arm outside `Mode.Type`), any other form over its simplified parent and record.
+    #[cold]
+    #[inline(never)]
+    fn simplified_form(&mut self, t: TypeId, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let types = self.types.clone();
+        if let crate::types::Retention::Annot(c, _) = types.retention(r) {
+            if self.syms.class(c).name == crate::names::UNCHECKED_VARIANCE && self.class_path(c) == "scala.annotation.unchecked.uncheckedVariance" {
+                return self.simplified(under);
+            }
+        }
+        let nu = self.simplified(under);
+        let nr = types.map_retention(r, &mut |x| self.simplified(x));
+        types.form_over(t, under, r, nu, nr)
+    }
+
+    /// `TypeComparer.lub` (TypeComparer.scala 2572-2615 at 3.8.4) of two types a simplification made, as a union of
+    /// `kind` (`isSoft`): `Any` or `Nothing` either side as `lub` takes them; a singleton below the other side the other;
+    /// then `mergedLub`'s `dropIfSub` both ways, the or-factors of `b` below `a` dropped and those of `a` below what is
+    /// left of `b`, the rest recombined (`orType`). The unions' atoms are `dropIfSub`'s case too (a literal below the
+    /// other side's union); `widenIfUnstable` widens no teq path, every path a stable one. Interim: tostring-opaque's
+    /// `TypeComparer.lub` and `glb`, ported whole, replace it and the meet `simplified` calls at this branch's rebase
+    /// after that part lands (tests/semanticdb/forms-rebase.txt).
+    pub(super) fn merged_lub(&mut self, a: TypeId, b: TypeId, kind: UnionKind) -> TypeId {
+        if a == b {
+            return a;
+        }
+        if a == ANY || b == NOTHING {
+            return a;
+        }
+        if b == ANY || a == NOTHING {
+            return b;
+        }
+        if self.is_singleton_type(a) && self.frozen_sub(a, b) {
+            return b;
+        }
+        if self.is_singleton_type(b) && self.frozen_sub(b, a) {
+            return a;
+        }
+        let b2 = self.drop_if_sub(b, Some(a));
+        let a2 = self.drop_if_sub(a, b2);
+        match (a2, b2) {
+            (Some(x), Some(y)) => self.types.union_as(kind, x, y),
+            (Some(x), None) | (None, Some(x)) => x,
+            (None, None) => a,
+        }
+    }
+
+    /// `TypeComparer.dropIfSub` (2700-2711): each or-factor of `t` below `sup`, frozen, dropped (`None` where all are),
+    /// an instantiated variable read as its instance.
+    fn drop_if_sub(&mut self, t: TypeId, sup: Option<TypeId>) -> Option<TypeId> {
+        let t = self.deref(t);
+        if let Type::Union(x, y, kind) = self.types.get(t) {
+            let (x2, y2) = (self.drop_if_sub(x, sup), self.drop_if_sub(y, sup));
+            return match (x2, y2) {
+                (Some(p), Some(q)) => Some(if p == x && q == y { t } else { self.types.union_as(kind, p, q) }),
+                (Some(p), None) | (None, Some(p)) => Some(p),
+                (None, None) => None,
+            };
+        }
+        match sup {
+            Some(s) if self.frozen_sub(t, s) => None,
+            _ => Some(t),
+        }
+    }
+
     /// dotty's `TypeComparer.glb`: the meet of `a` and `b`, a part of either that is a supertype
     /// of the other dropped (`dropIfSuper`, a frozen comparison; a part the other holds as a part
     /// is dropped without one), so `R & R` is `R` and `Bus & (Clock & Bus)` is `Clock & Bus`.
@@ -3755,14 +4267,19 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether `part` is `t` or one of the parts of the intersection `t`.
+    /// Whether `part` is `t` or one of the parts of the intersection `t`: a retained form read as its canonical type
+    /// where one may exist (`semantic`), the flag read once for the walk.
     fn is_part_of_inter(&mut self, part: TypeId, t: TypeId) -> bool {
+        if self.semantic { self.is_part_of_inter_in::<true>(part, t) } else { self.is_part_of_inter_in::<false>(part, t) }
+    }
+
+    fn is_part_of_inter_in<const FORMS: bool>(&mut self, part: TypeId, t: TypeId) -> bool {
         let t = self.deref(t);
-        if t == part {
+        if t == part || FORMS && self.types.same(t, part) {
             return true;
         }
         match self.types.get(t) {
-            Type::Inter(a, b) => self.is_part_of_inter(part, a) || self.is_part_of_inter(part, b),
+            Type::Inter(a, b) => self.is_part_of_inter_in::<FORMS>(part, a) || self.is_part_of_inter_in::<FORMS>(part, b),
             _ => false,
         }
     }
@@ -3771,7 +4288,7 @@ impl<'a> Worker<'a> {
     fn has_upper_bound(&mut self, v: TVarId) -> bool {
         for k in 0..self.tvars[v].upper.len() {
             let u = self.tvars[v].upper[k];
-            let u = self.deref(u);
+            let u = self.deref_canonical(u);
             if u != ANY && !matches!(self.types.get(u), Type::Var(w) if w == v) {
                 return true;
             }
@@ -3899,7 +4416,7 @@ impl<'a> Worker<'a> {
         for &l in &info.lower {
             match self.types.get(l) {
                 Type::Var(_) | Type::AppVar(..) => heads = true,
-                _ if l != NOTHING => return true,
+                _ if self.canon(l) != NOTHING => return true,
                 _ => {}
             }
         }
@@ -3908,7 +4425,8 @@ impl<'a> Worker<'a> {
         }
         for k in 0..self.tvars[v].lower.len() {
             let l = self.tvars[v].lower[k];
-            if self.deref(l) != NOTHING {
+            let d = self.deref(l);
+            if self.canon(d) != NOTHING {
                 return true;
             }
         }
@@ -4095,7 +4613,21 @@ impl<'a> Worker<'a> {
         if self.types.names_term(r, params) {
             return;
         }
+        // The bound this records stands for the result's lower bound as dotty leaves it after this check and the
+        // instantiation's leveling (teq records no bound of the body's own before: `widen_lambda_result` rolls its
+        // comparison back). dotty's body is typed against the result first (`typedAheadExpr(mdef.rhs, tpt.tpe)`), so
+        // the lower bound is the body's type; a hygienic type below it, frozen, adds nothing
+        // (`TypeComparer.compareTypeParamRef`'s `isSubTypeWhenFrozen`, ConstraintHandling's `lo | bound` keeping `lo`);
+        // and `fixLevels` (ConstraintHandling.scala 516-560 at 3.8.4) maps that bound only where `needsLeveling`, a
+        // `TypeAccumulator`, which goes into no annotation (Types.scala 6933), meets a parameter. So an annotation whose
+        // arguments alone name a parameter stays on the body's type, where the avoidance (`Annotation.mapWith`) dropped
+        // it for an argument it made a range.
         let snap = self.snapshot();
+        if !self.types.names_term(z, params) && self.frozen_sub(hygienic, z) && self.is_sub(z, r) {
+            return;
+        }
+        self.rollback(&snap);
+        // dotty's check itself: the hygienic type against the result.
         if self.is_sub(hygienic, r) {
             return;
         }
@@ -4119,12 +4651,91 @@ impl<'a> Worker<'a> {
     /// nothing. At variance 0 the range of both is the wildcard of its bounds, as an invariant
     /// argument takes it.
     pub(super) fn avoid_params(&mut self, t: TypeId, params: &[SymId], v: i8, seen: &mut Vec<TVarId>) -> TypeId {
+        // A retained form first: what it is made over and its record avoided, the terms only the record names among
+        // them.
+        if self.semantic {
+            let d = self.deref_keeping(t);
+            if let Some((under, r)) = self.types.form_of(d) {
+                return self.avoid_params_form(d, under, r, params, v, seen);
+            }
+        }
+        self.avoid_params_of(t, params, v, seen)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn avoid_params_form(&mut self, t: TypeId, under: TypeId, r: crate::types::RetainId, params: &[SymId], v: i8, seen: &mut Vec<TVarId>) -> TypeId {
+        let mut ctx = vec![v as u32];
+        ctx.extend(params.iter().map(|s| s.0));
+        ctx.push(u32::MAX);
+        ctx.extend(seen.iter().map(|x| x.0));
+        if let Some(done) = self.form_passes.avoid.get(&ctx, t) {
+            return done;
+        }
+        self.form_passes.avoid.enter();
+        let nu = self.avoid_params(under, params, v, seen);
+        let types = self.types.clone();
+        // An alias application as dotty's approximation maps an `AppliedType` (`derived_applied_alias`), a range at an
+        // invariant place the wildcard of its ends.
+        if let crate::types::Retention::Alias(a, args) = types.retention(r) {
+            use super::depfun::Approx;
+            let as_range = |w: &Self, x: TypeId, y: TypeId, v: i8| match w.range_end(y) {
+                Some((lo, hi)) if v == 0 && !w.types.is_wild(x) => Approx::Range(lo, hi),
+                _ => Approx::Exact(y),
+            };
+            let nua = as_range(self, under, nu, v);
+            let out = match self.derived_applied_alias(t, under, a, args, nua, v, &mut |w, x, wv| {
+                let y = w.avoid_params(x, params, wv, seen);
+                as_range(w, x, y, wv)
+            }) {
+                Approx::Exact(x) => x,
+                Approx::Range(lo, hi) => self.range_at(lo, hi, v),
+            };
+            self.form_passes.avoid.leave(&ctx, t, out);
+            return out;
+        }
+        let nr = match types.retention(r) {
+            // `Annotation.mapWith` under the approximation: a type of an argument's tree made a range (a wildcard at an
+            // invariant place) drops the annotation, `EmptyAnnotation`.
+            crate::types::Retention::Annot(..) => types.map_annotation(r, &mut |x| {
+                let y = self.avoid_params(x, params, v, seen);
+                (v != 0 || self.range_end(y).is_none() || self.range_end(x).is_some()).then_some(y)
+            }),
+            _ => Some(types.map_retention(r, &mut |x| self.avoid_params(x, params, v, seen))),
+        };
+        // The form kept as dotty's approximation keeps an annotation (`derived_annotated`); an `EmptyAnnotation` leaves
+        // the parent alone (`AnnotatedType.derivedAnnotatedType`).
+        let out = self.derived_annotated(nu, v, &mut |w, x| match nr {
+            None => x,
+            Some(nr) if x == under && nr == r => t,
+            Some(nr) => w.types.retained_by(x, nr),
+        });
+        self.form_passes.avoid.leave(&ctx, t, out);
+        out
+    }
+
+    /// `ApproximatingTypeMap.derivedAnnotatedType` (Types.scala 6825-6832 at 3.8.4) of an annotated type whose parent
+    /// this map made `u`: a range's endpoints each annotated (`annotate`) before the range, at the variance `v`
+    /// (`range`); else `u` annotated, apart from exactly `Nothing`, which keeps no annotation. The endpoints are the
+    /// range's as it stands (`range_end`), an inner annotation's retained ones included (`x.T @Ann @Other` keeps both).
+    fn derived_annotated(&mut self, u: TypeId, v: i8, annotate: &mut dyn FnMut(&mut Self, TypeId) -> TypeId) -> TypeId {
+        match self.range_end(u) {
+            Some((lo, hi)) => {
+                let (lo, hi) = (annotate(self, lo), annotate(self, hi));
+                self.range_at(lo, hi, v)
+            }
+            None if self.types.is_exactly_nothing(u) => u,
+            None => annotate(self, u),
+        }
+    }
+
+    fn avoid_params_of(&mut self, t: TypeId, params: &[SymId], v: i8, seen: &mut Vec<TVarId>) -> TypeId {
         // An annotated type's range is the annotated bounds (`ApproximatingTypeMap`'s
         // `derivedAnnotatedType`), the annotation kept over a type.
         let t = self.deref_keeping(t);
         if let Type::Annotated(u) = self.types.get(t) {
             let u = self.avoid_params(u, params, v, seen);
-            return if matches!(self.types.get(u), Type::Wild | Type::BoundedWild(..)) { u } else { self.types.mk(Type::Annotated(u)) };
+            return self.derived_annotated(u, v, &mut |w, x| w.types.mk(Type::Annotated(x)));
         }
         match self.types.get(t) {
             Type::Var(w) => {
@@ -4141,7 +4752,7 @@ impl<'a> Worker<'a> {
                 seen.pop();
                 if avoided != inst { avoided } else { t }
             }
-            _ if !self.types.names_term(t, params) && !self.types.has_vars(t) => t,
+            _ if !self.types.names_term_mapped(t, params) && !self.types.has_vars(t) => t,
             Type::Term(s) | Type::Select(_, s) if params.contains(&s) || matches!(self.types.get(t), Type::Select(p, _) if self.types.names_term(p, params)) => {
                 if v < 0 {
                     return NOTHING;
@@ -4200,26 +4811,240 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// `avoid_params` of `t` at `v` as a range: the bounds of the wildcard it gave at variance 0,
-    /// the type itself twice otherwise.
+    /// `avoid_params` of `t` at `v` as a range: the bounds of the wildcard it gave at variance 0, its retained ends
+    /// first (`range_end`), the type itself twice otherwise.
     fn avoid_range(&mut self, t: TypeId, params: &[SymId], v: i8, seen: &mut Vec<TVarId>) -> (TypeId, TypeId) {
         let r = self.avoid_params(t, params, v, seen);
-        match self.types.get(r) {
-            Type::Wild if v == 0 => (NOTHING, ANY),
-            Type::BoundedWild(lo, hi) if v == 0 => (lo, hi),
+        match self.range_end(r) {
+            Some(ends) if v == 0 => ends,
             _ => (r, r),
         }
     }
 
-    /// A range's place at variance `v`: its upper bound from above, its lower from below, the
-    /// wildcard of both in an invariant argument, the type where the two are one.
+    /// `ApproximatingTypeMap.range` (Types.scala 6592-6617 at 3.8.4) at variance `v`: the upper end at a positive one; the
+    /// lower at a negative one, `Nothing` itself (`eq`) as `Nothing & hi` (`nothing_and`); at an invariant one the end
+    /// where both are one type (`eq`), else the range of the ends' own ends (`lower`, `upper`), the wildcard an invariant
+    /// argument takes it as.
     fn range_at(&mut self, lo: TypeId, hi: TypeId, v: i8) -> TypeId {
-        match v {
-            _ if lo == hi => lo,
-            1 => hi,
-            -1 => lo,
-            _ => self.types.bounded_wild(lo, hi),
+        if v > 0 {
+            hi
+        } else if v < 0 {
+            if lo == NOTHING { self.nothing_and(hi) } else { lo }
+        } else if lo == hi {
+            lo
+        } else {
+            let (l, h) = (self.range_end(lo).map_or(lo, |r| r.0), self.range_end(hi).map_or(hi, |r| r.1));
+            self.types.bounded_wild(l, h)
         }
+    }
+
+    /// The ends of `t` where it is a range (`lower` and `upper`, Types.scala 6621-6629): a wildcard here, written over its
+    /// canonical one where an end keeps a retained form (`bounded_wild`); `None` for any other type.
+    #[inline]
+    fn range_end(&self, t: TypeId) -> Option<(TypeId, TypeId)> {
+        if let Some((_, r)) = self.types.form_of(t) {
+            if let crate::types::Retention::Written(w) = self.types.retention(r) {
+                if let Some(ends) = self.written_range(w) {
+                    return Some(ends);
+                }
+            }
+        }
+        match self.types.get(t) {
+            Type::Wild => Some((NOTHING, ANY)),
+            Type::BoundedWild(lo, hi) => Some((lo, hi)),
+            _ => None,
+        }
+    }
+
+    /// The ends of a written wildcard, through a written type itself retained (a record the store's maps rebuilt, whose
+    /// wildcard `bounded_wild` kept over the canonical type its ends agree on).
+    fn written_range(&self, w: TypeId) -> Option<(TypeId, TypeId)> {
+        if let Some((_, r)) = self.types.form_of(w) {
+            if let crate::types::Retention::Written(x) = self.types.retention(r) {
+                return self.written_range(x);
+            }
+        }
+        match self.types.get(w) {
+            Type::BoundedWild(lo, hi) => Some((lo, hi)),
+            _ => None,
+        }
+    }
+
+    /// `ApproximatingTypeMap.derivedAppliedType` (Types.scala 6765-6811 at 3.8.4) of the retained alias application `t`,
+    /// the alias `a` applied to `args` over `under`, whose canonical type the map made `nu`, its arguments mapped by
+    /// `arg` as `TypeMap.mapArgs` and `mapArg` map them (6327-6338): each at `v` times its parameter's variance sign
+    /// (`alias_param_signs`), a wildcard at `v` itself. No argument a range: the alias applied to the mapped ones
+    /// (`AppliedType.derivedAppliedType`'s `appliedTo`), the form kept over `nu`, `t` itself where nothing changed. A
+    /// range among them: at a positive variance the arguments as bounds, an application `appliedTo`'s `Reducer` reduces,
+    /// so no application of the alias stays; else the ranges distributed over the co- and contravariant parameters
+    /// (`distributeArgs`), the alias applied at each end, and where an invariant parameter holds one, `Nothing .. Any`
+    /// (an alias is a type lambda, `tycon.isLambdaSub`). The canonical type is the map's: where dotty's result is no
+    /// application of the alias over `nu` (a reduction, the empty range), the form goes and `nu` stands.
+    pub(super) fn derived_applied_alias(&mut self, t: TypeId, under: TypeId, a: AliasId, args: TList, nu: super::depfun::Approx, v: i8, arg: &mut dyn FnMut(&mut Self, TypeId, i8) -> super::depfun::Approx) -> super::depfun::Approx {
+        use super::depfun::Approx;
+        let items = self.types.items(args).to_vec();
+        let signs = self.alias_param_signs(a);
+        let mut mapped = Vec::with_capacity(items.len());
+        for (i, &x) in items.iter().enumerate() {
+            let w = if self.types.is_wild(x) { v } else { v * signs.get(i).copied().unwrap_or(0) };
+            mapped.push(arg(self, x, w));
+        }
+        let apply = |w: &mut Self, over: TypeId, xs: &[TypeId]| {
+            let l = w.types.list(xs);
+            w.types.retained(over, crate::types::Retention::Alias(a, l))
+        };
+        if mapped.iter().all(|m| matches!(m, Approx::Exact(_))) {
+            let xs: Vec<TypeId> = mapped.iter().map(|m| m.lo()).collect();
+            return match nu {
+                Approx::Exact(n) if n == under && xs == items => Approx::Exact(t),
+                Approx::Exact(n) => Approx::Exact(apply(self, n, &xs)),
+                nu => nu,
+            };
+        }
+        if v > 0 {
+            return nu;
+        }
+        let (mut lo_args, mut hi_args) = (Vec::with_capacity(items.len()), Vec::with_capacity(items.len()));
+        for (i, m) in mapped.into_iter().enumerate() {
+            match m {
+                Approx::Exact(x) => {
+                    lo_args.push(x);
+                    hi_args.push(x);
+                }
+                Approx::Range(lo, hi) => match signs.get(i).copied().unwrap_or(0) {
+                    0 => return Approx::Range(NOTHING, ANY),
+                    s if s > 0 => {
+                        lo_args.push(lo);
+                        hi_args.push(hi);
+                    }
+                    _ => {
+                        lo_args.push(hi);
+                        hi_args.push(lo);
+                    }
+                },
+            }
+        }
+        // `range(tp.derivedAppliedType(tycon, loBuf), tp.derivedAppliedType(tycon, hiBuf))`: the caller's `range` picks
+        // the end its variance reads (`range_at`, `approx_range`).
+        let (lo, hi) = match nu {
+            Approx::Range(lo, hi) => (lo, hi),
+            Approx::Exact(n) => (n, n),
+        };
+        Approx::Range(apply(self, lo, &lo_args), apply(self, hi, &hi_args))
+    }
+
+    /// `Nothing & hi` as `ApproximatingTypeMap.range` makes it at a negative variance (Types.scala 6595-6611 at 3.8.4): the
+    /// intersection itself (`AndType(lo, hi)`, unsimplified), under `hi.etaExpand` where that is a lambda
+    /// (`expandedHi.derivedLambdaType(resType = AndType(lo, expandedHi.resType))`), so that an approximated prefix keeps
+    /// its members.
+    pub(super) fn nothing_and(&mut self, hi: TypeId) -> TypeId {
+        match self.eta_expand(hi) {
+            Some((ps, body)) => {
+                let res = self.types.mk(Type::Inter(NOTHING, body));
+                self.types.mk(Type::Lambda(ps, res))
+            }
+            None => self.types.mk(Type::Inter(NOTHING, hi)),
+        }
+    }
+
+    /// `TypeApplications.etaExpand` (TypeApplications.scala 319-341 at 3.8.4) of `t` as its parameters and result where
+    /// it is a lambda, `None` where it takes no type parameters (`HKTypeLambda.fromParams(Nil, t)` is `t`). The type
+    /// parameters are `typeParams`' (173-216): a lambda's own; a class constructor's, the class's; a higher-kinded type
+    /// parameter's or abstract member's, those of its upper bound's lambda (a `TypeRef` to no class reads its info, whose
+    /// bounds are a proxy of the upper one), or, for a parameter declared by its arity alone (`F[_]`, the bound
+    /// `[_] =>> Any`), that many of its declared variances. The result is `t` applied to them (`appliedTo`, teq's
+    /// `apply_ctor`), each one fresh with its bounds integrated (`HKTypeLambda.fromParams`, `integrate`); a class's
+    /// bounds as its declaration has them, teq's constructor standing for the class through its owner's `this`, where
+    /// `asSeenFrom(prefix, owner)` leaves them as they are. Applied, singleton, refined and other types have none.
+    pub(super) fn eta_expand(&mut self, t: TypeId) -> Option<(TList, TypeId)> {
+        let t = self.deref(t);
+        // The parameters `t` takes, each with its name, variance, bounds and kind, over the parameters themselves.
+        let (own, kinds): (Vec<TParamId>, Vec<(Name, i8)>) = match self.types.get(t) {
+            Type::Lambda(ps, body) => return Some((ps, body)),
+            Type::Ctor(c) if !self.syms.class(c).tparams.is_empty() => {
+                let own = self.syms.class(c).tparams.clone();
+                let kinds = own.iter().map(|&p| (self.syms.tparam(p).name, self.syms.tparam(p).variance)).collect();
+                (own, kinds)
+            }
+            Type::Param(p) => {
+                let info = self.syms.tparam(p);
+                match self.types.get(info.upper) {
+                    Type::Lambda(l, _) => self.lambda_param_kinds(l),
+                    _ if info.arity > 0 => {
+                        let variances = info.hk_variances.clone();
+                        let kinds = (0..info.arity as usize).map(|i| (self.interner.intern(&format!("_${}", i + 1)), variances.get(i).copied().unwrap_or(0))).collect();
+                        (Vec::new(), kinds)
+                    }
+                    _ => return None,
+                }
+            }
+            // An abstract member's bound lambda (`type F[X] <: B[X]`), or, bounded by `Any` alone, its declared
+            // parameters (dotty's bound `[X] =>> Any`).
+            Type::Member(prefix, name) => match self.type_member(prefix, name) {
+                Some(super::members::MemberInfo::Bounds(_, hi)) => match self.types.get(hi) {
+                    Type::Lambda(l, _) => self.lambda_param_kinds(l),
+                    _ => match self.type_member_alias(prefix, name) {
+                        Some(a) if !self.syms.aliases[a.idx()].tparams.is_empty() => self.alias_param_kinds(a),
+                        _ => return None,
+                    },
+                },
+                _ => return None,
+            },
+            Type::Decl(a) => match self.syms.aliases[a.idx()].bounds {
+                Some((_, hi)) => match self.types.get(hi) {
+                    Type::Lambda(l, _) => self.lambda_param_kinds(l),
+                    _ if !self.syms.aliases[a.idx()].tparams.is_empty() => self.alias_param_kinds(a),
+                    _ => return None,
+                },
+                None => return None,
+            },
+            _ => return None,
+        };
+        let fresh: Vec<(TParamId, TypeId)> = kinds.iter().map(|&(name, variance)| {
+            let q = self.syms.new_tparam(name, variance);
+            (q, self.types.param(q))
+        }).collect();
+        // `integrate`: each bound over the fresh parameters in place of the ones it was written over.
+        let subst: Subst = own.iter().zip(&fresh).map(|(&p, &(_, q))| (p, q)).collect();
+        for (i, &p) in own.iter().enumerate() {
+            let (lower, upper, arity) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper, self.syms.tparam(p).arity);
+            let hk = self.syms.tparam(p).hk_variances.clone();
+            let (lower, upper) = (self.types.subst(lower, &subst), self.types.subst(upper, &subst));
+            let info = &mut self.syms.tparams[fresh[i].0.idx()];
+            (info.lower, info.upper, info.arity, info.hk_variances) = (lower, upper, arity, hk);
+        }
+        let args: Vec<TypeId> = fresh.iter().map(|&(_, q)| q).collect();
+        let l = self.types.list(&args);
+        let body = match self.types.form_of(t) {
+            // An alias of a constructor applied keeps the alias (`appliedTo`'s `AppliedType(self, args)` over the alias's
+            // `TypeRef`), its record the alias applied to the parameters.
+            Some((under, r)) => match self.types.retention(r) {
+                crate::types::Retention::Alias(a, given) if given == EMPTY_LIST => {
+                    let applied = self.types.apply_ctor(under, &args);
+                    self.types.retained(applied, crate::types::Retention::Alias(a, l))
+                }
+                _ => self.types.apply_ctor(t, &args),
+            },
+            None => self.types.apply_ctor(t, &args),
+        };
+        Some((l, body))
+    }
+
+    /// An abstract member's declared parameters, each with its name and variance.
+    fn alias_param_kinds(&self, a: AliasId) -> (Vec<TParamId>, Vec<(Name, i8)>) {
+        let own = self.syms.aliases[a.idx()].tparams.clone();
+        let kinds = own.iter().map(|&p| (self.syms.tparam(p).name, self.syms.tparam(p).variance)).collect();
+        (own, kinds)
+    }
+
+    /// The parameters of a type lambda bound (`[X <: B] =>> U`), each with its name and variance.
+    fn lambda_param_kinds(&self, l: TList) -> (Vec<TParamId>, Vec<(Name, i8)>) {
+        let own: Vec<TParamId> = self.types.items(l).iter().filter_map(|&x| match self.types.get(x) {
+            Type::Param(p) => Some(p),
+            _ => None,
+        }).collect();
+        let kinds = own.iter().map(|&p| (self.syms.tparam(p).name, self.syms.tparam(p).variance)).collect();
+        (own, kinds)
     }
 
     /// `a | b` as dotty's `|` makes it (`TypeComparer.lub`'s `mergeIfSuper`, frozen): a part the
@@ -4369,6 +5194,11 @@ impl<'a> Worker<'a> {
     /// intersection. Whether one was.
     pub(super) fn could_instantiate_var(&mut self, t: TypeId, applied: bool) -> bool {
         let t = self.deref(t);
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.could_instantiate_var_form(t, applied, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Var(v) => {
                 if !self.has_lower_bound(v) {
@@ -4389,6 +5219,12 @@ impl<'a> Worker<'a> {
             Type::Union(a, b, _) | Type::Inter(a, b) => self.could_instantiate_var(a, applied) || self.could_instantiate_var(b, applied),
             _ => false,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn could_instantiate_var_form(&mut self, t: TypeId, applied: bool, under: TypeId, r: crate::types::RetainId) -> bool {
+        self.ask_form(&[super::FORM_INSTANTIATE_VAR, applied as u32], t, under, r, &mut |w, x| w.could_instantiate_var(x, applied))
     }
 
     /// Solves the variables in `t` that already have bounds; unconstrained ones stay open so
@@ -4420,6 +5256,11 @@ impl<'a> Worker<'a> {
     }
 
     fn maximize_unbounded_vars(&mut self, t: TypeId) {
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.maximize_unbounded_vars_form(t, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Var(v) => {
                 let info = &self.tvars[v];
@@ -4448,6 +5289,15 @@ impl<'a> Worker<'a> {
             }
             _ => {}
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn maximize_unbounded_vars_form(&mut self, t: TypeId, under: TypeId, r: crate::types::RetainId) {
+        self.ask_form(&[super::FORM_RAISE_VARS], t, under, r, &mut |w, x| {
+            w.maximize_unbounded_vars(x);
+            false
+        });
     }
 
     /// Solves the variables of `selected` that `t` mentions.
@@ -4500,6 +5350,13 @@ impl<'a> Worker<'a> {
             return;
         }
         let t = self.deref(t);
+        // A retained form first: its record's types, each at its own variance (`form_parts_at`), then what it is made
+        // over.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.collect_var_variances_form(t, sign, out, under, r);
+            }
+        }
         let note = |out: &mut Vec<(TVarId, i8)>, v: TVarId, sign: i8| match out.iter_mut().find(|(w, _)| *w == v) {
             Some((_, s)) if *s != sign => *s = 0,
             Some(_) => {}
@@ -4589,6 +5446,19 @@ impl<'a> Worker<'a> {
         }
     }
 
+    #[cold]
+    #[inline(never)]
+    fn collect_var_variances_form(&mut self, t: TypeId, sign: i8, out: &mut Vec<(TVarId, i8)>, under: TypeId, r: crate::types::RetainId) {
+        let types = self.types.clone();
+        types.in_pass(&[super::FORM_VAR_VARIANCES, sign as u32], t, || {
+            for (x, w) in self.form_parts_at(r) {
+                self.collect_var_variances(x, sign * w, out);
+            }
+            self.collect_var_variances(under, sign, out);
+            0
+        });
+    }
+
     /// Whether `t` names a type variable made at `from` or later.
     #[cfg(debug_assertions)]
     pub fn mentions_var_from(&self, t: TypeId, from: u32) -> bool {
@@ -4598,6 +5468,12 @@ impl<'a> Worker<'a> {
     }
 
     pub fn collect_vars(&self, t: TypeId, out: &mut Vec<TVarId>) {
+        // A retained form first: its record's variables (a phantom alias's argument), then what it is made over.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.collect_vars_form(t, out, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Var(v) => out.push(v),
             Type::AppVar(v, args) => {
@@ -4640,6 +5516,17 @@ impl<'a> Worker<'a> {
                 }
             }
             _ => {}
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn collect_vars_form(&self, t: TypeId, out: &mut Vec<TVarId>, under: TypeId, r: crate::types::RetainId) {
+        if self.types.has_vars(t) {
+            self.types.ask_form_once(&[super::FORM_COLLECT_VARS], t, under, r, false, &mut |x| {
+                self.collect_vars(x, out);
+                false
+            });
         }
     }
 
@@ -4753,7 +5640,7 @@ impl<'a> Worker<'a> {
                 continue;
             }
             acc = Some(match acc {
-                Some(a) if a == t => a,
+                Some(a) if self.same_type(a, t) => a,
                 Some(a) => self.types.soft_union(a, t),
                 None => t,
             });
@@ -5049,7 +5936,7 @@ impl<'a> Worker<'a> {
         let second = self.find_member_in_part(pre, b, name, 0, &mut jb);
         let (found, info) = match (first, second) {
             // The same denotation through both parts (dotty's `denot1 eq denot2`).
-            (Some(fa), Some(fb)) if fa == fb => (Some(fa), ja),
+            (Some(fa), Some(fb)) if fa.0 == fb.0 && self.same_type(fa.1, fb.1) => (Some(fa), ja),
             (Some(fa), Some(fb)) => {
                 let da = self.seen_from_whole(pre, (fa, ja));
                 let db = self.seen_from_whole(pre, (fb, jb));
@@ -5062,7 +5949,7 @@ impl<'a> Worker<'a> {
                 let refined = !overloaded && (self.refinement_alternative(a, name, &da).is_some() || self.refinement_alternative(b, name, &db).is_some());
                 if refined {
                     (Some((self.merged_overload(sa, ta, sb, tb), ta)), None)
-                } else if da.0 == db.0 {
+                } else if sa == sb && self.same_type(ta, tb) {
                     // One symbol through two instances of its owner, seen from the whole
                     // receiver alike: one member.
                     (Some(da.0), da.1)
@@ -5468,7 +6355,7 @@ impl<'a> Worker<'a> {
     /// where none matches.
     fn merge_denotation(&mut self, pre: TypeId, acc: &mut Vec<Denot>, d: Denot) {
         for i in 0..acc.len() {
-            if acc[i].0 == d.0 {
+            if (acc[i].0).0 == (d.0).0 && self.same_type((acc[i].0).1, (d.0).1) {
                 return;
             }
             let (ia, id) = (self.denot_info(&acc[i]), self.denot_info(&d));
@@ -6143,7 +7030,7 @@ impl<'a> Worker<'a> {
     /// `y`'s type parameters read as `x`'s (`matchingMethodParams`). `f[T](x: T)` and `f[U <:
     /// String](x: U)` do not match: their parameters erase to `Object` and `String`.
     pub(super) fn members_match(&mut self, x: SymId, ta: TypeId, y: SymId, tb: TypeId) -> bool {
-        if x == y && ta == tb {
+        if x == y && self.same_type(ta, tb) {
             return true;
         }
         if self.arity_shape(x) != self.arity_shape(y) {
@@ -6159,7 +7046,10 @@ impl<'a> Worker<'a> {
         }
         let own = self.parameters_of(x).tparams.clone();
         let shape = self.parameter_shape(x, ta, None);
-        self.parameter_shape(y, tb, Some(&own)) == shape
+        let other = self.parameter_shape(y, tb, Some(&own));
+        other.0 == shape.0
+            && other.1.len() == shape.1.len()
+            && other.1.iter().zip(&shape.1).all(|(&(t, n, r), &(u, m, q))| self.same_type(t, u) && n == m && r == q)
     }
 
     /// The classes the parameters and the result of `s` erase to, seen from its owner's
@@ -6347,5 +7237,167 @@ fn compose_dep(f: u8, s: i8) -> u8 {
         -1 => ((f & DEP_CO) << 1) | ((f & DEP_CONTRA) >> 1),
         _ if f != 0 => DEP_CO | DEP_CONTRA,
         _ => 0,
+    }
+}
+
+#[cfg(test)]
+mod eta_expand_tests {
+    use super::*;
+
+    const PROGRAM: &str = "class Box[A]\nclass Ord[T <: Box[T]]\nclass C:\n  type L[X] <: List[X]\n  type A[X]\nclass D[G[_], H[X] <: Box[X]]\nobject O:\n  type M[X] <: Box[X]\n  type B = Box\n@main def run(): Unit = println(1)\n";
+
+    fn class(w: &Worker, n: &str) -> ClassId {
+        (0..w.syms.classes.len()).map(|i| ClassId(i as u32)).find(|&c| w.interner.get(w.syms.class(c).name) == n).expect("the class")
+    }
+
+    fn alias(w: &mut Worker, n: &str) -> AliasId {
+        let a = (0..w.syms.aliases.len()).map(|i| AliasId(i as u32)).find(|&a| w.interner.get(w.syms.aliases[a.idx()].name) == n).expect("the alias");
+        w.complete_alias(a);
+        a
+    }
+
+    /// `TypeApplications.etaExpand` over each shape `typeParams` reads: a lambda its own parameters; a class constructor
+    /// its class's, fresh, their bounds over the fresh ones; a higher-kinded parameter its bound lambda's, or as many as
+    /// its arity; an abstract member (through a prefix, and an object's) its upper bound's lambda's; an alias of a
+    /// constructor applied as the alias; an applied type none. `range`'s negative `Nothing` is the lambda over
+    /// `Nothing & ...`.
+    #[test]
+    fn eta_expansion_over_each_shape() {
+        crate::with_typed_program("eta-expand", PROGRAM, &[], |w| {
+            let params = |w: &Worker, l: TList| -> Vec<TParamId> { w.types.items(l).iter().map(|&x| match w.types.get(x) { Type::Param(p) => p, _ => panic!("a parameter") }).collect() };
+            // A lambda: its own.
+            let p = w.syms.new_tparam(w.interner.intern("X"), 0);
+            let px = w.types.param(p);
+            let pl = w.types.list(&[px]);
+            let body = w.types.class(class(w, "Box"), &[px]);
+            let lam = w.types.mk(Type::Lambda(pl, body));
+            assert_eq!(w.eta_expand(lam), Some((pl, body)));
+            // A class constructor: fresh parameters, `T <: Box[T]` over the fresh `T`, the class applied to them.
+            let ord = class(w, "Ord");
+            let ctor = w.types.mk(Type::Ctor(ord));
+            let (l, body) = w.eta_expand(ctor).expect("a lambda");
+            let [q] = params(w, l)[..] else { panic!("one parameter") };
+            assert_ne!(q, w.syms.class(ord).tparams[0]);
+            let qt = w.types.param(q);
+            assert_eq!(w.syms.tparam(q).upper, w.types.class(class(w, "Box"), &[qt]));
+            assert_eq!(body, w.types.class(ord, &[qt]));
+            // Higher-kinded parameters: `G[_]` by its arity, `H[X] <: Box[X]` by its bound's lambda.
+            let d = class(w, "D");
+            let (g, h) = (w.syms.class(d).tparams[0], w.syms.class(d).tparams[1]);
+            let gt = w.types.param(g);
+            let (l, body) = w.eta_expand(gt).expect("a lambda");
+            assert_eq!(params(w, l).len(), 1);
+            assert!(matches!(w.types.get(body), Type::AppParam(x, a) if x == g && a == l));
+            let ht = w.types.param(h);
+            let (l, body) = w.eta_expand(ht).expect("a lambda");
+            let [x] = params(w, l)[..] else { panic!("one parameter") };
+            assert!(matches!(w.types.get(body), Type::AppParam(y, a) if y == h && a == l));
+            let _ = x;
+            // An abstract member through a prefix (`C.this.L`), its bound `[X] =>> List[X]`; an object's (`O.M`).
+            let c = class(w, "C");
+            let this_c = w.types.mk(Type::This(c));
+            let member = w.types.mk(Type::Member(this_c, w.interner.intern("L")));
+            let (l, body) = w.eta_expand(member).expect("a lambda");
+            assert!(matches!(w.types.get(body), Type::AppMember(m, a) if m == member && a == l));
+            let m = alias(w, "M");
+            let decl = w.types.mk(Type::Decl(m));
+            let (l, body) = w.eta_expand(decl).expect("a lambda");
+            assert!(matches!(w.types.get(body), Type::AppMember(x, a) if x == decl && a == l));
+            // An abstract member with no written bound: its bound `[X] =>> Any`'s parameter.
+            let abs = w.types.mk(Type::Member(this_c, w.interner.intern("A")));
+            let (l, body) = w.eta_expand(abs).expect("a lambda");
+            assert!(matches!(w.types.get(body), Type::AppMember(x, a) if x == abs && a == l));
+            // An alias of a constructor kept as its form: applied, the alias applied.
+            let b = alias(w, "B");
+            let box_ctor = w.types.mk(Type::Ctor(class(w, "Box")));
+            let form = w.types.retained(box_ctor, crate::types::Retention::Alias(b, EMPTY_LIST));
+            let (l, body) = w.eta_expand(form).expect("a lambda");
+            assert_eq!(w.types.form_of(body).map(|(_, r)| w.types.retention(r)), Some(crate::types::Retention::Alias(b, l)));
+            assert_eq!(w.alias_param_signs(b), vec![0]);
+            // An applied type: none, `Nothing & hi` bare.
+            let int = w.b.t_int;
+            let applied = w.types.class(class(w, "Box"), &[int]);
+            assert_eq!(w.eta_expand(applied), None);
+            assert_eq!(w.nothing_and(applied), w.types.mk(Type::Inter(NOTHING, applied)));
+            // `Nothing & hi` under the lambda.
+            let and = w.nothing_and(ctor);
+            let Type::Lambda(l, res) = w.types.get(and) else { panic!("a lambda") };
+            assert!(matches!(w.types.get(res), Type::Inter(NOTHING, b) if matches!(w.types.get(b), Type::Class(k, a) if k == ord && a == l)));
+        });
+    }
+}
+
+#[cfg(test)]
+mod derived_applied_tests {
+    use super::*;
+    use super::super::depfun::Approx;
+
+    const PROGRAM: &str = "class Out[+A]\nclass In[-A]\nclass Box[A]\nobject O:\n  type F[A, B] = A => B\n  type Fd[A, +B] = A => B\n  type K[A] = Int\n  type Contra[-A] = In[A]\n  type Twice[A] = Box[Box[A]]\n@main def run(): Unit = println(1)\n";
+
+    fn alias(w: &mut Worker, n: &str) -> AliasId {
+        let n = w.interner.intern(n);
+        let a = (0..w.syms.aliases.len()).map(|i| AliasId(i as u32)).find(|&a| w.syms.aliases[a.idx()].name == n).expect("the alias");
+        w.complete_alias(a);
+        a
+    }
+
+    /// `LambdaParam.paramVarianceSign` of an alias's parameters: structural where none is declared (`A => B` gives `A`
+    /// contravariant and `B` covariant, an unused one is bivariant and reads as covariant, `Box[Box[A]]` invariant);
+    /// declared where one is (`Fd[A, +B]`: `A` invariant).
+    #[test]
+    fn alias_parameter_variances_as_dotty_reads_them() {
+        crate::with_typed_program("alias-variances", PROGRAM, &[], |w| {
+            let f = alias(w, "F");
+            assert_eq!(w.alias_param_signs(f), vec![-1, 1]);
+            let fd = alias(w, "Fd");
+            assert_eq!(w.alias_param_signs(fd), vec![0, 1]);
+            let k = alias(w, "K");
+            assert_eq!(w.alias_param_signs(k), vec![1]);
+            let contra = alias(w, "Contra");
+            assert_eq!(w.alias_param_signs(contra), vec![-1]);
+            let twice = alias(w, "Twice");
+            assert_eq!(w.alias_param_signs(twice), vec![0]);
+        });
+    }
+
+    /// `ApproximatingTypeMap.derivedAppliedType` of an alias application whose argument the map made a range: at a
+    /// covariant parameter the range distributed to the alias at each end (`distributeArgs`), at a contravariant one
+    /// swapped, at an invariant one `Nothing .. Any` (`isLambdaSub`); no range, the alias over the mapped arguments; at a
+    /// positive variance the map's own result (`appliedTo`'s reduction).
+    #[test]
+    fn an_alias_application_distributes_a_range_by_its_parameters() {
+        crate::with_typed_program("derived-applied", PROGRAM, &[], |w| {
+            let (k, contra, twice) = (alias(w, "K"), alias(w, "Contra"), alias(w, "Twice"));
+            let (int, string) = (w.b.t_int, w.b.t_string);
+            let applied = |w: &mut Worker, a: AliasId, over: TypeId, arg: TypeId| {
+                let l = w.types.list(&[arg]);
+                (w.types.retained(over, crate::types::Retention::Alias(a, l)), l)
+            };
+            let alias_of = |w: &Worker, t: TypeId| w.types.form_of(t).map(|(u, r)| (u, w.types.retention(r)));
+            // `K[String]` over `Int`, its argument a range: `range(K[Nothing], K[Any])` at an invariant place.
+            let (kt, kl) = applied(w, k, int, string);
+            let out = w.derived_applied_alias(kt, int, k, kl, Approx::Exact(int), 0, &mut |_, _, _| Approx::Range(NOTHING, ANY));
+            let Approx::Range(lo, hi) = out else { panic!("a range") };
+            assert_eq!(alias_of(w, lo), Some((int, crate::types::Retention::Alias(k, w.types.list(&[NOTHING])))));
+            assert_eq!(alias_of(w, hi), Some((int, crate::types::Retention::Alias(k, w.types.list(&[ANY])))));
+            // `Contra[String]` over `In[String]`: the ends swapped, `In[Any] .. In[Nothing]` kept as `Contra`'s.
+            let Type::Class(in_class, _) = w.types.get(w.syms.aliases[contra.idx()].rhs) else { panic!("In[A]") };
+            let in_string = w.types.class(in_class, &[string]);
+            let (ct, cl) = applied(w, contra, in_string, string);
+            let out = w.derived_applied_alias(ct, in_string, contra, cl, Approx::Range(in_string, in_string), 0, &mut |_, _, _| Approx::Range(NOTHING, ANY));
+            let Approx::Range(lo, hi) = out else { panic!("a range") };
+            assert_eq!(alias_of(w, lo).map(|(_, r)| r), Some(crate::types::Retention::Alias(contra, w.types.list(&[ANY]))));
+            assert_eq!(alias_of(w, hi).map(|(_, r)| r), Some(crate::types::Retention::Alias(contra, w.types.list(&[NOTHING]))));
+            // `Twice[String]`: an invariant parameter's range is the empty range.
+            let (tt, tl) = applied(w, twice, int, string);
+            assert!(matches!(w.derived_applied_alias(tt, int, twice, tl, Approx::Exact(int), -1, &mut |_, _, _| Approx::Range(NOTHING, ANY)), Approx::Range(NOTHING, ANY)));
+            // No range: the alias over the mapped argument; nothing changed, the form itself.
+            let out = w.derived_applied_alias(kt, int, k, kl, Approx::Exact(int), 1, &mut |_, _, _| Approx::Exact(int));
+            let Approx::Exact(x) = out else { panic!("exact") };
+            assert_eq!(alias_of(w, x), Some((int, crate::types::Retention::Alias(k, w.types.list(&[int])))));
+            assert!(matches!(w.derived_applied_alias(kt, int, k, kl, Approx::Exact(int), 1, &mut |_, x, _| Approx::Exact(x)), Approx::Exact(x) if x == kt));
+            // A range at a positive variance: the map's own result.
+            assert!(matches!(w.derived_applied_alias(kt, int, k, kl, Approx::Exact(int), 1, &mut |_, _, _| Approx::Range(NOTHING, ANY)), Approx::Exact(x) if x == int));
+        });
     }
 }

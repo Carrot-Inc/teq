@@ -102,7 +102,7 @@ impl<'a> Worker<'a> {
                 let mut acc = NOTHING;
                 for &(_, t) in &branches {
                     let t = self.solve_bounded_in(t);
-                    acc = if acc == NOTHING { t } else { self.lub(acc, t) };
+                    acc = if self.canon(acc) == NOTHING { t } else { self.lub(acc, t) };
                 }
                 self.solve_in(acc)
             }
@@ -577,7 +577,7 @@ impl<'a> Worker<'a> {
             }
             Pat::Lit(e) => {
                 let (te, lit) = self.type_expr(e, Some(sty));
-                let scrut = self.deref(sty);
+                let scrut = self.deref_canonical(sty);
                 let te = self.literal_as(te, scrut);
                 // `1 == x` on an `Any` is cooperative equality; only a primitive scrutinee
                 // settles the literal's representation.
@@ -678,7 +678,7 @@ impl<'a> Worker<'a> {
                     let added: Vec<_> = self.gadt.drain(gadt_mark..).collect();
                     common = Some(match common.take() {
                         None => added,
-                        Some(c) => c.into_iter().filter(|e| added.contains(e)).collect(),
+                        Some(c) => c.into_iter().filter(|e| added.iter().any(|a| a.0 == e.0 && a.2 == e.2 && self.same_type(a.1, e.1))).collect(),
                     });
                 }
                 self.pattern_alternatives.pop();
@@ -1078,7 +1078,7 @@ impl<'a> Worker<'a> {
         Some(match self.prog.expr(e) {
             TExpr::Int(n) => LitVal::Int(n),
             TExpr::Long(n) => LitVal::Long(n),
-            TExpr::Double(d) if self.prog.type_of(e).is_some_and(|t| self.widen_lit(t) == self.b.t_float) => LitVal::Float((d as f32).to_bits()),
+            TExpr::Double(d) if self.prog.type_of(e).is_some_and(|t| self.widen_lit(self.canon(t)) == self.b.t_float) => LitVal::Float((d as f32).to_bits()),
             TExpr::Double(d) => LitVal::Double(d.to_bits()),
             TExpr::Char(c) => LitVal::Char(c),
             TExpr::Bool(b) => LitVal::Bool(b),
@@ -1180,7 +1180,7 @@ impl<'a> Worker<'a> {
                             continue;
                         }
                         let mut upper = self.syms.tparam(param).upper;
-                        if upper == ANY {
+                        if self.canon(upper) == ANY {
                             continue;
                         }
                         if self.mentions_tparam_of(upper, Some(&params)) {
@@ -1218,7 +1218,7 @@ impl<'a> Worker<'a> {
                 // bounds say nothing.
                 let bounds = |t: &mut Self, list: Vec<TypeId>, trivial: TypeId| -> Vec<TypeId> {
                     let zonked: Vec<TypeId> = list.into_iter().map(|b| t.zonk(b)).collect();
-                    zonked.into_iter().filter(|&b| !t.types.has_vars(b) && b != ERROR && b != trivial).collect()
+                    zonked.into_iter().filter(|&b| !t.types.has_vars(b) && b != ERROR && !t.types.same(b, trivial)).collect()
                 };
                 let (lower, upper) = (self.tvars[v].lower.clone(), self.tvars[v].upper.clone());
                 let (lower, upper) = (bounds(self, lower, NOTHING), bounds(self, upper, ANY));
@@ -1232,7 +1232,7 @@ impl<'a> Worker<'a> {
             // it leaves the pattern's bounds, as scalac types the case.
             let stated_lower = self.syms.tparams[p.idx()].lower;
             if let Some(known) = inst {
-                if stated_lower != NOTHING {
+                if self.canon(stated_lower) != NOTHING {
                     let mark = self.snapshot();
                     let above = self.is_sub(stated_lower, known);
                     self.rollback(&mark);
@@ -1251,7 +1251,7 @@ impl<'a> Worker<'a> {
                     u = self.types.inter(u, b);
                 }
                 let declared = self.syms.tparams[p.idx()].upper;
-                if declared != ANY && !self.is_sub(u, declared) {
+                if self.canon(declared) != ANY && !self.is_sub(u, declared) {
                     u = self.types.inter(u, declared);
                 }
                 self.syms.tparams[p.idx()].upper = u;
@@ -1262,7 +1262,7 @@ impl<'a> Worker<'a> {
                 for &b in &lower[1..] {
                     l = self.lub(l, b);
                 }
-                if stated_lower != NOTHING {
+                if self.canon(stated_lower) != NOTHING {
                     l = self.lub(stated_lower, l);
                 }
                 self.syms.tparams[p.idx()].lower = l;
@@ -1278,7 +1278,7 @@ impl<'a> Worker<'a> {
     fn infer_type_pattern_args(&mut self, t: TypeId, sty: TypeId) -> TypeId {
         let Type::Class(c, args) = self.types.get(t) else { return t };
         let items: Vec<TypeId> = self.types.items(args).to_vec();
-        if !items.contains(&WILD) || self.types.contains_error(sty) {
+        if !items.iter().any(|&a| self.canon(a) == WILD) || self.types.contains_error(sty) {
             return t;
         }
         let (solved, conforms, fixed_below) = self.solve_pattern_class_bounded(c, items.len(), sty);
@@ -1286,7 +1286,7 @@ impl<'a> Worker<'a> {
             .iter()
             .zip(&solved)
             .enumerate()
-            .map(|(i, (&a, &s))| if a == WILD && conforms && (s != ANY || fixed_below[i]) && !self.types.has_vars(s) { s } else { a })
+            .map(|(i, (&a, &s))| if self.canon(a) == WILD && conforms && (self.canon(s) != ANY || fixed_below[i]) && !self.types.has_vars(s) { s } else { a })
             .collect();
         self.types.class(c, &fixed)
     }
@@ -1329,16 +1329,18 @@ impl<'a> Worker<'a> {
             // scalac's union simplifies.
             let mut kept: Vec<TypeId> = Vec::new();
             for (i, &p) in bound.iter().enumerate() {
+                let up = self.canon(p);
                 let absorbed = bound.iter().enumerate().any(|(j, &q)| {
-                    if i == j || (q == p && j > i) {
+                    let uq = self.canon(q);
+                    if i == j || (uq == up && j > i) {
                         return false;
                     }
                     let mark = self.snapshot();
                     let below = self.is_sub(p, q) && self.trail.len() == mark.at();
                     self.rollback(&mark);
-                    below && (q != p)
+                    below && (uq != up)
                 });
-                if !absorbed && !kept.contains(&p) {
+                if !absorbed && !kept.iter().any(|&k| self.same_type(k, up)) {
                     kept.push(p);
                 }
             }
@@ -1482,7 +1484,10 @@ impl<'a> Worker<'a> {
             .map(|&v| match self.types.get(v) {
                 Type::Var(v) => {
                     let lower = self.tvars[v].lower.clone();
-                    lower.into_iter().any(|l| self.zonk(l) == ANY)
+                    lower.into_iter().any(|l| {
+                        let l = self.zonk(l);
+                        self.canon(l) == ANY
+                    })
                 }
                 _ => false,
             })
@@ -1622,13 +1627,14 @@ impl<'a> Worker<'a> {
         let Some(base) = self.base_type(pat_ty, sc) else { return };
         let Type::Class(_, pargs) = self.types.get(base) else { return };
         for i in 0..self.types.items(sargs).len().min(self.types.items(pargs).len()) {
-            let s = self.deref(self.types.items(sargs)[i]);
+            let s = self.deref_canonical(self.types.items(sargs)[i]);
             let Type::Param(p) = self.types.get(s) else { continue };
             let known = self.zonk(self.types.items(pargs)[i]);
             self.settle_class(sc);
             let variance = self.syms.tparam(self.syms.class(sc).tparams[i]).variance;
-            let says_nothing = (variance == 1 && known == NOTHING) || (variance == -1 && known == ANY);
-            if known == s || known == ERROR || says_nothing || self.types.has_vars(known) {
+            let uk = self.canon(known);
+            let says_nothing = (variance == 1 && uk == NOTHING) || (variance == -1 && uk == ANY);
+            if uk == s || known == ERROR || says_nothing || self.types.has_vars(known) {
                 continue;
             }
             self.gadt.push((p, known, variance));
@@ -2134,7 +2140,7 @@ impl<'a> Worker<'a> {
             Type::Nothing => Some(Erased::Nothing(0)),
             Type::Param(p) => {
                 let hi = self.syms.tparam(p).upper;
-                if hi == t { Some(object) } else { self.bound_erasure(hi, depth + 1) }
+                if self.same_type(hi, t) { Some(object) } else { self.bound_erasure(hi, depth + 1) }
             }
             Type::AppParam(p, args) => match self.app_param_upper(p, args) {
                 Some(hi) => self.bound_erasure(hi, depth + 1),
@@ -2142,7 +2148,7 @@ impl<'a> Worker<'a> {
             },
             Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
                 let (_, hi) = self.member_bounds(t);
-                if hi == t { Some(object) } else { self.bound_erasure(hi, depth + 1) }
+                if self.same_type(hi, t) { Some(object) } else { self.bound_erasure(hi, depth + 1) }
             }
             Type::BoundedWild(_, hi) => self.bound_erasure(hi, depth + 1),
             Type::Union(a, b, _) => {
@@ -2173,7 +2179,7 @@ impl<'a> Worker<'a> {
             Type::Refined(parent, _) => self.bound_erasure(parent, depth + 1),
             Type::Rec(body) => self.bound_erasure(body, depth + 1),
             Type::Term(_) | Type::Select(..) | Type::Match(..) | Type::Alias(..) => match self.dependent_underlying(t) {
-                Some(u) if u != t => self.bound_erasure(u, depth + 1),
+                Some(u) if !self.same_type(u, t) => self.bound_erasure(u, depth + 1),
                 _ => Some(object),
             },
             _ => None,
@@ -2270,7 +2276,7 @@ impl<'a> Worker<'a> {
             Type::Refined(parent, _) => self.generic_array_element_at(parent, depth + 1),
             Type::Rec(body) => self.generic_array_element_at(body, depth + 1),
             Type::Term(_) | Type::Select(..) | Type::This(_) | Type::Alias(..) => match self.dependent_underlying(t) {
-                Some(u) if u != t => self.generic_array_element_at(u, depth + 1),
+                Some(u) if !self.same_type(u, t) => self.generic_array_element_at(u, depth + 1),
                 _ => false,
             },
             Type::Inter(a, b) => self.generic_array_element_at(a, depth + 1) && self.generic_array_element_at(b, depth + 1),
@@ -2294,7 +2300,7 @@ impl<'a> Worker<'a> {
             Type::Lit(_) => self.array_upper_bound(self.widen_lit(t), depth + 1),
             Type::Param(p) => {
                 let hi = self.syms.tparam(p).upper;
-                if hi == t { None } else { self.array_upper_bound(hi, depth + 1) }
+                if self.same_type(hi, t) { None } else { self.array_upper_bound(hi, depth + 1) }
             }
             Type::AppParam(p, args) => {
                 let hi = self.app_param_upper(p, args)?;
@@ -2302,7 +2308,7 @@ impl<'a> Worker<'a> {
             }
             Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
                 let (_, hi) = self.member_bounds(t);
-                if hi == t { None } else { self.array_upper_bound(hi, depth + 1) }
+                if self.same_type(hi, t) { None } else { self.array_upper_bound(hi, depth + 1) }
             }
             Type::BoundedWild(_, hi) => self.array_upper_bound(hi, depth + 1),
             Type::Refined(parent, _) => self.array_upper_bound(parent, depth + 1),
@@ -2444,7 +2450,7 @@ impl<'a> Worker<'a> {
             Type::Inter(a, b) => self.may_be_null(a, depth + 1) && self.may_be_null(b, depth + 1),
             Type::Param(p) => {
                 let hi = self.syms.tparam(p).upper;
-                hi == t || self.may_be_null(hi, depth + 1)
+                self.same_type(hi, t) || self.may_be_null(hi, depth + 1)
             }
             Type::AppParam(p, args) => match self.app_param_upper(p, args) {
                 Some(hi) => self.may_be_null(hi, depth + 1),
@@ -2452,12 +2458,12 @@ impl<'a> Worker<'a> {
             },
             Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
                 let (_, hi) = self.member_bounds(t);
-                hi == t || self.may_be_null(hi, depth + 1)
+                self.same_type(hi, t) || self.may_be_null(hi, depth + 1)
             }
             Type::Refined(parent, _) => self.may_be_null(parent, depth + 1),
             Type::Rec(body) => self.may_be_null(body, depth + 1),
             Type::Term(_) | Type::Select(..) | Type::This(_) | Type::Match(..) | Type::Alias(..) => match self.dependent_underlying(t) {
-                Some(u) if u != t => self.may_be_null(u, depth + 1),
+                Some(u) if !self.same_type(u, t) => self.may_be_null(u, depth + 1),
                 _ => true,
             },
             _ => true,
@@ -2600,7 +2606,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Param(p) => match self.syms.tparam(p).upper {
-                ANY => None,
+                upper if self.canon(upper) == ANY => None,
                 upper => self.effective_class(upper, depth),
             },
             Type::AppParam(p, args) => {
@@ -2615,7 +2621,7 @@ impl<'a> Worker<'a> {
             Type::Class(c, args) if self.syms.class(c).kind == ClassKind::Opaque => {
                 self.complete_class(c);
                 let info = self.syms.class(c);
-                let Some(under) = info.underlying.filter(|&u| u != t) else { return self.class_of(t) };
+                let Some(under) = info.underlying.filter(|&u| !self.same_type(u, t)) else { return self.class_of(t) };
                 let subst: Subst = info.tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
                 let under = self.types.subst(under, &subst);
                 self.effective_class(under, depth)
@@ -3014,7 +3020,7 @@ impl<'a> Worker<'a> {
                 _ => return false,
             },
         };
-        stated == pre
+        self.same_type(stated, pre)
     }
 
     /// dotty's `PureInterface` trait (`TreeInfo.defKind`, `TreeUnpickler.indexStats` for a
@@ -3050,8 +3056,8 @@ impl<'a> Worker<'a> {
         let n = self.syms.class(c).tparams.len();
         let (known, _) = self.solve_pattern_class(c, n, sty);
         asked.iter().zip(&known).all(|(&a, &k)| {
-            let a = self.deref(a);
-            matches!(a, ANY | NOTHING | ERROR) || self.types.is_wild(a) || self.deref(k) == a || self.is_case_binder(a)
+            let a = self.deref_canonical(a);
+            matches!(a, ANY | NOTHING | ERROR) || self.types.is_wild(a) || self.deref_canonical(k) == a || self.is_case_binder(a)
         })
     }
 
@@ -3080,7 +3086,7 @@ impl<'a> Worker<'a> {
                 let items = self.types.items(args).to_vec();
                 let mut all_wild = true;
                 for a in items {
-                    let a = self.deref(a);
+                    let a = self.deref_canonical(a);
                     all_wild &= self.types.is_wild(a) || a == ANY;
                 }
                 args == EMPTY_LIST || all_wild || self.args_determined(c, args, ANY)

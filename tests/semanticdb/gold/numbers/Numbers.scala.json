@@ -1,0 +1,28 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Numbers.scala",
+  "text": "",
+  "md5": "72D054334C026111446A4C71E7CECBF1",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"_empty_/Numbers.dn.","language":"SCALA","kind":"METHOD","properties":1032,"display_name":"dn","signature":{"kind":"ValueSignature","tpe":{"kind":"ConstantType","constant":{"kind":"DoubleConstant","value":"NaN"}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Numbers.fn.","language":"SCALA","kind":"METHOD","properties":1032,"display_name":"fn","signature":{"kind":"ValueSignature","tpe":{"kind":"ConstantType","constant":{"kind":"FloatConstant","value":"NaN"}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Numbers.dz.","language":"SCALA","kind":"METHOD","properties":1032,"display_name":"dz","signature":{"kind":"ValueSignature","tpe":{"kind":"ConstantType","constant":{"kind":"DoubleConstant","value":"0.0"}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Numbers.fz.","language":"SCALA","kind":"METHOD","properties":1032,"display_name":"fz","signature":{"kind":"ValueSignature","tpe":{"kind":"ConstantType","constant":{"kind":"FloatConstant","value":"0.0"}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Numbers.di.","language":"SCALA","kind":"METHOD","properties":1032,"display_name":"di","signature":{"kind":"ValueSignature","tpe":{"kind":"ConstantType","constant":{"kind":"DoubleConstant","value":"Infinity"}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Numbers.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Numbers","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"_empty_/Numbers."},"declarations":{"symlinks":["_empty_/Numbers.`<init>`().","_empty_/Numbers.dn.","_empty_/Numbers.fn.","_empty_/Numbers.dz.","_empty_/Numbers.fz.","_empty_/Numbers.di."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":1,"start_character":21,"end_line":1,"end_character":22},"symbol":"scala/Double#`/`(+6).","role":"REFERENCE"},
+    {"range":{"start_line":1,"start_character":12,"end_line":1,"end_character":14},"symbol":"_empty_/Numbers.dn.","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":22,"end_line":2,"end_character":23},"symbol":"scala/Float#`/`(+5).","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":12,"end_line":2,"end_character":14},"symbol":"_empty_/Numbers.fn.","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":12,"end_line":3,"end_character":14},"symbol":"_empty_/Numbers.dz.","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":12,"end_line":4,"end_character":14},"symbol":"_empty_/Numbers.fz.","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":21,"end_line":5,"end_character":22},"symbol":"scala/Double#`/`(+6).","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":12,"end_line":5,"end_character":14},"symbol":"_empty_/Numbers.di.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":7,"end_line":0,"end_character":14},"symbol":"_empty_/Numbers.","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

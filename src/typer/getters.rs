@@ -364,6 +364,13 @@ impl<'a> Worker<'a> {
         if tparams.is_empty() || !self.mentions_tparam_of(t, Some(tparams)) {
             return t;
         }
+        // A retained form first: what it is made over and its record's types, each occurrence its own approximation
+        // (a fresh variable each: no pass), the form over them.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.proto_wild_params_form(t, tparams, seen, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Param(p) if tparams.contains(&p) => {
                 let (lo, hi) = self.proto_wild_bounds(p, tparams, seen);
@@ -373,12 +380,13 @@ impl<'a> Worker<'a> {
                 if self.syms.tparam(p).arity > 0 {
                     self.tvars[v].set_origin(p);
                 }
-                if hi != ANY || lo != NOTHING {
+                let (top, bottom) = (self.canon(hi) == ANY, self.canon(lo) == NOTHING);
+                if !top || !bottom {
                     self.tvars[v].set_declared(lo, hi);
-                    if hi != ANY {
+                    if !top {
                         self.is_sub(ty, hi);
                     }
-                    if lo != NOTHING {
+                    if !bottom {
                         self.is_sub(lo, ty);
                     }
                 }
@@ -427,6 +435,15 @@ impl<'a> Worker<'a> {
                 })
             }
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn proto_wild_params_form(&mut self, t: TypeId, tparams: &[TParamId], seen: &[TParamId], under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let types = self.types.clone();
+        let nu = self.proto_wild_params(under, tparams, seen);
+        let nr = types.map_retention(r, &mut |x| self.proto_wild_params(x, tparams, seen));
+        types.form_over(t, under, r, nu, nr)
     }
 
     /// The bounds of the parameter `p`'s wildcard (`wildApproxBounds`): none where `p` is among

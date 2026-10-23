@@ -1920,7 +1920,7 @@ impl<'a> Worker<'a> {
             }
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;
-                if upper != ANY {
+                if self.canon(upper) != ANY {
                     self.receiver_classes(upper, out, depth + 1);
                 }
             }

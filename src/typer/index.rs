@@ -2682,7 +2682,7 @@ impl<'a> Worker<'a> {
             }
             Target::TParam(p) => {
                 let (name, upper) = (self.syms.tparam(p).name, self.syms.tparam(p).upper);
-                if upper == ANY {
+                if self.canon(upper) == ANY {
                     format!("type {}", self.name_str(name))
                 } else {
                     format!("type {} <: {}", self.name_str(name), self.show(upper))

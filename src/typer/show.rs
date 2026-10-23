@@ -126,11 +126,11 @@ impl<'a> Worker<'a> {
                 hi
             }
         };
-        if lo != NOTHING {
+        if self.canon(lo) != NOTHING {
             out.push_str(" >: ");
             self.show_into(lo, out, false);
         }
-        if hi != ANY {
+        if self.canon(hi) != ANY {
             out.push_str(" <: ");
             self.show_into(hi, out, false);
         }
@@ -168,11 +168,11 @@ impl<'a> Worker<'a> {
             Type::Wild => out.push('?'),
             Type::BoundedWild(lo, hi) => {
                 out.push('?');
-                if lo != NOTHING {
+                if self.canon(lo) != NOTHING {
                     out.push_str(" >: ");
                     self.show_into(lo, out, true);
                 }
-                if hi != ANY {
+                if self.canon(hi) != ANY {
                     out.push_str(" <: ");
                     self.show_into(hi, out, true);
                 }
@@ -419,7 +419,7 @@ impl<'a> Worker<'a> {
                         out.push_str("; ");
                     }
                     out.push_str("case ");
-                    if c.pattern == ANY {
+                    if self.canon(c.pattern) == ANY {
                         out.push('_');
                     } else {
                         self.show_into(c.pattern, out, false);
@@ -570,11 +570,11 @@ impl<'a> Worker<'a> {
             Refinement::Bounds(n, lo, hi) => {
                 out.push_str("type ");
                 out.push_str(self.interner.get(n));
-                if lo != NOTHING {
+                if self.canon(lo) != NOTHING {
                     out.push_str(" >: ");
                     self.show_into(lo, out, false);
                 }
-                if hi != ANY {
+                if self.canon(hi) != ANY {
                     out.push_str(" <: ");
                     self.show_into(hi, out, false);
                 }
@@ -600,11 +600,11 @@ impl<'a> Worker<'a> {
                             }
                             out.push_str(self.type_name_ref(self.syms.tparam(t).name));
                             let (lo, hi) = (types.next().unwrap_or(NOTHING), types.next().unwrap_or(ANY));
-                            if lo != NOTHING {
+                            if self.canon(lo) != NOTHING {
                                 out.push_str(" >: ");
                                 self.show_into(lo, out, false);
                             }
-                            if hi != ANY {
+                            if self.canon(hi) != ANY {
                                 out.push_str(" <: ");
                                 self.show_into(hi, out, false);
                             }

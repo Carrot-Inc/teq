@@ -1,0 +1,4 @@
+Retained.annotated: A @Ann
+Retained.phantom: Phantom[A]
+Retained.annotatedInt: Int @Ann
+Retained.phantomString: Phantom[String]
