@@ -568,6 +568,20 @@ code2=$?
 check "records: a baseline over a record, and a migration over unchanged inputs, are refused" "$work/records.log" eval '[ $code = 1 ] && [ $code2 = 1 ] &&
   grep -q "^FAIL p: compile: the migrate is refused: a migrate over the accepted record.s inputs" "$work/records.log" && git -C "$rec" diff --quiet &&
   [ ! -e "$rec/bench/p/errors.txt.proposed" ]'
+# A migration over unchanged inputs that moves an accepted error (the same message, one line lower) is admitted; one
+# that adds an error no lost item matches by its message is refused (a project of its own, m, so the record stays).
+mkdir -p "$rec/bench/m" && echo '{"commit": "c0ffee"}' > "$rec/bench/m/pin.json" && echo '{}' > "$rec/bench/m/generated.json"
+held "$work/t-ab" m --baseline --binary "teq 0.1.8 aaaaaaaaa" && commit_records "m: the baseline"
+held "$work/t-a3b" m --migrate "the error moved one line lower" && ratchet check HEAD
+code=$?
+moved_kind=$(sed -n "s/^kind //p" "$rec/bench/m/errors.txt")
+commit_records "m: the migration"
+held "$work/t-abc" m --migrate "nothing moved, c added"
+code2=$?
+check "records: a migration over unchanged inputs is admitted when it moves an error and refused when it adds one" "$work/records.log" eval '[ $code = 0 ] && [ "$moved_kind" = migrate ] &&
+  grep -q "modules/a/A.scala:3:15: " "$rec/bench/m/errors.txt" && ! grep -q "modules/a/A.scala:2:15: " "$rec/bench/m/errors.txt" && [ $code2 = 1 ] &&
+  grep -q "adds 1 item no lost item matches by its message" "$work/records.log"'
+git -C "$rec" checkout -q bench/m
 echo '{"target/teq/p/compile/src_managed": "1234"}' > "$rec/bench/p/generated.json"
 held "$work/t-b"
 code=$?

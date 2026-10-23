@@ -218,12 +218,21 @@ object Ratchet:
       case (Some(a), Some(c)) if a == c => Vector.empty
       case (Some(a), Some(c)) if a.provenance.inputs == c.provenance.inputs =>
         val out = Vector.newBuilder[String]
-        if c.provenance.kind != "record" then out += s"a ${c.provenance.kind} over the accepted record's inputs: a step of the record is a record (--record), its debt within the accepted debt"
+        val wider = Multiset.minus(c.debt, a.debt)
+        if c.provenance.kind == "migrate" && wider.nonEmpty then
+          // The compiler now places or prints an accepted error elsewhere: every item the head adds pairs with one it
+          // loses by the message (the position and the printed lines apart), and the debt does not grow.
+          if !evidence then out += "a migration without its evidence beside it"
+          val unmatched = Multiset.minus(wider.map(message), Multiset.minus(a.debt, c.debt).map(message))
+          if unmatched.nonEmpty then
+            out += s"a migration over the accepted record's inputs adds ${unmatched.size} ${if unmatched.size == 1 then "item" else "items"} no lost item matches by its message:"
+            unmatched.take(10).foreach(w => out += s"  + ${Records.escape(w)}")
+          if c.debt.size > a.debt.size then out += s"a migration over the accepted record's inputs grows the debt from ${a.debt.size} to ${c.debt.size}"
+        else if c.provenance.kind != "record" then out += s"a ${c.provenance.kind} over the accepted record's inputs: a step of the record is a record (--record), its debt within the accepted debt"
         if c.scope != a.scope then
           val (lost, added) = (a.scope.diff(c.scope), c.scope.diff(a.scope))
           out += s"the scope is not the accepted one:${if lost.nonEmpty then s" ${lost.size} left out (${lost.take(3).mkString(", ")})" else ""}${if added.nonEmpty then s" ${added.size} added (${added.take(3).mkString(", ")})" else ""}"
-        val wider = Multiset.minus(c.debt, a.debt)
-        if wider.nonEmpty then
+        if (c.provenance.kind != "migrate" || wider.isEmpty) && wider.nonEmpty then
           out += s"the record widens the accepted one by ${wider.size}:"
           wider.take(10).foreach(w => out += s"  + ${Records.escape(w)}")
         out.result()
@@ -231,6 +240,10 @@ object Ratchet:
         if c.provenance.kind != "migrate" then Vector(s"the inputs are not the accepted record's: a ${c.provenance.kind} cannot change them, a migration (--migrate <reason>) does")
         else if !evidence then Vector("a migration without its evidence beside it")
         else Vector.empty
+
+  // An item's message: its first line without the source position, the key and the printed lines apart.
+  def message(item: String): String =
+    item.takeWhile(_ != '\n').replaceAll("""\S+:\d+:\d+:\s*""", "").trim
 
   // A run's observation against the head's record.
   def judge(record: Record, seen: Observation): Verdict =
