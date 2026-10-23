@@ -1,0 +1,2 @@
+Meet.distributed: Invariant[(Int | String) & (Int | Boolean)]
+Meet.distribution: Invariant[Int | String & Boolean]

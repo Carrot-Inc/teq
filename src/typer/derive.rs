@@ -601,10 +601,10 @@ impl<'a> Worker<'a> {
         });
         let tuple = self.b.tuple_trait;
         rs.iter().any(|&r| match self.types.refinement(r) {
-            Refinement::Alias(n, t) if n == names.mono => Some(t) != mirrored,
+            Refinement::Alias(n, t) if n == names.mono => Some(self.canon(t)) != mirrored.map(|m| self.canon(m)),
             Refinement::Alias(n, _) => n == names.elem_types || n == names.elem_labels,
             Refinement::Bounds(n, lo, hi) if n == names.elem_types || n == names.elem_labels => {
-                lo != NOTHING || !matches!(self.types.get(hi), Type::Class(c, _) if Some(c) == tuple)
+                self.canon(lo) != NOTHING || !matches!(self.types.get(hi), Type::Class(c, _) if Some(c) == tuple)
             }
             Refinement::Bounds(..) => false,
             // A term member no mirror has.
@@ -639,10 +639,10 @@ impl<'a> Worker<'a> {
                 match self.types.refinement(r) {
                     Refinement::Alias(n, t) if n == name => alias = Some(t),
                     Refinement::Bounds(n, l, h) if n == name => {
-                        if l != NOTHING {
+                        if self.canon(l) != NOTHING {
                             lo = if lo == NOTHING { l } else { self.types.union(lo, l) };
                         }
-                        if h != ANY {
+                        if self.canon(h) != ANY {
                             hi = if hi == ANY { h } else { self.types.inter(hi, h) };
                         }
                     }
@@ -1081,7 +1081,12 @@ impl<'a> Worker<'a> {
             // Only the class over the lambda's own parameters, as `[X] =>> Tree[X]` is `Tree`;
             // `[X] =>> List[Tree[X]]` is no class and has no mirror.
             Type::Lambda(ps, body) => match self.types.get(self.types.strip_nested(body)) {
-                Type::Class(c, args) if self.types.items(args) == self.types.items(ps) => Some((c, body, self.types.items(ps).to_vec())),
+                Type::Class(c, args)
+                    if self.types.items(args).len() == self.types.items(ps).len()
+                        && self.types.items(args).iter().zip(self.types.items(ps)).all(|(&a, &p)| self.same_type(a, p)) =>
+                {
+                    Some((c, body, self.types.items(ps).to_vec()))
+                }
                 _ => None,
             },
             _ => None,

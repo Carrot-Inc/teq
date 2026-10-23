@@ -32,8 +32,8 @@ fn string_from_bytes(it: &mut Interp, a: &[Value]) -> Option<R> {
         let Some(sig) = it.syms().sym(s).sig.clone() else { return false };
         let Some(params) = sig.clauses.first().map(|c| &c.params) else { return false };
         let over_bytes = params.len() == n
-            && matches!(it.typer.types.get(params[0].ty), crate::types::Type::Class(c, args) if c == array && it.typer.types.items(args).first() == Some(&t_byte));
-        over_bytes && (n == 1 || (params[n - 1].ty == t_string) == name_last)
+            && matches!(it.typer.types.get(params[0].ty), crate::types::Type::Class(c, args) if c == array && it.typer.types.items(args).first().map(|&x| it.typer.types.canonical(x)) == Some(t_byte));
+        over_bytes && (n == 1 || (it.typer.types.canonical(params[n - 1].ty) == t_string) == name_last)
     })?;
     Some(it.invoke(a[0].clone(), sym, a[1..].to_vec()))
 }

@@ -1,0 +1,25 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "nested-client/Client.scala",
+  "text": "",
+  "md5": "B23B8A3D40595CC85F476DB6B59778D2",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"nestedann/Client.fromOuter.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"fromOuter","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"nestedann/Box#","type_arguments":[{"kind":"AnnotatedType","annotations":[{"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"nestedann/Outer#Ann#","type_arguments":[]}}],"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"nestedann/Client.fromLib.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"fromLib","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"nestedann/Box#","type_arguments":[{"kind":"AnnotatedType","annotations":[{"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"nestedann/Outer#Ann#","type_arguments":[]}}],"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"nestedann/Client.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Client","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"nestedann/Client."},"declarations":{"symlinks":["nestedann/Client.`<init>`().","nestedann/Client.fromOuter.","nestedann/Client.fromLib."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":18,"end_line":2,"end_character":21},"symbol":"nestedann/Lib.","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":22,"end_line":2,"end_character":27},"symbol":"nestedann/Lib.outer.","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":28,"end_line":2,"end_character":37},"symbol":"nestedann/Outer#annotated().","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":15},"symbol":"nestedann/Client.fromOuter.","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":16,"end_line":3,"end_character":19},"symbol":"nestedann/Lib.","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":20,"end_line":3,"end_character":29},"symbol":"nestedann/Lib.annotated().","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":6,"end_line":3,"end_character":13},"symbol":"nestedann/Client.fromLib.","role":"DEFINITION"},
+    {"range":{"start_line":1,"start_character":7,"end_line":1,"end_character":13},"symbol":"nestedann/Client.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":17},"symbol":"nestedann/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

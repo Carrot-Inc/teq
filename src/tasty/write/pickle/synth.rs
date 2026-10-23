@@ -887,7 +887,7 @@ impl<'w, 'a> P<'w, 'a> {
                 p.int_literal(i as i32);
                 p.buf.end_length(pa);
             };
-            if *t == ANY {
+            if self.w.types.underlying(*t) == ANY {
                 element(self);
             } else {
                 // .$asInstanceOf$[T]

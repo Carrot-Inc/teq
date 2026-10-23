@@ -676,7 +676,7 @@ impl<'a> Worker<'a> {
             SelectionResult::Selected
         } else {
             match f.expected {
-                Some(t) if t != ANY && t != self.b.t_unit && !matches!(self.types.get(t), Type::Var(_)) => SelectionResult::Type(t),
+                Some(t) if self.canon(t) != ANY && self.canon(t) != self.b.t_unit && !matches!(self.types.get(t), Type::Var(_)) => SelectionResult::Type(t),
                 _ => SelectionResult::Ignored,
             }
         };
@@ -724,7 +724,7 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
         type_it: fn(&mut Self, ExprId, Option<TypeId>) -> (TExprId, TypeId),
     ) -> (TExprId, TypeId) {
-        let key = (self.env.file, e, expected);
+        let key = (self.env.file, e, expected.map(|t| self.canon(t)));
         match self.inferred_outcomes.get(&key) {
             Some(true) => return self.type_dropping(e, list, expected, type_it),
             Some(false) => return type_it(self, e, expected),
@@ -787,7 +787,7 @@ impl<'a> Worker<'a> {
             return false;
         }
         match expected {
-            Some(exp) if exp != self.b.t_unit && exp != ANY => {
+            Some(exp) if self.canon(exp) != self.b.t_unit && self.canon(exp) != ANY => {
                 let mark = self.snapshot();
                 let conforms = self.is_sub(ty, exp);
                 if !conforms {
@@ -1914,10 +1914,10 @@ impl<'a> Worker<'a> {
         let ty = match (self.types.get(recv_ty), self.types.get(r.1)) {
             (Type::Nested(p, _), Type::Class(k, _)) if k != companion && self.syms.class(companion).kind == ClassKind::EnumCase => {
                 let case_ty = self.prog.type_of(r.0).filter(|&t| self.class_of(t) == Some(companion)).unwrap_or_else(|| self.types.class(companion, &[]));
-                let precise = self.nested_type(p, case_ty);
+                let precise = self.nested_type(p, self.canon_head(case_ty));
                 self.base_type(precise, k).unwrap_or(r.1)
             }
-            (Type::Nested(p, _), Type::Class(..)) => self.nested_type(p, r.1),
+            (Type::Nested(p, _), Type::Class(..)) => self.nested_type(p, self.canon_head(r.1)),
             _ => r.1,
         };
         (r.0, ty)
@@ -2299,7 +2299,7 @@ impl<'a> Worker<'a> {
             _ => None,
         };
         let mut seen = |m: SymId, owner_ty: Option<TypeId>| {
-            let subst = owner_ty.map_or_else(Vec::new, |t| self.owner_subst(t));
+            let subst = owner_ty.map_or_else(Vec::new, |t| self.owner_subst(self.canon_head(t)));
             let (params, _) = self.pickled_signature_seen(m, "", &subst)?;
             Some(params.into_iter().map(|p| match p {
                 PickledSigParam::Types(n) => format!("#{n}"),
@@ -3130,6 +3130,11 @@ impl<'a> Worker<'a> {
         if !self.types.has_paths(t) {
             return false;
         }
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.mentions_this_of_form(t, k, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::This(c) => c == k,
             Type::Select(p, _) | Type::Member(p, _) | Type::Lambda(_, p) => self.mentions_this_of(p, k),
@@ -3150,6 +3155,12 @@ impl<'a> Worker<'a> {
             }
             _ => false,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn mentions_this_of_form(&self, t: TypeId, k: ClassId, under: TypeId, r: crate::types::RetainId) -> bool {
+        self.types.ask_form_once(&[super::FORM_MENTIONS_THIS, k.0], t, under, r, false, &mut |x| self.mentions_this_of(x, k))
     }
 
     /// The type of `member` seen from `prefix` of class `c`. A member declared in `c` itself
@@ -4246,7 +4257,7 @@ impl<'a> Worker<'a> {
                     }
                     let constant = self.argument_constant(a);
                     let ty = self.prog.type_of(a);
-                    let unit = constant.is_none() && ty.map_or(false, |t| self.deref(t) == self.b.t_unit);
+                    let unit = constant.is_none() && ty.map_or(false, |t| self.deref_canonical(t) == self.b.t_unit);
                     if !((constant.is_some() || unit) && purity.at_least(Purity::PURE)) {
                         let bound_ty = match constant {
                             Some(v) => self.types.lit(v),
@@ -4895,7 +4906,7 @@ impl<'a> Worker<'a> {
                 // A constructor's arguments are an applied type tree's (`New(AppliedTypeTree)`, `typedAppliedTypeTree`'s
                 // `preCheckKinds`: `hasSameKindAs`); a method's are checked by their arity (`checkBounds` at PostTyper,
                 // `tests/pending-cases/method_type_arg_kind.scala`).
-                let wrong = if ctor.is_some() { !self.pre_check_kind(var, tp) } else { var != NOTHING && self.type_arity(var) != self.param_arity(tp) };
+                let wrong = if ctor.is_some() { !self.pre_check_kind(var, tp) } else { self.canon(var) != NOTHING && self.type_arity(var) != self.param_arity(tp) };
                 if wrong && !self.is_body_file(self.env.file) {
                     let msg = self.kind_mismatch(var, tp);
                     self.error(span, msg);
@@ -4905,9 +4916,9 @@ impl<'a> Worker<'a> {
             // The variable keeps the bounds its parameter declares, which `instDirection` tells
             // the constraint's apart from.
             if let Type::Var(v) = self.types.get(var) {
-                if upper != ANY || lower != NOTHING {
-                    let u = if upper != ANY { self.types.subst(upper, &subst) } else { ANY };
-                    let l = if lower != NOTHING { self.types.subst(lower, &subst) } else { NOTHING };
+                if self.canon(upper) != ANY || self.canon(lower) != NOTHING {
+                    let u = if self.canon(upper) != ANY { self.types.subst(upper, &subst) } else { ANY };
+                    let l = if self.canon(lower) != NOTHING { self.types.subst(lower, &subst) } else { NOTHING };
                     self.tvars[v].set_declared(l, u);
                 }
             }
@@ -4994,7 +5005,7 @@ impl<'a> Worker<'a> {
         // in `Tree[A]`), as dotty constrains a result that is not dependent (`isResultDependent`).
         let names_param = self.types.has_paths(sig.ret) && {
             let params: Vec<SymId> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
-            self.types.names_term(sig.ret, &params)
+            self.types.names_term_mapped(sig.ret, &params)
         };
         let constrain_by_expected = explicit_lists == normal_clauses && !names_param;
         if constrain_by_expected && explicit_lists <= 1 {
@@ -5701,7 +5712,7 @@ impl<'a> Worker<'a> {
         } else {
             (te, ty) = self.widen_lambda_result(te, ty, eta_ret_expected, span);
             if let (Some(ret), true, 1) = (eta_ret_expected, eta_sam.is_some(), eta.len()) {
-                if ret != self.b.t_unit && eta_sam_mismatch.is_none() && !self.fits_lambda_result(ty, ret) {
+                if self.canon(ret) != self.b.t_unit && eta_sam_mismatch.is_none() && !self.fits_lambda_result(ty, ret) {
                     eta_sam_mismatch = Some((ty, ret));
                 }
             }
@@ -5991,7 +6002,7 @@ impl<'a> Worker<'a> {
                 (Some(f), Some(t)) if super::prims::widens(f, t) => super::prims::convert_ops(f, t),
                 _ => &[],
             };
-            if ops.is_empty() && !self.jvm && self.expr_marks.get(&te).is_some_and(|m| m & super::MARK_ERASED_SOLVED != 0) && self.deref(actual) == self.deref(target) {
+            if ops.is_empty() && !self.jvm && self.expr_marks.get(&te).is_some_and(|m| m & super::MARK_ERASED_SOLVED != 0) && self.deref_canonical(actual) == self.deref(target) {
                 // An erased result the parameter is solved to as it stands (`List(m.get(k))`, a
                 // lambda's `x => m.get(x)`): unboxed in place, as `unbox_erased` unboxes it where
                 // the primitive is expected as written.
@@ -6180,7 +6191,7 @@ impl<'a> Worker<'a> {
         let is_print = matches!(info.name, names::PRINTLN | names::PRINT)
             && info.owner == Owner::Package(self.b.scala_pkg);
         let ty = self.last_arg_types[0];
-        let printed = self.deref(ty);
+        let printed = self.deref_canonical(ty);
         if is_print && matches!(self.is_numeric(printed), Some(super::prims::R_DOUBLE | super::prims::R_FLOAT)) {
             args[0] = self.prog.rendering(args[0], StrKind::Double);
         }
@@ -6293,7 +6304,7 @@ impl<'a> Worker<'a> {
         // to the primitive where the bound erases to one, else to `Object`.
         let upper = match self.types.get(ret) {
             Type::Param(p) => self.syms.tparam(p).upper,
-            Type::Member(..) => self.member_bounds(ret).1,
+            Type::Member(..) => self.member_bounds(self.canon_head(ret)).1,
             _ => return false,
         };
         if self.erased_primitive(upper).is_some() {
@@ -6539,7 +6550,7 @@ impl<'a> Worker<'a> {
             return te;
         }
         let tmp = self.indexed_local("h", self.hoisted.len() as u32, ty, span);
-        if self.capturing() && ty == ANY {
+        if self.capturing() && self.canon(ty) == ANY {
             if let Some(own) = self.prog.type_of(te) {
                 self.capture_local(tmp, |l| l.ty = Some(own));
             }
@@ -7095,7 +7106,7 @@ impl<'a> Worker<'a> {
         let t = self.deref(pty);
         let Type::Param(p) = self.types.get(t) else { return pty };
         let info = self.syms.tparam(p);
-        if info.name == crate::names::WILDCARD && info.lower != NOTHING { info.lower } else { pty }
+        if info.name == crate::names::WILDCARD && self.canon(info.lower) != NOTHING { info.lower } else { pty }
     }
 
     /// An argument of a function's by-name parameter `=> A`, passed unevaluated.
@@ -7573,7 +7584,7 @@ impl<'a> Worker<'a> {
 
     /// `depth` bounds the variables followed, which may name each other.
     fn bounded_by_singleton_in(&mut self, u: TypeId, depth: u32) -> bool {
-        let u = self.deref(u);
+        let u = self.deref_canonical(u);
         match self.types.get(u) {
             Type::Inter(a, b) => self.bounded_by_singleton_in(a, depth) || self.bounded_by_singleton_in(b, depth),
             Type::Var(v) if depth > 0 => {
@@ -8449,7 +8460,7 @@ impl<'a> Worker<'a> {
                         let ty = match self.types.get(ty) {
                             Type::Class(k, _) if k == nested && self.is_inner_class(nested) => {
                                 let prefix = self.path_of(recv).unwrap_or(recv_ty);
-                                self.nested_type(prefix, ty)
+                                self.nested_type(prefix, self.canon_head(ty))
                             }
                             _ => self.as_seen_from(ty, recv_ty, c),
                         };
@@ -9320,7 +9331,7 @@ impl<'a> Worker<'a> {
             return false;
         }
         let receiver = info.sig.as_ref().and_then(|sig| sig.clauses.first()).and_then(|c| c.params.first()).map(|p| p.ty);
-        receiver == Some(self.b.t_string)
+        receiver.map(|t| self.canon(t)) == Some(self.b.t_string)
     }
 
     /// A method of Java's, read from a class file or standing for one in a `java.*` package of the
@@ -11500,8 +11511,8 @@ impl<'a> Worker<'a> {
         self.diags.items[diags..].iter().enumerate().any(|(k, d)| {
             let mismatch = required.iter().find(|&&(i, _)| i == diags + k).map(|&(_, r)| r);
             let inside = d.span != at && d.span.start >= at.start && d.span.end <= at.end;
-            let placed_at_tree = d.span == at && mismatch.is_some_and(|r| expected.is_some_and(|x| r != x));
-            !d.is_warning && mismatch != Some(formal) && (inside || placed_at_tree) && (!erroneous || mismatch.is_some())
+            let placed_at_tree = d.span == at && mismatch.is_some_and(|r| expected.is_some_and(|x| !self.same_type(r, x)));
+            !d.is_warning && mismatch.map(|r| self.canon(r)) != Some(self.canon(formal)) && (inside || placed_at_tree) && (!erroneous || mismatch.is_some())
         })
     }
 
@@ -11606,7 +11617,7 @@ impl<'a> Worker<'a> {
     /// type that has it (`viewExists`), the std's extensions of a builtin being Predef's views. An
     /// extension method counts in neither.
     pub(super) fn selection_matches(&mut self, t: TypeId, name: Name, views: bool) -> bool {
-        let t = self.deref(t);
+        let t = self.deref_canonical(t);
         if matches!(self.types.get(t), Type::Var(_)) || t == NOTHING {
             return true;
         }
@@ -11732,7 +11743,7 @@ impl<'a> Worker<'a> {
     /// explicit clause, a value of a function type by its `apply`, another value by its `apply`
     /// members, a builtin operator by the operand types its overloads take.
     fn selection_matched(&mut self, t: TypeId, i: usize, depth: u8, views: bool) -> bool {
-        let t = self.deref(t);
+        let t = self.deref_canonical(t);
         if matches!(self.types.get(t), Type::Var(_)) || t == NOTHING {
             return true;
         }
@@ -12074,7 +12085,7 @@ impl<'a> Worker<'a> {
         use super::prims::{R_BYTE, R_CHAR, R_DOUBLE, R_INT, R_LONG, R_SHORT};
         let own = self.dealias(t);
         let own = self.operator_type(own);
-        let own = self.dealias(own);
+        let own = self.dealias_canonical(own);
         let (b_bool, b_string) = (self.b.t_boolean, self.b.t_string);
         let unary = |r: TypeId| vec![Self::sig_alt(None, false, Some(r))];
         let binary = |p: TypeId, r: TypeId| Self::sig_alt(Some(vec![Some(p)]), false, Some(r));
@@ -12346,7 +12357,7 @@ impl<'a> Worker<'a> {
             return true;
         }
         let Some(exp) = expected else { return false };
-        let exp = self.deref(exp);
+        let exp = self.deref_canonical(exp);
         if ty == ERROR || exp == ANY || exp == self.b.t_unit {
             return false;
         }

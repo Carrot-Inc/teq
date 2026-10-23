@@ -1,0 +1,27 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "javaorder/UseHolder.scala",
+  "text": "",
+  "md5": "0A59F64BB51F7220190C64424FFB5C24",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"javaorder/UseHolder.h.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"h","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"javaorder/Holder#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"javaorder/UseHolder.n.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"n","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"javaorder/UseHolder.m.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"m","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"javaorder/UseHolder.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"UseHolder","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"javaorder/UseHolder."},"declarations":{"symlinks":["javaorder/UseHolder.`<init>`().","javaorder/UseHolder.h.","javaorder/UseHolder.n.","javaorder/UseHolder.m."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":3,"start_character":14,"end_line":3,"end_character":20},"symbol":"javaorder/Holder#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":6,"end_line":3,"end_character":7},"symbol":"javaorder/UseHolder.h.","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":10,"end_line":4,"end_character":11},"symbol":"javaorder/UseHolder.h.","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":12,"end_line":4,"end_character":16},"symbol":"javaorder/Holder#size().","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":6,"end_line":4,"end_character":7},"symbol":"javaorder/UseHolder.n.","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":10,"end_line":5,"end_character":11},"symbol":"javaorder/UseHolder.h.","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":12,"end_line":5,"end_character":16},"symbol":"javaorder/Holder#size.","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":6,"end_line":5,"end_character":7},"symbol":"javaorder/UseHolder.m.","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":7,"end_line":2,"end_character":16},"symbol":"javaorder/UseHolder.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":17},"symbol":"javaorder/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

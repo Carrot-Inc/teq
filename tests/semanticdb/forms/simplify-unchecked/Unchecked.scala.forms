@@ -1,0 +1,4 @@
+Unchecked.source: Box[Int @uncheckedVariance]
+Unchecked.result: Box[Int]
+Unchecked.sourceWithSet: Box[Int & String @uncheckedVariance]
+Unchecked.resultWithSet: Box[Int & String]

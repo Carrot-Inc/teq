@@ -440,6 +440,56 @@ object Verb:
       val rx = fix(x)
       Sh("chmod", "u+w", dir.toString).check(false).run()
       expect("write failure", rx.status == 2 && rx.errAll().contains("cannot write") && text(x, "core/src/core/Core.scala") == coreSource, s"exit ${rx.status}: ${rx.errAll()}")
+    // The SemanticDB service (tests/semanticdb/TABLE.md, ruling 1): a semantic rule's questions answered from a typing of
+    // the round's own, made at the round's first question; round two's from its own typing of round one's edits; a run
+    // whose semantic rules ask nothing types nothing for it, and one with none starts no service; an answer the service
+    // refuses or fails is the asking rule's failure, nothing written. The probe reads the document's header: its MD5,
+    // the round's text's, and its uri, the path from where the run works.
+    val probe = "package teq.fix.probe\nimport teq.fix.*\nfinal class Probe extends SemanticRule(\"Probe\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val shown = Native.docSymbols(doc.gen).map(b => if b >= 32 && b < 127 then b.toChar else ' ').mkString\n    val md5 = \"[0-9A-F]{32}\".r.findFirstIn(shown).getOrElse(\"none\")\n    Patch.lint(Diagnostic(\"\", s\"semanticdb $md5 ${shown.contains(doc.path)}\", doc.tree.pos))\n"
+    def md5(s: String): String = java.security.MessageDigest.getInstance("MD5").digest(s.getBytes("UTF-8")).map(b => f"${b & 0xff}%02X").mkString
+    def recorded(dir: Path, args: Seq[String], env: (String, String)*): (Sh.Result, Vector[String]) =
+      val record = dir.resolve("record.txt")
+      val res = Sh((Vector(teq, "fix") ++ args)*).in(dir).withEnv((("TEQ_FIX_RECORD" -> record.toString) +: env)*).timeout(300).check(false).run()
+      (res, if Files.exists(record) then read(record).linesIterator.toVector else Vector())
+    def served(rec: Vector[String]): Vector[(String, String, String)] =
+      rec.filter(_.startsWith("serve ")).map(Parallel.fieldsOf).map(f => (f.getOrElse("round", "?"), f.getOrElse("typed", "?"), f.getOrElse("queries", "?")))
+    val plain = "package core\nobject Core { val x = 1 }\n"
+    val sv = build(work, "service", "core/src/core/Core.scala" -> plain, "rules/Probe.scala" -> probe, ".scalafix.conf" -> "rules = [\"file:rules/Probe.scala\"]\n")
+    val (rsv, svRecord) = recorded(sv, Seq("core"))
+    expect("service", rsv.status == 1 && rsv.errAll().contains(s"[Probe]: semanticdb ${md5(plain)} true") && served(svRecord) == Vector(("1", "1", "1")) && text(sv, "core/src/core/Core.scala") == plain,
+      s"exit ${rsv.status}: ${rsv.errAll()}\n${svRecord.filter(l => l.startsWith("serve") || l.startsWith("done")).mkString("\n")}")
+    val listed = "package core\nobject Core { val x: List[Int] = List() }\n"
+    val rounds = Seq("core/src/core/Core.scala" -> listed, "rules/Probe.scala" -> probe, ".scalafix.conf" -> "rules = [EmptyCollectionsUnified, \"file:rules/Probe.scala\"]\n")
+    val sr = build(work, "service-rounds", rounds*)
+    val (rsr, srRecord) = recorded(sr, Seq("core"))
+    val edited = text(sr, "core/src/core/Core.scala")
+    expect("service/rounds", rsr.status == 1 && edited != listed && rsr.errAll().contains(s"[Probe]: semanticdb ${md5(edited)} true") && served(srRecord) == Vector(("1", "1", "1"), ("2", "1", "1")),
+      s"exit ${rsr.status}: ${rsr.errAll()}\n${srRecord.filter(_.startsWith("serve")).mkString("\n")}")
+    val idle = build(work, "service-idle", ".scalafix.conf" -> "rules = [NoUnusedImports]\n")
+    val (ridle, idleRecord) = recorded(idle, Seq("core"))
+    expect("service/idle", ridle.status == 0 && served(idleRecord).nonEmpty && served(idleRecord).forall((_, typed, queries) => typed == "0" && queries == "0") && text(idle, "core/src/core/Core.scala") == coreFixed, s"exit ${ridle.status}: ${ridle.errAll()}\n${idleRecord.filter(_.startsWith("serve")).mkString("\n")}")
+    val none = build(work, "service-none", ".scalafix.conf" -> "rules = [DisableSyntax]\nDisableSyntax.noVars = true\n")
+    val (rnone, noneRecord) = recorded(none, Seq())
+    expect("service/none", rnone.status == 1 && served(noneRecord).isEmpty, s"exit ${rnone.status}: ${noneRecord.filter(_.startsWith("serve")).mkString("\n")}")
+    val asker = "package teq.fix.probe\nimport teq.fix.*\nfinal class Ask extends SemanticRule(\"Ask\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    Native.symbolsAt(doc.gen, 0, 7)\n    Patch.empty\n"
+    val sa = build(work, "service-symbols", "core/src/core/Core.scala" -> plain, "rules/Ask.scala" -> asker, ".scalafix.conf" -> "rules = [\"file:rules/Ask.scala\"]\n")
+    val rsa = fix(sa, "core")
+    expect("service/symbols refused", rsa.status == 2 && rsa.errAll().contains("the rule Ask failed") && rsa.errAll().contains("not extracted yet"), s"exit ${rsa.status}: ${rsa.errAll()}")
+    // The round's texts (the pass over c14fd75e1, Swap.scala): a file written between the document's dispatch and its
+    // first question, its own or a dependency's the job does not edit, leaves the service's typing as the round read
+    // the program: the answer's MD5 the round's text's, a dependency broken on the disk no failure.
+    val swap = "package teq.fix.probe\nimport teq.fix.*\nimport java.nio.file.{Files, Paths}\nfinal class Swap extends SemanticRule(\"Swap\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val old = doc.input.text\n    val path = Paths.get(doc.path)\n    Files.writeString(path, old.replace(\"= 1\", \"= 2\"))\n    try\n      val shown = Native.docSymbols(doc.gen).map(b => if b >= 32 && b < 127 then b.toChar else ' ').mkString\n      Patch.lint(Diagnostic(\"\", \"semantic-md5=\" + \"[0-9A-F]{32}\".r.findFirstIn(shown).getOrElse(\"none\"), doc.tree.pos))\n    finally Files.writeString(path, old)\n"
+    val ss = build(work, "service-snapshot", "core/src/core/Core.scala" -> plain, "rules/Swap.scala" -> swap, ".scalafix.conf" -> "rules = [\"file:rules/Swap.scala\"]\n")
+    val rss = fix(ss, "core")
+    expect("service/snapshot", rss.status == 1 && rss.errAll().contains(s"semantic-md5=${md5(plain)}") && text(ss, "core/src/core/Core.scala") == plain, s"exit ${rss.status}: ${rss.errAll()}")
+    val breaker = "package teq.fix.probe\nimport teq.fix.*\nimport java.nio.file.{Files, Paths}\nfinal class Break extends SemanticRule(\"Break\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val core = Paths.get(\"core/src/core/Core.scala\")\n    val old = Files.readString(core)\n    Files.writeString(core, \"package core\\nobject Broken { val y: Int = \\\"no\\\" }\\n\")\n    try\n      Native.docSymbols(doc.gen)\n      Patch.lint(Diagnostic(\"\", \"answered\", doc.tree.pos))\n    finally Files.writeString(core, old)\n"
+    val sb = build(work, "service-snapshot-dependency", "core/src/core/Core.scala" -> plain, "rules/Break.scala" -> breaker, ".scalafix.conf" -> "rules = [\"file:rules/Break.scala\"]\n")
+    val rsb = fix(sb, "app")
+    expect("service/snapshot-dependency", rsb.status == 1 && rsb.errAll().contains("[Break]: answered") && text(sb, "core/src/core/Core.scala") == plain, s"exit ${rsb.status}: ${rsb.errAll()}")
+    val sf = build(work, "service-failure", rounds*)
+    val (rsf, _) = recorded(sf, Seq("core"), "TEQ_FIX_PLANT" -> "query-failure")
+    expect("service/failure", rsf.status == 2 && rsf.errAll().contains("the rule Probe failed") && rsf.errAll().contains("the extraction failed") && text(sf, "core/src/core/Core.scala") == listed,
+      s"exit ${rsf.status}: ${rsf.errAll()}")
     (pass, fail)
 
 /** The rules' phase over several workers (docs/FIX.md, "The run"): a generated corpus every shipped rule reports on and

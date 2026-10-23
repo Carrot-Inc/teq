@@ -1,0 +1,18 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "example-dir/FileInDir.scala",
+  "text": "",
+  "md5": "082596E984D401F60BB421DEFF780F31",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"example/FileInDir#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"example/FileInDir#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/FileInDir#","language":"SCALA","kind":"CLASS","properties":0,"display_name":"FileInDir","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"example/FileInDir#","type_arguments":[]},"declarations":{"symlinks":["example/FileInDir#`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":0,"end_line":2,"end_character":0},"symbol":"example/FileInDir#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":15},"symbol":"example/FileInDir#","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":15},"symbol":"example/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

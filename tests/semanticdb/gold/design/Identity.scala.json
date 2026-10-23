@@ -1,0 +1,44 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Identity.scala",
+  "text": "",
+  "md5": "F73B681858363733D3A7E3F4483FC491",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"identity/Original.f().(x)","language":"SCALA","kind":"PARAMETER","properties":0,"display_name":"x","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"identity/Original.f().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"f","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":["identity/Original.f().(x)"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"identity/Original.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Original","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"identity/Original."},"declarations":{"symlinks":["identity/Original.`<init>`().","identity/Original.f()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"identity/Forward.f().(x)","language":"SCALA","kind":"PARAMETER","properties":0,"display_name":"x","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"identity/Forward.f().","language":"SCALA","kind":"METHOD","properties":8,"display_name":"f","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":["identity/Forward.f().(x)"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"identity/Forward.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Forward","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"identity/Forward."},"declarations":{"symlinks":["identity/Forward.`<init>`().","identity/Forward.f()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"identity/Cash.cash$.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"cash","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Option#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"identity/Cash.use.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"use","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"identity/Cash.result.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"result","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"identity/Cash.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Cash","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"identity/Cash."},"declarations":{"symlinks":["identity/Cash.`<init>`().","identity/Cash.cash$.","identity/Cash.use.","identity/Cash.result."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":11,"end_line":2,"end_character":14},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":8,"end_line":2,"end_character":9},"symbol":"identity/Original.f().(x)","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":17,"end_line":2,"end_character":20},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":23,"end_line":2,"end_character":24},"symbol":"identity/Original.f().(x)","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":7},"symbol":"identity/Original.f().","role":"DEFINITION"},
+    {"range":{"start_line":1,"start_character":7,"end_line":1,"end_character":15},"symbol":"identity/Original.","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":9,"end_line":4,"end_character":17},"symbol":"identity/Original.","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":7,"end_line":3,"end_character":14},"symbol":"identity/Forward.","role":"DEFINITION"},
+    {"range":{"start_line":6,"start_character":14,"end_line":6,"end_character":20},"symbol":"scala/Option.","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":6,"end_line":6,"end_character":10},"symbol":"identity/Cash.cash$.","role":"DEFINITION"},
+    {"range":{"start_line":7,"start_character":12,"end_line":7,"end_character":17},"symbol":"identity/Cash.cash$.","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":18,"end_line":7,"end_character":21},"symbol":"scala/Option#get().","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":6,"end_line":7,"end_character":9},"symbol":"identity/Cash.use.","role":"DEFINITION"},
+    {"range":{"start_line":8,"start_character":15,"end_line":8,"end_character":22},"symbol":"identity/Forward.","role":"REFERENCE"},
+    {"range":{"start_line":8,"start_character":23,"end_line":8,"end_character":24},"symbol":"identity/Forward.f().","role":"REFERENCE"},
+    {"range":{"start_line":8,"start_character":6,"end_line":8,"end_character":12},"symbol":"identity/Cash.result.","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":7,"end_line":5,"end_character":11},"symbol":"identity/Cash.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":16},"symbol":"identity/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": [
+    {"range":{"start_line":6,"start_character":14,"end_line":6,"end_character":20},"tree":{"kind":"TypeApplyTree","function":{"kind":"SelectTree","qualifier":{"kind":"OriginalTree","range":{"start_line":6,"start_character":14,"end_line":6,"end_character":20}},"id":{"symbol":"scala/Option.apply()."}},"type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}]}},
+    {"range":{"start_line":6,"start_character":14,"end_line":6,"end_character":23},"tree":{"kind":"ApplyTree","function":{"kind":"TypeApplyTree","function":{"kind":"SelectTree","qualifier":{"kind":"IdTree","symbol":"scala/Option."},"id":{"symbol":"scala/Option.apply()."}},"type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}]},"arguments":[{"kind":"OriginalTree","range":{"start_line":6,"start_character":14,"end_line":6,"end_character":23}}],"properties":0}}
+  ]
+}

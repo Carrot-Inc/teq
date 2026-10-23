@@ -1,0 +1,18 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Objects.scala",
+  "text": "",
+  "md5": "BDD99463C0CB109A8A38D1457EBC082E",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"objects/X.Y.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Y","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"objects/X.Y."},"declarations":{"symlinks":["objects/X.Y.`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"objects/X.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"X","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"objects/X."},"declarations":{"symlinks":["objects/X.`<init>`().","objects/X.Y.","objects/X.Y."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":3,"start_character":9,"end_line":3,"end_character":10},"symbol":"objects/X.Y.","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":7,"end_line":2,"end_character":8},"symbol":"objects/X.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":15},"symbol":"objects/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

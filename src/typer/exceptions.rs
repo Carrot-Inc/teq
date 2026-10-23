@@ -100,7 +100,7 @@ impl<'a> Worker<'a> {
                 let mut acc = NOTHING;
                 for &(_, t) in &branches {
                     let t = self.solve_bounded_in(t);
-                    acc = if acc == NOTHING { t } else { self.lub(acc, t) };
+                    acc = if self.canon(acc) == NOTHING { t } else { self.lub(acc, t) };
                 }
                 self.solve_in(acc)
             }
@@ -220,7 +220,7 @@ impl<'a> Worker<'a> {
             }
             Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
                 let (lower, _) = self.member_bounds(t);
-                lower != NOTHING && lower != t && self.null_conforms(lower)
+                lower != NOTHING && !self.same_type(lower, t) && self.null_conforms(lower)
             }
             Type::Refined(parent, _) => self.null_conforms(parent),
             // A polymorphic function type, dotty's refinement of the trait `PolyFunction`, a reference type.
@@ -486,7 +486,7 @@ impl<'a> Worker<'a> {
                 let value = self.types.items(args)[0];
                 self.option_pattern(value, subs, span)
             }
-            _ if rty == self.b.t_boolean && subs.is_empty() => {
+            _ if self.canon(rty) == self.b.t_boolean && subs.is_empty() => {
                 let yes = self.prog.add(TExpr::Bool(true));
                 self.prog.add_pat(TPat::Equals(yes, true))
             }
@@ -564,12 +564,12 @@ impl<'a> Worker<'a> {
         let vars: Subst = tparams.iter().map(|&p| (p, self.fresh_var())).collect();
         for &(p, v) in &vars {
             let (upper, lower) = (self.syms.tparam(p).upper, self.syms.tparams[p.idx()].lower);
-            if upper != ANY {
+            if self.canon(upper) != ANY {
                 let upper = self.types.subst(upper, owner_subst);
                 let upper = self.types.subst(upper, &vars);
                 self.is_sub(v, upper);
             }
-            if lower != NOTHING {
+            if self.canon(lower) != NOTHING {
                 let lower = self.types.subst(lower, owner_subst);
                 let lower = self.types.subst(lower, &vars);
                 self.is_sub(lower, v);
@@ -620,7 +620,7 @@ impl<'a> Worker<'a> {
             };
             // A parameter its bounds leave nothing to maximise to (`C <: SeqOps[A, CC, C]` of `+:`
             // over a `View`) gives no type to test: the call reports the scrutinee, as before.
-            unsettled |= (choice == NOTHING && !downwards) || self.types.has_vars(choice);
+            unsettled |= (self.canon(choice) == NOTHING && !downwards) || self.types.has_vars(choice);
             chosen.push((p, choice));
         }
         let taken = self.types.subst(pty, &chosen);

@@ -1564,7 +1564,7 @@ impl<'a> Worker<'a> {
             Type::Refined(parent, _) if self.contains_intersection(parent, 0) => {
                 let own = self.as_seen_from(ret, t, owner);
                 let through = self.seen_from_receiver(ret, parent, owner, depth + 1)?;
-                (own == through).then_some(own)
+                (self.same_type(own, through)).then_some(own)
             }
             _ => Some(self.as_seen_from(ret, t, owner)),
         }

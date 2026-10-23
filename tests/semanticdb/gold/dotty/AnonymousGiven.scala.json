@@ -1,0 +1,23 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "AnonymousGiven.scala",
+  "text": "",
+  "md5": "769D36922FDF7C970B324A67BB0B6433",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"angiven/Foo#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"angiven/Foo#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"angiven/Foo#","language":"SCALA","kind":"TRAIT","properties":0,"display_name":"Foo","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"angiven/Foo#","type_arguments":[]},"declarations":{"symlinks":["angiven/Foo#`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"angiven/AnonymousGiven$package.bar().(x$1)","language":"SCALA","kind":"PARAMETER","properties":65568,"display_name":"x$1","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"angiven/Foo#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"angiven/AnonymousGiven$package.bar().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"bar","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":["angiven/AnonymousGiven$package.bar().(x$1)"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"angiven/AnonymousGiven$package.","language":"SCALA","kind":"PACKAGE_OBJECT","properties":8,"display_name":"angiven","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"angiven/AnonymousGiven$package."},"declarations":{"symlinks":["angiven/AnonymousGiven$package.`<init>`().","angiven/AnonymousGiven$package.bar()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":0,"end_line":2,"end_character":0},"symbol":"angiven/Foo#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":9},"symbol":"angiven/Foo#","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":14,"end_line":4,"end_character":17},"symbol":"angiven/Foo#","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":4,"end_line":4,"end_character":7},"symbol":"angiven/AnonymousGiven$package.bar().","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":15},"symbol":"angiven/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

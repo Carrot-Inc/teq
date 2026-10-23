@@ -1,0 +1,24 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "annotated-client/Client.scala",
+  "text": "",
+  "md5": "7590B2739CBA6025EF80BD28464AA807",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"_empty_/Client.ann.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"ann","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"loaded/Box#","type_arguments":[{"kind":"AnnotatedType","annotations":[{"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"loaded/Ann#","type_arguments":[]}}],"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Client.alias.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"alias","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"loaded/Lib.A#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Client.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Client","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"_empty_/Client."},"declarations":{"symlinks":["_empty_/Client.`<init>`().","_empty_/Client.ann.","_empty_/Client.alias."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":0,"start_character":7,"end_line":0,"end_character":13},"symbol":"loaded/","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":12,"end_line":2,"end_character":15},"symbol":"loaded/Lib.","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":16,"end_line":2,"end_character":25},"symbol":"loaded/Lib.annotated().","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":9},"symbol":"_empty_/Client.ann.","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":14,"end_line":3,"end_character":17},"symbol":"loaded/Lib.","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":18,"end_line":3,"end_character":25},"symbol":"loaded/Lib.aliased().","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":6,"end_line":3,"end_character":11},"symbol":"_empty_/Client.alias.","role":"DEFINITION"},
+    {"range":{"start_line":1,"start_character":7,"end_line":1,"end_character":13},"symbol":"_empty_/Client.","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

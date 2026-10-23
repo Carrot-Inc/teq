@@ -862,6 +862,14 @@ impl<'a> Worker<'a> {
         let mut stack = vec![(t, inferred)];
         let mut parts: Vec<TypeId> = Vec::new();
         while let Some((x, inferred)) = stack.pop() {
+            // A retained form's record's types and what it is made over.
+            if self.semantic {
+                if let Some((under, r)) = self.types.form_of(x) {
+                    stack.extend(self.types.retention_types(r, false).into_iter().map(|y| (y, inferred)));
+                    stack.push((under, inferred));
+                    continue;
+                }
+            }
             match self.types.get(x) {
                 Type::Term(v) | Type::Select(_, v) => out.extend(paths.iter().rev().find(|&&(s, _)| s == v).map(|&(_, p)| p)),
                 Type::Param(p) | Type::AppParam(p, _) => out.extend(inherited.iter().filter(|&&(q, _)| q == p).map(|&(_, t)| t)),
@@ -1874,7 +1882,7 @@ impl<'a> Worker<'a> {
         }
         // A method declared `Unit` takes any `Expr`, the value discarded as the retype path's
         // typing of the body against `Unit` discards it.
-        let (tree, ty) = if ret == self.b.t_unit && ty != ERROR && ty != ret { (self.adapt(tree, ty, ret, span), ret) } else { (tree, ty) };
+        let (tree, ty) = if self.canon(ret) == self.b.t_unit && ty != ERROR && !self.same_type(ty, ret) { (self.adapt(tree, ty, ret, span), ret) } else { (tree, ty) };
         self.set_walked_type(w, tree, ty);
         tree
     }
@@ -2184,7 +2192,7 @@ impl<'a> Worker<'a> {
         }
         let Some((v, _)) = by_type else {
             // scalac's check of the value at the expansion, where the definition kept it.
-            let t = self.deref(walked);
+            let t = self.deref_canonical(walked);
             let msg = if t == self.b.t_unit {
                 "`inline val` of type `Unit` is not supported.\n\nTo inline a `Unit` consider using `inline def`"
             } else if t == self.b.t_string || self.is_primitive(t) {
@@ -2521,6 +2529,11 @@ impl<'a> Worker<'a> {
         if !self.types.has_paths(t) {
             return t;
         }
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.members_of_paths_form(t, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Member(..) | Type::Select(..) => {
                 let d = self.dealias(t);
@@ -2551,6 +2564,12 @@ impl<'a> Worker<'a> {
             }
             _ => t,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn members_of_paths_form(&mut self, t: TypeId, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        self.map_form(&[super::FORM_MEMBERS_OF_PATHS], t, under, r, &mut |w, x| w.members_of_paths(x))
     }
 
     /// A call of a method whose result names a parameter's path (`summon[T](using x: T): x.type`)

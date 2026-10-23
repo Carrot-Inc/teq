@@ -3,7 +3,7 @@
 //! as the typer produced it, typing the bodies of the standard library when it meets them, so
 //! it needs the `Worker` rather than a finished program, and it imports nothing of the emitters.
 
-mod archive;
+pub(crate) mod archive;
 mod bignum;
 mod builtins;
 mod char_tables;

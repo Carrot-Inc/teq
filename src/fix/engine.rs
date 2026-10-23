@@ -1,9 +1,10 @@
 //! `teq fix`'s run (docs/FIX.md, "Patches, suppressions and rounds"): the rules compiled and configured on the rule workers, each with an
 //! interpreter of its own; each job (a configuration's program, or the files `teq compiler fix` names) typed on a typing
 //! thread of its own as `teq compiler check` types it, over compile's workers, a parallel attempt that gives way typed
-//! again by one worker within its round; typing and rules never at once, every rule worker ready before a typing
-//! begins; each editable document's view handed to a worker, which runs
-//! every rule over it, the results gathered in the documents' order; the patches planned, all of them before anything
+//! again by one worker within its round; the round's typing and its rules never at once, every rule worker ready
+//! before a typing begins; where a semantic rule is configured the typing thread then serves the rules' SemanticDB
+//! questions until the round's last document is done (`serve`: a typing of its own by one worker, made at the first
+//! question); each editable document's view handed to a worker, which runs every rule over it, the results gathered in the documents' order; the patches planned, all of them before anything
 //! is written; at most two rounds, the second over the first's text, typed again, for the imports the first's edits
 //! left unused. A run whose rules teq ships takes as many workers as `--threads` (the cores by default) and a round's
 //! documents allow; one with a project rule (`file:`) keeps one worker, whose rule instances keep their state across
@@ -13,6 +14,7 @@ use super::config::Conf;
 use super::host::{self, Asker, DocView, Host, Results, Severity, Utf16};
 use super::nodes::{self, K};
 use super::plan::{self, Plan, Printed};
+use super::service::{Answer as SemAnswer, Ask, SemQuery, SemReply};
 use crate::source::{FileId, SourceFile, Span};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -87,6 +89,8 @@ struct Handout {
     asker: Asker,
     delay: u64,
     first: bool,
+    /// The round's SemanticDB service, where a semantic rule is configured (`serve`).
+    link: Option<mpsc::Sender<SemQuery>>,
 }
 
 enum FromRules {
@@ -112,6 +116,8 @@ struct Answer {
     cpu: u64,
     /// Whether the worker waited for `TEQ_FIX_BARRIER`'s workers in vain.
     barrier_timeout: bool,
+    /// The SemanticDB questions its rules asked (`fix::service`).
+    queries: u32,
 }
 
 #[derive(Clone, PartialEq)]
@@ -372,7 +378,7 @@ fn drive(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mut Pool<
     if std::env::var_os("TEQ_FIX_TRACE").is_some() {
         TIMES.with(|t| {
             let (t, held) = (t.get(), crate::alloc::held());
-            eprintln!("fix: {:.0} ms in all: the rules' program {:.0} ms, typing {:.0} ms, the rules {:.0} ms on {} worker{} (their documents {:.0} ms, {:.0} ms of CPU, the longest {:.0} ms), planning {:.0} ms; the allocator reserved {} MB, its requests over 32 KB at most {} MB", started.elapsed().as_secs_f64() * 1e3, t[0] * 1e3, t[1] * 1e3, t[2] * 1e3, pool.to.len(), if pool.to.len() == 1 { "" } else { "s" }, t[4] * 1e3, t[6] * 1e3, t[5] * 1e3, t[3] * 1e3, held.reserved >> 20, held.large_peak >> 20);
+            eprintln!("fix: {:.0} ms in all: the rules' program {:.0} ms, typing {:.0} ms, the rules {:.0} ms on {} worker{} (their documents {:.0} ms, {:.0} ms of CPU, the longest {:.0} ms), planning {:.0} ms, the SemanticDB answers {:.0} ms; the allocator reserved {} MB, its requests over 32 KB at most {} MB", started.elapsed().as_secs_f64() * 1e3, t[0] * 1e3, t[1] * 1e3, t[2] * 1e3, pool.to.len(), if pool.to.len() == 1 { "" } else { "s" }, t[4] * 1e3, t[6] * 1e3, t[5] * 1e3, t[3] * 1e3, t[7] * 1e3, held.reserved >> 20, held.large_peak >> 20);
         });
     }
     code
@@ -381,8 +387,9 @@ fn drive(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mut Pool<
 thread_local! {
     /// Seconds the run spent: making the rules' program ready, typing, in the rules (the rounds' wall time, from a
     /// round's first document handed out to its last one planned), planning (which overlaps the rules' wall time), the
-    /// documents' rules summed over the workers, the longest document's, the documents' CPU time (`TEQ_FIX_TRACE`).
-    static TIMES: std::cell::Cell<[f64; 7]> = const { std::cell::Cell::new([0.0; 7]) };
+    /// documents' rules summed over the workers, the longest document's, the documents' CPU time, and the SemanticDB
+    /// answers (a round's service from its first question to its last answer, its typing among them) (`TEQ_FIX_TRACE`).
+    static TIMES: std::cell::Cell<[f64; 8]> = const { std::cell::Cell::new([0.0; 8]) };
 }
 
 /// The run's epoch, which the coordinator's and the rule thread's clock readings of the execution record share.
@@ -468,9 +475,9 @@ fn drive_rounds(setup: &Setup, lint_config: &LintConfig, jobs: &[Job], pool: &mu
     let mut base = 0u32;
     let names: Vec<String> = infos.iter().map(|i| i.name.clone()).collect();
     let semantic_rules: Vec<bool> = infos.iter().map(|i| i.semantic).collect();
-    // A semantic rule configured: the typings read the unused imports (`-Wunused:imports`), which the record says, so
-    // that a comparison with `teq compiler check` asks the same of it (bench/fix/parity.sh).
-    let semantic = semantic_rules.contains(&true);
+    // A semantic rule configured, or the SemanticDB dump: the typings read the unused imports (`-Wunused:imports`),
+    // which the record says, so that a comparison with `teq compiler check` asks the same of it (bench/fix/parity.sh).
+    let semantic = semantic_rules.contains(&true) || semanticdb_dump().is_some();
     record(format_args!("run eligible={} workers={} semantic={}", pool.eligible as u8, pool.limit, semantic as u8));
     let mut gen = 0u32;
     // Round one, over the files as read; the rules' results kept for round two.
@@ -712,16 +719,45 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
         }
     }
     let typing = std::time::Instant::now();
-    let (attempts, docs) = std::thread::scope(|scope| {
-        let thread = std::thread::Builder::new().name("teq-fix-typer".to_string()).stack_size(1 << 30).spawn_scoped(scope, || {
-            crate::alloc::enter();
-            typed(job, overrides, semantic, first_gen, display)
-        });
-        match thread {
-            Ok(t) => t.join().unwrap_or_else(|_| (Vec::new(), Err("teq fix: the typing thread panicked\n".to_string()))),
-            Err(e) => (Vec::new(), Err(format!("teq fix: the system gave the typing thread no thread ({})\n", e))),
+    // The round's typing thread owns the round's typing (tests/semanticdb/TABLE.md, ruling 1): it types the round and
+    // hands back its attempts and documents; where a semantic rule is configured it then serves the rules' SemanticDB
+    // questions (`serve`) until the round drops its link after the last document, and the round joins it there; else
+    // the round joins it at once.
+    let (link, questions) = if infos.iter().any(|i| i.semantic) {
+        let (link, questions) = mpsc::channel::<SemQuery>();
+        (Some(link), Some(questions))
+    } else {
+        (None, None)
+    };
+    let (handed_back, typed_back) = mpsc::channel();
+    let owned = (job.clone(), overrides.clone(), display.clone());
+    let thread = std::thread::Builder::new().name("teq-fix-typer".to_string()).stack_size(1 << 30).spawn_scoped(pool.scope, move || {
+        crate::alloc::enter();
+        let (job, overrides, display) = owned;
+        let (attempts, docs, texts) = typed(&job, &overrides, semantic, first_gen, &display);
+        let served: Option<Vec<(u32, String)>> = docs.as_ref().ok().map(|d| d.iter().map(|v| (v.gen, v.file.clone())).collect());
+        let _ = handed_back.send((attempts, docs));
+        match (questions, served) {
+            (Some(questions), Some(served)) => serve(&job, &overrides, &display, first_gen, served, questions, texts),
+            _ => Served::default(),
         }
     });
+    let (attempts, docs, mut owner) = match thread {
+        Ok(t) => match typed_back.recv() {
+            Ok((attempts, docs)) => (attempts, docs, Some(t)),
+            Err(_) => {
+                let _ = t.join();
+                (Vec::new(), Err("teq fix: the typing thread panicked\n".to_string()), None)
+            }
+        },
+        Err(e) => (Vec::new(), Err(format!("teq fix: the system gave the typing thread no thread ({})\n", e)), None),
+    };
+    // A round no rule asks about, or one that did not type: its typing thread ends now.
+    if link.is_none() || docs.is_err() {
+        if let Some(t) = owner.take() {
+            t.join().map_err(|_| "teq fix: the typing thread panicked\n".to_string())?;
+        }
+    }
     // What the merges gave back to be dropped on threads of their own (`crew::give_back`), dropped before anything
     // follows, so that the next typing finds it.
     let waiting = std::time::Instant::now();
@@ -778,7 +814,7 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
             let asker = Asker { job: k as u32, round: r, slot: slot as u32, gen: d.gen, worker: w as u32 };
             record(format_args!("dispatch slot={} gen={} worker={} at_us={}", slot, d.gen, w, now_us()));
             let first = !std::mem::replace(&mut handed[w], true);
-            pool.to[w].send(ToRules::Doc(Box::new(d), Handout { semantic_only, asker, delay: schedule.delay(slot), first })).map_err(|_| ended())?;
+            pool.to[w].send(ToRules::Doc(Box::new(d), Handout { semantic_only, asker, delay: schedule.delay(slot), first, link: link.clone() })).map_err(|_| ended())?;
             in_flight += 1;
         }
         match pool.from.recv() {
@@ -793,7 +829,7 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
                 if a.barrier_timeout {
                     record(format_args!("barrier-timeout worker={}", w));
                 }
-                record(format_args!("done slot={} gen={} worker={} start_us={} finish_us={} cpu_us={} queries=0", slot, a.asker.gen, w, a.start, a.finish, a.cpu));
+                record(format_args!("done slot={} gen={} worker={} start_us={} finish_us={} cpu_us={} queries={}", slot, a.asker.gen, w, a.start, a.finish, a.cpu, a.queries));
                 let took = a.finish.saturating_sub(a.start);
                 (service, cpu) = (service + took, cpu + a.cpu);
                 add_time(5, took as f64 / 1e6);
@@ -823,6 +859,13 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
             next += 1;
             consumed += 1;
         }
+    }
+    // The round's last document done, its service ends with the round's link, and the round joins its typing thread.
+    drop(link);
+    if let Some(owner) = owner {
+        let served = owner.join().map_err(|_| "teq fix: the typing thread panicked\n".to_string())?;
+        record(format_args!("serve job={} round={} queries={} typed={} start_us={} end_us={}", k, r, served.queries, served.typed as u8, served.start_us, served.end_us));
+        add_time(7, served.end_us.saturating_sub(served.start_us) as f64 / 1e6);
     }
     timed(2, rules_start);
     add_time(4, service as f64 / 1e6);
@@ -950,12 +993,12 @@ struct Attempt {
 /// gives way is the round's: the round's texts typed again by one worker on this thread, nothing of the attempt
 /// published, the rules configured and the earlier rounds' results as they were (docs/FIX.md, "Patches, suppressions and rounds"). The attempts
 /// come back for the record.
-fn typed(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>) -> (Vec<Attempt>, Result<Vec<DocView>, String>) {
-    let mut attempts = Vec::new();
+fn typed(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>) -> (Vec<Attempt>, Result<Vec<DocView>, String>, Option<RoundTexts>) {
+    let (mut attempts, mut texts) = (Vec::new(), None);
     #[cfg(debug_assertions)]
     let numbers = crate::typer::thread::run(crate::shared::numbers_taken_by_others);
-    if let Some(docs) = attempt(job, overrides, semantic, first_gen, display, None, &mut attempts) {
-        return (attempts, docs);
+    if let Some(docs) = attempt(job, overrides, semantic, first_gen, display, None, &mut attempts, &mut texts, None) {
+        return (attempts, docs, texts);
     }
     // What watch's retry asserts of an attempt that gave way (`watch.rs`): nothing of it is held on the typing thread.
     #[cfg(debug_assertions)]
@@ -965,8 +1008,16 @@ fn typed(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first_g
         assert_eq!((depth, staged, overlay), (0, 0, false), "the attempt left the loader's lock held, completions staged or an overlay entered");
     }
     // One worker takes no fork, and only a forked build gives way (`Worker::need_serial_for_state`).
-    let docs = attempt(job, overrides, semantic, first_gen, display, Some(1), &mut attempts).unwrap_or_else(|| Err("teq fix: the typing gave way at one worker\n".to_string()));
-    (attempts, docs)
+    let docs = attempt(job, overrides, semantic, first_gen, display, Some(1), &mut attempts, &mut texts, None).unwrap_or_else(|| Err("teq fix: the typing gave way at one worker\n".to_string()));
+    (attempts, docs, texts)
+}
+
+/// The texts a round types (`attempt`): the program's paths, their roots and each file's text, `overrides` over the
+/// disk as the round's first attempt read them.
+struct RoundTexts {
+    paths: Vec<String>,
+    roots: crate::intern::FxMap<String, String>,
+    texts: HashMap<String, String>,
 }
 
 /// The workers a round types with: compile's (`--threads`, `TEQ_THREADS`, else the automatic count over the round's
@@ -982,13 +1033,98 @@ fn typing_threads(opts: &crate::Options, program_bytes: usize, largest_unit: usi
     crate::frontend::requested_threads(opts.threads).unwrap_or_else(|| crate::frontend::automatic_threads(program_bytes, largest_unit))
 }
 
+/// What the service's typing does with its typer before its exit (`serve`): the typer, the texts, the scripts' own texts.
+type Serving<'s> = dyn FnMut(&mut crate::typer::Typer<'_>, &crate::source::Sources, &HashMap<String, String>) + 's;
+
+/// What the round's SemanticDB service did, for the record: the questions it answered, whether it typed, and when it
+/// began typing and ended (microseconds since the run began).
+#[derive(Default)]
+struct Served {
+    queries: u32,
+    typed: bool,
+    start_us: u64,
+    end_us: u64,
+}
+
+/// The round's SemanticDB service (`fix::service`; tests/semanticdb/TABLE.md, ruling 1), on the round's typing thread
+/// after its typing: nothing typed before a rule asks; at the first question, the round's texts (`texts`, as the round's
+/// typing read them) typed by one worker keeping the retained forms (`--semantic-types`), as `typed` types them but for
+/// the worker count and the forms, so
+/// that the answers are the same whatever the round's typing's count; each question answered on that thread until the
+/// round drops its link after its last document. An answer's panic is caught and answers every later question where the build
+/// unwinds (the release build aborts on any panic, Cargo.toml); the typing's errors answer every question.
+fn serve(job: &Job, overrides: &HashMap<String, String>, display: &Option<(PathBuf, PathBuf)>, first_gen: u32, docs: Vec<(u32, String)>, questions: mpsc::Receiver<SemQuery>, mut texts: Option<RoundTexts>) -> Served {
+    let Ok(first) = questions.recv() else { return Served::default() };
+    let start_us = now_us();
+    let (mut pending, mut queries, mut attempts) = (Some(first), 0u32, Vec::new());
+    let mut answering = |typer: &mut crate::typer::Typer<'_>, sources: &crate::source::Sources, written: &HashMap<String, String>| {
+        let mut broken: Option<String> = None;
+        while let Some(q) = pending.take().or_else(|| questions.recv().ok()) {
+            queries += 1;
+            let answered = match &broken {
+                Some(e) => Err(e.clone()),
+                None => std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| answer(typer, sources, written, &docs, &q))).unwrap_or_else(|p| {
+                    let e = format!("the SemanticDB service failed: {}", panic_text(p.as_ref()));
+                    broken = Some(e.clone());
+                    Err(e)
+                }),
+            };
+            let _ = q.reply.send(SemReply { job: q.job, round: q.round, gen: q.gen, answer: answered });
+        }
+    };
+    let typed = attempt(job, overrides, true, first_gen, display, Some(1), &mut attempts, &mut texts, Some(&mut answering));
+    // One worker never gives way (`Worker::need_serial_for_state`).
+    if let Some(e) = match typed {
+        Some(Ok(_)) => None,
+        Some(Err(e)) => Some(e),
+        None => Some("the typing gave way at one worker".to_string()),
+    } {
+        let e = format!("the round's semantic typing failed: {}", e.trim_end());
+        while let Some(q) = pending.take().or_else(|| questions.recv().ok()) {
+            queries += 1;
+            let _ = q.reply.send(SemReply { job: q.job, round: q.round, gen: q.gen, answer: Err(e.clone()) });
+        }
+    }
+    Served { queries, typed: true, start_us, end_us: now_us() }
+}
+
+/// The service's answer to `q` from the round's semantic typing: the document `q.gen` of the round's, its text the
+/// typing's (a script's own, `written`). Before the port of ExtractSemanticDB (the order of work's step 7) the document
+/// is its header alone, and the symbols and informations are refused, never answered empty. `TEQ_FIX_PLANT=query-failure`,
+/// the fix suite's, fails every answer as an extraction's error would.
+fn answer(_typer: &mut crate::typer::Typer<'_>, sources: &crate::source::Sources, written: &HashMap<String, String>, docs: &[(u32, String)], q: &SemQuery) -> Result<SemAnswer, String> {
+    if plant().as_deref() == Some("query-failure") {
+        return Err("the extraction failed (TEQ_FIX_PLANT=query-failure)".to_string());
+    }
+    let Some((_, file)) = docs.iter().find(|(g, _)| *g == q.gen) else { return Err(format!("generation {} is not this round's", q.gen)) };
+    let Some(f) = sources.as_slice().iter().find(|f| &f.path == file) else { return Err(format!("{}: the round's semantic typing typed no such file", file)) };
+    let text = written.get(file).map_or(f.text.as_str(), String::as_str);
+    match &q.ask {
+        Ask::Doc => {
+            let root = std::env::current_dir().unwrap_or_default();
+            let doc = crate::typer::semanticdb::document(Path::new(file), text, &root);
+            Ok(SemAnswer::Doc(crate::typer::semanticdb::document::write_documents(&doc)))
+        }
+        Ask::Symbols { start, end } => Err(format!("the symbols at [{}, {}) of {}: {}", start, end, file, NOT_PORTED)),
+        Ask::Info { symbol } => Err(format!("the information of {}: {}", symbol, NOT_PORTED)),
+    }
+}
+
+/// Why the service answers no symbol yet.
+const NOT_PORTED: &str = "SemanticDB's symbols are not extracted yet: the port of ExtractSemanticDB is the order of work's step 7 (tests/semanticdb/TABLE.md)";
+
+/// A panic's message.
+fn panic_text(p: &(dyn std::any::Any + Send)) -> String {
+    p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_else(|| "a panic".to_string())
+}
+
 /// One attempt at the round's typing, at `forced` workers or the round's own count (`typing_threads`): its documents or
 /// its rendered errors, or `None` where it gave way. Nothing is read of the typer before the give-way and the merge's
 /// refusal are ruled out; the jar caches are written by an attempt that ends the round, never by one that gave way or
 /// whose merge was refused, as compile writes them; every attempt ends with the interpreter's state of its program
 /// disposed of on the thread that typed, and the typer, its trees and its texts dropped here.
 #[allow(clippy::too_many_arguments)]
-fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>, forced: Option<usize>, attempts: &mut Vec<Attempt>) -> Option<Result<Vec<DocView>, String>> {
+fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>, forced: Option<usize>, attempts: &mut Vec<Attempt>, texts: &mut Option<RoundTexts>, serving: Option<&mut Serving<'_>>) -> Option<Result<Vec<DocView>, String>> {
     let (began, start_us) = (std::time::Instant::now(), now_us());
     let mut args = vec!["compiler".to_string(), "check".to_string()];
     args.extend(job.args.iter().cloned());
@@ -999,19 +1135,51 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first
     if semantic {
         opts.wunused_imports = true;
     }
-    let (paths, roots, _) = crate::collect_program_paths_with_roots(&opts);
+    // The typer keeps the forms the SemanticDB documents read (`TEQ_FIX_SEMANTICDB`'s, the service's), with one worker
+    // (tests/semanticdb/TABLE.md, section 6), transparent to its typing (the identity run).
+    if semanticdb_dump().is_some() || serving.is_some() {
+        opts.semantic_types = true;
+    }
+    // The round's texts: its first attempt reads the program's files (their paths and texts, `overrides` over the disk)
+    // and keeps them, and every later typing of the round (the retry at one worker, the SemanticDB service's) types them
+    // as they were, never the disk again, whatever was written to it since.
+    let (paths, roots) = match texts.as_ref() {
+        Some(t) => (t.paths.clone(), t.roots.clone()),
+        None => {
+            let (paths, roots, _) = crate::collect_program_paths_with_roots(&opts);
+            (paths, roots)
+        }
+    };
     let editable: Vec<String> = paths.iter().filter(|p| job.edits(p)).cloned().collect();
     opts.keep = editable.clone();
     // A file's text as round one left it where `overrides` has it; a script's as written, its document's text: the
     // wrapper `read_program` appends to a `.sc` (`script::wrap`) is for typing alone, past the script's own text.
     let mut written: HashMap<String, String> = HashMap::new();
-    let program = match crate::read_program_with(&opts, paths, &roots, |p, disk| {
-        let text = overrides.get(p).cloned().unwrap_or(disk);
-        if crate::script::is_script(p) {
-            written.insert(p.to_string(), text.clone());
+    let read = match texts.as_ref() {
+        Some(t) => crate::read_program_from(&opts, paths, &roots, |p| {
+            let text = t.texts.get(p).cloned().ok_or_else(|| format!("teq fix: the round's texts hold no {}", p))?;
+            if crate::script::is_script(p) {
+                written.insert(p.to_string(), text.clone());
+            }
+            Ok(text)
+        }),
+        None => {
+            let mut kept = RoundTexts { paths: paths.clone(), roots: roots.clone(), texts: HashMap::new() };
+            let read = crate::read_program_with(&opts, paths, &roots, |p, disk| {
+                let text = overrides.get(p).cloned().unwrap_or(disk);
+                if crate::script::is_script(p) {
+                    written.insert(p.to_string(), text.clone());
+                }
+                kept.texts.insert(p.to_string(), text.clone());
+                text
+            });
+            if read.is_ok() {
+                *texts = Some(kept);
+            }
+            read
         }
-        text
-    }) {
+    };
+    let program = match read {
         Ok(p) => p,
         Err(e) => return Some(Err(format!("{}\n", e))),
     };
@@ -1034,7 +1202,8 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first
     parts[0] = (began.elapsed() - jars).as_secs_f64();
     parts[1] = jars.as_secs_f64();
     let typing = std::time::Instant::now();
-    let asked = forced.unwrap_or_else(|| typing_threads(&opts, program_bytes, largest_unit));
+    // One worker keeps the retained forms (`configure_typer`).
+    let asked = forced.unwrap_or_else(|| if opts.semantic_types { 1 } else { typing_threads(&opts, program_bytes, largest_unit) });
     let mut typer = crate::typer::Typer::new(&asts, &sources, &mut interner);
     typer.threads = asked;
     crate::install_std(&mut typer, std, &selected, &blocks_of, scalajs_unlocked);
@@ -1081,6 +1250,14 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first
     } else if typer.merge_failed {
         a.outcome = "refused";
         Some(Err(typer.report_diags().0))
+    } else if let Some(serve) = serving {
+        // The service's typing answers its questions here, before its exit; the round's typing wrote the jar caches.
+        if typer.diags.items.iter().any(|d| !d.is_warning) || typer.diags.syntax_errors {
+            Some(Err(typer.report_diags().0))
+        } else {
+            serve(&mut typer, &sources, &written);
+            Some(Ok(Vec::new()))
+        }
     } else {
         let caching = std::time::Instant::now();
         crate::save_jar_caches(&mut typer);
@@ -1089,7 +1266,10 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first
             Some(Err(typer.report_diags().0))
         } else {
             let documents = std::time::Instant::now();
-            let docs = documents_of(&typer, &sources, &asts, &blocks_of, &editable, &written, semantic, first_gen, display);
+            // Round one's SemanticDB documents under `TEQ_FIX_SEMANTICDB` (`semanticdb_dump`), each file named by the
+            // command line's argument for it.
+            let dump = semanticdb_dump().filter(|_| overrides.is_empty());
+            let docs = documents_of(&mut typer, &sources, &asts, &blocks_of, &editable, &written, semantic, first_gen, display, dump.as_deref().map(|d| (d, opts.inputs.as_slice())));
             a.parts[3] = documents.elapsed().as_secs_f64();
             Some(docs)
         }
@@ -1115,7 +1295,7 @@ fn attempt(job: &Job, overrides: &HashMap<String, String>, semantic: bool, first
 
 /// The views of the job's editable files, from a typer that typed the program.
 #[allow(clippy::too_many_arguments)]
-fn documents_of(typer: &crate::typer::Typer<'_>, sources: &crate::source::Sources, asts: &crate::ast::Asts, blocks_of: &[Vec<usize>], editable: &[String], written: &HashMap<String, String>, semantic: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>) -> Result<Vec<DocView>, String> {
+fn documents_of(typer: &mut crate::typer::Typer<'_>, sources: &crate::source::Sources, asts: &crate::ast::Asts, blocks_of: &[Vec<usize>], editable: &[String], written: &HashMap<String, String>, semantic: bool, first_gen: u32, display: &Option<(PathBuf, PathBuf)>, dump: Option<(&Path, &[String])>) -> Result<Vec<DocView>, String> {
     let files = sources.as_slice();
     let expanded: Vec<FileId> = typer.index.as_ref().map(|i| i.expanded.clone()).unwrap_or_default();
     let withheld = typer.unused_withheld();
@@ -1165,6 +1345,17 @@ fn documents_of(typer: &crate::typer::Typer<'_>, sources: &crate::source::Source
             nodes_of.dedup();
             Ok(nodes_of)
         };
+        if let Some((dir, inputs)) = dump {
+            let root = std::env::var_os("TEQ_FIX_SEMANTICDB_ROOT").map(PathBuf::from).unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            // The file's path as the command line gave it (`SourceFile`'s `jpath`), which the program's paths spell as
+            // the file system does: its elements kept (`outside/./Other.scala`).
+            let given = inputs.iter().find(|i| crate::file_identity(i) == crate::file_identity(&f.path)).cloned().unwrap_or_else(|| f.path.clone());
+            let doc = crate::typer::semanticdb::document(Path::new(&given), text, &root);
+            crate::typer::semanticdb::write_dump(dir, Path::new(&given), &root, &doc).map_err(|e| format!("teq fix: {}: the SemanticDB document is not written: {}\n", f.path, e))?;
+            let ids: Vec<FileId> = entries.iter().map(|&e| FileId(e as u32)).collect();
+            let view = typer.on_thread(|w| crate::typer::semanticdb::retained_view(w, &ids));
+            crate::typer::semanticdb::write_view(dir, Path::new(&given), &root, &view).map_err(|e| format!("teq fix: {}: the retained forms' view is not written: {}\n", f.path, e))?;
+        }
         out.push(DocView {
             gen: first_gen + out.len() as u32,
             path: shown_path(display, &f.path),
@@ -1180,6 +1371,13 @@ fn documents_of(typer: &crate::typer::Typer<'_>, sources: &crate::source::Source
         });
     }
     Ok(out)
+}
+
+/// `TEQ_FIX_SEMANTICDB=<dir>`, a test's: round one writes each editable file's SemanticDB document where scalac's
+/// `-semanticdb-target <dir>` writes it, its path relative to `TEQ_FIX_SEMANTICDB_ROOT` (scalac's `-sourceroot`, by
+/// default the working directory), the run typed as for a semantic rule; tests/semanticdb compares it with scalac's.
+fn semanticdb_dump() -> Option<PathBuf> {
+    std::env::var_os("TEQ_FIX_SEMANTICDB").map(PathBuf::from)
 }
 
 fn is_importee(k: K) -> bool {
@@ -1381,7 +1579,7 @@ fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc:
     let booting = std::time::Instant::now();
     let since = |t: std::time::Instant| t.elapsed().as_micros() as u64;
     let Boot { conf, config_dir, requested } = boot;
-    host::install(Host { doc: None, results: Results::default(), conf: conf.clone(), read: vec![false; conf.nodes.len()], groups: 0, asker: None });
+    host::install(Host { doc: None, results: Results::default(), conf: conf.clone(), read: vec![false; conf.nodes.len()], groups: 0, asker: None, sem: None, queries: 0 });
     let sources: Vec<(String, PathBuf)> = requested.iter().filter_map(|r| r.strip_prefix("file:").map(|p| (r.clone(), config_dir.join(p)))).collect();
     let mut files: Vec<PathBuf> = Vec::new();
     for (_, p) in &sources {
@@ -1535,7 +1733,7 @@ fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc:
     };
     let _ = tx.send(FromRules::Ready(worker, Ok(infos), since(booting)));
     let rules = crate::interp::fix::array_of(configured);
-    while let Ok(ToRules::Doc(doc, Handout { semantic_only, asker, delay, first })) = rx.recv() {
+    while let Ok(ToRules::Doc(doc, Handout { semantic_only, asker, delay, first, link })) = rx.recv() {
         let gen = doc.gen;
         // A document's atomic groups are numbered from 1; the coordinator offsets them (`consume`).
         host::with_host(|h| {
@@ -1543,6 +1741,8 @@ fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc:
             h.results = Results::default();
             h.groups = 0;
             h.asker = Some(asker);
+            h.sem = link;
+            h.queries = 0;
         });
         interp.set_limits(crate::interp::Limits::unlimited());
         let (start, cpu_start) = (now_us(), crate::measure::thread_cpu_ns());
@@ -1556,19 +1756,21 @@ fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc:
             }),
         };
         let (finish, cpu) = (now_us(), crate::measure::thread_cpu_ns().saturating_sub(cpu_start) / 1000);
-        let (results, view, groups, asker) = host::with_host(|h| {
+        // The document's link to the service goes with it: the round's service ends with the round's last document.
+        let (results, view, groups, asker, queries) = host::with_host(|h| {
             let mut r = std::mem::take(&mut h.results);
             if let Some(f) = failure {
                 r.failures.push((0, f));
             }
-            (r, h.doc.take(), h.groups, h.asker.take())
+            h.sem = None;
+            (r, h.doc.take(), h.groups, h.asker.take(), h.queries)
         })
         .unwrap_or_default();
         let (Some(view), Some(asker)) = (view, asker) else { break };
         if delay > 0 {
             std::thread::sleep(std::time::Duration::from_millis(delay));
         }
-        if tx.send(FromRules::Done(Box::new(Answer { asker, results, view, groups, start, finish, cpu, barrier_timeout }))).is_err() {
+        if tx.send(FromRules::Done(Box::new(Answer { asker, results, view, groups, start, finish, cpu, barrier_timeout, queries }))).is_err() {
             break;
         }
     }

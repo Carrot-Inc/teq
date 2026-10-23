@@ -1662,7 +1662,7 @@ impl<'a> Worker<'a> {
             let mut work = self.types.union_parts();
             let mut seen: FxMap<TypeId, ()> = FxMap::default();
             while let Some(t) = work.pop() {
-                if seen.insert(t, ()).is_some() {
+                if seen.insert(self.canon(t), ()).is_some() {
                     continue;
                 }
                 match self.types.get(t) {
@@ -2218,7 +2218,7 @@ impl<'a> Worker<'a> {
         // A trait whose first parent is `Any` as completed and dealiased, written so or through an
         // alias, is universal (`mods::UNIVERSAL`), as a source trait is (dotty's
         // `Namer.ensureFirstIsClass`).
-        if kind == ClassKind::Trait && parents.first().is_some_and(|&p| self.deref_alias(p) == ANY) {
+        if kind == ClassKind::Trait && parents.first().is_some_and(|&p| self.deref_alias_canonical(p) == ANY) {
             self.syms.class_mut(c).mods |= mods::UNIVERSAL;
         }
         for pt in parents {

@@ -428,11 +428,13 @@ impl<'w, 'a> P<'w, 'a> {
 
     pub(super) fn is_unit(&mut self, t: TypeId) -> bool {
         let t = self.w.zonk(t);
+        let t = self.w.types.underlying(t);
         t == self.w.b.t_unit || matches!(self.w.types.get(t), Type::Class(c, _) if c == self.w.b.unit)
     }
 
     pub(super) fn is_nothing(&mut self, t: TypeId) -> bool {
         let t = self.w.zonk(t);
+        let t = self.w.types.underlying(t);
         t == NOTHING
     }
 
@@ -2048,6 +2050,7 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     fn names_any_param(&self, t: TypeId, formals: &[TParamId]) -> bool {
+        let t = self.w.types.underlying(t);
         match self.w.types.get(t) {
             Type::Param(p) | Type::AppParam(p, _) if formals.contains(&p) => true,
             _ => {
@@ -3146,7 +3149,7 @@ impl<'w, 'a> P<'w, 'a> {
             Type::Param(_) => {
                 let evidence = self.params.iter().rev().map(|&(q, at)| (q, at)).find(|&(q, _)| {
                     let pt = self.w.sig_of(q).ret;
-                    matches!(self.w.types.get(pt), Type::Class(k, args) if Some(k) == tag_class && self.w.types.items(args).first() == Some(&t))
+                    matches!(self.w.types.get(pt), Type::Class(k, args) if Some(k) == tag_class && self.w.types.items(args).first().map(|&a| self.w.types.underlying(a)) == Some(t))
                 });
                 match evidence {
                     Some((_, at)) => {
@@ -3262,7 +3265,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// primitive or a string through `js.Any.fromX`, a JavaScript value as it is.
     fn js_any_value(&mut self, v: TExprId) {
         let Some(t) = self.node_type(v) else { return self.fail("a literal's value of no type".to_string()) };
-        let t = self.w.widen_lit(t);
+        let t = self.w.types.underlying(self.w.widen_lit(t));
         let kind = if t == self.w.b.t_string {
             Some("String")
         } else if let Some(k) = self.numeric_class(t) {
@@ -3363,7 +3366,7 @@ impl<'w, 'a> P<'w, 'a> {
         let t = self.node_type(e)?;
         let t = self.w.zonk(t);
         let declared = self.w.sig_of(s).ret;
-        (t != declared && t != ANY).then_some(t)
+        (self.canonical(t) != self.canonical(declared) && self.w.types.underlying(t) != ANY).then_some(t)
     }
 
     /// `e.$asInstanceOf$[T]`, the cast scalac's typer inserts.
@@ -3686,7 +3689,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// `a op b` of a comparison with an `Int`, selected on the class scala-library's member
     /// returns (`l.sizeIs > 1`).
     fn compared_op(&mut self, class: &str, name: &str, a: TExprId, b: TExprId) {
-        if !matches!(name, "<" | "<=" | ">" | ">=" | "==" | "!=") || !self.operand_type(b).map_or(false, |t| t == self.w.b.t_int) {
+        if !matches!(name, "<" | "<=" | ">" | ">=" | "==" | "!=") || !self.operand_type(b).map_or(false, |t| self.w.types.underlying(t) == self.w.b.t_int) {
             return self.fail(format!("the comparison {} of a member scala-library has under another shape", name));
         }
         // The package, and the class with the objects it is nested in (`IterableOps$.SizeCompareOps`).
@@ -4390,7 +4393,7 @@ impl<'w, 'a> P<'w, 'a> {
         let captures = self.index.tclasses.get(&c).map_or(0, |&i| self.w.prog.classes[i as usize].ctor_params.len());
         let parent_args: Vec<TExprId> = args.iter().skip(captures).copied().collect();
         let parents: Vec<TypeId> = self.w.syms.class(c).parents.clone();
-        let parents: Vec<TypeId> = parents.into_iter().filter(|&p| p != self.w.b.t_any_ref).collect();
+        let parents: Vec<TypeId> = parents.into_iter().filter(|&p| self.w.types.underlying(p) != self.w.b.t_any_ref).collect();
         let ty = match parents.split_first() {
             Some((&first, rest)) => rest.iter().fold(first, |acc, &p| self.w.types.inter(acc, p)),
             None => self.w.b.t_any_ref,
@@ -5237,7 +5240,7 @@ impl<'w, 'a> P<'w, 'a> {
         let Some(base) = self.w.base_type(t, sc) else { return false };
         let Type::Class(_, bargs) = self.w.types.get(base) else { return false };
         let bargs: Vec<TypeId> = self.w.types.items(bargs).to_vec();
-        sargs.iter().zip(&bargs).any(|(&s, &b)| matches!(self.w.types.get(s), Type::Param(_)) && s != b)
+        sargs.iter().zip(&bargs).any(|(&s, &b)| matches!(self.w.types.get(s), Type::Param(_)) && self.w.types.underlying(s) != self.w.types.underlying(b))
     }
 
     /// How the inline body being written has `e` among its reducible nodes.
@@ -5760,6 +5763,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// comparison's `Boolean`, an arithmetic operation's the wider operand's, `Int` at least.
     fn op_result(&self, op: PrimOp, lt: TypeId, rt: TypeId) -> TypeId {
         use PrimOp::*;
+        let (lt, rt) = (self.w.types.underlying(lt), self.w.types.underlying(rt));
         let b = &self.w.b;
         match op {
             Lt | Le | Gt | Ge | RefEq | RefNe | Same | NotSame | Eq | Ne | BoolAnd | BoolOr | BoolXor | BoolStrictAnd | BoolStrictOr => b.t_boolean,

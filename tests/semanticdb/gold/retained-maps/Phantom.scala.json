@@ -1,0 +1,35 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Phantom.scala",
+  "text": "",
+  "md5": "A82E70B465A7388E0DA201DA86A9CA2D",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"_empty_/Holder#Phantom#[A]","language":"SCALA","kind":"TYPE_PARAMETER","properties":0,"display_name":"A","signature":{"kind":"TypeSignature","type_parameters":null,"lower_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]},"upper_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Any#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Holder#Phantom#","language":"SCALA","kind":"TYPE","properties":0,"display_name":"Phantom","signature":{"kind":"TypeSignature","type_parameters":{"symlinks":["_empty_/Holder#Phantom#[A]"],"hardlinks":[]},"lower_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]},"upper_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Holder#phantom().[A]","language":"SCALA","kind":"TYPE_PARAMETER","properties":0,"display_name":"A","signature":{"kind":"TypeSignature","type_parameters":null,"lower_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]},"upper_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Any#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Holder#phantom().(a)","language":"SCALA","kind":"PARAMETER","properties":0,"display_name":"a","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Holder#phantom().[A]","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Holder#phantom().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"phantom","signature":{"kind":"MethodSignature","type_parameters":{"symlinks":["_empty_/Holder#phantom().[A]"],"hardlinks":[]},"parameter_lists":[{"symlinks":["_empty_/Holder#phantom().(a)"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Holder#Phantom#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Holder#phantom().[A]","type_arguments":[]}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Holder#phantomString.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"phantomString","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Holder#Phantom#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Predef.String#","type_arguments":[]}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Holder#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Holder#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Holder#","language":"SCALA","kind":"CLASS","properties":0,"display_name":"Holder","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Holder#","type_arguments":[]},"declarations":{"symlinks":["_empty_/Holder#`<init>`().","_empty_/Holder#Phantom#","_empty_/Holder#phantom().","_empty_/Holder#phantomString."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":1,"start_character":15,"end_line":1,"end_character":16},"symbol":"_empty_/Holder#Phantom#[A]","role":"DEFINITION"},
+    {"range":{"start_line":1,"start_character":20,"end_line":1,"end_character":23},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":1,"start_character":7,"end_line":1,"end_character":14},"symbol":"_empty_/Holder#Phantom#","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":14,"end_line":2,"end_character":15},"symbol":"_empty_/Holder#phantom().[A]","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":20,"end_line":2,"end_character":21},"symbol":"_empty_/Holder#phantom().[A]","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":17,"end_line":2,"end_character":18},"symbol":"_empty_/Holder#phantom().(a)","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":24,"end_line":2,"end_character":31},"symbol":"_empty_/Holder#Phantom#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":32,"end_line":2,"end_character":33},"symbol":"_empty_/Holder#phantom().[A]","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":13},"symbol":"_empty_/Holder#phantom().","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":22,"end_line":3,"end_character":29},"symbol":"_empty_/Holder#phantom().","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":30,"end_line":3,"end_character":36},"symbol":"scala/Predef.String#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":6,"end_line":3,"end_character":19},"symbol":"_empty_/Holder#phantomString.","role":"DEFINITION"},
+    {"range":{"start_line":1,"start_character":2,"end_line":1,"end_character":2},"symbol":"_empty_/Holder#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":6,"end_line":0,"end_character":12},"symbol":"_empty_/Holder#","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

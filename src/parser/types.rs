@@ -933,6 +933,7 @@ impl<'a> Parser<'a> {
                     for a in annots.iter().filter(|a| !matches!(a.name, names::UNCHECKED | names::UNCHECKED_VARIANCE | names::NOWARN)) {
                         let class = self.ast.annot_new(a).map(|(path, _)| path);
                         t = self.ast.add_ty(TyExpr::Annotated(t, class), start.to(self.prev_span()));
+                        self.ast.annotated_instances.push((t, a.instance));
                     }
                     // The annotations' trees under the type as written, which a val's declared
                     // type names (`Int @Ann(m)`, the pickle's `ANNOTATEDtpt`).

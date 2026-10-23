@@ -57,6 +57,7 @@ pub use resolve::{TermRef, TypeRef};
 mod referents;
 mod reflective;
 mod restrict;
+pub(crate) mod semanticdb;
 pub mod setters;
 mod show;
 mod signature;
@@ -970,6 +971,52 @@ pub struct ViewMemos {
     kind_clauses: crate::intern::FxMap<TParamId, TypeId>,
 }
 
+/// The kinds of the typer's passes over retained forms (`Worker::map_form`, `Worker::ask_form`, `TypeStore::in_pass`),
+/// the first word of a pass's context, apart from the store's own.
+pub(crate) const FORM_SUBST_APPROX: u32 = 100;
+pub(crate) const FORM_COLLECT_VARS: u32 = 101;
+pub(crate) const FORM_VAR_VARIANCES: u32 = 102;
+pub(crate) const FORM_MATCH_ALIAS_VARS: u32 = 103;
+pub(crate) const FORM_INSTANTIATE_VAR: u32 = 104;
+pub(crate) const FORM_RAISE_VARS: u32 = 105;
+pub(crate) const FORM_SELECTION_THROUGH: u32 = 106;
+pub(crate) const FORM_FIX_MEMBERS: u32 = 107;
+pub(crate) const FORM_SPECIALISE_ALIASES: u32 = 108;
+pub(crate) const FORM_REDIRECT_ALIAS: u32 = 109;
+pub(crate) const FORM_PARAM_VARIANCES: u32 = 112;
+pub(crate) const FORM_MENTIONS_THIS: u32 = 113;
+pub(crate) const FORM_REPLACED: u32 = 114;
+pub(crate) const FORM_VARIANCE_VIOLATION: u32 = 115;
+pub(crate) const FORM_WILD_APPROX_VARS: u32 = 116;
+pub(crate) const FORM_WILD_APPROX: u32 = 121;
+pub(crate) const FORM_BLANK_SHAPE: u32 = 122;
+pub(crate) const FORM_TARGET_SHAPE: u32 = 123;
+pub(crate) const FORM_FLIP_CONTRAVARIANT: u32 = 125;
+pub(crate) const FORM_SINGLETON_PART: u32 = 126;
+pub(crate) const FORM_MENTIONS_TERM: u32 = 127;
+pub(crate) const FORM_CLASS_COPIES: u32 = 128;
+pub(crate) const FORM_CLOSED_TYPE: u32 = 129;
+pub(crate) const FORM_NORMALIZE: u32 = 131;
+pub(crate) const FORM_MENTIONS_TPARAM: u32 = 132;
+pub(crate) const FORM_TYPE_PARAMS: u32 = 133;
+pub(crate) const FORM_PATH_MEMBERS: u32 = 134;
+pub(crate) const FORM_FIRST_VARIANCES: u32 = 135;
+pub(crate) const FORM_IS_GROUND: u32 = 137;
+pub(crate) const FORM_MEMBERS_OF_PATHS: u32 = 139;
+pub(crate) const FORM_FIX_RECS: u32 = 140;
+pub(crate) const FORM_CLOSED_RESULT: u32 = 142;
+pub(crate) const FORM_NON_CYCLIC: u32 = 143;
+
+/// What `zonk`, `rebase`, `avoid_params` and `approx` made of the retained forms of their passes under way
+/// (`types::FormPass`).
+#[derive(Default)]
+pub(crate) struct FormPasses {
+    zonk: crate::types::FormPass<TypeId>,
+    rebase: crate::types::FormPass<TypeId>,
+    avoid: crate::types::FormPass<TypeId>,
+    approx: crate::types::FormPass<depfun::Approx>,
+}
+
 pub struct Worker<'a> {
     pub asts: &'a Asts,
     pub interner: &'a Interner,
@@ -1372,6 +1419,11 @@ pub struct Worker<'a> {
     /// Pairs whose least upper bound is being computed; a self-referential base type such as
     /// `IterableOps[A, CC, C]` with `C` the collection itself leads back to the same pair.
     pub lub_in_progress: Vec<(TypeId, TypeId)>,
+    /// What `simplified` made of a closed type (no variable, path or worker's id, asked under no GADT constraint and
+    /// no opaque type's transparency), which that context does not change: the same union met again is merged once.
+    pub simplified_memo: FxMap<TypeId, TypeId>,
+    /// `simplified` is inside a type `normalize` gave, whose reducible parts it does not reduce again.
+    pub simplifying_normal: bool,
     /// Whether a join being computed serves member selection on a union, where differing
     /// invariant arguments read as the unknown argument rather than failing the join.
     pub join_wild: bool,
@@ -1865,6 +1917,15 @@ pub struct Worker<'a> {
     /// the last such reference.
     pub declared_lost: bool,
     pub declared_alias_hit: Option<AliasId>,
+    /// Whether the typer types for `teq fix`'s SemanticDB forms: it keeps, as retained forms
+    /// (`TypeStore::retained`), what dotty's types keep and teq's canonical ones erase (tests/semanticdb/TABLE.md,
+    /// section 6). With one worker alone.
+    pub semantic: bool,
+    /// The parameterized alias `type_ref_to_type` last gave as a constructor, under `semantic`: `TyExpr::Apply`
+    /// retains it over its application with the arguments.
+    pub semantic_alias_ctor: Option<AliasId>,
+    /// The passes of `zonk`, `rebase`, `avoid_params` and `approx` over the retained forms (`types::FormPass`).
+    pub(crate) form_passes: FormPasses,
     pub declared_views: FxMap<(FileId, crate::ast::TyExprId), TypeId>,
     /// The type arguments of a polymorphic function value being applied, which the call of the
     /// function type it instantiates to takes (`poly_pending`).
@@ -2968,6 +3029,8 @@ impl<'a> Worker<'a> {
             hoisted: Vec::new(),
             tested: Vec::new(),
             lub_in_progress: Vec::new(),
+            simplified_memo: FxMap::default(),
+            simplifying_normal: false,
             join_wild: false,
             necessary_either: false,
             alias_bound_as_path: false,
@@ -3136,6 +3199,9 @@ impl<'a> Worker<'a> {
             declaring: 0,
             declared_lost: false,
             declared_alias_hit: None,
+            semantic: false,
+            semantic_alias_ctor: None,
+            form_passes: FormPasses::default(),
             declared_views: FxMap::default(),
             poly_targs: None,
             poly_pending: Vec::new(),
@@ -3392,6 +3458,8 @@ impl<'a> Worker<'a> {
             hoisted: Default::default(),
             tested: Default::default(),
             lub_in_progress: Default::default(),
+            simplified_memo: FxMap::default(),
+            simplifying_normal: false,
             join_wild: Default::default(),
             soft_lub: Default::default(),
             necessary_either: Default::default(),
@@ -3547,6 +3615,9 @@ impl<'a> Worker<'a> {
             declaring: 0,
             declared_lost: false,
             declared_alias_hit: None,
+            semantic: self.semantic,
+            semantic_alias_ctor: None,
+            form_passes: FormPasses::default(),
             declared_views: FxMap::default(),
             poly_targs: None,
             poly_pending: Vec::new(),
@@ -5591,3 +5662,7 @@ enum PathFound {
     NestedIn(ClassKind),
     Nothing,
 }
+
+// The departures this part leaves to other parts, pinned by scalac's answers (src/typer/departure_pins.rs).
+#[cfg(test)]
+mod departure_pins;

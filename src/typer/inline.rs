@@ -2017,7 +2017,7 @@ impl<'a> Worker<'a> {
     /// Whether every value of `t` is `null` or none, as erased (`Types.isBottomTypeAfterErasure`):
     /// `Nothing` and `Null`.
     fn is_bottom_after_erasure(&mut self, t: TypeId) -> bool {
-        let t = self.dealias(t);
+        let t = self.dealias_canonical(t);
         t == NOTHING || matches!(self.types.get(t), Type::Class(c, _) if c == self.b.null)
     }
 
@@ -2077,7 +2077,7 @@ impl<'a> Worker<'a> {
     /// `own`, which is how scalac dispatches the call it inlines.
     pub(super) fn parameter_member(&mut self, recv: TExprId, own: TypeId, name: Name) -> Option<(SymId, TypeId)> {
         let declared = self.proxy_declared(recv)?;
-        if declared == own {
+        if self.same_type(declared, own) {
             return None;
         }
         let (member, owner_ty) = self.find_member(declared, name)?;
@@ -2195,6 +2195,11 @@ impl<'a> Worker<'a> {
         if !self.types.has_paths(t) {
             return false;
         }
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.mentions_term_form(t, s, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Term(x) => x == s,
             Type::Select(p, _) | Type::Member(p, _) | Type::Lambda(_, p) | Type::Annotated(p) => self.mentions_term(p, s),
@@ -2216,6 +2221,12 @@ impl<'a> Worker<'a> {
             Type::Match(scrut, _) => self.mentions_term(scrut, s),
             _ => false,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn mentions_term_form(&self, t: TypeId, s: SymId, under: TypeId, r: crate::types::RetainId) -> bool {
+        self.types.ask_form_once(&[super::FORM_MENTIONS_TERM, s.0], t, under, r, false, &mut |x| self.mentions_term(x, s))
     }
 
     /// The type of `this` in the expansion under way, for a class the expanded method's owner
@@ -3140,7 +3151,7 @@ impl<'a> Worker<'a> {
     /// Notes a member whose result is a Double or Float.
     fn note_fractional(&mut self, s: SymId, fractional: &mut bool) -> bool {
         if let Some(ret) = self.syms.sym(s).sig.as_ref().map(|sig| sig.ret) {
-            let ret = self.dealias(ret);
+            let ret = self.dealias_canonical(ret);
             if ret == self.b.t_double || ret == self.b.t_float {
                 *fractional = true;
             }
@@ -4742,7 +4753,7 @@ impl<'a> Worker<'a> {
             LitVal::Long(l) => format!("{}L", l),
             LitVal::Double(bits) => {
                 let d = f64::from_bits(bits);
-                let float = self.prog.type_of(e).map_or(false, |t| t == self.b.t_float);
+                let float = self.prog.type_of(e).map_or(false, |t| self.canon(t) == self.b.t_float);
                 let mut text = if float { (d as f32).to_string() } else { d.to_string() };
                 if d.is_finite() && !text.contains(['.', 'e', 'E']) {
                     text.push_str(".0");
@@ -4881,7 +4892,7 @@ impl<'a> Worker<'a> {
             let (h, tail) = match cons(self, t) {
                 Some(pair) => pair,
                 None => {
-                    let d = self.dealias(t);
+                    let d = self.dealias_canonical(t);
                     match cons(self, d) {
                         Some(pair) => pair,
                         None => match self.types.get(d) {

@@ -578,7 +578,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
             Space::Empty => h.write_u8(0),
             Space::Typ(t) => {
                 h.write_u8(1);
-                h.write_u32(t.0);
+                h.write_u32(self.t.types.canonical(t).0);
             }
             Space::Lit(l) => {
                 h.write_u8(2);
@@ -588,7 +588,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
             Space::Prod(c, t, items) => {
                 h.write_u8(3);
                 h.write_u32(c.0);
-                h.write_u32(t.0);
+                h.write_u32(self.t.types.canonical(t).0);
                 for i in 0..items.len as usize {
                     self.digest_into(self.part(items, i), h);
                 }
@@ -631,8 +631,10 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// Structural equality: two runs are the same when their parts are.
     fn same(&self, a: Space, b: Space) -> bool {
         match (a, b) {
-            (Space::Prod(c1, t1, f1), Space::Prod(c2, t2, f2)) => c1 == c2 && t1 == t2 && self.same_items(f1, f2),
+            (Space::Prod(c1, t1, f1), Space::Prod(c2, t2, f2)) => c1 == c2 && self.t.types.same(t1, t2) && self.same_items(f1, f2),
             (Space::Or(xs), Space::Or(ys)) => self.same_items(xs, ys),
+            // A retained form is the same space as its canonical type.
+            (Space::Typ(x), Space::Typ(y)) => self.t.types.same(x, y),
             _ => a == b,
         }
     }
@@ -1563,19 +1565,20 @@ impl<'t, 'a> Spaces<'t, 'a> {
     // ---- the algebra ----
 
     fn sub(&mut self, a: TypeId, b: TypeId) -> bool {
-        if a == b || b == ANY || a == NOTHING {
+        let (ua, ub) = (self.t.types.canonical(a), self.t.types.canonical(b));
+        if ua == ub || ub == ANY || ua == NOTHING {
             return true;
         }
         // `Int` and `Double` share a run-time type, so a `Double` case takes the `Int`s too;
         // the literals of a `Float` scrutinee are `Double`s.
-        if (a == self.t.b.t_int && b == self.t.b.t_double) || (a == self.t.b.t_double && b == self.t.b.t_float) {
+        if (ua == self.t.b.t_int && ub == self.t.b.t_double) || (ua == self.t.b.t_double && ub == self.t.b.t_float) {
             return true;
         }
         // Two classes are related through the base types alone; the typer settles their
         // arguments, and what stands below `AnyVal` and `AnyRef`.
         let tops = [self.t.b.t_any_val, self.t.b.t_any_ref];
-        match (self.t.types.get(a), self.t.types.get(b)) {
-            (Type::Class(c1, xs), Type::Class(c2, ys)) if self.plain_class(c1) && self.plain_class(c2) && !tops.contains(&b) => {
+        match (self.t.types.get(ua), self.t.types.get(ub)) {
+            (Type::Class(c1, xs), Type::Class(c2, ys)) if self.plain_class(c1) && self.plain_class(c2) && !tops.contains(&ub) => {
                 self.t.complete_class(c1);
                 if !self.t.syms.class(c1).base_types.iter().any(|&(base, _)| base == c2) {
                     return false;
@@ -1588,13 +1591,13 @@ impl<'t, 'a> Spaces<'t, 'a> {
             (Type::Class(..), Type::Union(x, y, _)) => return self.sub(a, x) || self.sub(a, y),
             _ => {}
         }
-        if let Some(&r) = self.sc.subs.get(&(a, b)) {
+        if let Some(&r) = self.sc.subs.get(&(ua, ub)) {
             return r;
         }
         let mark = self.t.snapshot();
         let r = self.t.is_sub(a, b);
         self.t.rollback(&mark);
-        self.sc.subs.insert((a, b), r);
+        self.sc.subs.insert((ua, ub), r);
         r
     }
 
@@ -1639,21 +1642,21 @@ impl<'t, 'a> Spaces<'t, 'a> {
             // parameter's `superType`).
             (_, Type::Param(p)) => {
                 let upper = self.t.syms.tparam(p).upper;
-                upper != t2 && self.disjoint(t1, upper)
+                !self.t.types.same(upper, t2) && self.disjoint(t1, upper)
             }
             (Type::Param(p), _) => {
                 let upper = self.t.syms.tparam(p).upper;
-                upper != t1 && self.disjoint(upper, t2)
+                !self.t.types.same(upper, t1) && self.disjoint(upper, t2)
             }
             // An abstract type member through its upper bound, as `decompose` takes it
             // (Space.scala 747, `isUpperBoundedAbstract`).
             (_, Type::Member(..) | Type::AppMember(..) | Type::Decl(_)) => {
                 let (_, upper) = self.t.member_bounds(t2);
-                upper != t2 && self.disjoint(t1, upper)
+                !self.t.types.same(upper, t2) && self.disjoint(t1, upper)
             }
             (Type::Member(..) | Type::AppMember(..) | Type::Decl(_), _) => {
                 let (_, upper) = self.t.member_bounds(t1);
-                upper != t1 && self.disjoint(upper, t2)
+                !self.t.types.same(upper, t1) && self.disjoint(upper, t2)
             }
             (Type::Class(c1, _), Type::Class(c2, _)) => !self.xxl_tuple_of(c1, c2) && !self.xxl_tuple_of(c2, c1) && self.classes_disjoint(c1, c2),
             _ => false,
@@ -1673,7 +1676,8 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// The field types of a case class or tuple instance, as a run of `field_arena`, remembered
     /// per match.
     fn field_types(&mut self, t: TypeId) -> Option<Items> {
-        if let Some(&(_, f)) = self.sc.fields.iter().find(|(k, _)| *k == t) {
+        let key = self.t.types.canonical(t);
+        if let Some(&(_, f)) = self.sc.fields.iter().find(|(k, _)| *k == key) {
             return f;
         }
         let fields = self.t.class_field_types(t).map(|tys| {
@@ -1681,7 +1685,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
             self.sc.field_arena.extend_from_slice(&tys);
             Items { start: start as u32, len: tys.len() as u32 }
         });
-        self.sc.fields.push((t, fields));
+        self.sc.fields.push((key, fields));
         fields
     }
 
@@ -1804,12 +1808,24 @@ impl<'t, 'a> Spaces<'t, 'a> {
     }
 
     fn is_ground(&self, t: TypeId) -> bool {
+        // A retained form first: its record's types and what it is made over, each ground.
+        if self.t.semantic {
+            if let Some((under, r)) = self.t.types.form_of(t) {
+                return self.is_ground_form(t, under, r);
+            }
+        }
         match self.t.types.get(t) {
             Type::Any | Type::Nothing | Type::Ctor(_) => true,
             Type::Class(_, args) => self.t.types.items(args).iter().all(|&a| self.is_ground(a)),
             Type::Union(a, b, _) | Type::Inter(a, b) => self.is_ground(a) && self.is_ground(b),
             _ => false,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn is_ground_form(&self, t: TypeId, under: TypeId, r: crate::types::RetainId) -> bool {
+        self.t.types.in_pass(&[super::FORM_IS_GROUND], t, || (self.t.types.retention_types(r, false).into_iter().all(|x| self.is_ground(x)) && self.is_ground(under)) as u32) != 0
     }
 
     /// `Typ(t)` as the product of its fields, when `t` is a case class or tuple, or of the
@@ -1848,7 +1864,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// and a pattern below another covers nothing.
     fn outer_implied(&mut self, t: TypeId, sty: TypeId) -> bool {
         let (stated, scrut) = self.prefixed;
-        if sty == scrut {
+        if self.t.types.same(sty, scrut) {
             return self.t.prefix_agrees(t, stated);
         }
         // A space below another that keeps its prefix (a field's `a.T`, a child through
@@ -2199,7 +2215,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
         let stated_nested = matches!(self.t.types.get(stated), Type::Nested(..));
         for p in parts {
             let p = match p {
-                Space::Typ(t) if t == scrut && stated_nested => Space::Typ(stated),
+                Space::Typ(t) if self.t.types.same(t, scrut) && stated_nested => Space::Typ(stated),
                 other => other,
             };
             match p {
@@ -2247,7 +2263,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
                         let f = self.part(fields, i);
                         let signature = declared.filter(|d| (i as u32) < d.len).map(|d| self.sc.field_arena[d.start as usize + i]);
                         match (f, signature) {
-                            (Space::Typ(ft), Some(st)) if ft != st && !self.is_singleton_type(ft) => self.show_type_space(ft),
+                            (Space::Typ(ft), Some(st)) if !self.t.types.same(ft, st) && !self.is_singleton_type(ft) => self.show_type_space(ft),
                             _ => self.show_field(f),
                         }
                     })

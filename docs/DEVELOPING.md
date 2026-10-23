@@ -123,6 +123,12 @@ holds scalac's output on that major (`run_jvm.sh`'s header). `tests/all.sh` keep
 under `out/all/`. `bench/budget.sh` and `tests/runtime.sh` skip on any machine but the one that recorded their
 budgets.
 
+`tests/semanticdb` is the SemanticDB oracle of `teq fix`'s forms: `harness.py --regen` records scalac 3.8.4's
+`-Xsemanticdb` documents of each group of its corpus as golds, `--check` holds the manifest and the golds to each other,
+`--self-test` proves the comparison refuses damaged documents, and `--teq <binary>` compares teq's documents
+(`TEQ_FIX_SEMANTICDB`, written by `teq compiler fix` only for a program that types whole) with the golds field by
+field; dotty's own corpus is read from the scala3 checkout at the tag 3.8.4 (the harness's header has the environment).
+
 Evidence that a change leaves the output alone, or what it moves:
 
 ```

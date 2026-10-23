@@ -1974,7 +1974,8 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
         let same = info.sig.as_ref().map_or(false, |o| {
-            o.ret == sig.ret && o.clauses.len() == sig.clauses.len() && o.clauses.iter().zip(&sig.clauses).all(|(a, b)| a.params.len() == b.params.len() && a.params.iter().zip(&b.params).all(|(x, y)| x.ty == y.ty))
+            let u = |t: TypeId| cx.input.types.underlying(t);
+            u(o.ret) == u(sig.ret) && o.clauses.len() == sig.clauses.len() && o.clauses.iter().zip(&sig.clauses).all(|(a, b)| a.params.len() == b.params.len() && a.params.iter().zip(&b.params).all(|(x, y)| u(x.ty) == u(y.ty)))
         });
         let m = self.mref(s);
         if same || m.params.len() != sig.clauses.iter().map(|c| c.params.len()).sum::<usize>() {
@@ -2031,7 +2032,7 @@ impl<'a> Gen<'a> {
             for &tp in &sig.tparams {
                 let upper = syms.tparam(tp).upper;
                 let seen = types.subst(upper, &subst);
-                if seen == upper {
+                if types.same(seen, upper) {
                     continue;
                 }
                 match subst.iter_mut().find(|(p, _)| *p == tp) {

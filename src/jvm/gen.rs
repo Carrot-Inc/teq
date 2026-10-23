@@ -463,6 +463,7 @@ impl<'a> Gen<'a> {
         if t == NO_TYPE {
             return JType::object();
         }
+        let t = self.cx.input.types.underlying(t);
         if t.0 >= crate::arena::LOCAL_BASE || self.sparse || self.java_erasure || self.bottom_markers {
             return self.erase_overlay(t);
         }
@@ -699,6 +700,7 @@ impl<'a> Gen<'a> {
 
     /// A declared view, expanded (`symbols::expand_declared`) once per view.
     fn declared_type(&self, t: TypeId) -> TypeId {
+        let t = self.cx.input.types.underlying(t);
         if let Some(&x) = self.declared.borrow().get(&t) {
             return x;
         }
@@ -2695,7 +2697,7 @@ impl<'a> Gen<'a> {
         // A branch that throws leaves nothing to join.
         let mut branches: Option<JType> = None;
         for r in results {
-            if matches!(prog.expr(r), TExpr::Throw(..)) || self.recorded_type(r) == Some(NOTHING) {
+            if matches!(prog.expr(r), TExpr::Throw(..)) || self.recorded_type(r).map(|t| self.cx.input.types.canonical(t)) == Some(NOTHING) {
                 continue;
             }
             let t = self.static_type(r);
@@ -4842,7 +4844,7 @@ impl<'a> Gen<'a> {
         // The getter's type as the typer completed it (`Namer.inferredResultType`): the default's
         // own where the parameter's type names the method's type parameters (`a$default$1[A]:
         // String`), as scalac's class file has it; the parameter's otherwise.
-        let own = self.cx.input.getters.and_then(|t| crate::typer::getters::getter_type(t, self.cx.input.syms, crate::tir::DefaultOf::Method(s), i)).filter(|&t| t != p.ty);
+        let own = self.cx.input.getters.and_then(|t| crate::typer::getters::getter_type(t, self.cx.input.syms, crate::tir::DefaultOf::Method(s), i)).filter(|&t| !self.cx.input.types.same(t, p.ty));
         let ret = match own {
             Some(t) => self.erase(t),
             None if p.by_name => self.erase(p.ty),

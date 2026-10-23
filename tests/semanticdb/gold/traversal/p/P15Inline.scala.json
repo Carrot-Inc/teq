@@ -1,0 +1,40 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "P15Inline.scala",
+  "text": "",
+  "md5": "948CEE2B18861B16A189551FF3DD0926",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"p15/Inl.twice().(x)","language":"SCALA","kind":"PARAMETER","properties":131072,"display_name":"x","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"p15/Inl.twice().","language":"SCALA","kind":"MACRO","properties":131072,"display_name":"twice","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":["p15/Inl.twice().(x)"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"p15/Inl.tr().","language":"SCALA","kind":"MACRO","properties":655360,"display_name":"tr","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Any#","type_arguments":[]}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"p15/Inl.a.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"a","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"p15/Inl.b.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"b","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"local0","language":"SCALA","kind":"LOCAL","properties":1024,"display_name":"q","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"p15/Inl.c().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"c","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"p15/Inl.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Inl","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"p15/Inl."},"declarations":{"symlinks":["p15/Inl.`<init>`().","p15/Inl.twice().","p15/Inl.tr().","p15/Inl.a.","p15/Inl.b.","p15/Inl.c()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":29,"end_line":2,"end_character":32},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":26,"end_line":2,"end_character":27},"symbol":"p15/Inl.twice().(x)","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":35,"end_line":2,"end_character":38},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":41,"end_line":2,"end_character":42},"symbol":"p15/Inl.twice().(x)","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":43,"end_line":2,"end_character":44},"symbol":"scala/Int#`+`(+4).","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":45,"end_line":2,"end_character":46},"symbol":"p15/Inl.twice().(x)","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":13,"end_line":2,"end_character":18},"symbol":"p15/Inl.twice().","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":29,"end_line":3,"end_character":32},"symbol":"scala/Any#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":25,"end_line":3,"end_character":27},"symbol":"p15/Inl.tr().","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":10,"end_line":4,"end_character":15},"symbol":"p15/Inl.twice().","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":6,"end_line":4,"end_character":7},"symbol":"p15/Inl.a.","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":10,"end_line":5,"end_character":12},"symbol":"p15/Inl.tr().","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":6,"end_line":5,"end_character":7},"symbol":"p15/Inl.b.","role":"DEFINITION"},
+    {"range":{"start_line":6,"start_character":16,"end_line":6,"end_character":17},"symbol":"local0","role":"DEFINITION"},
+    {"range":{"start_line":6,"start_character":23,"end_line":6,"end_character":28},"symbol":"p15/Inl.twice().","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":29,"end_line":6,"end_character":30},"symbol":"local0","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":6,"end_line":6,"end_character":7},"symbol":"p15/Inl.c().","role":"DEFINITION"},
+    {"range":{"start_line":1,"start_character":7,"end_line":1,"end_character":10},"symbol":"p15/Inl.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":11},"symbol":"p15/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

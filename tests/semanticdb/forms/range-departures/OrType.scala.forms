@@ -1,0 +1,3 @@
+OrType.map: B
+OrType.union: OrInv[? >: String]
+OrType.unionOut: OrOut[Any]

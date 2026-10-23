@@ -1044,17 +1044,16 @@ impl<'a> Worker<'a> {
         if self.syms.sym(sym).kind != SymKind::Def || self.syms.sym(sym).is_extension {
             return false;
         }
-        // The signature and `Array[String]` both in the reader's view, compared by id.
+        // `Array[String]` and `Unit` read through the retained forms (`Predef.String`), by their canonical ids.
         let sig = self.sig_arc(sym);
         let [clause] = sig.clauses.as_slice() else { return false };
         let [param] = clause.params.as_slice() else { return false };
-        let array_of_string = self.types.class(self.b.array, &[self.b.t_string]);
         sig.tparams.is_empty()
             && !clause.is_using
             && !param.repeated
             && !param.by_name
-            && param.ty == array_of_string
-            && sig.ret == self.b.t_unit
+            && matches!(self.types.get(param.ty), Type::Class(a, args) if a == self.b.array && matches!(self.types.items(args), &[e] if self.canon(e) == self.b.t_string))
+            && self.canon(sig.ret) == self.b.t_unit
     }
 
     /// A `@main` method runs with the command line: without parameters, with them as `String*`, or
@@ -1070,7 +1069,7 @@ impl<'a> Worker<'a> {
         let params: Vec<&ParamSig> = sig.clauses.iter().flat_map(|c| c.params.iter()).collect();
         let takes_strings = match params.as_slice() {
             [] => true,
-            [p] => p.repeated && !p.by_name && p.ty == self.b.t_string,
+            [p] => p.repeated && !p.by_name && self.canon(p.ty) == self.b.t_string,
             _ => false,
         };
         let refusal = if !sig.tparams.is_empty() {
@@ -1681,7 +1680,7 @@ impl<'a> Worker<'a> {
     fn param_info_hi(&mut self, p: TParamId) -> TypeId {
         let info = self.syms.tparam(p);
         let (upper, arity) = (info.upper, info.arity as usize);
-        if arity == 0 || upper != ANY {
+        if arity == 0 || self.canon(upper) != ANY {
             return upper;
         }
         if let Some(&t) = self.kind_clauses.get(&p) {
@@ -1704,7 +1703,7 @@ impl<'a> Worker<'a> {
     /// `[X..] =>> Any` over its declared parameters (`declared_clause`), each with its own information; else the bound.
     fn member_info_hi(&mut self, alias: Option<AliasId>, hi: TypeId) -> TypeId {
         match alias {
-            Some(a) if hi == ANY => self.declared_clause(a),
+            Some(a) if self.canon(hi) == ANY => self.declared_clause(a),
             _ => hi,
         }
     }
@@ -1755,6 +1754,7 @@ impl<'a> Worker<'a> {
     /// Enters the reference `t` on the kind queries' walk (`Worker::kind_walk`): false where it is on it already, a
     /// bound reaching itself (dotty's `CyclicReference`), which reads as no information.
     fn kind_walk_enter(&mut self, t: TypeId) -> bool {
+        let t = self.canon(t);
         if self.kind_walk.contains(&t) {
             return false;
         }
@@ -2102,10 +2102,18 @@ impl<'a> Worker<'a> {
     /// its arguments', a nested class's prefix. A variable: not permanently instantiated true (`permanent_instance`), else
     /// its permanent instance's. Else the parts' (`foldOver`).
     fn test_provisional(&mut self, t: TypeId, seen: &mut Vec<TypeId>) -> bool {
-        if seen.contains(&t) {
+        // A retained form first: its record's types, then what it is made over; the parts' forms kept (the canonical
+        // type is the cycle's key alone).
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.test_provisional_form(seen, under, r);
+            }
+        }
+        let key = self.canon(t);
+        if seen.contains(&key) {
             return false;
         }
-        seen.push(t);
+        seen.push(key);
         match self.types.get(t) {
             Type::Param(p) => {
                 if self.binder_state(p).is_some_and(|s| s != super::BinderState::Done) {
@@ -2156,6 +2164,13 @@ impl<'a> Worker<'a> {
                 parts.into_iter().any(|x| self.test_provisional(x, seen))
             }
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn test_provisional_form(&mut self, seen: &mut Vec<TypeId>, under: TypeId, r: crate::types::RetainId) -> bool {
+        let parts = self.types.retention_types(r, false);
+        parts.into_iter().any(|x| self.test_provisional(x, seen)) || self.test_provisional(under, seen)
     }
 
     /// `testProvisional` of a `TypeRef` to the member `a`: its symbol `Provisional` (its `typeSig` under way) true; a
@@ -2378,6 +2393,13 @@ impl<'a> Worker<'a> {
     /// explored (`TypeRef`), every other type mapped over (`TypeMap.mapOver`).
     fn nc_apply(&mut self, m: &mut NonCyclic, t: TypeId) -> Result<(), ()> {
         let t = self.deref_keeping(t);
+        // A retained form first, as the map visits the type it stands for: its record's types (an annotation's
+        // arguments' through `Annotation.mapWith`), then what it is made over; once in the pass at the map's flags.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.nc_apply_form(m, t, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Term(_) | Type::Select(..) => {
                 let underlying = self.path_underlying(t);
@@ -2422,6 +2444,28 @@ impl<'a> Worker<'a> {
             }
             _ => self.nc_map_over(m, t),
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn nc_apply_form(&mut self, m: &mut NonCyclic, t: TypeId, under: TypeId, r: crate::types::RetainId) -> Result<(), ()> {
+        let types = self.types.clone();
+        let mut ctx = vec![super::FORM_NON_CYCLIC, m.cycle_ok as u32, m.nested_cycle_ok as u32, m.variance as u32, m.sym.0];
+        ctx.extend(m.locked.iter().map(|x| x.0));
+        let failed = types.in_pass(&ctx, t, || {
+            // An alias's arguments as `mapArgs` visits an applied type's (`nc_map_args`, at its parameters' variances),
+            // a written type and an annotation's arguments' trees (`Annotation.mapWith`) as the map stands; then what
+            // the form is made over.
+            let record = match types.retention(r) {
+                crate::types::Retention::Alias(..) => {
+                    let (args, variances): (Vec<TypeId>, Vec<i8>) = self.form_parts_at(r).into_iter().unzip();
+                    self.nc_map_args(m, &args, &variances)
+                }
+                _ => types.retention_types(r, true).into_iter().try_for_each(|x| self.nc_apply(m, x)),
+            };
+            (record.is_err() || self.nc_apply(m, under).is_err()) as u32
+        });
+        if failed != 0 { Err(()) } else { Ok(()) }
     }
 
     /// `mapOver(rinfo)` of a refinement member's information, as one type: a `TypeBounds` its lower bound at
@@ -4390,7 +4434,7 @@ impl<'a> Worker<'a> {
         if in_body {
             return ty;
         }
-        let t = self.deref(ty);
+        let t = self.deref_canonical(ty);
         if t == self.b.t_unit {
             self.inline_val_error(span, "`inline val` of type `Unit` is not supported.\n\nTo inline a `Unit` consider using `inline def`");
         } else if t == self.b.t_string || self.is_primitive(t) {
@@ -4804,7 +4848,7 @@ impl<'a> Worker<'a> {
         let outer_inline_val = std::mem::replace(&mut self.inline_val_rhs, def.mods & mods::INLINE != 0 && matches!(def.kind, DefKind::Val { .. }));
         let typed = match body {
             Some(b) if !has_intrinsic => Some(match expected {
-                Some(t) if t == self.b.t_unit => {
+                Some(t) if self.canon(t) == self.b.t_unit => {
                     let (e, ty) = self.type_expr(b, None);
                     self.warn_discarded(b, e, ty);
                     body_ty = Some(ty);
@@ -4884,7 +4928,7 @@ impl<'a> Worker<'a> {
         }
         if is_method {
             if !has_intrinsic {
-                let body_unconsuming = self.unused.defs_on() && body_ty.is_some_and(|t| t == NOTHING || self.fold_type(t).is_some());
+                let body_unconsuming = self.unused.defs_on() && body_ty.is_some_and(|t| self.canon(t) == NOTHING || self.fold_type(t).is_some());
                 let f = self.prog.add_fun(TFun { sym, params, defaults, body: typed, body_unconsuming, captures: 0, lifted: false });
                 self.fun_of_sym.insert(sym, f);
                 if def.annots.iter().any(|a| a.name == names::TAILREC) {
@@ -7268,11 +7312,11 @@ impl<'a> Worker<'a> {
             }
             out.push(']');
         }
-        if lo != NOTHING {
+        if self.canon(lo) != NOTHING {
             let b = body(self, lo);
             out.push_str(&format!(" >: {}", self.show(b)));
         }
-        if hi != ANY {
+        if self.canon(hi) != ANY {
             let b = body(self, hi);
             out.push_str(&format!(" <: {}", self.show(b)));
         }
@@ -8029,6 +8073,10 @@ impl<'a> Worker<'a> {
         let name = self.interner.intern("MirroredMonoType");
         let (types, syms) = (&*self.types, &self.syms);
         fn replaced(types: &crate::types::TypeStore, syms: &crate::symbols::Symbols, t: TypeId, name: Name, mono: TypeId) -> TypeId {
+            // A retained form first: what it is made over and its record replaced.
+            if let Some((under, r)) = types.form_of(t) {
+                return types.map_form_once(&[super::FORM_REPLACED, name.0, mono.0], t, under, r, &mut |x| replaced(types, syms, x, name, mono));
+            }
             match types.get(t) {
                 Type::Decl(a) if syms.aliases[a.idx()].name == name => mono,
                 Type::Member(_, n) if n == name => mono,
@@ -8251,7 +8299,7 @@ impl<'a> Worker<'a> {
             return Agreement::Same;
         }
         let self_of = |t: &Self, k: ClassId| t.syms.class(k).base_types[0].1;
-        let returns_this = m_owner.and_then(|t| self.class_of(t)).map_or(false, |k| msig.ret == self_of(self, k));
+        let returns_this = m_owner.and_then(|t| self.class_of(t)).map_or(false, |k| self.canon(msig.ret) == self_of(self, k));
         let mret = if returns_this {
             self_of(self, c)
         } else {
@@ -8362,11 +8410,11 @@ impl<'a> Worker<'a> {
                     Type::Lambda(_, body) => body,
                     _ => lower,
                 };
-                if lower != NOTHING {
+                if self.canon(lower) != NOTHING {
                     let t = self.types.subst(lower, subst);
                     let _ = std::fmt::Write::write_fmt(&mut out, format_args!(" >: {}", self.show(t)));
                 }
-                if upper != ANY {
+                if self.canon(upper) != ANY {
                     let t = self.types.subst(upper, subst);
                     let _ = std::fmt::Write::write_fmt(&mut out, format_args!(" <: {}", self.show(t)));
                 }
@@ -9044,8 +9092,15 @@ impl<'a> Worker<'a> {
     /// checked, since the parameter's own variances are not recorded.
     fn variance_violation(&mut self, t: TypeId, sign: i8) -> Option<(TParamId, i8)> {
         let t = self.deref(t);
-        if self.variance_skip.contains(&t) {
+        if self.variance_skip.iter().any(|&s| self.same_type(s, t)) {
             return None;
+        }
+        // A retained form first: its record's types each at its own variance (`form_parts_at`), then what it is made
+        // over; the first violation found.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.variance_violation_form(t, sign, under, r);
+            }
         }
         match self.types.get(t) {
             Type::Param(p) => {
@@ -9055,7 +9110,7 @@ impl<'a> Worker<'a> {
             // `G[A]` for a `G[_]`: an argument stands where `G`'s own parameter puts it.
             Type::AppParam(p, args) => {
                 let v = self.syms.tparam(p).variance;
-                if v != 0 && v != sign && !self.variance_skip.contains(&self.types.param(p)) {
+                if v != 0 && v != sign && !self.variance_skip.iter().any(|&s| self.canon(s) == self.types.param(p)) {
                     return Some((p, sign));
                 }
                 let n = self.types.items(args).len();
@@ -9128,6 +9183,21 @@ impl<'a> Worker<'a> {
             Type::Rec(body) => self.variance_violation(body, sign),
             _ => None,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn variance_violation_form(&mut self, t: TypeId, sign: i8, under: TypeId, r: crate::types::RetainId) -> Option<(TParamId, i8)> {
+        let types = self.types.clone();
+        let found = types.in_pass(&[super::FORM_VARIANCE_VIOLATION, sign as u32], t, || {
+            let mut found = None;
+            for (x, w) in self.form_parts_at(r) {
+                found = found.or_else(|| self.variance_violation(x, sign * w));
+            }
+            let found = found.or_else(|| self.variance_violation(under, sign));
+            found.map_or(u32::MAX, |(p, s)| p.0 * 4 + (s + 1) as u32)
+        });
+        (found != u32::MAX).then(|| (TParamId(found / 4), (found % 4) as i8 - 1))
     }
 
     /// A val that a class inherits next to the def it implements, from an ancestor that knows

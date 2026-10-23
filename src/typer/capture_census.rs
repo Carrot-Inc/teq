@@ -298,7 +298,7 @@ impl<'w, 'a> Walk<'w, 'a> {
         if local.map_or(false, |l| l.mods != 0) {
             self.count("local modifiers", Status::Captured, None, ctx);
         }
-        let status = match (synthetic && ty == ANY, local.and_then(|l| l.ty)) {
+        let status = match (synthetic && self.w.types.canonical(ty) == ANY, local.and_then(|l| l.ty)) {
             (false, _) => Status::Derived,
             (true, Some(_)) => Status::Captured,
             (true, None) => Status::Missing,

@@ -469,7 +469,7 @@ impl<'a> Worker<'a> {
 
     /// `param_exempt` of a parameter of type `ty`.
     fn type_exempts(&mut self, ty: TypeId, implicit: bool) -> bool {
-        let ty = self.dealias(ty);
+        let ty = self.dealias_canonical(ty);
         // `Any`, every member of which is `Any`'s, is a marker (`isMarkerTrait`).
         if implicit && ty == crate::types::ANY {
             return true;
@@ -485,7 +485,7 @@ impl<'a> Worker<'a> {
             // An abstract type is a marker where its upper bound is.
             crate::types::Type::Member(..) | crate::types::Type::AppMember(..) | crate::types::Type::Decl(_) => {
                 let (_, hi) = self.member_bounds(ty);
-                let hi = self.dealias(hi);
+                let hi = self.dealias_canonical(hi);
                 match self.types.get(hi) {
                     crate::types::Type::Class(c, _) => self.marker_trait(c),
                     _ => hi == crate::types::ANY,

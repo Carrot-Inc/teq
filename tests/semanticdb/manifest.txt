@@ -1,0 +1,166 @@
+# The documents of tests/semanticdb's corpus: <group>/<uri><TAB><status>[<TAB><note>]
+# status: pending (the forms not built yet), pass (teq's document equals the gold), finding: <what> (a pinned gap,
+# named in the report). A note `unstable occurrences <line>:<character>...: <why>` names the occurrences (by their
+# range's start, from 0) whose symbol the reference itself changes under an unrelated edit: those symbols alone are
+# compared against nothing, the rest of the document as any other's.
+design/Extra.scala	pending
+design/Forms.scala	pending
+design/Identity.scala	pending
+dot-path/outside/./Other.scala	pending	a source outside the sourceroot given with an interior `.`: Java's path elements keep it in the uri
+dotty/Access.scala	pending
+dotty/Advanced.scala	finding: teq refuses it (Advanced.scala:54:19, "this type does not take type arguments"), a typer item
+dotty/Annotations.scala	finding: teq refuses it (Annotations.scala:22:9, an annotation on a class's primary constructor, "expected 'extends' or a template body, found '@'"), a parser item
+dotty/Anonymous.scala	pending
+dotty/AnonymousGiven.scala	pending
+dotty/CaseClass.scala	pending
+dotty/Classes.scala	finding: teq refuses it (Classes.scala:29:10, "expected end of statement, found 'def'"), a parser item
+dotty/Deprecated.scala	pending
+dotty/Empty.scala	pending
+dotty/EmptyObject.scala	pending
+dotty/EndMarkers.scala	pending
+dotty/EndMarkers2.scala	pending
+dotty/EnumVal.scala	pending
+dotty/Enums.scala	finding: teq refuses it (Enums.scala:53:32, "type mismatch: found Option[B] => Option[B], required A => Option[B]"), a typer item
+dotty/EtaExpansion.scala	pending
+dotty/Example.scala	pending
+dotty/Extension.scala	pending
+dotty/ForComprehension.scala	pending
+dotty/Givens.scala	pending
+dotty/ImplicitConversion.scala	pending
+dotty/Imports.scala	pending
+dotty/InfoMacro.scala	pending
+dotty/InfoMacroTest.scala	pending
+dotty/InstrumentTyper.scala	finding: teq refuses it (InstrumentTyper.scala:6:8, "cannot resolve import: types not found"): it imports semanticdb-Types.scala's package, which teq refuses
+dotty/InventedNames.scala	pending
+dotty/Issue1749.scala	pending
+dotty/JavaStaticVar.scala	pending
+dotty/Local.scala	pending
+dotty/Locals.scala	pending
+dotty/MatchType.scala	pending
+dotty/MetacJava.scala	finding: teq refuses it (MetacJava.scala:9:19, "not supported yet: inner class com.javacp.MetacJava.Overload1 needs an outer instance"), a typer item
+dotty/MethodUsages.scala	pending
+dotty/Methods.scala	pending
+dotty/NamedApplyBlock.scala	pending
+dotty/NamedArguments.scala	pending
+dotty/NewModifiers.scala	pending
+dotty/Objects.scala	pending
+dotty/Overrides.scala	pending
+dotty/Prefixes.scala	pending
+dotty/RecOrRefined.scala	pending
+dotty/RightAssociativeExtension.scala	pending
+dotty/Selfs.scala	pending
+dotty/ShadowedParameters.scala	pending
+dotty/StructuralTypes.scala	pending
+dotty/StructuralTypesParams.scala	pending
+dotty/Synthetic.scala	pending
+dotty/Tabs.scala	pending
+dotty/TargetName.scala	pending
+dotty/Traits.scala	pending
+dotty/ValPattern.scala	pending
+dotty/Vals.scala	pending
+dotty/Vararg.scala	pending
+dotty/dep-match.scala	pending
+dotty/example-dir/FileInDir.scala	pending
+dotty/exports-example-Codec.scala	finding: teq refuses it (exports-example-Codec.scala:13:10, "cannot resolve export: decode is not an object or a package"), a typer item
+dotty/exports-package.scala	finding: teq refuses it (exports-package.scala:3:17, "no eligible member Decoder at example"): it exports exports-example-Codec.scala's members, which teq refuses
+dotty/filename%20with%20spaces.scala	pending
+dotty/hk.scala	pending
+dotty/i5854.scala	pending
+dotty/i9727.scala	pending
+dotty/i9782.scala	pending
+dotty/inlineconsume.scala	pending
+dotty/inlinedefs.scala	pending
+dotty/local-file.scala	pending
+dotty/nullary.scala	pending
+dotty/recursion.scala	finding: teq refuses it (recursion.scala:11:25, "value + is not a member of Any"), a typer item
+dotty/semanticdb-Definitions.scala	pending
+dotty/semanticdb-Flags.scala	finding: teq refuses it (semanticdb-Flags.scala:9:26, a Scala 2 macro definition `= macro ???`, which scalac skips under -Xignore-scala2-macros), a parser item
+dotty/semanticdb-Types.scala	finding: teq refuses it (semanticdb-Types.scala:60:24, the qualified super `C.super[M].m`, "expected an identifier, found 'super'"), a parser item
+dotty/semanticdb-extract.scala	pending
+dotty/toplevel.scala	finding: teq refuses it (toplevel.scala:8:14, "not found: toplevel$package": the top-level definitions' object named), a typer item
+fake-order/Fakes.scala	pending	the fake tail in dotty's HashSet[SymbolInformation] order
+fun-param/v0/S.scala	pending	unstable occurrences 5:22 6:6: dotty names the named argument x of f(x = ...) by funParamSymbol's HashMap[Symbol, Int] order (symbol ids): the parameter at v0-v2, the body's val at v3; the two occurrences' symbols are compared against nothing, the rest of the document as any other
+fun-param/v1/S.scala	pending	unstable occurrences 12:22 13:6: dotty names the named argument x of f(x = ...) by funParamSymbol's HashMap[Symbol, Int] order (symbol ids): the parameter at v0-v2, the body's val at v3; the two occurrences' symbols are compared against nothing, the rest of the document as any other
+fun-param/v2/S.scala	pending	unstable occurrences 19:22 20:6: dotty names the named argument x of f(x = ...) by funParamSymbol's HashMap[Symbol, Int] order (symbol ids): the parameter at v0-v2, the body's val at v3; the two occurrences' symbols are compared against nothing, the rest of the document as any other
+fun-param/v3/S.scala	pending	unstable occurrences 26:22 27:6: dotty names the named argument x of f(x = ...) by funParamSymbol's HashMap[Symbol, Int] order (symbol ids): the parameter at v0-v2, the body's val at v3; the two occurrences' symbols are compared against nothing, the rest of the document as any other
+java-order-classes/javaorder/UseHolder.scala	pending	the Java class loaded from its class file: fields before methods (ClassfileParser), the method size(+1)
+java-order-source/javaorder/UseHolder.scala	finding: teq reads no Java source: given Holder.java with its consumer, it parses it as Scala and refuses it, so the consumer does not type (scalac parses the Java source, its members in written order: the method size()); from javac's class file teq reads the class in the class file's order (java-order-classes)
+lib-jar/client/Use.scala	pending	the jar consumer: CC's synthetic apply before its written one in the pickled scope
+lib-source/client/Use.scala	pending
+lib-source/lib/Lib.scala	pending
+numbers/Numbers.scala	pending	nonfinite and negative-zero constants
+outside-root/In.scala	pending
+outside-root/outside/Other.scala	pending	a source outside the sourceroot, named by its path as given (SourceFile.relativePath's fallback branch)
+ranges/Ranges.scala	pending
+given/Given.scala	pending
+bottom/Bottom.scala	finding: scalac's `result` is `Box[Nothing]`, teq's retained form `Box[Nothing @Mark]` (its type `Box[Nothing]` since `TypeOps.simplify` at `Namer.inferredResultType`): the annotation stays over the simplified `Nothing`, as dotty's `simplify` keeps an annotation over its parent (`derivedAnnotatedType`), so dotty drops it before; open
+bottom/Ends.scala	pending
+annotation-args/Args.scala	pending
+annotation-deps/Args.scala	pending
+annotation-deps/DepArgs.scala	pending
+alias-variance/Variance.scala	pending
+aliases/Aliases.scala	pending
+annotation-trees/AnnTrees.scala	pending
+simplify-normalize/Normalize.scala	pending
+simplify-unchecked/Unchecked.scala	pending
+simplify-meet/Meet.scala	pending
+nested-annotations/Nested.scala	pending
+bounds/Bounds.scala	pending
+range-departures/AndType.scala	pending
+range-departures/OrType.scala	pending
+range-departures/TypeBounds.scala	pending
+bound-order/BoundOrder.scala	pending
+bound-order/Lower.scala	pending
+alias-bound/AliasBound.scala	pending	an alias of an annotated type meeting a type parameter: scalac's `In[Int]` and `Out[Int]` (`TypeComparer`'s `NamedType` alias arms before the annotation arms and the constraint), teq keeps the alias (`In[Marked]`, a retained alias over its expansion where dotty keeps the `TypeRef`); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
+module-singleton/ModuleRef.scala	pending	an object referenced as a value: scalac's `SingleType(modref/Obj.)`, teq the module class's type (a module's `TermRef` as the type); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
+annotated-source/annotated-client/Client.scala	pending
+annotated-source/annotated-lib/Lib.scala	pending
+annotated-classes/annotated-client/Client.scala	pending
+annotated-jar/annotated-client/Client.scala	pending
+nested-annotated-source/nested-client/Client.scala	pending
+nested-annotated-source/nested-lib/Nested.scala	pending
+nested-annotated-classes/nested-client/Client.scala	pending
+nested-annotated-jar/nested-client/Client.scala	pending
+generic-annotated-source/generic-client/GenericClient.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
+generic-annotated-source/generic-lib/GenericAnn.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
+generic-annotated-classes/generic-client/GenericClient.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
+generic-annotated-jar/generic-client/GenericClient.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
+retained-maps/Phantom.scala	pending
+retained-maps/Retained.scala	pending
+rules/forbidden/Example.scala	pending
+rules/forbidden/ExampleSignificantIndentation.scala	pending
+rules/typelevel/LiteralsSyntaxTests.scala	pending
+rules/typelevel/LiteralsSyntaxWithExistingImplicitsImportTests.scala	pending
+rules/typelevel/LiteralsSyntaxWithExistingSyntaxImportTests.scala	pending
+rules/typelevel/LiteralsSyntaxWithSuppresionsTests.scala	pending
+rules/xuwei/OptionGetWarnTest.scala	pending
+traversal/p/P01Block.scala	pending
+traversal/p/P02Lambda.scala	pending
+traversal/p/P03For.scala	pending
+traversal/p/P04PatDef.scala	pending
+traversal/p/P05Match.scala	pending
+traversal/p/P06Interp.scala	pending
+traversal/p/P07Args.scala	pending
+traversal/p/P08Case.scala	pending
+traversal/p/P09Template.scala	pending
+traversal/p/P10Enum.scala	pending
+traversal/p/P11Given.scala	pending
+traversal/p/P12Ext.scala	pending
+traversal/p/P13Anon.scala	pending
+traversal/p/P14Types.scala	pending
+traversal/p/P15Inline.scala	pending
+traversal/p/P16End.scala	pending
+traversal/p/P17Import.scala	pending
+traversal/p/P18Pkg.scala	pending
+traversal/p/P19This.scala	pending
+traversal/p/P20Assign.scala	pending
+traversal/p/P21Struct.scala	pending
+traversal/p/P22Ctor.scala	pending
+traversal/q/Q01Lift.scala	pending
+traversal/q/Q02Ctor.scala	pending
+traversal/q/Q03Local.scala	pending
+traversal/q/Q04Misc.scala	pending
+traversal/r/R01Ann.scala	pending
+traversal/r/R02PkgObj.scala	pending
+traversal/s/S01Eta.scala	pending
+unicode/A‍B.scala	pending	a zero-width joiner in the file name, kept by java.net.URI in the document's uri

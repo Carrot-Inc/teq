@@ -27,13 +27,13 @@ pub struct DepFun {
 /// A type approximated where it names a parameter: exact, or the range of types it may be at a
 /// position whose variance does not pick a side (scalac's `ApproximatingTypeMap`).
 #[derive(Clone, Copy)]
-enum Approx {
+pub(super) enum Approx {
     Exact(TypeId),
     Range(TypeId, TypeId),
 }
 
 impl Approx {
-    fn lo(self) -> TypeId {
+    pub(super) fn lo(self) -> TypeId {
         match self {
             Approx::Exact(t) | Approx::Range(t, _) => t,
         }
@@ -46,15 +46,6 @@ impl Approx {
     }
 }
 
-fn range(lo: TypeId, hi: TypeId, variance: i8) -> Approx {
-    if variance > 0 {
-        Approx::Exact(hi)
-    } else if variance < 0 || lo == hi {
-        Approx::Exact(lo)
-    } else {
-        Approx::Range(lo, hi)
-    }
-}
 
 
 /// What an approximation replaces by ranges (scalac's `ApproximatingTypeMap` leaves): the paths of
@@ -137,11 +128,11 @@ impl<'a> Worker<'a> {
                 TyExpr::BoundedWildcard(lo, hi) => {
                     let mut b = String::new();
                     let (lo, hi) = (self.resolve_type(lo), self.resolve_type(hi));
-                    if lo != NOTHING {
+                    if self.canon(lo) != NOTHING {
                         b.push_str(" >: ");
                         b.push_str(&self.show(lo));
                     }
-                    if hi != ANY {
+                    if self.canon(hi) != ANY {
                         b.push_str(" <: ");
                         b.push_str(&self.show(hi));
                     }
@@ -179,6 +170,12 @@ impl<'a> Worker<'a> {
         if !self.types.names_term(t, &[param]) {
             return None;
         }
+        // A retained form first: its record's types (an alias's arguments), then what it is made over.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.selection_through_form(t, param, under, r);
+            }
+        }
         let list = |l: TList| self.types.items(l).iter().find_map(|&x| self.selection_through(x, param));
         match self.types.get(t) {
             Type::Member(p, _) | Type::Select(p, _) if matches!(self.types.get(p), Type::Term(s) if s == param) => Some(t),
@@ -193,6 +190,17 @@ impl<'a> Worker<'a> {
             }),
             _ => None,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn selection_through_form(&self, t: TypeId, param: SymId, under: TypeId, r: crate::types::RetainId) -> Option<TypeId> {
+        let found = self.types.in_pass(&[super::FORM_SELECTION_THROUGH, param.0], t, || {
+            let mut found = self.types.retention_types(r, false).into_iter().find_map(|x| self.selection_through(x, param));
+            found = found.or_else(|| self.selection_through(under, param));
+            found.map_or(u32::MAX, |f| f.0)
+        });
+        (found != u32::MAX).then_some(TypeId(found))
     }
 
     /// `(c: Ctx, x: c.T): c.T`, a method type as scalac shows it.
@@ -400,7 +408,7 @@ impl<'a> Worker<'a> {
         let [clause] = sig.clauses.as_slice() else { return None };
         let items = self.types.items(args);
         // An `apply` over other parameter types is an overload beside the class's, no view of it.
-        if !sig.tparams.is_empty() || clause.params.len() + 1 != items.len() || clause.params.iter().zip(items).any(|(p, &a)| p.ty != a) {
+        if !sig.tparams.is_empty() || clause.params.len() + 1 != items.len() || clause.params.iter().zip(items).any(|(p, &a)| !self.same_type(p.ty, a)) {
             return None;
         }
         let params = items[..clause.params.len()].to_vec();
@@ -508,20 +516,95 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// `ApproximatingTypeMap.range` (Types.scala 6592-6617 at 3.8.4): at a positive variance the upper end; at a negative
+    /// one the lower, `Nothing` itself (`eq`) as `Nothing & hi` (`nothing_and`); at an invariant one the end where both
+    /// are one type (`eq`), else the range, whose ends are types here, never ranges (`lower` and `upper` leave them).
+    #[inline]
+    fn approx_range(&mut self, lo: TypeId, hi: TypeId, v: i8) -> Approx {
+        if v > 0 {
+            Approx::Exact(hi)
+        } else if v < 0 {
+            Approx::Exact(if lo == NOTHING { self.nothing_and(hi) } else { lo })
+        } else if lo == hi {
+            Approx::Exact(lo)
+        } else {
+            Approx::Range(lo, hi)
+        }
+    }
+
+    /// `ApproximatingTypeMap.derivedAnnotatedType` (Types.scala 6825-6832 at 3.8.4) of a retained form: what it is made
+    /// over approximated; a range's endpoints each kept under the form (its record's types approximated as invariant
+    /// arguments) before the range, at the variance `v`; else the form over the type, apart from exactly `Nothing`.
+    #[cold]
+    #[inline(never)]
+    fn approx_form(&mut self, t: TypeId, under: TypeId, r: crate::types::RetainId, leaves: Leaves, v: i8) -> Approx {
+        let mut ctx = vec![v as u32];
+        ctx.extend(leaves.terms.iter().map(|s| s.0));
+        ctx.push(u32::MAX);
+        ctx.extend(leaves.tparams.iter().map(|p| p.0));
+        ctx.extend(leaves.ranges.iter().flat_map(|&(lo, hi)| [lo.0, hi.0]));
+        ctx.push(u32::MAX);
+        ctx.extend(leaves.expanding.borrow().iter().map(|x| x.0));
+        if let Some(done) = self.form_passes.approx.get(&ctx, t) {
+            return done;
+        }
+        self.form_passes.approx.enter();
+        let a = self.approx(under, leaves, v);
+        let types = self.types.clone();
+        // An alias application as `ApproximatingTypeMap` maps an `AppliedType` (`derived_applied_alias`).
+        if let crate::types::Retention::Alias(alias, args) = types.retention(r) {
+            let out = self.derived_applied_alias(t, under, alias, args, a, v, &mut |w, x, wv| w.approx(x, leaves, wv));
+            self.form_passes.approx.leave(&ctx, t, out);
+            return out;
+        }
+        let nr = match types.retention(r) {
+            // `Annotation.mapWith` at the map's variance: a type of an argument's tree made a range drops the annotation,
+            // `EmptyAnnotation`.
+            crate::types::Retention::Annot(..) => types.map_annotation(r, &mut |x| match self.approx(x, leaves, v) {
+                Approx::Exact(y) => Some(y),
+                Approx::Range(..) => None,
+            }),
+            _ => Some(types.map_retention(r, &mut |x| match self.approx(x, leaves, 0) {
+                Approx::Exact(y) => y,
+                Approx::Range(lo, hi) => types.bounded_wild(lo, hi),
+            })),
+        };
+        // An `EmptyAnnotation` leaves the parent alone (`AnnotatedType.derivedAnnotatedType`).
+        let keep = |x: TypeId| match nr {
+            None => x,
+            Some(nr) if x == under && nr == r => t,
+            Some(nr) => types.retained_by(x, nr),
+        };
+        let out = match a {
+            Approx::Range(lo, hi) => self.approx_range(keep(lo), keep(hi), v),
+            Approx::Exact(x) if types.is_exactly_nothing(x) => Approx::Exact(x),
+            Approx::Exact(x) => Approx::Exact(keep(x)),
+        };
+        self.form_passes.approx.leave(&ctx, t, out);
+        out
+    }
+
     fn names_leaves(&self, t: TypeId, leaves: Leaves) -> bool {
-        self.types.names_term(t, leaves.terms) || (!leaves.tparams.is_empty() && self.types.names_tparam(t, leaves.tparams))
+        self.types.names_term_mapped(t, leaves.terms) || (!leaves.tparams.is_empty() && self.types.names_tparam_mapped(t, leaves.tparams))
     }
 
     fn approx(&mut self, t: TypeId, leaves: Leaves, v: i8) -> Approx {
         if !self.names_leaves(t, leaves) {
             return Approx::Exact(t);
         }
+        // A retained form first, as dotty's approximation maps an annotated type (`approx_form`).
+        if self.semantic {
+            let d = self.deref_keeping(t);
+            if let Some((under, r)) = self.types.form_of(d) {
+                return self.approx_form(d, under, r, leaves, v);
+            }
+        }
         let t = self.deref(t);
         match self.types.get(t) {
             Type::Param(p) if leaves.tparams.contains(&p) => {
                 let i = leaves.tparams.iter().position(|&q| q == p).unwrap();
                 let (lo, hi) = leaves.ranges[i];
-                range(lo, hi, v)
+                self.approx_range(lo, hi, v)
             }
             // A higher-kinded parameter of a range applied (`derivedAppliedType` of a `Range`
             // constructor, Types.scala 6767): the arguments approximated at the parameter's own
@@ -537,19 +620,19 @@ impl<'a> Worker<'a> {
                 let approxed: Vec<Approx> = items.iter().enumerate().map(|(k, &a)| self.approx(a, leaves, v * variances.get(k).copied().unwrap_or(0))).collect();
                 let lower = self.applied_end(p, lo, &approxed, v).lo();
                 let upper = self.applied_end(p, hi, &approxed, v).hi();
-                range(lower, upper, v)
+                self.approx_range(lower, upper, v)
             }
             Type::Term(s) if leaves.terms.contains(&s) => {
                 let under = self.path_underlying(t);
                 let hi = self.approx_expanded(t, under, leaves, 1).hi();
-                range(NOTHING, hi, v)
+                self.approx_range(NOTHING, hi, v)
             }
             Type::Select(p, s) => match self.approx(p, leaves, v.max(0)) {
                 Approx::Exact(np) if self.types.is_path(np) => Approx::Exact(self.types.mk(Type::Select(np, s))),
                 pre => {
                     // The val's type seen through the upper bound of the prefix.
                     let hi = self.member_val_type(pre.hi(), s);
-                    range(NOTHING, hi, v)
+                    self.approx_range(NOTHING, hi, v)
                 }
             },
             Type::Member(p, name) => match self.approx(p, leaves, v.max(0)) {
@@ -557,7 +640,7 @@ impl<'a> Worker<'a> {
                     let np = if self.types.is_path(np) { np } else { self.widen_path(np) };
                     match self.member_type(np, name) {
                         Some(m) if !self.names_leaves(m, leaves) => Approx::Exact(m),
-                        _ => range(NOTHING, ANY, v),
+                        _ => self.approx_range(NOTHING, ANY, v),
                     }
                 }
                 Approx::Range(_, hi) => {
@@ -567,9 +650,9 @@ impl<'a> Worker<'a> {
                         Some(MemberInfo::Bounds(lo, up)) => {
                             let lo = self.approx_expanded(t, lo, leaves, -v).lo();
                             let up = self.approx_expanded(t, up, leaves, v).hi();
-                            range(lo, up, v)
+                            self.approx_range(lo, up, v)
                         }
-                        None => range(NOTHING, ANY, v),
+                        None => self.approx_range(NOTHING, ANY, v),
                     }
                 }
             },
@@ -582,15 +665,15 @@ impl<'a> Worker<'a> {
                         Approx::Exact(c) => Approx::Exact(self.types.mk(Type::Nested(np, c))),
                         c => {
                             let (lo, hi) = (self.types.mk(Type::Nested(np, c.lo())), self.types.mk(Type::Nested(np, c.hi())));
-                            range(lo, hi, v)
+                            self.approx_range(lo, hi, v)
                         }
                     },
                     pre => match self.types.get(pre.hi()) {
                         Type::Class(..) | Type::Nested(..) => {
                             let hi = self.types.mk(Type::Nested(pre.hi(), c.hi()));
-                            range(NOTHING, hi, v)
+                            self.approx_range(NOTHING, hi, v)
                         }
-                        _ => range(NOTHING, ANY, v),
+                        _ => self.approx_range(NOTHING, ANY, v),
                     },
                 }
             }
@@ -610,7 +693,7 @@ impl<'a> Worker<'a> {
                     _ => {
                         let lo = join(self, x.lo(), y.lo());
                         let hi = join(self, x.hi(), y.hi());
-                        range(lo, hi, v)
+                        self.approx_range(lo, hi, v)
                     }
                 }
             }
@@ -621,7 +704,7 @@ impl<'a> Worker<'a> {
                 Approx::Exact(b) => Approx::Exact(if b == body { t } else { self.types.rebind_rec(b) }),
                 Approx::Range(lo, hi) => {
                     let (lo, hi) = (self.types.rebind_rec(lo), self.types.rebind_rec(hi));
-                    range(lo, hi, v)
+                    self.approx_range(lo, hi, v)
                 }
             },
             // Bounds that name a parameter leave no exact type, as their lambda's parameter
@@ -650,7 +733,7 @@ impl<'a> Worker<'a> {
                     (true, Approx::Exact(b)) => Approx::Exact(self.types.mk(Type::Poly(lps, b))),
                     _ => {
                         let (lower, upper) = (self.types.mk(Type::Poly(lps, body.lo())), self.types.mk(Type::Poly(tps, body.hi())));
-                        range(lower, upper, v)
+                        self.approx_range(lower, upper, v)
                     }
                 }
             }
@@ -659,18 +742,18 @@ impl<'a> Worker<'a> {
                 Approx::Exact(b) => Approx::Exact(self.types.mk(Type::Lambda(ps, b))),
                 Approx::Range(lo, hi) => {
                     let (lower, upper) = (self.types.mk(Type::Lambda(ps, lo)), self.types.mk(Type::Lambda(ps, hi)));
-                    range(lower, upper, v)
+                    self.approx_range(lower, upper, v)
                 }
             },
             Type::Alias(..) => {
                 let e = self.deref_alias(t);
                 if e == t {
-                    range(NOTHING, ANY, v)
+                    self.approx_range(NOTHING, ANY, v)
                 } else {
                     self.approx_expanded(t, e, leaves, v)
                 }
             }
-            _ => range(NOTHING, ANY, v),
+            _ => self.approx_range(NOTHING, ANY, v),
         }
     }
 
@@ -714,7 +797,7 @@ impl<'a> Worker<'a> {
                     _ => 0,
                 })
                 .collect(),
-            _ => return range(NOTHING, ANY, v),
+            _ => return self.approx_range(NOTHING, ANY, v),
         };
         let (mut los, mut his) = (Vec::with_capacity(args.len()), Vec::with_capacity(args.len()));
         for (k, a) in args.iter().enumerate() {
@@ -733,12 +816,12 @@ impl<'a> Worker<'a> {
                 }
                 _ => {
                     let hi = self.apply_end(p, end, &as_bounds);
-                    return range(NOTHING, hi, v);
+                    return self.approx_range(NOTHING, hi, v);
                 }
             }
         }
         let (lower, upper) = (self.apply_end(p, end, &los), self.apply_end(p, end, &his));
-        range(lower, upper, v)
+        self.approx_range(lower, upper, v)
     }
 
     /// `p[xs]` with the constructor `end` standing for `p`, a union or an intersection of
@@ -780,7 +863,7 @@ impl<'a> Worker<'a> {
     /// approximation's work; a finite type is traversed whole).
     fn approx_expanded(&mut self, key: TypeId, e: TypeId, leaves: Leaves, v: i8) -> Approx {
         if leaves.expanding.borrow().contains(&key) {
-            return range(NOTHING, ANY, v);
+            return self.approx_range(NOTHING, ANY, v);
         }
         leaves.expanding.borrow_mut().push(key);
         let a = self.approx(e, leaves, v);
@@ -793,7 +876,7 @@ impl<'a> Worker<'a> {
     /// through another prefix the arguments approximated at the variances of the member's.
     fn approx_applied_member(&mut self, m: TypeId, args: TList, leaves: Leaves, v: i8) -> Approx {
         let items: Vec<TypeId> = self.types.items(args).to_vec();
-        let Type::Member(p, name) = self.types.get(m) else { return range(NOTHING, ANY, v) };
+        let Type::Member(p, name) = self.types.get(m) else { return self.approx_range(NOTHING, ANY, v) };
         let applied = |w: &mut Self, t: TypeId| match w.types.get(t) {
             Type::Lambda(..) | Type::Ctor(_) | Type::Param(_) | Type::Member(..) => w.types.apply_ctor(t, &items),
             _ => t,
@@ -802,7 +885,7 @@ impl<'a> Worker<'a> {
             Approx::Exact(np) => {
                 let np = if self.types.is_path(np) { np } else { self.widen_path(np) };
                 let tycon = if np == p { Some(m) } else { self.member_type(np, name) };
-                let Some(tycon) = tycon else { return range(NOTHING, ANY, v) };
+                let Some(tycon) = tycon else { return self.approx_range(NOTHING, ANY, v) };
                 if !matches!(self.types.get(tycon), Type::Member(..)) {
                     let e = applied(self, tycon);
                     return self.approx_expanded(self.types.mk(Type::AppMember(m, args)), e, leaves, v);
@@ -841,9 +924,9 @@ impl<'a> Worker<'a> {
                         let key = self.types.mk(Type::AppMember(m, args));
                         let lo = self.approx_expanded(key, lo, leaves, -v).lo();
                         let up = self.approx_expanded(key, up, leaves, v).hi();
-                        range(lo, up, v)
+                        self.approx_range(lo, up, v)
                     }
-                    None => range(NOTHING, ANY, v),
+                    None => self.approx_range(NOTHING, ANY, v),
                 }
             }
         }
@@ -932,12 +1015,12 @@ impl<'a> Worker<'a> {
         if distributed {
             let lo = self.apply_tycon(tycon, &los);
             let hi = self.apply_tycon(tycon, &his);
-            range(lo, hi, v)
+            self.approx_range(lo, hi, v)
         } else if class {
             let hi = self.apply_tycon(tycon, &as_bounds);
-            range(NOTHING, hi, v)
+            self.approx_range(NOTHING, hi, v)
         } else {
-            range(NOTHING, ANY, v)
+            self.approx_range(NOTHING, ANY, v)
         }
     }
 
@@ -968,12 +1051,14 @@ impl<'a> Worker<'a> {
             Some(m) => self.refined_by(parent.lo(), m),
             None => NOTHING,
         };
-        range(lower, upper, v)
+        self.approx_range(lower, upper, v)
     }
 
     fn refined_by(&mut self, parent: TypeId, m: Refinement) -> TypeId {
-        if let Refinement::Bounds(_, NOTHING, ANY) = m {
-            return parent;
+        if let Refinement::Bounds(_, lo, hi) = m {
+            if self.canon(lo) == NOTHING && self.canon(hi) == ANY {
+                return parent;
+            }
         }
         let r = self.types.refine(m);
         self.types.mk(Type::Refined(parent, r))

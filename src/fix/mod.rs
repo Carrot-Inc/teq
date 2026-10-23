@@ -8,4 +8,5 @@ pub mod escape;
 pub mod host;
 pub mod nodes;
 pub mod plan;
+pub mod service;
 pub mod source;

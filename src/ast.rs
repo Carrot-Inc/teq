@@ -888,6 +888,10 @@ pub struct Ast {
     /// library body's, those its pickle wrote (`ANNOTATEDtpt`) as the paths they name. A type's
     /// node leaves them out; dotty's `Annotated` tree keeps the annotation's tree.
     pub type_annots: Vec<(TyExprId, ExprId)>,
+    /// Each annotated type's node (`TyExpr::Annotated`) with its annotation's tree (`new A(..)`), in the nodes' order:
+    /// dotty's `Annotated` tree keeps the annotation, whose arguments' types a map of the retained annotation maps
+    /// (`Annotation.mapWith`, `Worker::annotation_argument_types`).
+    pub annotated_instances: Vec<(TyExprId, ExprId)>,
     /// Whether an annotation named `nowarn` was written in the file, whose definitions and
     /// ascriptions `@nowarn` suppresses the warnings of (`warnings.rs`), and the ascriptions
     /// and types so annotated (`e: @nowarn`, `T @nowarn`), each with its whole range.
@@ -1141,6 +1145,7 @@ impl Ast {
             reader: None,
             inline_annots: Vec::new(),
             type_annots: Vec::new(),
+            annotated_instances: Vec::new(),
             has_nowarn: false,
             main_proxies: Vec::new(),
             nowarn_ascriptions: Vec::new(),

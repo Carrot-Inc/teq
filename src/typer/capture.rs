@@ -9,7 +9,7 @@ use super::Worker;
 use crate::intern::FxMap;
 use crate::source::FileId;
 use crate::tir::capture::{Capture, Form, InlineCall, Key, Local, PatForm, Wrap};
-use crate::tir::{TExpr, TExprId, TPat, TPatId};
+use crate::tir::{TExpr, TExprId, TPat, TPatId, TStmt};
 use crate::types::*;
 
 impl<'a> Worker<'a> {
@@ -118,6 +118,206 @@ impl<'a> Worker<'a> {
         }
         self.typing_annotation = outer;
         self.deps = deps;
+    }
+
+    /// The types of the trees of the annotation `instance`'s arguments, as dotty's `Annotation.mapWith` visits them
+    /// (Annotations.scala 63-82 at 3.8.4: `tpd.allArguments`, each node's type): the class's type arguments, then each
+    /// node of the arguments, a stable reference as its path (`path_of`, dotty's `TermRef`), each type once. An
+    /// annotation written without arguments has none and is not typed (`mapWith`'s `Nil`). Typed quietly
+    /// (`type_annotation_quietly`); under `Worker::semantic` alone, for the retained annotation's record
+    /// (`Retention::Annot`). Every node of the arguments' trees is visited (`tree_types`).
+    pub(super) fn annotation_argument_types(&mut self, file: FileId, instance: crate::ast::ExprId) -> Vec<TypeId> {
+        let ast = self.ast(file);
+        if let crate::ast::Expr::New(ty, args) = ast.expr(instance) {
+            if ast.expr_list(args).is_empty() && !matches!(ast.ty(ty), crate::ast::TyExpr::Apply(..)) {
+                return Vec::new();
+            }
+        }
+        self.type_annotation_quietly(file, instance, |w, tree| {
+            let mut out = Vec::new();
+            let Some(tree) = tree else { return out };
+            let args = match w.prog.expr(tree) {
+                TExpr::New(_, l) | TExpr::NewVia(_, l) => {
+                    if let Some(Type::Class(_, targs)) = w.prog.type_of(tree).map(|c| w.types.get(c)) {
+                        let targs: Vec<TypeId> = w.types.items(targs).to_vec();
+                        for a in targs {
+                            let a = w.zonk(a);
+                            if !out.contains(&a) {
+                                out.push(a);
+                            }
+                        }
+                    }
+                    w.prog.expr_list(l).to_vec()
+                }
+                _ => vec![tree],
+            };
+            for a in args {
+                w.tree_types(a, &mut out);
+            }
+            out
+        })
+    }
+
+    /// Each type of the tree `e`, the node's own (its path where it is a stable reference) and then its children's in
+    /// their order, into `out` once each (`annotation_argument_types`): `TreeAccumulator.foldOver` (Trees.scala 1677-1805
+    /// at 3.8.4) over teq's typed tree, every node. A block's statements and then its expression, a local definition by
+    /// its symbol's type (the `ValDef`'s or `DefDef`'s type tree), its parameters' and its right side; a match's
+    /// scrutinee and each case's pattern, guard and body; a `try`'s block, cases and finalizer; a lambda's parameters
+    /// and body; a cast's or an ascription's type (`Typed`'s type tree).
+    fn tree_types(&mut self, e: TExprId, out: &mut Vec<TypeId>) {
+        if let Some(t) = self.path_of(e).or_else(|| self.prog.type_of(e)) {
+            self.push_tree_type(t, out);
+        }
+        match self.prog.expr(e) {
+            TExpr::Field(x, _) | TExpr::Unary(_, x) | TExpr::ToStr(x, _) | TExpr::TypeTest(x, _) | TExpr::Index(x, _) | TExpr::JsSelect(x, _) => self.tree_types(x, out),
+            TExpr::Spread(x) | TExpr::Return(x) | TExpr::Throw(x, _) | TExpr::Splice(x) => self.tree_types(x, out),
+            TExpr::Cast(x, _, ty) => {
+                self.tree_types(x, out);
+                self.push_tree_type(ty, out);
+            }
+            TExpr::Lambda(params, body) => {
+                for s in self.prog.sym_list(params).to_vec() {
+                    self.push_symbol_type(s, out);
+                }
+                self.tree_types(body, out);
+            }
+            TExpr::Block(stmts, res) => {
+                for st in self.prog.stmt_list(stmts).to_vec() {
+                    match st {
+                        TStmt::Expr(x) => self.tree_types(x, out),
+                        TStmt::Val(s, x) => {
+                            self.push_symbol_type(s, out);
+                            self.tree_types(x, out);
+                        }
+                        TStmt::Fun(f) => {
+                            let (sym, params, defaults, body) = {
+                                let fun = &self.prog.funs[f.idx()];
+                                (fun.sym, fun.params.clone(), fun.defaults.clone(), fun.body)
+                            };
+                            self.push_symbol_type(sym, out);
+                            for p in params {
+                                self.push_symbol_type(p, out);
+                            }
+                            for d in defaults.into_iter().flatten() {
+                                self.tree_types(d, out);
+                            }
+                            if let Some(b) = body {
+                                self.tree_types(b, out);
+                            }
+                        }
+                        TStmt::Pat(p, x) => {
+                            self.pat_types(p, out);
+                            self.tree_types(x, out);
+                        }
+                    }
+                }
+                self.tree_types(res, out);
+            }
+            TExpr::Match(x, cases) => {
+                self.tree_types(x, out);
+                self.case_types(cases, out);
+            }
+            TExpr::Try(i) => {
+                let (body, cases, finalizer) = {
+                    let t = &self.prog.tries[i as usize];
+                    (t.body, t.cases, t.finalizer)
+                };
+                self.tree_types(body, out);
+                self.case_types(cases, out);
+                if let Some(f) = finalizer {
+                    self.tree_types(f, out);
+                }
+            }
+            TExpr::Prim(_, a, b) | TExpr::Assign(a, b) | TExpr::While(a, b) => {
+                self.tree_types(a, out);
+                self.tree_types(b, out);
+            }
+            TExpr::If(c, a, b) => {
+                self.tree_types(c, out);
+                self.tree_types(a, out);
+                if let Some(b) = b {
+                    self.tree_types(b, out);
+                }
+            }
+            TExpr::CallMethod(x, _, l) | TExpr::CallClosure(x, l) => {
+                self.tree_types(x, out);
+                for a in self.prog.expr_list(l).to_vec() {
+                    self.tree_types(a, out);
+                }
+            }
+            TExpr::CallStatic(_, l) | TExpr::New(_, l) | TExpr::NewVia(_, l) | TExpr::StrConcat(l) | TExpr::Js(_, l) | TExpr::SeqLit(l) | TExpr::ArrayLit(l) | TExpr::ObjLit(l) | TExpr::Default(_, _, l) => {
+                for a in self.prog.expr_list(l).to_vec() {
+                    self.tree_types(a, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The cases `cases` (`CaseDef`: pattern, guard, body) into `out` (`tree_types`).
+    fn case_types(&mut self, cases: crate::ast::ListRef, out: &mut Vec<TypeId>) {
+        for k in self.prog.cases[cases.range()].to_vec() {
+            self.pat_types(k.pat, out);
+            if let Some(g) = k.guard {
+                self.tree_types(g, out);
+            }
+            self.tree_types(k.body, out);
+        }
+    }
+
+    /// A pattern's node types into `out` (`tree_types`): a binder's symbol's type (`Bind`), a type test's type
+    /// (`Typed`'s type tree), a constructor pattern's instance type, an equality pattern's tree, an extractor's call
+    /// (`UnApply`'s `fun`), then the sub-patterns.
+    fn pat_types(&mut self, p: TPatId, out: &mut Vec<TypeId>) {
+        match self.prog.pats[p.idx()] {
+            TPat::Wildcard => {}
+            TPat::Bind(s, inner) => {
+                self.push_symbol_type(s, out);
+                if let Some(q) = inner {
+                    self.pat_types(q, out);
+                }
+            }
+            TPat::Test(_, ty, inner) => {
+                self.push_tree_type(ty, out);
+                self.pat_types(inner, out);
+            }
+            TPat::Equals(x, _) => self.tree_types(x, out),
+            TPat::Class(_, ty, _, subs) => {
+                self.push_tree_type(ty, out);
+                for q in self.prog.pat_lists[subs.range()].to_vec() {
+                    self.pat_types(q, out);
+                }
+            }
+            TPat::Alt(subs) => {
+                for q in self.prog.pat_lists[subs.range()].to_vec() {
+                    self.pat_types(q, out);
+                }
+            }
+            TPat::Seq(items, rest) => {
+                for q in self.prog.pat_lists[items.range()].to_vec() {
+                    self.pat_types(q, out);
+                }
+                if let Some(q) = rest {
+                    self.pat_types(q, out);
+                }
+            }
+            TPat::Unapply(_, call, inner) => {
+                self.tree_types(call, out);
+                self.pat_types(inner, out);
+            }
+        }
+    }
+
+    fn push_tree_type(&mut self, t: TypeId, out: &mut Vec<TypeId>) {
+        let t = self.zonk(t);
+        if !out.contains(&t) {
+            out.push(t);
+        }
+    }
+
+    fn push_symbol_type(&mut self, s: SymId, out: &mut Vec<TypeId>) {
+        let t = self.sig_of(s).ret;
+        self.push_tree_type(t, out);
     }
 
     /// Runs `f`, the typing of a definition an annotation's typing may ask for on demand (a body

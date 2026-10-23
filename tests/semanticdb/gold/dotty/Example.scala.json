@@ -1,0 +1,45 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Example.scala",
+  "text": "",
+  "md5": "460A847D2D5052FE79AED64C9BA9FC94",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"local0","language":"SCALA","kind":"SELF_PARAMETER","properties":0,"display_name":"self","signature":{"kind":"ValueSignature","tpe":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"example/Example."}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Example.main().(args)","language":"SCALA","kind":"PARAMETER","properties":0,"display_name":"args","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Array#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Predef.String#","type_arguments":[]}]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Example.main().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"main","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":["example/Example.main().(args)"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Unit#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Example.x.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"x","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/reflect/ClassTag#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/Example.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Example","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"example/Example."},"declarations":{"symlinks":["example/Example.`<init>`().","example/Example.main().","example/Example.x."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":7,"end_line":2,"end_character":12},"symbol":"scala/","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":13,"end_line":2,"end_character":23},"symbol":"scala/concurrent/","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":24,"end_line":2,"end_character":30},"symbol":"scala/concurrent/Future.","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":24,"end_line":2,"end_character":30},"symbol":"scala/concurrent/Future#","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":17,"end_line":4,"end_character":21},"symbol":"local0","role":"DEFINITION"},
+    {"range":{"start_line":5,"start_character":6,"end_line":5,"end_character":11},"symbol":"scala/","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":12,"end_line":5,"end_character":22},"symbol":"scala/collection/","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":23,"end_line":5,"end_character":30},"symbol":"scala/collection/mutable/","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":31,"end_line":5,"end_character":36},"symbol":"scala/collection/mutable/Stack#","role":"REFERENCE"},
+    {"range":{"start_line":5,"start_character":37,"end_line":5,"end_character":40},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":17,"end_line":6,"end_character":22},"symbol":"scala/Array#","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":23,"end_line":6,"end_character":29},"symbol":"scala/Predef.String#","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":11,"end_line":6,"end_character":15},"symbol":"example/Example.main().(args)","role":"DEFINITION"},
+    {"range":{"start_line":6,"start_character":33,"end_line":6,"end_character":37},"symbol":"scala/Unit#","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":4,"end_line":7,"end_character":11},"symbol":"scala/Predef.println(+1).","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":6,"end_line":6,"end_character":10},"symbol":"example/Example.main().","role":"DEFINITION"},
+    {"range":{"start_line":9,"start_character":10,"end_line":9,"end_character":15},"symbol":"scala/","role":"REFERENCE"},
+    {"range":{"start_line":9,"start_character":16,"end_line":9,"end_character":23},"symbol":"scala/reflect/","role":"REFERENCE"},
+    {"range":{"start_line":9,"start_character":24,"end_line":9,"end_character":32},"symbol":"scala/reflect/package.classTag().","role":"REFERENCE"},
+    {"range":{"start_line":9,"start_character":33,"end_line":9,"end_character":36},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":9,"start_character":6,"end_line":9,"end_character":7},"symbol":"example/Example.x.","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":7,"end_line":4,"end_character":14},"symbol":"example/Example.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":15},"symbol":"example/","role":"DEFINITION"}
+  ],
+  "diagnostics": [
+    {"range":{"start_line":2,"start_character":24,"end_line":2,"end_character":30},"severity":"WARNING","message":"unused import"}
+  ],
+  "synthetics": [
+    {"range":{"start_line":9,"start_character":37,"end_line":9,"end_character":37},"tree":{"kind":"ApplyTree","function":{"kind":"TypeApplyTree","function":{"kind":"SelectTree","qualifier":{"kind":"IdTree","symbol":"scala/reflect/ClassTag."},"id":{"symbol":"scala/reflect/ClassTag.apply()."}},"type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}]},"arguments":[{"kind":"OriginalTree","range":{"start_line":9,"start_character":37,"end_line":9,"end_character":37}}],"properties":0}}
+  ]
+}

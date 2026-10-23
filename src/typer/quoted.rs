@@ -481,7 +481,7 @@ impl<'a> Worker<'a> {
         self.collect_type_params(t, &mut params);
         // A bare parameter is what the search that asks for this value looks for: asking
         // again would only recurse to the depth limit.
-        params.retain(|&p| self.types.param(p) != t);
+        params.retain(|&p| self.types.param(p) != self.canon(t));
         for p in params {
             let pty = self.types.param(p);
             let target = self.quoted_type_of(pty);
@@ -530,6 +530,11 @@ impl<'a> Worker<'a> {
         if !self.types.has_paths(t) {
             return;
         }
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.collect_path_members_form(t, out, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Member(p, _) if matches!(self.types.get(p), Type::Term(_) | Type::Select(..)) => {
                 if !out.contains(&t) {
@@ -554,6 +559,15 @@ impl<'a> Worker<'a> {
             }
             _ => {}
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn collect_path_members_form(&self, t: TypeId, out: &mut Vec<TypeId>, under: TypeId, r: crate::types::RetainId) {
+        self.types.ask_form_once(&[super::FORM_PATH_MEMBERS], t, under, r, false, &mut |x| {
+            self.collect_path_members(x, out);
+            false
+        });
     }
 
     /// The `Type[X]` given the search falls back to, as scalac's `Type.of[X]`.
@@ -607,6 +621,11 @@ impl<'a> Worker<'a> {
     }
 
     pub fn collect_type_params(&self, t: TypeId, out: &mut Vec<TParamId>) {
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.collect_type_params_form(t, out, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Var(v) => {
                 if let Some(inst) = self.tvars[v].inst {
@@ -654,6 +673,15 @@ impl<'a> Worker<'a> {
             }
             _ => {}
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn collect_type_params_form(&self, t: TypeId, out: &mut Vec<TParamId>, under: TypeId, r: crate::types::RetainId) {
+        self.types.ask_form_once(&[super::FORM_TYPE_PARAMS], t, under, r, false, &mut |x| {
+            self.collect_type_params(x, out);
+            false
+        });
     }
 
     /// The locals a tree defines: vals, local defs and their parameters, lambda parameters,
@@ -946,7 +974,7 @@ impl<'a> Worker<'a> {
     /// The `Expr` a macro's splice is typed against where the macro returns `ret`: `Expr[Any]`
     /// for `Unit`, whose value is discarded, as scalac types `exprSplice[T]` there.
     fn splice_code_type(&mut self, ret: TypeId) -> TypeId {
-        self.expr_type(if ret == self.b.t_unit { ANY } else { ret })
+        self.expr_type(if self.canon(ret) == self.b.t_unit { ANY } else { ret })
     }
 
     /// `${ e }` inside a quote: `e` is code of the enclosing level that yields the `Expr` the
@@ -1058,7 +1086,7 @@ impl<'a> Worker<'a> {
                 // open matching any (`f($y)` of `f[T](x: T)`), as dotty's pattern type variables do.
                 self.maximize_bottom_vars(ty);
                 let solved = self.solve_in(ty);
-                if self.types.has_vars(solved) || solved == NOTHING { ANY } else { solved }
+                if self.types.has_vars(solved) || self.canon(solved) == NOTHING { ANY } else { solved }
             } else {
                 ty
             };
@@ -1118,6 +1146,13 @@ impl<'a> Worker<'a> {
 
     fn first_variances(&mut self, t: TypeId, variance: i8, vars: &[TParamId], first: &mut [Option<i8>]) {
         let t = self.zonk(t);
+        // A retained form first: its record's types each at its own variance (`form_parts_at`), then what it is made
+        // over.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.first_variances_form(t, variance, vars, first, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Param(p) => {
                 if let Some(i) = vars.iter().position(|&q| q == p) {
@@ -1149,6 +1184,21 @@ impl<'a> Worker<'a> {
             Type::Lambda(_, body) | Type::Poly(_, body) => self.first_variances(body, variance, vars, first),
             _ => {}
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn first_variances_form(&mut self, t: TypeId, variance: i8, vars: &[TParamId], first: &mut [Option<i8>], under: TypeId, r: crate::types::RetainId) {
+        let types = self.types.clone();
+        let mut ctx = vec![super::FORM_FIRST_VARIANCES, variance as u32];
+        ctx.extend(vars.iter().map(|p| p.0));
+        types.in_pass(&ctx, t, || {
+            for (x, w) in self.form_parts_at(r) {
+                self.first_variances(x, variance * w, vars, first);
+            }
+            self.first_variances(under, variance, vars, first);
+            0
+        });
     }
 
     /// `case '[T]` against a `Type`.
@@ -1217,7 +1267,7 @@ impl<'a> Worker<'a> {
                     if let (TyExpr::TypeVar(n), Some(&cp)) = (self.cur_ast().ty(a), params.get(i)) {
                         if let Some(&(_, p)) = vars.iter().find(|&&(m, _)| m == n) {
                             let upper = self.syms.tparam(cp).upper;
-                            if upper != ANY && !self.mentions_tparam_of(upper, Some(&params)) {
+                            if self.canon(upper) != ANY && !self.mentions_tparam_of(upper, Some(&params)) {
                                 self.syms.tparams[p.idx()].upper = upper;
                             }
                         }

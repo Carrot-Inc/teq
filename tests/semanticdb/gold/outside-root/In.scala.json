@@ -1,0 +1,24 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "In.scala",
+  "text": "",
+  "md5": "6C107829A042C78482DAB936E67B10FF",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"inside/In.twice().(n)","language":"SCALA","kind":"PARAMETER","properties":0,"display_name":"n","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"inside/In.twice().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"twice","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":["inside/In.twice().(n)"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"inside/In.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"In","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"inside/In."},"declarations":{"symlinks":["inside/In.`<init>`().","inside/In.twice()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":3,"start_character":15,"end_line":3,"end_character":18},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":12,"end_line":3,"end_character":13},"symbol":"inside/In.twice().(n)","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":21,"end_line":3,"end_character":24},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":27,"end_line":3,"end_character":28},"symbol":"inside/In.twice().(n)","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":29,"end_line":3,"end_character":30},"symbol":"scala/Int#`*`(+3).","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":6,"end_line":3,"end_character":11},"symbol":"inside/In.twice().","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":7,"end_line":2,"end_character":9},"symbol":"inside/In.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":14},"symbol":"inside/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

@@ -1,0 +1,15 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "outside/./Other.scala",
+  "text": "",
+  "md5": "B4A95CEB9927BE93BABD2D51EBA824CB",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"_empty_/Other.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Other","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"_empty_/Other."},"declarations":{"symlinks":["_empty_/Other.`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":0,"start_character":7,"end_line":0,"end_character":12},"symbol":"_empty_/Other.","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Deprecated.scala",
+  "text": "",
+  "md5": "1E8E590B5F36C6BA66BC441ECBAA100E",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"_empty_/Deprecated.deprecatedMethod().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"deprecatedMethod","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}}},"annotations":[{"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/deprecated#","type_arguments":[]}}],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Deprecated.main().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"main","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Deprecated.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Deprecated","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"_empty_/Deprecated."},"declarations":{"symlinks":["_empty_/Deprecated.`<init>`().","_empty_/Deprecated.deprecatedMethod().","_empty_/Deprecated.main()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":1,"start_character":3,"end_line":1,"end_character":13},"symbol":"scala/deprecated#","role":"REFERENCE"},
+    {"range":{"start_line":1,"start_character":37,"end_line":1,"end_character":40},"symbol":"scala/Predef.`???`().","role":"REFERENCE"},
+    {"range":{"start_line":1,"start_character":18,"end_line":1,"end_character":34},"symbol":"_empty_/Deprecated.deprecatedMethod().","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":13,"end_line":2,"end_character":29},"symbol":"_empty_/Deprecated.deprecatedMethod().","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":10},"symbol":"_empty_/Deprecated.main().","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":7,"end_line":0,"end_character":17},"symbol":"_empty_/Deprecated.","role":"DEFINITION"}
+  ],
+  "diagnostics": [
+    {"range":{"start_line":2,"start_character":13,"end_line":2,"end_character":29},"severity":"WARNING","message":"method deprecatedMethod in object Deprecated is deprecated"}
+  ],
+  "synthetics": []
+}

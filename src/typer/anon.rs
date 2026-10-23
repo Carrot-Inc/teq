@@ -1293,7 +1293,7 @@ impl<'a> Worker<'a> {
         match r {
             Refinement::Alias(n, x) => {
                 let (lo, hi) = (self.avoid_missing(x, missing, -1, open, 0), self.avoid_missing(x, missing, 1, open, 0));
-                if lo == hi { Refinement::Alias(n, hi) } else { Refinement::Bounds(n, lo, hi) }
+                if self.same_type(lo, hi) { Refinement::Alias(n, hi) } else { Refinement::Bounds(n, lo, hi) }
             }
             Refinement::Bounds(n, lo, hi) => Refinement::Bounds(n, self.avoid_missing(lo, missing, -1, open, 0), self.avoid_missing(hi, missing, 1, open, 0)),
             Refinement::Val(n, s, x) => Refinement::Val(n, s, self.avoid_missing(x, missing, 1, open, 0)),
@@ -1323,6 +1323,13 @@ impl<'a> Worker<'a> {
     fn avoid_missing(&mut self, t: TypeId, missing: &Missing, v: i8, open: &mut Vec<ClassId>, depth: u32) -> TypeId {
         if depth > 24 {
             return t;
+        }
+        // A retained form first: what it is made over at this depth and its record's types as its parts (an alias's
+        // arguments in an invariant place), the form over them.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.avoid_missing_form(t, missing, v, open, depth, under, r);
+            }
         }
         // A missing class with its arguments and the prefix it is seen from.
         let missing_class = |w: &Self, t: TypeId| match w.types.get(t) {
@@ -1407,10 +1414,25 @@ impl<'a> Worker<'a> {
         types.map_parts(t, &mut |x| self.avoid_missing(x, missing, v, open, depth + 1))
     }
 
+    #[cold]
+    #[inline(never)]
+    fn avoid_missing_form(&mut self, t: TypeId, missing: &Missing, v: i8, open: &mut Vec<ClassId>, depth: u32, under: TypeId, r: crate::types::RetainId) -> TypeId {
+        let types = self.types.clone();
+        let nu = self.avoid_missing(under, missing, v, open, depth);
+        let nr = types.map_retention(r, &mut |x| self.avoid_missing(x, missing, 0, open, depth + 1));
+        types.form_over(t, under, r, nu, nr)
+    }
+
     /// Whether `t` names one of `missing`.
     fn mentions_missing(&mut self, t: TypeId, missing: &Missing, depth: u32) -> bool {
         if depth > 24 {
             return false;
+        }
+        // A retained form first: its record's types as its parts, then what it is made over at this depth.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.mentions_missing_form(missing, depth, under, r);
+            }
         }
         match self.types.get(t) {
             Type::Class(k, _) if missing.classes.contains(&k) => return true,
@@ -1426,6 +1448,13 @@ impl<'a> Worker<'a> {
             x
         });
         parts.into_iter().any(|x| self.mentions_missing(x, missing, depth + 1))
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn mentions_missing_form(&mut self, missing: &Missing, depth: u32, under: TypeId, r: crate::types::RetainId) -> bool {
+        let parts = self.types.retention_types(r, false);
+        parts.into_iter().any(|x| self.mentions_missing(x, missing, depth + 1)) || self.mentions_missing(under, missing, depth)
     }
 
     /// The refinement a type member of the anonymous class `c` adds to `parents`, if it needs one.
@@ -1698,6 +1727,13 @@ impl<'a> Worker<'a> {
     /// occurrence agrees, `0` otherwise.
     fn collect_param_variances(&mut self, t: TypeId, sign: i8, out: &mut Vec<(TParamId, i8)>) {
         let t = self.deref_alias(t);
+        // A retained form first: its record's types each at its own variance (`form_parts_at`), then what it is made
+        // over.
+        if self.semantic {
+            if let Some((under, r)) = self.types.form_of(t) {
+                return self.collect_param_variances_form(t, sign, out, under, r);
+            }
+        }
         match self.types.get(t) {
             Type::Param(p) => match out.iter_mut().find(|(q, _)| *q == p) {
                 Some((_, s)) if *s != sign => *s = 0,
@@ -1718,6 +1754,19 @@ impl<'a> Worker<'a> {
             }
             _ => {}
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn collect_param_variances_form(&mut self, t: TypeId, sign: i8, out: &mut Vec<(TParamId, i8)>, under: TypeId, r: crate::types::RetainId) {
+        let types = self.types.clone();
+        types.in_pass(&[super::FORM_PARAM_VARIANCES, sign as u32], t, || {
+            for (x, w) in self.form_parts_at(r) {
+                self.collect_param_variances(x, sign * w, out);
+            }
+            self.collect_param_variances(under, sign, out);
+            0
+        });
     }
 
     /// Whether an ancestor of `c`, or `c` itself, has a concrete method with the parameters of
@@ -2602,4 +2651,32 @@ impl Missing {
 /// no definition).
 pub fn is_outer_accessor_name(name: &str, defined: bool) -> bool {
     name.starts_with("$outer") || !defined && name.ends_with("$$$outer")
+}
+
+#[cfg(test)]
+mod depth_exit_pins {
+    use super::*;
+
+    /// `TypeOps.avoid`'s `AvoidMap` traverses a finite type whole, guarding only actual recursion (the pass over
+    /// 317e8fb73's 6): a missing class under 26 retained alias applications, each canonically `Int`, is seen. teq's
+    /// `mentions_missing` stops at its `depth > 24` exit, a bound master's walks carry and a part of its own lifts
+    /// (TABLE.md section 6).
+    #[test]
+    #[ignore = "waits for the part lifting the walks' depth exits"]
+    fn depth_exits_lifted_a_missing_class_under_twenty_six_retained_records_is_seen() {
+        const PROGRAM: &str = "class Local\nobject O:\n  type K[A] = Int\n@main def run(): Unit = println(1)\n";
+        crate::with_typed_program("pin-depth-exits", PROGRAM, &["--semantic-types"], |w| {
+            let local = (0..w.syms.classes.len()).map(|i| ClassId(i as u32)).find(|&c| w.name_ref(w.syms.class(c).name) == "Local").expect("Local");
+            let k = (0..w.syms.aliases.len()).map(|i| AliasId(i as u32)).find(|&a| w.name_ref(w.syms.aliases[a.idx()].name) == "K").expect("K");
+            w.complete_alias(k);
+            let int = w.b.t_int;
+            let mut t = w.types.class(local, &[]);
+            for _ in 0..26 { // past teq's depth > 24 exit, which dotty's AvoidMap does not have
+                let args = w.types.list(&[t]);
+                t = w.types.retained(int, crate::types::Retention::Alias(k, args));
+            }
+            let missing = Missing { classes: vec![local], aliases: Vec::new(), terms: Vec::new() };
+            assert!(w.mentions_missing(t, &missing, 0), "the missing class under 26 records");
+        });
+    }
 }

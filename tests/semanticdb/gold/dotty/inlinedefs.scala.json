@@ -1,0 +1,26 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "inlinedefs.scala",
+  "text": "",
+  "md5": "F6A94C0885D4012F224891493FA1D996",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"inlinedefs/FakePredef.assert().(assertion)","language":"SCALA","kind":"PARAMETER","properties":131072,"display_name":"assertion","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Boolean#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"inlinedefs/FakePredef.assert().","language":"SCALA","kind":"MACRO","properties":655368,"display_name":"assert","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":["inlinedefs/FakePredef.assert().(assertion)"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Unit#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"inlinedefs/FakePredef.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"FakePredef","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"inlinedefs/FakePredef."},"declarations":{"symlinks":["inlinedefs/FakePredef.`<init>`().","inlinedefs/FakePredef.assert()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":14,"start_character":9,"end_line":14,"end_character":18},"symbol":"inlinedefs/FakePredef.assert().(assertion)","role":"REFERENCE"},
+    {"range":{"start_line":15,"start_character":16,"end_line":15,"end_character":20},"symbol":"java/","role":"REFERENCE"},
+    {"range":{"start_line":15,"start_character":21,"end_line":15,"end_character":25},"symbol":"java/lang/","role":"REFERENCE"},
+    {"range":{"start_line":15,"start_character":26,"end_line":15,"end_character":40},"symbol":"java/lang/AssertionError#","role":"REFERENCE"},
+    {"range":{"start_line":13,"start_character":56,"end_line":13,"end_character":63},"symbol":"scala/Boolean#","role":"REFERENCE"},
+    {"range":{"start_line":13,"start_character":45,"end_line":13,"end_character":54},"symbol":"inlinedefs/FakePredef.assert().(assertion)","role":"DEFINITION"},
+    {"range":{"start_line":13,"start_character":66,"end_line":13,"end_character":70},"symbol":"scala/Unit#","role":"REFERENCE"},
+    {"range":{"start_line":13,"start_character":31,"end_line":13,"end_character":37},"symbol":"inlinedefs/FakePredef.assert().","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":7,"end_line":2,"end_character":17},"symbol":"inlinedefs/FakePredef.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":18},"symbol":"inlinedefs/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

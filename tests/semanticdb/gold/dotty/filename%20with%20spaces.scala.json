@@ -1,0 +1,18 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "filename%20with%20spaces.scala",
+  "text": "",
+  "md5": "FBAADB1AD85AFCF6D4E96088821372B9",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"example/FilenameWithSpaces#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"example/FilenameWithSpaces#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"example/FilenameWithSpaces#","language":"SCALA","kind":"CLASS","properties":0,"display_name":"FilenameWithSpaces","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"example/FilenameWithSpaces#","type_arguments":[]},"declarations":{"symlinks":["example/FilenameWithSpaces#`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":0,"end_line":2,"end_character":0},"symbol":"example/FilenameWithSpaces#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":24},"symbol":"example/FilenameWithSpaces#","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":15},"symbol":"example/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

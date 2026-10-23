@@ -54,6 +54,8 @@ teq compiler check src/                    # type check only
       --language implicitConversions  # scalac's -language
       --threads n                 # workers typing the bodies; by default one under 512 KiB of source,
                                   # else the cores, at most 8 (docs/TARGETS.md, "The typer's workers")
+      --semantic-types            # keep the forms teq fix's SemanticDB documents read, with one worker; a
+                                  # test's option: nothing else changes (tests/semanticdb, the identity run)
       --time                      # print per-phase timings
       --profile[=out.json]        # where the time of the type phase went, per construct and site
 teq tasty lib.jar [name-filter]   # print the signatures a jar's TASTy files hold

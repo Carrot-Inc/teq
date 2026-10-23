@@ -1,0 +1,36 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "i5854.scala",
+  "text": "",
+  "md5": "A04F942F73854575D917FB7BEFAF56C1",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"i5854/B#a.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"a","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Predef.String#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"local0","language":"SCALA","kind":"TYPE","properties":0,"display_name":"A","signature":{"kind":"TypeSignature","type_parameters":null,"lower_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Any#","type_arguments":[]},"upper_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"i5854/B#b.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"b","signature":{"kind":"ValueSignature","tpe":{"kind":"StructuralType","tpe":{"kind":"IntersectionType","types":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}]},"declarations":{"symlinks":[],"hardlinks":[{"symbol":"local0","language":"SCALA","kind":"TYPE","properties":0,"display_name":"A","signature":{"kind":"TypeSignature","type_parameters":null,"lower_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Any#","type_arguments":[]},"upper_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}]}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"i5854/B#loop().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"loop","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"i5854/B#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"i5854/B#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"i5854/B#","language":"SCALA","kind":"CLASS","properties":0,"display_name":"B","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"i5854/B#","type_arguments":[]},"declarations":{"symlinks":["i5854/B#`<init>`().","i5854/B#a.","i5854/B#b.","i5854/B#loop()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":7,"start_character":9,"end_line":7,"end_character":15},"symbol":"scala/Predef.String#","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":24,"end_line":7,"end_character":27},"symbol":"scala/Any#","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":30,"end_line":7,"end_character":31},"symbol":"i5854/B#b.","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":36,"end_line":7,"end_character":43},"symbol":"scala/Nothing#","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":46,"end_line":7,"end_character":52},"symbol":"scala/Predef.String#","role":"REFERENCE"},
+    {"range":{"start_line":7,"start_character":6,"end_line":7,"end_character":7},"symbol":"i5854/B#a.","role":"DEFINITION"},
+    {"range":{"start_line":8,"start_character":21,"end_line":8,"end_character":24},"symbol":"scala/Any#","role":"REFERENCE"},
+    {"range":{"start_line":8,"start_character":28,"end_line":8,"end_character":35},"symbol":"scala/Nothing#","role":"REFERENCE"},
+    {"range":{"start_line":8,"start_character":16,"end_line":8,"end_character":17},"symbol":"local0","role":"DEFINITION"},
+    {"range":{"start_line":8,"start_character":40,"end_line":8,"end_character":44},"symbol":"i5854/B#loop().","role":"REFERENCE"},
+    {"range":{"start_line":8,"start_character":6,"end_line":8,"end_character":7},"symbol":"i5854/B#b.","role":"DEFINITION"},
+    {"range":{"start_line":9,"start_character":14,"end_line":9,"end_character":21},"symbol":"scala/Nothing#","role":"REFERENCE"},
+    {"range":{"start_line":9,"start_character":24,"end_line":9,"end_character":28},"symbol":"i5854/B#loop().","role":"REFERENCE"},
+    {"range":{"start_line":9,"start_character":6,"end_line":9,"end_character":10},"symbol":"i5854/B#loop().","role":"DEFINITION"},
+    {"range":{"start_line":7,"start_character":2,"end_line":7,"end_character":2},"symbol":"i5854/B#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":7},"symbol":"i5854/B#","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":13},"symbol":"i5854/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

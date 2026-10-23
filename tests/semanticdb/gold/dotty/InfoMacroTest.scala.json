@@ -1,0 +1,25 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "InfoMacroTest.scala",
+  "text": "",
+  "md5": "E9A4A5F278D95746514E7E7D18E0B06A",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"_empty_/InfoMacroTest.main().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"main","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Unit#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/InfoMacroTest.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"InfoMacroTest","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"_empty_/InfoMacroTest."},"declarations":{"symlinks":["_empty_/InfoMacroTest.`<init>`().","_empty_/InfoMacroTest.main()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":14,"end_line":2,"end_character":18},"symbol":"scala/Unit#","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":4,"end_line":3,"end_character":13},"symbol":"_empty_/InfoMacro.","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":14,"end_line":3,"end_character":24},"symbol":"_empty_/InfoMacro.reportInfo().","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":4,"end_line":4,"end_character":13},"symbol":"_empty_/InfoMacro.","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":14,"end_line":4,"end_character":24},"symbol":"_empty_/InfoMacro.reportInfo().","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":10},"symbol":"_empty_/InfoMacroTest.main().","role":"DEFINITION"},
+    {"range":{"start_line":1,"start_character":7,"end_line":1,"end_character":20},"symbol":"_empty_/InfoMacroTest.","role":"DEFINITION"}
+  ],
+  "diagnostics": [
+    {"range":{"start_line":4,"start_character":4,"end_line":4,"end_character":48},"severity":"INFORMATION","message":"Info from macro: Another info message"},
+    {"range":{"start_line":3,"start_character":4,"end_line":3,"end_character":55},"severity":"INFORMATION","message":"Info from macro: This is a test info message"}
+  ],
+  "synthetics": []
+}

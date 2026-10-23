@@ -63,9 +63,12 @@ final class NoPrintln(message: String) extends SyntacticRule("NoPrintln"):
   `SemanticDocument` adds the typer's answers: `unusedImports`, the importees the typer's unused-import analysis
   reports (`-Wunused:imports`'s), and `hasExpansions`, whether an inline or macro expansion was made in the file.
   `unusedImports` throws where the analysis is unavailable (the program did not type), so a run that cannot answer
-  fails with exit 2 rather than finding nothing. `symbol` and `info` (SemanticDB's symbols and signatures, which
-  the next part ports from dotty's `SemanticSymbolBuilder` and `TypeOps`), `tpe`, `<:<` and `references` are not
-  there yet.
+  fails with exit 2 rather than finding nothing. `symbol` and `info` (SemanticDB's symbols and signatures, ported
+  from dotty's `SemanticSymbolBuilder` and `TypeOps`) are being built: where a semantic rule is configured, the round's
+  typing thread serves the rules' SemanticDB questions after its typing until the round's last document is done; at
+  the round's first question it types the round's texts (the program's files as the round's typing read them, never
+  the disk again) by one worker keeping the forms dotty's types keep, and answers from that typing (src/fix/service.rs), a question it cannot answer the asking rule's failure; it answers the
+  document's header so far. `tpe`, `<:<` and `references` are not there.
 - `Tree`: every node of the parser's trees, named and laid out as scalameta's: `Source`, `Pkg`, `Import`,
   `Importer`, `Importee.Name`/`Rename`/`Unimport`/`Wildcard`/`Given`/`GivenAll`, `Defn.Val`/`Var`/`Def`/`Class`/
   `Trait`/`Object`/`Enum`/`EnumCase`/`Given`/`GivenAlias`/`Type`, `Decl.*`, `Template`, `Init`, `Term.Param` and
@@ -195,7 +198,8 @@ tests/fix's cases), its file keeping the repository's notice.
 `TEQ_FIX_TREE=1` prints each document's tree, a node a line with its text; `TEQ_FIX_TRACE=1` the counts of each
 document's nodes, tokens, edits and lints and each rule's failure, then the run's phases (the rules' program, the
 typing, the rules — the rounds' wall time, the workers, their documents' time summed, its CPU time and the longest document's —, the
-planning) in milliseconds and what the allocator reserved; and a line for each typing attempt (its workers asked and
+planning, the SemanticDB answers — each round's service from its first question to its last answer, its typing among
+them) in milliseconds and what the allocator reserved; and a line for each typing attempt (its workers asked and
 typed with, its outcome and, where it gave way, why; its parts: reading and parsing, the jars, the typing as `teq
 compiler check --time` counts its `type` phase, with `run`'s phases, the documents, the jar caches, the attempt's exit)
 and for each round the wait for what its merges gave back to be dropped.
@@ -207,17 +211,25 @@ threads (a worker of either phase, a merge thread), so that the attempt was give
 again, whether it forked, its outcome, `one`,
 `joined`, `retried` or `refused`, when it began and ended, why it gave way), each round's `round` (its job, its number,
 its documents and its first generation), a `dispatch` and a `done` line a document (its slot, generation and worker, and
-when its rules began and ended, in microseconds since the run began, and the worker's CPU time between), a `serial` line where a round runs on one worker,
+when its rules began and ended, in microseconds since the run began, the worker's CPU time between, and the SemanticDB
+questions its rules asked), a `serial` line where a round runs on one worker, a `serve` line where a semantic rule is
+configured (the round's SemanticDB service: the questions it answered, whether it typed, when it began typing and ended),
 and `round-end` (the round's wall time and the sums of its documents' times and CPU times): the fix suite reads it to tell a parallel
 run from a serial one. `TEQ_FIX_INPUTS=<file>` writes each job's inputs as the compiler resolves them (its roots, the links it follows, its
 exclusions), a line `<job>\t<path>` each, and does nothing else: the corpus a measurement of bench/fix runs over.
 `TEQ_FIX_SCHEDULE` (`reverse`, `shuffle:<seed>`), `TEQ_FIX_BARRIER=<workers>` and
-`TEQ_FIX_PLANT` (`serial`, `completion`, `serial-typing`) are that suite's switches: the order the documents are handed
-out in, a wait until that many workers have begun, and the mutation controls its checks must refuse (`serial-typing`
-types every program by one worker, the rules' pool left as asked). So are `TEQ_FIX_TYPING_THREADS=<n>` and
+`TEQ_FIX_PLANT` (`serial`, `completion`, `serial-typing`, `query-failure`) are that suite's switches: the order the
+documents are handed out in, a wait until that many workers have begun, and the mutation controls its checks must refuse
+(`serial-typing` types every program by one worker, the rules' pool left as asked; `query-failure` fails every answer
+of the SemanticDB service, as an extraction's error would). So are `TEQ_FIX_TYPING_THREADS=<n>` and
 `TEQ_FIX_RULE_THREADS=<n>`, the typing's and the rules' counts apart; `TEQ_FIX_TYPING_WORK=1`, which turns the typer's
 counters on for each typing and writes a `typing-item` line for each item of its queue (the worker, the item's index in
 its file, when it began and ended, its file), the witness that several workers typed at once; and
 `TEQ_FIX_BOOT_DELAY=<ms>`, which holds every rule worker but the first that long before its bootstrap.
 `TEQ_FIX_INDEX=off` is bench/fix's, for its comparison with `teq compiler check`, which indexes nothing: the typer makes
 no index, and `hasExpansions` is false everywhere.
+`TEQ_FIX_SEMANTICDB=<dir>`, a test's, types the run as for a semantic rule, by one worker keeping the retained forms
+(`--semantic-types`), and writes each file's SemanticDB document of round one under `<dir>/META-INF/semanticdb/`, as scalac's `-Xsemanticdb -semanticdb-target <dir>` with its
+`-sourceroot`, `TEQ_FIX_SEMANTICDB_ROOT` (by default the working directory), would; tests/semanticdb compares it with
+scalac 3.8.4's. Beside each document, `<file>.forms` lists the types of the file's members with the retained forms the
+typer keeps (`Phantom[String]`, `Int @Ann`), a view of the store the same suite checks against scalac's typed tree.

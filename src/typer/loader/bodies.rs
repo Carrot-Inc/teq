@@ -5213,12 +5213,12 @@ impl<'a> Worker<'a> {
 
     fn names_nothing(&mut self, cv: &mut Conv, t: &TType) -> bool {
         let mut mx = super::MapCx::new(cv.file);
-        !self.mentions_local_type(cv, t) && self.map_type(&mut mx, t) == NOTHING
+        !self.mentions_local_type(cv, t) && { let mapped = self.map_type(&mut mx, t); self.canon(mapped) == NOTHING }
     }
 
     fn names_any(&mut self, cv: &mut Conv, t: &TType) -> bool {
         let mut mx = super::MapCx::new(cv.file);
-        !self.mentions_local_type(cv, t) && self.map_type(&mut mx, t) == ANY
+        !self.mentions_local_type(cv, t) && { let mapped = self.map_type(&mut mx, t); self.canon(mapped) == ANY }
     }
 
     fn conv_lambda(&mut self, cv: &mut Conv, sig: &DefSig, rhs: &Term, sam: Option<&TType>) -> ExprId {

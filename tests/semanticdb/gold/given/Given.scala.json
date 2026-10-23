@@ -1,0 +1,30 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Given.scala",
+  "text": "",
+  "md5": "7D828212AF85F7A8269E24B35E001F52",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"_empty_/Given.given_Int.","language":"SCALA","kind":"METHOD","properties":66664,"display_name":"given_Int","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Given.f().(x$1)","language":"SCALA","kind":"PARAMETER","properties":65568,"display_name":"x$1","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Given.f().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"f","signature":{"kind":"MethodSignature","type_parameters":null,"parameter_lists":[{"symlinks":["_empty_/Given.f().(x$1)"],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Given.x.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"x","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Given.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Given","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"_empty_/Given."},"declarations":{"symlinks":["_empty_/Given.`<init>`().","_empty_/Given.given_Int.","_empty_/Given.f().","_empty_/Given.x."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":1,"start_character":8,"end_line":1,"end_character":11},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":14,"end_line":2,"end_character":17},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":20,"end_line":2,"end_character":23},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":26,"end_line":2,"end_character":32},"symbol":"scala/Predef.summon().","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":33,"end_line":2,"end_character":36},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":7},"symbol":"_empty_/Given.f().","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":10,"end_line":3,"end_character":11},"symbol":"_empty_/Given.f().","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":6,"end_line":3,"end_character":7},"symbol":"_empty_/Given.x.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":7,"end_line":0,"end_character":12},"symbol":"_empty_/Given.","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": [
+    {"range":{"start_line":2,"start_character":26,"end_line":2,"end_character":37},"tree":{"kind":"ApplyTree","function":{"kind":"OriginalTree","range":{"start_line":2,"start_character":26,"end_line":2,"end_character":37}},"arguments":[{"kind":"IdTree","symbol":"_empty_/Given.f().(x$1)"}],"properties":65536}},
+    {"range":{"start_line":3,"start_character":10,"end_line":3,"end_character":11},"tree":{"kind":"ApplyTree","function":{"kind":"OriginalTree","range":{"start_line":3,"start_character":10,"end_line":3,"end_character":11}},"arguments":[{"kind":"IdTree","symbol":"_empty_/Given.given_Int."}],"properties":65536}}
+  ]
+}

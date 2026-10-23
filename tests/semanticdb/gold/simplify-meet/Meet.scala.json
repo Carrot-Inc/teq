@@ -1,0 +1,35 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "Meet.scala",
+  "text": "",
+  "md5": "1F826CD329B81F77CDF14438AAEFDA26",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"_empty_/Invariant#[A]","language":"SCALA","kind":"TYPE_PARAMETER","properties":0,"display_name":"A","signature":{"kind":"TypeSignature","type_parameters":null,"lower_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Nothing#","type_arguments":[]},"upper_bound":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Any#","type_arguments":[]}},"annotations":[],"access":{"kind":"Empty"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Invariant#`<init>`().","language":"SCALA","kind":"CONSTRUCTOR","properties":8192,"display_name":"<init>","signature":{"kind":"MethodSignature","type_parameters":{"symlinks":["_empty_/Invariant#[A]"],"hardlinks":[]},"parameter_lists":[{"symlinks":[],"hardlinks":[]}],"return_type":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Invariant#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Invariant#[A]","type_arguments":[]}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Invariant#","language":"SCALA","kind":"CLASS","properties":0,"display_name":"Invariant","signature":{"kind":"ClassSignature","type_parameters":{"symlinks":["_empty_/Invariant#[A]"],"hardlinks":[]},"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Invariant#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Invariant#[A]","type_arguments":[]}]},"declarations":{"symlinks":["_empty_/Invariant#[A]","_empty_/Invariant#`<init>`()."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Meet.distributed().","language":"SCALA","kind":"METHOD","properties":0,"display_name":"distributed","signature":{"kind":"ValueSignature","tpe":{"kind":"ByNameType","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Invariant#","type_arguments":[{"kind":"IntersectionType","types":[{"kind":"UnionType","types":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]},{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Predef.String#","type_arguments":[]}]},{"kind":"UnionType","types":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]},{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Boolean#","type_arguments":[]}]}]}]}}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Meet.distribution.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"distribution","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"_empty_/Invariant#","type_arguments":[{"kind":"UnionType","types":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]},{"kind":"IntersectionType","types":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Predef.String#","type_arguments":[]},{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Boolean#","type_arguments":[]}]}]}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"_empty_/Meet.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Meet","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"_empty_/Meet."},"declarations":{"symlinks":["_empty_/Meet.`<init>`().","_empty_/Meet.distributed().","_empty_/Meet.distribution."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":0,"start_character":16,"end_line":0,"end_character":17},"symbol":"_empty_/Invariant#[A]","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":15,"end_line":0,"end_character":15},"symbol":"_empty_/Invariant#`<init>`().","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":6,"end_line":0,"end_character":15},"symbol":"_empty_/Invariant#","role":"DEFINITION"},
+    {"range":{"start_line":2,"start_character":19,"end_line":2,"end_character":28},"symbol":"_empty_/Invariant#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":44,"end_line":2,"end_character":45},"symbol":"scala/`&`#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":34,"end_line":2,"end_character":35},"symbol":"scala/`|`#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":30,"end_line":2,"end_character":33},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":36,"end_line":2,"end_character":42},"symbol":"scala/Predef.String#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":51,"end_line":2,"end_character":52},"symbol":"scala/`|`#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":47,"end_line":2,"end_character":50},"symbol":"scala/Int#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":53,"end_line":2,"end_character":60},"symbol":"scala/Boolean#","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":65,"end_line":2,"end_character":68},"symbol":"scala/Predef.`???`().","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":17},"symbol":"_empty_/Meet.distributed().","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":21,"end_line":3,"end_character":32},"symbol":"_empty_/Meet.distributed().","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":6,"end_line":3,"end_character":18},"symbol":"_empty_/Meet.distribution.","role":"DEFINITION"},
+    {"range":{"start_line":1,"start_character":7,"end_line":1,"end_character":11},"symbol":"_empty_/Meet.","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

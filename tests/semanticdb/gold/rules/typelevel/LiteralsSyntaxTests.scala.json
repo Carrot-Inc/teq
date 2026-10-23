@@ -1,0 +1,41 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "LiteralsSyntaxTests.scala",
+  "text": "",
+  "md5": "35B024AC269274E4315676C200EE15CE",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"fix/LiteralsSyntaxTests.s.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"s","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/String#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"fix/LiteralsSyntaxTests.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"LiteralsSyntaxTests","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"fix/LiteralsSyntaxTests."},"declarations":{"symlinks":["fix/LiteralsSyntaxTests.`<init>`().","fix/LiteralsSyntaxTests.s."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":6,"start_character":7,"end_line":6,"end_character":10},"symbol":"org/","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":11,"end_line":6,"end_character":17},"symbol":"org/http4s/","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":18,"end_line":6,"end_character":21},"symbol":"org/http4s/Uri.","role":"REFERENCE"},
+    {"range":{"start_line":6,"start_character":18,"end_line":6,"end_character":21},"symbol":"org/http4s/Uri#","role":"REFERENCE"},
+    {"range":{"start_line":9,"start_character":6,"end_line":9,"end_character":7},"symbol":"fix/LiteralsSyntaxTests.s.","role":"DEFINITION"},
+    {"range":{"start_line":11,"start_character":2,"end_line":11,"end_character":5},"symbol":"org/http4s/Uri.","role":"REFERENCE"},
+    {"range":{"start_line":11,"start_character":6,"end_line":11,"end_character":22},"symbol":"org/http4s/Uri.unsafeFromString().","role":"REFERENCE"},
+    {"range":{"start_line":12,"start_character":2,"end_line":12,"end_character":5},"symbol":"org/http4s/Uri.","role":"REFERENCE"},
+    {"range":{"start_line":12,"start_character":6,"end_line":12,"end_character":22},"symbol":"org/http4s/Uri.unsafeFromString().","role":"REFERENCE"},
+    {"range":{"start_line":13,"start_character":2,"end_line":13,"end_character":5},"symbol":"org/http4s/Uri.","role":"REFERENCE"},
+    {"range":{"start_line":13,"start_character":6,"end_line":13,"end_character":22},"symbol":"org/http4s/Uri.unsafeFromString().","role":"REFERENCE"},
+    {"range":{"start_line":13,"start_character":29,"end_line":13,"end_character":30},"symbol":"java/lang/String#`+`().","role":"REFERENCE"},
+    {"range":{"start_line":14,"start_character":2,"end_line":14,"end_character":5},"symbol":"org/http4s/Uri.","role":"REFERENCE"},
+    {"range":{"start_line":14,"start_character":6,"end_line":14,"end_character":22},"symbol":"org/http4s/Uri.unsafeFromString().","role":"REFERENCE"},
+    {"range":{"start_line":14,"start_character":23,"end_line":14,"end_character":24},"symbol":"fix/LiteralsSyntaxTests.s.","role":"REFERENCE"},
+    {"range":{"start_line":15,"start_character":2,"end_line":15,"end_character":5},"symbol":"org/http4s/Uri.","role":"REFERENCE"},
+    {"range":{"start_line":15,"start_character":6,"end_line":15,"end_character":22},"symbol":"org/http4s/Uri.unsafeFromString().","role":"REFERENCE"},
+    {"range":{"start_line":15,"start_character":23,"end_line":15,"end_character":24},"symbol":"scala/StringContext#s().","role":"REFERENCE"},
+    {"range":{"start_line":15,"start_character":33,"end_line":15,"end_character":34},"symbol":"fix/LiteralsSyntaxTests.s.","role":"REFERENCE"},
+    {"range":{"start_line":17,"start_character":2,"end_line":17,"end_character":5},"symbol":"org/http4s/Uri.","role":"REFERENCE"},
+    {"range":{"start_line":17,"start_character":6,"end_line":17,"end_character":10},"symbol":"org/http4s/Uri.Path.","role":"REFERENCE"},
+    {"range":{"start_line":17,"start_character":11,"end_line":17,"end_character":27},"symbol":"org/http4s/Uri.Path.unsafeFromString().","role":"REFERENCE"},
+    {"range":{"start_line":8,"start_character":7,"end_line":8,"end_character":26},"symbol":"fix/LiteralsSyntaxTests.","role":"DEFINITION"},
+    {"range":{"start_line":4,"start_character":8,"end_line":4,"end_character":11},"symbol":"fix/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": [
+    {"range":{"start_line":15,"start_character":25,"end_line":15,"end_character":34},"tree":{"kind":"ApplyTree","function":{"kind":"IdTree","symbol":"scala/StringContext.apply()."},"arguments":[{"kind":"OriginalTree","range":{"start_line":15,"start_character":25,"end_line":15,"end_character":34}}],"properties":0}}
+  ]
+}

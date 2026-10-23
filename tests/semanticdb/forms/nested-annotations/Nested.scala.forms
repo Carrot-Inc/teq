@@ -1,0 +1,4 @@
+Nested.map: B
+Nested.one: Inv[? <: Any @Ann]
+Nested.two: Inv[? <: Any @Ann @Other]
+Nested.swapped: Inv[? <: Any @Other @Ann]

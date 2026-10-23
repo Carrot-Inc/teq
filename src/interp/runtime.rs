@@ -109,6 +109,8 @@ impl<'a, 't> Interp<'a, 't> {
                 matches!(self.invoke_member(b.clone(), m, crate::names::EQUALS, vec![a.clone()])?, Value::Bool(true))
             }
             (Value::Class(x), Value::Class(y)) => x.qname == y.qname,
+            // A retained form (teq fix's SemanticDB typing) equals its canonical type.
+            (Value::Type(x), Value::Type(y)) => self.typer.types.same(*x, *y),
             _ => false,
         })
     }

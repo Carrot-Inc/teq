@@ -1607,7 +1607,8 @@ impl<'a> Worker<'a> {
         let types = |sig: &MethodSig| sig.tparams.is_empty().then(|| sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| (p.ty, p.by_name, p.repeated))).collect::<Vec<_>>());
         let ta = types(self.parameters_of(a));
         let tb = types(self.parameters_of(b));
-        ta.is_some() && ta == tb
+        let canonical = |v: Option<Vec<(TypeId, bool, bool)>>| v.map(|v| v.into_iter().map(|(t, n, r)| (self.canon(t), n, r)).collect::<Vec<_>>());
+        ta.is_some() && canonical(ta) == canonical(tb)
     }
 
     /// Settles what no lookup has settled and names the alternatives of every overloaded name,
@@ -1975,7 +1976,7 @@ impl<'a> Worker<'a> {
             // clause, the using ones included (dotty's `Type.matchesLoosely` in
             // `Namer.invalidateIfClashingSynthetic`): a curried `apply(task)(toMessage)` leaves the
             // synthetic `apply(task, toMsg)` in place.
-            let clauses = |sig: &MethodSig| -> Vec<Vec<TypeId>> { sig.clauses.iter().map(|cl| cl.params.iter().map(|p| p.ty).collect()).collect() };
+            let clauses = |sig: &MethodSig| -> Vec<Vec<TypeId>> { sig.clauses.iter().map(|cl| cl.params.iter().map(|p| self.canon(p.ty)).collect()).collect() };
             let ctor_clauses = clauses(&sig);
             let mut replaced = false;
             let synthesized = |t: &Self, s: SymId| t.loaded.as_ref().is_some_and(|l| l.synthetic_members.contains_key(&s));
@@ -3047,7 +3048,7 @@ impl<'a> Worker<'a> {
                 // An open variable stands for the function type among its bounds, if any.
                 let arity = alts[i].clause(0).map_or(0, |cl| cl.params.len());
                 let exp = self.function_bound(expected, arity);
-                let exp = self.deref(exp);
+                let exp = self.deref_canonical(exp);
                 if matches!(self.types.get(exp), Type::Var(_)) || exp == ANY || exp == self.b.t_unit {
                     return true;
                 }
@@ -3070,7 +3071,7 @@ impl<'a> Worker<'a> {
         let Some(expected) = expected else { return Vec::new() };
         let expected = self.deref(expected);
         let Some((params, result)) = self.as_function(expected) else { return Vec::new() };
-        let result = self.deref(result);
+        let result = self.deref_canonical(result);
         cands
             .iter()
             .copied()
@@ -3183,11 +3184,11 @@ impl<'a> Worker<'a> {
             }
             let var = self.types.param(tp);
             let var = self.types.subst(var, &subst);
-            if upper != ANY {
+            if self.canon(upper) != ANY {
                 let u = self.types.subst(upper, &subst);
                 self.is_sub(var, u);
             }
-            if lower != NOTHING {
+            if self.canon(lower) != NOTHING {
                 let l = self.types.subst(lower, &subst);
                 self.is_sub(l, var);
             }
@@ -3462,7 +3463,7 @@ impl<'a> Worker<'a> {
                         return None;
                     }
                     match &common {
-                        Some((t, _)) if *t != key => None,
+                        Some((t, _)) if !self.same_type(*t, key) => None,
                         _ => Some((key, params)),
                     }
                 })();

@@ -455,6 +455,13 @@ impl<'a> Worker<'a> {
     /// at itself goes, as teq reports no unknown annotation), the tree left behind and its index
     /// records dropped, outside the capture, whose records a products build writes.
     fn mark_annotation(&mut self, file: FileId, instance: ast::ExprId) {
+        self.type_annotation_quietly(file, instance, |_, _| ());
+    }
+
+    /// Types the annotation `instance` as `mark_annotation` types it, quietly, and runs `then` over its tree before
+    /// the typing's trail is taken back: what it reports at itself goes, the tree is left behind, its index records are
+    /// dropped, outside the capture.
+    pub(super) fn type_annotation_quietly<R>(&mut self, file: FileId, instance: ast::ExprId, then: impl FnOnce(&mut Self, Option<crate::tir::TExprId>) -> R) -> R {
         let recorded = self.index_mark();
         let capture = self.prog.capture.take();
         let deps = self.deps.take();
@@ -463,18 +470,15 @@ impl<'a> Worker<'a> {
         let frame = self.var_frame_begin();
         let trail = self.snapshot();
         let pending = self.attempts.pending_len();
-        match self.java_annotation_class(instance) {
-            Some(c) => {
-                self.type_java_annotation(c, instance);
-            }
-            None => {
-                self.type_expr(instance, None);
-            }
-        }
+        let tree = match self.java_annotation_class(instance) {
+            Some(c) => self.type_java_annotation(c, instance),
+            None => Some(self.type_expr(instance, None).0),
+        };
         // The annotation's plain inline calls expand before what it reported is dropped.
         if self.attempts.pending_len() > pending {
             self.flush_pending_from(pending);
         }
+        let out = then(self, tree);
         self.rollback(&trail);
         self.var_frame_end(frame);
         let span = self.ast(file).expr_span(instance);
@@ -485,6 +489,7 @@ impl<'a> Worker<'a> {
         self.deps = deps;
         self.prog.capture = capture;
         self.index_drop_records_within(recorded, file, span);
+        out
     }
 
     pub(super) fn mark_names_of_type(&mut self, ast: &'a ast::Ast, t: ast::TyExprId) {

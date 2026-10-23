@@ -1,0 +1,25 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "generic-client/GenericClient.scala",
+  "text": "",
+  "md5": "5FABE4B8DB1708B1C9E12AE36132323A",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"reviewgen/GenericClient.fromInner.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"fromInner","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"reviewgen/Box#","type_arguments":[{"kind":"AnnotatedType","annotations":[{"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"reviewgen/Outer#Ann#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"reviewgen/Outer#Ann#[A]","type_arguments":[]}]}}],"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"reviewgen/GenericClient.fromQualified.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"fromQualified","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"reviewgen/Box#","type_arguments":[{"kind":"AnnotatedType","annotations":[{"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"reviewgen/Outer#Ann#","type_arguments":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"reviewgen/Outer#Ann#[A]","type_arguments":[]}]}}],"tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}}]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"reviewgen/GenericClient.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"GenericClient","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"reviewgen/GenericClient."},"declarations":{"symlinks":["reviewgen/GenericClient.`<init>`().","reviewgen/GenericClient.fromInner.","reviewgen/GenericClient.fromQualified."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":2,"start_character":18,"end_line":2,"end_character":28},"symbol":"reviewgen/GenericAnn.","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":29,"end_line":2,"end_character":34},"symbol":"reviewgen/GenericAnn.outer.","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":35,"end_line":2,"end_character":40},"symbol":"reviewgen/Outer#inner().","role":"REFERENCE"},
+    {"range":{"start_line":2,"start_character":6,"end_line":2,"end_character":15},"symbol":"reviewgen/GenericClient.fromInner.","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":22,"end_line":3,"end_character":32},"symbol":"reviewgen/GenericAnn.","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":33,"end_line":3,"end_character":42},"symbol":"reviewgen/GenericAnn.qualified().","role":"REFERENCE"},
+    {"range":{"start_line":3,"start_character":6,"end_line":3,"end_character":19},"symbol":"reviewgen/GenericClient.fromQualified.","role":"DEFINITION"},
+    {"range":{"start_line":1,"start_character":7,"end_line":1,"end_character":20},"symbol":"reviewgen/GenericClient.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":17},"symbol":"reviewgen/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}

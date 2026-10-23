@@ -931,12 +931,12 @@ impl<'a> Worker<'a> {
             if let Some(hi) = hi {
                 let hi = self.resolve_type(hi);
                 let current = self.syms.tparam(p).upper;
-                self.syms.tparams[p.idx()].upper = if current == ANY || self.is_sub(hi, current) { hi } else { self.types.inter(current, hi) };
+                self.syms.tparams[p.idx()].upper = if self.canon(current) == ANY || self.is_sub(hi, current) { hi } else { self.types.inter(current, hi) };
             }
             if let Some(lo) = lo {
                 let lo = self.resolve_type(lo);
                 let current = self.syms.tparam(p).lower;
-                self.syms.tparams[p.idx()].lower = if current == NOTHING { lo } else { self.lub(current, lo) };
+                self.syms.tparams[p.idx()].lower = if self.canon(current) == NOTHING { lo } else { self.lub(current, lo) };
             }
         }
     }

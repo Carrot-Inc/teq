@@ -238,6 +238,17 @@ impl<'a> Worker<'a> {
         mapped
     }
 
+    /// The class of a pickled annotation, its tree's type (a class's reference, applied where the
+    /// class takes type arguments) as `Annotations.annotClass` reads it (`annotation_type_class`).
+    fn loaded_annotation_class(&mut self, cx: &mut MapCx, annot: &TType) -> Option<ClassId> {
+        let class = match annot {
+            TType::Applied(tycon, _) => &**tycon,
+            other => other,
+        };
+        let t = self.map_type_ctor(cx, class);
+        self.annotation_type_class(t)
+    }
+
     fn map_type_ctor_in(&mut self, cx: &mut MapCx, t: &TType) -> TypeId {
         match t {
             TType::Package(_) => self.blocked(cx, Shape::Unknown, t),
@@ -268,7 +279,7 @@ impl<'a> Worker<'a> {
             }
             TType::Or(a, b) => {
                 let (x, y) = (self.map_type(cx, a), self.map_type(cx, b));
-                self.declared_lost |= x == y;
+                self.declared_lost |= self.same_type(x, y);
                 self.types.union(x, y)
             }
             TType::ByName(inner) => {
@@ -277,15 +288,27 @@ impl<'a> Worker<'a> {
             }
             // `T @RuntimeChecked` is the annotated type (an annotation under others included,
             // `T @RuntimeChecked @Mark`, as Types.scala 438-439's `hasAnnotation` recurses over
-            // nested `AnnotatedType`s); any other annotation is dropped.
+            // nested `AnnotatedType`s); any other annotation is dropped from the canonical type.
+            // Under semantic typing every annotation is retained over the type, as
+            // `TreeUnpickler.readType`'s ANNOTATEDtype arm makes `AnnotatedType(parent, ann)` of each,
+            // a `CompactAnnotation` of its type or an `Annotation` of its tree (TreeUnpickler.scala
+            // 427-433 at 3.8.4): its class, which TypeOps reads. The loader keeps the annotation's type
+            // alone, so its arguments' types are none (tryInsertImplicitOnQualifier's layer reads the
+            // tree whole).
             TType::Annotated(u, annot) => {
                 let inner = self.map_type_ctor(cx, u);
                 let tasty = self.tasty(cx.file);
-                if is_runtime_checked(&tasty, annot) && inner != ERROR && !matches!(self.types.get(inner), Type::Annotated(_)) {
+                let t = if is_runtime_checked(&tasty, annot) && inner != ERROR && !matches!(self.types.get(inner), Type::Annotated(_)) {
                     self.types.mk(Type::Annotated(inner))
                 } else {
                     inner
+                };
+                if self.semantic && t != ERROR {
+                    if let Some(k) = self.loaded_annotation_class(cx, annot) {
+                        return self.types.retained(t, Retention::Annot(k, EMPTY_LIST));
+                    }
                 }
+                t
             }
             TType::Refined(parent, members) => {
                 // `PolyFunction { def apply[A](a: A): A }` is a polymorphic function type; one

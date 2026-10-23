@@ -1,0 +1,21 @@
+{
+  "schema": "SEMANTICDB4",
+  "uri": "outside/Other.scala",
+  "text": "",
+  "md5": "A9B409DB2E29D466C28C2FFDDB07AC4C",
+  "language": "SCALA",
+  "symbols": [
+    {"symbol":"outside/Other.four.","language":"SCALA","kind":"METHOD","properties":1024,"display_name":"four","signature":{"kind":"ValueSignature","tpe":{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"scala/Int#","type_arguments":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null},
+    {"symbol":"outside/Other.","language":"SCALA","kind":"OBJECT","properties":8,"display_name":"Other","signature":{"kind":"ClassSignature","type_parameters":null,"parents":[{"kind":"TypeRef","prefix":{"kind":"Empty"},"symbol":"java/lang/Object#","type_arguments":[]}],"self":{"kind":"SingleType","prefix":{"kind":"Empty"},"symbol":"outside/Other."},"declarations":{"symlinks":["outside/Other.`<init>`().","outside/Other.four."],"hardlinks":[]}},"annotations":[],"access":{"kind":"PublicAccess"},"overridden_symbols":[],"documentation":null}
+  ],
+  "occurrences": [
+    {"range":{"start_line":4,"start_character":13,"end_line":4,"end_character":19},"symbol":"inside/","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":20,"end_line":4,"end_character":22},"symbol":"inside/In.","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":23,"end_line":4,"end_character":28},"symbol":"inside/In.twice().","role":"REFERENCE"},
+    {"range":{"start_line":4,"start_character":6,"end_line":4,"end_character":10},"symbol":"outside/Other.four.","role":"DEFINITION"},
+    {"range":{"start_line":3,"start_character":7,"end_line":3,"end_character":12},"symbol":"outside/Other.","role":"DEFINITION"},
+    {"range":{"start_line":0,"start_character":8,"end_line":0,"end_character":15},"symbol":"outside/","role":"DEFINITION"}
+  ],
+  "diagnostics": [],
+  "synthetics": []
+}
