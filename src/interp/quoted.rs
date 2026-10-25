@@ -5212,6 +5212,7 @@ impl<'a, 't> Interp<'a, 't> {
             | Type::Wild
             | Type::BoundedWild(..)
             | Type::Error
+            | Type::NoType
             | Type::Match(..) => SymRef::None,
         }
     }

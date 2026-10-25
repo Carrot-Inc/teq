@@ -706,6 +706,7 @@ java.lang.Float$	POSITIVE_INFINITY	-:scala.Float
 java.lang.Float$	TYPE	-:java.lang.Class
 java.lang.Float$	compare	scala.Float,scala.Float:scala.Int
 java.lang.Float$	floatToIntBits	scala.Float:scala.Int
+java.lang.Float$	floatToRawIntBits	scala.Float:scala.Int
 java.lang.Float$	hashCode	scala.Float:scala.Int
 java.lang.Float$	intBitsToFloat	scala.Int:scala.Float
 java.lang.Float$	max	scala.Float,scala.Float:scala.Float

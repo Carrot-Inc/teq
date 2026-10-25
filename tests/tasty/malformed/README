@@ -1,0 +1,6 @@
+Malformed TASTy inputs that a reader has to refuse rather than misread. `cyclic-name.tasty` is a
+real product's pickle with an unused `SUPERACCESSOR` name, entry 176, whose underlying reference is
+its own index: dotty's `NameTable` holds only the names read so far and `readName` resolves through
+it (`TastyUnpickler.scala:35-39`, 87), so scalac refuses it with `IndexOutOfBoundsException: 176 is
+out of bounds (min 0, max 175)`. The probe that made it is
+`type-representation-push-1676625dc/reproduce-cyclic-name.py`.

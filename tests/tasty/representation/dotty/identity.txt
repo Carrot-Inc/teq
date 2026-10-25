@@ -1,0 +1,13 @@
+annotation eql=false
+distinct annotation nodes eq=false
+shared annotation nodes eq=true
+bounds(p,p) kind=RealTypeBounds
+range distinct=Range
+range shared=CachedAnnotatedType
+skolem eq=false
+deferred before=false
+after symbol=false
+after tree=true; forces=1
+derived same annotation=true
+method eq=false
+method unique eq=false

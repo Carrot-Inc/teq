@@ -639,6 +639,9 @@ package java.lang:
     @js("$floatToIntBits($1)")
     @jvm("invokestatic java/lang/Float.floatToIntBits(F)I")
     def floatToIntBits(f: scala.Float): Int
+    @js("$floatToRawIntBits($1)")
+    @jvm("invokestatic java/lang/Float.floatToRawIntBits(F)I")
+    def floatToRawIntBits(f: scala.Float): Int
     @js("$intBitsToFloat($1)")
     @jvm("invokestatic java/lang/Float.intBitsToFloat(I)F")
     def intBitsToFloat(i: Int): scala.Float

@@ -24,7 +24,7 @@ lsp.1/4 255
 lsp.2/4 240
 lsp.3/4 197
 lsp.4/4 207
-tasty 85
+tasty 95
 modules 392
 modules.1/2 362
 modules.2/2 330

@@ -165,6 +165,7 @@ impl<'a> Worker<'a> {
             Type::Any => out.push_str("Any"),
             Type::Nothing => out.push_str("Nothing"),
             Type::Error => out.push_str("<error>"),
+            Type::NoType => out.push_str("<notype>"),
             Type::Wild => out.push('?'),
             Type::BoundedWild(lo, hi) => {
                 out.push('?');

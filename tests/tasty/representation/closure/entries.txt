@@ -1,0 +1,968 @@
+# The closure tool's entries (README.md): per landing, every dotty member a row of the landing cites in
+# section 3 of the type-representation table, by its SemanticDB symbol at 3.8.4 (a class by its constructor):
+# an entry when it is in core/ or in the landing's own mechanism files, else a reader (`reader <symbol>`).
+# ---- For every landing (README.md, "Boundaries and owners"): the lines before the first landing. ----
+#
+# The cuts: the boundaries of the ruling of 2026-10-24 on 16.0's points (ledger 69; REVIEWING.md "What counts" 2: a
+# feature of dotty's own that a mechanism calls and that is another mechanism with its own owner is a boundary of the
+# same kind as an external dependency), by what the inputs select, not by package. A member under a cut is listed with
+# the members calling it (`cut <entry> below <cut>`), never walked; the dispatch candidates of a call to it go with it.
+# The entries called and the decisions this part's inputs select are 16.b's rows, above; the dependency's own below.
+#
+# Diagnostics and message rendering: report.* and Message (with printing/ and parsing/ reached through the
+# highlighter). Above: which error a mechanism's branch reports and where, mapped to teq's reporter; below: the rendering.
+# The members' destinations, `port` lines (ports.txt), for every landing.
+include ports.txt
+# Ledger 77's cut class, dotty's plumbing by member with its contract (plumbing.txt).
+include plumbing.txt
+cut dotty/tools/dotc/report.* diagnostics(ledger-69)
+cut dotty/tools/dotc/reporting/* diagnostics(ledger-69)
+# Above the diagnostics cut, by what the inputs select (the ruling on round 11, 40 #2): the speculative typing's
+# reporter, `TyperState.fresh`'s StoreReporter (`fromTyperState`, its `report` bypassing WConf until a flush, its
+# `hasUnreportedErrors` override), and the Reporter members the typing reads of it: `issueUnconfigured`,
+# `removeBufferedMessages`, `hasUnreportedMessages`, `flush` and the counts they read and transfer.
+above dotty/tools/dotc/reporting/StoreReporter#* speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#issueUnconfigured(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#removeBufferedMessages(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#hasUnreportedMessages(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#hasUnreportedErrors(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#flush(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#errorCount(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#warningCount(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#_errorCount(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#_warningCount(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#unreportedWarnings(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#addUnreported(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/Reporter#pendingMessages(). speculative-typing(round-11)
+above dotty/tools/dotc/reporting/ExploringReporter* speculative-typing(round-11)
+# The printers: printing/ and show, and the show entries outside printing/ (a Printer reached for a message is
+# diagnostics'; one reached for a type's text at a decision an input selects is mapped above, 16.b).
+cut dotty/tools/dotc/printing/* printers(ledger-69)
+cut dotty/tools/dotc/core/Decorators.i(* printers(ledger-69)
+cut dotty/tools/dotc/core/Decorators.em(* printers(ledger-69)
+cut dotty/tools/dotc/core/Decorators.showing(* printers(ledger-69)
+cut dotty/tools/dotc/core/Contexts.Context#printer(* printers(ledger-69)
+cut dotty/tools/dotc/core/Symbols.Symbol#show* printers(ledger-69)
+cut dotty/tools/dotc/core/TypeUtils#showRef(* printers(ledger-69)
+cut dotty/tools/dotc/typer/Synthesizer#MirrorSource#show(* printers(ledger-69)
+cut dotty/tools/dotc/typer/TermRefSet#showAsList(* printers(ledger-69)
+# The debug printers and paths: config/Printers, the traces, -Ystats' counters and the debug strings; a Settings read
+# inside a closure member stays in the list with teq's flag beside it (the `flag` lines).
+cut dotty/tools/dotc/config/Printers* debug(ledger-69)
+cut dotty/tools/dotc/reporting/trace* debug(ledger-69)
+cut dotty/tools/dotc/util/Stats* debug(ledger-69)
+cut dotty/tools/dotc/core/TypeComparer#showGoal(* debug(ledger-69)
+cut dotty/tools/dotc/core/TypeComparer#traceInfo(* debug(ledger-69)
+cut dotty/tools/dotc/core/TypeComparer.ApproxState.Repr.show(* debug(ledger-69)
+cut dotty/tools/dotc/core/Names.Name#debugString(* debug(ledger-69)
+cut dotty/tools/dotc/core/SymDenotations.SymDenotation#debugString(* debug(ledger-69)
+# The trees' debug ids (-Yshow-tree-ids, -Ydebug-tree-with-id, ast/Positioned.scala:241-251, both flagged none:default):
+# `allocateId` runs at every tree's construction (42) and stores nothing while `ids` is null, the default; the ids, the
+# counter and their readers are the debug paths' (round 12, slice 2-01).
+cut dotty/tools/dotc/ast/Positioned#allocateId(* debug(ledger-69)
+cut dotty/tools/dotc/ast/Positioned#uniqueId(* debug(ledger-69)
+cut dotty/tools/dotc/ast/Positioned.ids* debug(ledger-69)
+cut dotty/tools/dotc/ast/Positioned.nextId* debug(ledger-69)
+cut dotty/tools/dotc/ast/Positioned.debugId* debug(ledger-69)
+# SymDenotations' trace indent (SymDenotations.scala:3127), the debug printers' (round 12, slice 2-p19).
+cut dotty/tools/dotc/core/SymDenotations.indent* debug(ledger-69)
+# The subtype statistics (TypeComparer.scala:2997-3007, every write `Stats.record`, elided under `inline val enabled =
+# false`, util/Stats.scala:13, 24-25), Types' trace flag (`@sharable var debugTrace`), a match type's self read only by
+# the `matchTypes.println` of its reduction's setup (Types.scala:5257, 5304), and whether a type error fills its JVM stack
+# trace (TypeErrors.scala:25-31, the debug settings) (round 12, slices 2-p23, 2-p25, 2-p41, 2-p49).
+cut dotty/tools/dotc/core/TypeComparer#recordStatistics(* debug(ledger-69)
+cut dotty/tools/dotc/core/Types.debugTrace* debug(ledger-69)
+cut dotty/tools/dotc/core/Types.MatchType#thisMatchType(* debug(ledger-69)
+cut dotty/tools/dotc/core/TypeError#computeStackTrace(* debug(ledger-69)
+# The trees' count, incremented only under `Stats.enabled` (ast/Trees.scala:27, 58; util/Stats.scala:13), reached by
+# Tree's constructor through the parent edge (the ruling on round 12's points, 5).
+cut dotty/tools/dotc/ast/Trees.ntrees* debug(ledger-69)
+# Symbol completion from source: Denotation.info's trigger (completeFrom, R33.11) is the mechanism and stays; Namer's
+# completer below it is the typer's boundary. The TASTy unpickler is in scope.
+cut dotty/tools/dotc/typer/Namer#* completion(ledger-69)
+# Capture checking, cut where dotty decides (the owner's ruling of 2026-10-24 on ledger 69's capture-checking cut): the
+# cut is not the cc/ package but ccEnabled. ccEnabled false: in scope (no line: the member is walked, its status its
+# first landing's); true: boundary (`cut <member> ccEnabled-true(ledger-69)`), the input that selects it a program under
+# `import scala.language.experimental.captureChecking` (or -language:experimental.captureChecking, separationChecking,
+# safe: Feature.ccEnabledBySetting, config/Feature.scala:152-155; the unit's import, ccEnabled 158-160; any unit's,
+# Run.ccEnabledSomewhere, set by handleGlobalLanguageImport 263-281, read by Feature.ccEnabledSomewhere 179-181). A
+# member serving both is `split <member> ccEnabled`: walked, its ccEnabled-only callees under cut lines of their own, or,
+# a callee in scope through other callers, its edge declined (`decline <caller> <callee> ccEnabled-true:<the guard>`).
+# The guards (cc/ files relative to compiler/src/dotty/tools/dotc/, at 3.8.4): isCaptureChecking = ctx.phaseId ==
+# checkCapturesPhaseId (cc/CaptureOps.scala:24-25); isCaptureCheckingOrSetup, that or Setup's id with
+# ccState.iterationId > 0 (28-33); Setup and CheckCaptures run only under Feature.ccEnabledSomewhere (cc/Setup.scala:
+# 104-105, cc/CheckCaptures.scala:246; in the plan at Compiler.scala:87-88, unlinked as denotation transformers when
+# !ccEnabledSomewhere, Run.scala:399-401); the extractor CapturingType.unapply answers Some only in those phases
+# (cc/CapturingType.scala:57-84). A capture-checked pickle read with cc off: its @retains/@retainsCap/@retainsByName
+# annotations become RetainingAnnotations (core/tasty/TreeUnpickler.scala:427-433 -> core/Annotations.scala:198, or
+# 297 -> 202 -> 198), kept on the AnnotatedType; a CaptureAnnotation is built only by CapturingType.apply
+# (cc/CapturingType.scala:49; CaptureAnnotation.scala:36, 57 copy one), called outside cc/ only under
+# isCaptureCheckingOrSetup (core/TypeComparer.scala:1046-1050) or Feature.ccEnabled (transform/PatternMatcher.scala:
+# 468-469). With cc off dotty also initializes what only ccEnabled paths read, and those runs are in scope by the
+# ruling (the paths dotty takes with capture checking off): Capability's cache fields on every TermRef and TypeRef
+# (cc/Capability.scala:343-348; ObjectCapability and SetCapability, over CoreCapability, their parents), CaptureSet's
+# module vals emptyRefs, empty, emptyOfStateful, Pending (cc/CaptureSet.scala:583-594, 609: three Const sets, built
+# when subCapturesRange first loads the module) with CaptureSet's constructor, and the cc phase objects in every run's
+# plan (Compiler.scala:87-88; `new CCState`, cc/CheckCaptures.scala:281). closure.py walks no object's or parent's
+# initializer (README.md, "An object's reference") and no entry reaches the plan, so of these only CaptureSet's
+# constructor, a landing-5 entry, is a member: a `split` line more specific than its class's cut walks it, and the
+# capability traits are split so that no cut lists them; teq's answer with cc off reads none of them.
+#
+# -- The phases: Setup, CheckCaptures (with its separation checker and synthetics), whole.
+# cc/Setup.scala:104-105 `super.isRunnable && Feature.ccEnabledSomewhere`; referenced outside cc/ only by the plan
+# (Compiler.scala:87). (The phase object and its fields are built in every run's plan; no landing reaches them.)
+cut dotty/tools/dotc/cc/Setup* ccEnabled-true(ledger-69)
+# cc/CheckCaptures.scala:246 `super.isRunnable && Feature.ccEnabledSomewhere`; outside cc/: the plan (Compiler.scala:88),
+# Phases' class lookup (core/Phases.scala:326) and Typer#typedAnnotated's `if Feature.ccEnabled && cls.isRetainsLike
+# then CheckCaptures.checkWellformedRetains(..)` (typer/Typer.scala:3647-3648).
+cut dotty/tools/dotc/cc/CheckCaptures* ccEnabled-true(ledger-69)
+# Called only from CheckCaptures#CaptureChecker#postCheck (cc/CheckCaptures.scala:2389).
+cut dotty/tools/dotc/cc/SepCheck* ccEnabled-true(ledger-69)
+# Called only from Setup (transformSym, setupTraverser), CheckCaptures (recheckDefDef) and
+# CaptureOps.needsResultRefinement, itself called only from CheckCaptures and SepCheck.
+cut dotty/tools/dotc/cc/Synthetics* ccEnabled-true(ledger-69)
+#
+# -- The capture-set solving: CaptureSet's class whole; the object's members but subCapturesRange (split, below). A
+# CaptureSet is reached only through a capturing type's refs (CaptureAnnotation#refs, RetainingAnnotation#toCaptureSet:
+# cc/CapturingType.scala:65, 81), CaptureSet.ofType, or the cc phases; every call outside cc/ is in a CapturingType arm,
+# under isCaptureCheckingOrSetup, or in a helper only those reach (out/closure/rows/capture-checking.md (a): recur
+# 441, 549, 597, 682-687, 872-888; distributeAnd 2852-2856; compareCaptures 2944-2957; subCaptures 2929-2932, makeVarState
+# 2926-2927; simplify 165-168; depStatus 4126-4133; foldOver 7009-7011; mapCapability 6371-6416; mapCapturingType 6357).
+# The class's constructor, Const's and the module vals also run once with cc off, when subCapturesRange first loads
+# the module: in scope (the rule above), split below. The class symbol is listed from CapturingType.unapply's and
+# decomposeCapturingType's signatures (a type, no call).
+cut dotty/tools/dotc/cc/CaptureSet#* ccEnabled-true(ledger-69)
+# CaptureSet's constructor runs with cc off for the module's constant sets (583-594, 609): in scope; every other
+# member of the class is the sets' solving, run under ccEnabled.
+split dotty/tools/dotc/cc/CaptureSet#`<init>`(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.apply(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.empty* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.universal(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.Const* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.Fluid* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.Var* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.Mutability* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.MutAdaptFailure* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.EmptyOfBoxed* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.HiddenSet* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.IncludeFailure* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.ofInfo(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.ofType* ccEnabled-true(ledger-69)
+# CaptureSet.subCapturesRange: TypeComparer#isSubArgs calls it on every wildcard argument against a non-bounds one
+# (core/TypeComparer.scala:1911-1913), cc off too: its one arm `case TypeBounds(CapturingType(lo, loRefs),
+# CapturingType(hi, hiRefs)) if lo =:= hi` (cc/CaptureSet.scala:1377) fails, `false` (1381-1382). ccEnabled false: false;
+# true: the arm's body (1378-1380: VarState, captureSet, subCaptures, cut above and below) and its guard's `=:=`.
+split dotty/tools/dotc/cc/CaptureSet.subCapturesRange(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+# TypeMap#mapCapability's LocalCap arm narrows a capability's prefix (core/Types.scala:6371-6416): mapCapability is
+# entered only from cc/ (its callers' arms are capturing types', cut), so the edge into Type#narrow is cc's alone.
+decline dotty/tools/dotc/core/Types.TypeMap#mapCapability(). dotty/tools/dotc/core/Types.Type#narrow(). ccEnabled-true:a-capability's-LocalCap-arm(core/Types.scala:6371-6416)
+decline dotty/tools/dotc/cc/CaptureSet.subCapturesRange(). dotty/tools/dotc/core/Types.Type#`=:=`(). ccEnabled-true:the-guard-of-the-CapturingType-arm(cc/CaptureSet.scala:1377)
+#
+# -- The capabilities (cc/Capability.scala, object Capabilities), whole: the elements of capture sets. Every capability
+# class is built only in cc/ (outside cc/ only patterns in the mapCapability overrides, core/Types.scala:4217-4220,
+# 6372-6401, core/Substituters.scala:169, 196, entered only from cc/, and in MethodTypeCompanion#checkValid2,
+# core/Types.scala:4373, which nothing calls); Capability's methods run on a capability in a capture set or under a cc
+# guard (TypeComparer.scala:1049-1050 isTracked and singletonCaptureSet under 1046; Types.scala:432, 4129-4130, 7011
+# coreType and stripReach in CapturingType arms; maybe, readOnly, restrict, reach in mapCapability, 6371-6416, 4219);
+# the capability maps (CapMap, ToResult, Internalize, 1185-1337), dispatch candidates of TypeMap's methods, are built
+# only by cc/. The traits ObjectCapability and SetCapability are parents of TermRef and TypeRef (core/Types.scala:2968,
+# 2997): their initializer, Capability's six cache fields (343-348), runs on every TermRef and TypeRef with cc off and
+# is read only by Capability's methods: in scope (the rule in the head), the traits split below.
+cut dotty/tools/dotc/cc/Capabilities.* ccEnabled-true(ledger-69)
+# The capability traits TermRef and TypeRef extend: their initializer, the cache fields, runs with cc off.
+split dotty/tools/dotc/cc/Capabilities.Capability# ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.CoreCapability# ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.ObjectCapability# ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.SetCapability# ccEnabled(false:in-scope,true:boundary)(ledger-69)
+# The capture-set maps and the deep accumulator, dispatch candidates of TypeMap's and TypeAccumulator's methods: built
+# only in cc/ (NarrowingCapabilityMap's MaybeMap, ReadOnlyMap, RestrictMap by CaptureSet#maybe, readOnly, restrict,
+# cc/CaptureSet.scala:448-452, 1674-1709; DeepTypeAccumulator by CaptureSet.ofTypeDeeply and derivesFromCapTraitDeeply,
+# cc/CaptureSet.scala:1801, cc/CaptureOps.scala:382-390).
+cut dotty/tools/dotc/cc/CaptureSet.NarrowingCapabilityMap* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.MaybeMap* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.ReadOnlyMap* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureSet.RestrictMap* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/DeepTypeAccumulator* ccEnabled-true(ledger-69)
+#
+# -- Capturing types: CaptureAnnotation whole (built only by CapturingType.apply, cc/CapturingType.scala:49; its type
+# tests in cc-off code, cc/CapturingType.scala:63 and cc/CaptureOps.scala:217, answer false); CapturingType.apply (its
+# callers outside cc/ guarded, TypeComparer.scala:1046-1050 and PatternMatcher.scala:468-469; the tool adds it at every
+# `CapturingType(..)` pattern too, closure.py's companion rule); CapturingOrRetainsType (alsoRetains = true, called only
+# from cc/).
+cut dotty/tools/dotc/cc/CaptureAnnotation* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CapturingType.apply(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CapturingOrRetainsType* ccEnabled-true(ledger-69)
+# CapturingType.unapply: every CapturingType arm of core/ calls it, cc off too (TypeComparer.scala:371, 546, 870,
+# 2852, 2881; TypeOps.scala:165, 309, 318; Types.scala:432, 1566, 4126, 4204, 6468, 7009; SymDenotations.scala:2339;
+# OrderingConstraint.scala:564). ccEnabled false: None (the IgnoreCaptures test, 58, then decomposeCapturingType's
+# `case _ => None`, 83-84); true, in Setup or CheckCaptures: Some, decomposeCapturingType's arms.
+split dotty/tools/dotc/cc/CapturingType.unapply(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+# decomposeCapturingType: called by unapply (59) and isUncachable (90), cc off too. Its arms: `case AnnotatedType(parent,
+# ann: CaptureAnnotation) if isCaptureCheckingOrSetup` (63-65: false with cc off, no CaptureAnnotation exists) and `case
+# AnnotatedType(parent, ann: RetainingAnnotation) if ann.isStrict && alsoRetains` (66: a pickle's @retains meets
+# ann.isStrict cc off, alsoRetains = isCaptureChecking, 62, false). True: `ann.refs` (65) and `ann.toCaptureSet` with
+# IllegalCaptureRef (81-82), cut.
+split dotty/tools/dotc/cc/CapturingType.decomposeCapturingType(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+cut dotty/tools/dotc/cc/IllegalCaptureRef* ccEnabled-true(ledger-69)
+# (CapturingType.isUncachable, cc/CapturingType.scala:89-90, no line: ClassDenotation#baseTypeOf calls it on every base
+# type it records, core/SymDenotations.scala:2254; Mode.IgnoreCaptures is OldImplicitResolution's bit, core/Mode.scala:
+# 118, 126, so decomposeCapturingType runs cc off under old implicit resolution and answers None.)
+#
+# -- RetainingAnnotation: the class is what the unpickler builds for a pickle's @retains* (core/Annotations.scala:198,
+# 297, 313-314), the ImpureFunctionN alias's (core/Definitions.scala:127) and the by-name map's (1401) and
+# nonDependentResultApprox's (core/Types.scala:4210-4211), all cc off; no line on the class, its constructors, tpe,
+# myCaptureSet or isStrict (RetainingAnnotation.scala:14-16, 39, 45). (Built by universal apply, without `new`: the
+# walk reaches the constructors only as landing 5's entries.) mapWith: ccEnabledSomewhere false: EmptyAnnotation;
+# true: mapWithCtd and its sanitize (RetainingAnnotation.scala:36-37, 25-34).
+split dotty/tools/dotc/cc/RetainingAnnotation#mapWith(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+decline dotty/tools/dotc/cc/RetainingAnnotation#mapWith(). dotty/tools/dotc/core/Annotations.CompactAnnotation#mapWithCtd(). ccEnabled-true:Feature.ccEnabledSomewhere(cc/RetainingAnnotation.scala:37)
+cut dotty/tools/dotc/cc/RetainingAnnotation#sanitize(* ccEnabled-true(ledger-69)
+# toCaptureSet: the capture set of a strict @retains, read by decomposeCapturingType's alsoRetains arm
+# (cc/CapturingType.scala:81) and cc/. (retainedType, 41-43, no line: read with cc off by the printers' by-name arm,
+# printing/PlainPrinter.scala:308, above their cut at landing op; below.)
+cut dotty/tools/dotc/cc/RetainingAnnotation#toCaptureSet(* ccEnabled-true(ledger-69)
+#
+# -- CaptureOps: the guards (isCaptureChecking 24-25, isRetains 662-664, isRetainsLike 669-671 with inScalaAnnotation
+# 655-657, isDisallowedInCapset 784-785) run cc off, no line. isCaptureCheckingOrSetup's second operand (32), evaluated
+# only at Setup's phase id, reads ccState.
+split dotty/tools/dotc/cc/CaptureOps$package.isCaptureCheckingOrSetup(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+# ccState (50-52): CheckCaptures' CCState, read at 32 and in CCState's wrappers' cc branches (CCState.scala:131, 147,
+# 164, 176) and cc/.
+cut dotty/tools/dotc/cc/CaptureOps$package.ccState(* ccEnabled-true(ledger-69)
+# boxed (214-223): TypeComparer#recur calls it on every TypeParamRef bound (461, 639), cc off too; false: the
+# RealTypeBounds arm or the type itself (220-223); true: the CapturingType arm (215-219), isBoxed, isAlwaysEmpty,
+# boxedAnnot cut, and its core/ callees declined.
+split dotty/tools/dotc/cc/CaptureOps$package.boxed(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+decline dotty/tools/dotc/cc/CaptureOps$package.boxed(). dotty/tools/dotc/core/Types.AnnotatedType#annot. ccEnabled-true:the-CapturingType-arm(cc/CaptureOps.scala:215-219)
+decline dotty/tools/dotc/cc/CaptureOps$package.boxed(). dotty/tools/dotc/core/Types.Type#derivesFrom(). ccEnabled-true:the-CapturingType-arm(cc/CaptureOps.scala:215-219)
+decline dotty/tools/dotc/cc/CaptureOps$package.boxed(). dotty/tools/dotc/core/Definitions#Caps_CapSet. ccEnabled-true:the-CapturingType-arm(cc/CaptureOps.scala:215-219)
+decline dotty/tools/dotc/cc/CaptureOps$package.boxed(). dotty/tools/dotc/core/Types.AnnotatedType.apply(). ccEnabled-true:the-CapturingType-arm(cc/CaptureOps.scala:215-219)
+# stripCapturing (334-340): ClassDenotation#baseTypeOf calls it on every parent of a class deriving from the symbol
+# (core/SymDenotations.scala:2282-2283), cc off too; false: the AnnotatedType arm keeps the annotation and recurs (337-
+# 338), or the type itself; true: the CapturingType arm (335-336). TypeComparer's calls are all ccEnabled-only:
+# recur 681, 685 (CapturingType arms' guards under 666), 894 (arm 870), 952 (`isCaptureCheckingOrSetup && ..`, 950),
+# 1050 (under 1046), 1058 (`isCaptureCheckingOrSetup && ..`); isSubArgs 1919 (after subCapturesRange is true).
+split dotty/tools/dotc/cc/CaptureOps$package.stripCapturing(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+decline dotty/tools/dotc/core/TypeComparer#recur(). dotty/tools/dotc/cc/CaptureOps$package.stripCapturing(). ccEnabled-true:isCaptureCheckingOrSetup-or-a-CapturingType-arm(core/TypeComparer.scala:666-685,870-894,950-952,1046-1050,1058)
+decline dotty/tools/dotc/core/TypeComparer#isSubArgs(). dotty/tools/dotc/cc/CaptureOps$package.stripCapturing(). ccEnabled-true:subCapturesRange-true(core/TypeComparer.scala:1913-1919)
+# Typer#typedAnnotated reads isRetainsLike only under `Feature.ccEnabled &&` (typer/Typer.scala:3647).
+decline dotty/tools/dotc/typer/Typer#typedAnnotated(). dotty/tools/dotc/cc/CaptureOps$package.isRetainsLike(). ccEnabled-true:Feature.ccEnabled(typer/Typer.scala:3647)
+# The capturing-type operations, each called outside cc/ only in a CapturingType arm or under a cc guard
+# (out/closure/rows/capture-checking.md (a)): retainedElements (RetainingAnnotation#toCaptureSet, printers),
+# isTrackableRef (Types.scala:4219, 6362, mapCapability's), captureSet (TypeComparer.scala:441, 597, 549, 682, 686, 872,
+# 888, 2853; TypeOps.scala:167; CaptureSet.scala:1379), capturing (a landing-5 entry; capturing(+1) 878, arm 870),
+# derivedCapturingType (in every arm: OrderingConstraint.scala:565, SymDenotations.scala:2340, TypeComparer.scala:2856,
+# 2883, TypeOps.scala:310, 319, Types.scala:1567, 6309-6310, 6844-6849), unboxed (561, arm 546), isBoxedCapturing (553-
+# 561, 2956; TypeOps.scala:168), isBoxCompatibleWith (2855, 2882), isAlwaysPure (550), derivesFromStateful (2946, in
+# compareCaptures, called only in arms), withReachCaptures (1053, under 1046), isBoxed (cc/CaptureOps.scala:215 in
+# boxed's arm; TypeOps.scala:168).
+cut dotty/tools/dotc/cc/CaptureOps$package.retainedElements(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.isTrackableRef(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.captureSet(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.capturing(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.derivedCapturingType(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.unboxed(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.isBoxedCapturing(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.isBoxCompatibleWith(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.isAlwaysPure(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.derivesFromStateful(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.withReachCaptures(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.isBoxed(* ccEnabled-true(ledger-69)
+# The capability annotations' extractors (cc/CaptureOps.scala:918-953): read by toCapability (67-84, from
+# retainedElements) and the printers; landing-5 entries with no caller outside cc/.
+cut dotty/tools/dotc/cc/AnnotatedCapability* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/OnlyCapability* ccEnabled-true(ledger-69)
+# CleanupRetains (906-913): Inlines.inlineCall builds one on every inline call and maps every InferredTypeTree's type
+# (inlines/Inlines.scala:106-111), PostTyper on every UnApply's type, Bind's info and inferred TypeTree, unguarded
+# (transform/PostTyper.scala:544, 648, 680), cc off
+# too (universal apply: the walk reaches the constructor only as landing 5's entry); ccEnabled false: drop the
+# RetainingAnnotation (912) or map over; true: keep it or rebuild it with Nothing (909-911).
+split dotty/tools/dotc/cc/CleanupRetains#apply(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+decline dotty/tools/dotc/cc/CleanupRetains#apply(). dotty/tools/dotc/core/Annotations.CompactAnnotation#symbol(). ccEnabled-true:Feature.ccEnabled(cc/CaptureOps.scala:909-911)
+decline dotty/tools/dotc/cc/CleanupRetains#apply(). dotty/tools/dotc/core/Definitions#RetainsCapAnnot. ccEnabled-true:Feature.ccEnabled(cc/CaptureOps.scala:909-911)
+decline dotty/tools/dotc/cc/CleanupRetains#apply(). dotty/tools/dotc/core/Definitions#NothingType(). ccEnabled-true:Feature.ccEnabled(cc/CaptureOps.scala:909-911)
+decline dotty/tools/dotc/cc/CleanupRetains#apply(). dotty/tools/dotc/core/Symbols.Symbol#asClass(). ccEnabled-true:Feature.ccEnabled(cc/CaptureOps.scala:909-911)
+decline dotty/tools/dotc/cc/CleanupRetains#apply(). dotty/tools/dotc/core/Types.AnnotatedType.apply(). ccEnabled-true:Feature.ccEnabled(cc/CaptureOps.scala:909-911)
+#
+# -- CCState: the class whole (one instance, CheckCaptures' ccState1, cc/CheckCaptures.scala:281, read only through
+# ccState); the object's wrappers. withCollapsedLocalCaps: Types.Type#findMember's goRefined calls it on every member
+# found through a non-precise RefinedType (core/Types.scala:923-929), cc off too; false: `op` (168); true: ccState's
+# collapseLocalCaps (163-167).
+cut dotty/tools/dotc/cc/CCState#* ccEnabled-true(ledger-69)
+split dotty/tools/dotc/cc/CCState.withCollapsedLocalCaps(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+# withGlobalCapAsRoot: RefChecks.checkSelfAgainstParents calls it cc off (typer/RefChecks.scala:110), `op` (151);
+# TypeComparer#recur only under isCaptureVarComparison (440, 596; = isCaptureCheckingOrSetup && .., 1610-1613).
+split dotty/tools/dotc/cc/CCState.withGlobalCapAsRoot(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+decline dotty/tools/dotc/core/TypeComparer#recur(). dotty/tools/dotc/cc/CCState.withGlobalCapAsRoot(). ccEnabled-true:isCaptureVarComparison(core/TypeComparer.scala:439-440,595-596,1610-1613)
+# The other wrappers' callers are cc/ and the printers (inNewExistentialScope: printing/PlainPrinter.scala:303,
+# RefinedPrinter.scala:199, 229, the printers' cut); the readers read ccState.
+cut dotty/tools/dotc/cc/CCState.withDiscardedUses(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CCState.ifNotTried(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CCState.openExistentialScopes(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CCState.globalCapIsRoot(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CCState.collapseLocalCaps(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CCState.discardUses(* ccEnabled-true(ledger-69)
+#
+# -- ccConfig: checkSkippedMaps (an inline false, cc/ccConfig.scala:30) is read only by CaptureSet#map and
+# CaptureSet.Var#addThisElem; strictMutability (67-68) is read by isDisallowedInCapset (cc/CaptureOps.scala:785), cc off
+# too (typer/Checking.scala:1047-1050, under Mode.InCaptureSet = ImplicitExploration, core/Mode.scala:92, 100): no line.
+cut dotty/tools/dotc/cc/ccConfig.checkSkippedMaps* ccEnabled-true(ledger-69)
+#
+# -- The printers' cc/ reads at landing op (the printers above their cut there, for compiletime.codeOf's printed tree,
+# the ruling on round 11), by the same rule: ccEnabled false: in scope (no line); true: boundary. A capture-checked
+# pickle read with cc off keeps its by-name types' @retainsByName annotations as RetainingAnnotations (core/tasty/
+# TreeUnpickler.scala:427-433 -> core/Annotations.scala:198), and PlainPrinter#toText's ExprType arm reads them (printing/
+# PlainPrinter.scala:305-310, `!ann.isStrict`: isStrict is isRetains, retains or retainsCap, cc/RetainingAnnotation.scala:
+# 39, cc/CaptureOps.scala:662-664), cc off. In scope there, no line: RetainingAnnotation#retainedType (41-43; 308; its
+# earlier cut line removed), retainedElementsRaw (cc/CaptureOps.scala:89-105; 308) and isCapsAnyRef (360-362; 309).
+# Mutability.isUpdateMethod (cc/Mutability.scala:56-59), no line: RefinedPrinter#modText on every definition printed
+# (printing/RefinedPrinter.scala:1194, unguarded), cc off its flag tests (57-58) and ccConfig.strictMutability (59), false;
+# the operand that follows strictMutability (59) runs only under separation checking or safe, each enabling capture
+# checking (cc/ccConfig.scala:67-68, config/Feature.scala:152-155, 273-282), as isDisallowedInCapset's (785): no split.
+# isCapsAnyRef's other printer read, isElidableUniversal's List arm (printing/PlainPrinter.scala:206), is given a list
+# only from PlainPrinter 328, under `if Feature.ccEnabledSomewhere` (327), directly (221) or through RefinedPrinter's
+# toTextCapturing and funMiddleText (printing/RefinedPrinter.scala:867-873, 181); its other sets are CaptureSets (284, 333,
+# 585; RefinedPrinter 316-320).
+decline dotty/tools/dotc/printing/PlainPrinter#isElidableUniversal(). dotty/tools/dotc/cc/CaptureOps$package.isCapsAnyRef(). ccEnabled-true:Feature.ccEnabledSomewhere(printing/PlainPrinter.scala:206,327-328)
+# toTextRetainedElem calls toCapability on a retained element that is not itself a Capability (printing/PlainPrinter.scala:
+# 186-191; TermRef, TypeRef, ThisType and the ParamRefs are, core/Types.scala:2968, 2997, 3135, 4914, 4926, and take 187),
+# reached from the by-name arm (310 -> 193-194), cc off: a pickle's `x*`, `x.rd`, `x.only[C]` element, an AnnotatedType.
+# toCapability (cc/CaptureOps.scala:67-84): ccEnabled false: the extractors' arms and their recursion (68-73), isCapsAnyRef
+# and isCapsFreshRef (74-77), isTrackableRef (78), the throw (84, caught at PlainPrinter 190); true: the local-mutable arm
+# (80-81), `ref.isLocalMutable` false unless ccConfig.strictMutability (cc/Capability.scala:490-494), its mapLocalMutable
+# cut below. (isCapsFreshRef, 365-367, read only at 76: in scope, no line. The cc-off arms' callees stay under the
+# capabilities' cuts above, Capability#reach, readOnly, restrict, GlobalAny, GlobalFresh, isTrackableRef, isLocalMutable,
+# the AnnotatedCapability and OnlyCapability extractors, IllegalCaptureRef: run here with cc off, at landing op alone,
+# the owner's question in out/closure/cc11/notes.md.)
+split dotty/tools/dotc/cc/CaptureOps$package.toCapability(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+# mapLocalMutable (531-533): called only by toCapability's local-mutable arm (81). varMirror (838-843): called only by
+# mapLocalMutable (532); ccState's varMirrors (839).
+cut dotty/tools/dotc/cc/CaptureOps$package.mapLocalMutable(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.varMirror(* ccEnabled-true(ledger-69)
+# CCState.inNewExistentialScope (cc/CCState.scala:129-136, inline): PlainPrinter#toText on every MethodType's result
+# (printing/PlainPrinter.scala:303) and RefinedPrinter#toTextMethodAsFunction on a dependent function type's result
+# (printing/RefinedPrinter.scala:229, from 315-316 and 336), cc off; false: `op` (136); true, under
+# isCaptureCheckingOrSetup (130): ccState, its openExistentialScopes (CCState#*) and marksExistentialScope (131-134), cut.
+split dotty/tools/dotc/cc/CCState.inNewExistentialScope(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+# RefinedPrinter#toTextFunction(+1)'s MethodType arm (199) is taken only from toTextMethodAsFunction 212, under
+# `cc.isCaptureCheckingOrSetup && ..` (206-212); its other caller (174) passes the AppliedType, arm 200.
+decline dotty/tools/dotc/printing/RefinedPrinter#toTextFunction(+1). dotty/tools/dotc/cc/CCState.inNewExistentialScope(). ccEnabled-true:isCaptureCheckingOrSetup(printing/RefinedPrinter.scala:199,206-212)
+# marksExistentialScope (cc/CaptureOps.scala:526-527): called by inNewExistentialScope's cc branch (cc/CCState.scala:133,
+# under 130) and cc/Capability.scala:1254 (cut).
+cut dotty/tools/dotc/cc/CaptureOps$package.marksExistentialScope(* ccEnabled-true(ledger-69)
+# retainedSet (cc/CaptureOps.scala:58-63): read only by RefinedPrinter#toTextCore's Annotated arm, in its local
+# captureSet (printing/RefinedPrinter.scala:715-716), evaluated only by toTextRetainsAnnot (719-721), taken only under
+# `annot.symbol.maybeOwner.isRetains && Feature.ccEnabled && !printDebug && Phases.checkCapturesPhase.exists` (722-725).
+cut dotty/tools/dotc/cc/CaptureOps$package.retainedSet(* ccEnabled-true(ledger-69)
+# PathSelectionProto (cc/CaptureOps.scala:900): built only by CheckCaptures (cc/CheckCaptures.scala:751, 793); outside
+# cc/ only RefinedPrinter#toText's `case sel: cc.PathSelectionProto` reads its selector (printing/RefinedPrinter.scala:
+# 344-345), the type test false with cc off.
+cut dotty/tools/dotc/cc/PathSelectionProto* ccEnabled-true(ledger-69)
+# derivesFromCapability (cc/CaptureOps.scala:407-408): PlainPrinter#toText reads it in its CapturingType arm (printing/
+# PlainPrinter.scala:277-284, under elideCapabilityCaps), None with cc off (CapturingType.unapply, above); else
+# CapturingType.apply (cc/CapturingType.scala:37, cut) and cc/. derivesFromCapTrait (393-405) and isArrayUnderStrictMut,
+# on Type (420) and on Symbol (781-782): called by derivesFromCapability and the other derivesFrom* (409-418;
+# derivesFromStateful cut above, the rest called only in cc/), derivesFromCapTraitDeeply (382-390, cc/),
+# inheritedClassifier (521, from CapturingType.apply 48) and isPureClass (684, from isAlwaysPure 348, cut above).
+cut dotty/tools/dotc/cc/CaptureOps$package.derivesFromCapability(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.derivesFromCapTrait(* ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/cc/CaptureOps$package.isArrayUnderStrictMut(* ccEnabled-true(ledger-69)
+# The Settings read a split member makes: RetainingAnnotation#mapWith's (cc/RetainingAnnotation.scala:37).
+flag dotty/tools/dotc/config/Feature.ccEnabledSomewhere(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need (as Feature.ccEnabled's line); no teq counterpart: any compiled unit's language.experimental.captureChecking import (Run.ccEnabledSomewhere, set by handleGlobalLanguageImport, Feature.scala:263-281) or -language:experimental.{captureChecking,separationChecking,safe} (ccEnabledBySetting, Run.scala:299); teq reads neither
+#
+# The owners: a member another part ports, by the ledger's latest line (~/reports/shared-helpers.txt, entry <n>; 58, 60a,
+# 63a and 65 to 69 amending the earlier), its status `ported-by:<part>(shared-helpers-<n>)`; `first-of(a,b)` where the
+# ledger gives the copy to whichever of two lands first. A member of a line that gives type-representation the one copy
+# (54, the representation seams; 65, AsSeenFromMap whole with the traversal; 67, ApproximatingTypeMap's whole port) has
+# no owner line: it is this part's, `landing:<N>`.
+#
+# 68 (and the ruling of 2026-10-24): the lub/glb copy's 14 members, printstream's whole meet port first on master
+# ("TypeComparer.lub and glb with mergedGlb, distributeAnd, glbArgs, liftIfHK, TypeBounds.&, infoMeet, mergedLub, atoms
+# and orType ...; SubstApproxMap; appliedTo's Reducer; the bottom predicate; the GADT constraint's parts"); landing 4
+# extends it.
+owner dotty/tools/dotc/core/TypeComparer#lub(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#glb(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#lubArgs(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#glbArgs(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#orType(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#andType(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#andTypeGen(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#distributeOr(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#distributeAnd(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#dropIfSub(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#dropIfSuper(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#liftIfHK(). printstream 68
+owner dotty/tools/dotc/core/TypeComparer#singletonInterval(). printstream 68
+owner dotty/tools/dotc/core/TypeOps.orDominator(). printstream 68
+owner dotty/tools/dotc/core/Types.TypeBounds#`&`(* printstream 68
+owner dotty/tools/dotc/core/Denotations.infoMeet(). printstream 68
+owner dotty/tools/dotc/core/Types.Type#atoms(). printstream 68
+owner dotty/tools/dotc/core/Types.OrType#atoms(). printstream 68
+owner dotty/tools/dotc/core/Atoms* printstream 68
+owner dotty/tools/dotc/core/Substituters.SubstApproxMap#* printstream 68
+owner dotty/tools/dotc/core/TypeApplications.Reducer#* printstream 68
+owner dotty/tools/dotc/core/TypeComparer#isBottom(). printstream 68
+owner dotty/tools/dotc/core/GadtConstraint* printstream 68
+owner dotty/tools/dotc/core/GadtState* printstream 68
+owner dotty/tools/dotc/core/ProperGadtState* printstream 68
+# 13 and 68 (and the ruling): core/Signature.scala's members are printstream's erasure module's where it has them
+# (tostring-opaque's signature closure, taken into that module by 13: the signature, its parameters and result, the
+# match degrees, NotAMethod, consistentParams with its consistent test, matchDegree, isWildcard); the rest are landing
+# 2's own (prependTermParams, prependTypeParams, isUnderDefined, OverloadedSignature, Signature.apply).
+owner dotty/tools/dotc/core/Signature#paramsSig. printstream 13
+owner dotty/tools/dotc/core/Signature#resSig. printstream 13
+owner dotty/tools/dotc/core/Signature#consistent(). printstream 13
+owner dotty/tools/dotc/core/Signature#consistentParams(). printstream 13
+owner dotty/tools/dotc/core/Signature#matchDegree(). printstream 13
+owner dotty/tools/dotc/core/Signature#isWildcard(). printstream 13
+owner dotty/tools/dotc/core/Signature.MatchDegree* printstream 13
+owner dotty/tools/dotc/core/Signature.NotAMethod. printstream 13
+# 61 (and the ruling): Types.findMember's family, mixin-forwarders' one copy (its push 53374a2a2): the walk, membersNamed,
+# Denotation.meet, the denotation's info through asSeenFrom.
+owner dotty/tools/dotc/core/Types.Type#findMember(). mixin-forwarders 61
+owner dotty/tools/dotc/core/Types.Type#member(). mixin-forwarders 61
+owner dotty/tools/dotc/core/Types.Type#memberBasedOnFlags(). mixin-forwarders 61
+owner dotty/tools/dotc/core/Types.Type#nonPrivateMember(). mixin-forwarders 61
+owner dotty/tools/dotc/core/SymDenotations.ClassDenotation#findMember(). mixin-forwarders 61
+owner dotty/tools/dotc/core/SymDenotations.ClassDenotation#membersNamed(). mixin-forwarders 61
+owner dotty/tools/dotc/core/SymDenotations.ClassDenotation#nonPrivateMembersNamed(). mixin-forwarders 61
+owner dotty/tools/dotc/core/SymDenotations.ClassDenotation#computeMembersNamed(). mixin-forwarders 61
+owner dotty/tools/dotc/core/SymDenotations.ClassDenotation#membersNamedNoShadowingBasedOnFlags(). mixin-forwarders 61
+owner dotty/tools/dotc/core/SymDenotations.ClassDenotation#memberCache(). mixin-forwarders 61
+owner dotty/tools/dotc/core/SymDenotations.PackageClassDenotation#computeMembersNamed(). mixin-forwarders 61
+owner dotty/tools/dotc/core/Denotations.Denotation#meet(). mixin-forwarders 61
+# 55: Types.dealias (dealias1 with keepOpaques and keepAnnots), mixin-forwarders' one copy.
+owner dotty/tools/dotc/core/Types.Type#dealias* mixin-forwarders 55
+# 56: tpd.ref's chain (prefixIsElidable, ref, followOuterLinks, singleton), written-trees' typed type tree producers.
+owner dotty/tools/dotc/ast/tpd.prefixIsElidable(). written-trees 56
+owner dotty/tools/dotc/ast/tpd.ref(* written-trees 56
+owner dotty/tools/dotc/ast/tpd.followOuterLinks(). written-trees 56
+owner dotty/tools/dotc/ast/tpd.singleton(). written-trees 56
+# 57: Inferencing.variances over foldOver's arms, default-getter-result-type's one copy.
+owner dotty/tools/dotc/typer/Inferencing.variances(). default-getter-result-type 57
+# 68: TypeOps.simplify is printstream's, among the interims its landing replaces, tostring-opaque reconciling onto it
+# (the ruling on the four points, 3: 59's reading withdrawn).
+owner dotty/tools/dotc/core/TypeOps.simplify(). printstream 68
+# 41: ConstraintHandling.widenInferred whole, default-getter-result-type's.
+owner dotty/tools/dotc/core/ConstraintHandling#widenInferred(). default-getter-result-type 41
+owner dotty/tools/dotc/core/ConstraintHandling#widenIrreducible(). default-getter-result-type 41
+owner dotty/tools/dotc/core/ConstraintHandling#dropTransparentTraits(). default-getter-result-type 41
+# 62: matchesType, matchesLoosely and matchingMethodParams; targetName, hasTargetName and matchesTargetName: the first of
+# mixin-forwarders and fix-rules-semantic to land.
+owner dotty/tools/dotc/core/TypeComparer#matchesType(). first-of(mixin-forwarders,fix-rules-semantic) 62
+owner dotty/tools/dotc/core/TypeComparer#matchingMethodParams(). first-of(mixin-forwarders,fix-rules-semantic) 62
+owner dotty/tools/dotc/core/Types.Type#matchesLoosely(). first-of(mixin-forwarders,fix-rules-semantic) 62
+# SingleDenotation#matchesLoosely (Denotations.scala:1037-1067) is not ledger 62's (TypeComparer's, 2373-2402): the
+# override pairs' denotation match, this part's (the ruling on round 12, R44.1; R33.2-7's +denot_matches_loosely).
+owner dotty/tools/dotc/core/SymDenotations.SymDenotation#targetName(). first-of(mixin-forwarders,fix-rules-semantic) 62
+owner dotty/tools/dotc/core/SymDenotations.SymDenotation#hasTargetName(). first-of(mixin-forwarders,fix-rules-semantic) 62
+owner dotty/tools/dotc/core/NameOps.matchesTargetName(). first-of(mixin-forwarders,fix-rules-semantic) 62
+# 63a: Types.classSymbol's compound arms and hasClassSymbol, lila-4's copy from its landing; 63: derivesFrom and
+# TypeProxy.superType, binder-null-union's port routed onto it.
+owner dotty/tools/dotc/core/Types.Type#classSymbol(). lila-4 63a
+owner dotty/tools/dotc/core/Types.Type#hasClassSymbol(). lila-4 63a
+owner dotty/tools/dotc/core/Types.Type#derivesFrom(). binder-null-union 63
+owner dotty/tools/dotc/core/Types.TypeProxy#superType(). binder-null-union 63
+# 50: baseType through ClassDenotation.baseTypeOf, one commit named for baseTypeOf: the first of function-arity-checks
+# and mixin-forwarders to land.
+owner dotty/tools/dotc/core/Types.Type#baseType(). first-of(function-arity-checks,mixin-forwarders) 50
+owner dotty/tools/dotc/core/SymDenotations.ClassDenotation#baseTypeOf(). first-of(function-arity-checks,mixin-forwarders) 50
+# 49: TypeComparer.hasMatchingMember whole: the first of source-version-3, mixin-forwarders and function-arity-checks.
+owner dotty/tools/dotc/core/TypeComparer#hasMatchingMember(). first-of(source-version-3,mixin-forwarders,function-arity-checks) 49
+# 66: the TypeErasure module's first copy on master: whichever of mixin-forwarders and printstream lands first (5, 9, 11
+# and 12 read so).
+owner dotty/tools/dotc/core/TypeErasure* first-of(mixin-forwarders,printstream) 66
+# 1: computeBaseData's BaseDataBuilder.addAll: the second of mixin-forwarders and printstream keeps one linearization.
+owner dotty/tools/dotc/core/SymDenotations.ClassDenotation#computeBaseData(). first-of(mixin-forwarders,printstream) 1
+owner dotty/tools/dotc/core/SymDenotations.BaseDataBuilder#* first-of(mixin-forwarders,printstream) 1
+# 46: SymDenotations.isAccessibleFrom: the first of import-quickfix and binder-null-union.
+owner dotty/tools/dotc/core/SymDenotations.SymDenotation#isAccessibleFrom(). first-of(import-quickfix,binder-null-union) 46
+# 35: MultiDenotation.suchThat's ambiguity: the first of laminar-airstream-2 and interp-env-script-2.
+owner dotty/tools/dotc/core/Denotations.MultiDenotation#suchThat(). first-of(laminar-airstream-2,interp-env-script-2) 35
+# 37: extractorMemberType whole: laminar-airstream-2's commit, or indigo-tyrian-2's made first.
+owner dotty/tools/dotc/typer/Applications.extractorMemberType(). first-of(laminar-airstream-2,indigo-tyrian-2) 37
+# 32: Types.lookupRefined with its SingletonType branch: the first of default-getter-result-type and mixin-forwarders.
+owner dotty/tools/dotc/core/Types.Type#lookupRefined(). first-of(default-getter-result-type,mixin-forwarders) 32
+# 28 and 57: default-getter-result-type's accumulators over TypeAccumulator.foldOver (IsFullyDefinedAccumulator,
+# existsPart). foldOver itself is the traversal's twin and this part's (the ruling on the four points, 3; ledger 75,
+# the ruling's text: printstream's landing table lists no foldOver ported whole), so it has no owner line.
+owner dotty/tools/dotc/typer/Inferencing.IsFullyDefinedAccumulator#* default-getter-result-type 28
+owner dotty/tools/dotc/core/Types.Type#existsPart(). default-getter-result-type 28
+# 17, 30 and 31: TypeApplications.typeParams on a selected reference, printstream's port.
+owner dotty/tools/dotc/core/TypeApplications#typeParams(). printstream 30
+# 4: isStable, tryInsertImplicitOnQualifier's.
+owner dotty/tools/dotc/core/Types.Type#isStable(). tryInsertImplicitOnQualifier 4
+# 64: Applications.compare whole and Implicits' candidate ordering, tryInsertImplicitOnQualifier's.
+owner dotty/tools/dotc/typer/Applications#compare(). tryInsertImplicitOnQualifier 64
+owner dotty/tools/dotc/typer/Applications#isApplicableMethodRef(* tryInsertImplicitOnQualifier 64
+owner dotty/tools/dotc/typer/Applications#compareOwner(). tryInsertImplicitOnQualifier 64
+#
+# The flags: a Settings read inside a closure member stays in the list as a member with teq's flag beside it (the
+# ruling of 2026-10-24, ledger 69): `flag <member> <teq's counterpart> # <evidence>`, the counterpart a flag teq
+# parses, a source construct it reads (`import:language...`, `source:<version>`), `none` where teq has nothing that
+# selects the branch, `infra` for a member that reads no particular setting. A pass is right to find a `none`
+# branch unmapped.
+flag dotty/tools/dotc/config/AllScalaSettings#indent. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -indent; teq's indentation is significant unless --source 3.0-migration (lexer.rs:47-48 Keywords::of_setting), nothing turns it back on there; an unknown option is refused (main.rs:1263)
+flag dotty/tools/dotc/config/AllScalaSettings#newSyntax. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -new-syntax (then/do required); teq's parser has no such rule (parser/defs.rs:1828's new_syntax is 3.6's given syntax, enables_new_givens); unknown option refused (main.rs:1263)
+flag dotty/tools/dotc/config/AllScalaSettings#noindent. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -no-indent; teq turns indentation off only under --source 3.0-migration (lexer.rs:48 indent: !migrate_to_3)
+flag dotty/tools/dotc/config/AllScalaSettings#oldSyntax. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -old-syntax (parentheses required around conditions, implies no-indent); teq's parser never requires them
+flag dotty/tools/dotc/config/AllScalaSettings#rewrite. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -rewrite; teq never patches sources: a migration message carries the notice text alone (source_version.rs:313 rewrite_notice), and teq fix (src/fix) reads no source version
+flag dotty/tools/dotc/config/AllScalaSettings#source. --source # parsed main.rs:1207 (SourceVersion::setting, source_version.rs:109), stored o.syntax.source main.rs:1210; read parser/mod.rs:208 (Parser.source), parser/mod.rs:274 (the unit's version where no import names one), frontend.rs:210 (keywords); per root --source-at main.rs:1220; dotty -source
+flag dotty/tools/dotc/config/CommonScalaSettings#classpath. --classpath # parsed main.rs:1095; read main.rs:1775-1776 (each jar opened), main.rs:143 (the Scala.js library unlocked by its jar); dotty -classpath
+flag dotty/tools/dotc/config/CommonScalaSettings#color. none:never # no counterpart: teq takes dotty's -color:never branch (its default is always), no colour in teq's diagnostics; no teq flag: dotty -color; teq's diagnostics have no colour mode; unknown option refused (main.rs:1263)
+flag dotty/tools/dotc/config/CommonScalaSettings#encoding. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -encoding; teq reads every source as UTF-8 (std::fs::read_to_string, main.rs:166)
+flag dotty/tools/dotc/config/CommonScalaSettings#experimental. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -experimental; teq has no experimental mode: src/typer has no @experimental check (names::EXPERIMENTAL is read only for a language import's path, typer/import_check.rs:119)
+flag dotty/tools/dotc/config/CommonScalaSettings#language. --language # parsed main.rs:1232 (comma-split; strictEquality also sets the dialect main.rs:1236, postfixOps o.syntax.postfix_ops main.rs:1240), o.language main.rs:1243 -> Options::policy main.rs:676 -> warnings::Policy.language (warnings.rs:385); read typer/feature.rs:187 (feature_enabled); dotty -language
+flag dotty/tools/dotc/config/CommonScalaSettings#outputDir. -o # parsed main.rs:1049, read main.rs:2281 (out_path); the other output modes --split (main.rs:1050) and --products (main.rs:1082); dotty -d
+flag dotty/tools/dotc/config/CommonScalaSettings#preview. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -preview; teq has no preview features (no read of `preview` in src/parser, src/typer)
+flag dotty/tools/dotc/config/CommonScalaSettings#scalajs. --target # dotty -scalajs; teq's --target js|jvm parsed main.rs:1071 (js, the default: o.jvm = false), read main.rs:216 (typer.set_jvm, typer/mod.rs:4315) and the typer's self.jvm (e.g. typer/check.rs:578); the Scala.js library is compiled in when its jar is on the classpath or the program names it (main.rs:143)
+flag dotty/tools/dotc/config/CommonScalaSettings#verbose. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -verbose; the compiler takes none (the --verbose of task/daemon.rs:658 is the task runner's)
+flag dotty/tools/dotc/config/Feature.autoTuplingEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: dotty -language:noAutoTupling or import language.noAutoTupling; teq auto-tuples unconditionally (typer/apply.rs:7067), no read of noAutoTupling in src (--language takes the name, main.rs:1243, and nothing reads it)
+flag dotty/tools/dotc/config/Feature.captureChecking. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.captureChecking (-language or import); teq has no capture checking and no read of the name (capture.rs is the typed-form capture, not cc); dotty -language:experimental.captureChecking or its scala.language import
+flag dotty/tools/dotc/config/Feature.ccEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -language:experimental.captureChecking or the unit's import (needsCaptureChecking); no cc in teq
+flag dotty/tools/dotc/config/Feature.ccEnabledBySetting(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -language:experimental.{captureChecking,separationChecking,safe}; teq's --language takes the names (main.rs:1232-1243) but nothing reads them
+flag dotty/tools/dotc/config/Feature.ccException(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: reads ccEnabled for an @experimental cc definition; teq has neither cc nor an experimental check; dotty -language:experimental.captureChecking or its scala.language import
+flag dotty/tools/dotc/config/Feature.checkExperimentalDef(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -experimental or an experimental language import (isExperimentalEnabled); teq reports no use of an @experimental definition (no read of the annotation in src/typer)
+flag dotty/tools/dotc/config/Feature.checkPreviewDef(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -preview; teq has no @preview check
+flag dotty/tools/dotc/config/Feature.checkPreviewFeature(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -preview; teq has no preview feature
+flag dotty/tools/dotc/config/Feature.dependent. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.dependent; no read of the name in src; dotty -language:experimental.dependent or its scala.language import
+flag dotty/tools/dotc/config/Feature.deprecated(). infra # the name constructor deprecated.<f>, reads no setting; teq admits a language import's `deprecated` qualifier by its path (ast.rs:573 is_language_import, typer/import_check.rs:119)
+flag dotty/tools/dotc/config/Feature.dynamicsEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.dynamics (-language or import); teq never checks a Dynamic subclass for the feature (no read of `dynamics` in src); dotty -language:dynamics or its scala.language import
+flag dotty/tools/dotc/config/Feature.enabled(). --language # -language or a language import; teq's feature_enabled (typer/feature.rs:186): --language first (policy.language, feature.rs:187, parsed main.rs:1232), then the innermost scala.language import in scope (feature.rs:191-197, import:language); dotty -language
+flag dotty/tools/dotc/config/Feature.enabledByImport(). import:language # the language import in scope (ImportInfo.featureImported); teq's parser records each scala.language import's features with their scopes (parser/mod.rs:1358 open_language_scopes, Ast::language_scopes ast.rs:810), read typer/feature.rs:191-197; dotty import scala.language.<feature> (the -language half is enabledBySetting)
+flag dotty/tools/dotc/config/Feature.enabledBySetting(). --language # parsed main.rs:1232; read typer/feature.rs:187 (policy.language.contains); dotty -language
+flag dotty/tools/dotc/config/Feature.enabledLanguageFeaturesBySetting(). --language # ctx.settings.language.value; teq's o.language (main.rs:1243) -> Policy.language (main.rs:676, warnings.rs:385), read typer/feature.rs:187; dotty -language
+flag dotty/tools/dotc/config/Feature.erasedDefinitions. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.erasedDefinitions; teq refuses `erased` as outside its subset (parser/defs.rs:73-74); dotty -language:experimental.erasedDefinitions or its scala.language import
+flag dotty/tools/dotc/config/Feature.experimental(). infra # the name constructor experimental.<f>, reads no setting; teq admits a language import's `experimental` qualifier by its path (ast.rs:573, typer/import_check.rs:119)
+flag dotty/tools/dotc/config/Feature.experimentalAutoEnableFeatures(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: the experimental language imports that make a unit experimental (with -experimental, isExperimentalEnabled); teq has no experimental mode
+flag dotty/tools/dotc/config/Feature.experimentalUseSite(). infra # the text of the experimental-use error, reads no setting (names -experimental); teq makes no such error
+flag dotty/tools/dotc/config/Feature.genericNumberLiterals. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.genericNumberLiterals; no read of the name in src; dotty -language:experimental.genericNumberLiterals or its scala.language import
+flag dotty/tools/dotc/config/Feature.genericNumberLiteralsEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -language or import of experimental.genericNumberLiterals; teq types a number literal by the standard numeric types only (FromDigits is only a std class name, typer/loader/compile.rs:950)
+flag dotty/tools/dotc/config/Feature.handleGlobalLanguageImport(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: imports of experimental.{pureFunctions,captureChecking,separationChecking,safe}; teq's parser acts on strictEquality, postfixOps and experimental.relaxedLambdaSyntax alone (parser/mod.rs:1545-1553); dotty -language:experimental.{pureFunctions,captureChecking,separationChecking,safe} or its scala.language import
+flag dotty/tools/dotc/config/Feature.into. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.into; teq's compiler parser has no `into` (only teq fix's scanner, src/fix/scanner.rs:685); dotty -language:experimental.into or its scala.language import
+flag dotty/tools/dotc/config/Feature.isExperimentalEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -experimental or an experimental language import; teq has neither
+flag dotty/tools/dotc/config/Feature.isPreviewEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -preview
+flag dotty/tools/dotc/config/Feature.legacyFeatures. --language # -language's legacy choices higherKinds, existentials, reflectiveCalls; teq's --language takes any name without a choice list (main.rs:1232-1243); dotty -language
+flag dotty/tools/dotc/config/Feature.migrateTo3(). source:3.0-migration # teq migrate_to_3 (source_version.rs:169); read lexer.rs:48 (given/enum identifiers, no indentation), parser/mod.rs:1644 (the keywords switched by a source import); dotty -source:3.0-migration
+flag dotty/tools/dotc/config/Feature.modularity. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.modularity; no read of the name, no `tracked` modifier in the parser; dotty -language:experimental.modularity or its scala.language import
+flag dotty/tools/dotc/config/Feature.multiSpreads. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.multiSpreads; teq's parser takes one spread before the list's `)` only (parser/expr.rs:1033-1038 following_is_vararg); dotty -language:experimental.multiSpreads or its scala.language import
+flag dotty/tools/dotc/config/Feature.namedTypeArgsEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -language or import of experimental.namedTypeArguments; no read in src
+flag dotty/tools/dotc/config/Feature.namedTypeArguments. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.namedTypeArguments; no read in src; dotty -language:experimental.namedTypeArguments or its scala.language import
+flag dotty/tools/dotc/config/Feature.nonViralExperimentalFeatures. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: the cc/separation/safe features that do not make a unit experimental; teq has no experimental mode; dotty -language:experimental.{captureChecking,separationChecking,safe} or its scala.language import
+flag dotty/tools/dotc/config/Feature.packageObjectValues. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.packageObjectValues; no read in src; dotty -language:experimental.packageObjectValues or its scala.language import
+flag dotty/tools/dotc/config/Feature.previewUseSite(). infra # the text of the preview-use error, reads no setting (names -preview); teq makes no such error
+flag dotty/tools/dotc/config/Feature.pureFunctions. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.pureFunctions; no read in src; dotty -language:experimental.pureFunctions or its scala.language import
+flag dotty/tools/dotc/config/Feature.pureFunsEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -language:experimental.pureFunctions, the unit's import or cc
+flag dotty/tools/dotc/config/Feature.quotedPatternsWithPolymorphicFunctions. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.quotedPatternsWithPolymorphicFunctions; no read in src; dotty -language:experimental.quotedPatternsWithPolymorphicFunctions or its scala.language import
+flag dotty/tools/dotc/config/Feature.quotedPatternsWithPolymorphicFunctionsEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -language or import of the feature; no read in src
+flag dotty/tools/dotc/config/Feature.relaxedLambdaSyntax. import:language.experimental.relaxedLambdaSyntax # parser/mod.rs:1551 sets ast.relaxed_lambdas, read parser/expr.rs:1696,1713; the setting half has none: --language experimental.relaxedLambdaSyntax is taken (main.rs:1243) and sets nothing; dotty -language:experimental.relaxedLambdaSyntax or its scala.language import
+flag dotty/tools/dotc/config/Feature.safe. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.safe; no read in src; dotty -language:experimental.safe or its scala.language import
+flag dotty/tools/dotc/config/Feature.safeEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -language:experimental.safe or the unit's import
+flag dotty/tools/dotc/config/Feature.saferExceptions. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.saferExceptions; no read in src, no CanThrow; dotty -language:experimental.saferExceptions or its scala.language import
+flag dotty/tools/dotc/config/Feature.scala2ExperimentalMacroEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -language or import of experimental.macros; teq has no Scala 2 macro definitions
+flag dotty/tools/dotc/config/Feature.scala2macros. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.macros; no read in src; dotty -language:experimental.macros or its scala.language import
+flag dotty/tools/dotc/config/Feature.separationChecking. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.separationChecking; no read in src; dotty -language:experimental.separationChecking or its scala.language import
+flag dotty/tools/dotc/config/Feature.shouldBehaveAsScala2(). none:default # no counterpart: teq takes dotty's default branch; no teq counterpart: -Ycompile-scala2-library or a unit at 2.13; teq has no such setting and no reader: is_scala2 (source_version.rs:163) is read only by Migration::outcome (source_version.rs:289, report.errorOrMigrationWarning's), none of shouldBehaveAsScala2's branches (Desugar, Namer, Definitions, SyntheticMembers)
+flag dotty/tools/dotc/config/Feature.sourceVersion(). --source # the unit's import, else the setting: parser/mod.rs:274 (unit_source.unwrap_or(syntax.source)) -> Ast.source_version (parser/mod.rs:281), read e.g. typer/namedtuple.rs:120, typer/pat.rs:792; the import half is import:language.<version> (parser/mod.rs:1622 source_import); dotty -source
+flag dotty/tools/dotc/config/Feature.sourceVersionSetting(). --source # parsed main.rs:1207-1210 -> o.syntax.source; read parser/mod.rs:208, parser/mod.rs:274, frontend.rs:210; dotty -source
+flag dotty/tools/dotc/config/Feature.strictEqualityPatternMatching. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.strictEqualityPatternMatching; no read in src; dotty -language:experimental.strictEqualityPatternMatching or its scala.language import
+flag dotty/tools/dotc/config/Feature.subCases. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.experimental.subCases; no read in src; dotty -language:experimental.subCases or its scala.language import
+flag dotty/tools/dotc/config/Feature.symbolLiterals. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: language.deprecated.symbolLiterals; teq's lexer reads `'x` as a quote or a char literal (lexer.rs:690-691), no symbol literal; dotty -language:deprecated.symbolLiterals or its scala.language import
+flag dotty/tools/dotc/config/Feature.values. --language # -language's choices; teq has no choice list: --language takes any name (main.rs:1232-1243); dotty -language
+flag dotty/tools/dotc/config/Feature.warnOnMigration(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -source X-migration (isMigrating, stable, migrateTo3) turning an error into a migration warning; teq has no such helper and none of its sites (RefChecks override messages, Typer's match type bound at 3.6, auto-application at 3.0: typer/apply.rs:9391 auto_applied has no migration branch); teq's migration warnings come from the Migration table alone (source_version.rs:287 outcome)
+flag dotty/tools/dotc/config/MigrationVersion#needsPatch(). --source # sourceVersion.isMigrating && isAtLeast(warnFrom); teq needs_patch (source_version.rs:302), read parser/expr.rs:974, typer/expr.rs:5795; dotty -source X-migration
+flag dotty/tools/dotc/config/MigrationVersion#patchFrom(). infra # warnFrom.prevMigrating, reads no setting: the version of the "-rewrite -source X" notice, which teq writes literally at each site (source_version.rs:313 rewrite_notice, e.g. parser/types.rs:658)
+flag dotty/tools/dotc/config/MigrationVersion#warnFrom. --source # teq thresholds().0 (source_version.rs:256), compared with the unit's version by outcome (source_version.rs:287) and needs_patch (source_version.rs:302); dotty -source
+flag dotty/tools/dotc/config/MigrationVersion.AlphanumericInfix. source:3.4..future # row source_version.rs:198, thresholds source_version.rs:266-271; read typer/infix.rs:206; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.AmbiguousNamedTupleSyntax. source:3.6..future # row source_version.rs:206, thresholds source_version.rs:273; read parser/expr.rs:968, parser/expr.rs:974; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.AscriptionAfterPattern. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no read: the row stands in teq's table (source_version.rs:196, thresholds 3.3..future source_version.rs:263) but no site reports it; tests/source-version/pending.txt lists it (the ascribed pattern's grammar absent); dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.ExplicitContextBoundArgument. source:3.4..3.5 # row source_version.rs:197, thresholds source_version.rs:264; read typer/apply.rs:13509; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.ForComprehensionPatternWithoutCase. source:3.2..3.4 # row source_version.rs:193, thresholds source_version.rs:261; read typer/pat.rs:829 (the generator's mode by the same versions, ast.rs:209 GenMode::of); dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.ForComprehensionUncheckedPathDefs. source:3.2..future # row source_version.rs:194, thresholds source_version.rs:262; read typer/pat.rs:829; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.FunctionUnderscore. source:3.4..future # row source_version.rs:204, thresholds source_version.rs:266-271; read typer/expr.rs:5811; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.GivenSyntax. source:future..future # row source_version.rs:211, thresholds source_version.rs:275-280; read parser/defs.rs:1826, parser/defs.rs:2029, parser/defs.rs:2046, parser/types.rs:321, parser/types.rs:1207; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.ImplicitParamsWithoutUsing. source:3.7..future # row source_version.rs:212, thresholds source_version.rs:274; read typer/apply.rs:13512, typer/apply.rs:13536; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.ImportRename. source:future..future # row source_version.rs:208, thresholds source_version.rs:275-280; read parser/mod.rs:1707; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.ImportWildcard. source:future..future # row source_version.rs:207, thresholds source_version.rs:275-280; read parser/mod.rs:1687; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.ParameterEnclosedByParenthesis. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no read: the row stands in teq's table (source_version.rs:209, thresholds future..future source_version.rs:277) but no site reports it; tests/source-version/pending.txt lists it (the implicit lambda's grammar absent); dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.RemoveThisQualifier. source:3.4..future # row source_version.rs:199, thresholds source_version.rs:266-271; read parser/defs.rs:193; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.Scala2Implicits. source:future..future # row source_version.rs:213, thresholds source_version.rs:275-280; read parser/defs.rs:527, parser/expr.rs:401, typer/feature.rs:43, typer/feature.rs:100; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.Scala2to3. source:3.0..3.0 # row source_version.rs:191, thresholds source_version.rs:259; read typer/expr.rs:5792-5803 (`x _` of a non-function) only; its other sites (procedure syntax and the rest) are pending (tests/source-version/pending.txt); dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.UninitializedVars. source:3.4..future # row source_version.rs:200, thresholds source_version.rs:266-271; read parser/defs.rs:433; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.VarargSpliceAscription. source:3.4..future # row source_version.rs:201, thresholds source_version.rs:266-271; read parser/expr.rs:533, parser/pat.rs:35; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.WildcardType. source:3.4..future # row source_version.rs:202, thresholds source_version.rs:266-271; read parser/types.rs:779; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.WithOperator. source:3.4..future # row source_version.rs:203, thresholds source_version.rs:265 (errorFrom future under the 3.8.4 tag, 3.10 under 3.10.0); read parser/types.rs:659; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/MigrationVersion.XmlLiteral. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no read: the row stands in teq's table (source_version.rs:210, thresholds future..future source_version.rs:278) but teq has no XML literals; tests/source-version/pending.txt lists it; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/ScalaSettingCategories.AdvancedSetting. infra # the -X settings' category, reads no setting; teq's options have no categories (one match, main.rs:1048-1264)
+flag dotty/tools/dotc/config/ScalaSettingCategories.ForkSetting. infra # the -Y settings' category, reads no setting; teq's options have no categories (main.rs:1048-1264)
+flag dotty/tools/dotc/config/ScalaSettingCategories.RootSetting. infra # the root settings' category, reads no setting; teq's options have no categories (main.rs:1048-1264)
+flag dotty/tools/dotc/config/ScalaSettingCategories.WarningSetting. infra # the -W settings' category, reads no setting; teq's options have no categories (main.rs:1048-1264)
+# The settings framework itself (config/Settings.scala: a setting's declaration, its tags, groups, state and value
+# lookup; ScalaSettingCategories' prefixes), reads no particular setting: each setting a mechanism reads has its own
+# `flag` line above, teq's flag beside it, and the framework is teq's own option parsing (main.rs:1048-1264), as the
+# categories' lines say (round 12, slice 2-06).
+flag dotty/tools/dotc/config/ScalaSettingCategories#`<init>`(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/ScalaSettingCategories#prefixLetter. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/ScalaSettingCategories.VerboseSetting. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.BooleanTag. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingCategory#`<init>`(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Deprecation#replacedBy. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.IntTag. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.ListTag. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.OptionTag. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.OutputTag. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#`<init>`(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#aliases. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#allFullNames. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#category. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#choices. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#ct. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#default. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#depends. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#deprecation. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#description. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#helpArg. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#idx. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#ignoreInvalidArgs. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#isDefaultIn(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#legacyArgs. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#legacyChoices. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#name. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#preferPrevious. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#prefix. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#propertyClass. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#updateIn(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting#valueIn(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting.ChoiceWithHelp#`<init>`(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting.ChoiceWithHelp#description. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting.ChoiceWithHelp#name. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting.isDefault(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.Setting.value(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingAlias#deprecation. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingAlias#name. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingCategory#prefixLetter(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#BooleanSetting(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#ChoiceSetting(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#IntSetting(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#MultiChoiceHelpSetting(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#MultiStringSetting(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#OptionSetting(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#OutputSetting(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#PathSetting(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#StringSetting(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#_allSettings. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#prependName(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingGroup#publish(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingsState#_wasRead(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingsState#`<init>`(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingsState#changed. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingsState#initialChanged. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingsState#initialValues. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingsState#reinitializedCopy(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingsState#update(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingsState#value(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.SettingsState#values. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.StringTag. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.VersionTag. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.settingCharacters. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.validTags. infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.validateSettingString(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/Settings.validateSettingTag(). infra # the settings framework; teq's options (main.rs:1048-1264)
+flag dotty/tools/dotc/config/ScalaSettingsProperties.defaultClasspath(). none:empty # no counterpart: teq takes no $CLASSPATH and no `.`, its class path empty without --classpath; no teq counterpart: -classpath's default, $CLASSPATH or "."; teq's class path is empty without --classpath (main.rs:1012) and teq reads no CLASSPATH variable
+flag dotty/tools/dotc/config/ScalaSettingsProperties.legacyLanguageFeatures. --language # -language's legacy choices (Feature.legacyFeatures); teq's --language takes any name without a choice list (main.rs:1232-1243); dotty -language
+flag dotty/tools/dotc/config/ScalaSettingsProperties.supportedLanguageFeatures(). --language # -language's choices (Feature.values); teq's --language takes any name without a choice list (main.rs:1232-1243); dotty -language
+flag dotty/tools/dotc/config/ScalaSettingsProperties.supportedSourceVersions(). --source # -source's choices; teq's SourceVersion::setting (source_version.rs:109-113): the tag's versions less 2.13, 3.1-migration and never, refused at main.rs:1212-1216; dotty -source
+flag dotty/tools/dotc/config/SourceVersion#enablesBetterFors(). source:3.8 # isAtLeast(3.8) || isAtLeast(3.7) && -preview; teq reads the first half at typer/expr.rs:5964 (is_at_least(V3_8)); the -preview half has none (no -preview in teq)
+flag dotty/tools/dotc/config/SourceVersion#enablesClauseInterleaving(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: isAtLeast(3.6) (Parsers.scala:4195); teq's parser reads the version nowhere for a def's clauses (its reads: parser/defs.rs:1828, parser/expr.rs:837,974,1570,1625, parser/mod.rs:1575,1603, parser/pat.rs:381, parser/types.rs:272,345); dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion#enablesCompactAnnotation(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: isAtLeast(3.9) && != 2.13 (TreePickler.scala:291); teq's pickler always writes an annotated type's annotation as its tree (tasty/write/pickle.rs:2109-2113, pickle.rs:2198 annotation_tree), no version read; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion#enablesDistributeAnd(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: !isAtLeast(future) (TypeComparer.scala:2517,2817, TypeApplications.scala:487); teq distributes at every version (typer/resolve.rs:8291 meet_instances), no source-version read in src/types or typer/subtype.rs; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion#enablesFewerBraces(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: isAtLeast(3.3) (Scanners.scala:686, Parsers.scala:899,1227); teq's lexer reads only migrate_to_3 (lexer.rs:48) and its parser no version for a colon argument (parser/expr.rs:384), so 3.0-3.2 read fewer braces too; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion#enablesNamedTuples(). source:3.7 # teq enables_named_tuples (source_version.rs:175); read parser/expr.rs:1570, parser/expr.rs:1625, parser/pat.rs:381, typer/namedtuple.rs:120; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion#enablesNewGivens(). source:3.6 # teq enables_new_givens (source_version.rs:180); read parser/defs.rs:1828, parser/types.rs:272, parser/types.rs:345; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion#isAtLeast(). --source # teq is_at_least (source_version.rs:159, the stable version's ordinal); read e.g. parser/mod.rs:1575, typer/pat.rs:792, typer/resolve.rs:6113, typer/import_check.rs:914; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion#isAtMost(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: stable.ordinal <= v.ordinal; teq has no is_at_most and none of its sites (Applications.compare's CompareScheme at 3.5, Applications.scala:2152; ccConfig.scala:61); dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion#isMigrating. --source # teq is_migrating (source_version.rs:140); read source_version.rs:146 (stable), :152 (prev_migrating), :303 (needs_patch); dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion#isScala2(). import:language.2.13 # teq is_scala2 (source_version.rs:163), read by Migration::outcome (source_version.rs:289, silent at 2.13); 2.13 reaches a unit only by its import (--source refuses it, source_version.rs:111); dotty import scala.language.`2.13` (-source refuses 2.13)
+flag dotty/tools/dotc/config/SourceVersion#prevMigrating(). --source # teq prev_migrating (source_version.rs:150); read source_version.rs:292 (outcome's migration warning at errorFrom.prevMigrating); dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion#requiresNewSyntax(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: isAtLeast(future) turns -new-syntax on (Scanners.scala:187); teq requires no `then` or `do` at future
+flag dotty/tools/dotc/config/SourceVersion#stable(). --source # teq stable (source_version.rs:145); read source_version.rs:160 (is_at_least); dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion.`2.13`. import:language.2.13 # teq SourceVersion::SCALA2 (source_version.rs:79): refused by --source (source_version.rs:111), named by an import (source_version.rs:119 import_name, parser/mod.rs:1734 source_version_selector); dotty import scala.language.`2.13` (-source refuses 2.13)
+flag dotty/tools/dotc/config/SourceVersion.allSourceVersionNames. import:language.<version> # the names a source version import may give; teq parser/mod.rs:1734 source_version_selector -> source_version.rs:119 import_name (the tag's names, never and 3.1-migration among them) -> parser/mod.rs:1622 source_import; dotty import scala.language.<version> (the setting half is -source)
+flag dotty/tools/dotc/config/SourceVersion.defaultSourceVersion. --source # -source's default; teq's Default (source_version.rs:57-63, 3.8 under the 3.8.4 tag), syntax.source's value without --source; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion.illegalInImports. import:language.<version> # 3.1-migration and never; teq illegal_import (source_version.rs:125), refused at parser/mod.rs:1627-1628; dotty import scala.language.<version> (the setting half is -source)
+flag dotty/tools/dotc/config/SourceVersion.illegalInSettings. --source # 2.13, 3.1-migration, never; teq SourceVersion::setting (source_version.rs:109-113) refuses them, main.rs:1212-1216 exits; dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion.illegalSourceVersionNames. import:language.<version> # the illegalInImports names, recognised to be refused; teq import_name (source_version.rs:119) admits them and illegal_import (source_version.rs:125) refuses them; dotty import scala.language.<version> (the setting half is -source)
+flag dotty/tools/dotc/config/SourceVersion.never. --source # teq SourceVersion::NEVER (source_version.rs:81): refused by --source (source_version.rs:111) and by an import (source_version.rs:126); teq's IdentifierDollars errorFrom (source_version.rs:281, 3.10.0's row); dotty -source (or the unit's source version import)
+flag dotty/tools/dotc/config/SourceVersion.validSourceVersionNames. import:language.<version> # the enum's names; teq NAMES (source_version.rs:51) through import_name (source_version.rs:119), parser/mod.rs:1734; dotty import scala.language.<version> (the setting half is -source)
+flag dotty/tools/dotc/config/WarningSettings#WNonUnitStatement. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Wnonunit-statement; teq makes no non-Unit statement warning (UnusedNonUnitValueID is only a name, warnings.rs:139); unknown option refused (main.rs:1263)
+flag dotty/tools/dotc/config/WarningSettings#Wall. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Wall; teq's warning options are --wunused (main.rs:1184), --wconf (main.rs:1200), --werror (main.rs:1183), --wtostring-interpolated (main.rs:1199), --deprecation, --feature, none of them all
+flag dotty/tools/dotc/config/WarningSettings#WenumCommentDiscard. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Wenum-comment-discard; teq keeps no doc comment (the lexer skips comments, lexer.rs:351)
+flag dotty/tools/dotc/config/WarningSettings#Whas.allOr(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -Wall or the given -W setting; teq has no -Wall and none of these settings
+flag dotty/tools/dotc/config/WarningSettings#Whas.enumCommentDiscard(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -Wall or -Wenum-comment-discard
+flag dotty/tools/dotc/config/WarningSettings#Whas.implausiblePatterns(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -Wall or -Wimplausible-patterns; teq makes no ImplausiblePatternWarning (only its name, warnings.rs:141)
+flag dotty/tools/dotc/config/WarningSettings#Whas.nonUnitStatement(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -Wall or -Wnonunit-statement
+flag dotty/tools/dotc/config/WarningSettings#Whas.safeInit(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -Wall or -Wsafe-init; teq has no initialization checker
+flag dotty/tools/dotc/config/WarningSettings#Whas.valueDiscard(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -Wall or -Wvalue-discard; teq's one discard warning is a pure value's (typer/expr.rs:569 warn_discarded, dotty's ungated PureUnitExpression path), the -Wvalue-discard warning of any value is never made
+flag dotty/tools/dotc/config/WarningSettings#Whas.wrongArrow(). add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq counterpart: -Wall or -Wwrong-arrow
+flag dotty/tools/dotc/config/WarningSettings#WimplausiblePatterns. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Wimplausible-patterns
+flag dotty/tools/dotc/config/WarningSettings#WsafeInit. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Wsafe-init; no initialization checker in teq
+flag dotty/tools/dotc/config/WarningSettings#WvalueDiscard. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Wvalue-discard (see Whas.valueDiscard)
+flag dotty/tools/dotc/config/WarningSettings#WwrongArrow. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Wwrong-arrow
+flag dotty/tools/dotc/config/XSettings#XcheckMacros. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Xcheck-macros; teq's interpreter runs macros (src/interp) with no invariant checks to turn on
+flag dotty/tools/dotc/config/XSettings#XdropComments. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Xdrop-docs; teq always drops them: the lexer skips comments (lexer.rs:351), none kept, the keeping branch unmapped
+flag dotty/tools/dotc/config/XSettings#XignoreScala2Macros. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Xignore-scala2-macros; teq has no Scala 2 macro calls to ignore
+flag dotty/tools/dotc/config/XSettings#XimplicitSearchLimit. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Ximplicit-search-limit; teq fixes it at dotty's default, IMPLICIT_SEARCH_LIMIT = 50000 (typer/implicits.rs:36, read typer/implicits.rs:2250, typer/implicits.rs:5030)
+flag dotty/tools/dotc/config/XSettings#XjavaTasty. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Xjava-tasty; teq pickles no Java-defined symbols
+flag dotty/tools/dotc/config/XSettings#XkindProjector. --kind-projector # parsed main.rs:1177 (o.syntax.kind_projector), read parser/types.rs:963; `*` alone: dotty's -Xkind-projector:underscores choice has none; dotty -Xkind-projector
+flag dotty/tools/dotc/config/XSettings#XmaxInlinedTrees. --max-inlined-trees # parsed main.rs:1118, read main.rs:204 -> typer/inline.rs:899; dotty -Xmax-inlined-trees
+flag dotty/tools/dotc/config/XSettings#XmaxInlines. --max-inlines # parsed main.rs:1122 (and a teq.toml's max-inlines, main.rs:1343), read main.rs:203 -> typer/inline.rs:900; dotty -Xmax-inlines
+flag dotty/tools/dotc/config/XSettings#XnoEnrichErrorMessages. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Xno-enrich-error-messages; teq's messages have no enriched form to turn off
+flag dotty/tools/dotc/config/XSettings#XprintSuspension. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Xprint-suspension; teq suspends no unit (a macro runs in its interpreter within the run)
+flag dotty/tools/dotc/config/XSettings#XreadComments. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Xread-docs; teq's TASTy loader reads no Comments section
+flag dotty/tools/dotc/config/YSettings#YbestEffort. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ybest-effort; teq writes no best-effort TASTy
+flag dotty/tools/dotc/config/YSettings#YcheckConstraintDeps. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ycheck-constraint-deps
+flag dotty/tools/dotc/config/YSettings#YcompileScala2Library. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ycompile-scala2-library; teq's own lean std is marked by Syntax::std (parser/mod.rs:36, its deprecation checks), no Scala 2 library mode
+flag dotty/tools/dotc/config/YSettings#Ydebug. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ydebug
+flag dotty/tools/dotc/config/YSettings#YdebugCyclic. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ydebug-cyclic
+flag dotty/tools/dotc/config/YSettings#YdebugError. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ydebug-error
+flag dotty/tools/dotc/config/YSettings#YdebugMissingRefs. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ydebug-missing-refs
+flag dotty/tools/dotc/config/YSettings#YdebugTypeError. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ydebug-type-error
+flag dotty/tools/dotc/config/YSettings#YdebugUnpickling. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ydebug-unpickling
+flag dotty/tools/dotc/config/YSettings#YdumpSbtInc. --analysis-version # dotty -Ydump-sbt-inc, reached through runZincPhases' forceRun (Contexts.scala:180); teq's --analysis-version parsed main.rs:1255, read main.rs:231 (capture), main.rs:235 (typer.deps for 3), the typer's self.deps (e.g. typer/apply.rs:1443); the foo.inc dump itself has none (teq's answer goes to stdout)
+flag dotty/tools/dotc/config/YSettings#YexplicitNulls. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Yexplicit-nulls; teq has no explicit nulls (typer/expr.rs:5891 "SafeNulls, which teq has not")
+flag dotty/tools/dotc/config/YSettings#YflexifyTasty. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Yflexify-tasty; teq reads a pickled flexible type as its inner type (typer/loader/types.rs:421, typer/loader/bodies.rs:1506) and flexifies nothing
+flag dotty/tools/dotc/config/YSettings#YforceSbtPhases. --analysis-version # dotty -Yforce-sbt-phases, runZincPhases' forceRun (Contexts.scala:180); teq's --analysis-version parsed main.rs:1255, read main.rs:231, main.rs:235, typer self.deps (e.g. typer/apply.rs:1443)
+flag dotty/tools/dotc/config/YSettings#YimplicitToGiven. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Yimplicit-to-given (with -rewrite); teq rewrites nothing
+flag dotty/tools/dotc/config/YSettings#Yimports. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Yimports; teq's root imports are fixed (Predef's, typer/resolve.rs:2590)
+flag dotty/tools/dotc/config/YSettings#YmagicOffsetHeader. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ymagic-offset-header; teq wraps a Scala CLI script itself (Syntax::script parser/mod.rs:40, script.rs:160 wrap) and reads no header comment
+flag dotty/tools/dotc/util/WrappedSourceFile.MagicHeaderInfo#`<init>`(). none:default # the -Ymagic-offset-header remap (util/SourceFile.scala:64-83), which teq does not read: every lookup answers NoHeader (round 12, slice 2-p65)
+flag dotty/tools/dotc/util/WrappedSourceFile.MagicHeaderInfo.HasHeader#`<init>`(). none:default # the -Ymagic-offset-header remap (util/SourceFile.scala:64-83), which teq does not read: every lookup answers NoHeader (round 12, slice 2-p65)
+flag dotty/tools/dotc/util/WrappedSourceFile.MagicHeaderInfo.HasHeader#offset. none:default # the -Ymagic-offset-header remap (util/SourceFile.scala:64-83), which teq does not read: every lookup answers NoHeader (round 12, slice 2-p65)
+flag dotty/tools/dotc/util/WrappedSourceFile.MagicHeaderInfo.HasHeader#originalFile. none:default # the -Ymagic-offset-header remap (util/SourceFile.scala:64-83), which teq does not read: every lookup answers NoHeader (round 12, slice 2-p65)
+flag dotty/tools/dotc/util/WrappedSourceFile.MagicHeaderInfo.NoHeader. none:default # the -Ymagic-offset-header remap (util/SourceFile.scala:64-83), which teq does not read: every lookup answers NoHeader (round 12, slice 2-p65)
+flag dotty/tools/dotc/util/WrappedSourceFile.lookupMagicHeader(). none:default # the -Ymagic-offset-header remap (util/SourceFile.scala:64-83), which teq does not read: every lookup answers NoHeader (round 12, slice 2-p65)
+flag dotty/tools/dotc/config/YSettings#YnoDeepSubtypes. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Yno-deep-subtypes
+flag dotty/tools/dotc/config/YSettings#YnoFlexibleTypes. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Yno-flexible-types; teq makes no flexible types (no explicit nulls)
+flag dotty/tools/dotc/config/YSettings#YnoImports. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Yno-imports; teq's root imports are fixed (typer/resolve.rs:2590)
+flag dotty/tools/dotc/config/YSettings#YnoPredef. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Yno-predef; Predef's root import goes only by an import that takes it away (typer/resolve.rs:498-500)
+flag dotty/tools/dotc/config/YSettings#YnoSuspendedUnits. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Yno-suspended-units; teq suspends no unit
+flag dotty/tools/dotc/config/YSettings#YretainTrees. --retain-trees # parsed main.rs:1117, read main.rs:205 -> typer/inline.rs:37 -> interp/quoted.rs:5096 (a macro's Symbol.tree); dotty -Yretain-trees
+flag dotty/tools/dotc/config/YSettings#YsafeInitGlobal. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -Ysafe-init-global; no initialization checker
+flag dotty/tools/dotc/config/YSettings#Yscala2Unpickler. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Yscala2-unpickler; teq always reads a Scala 2 jar's pickle (jvm/mod.rs:154-156 scala2_pickles), no switch
+flag dotty/tools/dotc/config/YSettings#YshowPrintErrors. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Yshow-print-errors
+flag dotty/tools/dotc/config/YSettings#YtestPickler. none:default # no counterpart: teq takes dotty's default branch; no teq flag: dotty -Ytest-pickler
+# The printers' Settings reads at opaque-proxies (above the printers' cut there for compiletime.codeOf, the ruling on
+# round 11): its debug settings, dotty's default branch; -pagewidth, which sets codeOf's line width, and -explain and
+# -uniqid, user settings teq does not read.
+flag dotty/tools/dotc/config/CommonScalaSettings#pageWidth. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -pagewidth (default 80), the width Text.show breaks codeOf's text at (printing/Texts.scala)
+flag dotty/tools/dotc/config/CommonScalaSettings#explain. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -explain, the printer's explanations of a type's parts
+flag dotty/tools/dotc/config/AllScalaSettings#uniqid. add:cli-settings # a flag to add, pinned to cli-settings: a setting a scalac user selects that teq's users need; no teq flag: dotty -uniqid, names printed with their ids
+flag dotty/tools/dotc/config/XSettings#XprintInline. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/XSettings#XprintTypes. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YccDebug. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YccVerbose. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YdebugFlags. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YdebugNames. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YdebugPos. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YplainPrinter. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YprintDebug. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YprintDebugOwners. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YprintLevel. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YprintPos. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YprintPosSyms. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YprintSyms. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YshowTreeIds. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+flag dotty/tools/dotc/config/YSettings#YshowVarBounds. none:default # no counterpart: teq takes dotty's default branch; a printer debug setting, read by the printers above their cut at opaque-proxies; off by default
+
+# Trees.Tree#withType's consistency check runs only under Config.checkTreesConsistent, an inline val false
+# (config/Config.scala:90; ast/Trees.scala:101-102): no input selects it (round 12, slice 2-02).
+decline dotty/tools/dotc/ast/Trees.Tree#withType(). dotty/tools/dotc/ast/Trees.Tree#checkChildrenTyped(). trees-consistent:Config.checkTreesConsistent-false(config/Config.scala:90;ast/Trees.scala:101-102)
+# OrderingConstraint.updateEntry's wildcard assertion runs only under Config.checkNoWildcardsInConstraint, an inline val
+# false (config/Config.scala:45; core/OrderingConstraint.scala:651): no input selects it (round 12, slice 2-36).
+decline dotty/tools/dotc/core/OrderingConstraint#updateEntry(). dotty/tools/dotc/core/Types.Type#containsWildcardTypes(). no-wildcards-check:Config.checkNoWildcardsInConstraint-false(config/Config.scala:45;core/OrderingConstraint.scala:651)
+
+# The capturing-type arm of TypeMap.mapOver and the capability maps it and a CaptureAnnotation's mapWith enter run only
+# in Setup and CheckCaptures: CapturingType.unapply answers a CaptureAnnotation only if isCaptureCheckingOrSetup and a
+# strict RetainingAnnotation only if isCaptureChecking (cc/CapturingType.scala:62-66), phases that run after the
+# pickler and only under Feature.ccEnabledSomewhere (cc/Setup.scala:104-105, cc/CheckCaptures.scala:246); a
+# CaptureAnnotation is built only by CapturingType.apply (49), under the same guards (round 12, audit A1 item 1294).
+cut dotty/tools/dotc/core/Types.TypeMap#mapCapturingType(). ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/core/Types.TypeMap#derivedCapturingType(). ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/core/Types.ApproximatingTypeMap#derivedCapturingType(). ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/core/Types.TypeMap#toTrackableRef(). ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/core/Types.TypeMap#mapCapability(). ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/core/Types.BiTypeMap#mapCapability(). ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/core/Types.BiTypeMap#mapFutureElements(). ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/core/Substituters.SubstBindingMap#mapCapability(). ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/core/Substituters.SubstBindingsMap#mapCapability(). ccEnabled-true(ledger-69)
+# The comparer's capture-set comparisons (TypeComparer.scala:2926-2950): every call is under isCaptureVarComparison
+# (439, 595: isCaptureCheckingOrSetup and both sides deriving from caps.CapSet, 1610-1613) or a CapturingType arm (549,
+# 682, 687, 870-893), the extractor answering Some only in Setup and CheckCaptures (cc/CapturingType.scala:62-70)
+# (round 12, slice 2-p23).
+cut dotty/tools/dotc/core/TypeComparer#makeVarState(). ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/core/TypeComparer#subCaptures(). ccEnabled-true(ledger-69)
+cut dotty/tools/dotc/core/TypeComparer#compareCaptures(). ccEnabled-true(ledger-69)
+# The pickler's inputs no teq compilation gives (round 12, slices 2-p50, 2-p51): best-effort compilation's error types
+# (-Ybest-effort and -Ywith-best-effort-tasty; TreePickler.scala:84-85, and ERRORtype written only under ctx.isBestEffort
+# or that condition false, 331, 335, 365, 395, 457, 832); a Java source's outline pickle (its attributes isJava and
+# isOutline, set only for a Java source, which reaches the pickler only under -Xjava-tasty, transform/Pickler.scala:
+# 287-291; the elided right-hand side under both, TreePickler.scala:397-400); a doc comment kept for the comment section
+# (TreePickler.scala:414-417, under ctx.docCtx, which -Xread-docs alone installs); the enriched report of a JVM stack
+# overflow (TreePickler.scala:26, 409-413, unless -Xno-enrich-error-messages), a diagnostic.
+flag dotty/tools/dotc/core/tasty/TreePickler#passesConditionForErroringBestEffortCode(). none:default # no counterpart: teq takes dotty's default branch (true outside best-effort compilation, TreePickler.scala:84-85); no teq flag: dotty -Ybest-effort, -Ywith-best-effort-tasty
+flag dotty/tools/dotc/core/tasty/TreePickler#pickleErrorType(). none:default # no counterpart: teq takes dotty's default branch (ERRORtype is written only in best-effort compilation, TreePickler.scala:331, 335, 365, 395, 457, 832); no teq flag: dotty -Ybest-effort; teq fails the build instead (src/tasty/write/mod.rs:1-10)
+flag dotty/tools/dotc/core/tasty/TreePickler#isJavaPickle. none:default # no counterpart: teq takes dotty's default branch (false: a Scala source's pickle, transform/Pickler.scala:287-291); no teq flag: dotty -Xjava-tasty; teq compiles Scala sources alone
+flag dotty/tools/dotc/core/tasty/TreePickler#isOutlinePickle. none:default # no counterpart: teq takes dotty's default branch (false: isOutline = isJava, transform/Pickler.scala:291); no teq flag: dotty -Xjava-tasty
+decline dotty/tools/dotc/core/tasty/TreePickler#pickleDef(). dotty/tools/dotc/core/tasty/TreePickler#pickleElidedUnlessEmpty(). java-tasty:isOutlinePickle-and-isJavaPickle-false(core/tasty/TreePickler.scala:397-400;transform/Pickler.scala:287-291)
+flag dotty/tools/dotc/core/tasty/TreePickler#docStrings. none:default # no counterpart: teq takes dotty's default branch (no doc context, nothing entered, TreePickler.scala:414-417); no teq flag: dotty -Xread-docs
+cut dotty/tools/dotc/core/tasty/TreePickler.StackSizeExceeded* diagnostics(ledger-69)
+# A Labeled tree has no input before the pickler: PatternMatcher and DropBreaks build the only ones
+# (transform/PatternMatcher.scala:1035, transform/DropBreaks.scala:202), both after Pickler in the plan (Compiler.scala:
+# 50, 84, 96), and TASTy has no tag for one (TreeUnpickler reads none): the tree maps' Labeled arms copy nothing teq
+# meets (round 12, slice 2-03).
+decline dotty/tools/dotc/ast/Trees.Instance#TreeMap#transform(). dotty/tools/dotc/ast/Trees.Instance#TreeCopier#Labeled(). no-input:Labeled-built-after-the-pickler-alone(Compiler.scala:50,84,96;transform/PatternMatcher.scala:1035;transform/DropBreaks.scala:202)
+decline dotty/tools/dotc/ast/TreeTypeMap#transform(). dotty/tools/dotc/ast/Trees.Instance#TreeCopier#Labeled(). no-input:Labeled-built-after-the-pickler-alone(Compiler.scala:50,84,96;transform/PatternMatcher.scala:1035;transform/DropBreaks.scala:202)
+# The unsafe-nulls test reads -Yexplicit-nulls (typer/Nullables.scala:27), a flag to add pinned to cli-settings.
+flag dotty/tools/dotc/typer/Nullables.unsafeNullsEnabled(). add:cli-settings # a flag to add, pinned to cli-settings: dotty -Yexplicit-nulls (ctx.explicitNulls && !ctx.mode.is(Mode.SafeNulls)); teq has no explicit nulls (typer/expr.rs:5891)
+
+# Implicit search's history is no representation landing's mechanism: every landing reaches Implicits.scala
+# through the inliner's typing pass or Typer, a reader edge as Implicits is at landing 4 apart from the implicit
+# scope (shared-helpers 82), so its edges are declined at every landing, not walked; the implicit scope
+# (`ImplicitRunInfo#`) stays landing 4's.
+decline dotty/tools/dotc/core/Contexts.Context#implicits(). dotty/tools/dotc/typer/Implicits.ContextualImplicits#`<init>`(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/core/Contexts.Context#implicits(). dotty/tools/dotc/typer/Implicits.ContextualImplicits#exclude(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/inlines/InlineReducer#reduceInlineMatch(). dotty/tools/dotc/typer/Implicits#inferImplicitArg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/inlines/InlineReducer#reduceInlineMatch(). dotty/tools/dotc/typer/Implicits#missingArgMsg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/inlines/Inlines.InlineCall#expand(). dotty/tools/dotc/typer/Implicits#inferImplicitArg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/inlines/Inlines.InlineCall#expand(). dotty/tools/dotc/typer/Implicits#missingArgMsg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/printing/RefinedPrinter#toTextCore(). dotty/tools/dotc/typer/Implicits.SearchFailureType#clarify(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/printing/RefinedPrinter#toTextCore(). dotty/tools/dotc/typer/Implicits.SearchFailureType#expectedType(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Applications#Application#matchArgs(). dotty/tools/dotc/typer/Implicits#implicitArgTree(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Applications#Application#matchArgs(). dotty/tools/dotc/typer/Implicits#inferImplicitArg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Applications#compare(). dotty/tools/dotc/typer/Implicits#viewExists(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Applications#typedApply(). dotty/tools/dotc/typer/Implicits#checkCanEqual(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/ErrorReporting.Errors#selectErrorAddendum(). dotty/tools/dotc/typer/Implicits.SearchFailure#reason(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/ErrorReporting.Errors#selectErrorAddendum(). dotty/tools/dotc/typer/Implicits.SearchFailure#tree. reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/ErrorReporting.Errors#whyFailedStr(). dotty/tools/dotc/typer/Implicits.FailedExtension#whyFailed. reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/ImportInfo#importedImplicits(). dotty/tools/dotc/typer/Implicits.RenamedImplicitRef#`<init>`(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/QuotesAndSplices#typedQuote(). dotty/tools/dotc/typer/Implicits#inferImplicitArg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/QuotesAndSplices#typedQuote(). dotty/tools/dotc/typer/Implicits#missingArgMsg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Synthesizer#synthesizedCanEqual. dotty/tools/dotc/typer/Implicits#assumedCanEqual(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Synthesizer#synthesizedCanEqual. dotty/tools/dotc/typer/Implicits#inferImplicitArg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Synthesizer#synthesizedCanEqual. dotty/tools/dotc/typer/Implicits.strictEquality(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Synthesizer#synthesizedClassTag. dotty/tools/dotc/typer/Implicits#inferImplicitArg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#`<init>`(). dotty/tools/dotc/typer/Implicits#`<init>`(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#adapt1(). dotty/tools/dotc/typer/Implicits#implicitParamString(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#adapt1(). dotty/tools/dotc/typer/Implicits#inferImplicitArg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#adapt1(). dotty/tools/dotc/typer/Implicits#inferView(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#adapt1(). dotty/tools/dotc/typer/Implicits#missingArgMsg(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#adapt1(). dotty/tools/dotc/typer/Implicits.AmbiguousImplicits#asNested(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#adapt1(). dotty/tools/dotc/typer/Implicits.SearchFailure#isAmbiguous(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#adapt1(). dotty/tools/dotc/typer/Implicits.SearchFailure#reason(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#adapt1(). dotty/tools/dotc/typer/Implicits.SearchFailureType#notes(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#adapt1(). dotty/tools/dotc/typer/Implicits.SearchSuccess#`<init>`(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#adapt1(). dotty/tools/dotc/typer/Implicits.TooUnspecific#`<init>`(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryExtensionOrConversion(). dotty/tools/dotc/typer/Implicits#inferView(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryExtensionOrConversion(). dotty/tools/dotc/typer/Implicits.FailedExtension#`<init>`(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryExtensionOrConversion(). dotty/tools/dotc/typer/Implicits.NestedFailure#`<init>`(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryExtensionOrConversion(). dotty/tools/dotc/typer/Implicits.SearchFailure#isAmbiguous(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryExtensionOrConversion(). dotty/tools/dotc/typer/Implicits.SearchFailure#reason(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryExtensionOrConversion(). dotty/tools/dotc/typer/Implicits.SearchFailure.apply(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryExtensionOrConversion(). dotty/tools/dotc/typer/Implicits.SearchFailureType#notes(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryExtensionOrConversion(). dotty/tools/dotc/typer/Implicits.SearchSuccess#`<init>`(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryInsertApplyOrImplicit(). dotty/tools/dotc/typer/Implicits.SearchFailure#reason(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryWithTypeTest(). dotty/tools/dotc/typer/Implicits#inferImplicit(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#tryWithTypeTest(). dotty/tools/dotc/typer/Implicits.SearchSuccess#`<init>`(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#typedClassDef(). dotty/tools/dotc/typer/Implicits#implicitArgTree(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#typedNumber(). dotty/tools/dotc/typer/Implicits#inferImplicit(). reader:implicit-search-history(shared-helpers-82)
+decline dotty/tools/dotc/typer/Typer#typedNumber(). dotty/tools/dotc/typer/Implicits.SearchSuccess#`<init>`(). reader:implicit-search-history(shared-helpers-82)
+
+landing 2 foundation
+# mechanism files beside core/: typer/ProtoTypes.scala, typer/Inferencing.scala
+# Edges no landing-2 input selects (the ruling on the four points, 2), each declined, the input that would select it
+# named (one remains, the pre-3.5.0 quote pattern). Annotation#mapWith's tree map is no longer declined: a landing-2 input selects it, a member selection whose
+# type holds an annotation over a class's type parameter (dotty's pos/annot-5789, `c.f` of `D[Int]` where `D[T].f` is
+# `Int @Annot[T]`: the map changes the argument's type), so TreeTypeMap and its copier are landing 2's (round 11, 36 #1).
+# The template's parents forced with their arguments are walked (round 12, review 41 item 1): a loaded annotation's
+# argument holding a local or anonymous class whose superclass constructor takes arguments selects TreeUnpickler's
+# LazyReader (TreeUnpickler.scala:1162-1167), its parents re-read and changeOwner(localDummy, constr.symbol), when the
+# annotation's tree map (Annotations.scala:72-78, landing 2's) or a TreeAccumulator over its tree reads the parents
+# (Trees.scala:1777-1778, TreeTypeMap.scala:104); so tpd.TreeOps#changeOwner (tpd.scala:895-902) is landing 2's.
+decline dotty/tools/dotc/core/tasty/TreeUnpickler#TreeReader#readTree(). dotty/tools/dotc/quoted/QuotePatterns.decode(). quote-pattern: a pre-3.5.0 quote pattern's UnApply of QuoteMatching's ExprMatch or TypeMatch read from TASTy (TreeUnpickler.scala:1648-1650), a macro's pattern; no landing-2 input
+# A loaded definition's doc comment is attached only under -Xread-docs (XreadComments, teq's default branch;
+# core/tasty/TreeUnpickler.scala:1027-1033): no landing-2 input selects it (round 12, slice 2-02).
+decline dotty/tools/dotc/core/tasty/TreeUnpickler#TreeReader#readNewDef(). dotty/tools/dotc/ast/Trees.MemberDef#setComment(). read-docs:XreadComments-false(core/tasty/TreeUnpickler.scala:1027-1033)
+# mapSymbols a reader, not an entry (the ruling on the four points, 2): the rows on `children` (table 636, NC8-8, TE9-1) cite the copier's Child remap (core/Symbols.scala:976-981) as a reader of `children`
+landing 3 binders
+# mechanism files beside core/: typer/ProtoTypes.scala, typer/Inferencing.scala
+# An edge no landing-3 input selects (round 11, R37.5-3): constrainResult's deep argument check, taken only under a
+# prototype FunProto#deepenProtoTrans makes (typer/ProtoTypes.scala:94-101, 640-641; its caller a failed implicit
+# argument search, Typer.scala:4565-4569, landing 4's): its typedArg runs the typer on the argument.
+decline dotty/tools/dotc/typer/ProtoTypes.Compatibility#constrainResult(). dotty/tools/dotc/typer/ProtoTypes.FunProto#typedArg(). deep-argument: a prototype deepenProtoTrans makes, after a failed implicit argument search (typer/ProtoTypes.scala:94-101, 640-641; Typer.scala:4565-4569); no landing-3 input
+# An argument error's classification reads the message's class and its `expected` (ProtoTypes.scala:459-466: an inner
+# TypeMismatchMsg whose argType != expected blocks recovery; dotty's pos/i20335): selected reads above the diagnostics
+# cut at landing 3, the rendering below it (round 12, R42.4).
+above dotty/tools/dotc/reporting/TypeMismatchMsg# argument-error-classification(round-12)
+above dotty/tools/dotc/reporting/TypeMismatchMsg#expected. argument-error-classification(round-12)
+# mapSymbols a reader, not an entry (the ruling on the four points, 2): EC1 and TA8 cite mapSymbols' completer (core/Symbols.scala:937-962) as a caller of substSym and a producer of a ClassInfo
+landing 4 references
+# mechanism files beside core/: none
+# `narrow`'s skolem, landing 4's by the ruling on round 11 (row 4.8, R39.7): NarrowCached's constructor, which row 4.8
+# cited from landing 7's block.
+# The speculative typing's reporter (the ruling on round 11, 40 #2; R40.2): the StoreReporter `TyperState.fresh` makes
+# here, its `report` holding a message unconfigured until a flush (StoreReporter.scala:48-53, Reporter.scala:165).
+# mapSymbols a reader, not an entry (the ruling on the four points, 2): KI8-5 cites the copies' companion links (core/Symbols.scala:968-971) as a producer of registeredCompanion
+landing op opaque-proxies
+# mechanism files beside core/: inlines/, ast/TreeTypeMap.scala, ast/Trees.scala, ast/tpd.scala
+# capture checking at this landing (the ruling's rule, ccEnabled false: in scope): the printers, above their cut here,
+# run toCapability on a capture-checked pickle's retained element with cc off (printing/PlainPrinter.scala:186-191),
+# and its cc-off arms (cc/CaptureOps.scala:67-79) run these with cc off: the capability's derived forms built and
+# cached (Capability#reach, readOnly, restrict, cached; cc/Capability.scala:353-390), the roots GlobalAny and
+# GlobalFresh (161, 165), isTrackableRef (cc/CaptureOps.scala:122-136), isLocalMutable (cc/Capability.scala:490-495,
+# false with cc off), the OnlyCapability extractor (cc/CaptureOps.scala:947-952) and the IllegalCaptureRef it throws
+# when no arm applies (84, caught at PlainPrinter 190).
+split dotty/tools/dotc/cc/Capabilities.Capability#reach(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.Capability#readOnly(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.Capability#restrict(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.Capability#cached(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.GlobalAny. ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.GlobalFresh. ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/CaptureOps$package.isTrackableRef(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.Capability#isLocalMutable(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/OnlyCapability.unapply(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/IllegalCaptureRef#* ccEnabled(false:in-scope,true:boundary)(ledger-69)
+# and the derived capabilities those build with cc off, through `cached` and the companions' applies (cc/Capability.scala:
+# 105-142, 353-390), with their classifier (`leastClassifier`, restrict's); a `Maybe` or a root is only cc's (type tests).
+split dotty/tools/dotc/cc/Capabilities.Reach* ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.ReadOnly* ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.Restricted* ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.Capability#myDerived* ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.Capability#`myDerived_=`* ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.leastClassifier(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+# The reach and read-only extractors toCapability starts with (cc/CaptureOps.scala:67-73), each AnnotatedCapability's
+# unapply (922-924: an AnnotatedType whose annotation `hasSymbol(annotCls)`, PD8-3's test), and the roots' own overrides
+# GlobalCap's readOnly, restrict and throwing reach dispatch to (cc/Capability.scala:148-157, the throw caught by
+# PlainPrinter's fallback), with cc off (round 12, R45.2-R45.3); the global AnnotatedCapability cut stays for the rest.
+split dotty/tools/dotc/cc/AnnotatedCapability#unapply(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/AnnotatedCapability#annotCls. ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.GlobalCap#readOnly. ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.GlobalCap#restrict(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+split dotty/tools/dotc/cc/Capabilities.GlobalCap#reach(). ccEnabled(false:in-scope,true:boundary)(ledger-69)
+# Above the completion cut at this landing (the ruling on round 11, 38 #3): `typedBlockStats`' `index(stats)`, which
+# during the inliner's typing pass dispatches to InlineTyper's override (Inliner.scala:871-875), entering a copied given.
+above dotty/tools/dotc/typer/Namer#index(+1). inline-typing(round-11)
+# Above the printers' cut at this landing (40 #1): compiletime.codeOf's text is the printed tree (Inlines.scala:490-491),
+# an input-selected decision, so the printer's branches it reaches are ported here (no printing part exists).
+above dotty/tools/dotc/printing/* codeOf(round-11)
+above dotty/tools/dotc/core/Contexts.Context#printer(). codeOf(round-11)
+landing 5 annotations
+# mechanism files beside core/: ast/TreeTypeMap.scala, ast/Trees.scala, ast/tpd.scala, cc/, sbt/ExtractAPI.scala
+landing 6 js-hierarchy
+# mechanism files beside core/: none
+# Seam 6 of the brief: a JS function is no Scala function type (Definitions.scala 1851-1861), SAM recognition.
+landing 7 remainder
+# mechanism files beside core/: none
+
+# The entries the rows give (closure.py --entries, entries.py), then those kept by hand that no row places yet.
+include entries-generated.txt
+include entries-unbacked.txt

@@ -1,4 +1,4 @@
-Programs scalac accepts that teq still rejects or runs otherwise, with the output scalac gives. No suite runs this
+Programs scalac accepts that teq still rejects or runs otherwise, with the output scalac gives. A program scalac crashes on where a ruling has teq report dotty's assertion as an internal error naming it holds scalac's crash as its outcome (`repr_child_prefix_assertion`). No suite runs this
 directory (a directory under `tests/cases/` would be run as a program); a case moves to `tests/cases/` with the change that makes it pass.
 
 `scalameta-parser/` holds programs of scalameta's parser tests (tests/fix/scalameta) that scalac's parser accepts and

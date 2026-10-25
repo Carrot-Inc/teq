@@ -894,7 +894,7 @@ impl Remap {
                 p.note_var(v);
                 types.mk(Type::Var(v))
             }
-            leaf @ (Type::Any | Type::Nothing | Type::Error | Type::Wild) => types.mk(leaf),
+            leaf @ (Type::Any | Type::Nothing | Type::Error | Type::Wild | Type::NoType) => types.mk(leaf),
         }
     }
 

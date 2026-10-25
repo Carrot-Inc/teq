@@ -1,0 +1,1 @@
+TypeBounds(TypeRef(ThisType(TypeRef(NoPrefix(), "scala")), "Int"), TypeRef(ThisType(TypeRef(NoPrefix(), "scala")), "Int")) | scala.Int | scala.Int

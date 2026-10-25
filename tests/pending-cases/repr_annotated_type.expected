@@ -1,0 +1,1 @@
+scala.Int @mark(7) | AnnotatedType(TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "Int"), Apply(Select(New(TypeIdent("mark")), "<init>"), List(Literal(IntConstant(7))))) | scala.Int

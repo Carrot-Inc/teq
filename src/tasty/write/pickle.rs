@@ -5892,6 +5892,7 @@ impl<'w, 'a> P<'w, 'a> {
         match self.w.types.get(t) {
             Type::Any => self.external_typeref("scala", "Any"),
             Type::Nothing => self.external_typeref("scala", "Nothing"),
+            Type::NoType => crate::types::no_type_matched("type_now"),
             Type::Error => {
                 self.fail("a type that did not check".to_string());
                 self.external_typeref("scala", "Nothing");

@@ -1,0 +1,4 @@
+# landing 7, remainder: the 3 members of landing-7.txt whose status is landing:7 and which carry no `port`, `owner` or `flag` line (closure.py, README.md)
+dotty/tools/dotc/core/Types.Type#typeMembers(). dotty/tools/dotc/core/Types.scala:1142
+dotty/tools/dotc/core/Types.Type#memberClasses(). dotty/tools/dotc/core/Types.scala:1157
+dotty/tools/dotc/core/Types.SkolemType#withName(). dotty/tools/dotc/core/Types.scala:4996

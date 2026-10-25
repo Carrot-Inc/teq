@@ -574,6 +574,25 @@ if [ "$1" != "--update" ]; then
     rm -rf "$ann_tmp"
   fi
 fi
+# The representation oracle: the fixtures of tests/tasty/representation, scalac 3.8.4's products read by teq's
+# reflection and teq's by scalac's, each observation against scalac's own: annotation arguments, bound kinds,
+# prefixes and designators, binder references (tests/tasty/representation/README.md). The differences are the
+# recorded ones, each pinned to the landing that closes it; `--update` rewrites the records and checks the pins.
+# Without scala-cli a failure (incomplete validation).
+if ! command -v scala-cli > /dev/null; then
+  fail=$((fail + 1))
+  echo "FAIL representation: no scala-cli, so scalac observes nothing (incomplete validation)"
+else
+  rep_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tasty-representation.XXXXXX") || { echo "tasty: no temporary directory for the representation oracle"; exit 1; }
+  tests/tasty/representation/check.sh "$(cd "$(dirname "$teq")" && pwd)/$(basename "$teq")" "$rep_tmp/work" ${1:+"$1"} > "$rep_tmp/out" 2>&1
+  rep_status=$?
+  pass=$((pass + $(grep -c '^ok ' "$rep_tmp/out")))
+  if [ $rep_status != 0 ]; then
+    fail=$((fail + 1))
+    grep -v '^ok ' "$rep_tmp/out" | head -30
+  fi
+  rm -rf "$rep_tmp"
+fi
 # The positions: `teq tasty --positions` of every fixture
 # against what scalac 3.8.4's unpickler gives its trees (tests/tasty/positions/Oracle.scala under
 # scala-cli, each fixture in its package's directory), compared per kind of tree by
@@ -841,6 +860,20 @@ if [ "$1" != "--update" ]; then
   fi
 fi
 rm -rf "$otmp"
+# A name table entry that refers to itself (or to a later entry) is a malformed TASTy: dotty reads
+# the table in order and resolves each reference through the names already read
+# (`TastyUnpickler.scala:35-39`, 87), so the reader refuses it instead of recursing in the name
+# serializer.
+malformed=$(timeout 30 "$teq" tasty --nodes tests/tasty/malformed/cyclic-name.tasty 2>&1)
+status=$?
+if [ "$status" -ne 0 ] && [ "$status" -ne 124 ] && [ "$status" -ne 134 ] \
+   && grep -qxF 'tests/tasty/malformed/cyclic-name.tasty: malformed TASTy: name 176 refers to name 176, which is not an earlier entry' <<< "$malformed" \
+   && ! grep -q 'stack overflow' <<< "$malformed"; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL malformed cyclic name: exit $status, $(head -2 <<< "$malformed")"
+fi
 # A version this reader does not know has to be refused with a message, not misread.
 bad=$(mktemp -t teq-tasty.XXXXXX).tasty
 printf '\x5c\xa1\xab\x1f\x9d\x80\x80' > "$bad"

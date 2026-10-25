@@ -1,0 +1,106 @@
+# The identity map of the encoding check (check 9, README.md "The encoding"): each identity difference of the
+# twins' pickles (`I< `/`I> ` in expected/encoding.diff, a reference one writer writes and the other does not)
+# mapped to the observed S-T record that holds it, its definition's (the path's first member, or the owner's
+# record for the owner's template and a constructor's parameters), whose difference has its pin. `oracle.py pins`
+# fails on an identity difference with no mapping and no pin of its own, on a mapping to a record that does not
+# differ or has no pin, and on a mapping or pin that names no identity difference.
+# <I:twin> <identity key> <S-T:twin> <S-T key>
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"AA"] S-T:api object:repr.API.AA
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"Child"] S-T:api object:repr.API.Child
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"M"] S-T:api object:repr.API.M
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"alias"] S-T:api object:repr.API.alias
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"alias","x"] S-T:api object:repr.API.alias
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"aliasOfAlias"] S-T:api object:repr.API.aliasOfAlias
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"ann"] S-T:api object:repr.API.ann
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"ann","x"] S-T:api object:repr.API.ann
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"annBoundaries"] S-T:api object:repr.API.annBoundaries
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"annIf"] S-T:api object:repr.API.annIf
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"annList"] S-T:api object:repr.API.annList
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"annMarkText"] S-T:api object:repr.API.annMarkText
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"annNamed"] S-T:api object:repr.API.annNamed
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"annReceiver"] S-T:api object:repr.API.annReceiver
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"annSeparator"] S-T:api object:repr.API.annSeparator
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"annText"] S-T:api object:repr.API.annText
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"annTyped"] S-T:api object:repr.API.annTyped
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"matched"] S-T:api object:repr.API.matched
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"u"] S-T:api object:repr.API.u
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"annLeaves"] S-T:api object:repr.API.annLeaves
+I:api repr/Abstract:["Abstract","T"] S-T:api class:repr.Abstract.T
+I:api repr/Annot:["Annot"] S-T:api class:repr.Annot:owner
+I:api repr/Cased:["Cased"] S-T:api class:repr.Cased:owner
+I:api repr/Cased:[["OBJECTCLASS",["UTF8","Cased"]],"apply","x"] S-T:api object:repr.Cased.apply
+I:api repr/Cased:["Cased","<init>","x"] S-T:api class:repr.Cased:owner
+I:api repr/Cased:["Cased","_1"] S-T:api class:repr.Cased._1
+I:api repr/Cased:["Cased",["DEFAULTGETTER",["UTF8","copy"],0]] S-T:api class:repr.Cased.copy$default$1
+I:api repr/Cased:["Cased","copy","x"] S-T:api class:repr.Cased.copy
+I:api repr/Cased:["Cased","productElementName"] S-T:api class:repr.Cased.productElementName
+I:api repr/Cased:["Cased","productPrefix"] S-T:api class:repr.Cased.productPrefix
+I:api repr/Cased:["Cased","x"] S-T:api class:repr.Cased.x
+I:api repr/D:["D","<init>","f"] S-T:api class:repr.D:owner
+I:api repr/D:["D","f"] S-T:api class:repr.D.f
+I:api repr/Text:["Text"] S-T:api class:repr.Text:owner
+I:api repr/Text:["Text","<init>","a"] S-T:api class:repr.Text:owner
+I:api repr/Text:["Text","<init>","b"] S-T:api class:repr.Text:owner
+I:api repr/Text:["Text","a"] S-T:api class:repr.Text.a
+I:api repr/Text:["Text","b"] S-T:api class:repr.Text.b
+I:api repr/leaves:["leaves"] S-T:api class:repr.leaves:owner
+I:api repr/leaves:["leaves","<init>","cls"] S-T:api class:repr.leaves:owner
+I:api repr/leaves:["leaves","<init>","str"] S-T:api class:repr.leaves:owner
+I:api repr/leaves:["leaves","str"] S-T:api class:repr.leaves.str
+I:api repr/mark:["mark"] S-T:api class:repr.mark:owner
+I:api repr/memberTag:["memberTag"] S-T:api class:repr.memberTag:owner
+I:api repr/named:["named"] S-T:api class:repr.named:owner
+I:api repr/named:[["OBJECTCLASS",["UTF8","named"]],["DEFAULTGETTER",["UTF8","<init>"],1]] S-T:api object:repr.named.$lessinit$greater$default$2
+I:api repr/named:["named","<init>","b"] S-T:api class:repr.named:owner
+I:api repr/named:["named","b"] S-T:api class:repr.named.b
+I:api repr/tag:["tag"] S-T:api class:repr.tag:owner
+I:js repr/js/Conversions:[["OBJECTCLASS",["UTF8","Conversions"]],"foreign"] S-T:js object:repr.js.Conversions.foreign
+I:js repr/js/Conversions:[["OBJECTCLASS",["UTF8","Conversions"]],"literal"] S-T:js object:repr.js.Conversions.literal
+I:refining repr/refining/Refining:[["OBJECTCLASS",["UTF8","Refining"]],"Refined"] S-T:refining object:repr.refining.Refining.Refined
+I:refining repr/refining/Refining:[["OBJECTCLASS",["UTF8","Refining"]],"direct"] S-T:refining object:repr.refining.Refining.direct
+I:refining repr/refining/Refining:[["OBJECTCLASS",["UTF8","Refining"]],"refined"] S-T:refining object:repr.refining.Refining.refined
+I:refining repr/refining/myAnnot:["myAnnot"] S-T:refining class:repr.refining.myAnnot:owner
+# The body pair (the pass over 1c61410d5): the method's result type tree, `Int`, scalac's written type tree and teq's
+# inferred one, observed in the S-T record of `Product.f`.
+I:api repr/Product:[["OBJECTCLASS",["UTF8","Product"]],"f"] S-T:api object:repr.Product.f
+# The initializer pair (the pass over 92c156369): the template statement's `locally` and `println`, scalac's
+# identifiers and teq's selections of `Predef`, observed in the owner's record of `Product`.
+I:api repr/Product:[["OBJECTCLASS",["UTF8","Product"]]] S-T:api object:repr.Product:owner
+# The references the structured dump holds past the string constants whose newline ended the old printed dump
+# (the newline pair, check 11): each is observed in the same member's S-T record, whose difference has its pin.
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"L"] S-T:api object:repr.API.L
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"L","X"] S-T:api object:repr.API.L
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"bounds"] S-T:api object:repr.API.bounds
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"bounds","x"] S-T:api object:repr.API.bounds
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"dep"] S-T:api object:repr.API.dep
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"depFun"] S-T:api object:repr.API.depFun
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"depFun","apply"] S-T:api object:repr.API.depFun
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"depFun","apply","b"] S-T:api object:repr.API.depFun
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"lambdaApplied"] S-T:api object:repr.API.lambdaApplied
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"leafClass"] S-T:api object:repr.API.leafClass
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"nested"] S-T:api object:repr.API.nested
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"nested","i"] S-T:api object:repr.API.nested
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"path"] S-T:api object:repr.API.path
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"polyFun"] S-T:api object:repr.API.polyFun
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"polyFun","apply"] S-T:api object:repr.API.polyFun
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"polyFun","apply","X"] S-T:api object:repr.API.polyFun
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"polyFun","apply","x$1"] S-T:api object:repr.API.polyFun
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"proj"] S-T:api object:repr.API.proj
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"recursive"] S-T:api object:repr.API.recursive
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"recursive","S"] S-T:api object:repr.API.recursive
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"recursive","h"] S-T:api object:repr.API.recursive
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"recursive","h","S"] S-T:api object:repr.API.recursive
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"recursive","h","h"] S-T:api object:repr.API.recursive
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedAlias"] S-T:api object:repr.API.refinedAlias
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedAlias","T"] S-T:api object:repr.API.refinedAlias
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedBounds"] S-T:api object:repr.API.refinedBounds
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedBounds","T"] S-T:api object:repr.API.refinedBounds
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedMethod"] S-T:api object:repr.API.refinedMethod
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedMethod","f"] S-T:api object:repr.API.refinedMethod
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedMethod","f","x"] S-T:api object:repr.API.refinedMethod
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedPoly"] S-T:api object:repr.API.refinedPoly
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedPoly","g"] S-T:api object:repr.API.refinedPoly
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedPoly","g","T"] S-T:api object:repr.API.refinedPoly
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"refinedPoly","g","x"] S-T:api object:repr.API.refinedPoly
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"upper"] S-T:api object:repr.API.upper
+I:api repr/API:[["OBJECTCLASS",["UTF8","API"]],"wild"] S-T:api object:repr.API.wild

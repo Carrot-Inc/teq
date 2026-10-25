@@ -1460,7 +1460,7 @@ impl Program {
     }
 }
 
-pub const NO_TYPE: TypeId = TypeId(u32::MAX);
+pub use crate::types::NO_TYPE;
 pub const NO_SPAN: (FileId, Span) = (FileId(u32::MAX), Span { start: 0, end: 0 });
 
 impl Program {

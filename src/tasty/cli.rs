@@ -14,6 +14,7 @@ fn usage() -> ! {
         "usage: teq tasty [--full] <jar or .tasty file> [name-filter]   print the signatures\n\
          \x20      teq tasty --names <.tasty file>                         print the name table\n\
          \x20      teq tasty --trees <jar or .tasty file> [name-filter]    print the raw trees, positions and attributes\n\
+         \x20      teq tasty --nodes <jar or .tasty file> [name-filter]    print the trees as one escaped record per node\n\
          \x20      teq tasty --positions <jar or .tasty file> [name-filter] print every tree's span as scalac's unpickler gives it\n\
          \x20      teq tasty --list <jar>                                  size, CRC-32 and name per entry\n\
          \x20      teq tasty --verify <jar>                                inflate every entry and check it\n\
@@ -286,6 +287,7 @@ pub fn run(args: &[String]) -> ! {
             "--verify" => mode = "verify",
             "--names" => mode = "names",
             "--trees" => mode = "trees",
+            "--nodes" => mode = "nodes",
             "--positions" => mode = "positions",
             "--index" => mode = "index",
             "--stats" => mode = "stats",
@@ -327,6 +329,14 @@ pub fn run(args: &[String]) -> ! {
             let file = TastyFile::parse(bytes).unwrap_or_else(|e| fail(format!("{}: {}", name, e)));
             let mut out = format!("// {}\n", name);
             super::dump::dump(&file, &mut out);
+            print!("{}", out);
+        }),
+        "nodes" => each_tasty(path, rest.get(1).copied(), |_, bytes| {
+            let file = TastyFile::parse(bytes).unwrap_or_else(|e| fail(format!("{}: {}", path, e)));
+            let mut out = String::new();
+            if let Err(e) = super::dump::nodes(&file, &mut out) {
+                fail(e);
+            }
             print!("{}", out);
         }),
         "positions" => each_tasty(path, rest.get(1).copied(), |name, bytes| {

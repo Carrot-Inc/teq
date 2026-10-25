@@ -921,6 +921,13 @@ function $floatToIntBits(f) {
   $f64view.setFloat32(0, f);
   return $f64view.getInt32(0);
 }
+// The bits a float holds, a NaN's sign and payload kept, as the JDK's floatToRawIntBits: through a Float32Array view.
+const $f32view = new Float32Array(1);
+const $f32bits = new Int32Array($f32view.buffer);
+function $floatToRawIntBits(f) {
+  $f32view[0] = f;
+  return $f32bits[0];
+}
 function $intBitsToFloat(i) {
   $f64view.setInt32(0, i);
   return $f64view.getFloat32(0);
