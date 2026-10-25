@@ -2025,6 +2025,7 @@ impl<'c, 'a> Collector<'c, 'a> {
         match self.w.types.get(t) {
             Type::Any => self.named_builtin("Any"),
             Type::Nothing => self.named_builtin("Nothing"),
+            Type::NoType => {}
             Type::Error | Type::Blocked(_) => {}
             Type::Wild => {
                 self.named_builtin("Nothing");

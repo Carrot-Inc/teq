@@ -1,0 +1,5 @@
+precise refinement is precise=true; imprecise is precise=false
+eql ignores precision=true
+in a shared bucket the precise refinement is the imprecise one=true
+the designator rewritten in place=true; its hash kept=true
+in a shared bucket a reference to the new symbol is the rewritten one=true

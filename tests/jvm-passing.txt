@@ -570,6 +570,7 @@ float_hash
 float_hex_minimal
 float_nan_bits
 float_parse_decimal_hex
+float_raw_bits
 float_strings
 fold_targets
 foldleft_empty_lambda

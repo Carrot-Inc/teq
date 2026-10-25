@@ -56,6 +56,8 @@ pub enum Type {
     Any,
     Nothing,
     Error,
+    /// The absence of a type, dotty's `NoType`: `NO_TYPE`'s entry, which nothing else makes.
+    NoType,
     Class(ClassId, TList),
     Param(TParamId),
     /// Application of a higher-kinded type parameter, e.g. `F[A]`.
@@ -354,6 +356,17 @@ pub const ANY: TypeId = TypeId(0);
 pub const NOTHING: TypeId = TypeId(1);
 pub const ERROR: TypeId = TypeId(2);
 pub const WILD: TypeId = TypeId(3);
+/// The absence of a type, dotty's `NoType`: the store's own entry, so that a read of it is in
+/// bounds and gives `Type::NoType`, and no read compares the id.
+pub const NO_TYPE: TypeId = TypeId(4);
+
+/// A match on a type met `NO_TYPE` where no answer is a type's: the id is compared, never read
+/// as a type.
+#[cold]
+#[inline(never)]
+pub(crate) fn no_type_matched(what: &str) -> ! {
+    panic!("NO_TYPE is compared, never read as a type ({what})")
+}
 
 pub const EMPTY_LIST: TList = TList(0);
 
@@ -519,6 +532,7 @@ impl TypeStore {
         assert_eq!(s.mk(Type::Nothing), NOTHING);
         assert_eq!(s.mk(Type::Error), ERROR);
         assert_eq!(s.mk(Type::Wild), WILD);
+        assert_eq!(s.mk(Type::NoType), NO_TYPE);
         assert_eq!(s.list(&[]), EMPTY_LIST);
         s
     }
@@ -1745,6 +1759,7 @@ impl TypeStore {
             }
         }
         match self.get(t) {
+            Type::NoType => false,
             Type::Member(p, _) => self.canonical(p) == self.canonical(prefix) || self.mentions_member_of(p, prefix),
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
                 self.items(args).iter().any(|&a| self.mentions_member_of(a, prefix))
@@ -1767,6 +1782,7 @@ impl TypeStore {
     pub fn contains_error(&self, t: TypeId) -> bool {
         match self.get(t) {
             Type::Error | Type::Blocked(_) => true,
+            Type::NoType => false,
             Type::Any
             | Type::Nothing
             | Type::Ctor(_)
@@ -1855,6 +1871,7 @@ impl TypeStore {
             Type::Any
             | Type::Nothing
             | Type::Error
+            | Type::NoType
             | Type::Ctor(_)
             | Type::Var(_)
             | Type::Lit(_)
@@ -2295,6 +2312,7 @@ impl TypeStore {
             Type::Any
             | Type::Nothing
             | Type::Error
+            | Type::NoType
             | Type::Ctor(_)
             | Type::Param(_)
             | Type::Var(_)
@@ -4699,6 +4717,36 @@ impl TypeStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `NO_TYPE` is the store's `NoType` entry: a read of it is in bounds and gives the node,
+    /// and `mk` makes that entry and no other.
+    #[test]
+    fn reading_no_type_is_the_no_type_node() {
+        let s = TypeStore::new();
+        assert_eq!(s.get(crate::tir::NO_TYPE), Type::NoType);
+        assert_eq!(s.mk(Type::NoType), crate::tir::NO_TYPE);
+        assert_eq!(crate::tir::NO_TYPE, TypeId(4));
+    }
+
+    /// `NoType` mentions nothing, so its flags are none, as a ground type's.
+    #[test]
+    fn reading_no_types_flags_is_empty() {
+        let s = TypeStore::new();
+        assert_eq!(s.flag(crate::tir::NO_TYPE), 0);
+    }
+
+    /// A form over `NO_TYPE` is a type of its own over the `NoType` node, as one over a ground
+    /// type is: its entry and flags are the node's, and the same record gives the same form.
+    #[test]
+    fn retaining_over_no_type_is_a_form_over_the_no_type_node() {
+        let s = TypeStore::new();
+        let alias = Retention::Alias(AliasId(3), EMPTY_LIST);
+        let f = s.retained(crate::tir::NO_TYPE, alias);
+        assert!(f != crate::tir::NO_TYPE);
+        assert_eq!((s.get(f), s.flag(f)), (Type::NoType, 0));
+        assert_eq!(s.retained(crate::tir::NO_TYPE, alias), f);
+        assert_eq!(s.canonical(f), crate::tir::NO_TYPE);
+    }
 
     /// A class through its prefix nests the class's own type (`Nested`), as a member does its
     /// prefix, so that `Type` keeps its three words and a class nested in no class is made as

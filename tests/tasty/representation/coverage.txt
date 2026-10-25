@@ -1,0 +1,713 @@
+# The representation oracle's coverage (README.md, "Coverage"): every public `def` of every `<T>Module` and `<T>Methods`
+# trait of scala.quoted.Quotes at 3.8.4 whose `T` the observation reaches: below `Tree`, `TypeRepr`, `Constant`,
+# `ParamClause` or `Selector`, and `Symbol`, `Flags`, `Signature` (dotty/Api.scala lists them from scalac's own Quotes;
+# no trait is set aside whole), one line each, `<trait>.<def> <status>`:
+#   printed <arm or serializer>                 read by the arm of that kind (or the serializer of that label), itself
+#                                               or through helpers that record no label, and reached by a fixture
+#   excluded constructor: <what it makes>       a constructor, reading no node
+#   excluded operation <accessors>: <why>       derivable from the printed accessors named (`self`: the printed node)
+#   excluded not-product: <the value>           a value not part of the product, named (a position, a rendering)
+# `oracle.py coverage` fails on an accessor or a kind with no line, a line for none, an arm or serializer that never
+# reads its printed accessor or that no fixture reaches from a root, a kind with no arm, an operation naming an
+# accessor not printed, or an exclusion of another kind or with no reason.
+AlternativesMethods.patterns excluded operation AlternativesModule.unapply: a field of the printed extractor
+AlternativesModule.apply excluded constructor: makes a Alternatives from its arguments, reading no node
+AlternativesModule.copy excluded constructor: makes a Alternatives from its arguments, reading no node
+AlternativesModule.unapply printed Alternatives
+AndOrTypeMethods.left excluded operation AndTypeModule.unapply, OrTypeModule.unapply: the left operand each extractor gives
+AndOrTypeMethods.right excluded operation AndTypeModule.unapply, OrTypeModule.unapply: the right operand each extractor gives
+AndTypeModule.apply excluded constructor: makes a AndType from its arguments, reading no node
+AndTypeModule.unapply printed AndType
+AnnotatedMethods.annotation excluded operation AnnotatedModule.unapply: a field of the printed extractor
+AnnotatedMethods.arg excluded operation AnnotatedModule.unapply: a field of the printed extractor
+AnnotatedModule.apply excluded constructor: makes a Annotated from its arguments, reading no node
+AnnotatedModule.copy excluded constructor: makes a Annotated from its arguments, reading no node
+AnnotatedModule.unapply printed Annotated
+AnnotatedTypeMethods.annotation excluded operation AnnotatedTypeModule.unapply: a field of the printed extractor
+AnnotatedTypeMethods.underlying excluded operation AnnotatedTypeModule.unapply: a field of the printed extractor
+AnnotatedTypeModule.apply excluded constructor: makes a AnnotatedType from its arguments, reading no node
+AnnotatedTypeModule.unapply printed AnnotatedType
+AppliedMethods.args excluded operation AppliedModule.unapply: a field of the printed extractor
+AppliedMethods.tpt excluded operation AppliedModule.unapply: a field of the printed extractor
+AppliedModule.apply excluded constructor: makes a Applied from its arguments, reading no node
+AppliedModule.copy excluded constructor: makes a Applied from its arguments, reading no node
+AppliedModule.unapply printed Applied
+AppliedTypeMethods.args excluded operation AppliedTypeModule.unapply: a field of the printed extractor
+AppliedTypeMethods.tycon excluded operation AppliedTypeModule.unapply: a field of the printed extractor
+AppliedTypeModule.apply excluded constructor: makes a AppliedType from its arguments, reading no node
+AppliedTypeModule.unapply printed AppliedType
+ApplyMethods.args excluded operation ApplyModule.unapply: a field of the printed extractor
+ApplyMethods.fun excluded operation ApplyModule.unapply: a field of the printed extractor
+ApplyModule.apply excluded constructor: makes a Apply from its arguments, reading no node
+ApplyModule.copy excluded constructor: makes a Apply from its arguments, reading no node
+ApplyModule.unapply printed Apply
+AssignMethods.lhs excluded operation AssignModule.unapply: a field of the printed extractor
+AssignMethods.rhs excluded operation AssignModule.unapply: a field of the printed extractor
+AssignModule.apply excluded constructor: makes a Assign from its arguments, reading no node
+AssignModule.copy excluded constructor: makes a Assign from its arguments, reading no node
+AssignModule.unapply printed Assign
+BindMethods.name excluded operation BindModule.unapply: a field of the printed extractor
+BindMethods.pattern excluded operation BindModule.unapply: a field of the printed extractor
+BindModule.apply excluded constructor: makes a Bind from its arguments, reading no node
+BindModule.copy excluded constructor: makes a Bind from its arguments, reading no node
+BindModule.unapply printed Bind
+BlockMethods.expr excluded operation BlockModule.unapply: a field of the printed extractor
+BlockMethods.statements excluded operation BlockModule.unapply: a field of the printed extractor
+BlockModule.apply excluded constructor: makes a Block from its arguments, reading no node
+BlockModule.copy excluded constructor: makes a Block from its arguments, reading no node
+BlockModule.unapply printed Block
+BooleanConstantModule.apply excluded constructor: makes a BooleanConstant from its arguments, reading no node
+BooleanConstantModule.unapply printed BooleanConstant
+ByNameMethods.result excluded operation ByNameModule.unapply: a field of the printed extractor
+ByNameModule.apply excluded constructor: makes a ByName from its arguments, reading no node
+ByNameModule.copy excluded constructor: makes a ByName from its arguments, reading no node
+ByNameModule.unapply printed ByName
+ByNameTypeMethods.underlying excluded operation ByNameTypeModule.unapply: a field of the printed extractor
+ByNameTypeModule.apply excluded constructor: makes a ByNameType from its arguments, reading no node
+ByNameTypeModule.unapply printed ByNameType
+ByteConstantModule.apply excluded constructor: makes a ByteConstant from its arguments, reading no node
+ByteConstantModule.unapply printed ByteConstant
+CaseDefMethods.guard excluded operation CaseDefModule.unapply: a field of the printed extractor
+CaseDefMethods.pattern excluded operation CaseDefModule.unapply: a field of the printed extractor
+CaseDefMethods.rhs excluded operation CaseDefModule.unapply: a field of the printed extractor
+CaseDefModule.apply excluded constructor: makes a CaseDef from its arguments, reading no node
+CaseDefModule.copy excluded constructor: makes a CaseDef from its arguments, reading no node
+CaseDefModule.unapply printed CaseDef
+CharConstantModule.apply excluded constructor: makes a CharConstant from its arguments, reading no node
+CharConstantModule.unapply printed CharConstant
+ClassDefMethods.body printed ClassDef
+ClassDefMethods.constructor printed ClassDef
+ClassDefMethods.parents printed ClassDef
+ClassDefMethods.self printed ClassDef
+ClassDefModule.apply excluded constructor: makes a ClassDef from its arguments, reading no node
+ClassDefModule.copy excluded constructor: makes a ClassDef from its arguments, reading no node
+ClassDefModule.module excluded constructor: makes a ClassDef from its arguments, reading no node
+ClassDefModule.unapply excluded operation ClassDefMethods.constructor, ClassDefMethods.parents, ClassDefMethods.self, ClassDefMethods.body: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw (the pass over 334a43adf)
+ClassOfConstantModule.apply excluded constructor: makes a ClassOfConstant from its arguments, reading no node
+ClassOfConstantModule.unapply printed ClassOfConstant
+ClosureMethods.meth excluded operation ClosureModule.unapply: a field of the printed extractor
+ClosureMethods.tpeOpt excluded operation ClosureModule.unapply: a field of the printed extractor
+ClosureModule.apply excluded constructor: makes a Closure from its arguments, reading no node
+ClosureModule.copy excluded constructor: makes a Closure from its arguments, reading no node
+ClosureModule.unapply printed Closure
+ConstantMethods.show excluded not-product: a rendering of the node in source text, which the product does not store
+ConstantMethods.value excluded operation BooleanConstantModule.unapply, ByteConstantModule.unapply, ShortConstantModule.unapply, IntConstantModule.unapply, LongConstantModule.unapply, FloatConstantModule.unapply, DoubleConstantModule.unapply, CharConstantModule.unapply, StringConstantModule.unapply, UnitConstantModule.unapply, NullConstantModule.unapply, ClassOfConstantModule.unapply: the value each kind's extractor gives
+ConstantTypeMethods.constant excluded operation ConstantTypeModule.unapply: a field of the printed extractor
+ConstantTypeModule.apply excluded constructor: makes a ConstantType from its arguments, reading no node
+ConstantTypeModule.unapply printed ConstantType
+DefDefMethods.leadingTypeParams excluded operation DefDefMethods.paramss: the leading type-parameter clause of `paramss`
+DefDefMethods.paramss printed DefDef
+DefDefMethods.returnTpt printed DefDef
+DefDefMethods.rhs printed DefDef
+DefDefMethods.termParamss excluded operation DefDefMethods.paramss: the term clauses of `paramss`
+DefDefMethods.trailingParamss excluded operation DefDefMethods.paramss: the clauses of `paramss` after the leading type clause
+DefDefModule.apply excluded constructor: makes a DefDef from its arguments, reading no node
+DefDefModule.copy excluded constructor: makes a DefDef from its arguments, reading no node
+DefDefModule.unapply excluded operation DefDefMethods.paramss, DefDefMethods.returnTpt, DefDefMethods.rhs: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw (the pass over 334a43adf)
+DefinitionMethods.name printed TermRef
+DoubleConstantModule.apply excluded constructor: makes a DoubleConstant from its arguments, reading no node
+DoubleConstantModule.unapply printed DoubleConstant
+ExportMethods.expr excluded operation ExportModule.unapply: a field of the printed extractor
+ExportMethods.selectors excluded operation ExportModule.unapply: a field of the printed extractor
+ExportModule.unapply printed Export
+FlagsMethods.& excluded constructor: makes the intersection of two flag sets
+FlagsMethods.is printed definition
+FlagsMethods.show excluded not-product: a rendering of the flag set in source text, which the product does not store
+FlagsMethods.| excluded constructor: makes the union of two flag sets
+FlagsModule.AbsOverride printed definition
+FlagsModule.Abstract printed definition
+FlagsModule.Artifact printed definition
+FlagsModule.Case printed definition
+FlagsModule.CaseAccessor printed definition
+FlagsModule.Contravariant printed definition
+FlagsModule.Covariant printed definition
+FlagsModule.Deferred printed definition
+FlagsModule.EmptyFlags excluded constructor: makes the empty flag set, printed `Flags([])` where a definition has no flag
+FlagsModule.Enum printed definition
+FlagsModule.Erased printed definition
+FlagsModule.Exported printed definition
+FlagsModule.ExtensionMethod printed definition
+FlagsModule.FieldAccessor printed definition
+FlagsModule.Final printed definition
+FlagsModule.Given printed definition
+FlagsModule.HasDefault printed definition
+FlagsModule.Implicit printed definition
+FlagsModule.Infix printed definition
+FlagsModule.Inline printed definition
+FlagsModule.Invisible printed definition
+FlagsModule.JavaAnnotation printed definition
+FlagsModule.JavaDefined printed definition
+FlagsModule.JavaStatic printed definition
+FlagsModule.Lazy printed definition
+FlagsModule.Local printed definition
+FlagsModule.Macro printed definition
+FlagsModule.Method printed definition
+FlagsModule.Module printed definition
+FlagsModule.Mutable printed definition
+FlagsModule.NoInits printed definition
+FlagsModule.Opaque printed definition
+FlagsModule.Open printed definition
+FlagsModule.Override printed definition
+FlagsModule.Package printed definition
+FlagsModule.Param printed definition
+FlagsModule.ParamAccessor printed definition
+FlagsModule.Private printed definition
+FlagsModule.PrivateLocal printed definition
+FlagsModule.Protected printed definition
+FlagsModule.Scala2x printed definition
+FlagsModule.Sealed printed definition
+FlagsModule.StableRealizable printed definition
+FlagsModule.Static printed definition
+FlagsModule.Synthetic printed definition
+FlagsModule.Trait printed definition
+FlagsModule.Transparent printed definition
+FlexibleTypeMethods.hi excluded operation FlexibleTypeModule.unapply: the underlying type `| Null`
+FlexibleTypeMethods.lo excluded operation FlexibleTypeModule.unapply: the underlying type itself
+FlexibleTypeMethods.underlying excluded operation FlexibleTypeModule.unapply: a field of the printed extractor
+FlexibleTypeModule.apply excluded constructor: makes a FlexibleType from its arguments, reading no node
+FlexibleTypeModule.unapply printed FlexibleType
+FloatConstantModule.apply excluded constructor: makes a FloatConstant from its arguments, reading no node
+FloatConstantModule.unapply printed FloatConstant
+GivenSelectorMethods.bound excluded operation GivenSelectorModule.unapply: a field of the printed extractor
+GivenSelectorModule.apply excluded constructor: makes a GivenSelector from its arguments, reading no node
+GivenSelectorModule.unapply printed GivenSelector
+IdentMethods.name excluded operation IdentModule.unapply: a field of the printed extractor
+IdentModule.apply excluded constructor: makes a Ident from its arguments, reading no node
+IdentModule.copy excluded constructor: makes a Ident from its arguments, reading no node
+IdentModule.unapply printed Ident
+IfMethods.cond excluded operation IfModule.unapply: a field of the printed extractor
+IfMethods.elsep excluded operation IfModule.unapply: a field of the printed extractor
+IfMethods.isInline printed If
+IfMethods.thenp excluded operation IfModule.unapply: a field of the printed extractor
+IfModule.apply excluded constructor: makes a If from its arguments, reading no node
+IfModule.copy excluded constructor: makes a If from its arguments, reading no node
+IfModule.unapply printed If
+ImportMethods.expr excluded operation ImportModule.unapply: a field of the printed extractor
+ImportMethods.selectors excluded operation ImportModule.unapply: a field of the printed extractor
+ImportModule.apply excluded constructor: makes a Import from its arguments, reading no node
+ImportModule.copy excluded constructor: makes a Import from its arguments, reading no node
+ImportModule.unapply printed Import
+InferredModule.apply excluded constructor: makes a Inferred from its arguments, reading no node
+InferredModule.unapply excluded operation TypeTreeMethods.tpe: the extractor's fields, read through a type test and these
+InlinedMethods.bindings excluded operation InlinedModule.unapply: a field of the printed extractor
+InlinedMethods.body excluded operation InlinedModule.unapply: a field of the printed extractor
+InlinedMethods.call excluded operation InlinedModule.unapply: a field of the printed extractor
+InlinedModule.apply excluded constructor: makes a Inlined from its arguments, reading no node
+InlinedModule.copy excluded constructor: makes a Inlined from its arguments, reading no node
+InlinedModule.unapply printed Inlined
+IntConstantModule.apply excluded constructor: makes a IntConstant from its arguments, reading no node
+IntConstantModule.unapply printed IntConstant
+LambdaTypeMethods.paramNames printed MethodType
+LambdaTypeMethods.paramTypes printed MethodType
+LambdaTypeMethods.resType printed MethodType
+LambdaTypeTreeMethods.body excluded operation LambdaTypeTreeModule.unapply: a field of the printed extractor
+LambdaTypeTreeMethods.tparams excluded operation LambdaTypeTreeModule.unapply: a field of the printed extractor
+LambdaTypeTreeModule.apply excluded constructor: makes a LambdaTypeTree from its arguments, reading no node
+LambdaTypeTreeModule.copy excluded constructor: makes a LambdaTypeTree from its arguments, reading no node
+LambdaTypeTreeModule.unapply printed LambdaTypeTree
+LiteralMethods.constant excluded operation LiteralModule.unapply: a field of the printed extractor
+LiteralModule.apply excluded constructor: makes a Literal from its arguments, reading no node
+LiteralModule.copy excluded constructor: makes a Literal from its arguments, reading no node
+LiteralModule.unapply printed Literal
+LongConstantModule.apply excluded constructor: makes a LongConstant from its arguments, reading no node
+LongConstantModule.unapply printed LongConstant
+MatchCaseMethods.pattern excluded operation MatchCaseModule.unapply: a field of the printed extractor
+MatchCaseMethods.rhs excluded operation MatchCaseModule.unapply: a field of the printed extractor
+MatchCaseModule.apply excluded constructor: makes a MatchCase from its arguments, reading no node
+MatchCaseModule.unapply printed MatchCase
+MatchMethods.cases excluded operation MatchModule.unapply: a field of the printed extractor
+MatchMethods.isInline printed Match
+MatchMethods.scrutinee excluded operation MatchModule.unapply: a field of the printed extractor
+MatchModule.apply excluded constructor: makes a Match from its arguments, reading no node
+MatchModule.copy excluded constructor: makes a Match from its arguments, reading no node
+MatchModule.unapply printed Match
+MatchTypeMethods.bound excluded operation MatchTypeModule.unapply: a field of the printed extractor
+MatchTypeMethods.cases excluded operation MatchTypeModule.unapply: a field of the printed extractor
+MatchTypeMethods.scrutinee excluded operation MatchTypeModule.unapply: a field of the printed extractor
+MatchTypeModule.apply excluded constructor: makes a MatchType from its arguments, reading no node
+MatchTypeModule.unapply printed MatchType
+MatchTypeTreeMethods.bound excluded operation MatchTypeTreeModule.unapply: a field of the printed extractor
+MatchTypeTreeMethods.cases excluded operation MatchTypeTreeModule.unapply: a field of the printed extractor
+MatchTypeTreeMethods.selector excluded operation MatchTypeTreeModule.unapply: a field of the printed extractor
+MatchTypeTreeModule.apply excluded constructor: makes a MatchTypeTree from its arguments, reading no node
+MatchTypeTreeModule.copy excluded constructor: makes a MatchTypeTree from its arguments, reading no node
+MatchTypeTreeModule.unapply printed MatchTypeTree
+MethodTypeMethods.erasedParams printed MethodType
+MethodTypeMethods.hasErasedParams printed MethodType
+MethodTypeMethods.isContextual printed MethodType
+MethodTypeMethods.isErased excluded operation MethodTypeMethods.erasedParams: whether every parameter is erased
+MethodTypeMethods.isImplicit printed MethodType
+MethodTypeMethods.methodTypeKind excluded operation MethodTypeMethods.isImplicit, MethodTypeMethods.isContextual: Plain, Implicit or Contextual by the two tests
+MethodTypeMethods.param excluded operation LambdaTypeMethods.paramNames: `param(i)` is the binder's `ParamRef(this, i)`, printed `Param(^k, i)`
+MethodTypeModule.apply excluded constructor: makes a MethodType from its arguments, reading no node
+MethodTypeModule.unapply excluded operation LambdaTypeMethods.paramNames, LambdaTypeMethods.paramTypes, LambdaTypeMethods.resType, MethodTypeMethods.isImplicit, MethodTypeMethods.isContextual, MethodTypeMethods.erasedParams: the extractor's fields, read through a type test and these
+NamedArgMethods.name excluded operation NamedArgModule.unapply: a field of the printed extractor
+NamedArgMethods.value excluded operation NamedArgModule.unapply: a field of the printed extractor
+NamedArgModule.apply excluded constructor: makes a NamedArg from its arguments, reading no node
+NamedArgModule.copy excluded constructor: makes a NamedArg from its arguments, reading no node
+NamedArgModule.unapply printed NamedArg
+NamedTypeMethods.name printed TermRef
+NamedTypeMethods.qualifier printed TermRef
+NewMethods.tpt excluded operation NewModule.unapply: a field of the printed extractor
+NewModule.apply excluded constructor: makes a New from its arguments, reading no node
+NewModule.copy excluded constructor: makes a New from its arguments, reading no node
+NewModule.unapply printed New
+NoPrefixModule.unapply printed NoPrefix
+NullConstantModule.apply excluded constructor: makes a NullConstant from its arguments, reading no node
+NullConstantModule.unapply printed NullConstant
+OmitSelectorMethods.name excluded operation OmitSelectorModule.unapply: a field of the printed extractor
+OmitSelectorMethods.namePos excluded not-product: a source position (its file, line and column), not part of the representation the oracle compares
+OmitSelectorModule.apply excluded constructor: makes a OmitSelector from its arguments, reading no node
+OmitSelectorModule.unapply printed OmitSelector
+OrTypeModule.apply excluded constructor: makes a OrType from its arguments, reading no node
+OrTypeModule.unapply printed OrType
+PackageClauseMethods.pid excluded operation PackageClauseModule.unapply: a field of the printed extractor
+PackageClauseMethods.stats excluded operation PackageClauseModule.unapply: a field of the printed extractor
+PackageClauseModule.apply excluded constructor: makes a PackageClause from its arguments, reading no node
+PackageClauseModule.copy excluded constructor: makes a PackageClause from its arguments, reading no node
+PackageClauseModule.unapply printed PackageClause
+ParamClauseMethods.params excluded operation TermParamClauseModule.unapply, TypeParamClauseModule.unapply: the parameters each clause's extractor gives
+ParamRefMethods.binder excluded operation ParamRefModule.unapply: a field of the printed extractor
+ParamRefMethods.paramNum excluded operation ParamRefModule.unapply: a field of the printed extractor
+ParamRefModule.unapply printed ParamRef
+PolyTypeMethods.param excluded operation LambdaTypeMethods.paramNames: `param(i)` is the binder's `ParamRef(this, i)`
+PolyTypeMethods.paramBounds printed PolyType
+PolyTypeModule.apply excluded constructor: makes a PolyType from its arguments, reading no node
+PolyTypeModule.unapply excluded operation LambdaTypeMethods.paramNames, PolyTypeMethods.paramBounds, LambdaTypeMethods.resType: the extractor's fields, read through a type test and these
+PositionMethods.end excluded not-product: a source position's end (its file, lines, columns or text), not part of the representation the oracle compares
+PositionMethods.endColumn excluded not-product: a source position's endColumn (its file, lines, columns or text), not part of the representation the oracle compares
+PositionMethods.endLine excluded not-product: a source position's endLine (its file, lines, columns or text), not part of the representation the oracle compares
+PositionMethods.sourceCode excluded not-product: a source position's sourceCode (its file, lines, columns or text), not part of the representation the oracle compares
+PositionMethods.sourceFile excluded not-product: a source position's sourceFile (its file, lines, columns or text), not part of the representation the oracle compares
+PositionMethods.start excluded not-product: a source position's start (its file, lines, columns or text), not part of the representation the oracle compares
+PositionMethods.startColumn excluded not-product: a source position's startColumn (its file, lines, columns or text), not part of the representation the oracle compares
+PositionMethods.startLine excluded not-product: a source position's startLine (its file, lines, columns or text), not part of the representation the oracle compares
+PositionModule.apply excluded constructor: makes a position
+PositionModule.ofMacroExpansion excluded constructor: makes a position
+RecursiveThisMethods.binder excluded operation RecursiveThisModule.unapply: a field of the printed extractor
+RecursiveThisModule.unapply printed RecursiveThis
+RecursiveTypeMethods.recThis excluded operation RecursiveTypeMethods.underlying: the binder's `RecThis`, printed `RecThis(^k)`
+RecursiveTypeMethods.underlying printed RecursiveType
+RecursiveTypeModule.apply excluded constructor: makes a RecursiveType from its arguments, reading no node
+RecursiveTypeModule.unapply excluded operation RecursiveTypeMethods.underlying: the extractor's fields, read through a type test and these
+RefModule.apply excluded constructor: makes a Ref from its arguments, reading no node
+RefModule.term excluded constructor: makes a Ref from its arguments, reading no node
+RefinedMethods.refinements excluded operation RefinedModule.unapply: a field of the printed extractor
+RefinedMethods.tpt excluded operation RefinedModule.unapply: a field of the printed extractor
+RefinedModule.apply excluded constructor: makes a Refined from its arguments, reading no node
+RefinedModule.copy excluded constructor: makes a Refined from its arguments, reading no node
+RefinedModule.unapply printed Refined
+RefinementMethods.info excluded operation RefinementModule.unapply: a field of the printed extractor
+RefinementMethods.name excluded operation RefinementModule.unapply: a field of the printed extractor
+RefinementMethods.parent excluded operation RefinementModule.unapply: a field of the printed extractor
+RefinementModule.apply excluded constructor: makes a Refinement from its arguments, reading no node
+RefinementModule.unapply printed Refinement
+RenameSelectorMethods.fromName excluded operation RenameSelectorModule.unapply: a field of the printed extractor
+RenameSelectorMethods.fromPos excluded not-product: a source position (its file, line and column), not part of the representation the oracle compares
+RenameSelectorMethods.toName excluded operation RenameSelectorModule.unapply: a field of the printed extractor
+RenameSelectorMethods.toPos excluded not-product: a source position (its file, line and column), not part of the representation the oracle compares
+RenameSelectorModule.apply excluded constructor: makes a RenameSelector from its arguments, reading no node
+RenameSelectorModule.unapply printed RenameSelector
+RepeatedMethods.elems excluded operation RepeatedModule.unapply: a field of the printed extractor
+RepeatedMethods.elemtpt excluded operation RepeatedModule.unapply: a field of the printed extractor
+RepeatedModule.apply excluded constructor: makes a Repeated from its arguments, reading no node
+RepeatedModule.copy excluded constructor: makes a Repeated from its arguments, reading no node
+RepeatedModule.unapply printed Repeated
+ReturnMethods.expr excluded operation ReturnModule.unapply: a field of the printed extractor
+ReturnMethods.from excluded operation ReturnModule.unapply: a field of the printed extractor
+ReturnModule.apply excluded constructor: makes a Return from its arguments, reading no node
+ReturnModule.copy excluded constructor: makes a Return from its arguments, reading no node
+ReturnModule.unapply printed Return
+SelectMethods.name excluded operation SelectModule.unapply: a field of the printed extractor
+SelectMethods.qualifier excluded operation SelectModule.unapply: a field of the printed extractor
+SelectMethods.signature excluded operation TreeMethods.symbol: the selected method's signature, printed `Sig(..)` beside its name
+SelectModule.apply excluded constructor: makes a Select from its arguments, reading no node
+SelectModule.copy excluded constructor: makes a Select from its arguments, reading no node
+SelectModule.overloaded excluded constructor: makes a Select from its arguments, reading no node
+SelectModule.unapply printed Select
+SelectModule.unique excluded constructor: makes a Select from its arguments, reading no node
+SelectOuterMethods.level excluded operation SelectOuterModule.unapply: a field of the printed extractor
+SelectOuterMethods.name excluded operation SelectOuterModule.unapply: a field of the printed extractor
+SelectOuterMethods.qualifier excluded operation SelectOuterModule.unapply: a field of the printed extractor
+SelectOuterModule.apply excluded constructor: makes a SelectOuter from its arguments, reading no node
+SelectOuterModule.copy excluded constructor: makes a SelectOuter from its arguments, reading no node
+SelectOuterModule.unapply printed SelectOuter
+ShortConstantModule.apply excluded constructor: makes a ShortConstant from its arguments, reading no node
+ShortConstantModule.unapply printed ShortConstant
+SignatureMethods.paramSigs printed nameSig
+SignatureMethods.resultSig printed nameSig
+SignatureModule.unapply excluded operation SignatureMethods.paramSigs, SignatureMethods.resultSig: the extractor's two fields, printed by name
+SimpleSelectorMethods.name excluded operation SimpleSelectorModule.unapply: a field of the printed extractor
+SimpleSelectorMethods.namePos excluded not-product: a source position (its file, line and column), not part of the representation the oracle compares
+SimpleSelectorModule.apply excluded constructor: makes a SimpleSelector from its arguments, reading no node
+SimpleSelectorModule.unapply printed SimpleSelector
+SingletonMethods.ref excluded operation SingletonModule.unapply: a field of the printed extractor
+SingletonModule.apply excluded constructor: makes a Singleton from its arguments, reading no node
+SingletonModule.copy excluded constructor: makes a Singleton from its arguments, reading no node
+SingletonModule.unapply printed Singleton
+StringConstantModule.apply excluded constructor: makes a StringConstant from its arguments, reading no node
+StringConstantModule.unapply printed StringConstant
+SummonFromMethods.cases excluded operation SummonFromModule.unapply: a field of the printed extractor
+SummonFromModule.apply excluded constructor: makes a SummonFrom from its arguments, reading no node
+SummonFromModule.copy excluded constructor: makes a SummonFrom from its arguments, reading no node
+SummonFromModule.unapply printed SummonFrom
+SuperMethods.id excluded operation SuperModule.unapply: the mix the extractor gives
+SuperMethods.idPos excluded not-product: a source position (its file, line and column), not part of the representation the oracle compares
+SuperMethods.qualifier excluded operation SuperModule.unapply: a field of the printed extractor
+SuperModule.apply excluded constructor: makes a Super from its arguments, reading no node
+SuperModule.copy excluded constructor: makes a Super from its arguments, reading no node
+SuperModule.unapply printed Super
+SuperTypeMethods.supertpe excluded operation SuperTypeModule.unapply: a field of the printed extractor
+SuperTypeMethods.thistpe excluded operation SuperTypeModule.unapply: a field of the printed extractor
+SuperTypeModule.apply excluded constructor: makes a SuperType from its arguments, reading no node
+SuperTypeModule.unapply printed SuperType
+SymbolMethods.allOverriddenSymbols excluded operation SymbolMethods.declarations, SymbolMethods.name, SymbolMethods.signature: the base classes' members of the same name and signature
+SymbolMethods.annotations printed definition
+SymbolMethods.asQuotes excluded not-product: a macro context nested at the symbol, no value of the products
+SymbolMethods.caseFields excluded operation SymbolMethods.declarations, SymbolMethods.flags: the declared members with the `CaseAccessor` flag
+SymbolMethods.children excluded operation SymbolMethods.annotations: the class's `Child` annotations (`denot.children`, QuotesImpl 3155), printed among its annotations
+SymbolMethods.companionClass excluded operation SymbolMethods.name, SymbolMethods.maybeOwner: the class of the same name in the same owner
+SymbolMethods.companionModule excluded operation SymbolMethods.name, SymbolMethods.maybeOwner: the object of the same name in the same owner
+SymbolMethods.declarations printed keyed
+SymbolMethods.declaredField excluded operation SymbolMethods.declarations: the declared members of that kind and name
+SymbolMethods.declaredFields excluded operation SymbolMethods.declarations: the declared members of that kind and name
+SymbolMethods.declaredMethod excluded operation SymbolMethods.declarations: the declared members of that kind and name
+SymbolMethods.declaredMethods excluded operation SymbolMethods.declarations: the declared members of that kind and name
+SymbolMethods.declaredType excluded operation SymbolMethods.declarations: the declared members of that kind and name
+SymbolMethods.declaredTypes excluded operation SymbolMethods.declarations: the declared members of that kind and name
+SymbolMethods.docstring excluded not-product: a source comment, which the representation does not hold
+SymbolMethods.exists excluded operation SymbolMethods.isNoSymbol: the negation of `isNoSymbol`
+SymbolMethods.fieldMember excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.fieldMembers excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.flags printed definition
+SymbolMethods.fullName excluded operation SymbolMethods.name, SymbolMethods.maybeOwner: the names from the root, the path the observation prints
+SymbolMethods.getAnnotation excluded operation SymbolMethods.annotations: the printed annotation of that class
+SymbolMethods.hasAnnotation excluded operation SymbolMethods.annotations: whether an annotation of that class is among the printed ones
+SymbolMethods.info printed definition
+SymbolMethods.isAbstractType printed symKind
+SymbolMethods.isAliasType printed symKind
+SymbolMethods.isAnonymousClass excluded operation SymbolMethods.name, SymbolMethods.isClassDef: a class named `$anon`
+SymbolMethods.isAnonymousFunction excluded operation SymbolMethods.name, SymbolMethods.isDefDef: a method named `$anonfun`
+SymbolMethods.isBind excluded operation BindModule.unapply: the symbol of a printed `Bind`
+SymbolMethods.isClassConstructor excluded operation SymbolMethods.name, SymbolMethods.isDefDef: a method named `<init>`
+SymbolMethods.isClassDef printed symKind
+SymbolMethods.isDefDef printed symKind
+SymbolMethods.isDefinedInCurrentRun excluded not-product: the compiler run's state, no value of the products
+SymbolMethods.isLocalDummy excluded operation SymbolMethods.name: a symbol named `<local ...>`
+SymbolMethods.isNoSymbol printed Ident
+SymbolMethods.isPackageDef printed prefix
+SymbolMethods.isRefinementClass excluded operation SymbolMethods.name, SymbolMethods.isClassDef: a class named `<refinement>`
+SymbolMethods.isSuperAccessor excluded operation SymbolMethods.name, SymbolMethods.flags: a method named `super$...` with its flags
+SymbolMethods.isTerm excluded operation SymbolMethods.isTypeDef, SymbolMethods.isClassDef, SymbolMethods.isNoSymbol: a symbol that is neither a type nor a class nor none
+SymbolMethods.isType excluded operation SymbolMethods.isTypeDef, SymbolMethods.isClassDef: a type or a class definition
+SymbolMethods.isTypeDef printed symKind
+SymbolMethods.isTypeParam excluded operation SymbolMethods.isTypeDef, SymbolMethods.flags: a type definition with the `Param` flag
+SymbolMethods.isValDef excluded operation SymbolMethods.isDefDef, SymbolMethods.flags: a term that is no method and no module, the kind the observation prints
+SymbolMethods.maybeOwner printed path
+SymbolMethods.memberField excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.memberFields excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.memberMethod excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.memberMethods excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.memberType excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.memberTypes excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.methodMember excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.methodMembers excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.moduleClass printed ownerClass
+SymbolMethods.name printed TermRef
+SymbolMethods.overridingSymbol excluded operation SymbolMethods.declarations, SymbolMethods.name, SymbolMethods.signature: the member of the same name and signature in a subclass
+SymbolMethods.owner excluded operation SymbolMethods.maybeOwner: the owner, which `maybeOwner` gives for every symbol that has one
+SymbolMethods.paramSymss excluded operation SymbolMethods.info, DefDefMethods.paramss: the parameters of the printed definition and of its printed information
+SymbolMethods.paramVariance excluded operation SymbolMethods.flags: the `Covariant` and `Contravariant` flags, printed by name
+SymbolMethods.pos excluded not-product: the symbol's source position (its file, line and column), not part of the representation the oracle compares
+SymbolMethods.primaryConstructor excluded operation SymbolMethods.declarations: the class's declared `<init>`
+SymbolMethods.privateWithin printed definition
+SymbolMethods.protectedWithin printed definition
+SymbolMethods.signature printed designator
+SymbolMethods.termRef excluded operation TypeReprMethods.termSymbol: the reference to the symbol, which a printed `TermRef` names
+SymbolMethods.tree excluded operation SymbolMethods.name, SymbolMethods.flags, SymbolMethods.info: a definition built from the symbol (`FromSymbol.definitionFromSym`, QuotesImpl 2989), from its printed name, flags and information
+SymbolMethods.typeMember excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.typeMembers excluded operation SymbolMethods.declarations, SymbolMethods.info: the members of that kind and name, declared or inherited, each its owner's declaration
+SymbolMethods.typeRef excluded operation TypeReprMethods.typeSymbol: the reference to the symbol, which a printed `TypeRef` names
+SymbolModule.classSymbol excluded operation SymbolMethods.name, SymbolMethods.maybeOwner: looks a symbol up by its full name, the path the observation prints for every symbol it meets
+SymbolModule.freshName excluded constructor: makes a fresh name
+SymbolModule.newBind excluded constructor: makes a new symbol
+SymbolModule.newBoundedType excluded constructor: makes a new symbol
+SymbolModule.newClass excluded constructor: makes a new symbol
+SymbolModule.newMethod excluded constructor: makes a new symbol
+SymbolModule.newModule excluded constructor: makes a new symbol
+SymbolModule.newTypeAlias excluded constructor: makes a new symbol
+SymbolModule.newVal excluded constructor: makes a new symbol
+SymbolModule.noSymbol excluded constructor: makes the absent symbol
+SymbolModule.requiredClass excluded operation SymbolMethods.name, SymbolMethods.maybeOwner: looks a symbol up by its full name, the path the observation prints for every symbol it meets
+SymbolModule.requiredMethod excluded operation SymbolMethods.name, SymbolMethods.maybeOwner: looks a symbol up by its full name, the path the observation prints for every symbol it meets
+SymbolModule.requiredModule excluded operation SymbolMethods.name, SymbolMethods.maybeOwner: looks a symbol up by its full name, the path the observation prints for every symbol it meets
+SymbolModule.requiredPackage excluded operation SymbolMethods.name, SymbolMethods.maybeOwner: looks a symbol up by its full name, the path the observation prints for every symbol it meets
+SymbolModule.spliceOwner excluded not-product: the macro expansion's own owner, no value of the observed products
+TermMethods.appliedTo excluded constructor: makes a new Term node from this one and its arguments
+TermMethods.appliedToArgs excluded constructor: makes a new Term node from this one and its arguments
+TermMethods.appliedToArgss excluded constructor: makes a new Term node from this one and its arguments
+TermMethods.appliedToNone excluded constructor: makes a new Term node from this one and its arguments
+TermMethods.appliedToType excluded constructor: makes a new Term node from this one and its arguments
+TermMethods.appliedToTypeTrees excluded constructor: makes a new Term node from this one and its arguments
+TermMethods.appliedToTypes excluded constructor: makes a new Term node from this one and its arguments
+TermMethods.ensureApplied excluded constructor: makes a new Term node from this one and its arguments
+TermMethods.etaExpand excluded constructor: makes a new Term node from this one and its arguments
+TermMethods.select excluded constructor: makes a new Term node from this one and its arguments
+TermMethods.tpe printed Inferred
+TermMethods.underlying excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TermMethods.underlyingArgument excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TermModule.betaReduce excluded operation self: reduces a printed term, a value of the printed tree
+TermParamClauseMethods.erasedArgs excluded operation SymbolMethods.flags: the parameters' `Erased` flags, printed in each `ValDef`'s `Flags`
+TermParamClauseMethods.hasErasedArgs excluded operation SymbolMethods.flags: the parameters' `Erased` flags, printed in each `ValDef`'s `Flags`
+TermParamClauseMethods.isErased excluded operation SymbolMethods.flags: the parameters' `Erased` flags, printed in each `ValDef`'s `Flags`
+TermParamClauseMethods.isGiven excluded operation SymbolMethods.flags: the parameters' `Given` flag, printed in each `ValDef`'s `Flags`
+TermParamClauseMethods.isImplicit excluded operation SymbolMethods.flags: the clause's parameters' `Implicit` flag, printed in each `ValDef`'s `Flags`
+TermParamClauseMethods.params excluded operation TermParamClauseModule.unapply: a field of the printed extractor
+TermParamClauseModule.apply excluded constructor: makes a TermParamClause from its arguments, reading no node
+TermParamClauseModule.unapply printed TermParamClause
+TermRefModule.apply excluded constructor: makes a TermRef from its arguments, reading no node
+TermRefModule.unapply excluded operation NamedTypeMethods.qualifier, NamedTypeMethods.name: the extractor's fields, read through a type test and these
+ThisMethods.id excluded operation ThisModule.unapply: a field of the printed extractor
+ThisModule.apply excluded constructor: makes a This from its arguments, reading no node
+ThisModule.copy excluded constructor: makes a This from its arguments, reading no node
+ThisModule.unapply printed This
+ThisTypeMethods.tref excluded operation TypeReprMethods.classSymbol: the class's reference, which the printed class determines
+ThisTypeModule.unapply excluded operation TypeReprMethods.classSymbol: the extractor's fields, read through a type test and these
+TreeMethods.asExpr excluded operation self: the same node under another static type
+TreeMethods.asExprOf excluded operation self: the same node under another static type
+TreeMethods.changeOwner excluded constructor: makes a copy of the tree under another owner
+TreeMethods.isExpr excluded operation self: the same node under another static type
+TreeMethods.pos excluded not-product: a source position (its file, line and column), not part of the representation the oracle compares
+TreeMethods.show excluded not-product: a rendering of the node in source text, which the product does not store
+TreeMethods.symbol printed Bind
+TryMethods.body excluded operation TryModule.unapply: a field of the printed extractor
+TryMethods.cases excluded operation TryModule.unapply: a field of the printed extractor
+TryMethods.finalizer excluded operation TryModule.unapply: a field of the printed extractor
+TryModule.apply excluded constructor: makes a Try from its arguments, reading no node
+TryModule.copy excluded constructor: makes a Try from its arguments, reading no node
+TryModule.unapply printed Try
+TypeApplyMethods.args excluded operation TypeApplyModule.unapply: a field of the printed extractor
+TypeApplyMethods.fun excluded operation TypeApplyModule.unapply: a field of the printed extractor
+TypeApplyModule.apply excluded constructor: makes a TypeApply from its arguments, reading no node
+TypeApplyModule.copy excluded constructor: makes a TypeApply from its arguments, reading no node
+TypeApplyModule.unapply printed TypeApply
+TypeBindMethods.body excluded operation TypeBindModule.unapply: a field of the printed extractor
+TypeBindMethods.name excluded operation TypeBindModule.unapply: a field of the printed extractor
+TypeBindModule.copy excluded constructor: makes a TypeBind from its arguments, reading no node
+TypeBindModule.unapply printed TypeBind
+TypeBlockMethods.aliases excluded operation TypeBlockModule.unapply: a field of the printed extractor
+TypeBlockMethods.tpt excluded operation TypeBlockModule.unapply: a field of the printed extractor
+TypeBlockModule.apply excluded constructor: makes a TypeBlock from its arguments, reading no node
+TypeBlockModule.copy excluded constructor: makes a TypeBlock from its arguments, reading no node
+TypeBlockModule.unapply printed TypeBlock
+TypeBoundsMethods.hi printed TypeBounds
+TypeBoundsMethods.low printed TypeBounds
+TypeBoundsModule.apply excluded constructor: makes a TypeBounds from its arguments, reading no node
+TypeBoundsModule.empty excluded constructor: makes a TypeBounds from its arguments, reading no node
+TypeBoundsModule.lower excluded constructor: makes a TypeBounds from its arguments, reading no node
+TypeBoundsModule.unapply excluded operation TypeBoundsMethods.low, TypeBoundsMethods.hi: the extractor's fields, read through a type test and these
+TypeBoundsModule.upper excluded constructor: makes a TypeBounds from its arguments, reading no node
+TypeBoundsTreeMethods.hi excluded operation TypeBoundsTreeModule.unapply: a field of the printed extractor
+TypeBoundsTreeMethods.low excluded operation TypeBoundsTreeModule.unapply: a field of the printed extractor
+TypeBoundsTreeMethods.tpe excluded operation TypeBoundsTreeModule.unapply: the bounds of the two printed trees
+TypeBoundsTreeModule.apply excluded constructor: makes a TypeBoundsTree from its arguments, reading no node
+TypeBoundsTreeModule.copy excluded constructor: makes a TypeBoundsTree from its arguments, reading no node
+TypeBoundsTreeModule.unapply printed TypeBoundsTree
+TypeCaseDefMethods.pattern excluded operation TypeCaseDefModule.unapply: a field of the printed extractor
+TypeCaseDefMethods.rhs excluded operation TypeCaseDefModule.unapply: a field of the printed extractor
+TypeCaseDefModule.apply excluded constructor: makes a TypeCaseDef from its arguments, reading no node
+TypeCaseDefModule.copy excluded constructor: makes a TypeCaseDef from its arguments, reading no node
+TypeCaseDefModule.unapply printed TypeCaseDef
+TypeDefMethods.rhs printed TypeDef
+TypeDefModule.apply excluded constructor: makes a TypeDef from its arguments, reading no node
+TypeDefModule.copy excluded constructor: makes a TypeDef from its arguments, reading no node
+TypeDefModule.unapply excluded operation TypeDefMethods.rhs: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw (the pass over 334a43adf)
+TypeIdentMethods.name excluded operation TypeIdentModule.unapply: a field of the printed extractor
+TypeIdentModule.apply excluded constructor: makes a TypeIdent from its arguments, reading no node
+TypeIdentModule.copy excluded constructor: makes a TypeIdent from its arguments, reading no node
+TypeIdentModule.unapply printed TypeIdent
+TypeLambdaMethods.param excluded operation LambdaTypeMethods.paramNames: `param(i)` is the binder's `ParamRef(this, i)`
+TypeLambdaMethods.paramBounds printed TypeLambda
+TypeLambdaMethods.paramVariances printed TypeLambda
+TypeLambdaModule.apply excluded constructor: makes a TypeLambda from its arguments, reading no node
+TypeLambdaModule.unapply excluded operation LambdaTypeMethods.paramNames, TypeLambdaMethods.paramBounds, TypeLambdaMethods.paramVariances, LambdaTypeMethods.resType: the extractor's fields, read through a type test and these
+TypeParamClauseMethods.params excluded operation TypeParamClauseModule.unapply: a field of the printed extractor
+TypeParamClauseModule.apply excluded constructor: makes a TypeParamClause from its arguments, reading no node
+TypeParamClauseModule.unapply printed TypeParamClause
+TypeProjectionMethods.name excluded operation TypeProjectionModule.unapply: a field of the printed extractor
+TypeProjectionMethods.qualifier excluded operation TypeProjectionModule.unapply: a field of the printed extractor
+TypeProjectionModule.apply excluded constructor: makes a TypeProjection from its arguments, reading no node
+TypeProjectionModule.copy excluded constructor: makes a TypeProjection from its arguments, reading no node
+TypeProjectionModule.unapply printed TypeProjection
+TypeRefMethods.isOpaqueAlias excluded operation TypeReprMethods.typeSymbol, SymbolMethods.flags: the symbol's `Opaque` flag, its kind printed `opaque`
+TypeRefMethods.translucentSuperType excluded operation SymbolMethods.info: the opaque alias's right side, its symbol's printed information
+TypeRefModule.unapply excluded operation NamedTypeMethods.qualifier, NamedTypeMethods.name: the extractor's fields, read through a type test and these
+TypeReprMethods.<:< excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.=:= excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.appliedTo excluded constructor: makes a new TypeRepr node from this one and its arguments
+TypeReprMethods.asType excluded operation self: the same node under another static type
+TypeReprMethods.baseClasses excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.baseType excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.classSymbol printed ThisType
+TypeReprMethods.dealias excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.dealiasKeepOpaques excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.derivesFrom excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.isContextFunctionType excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.isDependentFunctionType excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.isErasedFunctionType excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.isFunctionType excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.isSingleton excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.isTupleN excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.memberType excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.select excluded constructor: makes a new TypeRepr node from this one and its arguments
+TypeReprMethods.show excluded not-product: a rendering of the node in source text, which the product does not store
+TypeReprMethods.simplified excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.substituteTypes excluded constructor: makes a new TypeRepr node from this one and its arguments
+TypeReprMethods.termSymbol printed TermRef
+TypeReprMethods.typeArgs excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.typeSymbol printed TypeRef
+TypeReprMethods.widen excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.widenByName excluded operation self, SymbolMethods.info: computes another value from the printed node and the definitions it names (observed by their own lines)
+TypeReprMethods.widenTermRefByName printed TermRef
+TypeReprModule.of excluded constructor: makes a TypeRepr from its arguments, reading no node
+TypeReprModule.typeConstructorOf excluded constructor: makes a TypeRepr from its arguments, reading no node
+TypeSelectMethods.name excluded operation TypeSelectModule.unapply: a field of the printed extractor
+TypeSelectMethods.qualifier excluded operation TypeSelectModule.unapply: a field of the printed extractor
+TypeSelectModule.apply excluded constructor: makes a TypeSelect from its arguments, reading no node
+TypeSelectModule.copy excluded constructor: makes a TypeSelect from its arguments, reading no node
+TypeSelectModule.unapply printed TypeSelect
+TypeTreeMethods.tpe printed Inferred
+TypeTreeModule.of excluded constructor: makes a TypeTree from its arguments, reading no node
+TypeTreeModule.ref excluded constructor: makes a TypeTree from its arguments, reading no node
+TypedMethods.expr excluded operation TypedModule.unapply: a field of the printed extractor
+TypedMethods.tpt excluded operation TypedModule.unapply: a field of the printed extractor
+TypedModule.apply excluded constructor: makes a Typed from its arguments, reading no node
+TypedModule.copy excluded constructor: makes a Typed from its arguments, reading no node
+TypedModule.unapply printed Typed
+TypedOrTestMethods.tpt excluded operation TypedOrTestModule.unapply: a field of the printed extractor
+TypedOrTestMethods.tree excluded operation TypedOrTestModule.unapply: a field of the printed extractor
+TypedOrTestModule.apply excluded constructor: makes a TypedOrTest from its arguments, reading no node
+TypedOrTestModule.copy excluded constructor: makes a TypedOrTest from its arguments, reading no node
+TypedOrTestModule.unapply printed TypedOrTest
+UnapplyMethods.fun excluded operation UnapplyModule.unapply: a field of the printed extractor
+UnapplyMethods.implicits excluded operation UnapplyModule.unapply: a field of the printed extractor
+UnapplyMethods.patterns excluded operation UnapplyModule.unapply: a field of the printed extractor
+UnapplyModule.apply excluded constructor: makes a Unapply from its arguments, reading no node
+UnapplyModule.copy excluded constructor: makes a Unapply from its arguments, reading no node
+UnapplyModule.unapply printed Unapply
+UnitConstantModule.apply excluded constructor: makes a UnitConstant from its arguments, reading no node
+UnitConstantModule.unapply printed UnitConstant
+ValDefMethods.rhs printed ValDef
+ValDefMethods.tpt printed ValDef
+ValDefModule.apply excluded constructor: makes a ValDef from its arguments, reading no node
+ValDefModule.copy excluded constructor: makes a ValDef from its arguments, reading no node
+ValDefModule.let excluded constructor: makes a ValDef from its arguments, reading no node
+ValDefModule.unapply excluded operation ValDefMethods.tpt, ValDefMethods.rhs: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw (the pass over 334a43adf)
+ValOrDefDefMethods.rhs excluded operation ValDefMethods.rhs, DefDefMethods.rhs: the `rhs` each definition gives
+ValOrDefDefMethods.tpt excluded operation ValDefMethods.tpt, DefDefMethods.returnTpt: the `tpt` each definition gives
+WhileMethods.body excluded operation WhileModule.unapply: a field of the printed extractor
+WhileMethods.cond excluded operation WhileModule.unapply: a field of the printed extractor
+WhileModule.apply excluded constructor: makes a While from its arguments, reading no node
+WhileModule.copy excluded constructor: makes a While from its arguments, reading no node
+WhileModule.unapply printed While
+WildcardModule.apply excluded constructor: makes a Wildcard from its arguments, reading no node
+WildcardModule.unapply excluded operation TreeMethods.symbol: the extractor's fields, read through a type test and these
+WildcardTypeTreeMethods.tpe printed WildcardTypeTree
+WildcardTypeTreeModule.apply excluded constructor: makes a WildcardTypeTree from its arguments, reading no node
+WildcardTypeTreeModule.unapply excluded operation WildcardTypeTreeMethods.tpe: the extractor's fields, read through a type test and these
+
+# The kinds: every type below `Tree`, `TypeRepr`, `Constant`, `ParamClause` or `Selector` whose Module has an extractor
+# (dotty/Api.scala's `kind` lines), each with the serializer function whose arm records it (`hit`). A fixture must
+# reach each from a root; `fails-on-meeting` marks the few no fixture holds, whose arm makes the observation fail
+# (`Unobservable(..)`, check.sh) when one is met, so that meeting one asks for its fixture: never an exemption.
+kind Alternatives node
+kind Annotated node
+kind Applied node
+kind Apply node
+kind Assign node
+kind Bind node
+kind Block node
+kind ByName node
+kind CaseDef node
+kind ClassDef node
+kind Closure node
+kind DefDef node
+kind Export node fails-on-meeting
+kind Ident node
+kind If node
+kind Import node
+kind Inferred node
+kind Inlined node
+kind LambdaTypeTree node
+kind Literal node
+kind Match node
+kind MatchTypeTree node
+kind NamedArg node
+kind New node
+kind PackageClause node fails-on-meeting
+kind Refined node
+kind Repeated node
+kind Return node
+kind Select node
+kind SelectOuter node fails-on-meeting
+kind Singleton node
+kind SummonFrom node
+kind Super node
+kind This node
+kind Try node
+kind TypeApply node
+kind TypeBind node
+kind TypeBlock node
+kind TypeBoundsTree node
+kind TypeCaseDef node
+kind TypeDef node
+kind TypeIdent node
+kind TypeProjection node
+kind TypeSelect node
+kind Typed node
+kind TypedOrTest node
+kind Unapply node
+kind ValDef node
+kind While node
+kind Wildcard node
+kind WildcardTypeTree node fails-on-meeting
+kind AndType walk
+kind AnnotatedType walk
+kind AppliedType walk
+kind ByNameType walk
+kind ConstantType walk
+kind FlexibleType walk
+kind MatchCase walk
+kind MatchType walk
+kind MethodType walk
+kind NoPrefix walk
+kind OrType walk
+kind ParamRef walk
+kind PolyType walk
+kind RecursiveThis walk
+kind RecursiveType walk
+kind Refinement walk
+kind SuperType walk
+kind TermRef walk
+kind ThisType walk
+kind TypeBounds walk
+kind TypeLambda walk
+kind TypeRef walk
+kind BooleanConstant constant
+kind ByteConstant constant
+kind CharConstant constant
+kind ClassOfConstant constant
+kind DoubleConstant constant
+kind FloatConstant constant
+kind IntConstant constant
+kind LongConstant constant
+kind NullConstant constant
+kind ShortConstant constant
+kind StringConstant constant
+kind UnitConstant constant
+kind TermParamClause clause
+kind TypeParamClause clause
+kind GivenSelector selectorOf
+kind OmitSelector selectorOf
+kind RenameSelector selectorOf
+kind SimpleSelector selectorOf

@@ -65,6 +65,14 @@ fn dbl(it: &mut Interp, a: A, i: usize) -> R<f64> {
     }
 }
 
+/// A Float argument as the float it holds, never through a double: widening quiets a signalling NaN.
+fn flt(it: &mut Interp, a: A, i: usize) -> R<f32> {
+    match a.get(i) {
+        Some(Value::Float(f)) => Ok(*f),
+        _ => it.unsupported(format!("argument {} is no Float", i)),
+    }
+}
+
 fn boolean(it: &mut Interp, a: A, i: usize) -> R<bool> {
     match a.get(i).and_then(|v| v.as_bool()) {
         Some(v) => Ok(v),
@@ -1975,6 +1983,7 @@ fn install_java(it: &mut Table) {
         let f = dbl(it, a, 1)? as f32;
         Ok(Value::Int(if f.is_nan() { 0x7fc00000 } else { f.to_bits() as i32 }))
     });
+    reg!(it, "java.lang.Float.floatToRawIntBits", |it, a| Ok(Value::Int(flt(it, a, 1)?.to_bits() as i32)));
     reg!(it, "java.lang.Float.intBitsToFloat", |it, a| Ok(Value::Float(f32::from_bits(int(it, a, 1)? as u32))));
     reg!(it, "java.lang.Float.toString", |it, a| Ok(Value::string(java_float(dbl(it, a, 1)? as f32))));
     reg!(it, "java.lang.Boolean.booleanValue", |it, a| Ok(Value::Bool(boolean(it, a, 0)?)));

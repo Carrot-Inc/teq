@@ -164,7 +164,10 @@ impl TastyFile {
         }
         let mut names = Vec::with_capacity(256);
         while r.pos < names_end {
-            names.push(read_name(&mut r)?);
+            let i = names.len() as u32;
+            let name = read_name(&mut r)?;
+            check_name_refs(&name, i)?;
+            names.push(name);
         }
         let (mut asts, mut attributes, mut positions, mut origins) = (0..0, 0..0, 0..0, None);
         while !r.at_end() {
@@ -350,6 +353,50 @@ pub fn names_one_of(bytes: &[u8], wanted: &[&[u8]]) -> bool {
     false
 }
 
+/// Checks an entry's references as it is read. Dotty's `NameTable` holds only the names already
+/// read (`TastyUnpickler.scala:35-39`) and `readName` resolves a reference through it (87), so a
+/// well-formed entry refers only to an earlier entry. That also makes the recursive readers of
+/// names (`dump::part` and `dump::write_name_json`, `TastyFile::write_name` and `source_name`)
+/// terminate without a depth limit.
+fn check_name_refs(name: &TName, i: u32) -> Result<(), String> {
+    let earlier = |j: u32| {
+        if j < i {
+            Ok(())
+        } else {
+            Err(format!("malformed TASTy: name {} refers to name {}, which is not an earlier entry", i, j))
+        }
+    };
+    match name {
+        TName::Simple(_) => Ok(()),
+        TName::Qualified(a, b) | TName::Expanded(a, b) | TName::ExpandPrefix(a, b) => {
+            earlier(*a)?;
+            earlier(*b)
+        }
+        TName::Unique { separator, underlying, .. } => {
+            earlier(*separator)?;
+            if let Some(u) = underlying {
+                earlier(*u)?;
+            }
+            Ok(())
+        }
+        TName::DefaultGetter(u, _) | TName::SuperAccessor(u) | TName::InlineAccessor(u)
+        | TName::ObjectClass(u) | TName::BodyRetainer(u) => earlier(*u),
+        TName::Signed { original, target, result, params } => {
+            earlier(*original)?;
+            if let Some(t) = target {
+                earlier(*t)?;
+            }
+            earlier(*result)?;
+            for &p in params {
+                if p >= 0 {
+                    earlier(p as u32)?;
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
 fn read_name(r: &mut Reader) -> Result<TName, String> {
     use tags::name::*;
     let tag = r.byte();
@@ -389,4 +436,62 @@ fn read_name(r: &mut Reader) -> Result<TName, String> {
     };
     r.pos = end;
     Ok(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn utf8(s: &str) -> Vec<u8> {
+        let mut entry = vec![tags::name::UTF8];
+        write::write_nat(&mut entry, s.len() as u64);
+        entry.extend_from_slice(s.as_bytes());
+        entry
+    }
+
+    fn super_accessor(underlying: u32) -> Vec<u8> {
+        let mut payload = Vec::new();
+        write::write_nat(&mut payload, underlying as u64);
+        let mut entry = vec![tags::name::SUPERACCESSOR];
+        write::write_nat(&mut entry, payload.len() as u64);
+        entry.extend_from_slice(&payload);
+        entry
+    }
+
+    /// A TASTy file whose name table is `entries`, its `ASTs` section eight zero bytes.
+    fn file(entries: &[Vec<u8>]) -> Result<TastyFile, String> {
+        let mut names = Vec::new();
+        for entry in entries {
+            names.extend_from_slice(entry);
+        }
+        let mut bytes = vec![0x5c, 0xa1, 0xab, 0x1f];
+        for v in [MAJOR_VERSION as u64, MINOR_VERSION as u64, 0, 0] {
+            write::write_nat(&mut bytes, v);
+        }
+        bytes.extend_from_slice(&[0; 16]);
+        write::write_nat(&mut bytes, names.len() as u64);
+        bytes.extend_from_slice(&names);
+        write::write_nat(&mut bytes, 0);
+        write::write_nat(&mut bytes, 8);
+        bytes.extend_from_slice(&[0; 8]);
+        TastyFile::parse(bytes)
+    }
+
+    #[test]
+    fn a_name_that_refers_to_itself_is_refused() {
+        let err = file(&[utf8("ASTs"), super_accessor(1)]).err().expect("a malformed name table");
+        assert_eq!(err, "malformed TASTy: name 1 refers to name 1, which is not an earlier entry");
+    }
+
+    #[test]
+    fn a_name_that_refers_to_a_later_entry_is_refused() {
+        let err = file(&[utf8("ASTs"), super_accessor(2), utf8("later")]).err().expect("a malformed name table");
+        assert_eq!(err, "malformed TASTy: name 1 refers to name 2, which is not an earlier entry");
+    }
+
+    #[test]
+    fn a_name_table_that_refers_only_to_earlier_entries_is_read() {
+        let file = file(&[utf8("ASTs"), utf8("x"), super_accessor(1)]).expect("a TASTy file");
+        assert_eq!(file.names.len(), 3);
+    }
 }

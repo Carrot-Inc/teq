@@ -63,9 +63,10 @@ impl Section {
         while !r.at_end() {
             let header = r.long_int();
             if header == SOURCE {
-                let name = r.long_int();
-                if addr >= 0 && name >= 0 {
-                    sources.push((addr as Addr, name as NameRef));
+                // `PositionUnpickler` reads the name with `readNameRef`, a 31-bit Nat.
+                let name = r.nat();
+                if addr >= 0 {
+                    sources.push((addr as Addr, name));
                 }
                 continue;
             }
@@ -949,4 +950,43 @@ pub fn listing(name: &str, file: &TastyFile) -> String {
         out.push_str(&format!("{} {} {} {}\n", addr, tag, span, source));
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tasty::{MAJOR_VERSION, MINOR_VERSION};
+
+    /// A TASTy file whose `Positions` section is `positions`, its `ASTs` eight zero bytes.
+    fn file_with(positions: &[u8]) -> TastyFile {
+        let mut names = Vec::new();
+        for name in ["ASTs", "Positions"] {
+            names.push(1);
+            crate::tasty::write::write_nat(&mut names, name.len() as u64);
+            names.extend_from_slice(name.as_bytes());
+        }
+        let mut bytes = vec![0x5c, 0xa1, 0xab, 0x1f];
+        for v in [MAJOR_VERSION as u64, MINOR_VERSION as u64, 0, 0] {
+            crate::tasty::write::write_nat(&mut bytes, v);
+        }
+        bytes.extend_from_slice(&[0; 16]);
+        crate::tasty::write::write_nat(&mut bytes, names.len() as u64);
+        bytes.extend_from_slice(&names);
+        for (name, section) in [(0u64, &[0u8; 8][..]), (1, positions)] {
+            crate::tasty::write::write_nat(&mut bytes, name);
+            crate::tasty::write::write_nat(&mut bytes, section.len() as u64);
+            bytes.extend_from_slice(section);
+        }
+        TastyFile::parse(bytes).expect("a TASTy file")
+    }
+
+    #[test]
+    fn a_sources_name_reference_reads_as_a_nat() {
+        // An empty line table, the `SOURCE` header 4 and the name reference 64 as a Nat
+        // (`0xC0`, which read as an Int is -64).
+        let f = file_with(&[0x80, 0x84, 0xC0]);
+        let section = Section::read(&f).expect("a Positions section");
+        let sources: Vec<(Addr, NameRef)> = section.switches.iter().map(|&(a, _, n)| (a, n)).collect();
+        assert_eq!(sources, vec![(0, 64)]);
+    }
 }

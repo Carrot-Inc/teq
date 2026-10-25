@@ -1,0 +1,4 @@
+scalac 3.8.4: an unhandled exception in the typer, java.lang.AssertionError: assertion failed
+  at dotty.tools.dotc.core.TypeOps$.go$1(TypeOps.scala:1043)
+  at dotty.tools.dotc.core.TypeOps$.subPrefixAt$1(TypeOps.scala:1045)
+  at dotty.tools.dotc.core.TypeOps$.childPrefix(TypeOps.scala:1066)
