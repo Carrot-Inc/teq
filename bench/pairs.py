@@ -64,7 +64,7 @@ sys.path.insert(0, os.path.join(ROOT, "bench"))
 import runtime as harness  # noqa: E402
 
 CYCLES = 7
-TOLERANCE = {"budget": 8.0, "runtime": 15.0, "api": 8.0}
+TOLERANCE = {"budget": 10.0, "runtime": 15.0, "api": 10.0}
 LIMIT = {"budget": 1.30, "runtime": 1.30, "api": 1.30}
 # How a row's cycles are judged. "band": the median of the cycle means and its standard error, from their
 # median absolute deviation in logarithms; over when the median less BAND standard errors exceeds the

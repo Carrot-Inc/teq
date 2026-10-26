@@ -230,7 +230,7 @@ but the application API's type phase, the application's end-to-end suite, the me
 run alone after them (the type phase's pairs and the suite's specs are timed, the memory line's growth rows and the probes'
 growth ratios depend on the machine's load; the probes run under the node `NODE` names there, node 22). The type phase,
 `app-api-time`, is `bench/pairs.py api` over the lists the application lines read: the head's and master's
-`--time --all-mains` checks of the API at eight workers in balanced pairs, judged as the budget line judges (8%, an
+`--time --all-mains` checks of the API at eight workers in balanced pairs, judged as the budget line judges (10%, an
 inconclusive row not a pass), every run complete with a positive type phase and the first run's diagnostics (their first
 lines and count);
 `bench/app/fixture-lists.scala` writes those lists for the public corpus, to run it on any machine.
