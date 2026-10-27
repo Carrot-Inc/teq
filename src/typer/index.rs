@@ -342,6 +342,18 @@ impl Index {
     }
 }
 
+/// What a query answers (`index_query`): its result; where its target is declared, for the
+/// other sessions asked there; and for a query at a position, the digest (`index::digest`) of the
+/// text the position was resolved in, the one the language server holds the position it gave
+/// against: a program file's, a std file's embedded text, a library document's index's. `None`
+/// where the query was declined (a std or a library document whose file holds another text, a file
+/// the session has no text of) or names no position.
+pub struct IndexAnswer {
+    pub result: Json,
+    pub declared: Option<(PathBuf, u32)>,
+    pub text: Option<String>,
+}
+
 /// The session's view of the program files for the queries: their canonical paths by file, a
 /// std file its document's (`attach::std_document_path`), library files having none.
 pub struct Files {
@@ -2005,34 +2017,51 @@ impl<'a> Worker<'a> {
 
     // ---- queries ----
 
-    /// The answer to a query, and for a query about a target (references, implementations,
-    /// callers) where the target is declared: the other sessions whose programs hold that file
-    /// are asked there too.
-    pub fn index_query(&mut self, q: &crate::index::Query, files: &Files) -> (Json, Option<(PathBuf, u32)>) {
+    /// The answer to a query (`IndexAnswer`): for a query about a target (references,
+    /// implementations, callers) where the target is declared, where the other sessions whose
+    /// programs hold that file are asked too; for a query at a position, the text the position was
+    /// resolved in.
+    pub fn index_query(&mut self, q: &crate::index::Query, files: &Files) -> IndexAnswer {
         use crate::index::Query;
         let demanded = self.index.as_ref().map_or(0, |ix| ix.demanded());
+        let positional = !matches!(q, Query::Symbols(_) | Query::WorkspaceSymbols(_) | Query::Stats);
+        let mut text = None;
         if let Some(p) = q.file() {
             let ids = files.ids_of(p);
             if ids.first().map_or(false, |&f| self.std_file(f)) {
                 // The offsets are in the text the client holds, the file's as the server read it:
                 // a std document whose file holds another text than the embedded one is made whole
-                // and the query on it declined, as a library document's is (`document_target_at`).
+                // and the query on it declined, as a library document's is (`whole_document_index`).
                 if !self.std_document_whole(ids[0], p) {
                     let declined = match q {
                         Query::Complete(..) => super::complete::list(false, Vec::new()),
                         Query::Resolve(..) => obj([("edits", Json::Arr(Vec::new()))]),
                         _ => Json::Null,
                     };
-                    return (declined, None);
+                    return IndexAnswer { result: declined, declared: None, text: None };
                 }
+                // The embedded text `std_document_whole` accepted, which a first query enters.
+                let embedded = self.std.slot_of(ids[0]).map(|slot| self.std.slots[slot].text);
+                text = embedded.map(|t| crate::index::digest(t.as_bytes()));
                 self.demand_std_document(&ids);
+            }
+            if let Some(&f) = ids.first().filter(|_| text.is_none()) {
+                let sources: &'a crate::source::Sources = self.files;
+                text = Some(crate::index::digest(sources[f.0 as usize].text.as_bytes()));
             }
         }
         self.index_order();
-        // A query at a library's document: its occurrence looked up once, so that a lookup that
-        // declined (the document had to be made whole, `document_target_at`) declines the query.
+        // A query at a library's document: its occurrence (the innermost record of the document's
+        // index whose span holds the offset, a use or a declaration) looked up once, so that a lookup
+        // that declined (the document had to be made whole, `whole_document_index`) declines the
+        // query.
         let at_document = match q.file() {
-            Some(p) if files.ids_of(p).is_empty() => Some(document_offset(q).and_then(|o| self.document_target_at(p, o))),
+            Some(p) if files.ids_of(p).is_empty() => Some(document_offset(q).and_then(|o| {
+                let ix = self.whole_document_index(p)?;
+                text = Some(crate::index::digest(ix.text.as_bytes()));
+                let r = ix.at(o)?;
+                Some((r.span, r.target, ix))
+            })),
             _ => None,
         };
         let shared = |found: &Option<(Span, DocTarget, std::sync::Arc<DocIndex>)>| match found {
@@ -2062,16 +2091,17 @@ impl<'a> Worker<'a> {
             Query::References(..) | Query::Implementation(..) | Query::Incoming(..) => target.and_then(|t| self.declared_at(t, files)),
             _ => None,
         };
-        let answer = match q {
-            Query::Complete(p, offset, flags) => return (self.complete(p, *offset, *flags, files), None),
-            Query::Resolve(p, offset, generation, name) => return (self.complete_resolve(p, *offset, generation, name, files), None),
-            Query::Signature(p, offset) => return (self.signature(p, *offset, files), None),
+        let text = text.filter(|_| positional);
+        let result = match q {
+            Query::Complete(p, offset, flags) => self.complete(p, *offset, *flags, files),
+            Query::Resolve(p, offset, generation, name) => self.complete_resolve(p, *offset, generation, name, files),
+            Query::Signature(p, offset) => self.signature(p, *offset, files),
             _ => match at_document {
                 Some(found) => self.document_answer(q, found, files),
                 None => self.answer(q, files),
             },
         };
-        (answer, declared)
+        IndexAnswer { result, declared, text }
     }
 
     /// Whether the document at `path` of the std file `file` holds the embedded text, compared
@@ -2201,10 +2231,9 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The occurrence at `offset` of a library's document: the innermost record of the
-    /// document's index whose span holds the offset, a
-    /// use or a declaration, with the index.
-    fn document_target_at(&mut self, path: &std::path::Path, offset: u32) -> Option<(Span, DocTarget, std::sync::Arc<DocIndex>)> {
+    /// The index of a library's document whose file holds the text the index was built from,
+    /// which a query at a position in it is answered on (`index_query`).
+    fn whole_document_index(&mut self, path: &std::path::Path) -> Option<std::sync::Arc<DocIndex>> {
         // The offset is in the text the client holds, which is the file's as the server read it:
         // a file made whole by this query held another text, and the query is declined. The bytes
         // are read before the lookup, and no file at all (teq's cache cleared) is no other text: the
@@ -2218,9 +2247,9 @@ impl<'a> Worker<'a> {
         if held.is_some_and(|held| held != ix.text.as_bytes()) {
             return None;
         }
-        let r = ix.at(offset)?;
-        Some((r.span, r.target, ix))
+        Some(ix)
     }
+
 
     /// The offset of a position the language server gave as a line and a character, for a library
     /// document the client has not opened whose file is gone: the document made whole through the
@@ -2376,8 +2405,8 @@ impl<'a> Worker<'a> {
     }
 
     /// A query on a file that is none of the program's: a library's document, whose extent is
-    /// its occurrence index, `found` its occurrence at the query's offset
-    /// (`document_target_at`); `null` for any other file and where none is found.
+    /// its occurrence index, `found` its occurrence at the query's offset (`index_query`);
+    /// `null` for any other file and where none is found.
     fn document_answer(&mut self, q: &crate::index::Query, found: Option<(Span, DocTarget, std::sync::Arc<DocIndex>)>, files: &Files) -> Json {
         use crate::index::Query;
         let mut lines = LineCache { by_file: FxMap::default() };

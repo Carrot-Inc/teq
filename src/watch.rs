@@ -65,7 +65,12 @@
 //!
 //! `--index` (with `--check`) keeps the language server's navigation index and answers its
 //! queries, one JSON line each (`crate::index`, `typer::index`, docs/TARGETS.md "The language
-//! server"); its diagnostics carry `uri` and `range` counted as `--positions` says.
+//! server"); its diagnostics carry `uri` and `range` counted as `--positions` says. A query at a
+//! position answers with `"text"`, the digest (`index::digest`) of the text its program resolved the
+//! position in (`IndexAnswer::text`), or with `"declined":true` where it resolved it in none (a std or a
+//! library document whose file holds another text), and names its target's declaration and the call
+//! hierarchy's items with their texts' digests, which the language server holds the positions it gave
+//! against (`ContentModified`).
 //!
 //! Known limits: an entry's canonical path is resolved when the file is first read, so a file
 //! replaced by a symbolic link during the session is still known by its old path; in a plain
@@ -863,24 +868,33 @@ pub fn run(opts: &Options) -> ! {
                     continue;
                 }
                 Command::Query(q, at) => {
+                    crate::lsp::hooks::hold_query();
                     let demanded = |typer: &Option<Typer>| typer.as_ref().and_then(|t| t.index.as_ref()).map_or(0, |ix| ix.demanded());
                     let (before, held) = (demanded(&typer), account());
-                    let (answer, declared) = match typer.as_mut() {
+                    let nothing = || crate::typer::index::IndexAnswer { result: crate::lsp::json::Json::Null, declared: None, text: None };
+                    let mut answered = match typer.as_mut() {
                         // A position as a line and a character: resolved in the library document made
                         // whole through the lookup, which reports a miss where it cannot be.
                         Some(t) => t.on_thread(|w| match at {
                             None => w.index_query(&q, &query_files),
                             Some((line, character)) => match q.file().and_then(|p| w.document_offset(p, line, character, query_files.positions)) {
                                 Some(offset) => w.index_query(&q.at(offset), &query_files),
-                                None => (crate::lsp::json::Json::Null, None),
+                                None => nothing(),
                             },
                         }),
-                        None => (crate::lsp::json::Json::Null, None),
+                        None => nothing(),
                     };
                     if demanded(&typer) > before {
                         baseline += account().saturating_sub(held);
                     }
-                    print_answer_declared(&answer, declared.as_ref());
+                    // The texts the answer was found in, which the language server holds the positions
+                    // it gave against: a query at a position names the text it was resolved in (the
+                    // lookup's own, `IndexAnswer::text`), or says it was declined.
+                    let positional = !matches!(q, crate::index::Query::Symbols(_) | crate::index::Query::WorkspaceSymbols(_) | crate::index::Query::Stats);
+                    let declared_text = answered.declared.as_ref().and_then(|(path, _)| answered_text(&query_files, &sources, path));
+                    name_item_texts(&query_files, &sources, &q, &mut answered.result);
+                    let texts = Texts { declined: positional && answered.text.is_none(), text: answered.text, declared: declared_text };
+                    print_answer_declared(&answered.result, answered.declared.as_ref(), &texts);
                     continue;
                 }
             };
@@ -2448,20 +2462,89 @@ fn render_all(diags: &Diagnostics, files: &[SourceFile], all: bool) -> Vec<Strin
     reported(diags, files, |l| l == Level::Error || (all && l == Level::Warning)).iter().map(|s| render_one(&s.d, files)).collect()
 }
 
-/// The answer to a query: one line `{"result":...}`.
+/// The answer to a query the session could not resolve (it has no program): one line
+/// `{"result":...,"declined":true}`.
 fn print_answer(result: &crate::lsp::json::Json) {
-    print_answer_declared(result, None);
+    print_answer_declared(result, None, &Texts { declined: true, ..Texts::default() });
 }
 
-/// With where the query's target is declared: `{"result":...,"declared":{"path":..,"offset":..}}`,
-/// `"notes"`, the document paths the query found something else at (`attach::take_refusals`), and
-/// the sources' reports (`sources_reports`).
-fn print_answer_declared(result: &crate::lsp::json::Json, declared: Option<&(PathBuf, u32)>) {
+/// The digests (`index::digest`) of the texts a query's answer was found in: the text its position was
+/// resolved in (`text`), and that of the file its target is declared in (`declared`), where the language
+/// server's follow-ups ask the other sessions; or, for a query at a position the session resolved in no
+/// text (a std or a library document whose file holds another text, a file it has no text of, no
+/// program), that it was declined (`declined`), its answer the declined one.
+#[derive(Default)]
+struct Texts {
+    text: Option<String>,
+    declared: Option<String>,
+    declined: bool,
+}
+
+/// The digest of the text of a file an answer names (where its target is declared, a call hierarchy
+/// item's document): a program file's or an entered std file's, the text the program was typed from
+/// (`sources`, which a build sets only with the program it types), else a library document's, its
+/// file's bytes, which the lookup that found the declaration has just made whole (`write_document`),
+/// read without a lookup, which would enter files or index the document and change later answers;
+/// `None` where the session holds no text of it.
+fn answered_text(files: &crate::typer::index::Files, sources: &Sources, path: &std::path::Path) -> Option<String> {
+    match files.paths.iter().position(|p| p.as_deref() == Some(path)) {
+        Some(f) => Some(crate::index::digest(sources[f].text.as_bytes())),
+        None => crate::typer::loader::attach::document_bytes(path).map(|bytes| crate::index::digest(&bytes)),
+    }
+}
+
+/// The call hierarchy's items of an answer (a `prepare-call`'s, an `incoming`'s callers, an `outgoing`'s
+/// callees), each with the digest of its document's text in its `data`, which LSP keeps between an item's
+/// requests: the calls asked of an item are asked at its position in that text.
+fn name_item_texts(files: &crate::typer::index::Files, sources: &Sources, q: &crate::index::Query, answer: &mut crate::lsp::json::Json) {
+    use crate::index::Query;
+    use crate::lsp::json::{obj, Json};
+    let key = match q {
+        Query::PrepareCall(..) => None,
+        Query::Incoming(..) => Some("from"),
+        Query::Outgoing(..) => Some("to"),
+        _ => return,
+    };
+    let Json::Arr(entries) = answer else { return };
+    for entry in entries {
+        let item = match key {
+            Some(k) => match entry.get_mut(k) {
+                Some(item) => item,
+                None => continue,
+            },
+            None => entry,
+        };
+        let Some(path) = item.get("uri").and_then(Json::str).and_then(crate::lsp::uri::to_path) else { continue };
+        let Some(text) = answered_text(files, sources, &path) else { continue };
+        if let Json::Obj(fields) = item {
+            fields.retain(|(k, _)| k != "data");
+            fields.push(("data".to_string(), obj([("text", text.into())])));
+        }
+    }
+}
+
+/// With the digest of the text the answer was found in (`"text"`, `Texts`) or `"declined":true`, where the
+/// query's target is declared, with that file's text's digest: `{"result":...,"text":..,"declared":{"path":..,
+/// "offset":..,"text":..}}`, `"notes"`, the document paths the query found something else at
+/// (`attach::take_refusals`), and the sources' reports (`sources_reports`).
+fn print_answer_declared(result: &crate::lsp::json::Json, declared: Option<&(PathBuf, u32)>, texts: &Texts) {
+    use crate::lsp::json::Json;
     let mut line = String::from("{\"result\":");
     result.write(&mut line);
+    if let Some(text) = &texts.text {
+        line.push_str(",\"text\":");
+        Json::from(text.as_str()).write(&mut line);
+    }
+    if texts.declined {
+        line.push_str(",\"declined\":true");
+    }
     if let Some((path, offset)) = declared {
         line.push_str(",\"declared\":");
-        crate::lsp::json::obj([("path", path.to_string_lossy().into_owned().into()), ("offset", (*offset).into())]).write(&mut line);
+        let mut fields = vec![("path".to_string(), Json::from(path.to_string_lossy().into_owned())), ("offset".to_string(), (*offset).into())];
+        if let Some(text) = &texts.declared {
+            fields.push(("text".to_string(), text.as_str().into()));
+        }
+        Json::Obj(fields).write(&mut line);
     }
     let notes = crate::typer::loader::attach::take_refusals();
     if !notes.is_empty() {
