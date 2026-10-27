@@ -3,10 +3,16 @@
 //! child process and speaks JSON-RPC to the client (docs/TARGETS.md, "The language server").
 //!
 //! One thread reads the client's messages, one per child reads its answers, and this loop
-//! handles both in order. A child answers its commands in the order they were written, so a
-//! query written after a build is answered by the program that build made: the loop keeps per
-//! child the answers it waits for, in order, and a request that asks several children is
-//! answered once the last of them has. A child has one build under way at most, which carries an
+//! handles both in order. A child answers its commands in the order they were written: the loop
+//! keeps per child the answers it waits for, in order (`Session::expect`). A request is live from
+//! its registration to its one end (`end`), which sends its one response: its answer once each of
+//! its parts (one command to each session asked) has answered, `RequestCancelled` for the client's
+//! `$/cancelRequest`, `ContentModified` for an answer found in another text than the one its
+//! position was given in (`index::digest`). A part waits in the server (`Session::held`) until its
+//! session has nothing committed and the builds it waits for have answered (`admit`), so that it
+//! reads the program of the edits that came before it and is never written behind a build, and a
+//! cancel removes one never written; one committed when its request ends keeps its slot until its
+//! answer comes, which is dropped. A child has one build under way at most, which carries an
 //! identity its answer echoes; a build a newer edit of a document it carried overtakes is stale:
 //! asked to stop (`cancel`), and its answer dropped (docs/TARGETS.md, "Documents and diagnostics").
 
@@ -62,6 +68,8 @@ const METHOD_NOT_FOUND: i64 = -32601;
 const SERVER_NOT_INITIALIZED: i64 = -32002;
 /// A request whose document changed before it could be answered: the client asks again.
 const CONTENT_MODIFIED: i64 = -32801;
+/// A request the client cancelled (`$/cancelRequest`) while it was under way.
+const REQUEST_CANCELLED: i64 = -32800;
 
 pub(crate) enum Event {
     Client(Result<String, String>),
@@ -80,11 +88,51 @@ pub(crate) enum Event {
 /// What a child's next answer is for.
 enum Expect {
     Build(Sent),
-    /// A query and the command that asked it.
-    Query(u64, String),
-    /// The answer of a query written behind a build that was cancelled, which that build's
-    /// program never existed to answer: dropped, the query asked again after the next build.
-    Discard,
+    /// A part of a request (`Pending::parts`): the request and the part's index.
+    Query(u64, usize),
+    /// The answer nobody reads to a command of the request named, which ended while the command was
+    /// committed (cancelled, or answered without it): its slot stays until the answer comes, so that
+    /// the answers stay in step, and the session takes no other query meanwhile.
+    Discard(u64),
+}
+
+/// One command of a request to one session, and where it stands: held in the server
+/// (`Session::held`), committed once the child's outbox has it (its answer awaited in
+/// `Session::expect`), done once answered or nulled (its session went, or it could not be sent).
+struct Part {
+    s: usize,
+    command: String,
+    /// The digest of the text its position is in (`index::digest`), which the session's answer must
+    /// name: the text the request's position was turned into an offset in, or, for a follow-up, the
+    /// declaration's file's text in the session that answered where the target is declared. `None`
+    /// for a query without a position, or one the server has no text for (`position_at`).
+    expect: Option<String>,
+    /// The file its position is in, which a session that answers on another text of it, where the
+    /// client has not opened it, reads again from the disk.
+    file: Option<PathBuf>,
+    state: PartState,
+}
+
+/// A part held in a session (`Session::held`), and the build it reads the program of: the build under
+/// way when it was made, or the next where edits waited to be sent (`Session::wants_build`), so that
+/// a query reads the program of the edits that came before it.
+struct Held {
+    q: u64,
+    part: usize,
+    after: u64,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PartState {
+    Held,
+    Committed,
+    Done,
+}
+
+/// The key a client's request id is matched by: its JSON text, so that an integer id and a string
+/// id never match, and a cancel names a request by the id as the request spelled it.
+fn id_key(id: &Json) -> String {
+    id.to_text()
 }
 
 /// A build sent to a child, which carries its identity (`build #<id>`) and whose answer echoes
@@ -94,6 +142,8 @@ enum Expect {
 /// (`cancelled`), which stops it if it has not begun typing.
 struct Sent {
     id: u64,
+    /// Its place among the builds sent to the child (`Session::sent_builds`).
+    seq: u64,
     sent: Instant,
     plain: bool,
     poll: bool,
@@ -126,6 +176,8 @@ enum Item {
     /// The text of a document (`text`, `empty`), `None` to withdraw it.
     Text(PathBuf, Option<String>),
     Line(String),
+    /// A query's command, and the query it is for, which the trace names once it is written.
+    Query(u64, String),
     Quit,
 }
 
@@ -144,7 +196,7 @@ const OUTBOX_BOUND: usize = 64 << 20;
 fn item_bytes(item: &Item) -> usize {
     match item {
         Item::Text(_, Some(t)) => t.len(),
-        Item::Line(l) => l.len(),
+        Item::Line(l) | Item::Query(_, l) => l.len(),
         _ => 0,
     }
 }
@@ -174,16 +226,20 @@ impl Proc {
                 Item::Text(path, Some(t)) if t.is_empty() => format!("empty {}\n", path.display()),
                 Item::Text(path, Some(t)) => format!("text {} {}\n{}", path.display(), t.len(), t),
                 Item::Text(path, None) => format!("text {} 0\n", path.display()),
-                Item::Line(l) => l.clone(),
+                Item::Line(l) | Item::Query(_, l) => l.clone(),
                 Item::Quit => "quit\n".to_string(),
             };
             if stdin.write_all(bytes.as_bytes()).and_then(|_| stdin.flush()).is_err() || matches!(item, Item::Quit) {
                 return;
             }
-            if let Item::Line(l) = &item {
-                if let Some(id) = l.strip_prefix("cancel ") {
-                    hooks::trace("server", || format!("wrote-cancel {}", id.trim_end()));
+            match &item {
+                Item::Line(l) => {
+                    if let Some(id) = l.strip_prefix("cancel ") {
+                        hooks::trace("server", || format!("wrote-cancel {}", id.trim_end()));
+                    }
                 }
+                Item::Query(q, _) => hooks::trace("server", || format!("wrote-query {}", q)),
+                _ => {}
             }
         });
         Proc { child: Arc::new(Mutex::new(child)), outbox, args_file }
@@ -302,9 +358,13 @@ struct Session {
     carry_plain: bool,
     /// The stamp of each document's text the child was last sent.
     sent: BTreeMap<PathBuf, Stamp>,
-    /// Queries about a document whose latest text the child has not been sent while a build is
-    /// under way, asked after the build that sends it, so that their offsets are in that text.
-    deferred: Vec<(u64, String)>,
+    /// The parts of requests held in the server, in order, until the child has nothing committed
+    /// and the builds each waits for have answered (`admit`): a cancel removes one never written.
+    held: VecDeque<Held>,
+    /// The builds sent to the child, and the place of the last of them answered that typed
+    /// (published or dropped; a cancelled one typed nothing): what a held part waits for.
+    sent_builds: u64,
+    typed_builds: u64,
     /// The diagnostics of its last build answered for the texts it typed, by file, and the stamps
     /// of those texts: its part of a document's diagnostics is stale once the stamp moved on.
     diagnostics: BTreeMap<PathBuf, Vec<Json>>,
@@ -347,7 +407,9 @@ impl Session {
             carry: Vec::new(),
             carry_plain: false,
             sent: BTreeMap::new(),
-            deferred: Vec::new(),
+            held: VecDeque::new(),
+            sent_builds: 0,
+            typed_builds: 0,
             diagnostics: BTreeMap::new(),
             typed: BTreeMap::new(),
             last_build: Instant::now(),
@@ -416,11 +478,11 @@ impl Session {
     /// (Windows) every poll would be. Generators running while a poll is under way are a
     /// notified change's (a poll's own run before it is sent, the session free).
     fn oldest_build(&self) -> Option<Instant> {
-        let waited_on = self.wants_build() || self.generating.is_some() || !self.deferred.is_empty() || self.expect.iter().any(|e| matches!(e, Expect::Query(..)));
+        let waited_on = self.wants_build() || self.generating.is_some() || !self.held.is_empty() || self.expect.iter().any(|e| matches!(e, Expect::Query(..)));
         self.expect.iter().find_map(|e| match e {
             Expect::Build(b) if !b.poll || waited_on => Some(b.sent),
             Expect::Build(_) => None,
-            Expect::Query(..) | Expect::Discard => None,
+            Expect::Query(..) | Expect::Discard(_) => None,
         })
     }
 
@@ -434,7 +496,7 @@ impl Session {
     fn building(&mut self) -> Option<&mut Sent> {
         self.expect.iter_mut().find_map(|e| match e {
             Expect::Build(b) => Some(b),
-            Expect::Query(..) | Expect::Discard => None,
+            Expect::Query(..) | Expect::Discard(_) => None,
         })
     }
 
@@ -442,8 +504,17 @@ impl Session {
         self.proc.as_ref().map_or(false, |p| p.send(text))
     }
 
+    /// Admits the query `q`'s command to the child's outbox, which writes it in its turn.
+    fn send_query(&mut self, q: u64, command: &str) -> bool {
+        let sent = self.proc.as_ref().map_or(false, |p| p.push(Item::Query(q, command.to_string())));
+        if sent {
+            hooks::trace("server", || format!("dispatched {} {}", q, self.label()));
+        }
+        sent
+    }
+
     fn busy(&self) -> bool {
-        !self.expect.is_empty()
+        !self.expect.is_empty() || !self.held.is_empty()
     }
 
     /// When its idle poll is due: `IDLE` after its last build, while its child runs with nothing
@@ -458,34 +529,30 @@ struct Doc {
     version: i64,
     /// The URI the client opened it under, which answers name it by.
     uri: String,
+    /// The text's digest (`index::digest`), which a query on the document expects of its answer.
+    digest: String,
 }
 
-/// What `Pending::revision` holds.
-struct Revision {
-    path: PathBuf,
-    version: i64,
-    stamp: Option<Stamp>,
-}
 
-/// A client request waiting for its children's answers.
+/// A client request waiting for its children's answers: live from its registration (`register`)
+/// to its one end (`end`), which sends its one response.
 struct Pending {
     id: Json,
     method: String,
-    waiting: usize,
+    /// Its commands, one per session asked: the sessions it was asked of first, then those its
+    /// follow-ups ask (`follow`).
+    parts: Vec<Part>,
     results: Vec<(usize, Json)>,
     /// The query of `workspace/symbol`, which orders the joined answers.
     query: String,
     /// The item of `completionItem/resolve`, which the answer completes.
     item: Option<Json>,
-    /// The document a completion, a resolve or a signature help was asked on, its version and
-    /// its stamp then (none for a file not open): its items' `data` name the version, and a
-    /// query sent (or sent again, behind a cancelled build) once the document moved on, changed
-    /// or closed, is answered `ContentModified`, since its revision is never typed.
-    revision: Option<Revision>,
+    /// The version of the document a completion, a resolve or a signature help was asked on
+    /// (0 for a file not open), which a completion's items' `data` name for their resolve.
+    version: Option<i64>,
     /// For a query about a target: the command's verb and what follows the offset, which the
     /// sessions that hold the target's declaration and were not asked are asked with there.
     follow: Option<(&'static str, &'static str)>,
-    asked: Vec<usize>,
     /// A query on a library document no session is remembered for, asked of every running
     /// session that reads libraries: the first that maps the document answers, in the sessions'
     /// order, and is remembered for the document.
@@ -569,6 +636,8 @@ struct Server {
     /// one its queries go to, woken when parked.
     doc_sessions: BTreeMap<PathBuf, usize>,
     pending: BTreeMap<u64, Pending>,
+    /// The live requests by their client id (`id_key`).
+    ids: BTreeMap<String, u64>,
     next_query: u64,
     /// What was last published per file, and the version it was published with.
     published: BTreeMap<PathBuf, (Vec<Json>, Option<i64>)>,
@@ -647,6 +716,7 @@ pub fn run(args: &[String]) -> ! {
         docs: BTreeMap::new(),
         doc_sessions: BTreeMap::new(),
         pending: BTreeMap::new(),
+        ids: BTreeMap::new(),
         next_query: 0,
         published: BTreeMap::new(),
         stamps: BTreeMap::new(),
@@ -905,6 +975,11 @@ impl Server {
         if !self.initialized && method != "shutdown" {
             return respond_error(&id, SERVER_NOT_INITIALIZED, "initialize first");
         }
+        // A request is matched by its id while it is under way: one that reuses the id of another
+        // under way is refused, so that each is answered once and a cancel names one.
+        if self.ids.contains_key(&id_key(&id)) {
+            return respond_error(&id, INVALID_REQUEST, "a request with the id of one under way");
+        }
         match method {
             "shutdown" => {
                 self.shutdown = true;
@@ -913,13 +988,7 @@ impl Server {
                         p.end();
                         self.ending.push(p);
                     }
-                    let expected: Vec<Expect> = self.sessions[s].expect.drain(..).collect();
-                    for e in expected {
-                        if let Expect::Query(q, _) = e {
-                            self.query_answered(q, s, Json::Null);
-                        }
-                    }
-                    self.answer_deferred(s);
+                    self.drop_parts(s);
                     self.settle_progress(s);
                 }
                 self.kill_exports();
@@ -943,25 +1012,32 @@ impl Server {
                 Some(path) if self.library_document_changed(&path) => respond(&id, Json::Null),
                 Some(path) => {
                     let command = format!("symbols {}\n", path.display());
-                    self.ask(id, method, Some(&path), &command, true)
+                    self.ask(id, method, Some(&path), &command, true, None)
                 }
                 None => respond(&id, Json::Null),
             },
             "workspace/symbol" => {
                 let query = params.get("query").and_then(Json::str).unwrap_or("").replace('\n', " ");
-                self.ask(id, method, None, &format!("workspace-symbols {}\n", query), false)
+                self.ask(id, method, None, &format!("workspace-symbols {}\n", query), false, None)
             }
             "callHierarchy/incomingCalls" | "callHierarchy/outgoingCalls" => {
                 let item = params.get("item");
                 let path = item.and_then(|i| i.get("uri")).and_then(Json::str).and_then(uri::to_path).map(|p| canonical(&p));
                 let start = item.and_then(|i| Some((i.at(&["selectionRange", "start", "line"])?.uint()?, i.at(&["selectionRange", "start", "character"])?.uint()?)));
+                // The digest of the text of the item's document its session answered on (`data`, which
+                // the client keeps between the item's requests): the item's position is in that text.
+                let given = item.and_then(|i| i.at(&["data", "text"])).and_then(Json::str).map(str::to_string);
                 match (path, start) {
                     (Some(path), _) if self.library_document_changed(&path) => respond(&id, Json::Null),
                     (Some(path), Some((line, character))) => {
                         let verb = if method == "callHierarchy/incomingCalls" { "incoming" } else { "outgoing" };
-                        let Some(at) = self.position_at(&path, line, character) else { return respond(&id, Json::Null) };
+                        let Some((at, text)) = self.position_at(&path, line, character) else { return respond(&id, Json::Null) };
+                        // Turned into an offset in another text, the position would name another symbol.
+                        if given.is_some() && text.is_some() && given != text {
+                            return respond_error(&id, CONTENT_MODIFIED, "the document changed");
+                        }
                         let command = format!("{} {} {}\n", verb, path.display(), at);
-                        self.ask(id, method, Some(&path), &command, false)
+                        self.ask(id, method, Some(&path), &command, false, given.or(text))
                     }
                     _ => respond(&id, Json::Null),
                 }
@@ -977,9 +1053,9 @@ impl Server {
         if self.library_document_changed(&path) {
             return respond(&id, Json::Null);
         }
-        let Some(at) = self.position_at(&path, line, character) else { return respond(&id, Json::Null) };
+        let Some((at, text)) = self.position_at(&path, line, character) else { return respond(&id, Json::Null) };
         let command = format!("{} {} {}{}\n", verb, path.display(), at, extra);
-        self.ask(id, method, Some(&path), &command, false)
+        self.ask(id, method, Some(&path), &command, false, text)
     }
 
     /// Whether a file no session owns (a library's source) is open with a text
@@ -1000,23 +1076,26 @@ impl Server {
     /// (`offset`), or `<line>:<character>` for a jar's document the client has not opened whose
     /// file is gone. There is no text here to turn that position with: the session resolves it in
     /// the document it makes whole through its lookup (`Query::parse_at`).
-    fn position_at(&self, path: &Path, line: u32, character: u32) -> Option<String> {
+    /// With the digest of the text the offset is in (`offset`); none for a line and a character.
+    fn position_at(&self, path: &Path, line: u32, character: u32) -> Option<(String, Option<String>)> {
         let attached = || crate::typer::loader::attach::is_document(path) && !crate::typer::loader::attach::is_std_document(path);
         if !self.docs.contains_key(path) && missing(path) && attached() {
-            return Some(format!("{}:{}", line, character));
+            return Some((format!("{}:{}", line, character), None));
         }
-        self.offset(path, line, character).map(|o| o.to_string())
+        self.offset(path, line, character).map(|(o, text)| (o.to_string(), Some(text)))
     }
 
-    /// The byte offset of a position in the file as the client has it: the open document's
-    /// text, or the file on disk.
-    fn offset(&self, path: &Path, line: u32, character: u32) -> Option<u32> {
+    /// The byte offset of a position in the file as the client has it, the open document's text or
+    /// the file on disk, and that text's digest (`index::digest`), which the answer must name: a
+    /// session that answers on another text of the file would answer for whatever stands at the
+    /// offset there.
+    fn offset(&self, path: &Path, line: u32, character: u32) -> Option<(u32, String)> {
         let positions = self.positions();
         match self.docs.get(path) {
-            Some(doc) => Some(crate::index::offset_of(&doc.text, line, character, positions)),
+            Some(doc) => Some((crate::index::offset_of(&doc.text, line, character, positions), doc.digest.clone())),
             None => {
                 let text = read_text(path)?;
-                Some(crate::index::offset_of(&text, line, character, positions))
+                Some((crate::index::offset_of(&text, line, character, positions), crate::index::digest(text.as_bytes())))
             }
         }
     }
@@ -1036,7 +1115,7 @@ impl Server {
     /// a jar's or a product's, every one for a std file's) and answers the request
     /// once they have. A file whose current text a session holds back answers nothing there;
     /// `one` asks a single session, for what every owner answers alike.
-    fn ask(&mut self, id: Json, method: &str, file: Option<&Path>, command: &str, one: bool) {
+    fn ask(&mut self, id: Json, method: &str, file: Option<&Path>, command: &str, one: bool, expect: Option<String>) {
         self.flush();
         let mut targets: Vec<usize> = match file {
             Some(f) => self.open_for(f),
@@ -1067,22 +1146,6 @@ impl Server {
         if targets.is_empty() {
             return respond(&id, Json::Null);
         }
-        let q = self.next_query;
-        self.next_query += 1;
-        let mut waiting = 0;
-        for &s in &targets {
-            if self.query_waits(s) {
-                hooks::trace("server", || format!("deferred {}", q));
-                self.sessions[s].deferred.push((q, command.to_string()));
-                waiting += 1;
-            } else if self.sessions[s].send(command) {
-                self.sessions[s].expect.push_back(Expect::Query(q, command.to_string()));
-                waiting += 1;
-            }
-        }
-        if waiting == 0 {
-            return respond(&id, Json::Null);
-        }
         let query = match method {
             "workspace/symbol" => command.trim_end().strip_prefix("workspace-symbols ").unwrap_or("").to_lowercase(),
             _ => String::new(),
@@ -1095,7 +1158,61 @@ impl Server {
             _ => None,
         };
         let origin = file.map(Path::to_path_buf);
-        self.pending.insert(q, Pending { id, method: method.to_string(), waiting, results: Vec::new(), query, item, revision: None, follow, asked: targets, document, origin });
+        let parts = targets.iter().map(|&s| Part { s, command: command.to_string(), expect: expect.clone(), file: origin.clone(), state: PartState::Held }).collect();
+        let q = self.register(Pending { id, method: method.to_string(), parts, results: Vec::new(), query, item, version: None, follow, document, origin });
+        for i in 0..targets.len() {
+            self.offer(q, i);
+        }
+    }
+
+    /// A request live from here: under its client id, with its parts made and not yet offered.
+    fn register(&mut self, request: Pending) -> u64 {
+        let q = self.next_query;
+        self.next_query += 1;
+        self.ids.insert(id_key(&request.id), q);
+        self.pending.insert(q, request);
+        q
+    }
+
+    /// A part made: committed at once where its session has nothing committed and nothing held,
+    /// else held in the server (`admit`), where a cancel removes it before it is written.
+    fn offer(&mut self, q: u64, i: usize) {
+        let Some(s) = self.pending.get(&q).map(|p| p.parts[i].s) else { return };
+        let session = &mut self.sessions[s];
+        let after = session.sent_builds + u64::from(session.wants_build());
+        session.held.push_back(Held { q, part: i, after });
+        self.admit(s);
+        if self.sessions[s].held.iter().any(|h| (h.q, h.part) == (q, i)) {
+            hooks::trace("server", || format!("deferred {}", q));
+        }
+    }
+
+    /// Commits the session's held parts in order, one at a time: each once the child has nothing
+    /// committed (no build under way, no command's answer awaited, a cancelled one's included) and
+    /// the builds it waits for have answered.
+    fn admit(&mut self, s: usize) {
+        loop {
+            let session = &mut self.sessions[s];
+            let Some(first) = session.held.front() else { return };
+            if !session.expect.is_empty() || session.proc.is_none() || first.after > session.typed_builds {
+                return;
+            }
+            let Held { q, part, .. } = session.held.pop_front().expect("first");
+            self.commit(q, part);
+        }
+    }
+
+    /// Commits a part of a live request: its command admitted to the child's outbox and its answer
+    /// awaited; one that cannot be sent (the child is ended) is answered nothing there.
+    fn commit(&mut self, q: u64, i: usize) {
+        let Some(p) = self.pending.get_mut(&q) else { return };
+        let (s, command) = (p.parts[i].s, p.parts[i].command.clone());
+        if self.sessions[s].send_query(q, &command) {
+            self.pending.get_mut(&q).expect("live").parts[i].state = PartState::Committed;
+            self.sessions[s].expect.push_back(Expect::Query(q, i));
+        } else {
+            self.part_done(q, i, Json::Null);
+        }
     }
 
     /// The one session a completion or a signature help on `path` is asked of: a running one that
@@ -1122,20 +1239,20 @@ impl Server {
     }
 
     /// `textDocument/completion`: asked of one session that owns the file (`one_for`), after the
-    /// build of the document's text as the request found it (a query waits behind a build under
-    /// way for the one that sends that text, `query_waits`); a file no session holds answers the
+    /// build of the document's text as the request found it (a query held behind a build under
+    /// way waits for the one that sends that text, `admit`); a file no session holds answers the
     /// empty list.
     fn complete(&mut self, id: Json, params: &Json) {
         let empty = || obj([("isIncomplete", false.into()), ("items", Json::Arr(Vec::new()))]);
         let (Some(path), Some((line, character))) = (document_path(params), position(params)) else { return respond(&id, empty()) };
-        let Some(offset) = self.offset(&path, line, character) else { return respond(&id, empty()) };
+        let Some((offset, text)) = self.offset(&path, line, character) else { return respond(&id, empty()) };
         let version = self.docs.get(&path).map_or(0, |d| d.version);
         self.flush();
         let Some(s) = self.one_for(&path) else { return respond(&id, empty()) };
         self.sessions[s].last_used = Instant::now();
         let flags = self.insert_replace as u32 | (self.snippets as u32) << 1;
         let command = format!("complete {} {} {}\n", path.display(), offset, flags);
-        self.query_one(id, "textDocument/completion", s, &command, None, Some((path, version)));
+        self.query_one(id, "textDocument/completion", s, &command, None, path, version, text);
     }
 
     /// `textDocument/signatureHelp`: asked as a completion is, of one session that owns the
@@ -1143,45 +1260,57 @@ impl Server {
     /// `ContentModified` once that text is never typed; null where no session holds the file.
     fn signature_help(&mut self, id: Json, params: &Json) {
         let (Some(path), Some((line, character))) = (document_path(params), position(params)) else { return respond(&id, Json::Null) };
-        let Some(offset) = self.offset(&path, line, character) else { return respond(&id, Json::Null) };
+        let Some((offset, text)) = self.offset(&path, line, character) else { return respond(&id, Json::Null) };
         let version = self.docs.get(&path).map_or(0, |d| d.version);
         self.flush();
         let Some(s) = self.one_for(&path) else { return respond(&id, Json::Null) };
         self.sessions[s].last_used = Instant::now();
         let command = format!("signature {} {}\n", path.display(), offset);
-        self.query_one(id, "textDocument/signatureHelp", s, &command, None, Some((path, version)));
+        self.query_one(id, "textDocument/signatureHelp", s, &command, None, path, version, text);
     }
 
     /// Sends one session a query whose answer answers the request.
-    fn query_one(&mut self, id: Json, method: &str, s: usize, command: &str, item: Option<Json>, revision: Option<(PathBuf, i64)>) {
-        let revision = revision.map(|(path, version)| Revision { stamp: self.stamps.get(&path).copied(), path, version });
-        let q = self.next_query;
-        if self.query_waits(s) {
-            hooks::trace("server", || format!("deferred {}", q));
-            self.sessions[s].deferred.push((q, command.to_string()));
-        } else if self.sessions[s].send(command) {
-            self.sessions[s].expect.push_back(Expect::Query(q, command.to_string()));
-        } else {
-            return respond(&id, Json::Null);
+    /// The document's version names the items of a completion (`name_version`), and the answer must be
+    /// found in the text of digest `text`.
+    #[allow(clippy::too_many_arguments)]
+    fn query_one(&mut self, id: Json, method: &str, s: usize, command: &str, item: Option<Json>, path: PathBuf, version: i64, text: String) {
+        let parts = vec![Part { s, command: command.to_string(), expect: Some(text), file: Some(path.clone()), state: PartState::Held }];
+        let q = self.register(Pending { id, method: method.to_string(), parts, results: Vec::new(), query: String::new(), item, version: Some(version), follow: None, document: None, origin: Some(path) });
+        self.offer(q, 0);
+    }
+
+    /// `$/cancelRequest`: the request of that id under way ends `RequestCancelled`; an id no
+    /// request under way has (answered already, or never asked) is passed over.
+    fn cancel(&mut self, id: &Json) {
+        if let Some(&q) = self.ids.get(&id_key(id)) {
+            hooks::trace("server", || format!("request-cancelled {}", q));
+            self.end(q, Err((REQUEST_CANCELLED, "the request was cancelled")));
         }
-        self.next_query += 1;
-        let origin = revision.as_ref().map(|r| r.path.clone());
-        self.pending.insert(q, Pending { id, method: method.to_string(), waiting: 1, results: Vec::new(), query: String::new(), item, revision, follow: None, asked: vec![s], document: None, origin });
     }
 
-    /// Whether the query `q` was asked on a revision of a document that moved on since: a
-    /// completion's, a resolve's or a signature help's, whose offset and answer are that
-    /// revision's.
-    fn obsolete(&self, q: u64) -> bool {
-        let Some(r) = self.pending.get(&q).and_then(|p| p.revision.as_ref()) else { return false };
-        // Every open, change and close of the document stamps it anew.
-        self.stamps.get(&r.path) != r.stamp.as_ref()
-    }
-
-    /// Answers the query `q` `ContentModified`: its revision is never typed.
-    fn modified(&mut self, q: u64) {
-        if let Some(p) = self.pending.remove(&q) {
-            respond_error(&p.id, CONTENT_MODIFIED, "the document changed");
+    /// The request's one end: its response sent, the request and its id forgotten, each part of it
+    /// still held in a session dropped, and each committed to a child left to drain
+    /// (`Expect::Discard`), so that the child's answers stay in step.
+    fn end(&mut self, q: u64, outcome: Result<Json, (i64, &str)>) {
+        let Some(p) = self.pending.remove(&q) else { return };
+        self.ids.remove(&id_key(&p.id));
+        for (i, part) in p.parts.iter().enumerate() {
+            let session = &mut self.sessions[part.s];
+            match part.state {
+                PartState::Held => session.held.retain(|h| (h.q, h.part) != (q, i)),
+                PartState::Committed => {
+                    for e in session.expect.iter_mut() {
+                        if matches!(e, Expect::Query(x, j) if (*x, *j) == (q, i)) {
+                            *e = Expect::Discard(q);
+                        }
+                    }
+                }
+                PartState::Done => {}
+            }
+        }
+        match outcome {
+            Ok(result) => respond(&p.id, result),
+            Err((code, message)) => respond_error(&p.id, code, message),
         }
     }
 
@@ -1205,8 +1334,10 @@ impl Server {
         if self.sessions[s].dirty.contains(&path) {
             return respond_error(&id, CONTENT_MODIFIED, "the document changed");
         }
+        // The item's offset is in the text of the version it names, the document's now.
+        let text = self.docs.get(&path).map_or_else(String::new, |d| d.digest.clone());
         let command = format!("complete-resolve {} {} {} {}\n", path.display(), offset, generation, name);
-        self.query_one(id, "completionItem/resolve", s, &command, Some(item), Some((path, version)));
+        self.query_one(id, "completionItem/resolve", s, &command, Some(item), path, version, text);
     }
 
     fn notification(&mut self, method: &str, params: &Json) {
@@ -1220,12 +1351,18 @@ impl Server {
                 self.start_sessions()
             }
             "exit" => self.exit(),
+            "$/cancelRequest" => {
+                if let Some(id) = params.get("id") {
+                    self.cancel(id);
+                }
+            }
             "textDocument/didOpen" => {
                 let Some(path) = document_path(params) else { return };
                 let text = params.at(&["textDocument", "text"]).and_then(Json::str).unwrap_or("").to_string();
                 let version = params.at(&["textDocument", "version"]).and_then(Json::num).unwrap_or(0.0) as i64;
                 let uri = params.at(&["textDocument", "uri"]).and_then(Json::str).unwrap_or("").to_string();
-                self.docs.insert(path.clone(), Doc { text, version, uri });
+                let digest = crate::index::digest(text.as_bytes());
+                self.docs.insert(path.clone(), Doc { text, version, uri, digest });
                 self.stamp(&path);
                 self.open_for(&path);
                 self.touch(&path);
@@ -1239,7 +1376,7 @@ impl Server {
                     Some(doc) => doc.uri.clone(),
                     None => params.at(&["textDocument", "uri"]).and_then(Json::str).unwrap_or("").to_string(),
                 };
-                self.docs.insert(path.clone(), Doc { text: text.to_string(), version, uri });
+                self.docs.insert(path.clone(), Doc { text: text.to_string(), version, uri, digest: crate::index::digest(text.as_bytes()) });
                 self.stamp(&path);
                 self.open_for(&path);
                 self.touch(&path);
@@ -1793,14 +1930,7 @@ impl Server {
             p.kill();
         }
         session.typed = std::mem::take(&mut old.typed);
-        for e in old.expect.drain(..) {
-            if let Expect::Query(q, _) = e {
-                self.query_answered(q, s, Json::Null);
-            }
-        }
-        for (q, _) in old.deferred.drain(..) {
-            self.query_answered(q, s, Json::Null);
-        }
+        self.null_parts(std::mem::take(&mut old.expect), std::mem::take(&mut old.held));
         self.ensure_running(s);
         // With nothing to type, no build would replace the last one's diagnostics.
         if self.sessions[s].proc.is_none() && self.sessions[s].failure.is_none() {
@@ -1901,13 +2031,7 @@ impl Server {
         if let Some(p) = session.proc.take() {
             p.kill();
         }
-        let expected: Vec<Expect> = session.expect.drain(..).collect();
-        for e in expected {
-            if let Expect::Query(q, _) = e {
-                self.query_answered(q, s, Json::Null);
-            }
-        }
-        self.answer_deferred(s);
+        self.drop_parts(s);
         self.settle_progress(s);
     }
 
@@ -1922,13 +2046,7 @@ impl Server {
         if let Some(p) = session.proc.take() {
             p.kill();
         }
-        let expected: Vec<Expect> = session.expect.drain(..).collect();
-        for e in expected {
-            if let Expect::Query(q, _) = e {
-                self.query_answered(q, s, Json::Null);
-            }
-        }
-        self.answer_deferred(s);
+        self.drop_parts(s);
         let files: Vec<PathBuf> = std::mem::take(&mut self.sessions[s].diagnostics).into_keys().collect();
         self.publish_changed(&files);
         self.settle_progress(s);
@@ -2041,6 +2159,8 @@ impl Server {
         });
         session.proc = Some(Proc::start(child, stdin, args_file));
         session.expect.clear();
+        session.sent_builds = 0;
+        session.typed_builds = 0;
         session.failure = None;
         session.last_build = Instant::now();
         session.sent.clear();
@@ -2085,13 +2205,7 @@ impl Server {
         if let Some(p) = session.proc.take() {
             p.kill();
         }
-        let expected: Vec<Expect> = session.expect.drain(..).collect();
-        for e in expected {
-            if let Expect::Query(q, _) = e {
-                self.query_answered(q, s, Json::Null);
-            }
-        }
-        self.answer_deferred(s);
+        self.drop_parts(s);
         self.settle_progress(s);
         if self.shutdown {
             return;
@@ -2155,10 +2269,15 @@ impl Server {
 
     /// The session's next build, unless one is under way: the texts of its changed documents (a
     /// closed one withdrawn), then a build of them with what a cancelled build carried, or of
-    /// every file where one was asked for; then the queries that waited for it.
+    /// every file where one was asked for, written behind whatever the child has committed.
     fn send_build(&mut self, s: usize) {
         let session = &mut self.sessions[s];
         if session.proc.is_none() || session.building().is_some() {
+            return;
+        }
+        // The parts whose builds have answered go first, one at a time (`admit`): they read the
+        // program of the edits that came before them, not of those this build carries.
+        if session.held.front().is_some_and(|h| h.after <= session.typed_builds) {
             return;
         }
         let polled = std::mem::take(&mut session.poll);
@@ -2203,44 +2322,30 @@ impl Server {
         }
         hooks::trace("server", || format!("build {} {} {}{}", id, session.label(), if plain { "plain" } else { "named" }, if poll { " poll" } else { "" }));
         let typed = session.sent.clone();
-        session.expect.push_back(Expect::Build(Sent { id, sent: Instant::now(), plain, poll, carried, typed, cancelled: false }));
+        session.sent_builds += 1;
+        session.expect.push_back(Expect::Build(Sent { id, seq: session.sent_builds, sent: Instant::now(), plain, poll, carried, typed, cancelled: false }));
         session.last_build = Instant::now();
-        let mut unsent = Vec::new();
-        let waited = std::mem::take(&mut session.deferred);
-        for (q, command) in waited {
-            // A completion asked on a revision this build does not type (the edit after it came
-            // first, or the build that typed it was cancelled) is never answered from it.
-            if self.obsolete(q) {
-                hooks::trace("server", || format!("modified {}", q));
-                self.modified(q);
-                continue;
-            }
-            let session = &mut self.sessions[s];
-            if session.send(&command) {
-                session.expect.push_back(Expect::Query(q, command));
-            } else {
-                unsent.push(q);
-            }
-        }
-        for q in unsent {
-            self.query_answered(q, s, Json::Null);
-        }
     }
 
-    /// Whether a query waits for the session's next build: the session has a build under way and
-    /// another waits behind it (edits kept, a build of every file asked for, what a cancelled build
-    /// carried), which the query is to read, whatever file it is about or none: an edit came
-    /// before it, so it reads the program that edit makes (the offset of a file not open read from
-    /// the disk that build reads again, that of an edited document in the text that build sends).
-    fn query_waits(&mut self, s: usize) -> bool {
-        let session = &mut self.sessions[s];
-        session.wants_build() && session.building().is_some()
+    /// The parts of requests a session's child will never answer, now that it is gone or going
+    /// (shut down, parked, retired, exited): `null_parts`.
+    fn drop_parts(&mut self, s: usize) {
+        let expect = std::mem::take(&mut self.sessions[s].expect);
+        let held = std::mem::take(&mut self.sessions[s].held);
+        self.null_parts(expect, held);
     }
 
-    /// Answers the queries that waited for the session's next build, which will not come.
-    fn answer_deferred(&mut self, s: usize) {
-        for (q, _) in std::mem::take(&mut self.sessions[s].deferred) {
-            self.query_answered(q, s, Json::Null);
+    /// The parts committed to a child that is gone (`expect`, whose builds' and drained answers'
+    /// slots go with it) and those held for it: each answered nothing there, its request answered
+    /// once its other parts are.
+    fn null_parts(&mut self, expect: VecDeque<Expect>, held: VecDeque<Held>) {
+        let committed = expect.into_iter().filter_map(|e| match e {
+            Expect::Query(q, i) => Some((q, i)),
+            Expect::Build(_) | Expect::Discard(_) => None,
+        });
+        let parts: Vec<(u64, usize)> = committed.chain(held.into_iter().map(|h| (h.q, h.part))).collect();
+        for (q, i) in parts {
+            self.part_done(q, i, Json::Null);
         }
     }
 
@@ -2351,17 +2456,58 @@ impl Server {
                 self.build_answered(s, &json, build);
                 self.settle_progress(s);
             }
-            Expect::Discard => {}
-            Expect::Query(q, _) => {
-                let result = json.get("result").cloned().unwrap_or(Json::Null);
-                let declared = json.get("declared").and_then(|d| Some((PathBuf::from(d.get("path")?.str()?), d.get("offset")?.uint()?)));
-                if let Some((path, offset)) = declared {
-                    self.follow(q, &path, offset);
-                }
-                self.tell_notes(s, &json);
-                self.query_answered(q, s, result);
-            }
+            Expect::Discard(q) => hooks::trace("server", || format!("drained {}", q)),
+            Expect::Query(q, i) => self.part_replied(s, q, i, &json),
         }
+        // The session's capacity is free once its answer is in: the next held part goes.
+        self.admit(s);
+    }
+
+    /// A committed part's answer: checked against the text its position is in, its follow-ups asked
+    /// where its target is declared, its result kept.
+    fn part_replied(&mut self, s: usize, q: u64, i: usize, json: &Json) {
+        hooks::trace("server", || format!("replied {}", q));
+        // Live by construction: a request that ends turns its committed slots to `Discard`.
+        if !self.pending.contains_key(&q) {
+            return;
+        }
+        // A library document open with another text than its file's answers nothing, whatever its
+        // parts found (`join`): no text of theirs is checked, no follow-up asked.
+        let changed_document = self.pending[&q].origin.as_deref().is_some_and(|f| self.library_document_changed(f));
+        // What the session found the answer in, for a part at a position: a text, by its digest, or
+        // nothing, the query declined (a std or a library document whose file holds another text, no
+        // program), its answer the declined one (null, the empty list). A text other than the one the
+        // position is in names whatever stands at the offset there, which is not the position the
+        // client gave; an answer that names neither breaks the session's contract, and may be such
+        // an answer: either is refused. A session that typed another text of a file the client has
+        // not opened (an edit on disk it has not read yet, or one since) reads the disk again with
+        // its next build, which a request asked again finds.
+        let part = &self.pending[&q].parts[i];
+        let text = json.get("text").and_then(Json::str);
+        let declined = json.get("declined").and_then(Json::bool) == Some(true);
+        let (refused, other_text) = match (&part.expect, text) {
+            _ if changed_document => (false, false),
+            (Some(expect), Some(text)) => (expect != text, expect != text),
+            (Some(_), None) => (!declined, false),
+            (None, _) => (false, false),
+        };
+        if refused {
+            let unopened = other_text && part.file.as_ref().is_some_and(|f| !self.docs.contains_key(f));
+            hooks::trace("server", || format!("modified {}", q));
+            self.end(q, Err((CONTENT_MODIFIED, "the document changed")));
+            if unopened {
+                self.plain_build(s);
+            }
+            return;
+        }
+        let result = json.get("result").cloned().unwrap_or(Json::Null);
+        let declared = json.get("declared").and_then(|d| Some((PathBuf::from(d.get("path")?.str()?), d.get("offset")?.uint()?, d.get("text").and_then(Json::str).map(str::to_string))));
+        // The follow-ups before the part is done, so that the request does not end first.
+        if let Some((path, offset, text)) = declared.filter(|_| !changed_document) {
+            self.follow(q, &path, offset, text);
+        }
+        self.tell_notes(s, json);
+        self.part_done(q, i, result);
     }
 
     /// What a session reports of the libraries' sources since its last message, carried by every
@@ -2397,9 +2543,9 @@ impl Server {
 
     /// A build's answer: one that does not echo the build's identity, a stale one (a document it
     /// carried changed since) and a cancelled one are dropped, the files of a cancelled one
-    /// carried by the next build and the queries written behind it asked again after that build,
-    /// since the program they were to read is never made; else its diagnostics are the session's,
-    /// with the stamps of the texts it typed, and the files whose lists changed are published.
+    /// carried by the next build, whose program the parts held for this one read instead (no query
+    /// is ever written behind a build, `admit`); else its diagnostics are the session's, with the
+    /// stamps of the texts it typed, and the files whose lists changed are published.
     fn build_answered(&mut self, s: usize, answer: &Json, build: Sent) {
         let echoed = answer.get("build").and_then(Json::num) == Some(build.id as f64);
         if echoed && answer.get("cancelled").and_then(Json::bool) == Some(true) {
@@ -2407,16 +2553,11 @@ impl Server {
             let session = &mut self.sessions[s];
             session.carry.extend(build.carried);
             session.carry_plain |= build.plain;
-            // The build under way was the first the child had to answer: what follows it in the
-            // queue was written behind it.
-            for e in session.expect.iter_mut() {
-                if let Expect::Query(q, command) = std::mem::replace(e, Expect::Discard) {
-                    hooks::trace("server", || format!("deferred {}", q));
-                    session.deferred.push((q, command));
-                }
-            }
             return;
         }
+        // Whatever becomes of its answer, the child's program is the one this build typed, which the
+        // parts held for it read (`admit`).
+        self.sessions[s].typed_builds = build.seq;
         let stale = build.carried.iter().any(|p| self.stamps.get(p) != build.typed.get(p));
         if !echoed || stale {
             hooks::trace("server", || format!("dropped {}", build.id));
@@ -2522,29 +2663,21 @@ impl Server {
     /// Asks the query again, at the declaration of its target, of the sessions that hold the
     /// declaration's file or serve its document (whose library view holds it as a product's or a
     /// jar's source, or whose std holds it) and were not asked yet.
-    fn follow(&mut self, q: u64, path: &Path, offset: u32) {
+    /// The declaration's offset is in the text of its file the answering session typed (`text`): a
+    /// session asked there must answer on that text.
+    fn follow(&mut self, q: u64, path: &Path, offset: u32, text: Option<String>) {
         let Some((verb, extra)) = self.pending.get(&q).and_then(|p| p.follow) else { return };
-        let asked = self.pending[&q].asked.clone();
+        // Edits gathered for the sessions asked go now, as a request's do (`ask`).
+        self.flush();
         let command = format!("{} {} {}{}\n", verb, path.display(), offset, extra);
         for s in 0..self.sessions.len() {
-            if asked.contains(&s) || !(self.sessions[s].owns(path) || self.sessions[s].serves_document(path)) || self.sessions[s].proc.is_none() {
+            let Some(p) = self.pending.get_mut(&q) else { return };
+            if p.parts.iter().any(|x| x.s == s) || !(self.sessions[s].owns(path) || self.sessions[s].serves_document(path)) || self.sessions[s].proc.is_none() {
                 continue;
             }
-            let asked = if self.query_waits(s) {
-                hooks::trace("server", || format!("deferred {}", q));
-                self.sessions[s].deferred.push((q, command.clone()));
-                true
-            } else if self.sessions[s].send(&command) {
-                self.sessions[s].expect.push_back(Expect::Query(q, command.clone()));
-                true
-            } else {
-                false
-            };
-            if asked {
-                let p = self.pending.get_mut(&q).expect("pending");
-                p.waiting += 1;
-                p.asked.push(s);
-            }
+            p.parts.push(Part { s, command: command.clone(), expect: text.clone(), file: Some(path.to_path_buf()), state: PartState::Held });
+            let i = p.parts.len() - 1;
+            self.offer(q, i);
         }
     }
 
@@ -2588,25 +2721,42 @@ impl Server {
         }
     }
 
-    fn query_answered(&mut self, q: u64, s: usize, result: Json) {
+    /// A part's result: kept, and the request answered (`join`, `end`) once none of its parts is
+    /// held or committed.
+    fn part_done(&mut self, q: u64, i: usize, result: Json) {
         let Some(p) = self.pending.get_mut(&q) else { return };
+        if p.parts[i].state == PartState::Done {
+            return;
+        }
+        p.parts[i].state = PartState::Done;
+        let s = p.parts[i].s;
         // A document asked of every library-reading session remembers its producer from the
-        // winning answer alone, below; any other answer names the documents it produced.
+        // winning answer alone (`join`); any other answer names the documents it produced.
         if p.document.is_none() {
             self.remember_documents(s, &result);
         }
-        let Some(p) = self.pending.get_mut(&q) else { return };
+        let p = self.pending.get_mut(&q).expect("live");
         p.results.push((s, result));
-        p.waiting -= 1;
-        if p.waiting > 0 {
+        if p.parts.iter().any(|x| x.state != PartState::Done) {
             return;
         }
-        let mut p = self.pending.remove(&q).expect("present");
+        let outcome = self.join(q);
+        self.end(q, outcome);
+    }
+
+    /// The answer of a request every part of which is done, from its parts' results.
+    fn join(&mut self, q: u64) -> Result<Json, (i64, &'static str)> {
+        let p = self.pending.get_mut(&q).expect("live");
+        let mut results = std::mem::take(&mut p.results);
+        // In the sessions' order, whatever order their answers came in: the joined answer is the
+        // same for every schedule, `merge` keeping the first session's of two items of one callable.
+        results.sort_by_key(|(s, _)| *s);
+        let (document, item) = (p.document.take(), p.item.take());
+        let (method, query, origin, version) = (p.method.clone(), std::mem::take(&mut p.query), p.origin.clone(), p.version);
         // A document asked of every library-reading session: the first that mapped it, in the
         // sessions' order, answers and is remembered for it and for the documents it named.
-        if let Some(path) = p.document.take() {
-            p.results.sort_by_key(|(s, _)| *s);
-            let first = p.results.iter().find(|(_, r)| !r.is_null()).map(|(s, _)| *s);
+        if let Some(path) = document {
+            let first = results.iter().find(|(_, r)| !r.is_null()).map(|(s, _)| *s);
             if let Some(s) = first {
                 // The producer, unless a live one stands: a retired one is replaced, so that
                 // the replacement is the session woken for the document from here on.
@@ -2616,34 +2766,31 @@ impl Server {
                         self.doc_sessions.insert(path, s);
                     }
                 }
-                p.results.retain(|(o, _)| *o == s);
-                let winner = p.results.first().map(|(_, r)| r.clone()).unwrap_or(Json::Null);
+                results.retain(|(o, _)| *o == s);
+                let winner = results.first().map(|(_, r)| r.clone()).unwrap_or(Json::Null);
                 self.remember_documents(s, &winner);
             }
         }
-        if p.origin.as_deref().is_some_and(|f| self.library_document_changed(f)) {
-            return match p.item {
-                Some(item) => respond(&p.id, item),
-                None if p.method == "textDocument/completion" => respond(&p.id, obj([("isIncomplete", false.into()), ("items", Json::Arr(Vec::new()))])),
-                None => respond(&p.id, Json::Null),
-            };
+        if origin.as_deref().is_some_and(|f| self.library_document_changed(f)) {
+            return Ok(match item {
+                Some(item) => item,
+                None if method == "textDocument/completion" => obj([("isIncomplete", false.into()), ("items", Json::Arr(Vec::new()))]),
+                None => Json::Null,
+            });
         }
-        let results: Vec<Json> = p.results.into_iter().map(|(_, r)| r).collect();
-        if let Some(item) = p.item {
-            return match resolved(item, results.into_iter().next().unwrap_or(Json::Null)) {
-                Ok(item) => respond(&p.id, item),
-                Err(why) => respond_error(&p.id, CONTENT_MODIFIED, why),
-            };
+        let results: Vec<Json> = results.into_iter().map(|(_, r)| r).collect();
+        if let Some(item) = item {
+            return resolved(item, results.into_iter().next().unwrap_or(Json::Null)).map_err(|why| (CONTENT_MODIFIED, why));
         }
-        let mut answer = merge(&p.method, &p.query, results);
-        if let Some(r) = &p.revision {
-            name_version(&mut answer, r.version);
+        let mut answer = merge(&method, &query, results);
+        if let Some(version) = version {
+            name_version(&mut answer, version);
         }
-        if p.method == "textDocument/signatureHelp" && !self.label_offsets {
+        if method == "textDocument/signatureHelp" && !self.label_offsets {
             label_texts(&mut answer);
         }
         self.respell(&mut answer);
-        respond(&p.id, answer);
+        Ok(answer)
     }
 }
 
@@ -2748,7 +2895,19 @@ fn diagnostic_at_start(msg: &str) -> Json {
     obj([("range", zero_range()), ("severity", 1u32.into()), ("source", "teq".into()), ("message", msg.into())])
 }
 
-/// The answers of several sessions as one: lists joined without repeats, the call hierarchy's
+/// Whether two call hierarchy items (prepared, or the callers and callees of calls) are one, whatever
+/// their `data`, compared in place: two sessions' items of one callable are one entry, the first
+/// session's in the sessions' order (`join`), and a digest in it of a text since replaced refuses its
+/// calls.
+fn same_item(a: Option<&Json>, b: Option<&Json>) -> bool {
+    match (a, b) {
+        (Some(Json::Obj(a)), Some(Json::Obj(b))) => a.iter().filter(|(k, _)| k != "data").eq(b.iter().filter(|(k, _)| k != "data")),
+        _ => a == b,
+    }
+}
+
+/// The answers of several sessions as one: lists joined without repeats (prepared call items by
+/// `same_item`), the call hierarchy's
 /// calls of one caller or callee joined into one entry, `workspace/symbol` ordered again and
 /// cut to its limit; for a single value the first that is not null.
 fn merge(method: &str, query: &str, results: Vec<Json>) -> Json {
@@ -2764,10 +2923,11 @@ fn merge(method: &str, query: &str, results: Vec<Json>) -> Json {
         "callHierarchy/outgoingCalls" => Some("to"),
         _ => None,
     };
+    let prepared = method == "textDocument/prepareCallHierarchy";
     for r in results {
         for item in r.arr() {
             if let Some(key) = key_field {
-                if let Some(existing) = out.iter_mut().find(|e| e.get(key) == item.get(key)) {
+                if let Some(existing) = out.iter_mut().find(|e| same_item(e.get(key), item.get(key))) {
                     if let (Json::Obj(fields), Some(ranges)) = (existing, item.get("fromRanges")) {
                         if let Some((_, Json::Arr(have))) = fields.iter_mut().find(|(k, _)| k == "fromRanges") {
                             for range in ranges.arr() {
@@ -2780,7 +2940,10 @@ fn merge(method: &str, query: &str, results: Vec<Json>) -> Json {
                     continue;
                 }
             }
-            if !out.contains(item) {
+            // A prepared item's `data` is its session's (its digest of the item's text), no part of its
+            // identity: one entry per callable, the first session's. Other results carry no such data.
+            let seen = if prepared { out.iter().any(|e| same_item(Some(e), Some(item))) } else { out.contains(item) };
+            if !seen {
                 out.push(item.clone());
             }
         }
@@ -2798,6 +2961,18 @@ fn merge(method: &str, query: &str, results: Vec<Json>) -> Json {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Two sessions' items of one callable, found in different texts of its file: one entry, the
+    /// first session's `data`, prepared or among a call's callers alike.
+    #[test]
+    fn items_of_one_callable_join_whatever_their_data() {
+        let item = |text: &str| Json::parse(&format!(r#"{{"name":"alpha","uri":"file:///w/Api.scala","selectionRange":{{"start":{{"line":1,"character":6}}}},"data":{{"text":"{text}"}}}}"#)).unwrap();
+        let joined = merge("textDocument/prepareCallHierarchy", "", vec![Json::Arr(vec![item("a")]), Json::Arr(vec![item("b")])]);
+        assert_eq!(joined, Json::Arr(vec![item("a")]));
+        let call = |text: &str| obj([("from", item(text)), ("fromRanges", Json::Arr(Vec::new()))]);
+        let joined = merge("callHierarchy/incomingCalls", "", vec![Json::Arr(vec![call("a")]), Json::Arr(vec![call("b")])]);
+        assert_eq!(joined, Json::Arr(vec![call("a")]));
+    }
 
     /// A Mill build's definition files and the inputs an export declares are build files whose change
     /// refreshes the stale warning, as an sbt build's are: watched by their globs, kept by
@@ -2866,8 +3041,8 @@ mod tests {
         let mut s = session(None, "/w/bare");
         assert_eq!(s.oldest_build(), None);
         let first = Instant::now();
-        let build = |id, sent, poll| Expect::Build(Sent { id, sent, plain: true, poll, carried: Vec::new(), typed: BTreeMap::new(), cancelled: false });
-        s.expect.push_back(Expect::Query(1, String::new()));
+        let build = |id, sent, poll| Expect::Build(Sent { id, seq: id, sent, plain: true, poll, carried: Vec::new(), typed: BTreeMap::new(), cancelled: false });
+        s.expect.push_back(Expect::Query(1, 0));
         s.expect.push_back(build(1, first, false));
         s.expect.push_back(build(2, first + Duration::from_millis(250), false));
         assert_eq!(s.oldest_build(), Some(first));
@@ -2878,7 +3053,7 @@ mod tests {
         s.expect.clear();
         s.expect.push_back(build(3, first, true));
         assert_eq!(s.oldest_build(), None);
-        s.expect.push_back(Expect::Query(2, String::new()));
+        s.expect.push_back(Expect::Query(2, 0));
         assert_eq!(s.oldest_build(), Some(first));
         s.expect.pop_back();
         s.generating = Some(0);

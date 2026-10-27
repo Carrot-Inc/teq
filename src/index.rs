@@ -135,6 +135,14 @@ impl Query {
     }
 }
 
+/// The identity of a text a query's position was given in, or its answer found in: `write::hash` of
+/// its bytes (eight at a time, the same on every machine), as sixteen hexadecimal digits. The language
+/// server names it for the text it turned a position into an offset in, and a session for the text its
+/// program answered on; where they differ, the answer is of another text (`src/lsp`, `ContentModified`).
+pub fn digest(text: &[u8]) -> String {
+    format!("{:016x}", crate::write::hash(text))
+}
+
 /// The starts of a text's lines, for turning offsets into positions.
 pub struct Lines<'t> {
     text: &'t str,

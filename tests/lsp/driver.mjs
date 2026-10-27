@@ -39,12 +39,22 @@ async function until(pred, timeout) {
 
 // --- The client ------------------------------------------------------------------------------
 
+/** Every client the scenarios start, whose responses the run checks after each scenario. */
+const clients = []
+
 class Client {
   constructor(cwd, env = {}, program = teq, args = ["lsp"]) {
     this.proc = spawn(program, args, { cwd, env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] })
     this.buffer = Buffer.alloc(0)
     this.nextId = 1
+    // Per id, the requests of that id waiting for their answers, in the order they were sent.
     this.waiting = new Map()
+    // Every response frame, and those that answered no request waiting: an id never asked, or
+    // asked once and answered twice.
+    this.responses = []
+    this.unexpected = []
+    this.reported = 0
+    clients.push(this)
     this.notifications = []
     this.requests = []
     this.orphanErrors = []
@@ -69,10 +79,14 @@ class Client {
     if (msg.id === null && msg.error) {
       this.orphanErrors.push(msg.error)
     } else if (msg.id !== undefined && msg.method === undefined) {
-      const w = this.waiting.get(msg.id)
-      if (w) {
-        this.waiting.delete(msg.id)
+      this.responses.push(msg)
+      const list = this.waiting.get(msg.id)
+      if (list?.length) {
+        const w = list.shift()
+        if (list.length === 0) this.waiting.delete(msg.id)
         w(msg)
+      } else {
+        this.unexpected.push(msg)
       }
     } else if (msg.id !== undefined) {
       this.requests.push(msg)
@@ -103,14 +117,28 @@ class Client {
   writeRaw(text) {
     this.proc.stdin.write(`Content-Length: ${Buffer.byteLength(text)}\r\n\r\n${text}`)
   }
-  async request(method, params, { timeout = 120000, pieces = 1 } = {}) {
-    const id = this.nextId++
-    const answer = new Promise((resolve) => this.waiting.set(id, resolve))
-    await this.write({ jsonrpc: "2.0", id, method, params }, pieces)
+  /** Sends a request without waiting for its answer: its id (`id`, a number or a string, else the
+   * next number), the promise of its answer and that of its write. */
+  send(method, params, { id = this.nextId++, pieces = 1 } = {}) {
+    const answer = new Promise((resolve) => {
+      const list = this.waiting.get(id) ?? []
+      list.push(resolve)
+      this.waiting.set(id, list)
+    })
+    const written = this.write({ jsonrpc: "2.0", id, method, params }, pieces)
+    return { id, answer, written }
+  }
+  async request(method, params, { timeout = 120000, pieces = 1, id } = {}) {
+    const sent = this.send(method, params, { id, pieces })
+    await sent.written
     const timer = sleep(timeout).then(() => ({ timeout: true }))
-    const msg = await Promise.race([answer, timer])
+    const msg = await Promise.race([sent.answer, timer])
     if (msg.timeout) throw new Error(`${method}: no answer in ${timeout} ms (stderr: ${this.stderr.slice(-400)})`)
     return msg
+  }
+  /** `$/cancelRequest` of the request `id`. */
+  cancel(id) {
+    this.notify("$/cancelRequest", { id })
   }
   async result(method, params, opts) {
     const msg = await this.request(method, params, opts)
@@ -141,6 +169,10 @@ class Client {
     return all.length ? all[all.length - 1].diagnostics : []
   }
 }
+
+/** A request of a method the server does not know: its error comes back once every message sent
+ * before it was handled, which orders a test's events without sleeping. */
+const sync = (c) => c.request("teq/sync", {}, { timeout: 20000 })
 
 // --- Positions ---------------------------------------------------------------------------------
 
@@ -2331,8 +2363,8 @@ async function overtaken() {
       { def, trace: traceOf(trace).slice(from) },
     )
 
-    // A query written behind a build that is then cancelled: the program it was to read is never
-    // made, so it is asked again after the next build, whose program answers it.
+    // A query behind a build that is then cancelled: held in the server, never written behind the
+    // build, it is asked after the next build, whose program answers it.
     writeFileSync(`${barrier}.start`, "")
     from = traceOf(trace).length
     const t8 = "object Edit:\n  def value: Int = 8\n  def twice: Int = value * 2\n"
@@ -2347,8 +2379,8 @@ async function overtaken() {
     const twice = await behindCancelled
     const order = traceOf(trace).slice(from).filter((e) => e.who === "server" && ["cancelled", "deferred"].includes(e.event)).map((e) => e.event)
     check(
-      "a query behind a cancelled build is asked again after the next build",
-      sameLocs(twice, [{ uri: uriOf(edit), range: rangeIn(t9, "def twice", 0, 4) }]) && same(order, ["cancelled", "deferred"]),
+      "a query behind a build that is then cancelled is answered by the next build's program",
+      sameLocs(twice, [{ uri: uriOf(edit), range: rangeIn(t9, "def twice", 0, 4) }]) && same(order, ["deferred", "cancelled"]),
       { twice, trace: traceOf(trace).slice(from) },
     )
 
@@ -2545,6 +2577,971 @@ async function completionRaces() {
   } finally {
     rmSync(`${barrier}.start`, { force: true })
   }
+}
+
+/** A hover and a signature help asked on a text whose build typed it and is then dropped for an edit
+ * after typing: the program that answers was typed from the text they were given on, so they answer
+ * that text's symbol at its range, never the later text's (the design pass's late-signature case). */
+async function lateAnswer() {
+  const root = join(work, "link/late-answer")
+  mkdirSync(root, { recursive: true })
+  const file = join(root, "Test.scala")
+  const s1 = 'object Test:\n  def pick(first: Int, second: String): Int = first\n  def body: Int =\n    val before = 1\n    pick(before, "x")\n'
+  const s2 = s1.replace("val before = 1", 'val other = "s"').replace('pick(before, "x")', "pick(1, other)")
+  const s3 = s2.replace("second: String", "second: Boolean").replace('val other = "s"', "val other = true")
+  writeFileSync(file, s1)
+  const trace = join(work, "late-answer-trace")
+  const barrier = join(work, "late-answer-barrier")
+  const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  let version = 1
+  const change = (text) => c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file), version: ++version }, contentChanges: [{ text }] })
+  const hover = (text) => c.request("textDocument/hover", { ...doc(file), position: positionAt(text, text.indexOf("val ") + 4) }, { timeout: 30000 })
+  const value = (a) => a.result?.contents?.value ?? ""
+  try {
+    const labels = { textDocument: { signatureHelp: { signatureInformation: { parameterInformation: { labelOffsetSupport: true } } } } }
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: labels })
+    c.notify("initialized", {})
+    c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version, text: s1 } })
+    await hover(s1)
+    writeFileSync(`${barrier}.answer`, "")
+    const from = traceOf(trace).length
+    change(s2)
+    const typed = await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "answer", "the build of s2 held before its answer")
+    const lateHover = hover(s2)
+    const lateSig = c.request("textDocument/signatureHelp", { ...doc(file), position: positionAt(s2, s2.indexOf("other)")) }, { timeout: 30000 })
+    await sync(c)
+    change(s3)
+    await traced(trace, from, (e) => e.event === "wrote-cancel" && e.id === typed.id, "the cancel the typing build ignores")
+    rmSync(`${barrier}.answer`)
+    const h = await lateHover
+    const g = await lateSig
+    await traced(trace, from, (e) => e.who === "server" && e.event === "dropped" && e.id === typed.id, "the build of s2 dropped")
+    check(
+      "a hover asked on a text whose build is dropped after typing: that text's symbol at its range, not the later text's",
+      value(h).includes("val other: String") && same(h.result?.range, rangeIn(s2, "other")) && !value(h).includes("Boolean"),
+      h,
+    )
+    const sig = g.result?.signatures?.[g.result.activeSignature ?? 0]
+    check("a signature help asked on that text: its signature, not the later text's", sig?.label === "pick(first: Int, second: String): Int" && g.result.activeParameter === 1, g)
+    const after = await hover(s3)
+    check("the next build's program answers the later text's symbol", value(after).includes("val other: Boolean"), after)
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the late answer scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    rmSync(`${barrier}.answer`, { force: true })
+  }
+}
+
+/** The server's events of the request part `q` in the trace from `from` on (`dispatched`, `wrote-query`, `replied`,
+ * `drained`, `deferred`, `request-cancelled`). */
+const partEvents = (trace, from, q, event) => traceOf(trace).slice(from).filter((e) => e.who === "server" && e.id === q && (event === undefined || e.event === event))
+/** The internal identity of the request a cancel ended, from the trace from `from` on. */
+async function cancelledQuery(trace, from) {
+  return (await traced(trace, from, (e) => e.who === "server" && e.event === "request-cancelled", "the request cancelled")).id
+}
+/** Whether a request part's command never reached its session's answers: never dispatched, or its answer drained, never replied. */
+const neverAnswered = (trace, from, q) => partEvents(trace, from, q, "replied").length === 0 && (partEvents(trace, from, q, "dispatched").length === 0 || partEvents(trace, from, q, "drained").length > 0)
+
+/** `$/cancelRequest` of requests asked of one session: -32800 at once while the session is held, nothing later for the
+ * id, with integer and string ids (an integer never matching a string); a cancel of an answered or unknown id answered
+ * nothing; a request reusing a live id refused; a cancel racing an edit of the document, in both orders; a cancel before
+ * and after the cancellation of the build the request waits behind. After each, a request with a distinct answer. */
+async function cancelRequests() {
+  const root = join(work, "link/cancel-requests")
+  mkdirSync(root, { recursive: true })
+  const file = join(root, "Test.scala")
+  let text = "object Test:\n  def alpha: Int = 1\n  def bravo: String = \"b\"\n  val use = alpha\n"
+  writeFileSync(file, text)
+  const trace = join(work, "cancel-requests-trace")
+  const barrier = join(work, "cancel-requests-barrier")
+  const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  let version = 1
+  let n = 1
+  const edit = () => {
+    text = text.replace(/def alpha: Int = \d+/, `def alpha: Int = ${++n}`)
+    c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file), version: ++version }, contentChanges: [{ text }] })
+  }
+  const held = (from, point) => traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === point, `a build held at ${point}`)
+  const releasedSince = (from) => traceOf(trace).slice(from).some((e) => e.who === "session" && e.event === "released")
+  const at = (needle, delta = 1) => ({ ...doc(file), position: positionAt(text, text.indexOf(needle) + delta) })
+  const hoverOf = async (needle, opts) => (await c.request("textDocument/hover", at(needle), opts)).result?.contents?.value ?? ""
+  const answered = (msg, timeout = 10000) => Promise.race([msg, sleep(timeout).then(() => ({ timeout: true }))])
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    c.notify("initialized", {})
+    c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version, text } })
+    await hoverOf("val use", 4)
+    // A completion and at once its cancel, the session held: -32800 while it is held, the completion's command never
+    // answered from the child, and a hover with another answer after it.
+    for (const id of [undefined, "completion-1"]) {
+      writeFileSync(`${barrier}.start`, "")
+      let from = traceOf(trace).length
+      edit()
+      await held(from, "start")
+      const sent = c.send("textDocument/completion", at("alpha\n", 3), { id })
+      c.cancel(sent.id)
+      const a = await answered(sent.answer)
+      check(`a completion cancelled at once (${typeof sent.id} id): -32800 while the session is held`, a.error?.code === -32800 && !releasedSince(from), a)
+      const q = await cancelledQuery(trace, from)
+      rmSync(`${barrier}.start`)
+      await traced(trace, from, (e) => e.who === "server" && e.event === "published", "the build published")
+      await sync(c)
+      check(`the cancelled completion (${typeof sent.id} id) was never answered from the session`, neverAnswered(trace, from, q), partEvents(trace, from, q))
+      check(`after the cancel (${typeof sent.id} id), a hover answers its own symbol`, (await hoverOf("bravo")).includes("bravo: String"))
+    }
+    // An integer id does not match a string one: the cancel of 7 leaves the request "7" to its answer.
+    {
+      writeFileSync(`${barrier}.start`, "")
+      const from = traceOf(trace).length
+      edit()
+      await held(from, "start")
+      const sent = c.send("textDocument/hover", at("bravo"), { id: "7" })
+      c.cancel(7)
+      await sync(c)
+      rmSync(`${barrier}.start`)
+      const a = await answered(sent.answer, 30000)
+      check("a cancel of the integer 7 leaves the request of the string id \"7\" to its answer", (a.result?.contents?.value ?? "").includes("bravo: String"), a)
+    }
+    // A cancel of an answered id and of an unknown id: no response, and the next request answered as before.
+    {
+      const sent = c.send("textDocument/hover", at("alpha"))
+      await sent.answer
+      c.cancel(sent.id)
+      c.cancel(987654)
+      c.cancel("never-asked")
+      await sync(c)
+      check("a cancel of an answered id and of unknown ids answers nothing, and the next hover answers", (await hoverOf("bravo")).includes("bravo: String"))
+    }
+    // A request with the id of one under way: refused at once, the one under way answered.
+    {
+      writeFileSync(`${barrier}.start`, "")
+      const from = traceOf(trace).length
+      edit()
+      await held(from, "start")
+      const first = c.send("textDocument/hover", at("bravo"), { id: 4242 })
+      const second = c.send("textDocument/hover", at("alpha"), { id: 4242 })
+      const early = await answered(first.answer)
+      check("a request with the id of one under way: -32600 at once, the session held", early.error?.code === -32600 && !releasedSince(from), early)
+      rmSync(`${barrier}.start`)
+      const late = await answered(second.answer, 30000)
+      check("the request under way under that id answered", (late.result?.contents?.value ?? "").includes("bravo: String"), late)
+    }
+    // A cancel racing an edit of the request's document, in both orders: -32800 either way, the edit ending nothing.
+    for (const order of ["cancel, then edit", "edit, then cancel"]) {
+      writeFileSync(`${barrier}.start`, "")
+      const from = traceOf(trace).length
+      edit()
+      await held(from, "start")
+      const sent = c.send("textDocument/hover", at("bravo"))
+      if (order === "cancel, then edit") {
+        c.cancel(sent.id)
+        edit()
+      } else {
+        edit()
+        c.cancel(sent.id)
+      }
+      const a = await answered(sent.answer)
+      check(`a cancel racing an edit (${order}): -32800`, a.error?.code === -32800, a)
+      rmSync(`${barrier}.start`)
+      await sync(c)
+      check(`after the race (${order}), a hover answers its own symbol`, (await hoverOf("bravo")).includes("bravo: String"))
+    }
+    // A cancel before the build the request waits behind is cancelled, and one after: neither request answered from
+    // the session, the next build published.
+    {
+      writeFileSync(`${barrier}.start`, "")
+      let from = traceOf(trace).length
+      edit()
+      const build = await held(from, "start")
+      const before = c.send("textDocument/definition", at("alpha\n", 3))
+      c.cancel(before.id)
+      const a = await answered(before.answer)
+      const q1 = await cancelledQuery(trace, from)
+      edit()
+      await traced(trace, from, (e) => e.event === "wrote-cancel" && e.id === build.id, "the build's cancel written")
+      rmSync(`${barrier}.start`)
+      await traced(trace, from, (e) => e.who === "server" && e.event === "cancelled" && e.id === build.id, "the build cancelled")
+      await traced(trace, from, (e) => e.who === "server" && e.event === "published" && e.id > build.id, "the next build published")
+      await sync(c)
+      check("a cancel before the build it waits behind is cancelled: -32800, never answered from the session", a.error?.code === -32800 && neverAnswered(trace, from, q1), { a, events: partEvents(trace, from, q1) })
+      // The build held at its start, its cancel written, then let go to its commit point, where it is cancelled; the
+      // next build, which types, held before its answer: the request is cancelled after the first build's cancellation.
+      writeFileSync(`${barrier}.start`, "")
+      writeFileSync(`${barrier}.answer`, "")
+      from = traceOf(trace).length
+      edit()
+      const second = await held(from, "start")
+      const after = c.send("textDocument/definition", at("alpha\n", 3))
+      await sync(c)
+      edit()
+      await traced(trace, from, (e) => e.event === "wrote-cancel" && e.id === second.id, "the build's cancel written")
+      rmSync(`${barrier}.start`)
+      await traced(trace, from, (e) => e.who === "server" && e.event === "cancelled" && e.id === second.id, "the build cancelled at its commit point")
+      await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "answer" && e.id > second.id, "the next build held before its answer")
+      c.cancel(after.id)
+      const b = await answered(after.answer)
+      const q2 = await cancelledQuery(trace, from)
+      rmSync(`${barrier}.answer`)
+      await traced(trace, from, (e) => e.who === "server" && e.event === "published" && e.id > second.id, "the next build published")
+      await sync(c)
+      check("a cancel after the build it waited behind was cancelled: -32800, never answered from the session", b.error?.code === -32800 && neverAnswered(trace, from, q2), { b, events: partEvents(trace, from, q2) })
+      check("after both, a hover answers its own symbol", (await hoverOf("bravo")).includes("bravo: String"))
+    }
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the cancel requests scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    for (const point of ["start", "commit", "answer", "query"]) rmSync(`${barrier}.${point}`, { force: true })
+  }
+}
+
+/** A request asked of two sessions, cancelled with one part received and one held behind the other session's builds:
+ * -32800 at once and the held part never asked; a references query cancelled while its follow-up is held in the second
+ * session: no late part. Each session drained after with a request of a distinct answer. */
+async function cancelSessions() {
+  const root = join(work, "link/cancel-sessions")
+  mkdirSync(root, { recursive: true })
+  const shared = join(root, "Shared.scala")
+  const useA = join(root, "UseA.scala")
+  const useB = join(root, "UseB.scala")
+  const decl = "object Api:\n  def alpha: Int = 1\n  def bravo: Int = 2\n"
+  const ta = "object UseA:\n  val x = Api.alpha\n"
+  let tb = "object UseB:\n  def right: Int = Api.alpha\n  def wrong: Int = Api.bravo\n"
+  for (const [f, t] of [[shared, decl], [useA, ta], [useB, tb]]) writeFileSync(f, t)
+  writeExport(join(root, "teq.lock"), { a: { platform: "js", sources: ["Shared.scala", "UseA.scala"] }, b: { platform: "js", sources: ["Shared.scala", "UseB.scala"] } })
+  const trace = join(work, "cancel-sessions-trace")
+  const barrier = join(work, "cancel-sessions-barrier")
+  const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  let vb = 1
+  let k = 0
+  const editB = () => {
+    tb = tb.replace(/\n(\/\/ edit \d+\n)?$/, `\n// edit ${++k}\n`)
+    c.notify("textDocument/didChange", { textDocument: { uri: uriOf(useB), version: ++vb }, contentChanges: [{ text: tb }] })
+  }
+  const position = (f, t, needle, delta = 1) => ({ ...doc(f), position: positionAt(t, t.indexOf(needle) + delta) })
+  const hoverOf = async (f, t, needle) => (await c.request("textDocument/hover", position(f, t, needle))).result?.contents?.value ?? ""
+  const answered = (msg, timeout = 10000) => Promise.race([msg, sleep(timeout).then(() => ({ timeout: true }))])
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    c.notify("initialized", {})
+    for (const [f, t] of [[useA, ta], [useB, tb], [shared, decl]]) c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(f), languageId: "scala", version: 1, text: t } })
+    await hoverOf(useA, ta, "alpha")
+    await hoverOf(useB, tb, "alpha")
+    const buildB = traceOf(trace).find((e) => e.who === "server" && e.event === "build" && e.rest[0] === "b/compile")
+    const pidB = traceOf(trace).find((e) => e.who === "session" && e.event === "start" && e.id === buildB.id).pid
+    // Holds the second session's build of an edit at its start, with another edit waiting behind it.
+    const holdB = async (from) => {
+      writeFileSync(`${barrier}.start`, String(pidB))
+      editB()
+      await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.pid === pidB && e.rest[0] === "start", "the second session's build held")
+      editB()
+      await sync(c)
+    }
+    const releaseB = async (from) => {
+      rmSync(`${barrier}.start`)
+      await traced(trace, from, (e) => e.who === "server" && e.event === "published" && traceOf(trace).some((b) => b.who === "server" && b.event === "build" && b.id === e.id && b.rest[0] === "b/compile"), "the second session's build published", 30000)
+      await sync(c)
+    }
+    // One part received, one held: cancelled.
+    {
+      const from = traceOf(trace).length
+      await holdB(from)
+      const sent = c.send("textDocument/hover", position(shared, decl, "alpha"))
+      const replied = await traced(trace, from, (e) => e.who === "server" && e.event === "replied", "the first session's part replied")
+      await traced(trace, from, (e) => e.who === "server" && e.event === "deferred" && e.id === replied.id, "the second session's part held")
+      c.cancel(sent.id)
+      const a = await answered(sent.answer)
+      check("a hover asked of two sessions, one part received and one held: -32800 at once", a.error?.code === -32800, a)
+      await releaseB(from)
+      const toB = partEvents(trace, from, replied.id, "dispatched").filter((e) => e.rest[0] === "b/compile")
+      check("the held part of the cancelled hover never asked of its session", toB.length === 0, partEvents(trace, from, replied.id))
+      check("after the cancel, each session answers a hover of its own", (await hoverOf(useA, ta, "x =")).includes("x: Int") && (await hoverOf(useB, tb, "wrong")).includes("wrong: Int"))
+    }
+    // A references query whose follow-up to the second session is held: cancelled, no late part.
+    {
+      const from = traceOf(trace).length
+      await holdB(from)
+      const sent = c.send("textDocument/references", { ...position(useA, ta, "alpha"), context: { includeDeclaration: true } })
+      const replied = await traced(trace, from, (e) => e.who === "server" && e.event === "replied", "the first session's references replied")
+      await traced(trace, from, (e) => e.who === "server" && e.event === "deferred" && e.id === replied.id, "the follow-up held for the second session")
+      c.cancel(sent.id)
+      const a = await answered(sent.answer)
+      check("a references query cancelled while its follow-up is held: -32800 at once", a.error?.code === -32800, a)
+      await releaseB(from)
+      const toB = partEvents(trace, from, replied.id, "dispatched").filter((e) => e.rest[0] === "b/compile")
+      check("the cancelled follow-up never asked of its session", toB.length === 0, partEvents(trace, from, replied.id))
+      const refs = await c.result("textDocument/references", { ...position(useA, ta, "alpha"), context: { includeDeclaration: false } })
+      check("after the cancel, references of the same symbol answer both sessions' uses", sameLocs(refs, [at(useA, "alpha"), { uri: uriOf(useB), range: rangeIn(tb, "alpha") }]), refs)
+    }
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the cancel sessions scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    rmSync(`${barrier}.start`, { force: true })
+  }
+}
+
+/** A query held in its session's child when the child dies: answered nothing, once, and a later cancel of it passed over;
+ * the child started anew answers the next request. A query cancelled while held in a child that then dies: -32800 and
+ * nothing more. */
+async function cancelTeardown() {
+  const root = join(work, "link/cancel-teardown")
+  mkdirSync(root, { recursive: true })
+  const file = join(root, "Test.scala")
+  const text = "object Test:\n  def alpha: Int = 1\n  def bravo: String = \"b\"\n"
+  writeFileSync(file, text)
+  const trace = join(work, "cancel-teardown-trace")
+  const barrier = join(work, "cancel-teardown-barrier")
+  const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  const at = (needle) => ({ ...doc(file), position: positionAt(text, text.indexOf(needle) + 1) })
+  const answered = (msg, timeout = 15000) => Promise.race([msg, sleep(timeout).then(() => ({ timeout: true }))])
+  const sessionPid = () => traceOf(trace).filter((e) => e.who === "session" && e.event === "start").pop().pid
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    c.notify("initialized", {})
+    c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version: 1, text } })
+    await c.result("textDocument/hover", at("alpha"))
+    // A query held in the child, which then dies.
+    let pid = sessionPid()
+    writeFileSync(`${barrier}.query`, String(pid))
+    let from = traceOf(trace).length
+    const lost = c.send("textDocument/hover", at("bravo"))
+    await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "query" && e.pid === pid, "the query held in the child")
+    let mark = c.mark()
+    process.kill(pid, "SIGKILL")
+    const a = await answered(lost.answer)
+    const ended = () => until(() => c.diagnosticsSince(mark).some((p) => p.diagnostics.some((x) => x.message.includes("session ended"))), 15000)
+    await ended()
+    check("a query whose session's child dies under it: answered nothing, once", a.result === null && !a.error, a)
+    c.cancel(lost.id)
+    await sync(c)
+    const fresh = await c.request("textDocument/hover", at("bravo"))
+    check("the child started anew answers the next hover", (fresh.result?.contents?.value ?? "").includes("bravo: String"), fresh)
+    // A query cancelled while held in a child that then dies: -32800, nothing more.
+    pid = sessionPid()
+    writeFileSync(`${barrier}.query`, String(pid))
+    from = traceOf(trace).length
+    const cancelled = c.send("textDocument/hover", at("alpha"))
+    await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "query" && e.pid === pid, "the query held in the child")
+    c.cancel(cancelled.id)
+    const b = await answered(cancelled.answer)
+    check("a query cancelled while held in its child: -32800 at once", b.error?.code === -32800, b)
+    mark = c.mark()
+    process.kill(pid, "SIGKILL")
+    check("the child's death told", await ended())
+    const again = await c.request("textDocument/hover", at("alpha"))
+    check("after the child's death, the child started anew answers the next hover", (again.result?.contents?.value ?? "").includes("alpha: Int"), again)
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the cancel teardown scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    rmSync(`${barrier}.query`, { force: true })
+  }
+}
+
+/** Position queries asked on a text whose build is held, then an edit above their positions: where the build is cancelled
+ * before typing, the program that answers is the edit's and every one of them answers `ContentModified`, never the symbol
+ * at the old offset in the newer text; where the build typed, the program that answers is the one of the text they were
+ * given on, and each answers that text's symbol (the ruling of 2026-10-27). */
+async function positionRevisions() {
+  const root = join(work, "link/position-revisions")
+  mkdirSync(root, { recursive: true })
+  const file = join(root, "Test.scala")
+  const base = (n) => `object Test:\n  val alpha: Int = ${n}\n  def pick(first: Int, second: String): Int = first\n  val r = pick(alpha, "x")\n`
+  const above = (t) => t.replace("  val alpha", '  val bravo: String = "b"\n  def pick2(a: Boolean): Boolean = a\n  val alpha')
+  writeFileSync(file, base(0))
+  const trace = join(work, "position-revisions-trace")
+  const barrier = join(work, "position-revisions-barrier")
+  const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  let version = 1
+  const change = (text) => c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file), version: ++version }, contentChanges: [{ text }] })
+  const where = (text, needle, delta = 1) => ({ ...doc(file), position: positionAt(text, text.indexOf(needle) + delta) })
+  // Every position method at `alpha` (its use in the call for definition and references) and inside the call.
+  const ask = (text) => ({
+    hover: c.request("textDocument/hover", where(text, "alpha")),
+    definition: c.request("textDocument/definition", where(text, "pick(alpha", 6)),
+    references: c.request("textDocument/references", { ...where(text, "pick(alpha", 6), context: { includeDeclaration: true } }),
+    completion: c.request("textDocument/completion", where(text, "pick(alpha", 7)),
+    signature: c.request("textDocument/signatureHelp", where(text, '"x"', 0)),
+  })
+  const settle = async (asked) => Object.fromEntries(await Promise.all(Object.entries(asked).map(async ([k, p]) => [k, await p])))
+  try {
+    const labels = { textDocument: { signatureHelp: { signatureInformation: { parameterInformation: { labelOffsetSupport: true } } } } }
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: labels })
+    c.notify("initialized", {})
+    c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version, text: base(0) } })
+    await c.result("textDocument/hover", where(base(0), "alpha"))
+    // The build of the queries' text held at its start, an edit above their positions cancelling it.
+    writeFileSync(`${barrier}.start`, "")
+    let from = traceOf(trace).length
+    const t1 = base(1)
+    change(t1)
+    const build = await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "start", "the build held at its start")
+    const before = ask(t1)
+    await sync(c)
+    change(above(t1))
+    await traced(trace, from, (e) => e.event === "wrote-cancel" && e.id === build.id, "the cancel written")
+    rmSync(`${barrier}.start`)
+    const cancelled = await settle(before)
+    await traced(trace, from, (e) => e.who === "server" && e.event === "cancelled" && e.id === build.id, "the build cancelled before typing")
+    for (const [method, a] of Object.entries(cancelled)) check(`${method} behind a build an edit above it cancels: ContentModified, never the newer text's symbol`, a.error?.code === -32801, a)
+    // The build of the queries' text held after typing, the same edit after it: answered on their own text.
+    writeFileSync(`${barrier}.answer`, "")
+    from = traceOf(trace).length
+    const t2 = base(2)
+    change(t2)
+    const typed = await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "answer", "the build held before its answer")
+    const after = ask(t2)
+    await sync(c)
+    change(above(t2))
+    await traced(trace, from, (e) => e.event === "wrote-cancel" && e.id === typed.id, "the cancel the typing build ignores")
+    rmSync(`${barrier}.answer`)
+    const own = await settle(after)
+    const value = (a) => a.result?.contents?.value ?? ""
+    check("hover asked on a typed text an edit then follows: that text's symbol", value(own.hover).includes("alpha: Int") && same(own.hover.result?.range, rangeIn(t2, "alpha")), own.hover)
+    check("definition asked on that text: its declaration in that text", sameLocs(own.definition.result, [{ uri: uriOf(file), range: rangeIn(t2, "alpha") }]), own.definition)
+    check("references asked on that text: its occurrences in that text", sameLocs(own.references.result, [{ uri: uriOf(file), range: rangeIn(t2, "alpha") }, { uri: uriOf(file), range: rangeIn(t2, "alpha", 1) }]), own.references)
+    check("completion asked on that text: its items", (own.completion.result?.items ?? []).some((i) => i.label === "alpha") && !(own.completion.result?.items ?? []).some((i) => i.label === "bravo"), own.completion.result?.items?.length)
+    check("signature help asked on that text: its signature", own.signature.result?.signatures?.[0]?.label === "pick(first: Int, second: String): Int", own.signature)
+    // And the newer text answers its own.
+    const t3 = above(t2)
+    check("the newer text's hover answers its symbol", value(await c.request("textDocument/hover", where(t3, "bravo"))).includes("bravo: String"))
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the position revisions scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    for (const point of ["start", "answer"]) rmSync(`${barrier}.${point}`, { force: true })
+  }
+}
+
+/** A references query whose first session answered on a declaration's text another session has since replaced: its
+ * follow-up there answers `ContentModified`, never the other session's uses of whatever stands at the old offset; a call
+ * hierarchy item prepared before the declarations were reordered: its calls answer `ContentModified`, never the callers
+ * of the symbol now at its position; an item prepared after answers its callers (the design pass's follow-up probe). */
+async function followRevisions() {
+  const root = join(work, "link/follow-revisions")
+  mkdirSync(root, { recursive: true })
+  const shared = join(root, "Shared.scala")
+  const useA = join(root, "UseA.scala")
+  const useB = join(root, "UseB.scala")
+  const decl = "object Api:\n  def alpha: Int = 1\n  def bravo: Int = 2\n"
+  const ta = "object UseA:\n  val x = Api.alpha\n"
+  const tb = "object UseB:\n  def right: Int = Api.alpha\n  def wrong: Int = Api.bravo\n"
+  for (const [f, t] of [[shared, decl], [useA, ta], [useB, tb]]) writeFileSync(f, t)
+  writeExport(join(root, "teq.lock"), { a: { platform: "js", sources: ["Shared.scala", "UseA.scala"] }, b: { platform: "js", sources: ["Shared.scala", "UseB.scala"] } })
+  const trace = join(work, "follow-revisions-trace")
+  const barrier = join(work, "follow-revisions-barrier")
+  const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  const change = (f, text, version) => c.notify("textDocument/didChange", { textDocument: { uri: uriOf(f), version }, contentChanges: [{ text }] })
+  const where = (f, t, needle, delta = 1) => ({ ...doc(f), position: positionAt(t, t.indexOf(needle) + delta) })
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    c.notify("initialized", {})
+    for (const [f, t] of [[useA, ta], [useB, tb], [shared, decl]]) c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(f), languageId: "scala", version: 1, text: t } })
+    await c.result("textDocument/hover", where(useA, ta, "alpha"))
+    await c.result("textDocument/hover", where(useB, tb, "alpha"))
+    const prepared = (await c.result("textDocument/prepareCallHierarchy", where(shared, decl, "alpha")))?.[0]
+    check("a prepared item names the text it was found in", typeof prepared?.data?.text === "string", prepared)
+    const buildA = traceOf(trace).find((e) => e.who === "server" && e.event === "build" && e.rest[0] === "a/compile")
+    const pidA = traceOf(trace).find((e) => e.who === "session" && e.event === "start" && e.id === buildA.id).pid
+    writeFileSync(`${barrier}.answer`, String(pidA))
+    const from = traceOf(trace).length
+    const ta2 = ta + "// edit A\n"
+    change(useA, ta2, 2)
+    await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.pid === pidA && e.rest[0] === "answer", "the first session held before its answer")
+    const refs = c.request("textDocument/references", { ...where(useA, ta2, "alpha"), context: { includeDeclaration: true } })
+    await sync(c)
+    const reordered = "object Api:\n  def bravo: Int = 2\n  def alpha: Int = 1\n"
+    change(shared, reordered, 2)
+    const buildB = await traced(trace, from, (e) => e.who === "server" && e.event === "build" && e.rest[0] === "b/compile", "the second session's build of the reorder")
+    await traced(trace, from, (e) => e.who === "server" && e.event === "published" && e.id === buildB.id, "the second session's reorder published")
+    rmSync(`${barrier}.answer`)
+    const a = await refs
+    check("references whose follow-up meets a declaration reordered in its session: ContentModified, never the uses of the symbol now at the old offset", a.error?.code === -32801, a)
+    await sync(c)
+    await c.result("textDocument/hover", where(useA, ta2, "alpha"))
+    const stale = await c.request("callHierarchy/incomingCalls", { item: prepared })
+    check("the calls of an item prepared before its document was reordered: ContentModified, never the callers of the symbol now at its position", stale.error?.code === -32801, stale)
+    const fresh = (await c.result("textDocument/prepareCallHierarchy", where(shared, reordered, "alpha")))?.[0]
+    const calls = await c.result("callHierarchy/incomingCalls", { item: fresh })
+    const callers = (calls ?? []).map((x) => x.from.name).sort()
+    check("an item prepared after: its callers in both sessions", same(callers, ["right", "x"]), calls)
+    const now = await c.result("textDocument/references", { ...where(useA, ta2, "alpha"), context: { includeDeclaration: false } })
+    check("references asked again: both sessions' uses", sameLocs(now, [{ uri: uriOf(useA), range: rangeIn(ta2, "alpha") }, { uri: uriOf(useB), range: rangeIn(tb, "alpha") }]), now)
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the follow revisions scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    rmSync(`${barrier}.answer`, { force: true })
+  }
+}
+
+/** A query on a file the client has not opened, its offset taken in the disk's text: answered `ContentModified` when the
+ * session that answers typed another text of it (an edit on disk after the query, read by the build of every file it
+ * waited for; or one before it the session had not read), and the next request, asked once more, answered on the disk's
+ * text, which that answer had the session read (the design pass's closed-file probe). */
+async function closedRevision() {
+  const root = join(work, "link/closed-revision")
+  mkdirSync(root, { recursive: true })
+  const file = join(root, "Closed.scala")
+  const helper = join(root, "Helper.scala")
+  const old = "object Closed:\n  val alpha: Int = 1\n"
+  const ht = "object Helper:\n  val n: Int = 1\n"
+  writeFileSync(file, old)
+  writeFileSync(helper, ht)
+  const trace = join(work, "closed-revision-trace")
+  const barrier = join(work, "closed-revision-barrier")
+  const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  const watched = () => c.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: uriOf(file), type: 2 }] })
+  const hover = (text, needle) => c.request("textDocument/hover", { ...doc(file), position: positionAt(text, text.indexOf(needle) + 1) })
+  const value = (a) => a.result?.contents?.value ?? ""
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    c.notify("initialized", {})
+    c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(helper), languageId: "scala", version: 1, text: ht } })
+    check("a file not open: its symbol", value(await hover(old, "alpha")).includes("alpha: Int"))
+    // The query waits behind a held build for the build of every file; the file changes on disk meanwhile.
+    writeFileSync(`${barrier}.start`, "")
+    const from = traceOf(trace).length
+    c.notify("textDocument/didChange", { textDocument: { uri: uriOf(helper), version: 2 }, contentChanges: [{ text: ht.replace("= 1", "= 2") }] })
+    await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "start", "the build held at its start")
+    watched()
+    const stale = hover(old, "alpha")
+    await sync(c)
+    const newer = old.replace("  val alpha", '  val bravo: String = "b"\n  val alpha')
+    writeFileSync(file, newer)
+    watched()
+    await sync(c)
+    rmSync(`${barrier}.start`)
+    const a = await stale
+    check("a query on a file not open whose text changed on disk before its answer: ContentModified, never the newer text's symbol", a.error?.code === -32801, a)
+    check("asked again, the disk's text answers", value(await hover(newer, "alpha")).includes("alpha: Int"))
+    // An edit on disk no notification tells: the session has not read it; asked once, ContentModified, and the build of
+    // every file that answer asks for has it read for the request asked again.
+    const newest = newer.replace("  val bravo", "  val charlie: Long = 3L\n  val bravo")
+    writeFileSync(file, newest)
+    const unread = await hover(newest, "bravo")
+    check("a query on a file not open changed on disk unread by its session: ContentModified", unread.error?.code === -32801, unread)
+    check("asked again, the build that answer asked for has the disk's text read", value(await hover(newest, "bravo")).includes("bravo: String"))
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the closed revision scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    rmSync(`${barrier}.start`, { force: true })
+  }
+}
+
+/** A burst of 20 completions, each cancelled by the next, with the session's committed work held: the 19 cancelled
+ * answer -32800 at once and only the last is written to the session. With the session idle and the first's answer held
+ * in the child: the first and the last are written, no other. The session answers a hover of its own after each. */
+async function cancelBurst() {
+  const root = join(work, "link/cancel-burst")
+  mkdirSync(root, { recursive: true })
+  const file = join(root, "Test.scala")
+  let text = "object Test:\n  def alpha: Int = 1\n  def bravo: String = \"b\"\n  val use = alpha\n"
+  writeFileSync(file, text)
+  const trace = join(work, "cancel-burst-trace")
+  const barrier = join(work, "cancel-burst-barrier")
+  const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  let version = 1
+  const at = (needle, delta = 1) => ({ ...doc(file), position: positionAt(text, text.indexOf(needle) + delta) })
+  const answered = (msg, timeout = 15000) => Promise.race([msg, sleep(timeout).then(() => ({ timeout: true }))])
+  const written = (from) => traceOf(trace).slice(from).filter((e) => e.who === "server" && e.event === "wrote-query")
+  const releasedSince = (from) => traceOf(trace).slice(from).some((e) => e.who === "session" && e.event === "released")
+  // Twenty completions, each cancelling the one before: the last's answer, and whether the 19 others answered -32800.
+  const burst = async () => {
+    const sent = []
+    for (let k = 0; k < 20; k++) {
+      sent.push(c.send("textDocument/completion", at("alpha\n", 3)))
+      if (k > 0) c.cancel(sent[k - 1].id)
+    }
+    const cancelled = await Promise.all(sent.slice(0, 19).map((s) => answered(s.answer)))
+    return { last: sent[19], cancelled: cancelled.every((a) => a.error?.code === -32800), early: !releasedSince(fromBurst) }
+  }
+  let fromBurst = 0
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    c.notify("initialized", {})
+    c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version, text } })
+    await c.result("textDocument/hover", at("bravo"))
+    // The session's committed work held: a build held at its start.
+    writeFileSync(`${barrier}.start`, "")
+    fromBurst = traceOf(trace).length
+    text = text.replace("= 1", "= 2")
+    c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file), version: ++version }, contentChanges: [{ text }] })
+    await traced(trace, fromBurst, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "start", "the build held at its start")
+    let b = await burst()
+    check("a burst of 20 completions behind a held build, each cancelled by the next: 19 answer -32800 while it is held", b.cancelled && b.early)
+    rmSync(`${barrier}.start`)
+    let last = await answered(b.last.answer, 30000)
+    check("the burst's last completion answered", (last.result?.items ?? []).some((i) => i.label === "alpha"), last)
+    check("of the burst behind a held build, only the last written to the session", written(fromBurst).length === 1, written(fromBurst))
+    check("after the burst, the session answers a hover of its own", ((await c.result("textDocument/hover", at("bravo")))?.contents?.value ?? "").includes("bravo: String"))
+    // The session idle, the first completion's answer held in the child.
+    const pid = traceOf(trace).filter((e) => e.who === "session" && e.event === "start").pop().pid
+    writeFileSync(`${barrier}.query`, String(pid))
+    fromBurst = traceOf(trace).length
+    b = await burst()
+    check("a burst of 20 completions on an idle session, the first held in it, each cancelled by the next: 19 answer -32800 while it is held", b.cancelled && b.early)
+    rmSync(`${barrier}.query`)
+    last = await answered(b.last.answer, 30000)
+    check("that burst's last completion answered", (last.result?.items ?? []).some((i) => i.label === "alpha"), last)
+    check("of the burst on an idle session, only the first and the last written to it", written(fromBurst).length === 2, written(fromBurst))
+    check("after it, the session answers a hover of its own", ((await c.result("textDocument/hover", at("bravo")))?.contents?.value ?? "").includes("bravo: String"))
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the cancel burst scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    for (const point of ["start", "query"]) rmSync(`${barrier}.${point}`, { force: true })
+  }
+}
+
+/** An edit every 50 ms for 3 s, each moving the lines above the asked symbol, with a hover and a completion asked on the
+ * edited file every 200 ms: each request answered once, its own text's symbol or `ContentModified`, and none left once
+ * the edits stop. Then the same while every build is held and cancelled before typing: the requests' parts stay held in
+ * the server, none written, until a build types. The counts go to the log (`edit stream:`). */
+async function editStream() {
+  const root = join(work, "link/edit-stream")
+  mkdirSync(root, { recursive: true })
+  const file = join(root, "Test.scala")
+  const textOf = (n) => `object Test:\n  // ${"x".repeat(n % 9)}\n${n % 2 ? "  val pad: Int = 0\n" : ""}  val bravo: String = "b"\n  val alpha: Int = ${n}\n  val use = alpha\n`
+  writeFileSync(file, textOf(0))
+  const trace = join(work, "edit-stream-trace")
+  const barrier = join(work, "edit-stream-barrier")
+  const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  let n = 0
+  let text = textOf(0)
+  const asked = []
+  const edit = () => {
+    text = textOf(++n)
+    c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file), version: n + 1 }, contentChanges: [{ text }] })
+  }
+  const ask = (phase) => {
+    const t = text
+    asked.push({ phase, kind: "hover", answer: c.send("textDocument/hover", { ...doc(file), position: positionAt(t, t.indexOf("val alpha") + 5) }).answer })
+    asked.push({ phase, kind: "completion", answer: c.send("textDocument/completion", { ...doc(file), position: positionAt(t, t.indexOf("use = al") + 8) }).answer })
+  }
+  // Edits every 50 ms and requests every 200 ms until `stop` holds.
+  const stream = async (phase, stop) => {
+    for (let k = 0; !stop(); k++) {
+      edit()
+      if (k % 4 === 0) ask(phase)
+      await sleep(50)
+    }
+  }
+  const outcome = (a) => (a.timeout ? "left" : a.error?.code === -32801 ? "modified" : a.error ? `error ${a.error.code}` : "answered")
+  const right = (kind, a) => (kind === "hover" ? (a.result?.contents?.value ?? "").includes("alpha: Int") : (a.result?.items ?? []).some((i) => i.label === "alpha"))
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    c.notify("initialized", {})
+    c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version: 1, text } })
+    await c.result("textDocument/hover", { ...doc(file), position: positionAt(text, text.indexOf("val alpha") + 5) })
+    const settle = (list) => Promise.all(list.map(async (r) => ({ ...r, a: await Promise.race([r.answer, sleep(60000).then(() => ({ timeout: true }))]) })))
+    const start = Date.now()
+    await stream("free", () => Date.now() - start >= 3000)
+    const free = await settle(asked.splice(0))
+    // The session idle again, its last build answered, before every build is held.
+    await c.result("textDocument/hover", { ...doc(file), position: positionAt(text, text.indexOf("val alpha") + 5) })
+    // Every build held and cancelled before typing: held at its commit point while edits come, then let go to it while
+    // the next is held at its start, three times.
+    const from = traceOf(trace).length
+    writeFileSync(`${barrier}.commit`, "")
+    let stop = false
+    const running = stream("cancelled", () => stop)
+    let cancelledBuilds = 0
+    for (let cycle = 0; cycle < 3; cycle++) {
+      const heldAt = await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "commit" && !traceOf(trace).slice(from).some((x) => x.who === "server" && x.event === "cancelled" && x.id === e.id), "a build held at its commit point")
+      await sleep(150)
+      writeFileSync(`${barrier}.start`, "")
+      rmSync(`${barrier}.commit`)
+      await traced(trace, from, (e) => e.who === "server" && e.event === "cancelled" && e.id === heldAt.id, "the held build cancelled at its commit point")
+      cancelledBuilds++
+      await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "start" && e.id > heldAt.id, "the next build held at its start")
+      writeFileSync(`${barrier}.commit`, "")
+      rmSync(`${barrier}.start`)
+    }
+    const during = traceOf(trace).slice(from)
+    const heldParts = new Set(during.filter((e) => e.who === "server" && e.event === "deferred").map((e) => e.id)).size
+    const written = during.filter((e) => e.who === "server" && e.event === "wrote-query").length
+    const typed = during.filter((e) => e.who === "session" && e.event === "answered").length
+    stop = true
+    await running
+    rmSync(`${barrier}.commit`, { force: true })
+    rmSync(`${barrier}.start`, { force: true })
+    check("while every build is cancelled before typing, the requests' parts are held in the server and none is written", cancelledBuilds === 3 && typed === 0 && heldParts > 0 && written === 0, { cancelledBuilds, typed, heldParts, written })
+    // Once the edits stop, every request answered once: its own text's symbol, or ContentModified.
+    const settled = [...free, ...(await settle(asked.splice(0)))]
+    const counts = {}
+    for (const r of settled) {
+      const key = `${r.phase} ${r.kind} ${outcome(r.a)}`
+      counts[key] = (counts[key] ?? 0) + 1
+    }
+    console.log(`edit stream: ${n} edits, ${settled.length} requests, while every build is cancelled before typing ${heldParts} parts held and ${written} written; ${JSON.stringify(counts)}`)
+    const wrong = settled.filter((r) => outcome(r.a) !== "modified" && !(outcome(r.a) === "answered" && right(r.kind, r.a)))
+    check("under an edit every 50 ms, every hover and completion answered once, its own text's symbol or ContentModified, none left", wrong.length === 0, wrong.map((r) => ({ phase: r.phase, kind: r.kind, a: r.a })))
+    check("after the edits, the session answers a hover of its own", ((await c.result("textDocument/hover", { ...doc(file), position: positionAt(text, text.indexOf("val bravo") + 5) }))?.contents?.value ?? "").includes("bravo: String"))
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the edit stream scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    for (const point of ["start", "commit"]) rmSync(`${barrier}.${point}`, { force: true })
+  }
+}
+
+/** A hover on a std document altered on disk, held in the session while the file is restored: the session resolves the
+ * position in the embedded text, not the one it was given in, and the hover answers `ContentModified`, the first query
+ * into that std file (its file not yet entered) as the next (the review pass's schedule); the restored document then
+ * answers its own symbol. */
+async function coldStd() {
+  const root = join(work, "link/cold-std")
+  mkdirSync(root, { recursive: true })
+  const cache = join(root, "cache")
+  const trace = join(work, "cold-std-trace")
+  const barrier = join(work, "cold-std-barrier")
+  const file = join(root, "Test.scala")
+  const app = "object Test:\n  val xs = List(1)\n"
+  writeFileSync(file, app)
+  writeExport(join(root, "teq.lock"), { app: { platform: "js", sources: ["Test.scala"] } })
+  const c = new Client(root, { TEQ_CACHE_DIR: cache, TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    c.notify("initialized", {})
+    const loc = (await c.result("textDocument/definition", { ...doc(file), position: positionAt(app, app.indexOf("List(") + 1) }))[0]
+    const stdDir = fileURLToPath(loc.uri).replace(/(\/std-[^/]+)\/.*$/, "$1")
+    const path = join(stdDir, "javalib/atomic.scala")
+    const text = readFileSync(join(here, "../../std/javalib/atomic.scala"), "utf8")
+    const altered = text.replaceAll("AtomicInteger", "AtomicChanged")
+    const outcomes = {}
+    for (const kind of ["cold", "warm"]) {
+      mkdirSync(dirname(path), { recursive: true })
+      if (existsSync(path)) chmodSync(path, 0o644)
+      writeFileSync(path, altered)
+      writeFileSync(`${barrier}.query`, "")
+      const from = traceOf(trace).length
+      const sent = c.send("textDocument/hover", { ...doc(path), position: positionAt(altered, altered.indexOf("class AtomicChanged") + 7) })
+      await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "query", "the hover held in the session")
+      writeFileSync(path, text)
+      rmSync(`${barrier}.query`)
+      const a = await sent.answer
+      outcomes[kind] = a.error?.code ?? a.result
+      check(`a hover on a std document restored under it (${kind}): ContentModified, never the embedded text's symbol at that offset`, a.error?.code === -32801, a)
+    }
+    check("the first query into a std file and the next answer alike", same(outcomes.cold, outcomes.warm), outcomes)
+    const own = await c.result("textDocument/hover", { ...doc(path), position: positionAt(text, text.indexOf("class AtomicInteger") + 7) })
+    check("the restored std document answers its own symbol", (own?.contents?.value ?? "").includes("AtomicInteger"), own)
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the cold std scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    rmSync(`${barrier}.query`, { force: true })
+  }
+}
+
+/** Two sessions' answers to one incoming calls request, a caller's file typed from different texts in each, received in
+ * either order: the joined answer, its caller item's `data` included, and that item's expansion are the same both
+ * ways (the review pass's schedule). */
+async function joinOrder() {
+  const root = join(work, "link/join-order")
+  mkdirSync(root, { recursive: true })
+  const api = join(root, "Api.scala")
+  const caller = join(root, "Caller.scala")
+  const ua = join(root, "A.scala")
+  const ub = join(root, "B.scala")
+  const decl = "object Api:\n  def alpha: Int = 1\n"
+  const old = "object Caller:\n  def caller: Int = Api.alpha\n"
+  const fresh = old + "// changed caller text\n"
+  const ta = "object A:\n  val x = 1\n"
+  const tb = "object B:\n  val x = 1\n"
+  const seen = {}
+  for (const first of ["a", "b"]) {
+    for (const [f, t] of [[api, decl], [caller, old], [ua, ta], [ub, tb]]) writeFileSync(f, t)
+    writeExport(join(root, "teq.lock"), { a: { platform: "js", sources: ["Api.scala", "Caller.scala", "A.scala"] }, b: { platform: "js", sources: ["Api.scala", "Caller.scala", "B.scala"] } })
+    const trace = join(work, `join-order-trace-${first}`)
+    const barrier = join(work, `join-order-barrier-${first}`)
+    const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+    const where = (f, t, n) => ({ ...doc(f), position: positionAt(t, t.indexOf(n) + 1) })
+    const change = (f, t, v) => c.notify("textDocument/didChange", { textDocument: { uri: uriOf(f), version: v }, contentChanges: [{ text: t }] })
+    try {
+      await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+      c.notify("initialized", {})
+      for (const [f, t] of [[ua, ta], [ub, tb], [api, decl], [caller, old]]) c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(f), languageId: "scala", version: 1, text: t } })
+      await c.result("textDocument/hover", where(ua, ta, "x"))
+      await c.result("textDocument/hover", where(ub, tb, "x"))
+      const prepared = (await c.result("textDocument/prepareCallHierarchy", where(api, decl, "alpha")))[0]
+      const pid = (name) => {
+        const build = traceOf(trace).find((e) => e.who === "server" && e.event === "build" && e.rest[0] === `${name}/compile`)
+        return traceOf(trace).find((e) => e.who === "session" && e.event === "start" && e.id === build.id).pid
+      }
+      const a = pid("a")
+      const b = pid("b")
+      const from = traceOf(trace).length
+      // The first session types an edit of the caller and is held before its answer; the second is held before typing
+      // it, and a later edit cancels it there.
+      writeFileSync(`${barrier}.answer`, String(a))
+      writeFileSync(`${barrier}.start`, String(b))
+      change(caller, old + "// before\n", 2)
+      await traced(trace, from, (e) => e.pid === a && e.event === "held" && e.rest[0] === "answer", "the first session typed")
+      await traced(trace, from, (e) => e.pid === b && e.event === "held" && e.rest[0] === "start", "the second session before typing")
+      const req = c.send("callHierarchy/incomingCalls", { item: prepared })
+      await sync(c)
+      change(caller, fresh, 3)
+      await sync(c)
+      if (first === "b") writeFileSync(`${barrier}.query`, String(a))
+      rmSync(`${barrier}.answer`)
+      if (first === "a") await traced(trace, from, (e) => e.who === "server" && e.event === "replied", "the first session's reply")
+      else await traced(trace, from, (e) => e.pid === a && e.event === "held" && e.rest[0] === "query", "the first session's query held")
+      rmSync(`${barrier}.start`)
+      if (first === "b") {
+        await traced(trace, from, (e) => e.who === "server" && e.event === "replied", "the second session's reply")
+        rmSync(`${barrier}.query`)
+      }
+      const joined = await req.answer
+      check(`incoming calls joined across two sessions, ${first}'s answer first: one caller`, joined.result?.length === 1, joined)
+      const expansion = await c.request("callHierarchy/outgoingCalls", { item: joined.result?.[0]?.from })
+      seen[first] = { joined: joined.result ?? joined.error, expansion: expansion.error?.code ?? expansion.result }
+      await c.result("shutdown", null)
+      c.notify("exit", null)
+      await c.exited
+    } catch (e) {
+      check(`the join order scenario (${first} first) ran to its end`, false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+      c.proc.kill()
+    } finally {
+      for (const point of ["start", "answer", "query"]) rmSync(`${barrier}.${point}`, { force: true })
+    }
+  }
+  check("the joined caller, its data included, is the same whichever session answers first", seen.a && same(seen.a.joined, seen.b?.joined), seen)
+  check("and so is its expansion", seen.a && same(seen.a.expansion, seen.b?.expansion), seen)
+}
+
+/** `prepareCallHierarchy` asked of two sessions that hold different texts of the callee's file: one item, as from one
+ * session, with the first session's text (the review pass's two-snapshot schedule); the first session's text is not
+ * the client's by then, so its calls answer `ContentModified`. Prepared again once both sessions typed the client's
+ * text: one item, whose calls answer. */
+async function prepareJoin() {
+  const root = join(work, "link/prepare-join")
+  mkdirSync(root, { recursive: true })
+  const api = join(root, "Api.scala")
+  const caller = join(root, "Caller.scala")
+  const ua = join(root, "A.scala")
+  const ub = join(root, "B.scala")
+  const decl = "object Api:\n  def alpha: Int = 1\n"
+  const call = "object Caller:\n  def caller: Int = Api.alpha\n"
+  const ta = "object A:\n  val x = 1\n"
+  const tb = "object B:\n  val x = 1\n"
+  for (const [f, t] of [[api, decl], [caller, call], [ua, ta], [ub, tb]]) writeFileSync(f, t)
+  writeExport(join(root, "teq.lock"), { a: { platform: "js", sources: ["Api.scala", "Caller.scala", "A.scala"] }, b: { platform: "js", sources: ["Api.scala", "Caller.scala", "B.scala"] } })
+  const trace = join(work, "prepare-join-trace")
+  const barrier = join(work, "prepare-join-barrier")
+  const c = new Client(root, { TEQ_LSP_TRACE_FILE: trace, TEQ_LSP_TEST_BARRIER: barrier })
+  const where = (f, t, n) => ({ ...doc(f), position: positionAt(t, t.indexOf(n) + 1) })
+  const change = (t, v) => c.notify("textDocument/didChange", { textDocument: { uri: uriOf(api), version: v }, contentChanges: [{ text: t }] })
+  const alphaItem = (i) => i?.name === "alpha" && i.uri === uriOf(api) && same(i.selectionRange, rangeIn(decl, "alpha"))
+  try {
+    await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    c.notify("initialized", {})
+    for (const [f, t] of [[ua, ta], [ub, tb], [api, decl], [caller, call]]) c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(f), languageId: "scala", version: 1, text: t } })
+    await c.result("textDocument/hover", where(ua, ta, "x"))
+    await c.result("textDocument/hover", where(ub, tb, "x"))
+    const initial = await c.result("textDocument/prepareCallHierarchy", where(caller, call, "alpha"))
+    check("two sessions with one text of the callee's file prepare one item", initial?.length === 1 && alphaItem(initial[0]), initial)
+    const pid = (name) => {
+      const build = traceOf(trace).find((e) => e.who === "server" && e.event === "build" && e.rest[0] === `${name}/compile`)
+      return traceOf(trace).find((e) => e.who === "session" && e.event === "start" && e.id === build.id).pid
+    }
+    const a = pid("a")
+    const b = pid("b")
+    const from = traceOf(trace).length
+    // The first session types an edit of the callee's file and is held before its answer; the second is held before
+    // typing it, and a later edit cancels it there: the two answer from different texts of that file.
+    writeFileSync(`${barrier}.answer`, String(a))
+    writeFileSync(`${barrier}.start`, String(b))
+    change(decl + "// before\n", 2)
+    await traced(trace, from, (e) => e.pid === a && e.event === "held" && e.rest[0] === "answer", "the first session typed")
+    await traced(trace, from, (e) => e.pid === b && e.event === "held" && e.rest[0] === "start", "the second session before typing")
+    const req = c.send("textDocument/prepareCallHierarchy", where(caller, call, "alpha"))
+    await sync(c)
+    change(decl + "// after\n", 3)
+    await sync(c)
+    rmSync(`${barrier}.answer`)
+    rmSync(`${barrier}.start`)
+    const joined = await req.answer
+    check("two sessions with different texts of the callee's file prepare one item, as master answers", joined.result?.length === 1 && alphaItem(joined.result[0]), joined)
+    const stale = await c.request("callHierarchy/outgoingCalls", { item: joined.result?.[0] })
+    check("that item names the first session's text, not the client's by then: its calls answer ContentModified", stale.error?.code === -32801, stale)
+    await c.result("textDocument/hover", where(ua, ta, "x"))
+    await c.result("textDocument/hover", where(ub, tb, "x"))
+    const again = await c.result("textDocument/prepareCallHierarchy", where(caller, call, "alpha"))
+    const calls = await c.request("callHierarchy/outgoingCalls", { item: again?.[0] })
+    check("prepared again once both sessions typed the client's text: one item, whose calls answer", again?.length === 1 && alphaItem(again[0]) && same(calls.result, []), { again, calls })
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+  } catch (e) {
+    check("the prepare join scenario ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  } finally {
+    for (const point of ["start", "answer"]) rmSync(`${barrier}.${point}`, { force: true })
+  }
+}
+
+/** References to a method used 1,500 times in one file, the review pass's case of a join that copied every compared
+ * location: answered within master's order of magnitude (about 50 ms on a release build, 150 ms on a fast one, against
+ * 2 s for that join). The bound is generous and calibrated: it fails only where the median exceeds 400 ms and is more
+ * than 50 times that of 150 uses, which master's join keeps near 20 to 30 times and the copying join pushed past 80. */
+async function referencesCost() {
+  const median = {}
+  for (const count of [150, 1500]) {
+    const root = join(work, `link/references-cost-${count}`)
+    mkdirSync(root, { recursive: true })
+    const file = join(root, "Test.scala")
+    const text = "object Test:\n  def alpha: Int = 1\n  def use: Unit =\n" + "    alpha\n".repeat(count) + "    ()\n"
+    writeFileSync(file, text)
+    writeExport(join(root, "teq.lock"), { app: { platform: "js", sources: ["Test.scala"] } })
+    const c = new Client(root)
+    try {
+      await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+      c.notify("initialized", {})
+      const at = { ...doc(file), position: positionAt(text, text.indexOf("alpha") + 1) }
+      await c.result("textDocument/hover", at)
+      const times = []
+      let found = 0
+      for (let i = 0; i < 5; i++) {
+        const start = process.hrtime.bigint()
+        const r = await c.result("textDocument/references", { ...at, context: { includeDeclaration: false } })
+        times.push(Number(process.hrtime.bigint() - start) / 1e6)
+        found = r?.length ?? 0
+      }
+      median[count] = times.sort((a, b) => a - b)[2]
+      check(`references to ${count} uses: every use`, found === count, { count, found })
+      await c.result("shutdown", null)
+      c.notify("exit", null)
+    } catch (e) {
+      check(`the references cost scenario (${count} uses) ran to its end`, false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+      c.proc.kill()
+    }
+  }
+  const [small, large] = [median[150], median[1500]]
+  check("references to 1,500 uses within master's order of magnitude (median under 400 ms, or under 50 times that of 150 uses)", small !== undefined && large !== undefined && !(large > 400 && large > 50 * small), { median150: small, median1500: large })
 }
 
 async function overtakenAgain() {
@@ -5650,10 +6647,10 @@ async function sourcesFailures() {
       })
     }
     // A rejection carried by an answer the server discards. The store's copy unreadable (fetched with
-    // its matching checksum), the repository repaired; an edit's build held at its start, a definition
-    // queued behind it, a second edit cancelling the build: the definition's answer is discarded with
-    // the cancelled build, and its rejection reaches the fetcher all the same, which fetches the
-    // repaired bytes. A second server over the same caches (the restart control) answers from them.
+    // its matching checksum), the repository repaired; a definition held in the session before it is
+    // computed and cancelled there: its answer, which reads the store's copy, is drained, and its
+    // rejection reaches the fetcher all the same, which fetches the repaired bytes. A second server
+    // over the same caches (the restart control) answers from them.
     {
       const art = servedArtifact(repo, "test.discarded", "liba", "1.0", liba(), damagedSources("crc"))
       const { cache, coursier } = caches("discarded")
@@ -5667,24 +6664,22 @@ async function sourcesFailures() {
           await traced(trace, 0, (e) => e.event === "published", "the first build's diagnostics")
           art.src.bytes = libaSources()
           art.sum.bytes = Buffer.from(`${sha1Of(libaSources())}\n`)
-          const text = readFileSync(file, "utf8")
-          const change = (version) => c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file), version }, contentChanges: [{ text: text + "\n".repeat(version) }] })
-          writeFileSync(`${barrier}.start`, "")
+          const pid = traceOf(trace).filter((e) => e.who === "session" && e.event === "start").pop().pid
+          writeFileSync(`${barrier}.query`, String(pid))
           const from = traceOf(trace).length
-          change(2)
-          const held = await traced(trace, from, (e) => e.event === "held" && e.rest[0] === "start", "the edit's build held at its start")
-          const pending = c.request("textDocument/definition", at_(file, "A.make", 0, 2))
-          change(3)
-          await traced(trace, from, (e) => e.event === "wrote-cancel" && e.id === held.id, "the build's cancel")
-          rmSync(`${barrier}.start`)
-          const first = (await pending).result
-          await traced(trace, from, (e) => e.event === "sources-rejected" && e.rest[0] === url, "the discarded answer's rejection")
+          const pending = c.send("textDocument/definition", at_(file, "A.make", 0, 2))
+          await traced(trace, from, (e) => e.who === "session" && e.event === "held" && e.rest[0] === "query", "the definition held in the session")
+          c.cancel(pending.id)
+          const first = (await pending.answer).error?.code
+          rmSync(`${barrier}.query`)
+          await traced(trace, from, (e) => e.who === "server" && e.event === "drained", "the cancelled definition's answer drained")
+          await traced(trace, from, (e) => e.event === "sources-rejected" && e.rest[0] === url, "the drained answer's rejection")
           await traced(trace, from, (e) => e.event === "sources-published" && e.rest[0] === url, "the repaired bytes' publication")
           const { ok, found } = await landsInSources(c, file, cache)
-          check("rejection-in-a-discarded-answer: a definition's answer discarded with a cancelled build carries the store's copy's rejection, which reaches the fetcher; the repaired bytes fetched and answered with no restart", first === null && ok && art.src.requests === 2 && sessionsEnded(c).length === 0, { first, found, requests: art.src.requests })
+          check("rejection-in-a-discarded-answer: a cancelled definition's answer, drained, carries the store's copy's rejection, which reaches the fetcher; the repaired bytes fetched and answered with no restart", first === -32800 && ok && art.src.requests === 2 && sessionsEnded(c).length === 0, { first, found, requests: art.src.requests })
         })
       } finally {
-        rmSync(`${barrier}.start`, { force: true })
+        rmSync(`${barrier}.query`, { force: true })
       }
       await sourcesServer("discarded-restart", { classpath, repositories, cache, coursier, env: quick }, async ({ c, trace, file }) => {
         await traceSaid(trace, "sources-held", url)
@@ -5942,7 +6937,7 @@ async function refusedMapping() {
   }
 }
 
-const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths }
+const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, lateAnswer, cancelRequests, cancelSessions, cancelTeardown, positionRevisions, followRevisions, closedRevision, cancelBurst, editStream, coldStd, joinOrder, prepareJoin, referencesCost, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, refusedMapping, idleMinute, jarFetch, librarySources, sourcesFailures, sourcesHeld, sourcesBackoff, sourcesPaths }
 // Run only when named: the idle minute, the jar fetch and the sources' fetches, which tests/lsp.sh
 // runs once each.
 const named = new Set(["idleMinute", "jarFetch", "librarySources", "sourcesFailures", "sourcesHeld", "sourcesBackoff", "sourcesPaths"])
@@ -5955,10 +6950,17 @@ if (unknown.length > 0) {
   process.exit(2)
 }
 if (process.env.LSP_UNITS) writeFileSync(process.env.LSP_UNITS, Object.keys(scenarios).join("\n") + "\n")
+// Every response a scenario's clients received answered one request of its id, once: a response to
+// an id no request is waiting on (never asked, or answered already) fails the scenario.
 for (const [name, run] of Object.entries(scenarios)) {
   if (!(only ? only.includes(name) : !named.has(name))) continue
   if (process.env.PIECES_RAN) appendFileSync(process.env.PIECES_RAN, `${name} ${process.env.TEQ_SESSION_THREADS ?? "auto"}\n`)
+  const from = clients.length
   await run()
+  const stray = clients.slice(from).flatMap((c) => ((c.reported = c.unexpected.length), c.unexpected))
+  check(`${name}: every response answers a request of its id, once`, stray.length === 0, stray)
 }
+const late = clients.flatMap((c) => c.unexpected.slice(c.reported))
+check("no response came after its scenario that answers no request", late.length === 0, late)
 console.log(`${passed} passed, ${failed} failed`)
 process.exit(failed === 0 ? 0 : 1)

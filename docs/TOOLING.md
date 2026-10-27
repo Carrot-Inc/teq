@@ -541,6 +541,16 @@ Signature help triggers on `(` and `,` and lists every overload with the active 
 (through a conversion of an argument too), at the types the call instantiated; inside a type argument list it
 is a later part.
 
+A request the client cancels (`$/cancelRequest`) is answered -32800 (`RequestCancelled`) at once. While a project's
+session is busy the server keeps its next queries back and hands them over one at a time, so a cancelled one it still
+holds is never computed; one already handed over runs to its end and its answer is dropped. A position query (a
+definition, references, a hover, implementations, the call hierarchy, completion, signature help) is answered on the
+text its position was given in. When the program that would answer it was typed from another text of that file (an
+edit came first and the build the query waited for typed the newer text, or a file the editor has not opened changed
+on disk), it is answered -32801 (`ContentModified`) and the client asks again; an answer found in the request's own
+text is given even when the document has changed since. A call hierarchy item names the text it was found in (its
+`data`), and its callers and callees are asked in that text.
+
 The server works from the folder's `teq.lock`, at or above the folder, else at the roots of the sbt builds up
 to three levels below. Each project configuration is a session, one `teq compiler watch --check` process, started when
 a file of its source roots is opened; at most four run at once (`maxSessions`) and one unused for half an hour
