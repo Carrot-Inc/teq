@@ -1,0 +1,7 @@
+# The push pass's reproduction on 2264522c54 and the edits after it, one per line (<file> <edit>), each answered by a
+# build: B's secondary constructor loses its first call while A's error stands from the full build, whose check reads
+# the history (an error reported before it); A's error is taken away; A's error comes back; B's call comes back.
+B.scala edit-B-no-call.txt
+A.scala edit-A-fixed.txt
+A.scala edit-A-bad.txt
+B.scala edit-B-call.txt

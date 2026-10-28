@@ -98,7 +98,10 @@
 # kernel's); and with --app, which names the application's export build file, the export's identity against master's
 # saved build (bench/app/export-identity.sh), the API check against master's diagnostics (bench/app/api-check.sh,
 # app-api) and the check of the API's test configuration over each binary's own build of the main lists' products,
-# against master's the same way (api-check.sh --test, app-api-test), the API's type phase against master's binary's
+# against master's the same way (api-check.sh --test, app-api-test), the API's diagnostics and exit at one typer worker
+# against the default count's and, where that typed nothing on an attached worker or gave way, every item's on one, for
+# the main configuration and the test configuration over the main lists' products
+# (bench/app/workers-check.sh, app-workers, with the application's warning flags), the API's type phase against master's binary's
 # (bench/pairs.py api: `--time --all-mains` at eight workers, the binaries in balanced pairs, both plain builds,
 # every run completed with a positive type phase and the first run's diagnostics, their first lines and count; over 8% fails,
 # inconclusive is not a pass, app-api-time), all reading the application's checkout and the jars
@@ -248,7 +251,7 @@ pieced="lsp:4 jvm-watch:2 modules:2 split:2"
 # pieces_of <suite>: its number of pieces, nothing for a suite run whole.
 pieces_of() { local spec; for spec in $pieced; do [ "${spec%%:*}" != "$1" ] || echo "${spec#*:}"; done; }
 compare="budget runtime sentinel"
-local_lines="records no-caps size instructions instructions-derive app-api-time memory asymptotics app-export app-export-accept app-api app-api-test app-chain app-cypress app-fix app-scalac"
+local_lines="records no-caps size instructions instructions-derive app-api-time memory asymptotics app-export app-export-accept app-api app-api-test app-workers app-chain app-cypress app-fix app-scalac"
 # The application's first commit with its rules under teq fix, which the app-fix line waits for in the pinned snapshot;
 # empty until the application has merged them.
 app_fix_since=
@@ -540,6 +543,15 @@ local_line() {
         result $1 local $(($(now) - s)) $code "$(tail -1 "$out/$1.log")" "$file"
       fi
       ;;
+    app-workers)
+      if [ -z "$app" ]; then
+        result $1 local 0 skip "needs --app" "$file"
+      else
+        APP_ROOT=$(app_root) OUT="$out/app-workers" timeout 1500 "$root/bench/app/workers-check.sh" "$bin" > "$out/$1.log" 2>&1
+        code=$?
+        result $1 local $(($(now) - s)) $code "$(tail -1 "$out/$1.log")" "$file"
+      fi
+      ;;
     app-chain)
       if [ -z "$app" ]; then
         result app-chain local 0 skip "needs --app" "$file"
@@ -680,6 +692,7 @@ local_half() {
   { local_line app-export; local_line app-export-accept; } &
   local_line app-api &
   local_line app-api-test &
+  local_line app-workers &
   local_line app-chain &
   local_line app-scalac &
   for p in $here_projects; do local_project $p & done

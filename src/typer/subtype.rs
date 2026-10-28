@@ -2559,7 +2559,9 @@ impl<'a> Worker<'a> {
                     return Some(t);
                 }
                 // dotty's `baseTypeCache`: the base type of a class type, kept per type and base
-                // class once the class is complete and where the type has no inference variable.
+                // class once the class is complete and where the type has no inference variable,
+                // in this view's cache (`ViewMemos`): the loader's lock holder's apart from the
+                // worker's own outside the lock, each holding the types its view reads.
                 if let Some(&kept) = self.base_type_cache.get(&(t, target)) {
                     return kept;
                 }

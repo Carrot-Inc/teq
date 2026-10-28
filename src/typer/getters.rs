@@ -523,8 +523,14 @@ impl<'a> Worker<'a> {
     }
 
     /// The defaults of the record this worker made for `m` (`TFun::defaults`), each its getter's
-    /// tree where the getter is complete, before the record is published.
+    /// tree where the getter is complete, before the record is published. A record published
+    /// already (a body typed on demand, published before the traversal reached its getters) has one
+    /// version until the merge, which a peer reads (`arena::EscapeMarks`): its defaults wait for the
+    /// merge's `fill_getters`, and a reader before it asks the getter (`default_tree`).
     pub(super) fn fill_own_getters(&mut self, m: SymId) {
+        if self.forked && self.shared_sym(m) && self.syms.sym(m).body() == crate::symbols::Completion::Done {
+            return;
+        }
         let Some(&f) = self.fun_of_sym.local.get(&m) else { return };
         let n = self.prog.funs[f.idx()].defaults.len();
         for i in 0..n {

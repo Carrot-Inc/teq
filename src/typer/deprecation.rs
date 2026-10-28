@@ -212,7 +212,7 @@ impl<'a> Worker<'a> {
             let span = ast.expr_span(instance);
             let own = |d: &crate::source::Diagnostic| d.file == file && d.span.start >= span.start && d.span.end <= span.end;
             let elsewhere: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !own(d)).collect();
-            self.diags.items.extend(elsewhere);
+            self.diags.extend(elsewhere);
             let class = match self.types.get(resolved) {
                 crate::types::Type::Class(c, _) | crate::types::Type::Ctor(c) => c,
                 crate::types::Type::Lambda(_, rhs) => {

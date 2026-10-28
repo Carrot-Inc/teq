@@ -1,0 +1,4 @@
+# A member with an inferred result whose completion reports a deprecation, demanded first by the earliest file: its
+# reports stand at that demand, as one worker's walk makes them, or the build gives way.
+0 --deprecation
+0

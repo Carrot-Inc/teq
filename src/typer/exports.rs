@@ -694,6 +694,7 @@ impl<'a> Worker<'a> {
     ) -> (Option<Arc<ExportScope>>, SourceState) {
         if self.export_stack.len() >= MAX_EXPORT_DEPTH {
             if let ExportOwner::Class(c) = owner {
+                self.told_once("exports nested too deeply");
                 let info = self.syms.class(c);
                 self.diags.error(info.file, info.span, "exports are nested too deeply");
             }
@@ -751,6 +752,9 @@ impl<'a> Worker<'a> {
         // Each under the completion that owns its clause: the class's, or a top-level clause's
         // (`top_export_owner`).
         let outer = self.diags.owner;
+        if !errors.is_empty() {
+            self.told_once("an export table's conflicts");
+        }
         for (file, span, msg) in errors {
             self.diags.owner = match owner {
                 ExportOwner::Class(c) => self.class_owner(c).unwrap_or(outer),

@@ -194,18 +194,13 @@ same_output inline_definition_failed 8 compiler check tests/errors/inline_defini
 same_output inline_definition_bounds 8 compiler check tests/errors/inline_definition_bounds.scala
 same_output inline_expansions_quiet 8 compiler check tests/workers/inline_expansions_quiet --werror
 
-# Two diagnostics at one place are presented in the order they were reported in, which the
-# workers' schedule decides: a signature's error is reported by whichever worker completes the
-# signature first. A build whose workers left two at one place is typed again by one worker
-# (`diagnostics_meeting`). A larger file ahead of the error file gives that file to the second
-# worker, the first stealing its last item, whose call completes the signature.
+# Two diagnostics at one place are presented in the order one worker's walk reports them, whichever worker types what:
+# a signature's error is reported by whichever worker completes the signature first, and the merge places the
+# workers' diagnostics by the walk's order, a completion's at its first demand or the build given to one worker
+# (`merge_diagnostics`, `events_displaced`). A larger file ahead of the error file gives that file to the second
+# worker, the first stealing its last item, whose call completes the signature; shaken, the output is one worker's.
 printf '// %s\n' "$(printf 'padding %.0s' $(seq 1 1000))" > "$work/padding.scala"
 meeting=(compiler check "$work/padding.scala" tests/errors/param_clause_blank_line.scala)
-gave=0
-for t in $COUNTS; do
-  TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" "${meeting[@]}" --threads $t 2>&1 | grep -q 'typed again by one worker: two diagnostics at one place' && gave=$((gave + 1))
-done
-[ $gave = $(echo $COUNTS | wc -w) ] && ok || bad "diagnostics_meeting: $gave of the counts $COUNTS gave way to one worker"
 timeout 120 "$TEQ" "${meeting[@]}" --threads 1 > "$work/meeting.one" 2>&1
 differ=""
 for s in $(seq 1 12); do
@@ -215,6 +210,24 @@ for s in $(seq 1 12); do
   done
 done
 [ -z "$differ" ] && ok || bad "diagnostics_meeting_shaken: differ from one worker at$differ"
+
+# Two bindings of one name that denote one object, a val declared as its singleton and a wildcard import of it, are
+# no ambiguity at any count (dotty's `isSameRef`, teq's `names_object`): a val whose signature another worker is
+# completing is waited for, as one worker's walk reads it complete, and only this worker's own completion under way
+# names nothing (before, "reference to TimelineAnimation is ambiguous" in 11 of 60 runs at eight workers shaken at
+# `computed`, 2 of 20 unshaken, on master too; scalac accepts it). One worker against the hook at two and eight
+# workers, each shaken at forty seeds.
+timeout 120 "$TEQ" compiler check tests/cases/same_ref_bindings.scala --threads 1 > "$work/same_ref.one" 2>&1
+differ=""
+for s in $(seq 1 40); do
+  for t in 2 8; do
+    hook=()
+    [ $t = 2 ] && hook=(TEQ_IDLE_WORKERS=0)
+    env "${hook[@]}" TEQ_SHAKE="$s:computed" timeout 120 "$TEQ" compiler check tests/cases/same_ref_bindings.scala --threads $t > "$work/same_ref.$t" 2>&1
+    cmp -s "$work/same_ref.one" "$work/same_ref.$t" || differ="$differ $t workers under TEQ_SHAKE=$s;"
+  done
+done
+[ -z "$differ" ] && ok || bad "same_ref_shaken: differ from one worker at$differ"
 
 # A function literal against `PartialFunction` is a partial function literal in every worker, the
 # std's `PartialFunction` another worker entered included (`is_partial_function`).
@@ -395,6 +408,28 @@ if [ -n "$JARS_MISSING" ]; then
   ok
 else
   same_output mixin_supers 4 check tests/workers/mixin_supers --std=scala-library --classpath "$JARS_CP"
+fi
+
+# The values of an enum extending `java.lang.Enum` are `Mirror.Singleton`s at every count, as dotty's `DesugarEnums`
+# makes each value's class (`ExtendsSingletonMirror`, whatever the enum extends): scala-java-time's `ChronoUnit` from
+# its jar and an enum of the program's (without, the parent hung on whether the enum's own parents were complete when
+# the value's were made, which the order of the typing decides: none of the nineteen here at any count, some of
+# `ChronoUnit`'s in the application's export, other ones at another count; scalac's classes have it, 16 and 3).
+jars_of tests/workers/enum_singleton_mirror
+if [ -n "$JARS_MISSING" ]; then
+  echo "skip enum_singleton_mirror: not in the coursier cache:$JARS_MISSING"
+  ok
+else
+  mirrored=ok
+  for t in 1 $COUNTS; do
+    got=$(one enum_singleton_mirror "$t" run tests/workers/enum_singleton_mirror --classpath "$JARS_CP" 2>&1 | tr '\n' ' ')
+    if [ "$got" != "16 3 " ]; then
+      bad "enum_singleton_mirror: $t workers print $got, not scalac's 16 3"
+      mirrored=
+      break
+    fi
+  done
+  [ -n "$mirrored" ] && ok
 fi
 
 # The same for a trait of the program in a file of its own, which the quoted files' reach does not type before the fork:
@@ -1315,20 +1350,81 @@ else
   echo "workers: the watch's numbering across a session's full builds unproven: the evidence is the assertion-enabled build's TEQ_SESSION_INVENTORY"
 fi
 
-# A method with a default argument, typed through the fork: in the assertion-enabled build a worker changes the
-# default getter's record after a publication sealed it (`src/arena.rs`'s check of a published record, "worker Some(0)
-# changed its record ... (teq::tir::TFun) after a publication sealed it"), on master's binary as on teq fix's typing
-# (fix-parallel-typing's push pass of 5c171b26f): the parallel typer's publication of a default getter, pinned here for
-# its own part and printed as known while the build at four workers aborts, a pass once it does not; the release
-# builds carry no such check. tests/fix.scala's `typing` cases are pending on it in that build.
-if "$TEQ" --version | grep -q assertions; then
-  saved_counts=$COUNTS
-  COUNTS=4
-  known default_getter_sealed "a default getter's record changed after its publication sealed it" 1 compiler check tests/workers/default_getter_sealed
-  COUNTS=$saved_counts
+# A record a publication sealed is never changed before the merge (`src/arena.rs`'s check of a published record, the
+# assertion-enabled build's): a method with a default argument whose body is typed on demand and published before the
+# traversal reaches its getters, its record's defaults waiting for the merge (`fill_own_getters`); and a local enum's
+# cases, settled in place once their block knows what they capture, which no publication registers before
+# (`settling_classes`, `settle_local_class`). Each under the hook and at four workers, against one worker; the
+# release builds carry no such check, so the cases prove the order of their output alone there.
+saved_counts=$COUNTS
+COUNTS=4
+same_output default_getter_sealed 1 compiler check tests/workers/default_getter_sealed
+same_output local_enum_sealed 1 compiler check tests/cases/enum_case_defaults.scala
+for c in tests/workers/default_getter_sealed tests/cases/enum_case_defaults.scala; do
+  if TEQ_IDLE_WORKERS=0 timeout 120 "$TEQ" compiler check "$c" --threads 4 2>&1 | grep -q 'after a publication sealed it'; then
+    bad "$c: a record changed after its publication sealed it, under the hook"
+  else
+    ok
+  fi
+done
+COUNTS=$saved_counts
+
+# The loader's lock holder reads the base's types alone (`types::view`, the assertion-enabled build's check): a
+# library class's inherited alternatives merged under the lock read no base instance the worker's own overlay holds,
+# which its memo of base types kept from outside the lock (`base_type_of`'s `class_base_memo`; before, "the loader's
+# lock holder read types from the holder's own overlay" in every forked check of zio-json's derivation for a case
+# class nested in a class, one forked worker included, on master too). Under the hook at two and eight workers; the
+# release builds carry no such check, so the case proves nothing there.
+jars_of tests/classpath/jvm/nested_object_codec.scala
+if [ -n "$JARS_MISSING" ]; then
+  echo "skip base_memo_view: not in the coursier cache:$JARS_MISSING"
+  ok
 else
-  echo "workers: default_getter_sealed unproven: the check it trips is the assertion-enabled build's"
+  for t in 2 8; do
+    if TEQ_IDLE_WORKERS=0 timeout 120 "$TEQ" compiler check tests/classpath/jvm/nested_object_codec.scala --classpath "$JARS_CP" --target jvm --std scala-library --threads $t 2>&1 | grep -q 'view check'; then
+      bad "base_memo_view: a view check under the hook at $t workers"
+    else
+      ok
+    fi
+  done
 fi
+
+# The same for `base_type`'s cache (dotty's `baseTypeCache`), kept apart per view as `base_type_of`'s memo is
+# (`ViewMemos`, swapped where the loader's lock is taken and released): the Java constructors of a std class absorbed
+# under the lock compare their parameters through it (tests/cases/charsequence_release.scala, `new StringBuilder(...)`
+# on the JVM, and the push pass's reduction of it, tests/workers/string_builder_view), and a given search in a std body
+# typed under the lock for an inferred signature reads a candidate's base through it (tests/cases/std_maps_sets.scala);
+# before, "the loader's lock holder read types from the holder's own overlay" in 10 of 10 runs of each of the first
+# two under the hook at eight workers. Under the hook at two and eight workers.
+for p in tests/cases/charsequence_release.scala tests/workers/string_builder_view tests/cases/std_maps_sets.scala; do
+  for t in 2 8; do
+    if TEQ_IDLE_WORKERS=0 timeout 120 "$TEQ" compiler check "$p" --std scala-library --target jvm --threads $t 2>&1 | grep -q 'view check'; then
+      bad "base_cache_view: a view check in $p under the hook at $t workers"
+    else
+      ok
+    fi
+  done
+done
+
+# Pending: an import whose `given T` selectors bound the givens it brings (`Namer.importBound`), the bound's type made
+# by a worker after the fork, which the merge's renumbering finds no listing of (src/typer/merge/parallel.rs's
+# "the merge's renumbering met type N made after the fork, which no listing handed over"): every forked build of these
+# three aborts there, at two and at sixteen workers, on master (8907746df3) too. Kept for the repair, counted apart.
+for p in tests/errors/given_import_bound_constrained.scala tests/cases/given_import_bounds.scala tests/cases/given_import_bound_situated.scala; do
+  known "$(basename "$p" .scala)" "an import's given bound made after the fork, which no listing hands the merge" 1 compiler check "$p"
+done
+
+# What a worker reads of its peers' records answers as one worker's walk does (`Worker::attach`'s sweep): a kept call
+# of the inlining phase folding a literal an earlier expansion evaluated, on the phase's every worker
+# (`InlineState::evaluated`, handed over with `PhaseTables`; before, "Cannot reduce `inline if`" at one worker alone);
+# a nested class's secondary constructor whose default reads the enclosing instance, the constructor and its getter
+# typed by different workers, one outer parameter for both (`ctor_outer_params`, shared as `outer_this` is; before,
+# the getter read an unbound local); and a match type seen through a prefix from eight files, one derived alias for
+# every worker (`derived_aliases`, shared as `derived_opaques` is; before, eight type mismatches at eight workers).
+TEQ_PHASE_FORK=1 same_output phase_evaluated_literal 3 compiler check tests/workers/phase_evaluated_literal
+same_output ctor_outer_getter 3 run tests/workers/ctor_outer_getter
+same_output derived_match_alias 3 compiler check tests/workers/derived_match_alias
+TEQ_IDLE_WORKERS=0 same_output derived_match_alias_attached 1 compiler check tests/workers/derived_match_alias
 
 # A named local class an inline method's body defines, the definition checked on each worker whose
 # expansion asks for it first: the pickle of the body holds the class its block defines once

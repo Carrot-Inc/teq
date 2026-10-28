@@ -484,7 +484,7 @@ impl<'a> Worker<'a> {
         let span = self.ast(file).expr_span(instance);
         let own = |d: &crate::source::Diagnostic| d.file == file && d.span.start >= span.start && d.span.end <= span.end;
         let elsewhere: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !own(d)).collect();
-        self.diags.items.extend(elsewhere);
+        self.diags.extend(elsewhere);
         self.typing_annotation = outer;
         self.deps = deps;
         self.prog.capture = capture;
@@ -957,7 +957,7 @@ impl<'a> Worker<'a> {
         let ast = self.ast(file);
         let at_imports = |d: &crate::source::Diagnostic| d.file == file && ast.imports.iter().any(|imp| imp.span.start <= d.span.start && d.span.end <= imp.span.end);
         let kept: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !at_imports(d)).collect();
-        self.diags.items.extend(kept);
+        self.diags.extend(kept);
         if let Some(list) = self.file_imports[file.0 as usize].clone() {
             self.unused.quiet.insert(file, list);
         }

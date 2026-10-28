@@ -1,0 +1,2 @@
+# One call fewer than `PHASE_FORK_CALLS` (src/typer/inlining.rs, 256): the phase does not fork at any count.
+0

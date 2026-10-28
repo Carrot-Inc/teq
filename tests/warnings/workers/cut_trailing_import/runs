@@ -1,0 +1,3 @@
+# A transparent macro of the run suspends its unit in the file's last object, the file's trailing import's error
+# reported as the item unwinds after the cut: that report is not the cut's, the unit's later round reports it once.
+1

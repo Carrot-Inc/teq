@@ -195,6 +195,7 @@ pub(crate) fn configure_typer(typer: &mut typer::Typer<'_>, opts: &Options, asts
         typer.w.semantic = true;
         typer.threads = 1;
     }
+    // The build's policy, fixed until the build ends (`Diagnostics::policy`).
     typer.diags.policy = std::sync::Arc::new(opts.policy());
     if opts.wunused_imports {
         typer.unused.mode = typer::unused::Mode::Warn;
@@ -2045,7 +2046,7 @@ fn compile() -> i32 {
     }
 
     let mut typer = typer::Typer::new(&asts, &files, &mut interner);
-    typer.diags.items.extend(syntax_warnings);
+    typer.diags.extend(syntax_warnings);
     typer.recovered = parse_errors > 0;
     typer.diags.syntax_errors = parse_errors > 0;
     // The build again by one worker, after a parallel attempt gave way (`serial_again`).

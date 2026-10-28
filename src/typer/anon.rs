@@ -60,7 +60,7 @@ impl<'a> Worker<'a> {
         if !inlined {
             self.def_classes.insert(file.0 as usize, d, c);
         }
-        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.set_anon_env(c, Arc::new(self.env.clone()));
         self.enter_body(file, c, &cls.body);
         self.syms.class_mut(c).state().set(Completion::InProgress);
         let mut parents = Vec::with_capacity(cls.parents.len());
@@ -160,7 +160,7 @@ impl<'a> Worker<'a> {
         if !inlined {
             self.def_classes.insert(file.0 as usize, d, c);
         }
-        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.set_anon_env(c, Arc::new(self.env.clone()));
         self.enter_body(file, c, &cls.body);
         self.syms.class_mut(c).state().set(Completion::InProgress);
         self.set_parents(c, vec![(parent_ty, span)]);
@@ -626,10 +626,57 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Records the environment `env` the local or anonymous class `c` is made in (`anon_envs`). On a
+    /// fork it is every worker's where the class is made, as a reader holding the class reads the
+    /// records the environment names, made before it: a class of this worker's own chunk has it in
+    /// the worker's entries, which the merge places, and in the shared ones at once (at the
+    /// release, under the loader's lock), which the merge drops (`merge_own_where`); a shared class,
+    /// made under the lock, has it shared at the release unless it names a record of this worker's
+    /// own chunk, which the merge renumbers in the worker's entries alone.
+    pub(super) fn set_anon_env(&mut self, c: ClassId, env: Arc<Env>) {
+        if !self.forked {
+            self.anon_envs.insert(c, env);
+        } else if c.0 >= crate::arena::LOCAL_BASE {
+            self.anon_envs.local.insert(c, env.clone());
+            if crate::shared::lock_depth() > 0 {
+                self.anon_envs.insert_shared(c, env);
+            } else {
+                self.anon_envs.publish(c, env);
+            }
+        } else if self.anon_envs.to_shared && !names_own_records(&env) {
+            self.anon_envs.insert(c, env);
+        } else {
+            self.anon_envs.local.insert(c, env);
+        }
+    }
+
     pub fn anon_env(&self, c: ClassId) -> Env {
         match self.anon_envs.get(&c) {
             Some(env) => (**env).clone(),
-            None => Env { file: self.syms.class(c).file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None },
+            None => {
+                self.env_of_peer_class(c);
+                Env { file: self.syms.class(c).file, frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None }
+            }
+        }
+    }
+
+    /// A local class's environment this worker lacks (`anon_envs`): on a fork, the class another
+    /// worker made, whose environment is shared where the class is made (`set_anon_env`) unless it
+    /// is a shared class whose environment names that worker's own records, made under the
+    /// loader's lock in the middle of that worker's own typing. The build is given to one worker,
+    /// whose walk reads it; the reason says whose chunk the class is in and which worker reads it,
+    /// with the reader's frames under `RUST_BACKTRACE`. A class of this worker's own chunk with
+    /// none is one whose environment is not recorded yet (the copy of a stored body's class,
+    /// recorded where the walk meets its creation, `settle_class_body`), which one worker's walk
+    /// reads alike: no give-way.
+    pub(super) fn env_of_peer_class(&self, c: ClassId) {
+        if self.forked && self.syms.class(c).owner == Owner::Local && !self.syms.classes.is_own(c.0) {
+            self.need_serial(|| {
+                let whose = if c.0 >= crate::arena::LOCAL_BASE { format!("worker {}'s own", (c.0 - crate::arena::LOCAL_BASE) / crate::arena::WORKER_SPAN) } else { "shared".to_string() };
+                let frames = std::backtrace::Backtrace::capture();
+                let frames = if frames.status() == std::backtrace::BacktraceStatus::Captured { format!("; read at:\n{}", frames) } else { String::new() };
+                format!("a local class's environment another worker holds ({}, {}, read by worker {}){}", self.name_str(self.syms.class(c).name), whose, self.worker, frames)
+            });
         }
     }
 
@@ -662,7 +709,10 @@ impl<'a> Worker<'a> {
     /// the call site's where it stands in an inline body, the enclosing instances' `this`, and
     /// the locals of the expansions around it.
     pub(super) fn visible_to_class(&mut self, c: ClassId) -> Vec<SymId> {
-        let env = self.anon_envs[&c].clone();
+        let Some(env) = self.anon_envs.get(&c).cloned() else {
+            self.env_of_peer_class(c);
+            return Vec::new();
+        };
         // A class in an inline body also sees the call site's scope, where `summonInline`
         // finds its givens.
         let site = self.inline.site_env.clone();
@@ -1837,7 +1887,7 @@ impl<'a> Worker<'a> {
             self.loaded_mut().product_class_places.insert(c, (source, offset));
         }
         self.note_made_at(c, span, stored);
-        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.set_anon_env(c, Arc::new(self.env.clone()));
         self.syms.class_mut(c).state().set(Completion::InProgress);
         self.set_parents(c, vec![(trait_ty, span)]);
         self.syms.class_mut(c).state().set(Completion::Done);
@@ -2023,7 +2073,7 @@ impl<'a> Worker<'a> {
         let name = self.class_name_at(span, stored);
         let c = self.syms.new_class(name, ClassKind::Anon, mods::FINAL, Owner::Local, file, None, span);
         self.note_made_at(c, span, stored);
-        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.set_anon_env(c, Arc::new(self.env.clone()));
         self.syms.class_mut(c).state().set(Completion::InProgress);
         // `Synthesizer.anonymousMirror`'s class extends `Object` and `java.io.Serializable`
         // before the mirror's trait `SyntheticMembers.addMirrorSupport` adds.
@@ -2116,6 +2166,12 @@ impl<'a> Worker<'a> {
         if let Err(tclass) = self.keep_stored_class(tclass) {
             let id = self.prog.classes.push(tclass);
             self.note_nested_in_check(id);
+            // A local class and those its body defines are settled in place once their block knows
+            // what they capture (`settle_local_class`): no publication registers them before
+            // (`settling_classes`).
+            if self.forked && self.tclass_settling_scopes > 0 && self.prog.classes.is_own(id) {
+                self.tclasses_settling.push(id);
+            }
         }
     }
 
@@ -2145,7 +2201,7 @@ impl<'a> Worker<'a> {
         let name = self.class_name_at(span, stored);
         let c = self.syms.new_class(name, ClassKind::Anon, mods::FINAL, Owner::Local, file, None, span);
         self.note_made_at(c, span, stored);
-        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.set_anon_env(c, Arc::new(self.env.clone()));
         self.syms.class_mut(c).state().set(Completion::InProgress);
         self.set_parents(c, vec![(trait_ty, span)]);
         self.syms.class_mut(c).state().set(Completion::Done);
@@ -2679,4 +2735,24 @@ mod depth_exit_pins {
             assert!(w.mentions_missing(t, &missing, 0), "the missing class under 26 records");
         });
     }
+}
+
+/// Whether `env` names a record of a worker's own chunk (`arena::LOCAL_BASE`): a local, a type
+/// parameter, a class or an alias of its scopes, or an import's package or class.
+fn names_own_records(env: &Env) -> bool {
+    let own = |id: u32| id >= crate::arena::LOCAL_BASE;
+    env.frames.iter().any(|f| match f {
+        Frame::Locals { names, tparams, givens, classes, aliases, .. } => {
+            names.iter().any(|&(_, s)| own(s.0))
+                || tparams.iter().any(|&(_, p)| own(p.0))
+                || givens.iter().any(|&s| own(s.0))
+                || classes.iter().any(|&(_, c)| own(c.0))
+                || aliases.iter().any(|&(_, a)| own(a.0))
+        }
+        Frame::Class(c) => own(c.0),
+    }) || env.imports.iter().any(|i| match i.target {
+        super::ImportTarget::PkgMember(p, _) | super::ImportTarget::PkgAll(p) | super::ImportTarget::PkgGivens(p) => own(p.0),
+        super::ImportTarget::ClassMember(c, _) | super::ImportTarget::ClassAll(c) | super::ImportTarget::ClassGivens(c) => own(c.0),
+        _ => false,
+    })
 }

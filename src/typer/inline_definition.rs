@@ -704,9 +704,40 @@ impl<'a> Worker<'a> {
     /// The definition's check is its body's typing whatever asked for it, a call's demand in a
     /// signature or under a typing that reports no warnings included: its diagnostics are the
     /// body's (`again`), which `check_definition_in_body` reads to tell a failed definition, its
-    /// warnings reported, as the walk's own check reports them.
-    pub(super) fn check_definition_in(&mut self, sym: SymId, env: super::Env) {
+    /// warnings reported, as the walk's own check reports them. Whether this check took the
+    /// definition's claim on a fork (`claim_definition`), which a caller discarding what it made
+    /// gives back.
+    pub(super) fn check_definition_in(&mut self, sym: SymId, env: super::Env) -> bool {
+        if !self.forked {
+            self.again(|t| t.check_definition_in_body(sym, env));
+            return false;
+        }
+        // Checked once by one worker's walk, where it is first demanded: on a fork, each worker that
+        // demands it checks it for its record, the first to claim it tells what the check reports
+        // under the demander's owner (`merge::Event::Completion` of the body's owner), the others
+        // nothing of it; what the completions it reaches report is theirs.
+        let claimed = !self.inline_definitions.contains_key(&sym) && self.claim_definition(sym);
+        let (owner, mark) = (self.diags.owner.key(), self.diags.items.len());
         self.again(|t| t.check_definition_in_body(sym, env));
+        let made = self.diags.items.len() > mark && self.diags.items[mark..].iter().any(|d| d.owner.key() == owner);
+        if !made {
+            return claimed;
+        }
+        if claimed {
+            if let Some(to) = self.body_owner(sym) {
+                self.tell(super::merge::Event::Completion(to.key()));
+            }
+        } else {
+            let mut i = mark;
+            while i < self.diags.items.len() {
+                if self.diags.items[i].owner.key() == owner {
+                    self.diags.items.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        claimed
     }
 
     fn check_definition_in_body(&mut self, sym: SymId, env: super::Env) {
@@ -848,7 +879,7 @@ impl<'a> Worker<'a> {
         // none included.
         let within = |d: &Diagnostic| d.file == file && (library || d.of_body && d.span.start >= def_span.start && d.span.end <= def_span.end);
         let (own, other): (Vec<Diagnostic>, Vec<Diagnostic>) = reported.into_iter().partition(within);
-        self.diags.items.extend(other);
+        self.diags.extend(other);
         // A body with an error fails, held back or not: its errors are the build's, reported here
         // once, and a call of it is the plain call. One held back without an error keeps its
         // forms' checks for the retype path, which types it at each call.
@@ -859,7 +890,7 @@ impl<'a> Worker<'a> {
             None => DefinitionState::Checked,
         };
         if !library && (held.is_none() || failed) {
-            self.diags.items.extend(own.iter().cloned());
+            self.diags.extend(own.iter().cloned());
         }
         let typed_body = body;
         let body = body.filter(|_| held.is_none());

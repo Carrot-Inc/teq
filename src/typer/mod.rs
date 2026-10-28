@@ -969,6 +969,8 @@ pub struct ViewMemos {
     given_fast: FxMap<(TypeId, FileId, u64), (std::sync::Arc<implicits::GivenResult>, Box<[u32]>)>,
     lit_types: FxMap<crate::types::LitVal, TypeId>,
     kind_clauses: crate::intern::FxMap<TParamId, TypeId>,
+    pub(super) base_type_cache: FxMap<(TypeId, ClassId), Option<TypeId>>,
+    pub(super) class_base_memo: FxMap<(ClassId, ClassId), TypeId>,
 }
 
 /// The kinds of the typer's passes over retained forms (`Worker::map_form`, `Worker::ask_form`, `TypeStore::in_pass`),
@@ -1463,7 +1465,7 @@ pub struct Worker<'a> {
     pub poisoned: FxMap<FunId, Vec<crate::source::Diagnostic>>,
     /// Of those, the members whose bodies a product withholds: the interpreter stops where it
     /// calls one.
-    pub poisoned_withheld: FxMap<FunId, ()>,
+    pub poisoned_withheld: crate::arena::Layered<FunId, ()>,
     /// The diagnostic of each body a product withholds, by the node its typing left in its
     /// place: a run that reaches the node reports it again where an attempt that typed the body
     /// gave it up (a macro's expansion tried once more).
@@ -1549,7 +1551,7 @@ pub struct Worker<'a> {
     /// A match-type alias of a generic class seen through a prefix (`K0.LiftP` for `Kind`'s
     /// `LiftP`), copied with the class's parameters as the prefix instantiates them, per
     /// alias and prefix.
-    pub derived_aliases: FxMap<(AliasId, TypeId), AliasId>,
+    pub derived_aliases: crate::arena::Layered<(AliasId, TypeId), AliasId>,
     /// An opaque type of a class or trait seen through an object deriving from it
     /// (`HtmlTagOf.Tag` of `trait TagLite`), per opaque type and object.
     pub derived_opaques: crate::arena::Layered<(ClassId, ClassId), ClassId>,
@@ -1586,6 +1588,31 @@ pub struct Worker<'a> {
     pub arity_classes: crate::arena::Layered<Name, ClassId>,
     /// The work items this worker typed and the own records each made (`merge_workers`).
     pub items: Vec<merge::ItemRange>,
+    /// What each item this worker typed reported (`merge::DiagRange`), in the order it typed them:
+    /// the prefix's and the fork's in the body phase, the units' in the inlining phase, which the
+    /// merge places in one worker's walk's order (`merge_diagnostics`). Recorded in a build that may
+    /// fork (`walk_by_size`).
+    pub diag_ranges: Vec<merge::DiagRange>,
+    /// Where the records the next merge places begin in `diags.items` and
+    /// `inlining.suspension_reports`: the body phase's start, or the inlining phase's fork.
+    pub diag_region: (usize, usize),
+    /// Whether an item's range is open (`begin_diag_range`), the item's rank and where its records
+    /// begin.
+    pub diag_range_open: bool,
+    pub diag_rank: (u32, u32),
+    pub diag_range_from: (u32, u32),
+    /// The history reads of a build that may fork (`Worker::history`), for the merge to ask again.
+    pub history_reads: Vec<merge::HistoryRead>,
+    /// The events this worker told and those it met, each at its item's rank (`merge::Event`).
+    pub told: Vec<(merge::Event, (u32, u32))>,
+    pub meetings: FxMap<merge::Event, (u32, u32)>,
+    /// The fork's claims of the events told once (`merge::Claims`), every worker's, made anew at each
+    /// fork.
+    pub claims: std::sync::Arc<merge::Claims>,
+    /// On a worker attached for a fork, the errors the fork's worker had reported by then, in its
+    /// diagnostics and with its suspended units' reports: what the history reads read before the
+    /// worker's own (`Worker::history`).
+    pub inherited: (std::sync::Arc<Vec<crate::source::Diagnostic>>, std::sync::Arc<Vec<crate::source::Diagnostic>>),
     /// How many of this worker's own `TClass` records are published (`publish_class_bodies`).
     pub tclasses_published: usize,
     /// The worker's own `TClass`es past `tclasses_published` registered already, by their index
@@ -1741,8 +1768,9 @@ pub struct Worker<'a> {
     pub override_pairs: Vec<(SymId, SymId)>,
     pub derive: derive::Derivation,
     /// The environment of the `new` expression of each anonymous class, which its members are
-    /// typed in.
-    pub anon_envs: FxMap<ClassId, std::sync::Arc<Env>>,
+    /// typed in. On a fork, the class another worker made is read with its environment, shared
+    /// where the class is made (`set_anon_env`).
+    pub anon_envs: crate::arena::Layered<ClassId, std::sync::Arc<Env>>,
     /// Extractor patterns whose `unapply` returns a `Some`, which cannot fail.
     pub irrefutable_pats: FxMap<TPatId, ()>,
     /// The type patterns over an abstract type that go through a `TypeTest` or a `ClassTag`
@@ -1947,7 +1975,7 @@ pub struct Worker<'a> {
     pub vals_by_accessor: bool,
     /// Methods that override nothing and get a suffixed name although their class does not
     /// overload them (`Worker::suffix_clashing_roots`).
-    pub suffixed_roots: FxMap<SymId, ()>,
+    pub suffixed_roots: crate::arena::Layered<SymId, ()>,
     pub prog_index: check::ProgIndex,
     pub roots_memo: FxMap<SymId, std::sync::Arc<[SymId]>>,
     /// The inherited type members and nested classes found by name, misses included
@@ -2204,8 +2232,9 @@ pub enum PendingShared {
 pub struct SerialNeed {
     needed: std::sync::atomic::AtomicBool,
     reason: std::sync::Mutex<Option<(String, Option<(String, ClassId)>)>>,
-    /// Whether the reason is two diagnostics at one place (`Worker::diagnostics_meeting`): this
-    /// build's own errors, which say nothing of the next build's.
+    /// Whether the reason is the workers' diagnostics, which the merge could not place as one
+    /// worker's walk makes them (`Worker::need_serial_for_diagnostics`): this build's own, which say
+    /// nothing of the next build's.
     diagnostics: std::sync::atomic::AtomicBool,
 }
 
@@ -2498,6 +2527,13 @@ impl<'a> Typer<'a> {
             // once on the way (a signature, an import) says so where it is (`once`).
             w.diags.of_bodies = true;
             w.bodies_started = true;
+            w.diag_ranges.clear();
+            w.history_reads.clear();
+            w.told.clear();
+            w.meetings.clear();
+            w.inlining.track_meetings = w.walk_by_size;
+            w.inlining.notes = w.inlining.track_demands || w.inlining.track_meetings;
+            w.diag_region = (w.diags.items.len(), w.inlining.suspension_reports.len());
             prep::capture(true);
             if std::env::var_os("TEQ_PREP_REPLAY").is_some() {
                 w.replay_preparation();
@@ -2650,8 +2686,14 @@ impl<'a> Typer<'a> {
                         );
                     }
                     crate::measure::phase_done("workers, the others joined");
-                    if let Some((file, at)) = w.diagnostics_meeting(&others) {
-                        w.need_serial_for_diagnostics(|| format!("two diagnostics at one place (file {} at {})", file.0, at));
+                    // `TEQ_FORK_ITEMS=1`: the items each worker typed, whatever becomes of the build, for
+                    // the tests and the gate's line that need to know attached workers typed.
+                    if std::env::var_os("TEQ_FORK_ITEMS").is_some_and(|v| v == "1") {
+                        let counts: Vec<String> = std::iter::once(w.items.len()).chain(others.iter().map(|o| o.as_ref().map_or(0, |o| o.items.len()))).enumerate().map(|(k, n)| format!("worker {}: {} items", k, n)).collect();
+                        eprintln!("teq: forked {}", counts.join(", "));
+                    }
+                    if let Some(why) = w.diagnostics_unplaced(&others).or_else(|| w.history_mismatch(&others)).or_else(|| w.events_displaced(&others)) {
+                        w.need_serial_for_diagnostics(|| why);
                     }
                     // The build is typed again by one worker (`need_serial`): what the workers
                     // made goes with them.
@@ -3042,7 +3084,7 @@ impl<'a> Worker<'a> {
             std_binding_names: None,
             naming_library: 0,
             poisoned: FxMap::default(),
-            poisoned_withheld: FxMap::default(),
+            poisoned_withheld: Default::default(),
             withheld_notes: FxMap::default(),
             reflective_jar_found: None,
             renamed_roots: Vec::new(),
@@ -3078,7 +3120,7 @@ impl<'a> Worker<'a> {
             base_type_cache: FxMap::default(),
             target_name_files: Vec::new(),
             rule_member_names: Vec::new(),
-            derived_aliases: FxMap::default(),
+            derived_aliases: Default::default(),
             derived_opaques: Default::default(),
             function_targets: Vec::new(),
             ext_modules: Vec::new(),
@@ -3093,6 +3135,16 @@ impl<'a> Worker<'a> {
             worker: 0,
             arity_classes: Default::default(),
             items: Vec::new(),
+            diag_ranges: Vec::new(),
+            diag_region: (0, 0),
+            diag_range_open: false,
+            diag_rank: (0, 0),
+            diag_range_from: (0, 0),
+            history_reads: Vec::new(),
+            told: Vec::new(),
+            meetings: FxMap::default(),
+            claims: Default::default(),
+            inherited: Default::default(),
             tclasses_published: 0,
             tclasses_registered: FxMap::default(),
             tclasses_settling: Vec::new(),
@@ -3145,7 +3197,7 @@ impl<'a> Worker<'a> {
             late_methods: Vec::new(),
             override_pairs: Vec::new(),
             derive: derive::Derivation::default(),
-            anon_envs: FxMap::default(),
+            anon_envs: Default::default(),
             irrefutable_pats: FxMap::default(),
             tag_pats: FxMap::default(),
             arg_types_seen: Vec::new(),
@@ -3209,7 +3261,7 @@ impl<'a> Worker<'a> {
             dispatch_pending: Vec::new(),
             named_like: Vec::new(),
             vals_by_accessor: false,
-            suffixed_roots: FxMap::default(),
+            suffixed_roots: Default::default(),
             prog_index: check::ProgIndex::default(),
             roots_memo: FxMap::default(),
             inherited_named: Default::default(),
@@ -3305,7 +3357,10 @@ impl<'a> Worker<'a> {
             interner: self.interner,
             syms: self.syms.attach(worker),
             types: self.types.clone(),
-            diags: Default::default(),
+            // The build's policy, which every decision of its typing reads on any worker
+            // (`Diagnostics::policy`), whether what is reported now comes of bodies, and the
+            // build's count of its records (`Ordinal`).
+            diags: Diagnostics { policy: self.diags.policy.clone(), of_bodies: self.diags.of_bodies, made: self.diags.made.clone(), syntax_errors: self.diags.syntax_errors, ..Default::default() },
             prog: self.prog.attach(worker),
             b: self.b.clone(),
             env: Env { file: FileId(0), frames: Vec::new(), imports: Vec::new(), import_limit: None, visible_imports: None },
@@ -3329,10 +3384,12 @@ impl<'a> Worker<'a> {
             cache_buffers: Vec::new(),
             fun_of_sym: self.fun_of_sym.attach(),
             getters: self.getters.clone(),
-            stable_realizable: FxMap::default(),
+            // The marks and heads the fork's worker made are the attached workers' too: an import's
+            // check reads them on any worker as on one (`import_check`).
+            stable_realizable: self.stable_realizable.clone(),
             proto_vars: Vec::new(),
-            checked_imports: FxMap::default(),
-            import_heads: FxMap::default(),
+            checked_imports: self.checked_imports.clone(),
+            import_heads: self.import_heads.clone(),
             // The navigation index's tables the typing reads, its records the worker's own,
             // which the merge joins in the work items' order (`merge_workers`).
             index: self.index.as_ref().map(|ix| Box::new(ix.attach())),
@@ -3362,7 +3419,9 @@ impl<'a> Worker<'a> {
             binop_rhs: None,
             annotation_args: false,
             inline_getters_only: false,
-            written_purity: Default::default(),
+            // What the fork's worker recorded of the written forms is every worker's to read (an import
+            // head's, an inline argument's purity, `expr_purity`); the merge joins the workers'.
+            written_purity: self.written_purity.clone(),
             ref_exported: false,
             measured_target: Default::default(),
             defining: Default::default(),
@@ -3471,7 +3530,7 @@ impl<'a> Worker<'a> {
             std_binding_names: None,
             naming_library: Default::default(),
             poisoned: self.poisoned.clone(),
-            poisoned_withheld: self.poisoned_withheld.clone(),
+            poisoned_withheld: self.poisoned_withheld.attach(),
             withheld_notes: self.withheld_notes.clone(),
             reflective_jar_found: self.reflective_jar_found.clone(),
             renamed_roots: Default::default(),
@@ -3502,7 +3561,7 @@ impl<'a> Worker<'a> {
             base_type_cache: FxMap::default(),
             target_name_files: self.target_name_files.clone(),
             rule_member_names: self.rule_member_names.clone(),
-            derived_aliases: self.derived_aliases.clone(),
+            derived_aliases: self.derived_aliases.attach(),
             derived_opaques: self.derived_opaques.attach(),
             arity_classes: self.arity_classes.attach(),
             merging: Vec::new(),
@@ -3556,9 +3615,9 @@ impl<'a> Worker<'a> {
             late_methods: Vec::new(),
             override_pairs: Vec::new(),
             derive: self.derive.attach(),
-            anon_envs: self.anon_envs.clone(),
+            anon_envs: self.anon_envs.attach(),
             irrefutable_pats: self.irrefutable_pats.clone(),
-            tag_pats: self.tag_pats.clone(),
+            tag_pats: FxMap::default(),
             arg_types_seen: Default::default(),
             erroneous_args: Default::default(),
             erroneous_lambdas: Default::default(),
@@ -3629,12 +3688,12 @@ impl<'a> Worker<'a> {
             dispatch_pending: Default::default(),
             named_like: Default::default(),
             vals_by_accessor: false,
-            suffixed_roots: self.suffixed_roots.clone(),
+            suffixed_roots: self.suffixed_roots.attach(),
             prog_index: Default::default(),
             roots_memo: self.roots_memo.clone(),
             inherited_named: Default::default(),
             subclasses: Default::default(),
-            alternatives_named: Default::default(),
+            alternatives_named: self.alternatives_named,
             inherited_pairs: Default::default(),
             loaded: self.loaded.clone(),
             std: self.std.clone(),
@@ -3666,13 +3725,13 @@ impl<'a> Worker<'a> {
             outer_prefixes: self.outer_prefixes.clone(),
             receiver_types: self.receiver_types.clone(),
             sam_arity: self.sam_arity.clone(),
-            member_cycles: Default::default(),
+            member_cycles: self.member_cycles.clone(),
             merged_overloads: self.merged_overloads.attach(),
             views_on: false,
             note_paths: Default::default(),
             inline: inline::InlineState::worker(&self.inline),
             profile: profile::Profile::worker(self.profile.on, self.profile.sig_hook),
-            matches: Default::default(),
+            matches: self.matches.attach(),
             other_view_memos: Default::default(),
             case_binders: Default::default(),
             overload_arg_spans: Vec::new(),
@@ -3696,7 +3755,7 @@ impl<'a> Worker<'a> {
             forwarders_completion: FxMap::default(),
             forward_names: FxMap::default(),
             probing_forward_names: false,
-            forwarders_on_completion: false,
+            forwarders_on_completion: self.forwarders_on_completion,
             deferred_lambdas: FxMap::default(),
             lambda_results: FxMap::default(),
             blocked_clauses: Vec::new(),
@@ -3708,6 +3767,16 @@ impl<'a> Worker<'a> {
             types_at_fork: self.types_at_fork,
             predecoded: None,
             items: Vec::new(),
+            diag_ranges: Vec::new(),
+            diag_region: (0, 0),
+            diag_range_open: false,
+            diag_rank: (0, 0),
+            diag_range_from: (0, 0),
+            history_reads: Vec::new(),
+            told: Vec::new(),
+            meetings: FxMap::default(),
+            claims: self.claims.clone(),
+            inherited: self.errors_at_fork(),
             tclasses_published: 0,
             tclasses_registered: FxMap::default(),
             tclasses_settling: Vec::new(),
@@ -3715,10 +3784,10 @@ impl<'a> Worker<'a> {
             tclasses_in_checks: Vec::new(),
             pending_shared: Vec::new(),
         };
-        // The worker types bodies as the main one does: what they report a retype reports again
-        // (`Diagnostics::of_bodies`), and its typing's demands are recorded (`Worker::begin_demands`).
-        w.diags.of_bodies = self.diags.of_bodies;
+        // The worker's typing's demands are recorded as the main one's are (`Worker::begin_demands`).
         w.inlining.track_demands = self.inlining.track_demands;
+        w.inlining.track_meetings = self.inlining.track_meetings;
+        w.inlining.notes = self.inlining.notes;
         w
     }
 
@@ -3755,6 +3824,14 @@ impl<'a> Worker<'a> {
         if let Some(outer) = self.var_frames.last_mut() {
             outer.1 += made;
         }
+    }
+
+    /// The errors this worker had reported, in its diagnostics and with its suspended units'
+    /// reports, with what it inherited: a worker attached now reads them before its own
+    /// (`Worker::history`).
+    fn errors_at_fork(&self) -> (std::sync::Arc<Vec<crate::source::Diagnostic>>, std::sync::Arc<Vec<crate::source::Diagnostic>>) {
+        let errors = |own: &[crate::source::Diagnostic], inherited: &[crate::source::Diagnostic]| std::sync::Arc::new(inherited.iter().chain(own.iter()).filter(|d| !d.is_warning).cloned().collect());
+        (errors(&self.diags.items, &self.inherited.0), errors(&self.inlining.suspension_reports, &self.inherited.1))
     }
 
     /// The lengths of the worker's own chunks (`ItemRange`).
@@ -3897,6 +3974,7 @@ impl<'a> Worker<'a> {
         self.outer_accessors.to_shared = on;
         self.merged_overloads.to_shared = on;
         self.derived_opaques.to_shared = on;
+        self.derived_aliases.to_shared = on;
         self.derive.to_shared(on);
         self.syms.dispatch_names.to_shared = on;
         self.syms.js_export_names.to_shared = on;
@@ -3910,6 +3988,10 @@ impl<'a> Worker<'a> {
         self.inferred_trait_args.to_shared = on;
         self.unchecked_variance.to_shared = on;
         self.outer_this.to_shared = on;
+        self.anon_envs.to_shared = on;
+        self.ctor_outer_params.to_shared = on;
+        self.suffixed_roots.to_shared = on;
+        self.poisoned_withheld.to_shared = on;
         self.quote.to_shared(on);
         self.def_syms.to_shared = on;
         self.def_classes.to_shared = on;
@@ -4032,6 +4114,7 @@ impl<'a> Worker<'a> {
         self.outer_accessors.apply_pending();
         self.merged_overloads.apply_pending();
         self.derived_opaques.apply_pending();
+        self.derived_aliases.apply_pending();
         self.arity_classes.apply_pending();
         self.prog.template_syms.apply_pending();
         self.prog.overrides.apply_pending();
@@ -4039,6 +4122,10 @@ impl<'a> Worker<'a> {
         self.inferred_trait_args.apply_pending();
         self.unchecked_variance.apply_pending();
         self.outer_this.apply_pending();
+        self.anon_envs.apply_pending();
+        self.ctor_outer_params.apply_pending();
+        self.suffixed_roots.apply_pending();
+        self.poisoned_withheld.apply_pending();
         self.quote.apply_pending();
         self.derive.apply_pending();
         self.syms.dispatch_names.apply_pending();
@@ -4085,6 +4172,15 @@ impl<'a> Worker<'a> {
     /// the view it was made in (a worker's overlay types outside the lock, the base's under it), so
     /// the outermost hold swaps the holder's set in and its release swaps it out again. Each view
     /// makes its own entries, structurally the same answers in its own types.
+    /// The base types kept of the classes' linearisations (`base_type_cache`, `class_base_memo`)
+    /// gone in both views, where a class's parents are made again or the ids are renumbered.
+    pub(super) fn clear_base_caches(&mut self) {
+        self.base_type_cache.clear();
+        self.class_base_memo.clear();
+        self.other_view_memos.base_type_cache.clear();
+        self.other_view_memos.class_base_memo.clear();
+    }
+
     fn swap_view_memos(&mut self) {
         if !self.types.overlays_on() {
             return;
@@ -4094,6 +4190,10 @@ impl<'a> Worker<'a> {
         std::mem::swap(&mut self.given_fast, &mut other.given_fast);
         std::mem::swap(&mut self.lit_types, &mut other.lit_types);
         std::mem::swap(&mut self.kind_clauses, &mut other.kind_clauses);
+        // The base types a class type's linearisation gives (dotty's `baseTypeCache`, and their
+        // meets): made in a view, a type of it, read in that view alone.
+        std::mem::swap(&mut self.base_type_cache, &mut other.base_type_cache);
+        std::mem::swap(&mut self.class_base_memo, &mut other.class_base_memo);
     }
 
     /// What the release is about to make every worker's, checked to name the base alone
@@ -4117,6 +4217,11 @@ impl<'a> Worker<'a> {
     /// leaves them (`FileMaps::snapshot`, `ExportTables::fork`).
     pub fn fork(&mut self, attaching: bool) {
         self.forget_local_memos();
+        // The fresh own chunk publishes and registers its classes from its start: what the
+        // previous fork's chunk published says nothing of it (`publish_class_bodies`).
+        self.tclasses_published = 0;
+        self.tclasses_registered.clear();
+        self.tclasses_in_checks.clear();
         let s = &mut self.syms;
         s.syms.fork();
         s.classes.fork();
@@ -4139,6 +4244,7 @@ impl<'a> Worker<'a> {
         self.outer_accessors.fork();
         self.merged_overloads.fork();
         self.derived_opaques.fork();
+        self.derived_aliases.fork();
         self.derive.fork();
         self.syms.dispatch_names.fork();
         self.syms.js_export_names.fork();
@@ -4165,6 +4271,10 @@ impl<'a> Worker<'a> {
         self.tvars_at_fork = self.tvars.len() as u32;
         self.lists_at_fork = self.local_news.len();
         self.outer_this.fork();
+        self.anon_envs.fork();
+        self.ctor_outer_params.fork();
+        self.suffixed_roots.fork();
+        self.poisoned_withheld.fork();
         self.quote.fork();
         if attaching {
             self.class_exports.fork();
@@ -4174,6 +4284,9 @@ impl<'a> Worker<'a> {
         // to the merge (`types.rs`, `intern.rs`).
         self.types.set_exclusive(false);
         self.interner.set_exclusive(false);
+        // A claim arbitrates the workers of one fork (`merge::Claims`): the body phase's, and each
+        // inlining phase's, a session's retype included, start with none.
+        self.claims = Default::default();
         self.forked = true;
     }
 
@@ -4189,8 +4302,10 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Gives the build to one worker for two different diagnostics at one place, whose order the
-    /// workers' schedule decided (`diagnostics_meeting`). Asked once the workers are joined.
+    /// Gives the build to one worker for diagnostics the workers' schedule decided: a record no
+    /// item placed (`diagnostics_unplaced`), a history read the walk's order answers otherwise
+    /// (`history_mismatch`), an event told away from its first meeting or twice
+    /// (`events_displaced`, `told_once`).
     pub fn need_serial_for_diagnostics(&self, why: impl FnOnce() -> String) {
         if self.bodies_started && self.walk_by_size && !self.serial.is_needed() {
             self.serial.diagnostics.store(true, std::sync::atomic::Ordering::Release);

@@ -44,6 +44,12 @@ pub struct MatchState {
 }
 
 impl MatchState {
+    /// A worker attached for a fork: what was reported is told already (`report_match_recursion`),
+    /// the memos start cold.
+    pub fn attach(&self) -> MatchState {
+        MatchState { reported: self.reported.clone(), ..MatchState::default() }
+    }
+
     /// Exchanges the reductions and the alias expansions with `other`'s: the memos of the other
     /// view (`Worker::swap_view_memos`).
     pub fn swap_memos(&mut self, other: &mut MatchMemos) {
@@ -459,6 +465,7 @@ impl<'a> Worker<'a> {
         if self.matches.reported.contains(&a) {
             return;
         }
+        self.told_once("a match type's recursion");
         self.matches.reported.push(a);
         let (file, span) = {
             let info = &self.syms.aliases[a.idx()];

@@ -352,6 +352,7 @@ impl<'a> Worker<'a> {
         // outlives the run.
         let promoted = self.promote_begin(sym);
         let unwinding = std::mem::replace(&mut self.inlining.unwinding, false);
+        let unwinding_file = self.diags.unwinding.take();
         if self.library_inline(sym) {
             self.demand_library_definition(sym);
         } else if self.syms.sym(sym).owner == Owner::Local {
@@ -360,6 +361,7 @@ impl<'a> Worker<'a> {
             self.check_inline_definition(sym);
         }
         self.inlining.unwinding |= unwinding;
+        self.diags.unwinding = self.diags.unwinding.or(unwinding_file);
         self.promote_end(promoted);
     }
 
@@ -384,17 +386,21 @@ impl<'a> Worker<'a> {
         env.imports.retain(|i| i.depth as usize <= k + 1);
         let Some(scope) = self.env_at_definition(sym, k, env) else { return };
         let marks = (self.diags.items.len(), self.deferred_matches.len(), self.deferred_bounds.len());
-        self.check_definition_in(sym, scope.env);
+        let claimed = self.check_definition_in(sym, scope.env);
         let Some(read) = self.pending_read(sym, &scope.pending) else { return };
         // The checked body reads a binding the block defines between the call and the
         // definition: scalac's E039 at the call. The record and what its check reported at the
-        // definition go, and the block's own check of the definition, where it stands, makes
-        // them again; what the check reported of other bodies on the way stays.
+        // definition go, with the claim the check took on a fork, and the block's own check of
+        // the definition, where it stands, makes them again; what the check reported of other
+        // bodies on the way stays.
         self.inline_definitions.retain(|&s, _| s != sym);
+        if claimed {
+            self.release_definition(sym);
+        }
         let (file, span) = self.definition_span(sym);
         let within = |f: crate::source::FileId, s: Span| f == file && s.start >= span.start && s.end <= span.end;
         let reported = self.diags.items.split_off(marks.0);
-        self.diags.items.extend(reported.into_iter().filter(|d| !within(d.file, d.span)));
+        self.diags.extend(reported.into_iter().filter(|d| !within(d.file, d.span)));
         let later = self.deferred_matches.split_off(marks.1);
         self.deferred_matches.extend(later.into_iter().filter(|m| !within(m.file, m.span)));
         let later = self.deferred_bounds.split_off(marks.2);
@@ -1631,7 +1637,7 @@ impl<'a> Worker<'a> {
     /// captures, read off the walked body in that order among the locals the expansion has in
     /// scope here (`captured_by`). The index of its body and its captures.
     fn settle_class_body(&mut self, w: &mut Walk, c: ClassId) -> (usize, Vec<SymId>) {
-        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.set_anon_env(c, Arc::new(self.env.clone()));
         let Some(index) = self.prog_index.class(&self.prog, c) else { unreachable!("the copy's body") };
         let tc = self.prog.classes[index].clone();
         // The parts of the body in the order written, as the typing takes them.
@@ -3541,6 +3547,7 @@ pub mod counts {
         prepared: u64,
         gave_way: u64,
         phase_units: u64,
+        attached_units: u64,
         typing_suspended: u64,
         retyped: u64,
         inherited_written: u64,
@@ -3640,6 +3647,11 @@ pub mod counts {
         with(|c| c.phase_units += units as u64);
     }
 
+    /// A unit of a forked phase expanded by an attached worker (`Worker::phase_work`).
+    pub fn attached_unit() {
+        with(|c| c.attached_units += 1);
+    }
+
     /// The files a macro of the run suspended at typing, `typing` of them, and the files typed again
     /// for a later round, `retyped` (`Worker::inlining_phase`).
     pub fn suspended_files(typing: usize, retyped: usize) {
@@ -3683,8 +3695,8 @@ pub mod counts {
             line.push_str(&format!("; {}: {}", reason.name(), n));
         }
         line.push_str(&format!(
-            "; phase: kept {} ({} bytes) expanded {} prepared {} gave way {} forked units {} inherited variables changed {} reflection queries {} memo answers {} files suspended at typing {} typed again {}",
-            c.kept, c.kept_bytes, c.phase_expanded, c.prepared, c.gave_way, c.phase_units, c.inherited_written, c.reflect_asked, c.reflect_answered, c.typing_suspended, c.retyped
+            "; phase: kept {} ({} bytes) expanded {} prepared {} gave way {} forked units {} attached units {} inherited variables changed {} reflection queries {} memo answers {} files suspended at typing {} typed again {}",
+            c.kept, c.kept_bytes, c.phase_expanded, c.prepared, c.gave_way, c.phase_units, c.attached_units, c.inherited_written, c.reflect_asked, c.reflect_answered, c.typing_suspended, c.retyped
         ));
         if setting == "1" {
             eprintln!("{}", line);

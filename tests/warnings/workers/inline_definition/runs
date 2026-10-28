@@ -1,0 +1,4 @@
+# An explicitly typed inline method with a deprecated reference, demanded from four files: its check reports once, as
+# one worker's walk reports it, the summary's count too.
+0 --deprecation
+0

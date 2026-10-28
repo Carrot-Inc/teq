@@ -177,9 +177,10 @@ impl<'a> Worker<'a> {
     }
 
     /// The parent `SyntheticMembers.addMirrorSupport` gives `c`: `Mirror.Singleton` to a case
-    /// object, and to an enum's singleton case (`DesugarEnums`' `ExtendsSingletonMirror`), but of
-    /// a Java enum; none to a class of Scala 2, whose objects scalac mirrors through a
-    /// `Mirror.SingletonProxy`. `Mirror.Product` to the companion of a generic product, and
+    /// object, and to an enum's singleton case (`DesugarEnums`' `ExtendsSingletonMirror`, which
+    /// `expandEnumModule` and `enumValueCreator` attach whatever the enum extends, `java.lang.Enum`
+    /// too: what the case's class is never waits on its enum's parents); none to a class of
+    /// Scala 2, whose objects scalac mirrors through a `Mirror.SingletonProxy`. `Mirror.Product` to the companion of a generic product, and
     /// `Mirror.Sum` to an enum's, where the companion is the mirror (`mirror_companion`).
     pub(super) fn mirror_parent(&mut self, c: ClassId) -> Option<ClassId> {
         let (kind, case, singleton, companion) = {
@@ -188,7 +189,7 @@ impl<'a> Worker<'a> {
         };
         let sm = self.demanded_mirror_classes()?;
         match kind {
-            ClassKind::EnumCase => (singleton && !self.is_java_enum_value(c) && !self.is_scala2x(c)).then_some(sm.singleton),
+            ClassKind::EnumCase => (singleton && !self.is_scala2x(c)).then_some(sm.singleton),
             _ if case && self.mirror_module(c) => (!self.is_scala2x(c)).then_some(sm.singleton),
             _ if self.mirror_module(c) => {
                 let k = companion?;
@@ -1052,6 +1053,7 @@ impl<'a> Worker<'a> {
         };
         let value = self.prog.add(TExpr::Cast(value, op, ty));
         *self.expr_marks.entry(value).or_default() |= super::MARK_CAST | super::MARK_CALL | super::MARK_RETYPED;
+        self.prog.mark_cast(value);
         // The tree is of the mirror's type, which a quote's pattern reads (`$m: Mirror.SumOf[A]
         // { type MirroredLabel = l }`).
         self.prog.set_type(value, ty);

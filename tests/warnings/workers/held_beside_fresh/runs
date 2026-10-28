@@ -1,0 +1,5 @@
+# Two units of one file reporting at one place, the phase forked with every unit an attached worker's: `F.fresh`'s
+# call expands at its unit and reports there; `F.held`'s is copied into a transparent call's expansion, so it expands
+# at typing, ahead of the phase, and what it reports is held for its unit (`PendingInline::held`, issued in the
+# unit's range): one worker shows the earlier unit's message, as scalac does, the held one coming after it.
+0

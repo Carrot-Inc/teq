@@ -6,10 +6,20 @@
 #   policy.py scalac <exit> <file> < scalac's output    (-color:never)
 #   policy.py teq <exit> <file> < teq's output
 #   policy.py flags < scalac options                     teq's flags for them, one line
+#   policy.py flags --warnings-only < scalac options     the same of the warning policy's options alone (-W..., -deprecation,
+#                                                         -feature, -language:...), the others left out
 import re, shlex, sys
 
-def teq_flags(options):
+def warning_option(o):
+    """Whether scalac's option `o` is one of the warning policy's, which `teq_flags` maps."""
+    return o.startswith("-W") or o in ("-deprecation", "-feature") or o.startswith("-language:")
+
+def teq_flags(options, skip_other=False):
     out = []
+    if skip_other:
+        options = [o for o in options if warning_option(o)]
+    # Every -language option's features in one `--language`, whose list is comma-separated.
+    language = []
     for o in options:
         if o == "-deprecation":
             out.append("--deprecation")
@@ -24,9 +34,11 @@ def teq_flags(options):
         elif o.startswith("-Wconf:"):
             out += ["--wconf", o[len("-Wconf:"):]]
         elif o.startswith("-language:"):
-            out += ["--language", o[len("-language:"):]]
+            language += [f for f in o[len("-language:"):].split(",") if f and f not in language]
         else:
             raise SystemExit(f"no teq flag for {o}")
+    if language:
+        out += ["--language", ",".join(language)]
     return out
 
 # teq names its own options where scalac names its.
@@ -96,7 +108,7 @@ def teq(lines, path):
 
 mode = sys.argv[1]
 if mode == "flags":
-    print(" ".join(shlex.quote(f) for f in teq_flags(sys.stdin.read().split())))
+    print(" ".join(shlex.quote(f) for f in teq_flags(sys.stdin.read().split(), skip_other=sys.argv[2:3] == ["--warnings-only"])))
     sys.exit(0)
 code, path = sys.argv[2], sys.argv[3]
 lines = sys.stdin.read().split("\n")

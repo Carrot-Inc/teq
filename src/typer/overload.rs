@@ -332,10 +332,13 @@ impl<'a> Worker<'a> {
             // A local or anonymous class stands in the class whose body made it (chimney's
             // `new TotallyBuildIterable[M, A] { .. }` in a method of the cake).
             if at == Owner::Local {
-                if let Some(env) = t.anon_envs.get(&k) {
-                    if let Some(h) = env.frames.iter().rev().find_map(|f| match f { super::Frame::Class(x) => Some(*x), _ => None }) {
-                        at = Owner::Class(h);
+                match t.anon_envs.get(&k) {
+                    Some(env) => {
+                        if let Some(h) = env.frames.iter().rev().find_map(|f| match f { super::Frame::Class(x) => Some(*x), _ => None }) {
+                            at = Owner::Class(h);
+                        }
                     }
+                    None => t.env_of_peer_class(k),
                 }
             }
             while let Owner::Class(o) = at {
@@ -392,10 +395,13 @@ impl<'a> Worker<'a> {
         let mut out = Vec::new();
         let mut at = self.syms.class(k).owner;
         if at == Owner::Local {
-            if let Some(env) = self.anon_envs.get(&k) {
-                if let Some(h) = env.frames.iter().rev().find_map(|f| match f { super::Frame::Class(x) => Some(*x), _ => None }) {
-                    at = Owner::Class(h);
+            match self.anon_envs.get(&k) {
+                Some(env) => {
+                    if let Some(h) = env.frames.iter().rev().find_map(|f| match f { super::Frame::Class(x) => Some(*x), _ => None }) {
+                        at = Owner::Class(h);
+                    }
                 }
+                None => self.env_of_peer_class(k),
             }
         }
         while let Owner::Class(o) = at {
@@ -469,6 +475,12 @@ impl<'a> Worker<'a> {
                         if apart && is_def(self, m) != is_def(self, like) {
                             let method = if is_def(self, m) { m } else { like };
                             self.suffixed_roots.insert(method, ());
+                            // Named plain before this join (another completion's naming, on any
+                            // worker), it is named again, as the final pass names a root it suffixes:
+                            // the name is the join's whichever completion ran first.
+                            if self.syms.sym(method).dispatch == Dispatch::Plain {
+                                self.syms.sym_mut(method).dispatch = Dispatch::Unknown;
+                            }
                         }
                     }
                 }
@@ -1003,7 +1015,8 @@ impl<'a> Worker<'a> {
             }
         }
         // What overrides such a root takes its name.
-        let roots: Vec<SymId> = self.suffixed_roots.keys().copied().collect();
+        let mut roots: Vec<SymId> = self.suffixed_roots.iter().map(|(&s, _)| s).collect();
+        roots.sort_unstable();
         let owners: Vec<ClassId> = roots.iter().filter_map(|&r| match self.syms.sym(r).owner {
             Owner::Class(rc) => Some(rc),
             _ => None,
@@ -1664,7 +1677,8 @@ impl<'a> Worker<'a> {
         }
         // A root told apart by a later round, whose set the loop had passed, is named now:
         // the names are the same whichever order the sets stand in.
-        let roots: Vec<SymId> = self.suffixed_roots.keys().copied().collect();
+        let mut roots: Vec<SymId> = self.suffixed_roots.iter().map(|(&s, _)| s).collect();
+        roots.sort_unstable();
         for r in roots {
             if self.syms.sym(r).dispatch == Dispatch::Unknown {
                 self.dispatch_name(r);

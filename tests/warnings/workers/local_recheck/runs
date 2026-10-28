@@ -1,0 +1,8 @@
+# A local inline method called before its definition across a lazy val an import of the block reads (scalac's E039
+# at the call): the call's check of the definition goes with what it reported there and the claim it took, and the
+# block's own check of the definition reports its deprecation again, as one worker's walk does, under every warning
+# setting (without, the attached workers lost the warning: the kept claim had the later check drop it).
+1 --deprecation
+1
+1 --werror
+1 --wconf any:e
