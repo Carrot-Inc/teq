@@ -752,7 +752,7 @@ impl<'a> Worker<'a> {
     /// the tag of `AnyRef` as its default, the array a call of the std's makes without one;
     /// a call that passes the tag keeps it.
     fn default_erased_evidence(&mut self, sym: SymId, f: crate::typer::FunId) {
-        let Some(tag_class) = self.sites.class_tag else { return };
+        let Some(tag_class) = self.class_tag_class(false) else { return };
         let mut roots = Vec::new();
         self.root_declarations(sym, 0, &mut roots);
         let erased = roots.iter().any(|&r| r != sym && self.syms.sym(r).erased_tags != 0 && !self.is_library_member(r));

@@ -2618,7 +2618,7 @@ impl<'a, 't> Interp<'a, 't> {
                 // A stable val's reference has its singleton type, as scalac's `Ident` has,
                 // which `widen` takes to the declared type; a reference cast to its own type is
                 // the cast's tree, of that type (`mirrorRef.cast(mirrorType)`).
-                let cast = self.typer.expr_marks.get(&e).is_some_and(|&m| m & crate::typer::MARK_CAST != 0);
+                let cast = self.prog().is_cast(e);
                 if let (TExpr::Local(s) | TExpr::Static(s), false) = (self.prog().expr(e), cast) {
                     if matches!(self.syms().sym(s).kind, SymKind::Val | SymKind::Param) && self.typer.sig_of(s).tparams.is_empty() {
                         let declared = self.typer.sig_of(s).ret;

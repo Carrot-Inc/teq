@@ -1105,8 +1105,7 @@ impl<'a> Worker<'a> {
             }
         }
         // The builtin, complete before, meets more bases (`base_type_cache`).
-        self.base_type_cache.clear();
-        self.class_base_memo.clear();
+        self.clear_base_caches();
         self.syms.class_mut(c).base_types = bases;
         self.syms.class_mut(c).rule_prefix = 0;
         if self.syms.class(c).base_types.len() > 1 {
@@ -2206,8 +2205,7 @@ impl<'a> Worker<'a> {
     /// library was checked by scalac.
     fn set_loaded_parents(&mut self, c: ClassId, parents: Vec<TypeId>) {
         if !self.syms.class(c).base_types.is_empty() {
-            self.base_type_cache.clear();
-            self.class_base_memo.clear();
+            self.clear_base_caches();
         }
         let targs: Vec<TypeId> = self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
         let self_ty = self.types.class(c, &targs);

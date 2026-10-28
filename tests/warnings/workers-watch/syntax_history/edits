@@ -1,0 +1,8 @@
+# A Scala.js session: an edit leaves `watchMemoryBroken` without a body behind a syntax error in the first file (its
+# "needs a body" a dependent record), whose full build reaches a transparent macro of the run in six later files, the
+# suspension of each reading whether an error was reported; then the file mended. The parser's error is reported
+# before every typing, as dotty's `Parser` phase reports it, so every read answers yes on every worker (before, a
+# worker that had not typed the first file read no, the walk's model the dependent record, and the full build gave way
+# at eight and sixteen workers).
+a.scala edit-a-broken.txt
+a.scala edit-a-ok.txt

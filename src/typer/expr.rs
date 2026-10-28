@@ -120,7 +120,7 @@ impl<'a> Worker<'a> {
         let sym = self.new_local(def.name, SymKind::Val, ty, def.span);
         self.syms.sym_mut(sym).mods |= mods::LAZY;
         self.syms.class_mut(c).local_module = Some(sym);
-        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.set_anon_env(c, Arc::new(self.env.clone()));
         self.bind_local(def.name, sym);
         if def.mods & mods::IMPLICIT != 0 {
             self.bind_given(sym);
@@ -144,7 +144,7 @@ impl<'a> Worker<'a> {
         self.syms.sym_mut(sym).mods |= mods::LAZY | mods::GIVEN | (def.mods & mods::ANONYMOUS);
         self.def_syms.insert(file.0 as usize, d, sym);
         self.syms.class_mut(c).local_module = Some(sym);
-        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.set_anon_env(c, Arc::new(self.env.clone()));
         self.bind_local(def.name, sym);
         self.bind_given(sym);
     }
@@ -168,7 +168,7 @@ impl<'a> Worker<'a> {
             self.index_local(sym);
         }
         self.def_syms.insert(file.0 as usize, d, sym);
-        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.set_anon_env(c, Arc::new(self.env.clone()));
         self.bind_local(def.name, sym);
         self.bind_given(sym);
     }
@@ -182,10 +182,10 @@ impl<'a> Worker<'a> {
         self.enter_def(file, Owner::Local, d);
         let Some(&c) = self.def_classes.get(file.0 as usize, &d) else { return };
         let env = Arc::new(self.env.clone());
-        self.anon_envs.insert(c, env.clone());
+        self.set_anon_env(c, env.clone());
         self.bind_local_class(name, c);
         if let Some(companion) = self.syms.class(c).companion {
-            self.anon_envs.insert(companion, env);
+            self.set_anon_env(companion, env);
             let synthesized = self.syms.class(companion).def.is_none();
             if let (true, Some(m)) = (synthesized, self.syms.class(companion).local_module) {
                 self.bind_local(name, m);
@@ -244,9 +244,10 @@ impl<'a> Worker<'a> {
         let msg = "Case class definitions are not allowed in inline methods or quoted code. Use a normal class instead.";
         // Reported at the inline body, as scalac reports it at the definition, once for all of
         // its expansions.
-        if self.diags.items.iter().any(|d| d.file == def_file && d.span == def_span && d.msg == msg) {
+        if self.history(super::merge::HistoryQuery::Reported(def_file, def_span, msg.to_string()), "a case class in an inline body, reported once") {
             return;
         }
+        self.told_once("a case class in an inline body");
         self.diags.error(def_file, def_span, msg);
     }
 
@@ -352,6 +353,48 @@ impl<'a> Worker<'a> {
             _ => return None,
         };
         self.env.frames.iter().any(|f| matches!(f, Frame::Class(c) if *c == k)).then_some(k)
+    }
+
+    /// The local class `c` of kind `kind` checked where its block defines it and settled once its
+    /// block knows what it captures (`finish_local_class`), its body seeing the block as `env`; a
+    /// local object's instance and a local enum's companion's added to `out`.
+    fn define_local_class(&mut self, c: ClassId, kind: ast::ClassKind, env: Arc<super::Env>, first: usize, out: &mut Vec<TStmt>) {
+        match kind {
+            ast::ClassKind::Class => {
+                self.check_class(c);
+                self.finish_local_class(c, first);
+            }
+            // A local object is an instance of its lifted class, made once per run of
+            // the block on its first use, as scalac's lazy val holds it.
+            // A local enum's companion is checked with the enum (`finish_local_enum`).
+            ast::ClassKind::Object if self.syms.class(c).companion.is_some_and(|e| self.syms.class(e).kind == ClassKind::Enum) => {}
+            ast::ClassKind::Object => {
+                self.check_class(c);
+                self.finish_local_class(c, first);
+                if let Some(sym) = self.syms.class(c).local_module {
+                    let init = self.new_instance(c, ast::ListRef::EMPTY, Span::default());
+                    out.push(TStmt::Val(sym, init));
+                }
+            }
+            ast::ClassKind::Enum => {
+                let companion = self.syms.class(c).companion;
+                if let Some(m) = companion {
+                    self.set_anon_env(m, env);
+                }
+                self.check_class(c);
+                self.finish_local_class(c, first);
+                if let Some(m) = companion {
+                    self.finish_local_enum(c, m, out);
+                }
+            }
+            ast::ClassKind::Trait => {
+                self.check_class(c);
+                if !self.deferred_classes.is_empty() {
+                    self.finish_deferred_classes(0, false);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// The local enum `e` checked and its captures known: its cases, which pass those to its
@@ -619,7 +662,7 @@ impl<'a> Worker<'a> {
     /// `TreeInfo.exprPurity` takes for an effect (an ordinary `TypeApply` is `Impure`) where its
     /// erasure makes it the value itself.
     fn pure_value(&self, te: TExprId) -> bool {
-        if self.expr_marks.get(&te).map_or(false, |&m| m & super::MARK_CAST != 0) {
+        if self.prog.is_cast(te) {
             return false;
         }
         match self.prog.expr(te) {
@@ -2111,6 +2154,9 @@ impl<'a> Worker<'a> {
             }
             Expr::Withheld(msg) => {
                 let msg = self.cur_ast().strings[msg.idx()].clone();
+                // Which worker meets a withheld body depends on which typed it (`withheld_met`'s
+                // readers, the lenient retry and a run's halt): on a fork, one worker types the build.
+                self.told_once("a withheld body met");
                 self.error(span, msg);
                 self.withheld_met += 1;
                 let note = self.diags.items.last().cloned();
@@ -3190,7 +3236,7 @@ impl<'a> Worker<'a> {
         if !self.jvm && !matches!(self.types.get(known), Type::Param(_) | Type::AppParam(..)) {
             return None;
         }
-        let tag_class = self.sites.class_tag?;
+        let tag_class = self.class_tag_class(true)?;
         let target = self.types.class(tag_class, &[elem]);
         let Some(evidence) = self.resolve_given(target, span) else {
             let file = self.env.file;
@@ -4668,7 +4714,7 @@ impl<'a> Worker<'a> {
                         } else {
                             self.name_retyped_product_class(c);
                         }
-                        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+                        self.set_anon_env(c, Arc::new(self.env.clone()));
                         self.bind_local_class(def.name, c);
                         self.link_local_companion(c, def.name);
                     }
@@ -4994,44 +5040,11 @@ impl<'a> Worker<'a> {
                     self.deps_local_class(c);
                 }
                 let env = Arc::new(self.env.clone());
-                self.anon_envs.insert(c, env.clone());
+                self.set_anon_env(c, env.clone());
                 let first = self.prog.exprs.len();
-                match cls.kind {
-                    ast::ClassKind::Class => {
-                        self.check_class(c);
-                        self.finish_local_class(c, first);
-                    }
-                    // A local object is an instance of its lifted class, made once per run of
-                    // the block on its first use, as scalac's lazy val holds it.
-                    // A local enum's companion is checked with the enum (`finish_local_enum`).
-                    ast::ClassKind::Object if self.syms.class(c).companion.is_some_and(|e| self.syms.class(e).kind == ClassKind::Enum) => {}
-                    ast::ClassKind::Object => {
-                        self.check_class(c);
-                        self.finish_local_class(c, first);
-                        if let Some(sym) = self.syms.class(c).local_module {
-                            let init = self.new_instance(c, ast::ListRef::EMPTY, Span::default());
-                            out.push(TStmt::Val(sym, init));
-                        }
-                    }
-                    ast::ClassKind::Enum => {
-                        let companion = self.syms.class(c).companion;
-                        if let Some(m) = companion {
-                            self.anon_envs.insert(m, env);
-                        }
-                        self.check_class(c);
-                        self.finish_local_class(c, first);
-                        if let Some(m) = companion {
-                            self.finish_local_enum(c, m, out);
-                        }
-                    }
-                    ast::ClassKind::Trait => {
-                        self.check_class(c);
-                        if !self.deferred_classes.is_empty() {
-                            self.finish_deferred_classes(0, false);
-                        }
-                    }
-                    _ => {}
-                }
+                // Its records and its nested classes' are settled in place before any publication
+                // registers them (`settling_classes`, `settle_local_class`).
+                self.settling_classes(|t| t.define_local_class(c, cls.kind, env, first, out));
             }
             DefKind::Val { pat, ty, rhs } => {
                 let Some(rhs) = *rhs else {
@@ -5226,14 +5239,10 @@ impl<'a> Worker<'a> {
                             self.deps_local_class(c);
                         }
                         // Its body sees the block as it stands here, as a local object's does.
-                        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+                        let env = Arc::new(self.env.clone());
+                        self.set_anon_env(c, env.clone());
                         let first = self.prog.exprs.len();
-                        self.check_class(c);
-                        self.finish_local_class(c, first);
-                        if let Some(sym) = self.syms.class(c).local_module {
-                            let init = self.new_instance(c, ast::ListRef::EMPTY, Span::default());
-                            out.push(TStmt::Val(sym, init));
-                        }
+                        self.settling_classes(|t| t.define_local_class(c, ast::ClassKind::Object, env, first, out));
                     }
                     return;
                 };

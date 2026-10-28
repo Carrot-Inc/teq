@@ -1,0 +1,4 @@
+# A transparent macro of the run called after an error of an earlier file: whether its unit suspends reads the errors
+# reported before it (`typing_suspends`, dotty's `ctx.reporter.errorsReported`), which the history one worker's walk
+# reads answers, or the build gives way.
+1

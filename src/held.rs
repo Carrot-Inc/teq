@@ -89,6 +89,7 @@ impl Program {
             opaque_bits,
             spread_bits,
             ascribed_bits,
+            cast_bits,
             setter_assign_bits,
             tuple_index_bits,
             kept_bits,
@@ -152,6 +153,7 @@ impl Program {
             + opaque_bits.held()
             + spread_bits.held()
             + ascribed_bits.held()
+            + cast_bits.held()
             + setter_assign_bits.held()
             + tuple_index_bits.held()
             + kept_bits.held()

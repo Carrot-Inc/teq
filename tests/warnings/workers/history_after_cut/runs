@@ -1,0 +1,8 @@
+# A transparent macro of the run cuts `A1`'s typing, and `A2` after it in its file reports a type error where a worker
+# types it before it knows of the cut; `B`, a later file another worker types meanwhile, meets a macro of the run whose
+# suspension reads whether an error was reported (dotty's `errorsReported`). One worker's walk never types `A2` before
+# the cut's round, as dotty's traversal stops at the cut and its reporter never holds that error, so the history counts
+# what stands of a suspended unit's typing (`Standing`, the cut's rule) and nothing made while an item unwinds
+# (`Unwound`); before, the build gave way at eight workers in every run, "a read of the history ... answered false
+# where the walk's order answers true". The error is reported once, at the round the file is typed again.
+1

@@ -336,7 +336,7 @@ impl<'a> Typing<'a> for Worker<'a> {
     fn take_poisoned(&mut self, reached: &[FunId]) {
         for f in reached {
             if let Some(diags) = self.poisoned.remove(f) {
-                self.diags.items.extend(diags);
+                self.diags.extend(diags);
             }
         }
     }

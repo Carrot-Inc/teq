@@ -3318,6 +3318,24 @@ impl<K: Hash + Eq + Copy, V> Layered<K, V> {
         self.join(entries);
     }
 
+    /// `merge_own` of the shared entries whose key `keep` holds of: the others are the workers'
+    /// own entries a publication shared, which the merge placed with the workers' own.
+    pub fn merge_own_where(&mut self, keep: impl Fn(&K) -> bool)
+    where
+        V: Clone,
+    {
+        let Some(shared) = self.shared.take() else { return };
+        let own = std::mem::take(&mut self.local);
+        let mut entries: FxMap<K, V> = FxMap::default();
+        for (k, v) in shared.iter() {
+            if keep(k) {
+                entries.insert(*k, v.clone());
+            }
+        }
+        entries.extend(own);
+        self.join(entries);
+    }
+
     /// Leaves the shared entries: one map again.
     pub fn join(&mut self, entries: FxMap<K, V>) {
         self.shared = None;

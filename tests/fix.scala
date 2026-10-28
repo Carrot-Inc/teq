@@ -811,9 +811,8 @@ object Parallel:
   * one item at a time across forked workers, the items' check. Every rule worker started before a typing is ready
   * before it begins (`TEQ_FIX_BOOT_DELAY` holding their bootstraps), so that no bootstrap's typing runs beside it.
   * `--threads` reaches both verbs in both spellings; a refused mapping is recorded as one worker's typing in place.
-  * The default getter's case (`tests/workers/default_getter_sealed`): in the assertion-enabled build a forked typing of a
-  * method with a default argument aborts at a check of the parallel typer's (pinned as tests/workers.sh's
-  * `default_getter_sealed`); there a run that aborts so, the witness corpus's among them, is pending on that pin. The counter macro library of
+  * The default getter's case (`tests/workers/default_getter_sealed`): a forked typing of a method with a default
+  * argument, the one-worker run's bytes in every build, the assertion-enabled one's check of a sealed record among them. The counter macro library of
   * tests/fix/support/typing/counter, whose state a run changes, gives a parallel attempt way at 4, 8 and 16 in round
   * one, in round two and in a later job: each run the one-worker run's bytes, the project rule `Print`'s configuration
   * printed once, a refusal (`ZBad.scala`) every file as it was. The library is read from its products on the class path
@@ -953,18 +952,6 @@ object Typing:
       val problems = typingProblems(o.record, asked, retried) ++ (if witness && asked > 1 then workProblems(o.record) else Vector())
       if engineParallelTyping then expect(name, problems.isEmpty, problems.mkString("\n  "))
       else if asked > 1 then expect(name + "/refused", problems.nonEmpty, "the typing check accepts a serial engine's run")
-    // The assertion-enabled build aborts a forked typing of a method with a default argument (a worker changes the
-    // default getter's record after a publication sealed it): the parallel typer's, pinned as tests/workers.sh's
-    // `default_getter_sealed` for its own part. A run that aborts so there is pending on that pin, counted apart; any
-    // other abort fails.
-    val assertions = Sh(teq, "--version").check(false).run().outAll().trim.endsWith("assertions")
-    var pending = 0
-    def pinned(name: String, o: Parallel.Outcome): Boolean =
-      val hit = assertions && o.status == 134 && o.err.contains("after a publication sealed it")
-      if hit then
-        pending += 1
-        println(s"PENDING typing/$name: a default getter's record changed after its publication sealed it (tests/workers.sh's default_getter_sealed)")
-      hit
     def typed(tag: String, files: Seq[(String, String)], conf: String, t: Int, r: Int, env: Seq[(String, String)] = Seq(), extra: Seq[String] = Seq()): Parallel.Outcome =
       Parallel.runOn(teq, work, "typing-" + tag, files, conf, r, (if t == r then Seq() else Seq("TEQ_FIX_TYPING_THREADS" -> t.toString)) ++ env, extra = extra)
 
@@ -977,11 +964,10 @@ object Typing:
     for t <- counts; r <- counts if (t, r) != (1, 1) do
       val env = Seq("TEQ_FIX_TYPING_WORK" -> "1") ++ (if r > 1 then Seq("TEQ_FIX_BARRIER" -> (r min 4).toString) else Seq())
       val o = typed(s"t$t-r$r", corpus, Parallel.conf, t, r, env)
-      if !pinned(s"t$t/r$r", o) then
-        expect(s"t$t/r$r/bytes", sameBytes(base, o).isEmpty, sameBytes(base, o).getOrElse(""))
-        typing(s"t$t/r$r/typing", o, t, witness = true)
-        val rules = Parallel.recordProblems(o.record, r, r min 4)
-        expect(s"t$t/r$r/rules", rules.isEmpty, rules.mkString("\n  "))
+      expect(s"t$t/r$r/bytes", sameBytes(base, o).isEmpty, sameBytes(base, o).getOrElse(""))
+      typing(s"t$t/r$r/typing", o, t, witness = true)
+      val rules = Parallel.recordProblems(o.record, r, r min 4)
+      expect(s"t$t/r$r/rules", rules.isEmpty, rules.mkString("\n  "))
     // The control: the typing serial, the rules' pool parallel. The rules' check accepts it; the typing check must not.
     val planted = typed("plant-serial-typing", corpus, Parallel.conf, 8, 8, Seq("TEQ_FIX_PLANT" -> "serial-typing", "TEQ_FIX_TYPING_WORK" -> "1", "TEQ_FIX_BARRIER" -> "4"))
     expect("plant/serial-typing/bytes", sameBytes(base, planted).isEmpty, sameBytes(base, planted).getOrElse(""))
@@ -990,9 +976,8 @@ object Typing:
     // The control the items alone tell: one item at a time across the workers (`TEQ_SERIAL_ITEMS=1`), the workers'
     // assignment unchanged, so that the attempt says it forked and the items name several workers.
     val serialItems = typed("serial-items", corpus, Parallel.conf, 8, 8, Seq("TEQ_SERIAL_ITEMS" -> "1", "TEQ_FIX_TYPING_WORK" -> "1", "TEQ_FIX_BARRIER" -> "4"))
-    if !pinned("serial-items", serialItems) then
-      expect("serial-items/bytes", sameBytes(base, serialItems).isEmpty, sameBytes(base, serialItems).getOrElse(""))
-      expect("serial-items/refused", workProblems(serialItems.record).nonEmpty, "the items' check accepts a run whose items were typed one at a time")
+    expect("serial-items/bytes", sameBytes(base, serialItems).isEmpty, sameBytes(base, serialItems).getOrElse(""))
+    expect("serial-items/refused", workProblems(serialItems.record).nonEmpty, "the items' check accepts a run whose items were typed one at a time")
     // The pool's readiness: round one's documents done by the lead while the others' bootstraps are held
     // (`TEQ_FIX_BOOT_DELAY`), round two's typing waits for every one of them.
     val ready = (0 until 4).map(i => f"src/rd/R$i.scala" -> s"package rd\nimport scala.Nil\nobject R$i { val empty: List[Int] = Nil }\n")
@@ -1003,10 +988,9 @@ object Typing:
     if engineParallelTyping then
       // The two requests apart: typing at eight, the rules' pool at one.
       val apart = Parallel.runOn(teq, work, "typing-apart", corpus, Parallel.conf, 8, Seq("TEQ_FIX_RULE_THREADS" -> "1"))
-      if !pinned("apart", apart) then
-        expect("apart/bytes", sameBytes(base, apart).isEmpty, sameBytes(base, apart).getOrElse(""))
-        expect("apart/typing", typingProblems(apart.record, 8).isEmpty, typingProblems(apart.record, 8).mkString("\n  "))
-        expect("apart/rules", apart.record.exists(l => l.startsWith("run ") && Parallel.fieldsOf(l).get("workers") == Some("1")), apart.record.take(3).mkString("\n"))
+      expect("apart/bytes", sameBytes(base, apart).isEmpty, sameBytes(base, apart).getOrElse(""))
+      expect("apart/typing", typingProblems(apart.record, 8).isEmpty, typingProblems(apart.record, 8).mkString("\n  "))
+      expect("apart/rules", apart.record.exists(l => l.startsWith("run ") && Parallel.fieldsOf(l).get("workers") == Some("1")), apart.record.take(3).mkString("\n"))
       // A refused mapping (Linux, where `ulimit -v` bounds the address space): the overlays do not fit in 16 GiB at four
       // workers, so the typer types in place by one worker, the fork's path not taken though `TEQ_FORK=1` asks for it;
       // the record says what happened (`mapping_refused=1 effective=1 forked=0 outcome=one`), and the files are as one
@@ -1272,15 +1256,13 @@ object Typing:
     val round2 = typed("round2-check", program("round2", "p"), bothConf, 1, 1)
     expect("round2/answer", round2.files("src/p/Input.scala") == "package p\nobject Example { val empty: List[Int] = List.empty }\n", round2.files("src/p/Input.scala"))
     // The default getter's case (the push pass of 5c171b26f), its fixture tests/workers.sh's: two files, a method with a
-    // default argument, typed by several workers: the bytes the one-worker run's; in the assertion-enabled build
-    // pending on the pin until the parallel typer's publication of the getter is fixed.
+    // default argument, typed by several workers: the bytes the one-worker run's, in the assertion-enabled build too
+    // (a record a publication sealed is never changed before the merge, tests/workers.sh's `default_getter_sealed`).
     val getter = Files.list(Paths.get("tests/workers/default_getter_sealed")).iterator.asScala.toVector.sorted.map(f => s"src/dg/${f.getFileName}" -> read(f))
     val getterOne = typed("getter-1", getter, unusedConf, 1, 1)
     expect("getter", getterOne.status == 0, s"exit ${getterOne.status}\n${getterOne.err.linesIterator.take(5).mkString("\n")}")
     for t <- counts.drop(1) do
       val o = typed(s"getter-$t", getter, unusedConf, t, t)
-      if !pinned(s"getter/w$t", o) then
-        expect(s"getter/w$t/bytes", sameBytes(getterOne, o).isEmpty, sameBytes(getterOne, o).getOrElse(""))
-        typing(s"getter/w$t/typing", o, t)
-    if pending > 0 then println(s"typing: $pending pending on tests/workers.sh's default_getter_sealed")
+      expect(s"getter/w$t/bytes", sameBytes(getterOne, o).isEmpty, sameBytes(getterOne, o).getOrElse(""))
+      typing(s"getter/w$t/typing", o, t)
     (pass, fail)

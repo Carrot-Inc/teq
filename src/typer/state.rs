@@ -1251,7 +1251,7 @@ impl<'a> Worker<'a> {
                 if self.attempts.open != 0 && !d.is_warning {
                     self.attempts.late.push(self.diags.items.len() as u32);
                 }
-                self.diags.items.push(d);
+                self.diags.push(d);
             }
         }
     }
@@ -1647,7 +1647,7 @@ impl<'a> Worker<'a> {
         self.replay(s.redo);
         let base = self.diags.items.len() as u32;
         self.attempts.late.extend(s.late.iter().map(|&i| base + i));
-        self.diags.items.extend(s.diags);
+        self.diags.extend(s.diags);
         self.error_nodes += s.error_nodes;
         self.index_put_back(s.index);
         self.restore_rare(s.infos, s.matches, s.bounds, s.rewrites, s.pending);
@@ -2008,7 +2008,7 @@ impl<'a> Worker<'a> {
         let dropped = split_except(&mut self.diags.items, m.diags as usize, &kept_diags);
         // The census of what the dropped ones counted, as `discard_diagnostics` takes it back.
         let len = self.diags.items.len();
-        self.diags.items.extend(dropped);
+        self.diags.extend(dropped);
         self.discard_counted(len);
         self.index_drop_except(m.index, &kept_records);
         self.cut_rare(at, &[kept_rare[0].as_slice(), kept_rare[1].as_slice(), kept_rare[2].as_slice(), kept_rare[3].as_slice(), kept_rare[4].as_slice()]);

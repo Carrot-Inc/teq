@@ -622,6 +622,7 @@ impl<'a> Worker<'a> {
         if self.member_cycles.contains(&(c, name)) {
             return;
         }
+        self.told_once("a cyclic alias");
         self.member_cycles.push((c, name));
         let (file, span) = {
             let i = self.syms.class(c);
@@ -2135,7 +2136,7 @@ impl<'a> Worker<'a> {
     /// val selected from one of those.
     pub fn path_of(&mut self, te: crate::tir::TExprId) -> Option<TypeId> {
         use crate::tir::TExpr;
-        if self.expr_marks.get(&te).map_or(false, |&m| m & super::MARK_CAST != 0) {
+        if self.prog.is_cast(te) {
             return None;
         }
         // A given's reference still pending is the call its expansion makes, each a value of its

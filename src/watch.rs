@@ -637,6 +637,10 @@ pub fn run(opts: &Options) -> ! {
             let mut t = Typer::new(&asts, &sources, &mut interner);
             // A session's texts change: what the parser recovered may come and go with any edit.
             t.recovered = true;
+            // Whether the program has a syntax error, before its bodies are typed: what a decision
+            // reading whether an error was reported reads (`Worker::history`), as dotty's parser
+            // reports it ahead of the typer, on every worker.
+            t.diags.syntax_errors = syntax_has_errors(&syntax);
             if let Some((types, lists)) = store_hint {
                 t.types.reserve(types + types / 4, lists + lists / 4);
             }
@@ -661,6 +665,7 @@ pub fn run(opts: &Options) -> ! {
             t.known_caches = !opts.no_known_caches;
             t.macro_state_per_worker = opts.macro_state_per_worker;
             t.dialect = opts.dialect;
+            // This full build's policy, fixed until it ends (`Diagnostics::policy`): a retype keeps it.
             t.diags.policy = std::sync::Arc::new(opts.policy());
             // The unused imports: warnings under the flag, else a language server's hints.
             t.unused.mode = match (opts.wunused_imports, opts.index) {
@@ -731,6 +736,10 @@ pub fn run(opts: &Options) -> ! {
             if t.serial.is_needed() || refusal.is_some() {
                 let why = t.serial.reason().or(refusal).unwrap_or_default();
                 crate::types::view::gave_way(&why);
+                // `TEQ_SERIAL_TRACE`: why, whatever the count and the reason, as a build's own trace prints it.
+                if std::env::var_os("TEQ_SERIAL_TRACE").is_some() {
+                    eprintln!("teq: typed again by one worker: {}", why);
+                }
                 if automatic && !t.serial.of_diagnostics() {
                     let module = t.serial.undeclared_module().filter(|(name, c)| t.on_thread(|w| w.declared_by(name, *c))).map(|(name, _)| name);
                     let until = module.as_ref().map(|m| format!(", until the session restarts with {m} declared")).unwrap_or_default();
@@ -1154,6 +1163,7 @@ pub fn run(opts: &Options) -> ! {
             }
             let changes: Vec<Change> = remaps.iter().map(|(o, remap)| Change { file: FileId(*o as u32), remap }).collect();
             let t_type = Instant::now();
+            t.diags.syntax_errors = syntax_has_errors(&syntax);
             match t.retype(&changes) {
                 Ok(restored) => {
                     store_hint = Some(t.types.len());
@@ -1168,6 +1178,25 @@ pub fn run(opts: &Options) -> ! {
                     }
                     pending.sort_unstable();
                     pending.dedup();
+                }
+                // A retype whose inlining phase forked gave the build to one worker (`need_serial`): typed
+                // again from the start by one worker, as a full build that gives way is, and that build
+                // answers.
+                Err(reason) if reason.starts_with(crate::typer::incremental::RETYPE_GAVE_WAY) => {
+                    crate::types::view::gave_way(&reason);
+                    if std::env::var_os("TEQ_SERIAL_TRACE").is_some() {
+                        eprintln!("teq: typed again by one worker: {}", reason);
+                    }
+                    retry = Some(Retry {
+                        requested: Instant::now(),
+                        attempt: t_type.elapsed(),
+                        threads: t.threads,
+                        removed: Vec::new(),
+                        products: false,
+                        #[cfg(debug_assertions)]
+                        numbers_taken: crate::typer::thread::run(crate::shared::numbers_taken_by_others),
+                    });
+                    break Some(reason);
                 }
                 Err(reason) => break Some(reason),
             }
@@ -1961,6 +1990,11 @@ fn finish_file(t: &mut Worker, sources: &Sources, file: &str, opts: &Options, re
 /// The lexical and parse diagnostics of the program's files, by canonical path (their files' ids
 /// given where they are presented).
 type Syntax = FxMap<PathBuf, Vec<Diagnostic>>;
+
+/// Whether the program's syntax diagnostics hold an error.
+fn syntax_has_errors(syntax: &Syntax) -> bool {
+    syntax.values().flatten().any(|d| !d.is_warning)
+}
 
 /// Hands the typer's diagnostics the program's syntax diagnostics, which its answers then present
 /// with its own and count as errors (`Diagnostics::fails`), and the program's syntax state, by

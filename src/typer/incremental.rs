@@ -21,6 +21,11 @@ pub struct Change<'r> {
     pub remap: &'r Remap,
 }
 
+
+/// The start of the reason a retype gives when a forked round of its inlining phase gave the build
+/// to one worker (`retype_files`), which a session answers with a build of one worker.
+pub const RETYPE_GAVE_WAY: &str = "a retype gave way: ";
+
 impl<'a> super::Typer<'a> {
     /// Types the bodies of the changed files anew. `Err` names why a full build is needed
     /// instead; `Ok` leaves the diagnostics of the files in `diags`. An inferred signature that
@@ -65,6 +70,15 @@ impl<'a> super::Typer<'a> {
 }
 
 impl<'a> Worker<'a> {
+    /// What a fork tracked of its items for the merge (their ranges, the history reads, the events
+    /// told and met) forgotten, where one worker types again what a build that forked made.
+    fn forget_fork_tracking(&mut self) {
+        self.diag_ranges.clear();
+        self.history_reads.clear();
+        self.told.clear();
+        self.meetings.clear();
+    }
+
     fn retype_files(&mut self, changes: &[Change]) -> Result<Vec<FileId>, String> {
         if self.scan_wildcards() != self.wildcards_used.load(std::sync::atomic::Ordering::Relaxed) {
             return Err("wildcard arguments are newly used or no longer used".to_string());
@@ -84,8 +98,7 @@ impl<'a> Worker<'a> {
         }
         self.given_fast.clear();
         self.head_sigs.clear();
-        self.base_type_cache.clear();
-        self.class_base_memo.clear();
+        self.clear_base_caches();
         self.target_name_files.clear();
         self.package_levels.clear();
         // A member's body may come or go with the edit.
@@ -131,6 +144,9 @@ impl<'a> Worker<'a> {
         self.begin_demands();
         self.checked_imports.clear();
         self.import_heads.clear();
+        // A retype's walk is one worker's: what a fork tracked to place and check its workers' records
+        // (`merge::DiagRange`, the history reads, the events) is the full build's, gone with it.
+        self.forget_fork_tracking();
         for change in changes {
             self.check_file(change.file);
         }
@@ -138,6 +154,11 @@ impl<'a> Worker<'a> {
         self.fill_getters();
         // The retyped files' kept calls, and those an earlier build with an error left, expanded.
         self.inlining_phase();
+        // A forked round of the phase gave the build to one worker (`need_serial`): its arenas are
+        // the fork's, nothing after reads them, and the session types the build again by one worker.
+        if self.serial.is_needed() {
+            return Err(format!("{}{}", RETYPE_GAVE_WAY, self.serial.reason().unwrap_or_default()));
+        }
         // The files' top-level value forwarders, forgotten with their typing: made again as the
         // full path makes them once the bodies are typed.
         self.define_top_value_forwarders();
@@ -222,6 +243,7 @@ impl<'a> Worker<'a> {
         self.reopen_suspended();
         self.checked_imports.retain(|&(f, _), _| !files.iter().any(|x| x.0 == f));
         self.import_heads.retain(|&(f, _), _| !files.iter().any(|x| x.0 == f));
+        self.forget_fork_tracking();
         for &file in files {
             self.check_file(file);
         }

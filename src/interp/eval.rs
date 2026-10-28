@@ -1152,12 +1152,14 @@ impl<'a, 't> Interp<'a, 't> {
     /// Calls the function `f` with `this` and the arguments; `parent` is the scope a local def or
     /// a member of an anonymous class reads its captures from, `class` the class of a method.
     pub(super) fn call_fun(&mut self, f: FunId, this: Value, args: Vec<Value>, parent: Option<Rc<Frame>>, class: Option<ClassId>) -> R {
-        if !self.typer.poisoned_withheld.is_empty() && self.typer.poisoned_withheld.contains_key(&f) {
+        // Every worker's withheld members, the shared ones and those this worker's hold stages
+        // (`Layered`), so that a run on any worker stops where one worker's would.
+        if self.typer.poisoned_withheld.contains_key(&f) {
             // A member of an anonymous class whose body its product withholds, kept quiet until
             // called, as the reach reports it once it marks the member; every run that calls it
             // stops, a later macro expansion's too.
             let diags = self.typer.poisoned.remove(&f).unwrap_or_default();
-            self.typer.diags.items.extend(diags);
+            self.typer.diags.extend(diags);
             return self.withheld_reached();
         }
         self.halt_on_withheld()?;
@@ -1317,12 +1319,16 @@ impl<'a, 't> Interp<'a, 't> {
         let Some(d) = self.typer.withheld_notes.get(&e) else { return };
         if !self.typer.diags.items.iter().any(|x| x.file == d.file && x.span == d.span && x.msg == d.msg) {
             let d = d.clone();
-            self.typer.diags.items.push(d);
+            self.typer.diags.push(d);
         }
     }
 
-    /// Stops the run where it reaches a withheld body (`typer::WITHHELD_TEMPLATE`).
+    /// Stops the run where it reaches a withheld body (`typer::WITHHELD_TEMPLATE`). On a worker of a
+    /// fork the build is given to one worker: which withheld members and notes a run sees is what
+    /// the workers that typed the library bodies had published by then (`poisoned_withheld`,
+    /// `withheld_notes`), and what it reports of them is told once (`Worker::told_once`).
     pub(super) fn withheld_reached(&mut self) -> R {
+        self.typer.told_once("a macro's run reached a withheld body");
         self.halted = true;
         self.exec.steps = 0;
         Err(Control::Fail(Failure::Withheld))

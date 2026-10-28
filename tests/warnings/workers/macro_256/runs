@@ -1,0 +1,4 @@
+# A macro reporting each call's message at one place (`report.warning` at a quoted anchor) from 256 calls in eight
+# files: the inlining phase forks (`PHASE_FORK_CALLS`, src/typer/inlining.rs, 256), and of the messages at one place
+# the first call's is shown, as one worker's walk (and scalac 3.8.4) shows it.
+0

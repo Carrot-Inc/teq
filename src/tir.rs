@@ -1176,6 +1176,10 @@ pub struct Program {
     /// would be another (a generic result's `Object`): the JVM's qualifier of a member is of the
     /// ascribed class (`Gen::qualifier_site`).
     pub ascribed_bits: Bits,
+    /// The nodes a cast's tree stands for (`typer::MARK_CAST`: a primitive's conversion made as a
+    /// cast, a mirror's value), as bits by expression: what a macro's view of a body another worker
+    /// typed reads (`tree_type`), every worker's marks in one set while forked.
+    pub cast_bits: Bits,
     /// The setter calls the typer made of an assignment through an abstract var (`c.x = v`,
     /// `Worker::assignment`), as bits by expression: scalac's tree keeps an assignment, where a
     /// call written `c.x_=(v)` is an application (dotty's `Typer.typedAssign`), which the trees a
@@ -1355,6 +1359,7 @@ impl Program {
         self.opaque_bits.fork();
         self.spread_bits.fork();
         self.ascribed_bits.fork();
+        self.cast_bits.fork();
         self.setter_assign_bits.fork();
         self.tuple_index_bits.fork();
         self.kept_bits.fork();
@@ -1373,7 +1378,7 @@ impl Program {
             let own_base = self.exprs.own_base();
             self.expr_types.follow_escapes(marks.clone(), own_base);
             self.expr_spans.follow_escapes(marks.clone(), own_base);
-            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.setter_assign_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
+            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.ascribed_bits, &mut self.cast_bits, &mut self.setter_assign_bits, &mut self.kept_bits, &mut self.tuple_index_bits] {
                 bits.follow_escapes(marks.clone(), own_base);
             }
         }
@@ -1449,6 +1454,7 @@ impl Program {
             opaque_bits: Bits::attach(self.opaque_bits.shared_arc(), worker),
             spread_bits: Bits::attach(self.spread_bits.shared_arc(), worker),
             ascribed_bits: Bits::attach(self.ascribed_bits.shared_arc(), worker),
+            cast_bits: Bits::attach(self.cast_bits.shared_arc(), worker),
             setter_assign_bits: Bits::attach(self.setter_assign_bits.shared_arc(), worker),
             tuple_index_bits: Bits::attach(self.tuple_index_bits.shared_arc(), worker),
             kept_bits: Bits::attach(self.kept_bits.shared_arc(), worker),
@@ -1556,6 +1562,7 @@ impl Default for Program {
             opaque_bits: Bits::default(),
             spread_bits: Bits::default(),
             ascribed_bits: Bits::default(),
+            cast_bits: Bits::default(),
             setter_assign_bits: Bits::default(),
             tuple_index_bits: Bits::default(),
             kept_bits: Bits::default(),
@@ -1855,6 +1862,16 @@ impl Program {
     #[inline(always)]
     pub fn is_ascribed(&self, e: TExprId) -> bool {
         self.ascribed_bits.has(e.0)
+    }
+
+    /// Marks `e` as a cast's tree (`cast_bits`).
+    pub fn mark_cast(&mut self, e: TExprId) {
+        self.cast_bits.set(e.0);
+    }
+
+    #[inline(always)]
+    pub fn is_cast(&self, e: TExprId) -> bool {
+        self.cast_bits.has(e.0)
     }
 
     #[inline(always)]

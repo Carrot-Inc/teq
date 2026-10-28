@@ -1,0 +1,3 @@
+# A cyclic alias reached from four files: reported once, as one worker's walk reports it; told on a worker of a fork,
+# the build gives way to one worker.
+1

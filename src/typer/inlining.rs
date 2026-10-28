@@ -172,6 +172,12 @@ struct PhaseTables {
     deferred_lambdas: FxMap<(u32, u32, u32), TExprId>,
     lambda_results: FxMap<(u32, u32, u32), TypeId>,
     journal: FxMap<TExprId, (crate::tir::TExpr, Option<TypeId>)>,
+    /// What the body phase's expansions kept past their item (`InlineState::evaluated`, the
+    /// literals an interpreted constant made; `InlineState::args`, the locals an `inline val` or a
+    /// reduced match's binder stands for): a kept call's expansion on any worker reads them as the
+    /// main worker's does.
+    evaluated: FxMap<TExprId, ()>,
+    inline_args: FxMap<SymId, super::inline::InlineArg>,
 }
 
 impl PhaseTables {
@@ -186,6 +192,8 @@ impl PhaseTables {
             deferred_lambdas: w.deferred_lambdas.clone(),
             lambda_results: w.lambda_results.clone(),
             journal: w.inlining.journal.clone(),
+            evaluated: w.inline.evaluated.clone(),
+            inline_args: w.inline.args.clone(),
         }
     }
 
@@ -199,6 +207,8 @@ impl PhaseTables {
         w.deferred_lambdas = self.deferred_lambdas.clone();
         w.lambda_results = self.lambda_results.clone();
         w.inlining.journal = self.journal.clone();
+        w.inline.evaluated = self.evaluated.clone();
+        w.inline.args = self.inline_args.clone();
     }
 
     /// The entries `w` holds that it was given, dropped: the main worker holds them.
@@ -212,6 +222,8 @@ impl PhaseTables {
         w.deferred_lambdas.retain(|k, v| self.deferred_lambdas.get(k) != Some(v));
         w.lambda_results.retain(|k, v| self.lambda_results.get(k) != Some(v));
         w.inlining.journal.retain(|k, _| !self.journal.contains_key(k));
+        w.inline.evaluated.retain(|k, _| !self.evaluated.contains_key(k));
+        w.inline.args.retain(|k, v| self.inline_args.get(k).map_or(true, |x| x.expr != v.expr || x.ty != v.ty));
     }
 }
 
@@ -221,11 +233,65 @@ impl PhaseTables {
 /// progress there, the unit's own, what they had reported and demanded by then. dotty's
 /// `SuspendException` leaves them at that point (`TyperPhase.typeCheck` catches it, the
 /// reporter keeping what they reported).
+#[derive(Clone)]
 pub(super) struct TypingCut {
     pub(super) file: u32,
     pub(super) key: u32,
-    pub(super) reported: Vec<Diagnostic>,
+    /// The records its definitions in progress had reported by then, by identity
+    /// (`source::Ordinal`): an equal record reported after, as the item unwinds, is not of them.
+    pub(super) reported: Vec<u64>,
     pub(super) demanded: Vec<DiagOwner>,
+    /// The rank of the item it was made in (`Worker::diag_rank`), none outside one: a history read
+    /// at a later item's reads the cut's standing, one at this item's or before it does not, as one
+    /// worker's walk meets the cut there (`Worker::history`, `history_mismatch`).
+    pub(super) rank: Option<(u32, u32)>,
+}
+
+impl TypingCut {
+    /// Whether one worker's walk has met the cut by a read at the item ranked `at`.
+    pub(super) fn before(&self, at: (u32, u32)) -> bool {
+        self.rank.map_or(true, |r| r < at)
+    }
+}
+
+/// A file no cut suspended (`Standing::cut_at`).
+const NOT_SUSPENDED: u32 = u32::MAX;
+
+/// What stands of what the typing reported where units suspended at typing
+/// (`Worker::typing_standing`): by file the key of the item its typing was cut in, the completions
+/// those before kept whole and the in-progress definitions at the cuts demanded, and what those had
+/// reported by the cut.
+pub(super) struct Standing {
+    cut_at: Vec<u32>,
+    item_of: FxMap<(u32, u32), u32>,
+    demanded: FxMap<(u32, u32), ()>,
+    at_cut: FxMap<u64, ()>,
+}
+
+impl Standing {
+    /// Whether `o` is a definition of a unit that suspended.
+    fn suspended(&self, o: DiagOwner) -> bool {
+        !o.is_none() && self.cut_at.get(o.file as usize).is_some_and(|&k| k != NOT_SUSPENDED)
+    }
+
+    /// Whether the traversal keeps `o` whole: of a unit that did not suspend, or of an item before
+    /// its unit's cut (each owner's item by its key, worked out once).
+    fn whole(&mut self, w: &Worker<'_>, o: DiagOwner) -> bool {
+        if !self.suspended(o) {
+            return true;
+        }
+        let key = *self.item_of.entry(o.key()).or_insert_with(|| w.desugared_key(FileId(o.file), o.place));
+        key < self.cut_at[o.file as usize]
+    }
+
+    /// Whether the record `d` stands: of no owner, of a definition kept whole or demanded, or one a
+    /// definition in progress at a cut had reported by then.
+    pub(super) fn stands(&mut self, w: &Worker<'_>, d: &Diagnostic) -> bool {
+        if d.owner.is_none() || !self.suspended(d.owner) || self.demanded.contains_key(&d.owner.key()) || self.whole(w, d.owner) {
+            return true;
+        }
+        self.at_cut.contains_key(&d.ordinal.0)
+    }
 }
 
 #[derive(Default)]
@@ -246,6 +312,14 @@ pub struct Inlining {
     /// (`demands`): where a file of the program quotes or splices, whose macro may suspend a unit
     /// at typing (`Worker::begin_demands`).
     pub(super) track_demands: bool,
+    /// Whether the typing records where each completion that reported is met (`Worker::meet`): in
+    /// a build that may fork (`walk_by_size`), whose merge places a completion's reports at its
+    /// first demand in one worker's walk or gives the build to one worker (`events_displaced`).
+    pub(super) track_meetings: bool,
+    /// `track_demands || track_meetings`, read where every signature is (`notes_demands`).
+    pub(super) notes: bool,
+    /// Where `diags.items` stood as each completion of `completing` began (`Worker::enter_owner`).
+    pub(super) completing_marks: Vec<usize>,
     /// The demands this worker's typing made, each by the definition being typed and the one it
     /// demanded (`Worker::note_demand`): a body it typed or found typed, an inferred signature it
     /// read, an inline method's body an expansion needed, as dotty's completers type them when
@@ -352,11 +426,11 @@ pub struct Inlining {
     /// round had reported when its expansion met the macro of the run (`Worker::hit_suspension`):
     /// what stands of the round once it is given up.
     round_diags: usize,
-    suspension_prefix: Option<Vec<Diagnostic>>,
+    suspension_prefix: Option<FxMap<u64, ()>>,
     /// On a worker of a forked round that may suspend a file, what each unit reported, with the
     /// unit's place in the walk and its file: what the merge keeps of a file given up
     /// (`give_up_suspended`).
-    pub(super) unit_reports: Vec<(u32, u32, Diagnostic)>,
+    pub(super) unit_reports: Vec<(u32, u32, u64)>,
     /// The typed records of the nodes the phase changed in place (a kept call's, the index of a
     /// tuple its expansion folded), with their recorded types: the typed view reflection reads
     /// (`Worker::typed_expr`), as dotty's `defTree`, set by `PostTyper` before `Inlining`, keeps
@@ -492,12 +566,20 @@ impl Inlining {
                 self.typing_suspended.push(f);
             }
         }
-        self.suspension_reports.append(&mut o.suspension_reports);
+        // The suspended units' reports are placed with the diagnostics (`merge_diagnostics`).
+        debug_assert!(o.suspension_reports.is_empty(), "a worker's suspension reports left to the merge");
         self.demands.append(&mut o.demands);
         self.typing_cuts.append(&mut o.typing_cuts);
         self.unit_reports.append(&mut o.unit_reports);
         self.journal.extend(std::mem::take(&mut o.journal));
         self.index.clear();
+    }
+
+    /// Whether the typing notes what a read demands: for the units' suspensions (`track_demands`)
+    /// or for the merge's placement of what completions reported (`track_meetings`).
+    #[inline]
+    pub(super) fn notes_demands(&self) -> bool {
+        self.notes
     }
 
     /// The index of the calls still to expand, made again (after a merge or a sort).
@@ -569,6 +651,11 @@ impl<'a> Worker<'a> {
         let queue = PhaseQueue { units: taken.into_iter().map(|u| std::sync::Mutex::new(Some(u))).collect(), next: std::sync::atomic::AtomicUsize::new(0), tables: PhaseTables::of(self), classes, captures, suspendable: self.inlining.suspendable, splices_name_run: self.inlining.splices_name_run, current_run: self.inlining.current_run.clone(), reflect: Default::default(), given_up: (0..self.files.len()).map(|_| std::sync::atomic::AtomicU32::new(u32::MAX)).collect() };
         super::substitution::counts::phase_forked(queue.units.len());
         let prefix = super::merge::Prefix::of(self);
+        self.diag_ranges.clear();
+        self.history_reads.clear();
+        self.told.clear();
+        self.meetings.clear();
+        self.diag_region = (self.diags.items.len(), self.inlining.suspension_reports.len());
         // The body phase's workers took the variables' tags below its count, an earlier fork of
         // the phase the ones after.
         self.tvars.into_phase(self.inlining.next_tag as u32);
@@ -617,6 +704,9 @@ impl<'a> Worker<'a> {
         crate::measure::phase_done("inlining, the workers");
         let written = self.tvars.inherited_written() + others.iter().flatten().map(|w| w.tvars.inherited_written()).sum::<usize>();
         super::substitution::counts::inherited_written(written);
+        if let Some(why) = self.diagnostics_unplaced(&others).or_else(|| self.history_mismatch(&others)).or_else(|| self.events_displaced(&others)) {
+            self.need_serial_for_diagnostics(|| why);
+        }
         // The build is typed again by one worker (`need_serial`): what the workers made goes.
         if self.serial.is_needed() {
             return FxMap::default();
@@ -649,8 +739,10 @@ impl<'a> Worker<'a> {
         self.inlining.running = true;
         let outer_env = self.env.clone();
         let erased = self.erased_values.len();
+        // `TEQ_IDLE_WORKERS` keeps a worker from the units as from the items (`check::idle_worker`).
+        let idle = super::check::idle_worker(self.worker);
         loop {
-            if self.serial.is_needed() {
+            if self.serial.is_needed() || idle {
                 break;
             }
             crate::shake::point(crate::shake::Point::Item);
@@ -673,6 +765,7 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let start = self.own_marks();
+            let marks = self.begin_diag_range((0, u as u32));
             let given_up = self.inlining.suspended.len();
             let reported = self.diags.items.len();
             self.inlining.kept = unit;
@@ -685,13 +778,17 @@ impl<'a> Worker<'a> {
             }
             if q.suspendable {
                 let reports = self.diags.items.get(reported..).unwrap_or_default();
-                self.inlining.unit_reports.extend(reports.iter().map(|d| (u as u32, file, d.clone())));
+                self.inlining.unit_reports.extend(reports.iter().map(|d| (u as u32, file, d.ordinal.0)));
             }
             self.inlining.kept.clear();
             self.inlining.index.clear();
             self.publish_made_classes();
             let end = self.own_marks();
             self.items.push(super::merge::ItemRange { key: (0, u as u32), start, end });
+            self.end_diag_range((0, u as u32), marks);
+            if self.worker != 0 {
+                super::substitution::counts::attached_unit();
+            }
         }
         self.inlining.shared_reflect = None;
         if let Some(m) = self.inlining.reflect.as_mut() {
@@ -1497,7 +1594,7 @@ impl<'a> Worker<'a> {
         // `SpaceEngine.checkMatch` among them, and the later run's typing defers them again.
         self.deferred_matches.retain(|m| !files.contains(&m.file.0));
         let reported = std::mem::take(&mut self.inlining.suspension_reports);
-        self.diags.items.extend(reported);
+        self.diags.extend(reported);
         if self.inlining.kept.iter().any(|k| files.contains(&k.at.file)) {
             self.inlining.kept.retain(|k| !files.contains(&k.at.file));
         }
@@ -1506,6 +1603,47 @@ impl<'a> Worker<'a> {
                 self.inlining.suspended.push(f);
             }
         }
+    }
+
+    /// Which records stand of what the typing reported, the units `files` suspended at typing at
+    /// `cuts` with the completions `demands` lists (`keep_typing_reports`'s rule, `Standing::stands`):
+    /// what the reports' dropping keeps, and what the history a decision reads counts of a record
+    /// made before it (`merge::Worker::history_mismatch`), as dotty's reporter holds it.
+    pub(super) fn typing_standing(&self, files: &[u32], cuts: &[TypingCut], demands: &[(DiagOwner, DiagOwner)]) -> Standing {
+        // By file: not suspended, or the key of the item its typing was cut in, the earliest of its
+        // cuts; a unit no cut names (none of its definitions was in progress) keeps no item whole.
+        let mut cut_at = vec![NOT_SUSPENDED; self.asts.len()];
+        for &f in files {
+            cut_at[f as usize] = cuts.iter().filter(|c| c.file == f).map(|c| c.key).min().unwrap_or(0);
+        }
+        let mut standing = Standing { cut_at, item_of: FxMap::default(), demanded: FxMap::default(), at_cut: FxMap::default() };
+        // The completions those demanded, and the ones the definitions in progress at a cut in
+        // the cut item had demanded by then, closed under the demands.
+        let mut onward: FxMap<(u32, u32), Vec<DiagOwner>> = FxMap::default();
+        let mut reached: Vec<DiagOwner> = Vec::new();
+        for &(from, to) in demands {
+            if !standing.suspended(to) {
+                continue;
+            }
+            if standing.whole(self, from) {
+                reached.push(to);
+            } else {
+                onward.entry(from.key()).or_default().push(to);
+            }
+        }
+        let first_cuts: Vec<&TypingCut> = cuts.iter().filter(|c| standing.cut_at.get(c.file as usize) == Some(&c.key)).collect();
+        reached.extend(first_cuts.iter().flat_map(|c| c.demanded.iter().copied()).filter(|&o| standing.suspended(o)));
+        while let Some(o) = reached.pop() {
+            if standing.whole(self, o) || standing.demanded.insert(o.key(), ()).is_some() {
+                continue;
+            }
+            if let Some(next) = onward.get(&o.key()) {
+                reached.extend(next.iter().copied());
+            }
+        }
+        // What the definitions in progress at the cuts had reported by then, by identity.
+        standing.at_cut = first_cuts.iter().flat_map(|c| c.reported.iter()).map(|&o| (o, ())).collect();
+        standing
     }
 
     /// Of what the typing reported, what dotty's reporter holds when `TyperPhase.typeCheck` catches
@@ -1524,71 +1662,15 @@ impl<'a> Worker<'a> {
     /// (`TypingCut`). Any other owner's reports go: a typing dotty's traversal never reaches, which
     /// a worker did unaware of the suspension.
     fn keep_typing_reports(&mut self, files: &[u32], cuts: &[TypingCut], demands: &[(DiagOwner, DiagOwner)]) {
-        // By file: not suspended, or the key of the item its typing was cut in, the earliest of its
-        // cuts; a unit no cut names (none of its definitions was in progress) keeps no item whole.
-        const NOT_SUSPENDED: u32 = u32::MAX;
-        let mut cut_at = vec![NOT_SUSPENDED; self.asts.len()];
-        for &f in files {
-            cut_at[f as usize] = cuts.iter().filter(|c| c.file == f).map(|c| c.key).min().unwrap_or(0);
-        }
-        let suspended = |o: DiagOwner| !o.is_none() && cut_at.get(o.file as usize).is_some_and(|&k| k != NOT_SUSPENDED);
-        // An owner kept whole by the traversal itself: of a unit that did not suspend, or of an
-        // item before its unit's cut (each owner's item by its key, worked out once).
-        let mut item_of: FxMap<(u32, u32), u32> = FxMap::default();
-        let mut whole = |w: &Worker<'a>, o: DiagOwner| -> bool {
-            if !suspended(o) {
-                return true;
-            }
-            let key = *item_of.entry(o.key()).or_insert_with(|| w.desugared_key(FileId(o.file), o.place));
-            key < cut_at[o.file as usize]
-        };
-        // The completions those demanded, and the ones the definitions in progress at a cut in
-        // the cut item had demanded by then, closed under the demands.
-        let mut onward: FxMap<(u32, u32), Vec<DiagOwner>> = FxMap::default();
-        let mut reached: Vec<DiagOwner> = Vec::new();
-        for &(from, to) in demands {
-            if !suspended(to) {
-                continue;
-            }
-            if whole(self, from) {
-                reached.push(to);
-            } else {
-                onward.entry(from.key()).or_default().push(to);
+        let mut standing = self.typing_standing(files, cuts, demands);
+        let stands: Vec<bool> = (0..self.diags.items.len()).map(|i| standing.stands(self, &self.diags.items[i])).collect();
+        // `TEQ_UNPRESENTED=1`: what goes, for a trace of what the history reads counted before.
+        if std::env::var_os("TEQ_UNPRESENTED").is_some_and(|v| v == "1") {
+            for (d, _) in self.diags.items.iter().zip(&stands).filter(|(_, &s)| !s) {
+                let why = if d.unwound.0 { "made while its item unwound" } else { "a typing dotty's traversal never reaches" };
+                eprintln!("teq: dropped at its unit's suspension ({}): {} at file {} {}..{}: {}", why, if d.is_warning { "warning" } else { "error" }, d.file.0, d.span.start, d.span.end, d.msg.lines().next().unwrap_or(""));
             }
         }
-        let first_cuts: Vec<&TypingCut> = cuts.iter().filter(|c| cut_at.get(c.file as usize) == Some(&c.key)).collect();
-        reached.extend(first_cuts.iter().flat_map(|c| c.demanded.iter().copied()).filter(|&o| suspended(o)));
-        let mut demanded: FxMap<(u32, u32), ()> = FxMap::default();
-        while let Some(o) = reached.pop() {
-            if whole(self, o) || demanded.insert(o.key(), ()).is_some() {
-                continue;
-            }
-            if let Some(next) = onward.get(&o.key()) {
-                reached.extend(next.iter().copied());
-            }
-        }
-        // What the definitions in progress at the cuts had reported by then.
-        let mut at_cut: FxMap<Diagnostic, u32> = FxMap::default();
-        for d in first_cuts.iter().flat_map(|c| c.reported.iter()) {
-            *at_cut.entry(d.clone()).or_default() += 1;
-        }
-        let stands: Vec<bool> = self
-            .diags
-            .items
-            .iter()
-            .map(|d| {
-                if d.owner.is_none() || !suspended(d.owner) || demanded.contains_key(&d.owner.key()) || whole(self, d.owner) {
-                    return true;
-                }
-                match at_cut.get_mut(d) {
-                    Some(n) if *n > 0 => {
-                        *n -= 1;
-                        true
-                    }
-                    _ => false,
-                }
-            })
-            .collect();
         let mut i = 0;
         self.diags.items.retain(|_| {
             i += 1;
@@ -1598,7 +1680,7 @@ impl<'a> Worker<'a> {
         // (`DeferredBound::owner`): one owned by a completion the traversal never reached goes
         // with it.
         let deferred = std::mem::take(&mut self.deferred_bounds);
-        let kept: Vec<_> = deferred.into_iter().filter(|b| b.owner.is_none() || demanded.contains_key(&b.owner.key()) || whole(self, b.owner)).collect();
+        let kept: Vec<_> = deferred.into_iter().filter(|b| b.owner.is_none() || standing.demanded.contains_key(&b.owner.key()) || standing.whole(self, b.owner)).collect();
         self.deferred_bounds = kept;
     }
 
@@ -1645,6 +1727,7 @@ impl<'a> Worker<'a> {
     /// its own until `leave_owner` with what this returned.
     pub(super) fn enter_owner(&mut self, owner: DiagOwner) -> DiagOwner {
         self.inlining.completing.push(owner);
+        self.inlining.completing_marks.push(self.diags.items.len());
         std::mem::replace(&mut self.diags.owner, owner)
     }
 
@@ -1653,6 +1736,11 @@ impl<'a> Worker<'a> {
     pub(super) fn leave_owner(&mut self, outer: DiagOwner, demanded: bool) {
         let done = std::mem::replace(&mut self.diags.owner, outer);
         self.inlining.completing.pop();
+        // A completion that reported is told where it was made (`Worker::tell`).
+        let mark = self.inlining.completing_marks.pop().unwrap_or(usize::MAX);
+        if self.inlining.track_meetings && self.diags.items.len() > mark && !done.is_none() {
+            self.tell(super::merge::Event::Completion(done.key()));
+        }
         if demanded {
             self.note_demand(outer, done);
         }
@@ -1701,7 +1789,7 @@ impl<'a> Worker<'a> {
     /// The walk reached the body of `sym` and found it typed, or an expansion needed it: a demand
     /// of the definition being typed (`note_demand`).
     pub(super) fn note_reached(&mut self, sym: SymId) {
-        if !self.inlining.track_demands {
+        if !self.inlining.notes_demands() {
             return;
         }
         if let Some(to) = self.body_owner(sym) {
@@ -1758,6 +1846,9 @@ impl<'a> Worker<'a> {
 
     /// `from`'s typing demanded `to`'s (`Inlining::demands`).
     pub(super) fn note_demand(&mut self, from: DiagOwner, to: DiagOwner) {
+        if self.inlining.track_meetings {
+            self.meet(super::merge::Event::Completion(to.key()));
+        }
         if !self.inlining.track_demands || from.is_none() || from.key() == to.key() {
             return;
         }
@@ -1773,6 +1864,7 @@ impl<'a> Worker<'a> {
         self.inlining.last_demand = Default::default();
         self.inlining.noted.clear();
         self.inlining.track_demands = (0..self.asts.len() as u32).map(FileId).any(|f| self.ast(f).has_quotes && self.program_file(f));
+        self.inlining.notes = self.inlining.track_demands || self.inlining.track_meetings;
     }
 
     /// A run whose every file suspended again: dotty's `Run.checkSuspendedUnits` ("no further
@@ -2122,14 +2214,15 @@ impl<'a> Worker<'a> {
     /// at the splice its expansion reaches (`Inliner.expandMacro`), and its reporter keeps what
     /// the unit reported before.
     fn give_up_suspended(&mut self, mark: usize, given_up: &FxMap<u32, u32>) {
-        // Whether each unit that reported it follows its file's first unit given up.
-        let mut beyond: FxMap<Diagnostic, bool> = FxMap::default();
-        for (u, file, d) in std::mem::take(&mut self.inlining.unit_reports) {
-            let after = given_up.get(&file).is_some_and(|&first| u > first);
-            *beyond.entry(d).or_insert(true) &= after;
-        }
+        // The records of the units that follow their file's first unit given up, by identity
+        // (`source::Ordinal`): an equal record of a unit before it stays.
+        let beyond: FxMap<u64, ()> = std::mem::take(&mut self.inlining.unit_reports)
+            .into_iter()
+            .filter(|&(u, file, _)| given_up.get(&file).is_some_and(|&first| u > first))
+            .map(|(_, _, ordinal)| (ordinal, ()))
+            .collect();
         let round = self.diags.items.split_off(mark);
-        self.diags.items.extend(round.into_iter().filter(|d| beyond.get(d) != Some(&true)));
+        self.diags.extend(round.into_iter().filter(|d| !beyond.contains_key(&d.ordinal.0)));
     }
 
     /// The units `groups` of `inlining.kept` expanded in their order, each by the walk of its
@@ -2233,7 +2326,7 @@ impl<'a> Worker<'a> {
             self.keep_suspension_prefix(prefix);
         }
         let reported = std::mem::take(&mut self.inlining.suspension_reports);
-        self.diags.items.extend(reported);
+        self.diags.extend(reported);
         drop(self.take_pending_from(c.pending));
         self.inline_unboxes.truncate(c.inline_unboxes);
         self.erased_values.truncate(c.erased_values);
@@ -2273,31 +2366,24 @@ impl<'a> Worker<'a> {
     pub(super) fn hit_suspension(&mut self) {
         if !self.inlining.suspended_hit && self.inlining.rewrite_log.is_some() {
             let from = self.inlining.round_diags.min(self.diags.items.len());
-            self.inlining.suspension_prefix = Some(self.diags.items[from..].to_vec());
+            self.inlining.suspension_prefix = Some(self.diags.items[from..].iter().map(|d| (d.ordinal.0, ())).collect());
         }
         self.inlining.suspended_hit = true;
     }
 
-    /// The round's diagnostics cut back to `prefix`, what it had reported at its suspension: those
+    /// The round's diagnostics cut back to `prefix`, what it had reported at its suspension (by
+    /// identity, `source::Ordinal`): those
     /// reported after it dropped (through the census of unsupported bodies), and those a retraction
     /// took back since staying out.
-    fn keep_suspension_prefix(&mut self, prefix: Vec<Diagnostic>) {
+    fn keep_suspension_prefix(&mut self, prefix: FxMap<u64, ()>) {
         let from = self.inlining.round_diags.min(self.diags.items.len());
         let after = self.diags.items.split_off(from);
-        let mut held: FxMap<&Diagnostic, u32> = FxMap::default();
-        for d in &prefix {
-            *held.entry(d).or_default() += 1;
-        }
-        let (keep, dropped): (Vec<Diagnostic>, Vec<Diagnostic>) = after.into_iter().partition(|d| match held.get_mut(d) {
-            Some(n) if *n > 0 => {
-                *n -= 1;
-                true
-            }
-            _ => false,
-        });
-        self.diags.items.extend(dropped);
+        // By identity (`source::Ordinal`): an equal record reported after the suspension is not
+        // of the prefix.
+        let (keep, dropped): (Vec<Diagnostic>, Vec<Diagnostic>) = after.into_iter().partition(|d| prefix.contains_key(&d.ordinal.0));
+        self.diags.extend(dropped);
         self.drop_diagnostics_from(from);
-        self.diags.items.extend(keep);
+        self.diags.extend(keep);
     }
 
     /// The kept calls of the unit `range` expanded in their order (`expand_kept`), up to one whose
@@ -2515,7 +2601,7 @@ impl<'a> Worker<'a> {
             let k = &mut self.inlining.kept[i];
             (k.node, k.typed_as, k.call.take(), std::mem::take(&mut k.held))
         };
-        self.diags.items.extend(held);
+        self.diags.extend(held);
         let Some(call) = call else { return };
         // A call another expansion's run reaches (`prepare_executable`) is expanded whole.
         let suspending = self.inlining.suspending;

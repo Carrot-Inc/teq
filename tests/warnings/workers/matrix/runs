@@ -1,0 +1,16 @@
+# Each typing-time diagnostic in every file: the toString lint, an implicit conversion's definition (a feature),
+# a deprecated reference, an unused import and local, a used and an unused @nowarn; each switch on and off and
+# the combinations with @nowarn's consumption, the summaries, -Wconf and -Werror.
+0
+0 --wtostring-interpolated
+1 --wtostring-interpolated --werror
+0 --language implicitConversions --feature
+0 --feature
+0 --deprecation
+1 --deprecation --werror
+0 --wunused all
+1 --wtostring-interpolated --wunused nowarn --werror
+1 --wconf cat=deprecation:e --deprecation
+1 --wconf msg=interpolation:s --wtostring-interpolated --werror
+1 --wconf cat=feature:s --feature --werror
+1 --deprecation --feature --wtostring-interpolated --wunused all --language implicitConversions --werror

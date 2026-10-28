@@ -1,0 +1,4 @@
+# A @nowarn the toString lint's warning uses, in every file: unused where the lint is off.
+0 --wtostring-interpolated --wunused nowarn --werror
+1 --wunused nowarn --werror
+0 --wtostring-interpolated --werror

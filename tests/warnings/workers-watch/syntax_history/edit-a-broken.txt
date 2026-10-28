@@ -1,0 +1,4 @@
+def watchMemoryOk: Int = 1
+def watchMemoryBroken(x: Int
+object A:
+  def ok: Int = watchMemoryOk

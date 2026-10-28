@@ -146,13 +146,23 @@ impl<'a> Worker<'a> {
         stmts.sort_unstable();
         stmts.dedup();
         for stmt in stmts {
+            // A statement is checked once, by the first worker of a fork to reach it, every reach a
+            // meeting (`claim_import`).
             if self.checked_imports.insert((file.0, stmt), ()).is_some() {
+                self.meet(super::merge::Event::Import(file.0, stmt));
+                continue;
+            }
+            if !self.claim_import(file.0, stmt) {
                 continue;
             }
             let Some(target) = resolved.iter().find(|r| r.stmt == stmt).map(|r| r.target) else { continue };
             let clause = self.ast(file).imports.iter().find(|a| a.span.start == stmt).map(|a| (a.path.clone(), a.span));
             if let Some((path, span)) = clause {
+                let mark = self.diags.items.len();
                 self.check_import_target(target, &path, span, "import");
+                if self.diags.items.len() > mark {
+                    self.tell(super::merge::Event::Import(file.0, stmt));
+                }
             }
         }
         self.env.file = outer_file;
@@ -816,7 +826,7 @@ impl<'a> Worker<'a> {
                     let t = self.resolve_type(b);
                     let at = other.selector_span;
                     let elsewhere: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !(d.file == file && d.span.start >= at.start && d.span.end <= at.end)).collect();
-                    self.diags.items.extend(elsewhere);
+                    self.diags.extend(elsewhere);
                     t
                 })
             };
@@ -1645,7 +1655,8 @@ impl<'a> Worker<'a> {
         match info.state().get() {
             Completion::Done => false,
             Completion::Suspended => unreachable!("only a signature suspends"),
-            Completion::InProgress => true,
+            // Under way on this worker; another worker's completion is waited for and done.
+            Completion::InProgress => !self.forked || info.state().mine(),
             Completion::NotStarted => {
                 let (file, owner, span) = (info.file, info.owner, info.span);
                 let Some(def) = info.def else { return false };
@@ -1992,6 +2003,11 @@ impl<'a> Worker<'a> {
         // `computeMembersNamed` passes over a package object `isCompleting`: its class's
         // completion, or its table's, whose parents may name a path through its own package
         // (`import p.sub.T; package object p extends T`, the file's imports then being read).
+        // Under way on this worker: another worker's completion is waited for, as one worker's walk
+        // reads it complete.
+        if self.forked && self.syms.class(obj).state().get() == Completion::InProgress && !self.syms.class(obj).state().mine() {
+            self.complete_class(obj);
+        }
         let completing = self.syms.class(obj).state().get() == Completion::InProgress
             || self.export_stack.iter().any(|f| f.owner == super::exports::ExportOwner::Class(obj));
         if completing {
@@ -6180,7 +6196,7 @@ impl<'a> Worker<'a> {
         let state = self.syms.alias(a).state().get();
         if state == Completion::Done {
             // A read of a completion is a demand of the one in progress (`demand_alias_read`).
-            if self.inlining.track_demands {
+            if self.inlining.notes_demands() {
                 self.demand_alias_read(a);
             }
             return;
@@ -6225,7 +6241,7 @@ impl<'a> Worker<'a> {
         if self.syms.alias(a).state() == Completion::Suspended {
             return self.read_suspended_alias(a);
         }
-        if self.inlining.track_demands {
+        if self.inlining.notes_demands() {
             self.demand_alias_read(a);
         }
     }
@@ -6235,7 +6251,7 @@ impl<'a> Worker<'a> {
     /// (`read_suspended`).
     #[cold]
     pub(super) fn read_suspended_alias(&mut self, a: AliasId) {
-        if self.inlining.track_demands {
+        if self.inlining.notes_demands() {
             self.demand_alias_read(a);
         }
         self.read_suspended();
@@ -6772,7 +6788,7 @@ impl<'a> Worker<'a> {
     pub fn complete_class(&mut self, c: ClassId) {
         if self.syms.class_cells.get(c.0) != Completion::Done {
             self.complete_class_uncompleted(c);
-        } else if self.inlining.track_demands && self.syms.class(c).completion_noted {
+        } else if self.inlining.notes_demands() && self.syms.class(c).completion_noted {
             // A read of a completion is a demand of the one in progress (`Denotation.info`), as a
             // signature's read is (`demand_sig_read`).
             self.demand_class_read(c);
@@ -6830,7 +6846,7 @@ impl<'a> Worker<'a> {
                 self.wait_cell(crate::shared::CellKey::new(super::check::CELL_CLASS, c.0), |w| w.syms.class(c).state().get().is_complete());
                 if self.syms.class(c).state() == Completion::Suspended {
                     self.read_suspended();
-                } else if self.inlining.track_demands && self.syms.class(c).completion_noted {
+                } else if self.inlining.notes_demands() && self.syms.class(c).completion_noted {
                     self.demand_class_read(c);
                 }
             }
@@ -7650,8 +7666,7 @@ impl<'a> Worker<'a> {
         // A class linearised again: what `base_type` kept of it goes (dotty invalidates a
         // class's `baseTypeCache` when its parents change).
         if !self.syms.class(c).base_types.is_empty() {
-            self.base_type_cache.clear();
-            self.class_base_memo.clear();
+            self.clear_base_caches();
         }
         let targs: Vec<TypeId> =
             self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
@@ -8184,6 +8199,8 @@ impl<'a> Worker<'a> {
         if i == 0 || !info.meets_in_bases {
             return Some(recorded);
         }
+        // The memo is this view's (`ViewMemos`): the loader's lock holder's apart from the worker's
+        // own outside the lock, each holding the types its view reads.
         if let Some(&kept) = self.class_base_memo.get(&(c, bc)) {
             return Some(kept);
         }
@@ -8985,13 +9002,14 @@ impl Binding for TermRef {
 
 /// The object a term binding names: the object itself, or a val whose type is the object's, as
 /// `isSameRef` compares the two refs by their types: the val's signature is completed here, a
-/// declared `Target.type` or an alias of it alike, and one in the middle of its completion names
-/// none.
+/// declared `Target.type` or an alias of it alike, and one in the middle of its completion on
+/// this worker names none (a cycle, which one worker's walk meets alike); one another worker of a
+/// fork is completing is waited for (`sig_of`), as one worker's walk reads it complete.
 fn names_object(t: &mut Worker, r: TermRef) -> Option<ClassId> {
     let s = r.sym()?;
     match t.syms.sym(s).kind {
         SymKind::Object(c) => Some(c),
-        SymKind::Val if t.syms.sym_cells.get(s.0) != crate::symbols::Completion::InProgress => {
+        SymKind::Val if !(t.syms.sym_cells.get(s.0) == crate::symbols::Completion::InProgress && (!t.forked || t.syms.sym_cells.mine(s.0))) => {
             let ret = t.sig_of(s).ret;
             let ret = t.deref_alias(ret);
             match t.types.get(ret) {

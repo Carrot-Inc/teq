@@ -181,8 +181,8 @@ pub const NO_FILE: FileId = FileId(u32::MAX);
 /// where it stands there, a member's name or a top-level definition's start, so that it is the
 /// same on every worker. A member's signature and its body are two completions at one place, the
 /// signature's marked (`DiagOwner::SIG`), as dotty's completer types a declared result apart from
-/// the body `typedDefDef` types. Equality and hashing ignore it: one problem two workers report
-/// from two bodies is one diagnostic (`Diagnostics::absorb`).
+/// the body `typedDefDef` types. Equality and hashing ignore it: the reporter hides a diagnostic
+/// equal to an earlier one at its place whichever completion reported each.
 #[derive(Clone, Copy, Debug)]
 pub struct DiagOwner {
     pub file: u32,
@@ -300,6 +300,50 @@ pub struct Diagnostic {
     /// it where it stands, but no place hides it, nor does it take one (`isHidden`'s
     /// `pos.exists`).
     pub unplaced: bool,
+    /// The occurrence's identity (`Ordinal`), which equality and hashing ignore.
+    pub ordinal: Ordinal,
+    /// Made by the code a unit's suspension leaves (`Unwound`), which equality and hashing ignore.
+    pub unwound: Unwound,
+}
+
+/// A diagnostic's identity in its build: a number no other record of the build has, given where it
+/// is made (`Diagnostics::push`) and kept where it goes (a unit's suspension reports, an expansion's
+/// held reports, another worker's merge), so that what a cut or a round's suspension had reported
+/// is told from an equal record made after (`TypingCut::reported`); 0 for a record not made yet.
+/// Equality and hashing ignore it, as `DiagOwner`'s do.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Ordinal(pub u64);
+
+impl PartialEq for Ordinal {
+    fn eq(&self, _: &Ordinal) -> bool {
+        true
+    }
+}
+
+impl Eq for Ordinal {}
+
+impl std::hash::Hash for Ordinal {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+
+/// Whether a record was made by the code a unit's suspension at typing leaves
+/// (`Diagnostics::unwinding`): the rest of the item whose typing unwinds after its unit's cut,
+/// which dotty's `SuspendException` never types and whose records the cut drops
+/// (`keep_typing_reports`), so that what the history reads (`typer::merge::HistoryQuery`, dotty's
+/// `errorsReported`) never counts it. Equality and hashing ignore it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Unwound(pub bool);
+
+impl PartialEq for Unwound {
+    fn eq(&self, _: &Unwound) -> bool {
+        true
+    }
+}
+
+impl Eq for Unwound {}
+
+impl std::hash::Hash for Unwound {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
 }
 
 /// A change of the source a diagnostic proposes, dotty's `CodeAction`: its title, what it does,
@@ -342,7 +386,7 @@ impl Place {
 impl Diagnostic {
     /// A diagnostic of nothing but its place, message and severity.
     pub fn plain(file: FileId, span: Span, msg: String, is_warning: bool, of_body: bool) -> Diagnostic {
-        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, phase: 0, unplaced: false }
+        Diagnostic { file, span, msg, is_warning, of_body, owner: DiagOwner::NONE, place: None, dependent: false, unknown: false, late: false, inlined_from: None, at_expansion: false, hint: false, unnecessary: false, id: crate::warnings::NO_ID, category: crate::warnings::Category::Plain, origin: None, action: None, phase: 0, unplaced: false, ordinal: Ordinal(0), unwound: Unwound(false) }
     }
 
     /// What the reporting policy's filters read of the diagnostic.
@@ -525,7 +569,10 @@ impl Report<'_> {
 #[derive(Default)]
 pub struct Diagnostics {
     pub items: Vec<Diagnostic>,
-    /// What the build asks of its warnings (`warnings::Policy`), set by the driver.
+    /// What the build asks of its warnings (`warnings::Policy`): set once by the driver before the
+    /// typer runs and never changed while the build lasts, so that every worker attached for the build
+    /// shares it (`Worker::attach`). A watch session's next full build makes a new typer with a new
+    /// policy, and a project whose flags change gets a new watch child from the language server.
     pub policy: std::sync::Arc<crate::warnings::Policy>,
     /// The `@nowarn` annotations of the program's files (`warnings::Suppression`), and the
     /// warnings their filters gave, read of the files' trees once their typing is over
@@ -547,6 +594,12 @@ pub struct Diagnostics {
     /// The lexical and parse diagnostics of the program's texts, which a session sets before it
     /// answers: presented with the typer's, in file and position order.
     pub syntax: Vec<Diagnostic>,
+    /// The build's count of the records made, every worker's (`Ordinal`), shared by the workers
+    /// attached for the build.
+    pub made: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    /// The file of the unit whose suspension at typing the item being typed unwinds from
+    /// (`Inlining::unwinding`): a record a definition of it makes is `Unwound`.
+    pub unwinding: Option<u32>,
 }
 
 impl Diagnostics {
@@ -559,14 +612,33 @@ impl Diagnostics {
 
     pub fn error(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
         let d = self.made(file, span, msg.into(), false, self.of_bodies);
+        self.push(d);
+    }
+
+    /// The record `d`, made now where it has no identity yet (`Ordinal`), as the last of the
+    /// diagnostics: every record goes in by here or `extend`.
+    pub fn push(&mut self, mut d: Diagnostic) {
+        if d.ordinal.0 == 0 {
+            d.ordinal = Ordinal(self.made.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1);
+            if self.unwinding.is_some_and(|f| !d.owner.is_none() && d.owner.file == f) {
+                d.unwound = Unwound(true);
+            }
+        }
         self.items.push(d);
+    }
+
+    /// `push` of each of `ds`.
+    pub fn extend(&mut self, ds: impl IntoIterator<Item = Diagnostic>) {
+        for d in ds {
+            self.push(d);
+        }
     }
 
     /// An error that depends on malformed syntax (`Diagnostic::dependent`).
     pub fn dependent_error(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
         let mut d = self.made(file, span, msg.into(), false, self.of_bodies);
         d.dependent = true;
-        self.items.push(d);
+        self.push(d);
     }
 
     /// A warning of the syntax, a migration warning where `migration` says (`Category::Migration`), with
@@ -577,12 +649,12 @@ impl Diagnostics {
         if migration {
             d.category = crate::warnings::Category::Migration;
         }
-        self.items.push(d);
+        self.push(d);
     }
 
     pub fn warn(&mut self, file: FileId, span: Span, msg: impl Into<String>) {
         let d = self.made(file, span, msg.into(), true, self.of_bodies);
-        self.items.push(d);
+        self.push(d);
     }
 
     /// A warning with its identity (`Diagnostic::id`), depending on malformed syntax where
@@ -595,7 +667,7 @@ impl Diagnostics {
         d.origin = w.origin;
         d.phase = w.phase;
         d.unplaced = w.unplaced;
-        self.items.push(d);
+        self.push(d);
     }
 
     /// A selector no name resolved through (`typer::unused`): a warning, or a hint.
@@ -605,7 +677,7 @@ impl Diagnostics {
         d.unnecessary = true;
         d.id = crate::warnings::id::UNUSED_SYMBOL;
         d.origin = origin;
-        self.items.push(d);
+        self.push(d);
     }
 
     /// An error of a library body's pseudo file placed in the library's source.
@@ -619,7 +691,7 @@ impl Diagnostics {
     /// The diagnostics a build presents: the syntax diagnostics a session set, then the typer's
     /// but the dependent ones and, while the program has a syntax error, the unknown ones. One
     /// that says what an earlier one says at the same place is presented once, as scalac's
-    /// reporter does, whether one worker reported it twice or two workers once each (`absorb`).
+    /// reporter does (`report_from`'s `Occupied`).
     ///
     /// Of the typer's diagnostics from the index `from` on, those before left out, and the
     /// syntax diagnostics where the report is not `whole`.
@@ -631,6 +703,30 @@ impl Diagnostics {
             .iter()
             .filter(move |_| whole)
             .chain(self.items.iter().enumerate().skip(from).filter(move |(i, d)| !d.dependent && !(d.unknown && syntax) && !(d.late && earlier) && !hidden.contains(i)).map(|(_, d)| d))
+    }
+
+    /// `TEQ_UNPRESENTED=1`: the typer's records `presented_from` leaves out, each with why, in their
+    /// order, for a trace of what a history read (`typer::merge::HistoryQuery`) counts and the
+    /// report does not show.
+    #[cold]
+    fn trace_unpresented(&self) {
+        let syntax = self.syntax_errors;
+        let earlier = self.syntax.iter().any(|d| !d.is_warning) || self.items.iter().any(|d| !d.is_warning && !d.dependent && !d.late && !(d.unknown && syntax));
+        let hidden = self.hidden_inlined();
+        for (i, d) in self.items.iter().enumerate() {
+            let why = if d.dependent {
+                "dependent"
+            } else if d.unknown && syntax {
+                "unknown after a syntax error"
+            } else if d.late && earlier {
+                "late, an earlier error presented"
+            } else if hidden.contains(&i) {
+                "an inlined error at an earlier one's place"
+            } else {
+                continue;
+            };
+            eprintln!("teq: not presented ({}): {} at file {} {}..{}: {}", why, if d.is_warning { "warning" } else { "error" }, d.file.0, d.span.start, d.span.end, d.msg.lines().next().unwrap_or(""));
+        }
     }
 
     /// The errors of inline expansions whose inlined place overlaps that of an earlier one
@@ -683,14 +779,6 @@ impl Diagnostics {
         self.items.iter().any(|d| !d.is_warning)
     }
 
-    /// Adds another worker's diagnostics, leaving out what is reported already: two workers
-    /// can report one problem, each from the body that met it.
-    pub fn absorb(&mut self, other: Diagnostics) {
-        let seen: std::collections::HashSet<&Diagnostic> = self.items.iter().collect();
-        let fresh: Vec<Diagnostic> = other.items.into_iter().filter(|d| !seen.contains(d)).collect();
-        self.items.extend(fresh);
-    }
-
     /// The diagnostics as the reporting policy presents them (`warnings.rs`), every
     /// presentation's: those `presented` keeps, in file and position order, each warning filtered
     /// by the `@nowarn` annotations around it and then by `-Wconf`'s rules, a conditional one
@@ -713,6 +801,9 @@ impl Diagnostics {
         let whole = after.is_none();
         let from = after.unwrap_or(0);
         let extras = if whole { &self.suppression_warnings[..] } else { &[] };
+        if whole && std::env::var_os("TEQ_UNPRESENTED").is_some_and(|v| v == "1") {
+            self.trace_unpresented();
+        }
         let candidates: Vec<&Diagnostic> = self.presented_from(from, whole).chain(extras.iter()).collect();
         // Presented in file and position order, the order they were made in at one place.
         let mut by_place: Vec<usize> = (0..candidates.len()).collect();

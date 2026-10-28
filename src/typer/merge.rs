@@ -54,7 +54,7 @@ mod trace;
 pub(super) use records::Mapping;
 use records::SigMemo;
 use super::{Env, ResolvedImport, TVarInfo, TVars, Worker};
-use crate::source::FileId;
+use crate::source::{Diagnostic, FileId};
 use crate::ast::ListRef;
 use crate::intern::FxMap;
 use crate::symbols::*;
@@ -402,6 +402,89 @@ pub struct ItemRange {
     pub key: (u32, u32),
     pub start: Prefix,
     pub end: Prefix,
+}
+
+/// A decision of the typing that read what the build had reported before it (`Worker::history`):
+/// whether an error was, in the diagnostics or with the suspended units' reports too (a macro's
+/// gate, dotty's `ctx.reporter.errorsReported`; a secondary constructor's check), whether a record
+/// equal to one was (a case class in an inline body, reported once), or whether an error of a file
+/// covers a span (`error_covers`).
+#[derive(Clone)]
+pub enum HistoryQuery {
+    AnyError { reports: bool },
+    Reported(FileId, crate::source::Span, String),
+    Covers(FileId, crate::source::Span),
+}
+
+impl HistoryQuery {
+    /// The query in words, for a give-way's reason.
+    pub fn describe(&self) -> String {
+        match self {
+            HistoryQuery::AnyError { reports } => format!("any error{}", if *reports { ", a suspended unit's included" } else { "" }),
+            HistoryQuery::Reported(file, span, msg) => format!("the report \"{}\" at file {} {}..{}", msg.lines().next().unwrap_or(""), file.0, span.start, span.end),
+            HistoryQuery::Covers(file, span) => format!("an error covering file {} {}..{}", file.0, span.start, span.end),
+        }
+    }
+
+    /// Whether the record `d` answers the query: a record the code a unit's suspension leaves made
+    /// (`source::Unwound`) answers none, as dotty's typer never made it.
+    pub fn holds(&self, d: &Diagnostic, of_reports: bool) -> bool {
+        if d.unwound.0 {
+            return false;
+        }
+        match self {
+            HistoryQuery::AnyError { reports } => !d.is_warning && (*reports || !of_reports),
+            HistoryQuery::Reported(file, span, msg) => !of_reports && d.file == *file && d.span == *span && d.msg == *msg,
+            HistoryQuery::Covers(file, at) => !of_reports && !d.is_warning && !d.dependent && d.file == *file && d.span.start <= at.end && at.start <= d.span.end,
+        }
+    }
+}
+
+/// What one worker's walk does once where it is first met and two workers can both meet
+/// (`Worker::meet`, `Worker::tell`): a completion that reported, by its owner (`DiagOwner::key`);
+/// an import statement's check, by its file and statement. The merge places its reports at the
+/// first meeting in the walk's order or gives the build to one worker (`events_displaced`).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Event {
+    Completion((u32, u32)),
+    Import(u32, u32),
+}
+
+/// The claims of the events a build that may fork tells once whichever worker meets them first
+/// (`Event`), shared by the workers attached for the fork: the import statements checked, the
+/// inline definitions whose check reports.
+#[derive(Default)]
+pub struct Claims {
+    pub imports: std::sync::Mutex<FxMap<(u32, u32), ()>>,
+    pub definitions: std::sync::Mutex<FxMap<crate::types::SymId, ()>>,
+}
+
+/// A history read of a build that may fork (`Worker::history`): the item it was made in, what the
+/// worker's records before that item answered (the inherited ones of the fork's included), and
+/// what the item's own answered. The merge asks the query again over the records of every item
+/// before it in one worker's walk (`history_mismatch`).
+#[derive(Clone)]
+pub struct HistoryRead {
+    pub rank: (u32, u32),
+    pub query: HistoryQuery,
+    pub before: bool,
+    pub own: bool,
+    /// Which decision read it, and where `before` holds the first record that held, for a give-way's
+    /// reason.
+    pub reader: &'static str,
+    pub seen: Option<String>,
+}
+
+/// What one work item reported, by its place in one worker's walk (`rank`): the body phase's item
+/// at its file's id and its place in the order dotty's typer meets them (`items_of`), or the
+/// inlining phase's unit at its place in the walk; and the ranges of the worker's `diags.items` and
+/// `inlining.suspension_reports` it made, read where the item ended. The merge places every worker's
+/// in that order, as one worker's walk makes them (`merge_diagnostics`).
+#[derive(Clone, Copy)]
+pub struct DiagRange {
+    pub rank: (u32, u32),
+    pub items: (u32, u32),
+    pub reports: (u32, u32),
 }
 
 /// The merge's renumbering, per arena, and what it makes of the types made after the fork
@@ -1338,6 +1421,14 @@ impl Remap {
         for (s, _) in &mut p.template_calls {
             *s = self.sym(*s);
         }
+        // A template a bundle published (`publish_side_tables`) is a shared entry under the worker's
+        // own string, which the merge renumbers as the worker's own entries are: copied into the
+        // worker's own under its new string, which `merge_own` keeps beside the stale one, which no
+        // string names after the merge.
+        let published: Vec<(crate::tir::StrRef, crate::types::SymId)> = p.template_syms.iter().filter(|(s, _)| s.0 >= crate::arena::LOCAL_BASE).map(|(&s, &sym)| (s, sym)).collect();
+        for (s, sym) in published {
+            p.template_syms.local.insert(s, sym);
+        }
         self.map(&mut p.template_syms.local, |r, s| r.ids.string(s), |r, s| *s = r.sym(*s));
         self.walked += (p.top_funs.own().len() + p.top_vals.own().len() + p.js_exports.len() + p.template_calls.len()) as u64;
     }
@@ -1823,9 +1914,10 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
         map(m, interpolations, |r, e| r.expr(e), |_, _| {});
         map(m, class_done, |r, c| r.class(c), |_, _| {});
     }));
-    let (class_imports, anon_envs, anon_captures, anon_parent_args, inferred_parent_args) = (&mut w.class_imports.local, &mut w.anon_envs, &mut w.anon_captures, &mut w.anon_parent_args, &mut w.inferred_parent_args.local);
+    let (class_imports, anon_envs, anon_captures, anon_parent_args, inferred_parent_args) = (&mut w.class_imports.local, &mut w.anon_envs.local, &mut w.anon_captures, &mut w.anon_parent_args, &mut w.inferred_parent_args.local);
     let inferred_trait_args = &mut w.inferred_trait_args.local;
     let (local_news, outer_this, sam_classes, sam_arity, entry_points) = (&mut w.local_news, &mut w.outer_this.local, &mut w.sam_classes, &mut w.sam_arity, &mut w.entry_points);
+    let ctor_outer_params = &mut w.ctor_outer_params.local;
     let (lifted_members, lifted_lazy, accessor_captures) = (&mut w.lifted_members, &mut w.lifted_lazy, &mut w.accessor_captures);
     let (held_proxies, held_proxy_of) = (&mut w.held_proxies, &mut w.held_proxy_of);
     tasks.push(Box::new(move |m| {
@@ -1875,6 +1967,7 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
             }
         }
         map(m, outer_this, |r, c| r.class(c), |r, s| *s = r.sym(*s));
+        map(m, ctor_outer_params, |r, c| r.sym(c), |r, s| *s = r.sym(*s));
         map(m, sam_classes, |r, c| r.class(c), |_, _| {});
         map(m, sam_arity, |r, (c, n)| (r.class(c), n), |_, _| {});
         for (s, c) in entry_points.iter_mut() {
@@ -1883,7 +1976,7 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
         }
     }));
     let (override_pairs, late_methods, inherited_pairs, member_cycles, unsettled_std_entries) = (&mut w.override_pairs, &mut w.late_methods, &mut w.inherited_pairs, &mut w.member_cycles, &mut w.unsettled_std_entries);
-    let (super_problems_told, inference_failed, mixin_supers, any_members, dispatch_pending, named_like, suffixed_roots) = (&mut w.super_problems_told, &mut w.inference_failed, &mut w.mixin_supers, &mut w.any_members.local, &mut w.dispatch_pending, &mut w.named_like, &mut w.suffixed_roots);
+    let (super_problems_told, inference_failed, mixin_supers, any_members, dispatch_pending, named_like, suffixed_roots) = (&mut w.super_problems_told, &mut w.inference_failed, &mut w.mixin_supers, &mut w.any_members.local, &mut w.dispatch_pending, &mut w.named_like, &mut w.suffixed_roots.local);
     tasks.push(Box::new(move |m| {
         for (a, p) in override_pairs.iter_mut() {
             *a = m.sym(*a);
@@ -1921,8 +2014,10 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
         map(m, suffixed_roots, |r, s| r.sym(s), |_, _| {});
     }));
     let (expr_marks, eta_expansions, folded_paths, irrefutable_pats) = (&mut w.expr_marks, &mut w.eta_expansions, &mut w.folded_paths, &mut w.irrefutable_pats);
+    let written_purity = &mut w.written_purity;
     tasks.push(Box::new(move |m| {
         map(m, expr_marks, |r, e| r.expr(e), |_, _| {});
+        map(m, written_purity, |r, e| r.expr(e), |_, _| {});
         map(m, eta_expansions, |r, e| r.expr(e), |_, _| {});
         map(m, folded_paths, |r, e| r.expr(e), |r, (recv, s)| {
             *recv = r.expr(*recv);
@@ -1930,7 +2025,7 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
         });
         map(m, irrefutable_pats, |r, p| r.pat(p), |_, _| {});
     }));
-    let (poisoned, poisoned_withheld, outer_accessors, merged_overloads, derived_aliases, derived_opaques) = (&mut w.poisoned, &mut w.poisoned_withheld, &mut w.outer_accessors.local, &mut w.merged_overloads.local, &mut w.derived_aliases, &mut w.derived_opaques.local);
+    let (poisoned, poisoned_withheld, outer_accessors, merged_overloads, derived_aliases, derived_opaques) = (&mut w.poisoned, &mut w.poisoned_withheld.local, &mut w.outer_accessors.local, &mut w.merged_overloads.local, &mut w.derived_aliases.local, &mut w.derived_opaques.local);
     let withheld_notes = &mut w.withheld_notes;
     tasks.push(Box::new(move |m| {
         map(m, poisoned, |r, f| r.fun(f), |_, _| {});
@@ -1938,7 +2033,15 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
         map(m, withheld_notes, |r, e| r.expr(e), |_, _| {});
         map(m, outer_accessors, |r, c| r.class(c), |r, s| *s = r.sym(*s));
         map(m, merged_overloads, |r, (a, b)| (r.sym(a), r.sym(b)), |r, s| *s = r.sym(*s));
-        map(m, derived_aliases, |r, (a, t)| (r.alias(a), t), |r, a| *a = r.alias(*a));
+        // A worker's own copies kept under their prefixes' new types, so that a match alias a local
+        // class's member derives is one alias across the merge, as one worker's walk keeps it; taken
+        // in the order of their workers' ids, so that the types the keys hand the promotion follow
+        // it and not the order the entries hash to (`promote`).
+        let mut own: Vec<((crate::types::AliasId, crate::types::TypeId), crate::types::AliasId)> = std::mem::take(derived_aliases).into_iter().collect();
+        own.sort_unstable_by_key(|&((a, t), _)| (a.0, t.0));
+        for ((a, t), d) in own {
+            derived_aliases.insert((m.alias(a), m.ty(t)), m.alias(d));
+        }
         map(m, derived_opaques, |r, (c, k)| (r.class(c), r.class(k)), |r, c| *c = r.class(*c));
     }));
     // The program files' definition maps: the local and anonymous classes and the local
@@ -2217,7 +2320,8 @@ impl<'a> Worker<'a> {
     /// which the remap renumbers with this worker's own. The other worker's arenas stay with it
     /// (`merge_workers` takes their records).
     fn absorb(&mut self, o: &mut Worker<'a>) {
-        self.diags.absorb(std::mem::take(&mut o.diags));
+        // The diagnostics are placed already (`merge_diagnostics`).
+        debug_assert!(o.diags.items.is_empty(), "a worker's diagnostics left to the merge");
         for n in std::mem::take(&mut o.binder_nowarns) {
             if !self.binder_nowarns.contains(&n) {
                 self.binder_nowarns.push(n);
@@ -2253,6 +2357,7 @@ impl<'a> Worker<'a> {
         self.outer_accessors.absorb(o.outer_accessors.take_local());
         self.merged_overloads.absorb(o.merged_overloads.take_local());
         self.derived_opaques.absorb(o.derived_opaques.take_local());
+        self.derived_aliases.absorb(o.derived_aliases.take_local());
         self.arity_classes.absorb(o.arity_classes.take_local());
         self.derive.absorb(&mut o.derive);
         self.syms.dispatch_names.absorb(o.syms.dispatch_names.take_local());
@@ -2274,7 +2379,9 @@ impl<'a> Worker<'a> {
         for (body, users) in std::mem::take(&mut o.inline_deps) {
             self.inline_deps.entry(body).or_default().extend(users);
         }
-        union(&mut self.anon_envs, &mut o.anon_envs);
+        for (c, env) in o.anon_envs.take_local() {
+            self.anon_envs.local.entry(c).or_insert(env);
+        }
         union(&mut self.anon_captures, &mut o.anon_captures);
         union(&mut self.lifted_members, &mut o.lifted_members);
         union(&mut self.lifted_lazy, &mut o.lifted_lazy);
@@ -2287,8 +2394,9 @@ impl<'a> Worker<'a> {
         union(&mut self.sam_classes, &mut o.sam_classes);
         union(&mut self.sam_arity, &mut o.sam_arity);
         union(&mut self.super_problems_told, &mut o.super_problems_told);
-        union(&mut self.suffixed_roots, &mut o.suffixed_roots);
+        self.suffixed_roots.absorb(o.suffixed_roots.take_local());
         union(&mut self.expr_marks, &mut o.expr_marks);
+        union(&mut self.written_purity, &mut o.written_purity);
         union(&mut self.eta_expansions, &mut o.eta_expansions);
         union(&mut self.folded_paths, &mut o.folded_paths);
         self.folded_deprecated |= o.folded_deprecated;
@@ -2297,7 +2405,7 @@ impl<'a> Worker<'a> {
         union(&mut self.captured_locals, &mut o.captured_locals);
         self.unchecked_variance.absorb(o.unchecked_variance.take_local());
         union(&mut self.poisoned, &mut o.poisoned);
-        union(&mut self.poisoned_withheld, &mut o.poisoned_withheld);
+        self.poisoned_withheld.absorb(o.poisoned_withheld.take_local());
         union(&mut self.withheld_notes, &mut o.withheld_notes);
         union(&mut self.reflect_ctor_params, &mut o.reflect_ctor_params);
         union(&mut self.reflect_param_of, &mut o.reflect_param_of);
@@ -2364,6 +2472,7 @@ impl<'a> Worker<'a> {
         let news = self.lists_at_fork;
         self.local_news.extend(o.local_news.drain(news.min(o.local_news.len())..));
         self.outer_this.absorb(o.outer_this.take_local());
+        self.ctor_outer_params.absorb(o.ctor_outer_params.take_local());
         self.entry_points.append(&mut o.entry_points);
         // What an inline definition's check left, each worker that asked for the check having
         // made it, is checked once, as by one worker; an expansion's own checks all stay.
@@ -2375,7 +2484,15 @@ impl<'a> Worker<'a> {
         self.late_methods.append(&mut o.late_methods);
         self.override_pairs.append(&mut o.override_pairs);
         self.inherited_pairs.append(&mut o.inherited_pairs);
-        self.member_cycles.append(&mut o.member_cycles);
+        for k in std::mem::take(&mut o.member_cycles) {
+            if !self.member_cycles.contains(&k) {
+                self.member_cycles.push(k);
+            }
+        }
+        // What every worker checked of the files' imports is checked (`reach_file_imports_to`).
+        for (k, ()) in std::mem::take(&mut o.checked_imports) {
+            self.checked_imports.insert(k, ());
+        }
         self.unsettled_std_entries.append(&mut o.unsettled_std_entries);
         self.dispatch_pending.append(&mut o.dispatch_pending);
         self.named_like.append(&mut o.named_like);
@@ -2468,24 +2585,209 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// A place where two different diagnostics of the workers stand, by file and offset. They
-    /// are presented in the order they were reported in, which the workers' schedule decides
-    /// (two workers', or one worker's items taken from a file's tail): a signature's error is
-    /// reported by whichever worker completes it first. One worker's build reports them in
-    /// its walk's order.
-    pub fn diagnostics_meeting(&self, others: &[Option<Worker<'a>>]) -> Option<(FileId, u32)> {
-        use std::collections::hash_map::Entry;
-        let mut at: std::collections::HashMap<(FileId, u32), &crate::source::Diagnostic> = std::collections::HashMap::new();
-        for d in self.diags.items.iter().chain(others.iter().flatten().flat_map(|o| o.diags.items.iter())) {
-            match at.entry((d.file, d.span.start)) {
-                Entry::Vacant(e) => {
-                    e.insert(d);
+    /// Why the workers' diagnostics cannot be placed in the order of one worker's walk
+    /// (`merge_diagnostics`), if they cannot: a record a worker made after the fork outside the
+    /// items it typed, or one item two workers typed.
+    pub fn diagnostics_unplaced(&self, others: &[Option<Worker<'a>>]) -> Option<String> {
+        let mut ranks: FxMap<(u32, u32), usize> = FxMap::default();
+        let workers = std::iter::once(Some(self)).chain(others.iter().map(Option::as_ref)).enumerate();
+        for (k, w) in workers.filter_map(|(k, w)| Some((k, w?))) {
+            let end = (w.diags.items.len(), w.inlining.suspension_reports.len());
+            // Worker 0's records from its region's start to its first item stand first in both
+            // orders; another worker's region is all it made.
+            let mut at = match (k, w.diag_ranges.first()) {
+                (0, Some(r)) => (r.items.0 as usize, r.reports.0 as usize),
+                (0, None) => end,
+                _ => (0, 0),
+            };
+            for r in &w.diag_ranges {
+                if (r.items.0 as usize, r.reports.0 as usize) != at {
+                    return Some(format!("a diagnostic no item placed: worker {} reported outside its items", k));
                 }
-                Entry::Occupied(e) if *e.get() != d => return Some((d.file, d.span.start)),
-                Entry::Occupied(_) => {}
+                at = (r.items.1 as usize, r.reports.1 as usize);
+                if let Some(other) = ranks.insert(r.rank, k).filter(|&o| o != k) {
+                    return Some(format!("a diagnostic no item placed: workers {} and {} typed one item", other, k));
+                }
+            }
+            if at != end {
+                return Some(format!("a diagnostic no item placed: worker {} reported outside its items", k));
             }
         }
         None
+    }
+
+    /// Why an event's reports (`Event`) do not stand where one worker's walk makes them, if they do
+    /// not: told by two workers, or told at an item after one that met it in the walk's order (a
+    /// completion another worker made first, an import statement a later item's worker checked).
+    pub fn events_displaced(&self, others: &[Option<Worker<'a>>]) -> Option<String> {
+        let workers: Vec<&Worker<'a>> = std::iter::once(self).chain(others.iter().flatten()).collect();
+        let mut told: FxMap<Event, ((u32, u32), usize)> = FxMap::default();
+        for (k, w) in workers.iter().enumerate() {
+            for &(e, r) in &w.told {
+                match told.get(&e) {
+                    Some(&(_, other)) if other != k => return Some(format!("an event told by two workers: {:?}", e)),
+                    Some(&(first, _)) if first <= r => {}
+                    _ => {
+                        told.insert(e, (r, k));
+                    }
+                }
+            }
+        }
+        if told.is_empty() {
+            return None;
+        }
+        let mut least: FxMap<Event, (u32, u32)> = FxMap::default();
+        for w in &workers {
+            for (&e, &r) in &w.meetings {
+                if told.contains_key(&e) {
+                    let l = least.entry(e).or_insert(r);
+                    if r < *l {
+                        *l = r;
+                    }
+                }
+            }
+        }
+        for (e, (r, _)) in told {
+            if least.get(&e).is_some_and(|&l| l < r) {
+                return Some(format!("an event's reports displaced from its first meeting: {:?}", e));
+            }
+        }
+        None
+    }
+
+    /// Why a history read of a worker's (`HistoryRead`) is not what one worker's walk would have
+    /// read, if one is not: the query asked again over the records every worker made in the items
+    /// before it in the walk's order, with this worker's made before its region and before its
+    /// first item, against what the reading worker's records before its item answered.
+    pub fn history_mismatch(&self, others: &[Option<Worker<'a>>]) -> Option<String> {
+        let workers: Vec<&Worker<'a>> = std::iter::once(self).chain(others.iter().flatten()).collect();
+        if workers.iter().all(|w| w.history_reads.is_empty()) {
+            return None;
+        }
+        let lead = self.diag_ranges.first().map_or((self.diags.items.len(), self.inlining.suspension_reports.len()), |r| (r.items.0 as usize, r.reports.0 as usize));
+        let mut ranges: Vec<(DiagRange, usize)> = Vec::new();
+        for (k, w) in workers.iter().enumerate() {
+            ranges.extend(w.diag_ranges.iter().map(|&r| (r, k)));
+        }
+        ranges.sort_by_key(|&(r, k)| (r.rank, k));
+        // Where units suspended at typing, one worker's walk counts at a read what stands of their
+        // typing by the cuts it met before the read's item (`keep_typing_reports`'s rule over
+        // every worker's cuts and demands): no record of an item past a unit's cut it met, which
+        // that walk never types, as dotty's reporter never holds one.
+        let cuts: Vec<super::inlining::TypingCut> = workers.iter().flat_map(|w| w.inlining.typing_cuts.iter().cloned()).collect();
+        let demands: Vec<(crate::source::DiagOwner, crate::source::DiagOwner)> = if cuts.is_empty() { Vec::new() } else { workers.iter().flat_map(|w| w.inlining.demands.iter().copied()).collect() };
+        for w in &workers {
+            for read in &w.history_reads {
+                if read.own {
+                    continue;
+                }
+                let q = &read.query;
+                let met: Vec<super::inlining::TypingCut> = cuts.iter().filter(|c| c.before(read.rank)).cloned().collect();
+                let mut standing = (!met.is_empty()).then(|| {
+                    let files: Vec<u32> = met.iter().map(|c| c.file).collect();
+                    self.typing_standing(&files, &met, &demands)
+                });
+                // The first record that holds in the walk's order, where it stands, for the reason.
+                fn first<'d>(q: &HistoryQuery, items: &'d [Diagnostic], reports: &'d [Diagnostic], stands: &mut dyn FnMut(&Diagnostic) -> bool) -> Option<(&'d Diagnostic, &'static str)> {
+                    items.iter().find(|d| q.holds(d, false) && stands(d)).map(|d| (d, "")).or_else(|| reports.iter().find(|d| q.holds(d, true)).map(|d| (d, ", a suspended unit's report")))
+                }
+                let mut stands = |d: &Diagnostic| standing.as_mut().map_or(true, |s| s.stands(self, d));
+                // The program's syntax errors, reported before every typing, answer whether an error was.
+                let syntax = matches!(q, HistoryQuery::AnyError { .. }) && self.diags.syntax_errors;
+                let mut found = if syntax { None } else { first(q, &self.diags.items[..lead.0.min(self.diags.items.len())], &self.inlining.suspension_reports[..lead.1.min(self.inlining.suspension_reports.len())], &mut stands).map(|(d, of)| (d, of, "before the fork's items".to_string())) };
+                for &(r, k) in ranges.iter().take_while(|(r, _)| r.rank < read.rank) {
+                    if syntax || found.is_some() {
+                        break;
+                    }
+                    let o = workers[k];
+                    found = first(q, &o.diags.items[r.items.0 as usize..r.items.1 as usize], &o.inlining.suspension_reports[r.reports.0 as usize..r.reports.1 as usize], &mut stands).map(|(d, of)| (d, of, format!("item {:?} on worker {}", r.rank, k)));
+                }
+                let before = syntax || found.is_some();
+                if before != read.before {
+                    let deciding = match found {
+                        Some((d, of, at)) => {
+                            let flags: Vec<&str> = [(d.late, "late"), (d.dependent, "dependent"), (d.unknown, "unknown"), (d.inlined_from.is_some(), "inlined")].into_iter().filter_map(|(on, f)| on.then_some(f)).collect();
+                            let flags = if flags.is_empty() { String::new() } else { format!(" ({})", flags.join(", ")) };
+                            format!("; the walk's first that holds: {} at file {} {}..{}{}{}, \"{}\"", at, d.file.0, d.span.start, d.span.end, of, flags, d.msg.lines().next().unwrap_or(""))
+                        }
+                        None if syntax => "; the program's syntax error holds before every typing".to_string(),
+                        None => format!("; no record before it holds in the walk's order{}", read.seen.as_ref().map_or(String::new(), |s| format!(", the reading worker's: {}", s))),
+                    };
+                    return Some(format!("a read of the history at item {:?} answered {} where the walk's order answers {} ({}, asking {}){}", read.rank, read.before, before, read.reader, q.describe(), deciding));
+                }
+            }
+        }
+        None
+    }
+
+    /// The workers' diagnostics and their suspended units' reports (`Inlining::suspension_reports`)
+    /// in the order of one worker's walk: this worker's made before its region (`diag_region`) and
+    /// before its first item where they stand, then every item's in the order of their ranks
+    /// (`DiagRange`), each in the order its worker made them. Nothing is left out by its content: what
+    /// one worker's walk tells once and two workers could both tell gives the build to one worker
+    /// (`Worker::told_once`, `events_displaced`). Asked once `diagnostics_unplaced` found every
+    /// record placed.
+    fn merge_diagnostics(&mut self, others: &mut [Option<Worker<'a>>]) {
+        let lead = self.diag_ranges.first().map_or((self.diags.items.len(), self.inlining.suspension_reports.len()), |r| (r.items.0 as usize, r.reports.0 as usize));
+        let base = (self.diag_region.0.min(lead.0), self.diag_region.1.min(lead.1));
+        let mut items: Vec<Vec<Option<Diagnostic>>> = Vec::with_capacity(others.len() + 1);
+        let mut reports: Vec<Vec<Option<Diagnostic>>> = Vec::with_capacity(others.len() + 1);
+        items.push(self.diags.items.split_off(base.0).into_iter().map(Some).collect());
+        reports.push(self.inlining.suspension_reports.split_off(base.1).into_iter().map(Some).collect());
+        let shift = |r: DiagRange| DiagRange { rank: r.rank, items: (r.items.0 - base.0 as u32, r.items.1 - base.0 as u32), reports: (r.reports.0 - base.1 as u32, r.reports.1 - base.1 as u32) };
+        let mut ranges: Vec<(DiagRange, usize)> = std::mem::take(&mut self.diag_ranges).into_iter().map(|r| (shift(r), 0)).collect();
+        self.history_reads.clear();
+        self.told.clear();
+        self.meetings.clear();
+        for (k, o) in others.iter_mut().enumerate() {
+            match o {
+                Some(o) => {
+                    items.push(std::mem::take(&mut o.diags.items).into_iter().map(Some).collect());
+                    reports.push(std::mem::take(&mut o.inlining.suspension_reports).into_iter().map(Some).collect());
+                    ranges.extend(std::mem::take(&mut o.diag_ranges).into_iter().map(|r| (r, k + 1)));
+                }
+                None => {
+                    items.push(Vec::new());
+                    reports.push(Vec::new());
+                }
+            }
+        }
+        // A record a worker made between two of its items, or after its last, goes with the item before
+        // it, as its walk made it: none in a build of several workers (`diagnostics_unplaced`).
+        let mut by_worker: Vec<usize> = (0..ranges.len()).collect();
+        by_worker.sort_by_key(|&i| (ranges[i].1, ranges[i].0.items.0, ranges[i].0.reports.0));
+        for w in by_worker.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            if ranges[a].1 == ranges[b].1 {
+                ranges[a].0.items.1 = ranges[b].0.items.0;
+                ranges[a].0.reports.1 = ranges[b].0.reports.0;
+            }
+        }
+        for k in 0..items.len() {
+            if let Some(&i) = by_worker.iter().filter(|&&i| ranges[i].1 == k).last() {
+                ranges[i].0.items.1 = items[k].len() as u32;
+                ranges[i].0.reports.1 = reports[k].len() as u32;
+            }
+        }
+        ranges.sort_by_key(|&(r, k)| (r.rank, k, r.items.0));
+        // Worker 0's records from its region's start to its first item, then the items'.
+        let mut order: Vec<(usize, std::ops::Range<usize>, std::ops::Range<usize>)> = vec![(0, 0..lead.0 - base.0, 0..lead.1 - base.1)];
+        order.extend(ranges.into_iter().map(|(r, k)| (k, r.items.0 as usize..r.items.1 as usize, r.reports.0 as usize..r.reports.1 as usize)));
+        let mut placed_items: Vec<Diagnostic> = Vec::new();
+        let mut placed_reports: Vec<Diagnostic> = Vec::new();
+        for (k, ri, rr) in order {
+            placed_items.extend(items[k][ri].iter_mut().filter_map(Option::take));
+            placed_reports.extend(reports[k][rr].iter_mut().filter_map(Option::take));
+        }
+        // A worker that made records and typed no item: placed after the items, worker by worker.
+        for k in 1..items.len() {
+            placed_items.extend(items[k].iter_mut().filter_map(Option::take));
+            placed_reports.extend(reports[k].iter_mut().filter_map(Option::take));
+        }
+        placed_items.extend(items[0].iter_mut().filter_map(Option::take));
+        placed_reports.extend(reports[0].iter_mut().filter_map(Option::take));
+        self.diags.items.append(&mut placed_items);
+        self.inlining.suspension_reports.append(&mut placed_reports);
     }
 
     /// The merge after the body phase over the workers: every worker's
@@ -2526,6 +2828,7 @@ impl<'a> Worker<'a> {
             clock.part("measurement");
         }
         self.merge_index_records(&mut others, &items, &order, at_fork);
+        self.merge_diagnostics(&mut others);
         clock.part("tables");
         for o in others.iter_mut().flatten() {
             self.absorb(o);
@@ -2633,7 +2936,7 @@ impl<'a> Worker<'a> {
         prog.expr_types.place(expr_numbering, crew);
         prog.expr_spans.place(expr_numbering, crew);
         // The bit sets, a task of the crew each.
-        let bits: Vec<std::sync::Mutex<&mut crate::arena::Bits>> = [&mut prog.expansion_bits, &mut prog.leaf_bits, &mut prog.chain_end_bits, &mut prog.taken_then_bits, &mut prog.taken_else_bits, &mut prog.widened_bits, &mut prog.opaque_bits, &mut prog.spread_bits, &mut prog.ascribed_bits, &mut prog.setter_assign_bits, &mut prog.kept_bits, &mut prog.tuple_index_bits].into_iter().map(std::sync::Mutex::new).collect();
+        let bits: Vec<std::sync::Mutex<&mut crate::arena::Bits>> = [&mut prog.expansion_bits, &mut prog.leaf_bits, &mut prog.chain_end_bits, &mut prog.taken_then_bits, &mut prog.taken_else_bits, &mut prog.widened_bits, &mut prog.opaque_bits, &mut prog.spread_bits, &mut prog.ascribed_bits, &mut prog.cast_bits, &mut prog.setter_assign_bits, &mut prog.kept_bits, &mut prog.tuple_index_bits].into_iter().map(std::sync::Mutex::new).collect();
         crew.each(bits.len(), &|i| bits[i].lock().unwrap_or_else(|e| e.into_inner()).place(expr_numbering));
         drop(bits);
         let owned_at = owned.append(&mut self.prog);
@@ -2688,6 +2991,7 @@ impl<'a> Worker<'a> {
         self.outer_accessors.merge_own();
         self.merged_overloads.merge_own();
         self.derived_opaques.merge_own();
+        self.derived_aliases.merge_own();
         self.arity_classes.merge_own();
         self.class_exports.merge_own();
         self.pkg_exports.merge_own();
@@ -2699,6 +3003,12 @@ impl<'a> Worker<'a> {
         self.inferred_trait_args.merge_own();
         self.unchecked_variance.merge_own();
         self.outer_this.merge_own();
+        // An environment a publication shared under its maker's own id is the maker's entry,
+        // placed with its class; those of the classes made under the lock carry shared ids.
+        self.anon_envs.merge_own_where(|c| c.0 < crate::arena::LOCAL_BASE);
+        self.ctor_outer_params.merge_own();
+        self.suffixed_roots.merge_own();
+        self.poisoned_withheld.merge_own();
         self.quote.merge_own();
         self.derive.merge_own();
         self.syms.dispatch_names.merge_own();
@@ -2776,8 +3086,7 @@ impl<'a> Worker<'a> {
         self.given_fast.clear();
         self.given_fits.clear();
         self.head_sigs.clear();
-        self.base_type_cache.clear();
-        self.class_base_memo.clear();
+        self.clear_base_caches();
         self.target_name_files.clear();
         self.given_preferences.clear();
         self.given_orders.clear();
@@ -2785,11 +3094,13 @@ impl<'a> Worker<'a> {
         self.implicit_scope_givens.clear();
         self.package_levels.clear();
         self.value_sigs.clear();
+        // Their type parameters are a worker's own, renumbered or gone (`rebind_tparams`).
+        self.refinement_sigs.clear();
+        self.poly_rebound.clear();
         self.lit_types.clear();
         // The kind queries' clauses (`param_info_hi`): lambdas over parameters the worker made, its own records, which the
         // merge renumbers and whose overlay it gives back.
         self.kind_clauses.clear();
-        self.derived_aliases.clear();
         self.inferred_outcomes.clear();
         self.inferred_val_outcomes.clear();
         self.matches.forget();
@@ -2801,6 +3112,8 @@ impl<'a> Worker<'a> {
         self.last_typed_pattern = None;
         self.pattern_alternatives.clear();
         self.gadt.clear();
+        // Keyed by the patterns' own ids, which the merge renumbers.
+        self.tag_pats.clear();
         self.enum_case_new = None;
         self.ascribed_constant = None;
         self.ascription_constants.clear();

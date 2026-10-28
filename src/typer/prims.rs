@@ -161,7 +161,13 @@ impl<'a> Worker<'a> {
             return self.syms.scala_full_name(self.interner, e);
         }
         let name = self.name_str(self.syms.class(e).name);
-        let frames = self.anon_envs.get(&e).map(|env| env.frames.clone()).unwrap_or_default();
+        let frames = match self.anon_envs.get(&e) {
+            Some(env) => env.frames.clone(),
+            None => {
+                self.env_of_peer_class(e);
+                Vec::new()
+            }
+        };
         let enclosing = frames.iter().rev().find_map(|f| match f {
             super::Frame::Class(k) if self.syms.class(*k).owner != Owner::Local => Some(*k),
             _ => None,
@@ -2263,6 +2269,7 @@ impl<'a> Worker<'a> {
         match lowering {
             CastLowering::Same => {
                 *self.expr_marks.entry(recv).or_default() |= super::MARK_CAST | super::MARK_CALL | super::MARK_RETYPED;
+                self.prog.mark_cast(recv);
                 self.end_chain(recv, t);
                 // The value is of the cast's erased target, as an ascription's: an upcast is one
                 // (`TypeTestsCasts.transformAsInstanceOf`: "Replace cast by type ascription"), and a
@@ -2283,6 +2290,7 @@ impl<'a> Worker<'a> {
                 let unit = self.prog.add(TExpr::Unit);
                 let te = if matches!(self.prog.expr(recv), TExpr::Null) {
                     *self.expr_marks.entry(unit).or_default() |= super::MARK_CAST;
+                    self.prog.mark_cast(unit);
                     unit
                 } else {
                     let l = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
@@ -2326,6 +2334,7 @@ impl<'a> Worker<'a> {
                 let zero = self.zero_of_test(test);
                 self.prog.set_type(zero, t);
                 *self.expr_marks.entry(zero).or_default() |= super::MARK_CAST | super::MARK_CALL;
+                self.prog.mark_cast(zero);
                 if self.capturing() {
                     self.capture_form(zero, Form::Cast(t));
                 }

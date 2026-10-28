@@ -1,0 +1,6 @@
+# A transparent macro of the run cuts the typing of `A` after two deprecations of its item (`TypingCut::reported`, the
+# ordinals at the cut), the file typed again at the next round, and `B` after it reporting the same two messages at
+# other places: the records before the cut kept by identity, those of the unwinding and of the typing again placed as
+# one worker's walk makes them, under the hook with no give-way (master gave the build to one worker, "two
+# diagnostics at one place").
+0 --deprecation

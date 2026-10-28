@@ -1,0 +1,4 @@
+# <exit at one worker> <teq's flags>: the toString lint in every file, an error under --werror.
+1 --wtostring-interpolated --werror
+0 --wtostring-interpolated
+0

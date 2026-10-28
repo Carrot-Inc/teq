@@ -377,7 +377,25 @@ impl<'a> Worker<'a> {
         (self.tclasses_published..self.prog.classes.own().len())
             .filter(|k| !self.tclasses_registered.contains_key(k) && !self.tclasses_settling.contains(&(base + *k as u32)))
             .filter(|&k| !self.in_unfinished_check(base + k as u32))
+            .filter(|&k| self.deferred_classes.is_empty() || !self.settles_later(self.prog.classes.own()[k].id))
             .collect()
+    }
+
+    /// Whether the local class `c`, or one it is nested in, waits for a local trait of its block
+    /// before it is settled (`deferred_classes`, `finish_deferred_classes`): its record is changed
+    /// in place then, so no publication registers it before.
+    fn settles_later(&self, c: ClassId) -> bool {
+        let mut at = Some(c);
+        while let Some(k) = at {
+            if self.deferred_classes.iter().any(|&(d, _)| d == k) {
+                return true;
+            }
+            at = match self.syms.class(k).owner {
+                crate::symbols::Owner::Class(o) if o != k => Some(o),
+                _ => None,
+            };
+        }
+        false
     }
 
     /// The `TClass` `id` this worker just pushed, made inside the check of an own class of its

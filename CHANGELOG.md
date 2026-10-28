@@ -7,6 +7,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- A build reports the same errors and warnings at any worker count: every worker applies the build's warning
+  options, and the diagnostics come in one worker's order.
 - Non-transparent inline calls expand in a phase after the whole program is typed, as scalac's: an expansion's
   error is reported only when the typer reports none, a unit that meets a macro of its own build is typed again in
   a later round, and `--retain-trees` and `--max-inlined-trees` are scalac's `-Yretain-trees` and `-Xmax-inlined-trees`
@@ -36,10 +38,18 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   it, and `teq fix` runs each configuration under its file and leaves the skipped ones out
   ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md),
   [the lockfile](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
+- A build's warnings and errors, their order and its exit are the same at every worker count: every typing worker
+  reads the build's warning flags (`--wtostring-interpolated`, `--language` among them), and the diagnostics are
+  those of one worker's walk, the build typed again by one worker where the order cannot be kept.
 
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- Every value of an enum that extends `java.lang.Enum` is a `Mirror.Singleton`.
+- `new Array[T](n)` with no `ClassTag[T]` in scope is refused, `No ClassTag available for T`, as scalac refuses it,
+  whatever was typed before it.
+- Each value of an enum that extends `java.lang.Enum` is a `Mirror.Singleton`, as scalac makes it (scala-java-time's
+  `ChronoUnit` among them), where only some were, which ones depending on the order of the typing.
 - `teq interp` gives a program more of the JDK: `Files.walkFileTree` and basic file attributes, a file's byte
   channel and the streams over it, `BufferedOutputStream`, `Class.getDeclaredMethod`, `MethodHandles` and
   `Proxy` as far as a library finds a constructor or a static method and installs a handler through them,

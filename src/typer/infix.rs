@@ -211,9 +211,9 @@ impl<'a> Worker<'a> {
     /// (`c nope 1`'s E008 at the selection; `unknown f 1`'s E006 at the operand does not). An earlier error alone: a
     /// warning teq reports over an operator before this one, a deprecation at the reference, is dotty's
     /// `CrossVersionChecks`', a later phase's, which this one hides there. A dependent error is never presented.
-    fn error_covers(&self, at: Span) -> bool {
+    fn error_covers(&mut self, at: Span) -> bool {
         let file = self.env.file;
-        self.diags.items.iter().any(|d| !d.is_warning && !d.dependent && d.file == file && d.span.start <= at.end && at.start <= d.span.end)
+        self.history(super::merge::HistoryQuery::Covers(file, at), "an infix operation's error under an earlier one")
     }
 
     /// `isDeclaredInfix`: the symbol declared `infix`, or an `unapply` of the companion of a case

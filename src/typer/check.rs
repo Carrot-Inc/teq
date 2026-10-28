@@ -46,9 +46,10 @@ pub struct Item {
 
 /// `TEQ_IDLE_WORKERS=1` keeps every worker but the main one from taking work, `=0` keeps the
 /// main one from it: the threads, the lock and the cells with nothing migrating, or every
-/// item on an attached worker, for the determinism test's bisection. The workers it keeps idle
+/// item on an attached worker (and every unit of a forked inlining phase, `Worker::phase_work`),
+/// for the determinism tests. The workers it keeps idle
 /// are attached and started all the same (`idle_workers_asked`).
-fn idle_worker(worker: usize) -> bool {
+pub(super) fn idle_worker(worker: usize) -> bool {
     match std::env::var("TEQ_IDLE_WORKERS").ok().as_deref() {
         Some("0") => worker == 0,
         Some(_) => worker != 0,
@@ -429,7 +430,7 @@ impl<'a> Worker<'a> {
                     self.walk.take(file);
                     let mut next = first;
                     while let Some(i) = next {
-                        self.check_queued(file, q.item_index(fi, i));
+                        self.check_queued(file, q.item_index(fi, i), i);
                         if self.serial.is_needed() {
                             break;
                         }
@@ -440,7 +441,7 @@ impl<'a> Worker<'a> {
                     if std::env::var_os("TEQ_MERGE_TRACE").is_some_and(|v| v == "print") {
                         eprintln!("merge check: worker {} steals item {} of {}", self.worker, i, self.source(q.files[fi].0).path);
                     }
-                    self.check_queued(q.files[fi].0, q.item_index(fi, i));
+                    self.check_queued(q.files[fi].0, q.item_index(fi, i), i);
                 }
                 None => break,
             }
@@ -501,7 +502,7 @@ impl<'a> Worker<'a> {
     /// Types the item `i` of `file` (its index among the file's top-level definitions) and records
     /// the own records it made (`ItemRange`), which the merge places in the order of the sources,
     /// by the file and the item.
-    fn check_queued(&mut self, file: FileId, i: u32) {
+    fn check_queued(&mut self, file: FileId, i: u32, position: u32) {
         // `TEQ_SERIAL_ITEMS=1` types one item at a time across the workers, the assignment
         // of items to workers unchanged: a failure that stays is one of state, one that goes
         // is a race between two items' typing.
@@ -512,9 +513,10 @@ impl<'a> Worker<'a> {
         // The working state of one solve or one match starts every item anew, whichever
         // worker types it and whatever that worker typed before.
         self.ascribed_constant = None;
+        let def = self.ast(file).top_level[i as usize];
+        let reported = self.begin_diag_range((file.0, position));
         self.refresh_std_if_stale();
         self.sync_arity_tables();
-        let def = self.ast(file).top_level[i as usize];
         let start = self.own_marks();
         crate::types::view::item_typed();
         crate::measure::item_begin();
@@ -522,6 +524,156 @@ impl<'a> Worker<'a> {
         crate::measure::item_end(file.0, self.source(file).text.len() as u32, i);
         let end = self.own_marks();
         self.items.push(super::merge::ItemRange { key: (file.0, i), start, end });
+        self.end_diag_range((file.0, position), reported);
+    }
+
+    /// An item begins whose records the merge places by its rank (`end_diag_range`): where they
+    /// begin, or `None` for an item typed inside another (a late std file's, an item a
+    /// completion reaches), whose records are the enclosing item's, as one worker's walk makes them
+    /// there.
+    pub(super) fn begin_diag_range(&mut self, rank: (u32, u32)) -> Option<(u32, u32)> {
+        if std::mem::replace(&mut self.diag_range_open, true) {
+            return None;
+        }
+        self.diag_rank = rank;
+        self.diag_range_from = self.diag_marks();
+        Some(self.diag_range_from)
+    }
+
+    /// Whether what the build reported before this point answers `q` (`merge::HistoryQuery`): the
+    /// records of the items before, on a worker attached for a fork those of the fork's worker before
+    /// it (`inherited`) and its own, and the item's own. In a build that may fork, inside an item, the
+    /// read is recorded for the merge, which asks it again in one worker's walk's order and gives the
+    /// build to one worker where the answer differs (`history_mismatch`), from the prefix on.
+    pub(super) fn history(&mut self, q: super::merge::HistoryQuery, reader: &'static str) -> bool {
+        let (from_items, from_reports) = if self.diag_range_open { (self.diag_range_from.0 as usize, self.diag_range_from.1 as usize) } else { (self.diags.items.len(), self.inlining.suspension_reports.len()) };
+        let from_items = from_items.min(self.diags.items.len());
+        let from_reports = from_reports.min(self.inlining.suspension_reports.len());
+        let own = self.diags.items[from_items..].iter().any(|d| q.holds(d, false)) || self.inlining.suspension_reports[from_reports..].iter().any(|d| q.holds(d, true));
+        let prior = self.prior_record(&q, from_items, from_reports);
+        // The parser's errors come before every typing, as dotty reports them in its `Parser` phase
+        // ahead of the typer: an error reported, for every read of whether one was, on every worker.
+        let syntax = matches!(q, super::merge::HistoryQuery::AnyError { .. }) && self.diags.syntax_errors;
+        let before = own || syntax || prior.is_some();
+        if self.walk_by_size && self.diag_range_open {
+            let rank = self.diag_rank;
+            // What answered, where it was not the item's own, for a give-way's reason.
+            let seen = (before && !own).then(|| match prior {
+                Some(d) => format!("file {} {}..{}, \"{}\"", d.file.0, d.span.start, d.span.end, d.msg.lines().next().unwrap_or("")),
+                None => "the program's syntax error".to_string(),
+            });
+            self.history_reads.push(super::merge::HistoryRead { rank, query: q, before: before && !own, own, reader, seen });
+        }
+        before
+    }
+
+    /// The first record before the item being typed that answers `q`, as one worker's walk has them
+    /// there: the fork's worker's inherited ones, then this worker's own. On a worker of a fork,
+    /// inside an item whose range is tracked, those of this worker the walk's order puts before the
+    /// item alone, made before its region (the fork's prefix) or in its items ranked before this one
+    /// (a later item another order typed first is not the walk's yet), and of those what stands by
+    /// the cuts this worker made before the item (`TypingCut::before`, `Standing`), as the merge
+    /// asks it again (`history_mismatch`); otherwise, one worker typing in the walk's order (the
+    /// prefix, a session's retype, a suspended round's), every one made before the item began, what
+    /// stands of the earlier builds included.
+    fn prior_record(&self, q: &super::merge::HistoryQuery, from_items: usize, from_reports: usize) -> Option<&crate::source::Diagnostic> {
+        let inherited = self.inherited.0.iter().find(|d| q.holds(d, false)).or_else(|| self.inherited.1.iter().find(|d| q.holds(d, true)));
+        if inherited.is_some() {
+            return inherited;
+        }
+        let in_reports = |a: usize, b: usize| self.inlining.suspension_reports[a.min(b)..b].iter().find(|d| q.holds(d, true));
+        if !(self.forked && self.walk_by_size && self.diag_range_open) {
+            return self.diags.items[..from_items].iter().find(|d| q.holds(d, false)).or_else(|| in_reports(0, from_reports));
+        }
+        let rank = self.diag_rank;
+        let met: Vec<super::inlining::TypingCut> = self.inlining.typing_cuts.iter().filter(|c| c.before(rank)).cloned().collect();
+        let mut standing = (!met.is_empty()).then(|| {
+            let files: Vec<u32> = met.iter().map(|c| c.file).collect();
+            self.typing_standing(&files, &met, &self.inlining.demands)
+        });
+        let mut in_items = |a: usize, b: usize| -> Option<&crate::source::Diagnostic> {
+            self.diags.items[a.min(b)..b].iter().find(|d| q.holds(d, false) && standing.as_mut().map_or(true, |s| s.stands(self, d)))
+        };
+        let (region_items, region_reports) = (self.diag_region.0.min(from_items), self.diag_region.1.min(from_reports));
+        if let Some(d) = in_items(0, region_items).or_else(|| in_reports(0, region_reports)) {
+            return Some(d);
+        }
+        for r in self.diag_ranges.iter().filter(|r| r.rank < rank) {
+            if let Some(d) = in_items(r.items.0 as usize, (r.items.1 as usize).min(from_items)).or_else(|| in_reports(r.reports.0 as usize, (r.reports.1 as usize).min(from_reports))) {
+                return Some(d);
+            }
+        }
+        None
+    }
+
+    /// The event `e` met here (`merge::Event`): a read of a completion that reported, a reach of an
+    /// import statement. Recorded inside an item of a build that may fork, for the merge.
+    pub(super) fn meet(&mut self, e: super::merge::Event) {
+        if self.diag_range_open && self.inlining.track_meetings {
+            let rank = self.diag_rank;
+            let least = self.meetings.entry(e).or_insert(rank);
+            if rank < *least {
+                *least = rank;
+            }
+        }
+    }
+
+    /// The event `e` told here, its reports made (`merge::Event`): met here too.
+    pub(super) fn tell(&mut self, e: super::merge::Event) {
+        if self.diag_range_open && self.inlining.track_meetings {
+            self.told.push((e, self.diag_rank));
+            self.meet(e);
+        }
+    }
+
+    /// Whether this worker tells the import statement `stmt` of `file`, claimed by the first worker of
+    /// a fork to check it (`merge::Claims`); the others skip it, as one worker's walk checks it
+    /// once. Every reach is a meeting (`merge::Event::Import`).
+    pub(super) fn claim_import(&mut self, file: u32, stmt: u32) -> bool {
+        let e = super::merge::Event::Import(file, stmt);
+        self.meet(e);
+        !self.forked || self.claims.imports.lock().unwrap_or_else(|e| e.into_inner()).insert((file, stmt), ()).is_none()
+    }
+
+    /// Whether this worker tells what the check of the inline definition `sym` reports, claimed by the
+    /// first worker of a fork to check it (`merge::Claims`): another worker checks it for its own
+    /// record and reports nothing of it (`check_definition_in`).
+    pub(super) fn claim_definition(&mut self, sym: SymId) -> bool {
+        !self.forked || self.claims.definitions.lock().unwrap_or_else(|e| e.into_inner()).insert(sym, ()).is_none()
+    }
+
+    /// The claim of the inline definition `sym` given back (`claim_definition`): the record and the
+    /// reports of the check that took it are discarded, and the check that makes them again tells
+    /// them, as one worker's walk reports them there (`demand_local_definition`).
+    pub(super) fn release_definition(&mut self, sym: SymId) {
+        if self.forked {
+            self.claims.definitions.lock().unwrap_or_else(|e| e.into_inner()).remove(&sym);
+        }
+    }
+
+    /// A report one worker's walk tells once per run (a cycle, a match type's failure, a super
+    /// call's problem, a case class in an inline body, an export's conflict, each kept by a table
+    /// of what was told): told on a worker of a fork, which another worker may tell too or a later
+    /// item before an earlier, the build is given to one worker (`need_serial_for_diagnostics`). Told
+    /// before the fork, its table is the attached workers' too.
+    pub(crate) fn told_once(&self, what: &str) {
+        if self.forked {
+            self.need_serial_for_diagnostics(|| format!("an event told by a worker: {}", what));
+        }
+    }
+
+    /// The lengths of `diags.items` and `inlining.suspension_reports`, where an item begins.
+    pub(super) fn diag_marks(&self) -> (u32, u32) {
+        (self.diags.items.len() as u32, self.inlining.suspension_reports.len() as u32)
+    }
+
+    /// The item of rank `rank`, begun at `from` (`begin_diag_range`), is done: what it reported is
+    /// recorded for the merge (`merge::DiagRange`).
+    pub(super) fn end_diag_range(&mut self, rank: (u32, u32), from: Option<(u32, u32)>) {
+        let Some(from) = from else { return };
+        self.diag_range_open = false;
+        let to = self.diag_marks();
+        self.diag_ranges.push(super::merge::DiagRange { rank, items: (from.0.min(to.0), to.0), reports: (from.1.min(to.1), to.1) });
     }
 
     /// The order the body phase takes the files in: by id for one worker; for several, the std
@@ -767,6 +919,7 @@ impl<'a> Worker<'a> {
                             );
                             let (file, span) = (self.syms.class(c).file, self.syms.class(c).span);
                             if !told(self) {
+                                self.told_once("a super call's problem");
                                 self.diags.error(file, span, msg);
                             }
                         }
@@ -783,6 +936,7 @@ impl<'a> Worker<'a> {
                             );
                             let (file, span) = (self.syms.class(c).file, self.syms.class(c).span);
                             if !told(self) {
+                                self.told_once("a super call's problem");
                                 self.diags.error(file, span, msg);
                             }
                         }
@@ -817,8 +971,14 @@ impl<'a> Worker<'a> {
 
     /// Types the items of a file, in order.
     pub(super) fn check_file(&mut self, file: FileId) {
-        for item in self.items_of(file) {
+        for (k, item) in self.items_of(file).enumerate() {
+            // The prefix's items, placed among the fork's by their ranks (`merge_diagnostics`): an
+            // item's place in the order `items_of` takes them in, the queue's (`Queue::item_index`).
+            let reported = if self.walk_by_size { self.begin_diag_range((file.0, k as u32)) } else { None };
             self.check_item(item);
+            if reported.is_some() {
+                self.end_diag_range((file.0, k as u32), reported);
+            }
         }
     }
 
@@ -859,6 +1019,7 @@ impl<'a> Worker<'a> {
         self.inlining.item_demands = outer_demands;
         if self.inlining.in_item == 0 {
             self.inlining.unwinding = false;
+            self.diags.unwinding = None;
         }
     }
 
@@ -2962,7 +3123,7 @@ impl<'a> Worker<'a> {
         self.var_frame_end(frame);
         let own = |d: &crate::source::Diagnostic| d.file == file && d.span.start >= span.start && d.span.end <= span.end;
         let elsewhere: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !own(d)).collect();
-        self.diags.items.extend(elsewhere);
+        self.diags.extend(elsewhere);
         self.index_drop_records_within(recorded, file, span);
         ty
     }
@@ -3290,7 +3451,7 @@ impl<'a> Worker<'a> {
         }
         if self.syms.sym_cells.get(sym.0) == Completion::Done {
             // A read of a completion is a demand of the one in progress (`demand_sig_read`).
-            if self.inlining.track_demands {
+            if self.inlining.notes_demands() {
                 self.demand_sig_read(sym);
             }
             return self.syms.sym(sym).info.sig.as_ref();
@@ -3312,7 +3473,7 @@ impl<'a> Worker<'a> {
             self.types.count_sig_read(|c| c.reads += 1);
         }
         if self.syms.sym_cells.get(sym.0) == Completion::Done {
-            if self.inlining.track_demands {
+            if self.inlining.notes_demands() {
                 self.demand_sig_read(sym);
             }
             return self.syms.sym(sym).info.sig.as_ref();
@@ -3424,7 +3585,7 @@ impl<'a> Worker<'a> {
                 self.complete_sig(sym, file, def_id, owner, kind, span);
                 self.phase_end(p);
                 if self.syms.sym(sym).state() == Completion::Suspended {
-                    if self.inlining.track_demands {
+                    if self.inlining.notes_demands() {
                         self.demand_sig_read(sym);
                     }
                     return None;
@@ -3433,7 +3594,7 @@ impl<'a> Worker<'a> {
         }
         // The completion this read made or waited for, or found made, is a demand of the one in
         // progress (`demand_sig_read`).
-        if self.inlining.track_demands {
+        if self.inlining.notes_demands() {
             self.demand_sig_read(sym);
         }
         self.syms.sym(sym).info.sig.as_ref()
@@ -3443,7 +3604,7 @@ impl<'a> Worker<'a> {
     /// reader depends on what the suspended completion reported before it suspended.
     #[cold]
     fn read_suspended_sig(&mut self, sym: SymId) -> Option<&Arc<MethodSig>> {
-        if self.inlining.track_demands {
+        if self.inlining.notes_demands() {
             self.demand_sig_read(sym);
         }
         self.read_suspended()
@@ -4511,7 +4672,7 @@ impl<'a> Worker<'a> {
             }
             _ => call,
         };
-        if !matches!(self.prog.expr(call), TExpr::New(..) | TExpr::NewVia(..)) && self.diags.error_count() == 0 {
+        if !matches!(self.prog.expr(call), TExpr::New(..) | TExpr::NewVia(..)) && !self.history(super::merge::HistoryQuery::AnyError { reports: false }, "a secondary constructor's first call") {
             self.error(span, "a secondary constructor has to call another constructor of its class first");
         }
         if let TExpr::NewVia(target, _) = self.prog.expr(call) {

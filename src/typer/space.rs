@@ -250,7 +250,7 @@ impl<'a> Worker<'a> {
             self.check_match(m.sty, &m.cases, &m.clauses, m.partial, m.span);
             if m.quiet {
                 let reported = self.diags.items.split_off(mark);
-                self.diags.items.extend(reported.into_iter().filter(|d| !d.is_warning));
+                self.diags.extend(reported.into_iter().filter(|d| !d.is_warning));
             }
         }
         self.dependent_checks = saved_dependent;

@@ -71,8 +71,29 @@ impl Erased {
 impl<'a> Worker<'a> {
     pub fn find_site_classes(&mut self) {
         self.sites.not_given_class = self.entered_class_at(&["scala", "util", "NotGiven"]);
-        self.sites.class_tag = self.entered_class_at(&["scala", "reflect", "ClassTag"]);
-        self.prog.class_tag_module = self.sites.class_tag.and_then(|c| self.syms.class(c).companion);
+        let tag = self.sites.class_tag.or_else(|| self.entered_class_at(&["scala", "reflect", "ClassTag"]));
+        self.set_class_tag(tag);
+    }
+
+    /// `scala.reflect.ClassTag` found, with its companion for the emitters (`class_tag_module`).
+    fn set_class_tag(&mut self, c: Option<ClassId>) {
+        if let Some(c) = c {
+            self.sites.class_tag = Some(c);
+            self.prog.class_tag_module = self.syms.class(c).companion;
+        }
+    }
+
+    /// `scala.reflect.ClassTag` as the build has it, whatever this worker met before: the class
+    /// found, else entered by its path where the reader `demand`s it (a tag's search, as
+    /// `tagged_test` asks), else the class where it is entered already. A function of the build,
+    /// not of which worker typed what before (`sites.class_tag`, which a first recognition fills).
+    pub(super) fn class_tag_class(&mut self, demand: bool) -> Option<ClassId> {
+        if let Some(c) = self.sites.class_tag {
+            return Some(c);
+        }
+        let c = if demand { self.class_at(&["scala", "reflect", "ClassTag"]) } else { self.entered_class_at(&["scala", "reflect", "ClassTag"]) };
+        self.set_class_tag(c);
+        c
     }
 
     /// The class or object at a path of packages, then of classes nested in one another,
@@ -285,12 +306,18 @@ impl<'a> Worker<'a> {
     /// Whether `t` is a `scala.reflect.ClassTag[_]`.
     pub fn is_class_tag(&mut self, t: TypeId) -> bool {
         let Type::Class(c, _) = self.types.get(t) else { return false };
+        self.is_class_tag_class(c)
+    }
+
+    /// Whether the class `c` is `scala.reflect.ClassTag`: by the class found, else by its path,
+    /// which finds it (`class_tag_class`).
+    pub(super) fn is_class_tag_class(&mut self, c: ClassId) -> bool {
         if self.sites.class_tag.is_none() {
             let info = self.syms.class(c);
             let in_reflect = matches!(info.owner, Owner::Package(p) if self.interner.get(self.syms.pkg(p).name) == "reflect"
                 && self.syms.pkg(p).parent == Some(self.b.scala_pkg));
             if in_reflect && self.interner.get(info.name) == "ClassTag" {
-                self.sites.class_tag = Some(c);
+                self.set_class_tag(Some(c));
             }
         }
         self.sites.class_tag == Some(c)
@@ -318,7 +345,8 @@ impl<'a> Worker<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn erased_evidence(&mut self, sym: SymId, sig: &MethodSig, subst: &Subst, written: Option<super::apply::ArgList>, erroneous_arg: bool, site: Span, span: Span) -> Vec<TExprId> {
         let tags = self.syms.sym(sym).erased_tags;
-        let Some(tag_class) = self.sites.class_tag.filter(|_| tags != 0) else { return Vec::new() };
+        // A signature that names ClassTag entered it: every worker reading it finds it.
+        let Some(tag_class) = (tags != 0).then(|| self.class_tag_class(false)).flatten() else { return Vec::new() };
         let params: Vec<ParamSig> = sig
             .tparams
             .iter()
@@ -426,7 +454,7 @@ impl<'a> Worker<'a> {
     /// has to be one that the type alone says (`stable_erasure`), and for an array type the
     /// element's tag, wrapped.
     pub fn class_tag_given(&mut self, class: ClassId, target: TypeId) -> Option<TExprId> {
-        if Some(class) != self.sites.class_tag {
+        if !self.is_class_tag_class(class) {
             return None;
         }
         let target = self.solve_bounded_in(target);

@@ -70,7 +70,7 @@ impl<'a> Worker<'a> {
                 let own = |d: &crate::source::Diagnostic| d.file == file && d.span.start >= span.start && d.span.end <= span.end;
                 let typed = !t.diags.items[mark..].iter().any(|d| own(d) && !d.is_warning);
                 let elsewhere: Vec<crate::source::Diagnostic> = t.diags.items.drain(mark..).filter(|d| !own(d)).collect();
-                t.diags.items.extend(elsewhere);
+                t.diags.extend(elsewhere);
                 if let (true, Some(te), Some(c)) = (typed, te, t.prog.capture.as_deref_mut()) {
                     c.annotations.insert((file, a.instance), te);
                 }
@@ -111,7 +111,7 @@ impl<'a> Worker<'a> {
             let own = |d: &crate::source::Diagnostic| d.file == file && d.span.start >= span.start && d.span.end <= span.end;
             let typed = !self.diags.items[mark..].iter().any(|d| own(d) && !d.is_warning);
             let elsewhere: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !own(d)).collect();
-            self.diags.items.extend(elsewhere);
+            self.diags.extend(elsewhere);
             if let (true, Some(c)) = (typed, self.prog.capture.as_deref_mut()) {
                 c.annotations.insert((file, instance), te);
             }
@@ -411,7 +411,7 @@ impl<'a> Worker<'a> {
                         let at = ast.written_arg(arg).map_or(ast.expr_span(arg), |(w, _)| w).start;
                         let file = self.env.file;
                         let kept: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| d.is_warning || d.file != file || d.span.start != at).collect();
-                        self.diags.items.extend(kept);
+                        self.diags.extend(kept);
                     }
                     typed_of.push((arg, te));
                 }

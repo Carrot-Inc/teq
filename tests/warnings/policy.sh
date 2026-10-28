@@ -7,7 +7,9 @@
 # compared with scalac's, pinned in tests/warnings/expected/policy by
 # tests/warnings/capture-policy.sh. The flags `-deprecation`, `-feature`, `-Wconf`, `@nowarn`,
 # `--werror` in both directions: a warning given, summarized, silenced, promoted or demoted, and
-# the exit that follows. Run by tests/run_errors.sh; the last line gives the counts.
+# the exit that follows. Each run once more under `TEQ_IDLE_WORKERS=0 --threads 2`, every item an
+# attached worker's: against scalac's as the others, and its whole output and exit against the
+# one-worker run's, unsorted. Run by tests/run_errors.sh; the last line gives the counts.
 cd "$(dirname "$0")/../.."
 TEQ=${TEQ:-./target/release/teq}
 records=out/warnings-policy
@@ -26,22 +28,29 @@ while IFS= read -r line; do
   expected=tests/warnings/expected/policy/$name.txt
   src=tests/warnings/policy/$probe.scala
   flags=$(python3 tests/warnings/policy.py flags <<< "$options")
-  for mode in check interp; do
+  for mode in check interp check-attached interp-attached; do
     total=$((total + 1))
-    if [ $mode = check ]; then
-      out=$(eval timeout 60 "$TEQ" compiler check "$src" "$flags" 2>&1)
-    else
-      out=$(eval timeout 60 "$TEQ" interp "$src" "$flags" 2>&1)
-    fi
+    case $mode in
+      check) out=$(eval timeout 60 "$TEQ" compiler check "$src" "$flags" 2>&1) ;;
+      interp) out=$(eval timeout 60 "$TEQ" interp "$src" "$flags" 2>&1) ;;
+      check-attached) out=$(eval TEQ_IDLE_WORKERS=0 timeout 60 "$TEQ" compiler check "$src" "$flags" --threads 2 2>&1) ;;
+      interp-attached) out=$(eval TEQ_IDLE_WORKERS=0 timeout 60 "$TEQ" interp "$src" "$flags" --threads 2 2>&1) ;;
+    esac
     code=$?
     printf '%s\n' "$out" > "$records/$name.$mode.out"
+    echo $code > "$records/$name.$mode.exit"
     got=$(python3 tests/warnings/policy.py teq "$code" "$probe.scala" <<< "$out")
-    if [ "$got" = "$(cat "$expected")" ]; then
-      matched=$((matched + 1))
-    else
+    if [ "$got" != "$(cat "$expected")" ]; then
       echo "FAIL $name ($mode, $options): teq's diagnostics or exit differ from scalac's ($src)"
       diff <(cat "$expected") <(printf '%s\n' "$got") | sed 's/^/  /'
       fail=1
+    elif [[ $mode == *-attached ]] && ! { cmp -s "$records/$name.${mode%-attached}.out" "$records/$name.$mode.out" && cmp -s "$records/$name.${mode%-attached}.exit" "$records/$name.$mode.exit"; }; then
+      # The attached workers' output, unsorted, against one worker's, its exit too (policy.py sorts).
+      echo "FAIL $name ($mode, $options): attached workers' output or exit is not one worker's ($src)"
+      diff "$records/$name.${mode%-attached}.out" "$records/$name.$mode.out" | head -5 | sed 's/^/  /'
+      fail=1
+    else
+      matched=$((matched + 1))
     fi
   done
 done < tests/warnings/policy.txt

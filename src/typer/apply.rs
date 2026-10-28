@@ -6219,12 +6219,15 @@ impl<'a> Worker<'a> {
         if self.stable_erasure(elem).is_none() {
             return false;
         }
+        // ClassTag's class and companion, as the build has them, before the standard tag's check reads
+        // the companion (`class_tag_class`).
+        let tag_class = self.class_tag_class(false);
         // A standard tag found by the search (`ClassTag.Int`, `ClassTag(classOf[C])`) stands as it is,
         // the tree scalac pickles before `ArrayConstructors` runs.
         if self.prog.is_standard_class_tag(*args.last().unwrap(), &self.syms, self.interner) {
             return true;
         }
-        let Some(tag_class) = self.sites.class_tag else { return true };
+        let Some(tag_class) = tag_class else { return true };
         let target = self.types.class(tag_class, &[elem]);
         if let Some(tag) = self.class_tag_given(tag_class, target) {
             *args.last_mut().unwrap() = tag;

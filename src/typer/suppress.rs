@@ -151,7 +151,7 @@ impl<'a> Worker<'a> {
         let own = |d: &Diagnostic| d.file == file && d.span.start >= span.start && d.span.end <= span.end;
         let failed = self.diags.items[mark..].iter().any(|d| own(d) && !d.is_warning);
         let elsewhere: Vec<Diagnostic> = self.diags.items.drain(mark..).filter(|d| !own(d)).collect();
-        self.diags.items.extend(elsewhere);
+        self.diags.extend(elsewhere);
         self.typing_annotation = outer;
         self.deps = deps;
         self.prog.capture = capture;

@@ -190,7 +190,14 @@ impl QuoteState {
     /// expansion sites and the deferred calls of its quotes.
     pub(super) fn absorb(&mut self, other: &mut QuoteState) {
         debug_assert!(other.frames.is_empty() && other.copied_deferred.is_empty());
-        self.copies.extend(std::mem::take(&mut other.copies));
+        // A count another worker advanced from the fork's snapshot is the larger: an untouched
+        // clone does not reset it (the copies' names, `$n`).
+        for (k, n) in std::mem::take(&mut other.copies) {
+            let mine = self.copies.entry(k).or_insert(n);
+            if n > *mine {
+                *mine = n;
+            }
+        }
         self.placement.placed.extend(std::mem::take(&mut other.placement.placed));
         self.fresh.extend(std::mem::take(&mut other.fresh));
         self.deferred.absorb(other.deferred.take_local());
@@ -1524,8 +1531,7 @@ impl<'a> Worker<'a> {
         // dotty's typer expands a transparent call alone (`Inlines.needsInlining`): a plain one teq
         // expands ahead of the phase holds what it reports for the phase, its macro run as before.
         let transparent = self.inline.sites.first().is_some_and(|s| self.syms.sym(s.callee).mods & crate::ast::mods::TRANSPARENT != 0);
-        let errors = |d: &crate::source::Diagnostic| !d.is_warning;
-        if !transparent || !self.program_file(file) || self.diags.items.iter().any(errors) || self.inlining.suspension_reports.iter().any(errors) || !self.splice_names_program(code, file) {
+        if !transparent || !self.program_file(file) || self.history(super::merge::HistoryQuery::AnyError { reports: true }, "a transparent macro of the run suspending its unit at typing") || !self.splice_names_program(code, file) {
             return false;
         }
         // What it reports outlives the unit's typing, as the phase's suspension's does.
@@ -1569,6 +1575,7 @@ impl<'a> Worker<'a> {
         }
         if self.inlining.in_item > 0 {
             self.inlining.unwinding = true;
+            self.diags.unwinding = Some(file.0);
         }
         if !self.inlining.typing_suspended.contains(&file.0) {
             self.inlining.typing_suspended.push(file.0);
@@ -1593,12 +1600,13 @@ impl<'a> Worker<'a> {
         if self.inlining.typing_cuts.iter().any(|c| c.file == file.0 && c.key <= key) {
             return;
         }
-        let reported = self.diags.items.iter().filter(|d| !d.owner.is_none() && owners.contains(&d.owner.key())).cloned().collect();
+        let reported = self.diags.items.iter().filter(|d| !d.owner.is_none() && owners.contains(&d.owner.key())).map(|d| d.ordinal.0).collect();
         // What they demanded is listed from where the item being typed began, a cut outside an
         // item reading the whole list.
         let from = if self.inlining.in_item > 0 { self.inlining.item_demands.min(self.inlining.demands.len()) } else { 0 };
         let demanded = self.inlining.demands[from..].iter().filter(|(by, _)| owners.contains(&by.key())).map(|&(_, to)| to).collect();
-        self.inlining.typing_cuts.push(super::inlining::TypingCut { file: file.0, key, reported, demanded });
+        let rank = self.diag_range_open.then_some(self.diag_rank);
+        self.inlining.typing_cuts.push(super::inlining::TypingCut { file: file.0, key, reported, demanded, rank });
     }
 
     /// Whether the walk of an item unwinding from its unit's suspension meets the definition `sym`
@@ -1806,7 +1814,7 @@ impl<'a> Worker<'a> {
         // unit's own source reported first, which outlives the file's round.
         if self.inlining.suspending
             && (self.inlining.suspended_hit
-                || (self.inlining.splices_name_run && !self.inlining.reached_other && !self.diags.items.iter().any(|d| !d.is_warning) && self.splice_names_program(te, self.syms.sym(callee).file)))
+                || (self.inlining.splices_name_run && !self.inlining.reached_other && !self.history(super::merge::HistoryQuery::AnyError { reports: false }, "a macro of the run giving the phase's round up") && self.splice_names_program(te, self.syms.sym(callee).file)))
         {
             if !self.inlining.suspended_hit {
                 let mark = self.diags.items.len();
@@ -3113,7 +3121,7 @@ impl<'c> Copier<'c> {
             if t.sam_classes.contains_key(&k) {
                 t.sam_classes.insert(nk, ());
             }
-            t.anon_envs.insert(nk, Arc::new(t.env.clone()));
+            t.set_anon_env(nk, Arc::new(t.env.clone()));
             if let Some(map) = &mut self.map {
                 map.part.classes.push((k, nk));
             }

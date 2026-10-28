@@ -1,0 +1,5 @@
+# An old-style implicit conversion's definition in every file: --language implicitConversions silences its feature
+# warning, --feature shows it, neither summarizes it.
+0 --language implicitConversions --feature --werror
+1 --feature --werror
+0
