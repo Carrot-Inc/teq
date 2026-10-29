@@ -7,6 +7,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- `teq compiler watch`, `teq lsp` and `teq fix` give memory back between builds: a session's resident memory on a
+  large program is about half of what it was, and its peak lower, whatever its class path's length.
 - A build reports the same errors and warnings at any worker count: every worker applies the build's warning
   options, and the diagnostics come in one worker's order.
 - Non-transparent inline calls expand in a phase after the whole program is typed, as scalac's: an expansion's

@@ -407,6 +407,9 @@ pub fn run(opts: &Options) -> ! {
         }
     };
     write::for_parent();
+    // What a build's merges hand to threads of their own to drop is freed before the session goes
+    // idle (`next_command`).
+    crate::crew::keep_given_back();
     #[cfg(windows)]
     relay_unpeekable_stdin();
     crate::measure::enable_parts(opts.timings || std::env::var_os("TEQ_SESSION_PARTS").is_some_and(|v| v == "1"));
@@ -805,7 +808,7 @@ pub fn run(opts: &Options) -> ! {
                 note_settling(&mut report, &mut kept_reach, settling);
             }
             report.ms.total = t0.elapsed();
-            print_built(&report);
+            print_report(&report);
             // What the interpreter made for a full build is not the retypes': at any count they
             // start from none, so that a declared cacheable object never holds a full build's state.
             crate::typer::thread::run(crate::interp::dispose);
@@ -842,6 +845,9 @@ pub fn run(opts: &Options) -> ! {
                 if let emit::kept::Settling::Dropped(walks) = settling {
                     log_dropped(walks);
                 }
+                // The overlays' drop the last merge began (`TypeStore::reclaim_overlays`), for the idle point to wait
+                // for; a store that goes hands its own on as it drops (`give_reclaiming_back`).
+                t.types.give_reclaiming_back();
             }
             let Some(cmd) = next_command(&mut input, &mut overlays, opts) else { break None };
             let requested = match cmd {
@@ -1237,7 +1243,7 @@ pub fn run(opts: &Options) -> ! {
             let settling = kept_reach.as_mut().and_then(|k| k.settling.take());
             note_kept(&mut report, reuse, compared, settling);
             report.ms.total = t0.elapsed();
-            print_built(&report);
+            print_report(&report);
         };
         if let Some(t) = &typer {
             for (i, slot) in t.std.slots.iter().enumerate() {
@@ -2117,8 +2123,12 @@ fn canonical_index(entries: &[Entry]) -> FxMap<PathBuf, usize> {
 /// into `overlays`, a line the session does not know is answered, and a `cancel` read here names
 /// no build under way and answers nothing.
 fn next_command(input: &mut Input, overlays: &mut Overlays, opts: &Options) -> Option<Command> {
-    // The session goes idle: what it freed on this thread is for every thread to take.
+    // The session goes idle: what the last build left to threads of their own is freed, what this
+    // thread freed is for every thread to take, and the mappings kept are unmapped (`alloc::idle`,
+    // docs/SPEED.md "A session's memory").
+    crate::crew::given_back();
     crate::alloc::settle();
+    crate::alloc::idle();
     loop {
         let command = match input.ahead.pop_front() {
             Some(command) => command,
@@ -2608,11 +2618,28 @@ fn entry_of_file(f: usize, n_std: usize, n_entries: usize, blocks_of: &[Vec<usiz
 /// allocator holds. `reserved` is what it took from the system for blocks up to 32 KB and
 /// never gives back, `free` what of that is on no thread's hands (at the centre, on the lists
 /// of the compiler thread and of the typing thread), `large` the larger requests, `large_peak`
-/// the most of them since the last `stats`, `mapped` the ones of 1 MB and more among them,
-/// which the session maps itself, and `mapped_kept` the address space of the freed mappings it
-/// keeps for the next build. `session`, once a build has typed: what its stores hold by their
-/// own shapes (`held.rs`), `account` and `baseline` the allocator's account of the session
-/// now and when its last full build was answered, `builds` the builds since. `interp`: the
+/// the most of them since the last `stats`, `mapped` what of them the session maps itself (on Linux
+/// and macOS; not those the system's allocator serves: aligned past the allocator's step, made before
+/// the process was resident, asked of it first after a refusal under a bound until the idle point, or
+/// where the system refused a mapping), `mapped_kept` the address space of the freed mappings it keeps
+/// for a later request of the same build (none at an idle point, which unmaps them, but those the system
+/// refused to unmap at its bound on the count of mappings), `kept_mappings`
+/// their count, `mappings_made` the
+/// mappings it took from the system, `idle_unmapped`
+/// the mappings the idle points unmapped, `idle_us` how long the last idle point took (`alloc::idle`),
+/// `resizes` the growths the system served by giving a mapping a new length (Linux's `mremap`),
+/// `kept_unmapped` how often the kept mappings, the reserve's rest or the ranges held gave way to a request
+/// the system refused, `advice_refused` the mappings unmapped because the system would not take their
+/// pages back, `unmaps_refused` how often the system refused an unmapping (at its bound on the count of
+/// mappings), the range kept the allocator's (a kept mapping and a range no list names for the next idle
+/// point, a shrunk block's tail until the block is freed, the reserve's rest as the reserve), `orphaned` how
+/// many such ranges no list names are held now, and `advice_kept` how often an advice was refused where the
+/// pages stay; then the resident pages by owner (Linux's `/proc/self/pagemap`): the process's (`rss`), the
+/// chunks', the kept mappings' (none at idle but those refused), the live mappings', and the rest
+/// (`other_resident`: the system's allocator, the binary, the stacks). `session`, once a
+/// build has typed: what its stores hold by their own shapes (`held.rs`), `account` and
+/// `baseline` the allocator's account of the session now and when its last full build was
+/// answered, `builds` the builds since. `interp`: the
 /// nodes the interpreter registered as able to close a cycle (`interp/registry.rs`), by kind,
 /// and what its last sweep emptied and freed, in how many microseconds.
 fn print_stats(kept: Option<&Kept>) {
@@ -2645,13 +2672,23 @@ fn print_stats(kept: Option<&Kept>) {
         ("large_peak", JsonValue::Int(held.large_peak)),
         ("mapped", JsonValue::Int(held.mapped)),
         ("mapped_kept", JsonValue::Int(held.mapped_kept)),
+        ("kept_mappings", JsonValue::Int(held.kept_mappings)),
         ("mappings_made", JsonValue::Int(held.mappings_made)),
+        ("idle_unmapped", JsonValue::Int(held.idle_unmapped)),
+        ("resizes", JsonValue::Int(held.resizes)),
+        ("idle_us", JsonValue::Int(held.idle_us)),
+        ("kept_unmapped", JsonValue::Int(held.kept_unmapped)),
+        ("advice_refused", JsonValue::Int(held.advice_refused)),
+        ("unmaps_refused", JsonValue::Int(held.unmaps_refused)),
+        ("orphaned", JsonValue::Int(held.orphaned)),
+        ("advice_kept", JsonValue::Int(held.advice_kept)),
         ("chains_taken", JsonValue::Int(held.chains_taken)),
         ("runs_carved", JsonValue::Int(held.runs_carved)),
         ("rss", JsonValue::Int(resident.rss)),
         ("chunks_resident", JsonValue::Int(resident.chunks)),
         ("kept_resident", JsonValue::Int(resident.kept)),
         ("mapped_resident", JsonValue::Int(resident.mapped)),
+        ("other_resident", JsonValue::Int(resident.rss.saturating_sub(resident.chunks + resident.kept + resident.mapped))),
     ]);
     let mut parts = vec![("allocator", allocator), ("interp", interp)];
     if let Some(k) = kept {
@@ -2689,10 +2726,6 @@ fn print_stats(kept: Option<&Kept>) {
     let _ = out.flush();
 }
 
-/// The answer of a build that parsed changed input, whether it went on to type or failed
-/// there. The mappings the build did not take from the ones kept go back to the system:
-/// once a build, since a query or a build that found nothing changed frees no array for the
-/// next to take.
 /// The files a build asks for with those a cancelled one carried (none: every file).
 fn with_carried(carried: Option<Option<Vec<String>>>, requested: Option<Vec<String>>) -> Option<Vec<String>> {
     match (carried, requested) {
@@ -2724,11 +2757,6 @@ fn print_cancelled(build: Option<u64>) {
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{}", json_object(&fields));
     let _ = out.flush();
-}
-
-fn print_built(r: &Report) {
-    print_report(r);
-    crate::alloc::age();
 }
 
 fn print_report(r: &Report) {

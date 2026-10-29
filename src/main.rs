@@ -1878,22 +1878,11 @@ fn main() {
     if std::env::var_os("TEQ_PANIC_REPORT").is_some_and(|v| v == "plain") {
         plain_panic_reports();
     }
-    // Before the first request of 1 MB, which a resident process maps itself. `TEQ_RESIDENT=0`
-    // keeps a session on the allocator of a batch run, for measuring what the exchange between
-    // its threads costs and for the training of the profile-guided build (bench/pgo.sh).
-    let mut words = argfile::args().iter();
-    let resident = match words.next().map(String::as_str) {
-        Some("lsp") => true,
-        Some("compiler") => words.next().is_some_and(|verb| verb == "watch"),
-        _ => false,
-    };
-    if resident {
+    let (session, resident) = residency(argfile::args(), std::env::var_os("TEQ_RESIDENT").as_deref());
+    if session {
         typer::thread::session();
     }
-    // `teq fix` and `teq compiler fix` type program after program, each typing's workers and typing thread ending before
-    // the next typing begins: what they leave goes to the centre, as a session's builds' do, without a session's typing
-    // thread (docs/FIX.md, "Patches, suppressions and rounds").
-    if (resident || fix_verb(argfile::args())) && !std::env::var_os("TEQ_RESIDENT").is_some_and(|v| v == "0") {
+    if resident {
         alloc::resident();
     }
     // The typer recurses over expressions and through the definitions they name; a library's
@@ -1902,6 +1891,23 @@ fn main() {
     let code = compiler.join().unwrap_or(2);
     interp::code_stats_report();
     std::process::exit(code);
+}
+
+/// What the process is by its arguments, the argument files' lines in place (`argfile::args`): a session's
+/// (`teq lsp`, `teq compiler watch`), whose typing thread lives across builds, and whether its allocator is
+/// a resident process's. `teq fix` and `teq compiler fix` type program after program, each typing's workers
+/// and typing thread ending before the next typing begins: what they leave goes to the centre, as a
+/// session's builds' do, without a session's typing thread (docs/FIX.md, "Patches, suppressions and
+/// rounds"). `TEQ_RESIDENT=0` keeps a session on the allocator of a batch run, for measuring what the
+/// exchange between its threads costs and for the training of the profile-guided build (bench/pgo.sh).
+fn residency(args: &[String], resident_env: Option<&std::ffi::OsStr>) -> (bool, bool) {
+    let mut words = args.iter();
+    let session = match words.next().map(String::as_str) {
+        Some("lsp") => true,
+        Some("compiler") => words.next().is_some_and(|verb| verb == "watch"),
+        _ => false,
+    };
+    (session, (session || fix_verb(args)) && !resident_env.is_some_and(|v| v == "0"))
 }
 
 /// Whether the command line is `teq fix`'s (after the prefix options a project verb takes) or `teq compiler fix`'s.
@@ -3434,6 +3440,42 @@ fn run_interp(opts: &Options, mut typer: typer::Worker, lines: usize, t: [Instan
         eprintln!("{}", report.render());
     }
     code
+}
+
+#[cfg(test)]
+mod residency_tests {
+    use super::residency;
+    use std::ffi::OsStr;
+
+    fn of(line: &str, env: Option<&str>) -> (bool, bool) {
+        let args: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+        residency(&args, env.map(OsStr::new))
+    }
+
+    #[test]
+    fn sessions_and_fix_are_resident_however_their_arguments_come() {
+        assert_eq!(of("lsp", None), (true, true));
+        assert_eq!(of("compiler watch src --classpath a.jar", None), (true, true));
+        assert_eq!(of("fix --check", None), (false, true));
+        assert_eq!(of("--export app --strict fix", None), (false, true));
+        assert_eq!(of("compiler fix src", None), (false, true));
+        assert_eq!(of("compiler check src", None), (false, false));
+        assert_eq!(of("compiler watch src", Some("0")), (true, false));
+        assert_eq!(of("compiler fix src", Some("0")), (false, false));
+        assert_eq!(of("compiler watch src", Some("1")), (true, true));
+        // An argument file's lines stand in its place before the verb is read.
+        let dir = std::env::temp_dir().join(format!("teq-residency-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("session.args");
+        let long = vec!["entry"; 8192].join(":");
+        std::fs::write(&file, format!("compiler\nwatch\nsrc\n--classpath\n{long}\n")).unwrap();
+        let args = crate::argfile::expand([crate::argfile::at(&file)]).unwrap();
+        assert_eq!(residency(&args, None), (true, true));
+        std::fs::write(&file, "compiler\nfix\n").unwrap();
+        let args = crate::argfile::expand([crate::argfile::at(&file)]).unwrap();
+        assert_eq!(residency(&args, None), (false, true));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 #[cfg(test)]

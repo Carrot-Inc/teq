@@ -10,8 +10,11 @@
 # prefix changed under a client (scalac's error, as a fresh check), a first build with a file that fails to parse (its
 # recovered tree typed with the rest) followed by its fix, and the `text` command: an unsaved
 # text standing in for the file on disk for a named and for a plain `build`, and its withdrawal;
-# and that a text of megabytes with a parse error leaves no mapping kept once two more builds
-# have parsed and typed (`stats`, docs/SPEED.md "A session's memory"); the lifecycle of a parse
+# and that a session keeps no mapping at any idle point, a text of megabytes with a parse error
+# replaced and the file's own text back, with full and incremental builds in turn too (`stats`,
+# docs/SPEED.md "A session's memory"), and
+# that a session whose class path is one argument of more than 32 KB maps (an argument file's line,
+# the command line's, an argument per entry); the lifecycle of a parse
 # error (an unchanged retry, an unrelated edit, a full rebuild, a text withdrawn, the file
 # removed) and, for each representative shape of a syntax error broken and fixed (one at each of
 # the parser's recovery sites), in two files in either order and under compaction, and for a
@@ -514,36 +517,80 @@ for compact in 2; do
     "$blocks/two.scala" "$blocks/one.scala" "$blocks/two-broken.scala" "$blocks/one.scala"
 done
 
-# A large text with a parse error, typed as a body edit: what the session mapped for it is kept
-# for the next build and given back by the one after.
+# A large text with a parse error, typed as a body edit, then a short one, then the file's own text again,
+# with full and incremental builds in turn as well (`TEQ_COMPACT_EVERY=2`): at every idle point the session
+# keeps no mapping, its address space and its pages its live blocks' (`alloc::idle`, docs/SPEED.md "A
+# session's memory"), the large text's mapping included once the text is replaced; the session maps what
+# each build asks for (`mappings_made`, `idle_unmapped`).
+kept_pages() {
+  expect "$1: the mappings kept at idle (count, address space, resident)" "$(field kept_mappings),$(field mapped_kept),$(field kept_resident)" '0,0,0'
+}
 src=$work/large && mkdir -p "$src" && cp tests/split/cycle/*.scala "$src"
-start "$src"
 { head -c 2097152 /dev/zero | tr '\0' ' '; echo; sed 's/def tag: String = "tagged"/def tag: String = ("tagged"/' tests/split/cycle/b.scala; } > "$work/large.text"
-text "$src/b.scala" "$work/large.text"
-build "$src/b.scala"
-expect "large text: the parse failure" "$(field ok),$(field incremental),$(count error)" 'false,true,1'
-echo stats >&3 && answer
-if [ "$(field mapped_kept)" -gt 0 ] 2> /dev/null; then ok; else bad "large text: nothing kept after the build that freed it: $RESULT"; fi
-for turn in 1 2; do
-  sed "s/def tag: String = \"tagged\"/def tag: String = (\"tagged$turn\"/" tests/split/cycle/b.scala > "$work/short.text"
+for compact in 0 2; do
+  what="large text (TEQ_COMPACT_EVERY=$compact)"
+  TEQ_COMPACT_EVERY=$compact start "$src"
+  text "$src/b.scala" "$work/large.text"
+  build "$src/b.scala"
+  expect "$what: the parse failure" "$(field ok),$(count error)" 'false,1'
+  echo stats >&3 && answer
+  kept_pages "$what, after its build"
+  # The text itself, 2 MB, is live as the document's.
+  mapped=$(field mapped)
+  if [ "$mapped" -ge 2097152 ] 2> /dev/null; then ok; else bad "$what: the text is not mapped: $RESULT"; fi
+  unmapped=$(field idle_unmapped)
+  sed 's/def tag: String = "tagged"/def tag: String = ("tagged1"/' tests/split/cycle/b.scala > "$work/short.text"
   text "$src/b.scala" "$work/short.text"
   build "$src/b.scala"
-  expect "large text: the short text fails to parse too ($turn)" "$(field ok),$(count error)" 'false,1'
-done
-echo stats >&3 && answer
-expect "large text: mappings kept after two more builds" "$(field mapped),$(field mapped_kept)" '0,0'
-# A query and a build that finds nothing changed are no builds to count.
-text "$src/b.scala" "$work/large.text"
-build "$src/b.scala"
-echo stats >&3 && answer
-kept=$(field mapped_kept)
-for turn in 1 2 3; do
-  echo stats >&3 && answer
+  expect "$what: the short text fails to parse too" "$(field ok),$(count error)" 'false,1'
+  withdraw "$src/b.scala"
   build "$src/b.scala"
+  expect "$what: the file's own text parses again" "$(field ok),$(count error)" 'true,0'
+  echo stats >&3 && answer
+  kept_pages "$what, two builds after it"
+  if [ "$(field idle_unmapped)" -gt "$unmapped" ] 2> /dev/null; then ok; else bad "$what: the idle points unmapped nothing the builds freed: $RESULT"; fi
+  if [ $((mapped - $(field mapped))) -ge 2097152 ] 2> /dev/null; then ok; else bad "$what: the large text is mapped still ($mapped bytes mapped with it): $RESULT"; fi
+  stop
 done
-echo stats >&3 && answer
-expect "large text: mappings kept through queries and builds of nothing" "$(field mapped_kept)" "$kept"
-stop
+
+# A class path of more than 32 KB in one argument, which is live before the session is resident: the
+# session maps its requests over 32 KB however the class path came (docs/SPEED.md, "A session's
+# memory"), as one line of an argument file, as one argument on the command line, and as an argument
+# per entry, and keeps no mapping at idle; the entries are empty directories.
+mkdir -p "$work/cp"
+entries=()
+for i in $(seq -w 1 600); do
+  mkdir -p "$work/cp/entry-$i-of-a-class-path-longer-than-a-small-block"
+  entries+=("$work/cp/entry-$i-of-a-class-path-longer-than-a-small-block")
+done
+long=$(IFS=:; echo "${entries[*]}")
+expect "long class path: one argument of more than 32 KB" "$((${#long} > 32768))" 1
+for form in file argv split; do
+  args=(compiler watch --check "$src")
+  case $form in
+    split) for e in "${entries[@]}"; do args+=(--classpath "$e"); done ;;
+    *) args+=(--classpath "$long") ;;
+  esac
+  rm -f "$work/cmd" "$work/ans"
+  mkfifo "$work/cmd" "$work/ans"
+  if [ $form = argv ]; then
+    "$TEQ" "${args[@]}" < "$work/cmd" > "$work/ans" 2> "$work/err" &
+  else
+    printf '%s\n' "${args[@]}" > "$work/long.args"
+    "$TEQ" "@$work/long.args" < "$work/cmd" > "$work/ans" 2> "$work/err" &
+  fi
+  WPID=$!
+  session_started "$WPID" "$src"
+  exec 3> "$work/cmd" 4< "$work/ans"
+  answer
+  expect "long class path ($form): the first build" "$(field ok)" true
+  text "$src/b.scala" "$work/large.text"
+  build "$src/b.scala"
+  echo stats >&3 && answer
+  if [ "$(field mappings_made)" -gt 0 ] 2> /dev/null; then ok; else bad "long class path ($form): the session mapped nothing: $RESULT"; fi
+  kept_pages "long class path ($form)"
+  stop
+done
 
 # A profiled retype after a build through the fork (`TEQ_FORK=1`), a local class with an opaque
 # type among the files: the merge of the forked build moved the class's mark to its merged id,

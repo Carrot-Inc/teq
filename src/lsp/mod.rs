@@ -40,8 +40,8 @@ use workspace::Description;
 const COALESCE: Duration = Duration::from_millis(100);
 /// How long a stream of edits can push the build back before it is typed anyway.
 const COALESCE_BOUND: Duration = Duration::from_millis(400);
-/// How long a mapping the server freed is kept for the next request of its size, and half of
-/// how long at most (`alloc::age`): the texts of a large document, once it is closed.
+/// How long a mapping the server freed is kept for the next request of its size at most, the
+/// server's idle point (`alloc::idle`): the texts of a large document, once it is closed.
 const AGE: Duration = Duration::from_secs(1);
 /// How long a session stays free after its last build before a plain build, the idle poll,
 /// reconciles it with the disk.
@@ -912,7 +912,7 @@ impl Server {
             }
             // By the clock and not by a pause: messages that keep coming put it off no longer.
             if Instant::now() >= age_at {
-                crate::alloc::age();
+                crate::alloc::idle();
                 age_at = Instant::now() + AGE;
             }
             if self.coalesce_until.map_or(false, |t| Instant::now() >= t) {

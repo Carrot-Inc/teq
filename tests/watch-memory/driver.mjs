@@ -41,7 +41,15 @@
 // appended (`vmmap -summary`). Under `TEQ_SESSION_WORKERS_LOG` (with `TEQ_SESSION_WORKERS=<n>`,
 // or `TEQ_FORK=1` for one worker through the fork) every full build the session's processes
 // logged has to say that its `n` workers joined (`workersJoined`); the line then says `workers
-// <n> joined <builds>`.
+// <n> joined <builds>`. Under `WATCH_MEMORY_ARGS_FILE=<file>` the session starts as `teq @<file>`, its
+// arguments the file's lines, as a build tool starts one whose class path is long. A line of a
+// session asked `stats` says, from its last answer, where its pages are by the allocator's account:
+// the mappings it made (`mappings_made`), those it keeps for a later request of the same build
+// (`kept_mappings`, their address space `kept_mb` and their resident pages `kept_resident_mb`; none at an
+// idle point, which unmaps them), the chunks' resident pages
+// (`chunks_resident_mb`) and the rest of the resident size (`other_resident_mb`: the system's
+// allocator, the binary, the stacks); under `WATCH_MEMORY_MAPS=1` it fails where the session mapped
+// nothing or keeps a mapping at idle (docs/SPEED.md, "A session's memory").
 import { spawn, spawnSync } from "node:child_process"
 import { readdirSync, readFileSync, writeFileSync, rmSync, mkdtempSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -186,7 +194,9 @@ function within(seconds, promise, what) {
 // `teq compiler watch` over its lines.
 class Watch {
   constructor() {
-    this.child = spawn(teq, ["compiler", "watch", ...watchArgs], { stdio: ["pipe", "pipe", "pipe"] })
+    const argsFile = process.env.WATCH_MEMORY_ARGS_FILE
+    if (argsFile) writeFileSync(argsFile, ["compiler", "watch", ...watchArgs].map((a) => a + "\n").join(""))
+    this.child = spawn(teq, argsFile ? [`@${argsFile}`] : ["compiler", "watch", ...watchArgs], { stdio: ["pipe", "pipe", "pipe"] })
     this.stderr = ""
     this.child.stderr.on("data", (data) => (this.stderr = (this.stderr + data).slice(-2000)))
     // The session's answers, a JSON line each, handed to whoever waits for the next one.
@@ -559,6 +569,18 @@ try {
   }
   const mb = (kb) => (kb / 1024).toFixed(1)
   const allocator = held?.allocator ?? { reserved: 0, live: 0, large: 0 }
+  // Where the pages are by the allocator's account, from the last `stats` (answered at the session's
+  // idle point, which unmapped the build's kept mappings).
+  const pages = held
+    ? ` mappings_made ${allocator.mappings_made ?? 0} kept_mappings ${allocator.kept_mappings ?? 0} kept_mb ${mb((allocator.mapped_kept ?? 0) / 1024)} ` +
+      `kept_resident_mb ${mb((allocator.kept_resident ?? 0) / 1024)} chunks_resident_mb ${mb((allocator.chunks_resident ?? 0) / 1024)} other_resident_mb ${mb((allocator.other_resident ?? 0) / 1024)}`
+    : ""
+  if (process.env.WATCH_MEMORY_MAPS === "1") {
+    if (!held) fail("no stats answered, whose mappings WATCH_MEMORY_MAPS checks")
+    if (!(allocator.mappings_made > 0)) fail(`the session mapped nothing: ${JSON.stringify(allocator)}`)
+    if (allocator.kept_mappings !== 0 || allocator.mapped_kept !== 0 || allocator.kept_resident !== 0)
+      fail(`the session keeps ${allocator.kept_mappings} mappings at idle, ${allocator.mapped_kept} bytes of address space and ${allocator.kept_resident} resident: ${JSON.stringify(allocator)}`)
+  }
   const out = []
   for (const p of processes) {
     const warm = p.samples.filter(([i]) => i >= WARM)
@@ -567,7 +589,7 @@ try {
     out.push(
       `${p.name} workload ${WORKLOAD} metric ${p.metric} edits ${edits} incremental ${incremental} full ${edits - incremental} failed ${failed} queries ${queries} ` +
         `memory_first_mb ${mb(p.first)} memory_warm_mb ${mb(warm[0][1])}${hundredth} memory_end_mb ${mb(p.samples.at(-1)[1])} peak_mb ${mb(p.peak)} ` +
-        `growth_kb_per_edit ${slope(warm).toFixed(1)}${account} rss_end_mb ${mb(residentKb(p.pid))} ` +
+        `growth_kb_per_edit ${slope(warm).toFixed(1)}${account}${p === processes[0] ? pages : ""} rss_end_mb ${mb(residentKb(p.pid))} ` +
         `first_build_ms ${(first.ms?.total ?? 0).toFixed(1)} build_ms_median ${median(times).toFixed(1)} build_ms_max ${Math.max(...times).toFixed(1)}`,
     )
   }

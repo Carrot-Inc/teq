@@ -3,56 +3,60 @@
 # Linux-x86_64: peak-core@fork recorded again 2026-10-14 on the release build of 522777874 (writer-products-4 over 99e11b39d), the largest of three runs (one WATCH_MEMORY_RECORD=1, two =max: 290.3, 291.7 and 291.2 MB), the tolerance unchanged: each of the core corpus's 5,610 case classes has the companion dotty's Desugar.classDef makes, entered, completed and checked as a class, which a forked build's worker holds as the main process does. The allocation alone (688eb5f4d over its parent 595c6d6cd on 6546f1d66, fresh copies, alternating runs) takes the peak from 243.7 and 242.7 MB to 279.6 and 276.3; master 6546f1d66 peaks at 243.4 and 242.4, this head at 277.3 to 281.6 alone and 288 to 291 in all.sh's runs. The shape's cost, accepted by the second code review's ruling 5. The row, MB measured, the earlier record to this one: 244.8 to 291.7 (ceiling 281.5 to 335.5).
 # Linux-x86_64: recorded 2026-09-29, teq 0.1.0 0d43a39d, the thin release build (a release build in the machine's mirror, which carries no hash: named by hand); where this record passes the 2026-09-28 one and that one is tighter, its limit is kept
 # Linux-x86_64: jvm-body, jvm-tenth and jvm-day recorded again 2026-10-01 with the release build of d8f8cf0fc, linked against scala-library, the JVM's one mode: master's link mode ends them at 475, 450 and 446 MB there, the lean mode at 217, 202 and 203
-Linux-x86_64 split-body edits 40 growth_kb_per_edit 1469.9 memory_end_mb 397.5 metric Rss+Swap
-Linux-x86_64 check-body edits 40 growth_kb_per_edit 720.4 memory_end_mb 241.6 metric Rss+Swap
-Linux-x86_64 jvm-body edits 40 growth_kb_per_edit 1233.8 memory_end_mb 440.9 metric Rss+Swap
-Linux-x86_64 split-tenth edits 40 growth_kb_per_edit -103.6 memory_end_mb 360.7 metric Rss+Swap
-Linux-x86_64 check-tenth edits 40 growth_kb_per_edit -55.0 memory_end_mb 227.2 metric Rss+Swap
-Linux-x86_64 jvm-tenth edits 40 growth_kb_per_edit 263.2 memory_end_mb 543.1 metric Rss+Swap
-Linux-x86_64 split-day edits 40 growth_kb_per_edit 448.3 memory_end_mb 354.0 metric Rss+Swap
-Linux-x86_64 check-day edits 40 growth_kb_per_edit 125.7 memory_end_mb 219.9 metric Rss+Swap
-Linux-x86_64 jvm-day edits 40 growth_kb_per_edit 2509.0 memory_end_mb 548.9 metric Rss+Swap
-Linux-x86_64 hot-day edits 40 growth_kb_per_edit 532.5 memory_end_mb 355.1 metric Rss+Swap
-Linux-x86_64 hot-full edits 20 growth_kb_per_edit 141.7 memory_end_mb 354.5 metric Rss+Swap
-Linux-x86_64 index-day edits 40 growth_kb_per_edit 61.0 memory_end_mb 253.8 metric Rss+Swap
-Linux-x86_64 lsp-day edits 40 growth_kb_per_edit 8.9 memory_end_mb 8.0 metric Anonymous+Swap
-Linux-x86_64 lsp-day-child edits 40 growth_kb_per_edit 64.2 memory_end_mb 256.0 metric Rss+Swap
-Linux-x86_64 frontend-hot-day edits 40 growth_kb_per_edit 978.0 memory_end_mb 632.3 metric Rss+Swap
-Linux-x86_64 frontend-hot-full edits 20 growth_kb_per_edit 346.2 memory_end_mb 624.5 metric Rss+Swap
-Linux-x86_64 frontend-check-day edits 40 growth_kb_per_edit 440.3 memory_end_mb 457.4 metric Rss+Swap
+Linux-x86_64 split-body edits 40 growth_kb_per_edit 1128.2 memory_end_mb 297.1 metric Rss+Swap
+Linux-x86_64 check-body edits 40 growth_kb_per_edit 717.6 memory_end_mb 224.0 metric Rss+Swap
+Linux-x86_64 jvm-body edits 40 growth_kb_per_edit 1233.8 memory_end_mb 375.4 metric Rss+Swap
+Linux-x86_64 split-tenth edits 40 growth_kb_per_edit -103.6 memory_end_mb 269.8 metric Rss+Swap
+Linux-x86_64 check-tenth edits 40 growth_kb_per_edit -55.0 memory_end_mb 202.6 metric Rss+Swap
+Linux-x86_64 jvm-tenth edits 40 growth_kb_per_edit 263.2 memory_end_mb 417.8 metric Rss+Swap
+Linux-x86_64 split-day edits 40 growth_kb_per_edit 328.1 memory_end_mb 268.5 metric Rss+Swap
+Linux-x86_64 check-day edits 40 growth_kb_per_edit 74.5 memory_end_mb 202.3 metric Rss+Swap
+Linux-x86_64 jvm-day edits 40 growth_kb_per_edit 2230.8 memory_end_mb 421.2 metric Rss+Swap
+Linux-x86_64 hot-day edits 40 growth_kb_per_edit 274.0 memory_end_mb 268.6 metric Rss+Swap
+Linux-x86_64 hot-full edits 20 growth_kb_per_edit -817.2 memory_end_mb 268.8 metric Rss+Swap
+Linux-x86_64 index-day edits 40 growth_kb_per_edit 47.0 memory_end_mb 226.8 metric Rss+Swap
+Linux-x86_64 lsp-day edits 40 growth_kb_per_edit 8.9 memory_end_mb 7.4 metric Anonymous+Swap
+Linux-x86_64 lsp-day-child edits 40 growth_kb_per_edit -6.7 memory_end_mb 226.9 metric Rss+Swap
+Linux-x86_64 frontend-hot-day edits 40 growth_kb_per_edit 978.0 memory_end_mb 494.1 metric Rss+Swap
+Linux-x86_64 frontend-hot-full edits 20 growth_kb_per_edit -465.6 memory_end_mb 490.0 metric Rss+Swap
+Linux-x86_64 frontend-check-day edits 40 growth_kb_per_edit 440.3 memory_end_mb 386.6 metric Rss+Swap
 # Linux-x86_64: the parallel typer's rows recorded 2026-10-03 with the release build of d9dda86a7 (the machine's mirror carries no hash: named by hand), the worker rows raised to the largest of eight runs (WATCH_MEMORY_RECORD=max), the last four on the head rebased onto master's 8f5012098
-Linux-x86_64 frontend-hot-full@2 edits 20 growth_kb_per_edit 2207.7 memory_end_mb 711.8 metric Rss+Swap
-Linux-x86_64 frontend-check-day@2 edits 40 growth_kb_per_edit 1196.7 memory_end_mb 553.4 metric Rss+Swap
-Linux-x86_64 lsp-day@2 edits 40 growth_kb_per_edit 8.5 memory_end_mb 8.0 metric Anonymous+Swap
-Linux-x86_64 lsp-day@2-child edits 40 growth_kb_per_edit 240.4 memory_end_mb 363.5 metric Rss+Swap
-Linux-x86_64 frontend-hot-full@8 edits 20 growth_kb_per_edit 2974.5 memory_end_mb 966.2 metric Rss+Swap
-Linux-x86_64 frontend-check-day@8 edits 40 growth_kb_per_edit 2688.4 memory_end_mb 845.6 metric Rss+Swap
-Linux-x86_64 lsp-day@8 edits 40 growth_kb_per_edit 8.5 memory_end_mb 8.0 metric Anonymous+Swap
-Linux-x86_64 lsp-day@8-child edits 40 growth_kb_per_edit 538.2 memory_end_mb 386.0 metric Rss+Swap
-Linux-x86_64 frontend-hot-full@16 edits 20 growth_kb_per_edit 2883.3 memory_end_mb 1288.1 metric Rss+Swap
-Linux-x86_64 frontend-check-day@16 edits 40 growth_kb_per_edit 2651.8 memory_end_mb 1174.4 metric Rss+Swap
-Linux-x86_64 lsp-day@16 edits 40 growth_kb_per_edit 6.2 memory_end_mb 8.0 metric Anonymous+Swap
-Linux-x86_64 lsp-day@16-child edits 40 growth_kb_per_edit 553.0 memory_end_mb 385.5 metric Rss+Swap
+Linux-x86_64 frontend-hot-full@2 edits 20 growth_kb_per_edit -2439.8 memory_end_mb 437.0 metric Rss+Swap
+Linux-x86_64 frontend-check-day@2 edits 40 growth_kb_per_edit 137.5 memory_end_mb 358.7 metric Rss+Swap
+Linux-x86_64 lsp-day@2 edits 40 growth_kb_per_edit 6.7 memory_end_mb 7.5 metric Anonymous+Swap
+Linux-x86_64 lsp-day@2-child edits 40 growth_kb_per_edit -5.2 memory_end_mb 237.1 metric Rss+Swap
+Linux-x86_64 frontend-hot-full@8 edits 20 growth_kb_per_edit -3877.2 memory_end_mb 562.7 metric Rss+Swap
+Linux-x86_64 frontend-check-day@8 edits 40 growth_kb_per_edit 500.4 memory_end_mb 492.6 metric Rss+Swap
+Linux-x86_64 lsp-day@8 edits 40 growth_kb_per_edit 6.5 memory_end_mb 7.5 metric Anonymous+Swap
+Linux-x86_64 lsp-day@8-child edits 40 growth_kb_per_edit 2.4 memory_end_mb 250.0 metric Rss+Swap
+Linux-x86_64 frontend-hot-full@16 edits 20 growth_kb_per_edit -6265.3 memory_end_mb 758.9 metric Rss+Swap
+Linux-x86_64 frontend-check-day@16 edits 40 growth_kb_per_edit 1251.1 memory_end_mb 690.2 metric Rss+Swap
+Linux-x86_64 lsp-day@16 edits 40 growth_kb_per_edit 6.2 memory_end_mb 7.5 metric Anonymous+Swap
+Linux-x86_64 lsp-day@16-child edits 40 growth_kb_per_edit 81.9 memory_end_mb 273.0 metric Rss+Swap
 Linux-x86_64 peak-frontend@1 metric VmHWM ceiling_mb 436.0 because 379.1 MB measured and the tolerance's 15% over it
-Linux-x86_64 peak-core@1 metric VmHWM ceiling_mb 241.4 because 209.9 MB measured and the tolerance's 15% over it
-Linux-x86_64 peak-frontend@fork metric VmHWM ceiling_mb 502.1 because 436.6 MB measured and the tolerance's 15% over it
-Linux-x86_64 peak-core@fork metric VmHWM ceiling_mb 335.5 because 291.7 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-core@1 metric VmHWM ceiling_mb 230.1 because 200.1 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-frontend@fork metric VmHWM ceiling_mb 455.6 because 396.2 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-core@fork metric VmHWM ceiling_mb 324.8 because 282.4 MB measured and the tolerance's 15% over it
 Linux-x86_64 peak-frontend@8 metric VmHWM ceiling_ratio 2.0 of peak-frontend@1 because the parallel typer's memory aim, at most 2 times one worker's peak; 1.71 measured
 Linux-x86_64 peak-core@8 metric VmHWM ceiling_ratio 2.0 of peak-core@1 because the parallel typer's memory aim, at most 2 times one worker's peak; 1.48 measured
 Linux-x86_64 peak-frontend@16 metric VmHWM ceiling_ratio 3.0 of peak-frontend@1 because the parallel typer's memory aim, at most 3 times one worker's peak; 2.30 measured
 Linux-x86_64 peak-core@16 metric VmHWM ceiling_ratio 3.0 of peak-core@1 because the parallel typer's memory aim, at most 3 times one worker's peak; 1.60 measured
 # Linux-x86_64: frontend-hot-full@12 raised to the run's numbers where larger 2026-10-03, teq 0.1.0 e34be579d (a release build in the machine's mirror, which carries no hash: named by hand)
-Linux-x86_64 frontend-hot-full@12 edits 20 growth_kb_per_edit 3708.9 memory_end_mb 1127.1 metric Rss+Swap
+Linux-x86_64 frontend-hot-full@12 edits 20 growth_kb_per_edit -5274.7 memory_end_mb 658.1 metric Rss+Swap
 # Linux-x86_64: peak-frontend@12, peak-core@12 recorded 2026-10-03, teq 0.1.0 e34be579d (a release build in the machine's mirror, which carries no hash: named by hand)
 Linux-x86_64 peak-frontend@12 metric VmHWM ceiling_ratio 2.5 of peak-frontend@1 because the parallel typer's memory aim, at most 2.5 times one worker's peak; 2.02 measured
 Linux-x86_64 peak-core@12 metric VmHWM ceiling_ratio 2.5 of peak-core@1 because the parallel typer's memory aim, at most 2.5 times one worker's peak; 1.56 measured
 # Linux-x86_64: index-std-day recorded 2026-10-07, teq 0.1.6 3b7191425: index-day's session asked besides the references of the std's List, which demand every std file after each full build; it ends at 274.0 MB where index-day ends at 231.3 MB on the same binary, the difference the std's typing
-Linux-x86_64 index-std-day edits 40 growth_kb_per_edit 139.7 memory_end_mb 317.7 metric Rss+Swap
+Linux-x86_64 index-std-day edits 40 growth_kb_per_edit -21.9 memory_end_mb 261.5 metric Rss+Swap
 # Linux-x86_64: the fix rows, peak-fix-frontend@1, @4, @8 and @16, recorded 2026-10-21 by WATCH_MEMORY_RECORD=1 on the release build of fix-parallel-typing's 2cf5a0a7b: a fresh `teq compiler fix --check` over the frontend, the shipped rules, its typing and its rules over 1, 4, 8 and 16 workers (`--threads`, both counts), both rounds, the allocator a resident process's (each typing's threads hand back what they hold). @8 and @16 are held to the parallel typer's memory aims (twice and three times one worker's peak), which they measured under (1.81, 2.65); Linux's alone, where the child's ru_maxrss is VmHWM.
 Linux-x86_64 peak-fix-frontend@1 metric VmHWM ceiling_mb 736.7 because 640.6 MB measured and the tolerance's 15% over it
-Linux-x86_64 peak-fix-frontend@4 metric VmHWM ceiling_mb 1036.8 because 901.6 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-fix-frontend@4 metric VmHWM ceiling_mb 1006.2 because 875.0 MB measured and the tolerance's 15% over it
 Linux-x86_64 peak-fix-frontend@8 metric VmHWM ceiling_ratio 2.0 of peak-fix-frontend@1 because the parallel typer's memory aim, at most 2 times one worker's peak; 1.81 measured
 Linux-x86_64 peak-fix-frontend@16 metric VmHWM ceiling_ratio 3.0 of peak-fix-frontend@1 because the parallel typer's memory aim, at most 3 times one worker's peak; 2.65 measured
+# Linux-x86_64: every row tightened 2026-10-28 by resident-alloc on a 16-core Linux machine (where master 8907746df's own run read 1 to 3% over the earlier rows: split-body 408.0 MB against 397.5, frontend-check-day@16 1192.8 against 1174.4) on the release build of 397e7085d (teq 0.1.9), the largest of three runs (one WATCH_MEMORY_RECORD=1, two =max) where under the earlier budget and never above it, the growth per edit apart from the memory at the end, a peak row's ceiling the largest peak of the three and the tolerance's 15% over it, the ratio rows as they were: a resident maps its requests over 32 KB whatever its arguments and its kept mappings give their pages back at its idle point (docs/SPEED.md, "A session's memory"). The rows, MB at the end (a peak row's ceiling), the earlier budget to this one: split-body 397.5 to 297.1, check-body 241.6 to 224, jvm-body 440.9 to 375.4, split-tenth 360.7 to 269.8, check-tenth 227.2 to 202.6, jvm-tenth 543.1 to 417.8, split-day 354 to 268.5, check-day 219.9 to 202.3, jvm-day 548.9 to 421.2, hot-day 355.1 to 268.6, hot-full 354.5 to 268.8, index-day 253.8 to 226.8, lsp-day 8 to 7.4, lsp-day-child 256 to 226.9, frontend-hot-day 632.3 to 494.1, frontend-hot-full 624.5 to 490, frontend-check-day 457.4 to 386.6, frontend-hot-full@2 711.8 to 437, frontend-check-day@2 553.4 to 358.7, lsp-day@2 8 to 7.5, lsp-day@2-child 363.5 to 237.1, frontend-hot-full@8 966.2 to 562.7, frontend-check-day@8 845.6 to 492.6, lsp-day@8 8 to 7.5, lsp-day@8-child 386 to 250, frontend-hot-full@16 1288.1 to 758.9, frontend-check-day@16 1174.4 to 690.2, lsp-day@16 8 to 7.5, lsp-day@16-child 385.5 to 273, peak-core@1 241.4 to 230.1, peak-frontend@fork 502.1 to 455.6, peak-core@fork 335.5 to 324.8, frontend-hot-full@12 1127.1 to 658.1, index-std-day 317.7 to 261.5, peak-fix-frontend@4 1036.8 to 1006.2. cp-jvm-full@1 and @8 added, a JVM session whose class path is one line of more than 32 KB in an argument file; master maps nothing there.
+# Linux-x86_64: cp-jvm-full@1 and @8 recorded again 2026-10-29 by resident-alloc. Their growth per edit is the largest the reference machine measured in its gate runs of 38b73ad3b, 9afa287f3 and c51c282cb, first passes and runs alone (@1 388, 1,756, 325, -804, -691, 1,131; @8 1,665, 613, 436, -1,500, -593, -114 KB per edit): 1,755.9 and 1,664.7, the judge's RECORD=max over the machine that judges the rows, which runs them noisier than the 16-core Linux machine the rows were tightened on. Their memory at the end is that machine's, the largest of five full runs of the line on the release build of c51c282cb (teq 0.1.9 6054bb3068, the same binary; one WATCH_MEMORY_RECORD=1, four =max, the judge's recording over each run's kept first passes): 415.9 and 412.1 MB, their growth there -1,076.0 to -550.0 and -1,678.7 to -85.6 KB per edit. The rows of 2026-10-28 held one run's growth (-1617.9, -1496.8), whose bar (the growth plus GROWTH_SLACK's 1,500 KB) was -117.9 and 3.2 KB per edit.
+Linux-x86_64 cp-jvm-full@1 edits 20 growth_kb_per_edit 1755.9 memory_end_mb 415.9 metric Rss+Swap
+Linux-x86_64 cp-jvm-full@8 edits 20 growth_kb_per_edit 1664.7 memory_end_mb 412.1 metric Rss+Swap
 # Linux-x86_64: peak-fix-frontend@1, peak-fix-frontend@4, peak-fix-frontend@8, peak-fix-frontend@16 recorded 2026-10-21, teq 0.1.9 2cf5a0a7b
 # Linux-x86_64: split-body, check-body, jvm-body, split-tenth, check-tenth, jvm-tenth, split-day, check-day, jvm-day, hot-day, hot-full, index-day, index-std-day, lsp-day, lsp-day-child, frontend-hot-day, frontend-hot-full, frontend-check-day, frontend-hot-full@2, frontend-check-day@2, lsp-day@2, lsp-day@2-child, frontend-hot-full@8, frontend-check-day@8, lsp-day@8, lsp-day@8-child, frontend-hot-full@16, frontend-check-day@16, lsp-day@16, lsp-day@16-child, frontend-hot-full@12 raised to the run's numbers where larger 2026-10-19, teq 0.1.9 b3aba4e74
 only Linux-x86_64 index-std-day because the reference machine recorded it on Linux alone; a platform without its row runs the suite without the session
@@ -121,9 +125,9 @@ observed Darwin-arm64 peak-core@8 metric phys_footprint_peak peak_mb 284.6 ratio
 observed Darwin-arm64 peak-frontend@16 metric phys_footprint_peak peak_mb 897.9 ratio 2.60 of peak-frontend@1 recorded 2026-10-03, teq 0.1.0 21810d552
 observed Darwin-arm64 peak-core@16 metric phys_footprint_peak peak_mb 321.4 ratio 1.97 of peak-core@1 recorded 2026-10-03, teq 0.1.0 21810d552
 observed Linux-x86_64 peak-frontend@1 metric VmHWM peak_mb 379.1 recorded 2026-10-11, teq 0.1.8 97c2e853c
-observed Linux-x86_64 peak-core@1 metric VmHWM peak_mb 209.9 recorded 2026-10-21, teq 0.1.9 8fe9efa98
-observed Linux-x86_64 peak-frontend@fork metric VmHWM peak_mb 436.6 recorded 2026-10-11, teq 0.1.8 97c2e853c
-observed Linux-x86_64 peak-core@fork metric VmHWM peak_mb 291.7 recorded 2026-10-14, teq 0.1.8 522777874
+observed Linux-x86_64 peak-core@1 metric VmHWM peak_mb 200.1 recorded 2026-10-28, teq 0.1.9 397e7085df (the largest of three runs)
+observed Linux-x86_64 peak-frontend@fork metric VmHWM peak_mb 396.2 recorded 2026-10-28, teq 0.1.9 397e7085df (the largest of three runs)
+observed Linux-x86_64 peak-core@fork metric VmHWM peak_mb 282.4 recorded 2026-10-28, teq 0.1.9 397e7085df (the largest of three runs)
 observed Linux-x86_64 peak-frontend@8 metric VmHWM peak_mb 647.0 ratio 1.71 of peak-frontend@1 recorded 2026-10-11, teq 0.1.8 97c2e853c
 observed Linux-x86_64 peak-core@8 metric VmHWM peak_mb 274.8 ratio 1.48 of peak-core@1 recorded 2026-10-11, teq 0.1.8 97c2e853c
 observed Linux-x86_64 peak-frontend@16 metric VmHWM peak_mb 873.6 ratio 2.30 of peak-frontend@1 recorded 2026-10-11, teq 0.1.8 97c2e853c
@@ -133,6 +137,8 @@ observed Darwin-arm64 peak-core@12 metric phys_footprint_peak peak_mb 264.5 reco
 observed Linux-x86_64 peak-frontend@12 metric VmHWM peak_mb 765.4 ratio 2.02 of peak-frontend@1 recorded 2026-10-11, teq 0.1.8 97c2e853c
 observed Linux-x86_64 peak-core@12 metric VmHWM peak_mb 289.3 ratio 1.56 of peak-core@1 recorded 2026-10-11, teq 0.1.8 97c2e853c
 observed Linux-x86_64 peak-fix-frontend@1 metric VmHWM peak_mb 640.6 recorded 2026-10-21, teq 0.1.9 2cf5a0a7b
-observed Linux-x86_64 peak-fix-frontend@4 metric VmHWM peak_mb 901.6 recorded 2026-10-21, teq 0.1.9 2cf5a0a7b
+observed Linux-x86_64 peak-fix-frontend@4 metric VmHWM peak_mb 875.0 recorded 2026-10-28, teq 0.1.9 397e7085df (the largest of three runs)
 observed Linux-x86_64 peak-fix-frontend@8 metric VmHWM peak_mb 1158.7 ratio 1.81 of peak-fix-frontend@1 recorded 2026-10-21, teq 0.1.9 2cf5a0a7b
 observed Linux-x86_64 peak-fix-frontend@16 metric VmHWM peak_mb 1699.1 ratio 2.65 of peak-fix-frontend@1 recorded 2026-10-21, teq 0.1.9 2cf5a0a7b
+only Linux-x86_64 cp-jvm-full@1 because the reference machine recorded it on Linux alone; a platform without its row runs the suite without the session
+only Linux-x86_64 cp-jvm-full@8 because the reference machine recorded it on Linux alone; a platform without its row runs the suite without the session

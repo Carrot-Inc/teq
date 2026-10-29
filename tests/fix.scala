@@ -1057,7 +1057,14 @@ object Typing:
         // The limits where each is met lie in the GiB below the first that joins the fork, a few MiB apart and moving
         // with the schedule: a GiB at a time to that first one, 32 MiB at a time across the GiB below it, then 8 MiB at a
         // time over the 384 MiB from just below the highest limit that refused the body phase's start, again (four
-        // times at most) until every start was met. Each run gives the one-worker run's exit, lints and files,
+        // times at most) until every start was met. Where those passes met no refusal of the merge's start, its window
+        // is narrower than their step: it lies just under the limits that join, about the highest limit that refused
+        // any start, and how wide it is depends on the allocator, the address space that grows between the inlining
+        // phase's starts and the merge's (glibc's arenas take theirs ahead, ten limits of a MiB in seventeen there met
+        // the merge; an allocator that asks the system for a growth's address space when the growth comes leaves it one
+        // or two in that span). So that span, 8 MiB on either side of that limit, is swept a MiB at a time, again (five
+        // times at most, some 90 s) until the merge's start is met; the passes before it find the window at once for
+        // most runs. Each run gives the one-worker run's exit, lints and files,
         // its record the path taken (the mappings refused; a start refused, named in the reason, the attempt given
         // way and one worker's `outcome=one` after; the fork joined); a run that ends in an allocation the system
         // refused (Rust's "memory allocation of … failed", the address space spent by an allocation and no thread's
@@ -1078,6 +1085,8 @@ object Typing:
         // The highest limit of the 32 MiB pass where the body phase's start was refused: the inlining phase's and the
         // merge's lie above it, by a few MiB and the schedule.
         var bodyAt = 0L
+        // The highest limit where any start was refused: the merge's window lies about it.
+        var refusedAt = 0L
         /** One run under `mib` MiB: whether it joined the fork. */
         def cell(mib: Long): Boolean =
           val record = cells.resolve("record.txt")
@@ -1101,6 +1110,7 @@ object Typing:
               starts.find((why, _) => first.why.startsWith("the system gave " + why + " no thread")) match
                 case Some((_, site)) =>
                   met += site
+                  refusedAt = refusedAt max mib
                   if site == "body" then bodyAt = bodyAt max mib
                 case None => wrong += s"$mib MiB: a refusal of no start named: ${first.why}"
               if as.size != 2 || first.outcome != "retried" || last.forked || last.outcome != "one" then wrong += s"$mib MiB: ${as.mkString("; ")}"
@@ -1124,8 +1134,14 @@ object Typing:
           while sweeps < 5 && !Set("body", "inlining", "merge").subsetOf(met) do
             for mib <- from until (from + 384) by 8 do cell(mib)
             sweeps += 1
+        var fine = 0
+        if joinedAt > 0 && refusedAt > 0 then
+          while fine < 5 && !met.contains("merge") do
+            for mib <- (refusedAt - 8) to (refusedAt + 8) do cell(mib)
+            fine += 1
         expect("starts", joinedAt > 0 && wrong.result().isEmpty, (if joinedAt == 0 then "the fork never joined up to 64 GiB\n  " else "") + wrong.result().mkString("\n  "))
-        expect("starts/met", Set("body", "inlining", "merge").subsetOf(met), s"the starts met: ${met.toVector.sorted.mkString(", ")}, over the GiB below $joinedAt GiB ($sweeps sweeps, $allocations allocations refused)")
+        expect("starts/met", Set("body", "inlining", "merge").subsetOf(met), s"the starts met: ${met.toVector.sorted.mkString(", ")}, over the GiB below $joinedAt GiB ($sweeps sweeps, $fine at a MiB about $refusedAt MiB, $allocations allocations refused)")
+        if fine > 0 && met.contains("merge") then println(s"typing/starts: the merge's start met by $fine pass(es) a MiB at a time about $refusedAt MiB")
         if allocations > 0 then println(s"typing/starts: $allocations run(s) ended in an allocation the system refused (no start's), counted apart")
 
     // The counter macro library (`counter/lib`, its products built here): a run of `next` changes `Counter.n`, which

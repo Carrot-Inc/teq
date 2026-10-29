@@ -404,6 +404,19 @@ fn local_id(id: u32) -> Flags {
     if id >= crate::arena::LOCAL_BASE { LOCAL_BIT } else { 0 }
 }
 
+/// For the tests of the idle barrier (`alloc::tests`): how long the overlays' drop waits before it frees them, and
+/// how many such drops have ended.
+#[cfg(test)]
+pub static RECLAIM_DELAY_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[cfg(test)]
+pub static RECLAIMED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+impl Drop for TypeStore {
+    fn drop(&mut self) {
+        self.give_reclaiming_back();
+    }
+}
+
 pub struct TypeStore {
     /// The body phase's overlays (`TEQ_TYPE_OVERLAYS=1`): set at
     /// the fork before any worker starts, taken at the merge after the join. Declared first,
@@ -415,7 +428,8 @@ pub struct TypeStore {
     /// after it is refused in the assertion-enabled builds.
     reclaimed: AtomicBool,
     /// The thread freeing the overlays the merge gave back, whose pages a later fork's overlays
-    /// take again (`refork_overlays` waits for it).
+    /// take again (`refork_overlays` and `join_reclaiming` wait for it; `give_reclaiming_back` and a
+    /// later `reclaim_overlays` hand it to the idle point).
     reclaiming: std::sync::Mutex<Option<std::thread::JoinHandle<()>>>,
     serial: Serial,
     types: SlabVec<Type>,
@@ -3158,12 +3172,28 @@ impl TypeStore {
     }
 
     /// Waits for the drop of the overlays that `reclaim_overlays` started and no later fork
-    /// joined (`refork_overlays`): `teq fix`, before a typing's store goes with its typer, whose drop
-    /// would let the thread go, so that the next typing finds what it freed.
+    /// joined (`refork_overlays`): `teq fix`'s attempt, before the interpreter's disposal and the
+    /// typing's store go, so that the next typing finds what it freed.
     pub fn join_reclaiming(&self) {
         let freeing = self.reclaiming.lock().unwrap_or_else(|e| e.into_inner()).take();
         if let Some(freeing) = freeing {
             let _ = freeing.join();
+        }
+    }
+
+    /// The drop of the overlays that `reclaim_overlays` started and no later fork or join waited for,
+    /// handed to the process's idle point (`crew::keep_thread`, which `crew::given_back` joins before a
+    /// resident unmaps its kept mappings or `teq fix` ages them), or let go in a process that keeps no
+    /// such threads. Every way a store goes with its overlays' drop still running passes here: the
+    /// store's own drop (its typer dropped by a watch retry, a merge or a build that failed, the
+    /// incremental loop's break to the full path, a give-way at the inlining fork that found no room
+    /// to join the body phase's drop, or a `give_back` thread holding the store's last reference) and
+    /// a session's idle point where it keeps its typer, so that what the overlays free is freed before
+    /// the idle point, whichever store held them.
+    pub fn give_reclaiming_back(&self) {
+        let freeing = self.reclaiming.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(freeing) = freeing {
+            crate::crew::keep_thread(freeing);
         }
     }
 
@@ -3278,8 +3308,18 @@ impl TypeStore {
             }
             let apart = crate::crew::Unshared(apart);
             // Where the system gives the thread none, the overlays are freed here, with the closure.
-            let freeing = crate::alloc::spawn_or_drop(move || drop(apart));
-            *self.reclaiming.lock().unwrap_or_else(|e| e.into_inner()) = freeing;
+            let freeing = crate::alloc::spawn_or_drop(move || {
+                #[cfg(test)]
+                std::thread::sleep(std::time::Duration::from_millis(RECLAIM_DELAY_MS.load(Ordering::Relaxed)));
+                drop(apart);
+                #[cfg(test)]
+                RECLAIMED.fetch_add(1, Ordering::Relaxed);
+            });
+            // An earlier drop no fork or join waited for goes to the idle point, never let go.
+            let earlier = std::mem::replace(&mut *self.reclaiming.lock().unwrap_or_else(|e| e.into_inner()), freeing);
+            if let Some(earlier) = earlier {
+                crate::crew::keep_thread(earlier);
+            }
         }
     }
 

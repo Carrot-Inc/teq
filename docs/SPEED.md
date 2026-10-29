@@ -130,9 +130,9 @@ no-overloading = false
 
 A resident process (`teq compiler watch`, the language server) lives across builds and threads, and three rules
 keep its memory in check. The compiler's own allocator, a thread-local one in place of malloc, lets a thread
-that goes idle or ends hand what it freed to a centre the other threads draw from, and maps requests of
-1 MB and more itself; a one-shot build keeps what it frees on the thread and leaves without dropping what
-it built. The interpreter registers the holders of the reference cycles that macro expansions leave and
+that goes idle or ends hand what it freed to a centre the other threads draw from, and maps its requests over
+32 KB at its step's alignment itself (below; one aligned past 16 bytes is the system allocator's); a one-shot
+build keeps what it frees on the thread and leaves without dropping what it built. The interpreter registers the holders of the reference cycles that macro expansions leave and
 cuts them at the start of every full build. And once the records that retypes leave dead have grown the
 session by half of what its last full build left, and by 16 MB at least, the next build takes the full
 path. Over the core-only benchmark a `watch --split` session grows by 1 MB per body edit and stands at
@@ -143,6 +143,54 @@ every build takes them.
 `teq fix` runs its allocator as a resident process's too, without a session's typing thread: it types program
 after program (each job's rounds, and a round again where a parallel attempt gave way), and each typing's threads hand
 back what they held as they end, for the next typing to take: one typing no longer strands the last one's memory (docs/FIX.md).
+
+A process maps when its verb is a resident's, read from its arguments with the argument files' lines in place
+(`teq lsp`, `teq compiler watch`, `teq fix` and `teq compiler fix`; `TEQ_RESIDENT=0` keeps the batch allocator), on
+Linux and macOS (on Windows a resident keeps the system's allocator for these requests, as every one-shot build
+does). Whatever the process allocated before is no obstacle: every block over 32 KB at the allocator's step alignment
+has a word before it that says
+whether the process mapped it or the system's allocator holds it, from the process's start, which a free and a
+realloc read, so the blocks of the arguments (a build tool's class path is one line of 50 KB and more) go back to
+the system's allocator and every request after is mapped. A session at eight workers ends twenty full builds of a
+public 33-file program on 408 jars at 102 to 108 MB, as one worker's; with its requests over 32 KB the system
+allocator's, held in an arena of each thread that freed them, it ends them at 141 MB where one worker ends at 97,
+the arenas' pages besides its account of 71 MB. The memory suite's JVM session whose class path is a 64 KB line of
+its argument file ends twenty full builds at 411 MB at eight workers, one worker's 414, where the system's
+allocator ends them at 835 MB.
+
+A mapping's length is its request's and its header's in whole pages, the address space the system's allocator
+maps a chunk of that size with. A block that grows past it is given the new length by Linux's `mremap`, which
+needs the difference of address space alone and moves the pages where the mapping cannot grow in place, never
+copying them (macOS has none: there the block moves to a mapping with room for two more doublings); a block that
+shrinks gives back the address space past its pages; a realloc within the length is served in place and asks for
+no address space. The band's mappings, the requests under 1 MB, are carved from 64 MB of address space mapped
+ahead (glibc's arena heap's length), as the system's allocator carves its arenas', so that under a bound on the
+address space (`ulimit -v`) the first request refused is one that needs address space of its own, a thread's
+stack, as with the system's allocator. Where the system refuses a request, the mappings kept and the rest of that
+reserve give way and it is asked again, then the system's allocator serves it as it would without the mode (what
+the system refuses to unmap, at its bound on the count of mappings, stays the allocator's, its pages given back: a
+kept mapping or a range no list names for the next idle point to unmap, a shrunk block's tail until the block is
+freed, the reserve's rest as the reserve); and under a bound, once a request was refused, the next blocks over 32 KB are
+asked of the system's allocator first until the process goes idle, since it serves from the space it holds free
+before it asks for more. A mapping freed
+is kept for the next request of its class (four to a doubling) or of the three below it, or, the first of its
+class's list, of the class above where its length holds that request, within the build, the address space past the next block unmapped, its block's pages
+with it; a block the system grows passes by the kept
+mapping a request of its new size would take, which gives its pages back and stays kept for the next request of its
+size, so that what a build grows (a text the language server receives, an array of the typer's) does not leave each
+earlier version resident. At the session's idle point, after a build was answered, the interpreter's state disposed
+and the drops the merges handed to threads of their own done, every mapping kept is unmapped: a session at idle
+holds the address space and the pages of its live blocks alone, besides the rest of the band's reserve (up to 64 MB
+of address space, none of it written; `teq fix` keeps its mappings' address space from one typing to the next for
+the next to take, their pages given back) and, at the system's bound on the count of mappings, what it refused to
+unmap, a page of each resident, until the next idle point. A JVM session of the application corpus's API program
+at twice its size, on a class path of 404 public jars in an argument file, at eight workers ends twenty full builds
+at 697 to 704 MB where, with its requests over 32 KB the system allocator's, it ends them at 1,662 to 1,677 MB; its
+address space is 30.2 to 30.3 GB at the end against the system allocator's 30.1 to 30.2, and 38.0 GB at its peak
+against 37.5 to 37.6, its resident peak 1,079 MB against 1,695. The next build maps what it asks for anew and writes
+its pages again, some 213,000 minor faults a full build against the system allocator's 53,000 to 56,000 (a third of
+a second more of the system's time in a build of 7 seconds of CPU), within the noise of its time (counted on Linux;
+macOS's footprint is not measured).
 
 ## The release build
 

@@ -16,7 +16,11 @@
 # frontend of the application corpus (bench/app) in the loop's shape, under the day's edits
 # and under full builds alone, and under `--check`, its edits going round files that expand
 # macros as well, its catalogue of class names declared to hold cacheable state as the
-# application's is, left out without its jars in the coursier cache.
+# application's is, left out without its jars in the coursier cache; and a JVM session over the
+# core corpus started as a build tool starts one, its arguments in an argument file whose class
+# path is one line of more than 32 KB (`LONGCP`: 600 empty directories), under full builds at one
+# worker and at eight (`cp-jvm-full@1`, `@8`), which passes only when it mapped its requests over
+# 32 KB and keeps no mapping at idle (WATCH_MEMORY_MAPS, the driver's).
 #
 # The parallel typer's rows: a session without a count and `@1` type
 # with one worker (`TEQ_SESSION_WORKERS=1`), the count their budgets were recorded at; a session
@@ -80,9 +84,9 @@
 # memory after 3,000 edits to the memory after the first hundred.
 #
 # What the numbers cannot see: memory the session freed and the system's allocator has not
-# given back is counted as the session's (the requests under 1 MB, which the session does not
-# map itself); a leak under the slack per edit passes the short run and shows in the long one,
-# as memory at the end against the hundredth edit's.
+# given back is counted as the session's (its 4 MB chunks, which it never returns, and on Windows
+# its requests over 32 KB, which it does not map itself); a leak under the slack per edit passes
+# the short run and shows in the long one, as memory at the end against the hundredth edit's.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 TEQ=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
@@ -139,6 +143,9 @@ for workload in body tenth day; do
   session jvm-$workload $workload core SRC --target jvm -o OUT
 done
 session hot-day day core SRC --split OUT --module-per-file bench --hot
+for n in 1 8; do
+  session cp-jvm-full@$n full core SRC --target jvm -o OUT --classpath LONGCP
+done
 session hot-full full core SRC --split OUT --module-per-file bench --hot
 session index-day day core --check --index SRC
 session index-std-day day core --check --index SRC
@@ -188,6 +195,7 @@ settings_of() {
 extra_of() {
   case $1 in
     *-std-*) echo "WATCH_MEMORY_STD=1 TEQ_CACHE_DIR=$2/cache" ;;
+    cp-*) echo "WATCH_MEMORY_ARGS_FILE=$2/session.args WATCH_MEMORY_MAPS=1" ;;
   esac
 }
 # A ratio row's baseline runs with it.
@@ -266,6 +274,14 @@ start() {
   args=()
   [ "$corpus" = app ] && roots=("$dir/src/frontend")
   for a in "$@"; do
+    if [ "$a" = LONGCP ]; then
+      local i entries=()
+      for i in $(seq -w 1 600); do
+        mkdir -p "$dir/cp/entry-$i-of-a-class-path-longer-than-a-small-block"
+        entries+=("$dir/cp/entry-$i-of-a-class-path-longer-than-a-small-block")
+      done
+      a=$(IFS=:; echo "${entries[*]}")
+    fi
     a=${a//SRC/$dir/src}
     args+=("${a//OUT/$dir/out}")
   done
