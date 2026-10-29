@@ -606,10 +606,11 @@ impl TVars {
     /// types under the new ids), the rest dropped: another worker's variable no kept record
     /// reaches reads open and unbounded, as during the bodies.
     pub fn keep_others(&mut self, kept: Vec<(TVarId, TVarInfo)>) {
-        // Millions of entries at sixteen workers, freed off the merge's path.
+        // Millions of entries at sixteen workers, freed off the merge's path by a thread a resident's idle point
+        // and `teq fix`'s next typing wait for (`crew::give_back`).
         let others = std::mem::take(&mut self.others);
         if others.iter().map(Vec::len).sum::<usize>() > 1 << 16 {
-            crate::alloc::spawn(move || drop(others));
+            crate::crew::give_back(others);
         }
         self.kept = Some(kept.into_iter().map(|(v, info)| (v.0, info)).collect());
     }

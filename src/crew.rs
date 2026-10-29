@@ -221,19 +221,35 @@ pub fn give_back<T: Send + 'static>(v: T) {
 static KEEP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static GIVEN: Mutex<Vec<std::thread::JoinHandle<()>>> = Mutex::new(Vec::new());
 
-/// Keeps the threads `give_back` starts from now on, for `given_back`: `teq fix`, whose next
-/// typing should find what the last one's merge gave back. A process that never asks keeps none,
-/// so that no session holds a thread that has ended.
+/// Keeps the threads `give_back` starts and `keep_thread` is handed from now on, for `given_back`:
+/// `teq fix`, whose next typing should find what the last one's merge gave back, and a resident
+/// session, whose idle point unmaps the kept mappings after what its build freed late. A process that
+/// never asks (a one-shot build) keeps none.
 pub fn keep_given_back() {
     KEEP.store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// Waits for every thread `give_back` started and kept since the last call: what it was given
-/// dropped and the thread ended, its lists handed back where the process is resident.
+/// Waits for every thread `give_back` started and kept since the last call, and every one handed to it
+/// (`keep_thread`), those handed on while it waits included: what it was given dropped and the thread
+/// ended, its lists handed back where the process is resident.
 pub fn given_back() {
-    let threads = std::mem::take(&mut *GIVEN.lock().unwrap_or_else(|e| e.into_inner()));
-    for t in threads {
-        let _ = t.join();
+    loop {
+        let threads = std::mem::take(&mut *GIVEN.lock().unwrap_or_else(|e| e.into_inner()));
+        if threads.is_empty() {
+            return;
+        }
+        for t in threads {
+            let _ = t.join();
+        }
+    }
+}
+
+/// A thread that frees what a build left, kept for `given_back` where the process keeps them
+/// (`keep_given_back`), let go otherwise: the drop of a type store's overlays, which the store
+/// hands on when it goes or its session goes idle (`TypeStore::give_reclaiming_back`).
+pub fn keep_thread(thread: std::thread::JoinHandle<()>) {
+    if KEEP.load(std::sync::atomic::Ordering::Relaxed) {
+        GIVEN.lock().unwrap_or_else(|e| e.into_inner()).push(thread);
     }
 }
 

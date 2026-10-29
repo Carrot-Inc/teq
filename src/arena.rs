@@ -222,7 +222,8 @@ impl CellDirectory {
     fn make_chunk(&self, at: usize) -> *mut CellChunk {
         let slot = unsafe { &*self.slots.add(at) };
         let layout = std::alloc::Layout::new::<CellChunk>();
-        let fresh = unsafe { std::alloc::System.alloc_zeroed(layout) } as *mut CellChunk;
+        // Asked again where the mappings the allocator keeps stood in the way (`alloc::asked`).
+        let fresh = crate::alloc::asked(|| unsafe { std::alloc::System.alloc_zeroed(layout) }) as *mut CellChunk;
         assert!(!fresh.is_null(), "no memory for a cell chunk");
         match slot.compare_exchange(std::ptr::null_mut(), fresh, Ordering::AcqRel, Ordering::Acquire) {
             Ok(_) => {

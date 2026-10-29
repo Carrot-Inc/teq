@@ -883,8 +883,9 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
     // follows, so that the next typing finds it.
     let waiting = std::time::Instant::now();
     crate::crew::given_back();
-    // A resident process's mappings that sat at the centre through the whole typing go back to the system, as at a
-    // session's idle point between builds.
+    // A resident process's kept mappings between typings (`alloc::age`): the cold ones go back to the system, the
+    // ones this typing freed keep their address space for the next and give back their pages, where a session's
+    // idle point unmaps them (`alloc::idle`, which says what the system's bound on the count of mappings leaves).
     if crate::alloc::is_resident() {
         crate::alloc::age();
     }
