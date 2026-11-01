@@ -104,11 +104,14 @@ bson_opaque_list_handler
 buffer_append_varargs
 build_from
 byname_conversion
+byname_ctor_reads
 byname_default
 byname_in_function_type
 byname_varargs
 byte_buffer_longs
 byte_short_float
+callable_field_names
+callable_given_names
 callable_stateful_superclass
 capture_a
 capture_assign_target
@@ -330,8 +333,11 @@ conversion_target_path_scope
 conversion_to_type_param
 conversion_using_after_receiver
 conversions
+copy_collision
 creator_through_prefix
 cross_features
+ctor_code_class_bodies
+ctor_code_class_copies
 data_streams
 deadline_now
 decimal_format
@@ -397,9 +403,14 @@ empty_args_given_apply
 empty_failures
 encoded_package_macro
 end_markers
+enum_body_reads_case_params
 enum_case_companion_mirror
 enum_case_defaults
 enum_case_given_through_object
+enum_case_override_param
+enum_case_override_param_scopes
+enum_case_refinement_binders
+enum_case_type_param_refs
 enum_cases
 enum_category
 enum_extends_class
@@ -413,6 +424,7 @@ enum_nested_prefix
 enum_nested_tuple_match
 enum_ordinal_dispatch
 enum_ordinal_null
+enum_param_runtime_names
 enum_parents
 enum_reference
 enum_secondary_ctor
@@ -543,6 +555,7 @@ extractor_singleton_subpattern
 extractor_through_value_import
 extractor_vals
 f_interpolator_linked
+field_storage_names
 files_directories
 files_generator
 files_open_options
@@ -735,6 +748,7 @@ givens_ranking
 givens_scope
 givens_self_reference
 givens_unions
+growable_builder_contract
 harmonize_literals
 harmonize_runtime
 hashing
@@ -801,6 +815,7 @@ infer_open_expected
 infer_upper_bounds_through_vars
 infer_with_path_param
 inference_leftovers_retired
+inferred_ctor
 infix_alphanumeric_exempt
 infix_and_or_method_clauses
 infix_args
@@ -849,6 +864,7 @@ inherit_trait_over_class
 inherited_companion_extension
 inherited_extension_two_objects
 inherited_main
+inherited_storage
 init_companions
 init_field_zero
 init_files
@@ -870,7 +886,12 @@ inline_arg_wrapped
 inline_binding_refs
 inline_bodies_scalac_product
 inline_body_import_nested_given
+inline_body_this_prefixes
 inline_constant_final
+inline_ctor_closures
+inline_ctor_expansion_classes
+inline_ctor_macro_args
+inline_ctor_macro_sam
 inline_definition_clean
 inline_definition_const_singleton
 inline_definition_conversion_targs
@@ -939,6 +960,8 @@ inline_reduce_local_value
 inline_retained
 inline_retained_match
 inline_retained_match_effects
+inline_same_this
+inline_saved
 inline_self_member
 inline_substitution_anon_parent_args
 inline_substitution_case_binder_scope
@@ -974,7 +997,10 @@ inline_substitution_tuple_head
 inline_substitution_value_import
 inline_summon_body_givens
 inline_summon_from_guards
+inline_this_prefixes
+inline_this_quoted
 inline_this_receiver
+inline_this_result
 inline_tuples
 inline_type_test_null
 inline_unused_effectful_argument
@@ -1157,6 +1183,7 @@ macro_constant_tags
 macro_constant_type_test
 macro_ctor_member_type
 macro_ctor_param_annots
+macro_ctor_param_reads
 macro_default_getters
 macro_derivation
 macro_enum_case_type_ref
@@ -1440,6 +1467,9 @@ override_access_local_owner
 override_enclosing_type_member
 override_inferred
 override_nullary_any
+override_param_chains
+override_param_read_in_construction
+override_param_values
 override_through_val_path
 package_alias_beside_object
 package_apply
@@ -1547,6 +1577,7 @@ prop_string_index_unchecked
 prop_trim_control
 proxy_private_import
 proxy_protected_import
+qualified_final
 qualified_private_trait_member
 qualified_this_outer_alias
 quote_pattern_hole_inferred
@@ -1808,7 +1839,11 @@ socket_lifecycle
 socket_shutdown_input
 socket_write_signal
 soft_inline_name
+sorted_map_builders
+sorted_set_builders
 sorted_set_concat
+sorted_set_effects
+sorted_set_evidence_ops
 sourcecode
 sourcecode_multi
 sourcecode_names
@@ -1851,6 +1886,7 @@ std_surface
 std_try
 stdextras
 stdin_lines
+storage_descendant_members
 stream_abstract_seq_parent
 stream_descriptors
 stream_iterator_lazy_tail
@@ -1987,6 +2023,7 @@ trait_private_class_member
 trait_private_same_name
 trait_reabstracted_member
 trait_state
+trait_storage
 trait_vals_mixed
 transparent_given_local
 transparent_match_constant_branch
@@ -2102,9 +2139,11 @@ union_widening_local
 unions
 unreachable_deep_split
 untupled_partial_lambda
+unused_ctor_param_reads
 using_conversion_param
 using_default
 using_lambda_argument
+using_search
 util_sorting
 uuid
 uuid_name_bytes

@@ -1794,6 +1794,11 @@ impl<'a> Worker<'a> {
     /// condition it is from being a constant.
     fn ascribed(&mut self, te: TExprId, ty: TypeId) {
         self.end_chain(te, ty);
+        // `(this: A)` is no longer the class's `this.type` (an inline call on it binds a proxy, `Inliner.canElideThis`),
+        // the local standing for `this` in a lambda's class for a SAM type alike.
+        if self.is_this_node(te) && !matches!(self.types.get(ty), Type::This(_)) {
+            *self.expr_marks.entry(te).or_default() |= super::MARK_RETYPED;
+        }
         if self.stands_for(ty, self.b.t_boolean) && self.fold_type(ty).is_none() {
             *self.expr_marks.entry(te).or_default() |= super::MARK_ASCRIBED;
         }
@@ -2333,7 +2338,11 @@ impl<'a> Worker<'a> {
                 let pending_call = self.prog.type_of(te).map_or(false, |it| !self.same_type(it, t) && self.is_numeric(it).is_some()) && self.is_pending_call(te);
                 let node = match self.prog.type_of(te) {
                     Some(inner_ty) if (self.canon(inner_ty) == self.b.t_double || narrowed_literal || pending_call) && self.is_numeric(t).is_none() && self.quote.level == 0 => {
-                        self.prog.add(TExpr::Block(crate::ast::ListRef::EMPTY, te))
+                        let node = self.prog.add(TExpr::Block(crate::ast::ListRef::EMPTY, te));
+                        if self.denotation_marks.is_some() {
+                            self.mark_wrapper(node, te);
+                        }
+                        node
                     }
                     _ => te,
                 };
@@ -2343,6 +2352,7 @@ impl<'a> Worker<'a> {
                     self.note_ascribed_tree_constant(node, te, own_ty);
                 }
                 let te = node;
+                self.note_written_this(te, ty);
                 self.ascribed(te, t);
                 // Its type stands as written to erasure (`Erasure.typedTyped`), the JVM's
                 // qualifier of a member selected from it (`Program::ascribed_bits`).
@@ -2598,7 +2608,12 @@ impl<'a> Worker<'a> {
             Type::Term(s) => self.stable_path_expr(s),
             Type::Select(q, s) => {
                 let recv = self.prefix_value(q)?;
-                Some(self.prog.add(TExpr::Field(recv, s)))
+                let field = self.prog.add(TExpr::Field(recv, s));
+                // `ref`'s: the class's own parameter accessor on its `this` is an `Ident` (`prefixIsElidable`).
+                if let Type::This(k) = self.types.get(q) {
+                    self.mark_if_param_ident(k, s, field);
+                }
+                Some(field)
             }
             Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Object => {
                 let enclosing = self.env.frames.iter().any(|f| matches!(f, Frame::Class(x) if *x == k));

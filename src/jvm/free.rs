@@ -133,7 +133,10 @@ impl Collector<'_, '_> {
 
     fn local(&mut self, s: SymId) {
         let info = self.cx.input.syms.sym(s);
-        if info.owner != Owner::Local {
+        // A class's constructor parameter is read as a local in its constructor's code (`Constructors.intoConstr`),
+        // a closure's or a local function's there too.
+        let ctor_param = matches!(info.owner, Owner::Class(c) if self.cx.input.syms.class(c).ctor_syms.iter().any(|clause| clause.contains(&s)));
+        if info.owner != Owner::Local && !ctor_param {
             return;
         }
         self.referenced.push(s);

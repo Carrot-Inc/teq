@@ -1464,6 +1464,8 @@ impl<'a> Worker<'a> {
             }
             self.lift_deferred_traits(Some(&waiting));
             self.settle_lifted_captures(Some(&waiting));
+            // `Constructors` done with them too, before a macro of the later round runs their constructors.
+            self.into_constr_program(Some(&waiting));
             self.inlining.current_run = Some(std::sync::Arc::new(waiting));
             self.prog.runs += 1;
             // The files given up typed again from their trees, their transparent macros run again

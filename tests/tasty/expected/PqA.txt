@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/PqA.tasty (TASTy 28.8, 380 bytes)
+package fix.shapes
+@SourceFile class PqA(val s: Int) extends Object {
+}

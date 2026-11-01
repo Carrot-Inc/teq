@@ -1,0 +1,5 @@
+jar 2 3 2 3
+jar bodies 2 3 2 3
+jar results 2 3 3 2 3
+sub 2 2 2 2
+jar quoted 3 2 2 3 sub 2 results 2 3

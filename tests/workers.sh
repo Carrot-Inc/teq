@@ -616,6 +616,19 @@ if [ "$(cat "$work/phase_order_quote.one")" = "$(printf '1\n2')" ]; then
 else
   bad "phase_order_quote: one worker's output is not scalac's: $(head -2 "$work/phase_order_quote.one" | tr '\n' ' ' | cut -c1-200)"
 fi
+# A library's inline methods whose bodies make an anonymous class, expanded across the units of the forked phase:
+# each worker checks the class of the body it stores (the record kept with the body, not pushed), and the walk of a
+# library class's constructor code at the end of its check (`into_constr`) takes the record its own check pushed
+# alone (before, the one below the worker's base, another worker's last record, which panicked at two, eight and
+# sixteen workers: `no record .. of worker .. readable by worker ..`). One worker prints scalac's output.
+rm -rf "$work/stored_class_lib"
+timeout 120 "$TEQ" compiler check --products "$work/stored_class_lib" --sourceroot tests/workers/phase_fork_stored_class/lib tests/workers/phase_fork_stored_class/lib/StoredLib.scala --threads 1 > /dev/null 2>&1
+same_output phase_fork_stored_class 3 run tests/workers/phase_fork_stored_class/use --classpath "$work/stored_class_lib"
+if [ "$(cat "$work/phase_fork_stored_class.one")" = "1 2 3 10" ]; then
+  ok
+else
+  bad "phase_fork_stored_class: one worker's output is not scalac's: $(head -2 "$work/phase_fork_stored_class.one" | tr '\n' ' ' | cut -c1-200)"
+fi
 # The same counter called by two files, the first holding an inline branch that would expand a macro of
 # the run and is not taken: the phase suspends a file on the macro its expansion meets
 # (`Inliner.expandMacro`'s `macroDependencies`), and the files keep the walk's order (before, the

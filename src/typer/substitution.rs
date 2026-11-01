@@ -1183,6 +1183,7 @@ impl<'a> Worker<'a> {
             lowering => {
                 let (cast, ty) = self.lower_cast_as(walked, from, to, lowering);
                 self.set_walked_type(w, cast, ty);
+                self.move_written_this(e, cast);
                 cast
             }
         }
@@ -2431,6 +2432,9 @@ impl<'a> Worker<'a> {
                 if node != e && !self.capturing() {
                     self.quote.deferred.local.remove(&e);
                 }
+                // What the definition's result type wrote for the call (`note_wrapped_result`) stands over its
+                // expansion's own.
+                self.move_written_this(e, node);
                 node
             }
             None => e,

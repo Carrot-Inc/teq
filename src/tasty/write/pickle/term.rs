@@ -802,6 +802,13 @@ impl<'w, 'a> P<'w, 'a> {
                 }
                 self.ty(t);
             }
+            // A selection `this.s` of an effectively final parameter accessor, read as the parameter in its class's
+            // constructor code (`Worker::into_constr`, no identifier: no `MARK_PARAM_IDENT`): the selection the source
+            // writes, as dotty pickles before `Constructors`.
+            TExpr::Local(s) if self.switched_selection(e, s).is_some() => {
+                let r = self.switched_selection(e, s).expect("a selection");
+                self.field(r, s, recs.targs)
+            }
             TExpr::Local(s) => self.local_ref(s),
             TExpr::This => self.this_ref(),
             TExpr::Super(t) => self.super_of(t),
@@ -812,6 +819,19 @@ impl<'w, 'a> P<'w, 'a> {
                 self.fail(format!("the std's {}, whose scala-library result is wider than the lean std's, other than as a receiver", self.name(self.w.syms.sym(s).name)))
             }
             TExpr::Field(r, s) if self.is_quotes_reflect(s) => self.quotes_reflect(r),
+            // An identifier naming its class's own parameter accessor (`MARK_PARAM_IDENT`, an inline method's body or
+            // an argument of its call): dotty's `Ident`, pickled as its reference, which `Constructors.intoConstr` reads
+            // as the parameter where an expansion places it in the constructor's code (a selection `this.s` stays one).
+            // Where the class's `this` is no prefix an identifier elides (in a parent's arguments, in another class): the
+            // selection.
+            TExpr::Field(r, s)
+                if matches!(self.w.prog.expr(r), TExpr::This)
+                    && self.w.expr_marks.get(&e).is_some_and(|&m| m & crate::typer::MARK_PARAM_IDENT != 0)
+                    && !self.in_parent_args
+                    && matches!(self.w.syms.sym(s).owner, Owner::Class(c) if self.enclosing.last() == Some(&c)) =>
+            {
+                self.member_termref(s)
+            }
             TExpr::Field(r, s) => {
                 self.receive_by_name(e, r, s);
                 // A named tuple's field, which scalac selects through `NamedTuple`'s members.
@@ -919,7 +939,11 @@ impl<'w, 'a> P<'w, 'a> {
                 // A by-name parameter read: the parameter itself, which the typer evaluates.
                 None if args.len == 0 && matches!(self.w.prog.expr(f), TExpr::Local(s) if self.is_by_name(s)) => {
                     let TExpr::Local(s) = self.w.prog.expr(f) else { unreachable!() };
-                    self.local_ref(s)
+                    // A by-name selection `this.s` the constructor's code reads as its thunk parameter: the selection.
+                    match self.switched_selection(f, s) {
+                        Some(r) => self.field(r, s, None),
+                        None => self.local_ref(s),
+                    }
                 }
                 None if args.len == 0 && matches!(self.w.prog.expr(f), TExpr::Field(_, s) if self.is_by_name(s)) => self.term(f),
                 None => self.apply_function(f, args, e),
@@ -1327,18 +1351,17 @@ impl<'w, 'a> P<'w, 'a> {
             return;
         }
         // A class's constructor parameter: its accessor through the class's `this`, named as an
-        // identifier in a parent's arguments.
+        // identifier in a parent's arguments and in the class's own constructor code, where the
+        // typer reads the parameter for it (`Constructors.intoConstr` runs after the pickler, which
+        // writes the source's `Ident` as its reference).
         if let Owner::Class(c) = self.w.syms.sym(s).owner {
-            if self.in_parent_args {
+            if self.in_parent_args || self.enclosing.last() == Some(&c) {
                 return self.member_termref(s);
             }
             self.buf.byte(SELECT);
             let n = self.term_name(s);
             self.buf.nat(n as u64);
             self.term_at(None);
-            if self.enclosing.last() == Some(&c) {
-                return self.this_ref();
-            }
             return self.qual_this(c);
         }
         let name = self.w.interner.get(self.w.syms.sym(s).name).to_string();
@@ -1385,6 +1408,15 @@ impl<'w, 'a> P<'w, 'a> {
             }
             None => self.fail("`this` outside a class".to_string()),
         }
+    }
+
+    /// The receiver of `e`, a read of the class's parameter `s` that was a selection of its accessor
+    /// (`Worker::into_constr`): no identifier, its path that receiver's.
+    fn switched_selection(&self, e: TExprId, s: SymId) -> Option<TExprId> {
+        if !matches!(self.w.syms.sym(s).owner, Owner::Class(_)) || self.w.expr_marks.get(&e).is_some_and(|&m| m & crate::typer::MARK_PARAM_IDENT != 0) {
+            return None;
+        }
+        self.w.folded_paths.get(&e).filter(|&&(_, f)| f == s).map(|&(r, _)| r)
     }
 
     /// The outer instance an inner class's accessor reads, `C.this`.

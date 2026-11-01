@@ -2053,7 +2053,11 @@ impl<'a> Worker<'a> {
                 match classes.into_iter().find(|&k| k == o || self.derives_from(k, o)) {
                     Some(through) => {
                         let (this, _) = self.type_this_of(through);
-                        self.prog.add(TExpr::Field(this, s))
+                        let field = self.prog.add(TExpr::Field(this, s));
+                        // The path's `ref`: the class's own parameter accessor on its `this` is an `Ident`
+                        // (`prefixIsElidable`).
+                        self.mark_if_param_ident(o, s, field);
+                        field
                     }
                     // An object's member (`Registry.token`): through the object itself.
                     None if self.syms.class(o).kind == ClassKind::Object && !self.class_in_class(o) => {
@@ -5483,12 +5487,18 @@ impl<'a> Worker<'a> {
                     }
                     (Some(ic), true) => self.prog.add(TExpr::New(ic, l)),
                     (None, true) => self.prog.add(TExpr::CallMethod(recv, g, l)),
-                    // A by-name using parameter of a class is forced, as a read of it is.
-                    _ if self.syms.sym(g).by_name => {
+                    _ => {
                         let field = self.prog.add(TExpr::Field(recv, g));
-                        self.prog.add(TExpr::CallClosure(field, ListRef::EMPTY))
+                        // `typedImplicit`'s `tpd.ref`: the class's own parameter accessor on its `this` is an `Ident`
+                        // (`prefixIsElidable`), which `Constructors.intoConstr` reads as the parameter.
+                        self.mark_if_param_ident(c, g, field);
+                        // A by-name using parameter of a class is forced, as a read of it is.
+                        if self.syms.sym(g).by_name {
+                            self.prog.add(TExpr::CallClosure(field, ListRef::EMPTY))
+                        } else {
+                            field
+                        }
                     }
-                    _ => self.prog.add(TExpr::Field(recv, g)),
                 }
             }
         };

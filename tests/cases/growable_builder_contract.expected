@@ -1,0 +1,22 @@
+TreeSet(1, 2, 3, 4, 5) -1
+TreeMap(1 -> a, 2 -> b) -1
+TreeSet(1, 2) -1
+List(1, 3) -1
+List(1, 2, 1, 2)
+hint 5
+hint 0
+hint 3
+hint 2
+hint 2
+hint 1
+knownSize
+iterator
+List(1, 1)
+TreeSet(1, 2, 3, 4) 4
+TreeSet(3)
+TreeSet() 0
+TreeMap(3 -> c)
+TreeMap(0 -> z, 1 -> a, 3 -> c)
+TreeMap(1 -> a)
+same adder true
+TreeMap(1 -> a, 2 -> b, 6 -> f)

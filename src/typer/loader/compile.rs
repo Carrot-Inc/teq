@@ -652,8 +652,12 @@ impl<'a> Worker<'a> {
         let phase = self.phase(Phase::Deferred);
         let prof = self.prof(Kind::LibraryBody, Span::default(), About::Class(c));
         if self.convert_library_class(c) {
+            // The classes its constructor's vals make as they are typed (`check_member`) are named as a body's are
+            // (`name_local_library_classes`).
+            let first_class = self.syms.classes.len();
             self.outside_inline(|t| t.check_class(c));
             self.name_library_members(c);
+            self.name_local_library_classes(first_class);
             self.bridge_library_class(c);
         }
         if let Some(p) = prof {

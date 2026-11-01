@@ -529,7 +529,7 @@ impl<'a> Worker<'a> {
         let info = self.sig_of(s).ret;
         let r = if stable_member && !self.is_late_initialized(s) {
             Realizability::Realizable
-        } else if !self.is_effectively_final(s) {
+        } else if !self.syms.is_effectively_final(s) {
             Realizability::NotFinal(s)
         } else {
             match self.realizability_of(info, checked) {
@@ -561,37 +561,6 @@ impl<'a> Worker<'a> {
     fn is_late_initialized(&self, s: SymId) -> bool {
         let info = self.syms.sym(s);
         info.mods & mods::LAZY != 0 && !matches!(info.kind, SymKind::Object(_))
-    }
-
-    /// `SymDenotation.isEffectivelyFinal`: final or private, an inline member not deferred, a Java
-    /// value that is no method, a constructor, or one not deferred whose owner is not an
-    /// extensible class.
-    fn is_effectively_final(&self, s: SymId) -> bool {
-        let info = self.syms.sym(s);
-        let deferred = info.mods & (mods::DEFERRED | mods::ABSTRACT) != 0;
-        if info.mods & (mods::FINAL | mods::PRIVATE) != 0 {
-            return true;
-        }
-        if info.mods & mods::INLINE != 0 && !deferred {
-            return true;
-        }
-        if info.java_defined && info.kind != SymKind::Def {
-            return true;
-        }
-        if info.name == crate::names::INIT {
-            return true;
-        }
-        let extensible = match info.owner {
-            Owner::Class(c) => self.is_extensible_class(c),
-            _ => false,
-        };
-        !deferred && !extensible
-    }
-
-    /// `isExtensibleClass`: a class, neither final, an object nor anonymous.
-    fn is_extensible_class(&self, c: ClassId) -> bool {
-        let k = self.syms.class(c);
-        !matches!(k.kind, ClassKind::Object | ClassKind::Anon | ClassKind::GivenImpl | ClassKind::EnumCase) && k.mods & mods::FINAL == 0
     }
 
     /// `realizability` of a type (`dealias` first): a path's `TermRef` with its prefix; a

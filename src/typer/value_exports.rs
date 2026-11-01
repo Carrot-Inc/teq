@@ -919,7 +919,7 @@ impl<'a> Worker<'a> {
             return false;
         }
         match self.loaded.as_ref().and_then(|l| l.access_within.get(&m)) {
-            Some(&(scope, _)) => self.within_scope_of(info.owner, scope),
+            Some(&(scope, _)) => self.within_loaded_qualifier(m, scope),
             None => false,
         }
     }

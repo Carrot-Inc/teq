@@ -901,6 +901,7 @@ impl<'a> Worker<'a> {
         let mut opaque = Vec::new();
         let mut spread = Vec::new();
         let mut ascribed = Vec::new();
+        let mut written_this: Vec<(TExprId, bool)> = Vec::new();
         let mut tuple_index = Vec::new();
         let mut erased = Vec::new();
         if let Some(b) = body {
@@ -930,6 +931,8 @@ impl<'a> Worker<'a> {
             spread.sort();
             ascribed = nodes.keys().copied().filter(|&e| self.prog.is_ascribed(e)).collect();
             ascribed.sort();
+            written_this = nodes.keys().filter_map(|&e| self.inline.this_written.get(&e).map(|&w| (e, w))).collect();
+            written_this.sort();
             tuple_index = nodes.keys().copied().filter(|&e| self.prog.is_tuple_index(e)).collect();
             tuple_index.sort();
             // The lean library's call is the intrinsic's, deferred: each expansion evaluates it anew.
@@ -977,6 +980,7 @@ impl<'a> Worker<'a> {
             opaque,
             spread,
             ascribed,
+            written_this,
             tuple_index,
             erased,
             hoisted,
@@ -1202,6 +1206,9 @@ impl<'a> Worker<'a> {
         }
         for (i, &e) in def.ascribed.iter().enumerate() {
             note(e, Meta::Ascribed(i as u32));
+        }
+        for (i, &(e, _)) in def.written_this.iter().enumerate() {
+            note(e, Meta::WrittenThis(i as u32));
         }
         for (i, &e) in def.tuple_index.iter().enumerate() {
             note(e, Meta::TupleIndex(i as u32));
@@ -1692,6 +1699,12 @@ impl<'a> Worker<'a> {
             if matches!(self.prog.expr(e), TExpr::This) && !map.inner_this.contains(&copy) {
                 this_copies.push(copy);
             }
+            // An identifier of an own parameter accessor stays one in the copy (`into_constr`), as an empty anonymous
+            // class's creation does (`MARK_ANON_PARENT`); on a receiver other than the elided `this` the identifier's
+            // copy reads the receiver's proxy, no `this`.
+            if matches!(self.prog.expr(e), TExpr::Field(..) | TExpr::New(..) | TExpr::Block(..)) && self.expr_marks.get(&e).is_some_and(|&m| m & super::MARK_PARAM_IDENT != 0) {
+                self.mark_param_ident(copy);
+            }
         }
         this_copies.sort();
         inst.this_copies.extend(this_copies);
@@ -1727,6 +1740,10 @@ impl<'a> Worker<'a> {
                 Meta::Opaque(_) => self.prog.mark_opaque(copy),
                 Meta::Spread(_) => self.prog.mark_spread(copy),
                 Meta::Ascribed(_) => self.prog.mark_ascribed(copy),
+                // The copy's `this` keeps what its cast or ascription wrote, which the inline `this` decision reads.
+                Meta::WrittenThis(i) => {
+                    self.inline.this_written.insert(copy, def.written_this[i as usize].1);
+                }
                 Meta::TupleIndex(_) => self.prog.mark_tuple_index(copy),
                 Meta::Erased(_) => self.note_erased_value(copy, Span::default()),
                 Meta::Import(i) => {
@@ -2356,6 +2373,14 @@ impl<'a> Worker<'a> {
             let ty = if transparent { self.solve_in(ty) } else { self.solve_inferred(ty) };
             (te, ty)
         };
+        if !transparent {
+            let result_tree = match &def.kind {
+                DefKind::Fun(f) => f.ret,
+                DefKind::Given(g) => Some(g.ty),
+                _ => None,
+            };
+            self.note_wrapped_result(te, result_tree);
+        }
         self.returns = outer_returns;
         self.return_to = outer_return;
         self.defining = outer_defining;
@@ -2772,6 +2797,7 @@ enum Meta {
     Opaque(u32),
     Spread(u32),
     Ascribed(u32),
+    WrittenThis(u32),
     TupleIndex(u32),
     Erased(u32),
     Import(u32),
@@ -2880,6 +2906,7 @@ impl InlineDefinition {
             erased: Vec::new(),
             spread: Vec::new(),
             ascribed: Vec::new(),
+            written_this: Vec::new(),
             tuple_index: Vec::new(),
             hoisted: Vec::new(),
             imports: Vec::new(),

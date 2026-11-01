@@ -17,7 +17,8 @@
 # izumi-reflect-boopickle-jvm, scala-collection-compat-jvm, zio-test-jvm, zio-interop-cats-jvm, zio-interop-tracer-jvm), chimney-jvm and chimney-macro-commons-jvm, tapir-core-jvm (1.13.29) with magnolia123-jvm,
 # sttp-model-core-jvm, sttp-shared-core-jvm and sttp-shared-ws-jvm; the interp-script fixture's lock jars its script reaches, named so that the actions cache holds them (decline-jvm, geny-jvm, os-lib-jvm, os-zip-jvm, magnolia1318-jvm, sttp-client4-core-jvm, sttp-client4-zio-jvm, sttp-shared-zio-jvm, sttp-model-core-1717-jvm, zio-interop-reactivestreams-jvm, zio-managed-jvm, jline-jdk8-jvm, reactive-streams-jvm, scodec-bits-jvm, algebra-jvm, cats-collections-core-jvm, idna4s-core-jvm); abi-callbacks-lib,
 # tests/support/abi_callbacks_lib.scala compiled by scalac (scala-cli) into a jar; typetest-lib,
-# tests/support/typetest_lib.scala compiled the same way; predef-lib,
+# tests/support/typetest_lib.scala compiled the same way; callable-lib, tests/support/callable_lib.scala compiled the
+# same way; ctor-lib, tests/support/ctor_lib.scala compiled the same way; predef-lib,
 # tests/support/predef_lib.scala compiled the same way; depfun-lib, tests/support/depfun_lib.scala
 # compiled the same way; inlinebodies-lib, tests/support/inline_bodies_lib.scala compiled the same way; view-lib, tests/support/view_lib.scala compiled the same way; nestedcompanion-lib,
 # tests/support/nestedcompanion_lib.scala compiled the same way; javareview-lib,
@@ -146,7 +147,7 @@ PY
 # tests/classfile/fixtures' Java classes they reach. Built when missing or older than a source.
 fixtures_jvm_jar() {
   local jar=$scratch/fixtures-jvm.jar dir=$scratch/fixtures-jvm.$$ src=tests/tasty/src f stale=0
-  local main="cake.scala cake3.scala cake4.scala guard.scala retain.scala runtime.scala targetname.scala wave6.scala shadow.scala reader_decl.scala reader_java.scala casts.scala icdefaults.scala overacc.scala"
+  local main="cake.scala cake3.scala cake4.scala guard.scala retain.scala runtime.scala targetname.scala wave6.scala shadow.scala reader_decl.scala reader_java.scala casts.scala icdefaults.scala overacc.scala paramqual.scala"
   [ -f "$jar" ] || stale=1
   for f in $main reader.scala reader_decl_v1.scala reader_java_v1.scala; do [ "$src/$f" -nt "$jar" ] && stale=1; done
   if [ $stale = 1 ]; then
@@ -335,6 +336,30 @@ abi_callbacks_jar() {
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/abi_callbacks_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+callable_lib_jar() {
+  local src=tests/support/callable_lib.scala
+  local jar=$scratch/callable-lib.jar
+  local dir=$scratch/callable-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/callable_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+ctor_lib_jar() {
+  local src=tests/support/ctor_lib.scala
+  local jar=$scratch/ctor-lib.jar
+  local dir=$scratch/ctor-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/ctor_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
       && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
     rm -rf "$dir"
   fi
@@ -808,6 +833,8 @@ jar_of() {
     javafixdir) echo tests/classfile/fixtures ;;
     abi-callbacks-lib) abi_callbacks_jar ;;
     typetest-lib) typetest_lib_jar ;;
+    callable-lib) callable_lib_jar ;;
+    ctor-lib) ctor_lib_jar ;;
     bundle-lib) bundle_jar ;;
     reflect-lib) reflect_lib_jar ;;
     erasure-lib) erasure_lib_jar ;;

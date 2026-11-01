@@ -4,21 +4,38 @@ package scala.collection.mutable
 trait Builder[-A, +To]:
   def addOne(elem: A): this.type
   def +=(elem: A): this.type = addOne(elem)
+  // scala-library's `Growable.addAll`: the builder itself copied first, so it is not added to under its own
+  // iterator; any other source walked by its iterator, each element through `addOne`.
   def addAll(elems: IterableOnce[A]): this.type =
-    elems.foreach(e => addOne(e))
+    if elems.asInstanceOf[AnyRef] eq this then addAll(Buffer.from(elems))
+    else
+      val it = elems.iterator
+      while it.hasNext do addOne(it.next())
     this
   def ++=(elems: IterableOnce[A]): this.type = addAll(elems)
   def result(): To
   def clear(): Unit
   def sizeHint(size: Int): Unit = ()
-  def sizeHint(coll: IterableOnce[?], delta: Int = 0): Unit = ()
+  // scala-library's: a hint only where the source's size is known (`knownSize`), never below 0.
+  final def sizeHint(coll: IterableOnce[?], delta: Int = 0): Unit =
+    val sz = coll.knownSize
+    if sz != -1 then sizeHint(0 max sz + delta)
+  final def sizeHintBounded(size: Int, boundingColl: Iterable[?]): Unit =
+    val s = boundingColl.knownSize
+    if s != -1 then sizeHint(scala.math.min(s, size))
   def knownSize: Int = -1
   def mapResult[NewTo](f: To => NewTo): ReusableBuilder[A, NewTo] =
     val self = this
+    // scala-library's: `addAll`, `sizeHint` and `knownSize` the builder's own (a sorted builder's adoption through it).
     new ReusableBuilder[A, NewTo]:
       def addOne(elem: A): this.type =
         self.addOne(elem)
         this
+      override def addAll(elems: IterableOnce[A]): this.type =
+        self.addAll(elems)
+        this
+      override def sizeHint(size: Int): Unit = self.sizeHint(size)
+      override def knownSize: Int = self.knownSize
       def result(): NewTo = f(self.result())
       def clear(): Unit = self.clear()
 
@@ -139,7 +156,14 @@ object ArrayBuffer:
   def empty[A]: ArrayBuffer[A] = new ArrayBuffer(emptyBuffer[A])
   def newBuilder[A]: Builder[A, ArrayBuffer[A]] = empty[A].mapResult(b => b)
   def apply[A](elems: A*): ArrayBuffer[A] = from(elems)
-  def from[A](elems: IterableOnce[A]): ArrayBuffer[A] = new ArrayBuffer(iterableToArray(elems))
+  // scala-library's: the source's size read first, then its elements walked by its iterator, copied where the size is
+  // known (`IterableOnce.copyElemsToArray`) and added through `Growable.addAll` where it is not.
+  def from[A](elems: IterableOnce[A]): ArrayBuffer[A] =
+    elems.knownSize
+    val items = emptyBuffer[A]
+    val it = elems.iterator
+    while it.hasNext do items.push(it.next())
+    new ArrayBuffer(items)
   def fill[A](n: Int)(elem: => A): ArrayBuffer[A] = new ArrayBuffer(filledBuffer(n)(elem))
   def tabulate[A](n: Int)(f: Int => A): ArrayBuffer[A] = new ArrayBuffer(tabulatedBuffer(n)(f))
 
@@ -202,6 +226,7 @@ final class ListBuffer[A](private val buf: ArrayBuffer[A]) extends SeqOps[A, Lis
 object Buffer:
   def empty[A]: ArrayBuffer[A] = ArrayBuffer.empty[A]
   def apply[A](elems: A*): ArrayBuffer[A] = ArrayBuffer.from(elems)
+  def from[A](elems: IterableOnce[A]): ArrayBuffer[A] = ArrayBuffer.from(elems)
 
 object ListBuffer:
   def empty[A]: ListBuffer[A] = new ListBuffer(ArrayBuffer.empty[A])
@@ -291,7 +316,7 @@ class HashMap[K, V](private val raw: RawMap[K, V] = newRawMap[K, V]) extends Ite
   def valuesIterator: Iterator[V] = Iterator.over(raw.rawValues)
   override def toMap[K2, V2](implicit ev: ((K, V)) <:< (K2, V2)): scala.Map[K2, V2] = unsafeCast(scala.Map.from(this))
   def foreach[U](f: ((K, V)) => U): Unit = raw.rawForeach((k, v) => f((k, v)))
-  def foreachEntry[U](f: (K, V) => U): Unit = raw.rawForeach(f)
+  override def foreachEntry[U](f: (K, V) => U): Unit = raw.rawForeach(f)
   // A function over the entries that gives pairs builds a HashMap, any other an Iterable, as
   // scala-library's overloads of `MapOps` and `IterableOps` do.
   @jvmWide
@@ -441,7 +466,7 @@ type LinkedHashSet[A] = HashSet[A]
 /** `scala.collection.mutable.SortedSet` over a sorted array, as cats' `distinct` and the
   * application's sorted sets use it; every one is a `TreeSet`, the class keeping the two types
   * distinct as scala-library does. */
-class SortedSet[A](private var items: RawBuffer[A], val ordering: Ordering[A]) extends IterableOps[A, Iterable, SortedSet[A]], Iterable[A]:
+class SortedSet[A](private[mutable] var items: RawBuffer[A], val ordering: Ordering[A]) extends IterableOps[A, Iterable, SortedSet[A]], Iterable[A]:
   def buildCC[B](elems: RawBuffer[B]): Iterable[B] = fromArray(elems)
   override def buildC(sorted: RawBuffer[A]): SortedSet[A] = SortedSet.from(Vector.wrap(sorted))(using ordering)
   override def iterator: Iterator[A] = Iterator.over(copyArray(items))
@@ -460,9 +485,10 @@ class SortedSet[A](private var items: RawBuffer[A], val ordering: Ordering[A]) e
     var found = -1
     while found < 0 && lo <= hi do
       val mid = (lo + hi) / 2
-      val c = ordering.compare(items(mid), elem)
+      // The element sought against the set's, as scala-library's tree compares (`RB.lookup`, `RB.update`).
+      val c = ordering.compare(elem, items(mid))
       if c == 0 then found = mid
-      else if c < 0 then lo = mid + 1
+      else if c > 0 then lo = mid + 1
       else hi = mid - 1
     if found >= 0 then found else -lo - 1
   def contains(elem: A): Boolean = search(elem) >= 0
@@ -487,18 +513,41 @@ class SortedSet[A](private var items: RawBuffer[A], val ordering: Ordering[A]) e
     this
   def addOne(elem: A): this.type = this += elem
   def subtractOne(elem: A): this.type = this -= elem
-  def ++=(elems: IterableOnce[A]): this.type =
-    elems.foreach(x => add(x))
+  // scala-library's `Growable.addAll` and `Shrinkable.subtractAll`, which the set's `++=` and `--=` are: the set itself
+  // copied first (`--=` of itself clears it), a linear sequence removed head by head, any other source walked by its
+  // iterator, each element through `addOne` or `subtractOne`.
+  def addAll(elems: IterableOnce[A]): this.type =
+    if elems.asInstanceOf[AnyRef] eq this then addAll(Buffer.from(elems))
+    else
+      val it = elems.iterator
+      while it.hasNext do addOne(it.next())
     this
-  def addAll(elems: IterableOnce[A]): this.type = this ++= elems
-  def --=(elems: IterableOnce[A]): this.type =
-    elems.foreach(x => remove(x))
+  def ++=(elems: IterableOnce[A]): this.type = addAll(elems)
+  def subtractAll(xs: IterableOnce[A]): this.type =
+    if xs.asInstanceOf[AnyRef] eq this then clear()
+    else
+      xs match
+        case xs: scala.collection.immutable.LinearSeq[A] @unchecked =>
+          // The std's `LinearSeq` keeps `Seq`'s `tail`; a linear sequence's tail is one.
+          var rest: scala.collection.immutable.LinearSeq[A] = xs
+          while rest.nonEmpty do
+            subtractOne(rest.head)
+            rest = unsafeCast[Seq[A], scala.collection.immutable.LinearSeq[A]](rest.tail)
+        case xs => xs.iterator.foreach(subtractOne)
     this
-  def subtractAll(elems: IterableOnce[A]): this.type = this --= elems
-  def clear(): Unit = items = emptyBuffer[A]
+  def --=(xs: IterableOnce[A]): this.type = subtractAll(xs)
+  // In place, as scala-library's set changes its tree, which the sets a builder's results are share.
+  def clear(): Unit = bufferClear(items)
   override def clone(): SortedSet[A] = SortedSet.from(this)(using ordering)
+  // `SetOps.filterInPlace`: the elements as they were, each one the predicate rejects removed then.
   def filterInPlace(p: A => Boolean): this.type =
-    items = items.filter(p)
+    if nonEmpty then
+      val elems = copyArray[A, A](items)
+      var i = 0
+      while i < elems.length do
+        val elem = elems(i)
+        if !p(elem) then this -= elem
+        i += 1
     this
   def rangeFrom(from: A): SortedSet[A] = filter(x => ordering.gteq(x, from))
   def rangeUntil(until: A): SortedSet[A] = filter(x => ordering.lt(x, until))
@@ -509,14 +558,30 @@ class SortedSet[A](private var items: RawBuffer[A], val ordering: Ordering[A]) e
     var out: Option[A] = None
     items.foreach(x => if p(x) then out = Some(x))
     out
+  // scala-library's `StrictOptimizedSortedSetOps`: each result is added to the result's builder as it is made, its
+  // ordering run then, before the next element is taken; called through the static type Iterable, no ordering is
+  // passed and the result is a HashSet, as the immutable set's is a plain Set.
   override def map[B](f: A => B)(implicit ord: Ordering[B]): SortedSet[B] =
-    val out = emptyBuffer[B]
-    foreach(x => out.push(f(x)))
-    SortedSet.sortedOrPlain(out, ord)
+    val b = SortedSet.builderOrPlain(ord)
+    foreach(x => b.addOne(f(x)))
+    b.result()
   override def flatMap[B](f: A => IterableOnce[B])(implicit ord: Ordering[B]): SortedSet[B] =
-    val out = emptyBuffer[B]
-    foreach(x => f(x).iterator.foreach(y => out.push(y)))
-    SortedSet.sortedOrPlain(out, ord)
+    val b = SortedSet.builderOrPlain(ord)
+    foreach(x => b ++= f(x))
+    b.result()
+  override def collect[B](pf: PartialFunction[A, B])(implicit ord: Ordering[B]): SortedSet[B] =
+    val b = SortedSet.builderOrPlain(ord)
+    val miss = partialMiss[A, B]
+    foreach: x =>
+      val v = pf.applyOrElse(x, miss)
+      if !isPartialMiss(v) then b.addOne(v)
+    b.result()
+  override def zip[B](that: IterableOnce[B])(implicit ord: Ordering[(A, B)]): SortedSet[(A, B)] =
+    val b = SortedSet.builderOrPlain(ord)
+    val a = iterator
+    val c = that.iterator
+    while a.hasNext && c.hasNext do b.addOne((a.next(), c.next()))
+    b.result()
   def toSortedSet: scala.collection.immutable.SortedSet[A] = scala.collection.immutable.SortedSet.from(this)(using ordering)
   def equals(that: Any): Boolean = that match
     case s: SortedSet[?] => size == s.size && unsafeCast[SortedSet[?], SortedSet[A]](s).forall(x => contains(x))
@@ -527,23 +592,37 @@ class SortedSet[A](private var items: RawBuffer[A], val ordering: Ordering[A]) e
   override def toString: String = mkString("TreeSet(", ", ", ")")
 
 object SortedSet:
-  def sortedOrPlain[B](items: RawBuffer[B], ord: Ordering[B]): SortedSet[B] =
-    if js.isUndefined(ord) then unsafeCast(HashSet.from(Vector.wrap(items))) else from(Vector.wrap(items))(using ord)
+  // The builder of a result: a sorted set's where the ordering is given, a HashSet's where a call through the static
+  // type Iterable passed none.
+  def builderOrPlain[B](ord: Ordering[B]): Builder[B, SortedSet[B]] =
+    if js.isUndefined(ord) then unsafeCast(HashSet.newBuilder[B]) else newBuilder(using ord)
   def empty[A](implicit ord: Ordering[A]): SortedSet[A] = new TreeSet(emptyBuffer[A], ord)
   def apply[A](elems: A*)(implicit ord: Ordering[A]): SortedSet[A] = from(elems)
   def from[A](elems: IterableOnce[A])(implicit ord: Ordering[A]): SortedSet[A] =
     val out = new TreeSet(emptyBuffer[A], ord)
     elems.foreach(x => out.add(x))
     out
-  def newBuilder[A](implicit ord: Ordering[A]): Builder[A, SortedSet[A]] = ArrayBuffer.empty[A].mapResult(items => from(items))
+  def newBuilder[A](implicit ord: Ordering[A]): Builder[A, SortedSet[A]] = TreeSet.newBuilder[A]
 
-final class TreeSet[A](items: RawBuffer[A], ordering: Ordering[A]) extends SortedSet[A](items, ordering)
+final class TreeSet[A](items: RawBuffer[A], ordering: Ordering[A]) extends SortedSet[A](items, ordering):
+  override def map[B](f: A => B)(implicit ord: Ordering[B]): TreeSet[B] = unsafeCast(super.map(f)(using ord))
+  override def flatMap[B](f: A => IterableOnce[B])(implicit ord: Ordering[B]): TreeSet[B] = unsafeCast(super.flatMap(f)(using ord))
+  override def collect[B](pf: PartialFunction[A, B])(implicit ord: Ordering[B]): TreeSet[B] = unsafeCast(super.collect(pf)(using ord))
+  override def zip[B](that: IterableOnce[B])(implicit ord: Ordering[(A, B)]): TreeSet[(A, B)] = unsafeCast(super.zip(that)(using ord))
 
 object TreeSet:
   def empty[A](implicit ord: Ordering[A]): TreeSet[A] = new TreeSet(emptyBuffer[A], ord)
   def apply[A](elems: A*)(implicit ord: Ordering[A]): TreeSet[A] = from(elems)
   def from[A](elems: IterableOnce[A])(implicit ord: Ordering[A]): TreeSet[A] = unsafeCast(SortedSet.from(elems))
-  def newBuilder[A](implicit ord: Ordering[A]): Builder[A, TreeSet[A]] = ArrayBuffer.empty[A].mapResult(items => from(items))
+  // scala-library's builder: one tree, each element inserted in turn; each result a new set over that tree, the
+  // results and the builder sharing it, until `clear` gives the builder a new one.
+  def newBuilder[A](implicit ord: Ordering[A]): Builder[A, TreeSet[A]] = new ReusableBuilder[A, TreeSet[A]]:
+    private var tree = TreeSet.empty[A]
+    def addOne(elem: A): this.type =
+      tree.add(elem)
+      this
+    def result(): TreeSet[A] = new TreeSet(tree.items, ord)
+    def clear(): Unit = tree = TreeSet.empty[A]
 
 object LinkedHashSet extends IterableFactory[HashSet]:
   def empty[A]: HashSet[A] = HashSet.empty[A]

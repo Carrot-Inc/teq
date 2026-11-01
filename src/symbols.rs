@@ -1677,24 +1677,39 @@ impl Symbols {
         false
     }
 
-    /// A def that nothing can override, as scalac sees it: final, private, local, top-level or a
-    /// member of a class that cannot be extended. Its self tail calls may become a loop.
+    /// `SymDenotation.isEffectivelyFinal` (SymDenotations.scala 1236-1245), a member nothing can
+    /// override: final or private, an inline member not deferred, a Java value that is no method, a
+    /// constructor, or one not deferred whose owner is no extensible class (a local or top-level
+    /// definition's none). Private is dotty's flag, which a qualified private member (`private[p]`,
+    /// its `privateWithin`, teq's `scoped_private`) does not have. TailRec's self tail calls, the
+    /// constructor's reads of its parameters (`Constructors.intoConstr`) and the import checks read it.
     pub fn is_effectively_final(&self, s: SymId) -> bool {
         let info = self.sym(s);
-        if info.mods & (mods::FINAL | mods::PRIVATE) != 0 {
+        let deferred = info.mods & (mods::DEFERRED | mods::ABSTRACT) != 0;
+        if info.mods & mods::FINAL != 0 || (info.mods & mods::PRIVATE != 0 && !info.scoped_private) {
             return true;
         }
-        match info.owner {
-            Owner::Local | Owner::Package(_) => true,
-            Owner::Class(c) => {
-                let class = self.class(c);
-                class.mods & mods::FINAL != 0
-                    || matches!(
-                        class.kind,
-                        ClassKind::Object | ClassKind::GivenImpl | ClassKind::Anon | ClassKind::EnumCase
-                    )
-            }
+        if info.mods & mods::INLINE != 0 && !deferred {
+            return true;
         }
+        if info.java_defined && info.kind != SymKind::Def {
+            return true;
+        }
+        if info.name == crate::names::INIT {
+            return true;
+        }
+        let extensible = match info.owner {
+            Owner::Class(c) => self.is_extensible_class(c),
+            _ => false,
+        };
+        !deferred && !extensible
+    }
+
+    /// `isExtensibleClass`: a class, neither final, an object nor anonymous (a given's class and an
+    /// enum case's are final).
+    pub fn is_extensible_class(&self, c: ClassId) -> bool {
+        let k = self.class(c);
+        !matches!(k.kind, ClassKind::Object | ClassKind::Anon | ClassKind::GivenImpl | ClassKind::EnumCase) && k.mods & mods::FINAL == 0
     }
 }
 

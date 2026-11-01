@@ -146,7 +146,6 @@ OOS_MESSAGES = [
     ("abstract-def", "an abstract def needs a result type"),
     ("local-val", "a local val needs an initializer"),
     ("val-type", "a val needs a type or an initializer"),
-    ("enum-extends", "an enum case of an invariant enum needs an explicit extends clause"),
 ]
 
 SYNTAX_PREFIXES = (

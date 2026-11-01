@@ -1,0 +1,4 @@
+1c1
+< @SourceFile class PqH(val h: Int) extends Object{(): java.lang.Object}() {
+---
+> @SourceFile class PqH(protected val h: Int) extends Object{(): java.lang.Object}() {

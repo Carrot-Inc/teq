@@ -76,12 +76,16 @@ pub enum ArgSrc {
 /// The typed nodes whose dotty tree has no symbol where teq's node is a reference (`Tree.symbol`, which only a
 /// denoting tree and a proxy tree have): a block's expression typed as an argument or beneath a proxy (`Block`,
 /// `mark_block_node`), a named argument's value (`NamedArg`, which `typedNamedArg` keeps), an inline expansion
-/// (`Inlined`), an inferred `using` argument (the constructor's parameter, which teq's one symbol for a parameter and
-/// its accessor conflates). `named` holds the values of the named arguments placed while the typing is under way,
-/// which `nodes` takes once typed.
+/// (`Inlined`), and the receiver's node a member call collapsed into (`mark_collapsed_call`), whose dotty tree's
+/// symbol is the member's. An inferred `using` argument is the reference the search found, a class parameter's where the
+/// superclass call's scope holds the accessors (`Contexts.superCallContext`), and is not marked. `wrappers` holds
+/// the nodes an ascription's typing wraps around its expression's (`mark_wrapper`), whose symbol is the expression's
+/// (`Typed.denot`). `named` holds the values of the named arguments placed while the typing is under way, which
+/// `nodes` takes once typed.
 #[derive(Default)]
 pub struct DenotationMarks {
     pub nodes: Vec<TExprId>,
+    pub wrappers: Vec<(TExprId, TExprId)>,
     named: Vec<ExprId>,
 }
 
@@ -2490,7 +2494,27 @@ impl<'a> Worker<'a> {
         let Some(loaded) = self.loaded.as_ref() else { return true };
         let Some(&(scope, protected)) = loaded.access_within.get(&s) else { return true };
         let file = self.env.file;
-        self.in_jar(file) || self.is_body_file(file) || self.source(file).is_std || self.within_scope_of(self.syms.sym(s).owner, scope) || (protected && self.in_subclass_of_owner(s))
+        self.in_jar(file) || self.is_body_file(file) || self.source(file).is_std || self.within_loaded_qualifier(s, scope) || (protected && self.in_subclass_of_owner(s))
+    }
+
+    /// Whether the site is inside the loaded member `s`'s qualifier (`ctx.owner.isContainedIn(privateWithin)`): the
+    /// package the pickle names, by its full name, or the class of the name around `s` (`within_scope_of`).
+    pub(super) fn within_loaded_qualifier(&self, s: SymId, scope: crate::intern::Name) -> bool {
+        let path = self.loaded.as_ref().and_then(|l| l.access_within_pkg.get(&s).copied());
+        match path {
+            Some(path) => self.package_at_path(path).is_some_and(|pk| self.site_in_package(pk)),
+            None => self.within_scope_of(self.syms.sym(s).owner, scope),
+        }
+    }
+
+    /// The package of the full name `path` (`a.b.c`), where it is entered.
+    fn package_at_path(&self, path: crate::intern::Name) -> Option<PkgId> {
+        let mut at = ROOT_PKG;
+        for seg in self.interner.get(path).split('.') {
+            let name = self.interner.lookup(seg)?;
+            at = self.syms.entry_at(at, self.syms.scope_key(self.interner, at, name))?.pkg?;
+        }
+        Some(at)
     }
 
     /// Whether the site is inside a subclass of the owner of `s`.
@@ -2636,60 +2660,58 @@ impl<'a> Worker<'a> {
         self.within_scope_of(from, scope)
     }
 
-    /// Whether the site is inside what `private[scope]` names for a definition in `from`: the
-    /// innermost class or package around it of that name, as scalac resolves the qualifier
-    /// (`q.p` is not the `p` of a definition in `p`); by the name alone where none is found.
+    /// Whether the site is inside what `private[scope]` names for a definition in `from` (dotty's `accessWithin`,
+    /// `ctx.owner.isContainedIn(privateWithin)`, and `accessWithinLinked` for a class's companion): the innermost
+    /// class or package around the definition of that name, as `Namer` resolves the qualifier (`q.p` is not the `p`
+    /// of a definition in `p`), found by walking the definition's owners, and then the site's own enclosing classes
+    /// and package by identity. A local class's owners past its block are the classes and package around the place
+    /// it was made (`anon_env`), where teq's owners stop.
     pub(super) fn within_scope_of(&self, from: Owner, scope: crate::intern::Name) -> bool {
         let mut at = from;
+        let mut last = None;
         loop {
             match at {
                 Owner::Class(c) => {
                     if self.syms.class(c).name == scope {
-                        let companion = self.syms.class(c).companion;
-                        return self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == c || Some(*k) == companion));
+                        return self.site_within_class(c);
                     }
+                    last = Some(c);
                     at = self.syms.class(c).owner;
                 }
-                Owner::Package(p) => {
-                    let mut q = Some(p);
-                    while let Some(pk) = q {
-                        if self.syms.pkg(pk).name == scope {
-                            let mut site = Some(self.file_pkgs[self.env.file.0 as usize]);
-                            while let Some(sp) = site {
-                                if sp == pk {
-                                    return true;
-                                }
-                                site = self.syms.pkg(sp).parent;
-                            }
-                            return false;
-                        }
-                        q = self.syms.pkg(pk).parent;
-                    }
-                    return self.within_scope(scope);
+                Owner::Package(p) => return self.package_named(Some(p), scope).is_some_and(|pk| self.site_in_package(pk)),
+                Owner::Local => {
+                    // No qualifier qualifies a block's own definition; a local class's goes on through its block.
+                    let Some(k) = last else { return false };
+                    let env = self.anon_env(k);
+                    let around = env.frames.iter().rev().find_map(|f| match f {
+                        super::Frame::Class(x) if self.syms.class(*x).name == scope => Some(*x),
+                        _ => None,
+                    });
+                    return match around {
+                        Some(x) => self.site_within_class(x),
+                        None => self.package_named(Some(self.file_pkgs[self.syms.class(k).file.0 as usize]), scope).is_some_and(|pk| self.site_in_package(pk)),
+                    };
                 }
-                Owner::Local => return self.within_scope(scope),
             }
         }
     }
 
-    /// Whether the site is inside a class or package of the simple name `scope`, what a
-    /// `private[scope]` definition is reachable from.
-    pub(super) fn within_scope(&self, scope: crate::intern::Name) -> bool {
-        let in_class = self.env.frames.iter().any(|f| match f {
-            super::Frame::Class(c) => self.syms.class(*c).name == scope,
-            _ => false,
-        });
-        if in_class {
-            return true;
-        }
-        let mut pkg = Some(self.file_pkgs[self.env.file.0 as usize]);
-        while let Some(p) = pkg {
-            if self.syms.pkg(p).name == scope {
-                return true;
+    /// The package `p` or the innermost package around it named `scope`.
+    fn package_named(&self, mut p: Option<PkgId>, scope: crate::intern::Name) -> Option<PkgId> {
+        while let Some(pk) = p {
+            if self.syms.pkg(pk).name == scope {
+                return Some(pk);
             }
-            pkg = self.syms.pkg(p).parent;
+            p = self.syms.pkg(pk).parent;
         }
-        false
+        None
+    }
+
+    /// Whether the site is inside the class `c` or its companion (`accessWithin`, and `accessWithinLinked` through
+    /// `linkedClass`, the companion module's class of a class and the class of a module class).
+    fn site_within_class(&self, c: ClassId) -> bool {
+        let companion = self.syms.class(c).companion;
+        self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == c || Some(*k) == companion))
     }
 
     /// A private constructor takes the `apply` and `copy` of a case class with it.
@@ -3648,6 +3670,9 @@ impl<'a> Worker<'a> {
                 };
                 let this = self.this_ref(c);
                 let callee = self.member_callee(this, self_ty, s);
+                if let Callee::Value(te, _) = callee {
+                    self.mark_if_param_ident(c, s, te);
+                }
                 self.written_member(callee)
             }
             TermRef::ModuleMember(c, s) => {
@@ -3697,6 +3722,42 @@ impl<'a> Worker<'a> {
                 return None;
             }
         })
+    }
+
+    /// Marks `te`, a read of `c`'s member `s` that is dotty's `Ident`: one an identifier makes, a reference by symbol a
+    /// pickle's `Ident` gives, or one the compiler makes (`tpd.ref`, an inferred argument's, a path's) where
+    /// `prefixIsElidable` holds: `s` one of `c`'s own immutable parameter accessors read on `c`'s `this` (the class's,
+    /// or the local standing for it in a lambda's class for a SAM type), `c` no trait, and the code's enclosing class
+    /// `c` (`ctx.owner.enclosingClass == pre.cls`: a lambda's class is none, an inline expansion's elided `this` is the
+    /// site's). `Constructors.intoConstr` reads it as the parameter where the constructor's code holds it
+    /// (`into_constr`); `this.s` is no identifier.
+    pub(super) fn mark_if_param_ident(&mut self, c: ClassId, s: SymId, te: TExprId) {
+        // A by-name parameter's read calls the thunk its field holds: the identifier is the field.
+        let te = match self.prog.expr(te) {
+            TExpr::CallClosure(f, args) if self.syms.sym(s).by_name && self.prog.expr_list(args).is_empty() => f,
+            _ => te,
+        };
+        let on_this = match self.prog.expr(te) {
+            TExpr::Field(r, f) if f == s => match self.prog.expr(r) {
+                TExpr::This => true,
+                TExpr::Local(o) => self.outer_this.get(&c) == Some(&o),
+                _ => false,
+            },
+            _ => false,
+        };
+        if !on_this || !self.is_own_param_accessor(c, s) || self.syms.class(c).kind == ClassKind::Trait {
+            return;
+        }
+        if self.this_class() == Some(c) || matches!(self.inline_this(c), Some((None, _))) {
+            self.mark_param_ident(te);
+        }
+    }
+
+    /// Whether `s` is one of `c`'s own immutable parameter accessors (`ParamAccessor`, not `Mutable`), a by-name one
+    /// included: `Constructors.intoConstr` reads its thunk parameter for it after `ElimByName`, which a read calls.
+    pub(super) fn is_own_param_accessor(&self, c: ClassId, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        info.owner == Owner::Class(c) && info.kind == SymKind::Val && self.syms.class(c).ctor_syms.iter().any(|cl| cl.contains(&s))
     }
 
     /// The value an import selects members of (`import v.*`, `import o.v.x`): a local, a
@@ -5271,12 +5332,6 @@ impl<'a> Worker<'a> {
                         let written = super::elaborate::ClauseArgs { inherit: None, getters: None, omitted: defaulted, order, ..Default::default() };
                         let p = plan.get_or_insert_with(|| self.call_plan(&ctor, call.sym, &sig));
                         self.elaborate_written(p, &mut call.recv, &mut args_out, clause_first, &written, clause, &subst, span);
-                    }
-                    // The givens the search found: a reference to the constructor's parameter in dotty's tree.
-                    if self.denotation_marks.is_some() {
-                        for k in clause_first..args_out.len() {
-                            self.mark_no_denotation(args_out[k]);
-                        }
                     }
                 }
                 continue;
@@ -7434,6 +7489,25 @@ impl<'a> Worker<'a> {
     pub(super) fn mark_no_denotation(&mut self, te: TExprId) {
         if let Some(marks) = self.denotation_marks.as_mut() {
             marks.nodes.push(te);
+        }
+    }
+
+    /// The receiver's node `te` that a member call's typing handed on as the call's (a same-rank numeric conversion,
+    /// a numeric `unary_+`, a cast that lowers to nothing): dotty's tree is the call, `Select` or `TypeApply`, whose
+    /// symbol is the member's and not the receiver's.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn mark_collapsed_call(&mut self, te: TExprId) {
+        self.mark_no_denotation(te);
+    }
+
+    /// The node `wrapper` an ascription's typing put around its expression's node `inner`, no tree of dotty's: its
+    /// symbol is `inner`'s, as `Typed.denot` is its expression's (Trees.scala 556-559).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn mark_wrapper(&mut self, wrapper: TExprId, inner: TExprId) {
+        if let Some(marks) = self.denotation_marks.as_mut() {
+            marks.wrappers.push((wrapper, inner));
         }
     }
 

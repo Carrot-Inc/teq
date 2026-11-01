@@ -1,0 +1,7 @@
+exit 1
+error 3:23
+  cannot override val parameter value s in class A
+error 6:23
+  cannot override val parameter value t in trait T
+error 10:22
+  cannot override val parameter value u in class D

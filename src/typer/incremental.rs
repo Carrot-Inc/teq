@@ -159,6 +159,7 @@ impl<'a> Worker<'a> {
         if self.serial.is_needed() {
             return Err(format!("{}{}", RETYPE_GAVE_WAY, self.serial.reason().unwrap_or_default()));
         }
+        self.into_constr_program(None);
         // The files' top-level value forwarders, forgotten with their typing: made again as the
         // full path makes them once the bodies are typed.
         self.define_top_value_forwarders();

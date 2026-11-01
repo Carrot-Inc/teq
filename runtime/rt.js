@@ -227,7 +227,20 @@ function $getChars(s, from, to, dst, at) {
 }
 function $callable(f, proto) {
   Object.setPrototypeOf(f, proto);
-  for (const k of ["length", "name"]) if (typeof proto[k] === "function") Object.defineProperty(f, k, { value: proto[k], writable: true, configurable: true });
+  // `in` runs no getter: the walk only where a class of the chain has a member of the name.
+  if ("length" in proto) $callableOwn(f, proto, "length");
+  if ("name" in proto) $callableOwn(f, proto, "name");
+}
+// The first property of the name up the chain stands for the function's own: a method copied, any other (a val's
+// getter, a given's, a constant) reached through the chain, the function's own deleted; none is run here.
+function $callableOwn(f, proto, k) {
+  for (let p = proto; p !== null; p = Object.getPrototypeOf(p)) {
+    const d = Object.getOwnPropertyDescriptor(p, k);
+    if (d === undefined) continue;
+    if (typeof d.value === "function") Object.defineProperty(f, k, { value: d.value, writable: true, configurable: true });
+    else delete f[k];
+    return;
+  }
 }
 // Every class but a primitive's is below `Object`; a trait's `Class` knows its number, which the
 // prototypes of the classes and traits that take it carry (`$cls`).

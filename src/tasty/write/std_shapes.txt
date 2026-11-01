@@ -19131,6 +19131,7 @@ scala.collection.Map	foldLeft	[1],java.lang.Object,scala.Function2:java.lang.Obj
 scala.collection.Map	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.Map	forall	scala.Function1:scala.Boolean
 scala.collection.Map	foreach	[1],scala.Function1:scala.Unit
+scala.collection.Map	foreachEntry	[1],scala.Function2:scala.Unit
 scala.collection.Map	get	java.lang.Object:scala.Option
 scala.collection.Map	getOrElse	[1],java.lang.Object,scala.Function0:java.lang.Object
 scala.collection.Map	groupBy	[1],scala.Function1:scala.collection.immutable.Map
@@ -22698,6 +22699,7 @@ scala.collection.immutable	Nil	object
 scala.collection.immutable	NumericRange	object
 scala.collection.immutable	Queue	object
 scala.collection.immutable	Range	object
+scala.collection.immutable	RedBlackTree	object
 scala.collection.immutable	Seq	object
 scala.collection.immutable	Set	object
 scala.collection.immutable	SortedMap	object
@@ -23010,6 +23012,7 @@ scala.collection.immutable.HashMap	foldLeft	[1],java.lang.Object,scala.Function2
 scala.collection.immutable.HashMap	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.immutable.HashMap	forall	scala.Function1:scala.Boolean
 scala.collection.immutable.HashMap	foreach	[1],scala.Function1:scala.Unit
+scala.collection.immutable.HashMap	foreachEntry	[1],scala.Function2:scala.Unit
 scala.collection.immutable.HashMap	get	java.lang.Object:scala.Option
 scala.collection.immutable.HashMap	getOrElse	[1],java.lang.Object,scala.Function0:java.lang.Object
 scala.collection.immutable.HashMap	groupBy	[1],scala.Function1:scala.collection.immutable.Map
@@ -23713,6 +23716,7 @@ scala.collection.immutable.ListMap	foldLeft	[1],java.lang.Object,scala.Function2
 scala.collection.immutable.ListMap	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.immutable.ListMap	forall	scala.Function1:scala.Boolean
 scala.collection.immutable.ListMap	foreach	[1],scala.Function1:scala.Unit
+scala.collection.immutable.ListMap	foreachEntry	[1],scala.Function2:scala.Unit
 scala.collection.immutable.ListMap	get	java.lang.Object:scala.Option
 scala.collection.immutable.ListMap	getOrElse	[1],java.lang.Object,scala.Function0:java.lang.Object
 scala.collection.immutable.ListMap	groupBy	[1],scala.Function1:scala.collection.immutable.Map
@@ -24032,6 +24036,7 @@ scala.collection.immutable.Map	foldLeft	[1],java.lang.Object,scala.Function2:jav
 scala.collection.immutable.Map	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.immutable.Map	forall	scala.Function1:scala.Boolean
 scala.collection.immutable.Map	foreach	[1],scala.Function1:scala.Unit
+scala.collection.immutable.Map	foreachEntry	[1],scala.Function2:scala.Unit
 scala.collection.immutable.Map	fromSpecific	scala.collection.IterableOnce:scala.collection.immutable.Map
 scala.collection.immutable.Map	get	java.lang.Object:scala.Option
 scala.collection.immutable.Map	getOrElse	[1],java.lang.Object,scala.Function0:java.lang.Object
@@ -24149,6 +24154,7 @@ scala.collection.immutable.Map$.Map1	foldLeft	[1],java.lang.Object,scala.Functio
 scala.collection.immutable.Map$.Map1	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.immutable.Map$.Map1	forall	scala.Function1:scala.Boolean
 scala.collection.immutable.Map$.Map1	foreach	[1],scala.Function1:scala.Unit
+scala.collection.immutable.Map$.Map1	foreachEntry	[1],scala.Function2:scala.Unit
 scala.collection.immutable.Map$.Map1	fromSpecific	scala.collection.IterableOnce:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map1	get	java.lang.Object:scala.Option
 scala.collection.immutable.Map$.Map1	getOrElse	[1],java.lang.Object,scala.Function0:java.lang.Object
@@ -24264,6 +24270,7 @@ scala.collection.immutable.Map$.Map2	foldLeft	[1],java.lang.Object,scala.Functio
 scala.collection.immutable.Map$.Map2	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.immutable.Map$.Map2	forall	scala.Function1:scala.Boolean
 scala.collection.immutable.Map$.Map2	foreach	[1],scala.Function1:scala.Unit
+scala.collection.immutable.Map$.Map2	foreachEntry	[1],scala.Function2:scala.Unit
 scala.collection.immutable.Map$.Map2	fromSpecific	scala.collection.IterableOnce:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map2	get	java.lang.Object:scala.Option
 scala.collection.immutable.Map$.Map2	getOrElse	[1],java.lang.Object,scala.Function0:java.lang.Object
@@ -24381,6 +24388,7 @@ scala.collection.immutable.Map$.Map3	foldLeft	[1],java.lang.Object,scala.Functio
 scala.collection.immutable.Map$.Map3	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.immutable.Map$.Map3	forall	scala.Function1:scala.Boolean
 scala.collection.immutable.Map$.Map3	foreach	[1],scala.Function1:scala.Unit
+scala.collection.immutable.Map$.Map3	foreachEntry	[1],scala.Function2:scala.Unit
 scala.collection.immutable.Map$.Map3	fromSpecific	scala.collection.IterableOnce:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map3	get	java.lang.Object:scala.Option
 scala.collection.immutable.Map$.Map3	getOrElse	[1],java.lang.Object,scala.Function0:java.lang.Object
@@ -24500,6 +24508,7 @@ scala.collection.immutable.Map$.Map4	foldLeft	[1],java.lang.Object,scala.Functio
 scala.collection.immutable.Map$.Map4	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.immutable.Map$.Map4	forall	scala.Function1:scala.Boolean
 scala.collection.immutable.Map$.Map4	foreach	[1],scala.Function1:scala.Unit
+scala.collection.immutable.Map$.Map4	foreachEntry	[1],scala.Function2:scala.Unit
 scala.collection.immutable.Map$.Map4	fromSpecific	scala.collection.IterableOnce:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map4	get	java.lang.Object:scala.Option
 scala.collection.immutable.Map$.Map4	getOrElse	[1],java.lang.Object,scala.Function0:java.lang.Object
@@ -25693,6 +25702,7 @@ scala.collection.immutable.SortedMap	foldLeft	[1],java.lang.Object,scala.Functio
 scala.collection.immutable.SortedMap	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.immutable.SortedMap	forall	scala.Function1:scala.Boolean
 scala.collection.immutable.SortedMap	foreach	[1],scala.Function1:scala.Unit
+scala.collection.immutable.SortedMap	foreachEntry	[1],scala.Function2:scala.Unit
 scala.collection.immutable.SortedMap	fromSpecific	scala.collection.IterableOnce:scala.collection.immutable.SortedMap
 scala.collection.immutable.SortedMap	get	java.lang.Object:scala.Option
 scala.collection.immutable.SortedMap	getOrElse	[1],java.lang.Object,scala.Function0:java.lang.Object
@@ -25784,6 +25794,7 @@ scala.collection.immutable.SortedSet	-	java.lang.Object:scala.collection.immutab
 scala.collection.immutable.SortedSet	--	scala.collection.IterableOnce:scala.collection.immutable.SortedSet
 scala.collection.immutable.SortedSet	apply	java.lang.Object:scala.Boolean
 scala.collection.immutable.SortedSet	className	-:java.lang.String
+scala.collection.immutable.SortedSet	collect	[1],scala.PartialFunction,scala.math.Ordering:scala.collection.immutable.SortedSet
 scala.collection.immutable.SortedSet	collect	[1],scala.PartialFunction:scala.collection.immutable.Set
 scala.collection.immutable.SortedSet	collectFirst	[1],scala.PartialFunction:scala.Option
 scala.collection.immutable.SortedSet	collectionClassName	-:java.lang.String
@@ -25889,6 +25900,7 @@ scala.collection.immutable.SortedSet	toSet	[1]:scala.collection.immutable.Set
 scala.collection.immutable.SortedSet	toStream	-:scala.collection.immutable.Stream
 scala.collection.immutable.SortedSet	toVector	-:scala.collection.immutable.Vector
 scala.collection.immutable.SortedSet	view	-:scala.collection.View
+scala.collection.immutable.SortedSet	zip	[1],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.immutable.SortedSet
 scala.collection.immutable.SortedSet	zip	[1],scala.collection.IterableOnce:scala.collection.immutable.Set
 scala.collection.immutable.SortedSet$	apply	[1],scala.collection.immutable.Seq,scala.math.Ordering:scala.collection.immutable.SortedSet
 scala.collection.immutable.SortedSet$	empty	[1],scala.math.Ordering:scala.collection.immutable.SortedSet
@@ -26081,6 +26093,7 @@ scala.collection.immutable.TreeMap	foldLeft	[1],java.lang.Object,scala.Function2
 scala.collection.immutable.TreeMap	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.immutable.TreeMap	forall	scala.Function1:scala.Boolean
 scala.collection.immutable.TreeMap	foreach	[1],scala.Function1:scala.Unit
+scala.collection.immutable.TreeMap	foreachEntry	[1],scala.Function2:scala.Unit
 scala.collection.immutable.TreeMap	get	java.lang.Object:scala.Option
 scala.collection.immutable.TreeMap	getOrElse	[1],java.lang.Object,scala.Function0:java.lang.Object
 scala.collection.immutable.TreeMap	groupBy	[1],scala.Function1:scala.collection.immutable.Map
@@ -26149,6 +26162,16 @@ scala.collection.immutable.TreeMap	valuesIterator	-:scala.collection.Iterator
 scala.collection.immutable.TreeMap$	apply	[2],scala.collection.immutable.Seq,scala.math.Ordering:scala.collection.immutable.TreeMap
 scala.collection.immutable.TreeMap$	empty	[2],scala.math.Ordering:scala.collection.immutable.TreeMap
 scala.collection.immutable.TreeMap$	from	[2],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.immutable.TreeMap
+scala.collection.immutable.TreeMap$	newBuilder	[2],scala.math.Ordering:scala.collection.mutable.ReusableBuilder
+scala.collection.immutable.TreeMap$.TreeMapBuilder	<init>	[2],scala.math.Ordering:scala.collection.immutable.TreeMap$.TreeMapBuilder
+scala.collection.immutable.TreeMap$.TreeMapBuilder	addAll	scala.collection.IterableOnce:scala.collection.immutable.TreeMap$.TreeMapBuilder
+scala.collection.immutable.TreeMap$.TreeMapBuilder	addOne	scala.Tuple2:scala.collection.immutable.TreeMap$.TreeMapBuilder
+scala.collection.immutable.TreeMap$.TreeMapBuilder	clear	:scala.Unit
+scala.collection.immutable.TreeMap$.TreeMapBuilder	knownSize	-:scala.Int
+scala.collection.immutable.TreeMap$.TreeMapBuilder	result	:scala.collection.immutable.TreeMap
+scala.collection.immutable.TreeMap$.TreeMapBuilder	sizeHint	scala.Int:scala.Unit
+scala.collection.immutable.TreeMap$.TreeMapBuilder	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.immutable.TreeMap$.TreeMapBuilder	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.immutable.TreeSet	+	java.lang.Object:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet	++	[1],scala.collection.IterableOnce:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet	++	scala.collection.IterableOnce:scala.collection.immutable.TreeSet
@@ -26156,6 +26179,7 @@ scala.collection.immutable.TreeSet	++:	[1],scala.collection.IterableOnce:scala.c
 scala.collection.immutable.TreeSet	-	java.lang.Object:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet	apply	java.lang.Object:scala.Boolean
 scala.collection.immutable.TreeSet	className	-:java.lang.String
+scala.collection.immutable.TreeSet	collect	[1],scala.PartialFunction,scala.math.Ordering:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet	collect	[1],scala.PartialFunction:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet	collectFirst	[1],scala.PartialFunction:scala.Option
 scala.collection.immutable.TreeSet	collectionClassName	-:java.lang.String
@@ -26172,6 +26196,7 @@ scala.collection.immutable.TreeSet	excl	java.lang.Object:scala.collection.immuta
 scala.collection.immutable.TreeSet	exists	scala.Function1:scala.Boolean
 scala.collection.immutable.TreeSet	find	scala.Function1:scala.Option
 scala.collection.immutable.TreeSet	firstKey	-:java.lang.Object
+scala.collection.immutable.TreeSet	flatMap	[1],scala.Function1,scala.math.Ordering:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet	flatMap	[1],scala.Function1:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet	flatten	[1],scala.Function1:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet	fold	[1],java.lang.Object,scala.Function2:java.lang.Object
@@ -26195,6 +26220,7 @@ scala.collection.immutable.TreeSet	last	-:java.lang.Object
 scala.collection.immutable.TreeSet	lastKey	-:java.lang.Object
 scala.collection.immutable.TreeSet	lastOption	-:scala.Option
 scala.collection.immutable.TreeSet	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
+scala.collection.immutable.TreeSet	map	[1],scala.Function1,scala.math.Ordering:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet	map	[1],scala.Function1:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.immutable.TreeSet	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -26243,10 +26269,21 @@ scala.collection.immutable.TreeSet	toSet	[1]:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet	toStream	-:scala.collection.immutable.Stream
 scala.collection.immutable.TreeSet	toVector	-:scala.collection.immutable.Vector
 scala.collection.immutable.TreeSet	view	-:scala.collection.View
+scala.collection.immutable.TreeSet	zip	[1],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet	zip	[1],scala.collection.IterableOnce:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet$	apply	[1],scala.collection.immutable.Seq,scala.math.Ordering:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet$	empty	[1],scala.math.Ordering:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet$	from	[1],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.immutable.TreeSet
+scala.collection.immutable.TreeSet$	newBuilder	[1],scala.math.Ordering:scala.collection.mutable.ReusableBuilder
+scala.collection.immutable.TreeSet$.TreeSetBuilder	<init>	[1],scala.math.Ordering:scala.collection.immutable.TreeSet$.TreeSetBuilder
+scala.collection.immutable.TreeSet$.TreeSetBuilder	addAll	scala.collection.IterableOnce:scala.collection.immutable.TreeSet$.TreeSetBuilder
+scala.collection.immutable.TreeSet$.TreeSetBuilder	addOne	java.lang.Object:scala.collection.immutable.TreeSet$.TreeSetBuilder
+scala.collection.immutable.TreeSet$.TreeSetBuilder	clear	:scala.Unit
+scala.collection.immutable.TreeSet$.TreeSetBuilder	knownSize	-:scala.Int
+scala.collection.immutable.TreeSet$.TreeSetBuilder	result	:scala.collection.immutable.TreeSet
+scala.collection.immutable.TreeSet$.TreeSetBuilder	sizeHint	scala.Int:scala.Unit
+scala.collection.immutable.TreeSet$.TreeSetBuilder	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.immutable.TreeSet$.TreeSetBuilder	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.immutable.Vector	++	[1],scala.collection.IterableOnce:scala.collection.immutable.Vector
 scala.collection.immutable.Vector	++:	[1],scala.collection.IterableOnce:scala.collection.immutable.Vector
 scala.collection.immutable.Vector	+:	[1],java.lang.Object:scala.collection.immutable.Vector
@@ -26399,6 +26436,7 @@ scala.collection.immutable.VectorBuilder	result	:scala.collection.immutable.Vect
 scala.collection.immutable.VectorBuilder	size	-:scala.Int
 scala.collection.immutable.VectorBuilder	sizeHint	scala.Int:scala.Unit
 scala.collection.immutable.VectorBuilder	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.immutable.VectorBuilder	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable	AnyRefMap	object
 scala.collection.mutable	ArrayBuffer	object
 scala.collection.mutable	ArrayBuilder	object
@@ -26591,6 +26629,7 @@ scala.collection.mutable.ArrayBuilder	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder	result	:java.lang.Object
 scala.collection.mutable.ArrayBuilder	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArrayBuilder$	make	[1],scala.reflect.ClassTag:scala.collection.mutable.ArrayBuilder
 scala.collection.mutable.ArrayBuilder$.ofBoolean	<init>	:scala.collection.mutable.ArrayBuilder$.ofBoolean
 scala.collection.mutable.ArrayBuilder$.ofBoolean	clear	:scala.Unit
@@ -26599,6 +26638,7 @@ scala.collection.mutable.ArrayBuilder$.ofBoolean	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder$.ofBoolean	result	:scala.Boolean[]
 scala.collection.mutable.ArrayBuilder$.ofBoolean	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofBoolean	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder$.ofBoolean	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofByte	<init>	:scala.collection.mutable.ArrayBuilder$.ofByte
 scala.collection.mutable.ArrayBuilder$.ofByte	clear	:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofByte	knownSize	-:scala.Int
@@ -26606,6 +26646,7 @@ scala.collection.mutable.ArrayBuilder$.ofByte	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder$.ofByte	result	:scala.Byte[]
 scala.collection.mutable.ArrayBuilder$.ofByte	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofByte	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder$.ofByte	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofChar	<init>	:scala.collection.mutable.ArrayBuilder$.ofChar
 scala.collection.mutable.ArrayBuilder$.ofChar	clear	:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofChar	knownSize	-:scala.Int
@@ -26613,6 +26654,7 @@ scala.collection.mutable.ArrayBuilder$.ofChar	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder$.ofChar	result	:scala.Char[]
 scala.collection.mutable.ArrayBuilder$.ofChar	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofChar	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder$.ofChar	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofDouble	<init>	:scala.collection.mutable.ArrayBuilder$.ofDouble
 scala.collection.mutable.ArrayBuilder$.ofDouble	clear	:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofDouble	knownSize	-:scala.Int
@@ -26620,6 +26662,7 @@ scala.collection.mutable.ArrayBuilder$.ofDouble	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder$.ofDouble	result	:scala.Double[]
 scala.collection.mutable.ArrayBuilder$.ofDouble	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofDouble	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder$.ofDouble	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofFloat	<init>	:scala.collection.mutable.ArrayBuilder$.ofFloat
 scala.collection.mutable.ArrayBuilder$.ofFloat	clear	:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofFloat	knownSize	-:scala.Int
@@ -26627,6 +26670,7 @@ scala.collection.mutable.ArrayBuilder$.ofFloat	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder$.ofFloat	result	:scala.Float[]
 scala.collection.mutable.ArrayBuilder$.ofFloat	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofFloat	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder$.ofFloat	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofInt	<init>	:scala.collection.mutable.ArrayBuilder$.ofInt
 scala.collection.mutable.ArrayBuilder$.ofInt	clear	:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofInt	knownSize	-:scala.Int
@@ -26634,6 +26678,7 @@ scala.collection.mutable.ArrayBuilder$.ofInt	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder$.ofInt	result	:scala.Int[]
 scala.collection.mutable.ArrayBuilder$.ofInt	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofInt	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder$.ofInt	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofLong	<init>	:scala.collection.mutable.ArrayBuilder$.ofLong
 scala.collection.mutable.ArrayBuilder$.ofLong	clear	:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofLong	knownSize	-:scala.Int
@@ -26641,6 +26686,7 @@ scala.collection.mutable.ArrayBuilder$.ofLong	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder$.ofLong	result	:scala.Long[]
 scala.collection.mutable.ArrayBuilder$.ofLong	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofLong	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder$.ofLong	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofRef	<init>	[1],scala.reflect.ClassTag:scala.collection.mutable.ArrayBuilder$.ofRef
 scala.collection.mutable.ArrayBuilder$.ofRef	clear	:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofRef	ct	-:scala.reflect.ClassTag
@@ -26649,6 +26695,7 @@ scala.collection.mutable.ArrayBuilder$.ofRef	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder$.ofRef	result	:java.lang.Object[]
 scala.collection.mutable.ArrayBuilder$.ofRef	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofRef	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder$.ofRef	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofShort	<init>	:scala.collection.mutable.ArrayBuilder$.ofShort
 scala.collection.mutable.ArrayBuilder$.ofShort	clear	:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofShort	knownSize	-:scala.Int
@@ -26656,6 +26703,7 @@ scala.collection.mutable.ArrayBuilder$.ofShort	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder$.ofShort	result	:scala.Short[]
 scala.collection.mutable.ArrayBuilder$.ofShort	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofShort	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder$.ofShort	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofUnit	<init>	:scala.collection.mutable.ArrayBuilder$.ofUnit
 scala.collection.mutable.ArrayBuilder$.ofUnit	clear	:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofUnit	knownSize	-:scala.Int
@@ -26663,6 +26711,7 @@ scala.collection.mutable.ArrayBuilder$.ofUnit	length	-:scala.Int
 scala.collection.mutable.ArrayBuilder$.ofUnit	result	:scala.runtime.BoxedUnit[]
 scala.collection.mutable.ArrayBuilder$.ofUnit	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ArrayBuilder$.ofUnit	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ArrayBuilder$.ofUnit	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ArraySeq	apply	scala.Int:java.lang.Object
 scala.collection.mutable.ArraySeq	collectFirst	[1],scala.PartialFunction:scala.Option
 scala.collection.mutable.ArraySeq	count	scala.Function1:scala.Int
@@ -27152,6 +27201,7 @@ scala.collection.mutable.Builder	result	:java.lang.Object
 scala.collection.mutable.Builder	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.Builder	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
 scala.collection.mutable.Builder	sizeHint$default$2	-:scala.Int
+scala.collection.mutable.Builder	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.HashMap	++	[1],scala.collection.IterableOnce:scala.collection.mutable.HashMap
 scala.collection.mutable.HashMap	++=	scala.collection.IterableOnce:scala.collection.mutable.HashMap
 scala.collection.mutable.HashMap	+=	scala.Tuple2:scala.collection.mutable.HashMap
@@ -27518,6 +27568,7 @@ scala.collection.mutable.ListBuffer	sizeCompare	scala.Int:scala.Int
 scala.collection.mutable.ListBuffer	sizeCompare	scala.collection.Iterable:scala.Int
 scala.collection.mutable.ListBuffer	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ListBuffer	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ListBuffer	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.ListBuffer	slice	scala.Int,scala.Int:scala.collection.mutable.ListBuffer
 scala.collection.mutable.ListBuffer	sliding	scala.Int,scala.Int:scala.collection.Iterator
 scala.collection.mutable.ListBuffer	sortBy	[1],scala.Function1,scala.math.Ordering:scala.collection.mutable.ListBuffer
@@ -27895,6 +27946,7 @@ scala.collection.mutable.ReusableBuilder	knownSize	-:scala.Int
 scala.collection.mutable.ReusableBuilder	result	:java.lang.Object
 scala.collection.mutable.ReusableBuilder	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.ReusableBuilder	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
+scala.collection.mutable.ReusableBuilder	sizeHintBounded	scala.Int,scala.collection.Iterable:scala.Unit
 scala.collection.mutable.SortedSet	++=	scala.collection.IterableOnce:scala.collection.mutable.SortedSet
 scala.collection.mutable.SortedSet	+=	java.lang.Object:scala.collection.mutable.SortedSet
 scala.collection.mutable.SortedSet	--=	scala.collection.IterableOnce:scala.collection.mutable.SortedSet
@@ -27906,6 +27958,7 @@ scala.collection.mutable.SortedSet	apply	java.lang.Object:scala.Boolean
 scala.collection.mutable.SortedSet	className	-:java.lang.String
 scala.collection.mutable.SortedSet	clear	:scala.Unit
 scala.collection.mutable.SortedSet	clone	:scala.collection.mutable.SortedSet
+scala.collection.mutable.SortedSet	collect	[1],scala.PartialFunction,scala.math.Ordering:scala.collection.mutable.SortedSet
 scala.collection.mutable.SortedSet	collectFirst	[1],scala.PartialFunction:scala.Option
 scala.collection.mutable.SortedSet	collectionClassName	-:java.lang.String
 scala.collection.mutable.SortedSet	contains	java.lang.Object:scala.Boolean
@@ -28001,6 +28054,7 @@ scala.collection.mutable.SortedSet	toSet	[1]:scala.collection.immutable.Set
 scala.collection.mutable.SortedSet	toStream	-:scala.collection.immutable.Stream
 scala.collection.mutable.SortedSet	toVector	-:scala.collection.immutable.Vector
 scala.collection.mutable.SortedSet	view	-:scala.collection.View
+scala.collection.mutable.SortedSet	zip	[1],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.mutable.SortedSet
 scala.collection.mutable.SortedSet$	apply	[1],scala.collection.immutable.Seq,scala.math.Ordering:scala.collection.mutable.SortedSet
 scala.collection.mutable.SortedSet$	empty	[1],scala.math.Ordering:scala.collection.mutable.SortedSet
 scala.collection.mutable.SortedSet$	from	[1],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.mutable.SortedSet
@@ -28187,6 +28241,7 @@ scala.collection.mutable.TreeSet	add	java.lang.Object:scala.Boolean
 scala.collection.mutable.TreeSet	apply	java.lang.Object:scala.Boolean
 scala.collection.mutable.TreeSet	className	-:java.lang.String
 scala.collection.mutable.TreeSet	clear	:scala.Unit
+scala.collection.mutable.TreeSet	collect	[1],scala.PartialFunction,scala.math.Ordering:scala.collection.mutable.TreeSet
 scala.collection.mutable.TreeSet	collectFirst	[1],scala.PartialFunction:scala.Option
 scala.collection.mutable.TreeSet	collectionClassName	-:java.lang.String
 scala.collection.mutable.TreeSet	contains	java.lang.Object:scala.Boolean
@@ -28199,6 +28254,7 @@ scala.collection.mutable.TreeSet	equals	java.lang.Object:scala.Boolean
 scala.collection.mutable.TreeSet	exists	scala.Function1:scala.Boolean
 scala.collection.mutable.TreeSet	find	scala.Function1:scala.Option
 scala.collection.mutable.TreeSet	firstKey	-:java.lang.Object
+scala.collection.mutable.TreeSet	flatMap	[1],scala.Function1,scala.math.Ordering:scala.collection.mutable.TreeSet
 scala.collection.mutable.TreeSet	fold	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.mutable.TreeSet	foldLeft	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.mutable.TreeSet	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
@@ -28219,6 +28275,7 @@ scala.collection.mutable.TreeSet	last	-:java.lang.Object
 scala.collection.mutable.TreeSet	lastKey	-:java.lang.Object
 scala.collection.mutable.TreeSet	lastOption	-:scala.Option
 scala.collection.mutable.TreeSet	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
+scala.collection.mutable.TreeSet	map	[1],scala.Function1,scala.math.Ordering:scala.collection.mutable.TreeSet
 scala.collection.mutable.TreeSet	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.mutable.TreeSet	maxBefore	java.lang.Object:scala.Option
 scala.collection.mutable.TreeSet	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -28264,6 +28321,7 @@ scala.collection.mutable.TreeSet	toSet	[1]:scala.collection.immutable.Set
 scala.collection.mutable.TreeSet	toStream	-:scala.collection.immutable.Stream
 scala.collection.mutable.TreeSet	toVector	-:scala.collection.immutable.Vector
 scala.collection.mutable.TreeSet	view	-:scala.collection.View
+scala.collection.mutable.TreeSet	zip	[1],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.mutable.TreeSet
 scala.collection.mutable.TreeSet$	apply	[1],scala.collection.immutable.Seq,scala.math.Ordering:scala.collection.mutable.TreeSet
 scala.collection.mutable.TreeSet$	empty	[1],scala.math.Ordering:scala.collection.mutable.TreeSet
 scala.collection.mutable.TreeSet$	from	[1],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.mutable.TreeSet

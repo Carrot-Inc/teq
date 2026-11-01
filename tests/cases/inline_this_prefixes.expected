@@ -1,0 +1,4 @@
+self 3 3 3 3 2 sub 2
+generic self 3
+self.type 3 3 3 2
+typed self.type 3 3

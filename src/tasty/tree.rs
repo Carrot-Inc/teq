@@ -41,8 +41,8 @@ pub struct Entry {
     pub has_body: bool,
     /// `private[p]`, which the index reads as public within `p` and hides from outside it.
     pub qualified_private: bool,
-    /// The name of the class or package `p` of `private[p]` or `protected[p]`.
-    pub access_within: Option<NameRef>,
+    /// The class or package `p` of `private[p]` or `protected[p]`.
+    pub access_within: Option<Qualifier>,
     /// An annotation of the definition has the simple name of a Scala.js interop annotation.
     pub js_annotated: bool,
     /// The definition is annotated `@deprecated` (`typer::deprecation`).
@@ -199,6 +199,17 @@ pub struct Param {
     pub flags: Flags,
     /// The text of the parameter's `@implicitNotFound`.
     pub implicit_not_found: Option<NameRef>,
+    /// A qualified parameter's qualifier (`private[p]`, `protected[p]`): the name of the class or package it names,
+    /// and whether it is private.
+    pub within: Option<(Qualifier, bool)>,
+}
+
+/// The class or package a qualifier (`private[p]`, `protected[p]`) refers to: the name of its reference, a package's
+/// its full name (`TYPEREFpkg`, `TERMREFpkg`), and whether it is a package.
+#[derive(Clone, Copy, Debug)]
+pub struct Qualifier {
+    pub name: NameRef,
+    pub pkg: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -213,6 +224,8 @@ pub struct Mods {
     /// The classes of the annotations.
     pub annots: Vec<TType>,
     pub within: Option<TType>,
+    /// The class or package `within` refers to.
+    pub within_name: Option<Qualifier>,
     /// The name `@targetName("name")` gives the definition in the class file.
     pub target_name: Option<NameRef>,
     /// The text of an `@implicitNotFound` annotation, which a missing given of the class reports.
@@ -409,8 +422,8 @@ impl<'a> Decoder<'a> {
         Entry { addr, tag, name, flags, is_class, has_body, qualified_private, access_within, js_annotated, deprecated }
     }
 
-    /// The name of the class or package a qualifier type at the cursor refers to.
-    fn qualifier_name(&self) -> Option<NameRef> {
+    /// The class or package a qualifier type at the cursor refers to.
+    fn qualifier_name(&self) -> Option<Qualifier> {
         let mut r = self.r.at(self.r.pos);
         loop {
             match r.byte() {
@@ -418,13 +431,13 @@ impl<'a> Decoder<'a> {
                     let to = r.nat() as usize;
                     r = r.at(to);
                 }
-                TYPEREFPKG | TERMREFPKG | TYPEREF => return Some(r.nat()),
+                tag @ (TYPEREFPKG | TERMREFPKG | TYPEREF) => return Some(Qualifier { name: r.nat(), pkg: tag != TYPEREF }),
                 TYPEREFDIRECT | TYPEREFSYMBOL => {
                     let to = r.nat() as usize;
                     let mut def = r.at(to);
                     def.byte();
                     def.end();
-                    return Some(def.nat());
+                    return Some(Qualifier { name: def.nat(), pkg: false });
                 }
                 _ => return None,
             }
@@ -870,6 +883,7 @@ impl<'a> Decoder<'a> {
                 }
                 PRIVATEQUALIFIED | PROTECTEDQUALIFIED => {
                     mods.flags.set(if m == PRIVATEQUALIFIED { PRIVATE } else { PROTECTED });
+                    mods.within_name = self.qualifier_name();
                     mods.within = Some(self.read_type());
                 }
                 m if m < 64 => mods.flags.set(m),
@@ -899,12 +913,14 @@ impl<'a> Decoder<'a> {
         let ty = self.read_tpt();
         let mods = self.modifiers(end);
         let mut flags = mods.flags;
-        // A `private[p]` parameter is a member outside its class, as the index reads one.
+        // A `private[p]` parameter is a member outside its class, as the index reads one, its qualifier kept as the
+        // index keeps an entry's (`Entry::access_within`).
+        let within = mods.within_name.filter(|_| mods.within.is_some()).map(|n| (n, flags.has(PRIVATE)));
         if mods.within.is_some() {
             flags.clear(PRIVATE);
             flags.clear(PROTECTED);
         }
-        Param { addr, name, ty, inferred, flags, implicit_not_found: mods.implicit_not_found }
+        Param { addr, name, ty, inferred, flags, implicit_not_found: mods.implicit_not_found, within }
     }
 
     pub(super) fn clauses(&mut self, end: usize) -> Vec<Clause> {

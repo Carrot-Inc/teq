@@ -779,10 +779,13 @@ impl<'a> Emitter<'a> {
             TExpr::Field(r, s) => {
                 self.emit_receiver(r);
                 self.out.push('.');
-                let n = self.sym_name(s);
-                self.out.push_str(&n);
                 if self.syms.sym(s).needs_accessor {
+                    let n = self.sym_name(s);
+                    self.out.push_str(&n);
                     self.out.push_str("()");
+                } else {
+                    let n = self.field_name(s);
+                    self.out.push_str(&n);
                 }
             }
             TExpr::CallStatic(s, args) => {

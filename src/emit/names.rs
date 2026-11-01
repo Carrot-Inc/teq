@@ -323,6 +323,18 @@ const RUNTIME_CALLED: &[&str] = &[
 /// name must not meet through the `$` of an accessor-backed field.
 const RUNTIME_PROPERTIES: &[&str] = &["name", "ordinal", "className", "fields", "eqFields", "values", "own", "body", "traitInit", "init"];
 
+/// Properties beside `RUNTIME_PROPERTIES` that the runtime and the emitter put on an instance, its prototype or a
+/// thrown value.
+const RUNTIME_INSTANCE_PROPERTIES: &[&str] = &["eqOuter", "fn", "names", "qname", "nlr", "causeGiven", "suppressed"];
+
+/// Whether `$n` is the runtime's or the emitter's on an instance or its prototype: an enum value's `$name` (which
+/// `$productPrefix` and `$canEqual` read on any product), a class's `$className`, its type tests' `$i<n>`, a parent
+/// call's `$via<n>`, ….
+pub(super) fn runtime_property(n: &str) -> bool {
+    let numbered = |prefix: &str| n.strip_prefix(prefix).is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()));
+    RUNTIME_PROPERTIES.contains(&n) || RUNTIME_INSTANCE_PROPERTIES.contains(&n) || numbered("i") || numbered("via")
+}
+
 impl Renames {
     pub fn compute(
         syms: &Symbols,

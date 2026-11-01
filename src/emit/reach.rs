@@ -1390,6 +1390,11 @@ struct Walker {
     /// Whether the walk is inside the body of a class, where a local is read from a field
     /// when the body runs apart from the constructor.
     in_init: bool,
+    /// The local functions of a class body's code, whose reads of the class's constructor parameters are the body's
+    /// (`Constructors.intoConstr` reads a parameter in a local function of the constructor too), and whether the walk
+    /// is inside one.
+    init_funs: FxMap<FunId, ()>,
+    in_init_fun: bool,
     /// The `@js` templates of the standard library, when JS-visible names are asked for, and
     /// how many symbols they cover.
     std_templates: Option<FxMap<String, ()>>,
@@ -1469,6 +1474,8 @@ impl Walker {
             library_classes: Vec::new(),
             bases_registered: Vec::new(),
             in_init: false,
+            init_funs: FxMap::default(),
+            in_init_fun: false,
             std_templates: None,
             std_templates_upto: 0,
             n_classes: 0,
@@ -1769,7 +1776,9 @@ impl Walker {
                         _ => self.local_regions.get(&f).copied(),
                     };
                     if let Some(body) = fun.body {
+                        self.in_init_fun = self.init_funs.contains_key(&f);
                         self.walk(cx, body);
+                        self.in_init_fun = false;
                     }
                 }
             }
@@ -2080,7 +2089,12 @@ impl Walker {
             Owner::Class(c) => self.library_classes.get(c.idx()).copied().unwrap_or(false),
             _ => false,
         };
-        if in_library && !std::mem::replace(&mut self.asked[s.idx()], true) {
+        // A jar class's non-lazy val is its constructor's code (`check_member`), walked with the class where its
+        // instance is made; a lazy one, and an object's or a trait's (marked lazy when its class is checked), is typed
+        // and walked when first read.
+        let info = cx.syms.sym(s);
+        let constructed = info.mods & mods::LAZY == 0 && matches!(info.owner, Owner::Class(c) if !matches!(cx.syms.class(c).kind, ClassKind::Object | ClassKind::Trait));
+        if in_library && !constructed && !std::mem::replace(&mut self.asked[s.idx()], true) {
             self.pending.push(s);
         }
     }
@@ -3245,7 +3259,7 @@ impl Meet for Walker {
     }
 
     fn local(&mut self, s: SymId) {
-        if self.in_init {
+        if self.in_init || self.in_init_fun {
             self.reach.init_read[s.idx()] = true;
         }
     }
@@ -3336,6 +3350,9 @@ impl Meet for Walker {
     }
 
     fn local_fun(&mut self, _cx: Cx, f: FunId) {
+        if self.in_init || self.in_init_fun {
+            self.init_funs.insert(f, ());
+        }
         if let Some(p) = self.place {
             self.local_places.entry(f).or_insert(p);
         }

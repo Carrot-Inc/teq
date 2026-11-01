@@ -23,6 +23,12 @@ trait Map[K, +V] extends Iterable[(K, V)], PartialFunction[K, V]:
   def getOrElse[V1 >: V](key: K, default: => V1): V1 = get(key) match
     case Some(v) => v
     case None => default
+  // `MapOps.foreachEntry`: each entry's key and value in the iterator's order, a map's own walk where it has one.
+  def foreachEntry[U](f: (K, V) => U): Unit =
+    val it = iterator
+    while it.hasNext do
+      val next = it.next()
+      f(next._1, next._2)
   // scala-library's: a map equals a map of the same entries, of whatever kind (immutable or mutable,
   // sorted or not), and hashes by its entries alone.
   override def equals(that: Any): Boolean = Map.sameEntries(this, that)

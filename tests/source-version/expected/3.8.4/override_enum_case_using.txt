@@ -1,0 +1,5 @@
+exit 1
+error 2:8
+  A case class must have at least one leading non-implicit parameter list
+error 2:47
+  Not found: s

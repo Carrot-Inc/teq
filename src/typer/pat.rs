@@ -2478,7 +2478,12 @@ impl<'a> Worker<'a> {
             Type::Term(s) => self.stable_path_expr(s),
             Type::Select(p, s) => {
                 let prefix = self.path_expr(p)?;
-                Some(self.prog.add(TExpr::Field(prefix, s)))
+                let field = self.prog.add(TExpr::Field(prefix, s));
+                // The path's `ref`: the class's own parameter accessor on its `this` is an `Ident` (`prefixIsElidable`).
+                if let Type::This(c) = self.types.get(p) {
+                    self.mark_if_param_ident(c, s, field);
+                }
+                Some(field)
             }
             Type::This(c) => Some(self.this_ref(c)),
             _ => None,

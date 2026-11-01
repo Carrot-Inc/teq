@@ -8,6 +8,7 @@ pub mod capture;
 mod capture_census;
 pub mod check;
 mod complete;
+mod constructors;
 mod conversions;
 pub mod deps;
 mod depfun;
@@ -345,6 +346,14 @@ pub const MARK_ASCRIBED_CLOSURE: u8 = 32;
 /// solved to its own primitive type (`Worker::apply_pending_widenings`). A plain parameter of a
 /// type parameter's type erases to `Object` and keeps the box (`Option(m.get(k))` is `None`).
 pub const MARK_ERASED_SOLVED: u8 = 64;
+/// An identifier naming its class's own immutable parameter accessor, typed as the accessor (`Field(This, s)`) outside
+/// the class's constructor code (an inline method's body): dotty's `Ident`, which `Constructors.intoConstr` reads as
+/// the constructor's parameter wherever an expansion places it in that code, where `this.s` stays the accessor's.
+pub const MARK_PARAM_IDENT: u8 = 128;
+/// On a `New`, or the block around one, rather than a `Field`: the creation of an anonymous class with an empty body,
+/// which teq makes no class for, its arguments the class's parent call (`Constructors.intoConstr` stops at them,
+/// `noDirectRefsFrom`). The bit `MARK_PARAM_IDENT`'s, which the copies keep alike.
+pub const MARK_ANON_PARENT: u8 = MARK_PARAM_IDENT;
 
 #[derive(Clone, PartialEq)]
 pub enum Frame {
@@ -2752,6 +2761,8 @@ impl<'a> Typer<'a> {
                 prep::capture(false);
                 return;
             }
+            // dotty's `Constructors.intoConstr` over the constructors' code, whose expansions are done.
+            w.into_constr_program(None);
             w.define_top_value_forwarders();
             w.register_late_methods();
             w.settle_js_imports();
@@ -4535,7 +4546,12 @@ impl<'a> Worker<'a> {
             let imp = self.import_at(i);
             matches!(imp.target, ImportTarget::Unresolved) && imp.name.map_or_else(|| !self.import_hides(imp, name), |n| n == name)
         });
-        if unknown {
+        // An enum case's reference to the enum's type parameter, which `typeParamIsReferenced` reported at this place
+        // (`check_enum_tparam_reference`): scalac's reporter hides the second error there (`UniqueMessagePositions`).
+        let file = self.env.file;
+        let illegal = format!("illegal reference to type parameter {} from enum case", self.name_str(name));
+        let hidden = self.diags.items.iter().any(|d| !d.is_warning && d.file == file && d.span == span && d.msg == illegal);
+        if unknown || hidden {
             self.dependent_error(span, msg);
         } else {
             self.error(span, msg);
