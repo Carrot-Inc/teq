@@ -1,0 +1,17 @@
+TreeMap(1 -> A, 2 -> b, 3 -> c, 4 -> d, 5 -> e) 1?5 4?5 4?1 2?4 2?1 3?4 3?1 3?2 1?4 1?2
+List((1,a), (2,b), (3,c))
+TreeMap(0 -> z, 1 -> a, 2 -> b, 3 -> c) TreeMap(1 -> a, 2 -> b, 3 -> c)
+TreeMap(1 -> a, 2 -> B, 3 -> c) TreeMap(1 -> a, 2 -> b, 3 -> c)
+TreeMap(1 -> a, 2 -> b, 3 -> c, 9 -> i)
+twenty
+TreeMap(1 -> a, 2 -> b, 3 -> c)
+own foreachEntry
+TreeMap(7 -> g)
+TreeMap(1 -> a, 2 -> b, 3 -> c)
+TreeMap(5 -> e) TreeMap(4 -> d, 5 -> e)
+TreeMap(7 -> g)
+TreeMap(A -> 3, b -> 2)
+ordering
+ordering
+ordering
+TreeMap(10 -> a, 20 -> b, 30 -> c)

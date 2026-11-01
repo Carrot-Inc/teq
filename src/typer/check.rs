@@ -5583,7 +5583,19 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        let records = self.prog.classes.len();
         self.push_class_body(tclass);
+        // A class whose calls expand as it is typed (a library's, the std's) has its constructor's code done here
+        // (`into_constr`), on the record just pushed (a library class's earlier record is the empty one its conversion
+        // started from; a stored body's class is pushed with its body, not here); the program's after the inlining
+        // phase. The record is the one this check pushed, none where it pushed none: the one below the length before
+        // the push is another's (in a forked worker another worker's, below its base).
+        if !self.program_file(file) && self.prog.classes.len() > records {
+            let ti = self.prog.classes.len() - 1;
+            if self.prog.classes[ti].id == c {
+                self.into_constr(ti);
+            }
+        }
         // A local trait's members take the values of the block they read, which the classes
         // mixing it in pass (`proxies.rs`): after the inlining phase where its trees hold calls
         // kept for it (`defer_trait_lifting`), as dotty's `LambdaLift` runs after `Inlining`.
@@ -6638,15 +6650,18 @@ impl<'a> Worker<'a> {
                 if rhs.is_none() && self.no_deferred_members(tclass.id) {
                     self.misplaced_abstract_member(def, false);
                 }
-                // A val of a jar's class is typed when the program reaches it and read
-                // through a getter, so that only what the program uses is compiled; one that
-                // implements a def of an ancestor is an accessor instead and stays eager. A
-                // product's class is another module's program and initialises as the whole
-                // program does.
+                // A val of a jar's object or trait, and a jar's lazy val, is typed when the program
+                // reaches it and read through a getter, so that only what the program uses is
+                // compiled; one that implements a def of an ancestor is an accessor instead and
+                // stays eager. A product's class is another module's program and initialises as the
+                // whole program does. A jar class's other vals initialise in its constructor, as the
+                // program's do (`Constructors.splitStats`), where they read its parameters
+                // (`intoConstr`) that a subclass's override leaves its own.
                 // A subclass's val that overrides it assigns the field its getter stands for, which a
                 // setter beside the getter takes (scalacheck's `Test.Parameters.useLegacyShrinking`
                 // overridden in `cpy`'s anonymous class).
-                if rhs.is_some() && self.is_library_class(tclass.id) && !self.is_product_class(tclass.id) && self.syms.sym(sym).kind == SymKind::Val && !self.jvm && !self.implements_def(tclass.id, sym) {
+                let constructs = (def.mods | self.syms.sym(sym).mods) & mods::LAZY == 0 && !matches!(self.syms.class(tclass.id).kind, ClassKind::Object | ClassKind::Trait);
+                if rhs.is_some() && !constructs && self.is_library_class(tclass.id) && !self.is_product_class(tclass.id) && self.syms.sym(sym).kind == SymKind::Val && !self.jvm && !self.implements_def(tclass.id, sym) {
                     self.with_loader(|w| {
                         let mut info = w.syms.sym_mut(sym);
                         info.mods |= mods::LAZY;
@@ -7509,32 +7524,70 @@ impl<'a> Worker<'a> {
         self.syms.class(c).ctor_syms.iter().any(|clause| clause.contains(&m))
     }
 
-    /// Whether `m`, a member of `c`, is a parameter accessor whose chain of like-named parameter
-    /// accessors in the superclasses reaches `p` (`RefChecks.isInheritedAccessor`, which follows
-    /// `ParamForwarding.inheritedAccessor` until it meets `p`): the superclass's own immutable parameter
-    /// accessor of the name, unless private, in which case one it passes to its superclass's like-named
-    /// parameter (`PostTyper.forwardParamAccessors`' `SuperParamAlias`) stands for the next.
+    /// `RefChecks.isInheritedAccessor` (RefChecks.scala 363-368): `m` is a parameter accessor and the chain of
+    /// `ParamForwarding.inheritedAccessor` from it meets `p`, every step seen from `c`, the class whose overrides are
+    /// checked (`currentClass`). Each step goes one superclass up, so the chain ends.
     fn is_inherited_accessor(&mut self, c: ClassId, m: SymId, p: SymId) -> bool {
-        if !self.is_ctor_param(c, m) {
-            return false;
-        }
-        let name = self.syms.sym(m).name;
-        let mut sup = self.syms.class(c).superclass;
-        while let Some(s) = sup {
-            let Some(candidate) = self.syms.class(s).ctor_syms.iter().flatten().copied().find(|&q| self.syms.sym(q).name == name) else { return false };
-            if self.syms.sym(candidate).kind != SymKind::Val {
+        let mut mbr = m;
+        loop {
+            // `mbr.is(ParamAccessor)`: a parameter of its class's primary constructor.
+            let Owner::Class(k) = self.syms.sym(mbr).owner else { return false };
+            if !self.is_ctor_param(k, mbr) {
                 return false;
             }
-            if self.syms.sym(candidate).mods & mods::FIELD != 0 && !self.is_private(candidate) {
-                if candidate == p {
-                    return true;
-                }
-            } else if !self.forwards_to_super_param(s, candidate) {
-                return false;
+            match self.inherited_accessor(c, k, self.syms.sym(mbr).name) {
+                Some(next) if next == p => return true,
+                Some(next) => mbr = next,
+                None => return false,
             }
-            sup = self.syms.class(s).superclass;
         }
-        false
+    }
+
+    /// `ParamForwarding.inheritedAccessor` (ParamForwarding.scala 75-86) of `k`'s parameter accessor `name`, seen
+    /// from `c`: the superclass's immutable parameter accessor of the name (`decl(name).suchThat(_.is(ParamAccessor,
+    /// butNot = Mutable))`) where it is not private and `c` may reach it through `super`; else, where it is a private
+    /// alias of its own superclass's like-named parameter (`SuperParamAlias`), that one's in turn; none otherwise.
+    fn inherited_accessor(&mut self, c: ClassId, k: ClassId, name: Name) -> Option<SymId> {
+        let mut owner = k;
+        loop {
+            let s = self.super_class(owner)?;
+            let candidate = self.syms.class(s).ctor_syms.iter().flatten().copied().find(|&q| self.syms.sym(q).name == name)?;
+            if self.syms.sym(candidate).kind == SymKind::Var {
+                return None;
+            }
+            let private = self.is_private(candidate);
+            if !private && self.accessible_from_class(c, candidate) {
+                return Some(candidate);
+            }
+            // `candidate.is(SuperParamAlias)`, which `PostTyper.forwardParamAccessors` sets on a private accessor alone.
+            if !private || !self.forwards_to_super_param(s, candidate) {
+                return None;
+            }
+            owner = s;
+        }
+    }
+
+    /// The superclass of `c` as `ParamForwarding` reads it (`ClassDenotation.superClass`, SymDenotations 1987-1991):
+    /// the class `superclass` holds, and for an enum case its enum (`DesugarEnums.enumClass`), the class of its first
+    /// parent, which `superclass` leaves out while the enum extends no class (the emitter's `$init`).
+    fn super_class(&self, c: ClassId) -> Option<ClassId> {
+        let info = self.syms.class(c);
+        match (info.kind, info.owner) {
+            (ClassKind::EnumCase, Owner::Class(companion)) => self.syms.class(companion).companion,
+            _ => info.superclass,
+        }
+    }
+
+    /// `s.isAccessibleFrom(c.thisType, superAccess = true)` (SymDenotations 929-980) for a member `s` that is not
+    /// private: `is_accessible` where `c` stands, its environment the owners `ctx.owner` has in `RefChecks`, which
+    /// `check_overrides` runs outside of.
+    fn accessible_from_class(&mut self, c: ClassId, s: SymId) -> bool {
+        let (file, at) = {
+            let i = self.syms.class(c);
+            (i.file, i.span.start)
+        };
+        let env = self.env_at(file, Owner::Class(c), at);
+        self.with_env(env, |t| t.is_accessible(s))
     }
 
     /// Whether the private parameter accessor `q` of the program's class `s` is an alias of its superclass's
@@ -7544,8 +7597,9 @@ impl<'a> Worker<'a> {
     /// application is the constructor's last clause (but the `()` `normalizeIfConstructor` appends to one of `using`
     /// clauses alone), the method type whose names `superParamNames` holds, and the
     /// argument whose symbol (`Tree.symbol`) is `q` stands at a parameter of `q`'s name. A typed argument's symbol is
-    /// its reference's, none for any other node (a conversion's call, `int2long(x)`) and none for a node the typing
-    /// marked as dotty's `Block`, `NamedArg` or `Inlined` (`Worker::denotation_marks`). A by-name parameter is none
+    /// its reference's (an inferred given's included), none for any other node (a conversion's call, `int2long(x)`)
+    /// and none for a node the typing marked as dotty's `Block`, `NamedArg` or `Inlined`; a wrapper the ascription's
+    /// typing made is its expression's (`Worker::denotation_marks`). A by-name parameter is none
     /// (`!sym.info.isInstanceOf[ExprType]`). A library class's alias (TASTy's `PARAMalias`) is not read.
     fn forwards_to_super_param(&mut self, s: ClassId, q: SymId) -> bool {
         let (file, def_id, sup) = {
@@ -7572,15 +7626,20 @@ impl<'a> Worker<'a> {
         let outer = self.denotation_marks.replace(Default::default());
         let mark = self.attempt();
         let call = self.type_parent_ctor(s, clause, sup, Some(parent_ty), false).map(|(call, _)| call);
-        let marks = std::mem::replace(&mut self.denotation_marks, outer).map(|m| m.nodes).unwrap_or_default();
+        let marks = std::mem::replace(&mut self.denotation_marks, outer).unwrap_or_default();
         let aliased = call.is_some_and(|call| {
             let args = self.prog.expr_list(call.args).to_vec();
             if call.via.is_some() || args.len() < names.len() {
                 return false;
             }
-            let symbol = |te: TExprId| match self.prog.expr(te) {
-                TExpr::Local(x) | TExpr::Field(_, x) if !marks.contains(&te) => Some(x),
-                _ => None,
+            let symbol = |mut te: TExprId| {
+                while let Some(&(_, inner)) = marks.wrappers.iter().find(|&&(w, _)| w == te) {
+                    te = inner;
+                }
+                match self.prog.expr(te) {
+                    TExpr::Local(x) | TExpr::Field(_, x) if !marks.nodes.contains(&te) => Some(x),
+                    _ => None,
+                }
             };
             // `superArgs.indexWhere(_.symbol == sym)`, then `superParamNames(idx) == stat.name`.
             let outermost = &args[args.len() - names.len()..];

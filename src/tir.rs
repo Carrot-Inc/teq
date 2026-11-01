@@ -611,6 +611,11 @@ pub struct InlineDefinition {
     pub spread: Vec<TExprId>,
     /// The body's ascriptions `Program::ascribed_bits` marks, which its copies keep.
     pub ascribed: Vec<TExprId>,
+    /// The body's nodes the inline `this` decision has a note for (`InlineState::this_written`), with whether the type
+    /// as written is a `this.type`: a `this`, or a cast of one, that a cast, an ascription or the method's result type
+    /// re-typed, and a root that is a deferred inline call; its copies keep them, which the decision reads in an
+    /// expansion.
+    pub written_this: Vec<(TExprId, bool)>,
     /// The messages of the body's checks of a tuple's index `Program::tuple_index_bits` marks,
     /// which its copies keep.
     pub tuple_index: Vec<TExprId>,

@@ -1037,6 +1037,8 @@ impl<'a> Worker<'a> {
                 if sig.ret_inferred {
                     cv.mark_inferred(ret);
                 }
+                // An inline method's result as written is what its body is ascribed to (`PrepareInlineable.wrapRHS`).
+                Self::note_pickled_this(cv, &sig.ret, ret);
                 let ret = Some(ret);
                 let body = rhs.as_ref().map(|r| self.conv_expr(cv, r));
                 let info = self.syms.sym(sym);
@@ -1236,6 +1238,23 @@ impl<'a> Worker<'a> {
     // ---- types ----
 
     fn conv_type(&mut self, cv: &mut Conv, t: &TType) -> TyExprId {
+        let ty = self.conv_type_inner(cv, t);
+        Self::note_pickled_this(cv, t, ty);
+        ty
+    }
+
+    /// A tree pickled as a ThisType (`this.type`, `C.this.type`), which the inline `this` decision tells from a
+    /// pickled alias of one (`note_written_this`): the store expands `Me` to the same ThisType.
+    fn note_pickled_this(cv: &mut Conv, t: &TType, ty: TyExprId) {
+        if matches!(t, TType::This(_)) {
+            let at = cv.ast.this_type_trees.partition_point(|&x| x < ty.0);
+            if cv.ast.this_type_trees.get(at) != Some(&ty.0) {
+                cv.ast.this_type_trees.insert(at, ty.0);
+            }
+        }
+    }
+
+    fn conv_type_inner(&mut self, cv: &mut Conv, t: &TType) -> TyExprId {
         // `T @RuntimeChecked` (an ascription's) keeps its annotation, which the store does not hold.
         if let TType::Annotated(u, _) = t {
             if super::types::runtime_checked_annot(cv.tasty(), t) {
@@ -1522,7 +1541,9 @@ impl<'a> Worker<'a> {
         }
         let mut cx = super::MapCx::new(cv.file);
         let mapped = self.map_type_ctor(&mut cx, a);
-        cv.ty(TyExpr::Resolved(mapped))
+        let ty = cv.ty(TyExpr::Resolved(mapped));
+        Self::note_pickled_this(cv, a, ty);
+        ty
     }
 
     /// A `BIND` in a type pattern is a type variable the case binds: named on first sight.

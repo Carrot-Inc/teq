@@ -42,6 +42,32 @@ regression.
 - `proposed-cases/` are programs scalac accepts and teq rejects, with the output of
   `scala-cli run -S 3.8.4` as `.expected`, in the format of `tests/cases`.
 
+## An enum case's parent and its type parameters as dotty's desugaring makes them (2026-10-29)
+
+Five negative tests moved, against master's record, with the enum-override-param branch, which ports
+`DesugarEnums.typeParamIsReferenced`, `Desugar.classDef`'s `enumClassTypeRef`, `DesugarEnums.interpolatedEnumParent`
+and `Checking.checkEnumParent`:
+
+- `neg/enum-List3` from `accepts` and `neg/enumWithType` from `oos` to `same`: a case with type parameters of its own
+  and no parent is `TypedCaseDoesNotExplicitlyExtendTypedEnum` (E148) at the case's start, where teq applied a covariant
+  enum to `Nothing` and refused an invariant one with a message of its own.
+- `neg/enum-tparams` from `different` to `same`: a reference to the enum's type parameter from a case with its own is
+  `illegal reference to type parameter T from enum case`, not `type T not found`.
+- `neg/i6601` from `oos` to `same`: a case whose written first parent is not its enum is `enum case does not extend its
+  enum class Var`.
+- `neg/enums` from `oos` to `superset`: the four rows above, and `interpolatedEnumParent`'s `cannot determine type
+  argument` for a value case (an invariant parameter, bounds that name another), each on a line the test marks. The two
+  lines more are errors master's teq gives too: line 25's `type mismatch: found C4, required Int => E4` (a case class's
+  companion read as a function value, which scalac accepts) and line 51's `method $ordinal overrides nothing` (scalac's
+  error is the anonymous class's on line 50). Each illegal reference is followed by `type T not found` on its line,
+  which scalac hides behind the first error there and teq does not (an error hides only the same error,
+  docs/internal/DIFFERENCES.md, "The warnings' policy").
+
+The tests of the override of a val parameter, the branch's other mechanism (`RefChecks` (1.12) over
+`ParamForwarding.inheritedAccessor`), keep their rows: `pos/i16092`, `pos/i618` and `pos/t1422_pos` accept, `warn/i11344`
+and `neg/i16438` are `same`, `neg/i14722` stays a `superset` (its mutable override's rule), and `neg/i16092` stays
+`different` on a dependent parameter type's mismatch ahead of (1.12).
+
 ## The interpreter's threads and a Scala CLI script's libraries (2026-10-16)
 
 Seven tests moved, against master's record, with the interp-env-script branch, each through a class the std gains:

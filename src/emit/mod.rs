@@ -172,6 +172,11 @@ pub struct Emitter<'a> {
     class_names: Vec<Option<Rc<str>>>,
     /// The qualified forms of the few names that are not bare everywhere.
     sym_quals: crate::intern::FxMap<SymId, Rc<str>>,
+    /// The properties `storage_name` allocated, and the classes whose storage it has allocated.
+    storage: crate::intern::FxMap<(SymId, bool), Rc<str>>,
+    storage_done: crate::intern::FxMap<ClassId, ()>,
+    /// For a class, the classes that extend it (`names_below`), made once.
+    below: Option<crate::intern::FxMap<ClassId, Vec<ClassId>>>,
     class_quals: crate::intern::FxMap<ClassId, Rc<str>>,
     naming: &'a Naming,
     /// The scope of the module being emitted (`Naming`).
@@ -355,11 +360,14 @@ enum UseForm {
 /// The texts a constructor writes of its own, which the walk of its scope reads the globals of
 /// where the constructor writes them (`Emitter::ctor_texts`).
 const CALLABLE: &str = "$callable($f, new.target.prototype);";
-const WRITABLE_NAME: &str = " Object.defineProperty($f, \"name\", { writable: true });";
+/// A function's own `name` and `length`, deleted where the class has a field of that name: the field's write makes its
+/// own property, and a guard of `OWN_FIELD` (a val a subclass's parameter overrides) reads only the class's writes.
+const DELETE_NAME: &str = " delete $f.name;";
+const DELETE_LENGTH: &str = " delete $f.length;";
 const SUPER_FIELDS: [&str; 3] = ["Object.assign(", ", Reflect.construct(Object.getPrototypeOf(", "), Array.of"];
 pub(super) const OWN_FIELD: &str = "Object.prototype.hasOwnProperty.call(";
 pub(super) const LAZY_FIELD: &str = "Object.defineProperty(this, ";
-const CTOR_TEXTS: [&str; 7] = [CALLABLE, WRITABLE_NAME, SUPER_FIELDS[0], SUPER_FIELDS[1], SUPER_FIELDS[2], OWN_FIELD, LAZY_FIELD];
+const CTOR_TEXTS: [&str; 8] = [CALLABLE, DELETE_NAME, DELETE_LENGTH, SUPER_FIELDS[0], SUPER_FIELDS[1], SUPER_FIELDS[2], OWN_FIELD, LAZY_FIELD];
 
 /// A def that cannot be overridden and calls itself in tail position is emitted as
 /// `while (true)`: the JS parameters are named apart, each iteration copies them into `const`s
@@ -986,6 +994,9 @@ impl<'a> Emitter<'a> {
             sym_names: vec![None; syms.syms.len()],
             class_names: vec![None; syms.classes.len()],
             sym_quals: Default::default(),
+            storage: Default::default(),
+            storage_done: Default::default(),
+            below: None,
             class_quals: Default::default(),
             naming,
             scope: NO_SCOPE,
@@ -1464,15 +1475,15 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Whether the class, or a class it extends, has a `val` or `var` of that name.
-    fn has_field_named(&self, c: ClassId, name: &str) -> bool {
-        let info = self.syms.class(c);
-        std::iter::once(c).chain(info.base_types.iter().map(|&(b, _)| b)).any(|k| {
-            self.syms.class(k).member_order.iter().any(|&m| {
-                let s = self.syms.sym(m);
-                matches!(s.kind, SymKind::Val | SymKind::Var) && self.interner.get(s.name) == name
-            })
-        })
+    /// Whether `c` or a base of it has a field emitted as `name` (`field_name`: renamed under `--release`, a field
+    /// behind an accessor its allocated property, `storage_name`).
+    fn has_field_named(&mut self, c: ClassId, name: &str) -> bool {
+        let fields: Vec<SymId> = std::iter::once(c)
+            .chain(self.syms.class(c).base_types.iter().map(|&(b, _)| b))
+            .flat_map(|k| self.syms.class(k).member_order.clone())
+            .filter(|&m| matches!(self.syms.sym(m).kind, SymKind::Val | SymKind::Var) && self.interner.get(self.syms.sym(m).name) == name)
+            .collect();
+        fields.into_iter().any(|m| self.field_name(m) == name)
     }
 
     pub fn class_name(&mut self, c: ClassId) -> Rc<str> {
@@ -1806,12 +1817,187 @@ impl<'a> Emitter<'a> {
     }
 
     fn field_name(&mut self, s: SymId) -> String {
-        let n = self.sym_name(s);
         if self.syms.sym(s).needs_accessor {
-            format!("${}", n)
-        } else {
-            n.to_string()
+            return self.storage_name(s, false).to_string();
         }
+        let n = self.sym_name(s);
+        // A plain field spelled as storage is (`$…`) takes the property the allocator gives it; any other keeps its name,
+        // which no storage takes.
+        if n.starts_with('$') && self.plain_field(s) {
+            return self.storage_name(s, false).to_string();
+        }
+        n.to_string()
+    }
+
+    /// The `$`-spelled names of the members of every class that extends `c`, and of the classes and traits in their
+    /// linearizations other than `c` and the classes it extends: an instance of such a class holds `c`'s storage beside
+    /// those members, so that storage takes none of their names (`allocate_storage`), whatever module defines them.
+    fn names_below(&mut self, c: ClassId) -> Vec<Rc<str>> {
+        if self.below.is_none() {
+            let mut below: crate::intern::FxMap<ClassId, Vec<ClassId>> = Default::default();
+            for i in 0..self.syms.classes.len() {
+                let k = ClassId(i as u32);
+                for &(b, _) in &self.syms.class(k).base_types {
+                    if b != k {
+                        below.entry(b).or_default().push(k);
+                    }
+                }
+            }
+            self.below = Some(below);
+        }
+        let Some(below) = self.below.as_ref().and_then(|b| b.get(&c)).cloned() else { return Vec::new() };
+        let mut seen: crate::intern::FxMap<ClassId, ()> = self.syms.class(c).base_types.iter().map(|&(b, _)| (b, ())).collect();
+        seen.insert(c, ());
+        let mut names = Vec::new();
+        for d in below {
+            let line: Vec<ClassId> = std::iter::once(d).chain(self.syms.class(d).base_types.iter().map(|&(b, _)| b)).collect();
+            for k in line {
+                if seen.insert(k, ()).is_some() {
+                    continue;
+                }
+                for m in self.syms.class(k).member_order.clone() {
+                    let text = self.sym_text(m);
+                    if text.starts_with('$') {
+                        names.push(text);
+                    }
+                }
+            }
+        }
+        names
+    }
+
+    /// Whether `s` is a field an instance holds under the property of its name: a val or a var of a class (a lazy val's
+    /// a getter of its prototype until its first read defines the property), or a given that is a lazy value, with no
+    /// accessor in front of it and no JavaScript member.
+    fn plain_field(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        let stored = matches!(info.kind, SymKind::Val | SymKind::Var) || (info.kind == SymKind::Given && info.mods & mods::LAZY != 0);
+        stored && !info.needs_accessor && matches!(info.owner, Owner::Class(_)) && !self.syms.js_member(s)
+    }
+
+    /// The property an instance keeps `s` in: a plain field's (`plain_field`), the field behind the accessor `s`
+    /// (dotty's `FieldName`), or with `copy` the copy of the constructor parameter `s` its class's deferred body reads
+    /// (`param_copy`). `Constructors.checkNoFieldClashes` keeps every storage of one object under a name of its own;
+    /// here every member of a class and of the classes it extends is a property of the instance or of its prototype, as
+    /// the runtime's are, and the storage of a class is allocated against the storage of every class it extends (a
+    /// subclass's own fields included, whatever their spelling) and against the members of every class an instance of
+    /// it may be, a class extending it and the traits and classes in that one's linearization (`names_below`), which
+    /// keep their names. A field shares the property of the field of its name a class it extends holds, as an
+    /// overriding val shares the property it overrides; a plain field keeps its name where it is no storage's spelling;
+    /// any other is the first of its name (`$n` for a field behind an accessor or a copy), `$` before it, … that no
+    /// member, no storage of those classes and no property of the runtime's is: the bases' storage first, then the
+    /// class's plain fields, its fields behind accessors and its copies, each in its members' order.
+    fn storage_name(&mut self, s: SymId, copy: bool) -> Rc<str> {
+        if let Some(n) = self.storage.get(&(s, copy)) {
+            return n.clone();
+        }
+        if let Owner::Class(c) = self.syms.sym(s).owner {
+            self.allocate_storage(c);
+        }
+        if let Some(n) = self.storage.get(&(s, copy)) {
+            return n.clone();
+        }
+        let n: Rc<str> = Rc::from(format!("${}", self.sym_text(s)));
+        self.storage.insert((s, copy), n.clone());
+        n
+    }
+
+    fn allocate_storage(&mut self, c: ClassId) {
+        if self.storage_done.insert(c, ()).is_some() {
+            return;
+        }
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).filter(|&b| b != c).collect();
+        for &b in &bases {
+            self.allocate_storage(b);
+        }
+        let mut taken: crate::intern::FxMap<Rc<str>, ()> = Default::default();
+        // The storage of the bases' fields by their names: behind accessors, and plain.
+        let mut inherited: crate::intern::FxMap<Rc<str>, Rc<str>> = Default::default();
+        let mut inherited_plain: crate::intern::FxMap<Rc<str>, Rc<str>> = Default::default();
+        let (mut plain, mut fields, mut copies) = (Vec::new(), Vec::new(), Vec::new());
+        for k in std::iter::once(c).chain(bases.iter().copied()) {
+            for m in self.syms.class(k).member_order.clone() {
+                let text = self.sym_text(m);
+                let is_plain = self.plain_field(m);
+                if !is_plain {
+                    taken.insert(text.clone(), ());
+                }
+                if k == c {
+                    if is_plain && !plain.contains(&m) {
+                        plain.push(m);
+                    }
+                    if self.syms.sym(m).needs_accessor && !fields.contains(&m) {
+                        fields.push(m);
+                    }
+                    if self.param_copy(m) && !copies.contains(&m) {
+                        copies.push(m);
+                    }
+                    continue;
+                }
+                let own = match self.storage.get(&(m, false)).cloned() {
+                    Some(n) => Some(n),
+                    None => is_plain.then(|| text.clone()),
+                };
+                if let Some(n) = own {
+                    taken.insert(n.clone(), ());
+                    let by_name = if is_plain { &mut inherited_plain } else { &mut inherited };
+                    by_name.entry(text).or_insert(n);
+                }
+                if let Some(n) = self.storage.get(&(m, true)).cloned() {
+                    taken.insert(n, ());
+                }
+            }
+        }
+        // Only a storage allocated anew (`fresh`) can take one of the names below the class.
+        let allocates = !copies.is_empty()
+            || fields.iter().any(|&m| !inherited.contains_key(&self.sym_text(m)))
+            || plain.iter().any(|&m| {
+                let text = self.sym_text(m);
+                text.starts_with('$') && !inherited_plain.contains_key(&text)
+            });
+        if allocates {
+            for n in self.names_below(c) {
+                taken.insert(n, ());
+            }
+        }
+        let fresh = |taken: &crate::intern::FxMap<Rc<str>, ()>, mut name: String| -> Rc<str> {
+            while taken.contains_key(name.as_str()) || name.strip_prefix('$').is_some_and(names::runtime_property) {
+                name.insert(0, '$');
+            }
+            Rc::from(name)
+        };
+        for m in plain {
+            let text = self.sym_text(m);
+            let name = if !text.starts_with('$') {
+                text
+            } else if let Some(n) = inherited_plain.get(&text) {
+                n.clone()
+            } else {
+                fresh(&taken, text.to_string())
+            };
+            taken.insert(name.clone(), ());
+            self.storage.insert((m, false), name);
+        }
+        for (m, copy) in fields.into_iter().map(|m| (m, false)).chain(copies.into_iter().map(|m| (m, true))) {
+            let text = self.sym_text(m);
+            let name = match inherited.get(&text) {
+                Some(n) if !copy => n.clone(),
+                _ => fresh(&taken, format!("${}", text)),
+            };
+            taken.insert(name.clone(), ());
+            self.storage.insert((m, copy), name);
+        }
+    }
+
+    /// Whether the constructor parameter `s`, a field, is kept in a copy of its own besides (`storage_name`): its class's
+    /// body reads it (dotty's `Constructors.intoConstr` reads the parameter where an identifier names its accessor)
+    /// and a subclass's parameter overrides it, whose constructor writes the property they share before the body runs
+    /// (`$body`).
+    fn param_copy(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        info.overridden_by_param
+            && self.reach.init_read[s.idx()]
+            && matches!(info.owner, Owner::Class(c) if self.syms.class(c).ctor_syms.iter().any(|clause| clause.contains(&s)))
     }
 
     /// The access to the field of `this` that holds the member `s`.
@@ -1839,7 +2025,7 @@ impl<'a> Emitter<'a> {
             };
         }
         if !self.body_params.is_empty() && self.body_params.contains(&s) && !self.captures.contains(&s) {
-            let field = self.field_access(s);
+            let field = if self.param_copy(s) { format!(".{}", self.storage_name(s, true)) } else { self.field_access(s) };
             return format!("{}{}", self.this_name, field);
         }
         match self.captures.iter().position(|&c| c == s) {
@@ -2429,7 +2615,10 @@ impl<'a> Emitter<'a> {
         if makes_function {
             self.ctor_texts.push(CALLABLE);
             if self.has_field_named(tc.id, "name") {
-                self.ctor_texts.push(WRITABLE_NAME);
+                self.ctor_texts.push(DELETE_NAME);
+            }
+            if self.has_field_named(tc.id, "length") {
+                self.ctor_texts.push(DELETE_LENGTH);
             }
             if superclass.is_some() {
                 self.ctor_texts.extend(SUPER_FIELDS);
@@ -2527,9 +2716,13 @@ impl<'a> Emitter<'a> {
                 let _ = write!(self.out, "const $f = ({0}) => $f.apply({0}); ", params);
                 self.out.push_str(CALLABLE);
                 self.declare_fixed("$f");
-                // A field named like the function's own read-only `name` is assigned in its place.
+                // A field named like the function's own `name` or `length` is the function's own property once
+                // written: the function's goes first.
                 if self.has_field_named(tc.id, "name") {
-                    self.out.push_str(WRITABLE_NAME);
+                    self.out.push_str(DELETE_NAME);
+                }
+                if self.has_field_named(tc.id, "length") {
+                    self.out.push_str(DELETE_LENGTH);
                 }
                 self.this_name = "$f";
             }
@@ -2619,24 +2812,14 @@ impl<'a> Emitter<'a> {
                 self.line();
                 let _ = write!(self.out, "{0}.$name = $name; {0}.$ordinal = $ordinal;", this);
             }
-            for (i, &p) in tc.ctor_params.iter().enumerate().filter(|_| !is_trait || takes_arguments) {
-                if is_trait && i < tc.captures {
-                    continue;
-                }
-                let captured = i < n_captures;
-                if !captured && !info.value_class && !self.param_needs_field(p, defers_body) {
-                    self.ctor_locals.push(p);
-                    continue;
-                }
-                self.line();
-                if captured {
-                    let field = self.capture_field(i, p);
-                    let _ = write!(self.out, "{}.{} = $c{};", this, field, i);
-                } else {
-                    let field = self.field_access(p);
-                    let param = self.ctor_param(p);
-                    let _ = write!(self.out, "{}{} = {};", this, field, param);
-                }
+            // The class's own parameters are its fields before its enum's `$init` runs, as dotty's `Constructors` puts
+            // `copyParams` before the superclass's constructor call; an enum's `$init` leaves a field a case's
+            // parameter overrides to the case (`overridden_by_param`, as `emit_inits` leaves a body val).
+            let fields: Vec<(usize, SymId)> = tc.ctor_params.iter().copied().enumerate().filter(|&(i, _)| (!is_trait || takes_arguments) && !(is_trait && i < tc.captures)).collect();
+            let value_class = info.value_class;
+            let enum_init = info.kind == ClassKind::Enum && superclass.is_none();
+            for &(i, p) in &fields {
+                self.emit_ctor_param_field(this, i, p, i < n_captures, value_class, defers_body, enum_init);
             }
             if let Some(args) = tc.parent_args.filter(|_| superclass.is_none()) {
                 match tc.parent_via {
@@ -2740,13 +2923,15 @@ impl<'a> Emitter<'a> {
                         self.out.push_str("; }");
                     }
                     None => {
-                        let _ = write!(self.out, "{0}() {{ return this.${0}; }}", n);
+                        let field = self.storage_name(p, false);
+                        let _ = write!(self.out, "{}() {{ return this.{}; }}", n, field);
                     }
                 }
                 if self.syms.sym(p).needs_setter {
                     let setter = self.setter_name(p);
                     self.line();
-                    let _ = write!(self.out, "{}(v) {{ this.${} = v; }}", setter, n);
+                    let field = self.storage_name(p, false);
+                    let _ = write!(self.out, "{}(v) {{ this.{} = v; }}", setter, field);
                 }
             }
         }
@@ -2870,9 +3055,9 @@ impl<'a> Emitter<'a> {
             let property = alts.len() == 1 && (first.kind != SymKind::Def || first.sig.as_ref().map_or(true, |sig| sig.clauses.is_empty()));
             if property {
                 let s = alts[0];
-                let n = self.sym_name(s);
                 let info = self.syms.sym(s);
                 let call = if info.kind == SymKind::Def || info.needs_accessor { "()" } else { "" };
+                let n = if call.is_empty() { Rc::from(self.field_name(s)) } else { self.sym_name(s) };
                 self.line();
                 let _ = write!(self.out, "get {}() {{ return this.{}{}; }}", key, n, call);
                 continue;
@@ -2949,6 +3134,36 @@ impl<'a> Emitter<'a> {
                 _ => return None,
             },
         })
+    }
+
+    /// A constructor parameter's field written from the parameter (a capture's from its `$c`), or the parameter kept a
+    /// local of the constructor where nothing reads it as a field. In an enum's `$init` (`enum_init`) a parameter a
+    /// case's parameter overrides is written only where the case has not written its own.
+    fn emit_ctor_param_field(&mut self, this: &str, i: usize, p: SymId, captured: bool, value_class: bool, defers_body: bool, enum_init: bool) {
+        if !captured && !value_class && !self.param_needs_field(p, defers_body) {
+            self.ctor_locals.push(p);
+            return;
+        }
+        self.line();
+        if captured {
+            let field = self.capture_field(i, p);
+            let _ = write!(self.out, "{}.{} = $c{};", this, field, i);
+        } else if enum_init && self.syms.sym(p).overridden_by_param {
+            let field = self.field_name(p);
+            let param = self.ctor_param(p);
+            let _ = write!(self.out, "if (!{}{}, ", OWN_FIELD, this);
+            js_string(&field, &mut self.out);
+            let _ = write!(self.out, ")) {}.{} = {};", this, field, param);
+        } else {
+            let field = self.field_access(p);
+            let param = self.ctor_param(p);
+            let _ = write!(self.out, "{}{} = {};", this, field, param);
+            if defers_body && self.param_copy(p) {
+                let copy = self.storage_name(p, true);
+                self.line();
+                let _ = write!(self.out, "{}.{} = {};", this, copy, param);
+            }
+        }
     }
 
     /// A plain constructor parameter is kept in a field when something reads it as one: a
@@ -3078,8 +3293,8 @@ impl<'a> Emitter<'a> {
     fn emit_reflective_proxies(&mut self, tc: &TClass) {
         let Some(proxies) = self.reach.reflective_proxies.get(&tc.id) else { return };
         for p in proxies {
-            let n = self.sym_name(p.member);
             let info = self.syms.sym(p.member);
+            let n = if info.kind == SymKind::Def || info.needs_accessor { self.sym_name(p.member) } else { Rc::from(self.field_name(p.member)) };
             let names: Vec<String> = (0..p.boxes.len()).map(|i| format!("$a{}", i)).collect();
             let mut call = format!("this.{}", n);
             if info.kind == SymKind::Def || info.needs_accessor {

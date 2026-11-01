@@ -618,6 +618,10 @@ pub struct SyntaxNotes {
     /// `InfixOp` the parser kept (`Typer.typedInfixOp`).
     pub infix_type_ops: Vec<TyExprId>,
     pub infix_pattern_ops: Vec<ExprId>,
+    /// An enum class case with type parameters of its own: the start of its name and of its tree, its annotations' or
+    /// its `case` keyword's (`Desugar.classDef`'s `TypedCaseDoesNotExplicitlyExtendTypedEnum` at
+    /// `cdef.srcPos.startPos`), ascending.
+    pub typed_enum_cases: Vec<(u32, u32)>,
     /// `(a = 1)`: the named tuple of one element it is from 3.7, or the `Parens` node it is before
     /// (dotty's `Parens(Assign(..))`), each with the assignment written and the span of its own
     /// parentheses, ascending, which the typer reports (`Typer.checkDeprecatedAssignmentSyntax`).
@@ -872,6 +876,9 @@ pub struct Ast {
     /// A library body's declared types of lambda parameters and local vals that scalac
     /// inferred, ascending: where they do not admit what the context gives, that is taken.
     pub inferred_types: Vec<u32>,
+    /// A library body's type trees pickled as a ThisType (`this.type`, `C.this.type`), ascending: the inline `this`
+    /// decision tells them from an alias of one (`type Me = this.type`), which the store expands to the same type.
+    pub this_type_trees: Vec<u32>,
     /// Per definition the range of the whole of it, from its annotations or modifiers to its
     /// last token; `NO_RANGE` where the parser made the definition up.
     pub def_ranges: Vec<Span>,
@@ -1148,6 +1155,7 @@ impl Ast {
             js_alias_types: Vec::new(),
             inferred_alternatives: Vec::new(),
             inferred_types: Vec::new(),
+            this_type_trees: Vec::new(),
             def_ranges: Vec::new(),
             name_spans: Vec::new(),
             ty_name_spans: Vec::new(),

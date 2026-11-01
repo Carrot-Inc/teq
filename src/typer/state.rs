@@ -166,6 +166,8 @@ pub(super) struct PendingCall {
     /// The receiver's type as the typing gave it (`InlineState::recv_types`), which the
     /// expansion's `this` takes.
     pub(super) recv_type: Option<crate::types::TypeId>,
+    /// Whether a `this` receiver's outermost cast or ascription wrote `this.type` (`InlineState::this_written`).
+    pub(super) recv_this_written: Option<bool>,
 }
 
 /// A node changed in place, with its value or its recorded type as it was; or the pending call
@@ -832,6 +834,7 @@ impl<'a> Worker<'a> {
             _ => (self.shared_worker_env(), span, Vec::new()),
         };
         let recv_type = call.recv.and_then(|r| self.inline.recv_types.remove(&r)).map(|t| self.zonk(t));
+        let recv_this_written = call.recv.and_then(|r| self.inline.this_written.get(&r).copied());
         let pending = PendingCall {
             call,
             sig: sig.clone(),
@@ -853,6 +856,7 @@ impl<'a> Worker<'a> {
             for_map: None,
             outer_locals,
             recv_type,
+            recv_this_written,
         };
         let len = self.attempts.pending.len();
         self.note_rare(Rare::Pending, len);
@@ -1315,6 +1319,9 @@ impl<'a> Worker<'a> {
             let t = self.zonk(t);
             self.inline.recv_types.insert(r, t);
         }
+        if let (Some(r), Some(w)) = (call.recv, p.recv_this_written) {
+            self.inline.this_written.insert(r, w);
+        }
         let expanded = match env {
             Some(env) => self.with_env(env, |t| t.expand_inline(&call, &sig, &subst, &args, ret_ty, span, expected)),
             None => self.expand_inline(&call, &sig, &subst, &args, ret_ty, span, expected),
@@ -1394,7 +1401,7 @@ impl<'a> Worker<'a> {
     /// What the expansion's root `from` is recorded as, given to the call's node `to` that takes its
     /// value, as `copy_expr` gives a copy: the expansion's record (by which the JavaScript emitter
     /// shares one function among the expansions of one shape, docs/TARGETS.md), its leaf, widening
-    /// and opacity marks, its evaluation and the language server's record of it.
+    /// and opacity marks, its `this` note, its evaluation and the language server's record of it.
     fn move_expansion_marks(&mut self, from: crate::tir::TExprId, to: crate::tir::TExprId) {
         // An `erasedValue` the expansion is stands in the call's node now.
         for made in self.erased_values.iter_mut().filter(|m| m.0 == from) {
@@ -1418,8 +1425,19 @@ impl<'a> Worker<'a> {
         if self.prog.is_opaque(from) {
             self.prog.mark_opaque(to);
         }
+        // An identifier of an own parameter accessor the expansion is stays one (`into_constr`), as an empty anonymous
+        // class's creation does (`MARK_ANON_PARENT`).
+        if self.expr_marks.get(&from).is_some_and(|&m| m & super::MARK_PARAM_IDENT != 0) {
+            self.mark_param_ident(to);
+        }
         if self.inline.evaluated.contains_key(&from) {
             self.inline.evaluated.insert(to, ());
+        }
+        // A `this` the expansion is keeps what its method's result type wrote (`note_wrapped_result`), which a call
+        // on it reads, unless the call's node has a note of its own: an enclosing definition's result type, the
+        // outermost, stands.
+        if !self.inline.this_written.contains_key(&to) {
+            self.move_written_this(from, to);
         }
         if let Some(ix) = self.index.as_mut() {
             if let Some(&sym) = ix.expansions.get(&from) {

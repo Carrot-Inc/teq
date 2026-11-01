@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/PqH.tasty (TASTy 28.8, 381 bytes)
+package fix.shapes
+@SourceFile class PqH(val h: Int) extends Object {
+}

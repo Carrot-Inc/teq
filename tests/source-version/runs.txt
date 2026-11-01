@@ -269,7 +269,8 @@ override_typed_call -source:future
 # The typed argument's symbol: a widening's or a conversion's call has none, nor does a by-name parameter alias.
 override_typed_args -source:future
 # What dotty's typed super call keeps: a transparent wrapper's `Inlined`, a named argument's `NamedArg`, neither of a
-# symbol; an inferred `using` argument the constructor's parameter, an explicit `using x` the accessor, an alias.
+# symbol; a `using` argument, inferred or explicit, the accessor, outside the outermost application where the
+# constructor takes `using` lists alone (`normalizeIfConstructor`'s appended `()`).
 override_typed_wrappers -source:future
 # A block beneath a proxy: `Typed` and `Annotated` forward their expression's symbol, a `Block` has none, so
 # `({ x }: Int)`, `(({ x }: Int): Int)`, `({ x }): Int`, `({ x }: @unchecked)` and `{ x: Int }` alias nothing;
@@ -277,6 +278,34 @@ override_typed_wrappers -source:future
 override_typed_blocks -source:future
 # A given parameter's accessor shown as one (`kindString`'s `given instance`).
 override_given_kind -source:future
+# An enum case's `override val` parameter overrides its enum's as the accessor it is (`inheritedAccessor` from the
+# case's superclass, its enum), whatever the case passes on, for every shape of the enum and of the case.
+override_enum_case
+override_enum_case -source:future
+# The candidate as accessible from the class checked (`isAccessibleFrom(currentClass.thisType, superAccess = true)`): a
+# `private[p]` one from inside `p` or the companion of the class it names, a protected one; refused from outside, a
+# private alias passed through included, at each level of the version.
+override_accessible
+override_accessible -source:3.8-migration
+override_accessible -source:future-migration
+override_accessible -source:future
+override_qualified
+override_qualified -source:future
+# Through an enum case, and through the call `Typer.parentTrees` inserts for a superclass a trait brings (no alias).
+override_enum_refused
+override_enum_refused -source:future
+# A call the typer folds into its receiver's node (a same-rank conversion, `unary_+`, a cast) is the call's tree, no
+# reference; an ascription's wrapper is its expression's; an inferred `using` argument the accessor it found.
+override_typed_collapsed -source:future
+# An inherited member's pair, and the word for an old-style implicit accessor (pending.txt).
+override_inherited_member
+override_implicit_kind
+# A case whose first parameter list is `using` (`Desugar.classDef`'s `CaseClassMissingNonImplicitParamList`, pending.txt).
+override_enum_case_using
+# A value case's parent where a bound of the enum's parameter names another in an annotation's argument
+# (`interpolatedEnumParent`'s `isGround`, whose substitution maps the argument trees through `Annotation.mapWith`;
+# pending.txt).
+enum_parent_bound_annotation
 java_ann_sites
 java_ann_sites -source:3.5
 java_ann_sites -source:3.6-migration

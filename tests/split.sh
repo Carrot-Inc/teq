@@ -9,7 +9,8 @@
 # it holds of one (held), the order in which a build reaches a page (publish); every one of
 # them with each package per file under --hot; hello world's module count and size; the module names, guards
 # and $hot of --module-per-file and --hot, and the objects --hot reports; that an empty file added in front
-# of the others, or the inputs given under another path, leave the output as it was; and the
+# of the others, the inputs given under another path, or a file of an unrelated package beside them whose member is
+# spelled like the program's storage (storage_unrelated), leave the output as it was; and the
 # incremental writes: a rebuild of an unchanged program writes nothing, an edit of one file
 # rewrites its module alone, and modules of an earlier build that are gone are removed; that a
 # macro program built with the interpreter's natives and without them (TEQ_NO_NATIVES=1) agrees;
@@ -49,8 +50,8 @@ suite_units() {
     unit_of "$src"
     case $unit in split/*) echo "$unit - hot" ;; *) echo "$unit" ;; esac
   done
-  printf '%s\n' hello hot names source-path quote-keys one-input exports-order input-order natives reflect-hot \
-    incremental incremental-hot lazy-order unreached-cast watch-file workers parser-threads
+  printf '%s\n' hello hot names source-path quote-keys one-input exports-order input-order unrelated-storage natives \
+    reflect-hot incremental incremental-hot lazy-order unreached-cast watch-file workers parser-threads
 }
 ! pieces_option split "$1" "$2" || shift 2
 [ $# = 0 ] || pieces_usage
@@ -564,6 +565,28 @@ if piece_has input-order; then
     bad "quote_keys: the files in another order give other bytes"
     diff -r "$work/given" "$work/permuted" | head -${DIFF_LINES:-10}
   fi
+  rm -rf "$work"
+fi
+
+# The storage of a class is allocated against its members, its bases' and those of the classes extending it
+# (`Constructors.checkNoFieldClashes`), no program-wide set of names: a file of another package beside the program,
+# whose member is spelled like the copy of `s` the program's A keeps, leaves every module as it was.
+if piece_has unrelated-storage; then
+  piece_ran unrelated-storage
+  work=$(mktemp -d)
+  printf 'package unrelated\nclass Other:\n  def $s: Int = 42\n' > "$work/Other.scala"
+  timeout 20 "$TEQ" compiler build tests/split/storage_unrelated --split "$work/alone" > /dev/null 2>&1
+  timeout 20 "$TEQ" compiler build tests/split/storage_unrelated "$work/Other.scala" --split "$work/beside" > /dev/null 2>&1
+  same=1
+  for module in "$work"/alone/*.mjs; do
+    cmp -s "$module" "$work/beside/${module##*/}" || {
+      same=0
+      bad "storage_unrelated: an unrelated file changes ${module##*/}"
+      diff "$module" "$work/beside/${module##*/}" | head -${DIFF_LINES:-10}
+    }
+  done
+  [ -f "$work/alone/base.mjs" ] || { same=0; bad "storage_unrelated: no base.mjs"; }
+  [ $same = 1 ] && ok
   rm -rf "$work"
 fi
 

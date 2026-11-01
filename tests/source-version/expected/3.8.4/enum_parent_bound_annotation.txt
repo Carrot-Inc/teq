@@ -1,0 +1,4 @@
+exit 1
+error 3:3
+  cannot determine type argument for enum parent class E,
+  type parameter type T has bounds that depend on a type parameter in the same parameter list

@@ -2064,6 +2064,9 @@ impl<'a> Worker<'a> {
             if matches!(rank, R_BYTE | R_SHORT | R_CHAR) {
                 return (self.promote(te, ty, R_INT), t_int);
             }
+            if self.denotation_marks.is_some() {
+                self.mark_collapsed_call(te);
+            }
             return (te, ty);
         }
         let method = match op {
@@ -2112,6 +2115,9 @@ impl<'a> Worker<'a> {
         };
         let conversion = NUMERIC_CONVERSIONS.contains(&text).then(|| text.to_string());
         let te = self.convert_rank(recv, recv_ty, to);
+        if te == recv && self.denotation_marks.is_some() {
+            self.mark_collapsed_call(te);
+        }
         let ty = self.rank_type(to);
         // A conversion of a constant tree has the converted constant's type (dotty's
         // `ConstFold.Select`, `foldUnop`'s `toInt` and kin): `2.5f.toInt` is a `2`. A `Byte` or
@@ -2680,6 +2686,10 @@ impl<'a> Worker<'a> {
                     let js_written = self.written_js_alias(ids[0]);
                     let t = self.resolve_declared_type(ids[0]);
                     let cast = self.lower_cast_written(recv, recv_ty, t, span, js_written);
+                    self.note_written_this(cast.0, ids[0]);
+                    if cast.0 == recv && self.denotation_marks.is_some() {
+                        self.mark_collapsed_call(cast.0);
+                    }
                     // The type argument is a type tree of the cast (`InlineDefinition::type_trees`).
                     if self.notes_type_trees() {
                         self.note_type_tree(cast.0, t);

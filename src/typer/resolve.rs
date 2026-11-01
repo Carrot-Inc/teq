@@ -7096,6 +7096,11 @@ impl<'a> Worker<'a> {
                 tparam_asts = copied;
                 inherited = true;
             }
+            // `typeParamIsReferenced`'s error: a case with type parameters of its own, or a value case, may not name
+            // the enum's, which are not in its scope.
+            if !cls.tparams.is_empty() || cls.clauses.is_empty() {
+                self.check_enum_tparam_reference(cls, e);
+            }
         }
         // The parameters a type application of the class made already, with their first-order
         // bounds (`make_class_tparams`), are the class's.
@@ -7217,26 +7222,42 @@ impl<'a> Worker<'a> {
                 }
             }
             let has_enum_parent = parents.iter().any(|&(t, _)| self.class_of(t) == Some(e));
-            if !has_enum_parent {
-                let etparams = self.syms.class(e).tparams.clone();
-                let args: Vec<TypeId> = if inherited {
-                    ids.iter().map(|&(_, p)| self.types.param(p)).collect()
+            let etparams = self.syms.class(e).tparams.clone();
+            let enum_word = format!("class {}", self.name_str(self.syms.class(e).name));
+            if cls.parents.is_empty() && !has_enum_parent {
+                let args: Option<Vec<TypeId>> = if etparams.is_empty() {
+                    // `enumClassTypeRef` (Desugar.scala 871-881): a nongeneric enum's own type.
+                    Some(Vec::new())
+                } else if inherited {
+                    // The enum applied to the case's type parameters it took from the enum.
+                    Some(ids.iter().map(|&(_, p)| self.types.param(p)).collect())
+                } else if !cls.tparams.is_empty() {
+                    // A class case with type parameters of its own: `enumClassTypeRef`'s error, the enum applied to an
+                    // `AnyRef` per type parameter of the case (`constrTparams.map(_ => anyRef)`, `defn.AnyRefAlias`).
+                    // Typing it (`typedAppliedTypeTree`) keeps as many as the enum takes, and too few leave no class
+                    // type, whose `WrongNumberOfTypeArgs` at the error's position the reporter hides
+                    // (`UniqueMessagePositions`): `checkEnumParent` repairs it.
+                    let at = self.typed_enum_case_start(c);
+                    self.error(at, "explicit extends clause needed because both enum case and enum class have type parameters");
+                    let any_ref = self.b.t_any_ref;
+                    (cls.tparams.len() >= etparams.len()).then(|| etparams.iter().map(|_| any_ref).collect())
                 } else {
-                    etparams
-                        .iter()
-                        .map(|&p| match self.syms.tparam(p).variance {
-                            1 => NOTHING,
-                            -1 => ANY,
-                            _ => {
-                                let span = self.syms.class(c).span;
-                                self.error(span, "an enum case of an invariant enum needs an explicit extends clause");
-                                ERROR
-                            }
-                        })
-                        .collect()
+                    Some(self.interpolated_enum_args(c, &enum_word, &etparams))
                 };
+                if let Some(args) = args {
+                    let t = self.types.class(e, &args);
+                    parents.insert(0, (t, self.syms.class(c).span));
+                }
+            }
+            // `Checking.checkEnumParent` (Checking.scala 1606-1626): a first parent that does not derive from the enum is
+            // reported at the case, and the enum applied to its parameters' lower bounds is prepended to the parents.
+            let first = parents.first().and_then(|&(t, _)| self.class_of(t));
+            if !first.is_some_and(|k| k == e || self.derives_from(k, e)) {
+                let span = self.syms.class(c).span;
+                self.error(span, format!("enum case does not extend its enum {}", enum_word));
+                let args: Vec<TypeId> = etparams.iter().map(|&p| self.syms.tparam(p).lower).collect();
                 let t = self.types.class(e, &args);
-                parents.insert(0, (t, self.syms.class(c).span));
+                parents.insert(0, (t, span));
             }
         }
         // A trait whose first parent is `Any` as resolved, written so or through an alias, is
@@ -7420,11 +7441,63 @@ impl<'a> Worker<'a> {
         if ecls.tparams.is_empty() {
             return None;
         }
-        let mentioned = |ty: TyExprId| ecls.tparams.iter().any(|tp| ty_mentions(ast, ty, tp.name));
-        let copies = case.parents.is_empty()
-            || case.parents.iter().any(|p| mentioned(p.ty))
-            || case.clauses.iter().any(|cl| cl.params.iter().any(|p| mentioned(p.ty)));
+        let names: Vec<Name> = ecls.tparams.iter().map(|tp| tp.name).collect();
+        let copies = case.parents.is_empty() || enum_tparam_reference(ast, case, &names).is_some();
         copies.then_some(&ecls.tparams[..])
+    }
+
+    /// `typeParamIsReferenced`'s error (DesugarEnums.scala 218-220) for a case with type parameters of its own or a
+    /// value case: the first reference to one of the enum's type parameters.
+    fn check_enum_tparam_reference(&mut self, case: &ast::ClassDef, e: ClassId) {
+        let info = self.syms.class(e);
+        let Some(def) = info.def else { return };
+        let DefKind::Class(ecls) = &self.ast(info.file).def(def).kind else { return };
+        let names: Vec<Name> = ecls.tparams.iter().map(|tp| tp.name).collect();
+        if names.is_empty() {
+            return;
+        }
+        if let Some((name, span)) = enum_tparam_reference(self.cur_ast(), case, &names) {
+            let msg = format!("illegal reference to type parameter {} from enum case", self.name_str(name));
+            self.error(span, msg);
+        }
+    }
+
+    /// Where the tree of the typed enum case `c` starts, its annotations' or its `case` keyword's (`cdef.srcPos.startPos`).
+    fn typed_enum_case_start(&self, c: ClassId) -> Span {
+        let span = self.syms.class(c).span;
+        let notes = &self.ast(self.syms.class(c).file).notes.typed_enum_cases;
+        let start = notes.binary_search_by_key(&span.start, |&(name, _)| name).ok().map_or(span.start, |i| notes[i].1);
+        Span::new(start, start)
+    }
+
+    /// `DesugarEnums.interpolatedEnumParent` (DesugarEnums.scala 66-83): the type arguments of a generic enum a value
+    /// case writes no parent for, each parameter's lower bound where it is covariant and its upper where it is
+    /// contravariant, a bound that names none of the enum's parameters (`isGround`); an error else.
+    fn interpolated_enum_args(&mut self, c: ClassId, enum_word: &str, etparams: &[TParamId]) -> Vec<TypeId> {
+        let mut args = Vec::with_capacity(etparams.len());
+        for &p in etparams {
+            let info = self.syms.tparam(p);
+            let (variance, lower, upper, name) = (info.variance, info.lower, info.upper, info.name);
+            let ground = |t: &Self, b: TypeId| !t.mentions_tparam_of(b, Some(etparams));
+            let arg = match variance {
+                1 if ground(self, lower) => Some(lower),
+                -1 if ground(self, upper) => Some(upper),
+                _ => None,
+            };
+            args.push(arg.unwrap_or_else(|| {
+                let problem = if variance == 0 { "is invariant" } else { "has bounds that depend on a type parameter in the same parameter list" };
+                let msg = format!(
+                    "cannot determine type argument for enum parent {},\ntype parameter type {} {}",
+                    enum_word,
+                    self.name_str(name),
+                    problem
+                );
+                let span = self.syms.class(c).span;
+                self.error(span, msg);
+                ERROR
+            }));
+        }
+        args
     }
 
     /// Whether an ancestor trait has parameters, using clauses or context bounds for `c` to fill in.
@@ -9141,22 +9214,105 @@ pub(super) fn ty_selects_from(ast: &ast::Ast, ty: TyExprId, is_param: &dyn Fn(Na
     }
 }
 
-pub(super) fn ty_mentions(ast: &ast::Ast, ty: TyExprId, name: Name) -> bool {
-    let any = |l: ast::ListRef| ast.ty_list(l).iter().any(|&t| ty_mentions(ast, t, name));
-    match ast.ty(ty) {
-        TyExpr::Name(n) => n == name,
-        TyExpr::Apply(f, args) => ty_mentions(ast, f, name) || any(args),
-        TyExpr::Fun(params, ret) | TyExpr::CtxFun(params, ret) => any(params) || ty_mentions(ast, ret, name),
-        TyExpr::Tuple(items) | TyExpr::NamedTuple(_, items) => any(items),
-        TyExpr::Union(a, b) | TyExpr::Inter(a, b) | TyExpr::BoundedWildcard(a, b) => ty_mentions(ast, a, name) || ty_mentions(ast, b, name),
-        TyExpr::ByName(t) | TyExpr::Repeated(t) | TyExpr::Unchecked(t) | TyExpr::UncheckedVariance(t) | TyExpr::Annotated(t, _) | TyExpr::Lambda(_, t) | TyExpr::PolyFun(_, t) => {
-            ty_mentions(ast, t, name)
+/// `DesugarEnums.typeParamIsReferenced` (DesugarEnums.scala 201-244) over an enum case's written types: the first
+/// reference to one of `names`, the enum's type parameters, in the types of the case's parameters (`valDefHasRef`)
+/// or then in its parents' types (`parentHasRef`, the type a parent applies: no argument), with its place; its own
+/// type parameters hide a name (`searchRef.apply`'s `underBinders(caseTypeParams, ..)`).
+pub(super) fn enum_tparam_reference(ast: &ast::Ast, case: &ast::ClassDef, names: &[Name]) -> Option<(Name, Span)> {
+    let mut search = SearchRef { ast, names: names.to_vec() };
+    search.under(case.tparams.iter().map(|tp| tp.name).collect(), |s| {
+        let params = case.clauses.iter().flat_map(|cl| cl.params.iter());
+        params.map(|p| p.ty).chain(case.parents.iter().map(|p| p.ty)).find_map(|t| s.ty(t))
+    })
+}
+
+/// `typeParamIsReferenced`'s `searchRef`, an `UntypedTreeAccumulator` that stops at the first match: an identifier
+/// of a name still searched matches; a type lambda's parameters and a refinement's type members hide their names below
+/// them (`underBinders`, by namespace: a term member's name is no type parameter's); every other tree is searched
+/// through (`foldOver`). A term path (`x.type`, the qualifier of `x.T`) names no type parameter.
+struct SearchRef<'x> {
+    ast: &'x ast::Ast,
+    names: Vec<Name>,
+}
+
+impl SearchRef<'_> {
+    fn under<R>(&mut self, binders: Vec<Name>, op: impl FnOnce(&mut Self) -> R) -> R {
+        let saved = self.names.clone();
+        self.names.retain(|n| !binders.contains(n));
+        let r = op(self);
+        self.names = saved;
+        r
+    }
+
+    fn tys(&mut self, l: ast::ListRef) -> Option<(Name, Span)> {
+        self.ast.ty_list(l).iter().find_map(|&t| self.ty(t))
+    }
+
+    fn opt(&mut self, t: Option<TyExprId>) -> Option<(Name, Span)> {
+        t.and_then(|t| self.ty(t))
+    }
+
+    fn ty(&mut self, t: TyExprId) -> Option<(Name, Span)> {
+        let ast = self.ast;
+        match ast.ty(t) {
+            TyExpr::Name(n) | TyExpr::TypeVar(n) => self.names.contains(&n).then(|| (n, ast.ty_spans[t.idx()])),
+            // An infix type (`A F B`, dotty's `InfixOp`, which the parser applies as `F[A, B]`, its operator after its left
+            // operand) folds its left operand, its operator, then its right operand (`foldMoreCases`); an applied
+            // type its constructor first.
+            TyExpr::Apply(f, args) => match *ast.ty_list(args) {
+                [l, r] if ast.ty_spans[f.idx()].start > ast.ty_spans[l.idx()].start => self.ty(l).or_else(|| self.ty(f)).or_else(|| self.ty(r)),
+                _ => self.ty(f).or_else(|| self.tys(args)),
+            },
+            TyExpr::Fun(params, ret) | TyExpr::CtxFun(params, ret) => self.tys(params).or_else(|| self.ty(ret)),
+            TyExpr::Tuple(items) | TyExpr::NamedTuple(_, items) => self.tys(items),
+            TyExpr::Union(a, b) | TyExpr::Inter(a, b) | TyExpr::BoundedWildcard(a, b) | TyExpr::MatchCase(a, b) => {
+                self.ty(a).or_else(|| self.ty(b))
+            }
+            TyExpr::ByName(u) | TyExpr::Repeated(u) | TyExpr::Unchecked(u) | TyExpr::UncheckedVariance(u) | TyExpr::Project(u, _) => self.ty(u),
+            TyExpr::Annotated(u, class) => self.ty(u).or_else(|| self.opt(class)),
+            TyExpr::Match(scrutinee, cases) => self.ty(scrutinee).or_else(|| self.tys(cases)),
+            // `LambdaTypeTree`: its parameters, their bounds and its body under them.
+            TyExpr::Lambda(params, body) => {
+                let binders = ast.name_lists[params.range()].to_vec();
+                self.under(binders, |s| s.lambda_bounds(t).or_else(|| s.ty(body)))
+            }
+            // `PolyFunction`, no binder of `searchRef`'s: its parameters' bounds and its function type.
+            TyExpr::PolyFun(_, body) => self.lambda_bounds(t).or_else(|| self.ty(body)),
+            // `RefinedTypeTree`: the parent and the members, under the members' names. `underBinders` subtracts dotty's
+            // `Name`s, a type parameter's a `TypeName`: a type member's name hides it, a val's or a def's, a `TermName`,
+            // does not.
+            TyExpr::Refined(parent, members) => {
+                let defs = ast.def_list(members).to_vec();
+                let binders = defs.iter().filter(|&&d| matches!(ast.def(d).kind, DefKind::TypeAlias { .. } | DefKind::Class(_))).map(|&d| ast.def(d).name).collect();
+                self.under(binders, |s| s.ty(parent).or_else(|| defs.iter().find_map(|&d| s.member(d))))
+            }
+            TyExpr::Select(..) | TyExpr::Singleton(_) | TyExpr::Wildcard | TyExpr::Lit(_) | TyExpr::Resolved(_) | TyExpr::MainParam(..) | TyExpr::Error => None,
         }
-        TyExpr::Project(t, _) | TyExpr::Refined(t, _) => ty_mentions(ast, t, name),
-        TyExpr::Match(s, cases) => ty_mentions(ast, s, name) || any(cases),
-        TyExpr::MatchCase(p, b) => ty_mentions(ast, p, name) || ty_mentions(ast, b, name),
-        TyExpr::Select(..) | TyExpr::Singleton(_) | TyExpr::Wildcard | TyExpr::Lit(_) | TyExpr::TypeVar(_) | TyExpr::Resolved(_) | TyExpr::MainParam(..) | TyExpr::Error => {
-            false
+    }
+
+    /// The bounds of a type lambda's or polymorphic function type's parameters (`Ast::lambda_bounds`).
+    fn lambda_bounds(&mut self, t: TyExprId) -> Option<(Name, Span)> {
+        let ast = self.ast;
+        let bounds = ast.lambda_bounds.iter().find(|(l, _)| *l == t).map_or(&[][..], |&(_, bl)| ast.ty_list(bl));
+        bounds.iter().filter(|&&b| b != ast::NO_BOUND).find_map(|&b| self.ty(b))
+    }
+
+    fn tparams(&mut self, tps: &[ast::TypeParam]) -> Option<(Name, Span)> {
+        tps.iter().find_map(|tp| self.opt(tp.lower).or_else(|| self.opt(tp.upper)).or_else(|| tp.context_bounds.iter().find_map(|&b| self.ty(b))))
+    }
+
+    /// A refinement's member as `foldOver` reads its `ValDef`, `DefDef` or `TypeDef`: a method's own type parameters
+    /// are no binders of `searchRef`'s, a type member's are its right side's lambda's.
+    fn member(&mut self, d: ast::DefId) -> Option<(Name, Span)> {
+        let ast = self.ast;
+        match &ast.def(d).kind {
+            DefKind::Val { ty, .. } => self.opt(*ty),
+            DefKind::Fun(f) => self.tparams(&f.tparams).or_else(|| f.clauses.iter().flat_map(|cl| cl.params.iter()).find_map(|p| self.ty(p.ty))).or_else(|| self.opt(f.ret)),
+            DefKind::TypeAlias { tparams, rhs, lower, upper } => {
+                let binders = tparams.iter().map(|tp| tp.name).collect();
+                self.under(binders, |s| s.tparams(tparams).or_else(|| s.opt(*rhs)).or_else(|| s.opt(*lower)).or_else(|| s.opt(*upper)))
+            }
+            _ => None,
         }
     }
 }

@@ -1,0 +1,7 @@
+exit 0
+warning 3:23
+  cannot override val parameter value s in class A
+warning 6:23
+  cannot override val parameter value t in trait T
+warning 10:22
+  cannot override val parameter value u in class D

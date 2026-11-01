@@ -60,6 +60,10 @@ pub struct Loaded {
     /// The members of a jar declared `private[p]` or `protected[p]`, with the simple name of `p`
     /// and whether they are `protected`.
     pub access_within: SharedMap<SymId, (Name, bool)>,
+    /// The full name of a loaded member's qualifier where it is a package, the package the pickle names (dotty's
+    /// `privateWithin`, a symbol): a deferred given's implementation keeps its declaration's (`dcl.copy`) wherever
+    /// its class is.
+    pub access_within_pkg: SharedMap<SymId, Name>,
     /// The library classes whose bridges were computed once their members were named.
     pub bridged: FxMap<ClassId, ()>,
     /// The member returning the enclosing instance of a class or trait nested in a class.
@@ -323,6 +327,7 @@ impl Loaded {
             implicit_not_found: SharedMap::new(),
             param_not_found: SharedMap::new(),
             access_within: SharedMap::new(),
+            access_within_pkg: SharedMap::new(),
             bridged: FxMap::default(),
             target_names: SharedMap::new(),
             product_target_names: SharedMap::new(),
@@ -2343,6 +2348,20 @@ impl<'a> Worker<'a> {
         Some(out)
     }
 
+    /// A loaded member's `private[p]` or `protected[p]` (dotty's `privateWithin`, `TreeUnpickler` reading
+    /// `PRIVATEqualified` and `PROTECTEDqualified`): the qualifier's simple name in `Loaded::access_within`, beside
+    /// whether it is protected, and `QUALIFIED` on the member.
+    fn enter_access_within(&mut self, tasty: &TastyFile, sym: SymId, q: crate::tasty::tree::Qualifier, private: bool) {
+        let full = tasty.name(tasty.source_name(q.name));
+        let within = self.interner.intern(full.rsplit('.').next().unwrap_or(&full));
+        self.loaded_mut().access_within.insert(sym, (within, !private));
+        if q.pkg {
+            let path = self.interner.intern(&full);
+            self.loaded_mut().access_within_pkg.insert(sym, path);
+        }
+        self.syms.sym_mut(sym).mods |= crate::ast::mods::QUALIFIED;
+    }
+
     fn enter_loaded_ctor(&mut self, c: ClassId, cx: &mut MapCx, ctor: &DefSig, accessors: &[crate::tasty::tree::Param]) {
         let tasty = self.tasty(cx.file);
         let file_id = self.syms.class(c).file;
@@ -2402,6 +2421,9 @@ impl<'a> Worker<'a> {
                     s.state().set(Completion::Done);
                     s.by_name = by_name;
                     s.set_declared_alias(declared_alias);
+                }
+                if let Some((q, private)) = accessor.map_or(p.within, |a| a.within) {
+                    self.enter_access_within(&tasty, sym, q, private);
                 }
                 if is_context_bound_name(&tasty, p.name) {
                     self.syms.context_bounds.insert(sym, ());
@@ -2590,10 +2612,7 @@ impl<'a> Worker<'a> {
         };
         self.loaded_mut().syms.insert(sym, LSym { file, addr: e.addr, conversion });
         if let Some(q) = e.access_within {
-            let full = tasty.name(tasty.source_name(q));
-            let within = self.interner.intern(full.rsplit('.').next().unwrap_or(&full));
-            self.loaded_mut().access_within.insert(sym, (within, !e.qualified_private));
-            self.syms.sym_mut(sym).mods |= crate::ast::mods::QUALIFIED;
+            self.enter_access_within(&tasty, sym, q, e.qualified_private);
         }
         self.loaded_mut().tables[file as usize].terms.insert(e.addr, sym);
         if e.js_annotated {

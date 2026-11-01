@@ -43,7 +43,26 @@ impl<'a> Worker<'a> {
                 let first_written = matches!(first.args.as_slice(), [(_, false), _, ..]);
                 let args: Vec<(ast::ListRef, bool, Span, super::apply::FunEnd)> =
                     first.args.iter().enumerate().map(|(k, &(l, using))| (l, using, span, super::apply::FunEnd::at(first.fun_end(ast, k)))).collect();
-                return self.type_new(first.ty, &args, first_written, span, expected);
+                let typed = self.type_new(first.ty, &args, first_written, span, expected);
+                // The arguments are the anonymous class's parent call, which dotty keeps in the class's definition,
+                // though teq makes no class here: its creation is marked as that call, where the walk of the
+                // constructor's code stops (`MARK_ANON_PARENT`), the block of the temporaries its arguments are
+                // evaluated into with it.
+                let mut at = typed.0;
+                loop {
+                    match self.prog.expr(at) {
+                        TExpr::New(..) => {
+                            *self.expr_marks.entry(at).or_default() |= super::MARK_ANON_PARENT;
+                            break;
+                        }
+                        TExpr::Block(_, res) => {
+                            *self.expr_marks.entry(at).or_default() |= super::MARK_ANON_PARENT;
+                            at = res;
+                        }
+                        _ => break,
+                    }
+                }
+                return typed;
             }
             Ok(k) => k,
         };

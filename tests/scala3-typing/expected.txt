@@ -207,13 +207,13 @@ neg/emptyCatch.scala	same
 neg/endmarkers.scala	std	ArrowAssoc
 neg/endmarkers1.scala	accepts	
 neg/ensureReported.scala	different	missing parameter type
-neg/enum-List3.scala	accepts	
+neg/enum-List3.scala	same	
 neg/enum-constrs.scala	accepts	
-neg/enum-tparams.scala	different	type {} not found
+neg/enum-tparams.scala	same	
 neg/enum-values.scala	same	
 neg/enum-variance.scala	same	
-neg/enumWithType.scala	oos	enum-extends
-neg/enums.scala	oos	enum-extends
+neg/enumWithType.scala	same	
+neg/enums.scala	superset	+2 lines: explicit extends clause needed because both enum case and enum class have type parameters
 neg/enumsAccess.scala	subset	4/10 lines
 neg/enumsLabel-singleimpl.scala	accepts	
 neg/enumvalues.scala	superset	+1 lines: {} is not a member of the package
@@ -1230,7 +1230,7 @@ neg/i6450.scala	subset	1/4 lines
 neg/i6475.scala	same	
 neg/i6501.scala	accepts	
 neg/i6503.scala	same	
-neg/i6601.scala	oos	enum-extends
+neg/i6601.scala	same	
 neg/i6606.scala	same	
 neg/i6622.scala	same	
 neg/i6622a.scala	same	

@@ -588,8 +588,10 @@ impl<'a> Worker<'a> {
             TExpr::Static(s) => matches!(self.syms.sym(s).kind, SymKind::Object(_) | SymKind::EnumValue(_)),
             // An object of the class, read through its accessor.
             TExpr::Field(_, s) | TExpr::CallMethod(_, s, _) if self.names_object(s) => true,
-            // A parameter accessor of the class (`Ident(_) => rhs.symbol.is(ParamAccessor)`).
+            // A parameter accessor of the class (`Ident(_) => rhs.symbol.is(ParamAccessor)`), read for the parameter in
+            // the constructor's code (`Constructors.intoConstr`, which runs after `CheckUnused`).
             TExpr::Field(r, s) => matches!(self.prog.expr(r), TExpr::This) && self.is_param_accessor(s),
+            TExpr::Local(s) => matches!(self.syms.sym(s).owner, Owner::Class(_)) && self.is_param_accessor(s),
             _ => false,
         }
     }

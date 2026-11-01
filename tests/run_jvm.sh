@@ -45,7 +45,13 @@
 # against inline_bindings.expected, listed from scalac's class files (left out without javap). And a jar's companion
 # is never touched before `new` of its case class, whatever bodies the build converted for a macro's run, where the
 # program's own companion that runs code is: tests/support/jar_companion_touch/list.sh's listing of
-# jar_companion_touch.scala against jar_companion_touch.expected (left out without javap or the jars).
+# jar_companion_touch.scala against jar_companion_touch.expected (left out without javap or the jars). And a
+# constructor loads its parameter where it reads its immutable parameter accessor by an identifier or as `this.s` of
+# an effectively final one (`Constructors.intoConstr`): tests/support/final_select/list.sh's listing of final_select.scala
+# against final_select.expected, listed from scalac's class files (left out without javap). And a constructor calls
+# its by-name parameter's thunk where its code reads the parameter, a closure there capturing the thunk:
+# tests/support/byname_ctor/list.sh's listing of byname_ctor.scala against byname_ctor.expected, listed from scalac's
+# class files (left out without javap).
 cd "$(dirname "$0")/.."
 # The lists are sorted bytewise: `sort -u` and `comm` under a locale's collation would take
 # `tail_calls` and `tailcalls` for one name. The character set stays the locale's, which java's
@@ -269,6 +275,36 @@ jar_companion_touch() {
     return 1
   fi
 }
+final_select() {
+  command -v javap > /dev/null || return 0
+  local work=$out/final_select
+  rm -rf "$work"
+  if ! timeout 60 "$TEQ" compiler build tests/support/final_select/final_select.scala --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
+    echo "FINAL SELECT: the fixture does not build (see $work.log)"
+    return 1
+  fi
+  bash tests/support/final_select/list.sh "$work" > "$work.txt"
+  if ! diff tests/support/final_select/final_select.expected "$work.txt" > "$work.diff"; then
+    echo "FINAL SELECT: a constructor reads the accessor where scalac's loads its parameter, or the other way"
+    head -10 "$work.diff"
+    return 1
+  fi
+}
+byname_ctor() {
+  command -v javap > /dev/null || return 0
+  local work=$out/byname_ctor
+  rm -rf "$work"
+  if ! timeout 60 "$TEQ" compiler build tests/support/byname_ctor/byname_ctor.scala --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
+    echo "BYNAME CTOR: the fixture does not build (see $work.log)"
+    return 1
+  fi
+  bash tests/support/byname_ctor/list.sh "$work" > "$work.txt"
+  if ! diff tests/support/byname_ctor/byname_ctor.expected "$work.txt" > "$work.diff"; then
+    echo "BYNAME CTOR: a constructor reads its by-name parameter's field where scalac's calls the parameter, or the other way"
+    head -10 "$work.diff"
+    return 1
+  fi
+}
 abi_layout() {
   command -v python3 > /dev/null || return 0
   local f name work fails=0
@@ -297,6 +333,8 @@ if [ -z "$VERSION" ]; then
   anon_final || status=1
   inline_bindings || status=1
   jar_companion_touch || status=1
+  final_select || status=1
+  byname_ctor || status=1
   abi_layout || status=1
 fi
 count() { grep -c "^$1 " "$out/results.txt"; }

@@ -47,6 +47,14 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- An enum case's `override val` parameter passed on to its enum's own is accepted, as scalac accepts it, and an
+  override through a qualified-private accessor is warned about as scalac warns.
+- A class's constructor code reads its own parameters where it names their accessors, so a subclass's override no
+  longer changes what the class's body computes.
+- An enum case naming its enum's type parameters where it may not, or extending a parent that is not its enum, is
+  refused with scalac's errors.
+- A sorted set's or map's `map`, `flatMap`, `collect` and `zip` keep their `Ordering` and build their results as
+  scala-library does, one element at a time, so an `Ordering` or a function with side effects runs in scalac's order.
 - Every value of an enum that extends `java.lang.Enum` is a `Mirror.Singleton`.
 - `new Array[T](n)` with no `ClassTag[T]` in scope is refused, `No ClassTag available for T`, as scalac refuses it,
   whatever was typed before it.

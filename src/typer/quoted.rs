@@ -2937,6 +2937,10 @@ impl<'c> Copier<'c> {
         let deferring = std::mem::replace(&mut self.deferring, false);
         let nc = self.class_now(t, c);
         self.deferring = deferring;
+        // The copy of a lambda's class for a SAM type is one too (`sam_classes`).
+        if nc != c && t.sam_classes.contains_key(&c) && !t.sam_classes.contains_key(&nc) {
+            t.sam_classes.insert(nc, ());
+        }
         nc
     }
 
@@ -3515,6 +3519,11 @@ impl<'c> Copier<'c> {
     fn expr(&mut self, t: &mut Worker, e: TExprId) -> TExprId {
         let node = self.stored.and_then(|s| s.index.node(e));
         let id = self.expr_node(t, e, node);
+        // An identifier of an own parameter accessor, and an empty anonymous class's creation (`MARK_ANON_PARENT`), stays
+        // one in the copy (`into_constr`).
+        if id != e && matches!(t.prog.expr(id), TExpr::Field(..) | TExpr::New(..) | TExpr::Block(..)) && t.expr_marks.get(&e).is_some_and(|&m| m & super::MARK_PARAM_IDENT != 0) {
+            t.mark_param_ident(id);
+        }
         if self.map.is_some() {
             self.mapped(t, e, id, node);
         }
@@ -3879,6 +3888,7 @@ impl<'c> Copier<'c> {
                             // makes the value itself).
                             lowering => {
                                 let (id, ty) = t.lower_cast_as(a, from, to, lowering);
+                                t.move_written_this(e, id);
                                 if id != a {
                                     t.prog.copy_span(e, id);
                                     self.set_copy_type(t, id, ty);

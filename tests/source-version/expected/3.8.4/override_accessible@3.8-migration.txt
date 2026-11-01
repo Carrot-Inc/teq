@@ -1,0 +1,7 @@
+exit 0
+warning 11:22
+  cannot override val parameter value s in class A
+warning 25:25
+  cannot override val parameter value s in class OA
+warning 29:23
+  cannot override val parameter value s in class A

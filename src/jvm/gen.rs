@@ -4090,11 +4090,12 @@ impl<'a> Gen<'a> {
         if self.m.before_super && matches!(cx.input.prog.expr(r), TExpr::This) && self.m.locals.contains_key(&s) {
             return self.load_local(s);
         }
-        // A val that a subclass may override is read through its accessor.
+        // A val that a subclass may override is read through its accessor, a qualified private one's (`private[p]`,
+        // no `Private` flag in dotty) among them.
         let own_field = matches!(cx.input.prog.expr(r), TExpr::This)
             && matches!(info.owner, Owner::Class(c) if Some(c) == self.this_class
                 && !cx.is_interface(c)
-                && (info.mods & mods::PRIVATE != 0 || cx.input.syms.class(c).subclasses.is_empty() && (!cx.input.open_world || cx.input.syms.class(c).mods & mods::FINAL != 0)))
+                && (info.mods & mods::PRIVATE != 0 && !info.scoped_private || cx.input.syms.class(c).subclasses.is_empty() && (!cx.input.open_world || cx.input.syms.class(c).mods & mods::FINAL != 0)))
             && !cx.is_lazy_member(s)
             && info.kind != SymKind::Def
             && self.m.this_slot == Some(0)

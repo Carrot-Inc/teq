@@ -1,0 +1,18 @@
+class A(val x: Int)
+class B1(x: Int) extends A(x.toInt)
+class C1(override val x: Int) extends B1(x)
+class B2(x: Int) extends A(x.asInstanceOf[Int])
+class C2(override val x: Int) extends B2(x)
+class B3(x: Int) extends A(+x)
+class C3(override val x: Int) extends B3(x)
+class AD(val x: Any)
+class BD(x: Double) extends AD((x.toDouble: Any))
+class CD(override val x: Double) extends BD(x)
+class BE(x: Double) extends AD((x: Any))
+class CE(override val x: Double) extends BE(x)
+class UA()(using val x: Int)
+class UB()(using x: Int) extends UA()
+class UC()(using override val x: Int) extends UB()
+class Default(val x: Int = 1)
+trait T extends Default
+class TC(override val x: Int) extends T

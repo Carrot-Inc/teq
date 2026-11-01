@@ -715,7 +715,11 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 frame.bind(p, v.clone());
                 let key = self.field_key(p);
-                self.bind_slot(&this, key, v);
+                // A parameter a subclass's parameter overrides keeps the subclass's value, bound before this class
+                // (its superclass, or its case's enum) is constructed, as a val's initialiser does (`run_inits`).
+                if !self.syms().sym(p).overridden_by_param || matches!(self.read_slot(&this, key), Value::Absent) {
+                    self.bind_slot(&this, key, v);
+                }
             }
         }
         let frame = self.exec_stmts(prelude, &frame, &cx)?;
@@ -2019,8 +2023,10 @@ impl<'a, 't> Interp<'a, 't> {
         let Some(m) = self.dispatch_sym(k, name) else { return Member::Missing };
         let (kind, lazy) = {
             let sym = self.syms().sym(m);
-            // A val of a library class is a lazy getter, marked so when its class is checked.
-            (sym.kind, sym.mods & mods::LAZY != 0 || (sym.kind == SymKind::Val && self.typer.is_library_member(m)))
+            // A val of a library object or trait is a lazy getter, marked so when its class is checked; a library
+            // class's non-lazy val is its constructor's (`check_member`), whose instance follows the check.
+            let constructed = matches!(sym.owner, Owner::Class(c) if !matches!(self.syms().class(c).kind, ClassKind::Object | ClassKind::Trait));
+            (sym.kind, sym.mods & mods::LAZY != 0 || (sym.kind == SymKind::Val && !constructed && self.typer.is_library_member(m)))
         };
         // A given object of an object is a module, published before its body runs.
         if let Some(c) = self.static_given_module(m) {

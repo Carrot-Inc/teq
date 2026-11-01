@@ -795,9 +795,14 @@ impl<'a, 't> Interp<'a, 't> {
                 // A constructor parameter read in the body of its class, or a capture a
                 // named class was constructed with.
                 if let Value::Obj(_) = &cx.this {
+                    let owner = self.syms().sym(s).owner;
                     let key = match self.field_key_of_param(s) {
                         Some(key) => Some(key),
-                        None if self.syms().sym(s).owner == Owner::Local => Some(self.field_key(s)),
+                        None if owner == Owner::Local => Some(self.field_key(s)),
+                        // A class's val parameter its constructor's code reads as the parameter
+                        // (`Constructors.intoConstr`), where a library val's initialiser runs once the
+                        // val is first demanded (`run_inits`), after construction: its slot.
+                        None if matches!(owner, Owner::Class(c) if self.syms().class(c).ctor_syms.iter().any(|cl| cl.contains(&s))) => Some(self.field_key(s)),
                         None => None,
                     };
                     if let Some(key) = key {

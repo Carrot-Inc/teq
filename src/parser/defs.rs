@@ -1328,11 +1328,13 @@ impl<'a> Parser<'a> {
             let at_enum_case =
                 |p: &Self| p.at(Tok::KwCase) && !matches!(p.kind_at(1), Tok::KwClass | Tok::KwObject);
             if is_enum && at_enum_case(p) {
-                p.parse_enum_cases(&mut body, Vec::new());
+                let start = p.span().start;
+                p.parse_enum_cases(&mut body, Vec::new(), start);
             } else if is_enum && p.at(Tok::At) {
+                let start = p.span().start;
                 let annots = p.parse_annots();
                 if at_enum_case(p) {
-                    p.parse_enum_cases(&mut body, annots);
+                    p.parse_enum_cases(&mut body, annots, start);
                 } else {
                     let mut defs = Vec::new();
                     let (start, first) = (p.span().start, p.ast.defs.len());
@@ -1658,7 +1660,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_enum_cases(&mut self, body: &mut Vec<Stmt>, annots: Vec<Annot>) {
+    /// The cases of an enum's body from the statement's `start`, its annotations' or its `case` keyword's (where dotty's
+    /// `defOrDcl` starts the case's tree).
+    fn parse_enum_cases(&mut self, body: &mut Vec<Stmt>, annots: Vec<Annot>, start: u32) {
         self.expect(Tok::KwCase);
         loop {
             let (name, span) = self.expect_ident();
@@ -1666,6 +1670,9 @@ impl<'a> Parser<'a> {
             let first = self.ast.defs.len();
             let mark = self.error_events;
             let tparams = self.parse_type_params();
+            if !tparams.is_empty() {
+                self.ast.notes.typed_enum_cases.push((span.start, start));
+            }
             let clauses = self.parse_param_clauses(Some(true), 0);
             let parents = self.parse_parents();
             let incomplete = if self.error_events == mark { 0 } else { mods::INCOMPLETE };

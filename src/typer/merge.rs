@@ -1508,6 +1508,9 @@ impl Remap {
         for e in d.widened.iter_mut().chain(d.opaque.iter_mut()).chain(d.spread.iter_mut()).chain(d.ascribed.iter_mut()).chain(d.tuple_index.iter_mut()).chain(d.erased.iter_mut()) {
             *e = self.expr(*e);
         }
+        for (e, _) in &mut d.written_this {
+            *e = self.expr(*e);
+        }
         for tc in &mut d.classes {
             records::tclass(self, tc);
         }
@@ -3339,6 +3342,7 @@ mod tests {
             erased: Vec::new(),
             spread: Vec::new(),
             ascribed: Vec::new(),
+            written_this: Vec::new(),
             tuple_index: Vec::new(),
             hoisted: Vec::new(),
             imports: Vec::new(),

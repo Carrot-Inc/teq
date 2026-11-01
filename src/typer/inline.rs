@@ -214,6 +214,11 @@ pub struct InlineState {
     pub lenient_match: u32,
     /// The static type of the receiver of each inline member call under way, by receiver.
     pub recv_types: FxMap<TExprId, TypeId>,
+    /// For a `this` a cast or an ascription re-typed, whether the outermost one's target as written is a `this.type`
+    /// (`this.type`, `C.this.type`, a self alias's `self.type`), by the node: `Inliner.canElideThis` reads the prefix's
+    /// type, which keeps an alias (`type Me = this.type`) that teq's types expand, so the written tree tells the two
+    /// apart.
+    pub this_written: FxMap<TExprId, bool>,
     /// The static types of the arguments typed for an inline callee, which its proxies take.
     pub record_args: bool,
     pub arg_types: Vec<(TExprId, TypeId)>,
@@ -354,6 +359,7 @@ impl InlineState {
             // names; what an `inline val` was evaluated to is read again after its body.
             args: _,
             recv_types: _,
+            this_written: _,
             evaluated: _,
             // Kept for the whole compilation.
             compiletime: _,
@@ -496,6 +502,7 @@ impl InlineState {
         self.copies.clear();
         self.erased = None;
         self.recv_types.clear();
+        self.this_written.clear();
         self.arg_types.clear();
     }
 }
@@ -622,6 +629,8 @@ pub(super) struct InlineBody {
     span: Span,
     pub transparent: bool,
     pub declared: bool,
+    /// The result type as written, none where it is inferred or the body is a forwarder's (`note_wrapped_result`).
+    pub result_tree: Option<TyExprId>,
     /// Per parameter, in clause order: whether it is an `inline` parameter.
     inline_params: Vec<bool>,
     defaults: Vec<Option<ExprId>>,
@@ -784,7 +793,7 @@ impl<'a> Worker<'a> {
             let sig = self.sig_arc(sym);
             let inline_params = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| self.syms.sym(p.sym).mods & mods::INLINE != 0)).collect();
             let defaults = sig.clauses.iter().flat_map(|c| c.params.iter().map(|_| None)).collect();
-            return Some(InlineBody { file, body: None, span, transparent, declared: true, inline_params, defaults, ext_group: 0 });
+            return Some(InlineBody { file, body: None, span, transparent, declared: true, result_tree: None, inline_params, defaults, ext_group: 0 });
         }
         // A library method's body comes with its class's conversion, whose pseudo file
         // gives it and what it makes their positions, the same whatever asked for it first.
@@ -807,15 +816,16 @@ impl<'a> Worker<'a> {
         };
         let def = self.ast(file).def(def_id);
         let transparent = def.mods & mods::TRANSPARENT != 0;
-        let (body, declared, clauses, ext_group) = match &def.kind {
-            DefKind::Fun(f) => (f.body?, f.ret.is_some(), &f.clauses, f.ext_group),
-            DefKind::Given(g) => (g.alias?, true, &g.clauses, 0),
+        let (body, result_tree, clauses, ext_group) = match &def.kind {
+            DefKind::Fun(f) => (f.body?, f.ret, &f.clauses, f.ext_group),
+            DefKind::Given(g) => (g.alias?, Some(g.ty), &g.clauses, 0),
             _ => return None,
         };
+        let declared = result_tree.is_some();
         let inline_params = clauses.iter().flat_map(|c| c.params.iter().map(|p| p.mods & mods::INLINE != 0)).collect();
         let defaults = clauses.iter().flat_map(|c| c.params.iter().map(|p| p.default)).collect();
         let span = self.ast(file).expr_span(body);
-        Some(InlineBody { file, body: Some(body), span, transparent, declared, inline_params, defaults, ext_group })
+        Some(InlineBody { file, body: Some(body), span, transparent, declared, result_tree, inline_params, defaults, ext_group })
     }
 
     /// The expansion of a call of the inline method `call.sym` with its typed arguments, one
@@ -1094,6 +1104,94 @@ impl<'a> Worker<'a> {
         (at != s).then(|| self.syms.sym(at).file)
     }
 
+    /// Whether `e` is a class's `this`: `This`, or the local standing for it in an anonymous class (a lambda's for a SAM
+    /// type) nested in the class (`outer_this`).
+    pub(super) fn is_this_node(&self, e: TExprId) -> bool {
+        match self.prog.expr(e) {
+            TExpr::This => true,
+            TExpr::Local(o) => {
+                self.syms.sym(o).sig.as_ref().is_some_and(|sig| matches!(self.types.get(sig.ret), Type::This(_))) && self.outer_this.find(|_, &sym| sym == o).is_some()
+            }
+            _ => false,
+        }
+    }
+
+    /// Notes for `node`, a `this` a cast or an ascription re-typed to the type tree `ty`, whether that tree is a
+    /// `this.type` (`InlineState::this_written`), the outermost re-typing's note standing.
+    pub(super) fn note_written_this(&mut self, node: TExprId, ty: TyExprId) {
+        if self.is_written_this_node(node) {
+            let written = self.writes_this_type(ty);
+            self.inline.this_written.insert(node, written);
+        }
+    }
+
+    /// Whether the type tree `ty` is a `this.type` of a class's `this` or self alias: as written, or, a library body's
+    /// tree converted by its type, pickled as a ThisType, not as an alias of one (`Ast::this_type_trees`).
+    fn writes_this_type(&self, ty: TyExprId) -> bool {
+        let ast = self.cur_ast();
+        match ast.ty(ty) {
+            // The path names a class's `this`: `this`, `C.this`, or an enclosing class's self alias (`self.type`, which
+            // dotty's `findRef` types as that class's ThisType).
+            TyExpr::Singleton(q) => match ast.ty(q) {
+                TyExpr::Name(n) => {
+                    n == crate::names::THIS
+                        || self.env.frames.iter().rev().any(|f| matches!(f, super::Frame::Class(k) if self.syms.class(*k).self_alias == n))
+                }
+                TyExpr::Select(_, n) => n == crate::names::THIS,
+                _ => false,
+            },
+            TyExpr::Resolved(_) => ast.this_type_trees.binary_search(&ty.0).is_ok(),
+            _ => false,
+        }
+    }
+
+    /// `PrepareInlineable.wrapRHS`: a plain inline method's body is ascribed to its result type, so a body that is the
+    /// class's `this` is, in an expansion, a prefix of that type, the ThisType only where the type as written
+    /// (`declared`) is a `this.type`; an inferred one (`None`) is widened. The outermost re-typing, its note stands over
+    /// the body's own: a body that is a deferred inline call keeps it for the `this` its expansion gives
+    /// (`move_written_this` where the walk resolves the call, `move_expansion_marks` keeping it on the call's node).
+    pub(super) fn note_wrapped_result(&mut self, te: TExprId, declared: Option<TyExprId>) {
+        if !self.is_written_this_node(te) && !self.quote.deferred.contains_key(&te) {
+            return;
+        }
+        let written = declared.is_some_and(|ty| self.writes_this_type(ty));
+        self.inline.this_written.insert(te, written);
+    }
+
+    /// The value of `e` through the blocks around it that have no statements.
+    fn statement_free_value(&self, mut e: TExprId) -> TExprId {
+        while let TExpr::Block(stmts, inner) = self.prog.expr(e) {
+            if stmts.len != 0 {
+                break;
+            }
+            e = inner;
+        }
+        e
+    }
+
+    /// Whether `node` is one the inline `this` decision keeps a note for: a `this`, or a cast of one, which a
+    /// definition's or a quote's typing keeps unlowered and whose lowering in an expansion moves the note to the `this`
+    /// it leaves (`move_written_this`).
+    pub(super) fn is_written_this_node(&self, node: TExprId) -> bool {
+        self.is_this_node(node) || matches!(self.prog.expr(node), TExpr::Cast(inner, CastOp::Written, _) if self.is_this_node(inner))
+    }
+
+    /// The note of `from` for `to`, a `this` that stands in its place (`note_written_this`): the node a cast's
+    /// lowering left, or a deferred call's node its expansion's root is written into.
+    pub(super) fn move_written_this(&mut self, from: TExprId, to: TExprId) {
+        if from == to || !self.is_this_node(to) {
+            return;
+        }
+        if let Some(&w) = self.inline.this_written.get(&from) {
+            self.inline.this_written.insert(to, w);
+        }
+    }
+
+    /// Marks `e`, an identifier naming its class's own parameter accessor (`MARK_PARAM_IDENT`).
+    pub(super) fn mark_param_ident(&mut self, e: TExprId) {
+        *self.expr_marks.entry(e).or_default() |= super::MARK_PARAM_IDENT;
+    }
+
     /// The plain call of a method whose definition failed the check, of type `ty`, which depends
     /// on the definition as an expansion does: an edit that fixes it types the caller again
     /// (`Worker::inline_deps`).
@@ -1152,6 +1250,7 @@ impl<'a> Worker<'a> {
         };
         if !body.transparent {
             self.mark_widened_expansion(te, ty);
+            self.note_wrapped_result(te, body.result_tree);
         }
         self.return_to = outer_return;
         self.returns = outer_returns;
@@ -1244,9 +1343,14 @@ impl<'a> Worker<'a> {
             counted: Vec::new(),
             transparent: body.transparent,
         };
-        if let (Some(r), Owner::Class(c)) = (call.recv, self.syms.sym(sym).owner) {
+        if let (Some(recv), Owner::Class(c)) = (call.recv, self.syms.sym(sym).owner) {
+            // A prefix that is a block without statements has its value's type, as dotty's `Inlined` without bindings
+            // has its expansion's (a library body's expansion of a transparent call on `this`, kept as scalac made it):
+            // `canElideThis` reads that type. A block with statements stays the receiver it is (the
+            // statements' lifting, `Inlines.liftBindings`, is not ported).
+            let r = self.statement_free_value(recv);
             if self.is_stable(r) && !matches!(self.prog.expr(r), TExpr::This) {
-                let recv_ty = self.inline.recv_types.get(&r).copied().unwrap_or_else(|| self.syms.this_type(c));
+                let recv_ty = self.inline.recv_types.get(&recv).copied().unwrap_or_else(|| self.syms.this_type(c));
                 let path = self.prefix_of(r, recv_ty);
                 let object = matches!(self.types.get(path), Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Object);
                 if self.types.is_path(path) || object {
@@ -1255,7 +1359,7 @@ impl<'a> Worker<'a> {
             }
             // `this` takes the receiver's own type, so that the members it names resolve as
             // they would on the receiver: an abstract inline member to its implementation.
-            let this_ty = match self.inline.recv_types.remove(&r) {
+            let this_ty = match self.inline.recv_types.remove(&recv) {
                 Some(t) if t != ERROR => t,
                 _ => {
                     let declared = self.syms.this_type(c);
@@ -1264,14 +1368,36 @@ impl<'a> Worker<'a> {
             };
             // A stable receiver (an object, a val) is what the body names in the place of
             // `this`, as a stable argument is; any other is bound once, before the body.
+            // `this` is elided where the call's prefix is the ThisType of the inline method's class
+            // (`Inliner.canElideThis`'s `inlineCallPrefix.tpe == tpe`, the site within that class). teq types a plain
+            // `this` as its class's own `this_type` (`Class(c)`, the intersection with a self type where one is
+            // declared), nothing re-typing it, and a cast or an ascription to `this.type` as `This(c)`: either is that
+            // prefix. A subclass's `this`, a cast to a subclass's `this.type` and a prefix re-typed to a class type are
+            // not, and are bound to a proxy as another receiver is, a `val` (`A_this`) the body selects on.
+            let retyped = [recv, r].iter().any(|e| self.expr_marks.get(e).is_some_and(|&m| m & (super::MARK_RETYPED | super::MARK_CAST) != 0));
+            let written_this = self.inline.this_written.remove(&recv).or_else(|| self.inline.this_written.remove(&r));
+            let own_this = match (written_this, self.types.get(this_ty)) {
+                // What a cast, an ascription or a plain inline method's result type wrote (`note_wrapped_result`): an
+                // alias of `this.type`, a class type.
+                (Some(false), _) => false,
+                // `this.type` as written, typed `This(c)` from source and as the outer receiver's class where an
+                // expansion's copy of a body holds it (the outer `this` elided).
+                (Some(true), Type::This(k)) | (Some(true), Type::Class(k, _)) => k == c,
+                (Some(true), _) => this_ty == self.syms.this_type(c),
+                // Nothing re-typed it as written: a plain `this`, or a cast no typing noted.
+                (None, Type::This(k)) => k == c,
+                (None, Type::Class(k, _)) if k == c => !retyped,
+                (None, _) => !retyped && this_ty == self.syms.this_type(c),
+            };
+            let widened_this = self.is_this_node(r) && !own_this;
             let proxy = match self.prog.expr(r) {
-                TExpr::This => None,
+                TExpr::This if !widened_this => None,
                 _ => {
                     let proxy = self.fresh_local("this", this_ty, span);
                     if !matches!(self.prog.expr(r), TExpr::Module(_)) {
                         self.mark_leaf(r);
                     }
-                    if self.is_stable(r) {
+                    if self.is_stable(r) && !widened_this {
                         self.inline.args.insert(proxy, InlineArg { expr: r, ty: this_ty, source: None });
                         bound.this_arg = Some(proxy);
                     } else {
@@ -2593,6 +2719,9 @@ impl<'a> Worker<'a> {
         }
         if self.interpolations.contains_key(&e) {
             self.interpolations.insert(id, ());
+        }
+        if matches!(self.prog.expr(id), TExpr::Field(..) | TExpr::New(..) | TExpr::Block(..)) && self.expr_marks.get(&e).is_some_and(|&m| m & super::MARK_PARAM_IDENT != 0) {
+            self.mark_param_ident(id);
         }
         if self.capturing() {
             self.capture_copy(e, id);
