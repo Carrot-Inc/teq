@@ -78,6 +78,15 @@ public final class Context {
 
     /** An event of the selector given, whatever its kind. */
     public void event(Selector selector, Status status, Throwable t) {
+        report(selector, status, t, false);
+    }
+
+    /** A success of the selector given whose duration cannot be had: its getter throws. */
+    public void eventWithoutDuration(Selector selector) {
+        report(selector, Status.Success, null, true);
+    }
+
+    private void report(Selector selector, Status status, Throwable t, boolean noDuration) {
         String name = def.fullyQualifiedName();
         Fingerprint print = def.fingerprint();
         OptionalThrowable thrown = t == null ? new OptionalThrowable() : new OptionalThrowable(t);
@@ -103,6 +112,9 @@ public final class Context {
             }
 
             public long duration() {
+                if (noDuration) {
+                    throw new IllegalStateException("duration-error");
+                }
                 return 1;
             }
         });
@@ -150,6 +162,11 @@ public final class Context {
     /** A line of the run's record. */
     public void record(String line) {
         run.record(line);
+    }
+
+    /** Whether the suite's definition is explicitly specified, its name given whole. */
+    public boolean explicit() {
+        return def.explicitlySpecified();
     }
 
     /** The pools whose threads are alive (`pool-<n>` of the executors' `pool-<n>-thread-<m>`), and whether this

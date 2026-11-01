@@ -710,13 +710,13 @@ object Inventory:
 
   // The events of a run as `teq test --events` writes them (`task::events::Event::line`): a line each, the project
   // (the module), the event's name (the suite), its selector, its status and the first line of what it threw,
-  // tab-separated; a case is the test a `test <name>` selector names (`<suite>.<test>`, Mill's and munit's
+  // tab-separated (a suite's `ran` line, shorter, no case); a case is the test a `test <name>` selector names (`<suite>.<test>`, Mill's and munit's
   // fully qualified name), another selector as it is written.
   def fromEvents(text: String): Inventory =
     val modules = scala.collection.mutable.LinkedHashMap.empty[String, Module]
     for line <- text.linesIterator if line.nonEmpty do
       line.split("\t", -1) match
-        case Array(project, suite, selector, status, _*) =>
+        case Array(project, suite, selector, status, _, _*) =>
           val m = modules.getOrElse(project, Module(0, Vector.empty, Vector.empty))
           modules(project) = m.copy(suites = (m.suites :+ suite).distinct, cases = m.cases :+ ((if selector.startsWith("test ") then selector.drop(5) else selector) -> status))
         case _ => ()

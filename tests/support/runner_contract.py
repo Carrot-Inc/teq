@@ -11,7 +11,8 @@
 # worker's forkError notification, teq's forkError line) as `forkError <thrown>`. The worker's debug lines are left
 # out, as are teq's protocol lines but its events and fork errors. `exact` holds the lines to the expected ones in
 # order; `relaxed`, for a run of several workers, holds the events, the fork errors and the error lines to them as a
-# multiset and the rest in order. The frames of a stack trace the JVM prints (an exception no one caught) are left
+# multiset and the rest in order; `unordered`, for lines of threads the JVM runs at once at its end (its shutdown
+# hooks, whose writes may interleave within a line), holds the words of every line as a multiset. The frames of a stack trace the JVM prints (an exception no one caught) are left
 # out, each side's naming its own classes, as are a failed task future's hash and the class of what failed it. Exits
 # 1 with both transcripts on a difference.
 import json
@@ -49,7 +50,8 @@ def from_sbt(text):
             if tag == "Debug":
                 continue
             prefix = {"Info": "", "Warn": "[warn] ", "Error": "[error] "}[tag]
-            out.extend(prefix + l for l in params["message"].splitlines())
+            # A message of null, which gson leaves out and sbt's console shows nothing of.
+            out.extend(prefix + l for l in params.get("message", "").splitlines())
         elif method == "forkError":
             error = params["error"]
             out.append("forkError " + thrown(error["message"], [f["className"] + "." + f["methodName"] for f in error.get("staceTrace", [])]))
@@ -64,7 +66,8 @@ def from_sbt(text):
                     first = exception["message"]
                     first = first[len(WRAPPED):] if first.startswith(WRAPPED) else first
                     frames = [f["className"] + "." + f["methodName"] for f in exception.get("staceTrace", [])]
-                out.append("event %s %s %s %s %d %s" % (params["group"], e["status"], e["fullyQualifiedName"], selector, e["duration"], thrown(first, frames or [])))
+                # A status of null, which gson leaves out.
+                out.append("event %s %s %s %s %d %s" % (params["group"], e.get("status", "null"), e["fullyQualifiedName"], selector, e["duration"], thrown(first, frames or [])))
     return out
 
 
@@ -89,7 +92,7 @@ def from_teq(text, token):
             suite, status, name, selector, a, b, ms = fields[1:8]
             shown = {"test": "test " + a, "suite": "suite", "nestedSuite": "nestedSuite " + a, "nestedTest": "nestedTest %s %s" % (a, b), "wildcard": "wildcard " + a}[selector]
             first, frames = (pending[0][0], pending[0][1]) if pending else (None, [])
-            out.append("event %s %s %s %s %s %s" % (suite, STATUSES[int(status)], name, shown, ms, thrown(first, frames)))
+            out.append("event %s %s %s %s %s %s" % (suite, STATUSES[int(status)] if int(status) >= 0 else "null", name, shown, ms, thrown(first, frames)))
             pending = []
         elif kind == "forkError":
             first, frames = (pending[0][0], pending[0][1]) if pending else (None, [])
@@ -105,6 +108,9 @@ def from_teq(text, token):
 def same(expected, got, mode):
     if mode == "exact":
         return expected == got
+    if mode == "unordered":
+        words = lambda lines: sorted(w for l in lines for w in l.split())
+        return words(expected) == words(got)
     loose = lambda l: l.startswith("event ") or l.startswith("forkError ") or l.startswith("[error] ")
     return [l for l in expected if not loose(l)] == [l for l in got if not loose(l)] and sorted(filter(loose, expected)) == sorted(filter(loose, got))
 

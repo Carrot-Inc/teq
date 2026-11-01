@@ -8,10 +8,11 @@
 //! `JSDOMNodeJSEnv` set up (`ComRun`: a loopback socket, each message its length in UTF-16 units,
 //! then the units big-endian, each a byte of the serialized message): one node per run, given its
 //! program on stdin as the environments give it, which loads the link as the module kind says;
-//! one controller runner per framework, its tasks executed one at a time and the tasks a task
-//! returns after it, then the runner's `done`. A run completes when every call has had its reply
+//! one controller runner per framework for every phase of the run (the configuration's groups),
+//! each phase's tasks executed one at a time and the tasks a task returns after it, then each
+//! runner's `done` once every phase has run. A run completes when every call has had its reply
 //! and node, its channel closed, exits with 0: a node that ends early, a reply that is an error
-//! or a status other than 0 fails it.
+//! (but a task's, an event of its suite) or a status other than 0 fails it.
 
 use super::events::{Event, Frame, Selector, Status, Tally, Thrown};
 use super::runner::{Fingerprint, Kind};
@@ -272,7 +273,7 @@ impl Out {
         }
     }
     fn task_def(&mut self, d: &TaskDef) -> &mut Out {
-        self.string(&d.name).fingerprint(&d.fingerprint).bool(false);
+        self.string(&d.name).fingerprint(&d.fingerprint).bool(d.explicit);
         // One `SuiteSelector`.
         self.int(1).byte(1)
     }
@@ -394,6 +395,8 @@ impl<'a> In<'a> {
 pub struct TaskDef {
     pub name: String,
     pub fingerprint: Fingerprint,
+    /// `explicitlySpecified`: the suite named whole on the command line.
+    pub explicit: bool,
 }
 
 /// A task the bridge made (`TaskInfo`): the task as the framework serialized it, its definition's
@@ -652,24 +655,21 @@ impl JsRun {
         })
     }
 
-    /// A framework's suites run with its arguments, as `RunnerAdapter` and `TaskAdapter` run them:
-    /// a controller runner, its tasks, each executed through the continuation and the tasks it
-    /// returns after it, then the runner's `done`, whose summary is written. A suite whose task
-    /// threw, or the framework's runner, is an event of its own (`Event::crashed`); a channel that
-    /// fails is the error.
-    pub fn run_framework(&mut self, run: i32, implementation: &str, args: &[String], suites: &[TaskDef], ansi: bool, tally: &mut Tally) -> Result<(), String> {
-        let crash_all = |me: &mut JsRun, tally: &mut Tally, thrown: Thrown| {
-            for d in suites {
-                let lines = tally.add(Event::crashed(&d.name, Some(thrown.clone())), me.verbose);
-                (me.out)(&lines);
-            }
-        };
+    /// A framework's controller runner made with its arguments, as `RunnerAdapter.apply` makes it, once for every phase
+    /// of the run: what failed in the bridge (`Err` within) is the run's failure, as sbt's `createTestRunners` throws
+    /// it; a channel that fails is the error.
+    pub fn create(&mut self, run: i32, implementation: &str, args: &[String], tally: &mut Tally) -> Result<Result<(), Thrown>, String> {
         let mut args_out = Out::new();
         args_out.int(run).string(implementation).strings(args).strings(&[]);
-        if let Err(thrown) = self.call(CREATE_CONTROLLER_RUNNER, &args_out, tally)? {
-            crash_all(self, tally, thrown);
-            return Ok(());
-        }
+        Ok(self.call(CREATE_CONTROLLER_RUNNER, &args_out, tally)?.map(|_| ()))
+    }
+
+    /// A phase's suites of a framework whose runner `create` made, as `RunnerAdapter.tasks` and `TaskAdapter.execute`
+    /// run them: their tasks asked, each executed through the continuation and the tasks it returns after it, its
+    /// events and the suites that ran counted into the phase's `tally`; a task that threw an event of its own
+    /// (`Event::crashed`), as `TestRunner.run` catches it. A failure of the tasks' call (`Err` within) is the run's, as
+    /// sbt's `TestRunner.tasks` throws it; a channel that fails is the error.
+    pub fn run_tasks(&mut self, run: i32, suites: &[TaskDef], ansi: bool, tally: &mut Tally) -> Result<Result<(), Thrown>, String> {
         let mut defs = Out::new();
         defs.int(run).int(suites.len() as i32);
         for d in suites {
@@ -677,15 +677,12 @@ impl JsRun {
         }
         let tasks = match self.call(TASKS, &defs, tally)? {
             Ok(reply) => In { bytes: &reply, at: 0 }.list(In::task_info)?,
-            Err(thrown) => {
-                crash_all(self, tally, thrown);
-                return self.done(run, implementation, tally);
-            }
+            Err(thrown) => return Ok(Err(thrown)),
         };
         for task in tasks {
             self.execute(run, task, ansi, tally)?;
         }
-        self.done(run, implementation, tally)
+        Ok(Ok(()))
     }
 
     fn execute(&mut self, run: i32, task: TaskInfo, ansi: bool, tally: &mut Tally) -> Result<(), String> {
@@ -708,7 +705,10 @@ impl JsRun {
         Ok(())
     }
 
-    fn done(&mut self, run: i32, implementation: &str, tally: &mut Tally) -> Result<(), String> {
+    /// The runner's `done`, as `RunnerAdapter.done` calls it once every phase has run, its summary written: what failed
+    /// in the bridge (`Err` within) is the run's failure, as sbt's `Defaults.allTestGroupsTask` lets `done()`'s throw
+    /// through; a channel that fails is the error.
+    pub fn done(&mut self, run: i32, tally: &mut Tally) -> Result<Result<(), Thrown>, String> {
         let mut payload = Out::new();
         payload.int(run);
         match self.call(DONE, &payload, tally)? {
@@ -717,13 +717,10 @@ impl JsRun {
                 if !summary.is_empty() {
                     (self.out)(&format!("{}\n", summary));
                 }
+                Ok(Ok(()))
             }
-            Err(thrown) => {
-                let lines = tally.add(Event::crashed(implementation, Some(thrown)), self.verbose);
-                (self.out)(&lines);
-            }
+            Err(thrown) => Ok(Err(thrown)),
         }
-        Ok(())
     }
 
     /// The run's end: the channel closed, which ends node's program, and node waited for, its

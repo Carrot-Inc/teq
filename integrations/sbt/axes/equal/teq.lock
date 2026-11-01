@@ -3,10 +3,10 @@ format: 1
 binaries: {}
 inputs:
   files:
-    build.sbt: 2cbc5d041a14a74906675af40cb01da5d6a6ca2e9ff384e5f6469105260bf8c9
+    build.sbt: 867a072e1c8fd968d4ae5b207892815fa705748980370bef17e5febdfc64ea51
     project/build.properties: 130d92ddf3cbfd0330ca6ec0e9aa88a65c8221ea9b47f0ed83095f52515ebcd3
     project/plugins.sbt: 91d3f3f605b86c50bcadd270241c51bc72dde08ab2a5870e2731a25cf74aa144
-  sha256: 194a5138d2d58384ffebc73798d92aa279af0ce70ce30f788e28d43103de4057
+  sha256: c30196df54ee3858252e57adfe4b2d01d2f2075d0a60c99e46713462aefc782a
 jars:
   junit:junit:4.13.2: maven-central 8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12 384581
   org.hamcrest:hamcrest-core:1.3: maven-central 42a25dc3219429f0e5d060061f71acb49bf010a0 45024
@@ -273,6 +273,14 @@ projects:
           - arguments:
               - "-b"
             class: munit.Framework
+        groups:
+          - name: zeta
+            patterns:
+              - "lib.Z*"
+          - name: alpha
+            patterns:
+              - "-lib.Skip*"
+              - "lib.*"
         javaOptions: []
         parallelism: auto
         resources:
@@ -366,6 +374,10 @@ projects:
           - arguments:
               - "-b"
             class: munit.Framework
+        groups:
+          - name: core
+            patterns:
+              - "sjs.Core*"
         javaOptions: []
         jsEnv:
           args: []

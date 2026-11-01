@@ -164,6 +164,7 @@ declared instead:
 | `teqDevCommand` | the `dev` script of a `package.json` in the project's base | a Scala.js project's dev command, run from the directory of the nearest `package.json` |
 | `teqBuildTool` | false | `teq.lock` and the launchers at the build's root, to commit; the build takes teq as its build tool when any project's setting says so, as a bare `teqBuildTool := true` of `build.sbt` does for every project |
 | `teqExportSnapshots` | true without `teqBuildTool`, false under it | lets the export name SNAPSHOT and dynamic versions |
+| `Test / teqTestGroups` | none | ordered, named groups of the test configuration's suites for `teq test`, each `name -> patterns` in `teq test`'s pattern syntax: a suite runs in the first group that matches it, the groups one after another as phases of one run, then the suites of none (docs/TOOLING.md, "Groups."); a name is unique, not empty and of one line, else the export refuses it |
 
 ```scala
 Compile / teqGenerators += TeqCommand(Seq("node", "generate-labels.mjs", "browserdemo-labels.txt"), inputs = Seq("browserdemo-labels.txt"))

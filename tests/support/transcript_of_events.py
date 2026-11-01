@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The transcript a stand-in teq prints for tests/reference-test-verb.sh's runs, as `teq test --verbose` prints one
 (task::events::report, src/task/daemon.rs `summary`): transcript_of_events.py <events> renders each event of the file
-(the project, the suite, the selector, the status, the thrown, tab-separated) as its outcome line, `[<status>] <test>`
+(the project, the suite, the selector, the status, the thrown, tab-separated, a group after them where the configuration
+has groups) as its outcome line, `[<status>] <test>`
 or `[fail] <test>: <thrown>`, each project's lines together in the order it first came, ended by its summary,
 `<project>/test: <n> suites, <p> passed, <f> failed[, <n> ignored, ...] in 1 ms (built in 1 ms)`, counted as teq's
 tally counts them."""
@@ -18,7 +19,8 @@ for line in open(sys.argv[1]):
     line = line.rstrip("\n")
     if not line:
         continue
-    if line.split("\t")[2:] == ["ran"]:
+    # A suite that ran, its group after it where the configuration has groups.
+    if line.split("\t")[2:3] == ["ran"] and len(line.split("\t")) <= 4:
         continue
     project, suite, selector, status, thrown = (line.split("\t") + [""] * 5)[:5]
     sections.setdefault(project, []).append((suite, selector, status, thrown))

@@ -29,7 +29,8 @@
 # test adapter, and `++3.8.4!` and `+lib/testOnly`; the release the build pins is resolved from a mirror of its GitHub release
 # (teqResolvedBinary), a SNAPSHOT of the compiler from the build's Maven repository (teqVersion overridden), whose
 # launcher runs it through the lock's binaries table; a release the mirror does not serve is named in a warning and
-# the lock names no binary.
+# the lock names no binary; `Test / teqTestGroups` exported in its order (equal's lib and sjs), and malformed group
+# names refusing the export.
 #
 # The plugin is the checkout's, published on both axes under a SNAPSHOT of its own into a Maven repository of the
 # run's (`^publish`, nothing reaching ~/.ivy2/local), or TEQ_PLUGIN_VERSION's, published locally on both axes
@@ -330,6 +331,19 @@ for version in $axes; do
     pass "sbt $version: sjs's own module initializers, the project's and Test's, refused in the lock, the export compiling nothing"
   else
     fail "sbt $version: the module initializers' refusals: $(grep -a -A3 "refus" "$dir/teq.lock" | head -12) $(grep -a "error" "$work/initializers-$version.log" | head -5)"
+  fi
+done
+
+# The suite groups' names checked where the setting is written: a name given twice and an empty one refuse the export
+# on each axis, naming the project and the setting, and no lock is written.
+for version in $axes; do
+  dir=$(copy equal "$version" groups)
+  if ! sbt_in "$dir" "$work/groups-$version.log" 'set lib / Test / teqTestGroups := Seq("a" -> Seq("lib.*"), "a" -> Seq("lib.Z*"), "" -> Seq())' teqExportAll &&
+    grep -q 'lib: Test / teqTestGroups names the group "a" twice' "$work/groups-$version.log" &&
+    grep -q 'lib: Test / teqTestGroups names a group with no name' "$work/groups-$version.log" && [ ! -f "$dir/teq.lock" ]; then
+    pass "sbt $version: suite groups of one name twice and of no name refuse the export, naming the project"
+  else
+    fail "sbt $version: the malformed suite groups: $(grep -a "error\|teqTestGroups" "$work/groups-$version.log" | head -10)"
   fi
 done
 

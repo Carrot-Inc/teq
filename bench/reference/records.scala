@@ -736,18 +736,21 @@ object Deviations:
   def category(status: String): String = if status == "Success" then "passed" else if failed(status) then "failed" else status.toLowerCase
 
   // The suites an invocation's events say ran (`teq test --events`, `task::events::Tally::ran_line`: the project, the
-  // suite and `ran`, tab-separated), a suite that ran no case among them.
+  // suite and `ran`, tab-separated, then the suite's group where the configuration has groups), a suite that ran no
+  // case among them.
   def ran(text: String): Vector[(String, String)] =
     text.linesIterator.flatMap(_.split("\t", -1) match
       case Array(project, suite, "ran") => Some(project -> suite)
+      case Array(project, suite, "ran", _) => Some(project -> suite)
       case _ => None).toVector
 
   // The cases of an invocation's events (`teq test --events`, `task::events::Event::line`: the project, the suite, the
-  // selector, the status, the thrown, tab-separated): a case is the test a `test <name>` selector names, another
-  // selector as it is written; `qualified`, the test's name is the case under no suite (Mill's `<suite>.<test>`).
+  // selector, the status, the thrown, tab-separated, then the suite's group where the configuration has groups): a
+  // case is the test a `test <name>` selector names, another selector as it is written; `qualified`, the test's name is
+  // the case under no suite (Mill's `<suite>.<test>`).
   def events(text: String, qualified: Boolean): Vector[(TestCase, String)] =
     text.linesIterator.filter(_.nonEmpty).flatMap(_.split("\t", -1) match
-      case Array(project, suite, selector, status, _*) =>
+      case Array(project, suite, selector, status, _, _*) =>
         val test = if selector.startsWith("test ") then selector.drop(5) else selector
         Some(TestCase(project, if qualified then "" else suite, test) -> status)
       case _ => None).toVector
