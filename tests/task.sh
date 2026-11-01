@@ -12,13 +12,13 @@
 # without the token of `daemon.json` is refused; `stop` ends the daemon. Then `test` over app's
 # munit suites (the jars of the example
 # fixture's jvmapp tests, from the coursier cache): the suites sbt's discovery would define, the
-# exclusion, the patterns, a runner per run (the next started once a run ends), an edit between two
-# runs and a resource's, `--changed`, a jar
-# rewritten in place restarting the runner, a runner killed and one whose client left, a JVM older
+# exclusion, the patterns, a runner per invocation (the next started once one ends, a listing's spent with it), an
+# edit between two runs and a resource's, `--changed`, a jar
+# rewritten in place read afresh by the next run, a runner killed and one whose client left, a JVM older
 # than the export's classes refused, `stop` ending the runner. Then the forked runner's contract, held on sbt
 # 2.0.8's own worker and on teq's runner over the probe framework's suites (javac's, from
-# tests/support/probe_framework), and the runner's pool through teq over an export of its own (the lock's
-# `parallelism`), each section saying what it holds. Then `run` (an alias and a main
+# tests/support/probe_framework), and the runner's pool and the run's class loader through teq over exports of
+# their own (the lock's `parallelism`, the test class path's layout), each section saying what it holds. Then `run` (an alias and a main
 # class, the run block's options, variables and directory, a resource of the runtime classpath,
 # the arguments and the exit code, the refusals, the main class implied without a word as sbt's
 # `run` implies it: the declared one, the single one among the products, a package object's
@@ -76,6 +76,7 @@ cleanup() {
   [ -f "$work/js/teq.lock" ] && (cd "$work/js" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -f "$work/e/target/teq/teq.lock" ] && (cd "$work/e" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -f "$work/pool/target/teq/teq.lock" ] && (cd "$work/pool" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+  [ -f "$work/ld/target/teq/teq.lock" ] && (cd "$work/ld" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -n "${server:-}" ] && kill "$server" 2> /dev/null
   rm -rf "$work"
 }
@@ -243,10 +244,10 @@ EOF
 # before): their products decide (one, two, none). STAGE_NONE gives solo's block `mainClassNone`,
 # the shape for a build that sets the key to None. OLD_SHAPE writes the export as a plugin before
 # them did: no `mainClass` in the run block (the stage block kept its own, which such a plugin
-# required), and no block for core.
+# required), and no block for core. TEST_GROUPS gives app's test configuration its `groups` (a JSON list).
 write_export() {
   python3 - "$b" "$lib" "$lib3" "$1" "$2" "${3:-}" "${OUTPUT_VERSION:-17}" "$PWD/integrations/sbt/example/teq.lock" "${EXTRA_FRAMEWORK:-}" "${JAVA_OPTIONS:-}" "${STAGE_DIRECTORY:-app/target/docker/stage}" <<'PY'
-import hashlib, sys
+import hashlib, json, sys
 import importlib.util, os
 spec = importlib.util.spec_from_file_location("lock", os.environ["LOCK_PY"])
 lock = importlib.util.module_from_spec(spec)
@@ -309,7 +310,8 @@ export = {
                                 "generators": [{"cwd": ".", "inputs": ["labels.txt"], "kind": "command", "outputs": [gen], "run": ["sh", "gen.sh", "labels.txt", gen]}]},
                     "test": {"classpath": [{"configuration": "compile", "project": "app"}, {"configuration": "compile", "project": "core"}, {"file": "lib/extra.jar"}] + jars + munit, "flags": flags(int(inlines)), "resources": ["app/test-resources"], "sources": ["app/test"],
                              "baseDirectory": ".", "envVars": {}, "exclude": ["app.Excluded"], "fork": False, "javaOptions": [option] if option else [],
-                             "frameworks": [{"arguments": [], "class": "munit.Framework"}] + ([{"arguments": [], "class": framework}] if framework else [])},
+                             "frameworks": [{"arguments": [], "class": "munit.Framework"}] + ([{"arguments": [], "class": framework}] if framework else []),
+                             **({"groups": json.loads(os.environ["TEST_GROUPS"])} if os.environ.get("TEST_GROUPS") else {})},
                     "runtime": {"classpath": [product("app"), product("core"), {"file": "lib/extra.jar"}] + jars, "resources": [], "sources": []}},
                 "run": {"aliases": {"exit": "app.Exit", "main": "app.Main", "sleep": "app.Sleep", "stubborn": "app.Stubborn"}, "baseDirectory": "app", "envVars": {"RUN_VAR": "var"}, "javaOptions": ["-Drun.option=opt"], **({} if old else {"mainClass": "app.Main"})},
                 "stage": {"directory": stage, "exposedPorts": [9000], "kind": "docker", "mainClass": "app.Main", "name": "app", "layers": {
@@ -528,23 +530,26 @@ next_runner() {
   runner_pid
 }
 out=$(task test app --list)
-expected='Test app.Excluded : subclass(false, munit.Suite)
-Test app.MainTest : subclass(false, munit.Suite)
+expected='Test app.MainTest : subclass(false, munit.Suite)
 Test app.Resources : subclass(false, munit.Suite)
 Test app.Sleeper : subclass(false, munit.Suite)
 Test app.ViaBase : subclass(false, munit.Suite)'
-if [ "$out" = "$expected" ]; then pass "test --list: the suites as sbt's definedTests, a base's subclass among them, the abstract base and a plain class not"; else fail "test --list: $out"; fi
-listed=$(runner_pid)
+if [ "$out" = "$expected" ]; then pass "test --list: the suites a run would run as sbt's definedTests shows them, a base's subclass among them, the abstract base, a plain class and the excluded suite not"; else fail "test --list: $out"; fi
+# The listing's runner, whose class loader holds this build's classes, is spent with the listing: the one launched for
+# the next invocation, with nothing of the class path loaded, runs the suites.
+log_count() { grep -c "$1" "$b/target/teq/task.log"; }
+listed=$(next_runner)
+started=$(log_count '^starting the test runner of app/test: ')
 out=$(task test app)
 if [ $? = 0 ] && [[ "$out" == *"app/test: 4 suites, 5 passed, 0 failed in "* ]] && [[ "$out" == *"app.MainTest"* ]] && [[ "$out" != *"excluded"* ]]; then pass "test runs the suites but the excluded one on the runner, the framework's output then the summary"; else fail "test: $out"; fi
 pid=$(next_runner)
 # The spent one quits on the daemon's thread, which reaps it.
 for _ in $(seq 50); do alive "$listed" || break; sleep 0.1; done
-if [ -n "$listed" ] && [ -n "$pid" ] && [ "$pid" != "$listed" ] && ! alive "$listed" && grep -q '^stopping the test runner of app/test: its run is done' "$b/target/teq/task.log" \
-  && grep -q '^starting the test runner of app/test for the next run' "$b/target/teq/task.log"; then
-  pass "a runner serves one run: the one --list started runs the suites and quits, the next launched before the answer"
+if [ -n "$listed" ] && [ -n "$pid" ] && [ "$pid" != "$listed" ] && ! alive "$listed" && [ "$(log_count '^starting the test runner of app/test: ')" = "$started" ] \
+  && [ "$(log_count '^stopping the test runner of app/test: its run is done')" -ge 2 ] && [ "$(log_count '^starting the test runner of app/test for the next run')" -ge 2 ]; then
+  pass "a runner serves one invocation: the listing's quits once it has listed, the one launched then runs the suites and quits, the next launched before the answer"
 else
-  fail "the runner per run: --list's $listed, the next $pid"
+  fail "the runner per invocation: the listing's successor $listed, the next $pid"
 fi
 cp "$b/app/test/app/MainTest.scala" "$work/MainTest.scala"
 sed -i.bak 's/core.Core.answer, 42/core.Core.answer, 41/' "$b/app/test/app/MainTest.scala"
@@ -564,21 +569,44 @@ echo hello > "$b/app/test-resources/greeting.txt"
 if [ $code = 1 ] && [[ "$out" == *"1 suite, 1 passed, 1 failed"* ]]; then pass "a resource of the test configuration is read afresh by the next run"; else fail "the resource: $out"; fi
 out=$(task test app '*Via*' -app.MainTest)
 if [[ "$out" == *"app/test: 1 suite, 1 passed"* ]] && [[ "$out" == *"app.ViaBase"* ]]; then pass "testOnly's patterns select the suites"; else fail "the patterns: $out"; fi
+out=$(task test app --list '*Via*' -app.MainTest 'app.Excluded')
+if [ "$out" = 'Test app.ViaBase : subclass(false, munit.Suite)' ]; then pass "--list prints what the patterns select, an excluded suite not though a pattern names it"; else fail "--list with patterns: $out"; fi
+TEST_GROUPS='[{"name": "via", "patterns": ["*Via*"]}, {"name": "empty", "patterns": ["none.*"]}, {"name": "rest", "patterns": ["-*Sleeper", "app.*"]}]' write_export 0.1.7-check.9 81
+out=$(task test app --list)
+expected='Group via
+Test app.ViaBase : subclass(false, munit.Suite)
+Group empty
+Group rest
+Test app.MainTest : subclass(false, munit.Suite)
+Test app.Resources : subclass(false, munit.Suite)
+Ungrouped
+Test app.Sleeper : subclass(false, munit.Suite)'
+listed_groups=$(task test app --list -app.Resources)
+write_export 0.1.7-check.9 81
+if [ "$out" = "$expected" ] && [[ "$listed_groups" != *"app.Resources"* ]] && [[ "$listed_groups" == *"Group rest"* ]]; then
+  pass "--list with groups: each group's suites under its header in the lock's order, an empty one shown, an exclusion leaving a suite to the ungrouped, the patterns applied first"
+else
+  fail "--list with groups: $out // $listed_groups"
+fi
 task test app > /dev/null
 out=$(task test app --changed)
 if [[ "$out" == "app/test: no suite depends on what changed" ]]; then pass "--changed after a run of every suite, nothing written since: no suite"; else fail "--changed with nothing written: $out"; fi
 cp "$b/core/src/core/Core.scala" "$work/Core.scala"
 sed -i.bak 's/def answer: Int = 42/def answer: Int = "42".toInt/' "$b/core/src/core/Core.scala"
+listed=$(task test app --list --changed 2> /dev/null)
+task test app --list > /dev/null
 out=$(task test app --changed)
-if [[ "$out" == *"app/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"app.MainTest"* ]]; then pass "--changed runs the suite whose classes depend on the class an edit changed, alone"; else fail "--changed after an edit: $out"; fi
+if [ "$listed" = 'Test app.MainTest : subclass(false, munit.Suite)' ]; then pass "--list --changed prints the suite whose classes depend on the class an edit changed, alone"; else fail "--list --changed after an edit: $listed"; fi
+if [[ "$out" == *"app/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"app.MainTest"* ]]; then pass "--changed runs the suite whose classes depend on the class an edit changed, alone, the listings before it leaving the history alone"; else fail "--changed after an edit: $out"; fi
 cp "$work/Core.scala" "$b/core/src/core/Core.scala"
 task compile app > /dev/null
 out=$(task test app --changed)
 if [[ "$out" == *"app/test: 1 suite, 1 passed, 0 failed"* ]]; then pass "--changed counts what a compile wrote since the last run of every suite"; else fail "--changed after a compile: $out"; fi
+changed=$(log_count '^stopping the test runner of app/test: what it was started with changed')
 extra_jar two
 out=$(task test app '*Resources')
-if [[ "$out" == *"1 suite, 1 passed, 1 failed"* ]] && grep -q '^stopping the test runner of app/test: what it was started with changed' "$b/target/teq/task.log"; then
-  pass "a jar of the class path rewritten in place starts the runner anew"
+if [[ "$out" == *"1 suite, 1 passed, 1 failed"* ]] && [ "$(log_count '^stopping the test runner of app/test: what it was started with changed')" = "$changed" ]; then
+  pass "a jar of the class path rewritten in place is read afresh by the next run's class loader, the runner launched before it kept"
 else
   fail "the jar rewritten: $out"
 fi
@@ -646,8 +674,19 @@ if [ -n "$pid" ] && ! alive "$pid" && ! pgrep -f "$b/target/teq/app/test/runner.
 # publishes, after its logged error, one Error of a SuiteSelector and no duration, its own events dropped (Throw;
 # ThrowOne and ThrowTwo at once, each with its own exception and frames); the tasks a task returns wait for its
 # whole wave though a worker is free (WaveA, WaveB, WaveChild); done() is called once the last wave is drained,
-# what it returns printed nowhere. The lines each side writes are compared as tests/support/runner_contract.py makes
-# them.
+# what it returns printed nowhere; an event's getters read as it comes, a throwing one the task's throw though its
+# selector is of no kind the worker writes (OddDuration); the debug lines' reads, a task error's event read as any
+# event's, and an error whose report throws (DebugAudit, Audit, BrokenReport, BrokenTasks); the suites carrying
+# fingerprints' copies, a throwable copied by its message, class and frames, a logger's null message, a definition
+# serialized, a trace of null, the loggers' array emptied (Shown, OddReads); an event of no status (NullStatus); a
+# framework of sbt's older interface runs through the worker's FrameworkWrapper (Legacy); a framework whose
+# fingerprints cannot be had (Unprinted); in the worker's virtual layout, slf4j's provider registered in a resources
+# directory beside slf4j-api is found (probe.ext.Provider). The lines each side writes are compared as
+# tests/support/runner_contract.py makes them. teq's runner plays sbt's host too, of sbt's export (`load 1`): where
+# the host's calls show, its own lines follow `=== teq`: once its worker has answered with no fork error, sbt's host
+# asks each of its runners' done() and shows the summaries (Defaults.allTestGroupsTask, TestResultLogger), the probe
+# framework's printing `probe: done` again and its summary; what the host throws (making a runner, discovering the
+# fingerprints) fails the run before any worker, with no line of the worker's.
 javac=${JAVAC:-${JAVA_HOME:+$JAVA_HOME/bin/}javac}
 java=${JAVA_HOME:+$JAVA_HOME/bin/}java
 interface=$M2/org/scala-sbt/test-interface/1.0/test-interface-1.0.jar
@@ -663,27 +702,49 @@ else
   # contract <name> exact|relaxed <threads: 1, n or auto> <framework or suite>...: the expected lines on stdin, held
   # to the pinned worker's and to those of teq's runner (the committed classes teq embeds) given the same frameworks
   # and suites, a framework `<class>|<argument>|<suite>,<suite>...` and a bare suite the probe framework's, its
-  # argument empty.
+  # argument empty. teq's runner has test-interface alone on its class path and the probe framework's classes as the
+  # run's class path (`load`); with CONTRACT_PATHS (entries separated by `:`), both sides take those entries as the
+  # run's class path besides, the worker in its virtual layout (probe.Pinned's `probe.classpath`).
   contract() {
-    local name=$1 mode=$2 threads=$3 bare= arg specs=() i class argument names suite
+    local name=$1 mode=$2 threads=$3 bare= arg specs=() i class argument names suite entry virtual=()
     shift 3
     for arg; do case $arg in *"|"*) specs+=("$arg") ;; *) bare=${bare:+$bare,}$arg ;; esac; done
     [ -z "$bare" ] || specs+=("probe.Framework||$bare")
     cat > "$probe/$name.want"
-    timeout 60 "$java" -cp "$probe/classes:$interface:$worker:$gson" probe.Pinned "$threads" "${specs[@]}" > "$probe/$name.sbt" 2>&1
+    [ -z "${CONTRACT_PATHS:-}" ] || virtual=("-Dprobe.classpath=$CONTRACT_PATHS")
+    timeout 60 "$java" "${virtual[@]}" -cp "$probe/classes:$interface:$worker:$gson" probe.Pinned "$threads" "${specs[@]}" > "$probe/$name.sbt" 2>&1
     {
+      printf 'path\t%s\n' "$probe/classes"
+      for entry in ${CONTRACT_PATHS//:/ }; do printf 'path\t%s\n' "$entry"; done
       for i in "${!specs[@]}"; do IFS='|' read -r class argument names <<< "${specs[$i]}"; printf 'framework\t%s\t%s\n' "$class" "$argument"; done
-      printf 'start\nrun\t0\t0\t%s\n' "$threads"
+      # As sbt's host, of sbt's export: the suites as the definitions its selection starts from, one filter of them all,
+      # as `testOnly` without patterns has (IncrementalTest.selectedFilter).
+      printf 'load\t1\nrun\t0\t0\t%s\t1\n' "$threads"
+      local defs=() suites=() filter=filter
       for i in "${!specs[@]}"; do
         IFS='|' read -r class argument names <<< "${specs[$i]}"
-        for suite in ${names//,/ }; do printf 'suite\t%s\t0\t%s\n' "$i" "$suite"; done
+        for suite in ${names//,/ }; do
+          filter+=$(printf '\t%s' "${#defs[@]}")
+          defs+=("$(printf 'def\t%s\t0\t%s' "$i" "$suite")")
+          suites+=("$(printf 'suite\t%s\t0\t0\t0\t%s' "$i" "$suite")")
+        done
       done
+      printf '%s\n' "${defs[@]}" "$filter" "${suites[@]}"
       printf 'go\nquit\n'
-    } | timeout 60 "$java" -cp "src/task/runner:$probe/classes:$interface" dev.teq.runner.Runner TOKEN7f3a > "$probe/$name.teq" 2>&1
-    local sbt teq sbt_code teq_code
+    } | timeout 60 "$java" -cp "src/task/runner:$interface" dev.teq.runner.Runner TOKEN7f3a > "$probe/$name.teq" 2>&1
+    local sbt teq sbt_code teq_code teq_mode=$mode
+    # Where teq's runner departs from the worker (docs/TOOLING.md, "Tests."), the lines after `=== teq <mode>` are its
+    # own, held in that mode.
+    if grep -q '^=== teq ' "$probe/$name.want"; then
+      teq_mode=$(sed -n 's/^=== teq //p' "$probe/$name.want")
+      sed '1,/^=== teq /d' "$probe/$name.want" > "$probe/$name.teq-want"
+      sed -i '/^=== teq /,$d' "$probe/$name.want"
+    else
+      cp "$probe/$name.want" "$probe/$name.teq-want"
+    fi
     sbt=$(python3 tests/support/runner_contract.py sbt - "$mode" "$probe/$name.want" < "$probe/$name.sbt")
     sbt_code=$?
-    teq=$(python3 tests/support/runner_contract.py teq TOKEN7f3a "$mode" "$probe/$name.want" < "$probe/$name.teq")
+    teq=$(python3 tests/support/runner_contract.py teq TOKEN7f3a "$teq_mode" "$probe/$name.teq-want" < "$probe/$name.teq")
     teq_code=$?
     if [ $sbt_code = 0 ] && [ $teq_code = 0 ]; then
       pass "teq's runner keeps the pinned worker's contract: $name"
@@ -699,6 +760,16 @@ event probe.pin.OrderB Success probe.pin.OrderB test case 1 -
 exec probe.pin.OrderChild
 event probe.pin.OrderChild Success probe.pin.OrderChild test case 1 -
 probe: done
+=== teq exact
+exec probe.pin.OrderA
+event probe.pin.OrderA Success probe.pin.OrderA test case 1 -
+exec probe.pin.OrderB
+event probe.pin.OrderB Success probe.pin.OrderB test case 1 -
+exec probe.pin.OrderChild
+event probe.pin.OrderChild Success probe.pin.OrderChild test case 1 -
+probe: done
+probe: done
+probe: the summary done() returns
 WANT
   contract logs relaxed 2 probe.pin.LogA probe.pin.LogB <<'WANT'
 A begin
@@ -707,6 +778,15 @@ A end
 event probe.pin.LogA Success probe.pin.LogA test case 1 -
 event probe.pin.LogB Success probe.pin.LogB test case 1 -
 probe: done
+=== teq relaxed
+A begin
+B between
+A end
+event probe.pin.LogA Success probe.pin.LogA test case 1 -
+event probe.pin.LogB Success probe.pin.LogB test case 1 -
+probe: done
+probe: done
+probe: the summary done() returns
 WANT
   contract throw exact 1 probe.pin.Throw <<'WANT'
 [error] Uncaught exception when running probe.pin.Throw: java.lang.RuntimeException: boom
@@ -732,31 +812,56 @@ event probe.pin.BadSelector Error probe.pin.BadSelector suite 0 java.lang.Unsupp
 probe: done
 WANT
   # Two frameworks of one fingerprint: the worker gives the suite to each (ForkTestMain.runTests' matches), the twin
-  # running it after the probe framework.
+  # running it after the probe framework; the worker calls the probe framework's done() before the twin runs, teq's
+  # runner every framework's done() once the run's last phase has drained, as sbt runs its groups in process.
   contract twin exact 1 'probe.Framework||probe.pin.OrderB' 'probe.Twin||' <<'WANT'
 exec probe.pin.OrderB
 event probe.pin.OrderB Success probe.pin.OrderB test case 1 -
 probe: done
 twin probe.pin.OrderB
 event probe.pin.OrderB Success probe.pin.OrderB suite 1 -
+=== teq exact
+exec probe.pin.OrderB
+event probe.pin.OrderB Success probe.pin.OrderB test case 1 -
+twin probe.pin.OrderB
+event probe.pin.OrderB Success probe.pin.OrderB suite 1 -
+probe: done
+probe: done
+probe
+probe: the summary done() returns
 WANT
   # The review's counter-probes: a framework that fails to make its runner, or its tasks, or whose done() throws, ends
   # the run, no framework after it run (the probe framework's OrderB never runs); done()'s hook, left in place, calls
-  # it again as the JVM ends, which prints its exception.
+  # it again as the JVM ends, which prints its exception. sbt's host makes the runners first (createTestRunners), so
+  # that one that cannot be made fails the run there, before the worker.
   contract runner exact 1 'probe.Failing|runner|probe.pin.FailingCase' probe.pin.OrderB <<'WANT'
 [error] Uncaught exception when running tests: java.lang.IllegalStateException: runner-error
+forkError java.lang.IllegalStateException: runner-error
+=== teq exact
 forkError java.lang.IllegalStateException: runner-error
 WANT
   contract tasks exact 1 'probe.Failing|tasks|probe.pin.FailingCase' probe.pin.OrderB <<'WANT'
 [error] Uncaught exception when running tests: java.lang.IllegalStateException: tasks-error
 forkError java.lang.IllegalStateException: tasks-error
 WANT
+  # teq's runner runs the probe framework's suite before the done() calls, the probe framework's done() never called
+  # by the run once the failing one has thrown, its hook calling it as the JVM ends, beside the failing one's, in
+  # either order.
   contract done exact 1 'probe.Failing|done|probe.pin.FailingCase' probe.pin.OrderB <<'WANT'
 exec probe.pin.FailingCase
 event probe.pin.FailingCase Success probe.pin.FailingCase suite 1 -
 [error] Uncaught exception when running tests: java.lang.IllegalStateException: done-error
 forkError java.lang.IllegalStateException: done-error
 Exception in thread "Thread-0" java.lang.IllegalStateException: done-error
+=== teq unordered
+exec probe.pin.FailingCase
+event probe.pin.FailingCase Success probe.pin.FailingCase suite 1 -
+exec probe.pin.OrderB
+event probe.pin.OrderB Success probe.pin.OrderB test case 1 -
+[error] Uncaught exception when running tests: java.lang.IllegalStateException: done-error
+forkError java.lang.IllegalStateException: done-error
+Exception in thread "Thread-0" java.lang.IllegalStateException: done-error
+probe: done
 WANT
   # The second review's counter-probe: past its fork error the worker goes on, its framework's done() releasing the
   # resource the throwing task acquired.
@@ -774,6 +879,20 @@ WANT
 odd accepted
 [error] Failed to execute task java.util.concurrent.FutureTask[Completed exceptionally: cannot serialize probe.pin.OddSelector; did you forget to register a subtype?]
 probe: done
+=== teq exact
+odd accepted
+[error] Failed to execute task java.util.concurrent.FutureTask[Completed exceptionally: cannot serialize probe.pin.OddSelector; did you forget to register a subtype?]
+probe: done
+probe: done
+probe: the summary done() returns
+WANT
+  # A counter-probe: an event of a Serializable selector of an unknown kind whose duration cannot be had: ForkEvent
+  # reads every getter as the event comes, before gson refuses the selector, so the task throws.
+  contract duration exact 1 probe.pin.OddDuration <<'WANT'
+[error] Uncaught exception when running probe.pin.OddDuration: java.lang.IllegalStateException: duration-error
+forkError java.lang.IllegalStateException: duration-error @ probe.pin.OddDuration.run
+event probe.pin.OddDuration Error probe.pin.OddDuration suite 0 java.lang.IllegalStateException: duration-error @ probe.pin.OddDuration.run
+probe: done
 WANT
   # The review's counter-probe: a throwable given to the loggers' trace is the worker's fork error, verbose or not.
   contract trace exact 1 probe.pin.Trace <<'WANT'
@@ -789,7 +908,184 @@ event probe.pin.WaveA Success probe.pin.WaveA test case 1 -
 event probe.pin.WaveB Success probe.pin.WaveB test case 1 -
 event probe.pin.WaveChild Success probe.pin.WaveChild test case 1 -
 probe: done
+=== teq relaxed
+exec probe.pin.WaveA
+exec probe.pin.WaveB ends
+exec probe.pin.WaveChild
+event probe.pin.WaveA Success probe.pin.WaveA test case 1 -
+event probe.pin.WaveB Success probe.pin.WaveB test case 1 -
+event probe.pin.WaveChild Success probe.pin.WaveChild test case 1 -
+probe: done
+probe: done
+probe: the summary done() returns
 WANT
+  # Counter-probes of the worker's task and reporting branches: a returned task whose definition's fingerprint cannot
+  # be shown throws at the debug line made before it runs, never running (ForkTestMain.runTest); a task that throws, its
+  # definition's fingerprint failing a getter, fails its future making its Error event (testError, testEvent,
+  # ForkEvent), no event of it sent; a framework's error whose report throws is the worker's internal error (Run.run,
+  # internalError).
+  contract debugread exact 1 'probe.DebugAudit||probe.Root' <<'WANT'
+[error] Uncaught exception when running probe.Child: java.lang.IllegalStateException: debug-read-error
+forkError java.lang.IllegalStateException: debug-read-error
+event probe.Child Error probe.Child suite 0 java.lang.IllegalStateException: debug-read-error
+WANT
+  contract errorread exact 1 'probe.Audit||probe.Root' <<'WANT'
+[error] Uncaught exception when running probe.Child: java.lang.IllegalStateException: task-error
+forkError java.lang.IllegalStateException: task-error
+[error] Failed to execute task java.util.concurrent.FutureTask[Completed exceptionally: fingerprint-read-error]
+WANT
+  # BrokenReport's throw comes from its fingerprints(), which sbt's host asks first, reflectively: its discovery fails
+  # with what wraps it, whose report does not throw, before any worker.
+  contract internal exact 1 'probe.BrokenReport||probe.Root' <<'WANT'
+Internal error when running tests: java.lang.IllegalArgumentException: report-error
+=== teq exact
+forkError java.lang.reflect.InvocationTargetException: null
+WANT
+  # A framework's error whose report throws in the worker, past sbt's host: the worker's internal error, after which it
+  # answers as at its end (the probe framework's OrderB never runs), and sbt's host, its run done, asks its runners'
+  # done() and shows the summaries (Defaults.allTestGroupsTask, TestResultLogger).
+  contract internalrun exact 1 'probe.BrokenTasks||probe.pin.BrokenCase' probe.pin.OrderB <<'WANT'
+Internal error when running tests: java.lang.IllegalArgumentException: report-error
+=== teq exact
+Internal error when running tests: java.lang.IllegalArgumentException: report-error
+probe: done
+probe
+probe: the summary done() returns
+WANT
+  # Counter-probes: a fingerprint that cannot be hashed reaches no definition, the suites carrying sbt's copies
+  # (ForkTests.forkFingerprint), and one of no suite whose requireNoArgConstructor throws is never asked it, so the
+  # suite runs; a throwable whose cause cannot be shown is copied by its message, class and frames (ForkError), its fork
+  # error sent; a logger's message of null shows nothing; a definition serializes, its copy Serializable; a trace of
+  # null throws back to the framework (a pin: it did before); the loggers' array emptied by a task leaves the worker's
+  # own lines alone.
+  contract fingerscan exact 1 'probe.Shown||probe.Root' <<'WANT'
+ROOT RAN
+WANT
+  contract causeread exact 1 'probe.OddReads|cause|probe.Root' <<'WANT'
+[error] Uncaught exception when running probe.Root: java.lang.RuntimeException: x
+forkError java.lang.RuntimeException: x
+event probe.Root Error probe.Root suite 0 java.lang.RuntimeException: x
+WANT
+  contract nulllog exact 1 'probe.OddReads|nulllog|probe.Root' <<'WANT'
+LOGGED
+WANT
+  contract serialize exact 1 'probe.OddReads|serialize|probe.Root' <<'WANT'
+SERIALIZED
+WANT
+  contract tracenull exact 1 'probe.OddReads|tracenull|probe.Root' <<'WANT'
+TRACE THREW java.lang.NullPointerException
+WANT
+  contract nulllogger exact 1 'probe.OddReads|nulllogger|probe.Root' <<'WANT'
+event probe.Root Success probe.Root test case 1 -
+WANT
+  # An event of no status: the worker's ForkEvent carries it (sbt's host counting it as none, SuiteResult.apply), and
+  # the task's other events with it.
+  contract nullstatus exact 1 probe.pin.NullStatus <<'WANT'
+event probe.pin.NullStatus null probe.pin.NullStatus test none 1 -
+event probe.pin.NullStatus Success probe.pin.NullStatus test case 1 -
+probe: done
+=== teq exact
+event probe.pin.NullStatus null probe.pin.NullStatus test none 1 -
+event probe.pin.NullStatus Success probe.pin.NullStatus test case 1 -
+probe: done
+probe: done
+probe: the summary done() returns
+WANT
+  # Counter-probes: the worker's loop over its framework's fingerprints reads each member as it reaches it, so that one
+  # a getter replaces meanwhile is the one met (LoopMutating: its first fingerprint's first module read replaces the
+  # second by a third), teq's runner first making sbt's host's calls of its own instance; and every framework's
+  # definition of a suite holds the suite's one selectors array (SelA writing into it, SelB seeing what it wrote). On
+  # sbt's side the harness's copy of the definition's fingerprint reads instance 1's; on teq's, sbt's host's discovery
+  # reads its own instance's two (the array's members as they were when asked, toList), then filteredFrameworks' first
+  # match and the copy, the worker's instance 2 after.
+  contract loopread exact 1 'probe.LoopMutating||probe.pin.OrderB' <<'WANT'
+instance 1 A isModule
+instance 2 A isModule
+instance 2 C isModule
+exec probe.pin.OrderB
+event probe.pin.OrderB Success probe.pin.OrderB test case 1 -
+probe: done
+=== teq exact
+instance 1 A isModule
+instance 1 B isModule
+instance 1 A isModule
+instance 1 A isModule
+instance 1 A isModule
+instance 2 A isModule
+instance 2 C isModule
+exec probe.pin.OrderB
+event probe.pin.OrderB Success probe.pin.OrderB test case 1 -
+probe: done
+probe: done
+probe: the summary done() returns
+WANT
+  contract selectors exact 1 'probe.SelA||probe.pin.OrderB' 'probe.SelB||' <<'WANT'
+A sees [TestSelector(mutated-by-A)]
+B sees [TestSelector(mutated-by-A)]
+WANT
+  # sbt's host's selection over 20,000 definitions, processOptions' distinct finding a definition's equals by its hash
+  # (a HashSet's bucket): under 100 ms by the runner's own count, which no worker joins, no suite being selected, the
+  # frameworks loaded and nothing thrown, so that the selection ran over them all (some 20 to 35 ms here; comparing each
+  # definition with every one kept before it took some 800 ms).
+  {
+    printf 'path\t%s\nframework\tprobe.Framework\t\nload\t1\nrun\t0\t0\t1\t1\n' "$probe/classes"
+    seq 0 19999 | awk '{printf "def\t0\t0\tprobe.Suite%d\n", $1}'
+    printf 'filter\ngo\nquit\n'
+  } | timeout 60 "$java" -cp "src/task/runner:$interface" dev.teq.runner.Runner TOKEN7f3a > "$probe/selection.teq" 2>&1
+  ms=$(awk -F'\t' '$1 == "TOKEN7f3a" && $2 == "done" {print $3}' "$probe/selection.teq")
+  if [ -n "$ms" ] && [ "$ms" -lt 100 ] && grep -q '^TOKEN7f3a	loaded$' "$probe/selection.teq" \
+    && ! grep -qE '^TOKEN7f3a	(throwable|forkError|missing)(	|$)' "$probe/selection.teq"; then
+    pass "sbt's host's selection of 20,000 definitions in ${ms} ms, a definition compared only with those of its hash"
+  else
+    fail "the host's selection of 20,000 definitions (${ms:-no} ms): $(tail -3 "$probe/selection.teq")"
+  fi
+  # A framework of sbt's older interface (org.scalatools.testing), which the worker runs through its FrameworkWrapper
+  # (ForkTestMain.runTests): its event a TestSelector of the test's name, with no duration.
+  contract legacy exact 1 'probe.Legacy|argument|probe.pin.OrderB' <<'WANT'
+legacy probe.pin.OrderB argument
+event probe.pin.OrderB Success probe.pin.OrderB test legacy case -1 -
+WANT
+  # A framework whose fingerprints cannot be had: the worker's run error, no framework after it run (the probe
+  # framework's OrderB never runs); sbt's host, asking them reflectively first (Tests.discover,
+  # TestFramework.getFingerprints), fails its discovery with what wraps the throw, before any worker.
+  contract fingerprints exact 1 'probe.Unprinted||probe.pin.FailingCase' probe.pin.OrderB <<'WANT'
+[error] Uncaught exception when running tests: java.lang.IllegalStateException: fingerprints-error
+forkError java.lang.IllegalStateException: fingerprints-error
+=== teq exact
+forkError java.lang.reflect.InvocationTargetException: null
+WANT
+  # slf4j-api below the runner, in the run's class loader beside a resources directory registering slf4j-simple's
+  # provider (its jar without the registration): slf4j finds it through its own class loader, as the worker's virtual
+  # layout does (WorkerMain.test), where a JVM class path holding slf4j-api above the run's loader gives slf4j's no-op
+  # factory.
+  slf4j=$M2/org/slf4j/slf4j-api/2.0.18/slf4j-api-2.0.18.jar
+  simple=$M2/org/slf4j/slf4j-simple/2.0.18/slf4j-simple-2.0.18.jar
+  if [ ! -f "$slf4j" ] || [ ! -f "$simple" ]; then
+    fail "slf4j-api 2.0.18 or slf4j-simple 2.0.18 is not in the coursier cache (incomplete validation)"
+  elif ! timeout 120 "$javac" --release 17 -nowarn -cp "$probe/classes:$interface:$slf4j" -d "$probe/provider" tests/support/probe_provider/probe/ext/Provider.java > "$probe/provider.log" 2>&1; then
+    fail "the provider suite does not compile: $(tail -5 "$probe/provider.log")"
+  else
+    mkdir -p "$probe/provider-resources/META-INF/services"
+    echo org.slf4j.simple.SimpleServiceProvider > "$probe/provider-resources/META-INF/services/org.slf4j.spi.SLF4JServiceProvider"
+    python3 - "$simple" "$probe/simple-unregistered.jar" <<'PY'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as src, zipfile.ZipFile(sys.argv[2], "w") as dst:
+    for entry in src.infolist():
+        if entry.filename != "META-INF/services/org.slf4j.spi.SLF4JServiceProvider":
+            dst.writestr(entry, src.read(entry.filename))
+PY
+    CONTRACT_PATHS="$probe/provider:$slf4j:$probe/simple-unregistered.jar:$probe/provider-resources" contract provider exact 1 probe.ext.Provider <<'WANT'
+factory org.slf4j.simple.SimpleLoggerFactory
+event probe.ext.Provider Success probe.ext.Provider test provider 1 -
+probe: done
+=== teq exact
+factory org.slf4j.simple.SimpleLoggerFactory
+event probe.ext.Provider Success probe.ext.Provider test provider 1 -
+probe: done
+probe: done
+probe: the summary done() returns
+WANT
+  fi
 fi
 
 # The pool through teq (docs/TOOLING.md, "Tests."), over an export of its own: a project `pool` whose suites are the
@@ -803,7 +1099,8 @@ fi
 # task's events lost when sent, the run going on; two tasks throwing at once, the first fork error ending the run with
 # its own frames; past a fork error, the run's tasks in flight finishing and its framework's done() releasing what a
 # task acquired, out of the client's sight; a throwable traced by the loggers failing the run; a framework that fails
-# to make its runner or its tasks, or whose done() throws, ending the run before the next framework; a suite of two
+# to make its runner or its tasks ending the run before the next framework, one whose done() throws ending it once
+# every framework's suites have run; a suite of two
 # frameworks' fingerprint run by each; eight suites of 50 events each on 4 threads, the counts whole and each suite's
 # events together; two suites' log lines as their loggers were called; a run's pool alone alive in its JVM, the run's
 # loader its threads'; a library's state that would outlive a run in a JVM kept across runs (an executor whose thread
@@ -1007,7 +1304,7 @@ PY
   pool_export 2
   out=$(pt 'pool.Pair*' --verbose)
   code=$?
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 4 suites, 4 passed, 0 failed"* ]] && [[ "$out" == *"[debug] Create a test executor with a thread pool of 2 threads."* ]] && [ "$(tail -1 "$pl/record.txt")" = "done 2 2" ]; then
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 4 suites, 4 passed, 0 failed"* ]] && [[ "$out" == *"[debug] Create a test executor with a thread pool of 2 threads."* ]] && [ "$(grep '^done ' "$pl/record.txt" | tr '\n' ',')" = "done 2 2,done 0 0," ]; then
     pass "a pool of the lock's 2: four suites meeting in pairs, at most 2 at once on 2 threads"
   else
     fail "the pool of 2: $out // $(cat "$pl/record.txt")"
@@ -1015,7 +1312,7 @@ PY
   pool_export 4
   out=$(pt 'pool.Quad*')
   code=$?
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 4 suites, 4 passed, 0 failed"* ]] && [ "$(tail -1 "$pl/record.txt")" = "done 4 4" ]; then
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 4 suites, 4 passed, 0 failed"* ]] && [ "$(grep '^done ' "$pl/record.txt" | tr '\n' ',')" = "done 4 4,done 0 0," ]; then
     pass "a count changed in the lock is the next run's"
   else
     fail "the changed count: $out // $(cat "$pl/record.txt")"
@@ -1024,7 +1321,7 @@ PY
   out=$(pt pool.Parent pool.Sibling)
   code=$?
   order=$(sed -E 's/ pool-[0-9]+-thread-[0-9]+$//' "$pl/record.txt" | tr '\n' ',')
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 2 suites, 3 passed, 0 failed"* ]] && [ "$order" = "start pool.Parent,end pool.Parent,start pool.Sibling,sibling ends,end pool.Sibling,start pool.Child,end pool.Child,done 1 1," ]; then
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 2 suites, 3 passed, 0 failed"* ]] && [ "$order" = "start pool.Parent,end pool.Parent,start pool.Sibling,sibling ends,end pool.Sibling,start pool.Child,end pool.Child,done 1 1,done 0 0," ]; then
     pass "one thread: a wave's tasks in order, then the task the first returned"
   else
     fail "one thread's order: $out // $order"
@@ -1107,12 +1404,17 @@ PY
     FAILING=$where pool_export 2
     out=$(pt pool.FailingCase pool.Pools)
     code=$?
-    [ $code = 1 ] && [[ "$out" == *"[error] Uncaught exception when running tests: java.lang.IllegalStateException: $where-error"* ]] \
-      && [[ "$out" == *"pool/test: the run failed: java.lang.IllegalStateException: $where-error"* ]] && ! grep -q '^start pool.Pools' "$pl/record.txt" || break
+    # done() is called once every framework's suites have run, the next framework's among them.
+    if [ "$where" = done ]; then next=1; else next=0; fi
+    # sbt's host makes the runners before its worker starts: one that cannot be made fails the run there, with no
+    # line of the worker's.
+    if [ "$where" = runner ]; then worker=0; else worker=1; fi
+    [ $code = 1 ] && [ "$([[ "$out" == *"[error] Uncaught exception when running tests: java.lang.IllegalStateException: $where-error"* ]] && echo 1 || echo 0)" = "$worker" ] \
+      && [[ "$out" == *"pool/test: the run failed: java.lang.IllegalStateException: $where-error"* ]] && [ "$(grep -c '^start pool.Pools' "$pl/record.txt")" = "$next" ] || break
     ended="$ended $where"
   done
   if [ "$ended" = " runner tasks done" ]; then
-    pass "a framework that fails to make its runner or its tasks, or whose done() throws, ends the run, the next framework not run"
+    pass "a framework that fails to make its runner fails the run in sbt's host, its tasks ends the worker's run, the next framework not run; one whose done() throws, once every framework's suites have run, ends it after them"
   else
     fail "the failing framework ($where, $code): $out // $(cat "$pl/record.txt")"
   fi
@@ -1178,7 +1480,7 @@ PY
   pool_export absent -XX:ActiveProcessorCount=3
   out=$(pt 'pool.Trio*')
   code=$?
-  if [ $code = 0 ] && [[ "$out" == *"pool/test: 6 suites, 6 passed, 0 failed"* ]] && [ "$(tail -1 "$pl/record.txt")" = "done 3 3" ]; then
+  if [ $code = 0 ] && [[ "$out" == *"pool/test: 6 suites, 6 passed, 0 failed"* ]] && [ "$(grep '^done ' "$pl/record.txt" | tr '\n' ',')" = "done 3 3,done 0 0," ]; then
     pass "no parallelism in the lock: the processors the runner's JVM counts, 3"
   else
     fail "the absent field: $out // $(cat "$pl/record.txt")"
@@ -1205,6 +1507,521 @@ PY
   else
     fail "the spent runner at stop: the daemon $daemon, the runner $hooked: $(ps -o pid,ppid,etime,args -p "$hooked" 2> /dev/null | tail -1)"
   fi
+fi
+
+# The run's class loader through teq (docs/TOOLING.md, "Tests."), over an export of its own: a project `ld` whose
+# suites are the probe framework's, the runner's JVM holding its own classes and test-interface alone, every entry of
+# the test class path in one class loader made once the build is done, as sbt 2's worker in its virtual layout. Its
+# scenarios: fifteen suites sharing a top-level object, made once, through one class loader, on one thread and on
+# fifteen, and fifteen suites each making a member object of their own through that same loader (as scalac's products
+# give under sbt's worker: a count of objects is no count of loaders); slf4j-api's provider registered in the
+# configuration's resources found by slf4j through its own loader; an assembly jar holding test-interface beside
+# slf4j-api, of which the runner's class path takes the interface's two packages alone, the provider found still; the
+# framework in a directory of the class path, loaded through the run's loader; a framework whose fingerprints cannot be
+# had, or whose constructor throws, ending the run as the worker's run error; a runner spent by a selection of nothing
+# as by a run; a class path without test-interface refused; and the groups, phases of one run (each case says what it
+# holds).
+ld=$work/ld
+if [ -f "$pl/lib/probe.jar" ] && [ -f "$probe/simple-unregistered.jar" ] && [ -f "${slf4j:-}" ]; then
+  mkdir -p "$ld/ld/src/ld" "$ld/ld/test/ld" "$ld/project" "$ld/target/teq" "$ld/lib" "$ld/ld/test-resources/META-INF/services"
+  cp "$pl/lib/probe.jar" "$probe/simple-unregistered.jar" "$ld/lib/"
+  cp -r "$probe/classes" "$ld/lib/probe-classes"
+  # The assembly: test-interface's classes and slf4j-api's in one jar.
+  python3 - "$interface" "$slf4j" "$ld/lib/assembly.jar" <<'PY'
+import sys, zipfile
+*sources, out = sys.argv[1:]
+seen = set()
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
+    for source in sources:
+        with zipfile.ZipFile(source) as src:
+            for entry in src.infolist():
+                if entry.filename.endswith(".class") and entry.filename not in seen:
+                    seen.add(entry.filename)
+                    dst.writestr(entry.filename, src.read(entry.filename))
+PY
+  echo org.slf4j.simple.SimpleServiceProvider > "$ld/ld/test-resources/META-INF/services/org.slf4j.spi.SLF4JServiceProvider"
+  printf 'package ld\n\nobject Ld:\n  val n: Int = 1\n' > "$ld/ld/src/ld/Ld.scala"
+  {
+    cat <<'SCALA'
+package ld
+
+import probe.{Context, Suite}
+
+/** Made once by each class loader that defines it, its count the JVM's (a system property). */
+object Shared:
+  val id: Int =
+    val n = Option(System.getProperty("ld.shared")).fold(0)(_.toInt) + 1
+    System.setProperty("ld.shared", n.toString)
+    n
+
+abstract class Sharing extends Suite:
+  def run(c: Context): Unit =
+    c.record(s"shared ${Shared.id} ${System.identityHashCode(Shared.getClass.getClassLoader)}")
+    c.pass("shared")
+
+abstract class Holding extends Suite:
+  object Member:
+    val id: Int =
+      val n = Option(System.getProperty("ld.member")).fold(0)(_.toInt) + 1
+      System.setProperty("ld.member", n.toString)
+      n
+  def run(c: Context): Unit =
+    c.record(s"member ${Member.id} ${System.identityHashCode(Member.getClass.getClassLoader)}")
+    c.pass("member")
+
+class Provider extends Suite:
+  def run(c: Context): Unit =
+    c.record("provider " + org.slf4j.LoggerFactory.getILoggerFactory.getClass.getName)
+    c.pass("provider")
+
+/** A suite of a first group, which returns a task of LaterNamed, a suite a later group's patterns name. */
+class GroupOne extends Suite:
+  def run(c: Context): Unit =
+    c.record(s"one ${Shared.id}")
+    c.nest("ld.LaterNamed")
+    c.pass("one")
+
+class LaterNamed extends Suite:
+  def run(c: Context): Unit =
+    c.record(s"later ${Shared.id}")
+    c.pass("later")
+
+class GroupTwo extends Suite:
+  def run(c: Context): Unit =
+    c.record(s"two ${Shared.id}")
+    c.pass("two")
+
+class Fails extends Suite:
+  def run(c: Context): Unit =
+    c.record("fails")
+    c.fail("fails", new AssertionError("expected"))
+
+class Boom extends Suite:
+  def run(c: Context): Unit =
+    c.record("boom")
+    throw new RuntimeException("boom")
+
+class Explicit extends Suite:
+  def run(c: Context): Unit =
+    c.record(s"explicit ${c.explicit()}")
+    c.pass("explicit")
+
+/** An event of no status, then a success. */
+class NullStatus extends Suite:
+  def run(c: Context): Unit =
+    c.event("none", null, null)
+    c.pass("case")
+
+class Exits extends Suite:
+  def run(c: Context): Unit =
+    c.record("exits")
+    System.exit(7)
+
+class FailingOne extends probe.FailingSuite
+class IdleOne extends probe.IdleSuite
+class BrokenOne extends probe.BrokenSuite
+class CountedOne extends probe.CountedSuite
+class CountedTwo extends probe.CountedSuite
+SCALA
+    for i in $(seq -w 1 15); do printf 'class Shared%s extends Sharing\nclass Member%s extends Holding\n' "$i" "$i"; done
+  } > "$ld/ld/test/ld/Suites.scala"
+  # A configuration of one suite, for the frameworks LD_FRAMEWORKS names alone.
+  mkdir -p "$ld/ld/one/ld"
+  printf 'package ld\n\nimport probe.{Context, Suite}\n\nclass One extends Suite:\n  def run(c: Context): Unit = c.pass("one")\n' > "$ld/ld/one/ld/One.scala"
+  echo 'lazy val ld = project' > "$ld/build.sbt"
+  echo 'sbt.version=2.0.8' > "$ld/project/build.properties"
+  # ld_export <parallelism>; LD_ASSEMBLY puts test-interface and slf4j-api in lib/assembly.jar, LD_DIR the probe
+  # framework in the directory lib/probe-classes, LD_UNPRINTED lists probe.Unprinted first, LD_UNMADE probe.Unmade,
+  # whose constructor throws, LD_UNSHOWN probe.Unshown, whose fingerprint cannot be shown, LD_NO_INTERFACE leaves
+  # test-interface out, LD_FAILING lists probe.Failing first with its argument, LD_IDLE probe.Idle, LD_BROKEN
+  # probe.BrokenTasks, LD_BROKENREPORT probe.BrokenReport, LD_COUNTED probe.Counted and probe.CountedTwin, LD_FRAMEWORKS
+  # names the frameworks instead (separated by spaces), LD_SOURCES the test sources' root instead of ld/test, LD_GROUPS gives
+  # the test configuration its groups (a JSON list); LD_MILL writes the lock as Mill's export (its inputs a build.mill
+  # at the root, which the caller writes).
+  ld_export() {
+    python3 - "$ld" "$lib" "$lib3" "$interface" "$slf4j" "$1" <<'PY'
+import hashlib, importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("lock", os.environ["LOCK_PY"])
+lock = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lock)
+import json
+root, lib, lib3, interface, slf4j, parallelism = sys.argv[1:]
+m2 = lib[: lib.index("/maven2/") + len("/maven2/")]
+def artifact(path):
+    data = open(path, "rb").read()
+    parts = path[len(m2):].split("/")
+    return ":".join([".".join(parts[:-3]), parts[-3], parts[-2]]), f"maven-central {hashlib.sha1(data).hexdigest()} {len(data)}"
+assembly = bool(os.environ.get("LD_ASSEMBLY"))
+libraries = [lib3, lib] + ([] if assembly or os.environ.get("LD_NO_INTERFACE") else [interface]) + ([] if assembly else [slf4j])
+table = dict(artifact(p) for p in libraries)
+files = (["lib/assembly.jar"] if assembly else []) + ["lib/probe-classes" if os.environ.get("LD_DIR") else "lib/probe.jar", "lib/simple-unregistered.jar"]
+flags = {"ignoredScalacOptions": [], "kindProjector": False, "strictEquality": False, "werror": False}
+test = {"classpath": [{"configuration": "compile", "project": "ld"}] + list(table) + [{"file": f} for f in files], "flags": flags, "resources": ["ld/test-resources"], "sources": [os.environ.get("LD_SOURCES", "ld/test")],
+        "baseDirectory": ".", "envVars": {}, "exclude": [], "fork": True, "javaOptions": [], "parallelism": int(parallelism),
+        "frameworks": [{"arguments": [], "class": c} for c in os.environ["LD_FRAMEWORKS"].split()] if os.environ.get("LD_FRAMEWORKS") else
+                      ([{"arguments": [], "class": "probe.Unprinted"}] if os.environ.get("LD_UNPRINTED") else [])
+                      + ([{"arguments": [], "class": "probe.Unshown"}] if os.environ.get("LD_UNSHOWN") else [])
+                      + ([{"arguments": [], "class": "probe.Unmade"}] if os.environ.get("LD_UNMADE") else [])
+                      + ([{"arguments": [os.environ["LD_FAILING"]], "class": "probe.Failing"}] if os.environ.get("LD_FAILING") else [])
+                      + ([{"arguments": [], "class": "probe.Idle"}] if os.environ.get("LD_IDLE") else [])
+                      + ([{"arguments": [], "class": "probe.BrokenTasks"}] if os.environ.get("LD_BROKEN") else [])
+                      + ([{"arguments": [], "class": "probe.BrokenReport"}] if os.environ.get("LD_BROKENREPORT") else [])
+                      + ([{"arguments": [], "class": "probe.Counted"}, {"arguments": [], "class": "probe.CountedTwin"}] if os.environ.get("LD_COUNTED") else [])
+                      + [{"arguments": ["record.txt"], "class": "probe.Framework"}],
+        **({"groups": json.loads(os.environ["LD_GROUPS"])} if os.environ.get("LD_GROUPS") else {})}
+compile_table = {k: v for k, v in table.items() if "test-interface" not in k and "slf4j" not in k}
+project = {"base": "ld", "platform": "jvm", "scalaVersion": "3.8.4", "configurations": {
+    "compile": {"classpath": list(compile_table), "flags": flags, "generators": [], "mainClasses": [], "resources": [], "sources": ["ld/src"]}, "test": test}}
+inputs = {f: hashlib.sha256(open(os.path.join(root, f), "rb").read()).hexdigest() for f in (["build.mill"] if os.environ.get("LD_MILL") else ["build.sbt", "project/build.properties"])}
+digest = hashlib.sha256("".join(f"{f}\0{d}\n" for f, d in sorted(inputs.items())).encode()).hexdigest()
+export = {"teq": "0.1.7-check.1", "format": 1, "binaries": {}, "inputs": {"files": inputs, "sha256": digest}, "java": {"outputVersion": 17},
+          "repositories": [{"id": "maven-central", "url": "https://repo1.maven.org/maven2/"}], "jars": table, "projects": {"ld": project},
+          **({"exporter": "mill"} if os.environ.get("LD_MILL") else {})}
+open(os.path.join(root, "target/teq/teq.lock"), "w", encoding="utf-8").write(lock.canonical(export))
+PY
+  }
+  lt() { : > "$ld/record.txt"; (cd "$ld" && timeout 150 "$TEQ" test ld "$@" 2>&1); }
+  ld_runner() { pgrep -f "$ld/target/teq/ld/test/runner.args" | head -1; }
+  # The runner's JVM class path but its own classes: the interface's directory, whose packages are listed.
+  ld_interface() { sed -n 2p "$ld/target/teq/ld/test/runner.args" | tr -d '"' | cut -d: -f2-; }
+  ld_export 1
+  out=$(lt 'ld.Shared*' 'ld.Member*' ld.Provider)
+  code=$?
+  shared=$(grep '^shared ' "$ld/record.txt" | sort -u)
+  members=$(grep -c '^member ' "$ld/record.txt")
+  member_loaders=$(grep '^member ' "$ld/record.txt" | cut -d' ' -f3 | sort -u)
+  member_ids=$(grep '^member ' "$ld/record.txt" | cut -d' ' -f2 | sort -n | tr '\n' ' ')
+  packages=$(cd "$(ld_interface)" 2> /dev/null && find . -name '*.class' | sed 's|/[^/]*$||' | sort -u | tr '\n' ' ')
+  if [ $code = 0 ] && [[ "$out" == *"ld/test: 31 suites, 31 passed, 0 failed"* ]] && [ "$(grep -c '^shared ' "$ld/record.txt")" = 15 ] && [ "$(printf '%s\n' "$shared" | wc -l | tr -d ' ')" = 1 ] \
+    && [[ "$shared" == "shared 1 "* ]] && [ "$members" = 15 ] && [ "$member_loaders" = "${shared#shared 1 }" ] && [ "$member_ids" = "$(seq 1 15 | tr '\n' ' ')" ] \
+    && grep -qx 'provider org.slf4j.simple.SimpleLoggerFactory' "$ld/record.txt" && [ "$packages" = "./org/scalatools/testing ./sbt/testing " ]; then
+    pass "one class loader for a run's suites: a top-level object made once for fifteen suites, fifteen member objects through that loader, slf4j's provider in the resources found, test-interface alone above"
+  else
+    fail "the run's class loader ($code; $members members $member_ids; loaders $member_loaders; $packages): $shared // $(cat "$ld/record.txt") // $out"
+  fi
+  ld_export 15
+  out=$(lt 'ld.Shared*')
+  code=$?
+  if [ $code = 0 ] && [ "$(grep -c '^shared 1 ' "$ld/record.txt")" = 15 ] && [ "$(grep '^shared ' "$ld/record.txt" | sort -u | wc -l | tr -d ' ')" = 1 ]; then
+    pass "fifteen suites at once on fifteen threads: the top-level object made once, through one class loader"
+  else
+    fail "the shared object on fifteen threads ($code): $(cat "$ld/record.txt") // $out"
+  fi
+  LD_ASSEMBLY=1 ld_export 1
+  out=$(lt ld.Provider)
+  code=$?
+  packages=$(cd "$(ld_interface)" 2> /dev/null && find . -name '*.class' | sed 's|/[^/]*$||' | sort -u | tr '\n' ' ')
+  if [ $code = 0 ] && grep -qx 'provider org.slf4j.simple.SimpleLoggerFactory' "$ld/record.txt" && [ "$packages" = "./org/scalatools/testing ./sbt/testing " ]; then
+    pass "an assembly holding test-interface and slf4j-api: the runner's class path takes the interface alone, slf4j's provider in the resources found"
+  else
+    fail "the assembly ($code; $packages): $(cat "$ld/record.txt") // $out"
+  fi
+  LD_DIR=1 ld_export 1
+  out=$(lt ld.Shared01)
+  code=$?
+  if [ $code = 0 ] && [[ "$out" == *"ld/test: 1 suite, 1 passed, 0 failed"* ]]; then
+    pass "a framework in a directory of the test class path loaded through the run's class loader"
+  else
+    fail "the framework in a directory ($code): $out"
+  fi
+  LD_UNPRINTED=1 ld_export 1
+  out=$(lt ld.Shared01)
+  code=$?
+  if [ $code = 1 ] && [[ "$out" == *"ld/test: the run failed: java.lang.reflect.InvocationTargetException"* ]] \
+    && [[ "$out" != *"Uncaught exception"* ]] && [ ! -s "$ld/record.txt" ]; then
+    pass "a framework whose fingerprints cannot be had fails the run as sbt's host's discovery fails, asking them reflectively, no worker's line, no suite run"
+  else
+    fail "the framework without fingerprints ($code): $out"
+  fi
+  ld_export 1
+  lt ld.Explicit > /dev/null
+  whole=$(grep '^explicit ' "$ld/record.txt")
+  lt 'ld.Explici*' > /dev/null
+  pattern=$(grep '^explicit ' "$ld/record.txt")
+  if [ "$whole" = "explicit true" ] && [ "$pattern" = "explicit false" ]; then
+    pass "a suite named whole is explicitly specified, one a pattern selects not, as testOnly marks them"
+  else
+    fail "explicitly specified: named whole $whole, by a pattern $pattern"
+  fi
+  LD_UNSHOWN=1 ld_export 1
+  out=$(lt ld.Shared01)
+  code=$?
+  if [ $code = 1 ] && [[ "$out" == *"ld/test: the run failed: java.lang.IllegalStateException: shown-error"* ]] && [ ! -s "$ld/record.txt" ]; then
+    pass "a framework whose fingerprint cannot be shown fails discovery, which shows it in a debug line, no suite run"
+  else
+    fail "the fingerprint that cannot be shown ($code): $out"
+  fi
+  LD_UNMADE=1 ld_export 1
+  out=$(lt ld.Shared01)
+  code=$?
+  if [ $code = 1 ] && [[ "$out" != *"Uncaught exception"* ]] \
+    && [[ "$out" == *"ld/test: the run failed: java.lang.reflect.InvocationTargetException"* ]] && [ ! -s "$ld/record.txt" ]; then
+    pass "a framework whose constructor throws fails the run as sbt's host fails making it, no worker's line, no suite run"
+  else
+    fail "the framework that cannot be made ($code): $out"
+  fi
+  ld_export 1
+  lt ld.Shared01 > /dev/null
+  for _ in $(seq 100); do [ "$(pgrep -f "$ld/target/teq/ld/test/runner.args" | wc -l | tr -d ' ')" = 1 ] && break; sleep 0.1; done
+  warm=$(ld_runner)
+  out=$(lt 'ld.NoSuch*')
+  code=$?
+  for _ in $(seq 50); do alive "$warm" || break; sleep 0.1; done
+  for _ in $(seq 100); do [ "$(pgrep -f "$ld/target/teq/ld/test/runner.args" | wc -l | tr -d ' ')" = 1 ] && break; sleep 0.1; done
+  next=$(ld_runner)
+  if [ $code = 0 ] && [[ "$out" == *"ld/test: no suite to run"* ]] && [ -n "$warm" ] && [ -n "$next" ] && [ "$warm" != "$next" ] && ! alive "$warm"; then
+    pass "a selection of nothing, after the frameworks were loaded, spends the runner as a run does"
+  else
+    fail "the runner after a selection of nothing ($code; $warm, then $next): $out"
+  fi
+  LD_NO_INTERFACE=1 ld_export 1
+  out=$(lt ld.Shared01)
+  code=$?
+  if [ $code = 2 ] && [[ "$out" == *"teq: ld/test: no entry of the test class path holds sbt's test interface (sbt/testing/Framework.class), which the test runner runs on"* ]]; then
+    pass "a test class path without test-interface refused, naming it"
+  else
+    fail "the class path without test-interface ($code): $out"
+  fi
+  # The groups: phases of one run (docs/TOOLING.md, "Tests."). lg <arguments>: the run's stdout in out.txt, its
+  # stderr's lines of ld/test in groups.txt (each group's header and summary, the total, the failure), times dropped.
+  lg() {
+    : > "$ld/record.txt"
+    (cd "$ld" && timeout 150 "$TEQ" test ld "$@" > "$ld/out.txt" 2> "$ld/err.txt")
+    local code=$?
+    grep -E '^(teq: )?ld/test' "$ld/err.txt" | sed -E 's/ in [0-9]+ ms( \(built in [0-9]+ ms\))?$//; s/ \(built in [0-9]+ ms\)$//' > "$ld/groups.txt"
+    return $code
+  }
+  # The records of the suites lg ran, their order kept: the start and end lines of each task left out.
+  ld_records() { grep -vE '^(start|end) ' "$ld/record.txt"; }
+  LD_GROUPS='[{"name": "first", "patterns": ["ld.GroupOne"]}, {"name": "none", "patterns": ["ld.Nothing*"]}, {"name": "second", "patterns": ["ld.GroupTwo", "ld.LaterNamed"]}]' ld_export 1
+  out=$(lt --list ld.GroupOne ld.GroupTwo ld.Shared01)
+  listed='Group first
+Test ld.GroupOne : subclass(false, probe.Suite)
+Group none
+Group second
+Test ld.GroupTwo : subclass(false, probe.Suite)
+Ungrouped
+Test ld.Shared01 : subclass(false, probe.Suite)'
+  : > "$ld/groups.events"
+  : > "$ld/groups.diag"
+  lg ld.GroupOne ld.GroupTwo ld.Shared01 --events "$ld/groups.events" --diagnostics "$ld/groups.diag"
+  code=$?
+  expected='ld/test [first]: 1 suite
+ld/test [first]: 1 suite, 2 passed, 0 failed
+ld/test [none]: no suite to run
+ld/test [second]: 1 suite
+ld/test [second]: 1 suite, 1 passed, 0 failed
+ld/test (ungrouped): 1 suite
+ld/test (ungrouped): 1 suite, 1 passed, 0 failed
+ld/test: 3 suites, 4 passed, 0 failed'
+  shared=$(grep '^shared ' "$ld/record.txt")
+  records="$(ld_records | sed 's/^shared 1 .*/shared 1/' | tr '\n' ',')"
+  later=$(awk -F'\t' '$2 == "ld.LaterNamed" {print NF " " $NF}' "$ld/groups.events" | sort -u | tr '\n' ',')
+  if [ $code = 0 ] && [ "$out" = "$listed" ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && [ "$records" = "one 1,later 1,two 1,shared 1,done 1 1,done 0 0," ] \
+    && [ "$later" = "4 first,6 first," ] && grep -q '^ld	ld.Shared01	ran	$' "$ld/groups.events" && grep -q '^ld	ld.GroupTwo	ran	second$' "$ld/groups.events" \
+    && grep -q '"group":"first"' "$ld/groups.diag" && grep -q '"group":null' "$ld/groups.diag" && ! grep -q 'ld/test \[' "$ld/out.txt"; then
+    pass "groups: the listing's sections, then the groups run in their order in one run, one object across them, a descendant in its originator's group though a later group names it, the headers, summaries and total on stderr, each event's group, done() once"
+  else
+    fail "the groups ($code; records $records; LaterNamed $later): $out // $(cat "$ld/groups.txt") // $(cat "$ld/groups.events")"
+  fi
+  lg ld.GroupOne ld.GroupTwo ld.Shared01
+  if [ $? = 0 ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && [ "$(ld_records | sed 's/^shared 1 .*/shared 1/' | tr '\n' ',')" = "one 1,later 1,two 1,shared 1,done 1 1,done 0 0," ]; then
+    pass "groups: the same invocation again, in a JVM of its own, the same run"
+  else
+    fail "the groups again: $(cat "$ld/groups.txt") // $(ld_records)"
+  fi
+  LD_GROUPS='[{"name": "first", "patterns": ["ld.Fails"]}, {"name": "second", "patterns": ["ld.GroupTwo"]}]' ld_export 1
+  lg ld.Fails ld.GroupTwo
+  code=$?
+  expected='ld/test [first]: 1 suite
+ld/test [first]: 1 suite, 0 passed, 1 failed
+ld/test [second]: 1 suite
+ld/test [second]: 1 suite, 1 passed, 0 failed
+ld/test: 2 suites, 1 passed, 1 failed'
+  if [ $code = 1 ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && [ "$(ld_records | tr '\n' ',')" = "fails,two 1,done 1 1,done 0 0," ]; then
+    pass "groups: a first group that fails, the second run after it, the exit the whole run's"
+  else
+    fail "the failed first group ($code): $(cat "$ld/groups.txt") // $(ld_records)"
+  fi
+  LD_GROUPS='[{"name": "first", "patterns": ["ld.Boom"]}, {"name": "second", "patterns": ["ld.GroupTwo"]}]' ld_export 1
+  lg ld.Boom ld.GroupTwo
+  code=$?
+  # The spent runner finishes its phase and its frameworks' done() out of the client's sight: its end waited for.
+  for _ in $(seq 100); do [ "$(pgrep -f "$ld/target/teq/ld/test/runner.args" | wc -l | tr -d ' ')" = 1 ] && break; sleep 0.1; done
+  expected='ld/test [first]: 1 suite
+ld/test: the run failed: java.lang.RuntimeException: boom
+ld/test: not completed: [first], [second]'
+  if [ $code = 1 ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && [ "$(ld_records | tr '\n' ',')" = "boom,done 1 1," ]; then
+    pass "groups: a task that throws ends the run in its group, the later group never started, the unfinished groups named, no total"
+  else
+    fail "the fatal first group ($code): $(cat "$ld/groups.txt") // $(ld_records)"
+  fi
+  LD_FAILING=done LD_GROUPS='[{"name": "first", "patterns": ["ld.GroupOne"]}, {"name": "second", "patterns": ["ld.GroupTwo", "ld.FailingOne"]}]' ld_export 1
+  : > "$ld/done.diag"
+  lg ld.GroupOne ld.GroupTwo ld.FailingOne --diagnostics "$ld/done.diag"
+  code=$?
+  expected='ld/test [first]: 1 suite
+ld/test [first]: 1 suite, 2 passed, 0 failed
+ld/test [second]: 2 suites
+ld/test [second]: 2 suites, 2 passed, 0 failed
+ld/test: the run failed: java.lang.IllegalStateException: done-error'
+  if [ $code = 1 ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] \
+    && grep '"severity":"failure"' "$ld/done.diag" | grep '"group":null' | grep -q 'the run failed: java.lang.IllegalStateException: done-error'; then
+    pass "groups: a framework's done() that throws once every group has passed fails the invocation after the groups' summaries, recorded as no group's failure"
+  else
+    fail "the failing done() ($code): $(cat "$ld/groups.txt") // $(cat "$ld/done.diag")"
+  fi
+  # Frameworks that fail to load, before any suite is discovered: every group and the ungrouped suites not completed,
+  # the run's failure recorded as no group's.
+  for broken in LD_UNMADE LD_UNPRINTED; do
+    : > "$ld/load.diag"
+    export "$broken=1"
+    LD_GROUPS='[{"name": "first", "patterns": ["ld.GroupOne"]}, {"name": "later", "patterns": ["ld.GroupTwo"]}]' ld_export 1
+    unset "$broken"
+    lg ld.GroupOne ld.GroupTwo --diagnostics "$ld/load.diag"
+    code=$?
+    [ $code = 1 ] && grep -q '^ld/test: the run failed: java.lang.' "$ld/groups.txt" && grep -qx 'ld/test: not completed: \[first\], \[later\], (ungrouped), no suite discovered' "$ld/groups.txt" \
+      && grep '"severity":"failure"' "$ld/load.diag" | grep -q '"group":null' && grep '"severity":"failure"' "$ld/load.diag" | grep -q '"group":"first"' && [ ! -s "$ld/record.txt" ] || break
+    broken=
+  done
+  if [ -z "$broken" ]; then
+    pass "groups: a framework that cannot be made, or whose fingerprints cannot be had, leaves every group not completed, named, the failure recorded"
+  else
+    fail "the frameworks failing to load with groups ($broken, $code): $(cat "$ld/groups.txt") // $(cat "$ld/load.diag")"
+  fi
+  # sbt's host makes a runner of a framework, and gives it to its worker, only where a suite one of its fingerprints
+  # matches is selected, in any group of the invocation (Defaults.allTestGroupsTask's filteredFrameworks): probe.Idle
+  # says when its runner is made and when it is done, its host's and its worker's.
+  LD_IDLE=1 ld_export 1
+  out=$(lt ld.Shared01)
+  code=$?
+  idle=$(lt ld.Shared01 ld.IdleOne | grep '^idle: ' | tr '\n' ',')
+  LD_IDLE=1 LD_GROUPS='[{"name": "first", "patterns": ["ld.Shared01"]}, {"name": "second", "patterns": ["ld.IdleOne"]}]' ld_export 1
+  lg ld.Shared01 ld.IdleOne
+  grouped=$(grep -E '^(idle: |probe: done)' "$ld/out.txt" | tr '\n' ',')
+  if [ $code = 0 ] && [[ "$out" == *"ld/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" != *"idle: "* ]] && [ "$idle" = "idle: runner,idle: runner,idle: ran ld.IdleOne,idle: done,idle: done," ] \
+    && [ "$grouped" = "idle: runner,idle: runner,idle: ran ld.IdleOne,idle: done,probe: done,idle: done,probe: done," ]; then
+    pass "a framework no selected suite is of makes no runner, is asked no tasks and no done(), as sbt's host leaves it out; one of a suite of a later group is the run's from its start, its host's runner and its worker's"
+  else
+    fail "the framework of no selected suite ($code): $idle // $grouped // $out"
+  fi
+  # The worker's internal error ends the run's phases, and the worker answers as at its end: sbt's host's outcome is
+  # that of the suites reported, its exit too, its runners' summaries shown; the groups not run named.
+  LD_BROKEN=1 LD_GROUPS='[{"name": "first", "patterns": ["ld.GroupOne"]}, {"name": "second", "patterns": ["ld.BrokenOne"]}, {"name": "third", "patterns": ["ld.GroupTwo"]}]' ld_export 1
+  lg ld.GroupOne ld.BrokenOne ld.GroupTwo
+  code=$?
+  expected='ld/test [first]: 1 suite
+ld/test [first]: 1 suite, 2 passed, 0 failed
+ld/test [second]: 1 suite
+ld/test: not completed: [second], [third]
+ld/test: 3 suites, 2 passed, 0 failed'
+  if [ $code = 0 ] && [ "$(cat "$ld/groups.txt")" = "$expected" ] && grep -qx 'Internal error when running tests: java.lang.IllegalArgumentException: report-error' "$ld/out.txt" \
+    && grep -qx 'probe: the summary done() returns' "$ld/out.txt" && grep -q '^one 1' "$ld/record.txt" && ! grep -q '^two ' "$ld/record.txt"; then
+    pass "groups: the worker's internal error ends the run's phases, no later group run, the outcome and exit the suites reported, sbt's host's summaries shown"
+  else
+    fail "the internal error ($code): $(cat "$ld/groups.txt") // $(cat "$ld/out.txt")"
+  fi
+  # An event of no status, counted as none (the worker's ForkEvent, sbt's host's SuiteResult.apply).
+  ld_export 1
+  : > "$ld/null.events"
+  out=$(lt ld.NullStatus --events "$ld/null.events")
+  code=$?
+  if [ $code = 0 ] && [[ "$out" == *"ld/test: 1 suite, 1 passed, 0 failed"* ]] && grep -q '^ld	ld.NullStatus	test none	null	$' "$ld/null.events"; then
+    pass "an event of no status is counted as none, as sbt's host counts it"
+  else
+    fail "the event of no status ($code): $(cat "$ld/null.events") // $out"
+  fi
+  # The suites in testOnly's order (Tests.processOptions' ordered filters): each pattern's, in the patterns' order, a
+  # suite once, at its first; listed and run so.
+  listed=$(lt --list ld.GroupTwo 'ld.Group*' ld.Explicit)
+  expanded=$(lt --list 'ld.Gr...Two' '-ld...One')
+  lt ld.GroupTwo 'ld.Group*' ld.Explicit > /dev/null
+  order=$(ld_records | sed 's/ .*//' | tr '\n' ',')
+  if [ "$listed" = "Test ld.GroupTwo : subclass(false, probe.Suite)
+Test ld.GroupOne : subclass(false, probe.Suite)
+Test ld.Explicit : subclass(false, probe.Suite)" ] && [ "$order" = "two,one,explicit,later,done,done," ] \
+    && [ "$expanded" = "Test ld.GroupTwo : subclass(false, probe.Suite)" ]; then
+    pass "the suites listed and run in testOnly's order: the patterns' order, each suite at its first, \`...\` a glob's \`**\`"
+  else
+    fail "testOnly's order: $listed // $order // $expanded"
+  fi
+  # sbt's host's and worker's calls of the frameworks' code, in sbt's order (probe.Counted, A, and probe.CountedTwin, B,
+  # of equal fingerprints, each call printed): the frameworks made and their fingerprints asked, then discovery's reads
+  # and debug text (TestFramework.createFramework, getFingerprints, Tests.discover); Tests.processOptions' first
+  # distinct over every definition (a definition's hash reading its fingerprint's module and name, equals only against
+  # one of an equal hash: the second framework's definition of a name), its second over one definition, which reads
+  # nothing; filteredFrameworks, each framework's fingerprints asked again and matched; createTestRunners; the suite's
+  # copy (ForkTests.forkFingerprint); the worker's own instances, fingerprints, matching, runners and tasks; the
+  # worker's done(); the host's names and done() (Defaults.allTestGroupsTask). An empty selection makes the host's
+  # calls through filteredFrameworks, and no runner.
+  LD_COUNTED=1 ld_export 1
+  lt ld.CountedOne > "$ld/counted.out"
+  code=$?
+  calls=$(grep -E '^[AB] ' "$ld/counted.out" | tr '\n' ',')
+  lt ld.NoSuchCounted > "$ld/counted-none.out"
+  none=$(grep -E '^[AB] ' "$ld/counted-none.out" | tr '\n' ',')
+  load='A made,B made,A fingerprints,B fingerprints,A superclassName,A isModule,B superclassName,B isModule,A toString,B toString,'
+  distinct='A isModule,A superclassName,B isModule,B superclassName,B isModule,A isModule,B superclassName,A superclassName,'
+  host='A fingerprints,A isModule,A isModule,A superclassName,A superclassName,B fingerprints,B isModule,A isModule,B superclassName,A superclassName,A isModule,A superclassName,A runner,B runner,A isModule,A superclassName,A requireNoArgConstructor,'
+  worker='A made,A fingerprints,A isModule,A superclassName,A runner,A ran ld.CountedOne,B made,B fingerprints,B isModule,B superclassName,B runner,B ran ld.CountedOne,A done,B done,'
+  if [ $code = 0 ] && grep -q 'ld/test: 1 suite, 2 passed, 0 failed' "$ld/counted.out" && [ "$calls" = "$load$distinct$distinct$host${worker}A name,A done,B name,B done," ] \
+    && grep -q 'ld/test: no suite to run' "$ld/counted-none.out" && [ "$none" = "$load$distinct${distinct}A fingerprints,B fingerprints," ]; then
+    pass "sbt's host's and worker's calls of the frameworks' code, in sbt's order, for a selected suite and for a selection of none"
+  else
+    fail "the host's calls ($code): $calls // $none // $(cat "$ld/counted.out")"
+  fi
+  # Over the configuration of one suite: a framework that replaces its array's entry when its runner is made keeps the
+  # fingerprint discovered (TestFramework.getFingerprints' toList), so its suite runs; a suite named twice has its
+  # fingerprint read as sbt's host reads it, processOptions' second distinct finding the repeated definition equal
+  # without a read (HashSet.addElem's BoxesRunTime.equals, the same reference), so that a fingerprint throwing on a
+  # seventh read lets the run complete, the worker's own instance reading its own once.
+  LD_SOURCES=ld/one LD_FRAMEWORKS=probe.Mutating ld_export 1
+  mutating=$(lt ld.One)
+  mutating_code=$?
+  LD_SOURCES=ld/one LD_FRAMEWORKS=probe.Gate ld_export 1
+  gate=$(lt ld.One ld.One)
+  gate_code=$?
+  reads=$(printf '%s\n' "$gate" | sed -n 's/^module read //p' | tr '\n' ',')
+  if [ $mutating_code = 0 ] && [[ "$mutating" == *"ld/test: 1 suite, 1 passed, 0 failed"* ]] && [ $gate_code = 0 ] && [[ "$gate" == *"ld/test: 1 suite, 1 passed, 0 failed"* ]] \
+    && [ "$reads" = "1,2,3,4,5,6,1," ]; then
+    pass "a framework replacing its fingerprint array's entry keeps the one discovered; a suite named twice reads its fingerprint as sbt's host does, the repeated definition the same"
+  else
+    fail "the snapshot and the identity ($mutating_code, $gate_code; reads $reads): $mutating // $gate"
+  fi
+  # An export of Mill's has no host: the worker's internal error, or one loading the frameworks, fails the run.
+  echo '// a Mill build' > "$ld/build.mill"
+  LD_MILL=1 LD_BROKEN=1 ld_export 1
+  out=$(lt ld.BrokenOne ld.GroupTwo)
+  code=$?
+  LD_MILL=1 LD_BROKENREPORT=1 ld_export 1
+  loaded=$(lt ld.GroupTwo)
+  loaded_code=$?
+  LD_MILL=1 ld_export 1
+  unset_status=$(lt ld.NullStatus)
+  unset_code=$?
+  rm -f "$ld/build.mill"
+  if [ $code = 1 ] && [[ "$out" == *"ld/test: the run failed: Internal error when running tests: java.lang.IllegalArgumentException: report-error"* ]] && ! grep -q '^two ' "$ld/record.txt" \
+    && [ $loaded_code = 1 ] && [[ "$loaded" == *"ld/test: the run failed: Internal error when running tests: java.lang.IllegalArgumentException: report-error"* ]] \
+    && [ $unset_code = 1 ] && [[ "$unset_status" == *"ld/test: the run failed: java.lang.NullPointerException"* ]]; then
+    pass "of Mill's export, the worker's internal error fails the run, as one loading the frameworks does, and an event of no status throws, as before"
+  else
+    fail "Mill's internal error ($code, $loaded_code, $unset_code): $out // $loaded // $unset_status"
+  fi
+  # A suite of a later group that ends the JVM: the run ends there, failed, and what ran before keeps its records.
+  LD_GROUPS='[{"name": "first", "patterns": ["ld.GroupOne"]}, {"name": "second", "patterns": ["ld.Exits"]}]' ld_export 1
+  : > "$ld/exit.events"
+  lg ld.GroupOne ld.Exits --events "$ld/exit.events"
+  code=$?
+  if [ $code = 1 ] && grep -q '^ld	ld.GroupOne	ran	first$' "$ld/exit.events" && grep -q '^ld	ld.GroupOne	test one	Success		first$' "$ld/exit.events" \
+    && grep -q '^ld	ld.LaterNamed	ran	first$' "$ld/exit.events" && grep -qx 'ld/test \[first\]: 1 suite, 2 passed, 0 failed' "$ld/groups.txt" \
+    && grep -qx 'ld/test: not completed: \[second\]' "$ld/groups.txt"; then
+    pass "groups: a later group's suite ending the JVM fails the run, the earlier group's events and suites written with their group"
+  else
+    fail "the JVM ended in a later group ($code): $(cat "$ld/groups.txt") // $(cat "$ld/exit.events")"
+  fi
+  (cd "$ld" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+else
+  fail "the probe framework or the slf4j jars were not prepared: the run's class loader is not checked (incomplete validation)"
 fi
 
 # `run`: app's main classes on a JVM of their own, through the daemon's compile.
@@ -2104,6 +2921,66 @@ class OtherSuite extends munit.FunSuite:
   test("other") { assertEquals(1 + 1, 2) }
 EOF
 printf 'package fixture\n\nobject NotASuite:\n  val x = 1\n' > "$js/none/src/test/scala/fixture/NotASuite.scala"
+mkdir -p "$js/probed/src/test/scala/fixture"
+cat > "$js/probed/src/test/scala/fixture/ProbeFramework.scala" <<'EOF'
+package fixture
+
+import sbt.testing.*
+
+// munit's framework, its runner printing each call the run makes of it and failing where its argument says: `tasks`
+// (its tasks) or `done`.
+class ProbeFramework extends Framework:
+  private val delegate = new munit.Framework()
+  def name(): String = "probe"
+  def fingerprints(): Array[Fingerprint] = delegate.fingerprints()
+  def slaveRunner(a: Array[String], r: Array[String], l: ClassLoader, send: String => Unit): Runner =
+    delegate.slaveRunner(a, r, l, send)
+  def runner(a: Array[String], r: Array[String], l: ClassLoader): Runner =
+    val mode = if a.length > 0 then a(0) else ""
+    println("PROBE CREATE")
+    val underlying = delegate.runner(Array.empty[String], r, l)
+    new Runner:
+      def args: Array[String] = a
+      def remoteArgs(): Array[String] = r
+      def tasks(defs: Array[TaskDef]): Array[Task] =
+        println("PROBE TASKS " + defs.length)
+        if mode == "tasks" then throw new IllegalStateException("tasks-error")
+        underlying.tasks(defs)
+      def done(): String =
+        println("PROBE DONE")
+        if mode == "done" then throw new IllegalStateException("done-error")
+        underlying.done()
+      def receiveMessage(msg: String): Option[String] = underlying.receiveMessage(msg)
+      def serializeTask(task: Task, serializer: TaskDef => String): String = underlying.serializeTask(task, serializer)
+      def deserializeTask(task: String, deserializer: String => TaskDef): Task = underlying.deserializeTask(task, deserializer)
+EOF
+cat > "$js/probed/src/test/scala/fixture/ProbedSuites.scala" <<'EOF'
+package fixture
+
+class AlphaSuite extends munit.FunSuite:
+  test("alpha") { assertEquals(1, 1) }
+
+class BetaSuite extends munit.FunSuite:
+  test("beta") { assertEquals(2, 2) }
+EOF
+mkdir -p "$js/grouped/src/test/scala/fixture"
+cat > "$js/grouped/src/test/scala/fixture/Grouped.scala" <<'EOF'
+package fixture
+
+// One object for the run's suites, which each suite counts on: the groups run ThirdSuite, then FirstSuite, then
+// SecondSuite, the names' order reversed.
+object Counter:
+  var n: Int = 0
+
+class FirstSuite extends munit.FunSuite:
+  test("first") { Counter.n += 1; assertEquals(Counter.n, 2) }
+
+class SecondSuite extends munit.FunSuite:
+  test("second") { Counter.n += 1; assertEquals(Counter.n, 3) }
+
+class ThirdSuite extends munit.FunSuite:
+  test("third") { Counter.n += 1; assertEquals(Counter.n, 1) }
+EOF
 cat > "$js/early/src/test/scala/fixture/EarlySuite.scala" <<'EOF'
 package fixture
 
@@ -2111,6 +2988,18 @@ import scala.scalajs.js
 
 class EarlySuite extends munit.FunSuite:
   test("ends node") { js.Dynamic.global.process.exit(0) }
+EOF
+mkdir -p "$js/exits/src/test/scala/fixture"
+cat > "$js/exits/src/test/scala/fixture/Exits.scala" <<'EOF'
+package fixture
+
+import scala.scalajs.js
+
+class BeforeSuite extends munit.FunSuite:
+  test("before") { assertEquals(1, 1) }
+
+class ExitsSuite extends munit.FunSuite:
+  test("ends node") { js.Dynamic.global.process.exit(7) }
 EOF
 python3 - "$js" "$(dirname "$(dirname "$(dirname "$(jar_of munit)")")")" <<'PY'
 import hashlib, importlib.util, os, sys
@@ -2143,15 +3032,16 @@ def description(p, sources):
 node = {"kind": "node", "executable": "node", "args": [], "env": {}, "sourceMap": "enableIfAvailable"}
 jsdom = {"kind": "jsdom", "executable": "node", "args": [], "env": {}, "packageRoot": ".", "lockfile": "package-lock.json"}
 cjs = dict(node, args=["--max-old-space-size=300"], env={"FIXTURE_GREETING": "hello"})
-def project(p, tests, jars, frameworks, kind, env, main=(), exclude=(), args=None):
+def project(p, tests, jars, frameworks, kind, env, main=(), exclude=(), args=None, groups=None):
     framework = lambda f: {"arguments": (args or {}).get(f, []), "class": f}
     return {"base": p, "platform": "js", "scalaVersion": "3.8.4", "description": description(p, list(main)),
             "configurations": {
                 "compile": {"classpath": [], "flags": flags, "generators": [], "mainClasses": [], "resources": [], "sources": list(main)},
                 "test": {"classpath": [{"configuration": "compile", "project": p}] + jars, "flags": flags, "resources": [], "sources": tests, "generators": [],
                          "baseDirectory": ".", "envVars": {}, "exclude": list(exclude), "fork": False, "javaOptions": [],
-                         "frameworks": [framework(f) for f in frameworks], "moduleKind": kind, "jsEnv": env}}}
+                         "frameworks": [framework(f) for f in frameworks], "moduleKind": kind, "jsEnv": env, **({"groups": groups} if groups else {})}}}
 MUNIT, SCALATEST, UTEST, ZIO = "munit.Framework", "org.scalatest.tools.Framework", "utest.runner.Framework", "zio.test.sbt.ZTestFramework"
+PROBE = "fixture.ProbeFramework"
 projects = {
     "suites": project("suites", ["suites/src/test/scala", "suites/src/test/zio"], munit + scalatest + utest + zio, [MUNIT, SCALATEST, UTEST, ZIO], "NoModule", node,
                       main=["suites/src/main/scala"], exclude=["fixture.MunitExcluded"], args={MUNIT: ["--exclude-tags=Slow"]}),
@@ -2162,9 +3052,19 @@ projects = {
     "cjs": project("cjs", ["cjs/src/test/scala"], munit, [MUNIT], "CommonJSModule", cjs),
     "none": project("none", ["none/src/test/scala"], munit, [MUNIT], "NoModule", node),
     "early": project("early", ["early/src/test/scala"], munit, [MUNIT], "NoModule", node),
+    "exits": project("exits", ["exits/src/test/scala"], munit, [MUNIT], "NoModule", node,
+                     groups=[{"name": "first", "patterns": ["fixture.Before*"]}, {"name": "second", "patterns": ["fixture.Exits*"]}]),
     "removal": project("removal", ["removal/src/test/scala"], munit, [MUNIT], "NoModule", node),
     "missing": project("missing", ["cjs/src/test/scala"], munit, [MUNIT, SCALATEST], "CommonJSModule", cjs),
     "domesm": project("domesm", ["esm/src/test/scala"], munit, [MUNIT], "ESModule", jsdom),
+    "grouped": project("grouped", ["grouped/src/test/scala"], munit, [MUNIT], "NoModule", node,
+                       groups=[{"name": "z", "patterns": ["fixture.Third*"]}, {"name": "a", "patterns": ["fixture.First*"]}]),
+    **{p: project(p, ["probed/src/test/scala"], munit, [PROBE], "NoModule", node, args={PROBE: [mode]} if mode else None,
+                  groups=[{"name": "first", "patterns": ["fixture.Alpha*"]}, {"name": "second", "patterns": ["fixture.Beta*"]}])
+       for p, mode in [("probed", ""), ("probedtasks", "tasks"), ("probeddone", "done")]},
+    "unmade": project("unmade", ["suites/src/test/scala"], munit + scalatest + utest, [MUNIT, SCALATEST], "NoModule", node,
+                      main=["suites/src/main/scala"], args={SCALATEST: ["-unknown-argument"]},
+                      groups=[{"name": "first", "patterns": ["fixture.MunitSuite"]}, {"name": "second", "patterns": ["fixture.ScalatestSuite"]}]),
 }
 inputs = {f: hashlib.sha256(open(os.path.join(js, f), "rb").read()).hexdigest() for f in ["build.sbt", "project/build.properties", "project/plugins.sbt"]}
 export = {"teq": "0.1.7-check.1", "format": 1, "binaries": {},
@@ -2217,8 +3117,8 @@ for p in suites suites120; do fresh_link "$p" || differ="$differ $p"; done
 out=$(jstest suites --list)
 code=$?
 listed=$(printf '%s\n' "$out" | sed -nE 's/^Test (fixture\.[A-Za-z]+) : .*/\1/p' | sort)
-if [ $code = 0 ] && [ "$listed" = "$(oracle_of suites defined | cut -f2 | sort)" ]; then
-  pass "scalajs tests: --list names the suites sbt's discovery defines, the abstract and the nested left out"
+if [ $code = 0 ] && [ "$listed" = "$(oracle_of suites defined | cut -f2 | grep -vx fixture.MunitExcluded | sort)" ]; then
+  pass "scalajs tests: --list names the suites a run would run of those sbt's discovery defines, the abstract, the nested and the excluded left out"
 else
   fail "scalajs tests: --list: $listed // $(oracle_of suites defined | cut -f2) // $out"
 fi
@@ -2228,10 +3128,17 @@ if [ $? = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/pattern.events" | cut -f2 | sort 
 else
   fail "scalajs tests: a pattern: $(cat "$js/pattern.events") $out"
 fi
+out=$(jstest suites --list fixture.UtestSuite)
+if [ $? = 0 ] && [ "$(printf '%s\n' "$out" | sed -nE 's/^Test ([^ ]+) : .*/\1/p')" = "fixture.UtestSuite" ]; then
+  pass "scalajs tests: --list prints what a pattern selects"
+else
+  fail "scalajs tests: --list with a pattern: $out"
+fi
 printf '\n// an edit\n' >> "$js/suites/src/test/scala/fixture/UtestSuite.scala"
+listed=$(jstest suites --list --changed | sed -nE 's/^Test ([^ ]+) : .*/\1/p')
 out=$(jstest suites --changed --events "$js/changed.events")
-if [ $? = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/changed.events" | cut -f2 | sort -u)" = "fixture.UtestSuite" ]; then
-  pass "scalajs tests: --changed after an edit runs the suite the edit reaches alone"
+if [ $? = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/changed.events" | cut -f2 | sort -u)" = "fixture.UtestSuite" ] && [ "$listed" = "fixture.UtestSuite" ]; then
+  pass "scalajs tests: --changed after an edit lists and runs the suite the edit reaches alone, the listing leaving the history alone"
 else
   fail "scalajs tests: --changed: $(cut -f2 "$js/changed.events" | sort -u) $out"
 fi
@@ -2251,6 +3158,54 @@ if [ $code = 1 ] && [ "$(awk -F'\t' 'NF > 3' "$js/removal2.events" | cut -f2 | s
   pass "scalajs tests: --changed after deleting a given a summonFrom found, its case binding none, runs the suite of the inline call"
 else
   fail "scalajs tests: --changed after deleting a summonFrom's given ($code): $(cut -f2,4 "$js/removal2.events" 2> /dev/null | tr '\n' ' ') $out"
+fi
+# The groups under node: the listing's sections, the suites run group after group in one node, which their shared
+# object counts, the groups' summaries on stderr and each event's group.
+out=$(jstest grouped --list)
+listed=$(printf '%s\n' "$out" | sed -E 's/ : .*//' | tr '\n' ',')
+: > "$js/grouped.events"
+(cd "$js" && timeout 300 "$TEQ" test grouped --events "$js/grouped.events" > "$js/grouped.out" 2> "$js/grouped.err")
+code=$?
+summaries=$(grep '^grouped/test' "$js/grouped.err" | sed -E 's/ in [0-9]+ ms( \(built in [0-9]+ ms\))?$//' | tr '\n' ',')
+order=$(awk -F'\t' 'NF == 6 {print $2 "/" $6}' "$js/grouped.events" | tr '\n' ',')
+if [ $code = 0 ] && [ "$listed" = "Group z,Test fixture.ThirdSuite,Group a,Test fixture.FirstSuite,Ungrouped,Test fixture.SecondSuite," ] \
+  && [ "$summaries" = "grouped/test [z]: 1 suite,grouped/test [z]: 1 suite, 1 passed, 0 failed,grouped/test [a]: 1 suite,grouped/test [a]: 1 suite, 1 passed, 0 failed,grouped/test (ungrouped): 1 suite,grouped/test (ungrouped): 1 suite, 1 passed, 0 failed,grouped/test: 3 suites, 3 passed, 0 failed," ] \
+  && [ "$order" = "fixture.ThirdSuite.third/z,fixture.FirstSuite.first/a,fixture.SecondSuite.second/," ]; then
+  pass "scalajs tests: groups listed and run in their order in one node, an object shared across them, each group's summary and each event's group"
+else
+  fail "scalajs tests: groups ($code): $listed // $summaries // $order // $(cat "$js/grouped.out")"
+fi
+# A framework's runner made once before the groups, its tasks asked as each group is entered and its done once after
+# them; its tasks failing ends the run in the first group, the second not completed; its done failing ends it after
+# both groups' summaries; each failure recorded (`--diagnostics`), the group it happened in, null for done.
+pj() { : > "$js/$1.diag"; (cd "$js" && timeout 300 "$TEQ" test "$1" --diagnostics "$js/$1.diag" > "$js/$1.out" 2> "$js/$1.err"); }
+probes() { grep '^PROBE' "$js/$1.out" | tr '\n' ','; }
+pj probed
+code=$?
+pj probedtasks
+code_tasks=$?
+pj probeddone
+code_done=$?
+if [ $code = 0 ] && [ "$(probes probed)" = "PROBE CREATE,PROBE TASKS 1,PROBE TASKS 1,PROBE DONE," ] && grep -q '^probed/test \[second\]: 1 suite, 1 passed, 0 failed' "$js/probed.err" \
+  && [ $code_tasks = 1 ] && [ "$(probes probedtasks)" = "PROBE CREATE,PROBE TASKS 1," ] && grep -q '^probedtasks/test: the run failed: org.scalajs.testing.common.RPCCore\$RPCException: ' "$js/probedtasks.err" \
+  && grep -qx 'probedtasks/test: not completed: \[first\], \[second\]' "$js/probedtasks.err" && grep '"severity":"failure"' "$js/probedtasks.diag" | grep 'the run failed' | grep -q '"group":"first"' \
+  && [ $code_done = 1 ] && [ "$(probes probeddone)" = "PROBE CREATE,PROBE TASKS 1,PROBE TASKS 1,PROBE DONE," ] && grep -q '^probeddone/test \[second\]: 1 suite, 1 passed, 0 failed' "$js/probeddone.err" \
+  && grep -q '^probeddone/test: the run failed: ' "$js/probeddone.err" && ! grep -q 'not completed' "$js/probeddone.err" \
+  && grep '"severity":"failure"' "$js/probeddone.diag" | grep 'the run failed' | grep -q '"group":null'; then
+  pass "scalajs tests: a framework's runner made once, its tasks asked per group and its done once; its tasks or its done failing ends the run, the failure recorded with its group"
+else
+  fail "scalajs tests: the probe framework ($code, $code_tasks, $code_done): $(probes probed) // $(probes probedtasks) // $(probes probeddone) // $(cat "$js/probedtasks.err" "$js/probeddone.err") // $(cat "$js/probedtasks.diag" "$js/probeddone.diag")"
+fi
+# A framework whose controller runner the bridge cannot make (ScalaTest refusing an argument) ends the run before any
+# suite runs, as sbt makes every runner before its groups and lets the failure through: the groups not completed named.
+: > "$js/unmade.events"
+out=$(jstest unmade fixture.MunitSuite fixture.ScalatestSuite --events "$js/unmade.events")
+code=$?
+if [ $code = 1 ] && [[ "$out" == *"unmade/test: the run failed: org.scalajs.testing.common.RPCCore\$RPCException:"* ]] && [[ "$out" == *"unmade/test: not completed: [first], [second]"* ]] \
+  && [ ! -s "$js/unmade.events" ] && [[ "$out" != *"unmade/test: 2 suites"* ]]; then
+  pass "scalajs tests: a framework whose runner the bridge cannot make ends the run before any group, the groups not completed named"
+else
+  fail "scalajs tests: the runner that cannot be made ($code): $out // $(cat "$js/unmade.events")"
 fi
 out=$(jstest esm --events "$js/esm.events")
 if [ $? = 0 ] && [ "$(inventory "$js/esm.events")" = "$(oracle_of esm)" ] && [ -f "$js/target/teq/esm/test/link/main.mjs" ]; then
@@ -2285,6 +3240,17 @@ if [ $? = 1 ] && [[ "$out" == *"node ended before the run completed"* ]]; then
   pass "scalajs tests: a node that ends in the middle of the run fails it"
 else
   fail "scalajs tests: an early end: $out"
+fi
+# A later group's suite that ends node: the run fails there, and what the earlier group ran keeps its records.
+: > "$js/exits.events"
+out=$(jstest exits --events "$js/exits.events")
+code=$?
+if [ $code = 1 ] && [[ "$out" == *"node ended before the run completed"* ]] && [[ "$out" == *"exits/test: not completed: [second]"* ]] \
+  && [[ "$out" == *"exits/test [first]: 1 suite, 1 passed, 0 failed"* ]] \
+  && grep -q '^exits	fixture.BeforeSuite	ran	first$' "$js/exits.events" && grep -q '^exits	fixture.BeforeSuite.before	.*	Success		first$' "$js/exits.events"; then
+  pass "scalajs tests: a later group's suite ending node fails the run, the earlier group's events and suites written with their group"
+else
+  fail "scalajs tests: node ended in a later group ($code): $out // $(cat "$js/exits.events")"
 fi
 out=$(jstest missing)
 if [ $? = 0 ] && [[ "$out" == *"note: missing/test: the test framework org.scalatest.tools.Framework is not in the test link"* ]] && [[ "$out" == *"missing/test: 1 suite, 2 passed, 0 failed"* ]]; then

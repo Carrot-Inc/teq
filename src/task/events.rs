@@ -3,7 +3,8 @@
 //! node (`jsrunner.rs`). Both runners hand their events over typed; the tally, the lines a failure
 //! is reported by and the summary are made here, once for both platforms.
 
-/// `sbt.testing.Status`, in its order: the bridge sends the ordinal.
+/// `sbt.testing.Status`, in its order: the bridge sends the ordinal. `Unset` is an event's status of null, which sbt's
+/// worker carries (`ForkEvent`) and its host counts as none (`SuiteResult.apply`), the JVM runner's -1.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Status {
     Success,
@@ -13,6 +14,7 @@ pub enum Status {
     Ignored,
     Canceled,
     Pending,
+    Unset,
 }
 
 impl Status {
@@ -32,6 +34,7 @@ impl Status {
             Status::Ignored => "Ignored",
             Status::Canceled => "Canceled",
             Status::Pending => "Pending",
+            Status::Unset => "null",
         }
     }
 
@@ -134,11 +137,13 @@ impl Event {
 
     /// The event as a line of the inventory `teq test --events` writes, the oracle's
     /// (tests/scalajs-oracle.scala): the project, the event's name, its selector, its status and
-    /// the first line of what it threw, tab-separated.
-    pub fn line(&self, project: &str) -> String {
+    /// the first line of what it threw, tab-separated; where the configuration has groups, then the
+    /// group its suite ran in, empty for the suites of none (no group's name is).
+    pub fn line(&self, project: &str, group: Option<&str>) -> String {
         let thrown = self.thrown.as_ref().and_then(|t| t.text.lines().next()).unwrap_or("");
         let clean = |s: &str| s.replace(['\t', '\n', '\r'], " ");
-        format!("{}\t{}\t{}\t{}\t{}\n", clean(project), clean(&self.name), clean(&self.selector.describe()), self.status.name(), clean(thrown))
+        let group = group.map_or(String::new(), |g| format!("\t{}", clean(g)));
+        format!("{}\t{}\t{}\t{}\t{}{}\n", clean(project), clean(&self.name), clean(&self.selector.describe()), self.status.name(), clean(thrown), group)
     }
 
     /// The test the event is of: its name and the test its selector names, said once.
@@ -180,16 +185,32 @@ impl Tally {
     }
 
     /// The `--events` file's line of a suite that ran: the project and the suite, tab-separated, then
-    /// `ran`, apart from a case's line by its three fields.
-    pub fn ran_line(project: &str, suite: &str) -> String {
+    /// `ran`, apart from a case's line by its three fields (four, a case's six, where the configuration
+    /// has groups: then the group the suite ran in, empty for the suites of none).
+    pub fn ran_line(project: &str, suite: &str, group: Option<&str>) -> String {
         let clean = |s: &str| s.replace(['\t', '\n', '\r'], " ");
-        format!("{}\t{}\tran\n", clean(project), clean(suite))
+        let group = group.map_or(String::new(), |g| format!("\t{}", clean(g)));
+        format!("{}\t{}\tran{}\n", clean(project), clean(suite), group)
+    }
+
+    /// The counts of several tallies together, a run's of its phases', for its summary.
+    pub fn sum(tallies: &[Tally]) -> Tally {
+        let mut total = Tally::default();
+        for t in tallies {
+            for (n, m) in total.counts.iter_mut().zip(t.counts) {
+                *n += m;
+            }
+        }
+        total
     }
 
     /// The event counted and kept; the lines that report it, which a failure always has and
     /// any other event has when `verbose`.
     pub fn add(&mut self, event: Event, verbose: bool) -> String {
-        self.counts[event.status as usize] += 1;
+        // An event of no status counted as none, its result none (`SuiteResult.apply`, `TestEvent.overallResult`).
+        if event.status != Status::Unset {
+            self.counts[event.status as usize] += 1;
+        }
         let lines = report(&event, verbose);
         self.events.push(event);
         lines

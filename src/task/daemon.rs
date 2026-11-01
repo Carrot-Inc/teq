@@ -11,13 +11,13 @@
 //! ends so that the next run finds it up, and when what it was started with changed or it died.
 
 use super::analysis::View;
-use super::events::{self, Tally};
+use super::events::{self, Tally, Thrown};
 use super::export::ModuleKind;
 use super::{jsdom, jsrunner};
-use super::export::{Entry, Export, Key, MainClass, Platform, TestContext};
+use super::export::{Entry, Export, Exporter, Group, Key, MainClass, Platform, TestContext};
 use super::generators;
 use super::resident::{Answer, Resident};
-use super::runner::{self, Jar, Ran, Runner, Spec};
+use super::runner::{self, Planned, Ran, Report, Runner, Spec};
 use super::stage;
 use super::suites::{self, Patterns};
 use super::{paths, Implied, Info, Paths, PROTOCOL};
@@ -788,17 +788,27 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     // Nothing under the configuration's source roots can be a suite: no runner is started to say
     // so (lila's 86 test configurations, most without a test).
     if candidates.is_empty() {
-        if !asked.list {
+        if asked.list {
+            reply.out(&suites::listing(&vec![Vec::new(); context.groups.len() + 1], &context.groups));
+        } else {
             reply.err(&format!("{}: no suite to run\n", key));
         }
-        if asked.patterns.is_empty() {
+        if asked.patterns.is_empty() && !asked.list {
             state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
         }
         return 0;
     }
     let runner_slot = state.runners.lock().unwrap_or_else(|e| e.into_inner()).entry(key.clone()).or_default().clone();
     let mut runner = runner_slot.lock().unwrap_or_else(|e| e.into_inner());
-    let spec = match runner_spec(export, key, &context, &request.environment) {
+    // The test class path in its order, which the run's class loader is made over once the runner is up.
+    let paths = match run_paths(export, key, &owner) {
+        Ok(p) => p,
+        Err(e) => {
+            failed(request, key, e, reply);
+            return 2;
+        }
+    };
+    let spec = match runner_spec(export, key, &context, &request.environment, &paths) {
         Ok(s) => s,
         Err(e) => {
             failed(request, key, e, reply);
@@ -814,8 +824,8 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
             r.stop();
         } else {
             kill_when_gone(reply, &finished, r.process(), key);
-            // One launched once the last run ended has loaded its frameworks meanwhile: its answers are read,
-            // then a ping tells whether it is still there.
+            // One launched once the last invocation ended has started meanwhile: its version is read, then a ping
+            // tells whether it is still there.
             let ready = (r.handshaken() || (r.alive() && r.handshake().is_ok())) && r.answers();
             if ready {
                 *runner = Some(r);
@@ -842,6 +852,41 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
             }
         }
     }
+    // A runner sent `load` holds this build's classes and whatever its frameworks made loading: it serves this
+    // invocation alone, as sbt's worker serves one request, and every way out from here spends it.
+    let spend = |runner: &mut Option<Runner>, failed: bool| {
+        if let Some(spent) = runner.take() {
+            *runner = renew(state, spent, key, &request.environment, &argfile, failed);
+        }
+    };
+    let r = runner.as_mut().expect("started");
+    // An export of sbt's has its host played (sbt's `Tests.discover`, `processOptions`, `filteredFrameworks`,
+    // `createTestRunners`, `ForkTests`' request and the runners' summaries), one of Mill's, whose runner has none, not.
+    let host = export.exporter == Exporter::Sbt;
+    // The run's class loader, made once the build is done, and the frameworks loaded through it.
+    match r.load(&paths, &context.frameworks, host, &mut |line| reply.out(line)) {
+        Ok(Ok(())) => {}
+        Ok(Err(thrown)) => {
+            // A framework that failed to load ends the run as its run's error does (ForkTestMain.Run.run), before any
+            // suite was discovered.
+            spend(&mut runner, true);
+            if let Some(t) = &thrown {
+                reply.out(&events::fork_error(t, asked.verbose));
+            }
+            let why = thrown.as_ref().and_then(|t| t.text.lines().next()).unwrap_or("a fork error");
+            run_failed(request, key, &context.groups, None, why, built_ms, reply);
+            not_started(request, key, &context.groups, reply);
+            return 1;
+        }
+        Err(e) => {
+            if let Some(r) = runner.take() {
+                r.stop();
+            }
+            failed_in_group(request, key, &context.groups, None, e, reply);
+            not_started(request, key, &context.groups, reply);
+            return 1;
+        }
+    }
     let r = runner.as_mut().expect("started");
     // A framework the export names that does not load leaves its suites unrun: never a pass.
     for (class, why) in &r.missing {
@@ -849,14 +894,9 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     }
     let incomplete = i32::from(!r.missing.is_empty());
     let defined = suites::defined(&candidates, &r.fingerprints);
-    if asked.list {
-        for d in &defined {
-            reply.out(&format!("{}\n", d));
-        }
-        return incomplete;
-    }
-    let mut selected = chosen(&defined, &r.fingerprints, &context, asked);
-    if asked.changed {
+    // Under `--changed`, the suites whose classes depend on a class rewritten since the last full run, or those of a
+    // source deleted since; none when every suite runs, which is said.
+    let affected = if asked.changed {
         let changes = state.changes.lock().unwrap_or_else(|e| e.into_inner());
         let why_every = match changes.get(key) {
             None => Some("no earlier run in this daemon's life".to_string()),
@@ -864,17 +904,69 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
             Some(_) => view.deps_missing.as_ref().map(|why| format!("the dependencies are unavailable: {}", why)),
         };
         match (why_every, changes.get(key)) {
-            (Some(why), _) => reply.err(&format!("teq: {}: every suite, {}\n", key, why)),
+            (Some(why), _) => {
+                reply.err(&format!("teq: {}: every suite, {}\n", key, why));
+                None
+            }
             (None, Some(c)) => {
                 let mut affected = view.affected(&c.files);
                 affected.extend(c.removed.iter().cloned());
-                selected.retain(|s| affected.contains(&s.name));
+                Some(affected)
             }
-            (None, None) => {}
+            (None, None) => None,
         }
+    } else {
+        None
+    };
+    let plan = selection(defined, &context, asked, affected.as_ref(), export.exporter);
+    // A listing is the plan a run with the same arguments would run, the change history left as it is.
+    if asked.list {
+        reply.out(&suites::listing(&plan.phases, &context.groups));
+        spend(&mut runner, false);
+        return incomplete;
     }
+    // The suites in the selection's order, each with its phase, a phase per group and the suites of none last, and
+    // what sbt's host's selection reads.
+    let planned = Planned {
+        host,
+        definitions: plan.definitions.iter().map(|d| (d.framework, d.index, d.name.clone())).collect(),
+        filters: plan.filters.clone(),
+        suites: plan.selected.iter().map(|(p, d)| (d.framework, d.index, *p, asked.patterns.names(&d.name), d.name.clone())).collect(),
+        phases: plan.phases.len(),
+    };
+    let count = planned.suites.len();
     let every = asked.patterns.is_empty();
-    if selected.is_empty() {
+    if count == 0 {
+        // sbt's host still makes its selection's calls of the frameworks (`processOptions`' and `filteredFrameworks`'),
+        // and starts no worker (`ForkTests.apply`); what they throw fails the run.
+        if host {
+            let r = runner.as_mut().expect("started");
+            let mut none: Vec<Tally> = plan.phases.iter().map(|_| Tally::default()).collect();
+            match r.run(&planned, context.parallelism, asked.verbose, request.tty, &mut none, &mut |report| {
+                if let Report::Line(line) = report {
+                    reply.out(line)
+                }
+            }) {
+                Ok(Ran::Failed(thrown)) => {
+                    spend(&mut runner, true);
+                    if let Some(t) = &thrown {
+                        reply.out(&events::fork_error(t, asked.verbose));
+                    }
+                    let why = thrown.as_ref().and_then(|t| t.text.lines().next()).unwrap_or("a fork error");
+                    run_failed(request, key, &context.groups, None, why, built_ms, reply);
+                    return 1;
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    if let Some(r) = runner.take() {
+                        r.stop();
+                    }
+                    failed_in_group(request, key, &context.groups, None, e, reply);
+                    return 1;
+                }
+            }
+        }
+        spend(&mut runner, false);
         let why = if asked.changed { "no suite depends on what changed" } else { "no suite to run" };
         reply.err(&format!("{}: {}\n", key, why));
         if every && incomplete == 0 {
@@ -882,21 +974,37 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         }
         return incomplete;
     }
-    let directories = child_directories(export, key, &owner);
     // A run of its own directory starts in it empty, as Mill's sandbox (`TestModuleUtil`) does.
     if context.sandbox {
         if let Err(e) = empty_directory(&export.sandbox_directory(key)) {
+            spend(&mut runner, false);
             failed(request, key, e, reply);
             return 2;
         }
     }
-    let names: Vec<(usize, usize, String)> = selected.iter().map(|s| (s.framework, s.fingerprint, s.name.clone())).collect();
-    let mut tally = Tally::default();
+    let r = runner.as_mut().expect("started");
+    let sizes: Vec<usize> = plan.phases.iter().map(Vec::len).collect();
+    let mut tallies: Vec<Tally> = plan.phases.iter().map(|_| Tally::default()).collect();
+    let mut ended = vec![false; plan.phases.len()];
+    // The phase entered and not ended, where a failure happens in a group.
+    let mut current: Option<usize> = None;
+    let groups = &context.groups;
     // The run's stream on stdout: what the suites, their frameworks and the runner's JVM print, and teq's report of
     // each event, whose names and messages are the suites' (the run's outcomes are its events, `--events`); teq's own
-    // lines on stderr, a build's diagnostics and count, the run's summary or end, so that nothing of a run's reaches
-    // them.
-    let result = r.run(&directories, &names, context.parallelism, asked.verbose, request.tty, &mut tally, &mut |line| reply.out(line));
+    // lines on stderr, a build's diagnostics and count, the groups' headers and summaries, the run's summary or end, so
+    // that nothing of a run's reaches them.
+    let result = r.run(&planned, context.parallelism, asked.verbose, request.tty, &mut tallies, &mut |report| match report {
+        Report::Line(line) => reply.out(line),
+        Report::Entered(p) => {
+            current = Some(p);
+            entered(request, key, groups, p, sizes[p], reply);
+        }
+        Report::Ended(p, ms, tally) => {
+            current = None;
+            ended[p] = true;
+            group_summary(request, key, groups, p, sizes[p], tally, ms, reply);
+        }
+    });
     drop(finished);
     let stderr = r.drain_stderr();
     if !stderr.is_empty() {
@@ -906,54 +1014,176 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         Ok(Ran::Failed(thrown)) => {
             // As sbt's ForkTests fails its harness at the worker's first forkError: nothing more of the run reaches the
             // client, no summary, the events reported before it written; the runner, still at its suites, retired as
-            // ForkTests leaves its worker once it has closed its input, its tasks in flight and done() let finish.
-            if let Some(spent) = runner.take() {
-                *runner = renew(state, spent, key, &request.environment, &argfile, true);
-            }
+            // ForkTests leaves its worker once it has closed its input, its tasks in flight and done() let finish, no
+            // later group started.
+            spend(&mut runner, true);
             if let Some(t) = &thrown {
                 reply.out(&events::fork_error(t, asked.verbose));
             }
             let why = thrown.as_ref().and_then(|t| t.text.lines().next()).unwrap_or("a fork error");
-            reply.err(&format!("{}: the run failed: {} (built in {} ms)\n", key, why, built_ms));
-            write_events(asked, key, &tally, reply);
+            run_failed(request, key, groups, current, why, built_ms, reply);
+            not_completed(request, key, groups, &sizes, &ended, reply);
+            write_events(asked, key, groups, &tallies, reply);
             1
         }
         Ok(Ran::Done(ms)) => {
-            if let Some(spent) = runner.take() {
-                *runner = renew(state, spent, key, &request.environment, &argfile, false);
-            }
+            spend(&mut runner, false);
             if every && incomplete == 0 {
                 state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
             }
-            reply.err(&summary(key, selected.len(), &tally, ms, built_ms));
-            write_events(asked, key, &tally, reply);
-            i32::from(tally.failed() > 0).max(incomplete)
+            let total = Tally::sum(&tallies);
+            reply.err(&summary(key, count, &total, ms, built_ms));
+            write_events(asked, key, groups, &tallies, reply);
+            i32::from(total.failed() > 0).max(incomplete)
+        }
+        Ok(Ran::Stopped(ms)) => {
+            // The worker's internal error, its line on the run's stream, ended the run's phases, and the worker
+            // answered as at its end: sbt's host's outcome is then that of the suites reported (ForkTests.mainTestTask,
+            // `overall` of what React counted), its exit too; the groups not completed named, the change history kept.
+            spend(&mut runner, false);
+            not_completed(request, key, groups, &sizes, &ended, reply);
+            let total = Tally::sum(&tallies);
+            reply.err(&summary(key, count, &total, ms, built_ms));
+            write_events(asked, key, groups, &tallies, reply);
+            i32::from(total.failed() > 0).max(incomplete)
         }
         Err(e) => {
             if let Some(r) = runner.take() {
                 r.stop();
             }
-            failed(request, key, e, reply);
+            // A runner that ended (a suite's System.exit, a JVM lost) ends the run where it is, the events of what ran
+            // before written with their groups, as every other end writes them.
+            failed_in_group(request, key, groups, current, e, reply);
+            not_completed(request, key, groups, &sizes, &ended, reply);
+            write_events(asked, key, groups, &tallies, reply);
             1
         }
     }
 }
 
-/// The run's events appended to the `--events` file, if one was asked for.
-fn write_events(asked: &TestRequest, key: &Key, tally: &Tally, reply: &mut Reply) {
+/// How the groups' lines name a phase: a group by its name, `[<name>]`, the suites of none `(ungrouped)`, which no
+/// group's is.
+fn group_label(groups: &[Group], phase: usize) -> String {
+    groups.get(phase).map_or("(ungrouped)".to_string(), |g| format!("[{}]", g.name))
+}
+
+/// A group's line on stderr, recorded (`--diagnostics`) with its severity and the group, null for the suites of none.
+fn group_line(request: &Request, key: &Key, groups: &[Group], phase: usize, severity: &str, text: String, reply: &mut Reply) {
+    reply.err(&text);
+    let group = groups.get(phase).map_or(Json::Null, |g| g.name.as_str().into());
+    record(request, vec![("key", key.to_string().as_str().into()), ("severity", severity.into()), ("group", group), ("message", text.trim_end().into()), ("shown", text.as_str().into())], reply);
+}
+
+/// A phase entered, where the configuration has groups: the group's header, `<key> [<name>]: <n> suites`, or for an
+/// empty group `no suite to run`; nothing for the suites of none when there are none.
+fn entered(request: &Request, key: &Key, groups: &[Group], phase: usize, size: usize, reply: &mut Reply) {
+    if groups.is_empty() || (size == 0 && phase == groups.len()) {
+        return;
+    }
+    let text = match size {
+        0 => format!("{} {}: no suite to run\n", key, group_label(groups, phase)),
+        n => format!("{} {}: {} suite{}\n", key, group_label(groups, phase), n, if n == 1 { "" } else { "s" }),
+    };
+    group_line(request, key, groups, phase, "group", text, reply);
+}
+
+/// A phase ended, where the configuration has groups and the phase had suites: the group's summary, its suites, the
+/// events of its suites' tasks and of the tasks they returned by status, and its time.
+#[allow(clippy::too_many_arguments)]
+fn group_summary(request: &Request, key: &Key, groups: &[Group], phase: usize, size: usize, tally: &Tally, ms: u64, reply: &mut Reply) {
+    if groups.is_empty() || size == 0 {
+        return;
+    }
+    let text = format!("{} {}: {} suite{}, {} passed, {} failed{} in {} ms\n", key, group_label(groups, phase), size, if size == 1 { "" } else { "s" }, tally.passed(), tally.failed(), tally.others(), ms);
+    group_line(request, key, groups, phase, "summary", text, reply);
+}
+
+/// The end of a run that failed, `<key>: the run failed: <why> (built in <ms> ms)`, on stderr; where the configuration has
+/// groups, recorded (`--diagnostics`, severity `failure`) with the group the failure happened in, null where it happened
+/// in no group (loading the frameworks, making the runners, their `done()` once every group has ended) or among the
+/// suites of none.
+#[allow(clippy::too_many_arguments)]
+fn run_failed(request: &Request, key: &Key, groups: &[Group], phase: Option<usize>, why: &str, built_ms: u128, reply: &mut Reply) {
+    let text = format!("{}: the run failed: {} (built in {} ms)\n", key, why, built_ms);
+    if groups.is_empty() {
+        reply.err(&text);
+        return;
+    }
+    // The suites of none's phase is no group: null, as outside every phase.
+    group_line(request, key, groups, phase.unwrap_or(groups.len()), "failure", text, reply);
+}
+
+/// A failure of `key`'s runner or node, which ended (`teq: <key>: <why>`), as `failed` shows and records it; where the
+/// configuration has groups, its record carries the group it happened in, as `run_failed`'s does.
+fn failed_in_group(request: &Request, key: &Key, groups: &[Group], phase: Option<usize>, why: impl std::fmt::Display, reply: &mut Reply) {
+    if groups.is_empty() {
+        failed(request, key, why, reply);
+        return;
+    }
+    let why = why.to_string();
+    let text = format!("teq: {}: {}\n", key, why);
+    reply.err(&text);
+    let group = phase.and_then(|p| groups.get(p)).map_or(Json::Null, |g| g.name.as_str().into());
+    record(request, vec![("key", key.to_string().as_str().into()), ("severity", "failure".into()), ("group", group), ("message", why.as_str().into()), ("shown", text.as_str().into())], reply);
+}
+
+/// The groups a run whose frameworks failed to load, before any suite was discovered, did not start: every group and
+/// the suites of none, named on stderr and recorded as `not_completed` names them; nothing without groups.
+fn not_started(request: &Request, key: &Key, groups: &[Group], reply: &mut Reply) {
+    if groups.is_empty() {
+        return;
+    }
+    let names: Vec<String> = (0..=groups.len()).map(|p| group_label(groups, p)).collect();
+    let text = format!("{}: not completed: {}, no suite discovered\n", key, names.join(", "));
+    group_line(request, key, groups, 0, "failure", text, reply);
+}
+
+/// The groups a run that failed did not complete, those with suites that it did not end, named on stderr and recorded
+/// (`--diagnostics`, severity `failure`, the first of them its group); nothing without groups, or when every group
+/// ended and the frameworks' `done()` failed.
+fn not_completed(request: &Request, key: &Key, groups: &[Group], sizes: &[usize], ended: &[bool], reply: &mut Reply) {
+    let unfinished: Vec<usize> = (0..sizes.len()).filter(|&p| !ended[p] && sizes[p] > 0).collect();
+    if groups.is_empty() || unfinished.is_empty() {
+        return;
+    }
+    let names: Vec<String> = unfinished.iter().map(|&p| group_label(groups, p)).collect();
+    let text = format!("{}: not completed: {}\n", key, names.join(", "));
+    group_line(request, key, groups, unfinished[0], "failure", text, reply);
+}
+
+/// The run's events appended to the `--events` file, if one was asked for: each phase's, in their order, with its
+/// group where the configuration has groups.
+fn write_events(asked: &TestRequest, key: &Key, groups: &[Group], tallies: &[Tally], reply: &mut Reply) {
     let Some(file) = &asked.events else { return };
     // Each case's line, then each suite's that ran (`Tally::ran_line`), a suite that sent no case among them.
-    let text: String = tally.events.iter().map(|e| e.line(&key.project)).chain(tally.ran.iter().map(|s| Tally::ran_line(&key.project, s))).collect();
+    let mut text = String::new();
+    for (p, tally) in tallies.iter().enumerate() {
+        let group = (!groups.is_empty()).then(|| groups.get(p).map_or("", |g| g.name.as_str()));
+        text.extend(tally.events.iter().map(|e| e.line(&key.project, group)).chain(tally.ran.iter().map(|s| Tally::ran_line(&key.project, s, group))));
+    }
     let written = std::fs::OpenOptions::new().append(true).open(file).and_then(|mut f| f.write_all(text.as_bytes()));
     if let Err(e) = written {
         reply.err(&format!("teq: cannot write {}: {}\n", file.display(), e));
     }
 }
 
-/// The suites a run takes of those discovered: each with the fingerprint it was found by, less
-/// those a `Tests.Exclude` names, matching the patterns as `testOnly` matches them.
-fn chosen(defined: &[suites::Defined], prints: &[runner::Fingerprint], context: &TestContext, asked: &TestRequest) -> Vec<suites::Suite> {
-    suites::assign(defined, prints).into_iter().filter(|s| !context.exclude.contains(&s.name) && asked.patterns.matches(&s.name)).collect()
+/// One invocation's plan, which a run runs and `--list` prints, on either platform: the suites discovered, as sbt's
+/// `Tests.processOptions` selects them (`suites::plan`): less those a `Tests.Exclude` names, then those `testOnly`'s
+/// ordered filters accept, in their order, each also one of those `affected` names under `--changed` (all where it is
+/// none), as `testQuick`'s filters each also ask its own question, one definition per name; each in the first of the
+/// configuration's groups whose patterns match it, then those of none (`suites::placed`). An export of Mill's, whose
+/// runner has no host, has its own (`suites::mill_plan`): the patterns one filter, the suites in discovery's order.
+fn selection<'a>(defined: Vec<suites::Defined>, context: &TestContext, asked: &'a TestRequest, affected: Option<&'a BTreeSet<String>>, exporter: Exporter) -> suites::Plan {
+    let excluded = |name: &str| context.exclude.iter().any(|e| e == name);
+    if exporter == Exporter::Mill {
+        return suites::mill_plan(defined, excluded, |name| asked.patterns.matches(name) && affected.is_none_or(|a| a.contains(name)), &context.groups);
+    }
+    let filters: Vec<Box<dyn Fn(&str) -> bool + 'a>> = asked.patterns.ordered();
+    let filters: Vec<Box<dyn Fn(&str) -> bool + 'a>> = match affected {
+        None => filters,
+        Some(a) => filters.into_iter().map(|f| Box::new(move |name: &str| f(name) && a.contains(name)) as Box<dyn Fn(&str) -> bool + 'a>).collect(),
+    };
+    suites::plan(defined, excluded, &filters, &context.groups)
 }
 
 /// The digest of each source file of the view, read from the build's root.
@@ -1051,6 +1281,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
         Ok(found) => found,
         Err(e) => {
             failed(request, key, e, reply);
+            not_started(request, key, &context.groups, reply);
             return 1;
         }
     };
@@ -1077,10 +1308,36 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
         reply.err(&format!("teq: {}: no suite of the test frameworks ({}) among the test sources: a run of nothing is no pass\n", key, classes.join(", ")));
         return 1;
     }
-    if asked.list {
-        for d in &defined {
-            out(&format!("{}\n", d));
+    let digests = source_digests(export, view);
+    // Under `--changed`, the suites whose sources depend on a source edited since the last full run, or those of a
+    // source deleted since; none when every suite runs, which is said.
+    let affected = if asked.changed {
+        let changes = state.changes.lock().unwrap_or_else(|e| e.into_inner());
+        let why_every = match changes.get(key) {
+            None => Some("no earlier run in this daemon's life".to_string()),
+            Some(c) if c.resident != *key || c.all => Some("its resident started anew since the last run".to_string()),
+            Some(_) => view.deps_missing.as_ref().map(|why| format!("the dependencies are unavailable: {}", why)),
+        };
+        match (why_every, changes.get(key)) {
+            (Some(why), _) => {
+                reply.err(&format!("teq: {}: every suite, {}\n", key, why));
+                None
+            }
+            (None, Some(c)) => {
+                let edited: BTreeSet<String> = digests.iter().filter(|(f, d)| c.sources.get(*f) != Some(*d)).map(|(f, _)| f.clone()).collect();
+                let mut affected = view.affected_by_sources(&edited);
+                affected.extend(c.removed.iter().cloned());
+                Some(affected)
+            }
+            (None, None) => None,
         }
+    } else {
+        None
+    };
+    let plan = selection(defined, &context, asked, affected.as_ref(), export.exporter);
+    // A listing is the plan a run with the same arguments would run, the change history left as it is.
+    if asked.list {
+        out(&suites::listing(&plan.phases, &context.groups));
         return match run.finish() {
             Ok(()) => 0,
             Err(e) => {
@@ -1089,31 +1346,13 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
             }
         };
     }
-    let mut selected = chosen(&defined, &prints, &context, asked);
-    let digests = source_digests(export, view);
-    if asked.changed {
-        let changes = state.changes.lock().unwrap_or_else(|e| e.into_inner());
-        let why_every = match changes.get(key) {
-            None => Some("no earlier run in this daemon's life".to_string()),
-            Some(c) if c.resident != *key || c.all => Some("its resident started anew since the last run".to_string()),
-            Some(_) => view.deps_missing.as_ref().map(|why| format!("the dependencies are unavailable: {}", why)),
-        };
-        match (why_every, changes.get(key)) {
-            (Some(why), _) => reply.err(&format!("teq: {}: every suite, {}\n", key, why)),
-            (None, Some(c)) => {
-                let edited: BTreeSet<String> = digests.iter().filter(|(f, d)| c.sources.get(*f) != Some(*d)).map(|(f, _)| f.clone()).collect();
-                let mut affected = view.affected_by_sources(&edited);
-                affected.extend(c.removed.iter().cloned());
-                selected.retain(|s| affected.contains(&s.name));
-            }
-            (None, None) => {}
-        }
-    }
+    let selected: Vec<Vec<suites::Suite>> = plan.phases.iter().map(|p| suites::assign(p, &prints)).collect();
+    let count: usize = selected.iter().map(Vec::len).sum();
     let every = asked.patterns.is_empty();
     let record = |state: &State| {
         state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: key.clone(), all: false, files: BTreeSet::new(), sources: digests.clone(), removed: BTreeSet::new() });
     };
-    if selected.is_empty() {
+    if count == 0 {
         let _ = run.finish();
         let why = if asked.changed { "no suite depends on what changed" } else { "no suite to run" };
         reply.err(&format!("{}: {}\n", key, why));
@@ -1122,34 +1361,115 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
         }
         return 0;
     }
-    let mut tally = Tally::default();
+    let groups = &context.groups;
+    let sizes: Vec<usize> = selected.iter().map(Vec::len).collect();
+    let mut tallies: Vec<Tally> = selected.iter().map(|_| Tally::default()).collect();
+    let mut ended = vec![false; selected.len()];
     let run_started = Instant::now();
-    let mut result = Ok(());
+    // The phases one after another, as sbt runs its groups in process (`Defaults.allTestGroupsTask`): one controller
+    // runner for each framework one of whose fingerprints matches a selected suite's, in any phase
+    // (`filteredFrameworks`), all made before the first phase (`createTestRunners`), each phase's tasks asked of them,
+    // then each runner's `done` once every phase has run. A failure of the bridge to make
+    // a runner, its tasks or its `done` is the run's, as sbt lets those throw through; a channel that fails is the
+    // error.
+    let mut made = vec![false; context.frameworks.len()];
+    let mut outcome: Result<Option<Thrown>, String> = Ok(None);
+    // The phase a failure of the bridge happened in, none outside every phase.
+    let mut failed_in: Option<usize> = None;
     for (i, framework) in context.frameworks.iter().enumerate() {
         let Some(info) = &found[i] else { continue };
-        let defs: Vec<jsrunner::TaskDef> = selected.iter().filter(|s| s.framework == i).map(|s| jsrunner::TaskDef { name: s.name.clone(), fingerprint: prints.iter().find(|p| p.framework == i && p.index == s.fingerprint).expect("assigned").clone() }).collect();
-        if defs.is_empty() {
+        if !prints.iter().any(|p| p.framework == i && plan.selected.iter().any(|(_, d)| d.kind == p.kind && d.module == p.module && d.print == p.name)) {
             continue;
         }
-        result = run.run_framework(i as i32, &info.implementation, &framework.arguments, &defs, request.tty, &mut tally);
-        if result.is_err() {
-            break;
+        match run.create(i as i32, &info.implementation, &framework.arguments, &mut tallies[0]) {
+            Ok(Ok(())) => made[i] = true,
+            Ok(Err(thrown)) => {
+                outcome = Ok(Some(thrown));
+                break;
+            }
+            Err(e) => {
+                outcome = Err(e);
+                break;
+            }
         }
     }
-    let result = result.and_then(|()| run.finish());
+    'phases: for (p, suites) in selected.iter().enumerate() {
+        if !matches!(outcome, Ok(None)) {
+            break;
+        }
+        entered(request, key, groups, p, sizes[p], reply);
+        let phase_started = Instant::now();
+        for i in (0..made.len()).filter(|&i| made[i]) {
+            let defs: Vec<jsrunner::TaskDef> = suites.iter().filter(|s| s.framework == i).map(|s| jsrunner::TaskDef { name: s.name.clone(), fingerprint: prints.iter().find(|p| p.framework == i && p.index == s.fingerprint).expect("assigned").clone(), explicit: asked.patterns.names(&s.name) }).collect();
+            if defs.is_empty() {
+                continue;
+            }
+            match run.run_tasks(i as i32, &defs, request.tty, &mut tallies[p]) {
+                Ok(Ok(())) => {}
+                Ok(Err(thrown)) => {
+                    outcome = Ok(Some(thrown));
+                    failed_in = Some(p);
+                    break 'phases;
+                }
+                Err(e) => {
+                    outcome = Err(e);
+                    failed_in = Some(p);
+                    break 'phases;
+                }
+            }
+        }
+        ended[p] = true;
+        group_summary(request, key, groups, p, sizes[p], &tallies[p], phase_started.elapsed().as_millis() as u64, reply);
+    }
+    if matches!(outcome, Ok(None)) {
+        let last = tallies.len() - 1;
+        for i in (0..made.len()).filter(|&i| made[i]) {
+            match run.done(i as i32, &mut tallies[last]) {
+                Ok(Ok(())) => {}
+                Ok(Err(thrown)) => {
+                    outcome = Ok(Some(thrown));
+                    break;
+                }
+                Err(e) => {
+                    outcome = Err(e);
+                    break;
+                }
+            }
+        }
+    }
+    let outcome = match outcome {
+        Ok(None) => run.finish().map(|()| None),
+        Ok(Some(thrown)) => {
+            let _ = run.finish();
+            Ok(Some(thrown))
+        }
+        Err(e) => Err(e),
+    };
     drop(finished);
     let ms = run_started.elapsed().as_millis() as u64;
-    match result {
-        Ok(()) => {
+    match outcome {
+        Ok(None) => {
             if every {
                 record(state);
             }
-            reply.err(&summary(key, selected.len(), &tally, ms, built_ms));
-            write_events(asked, key, &tally, reply);
-            i32::from(tally.failed() > 0)
+            let total = Tally::sum(&tallies);
+            reply.err(&summary(key, count, &total, ms, built_ms));
+            write_events(asked, key, groups, &tallies, reply);
+            i32::from(total.failed() > 0)
+        }
+        Ok(Some(thrown)) => {
+            reply.out(&events::fork_error(&thrown, asked.verbose));
+            run_failed(request, key, groups, failed_in, thrown.text.lines().next().unwrap_or("a framework's failure"), built_ms, reply);
+            not_completed(request, key, groups, &sizes, &ended, reply);
+            write_events(asked, key, groups, &tallies, reply);
+            1
         }
         Err(e) => {
-            failed(request, key, e, reply);
+            // A node that ended (a suite's process.exit, a channel lost) ends the run where it is, the events of what
+            // ran before written with their groups.
+            failed_in_group(request, key, groups, failed_in, e, reply);
+            not_completed(request, key, groups, &sizes, &ended, reply);
+            write_events(asked, key, groups, &tallies, reply);
             1
         }
     }
@@ -1346,14 +1666,16 @@ fn launch_runner(state: &State, key: &Key, spec: Spec, environment: &BTreeMap<St
     }
 }
 
-/// A runner serves one run, as sbt's forked worker does (`ForkTests` starts a worker for each run): a run inherits no
-/// thread, static or registration of the one before, which a JVM kept across runs cannot shed (a library's executor
-/// keeps the class loader of the run that made its threads as their context loader, its objects keep their state).
-/// Once a run ends, the spent runner quits, on a thread of its own and kept among the retiring runners until it has
+/// A runner serves one invocation, as sbt's forked worker serves one request (`ForkTests` starts a worker for each
+/// run): a run inherits no thread, static or registration of the one before, which a JVM kept across runs cannot shed
+/// (a library's executor keeps the class loader of the run that made its threads as their context loader, its objects
+/// keep their state), and a runner that loaded the frameworks holds that build's classes. Once its invocation ends (a
+/// run, a listing, a selection of nothing), the spent runner quits, on a thread of its own and kept among the retiring runners until it has
 /// (an ending daemon waits for them within the stop bound); one whose run `failed` at its fork error is let finish its
 /// run first, its output drained, within the stop bound (`Runner::retire`). The next is launched with its spec before the
-/// client is answered: its JVM starts and loads the frameworks while the client reads the run, and the next `test`
-/// reads its answers. None when it cannot be launched, the next `test` starting its own.
+/// client is answered: its JVM starts while the client reads the run, nothing of the test class path loaded until the
+/// next `test` sends it `load` after its build, and the next `test` reads its version. None when it cannot be
+/// launched, the next `test` starting its own.
 fn renew(state: &State, spent: Runner, key: &Key, environment: &BTreeMap<String, String>, argfile: &Path, failed: bool) -> Option<Runner> {
     let spec = spent.spec.clone();
     if failed {
@@ -1394,26 +1716,17 @@ fn kill_when_gone(reply: &Reply, finished: &Finished, process: Arc<Mutex<std::pr
 }
 
 /// The runner a test configuration's suites run on: the client's `java`, the configuration's
-/// options, directory and variables, and the jars of its class path in its order.
-fn runner_spec(export: &Export, key: &Key, context: &TestContext, environment: &BTreeMap<String, String>) -> Result<Spec, String> {
-    let conf = export.configuration(key).ok_or_else(|| format!("no configuration {}", key))?;
-    let mut jars = Vec::new();
-    for entry in conf.run_classpath() {
-        let path = match entry {
-            Entry::Product(_) => continue,
-            Entry::File(path) if export.path(path).is_dir() => continue,
-            entry => export.resolve(entry)?,
-        };
-        jars.push(Jar::new(path));
-    }
+/// options, directory and variables, and test-interface alone, taken from `paths`, the test class path
+/// (`runner::interface_dir`).
+fn runner_spec(export: &Export, key: &Key, context: &TestContext, environment: &BTreeMap<String, String>, paths: &[PathBuf]) -> Result<Spec, String> {
+    let interface = runner::interface_dir(paths)?.ok_or("no entry of the test class path holds sbt's test interface (sbt/testing/Framework.class), which the test runner runs on")?;
     Ok(Spec {
         java: runner::java(environment)?,
         least: export.java_output_version,
         options: context.java_options.clone(),
         directory: if context.sandbox { export.sandbox_directory(key) } else { export.path(&context.base_directory) },
         env: context.env(export),
-        jars,
-        frameworks: context.frameworks.clone(),
+        interface,
     })
 }
 
@@ -1429,22 +1742,23 @@ fn empty_directory(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// The directories a run reads through its own class loader: the resident's class files, the
-/// configuration's resources, and those of the products and directories on its class path.
-fn child_directories(export: &Export, key: &Key, owner: &Key) -> Vec<PathBuf> {
+/// The test class path a run reads through its own class loader, in its order, as sbt's worker is sent it
+/// (`ForkTests.mainTestTask`): the resident's class files, the configuration's and every project's it depends on, the
+/// configuration's resources, then each entry of its run class path, a product's resources, an artifact's jar, a
+/// file of the tree; those that exist, each once.
+fn run_paths(export: &Export, key: &Key, owner: &Key) -> Result<Vec<PathBuf>, String> {
     let conf = export.configuration(key).expect("a test configuration");
     let mut out = vec![export.path(&export.classes(owner))];
     out.extend(conf.resources.iter().map(|r| export.path(r)));
     for entry in conf.run_classpath() {
         match entry {
             Entry::Product(k) => out.extend(export.configuration(k).map_or(&[][..], |c| &c.resources).iter().map(|r| export.path(r))),
-            Entry::File(path) if export.path(path).is_dir() => out.push(export.path(path)),
-            _ => {}
+            entry => out.push(export.resolve(entry)?),
         }
     }
     let mut seen = BTreeSet::new();
-    out.retain(|d| d.is_dir() && seen.insert(d.clone()));
-    out
+    out.retain(|p| p.exists() && seen.insert(p.clone()));
+    Ok(out)
 }
 
 /// One resident's build: started when it is not running, its closure's generators run first.

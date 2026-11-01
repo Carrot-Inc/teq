@@ -1,8 +1,10 @@
 //! The test runner of `teq test` (docs/TARGETS.md, "The export and the project verbs"): the class files of
 //! `runner/Runner.java`, compiled once by javac 17 under `--release 17` and committed beside it
 //! (tests/runner-classes.sh holds them to the source), embedded here and written under
-//! `<cache root>/runner/<sha1 of the classes>/` at first use; and the runner's JVM, one per run,
-//! which the daemon starts ahead of the run, spoken to in the protocol `Runner.java` states.
+//! `<cache root>/runner/<sha1 of the classes>/` at first use; test-interface alone, its two packages taken
+//! from the test class path, under `<cache root>/runner/interface/<sha1 of its entries>/`; and the runner's
+//! JVM, one per invocation, which the daemon starts ahead of it, spoken to in the protocol `Runner.java`
+//! states.
 
 use super::events::{Event, Frame, Selector, Status, Tally, Thrown};
 use super::export::{join_paths, Framework, Parallelism};
@@ -16,12 +18,34 @@ use std::time::{Duration, Instant, SystemTime};
 
 const PACKAGE: &str = "dev/teq/runner";
 const MAIN: &str = "dev.teq.runner.Runner";
-const CLASSES: [(&str, &[u8]); 4] = [
+const CLASSES: [(&str, &[u8]); 21] = [
     ("Runner.class", include_bytes!("runner/dev/teq/runner/Runner.class")),
+    ("Runner$1.class", include_bytes!("runner/dev/teq/runner/Runner$1.class")),
+    ("Runner$2.class", include_bytes!("runner/dev/teq/runner/Runner$2.class")),
+    ("Runner$AnnotatedFingerprintWrapper.class", include_bytes!("runner/dev/teq/runner/Runner$AnnotatedFingerprintWrapper.class")),
+    ("Runner$AnnotatedFingerscan.class", include_bytes!("runner/dev/teq/runner/Runner$AnnotatedFingerscan.class")),
+    ("Runner$EventHandlerWrapper.class", include_bytes!("runner/dev/teq/runner/Runner$EventHandlerWrapper.class")),
+    ("Runner$EventWrapper.class", include_bytes!("runner/dev/teq/runner/Runner$EventWrapper.class")),
     ("Runner$Events.class", include_bytes!("runner/dev/teq/runner/Runner$Events.class")),
+    ("Runner$ForkError.class", include_bytes!("runner/dev/teq/runner/Runner$ForkError.class")),
     ("Runner$Forwarded.class", include_bytes!("runner/dev/teq/runner/Runner$Forwarded.class")),
+    ("Runner$FrameworkWrapper.class", include_bytes!("runner/dev/teq/runner/Runner$FrameworkWrapper.class")),
+    ("Runner$Read.class", include_bytes!("runner/dev/teq/runner/Runner$Read.class")),
+    ("Runner$RunnerWrapper$1$1.class", include_bytes!("runner/dev/teq/runner/Runner$RunnerWrapper$1$1.class")),
+    ("Runner$RunnerWrapper$1$2.class", include_bytes!("runner/dev/teq/runner/Runner$RunnerWrapper$1$2.class")),
+    ("Runner$RunnerWrapper$1$3.class", include_bytes!("runner/dev/teq/runner/Runner$RunnerWrapper$1$3.class")),
+    ("Runner$RunnerWrapper$1$4.class", include_bytes!("runner/dev/teq/runner/Runner$RunnerWrapper$1$4.class")),
+    ("Runner$RunnerWrapper$1.class", include_bytes!("runner/dev/teq/runner/Runner$RunnerWrapper$1.class")),
+    ("Runner$RunnerWrapper.class", include_bytes!("runner/dev/teq/runner/Runner$RunnerWrapper.class")),
+    ("Runner$SubclassFingerprintWrapper.class", include_bytes!("runner/dev/teq/runner/Runner$SubclassFingerprintWrapper.class")),
+    ("Runner$SubclassFingerscan.class", include_bytes!("runner/dev/teq/runner/Runner$SubclassFingerscan.class")),
     ("Runner$Unsendable.class", include_bytes!("runner/dev/teq/runner/Runner$Unsendable.class")),
 ];
+/// test-interface's two packages, what of a container of it the runner's class path takes: the interface sbt's
+/// worker runs on and its older one, which the worker's `FrameworkWrapper` adapts.
+const INTERFACE_PACKAGES: [&str; 2] = ["sbt/testing/", "org/scalatools/testing/"];
+/// The class that tells a container of test-interface, as sbt's worker finds its own (`classOf[Framework]`).
+const INTERFACE_CLASS: &str = "sbt/testing/Framework.class";
 /// The least Java the runner's class files load on.
 pub const LEAST_JAVA: u32 = 17;
 /// How long a runner asked to quit has before it is killed.
@@ -40,20 +64,29 @@ fn classes_under(root: &Path) -> Result<PathBuf, String> {
         sha1.update(&(bytes.len() as u64).to_le_bytes());
         sha1.update(bytes);
     }
-    let digest = sha1.hex();
-    let parent = root.join("runner");
-    let dir = parent.join(&digest);
-    let complete = |dir: &Path| CLASSES.iter().all(|(name, bytes)| std::fs::metadata(dir.join(PACKAGE).join(name)).is_ok_and(|m| m.len() == bytes.len() as u64));
+    let files: Vec<(String, &[u8])> = CLASSES.iter().map(|(name, bytes)| (format!("{}/{}", PACKAGE, name), *bytes)).collect();
+    written(&root.join("runner"), &sha1.hex(), &files, "the test runner's classes")
+}
+
+/// `files`, each a path under the directory and its bytes, in `parent/<digest>/`, written whole by a rename the first
+/// time and found again by their sizes.
+fn written(parent: &Path, digest: &str, files: &[(String, &[u8])], what: &str) -> Result<PathBuf, String> {
+    let dir = parent.join(digest);
+    let complete = |dir: &Path| files.iter().all(|(name, bytes)| std::fs::metadata(dir.join(name)).is_ok_and(|m| m.len() == bytes.len() as u64));
     if complete(&dir) {
         return Ok(dir);
     }
     let part = parent.join(format!("{}.{}", digest, std::process::id()));
     let _ = std::fs::remove_dir_all(&part);
     let write = || -> std::io::Result<()> {
-        std::fs::create_dir_all(part.join(PACKAGE))?;
-        for (name, bytes) in CLASSES {
-            std::fs::write(part.join(PACKAGE).join(name), bytes)?;
+        for (name, bytes) in files {
+            let file = part.join(name);
+            if let Some(d) = file.parent() {
+                std::fs::create_dir_all(d)?;
+            }
+            std::fs::write(file, bytes)?;
         }
+        std::fs::create_dir_all(&part)?;
         if dir.exists() && !complete(&dir) {
             std::fs::remove_dir_all(&dir)?;
         }
@@ -67,9 +100,104 @@ fn classes_under(root: &Path) -> Result<PathBuf, String> {
         }
         Err(e) => {
             let _ = std::fs::remove_dir_all(&part);
-            Err(format!("cannot write the test runner's classes into {}: {}", dir.display(), e))
+            Err(format!("cannot write {} into {}: {}", what, dir.display(), e))
         }
     }
+}
+
+/// What a jar of the test class path was found to hold of test-interface, by its path, as long as its size and
+/// modification time are those it had: the directory of the interface it holds, or none.
+type Seen = BTreeMap<PathBuf, (Option<(u64, SystemTime)>, Option<PathBuf>)>;
+static INTERFACES: Mutex<Seen> = Mutex::new(BTreeMap::new());
+
+/// test-interface alone, the runner's class path beside its own classes, as sbt's worker has its own copy there and
+/// nothing of the project (`WorkerExchange.startWorker`): the entries of the interface's two packages
+/// (`INTERFACE_PACKAGES`) taken from their container, the first entry of `paths`, the test class path in its order,
+/// that holds `sbt/testing/Framework.class`, a jar or a directory, never the container itself (an assembly holding
+/// other libraries beside the interface keeps them below, in the run's class loader); written under the cache root by
+/// their digest, so that the same bytes are the same directory. None where no entry holds it.
+pub fn interface_dir(paths: &[PathBuf]) -> Result<Option<PathBuf>, String> {
+    interface_in(&fetch::cache_root().ok_or("no cache directory for the test runner's classes: set TEQ_CACHE_DIR")?, paths)
+}
+
+fn interface_in(root: &Path, paths: &[PathBuf]) -> Result<Option<PathBuf>, String> {
+    for path in paths {
+        if path.is_dir() {
+            if path.join(INTERFACE_CLASS).is_file() {
+                return interface_under(root, &directory_entries(path)?).map(Some);
+            }
+            continue;
+        }
+        let stamp = std::fs::metadata(path).ok().and_then(|m| Some((m.len(), m.modified().ok()?)));
+        if let Some((seen, found)) = INTERFACES.lock().unwrap_or_else(|e| e.into_inner()).get(path) {
+            if stamp.is_some() && *seen == stamp && found.as_ref().is_none_or(|d| d.is_dir()) {
+                match found {
+                    Some(dir) => return Ok(Some(dir.clone())),
+                    None => continue,
+                }
+            }
+        }
+        // A file that is no zip archive holds no class, as the class loader reads it.
+        let found = match crate::zip::Zip::open(&path.to_string_lossy()) {
+            Ok(zip) if zip.find(INTERFACE_CLASS).is_some() => Some(interface_under(root, &jar_entries(&zip, path)?)?),
+            _ => None,
+        };
+        INTERFACES.lock().unwrap_or_else(|e| e.into_inner()).insert(path.clone(), (stamp, found.clone()));
+        if found.is_some() {
+            return Ok(found);
+        }
+    }
+    Ok(None)
+}
+
+fn in_interface(name: &str) -> bool {
+    !name.ends_with('/') && INTERFACE_PACKAGES.iter().any(|p| name.starts_with(p))
+}
+
+/// The interface's entries of a jar.
+fn jar_entries(zip: &crate::zip::Zip, path: &Path) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let mut out = Vec::new();
+    for (i, e) in zip.entries.iter().enumerate() {
+        let name = zip.name(e);
+        if in_interface(name) {
+            let bytes = zip.read(i).map_err(|why| format!("cannot read {} in {}: {}", name, path.display(), why))?;
+            out.push((name.to_string(), bytes));
+        }
+    }
+    Ok(out)
+}
+
+/// The interface's files of a directory.
+fn directory_entries(dir: &Path) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let mut out = Vec::new();
+    let mut pending: Vec<PathBuf> = INTERFACE_PACKAGES.iter().map(|p| dir.join(p)).filter(|d| d.is_dir()).collect();
+    while let Some(d) = pending.pop() {
+        for entry in std::fs::read_dir(&d).map_err(|e| format!("cannot read {}: {}", d.display(), e))?.flatten() {
+            let path = entry.path();
+            if entry.file_type().is_ok_and(|k| k.is_dir()) {
+                pending.push(path);
+            } else if let Ok(relative) = path.strip_prefix(dir) {
+                let name = relative.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
+                out.push((name, std::fs::read(&path).map_err(|e| format!("cannot read {}: {}", path.display(), e))?));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// The interface's entries written by their digest, their names sorted.
+fn interface_under(root: &Path, entries: &[(String, Vec<u8>)]) -> Result<PathBuf, String> {
+    let mut sorted: Vec<&(String, Vec<u8>)> = entries.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut sha1 = fetch::Sha1::new();
+    for (name, bytes) in &sorted {
+        sha1.update(name.as_bytes());
+        sha1.update(&[0]);
+        sha1.update(&(bytes.len() as u64).to_le_bytes());
+        sha1.update(bytes);
+    }
+    let files: Vec<(String, &[u8])> = sorted.iter().map(|(name, bytes)| (name.clone(), bytes.as_slice())).collect();
+    written(&root.join("runner").join("interface"), &sha1.hex(), &files, "test-interface")
 }
 
 /// A variable of the client's environment, by its name in any case on Windows.
@@ -90,22 +218,8 @@ pub fn java(environment: &BTreeMap<String, String>) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("no JAVA_HOME and no {} on PATH: set JAVA_HOME to a JDK {} or later", exe, LEAST_JAVA))
 }
 
-/// A jar of the runner's own class path with its size and modification time, which a build that
-/// rewrites it in place changes.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Jar {
-    pub path: PathBuf,
-    pub stamp: Option<(u64, SystemTime)>,
-}
-
-impl Jar {
-    pub fn new(path: PathBuf) -> Jar {
-        let stamp = std::fs::metadata(&path).ok().and_then(|m| Some((m.len(), m.modified().ok()?)));
-        Jar { path, stamp }
-    }
-}
-
-/// What a runner is started with and keeps for its life: another is another runner.
+/// What a runner is started with and keeps for its life: another is another runner. Nothing of the test class path
+/// but the interface: the rest is the run's class loader's, made after the build (`Runner::load`).
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Spec {
     pub java: PathBuf,
@@ -114,11 +228,11 @@ pub struct Spec {
     pub options: Vec<String>,
     pub directory: PathBuf,
     pub env: BTreeMap<String, String>,
-    pub jars: Vec<Jar>,
-    pub frameworks: Vec<Framework>,
+    /// test-interface alone (`interface_dir`), a directory named by its digest.
+    pub interface: PathBuf,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Kind {
     Subclass,
     Annotated,
@@ -145,20 +259,50 @@ pub struct Runner {
     stdout: BufReader<ChildStdout>,
     stderr: Arc<Mutex<String>>,
     token: String,
+    /// The frameworks' fingerprints, which `load` reads.
     pub fingerprints: Vec<Fingerprint>,
-    /// The frameworks that did not load, with why.
+    /// The frameworks whose class `load` did not find, with why.
     pub missing: Vec<(String, String)>,
-    /// Whether `handshake` has read the frameworks' answers.
+    /// Whether `handshake` has read the JVM's version.
     handshaken: bool,
 }
 
-/// How a run ended: done, in its milliseconds, or failed by the worker's fork error (what a task threw,
-/// what a framework's logger traced, a framework's failure to make its runner or its tasks, or its
-/// `done()`'s), with what was thrown.
+/// How a run ended: done, in its milliseconds; stopped by the worker's internal error (what reporting a
+/// framework's failure threw), after which it answered as at its end, in its milliseconds, the internal
+/// error's text written on the run's stream; or failed by a fork error (what a task threw, what a
+/// framework's logger traced, a framework's failure to make its runner or its tasks, or its `done()`'s,
+/// or what sbt's host threw), with what was thrown. The phases it ended are those `Report::Ended` named.
 #[derive(Debug)]
 pub enum Ran {
     Done(u64),
+    Stopped(u64),
     Failed(Option<Thrown>),
+}
+
+/// What a run runs (`Runner.java`'s `run`): for sbt's host (`host`), the definitions its selection starts from,
+/// `(framework, fingerprint, name)`, and its ordered filters, each the positions of the definitions it accepts; the
+/// suites, each `(framework, fingerprint, phase, explicit, name)` (explicit for a suite named whole, its definition's
+/// `explicitlySpecified`), in the selection's order; the number of phases.
+pub struct Planned {
+    pub host: bool,
+    pub definitions: Vec<(usize, usize, String)>,
+    pub filters: Vec<Vec<usize>>,
+    pub suites: Vec<(usize, usize, usize, bool, String)>,
+    pub phases: usize,
+}
+
+/// What a run reports as it comes: a line the suites, their frameworks or the JVM wrote, or the report of an event,
+/// for the run's stream; a phase entered; a phase ended in its milliseconds, with its tally.
+pub enum Report<'a> {
+    Line(&'a str),
+    Entered(usize),
+    Ended(usize, u64, &'a Tally),
+}
+
+/// The runner's internal error (`Runner.java`'s `internalError`, the worker's: what reporting the run's error threw), as
+/// the run's failure where no host of sbt's takes the run for completed (an export of Mill's): its text, no frame.
+fn internal(text: &str) -> Thrown {
+    Thrown { text: text.to_string(), frames: Vec::new(), cause: None }
 }
 
 /// What was thrown, its causes after it, as one throwable, the lines taken.
@@ -171,6 +315,25 @@ fn chain(thrown: &mut Vec<Thrown>) -> Option<Thrown> {
             Some(Box::new(t))
         })
         .map(|t| *t)
+}
+
+/// A line of what was thrown (`throwable`, `cause`, `frame`) added to the throwables before the event or the crash
+/// they belong to, a `throwable` starting them anew.
+fn collect(thrown: &mut Vec<Thrown>, fields: &[String]) {
+    let at = |i: usize| fields.get(i).map_or("", String::as_str);
+    match at(0) {
+        "throwable" | "cause" => {
+            if at(0) == "throwable" {
+                thrown.clear();
+            }
+            thrown.push(Thrown { text: at(1).to_string(), frames: Vec::new(), cause: None });
+        }
+        _ => {
+            if let Some(t) = thrown.last_mut() {
+                t.frames.push(Frame { class: at(1).to_string(), text: at(2).to_string() });
+            }
+        }
+    }
 }
 
 /// A field of a command, its tabs, line breaks and backslashes escaped.
@@ -268,12 +431,10 @@ fn platform_encoded(text: &str) -> Result<Vec<u8>, char> {
 
 impl Runner {
     /// Starts the runner's JVM in the spec's directory, with the client's environment and the
-    /// spec's variables, its class path in an argument file (a long one passes Windows' limit
-    /// on a command line), and sends it the frameworks to load, which it reads once it is up;
-    /// `handshake` then reads its answers.
+    /// spec's variables, its class path, its own classes and the interface, in an argument file
+    /// (a long one passes Windows' limit on a command line); `handshake` then reads its version.
     pub fn launch(spec: Spec, environment: &BTreeMap<String, String>, argfile: &Path) -> Result<Runner, String> {
-        let mut classpath = vec![classes_dir()?];
-        classpath.extend(spec.jars.iter().map(|j| j.path.clone()));
+        let classpath = vec![classes_dir()?, spec.interface.clone()];
         if let Some(dir) = argfile.parent() {
             std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {}", dir.display(), e))?;
         }
@@ -313,25 +474,10 @@ impl Runner {
                 }
             }
         });
-        let mut runner = Runner { spec, child: Arc::new(Mutex::new(child)), stdin, stdout, stderr, token, fingerprints: Vec::new(), missing: Vec::new(), handshaken: false };
-        let mut commands = String::new();
-        for f in &runner.spec.frameworks {
-            commands.push_str("framework\t");
-            commands.push_str(&field(&f.class));
-            for a in &f.arguments {
-                commands.push('\t');
-                commands.push_str(&field(a));
-            }
-            commands.push('\n');
-        }
-        commands.push_str("start\n");
-        // A JVM that ends before it reads them is told by `handshake`, from what it wrote.
-        let _ = runner.send(&commands);
-        Ok(runner)
+        Ok(Runner { spec, child: Arc::new(Mutex::new(child)), stdin, stdout, stderr, token, fingerprints: Vec::new(), missing: Vec::new(), handshaken: false })
     }
 
-    /// The JVM's version checked, refused when it is older than the export's classes; the
-    /// frameworks' fingerprints read, and those that did not load.
+    /// The JVM's version checked, refused when it is older than the export's classes.
     pub fn handshake(&mut self) -> Result<(), String> {
         let java = self.spec.java.display().to_string();
         let mut early = String::new();
@@ -354,47 +500,32 @@ impl Runner {
         if version < least {
             return Err(format!("{} is Java {}, older than the {} the export's classes are for (java.outputVersion): set JAVA_HOME to a JDK {} or later", java, version, least, least));
         }
-        loop {
-            let Some((before, fields)) = self.next()? else { return Err(self.gone()) };
-            self.stderr.lock().unwrap_or_else(|e| e.into_inner()).push_str(&before);
-            let at = |i: usize| fields.get(i).map_or("", String::as_str);
-            match at(0) {
-                "ready" => {
-                    self.handshaken = true;
-                    return Ok(());
-                }
-                "fingerprint" => {
-                    let kind = if at(3) == "annotated" { Kind::Annotated } else { Kind::Subclass };
-                    self.fingerprints.push(Fingerprint { framework: at(1).parse().unwrap_or(0), index: at(2).parse().unwrap_or(0), kind, module: at(4) == "true", name: at(5).to_string(), no_args: true });
-                }
-                "missing" => {
-                    let class = at(1).parse::<usize>().ok().and_then(|i| self.spec.frameworks.get(i)).map_or(String::new(), |f| f.class.clone());
-                    self.missing.push((class, at(2).to_string()));
-                }
-                _ => {}
-            }
-        }
+        self.handshaken = true;
+        Ok(())
     }
 
-    /// Runs the suites, each `(framework, fingerprint, name)`, through a class loader over the
-    /// directories on a pool of `parallelism`'s threads, sent with every run so that a lock changed
-    /// since the runner started has its say: each event counted into `tally`, the lines the frameworks
-    /// and the suites write and those that report an event passed to `out` as they come; how the run
-    /// ended, its first fork error ending it, nothing more of it read, as sbt's `ForkTests` fails its
-    /// harness at the worker's first `forkError`.
-    #[allow(clippy::too_many_arguments)]
-    pub fn run(&mut self, directories: &[PathBuf], suites: &[(usize, usize, String)], parallelism: Parallelism, verbose: bool, ansi: bool, tally: &mut Tally, out: &mut dyn FnMut(&str)) -> Result<Ran, String> {
-        let flag = |b: bool| if b { "1" } else { "0" };
-        let mut commands = format!("run\t{}\t{}\t{}\n", flag(verbose), flag(ansi), parallelism.field());
-        for d in directories {
-            commands.push_str(&format!("path\t{}\n", field(&d.to_string_lossy())));
+    /// The run's class loader made over `paths`, the test class path in its order, and `frameworks` loaded through it,
+    /// once the build is done (`Runner.java`'s `load`), as sbt's host loads them where `host` (an export of sbt's):
+    /// their fingerprints read and those whose class is not found, the lines written meanwhile passed to `out`; a
+    /// framework that failed to load otherwise is the run's fork error, as `run` gives one, its loading ended there.
+    pub fn load(&mut self, paths: &[PathBuf], frameworks: &[Framework], host: bool, out: &mut dyn FnMut(&str)) -> Result<Result<(), Option<Thrown>>, String> {
+        let mut commands = String::new();
+        for p in paths {
+            commands.push_str(&format!("path\t{}\n", field(&p.to_string_lossy())));
         }
-        for (framework, fingerprint, name) in suites {
-            commands.push_str(&format!("suite\t{}\t{}\t{}\n", framework, fingerprint, field(name)));
+        for f in frameworks {
+            commands.push_str("framework\t");
+            commands.push_str(&field(&f.class));
+            for a in &f.arguments {
+                commands.push('\t');
+                commands.push_str(&field(a));
+            }
+            commands.push('\n');
         }
-        commands.push_str("go\n");
+        commands.push_str(if host { "load\t1\n" } else { "load\t0\n" });
         self.send(&commands)?;
-        // What was thrown, its causes after it, until the event or the crash it belongs to.
+        self.fingerprints.clear();
+        self.missing.clear();
         let mut thrown: Vec<Thrown> = Vec::new();
         loop {
             let Some((before, fields)) = self.next()? else { return Err(self.gone()) };
@@ -403,18 +534,88 @@ impl Runner {
             }
             let at = |i: usize| fields.get(i).map_or("", String::as_str);
             match at(0) {
-                "throwable" | "cause" => {
-                    if at(0) == "throwable" {
-                        thrown.clear();
-                    }
-                    thrown.push(Thrown { text: at(1).to_string(), frames: Vec::new(), cause: None });
+                "loaded" => return Ok(Ok(())),
+                "fingerprint" => {
+                    let kind = if at(3) == "annotated" { Kind::Annotated } else { Kind::Subclass };
+                    self.fingerprints.push(Fingerprint { framework: at(1).parse().unwrap_or(0), index: at(2).parse().unwrap_or(0), kind, module: at(4) == "true", name: at(5).to_string(), no_args: true });
                 }
-                "frame" => {
-                    if let Some(t) = thrown.last_mut() {
-                        t.frames.push(Frame { class: at(1).to_string(), text: at(2).to_string() });
-                    }
+                "missing" => {
+                    let class = at(1).parse::<usize>().ok().and_then(|i| frameworks.get(i)).map_or(String::new(), |f| f.class.clone());
+                    self.missing.push((class, at(2).to_string()));
                 }
+                "throwable" | "cause" | "frame" => collect(&mut thrown, &fields),
+                "forkError" => return Ok(Err(chain(&mut thrown))),
+                // Of an export of Mill's, whose loading is the run's: what reporting its error threw.
+                "internalError" => return Ok(Err(Some(internal(at(1))))),
+                _ => {}
+            }
+        }
+    }
+
+    /// Runs the planned suites, the phases one after another, through the class loader `load` made on a pool of
+    /// `parallelism`'s threads, sent with every run so that a lock changed since the runner started has its say, sbt's
+    /// host played before and after its worker where `planned.host`: each event counted into its phase's tally in
+    /// `tallies`, a suite's task's events and those of the tasks it returned its phase's, whatever their names; the
+    /// lines the frameworks and the suites write, those that report an event, and the phases' boundaries passed to
+    /// `report` as they come; how the run ended, its first fork error ending it, nothing more of it read, as sbt's
+    /// `ForkTests` fails its harness at the worker's first `forkError`, and an internal error leaving it to end as the
+    /// worker answers.
+    pub fn run(&mut self, planned: &Planned, parallelism: Parallelism, verbose: bool, ansi: bool, tallies: &mut [Tally], report: &mut dyn FnMut(Report)) -> Result<Ran, String> {
+        let flag = |b: bool| if b { "1" } else { "0" };
+        let mut commands = format!("run\t{}\t{}\t{}\t{}\n", flag(verbose), flag(ansi), parallelism.field(), planned.phases);
+        if planned.host {
+            for (framework, fingerprint, name) in &planned.definitions {
+                commands.push_str(&format!("def\t{}\t{}\t{}\n", framework, fingerprint, field(name)));
+            }
+            for accepted in &planned.filters {
+                commands.push_str("filter");
+                for k in accepted {
+                    commands.push_str(&format!("\t{}", k));
+                }
+                commands.push('\n');
+            }
+        }
+        for (framework, fingerprint, phase, explicit, name) in &planned.suites {
+            commands.push_str(&format!("suite\t{}\t{}\t{}\t{}\t{}\n", framework, fingerprint, phase, flag(*explicit), field(name)));
+        }
+        commands.push_str("go\n");
+        self.send(&commands)?;
+        // The phase entered and not ended, where the events go.
+        let mut current: Option<usize> = None;
+        // What was thrown, its causes after it, until the event or the crash it belongs to.
+        let mut thrown: Vec<Thrown> = Vec::new();
+        // Whether the worker's internal error stopped the run.
+        let mut stopped = false;
+        loop {
+            let Some((before, fields)) = self.next()? else { return Err(self.gone()) };
+            if !before.is_empty() {
+                report(Report::Line(&before));
+            }
+            let at = |i: usize| fields.get(i).map_or("", String::as_str);
+            let phase = |i: usize| at(i).parse::<usize>().ok().filter(|p| *p < tallies.len());
+            match at(0) {
+                "throwable" | "cause" | "frame" => collect(&mut thrown, &fields),
                 "forkError" => return Ok(Ran::Failed(chain(&mut thrown))),
+                // Of an export of Mill's, whose runner has no host to take the run for completed, the run's failure.
+                "internalError" if !planned.host => return Ok(Ran::Failed(Some(internal(at(1))))),
+                // The worker writes it on the run's stream before it is sent (ForkTestMain.Run.internalError), then
+                // answers as at its end, and sbt's host's outcome is its suites' (ForkTests.mainTestTask).
+                "internalError" => {
+                    stopped = true;
+                    current = None;
+                }
+                "phase" => {
+                    current = phase(1);
+                    if let Some(p) = current {
+                        report(Report::Entered(p));
+                    }
+                }
+                "ended" => {
+                    if let Some(p) = phase(1) {
+                        current = None;
+                        report(Report::Ended(p, at(2).parse().unwrap_or(0), &tallies[p]));
+                    }
+                }
                 "event" => {
                     let thrown = chain(&mut thrown);
                     let selector = match at(4) {
@@ -424,15 +625,27 @@ impl Runner {
                         "wildcard" => Selector::Wildcard(at(5).to_string()),
                         _ => Selector::Suite,
                     };
-                    let status = at(2).parse::<i64>().ok().and_then(Status::of_ordinal).unwrap_or(Status::Error);
+                    let status = match at(2).parse::<i64>() {
+                        Ok(-1) => Status::Unset,
+                        n => n.ok().and_then(Status::of_ordinal).unwrap_or(Status::Error),
+                    };
                     let event = Event { suite: at(1).to_string(), name: at(3).to_string(), selector, status, thrown, ms: at(7).parse().unwrap_or(-1), crashed: false };
-                    let lines = tally.add(event, verbose);
-                    if !lines.is_empty() {
-                        out(&lines);
+                    if let Some(p) = current {
+                        let lines = tallies[p].add(event, verbose);
+                        if !lines.is_empty() {
+                            report(Report::Line(&lines));
+                        }
                     }
                 }
-                "ran" => tally.ran(at(1)),
-                "done" => return Ok(Ran::Done(at(1).parse::<u64>().unwrap_or(0))),
+                "ran" => {
+                    if let Some(p) = current {
+                        tallies[p].ran(at(1));
+                    }
+                }
+                "done" => {
+                    let ms = at(1).parse::<u64>().unwrap_or(0);
+                    return Ok(if stopped { Ran::Stopped(ms) } else { Ran::Done(ms) });
+                }
                 _ => {}
             }
         }
@@ -563,6 +776,46 @@ mod tests {
         std::fs::remove_file(written.join(PACKAGE).join("Runner$Events.class")).unwrap();
         assert_eq!(classes_under(&dir).unwrap(), written);
         assert!(written.join(PACKAGE).join("Runner$Events.class").is_file(), "an incomplete directory is written again");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// test-interface's two packages alone, taken from the first entry that holds `sbt/testing/Framework.class`, the
+    /// container's other classes left out, the same bytes the same directory; none where no entry holds it.
+    #[test]
+    fn the_interface_is_taken_alone_from_its_container() {
+        let dir = std::env::temp_dir().join(format!("teq-runner-interface-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let write = |path: &str, text: &str| {
+            let file = dir.join(path);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, text).unwrap();
+        };
+        write("other/sbt/testing/Task.class", "an earlier entry without the framework");
+        write("assembly/sbt/testing/Framework.class", "framework");
+        write("assembly/sbt/testing/Task.class", "task");
+        write("assembly/org/scalatools/testing/Framework.class", "old");
+        write("assembly/org/slf4j/LoggerFactory.class", "slf4j");
+        write("later/sbt/testing/Framework.class", "another");
+        let root = dir.join("cache");
+        let paths = [dir.join("missing.jar"), dir.join("other"), dir.join("assembly"), dir.join("later")];
+        let found = interface_in(&root, &paths).unwrap().unwrap();
+        let mut files: Vec<String> = Vec::new();
+        let mut pending = vec![found.clone()];
+        while let Some(d) = pending.pop() {
+            for e in std::fs::read_dir(&d).unwrap().flatten() {
+                if e.path().is_dir() {
+                    pending.push(e.path());
+                } else {
+                    files.push(e.path().strip_prefix(&found).unwrap().to_string_lossy().replace('\\', "/"));
+                }
+            }
+        }
+        files.sort();
+        assert_eq!(files, ["org/scalatools/testing/Framework.class", "sbt/testing/Framework.class", "sbt/testing/Task.class"]);
+        assert_eq!(std::fs::read_to_string(found.join("sbt/testing/Task.class")).unwrap(), "task");
+        assert_eq!(interface_in(&root, &paths[2..]).unwrap().unwrap(), found, "the same bytes, the same directory");
+        assert_ne!(interface_in(&root, &paths[3..]).unwrap().unwrap(), found);
+        assert_eq!(interface_in(&root, &paths[..2]).unwrap(), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

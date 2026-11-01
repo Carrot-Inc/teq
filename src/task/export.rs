@@ -239,6 +239,9 @@ pub struct TestContext {
     pub java_options: Vec<String>,
     pub frameworks: Vec<Framework>,
     pub exclude: Vec<String>,
+    /// The suites' ordered groups (`groups`, sbt-teq's `teqTestGroups`), none where the field is absent or empty: each
+    /// selected suite runs in the first whose patterns match it, the groups in their order, then the suites of none.
+    pub groups: Vec<Group>,
     /// Whether each run of the suites has a directory of its own, empty, as its working directory
     /// (`sandbox`, Mill's `testSandboxWorkingDir`): `sandbox_directory`, emptied before each run.
     pub sandbox: bool,
@@ -269,14 +272,7 @@ impl Parallelism {
                 Ok(n) if (1..=i32::MAX as u32).contains(&n) => return Ok(Parallelism::Threads(n)),
                 _ => n.to_string(),
             },
-            Some(Value::Str(s)) => {
-                let mut quoted = String::new();
-                lock::quote(s, &mut quoted);
-                quoted
-            }
-            Some(Value::Bool(b)) => b.to_string(),
-            Some(Value::List(_)) => "a list".to_string(),
-            Some(Value::Map(_)) => "a mapping".to_string(),
+            Some(other) => shown(other),
         };
         Err(format!("is auto or a number of threads from 1 to {}, not {}", i32::MAX, shown))
     }
@@ -378,6 +374,67 @@ const HARNESS_SOURCE: &str = "package dev.teq.test\n\n// The entry point of teq'
 pub struct Framework {
     pub class: String,
     pub arguments: Vec<String>,
+}
+
+/// A group of a test configuration's suites (`groups`): its name, unique, not empty and of no tab or line break (the
+/// group's field of an `--events` line, its header's line), and its patterns in the syntax of `teq test`'s own
+/// (`suites::Patterns`).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Group {
+    pub name: String,
+    pub patterns: Vec<String>,
+}
+
+impl Group {
+    /// The field's value: a list of mappings, each a `name`, a string unique among them, not empty and of one line
+    /// without a tab, and its `patterns`, a list of strings; absent, no group. Anything else is refused, never read in
+    /// part.
+    fn read(value: Option<&Value>) -> Result<Vec<Group>, String> {
+        let Some(value) = value else { return Ok(Vec::new()) };
+        let Value::List(items) = value else { return Err(format!("is a list of groups, each a name and its patterns, not {}", shown(value))) };
+        let mut groups: Vec<Group> = Vec::new();
+        for (i, item) in items.iter().enumerate() {
+            let at = format!("its group {}", i + 1);
+            let Value::Map(entries) = item else { return Err(format!("is a list of groups, each a name and its patterns: {} is {}", at, shown(item))) };
+            if let Some((key, _)) = entries.iter().find(|(k, _)| k != "name" && k != "patterns") {
+                return Err(format!("is a list of groups, each a name and its patterns: {} has {} besides", at, key));
+            }
+            let name = match item.get("name") {
+                Some(Value::Str(n)) if n.contains(['\t', '\n', '\r']) => return Err(format!("names each group on a line of its own: {}'s name holds a tab or a line break", at)),
+                Some(Value::Str(n)) if !n.is_empty() => n.clone(),
+                Some(Value::Str(_)) => return Err(format!("names each group: {}'s name is empty", at)),
+                Some(other) => return Err(format!("names each group by a string: {}'s name is {}", at, shown(other))),
+                None => return Err(format!("names each group: {} has no name", at)),
+            };
+            if groups.iter().any(|g| g.name == name) {
+                let mut quoted = String::new();
+                lock::quote(&name, &mut quoted);
+                return Err(format!("names each group once: {} is named {} as an earlier one is", at, quoted));
+            }
+            let patterns = match item.get("patterns") {
+                Some(Value::List(ps)) => ps.iter().map(|p| p.str().map(str::to_string).ok_or_else(|| format!("gives each group's patterns as strings: {} has {}", at, shown(p)))).collect::<Result<Vec<_>, _>>()?,
+                Some(other) => return Err(format!("gives each group's patterns as a list: {}'s are {}", at, shown(other))),
+                None => return Err(format!("gives each group's patterns: {} has none", at)),
+            };
+            groups.push(Group { name, patterns });
+        }
+        Ok(groups)
+    }
+}
+
+/// A value as a refusal names it.
+fn shown(value: &Value) -> String {
+    match value {
+        Value::Str(s) => {
+            let mut quoted = String::new();
+            lock::quote(s, &mut quoted);
+            quoted
+        }
+        Value::Int(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::List(_) => "a list".to_string(),
+        Value::Map(_) => "a mapping".to_string(),
+    }
 }
 
 /// An entry of a classpath: the products of a project's configuration, a jar of the table, or a
@@ -1668,6 +1725,7 @@ fn configuration(value: &Value) -> Result<Configuration, Refusal> {
         source: f.get("source").and_then(Value::str).map(str::to_string),
     });
     let parallelism = Parallelism::read(value.get("parallelism")).map_err(|why| Refusal::of(&["parallelism"], why))?;
+    let groups = Group::read(value.get("groups")).map_err(|why| Refusal::of(&["groups"], why))?;
     let test = value.get("frameworks").map(|_| TestContext {
         fork: value.get("fork").and_then(Value::bool) == Some(true),
         parallelism,
@@ -1682,6 +1740,7 @@ fn configuration(value: &Value) -> Result<Configuration, Refusal> {
             .filter_map(|f| Some(Framework { class: f.get("class").and_then(Value::str)?.to_string(), arguments: strings(f.get("arguments")) }))
             .collect(),
         exclude: strings(value.get("exclude")),
+        groups,
         sandbox: value.get("sandbox").and_then(Value::bool) == Some(true),
         module_kind: value.get("moduleKind").and_then(Value::str).map(str::to_string),
         js_env: value.get("jsEnv").map(|e| JsEnv {
@@ -2287,6 +2346,39 @@ repositories:
         assert!(refused.starts_with("/b/teq.lock: line 7: projects.a.configurations.test.parallelism is auto"), "{}", refused);
         assert_eq!(Parallelism::Threads(3).field(), "3");
         assert_eq!(Parallelism::Auto.field(), "auto");
+    }
+
+    /// The suites' groups in their order, none where the field is absent or empty; anything else refused on the
+    /// field's line, never read in part.
+    #[test]
+    fn the_test_groups() {
+        let read = |field: &str| {
+            let text = lock(&format!("projects:\n  a:\n    configurations:\n      test:\n        frameworks: []\n{}    platform: jvm\n", field));
+            parse(&text).map(|e| e.projects["a"].configurations["test"].test.as_ref().unwrap().groups.clone())
+        };
+        let group = |name: &str, patterns: &[&str]| Group { name: name.to_string(), patterns: patterns.iter().map(|p| p.to_string()).collect() };
+        assert_eq!(read(""), Ok(Vec::new()));
+        assert_eq!(read("        groups: []\n"), Ok(Vec::new()));
+        assert_eq!(
+            read("        groups:\n          - name: database\n            patterns:\n              - \"*RepoTest\"\n              - \"*Doobie*Test\"\n          - name: all\n            patterns: []\n"),
+            Ok(vec![group("database", &["*RepoTest", "*Doobie*Test"]), group("all", &[])])
+        );
+        let item = |text: &str| format!("groups:\n          - {}", text.replace('\n', "\n            "));
+        for (value, why) in [
+            ("groups: 1".to_string(), "is a list of groups, each a name and its patterns, not 1"),
+            (item("1"), "is a list of groups, each a name and its patterns: its group 1 is 1"),
+            (item("patterns: []"), "names each group: its group 1 has no name"),
+            (item("name: \"\"\npatterns: []"), "names each group: its group 1's name is empty"),
+            (item("name: \"a\\tb\"\npatterns: []"), "names each group on a line of its own: its group 1's name holds a tab or a line break"),
+            (item("name: 1\npatterns: []"), "names each group by a string: its group 1's name is 1"),
+            (format!("{}\n          - name: a\n            patterns: []", item("name: a\npatterns: []")), "names each group once: its group 2 is named \"a\" as an earlier one is"),
+            (item("name: a"), "gives each group's patterns: its group 1 has none"),
+            (item("name: a\npatterns: x"), "gives each group's patterns as a list: its group 1's are \"x\""),
+            (item("name: a\npatterns:\n  - 1"), "gives each group's patterns as strings: its group 1 has 1"),
+            (item("name: a\npatterns: []\ntags: []"), "is a list of groups, each a name and its patterns: its group 1 has tags besides"),
+        ] {
+            assert_eq!(read(&format!("        {}\n", value)), Err(format!("/b/teq.lock: line 9: projects.a.configurations.test.groups {}", why)), "{}", value);
+        }
     }
 
     #[test]

@@ -182,14 +182,18 @@ writes them), then runs teq's verbs over the export (`TEQ`). A branch publishes 
 `~/.m2`. The Zed extension (`integrations/zed`) is a crate of its own:
 `cargo test` there; its dev build needs rustup's `wasm32-wasip2` target.
 
-The JVM test runner (`src/task/runner/Runner.java`) is sbt 2.0.8's forked test worker, a JVM for each run, the
-daemon starting the next once a run ends (docs/TOOLING.md, "Tests."): its suites run on a pool of the lock's
-`parallelism`, which the sbt export writes from
+The JVM test runner (`src/task/runner/Runner.java`) is sbt 2.0.8's forked test worker in its virtual layout, with
+sbt's host's calls of the frameworks around it for an export of sbt's, a JVM for each invocation, the daemon starting
+the next once one ends (docs/TOOLING.md, "Tests."): its own classes and
+test-interface alone on the JVM's class path, the test class path in a class loader made after the build; its suites
+run on a pool of the lock's `parallelism`, which the sbt export writes from
 `Test / testForkedParallel` and `Test / testForkedParallelism` and the Mill export as `1`. `tests/task.sh` holds it
 to the pinned worker itself (`worker-2.0.8.jar` from the coursier cache, driven by `probe.Pinned` over the probe
-framework of `tests/support/probe_framework`, the two transcripts made alike by `tests/support/runner_contract.py`)
-and runs the pool through teq; a change of `Runner.java` compiles it again with javac 17 (`tests/runner-classes.sh`
-says how) and lists each class javac writes in `src/task/runner.rs`'s `CLASSES`.
+framework of `tests/support/probe_framework`, the worker's virtual layout where a case gives the run a class path,
+the two transcripts made alike by `tests/support/runner_contract.py`, the host's own lines after `=== teq` in a
+case's expected text) and runs the pool and the run's class loader
+through teq; a change of `Runner.java` compiles it again with javac 17 (`tests/runner-classes.sh` says how) and lists
+each class javac writes in `src/task/runner.rs`'s `CLASSES`.
 
 ### The assertion-enabled build
 

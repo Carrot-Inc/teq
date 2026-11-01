@@ -355,6 +355,10 @@ private[sbt] object Export {
       val testBase = (Test / baseDirectory).value
       val testEnv = (Test / Keys.envVars).value
       val testJavaOptions = (Test / javaOptions).value
+      val testGroups = (Test / teqTestGroups).value
+      // A group's name is unique, not empty and of one line, as teq reads the lock's `groups`: anything else refused here,
+      // where the setting is written, rather than by every verb that reads the lock.
+      val groupNames = testGroups.map(_._1)
       val scalaJSTestRefusals = teqExportScalaJSTestRefusals.value
       val runFork = (Compile / run / fork).value
       val runBase = (Compile / run / baseDirectory).value
@@ -383,6 +387,11 @@ private[sbt] object Export {
       val productionExcludes = teqProductionExcludes.value
 
       val refusals = mutable.ArrayBuffer.empty[String]
+      if (groupNames.exists(_.isEmpty)) refusals += s"$name: Test / teqTestGroups names a group with no name"
+      for (group <- groupNames.filter(_.exists(c => c == '\t' || c == '\n' || c == '\r')).distinct)
+        refusals += s"$name: Test / teqTestGroups names a group ${Lock.quoted(group)} holding a tab or a line break"
+      for (group <- groupNames.diff(groupNames.distinct).distinct)
+        refusals += s"$name: Test / teqTestGroups names the group ${Lock.quoted(group)} twice"
       // What teq cannot reproduce of the project but its generators, by the verb it keeps
       // from running: the lock records it and the verb refuses at use.
       val unsupported = mutable.LinkedHashMap.empty[String, mutable.ArrayBuffer[String]]
@@ -559,7 +568,7 @@ private[sbt] object Export {
           "javaOptions" -> strings(testJavaOptions),
           "frameworks" -> Json.Arr(frameworks.sortBy(_("class").str)(using utf8)),
           "exclude" -> strings(excluded),
-        ) ++ (if (js) scalaJSTest else Map("parallelism" -> parallelism(testParallel, testParallelism))) ++ generatorFields(testGenerators, resourceGeneratorsOf(test)) ++ scalafix("test")),
+        ) ++ groupsField(testGroups) ++ (if (js) scalaJSTest else Map("parallelism" -> parallelism(testParallel, testParallelism))) ++ generatorFields(testGenerators, resourceGeneratorsOf(test)) ++ scalafix("test")),
       )
 
       // sbt's managed source directories are not teq's: a project's generated sources are
@@ -782,6 +791,12 @@ private[sbt] object Export {
       c.extendsConfigs.find(e => directory(e.name).isDefined && directory(e.name) == directory(c.name)).fold(c)(source)
     configurations.find(_.name == conf).filter(c => directory(c.name).isDefined).map(c => source(c).name)
   }
+
+  /** The test configuration's `groups`, `teqTestGroups` in its order, each a `name` and its `patterns`; none where the
+    * setting is empty, as it is by default, so that a lock without groups stays as it was. */
+  private def groupsField(groups: Seq[(String, Seq[String])]): Map[String, Json.Value] =
+    if (groups.isEmpty) Map.empty
+    else Map("groups" -> Json.Arr(groups.map { case (name, patterns) => Json.Obj(Map("name" -> Json.Str(name), "patterns" -> strings(patterns))) }))
 
   /** The test frameworks of `testFrameworks` that the test classpath's libraries implement, each
     * by the first of its classes found (`.sjsir` on Scala.js), as sbt's `loadedTestFrameworks`

@@ -5,7 +5,10 @@ projects of `teq.lock`, found at or above the working directory, and the launche
 beside the lock run the pinned compiler with nothing installed:
 
 ```
-teq test [project] [pattern...]   # compile, then run the project's suites
+teq test [project] [pattern...]   # compile, then run the project's suites, its groups' in their order
+      --list                      # print the suites such a run would run, each group's under its header
+      --changed                   # only the suites that depend on what changed since the last full run
+      --events <file>             # every event of the run and every suite that ran, a line each
 teq run api [-- args]             # compile, then run the project's main class on a JVM
 teq compile [project...]          # type the projects' closures and write their class files
 teq dev frontend                  # a Scala.js project's dev loop; stage, watch, build and stop likewise

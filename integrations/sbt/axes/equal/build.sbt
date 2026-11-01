@@ -15,12 +15,14 @@ ThisBuild / Test / testForkedParallel := true
 
 lazy val root = project.in(file(".")).aggregate(lib, app, gen, sjs)
 
-// A library with munit's suites, a framework's argument, and a generator teq runs.
+// A library with munit's suites, a framework's argument, suite groups for teq test in an order that is not their
+// names', and a generator teq runs.
 lazy val lib = project.settings(
   Compile / unmanagedSourceDirectories := Seq(baseDirectory.value / "src"),
   Test / unmanagedSourceDirectories := Seq(baseDirectory.value / "test"),
   libraryDependencies += "org.scalameta" %% "munit" % "1.3.4" % Test,
   Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
+  Test / teqTestGroups := Seq("zeta" -> Seq("lib.Z*"), "alpha" -> Seq("-lib.Skip*", "lib.*")),
   Compile / teqGenerators += TeqCommand(Seq("sh", "lib/generate.sh"), inputs = Seq("lib/generate.sh")),
 )
 
@@ -51,10 +53,11 @@ lazy val gen = project.settings(
   }.taskValue,
 )
 
-// A Scala.js library with munit's suites and a framework's argument.
+// A Scala.js library with munit's suites, a framework's argument and a suite group for teq test.
 lazy val sjs = project.enablePlugins(ScalaJSPlugin).settings(
   Compile / unmanagedSourceDirectories := Seq(baseDirectory.value / "src"),
   Test / unmanagedSourceDirectories := Seq(baseDirectory.value / "test"),
   libraryDependencies += "org.scalameta" % "munit_sjs1_3" % "1.3.4" % Test,
   Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
+  Test / teqTestGroups := Seq("core" -> Seq("sjs.Core*")),
 )

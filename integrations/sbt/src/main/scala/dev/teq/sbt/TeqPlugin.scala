@@ -62,6 +62,7 @@ object TeqPlugin extends AutoPlugin {
     val teqDevCommand = settingKey[Seq[String]]("The command of a Scala.js project's dev loop (teq dev), run from the directory of the package.json at or above its base; by default that package's dev script when the base holds it")
     val teqRunAliases = settingKey[Map[String, String]]("Names for the project's main classes, which teq run takes in their place")
     val teqMainClasses = settingKey[Seq[String]]("The project's main classes for teqExportAll besides Compile / mainClass and the aliases' targets: declared, since finding them takes a compile")
+    val teqTestGroups = settingKey[Seq[(String, Seq[String])]]("Ordered, named groups of the test configuration's suites for teq test, each its patterns in teq test's syntax (globs, - to exclude): a suite runs in the first group whose patterns match it, the groups in their order, then the suites of none (Test / teqTestGroups)")
     type TeqCommand = dev.teq.sbt.TeqCommand
     val TeqCommand = dev.teq.sbt.TeqCommand
   }
@@ -173,6 +174,7 @@ object TeqPlugin extends AutoPlugin {
     teqDevCommand := Nil,
     teqRunAliases := Map.empty,
     teqMainClasses := Nil,
+    teqTestGroups := Nil,
     teqGenerators := Nil,
     teqReplacesSbtGenerators := false,
     Compat.uncached(Compile / teqGenerate, generate),

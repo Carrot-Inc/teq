@@ -7,6 +7,16 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- `teq test` runs a test configuration's suites in the ordered groups sbt-teq's `teqTestGroups` names, each group
+  with its own summary and the rest last, and `teq test --list` lists what a run with the same arguments would run
+  ([the test verb](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md),
+  [the command line](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
+- `teq test` loads a run's frameworks, libraries and classes through one class loader in the test class path's
+  order, as sbt 2's forked worker does: a service a project registers in its own resources is found, and an object
+  is one per run.
+- `teq test` calls a test framework's code as sbt 2.0.8's host and worker call it: fingerprints read and copied in
+  sbt's order, a framework with no selected suite left out, a suite named twice run once, and a failure while
+  reporting a failure ending the run as sbt's does.
 - `teq compiler watch`, `teq lsp` and `teq fix` give memory back between builds: a session's resident memory on a
   large program is about half of what it was, and its peak lower, whatever its class path's length.
 - A build reports the same errors and warnings at any worker count: every worker applies the build's warning

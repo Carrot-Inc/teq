@@ -141,7 +141,8 @@ build's remote Maven ones and their credentials hosts; `jars`, every jar a class
 files' version; and `projects`, each with its platform, Scala version and configurations (the roots, the full
 ordered classpath, the flags (the scalac options teq honours, `source` the configuration's `-source`, under which a
 session of a closure types that configuration's roots, `--source-at`), the generators, the declared main classes and the test context of `compile`,
-`runtime` and `test`, a JVM test context's `parallelism` among it, "Tests." below; and `compile`'s `evictions`,
+`runtime` and `test`, a JVM test context's `parallelism` among it and a test context's `groups`, the ordered suite
+groups of `teqTestGroups` (absent where it is empty), "Tests." below; and `compile`'s `evictions`,
 absent where there is none: each dependency the build declares at a version its resolution did not choose, by its
 key, with the key of the jar chosen in its place, which a script's `//> using dep` of the declared version resolves
 to under `teq interp`; and `compile`'s and `test`'s `scalafix` where a project of the build enables sbt-scalafix,
@@ -183,6 +184,7 @@ What sbt would find by compiling or running the build's code is declared:
 | `teqDevCommand` | the `dev` script of the nearest `package.json` | a Scala.js project's dev command |
 | `teqBuildTool` | false | the lock and the launchers at the build's root, committed |
 | `teqExportSnapshots` | false under `teqBuildTool`, else true | lets the export name SNAPSHOT and dynamic versions |
+| `Test / teqTestGroups` | none | ordered, named groups of the test configuration's suites for `teq test`, each `name -> patterns` in `teq test`'s pattern syntax ("Tests." below) |
 
 A `TeqCommand` writes sources into the directory appended to `run` (sbt's `Compile / sourceManaged / "teq"`,
 the exported build's `target/teq/<project>/compile/src_managed`, relative to the command's working directory);
@@ -345,18 +347,57 @@ the build's records are written there (below) and, once the build passed, the pr
 program's output follows teq's own lines on the same channels, and a reader of the records never takes it for the
 build's.
 
-**Tests.** On the JVM the runner is a JVM over sbt's test interface for each run, as sbt forks a worker for each: the
-daemon launches the next one as a run ends, before it answers, with the frameworks to load, so that its JVM starts
-and loads them while the client reads the run, the spent one quitting meanwhile (`stop`, and a daemon that ends,
-waiting for it within their bound and killing it past that), and a run inherits no thread, static or registration of
-the one before (a library's executor whose threads took the earlier run's class loader as their context loader, a
-library object's state, a shutdown hook); a JVM older than `java.outputVersion`, or than 17, is refused. A run is one
-of sbt 2's forked test worker (sbt 2.0.8's `ForkTestMain`): the frameworks one after another on one pool of the test
-configuration's `parallelism` threads, each given every suite whose fingerprint one of its own matches (a suite of
-two frameworks of one fingerprint runs on both, and a framework that matches none still makes its runner and its
-`done()`), a framework's tasks submitted together as a wave, their results awaited in its order before the tasks they
+**Tests.** On the JVM the runner is a JVM over sbt's test interface for each invocation, as sbt forks a worker for
+each run: the daemon launches the next one as an invocation ends, before it answers, so that its JVM starts while the
+client reads the run, the spent one quitting meanwhile (`stop`, and a daemon that ends, waiting for it within their
+bound and killing it past that), and a run inherits no thread, static or registration of the one before (a library's
+executor whose threads took the earlier run's class loader as their context loader, a library object's state, a
+shutdown hook); a JVM older than `java.outputVersion`, or than 17, is refused. Its class path is laid out as sbt 2's
+worker lays it out by default (its virtual class path): the runner's own classes and test-interface alone on the
+JVM's, test-interface's two packages (`sbt.testing` and `org.scalatools.testing`) taken from the first entry of the
+test class path that holds `sbt.testing.Framework` (a class path with none is refused), and every entry of the test
+class path, the libraries, the frameworks, the class files and the resources, in one class loader below them in the
+class path's order, made once the build is done. So a library and the providers registered for it in a resources
+directory (slf4j's, through `META-INF/services`) see each other as under sbt, a suite's top-level object is one for
+the run's suites, and a jar rewritten in place is the next run's. Of an export of sbt's, a run plays sbt's host
+around its worker, the host's calls of the frameworks' code made as sbt 2.0.8's host makes them, in its order. The
+frameworks are made through that loader as the host makes them, one of sbt's older interface
+(`org.scalatools.testing`) through sbt's wrapper, and their fingerprints asked reflectively and read as its discovery
+reads them (each subclass fingerprint's superclass and module, each annotated one's annotation and module, then the
+text of each, which discovery's debug lines make): a framework whose class is not found is named and fails the run,
+its suites unrun and the others run; one that throws otherwise fails the run as sbt's host fails its task, with what
+was thrown (for `fingerprints()`, the reflective call's wrapper), before any suite runs and with no line of the
+worker's. The suites are selected as sbt's `Tests.processOptions` selects them: those a `Tests.Exclude` names dropped,
+then those the command line's patterns accept as `testOnly`'s ordered filters do, pattern by pattern in the command
+line's order, each suite at its first (without an inclusion, one filter of all but the excluded; `...` in a pattern,
+as in a group's, standing for `**`, as sbt's `expandGlob` has it), one definition of a
+name, its first in discovery's order (a class's subclass fingerprints, in the frameworks' order, before its annotated
+ones; the classes in their names' order, where sbt's discovery has its analysis' order); a run and `--list` take that
+order, within each group. One the command line names whole (no `*`, `?` or `...`) is explicitly specified, as
+`testOnly` marks it. Then the host's calls before its worker: the selection's (a definition's hash and equality read
+its fingerprint's module and name), the frameworks it keeps, those one of whose fingerprints, asked again, matches a
+selected suite's (`filteredFrameworks`, over the invocation's suites in every group), a runner made of each with the
+build's arguments and no remote ones (`createTestRunners`), each suite's fingerprint copied as sbt copies it for its
+worker, and each runner's `args()` and `remoteArgs()`, which the worker's runner of that framework is made with
+(ScalaTest's in the worker so reports to the host's, whose `done()` then gives ScalaTest's summary); what these throw
+fails the run there, before any suite runs. A framework no selected suite is of makes no runner and is asked nothing
+but its fingerprints; a selection of none makes the host's calls through the frameworks it keeps, and no runner.
+A runner that has loaded the frameworks serves that invocation alone, a listing and a selection of nothing among them.
+A run's worker is sbt 2's forked test worker (sbt 2.0.8's `ForkTestMain`): the frameworks the host kept one after
+another, each its own instance as the worker makes it, on one pool of the test configuration's `parallelism` threads,
+each given every suite whose fingerprint one of its own matches (a suite of two frameworks of one fingerprint runs on
+both), a framework's tasks submitted together as a wave, their results awaited in its order before the tasks they
 returned are submitted as the next wave, so that a returned task waits for the whole of its wave though a thread is
-free, and the framework's `done()` once its last wave is drained, what `done()` returns shown nowhere. A suite's
+free, and each framework's `done()` once every framework's suites have run (the last group's, below), as sbt calls
+its runners' `done()` after its groups in process, where sbt 2's forked worker calls each framework's after its own
+suites, before the next framework's runner is made; what the worker's `done()` returns is shown nowhere. Once the
+worker has ended with no fork error, the host asks each kept framework's name and its own runner's `done()`, then
+shows each summary on the run's stream, after the framework's name where it kept several, an empty one as a debug line
+(`Summary for <name> not available.`). An export of Mill's has no host, as Mill's runner has none: the frameworks are
+made once and their runners given the build's arguments, every framework that loads is given the suites, the
+patterns are one filter, the suites in discovery's order, and a name defined twice keeps one definition, a subclass
+fingerprint's before an annotated one's whether it defines the class or the object of the name, then the earlier
+framework's, then its earlier fingerprint's; an event of no status throws into its task, which fails the run. A suite's
 logger and its output are written as they come, so that the lines of suites running at once interleave; its events
 are reported together once its task returns, and a task that throws has `Uncaught exception when running <suite>:
 <what it threw>` logged as an error and is one `Error` of its suite (a `SuiteSelector`, no duration), the events it
@@ -364,29 +405,46 @@ reported dropped; an event the worker's `ForkEvent` refuses (a selector that is 
 neither kind) is thrown to the framework that reported it, so that its task throws, and one of a `Serializable`
 selector of a kind other than test-interface's five is taken and fails, as the worker's gson does, when its task's
 events are sent: `Failed to execute task <future>` is logged, the task's events and the tasks it returned are lost,
-and the run goes on. What a task threw, a throwable a framework gives its logger's `trace`, and what a framework
+and the run goes on. Of an export of sbt's, an event of no status is carried, as the worker's `ForkEvent` carries it,
+and counted as none, as sbt's host counts it (`null` its status in `--events`). What a task threw, a throwable a framework gives its logger's `trace`, and what a framework
 throws making its runner or its tasks, or its `done()` throws (after `Uncaught exception when running tests: <what it
 threw>`, no framework after it run), the worker also sends as a fork error, which ends the run as sbt's `ForkTests`
 fails its harness at the first: nothing more of the run reaches the client, its runner retired as `ForkTests` leaves
 its worker once it has closed the worker's input (its tasks in flight finish and its frameworks' `done()` runs, what
 it writes drained unread, within the stop bound, past which it is killed), `[error]` lines with the throwable's first
 line and first frame (its whole trace with `--verbose`) and `<project>/test: the run failed: <what was thrown>` stand
-for the summary, `--events` holds the events reported before it, and the exit code is 1. The pool is made under the
+for the summary, `--events` holds the events reported before it, and the exit code is 1. Where reporting such a
+framework's throw itself throws (its `toString()` throwing), the worker writes `Internal error when running tests: <what
+reporting threw>` and sends no fork error, and its run ends there as at its end, which sbt's host takes for a completed
+run: teq's run enters no later group and calls no `done()` of the worker, the host's summaries are shown, the groups
+not completed are named, and the run's outcome and exit code are those of the suites reported, as sbt's host computes
+them (its line counting the suites selected). Of an export of Mill's, whose runner has no host, the internal error,
+there or loading the frameworks, fails the run, `<project>/test: the run failed: Internal error when running tests:
+...`. A task's error event
+is read as any event is, so that a fingerprint whose getter throws fails the task's future (`Failed to execute task
+<future>`) and no event of it is sent; and the worker's debug lines are made whether shown or not, so that a returned
+task whose definition cannot be shown (its fingerprint's `toString()` throwing) throws before it runs. The pool is made under the
 run's class loader, whose classes its threads see, and shut down before that loader is closed; the count goes with
 every run, so that a lock changed in place is the next run's. `parallelism` is `auto`, the processors the runner's
 JVM counts at each run (`-XX:ActiveProcessorCount` among `javaOptions` sets it), or a count; the export writes it
 from `Test / testForkedParallel` and `Test / testForkedParallelism` as sbt's worker sizes its pool (`1` where the
 flag is false, the count where it is positive, else `auto`), so that sbt 2's defaults give `auto` and sbt 1's,
 without the second key, `1`; a Mill build's is `1` ("The export of a Mill build"); a lock without the field is
-`auto`, and any other value is refused on its line. `--verbose` names the pool's size (`[debug] Create a test
-executor with a thread pool of 4 threads.`). Nothing on the command line sets it, as nothing on sbt's does: the
+`auto`, and any other value is refused on its line. `--verbose` shows the worker's debug lines: the pool's size
+(`[debug] Create a test executor with a thread pool of 4 threads.`), each framework's initial tasks (`Runner for
+<class> produced <n> initial tasks for <m> tests.`), each task as it runs (`  Running TaskDef(...)`) and what it
+produced (`    Produced <n> nested tasks and <m> events.`). Nothing on the command line sets it, as nothing on sbt's does: the
 build's setting is the lock's.
 On Scala.js the test configuration's
 resident links the program whose entry point starts Scala.js's test bridge (the std's, `test-bridge` 1.22.0's
 port) into one file, and each run starts a node of its own that loads it, speaking to the bridge as
-sbt-scalajs's test adapter does: the frameworks found by their names, one controller runner per framework,
-each task run through the continuation of `Task.execute` and the tasks it returns after it, then the runner's
-`done`; a run passes when every call was answered and node exited with 0, so a node that ends early fails it.
+sbt-scalajs's test adapter does: the frameworks found by their names, a controller runner for each framework with
+suites to run, all made before the first suite runs (sbt's `createTestRunners`), each task run through the continuation
+of `Task.execute` and the tasks it returns after it, then each runner's `done` once every framework's suites have run,
+as sbt calls them in process. A runner, its tasks or its `done` that the bridge fails to make ends the run, as sbt lets
+those failures through (`[error]` lines with what was thrown and `<project>/test: the run failed: <what was thrown>` in
+the summary's place, the exit code 1), while a suite whose task threw is an `Error` of its own and the run goes on; a
+run passes when every call was answered and node exited with 0, so a node that ends early fails it.
 The export says how sbt-scalajs runs the link (the test configuration's `moduleKind` and `jsEnv`: `Test /
 scalaJSLinkerConfig`'s module kind and `Test / jsEnv`): a `NoModule` link is a script node runs in its global
 scope, as `NodeJSEnv` runs it from its stdin (a global `require` included), a `CommonJSModule` link is
@@ -412,12 +470,14 @@ are the suites'; and on stderr its own lines: a build's diagnostics and its coun
 (`teq: <configuration>: ...`), each configuration's summary or its end with nothing to run. A run's outcomes and the
 suites that ran are its events (`--events`) and its builds' diagnostics their records (`--diagnostics`), so nothing a
 suite names, throws or prints, and nothing a diagnostic's message holds, is taken for one of teq's lines; `--list`
-prints the suites on stdout.
+prints on stdout the suites a run with the same arguments would run, and runs none.
 
-Suites are found as sbt's `definedTests` finds them (`--list` prints them), against the fingerprints the
-frameworks give, and the patterns applied as `testOnly` applies them; `--changed` keeps the suites whose
+Suites are found as sbt's `definedTests` finds them, against the fingerprints the frameworks give, those a
+`Tests.Exclude` names left out, and the patterns applied as `testOnly` applies them, in its order (above); `--changed` keeps the suites whose
 classes depend, transitively, on a class rewritten since the configuration's last full run (on Scala.js, on a
-source file edited since), or depended on a source file deleted since, by the dependencies before the deletion. A Scala.js configuration with frameworks whose sources define no suite fails: a run
+source file edited since), or depended on a source file deleted since, by the dependencies before the deletion; a run
+without patterns that completes (its suites' own failures among them, `--changed`'s too) starts that history anew,
+never a listing or a run a fork error ended. `--list` prints that selection as `definedTests` shows it, a line a suite. A Scala.js configuration with frameworks whose sources define no suite fails: a run
 of nothing is no pass. A framework the export names that the test link does not hold (one whose jar is Scala 2's IR
 alone, as Scala.js's JUnit runtime that munit brings) is left out with a note, as sbt-scalajs leaves out the
 frameworks its link does not answer for: its suites, if any, do not run. Each failure is reported as `[fail] <test>: <message>` with the frames in the suite's
@@ -442,6 +502,38 @@ compiler's records (`--diagnostics-append`); their text is the command's and nev
 shown does not change.
 Without a project every project's suites run, on either platform, those the export refuses named and the exit
 code 2.
+
+**Groups.** `Test / teqTestGroups` orders one run's suites in named groups, the test configuration's `groups` in the
+lock (sbt-teq's alone: sbt's own `testGrouping`, a forked JVM per group, is not exported, and a Mill build's export
+writes none): each suite the run selects (the patterns, the exclusions and `--changed` applied first) runs in the
+first group whose patterns match it, patterns in the command line's syntax (a glob, `-` excluding, no inclusion taking
+every suite still left, an exclusion leaving the suite to a later group), the groups in their order, then the suites of
+none. The groups are phases of one run, as sbt runs its groups in process (`Defaults.allTestGroupsTask`): one JVM (one
+node on Scala.js), one class loader, one pool and one runner per framework, each group's tasks asked as it is entered
+and every task they return run in it, whatever its name, before the next group starts, and each framework's `done()`
+once, after the last. On stderr each group has its header, `<project>/test [<name>]: <n> suites` (`no suite to run`
+for an empty one), and its summary, `<project>/test [<name>]: <n> suites, <p> passed, <f> failed in <t> ms`, the
+suites of none `(ungrouped)`, then the run's line as without groups; the suites' output stays on stdout. A group's
+failing suites do not stop the later groups, and the exit code is the run's. A fork error (above) ends the run once the
+group it happens in has drained, no later group started: `<project>/test: not completed: [<name>], ...` names the
+groups it did not complete, and no run's line is printed; a `done()` that throws fails the run after the groups'
+summaries (on Scala.js, a framework's failure of the bridge, above, ends the run so). The worker's internal error
+(above) ends an sbt export's run in the group it happens in, the groups it did not complete named, then the run's line,
+its exit code the suites'. A runner or node that ends (a suite's `System.exit`) ends the run where it is, the groups it did not
+complete named, the events and suites of what ran written to `--events` with their groups. `--list` prints each group's suites
+under `Group <name>`, an empty group's header alone, and the suites of none, where there are any, under `Ungrouped`.
+Where there are groups, `--events` writes each line's group after its fields (empty for the suites of none), the group
+each suite ran in, and `--diagnostics` records each group's header (severity `group`) and its summary (`summary`) with
+its `group`, null for the suites of none, and for a run that failed its failure (`failure`, the line `<project>/test:
+the run failed: ...`) with the group it happened in, null where it happened in no group (loading the frameworks, sbt's
+host's calls before its worker, making the runners and copying the suites' fingerprints among them, the frameworks'
+`done()` once every group has ended and the host's summaries after; on Scala.js, making the runners before the first
+group) or among the suites of none, the worker's runner of a JVM framework being made in the first group; a
+runner or node that ends is recorded so too, as its configuration's failure (`teq: <project>/test: ...`); then one record
+naming the groups not completed (`failure`), its `group` the first of them. Frameworks that fail to load, before any suite is
+discovered, leave every group and the ungrouped suites not completed (`<project>/test: not completed: [<name>], ...,
+(ungrouped), no suite discovered`). Without groups there are no headers, no group summaries, no group fields and no
+such records.
 
 **Stage.** `teq stage api` writes the files of the export's `stage` block under its directory,
 `<layer>/<path in the image>`, so that a Dockerfile copying native-packager's layers

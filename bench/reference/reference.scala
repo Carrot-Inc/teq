@@ -118,13 +118,14 @@ object Tests:
 
   // The events of a run as `teq test --events` writes them (`task::events::Event::line`) and the oracle's listener
   // (bench/reference/oracle/OracleEvents.scala): a line each, the project, the event's name (the suite), its selector,
-  // its status and the first line of what it threw, tab-separated. A case is the test a `test <name>` selector names,
+  // its status and the first line of what it threw, tab-separated, then teq's group where the configuration has groups
+  // (a suite's `ran` line, of three fields or four, no case). A case is the test a `test <name>` selector names,
   // another selector as it is written (`nested <suite> <test>`, `suite`), in the suite of its own event's project.
   def fromEvents(text: String): Tests =
     val suites = scala.collection.mutable.LinkedHashMap.empty[(String, String), Vector[(String, String)]]
     for line <- text.linesIterator if line.nonEmpty do
       line.split("\t", -1) match
-        case Array(project, suite, selector, status, _*) =>
+        case Array(project, suite, selector, status, _, _*) =>
           val test = if selector.startsWith("test ") then selector.drop(5) else selector
           suites((project, suite)) = suites.getOrElse((project, suite), Vector.empty) :+ (test -> status)
         case _ => ()
