@@ -47,6 +47,8 @@ js/circe_derivation	pass	-
 js/classpath_first_wins	pass	-	
 js/companion_trait_given	pass	-	
 js/control	pass	-	
+js/derive_recursive_enum	pass	-	
+js/derive_recursive_list	pass	-	
 js/dom_browser	pass	-	
 js/dom_node	pass	-	
 js/existential_bounded	pass	-	

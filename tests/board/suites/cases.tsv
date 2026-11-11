@@ -481,6 +481,8 @@ dependent_givens	pass	-
 dependent_override	pass	-	
 dependent_result_alias_through_receiver	pass	-	
 dependent_val_refinement	pass	-	
+derive_recursive_enum_shapes	pass	-	
+derive_recursive_list_shapes	pass	-	
 derives_next_line	pass	-	
 derives_type_constructor	pass	-	
 derives_type_ctor	pass	-	
@@ -769,6 +771,7 @@ function_synthetic_named_arguments	fail	-	< 123
 function_trait_instances	pass	-	
 function_type_tests	pass	-	
 function_value_callee	fail	-	< n=3
+function_value_helper_leaving_local	pass	-	
 function_value_helper_local_names	pass	-	
 function_xxl	fail	-	< 4324
 function_xxl_arity256	fail	-	< true
@@ -869,6 +872,7 @@ given_inherited_param_result	pass	-
 given_inline_trait_member	pass	-	
 given_intersection	pass	-	
 given_intersection_bounds	pass	-	
+given_knot_inline_candidate	pass	-	
 given_laziness	pass	-	
 given_lazy_self_init_js	pass	-	
 given_local_inline	pass	-	

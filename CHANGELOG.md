@@ -57,6 +57,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A given found through an inline given can refer to itself by name: kittens' `derives Eq` over a class with a
+  `List[A]` field where `A` has no instance, or over a recursive enum, no longer answers `No given instance`.
 - A local named `$jsFn` or `$ap` no longer shadows the JavaScript runtime's helper for a call of a function value
   that may be an object, or for such a value passed on to a method (`xs.filter(p)`).
 - `ProcessHandle.of` under `teq interp` takes its pid as the JDK does: a number that wraps to 0 or below names no

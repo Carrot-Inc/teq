@@ -456,9 +456,10 @@ impl CoveringSeen {
     }
 }
 
-/// A parameterized given whose using clauses are being resolved, with the type it was asked
-/// for measured as scalac does for its divergence check: the number of applied types in it,
-/// the classes it mentions and the type itself with its open variables blanked out.
+/// A given whose using clauses are being resolved, or whose inline body is being expanded where
+/// it was found (`reopen_given`), with the type it was asked for measured as scalac does for its
+/// divergence check: the number of applied types in it, the classes it mentions and the type
+/// itself with its open variables blanked out.
 pub struct OpenGiven {
     pub given: SymId,
     target: TypeId,
@@ -5280,6 +5281,9 @@ impl<'a> Worker<'a> {
         // the parameter's place among the given's, its type, whether it is by-name.
         let mut omitted: Vec<(usize, usize, TypeId, bool)> = Vec::new();
         let mut knot = None;
+        // The candidate's entry among the open givens once its using clauses are resolved, for the
+        // expansion of an inline candidate's body (`reopen_given`).
+        let mut opened: Option<OpenGiven> = None;
         if let Some(open) = open {
             let step = self.step(Step::Divergence);
             let diverges = self.diverges(&open);
@@ -5345,7 +5349,8 @@ impl<'a> Worker<'a> {
                 }
             }
             self.attempts.given_args -= expands_now as u32;
-            knot = self.given_stack.pop().and_then(|open| open.rec.map(|rec| (rec, open.target)));
+            opened = self.given_stack.pop();
+            knot = opened.as_ref().and_then(|open| open.rec.map(|rec| (rec, open.target)));
             if let Some(failed) = failed {
                 return failed;
             }
@@ -5558,6 +5563,8 @@ impl<'a> Worker<'a> {
             // expanded at once, after the pending calls typed before it, as the given's expansion
             // reads it; one whose expansion fails is no instance of its own search.
             if self.attempts.given_args > 0 {
+                // Not under the candidate's entry (`reopen_given`): dotty expands a plain inline
+                // given in its inlining phase, where no search is open.
                 if let Some(first) = self.expand_pending_in(&[te]).filter(|_| self.implicit_depth > 0) {
                     self.drop_held(te);
                     if self.given_trace() {
@@ -5587,7 +5594,9 @@ impl<'a> Worker<'a> {
             let diag_mark = self.diags.items.len();
             self.read_in_progress(InProgress::InlineExpansion);
             self.inline.site_at_end = true;
+            self.reopen_given(&mut opened, g, target.unwrap_or(ret_ty));
             let expanded = self.expand_inline(&call, &sig, &subst, &args, ret_ty, span, Some(ret_ty));
+            self.close_given(&mut knot);
             self.inline.site_at_end = false;
             if let Some((e, t)) = expanded {
                 // A candidate whose expansion fails inside a search is no candidate, as in
@@ -5692,6 +5701,35 @@ impl<'a> Worker<'a> {
             out.push_str(&format!("\n  candidate {} failed: {}", self.method_description(*g), first));
         }
         out
+    }
+
+    /// The candidate `g` open again while its inline body is expanded where it is found: dotty
+    /// types a candidate under `searchHistory.nest(cand, pt)` (`ImplicitSearch.tryImplicit`), and
+    /// that `OpenSearch`, by-name when the request it answers is (`byname = outer.byname ||
+    /// pt.isByName`), is the context of all of `typedImplicit`, the expansion `Typer.adapt` makes
+    /// of an inline candidate included (`Inlines.inlineCall`). A `summonInline` of the body is
+    /// then a request below it, which `recursive_ref` may answer with an instance under
+    /// construction (kittens' `product` and `coproduct`, whose by-name instances are shapeless3's
+    /// inline `mkInstances`). The entry is the one the using clauses were resolved under
+    /// (`opened`), or one made now for a given that has none. Only for the expansion made where
+    /// dotty makes it under the search: a plain inline given found for an argument of a
+    /// transparent one is expanded at once here and in dotty's inlining phase, outside any search.
+    fn reopen_given(&mut self, opened: &mut Option<OpenGiven>, g: SymId, target: TypeId) {
+        let entry = match opened.take() {
+            Some(entry) => entry,
+            None => self.open_given(g, target),
+        };
+        self.given_stack.push(entry);
+    }
+
+    /// The end of `reopen_given`'s expansion: a request of the body that referred back to the
+    /// candidate's own instance makes it the knot's lazy local, as one of its using clauses does.
+    fn close_given(&mut self, knot: &mut Option<(SymId, TypeId)>) {
+        if let Some(entry) = self.given_stack.pop() {
+            if let Some(rec) = entry.rec {
+                *knot = Some((rec, entry.target));
+            }
+        }
     }
 
     /// scalac's recursive reference: a request that stands below a by-name parameter of an open
