@@ -116,6 +116,13 @@ suite scala3-interp tests/scala3/run.sh --target interp
 suite scala3-macros tests/scala3/run.sh --suite run-macros
 suite scala3-macros-interp tests/scala3/run.sh --suite run-macros --target interp
 suite scala3-typing python3 tests/scala3-typing/harness.py
+# The conformance board's rows (tests/board/dotty.py: dotty's own suites at the tag 3.8.4, each held to its list of
+# the tests expected to fail and to its committed list's verdicts), as four lines: the three longest rows one each,
+# every other row in the rest. They need dotty at the tag: SCALA3_TAG, else scala3-3.8.4 beside $SCALA3.
+suite board-run     python3 tests/board/dotty.py --row run
+suite board-run-scalajs python3 tests/board/dotty.py --row run-scalajs
+suite board-pos     python3 tests/board/dotty.py --row pos
+suite board-rest    python3 tests/board/dotty.py --except run,run-scalajs,pos
 suite rust-warnings ./tests/rust-warnings.sh
 suite no-caps ./tests/no-caps.sh
 suite gate-coverage ./tests/gate-coverage.sh

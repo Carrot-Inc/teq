@@ -4,6 +4,7 @@
   SCALA3_TAG=/path/to/scala3-at-3.8.4 TEQ=/path/to/teq python3 tests/board/dotty.py [options]
 
   --row NAME[,NAME]   only these rows (default: every row of rows.py)
+  --except NAME[,NAME] every row but these (the gate's line board-rest: a row is one line's or the rest's)
   --only REGEX        only the tests whose name matches
   --jobs N            tests at a time (default 8)
   --update            take the tests that pass now out of tests/pending/dotty-<row>.txt and write the row's list,
@@ -51,7 +52,17 @@ kind `check` (the typing line's `teq compiler check`), for a run kind `interp` (
 A list is one line per test: test, verdict, the other ways, the first line of the difference. Two runs on one
 commit give the same verdicts; the first line is information. Without --update the run is held to
 tests/pending/dotty-<row>.txt (tests/support/pending.py): it fails when a listed test passes and when an
-unlisted test fails.
+unlisted test fails. And to the row's committed list, tests/board/dotty/<row>.tsv, which the board's counts are
+read from: it fails where a test's verdict there is not the run's, and --update writes the list again, so a
+change that moves a verdict moves the board with it.
+
+The rows are lines of the gate (tests/all.sh, tests/gate.sh): board-run, board-run-scalajs, board-pos and
+board-rest, every other row. The gate's table keeps a line's last line, so a run ends with one that names what
+was not as listed, row and test, or the counts of a run that was.
+
+The corpus is $SCALA3_TAG, else scala3-3.8.4 beside the checkout $SCALA3 names (tests/all.sh's variable and the
+gate's machines'). teq runs under tests/support/teq-capped.sh (a memory cap) where the user's systemd manager
+lingers and starts such a scope, bare where not, which the run's first line then says.
 """
 import argparse
 import collections
@@ -75,7 +86,8 @@ import pending  # noqa: E402
 import rows as ROWS  # noqa: E402
 
 TAG_COMMIT = "7d4833b619d31ea9acac97fccf1e74b42b89c49f"
-CAPPED = "/srv/teq.git/owner-setup/teq-capped.sh"
+CAPPED = os.path.join(REPO, "tests", "support", "teq-capped.sh")
+LAST_LINE = 280  # the gate's table keeps 300 characters of a line's last line
 SRC = (".scala", ".java")
 
 # Limits. teq types on one thread, so its CPU seconds are its work, whatever else the machine runs; the wall
@@ -88,6 +100,7 @@ NEAR = 3  # a test past a third of a limit is named after the run
 
 
 def die(msg):
+    sys.stdout.flush()  # the rows' lines before the cause: the gate keeps a log's last line
     print(msg, file=sys.stderr)
     sys.exit(2)
 
@@ -102,9 +115,15 @@ def main_checkout():
 
 
 def corpus():
-    """The checkout of dotty at the tag: $SCALA3_TAG, else teq-ref/scala3-3.8.4 beside the main working tree.
+    """The checkout of dotty at the tag: $SCALA3_TAG; else scala3-3.8.4 beside the checkout at main that $SCALA3
+    names (a gate machine's mirror of the tree is no git checkout with a main working tree to look beside); else
+    teq-ref/scala3-3.8.4 beside the main working tree, where tests/all.sh looks for $SCALA3 too.
     Another commit, or a checkout without the tests, is an error: a list of nothing proves nothing."""
-    root = os.environ.get("SCALA3_TAG") or os.path.join(main_checkout(), "..", "teq-ref", "scala3-3.8.4")
+    root = os.environ.get("SCALA3_TAG")
+    if not root and os.environ.get("SCALA3"):
+        root = os.path.join(os.path.dirname(os.path.abspath(os.environ["SCALA3"])), "scala3-3.8.4")
+    if not root:
+        root = os.path.join(main_checkout(), "..", "teq-ref", "scala3-3.8.4")
     root = os.path.abspath(root)
     if not os.path.isdir(os.path.join(root, "tests")):
         die(f"no checkout of dotty at the tag 3.8.4 at {root} (set SCALA3_TAG; "
@@ -129,19 +148,35 @@ def scala_library():
 
 
 def teq_command():
-    """teq, under the memory cap where the machine has the wrapper (the brief's rule for dotty's tests)."""
+    """teq under the memory cap, the tree's tests/support/teq-capped.sh (a systemd scope of the test's own), where
+    this machine starts such a scope and keeps it: the user's systemd manager must be one that outlives a login
+    (`loginctl enable-linger`), since a manager that ends with the login ends its scopes with it, and a gate's
+    shard runs on after the login that started it; then the scope is asked for once, with --version, the way
+    every test starts it. Where either fails (no systemd-run, no manager, one that goes) teq runs bare, and the
+    fourth value is the line that says so; no verdict of the lists comes from the cap.
+    (command, its environment, the binary, that line or nothing)."""
     teq = os.environ.get("TEQ") or os.path.join(REPO, "target", "release", "teq")
-    env = {}
-    if os.path.realpath(teq) == os.path.realpath(CAPPED):
+    if os.path.basename(os.path.realpath(teq)) == os.path.basename(CAPPED):
         if not os.environ.get("TEQ_REAL"):
             die("TEQ is the capped wrapper: set TEQ_REAL to the binary")
-        return teq, env, os.environ["TEQ_REAL"]
+        return teq, {}, os.environ["TEQ_REAL"], ""
     if not os.path.exists(teq):
         die(f"no teq binary at {teq}; build it with cargo build --release")
-    if os.path.exists(CAPPED):
-        env["TEQ_REAL"] = os.path.abspath(teq)
-        return CAPPED, env, os.path.abspath(teq)
-    return os.path.abspath(teq), env, os.path.abspath(teq)
+    teq = os.path.abspath(teq)
+    env = {"TEQ_REAL": teq}
+    try:
+        linger = subprocess.run(["loginctl", "show-user", str(os.getuid()), "--value", "-p", "Linger"], capture_output=True,
+                                text=True, timeout=20, stdin=subprocess.DEVNULL)
+        why = "" if linger.returncode == 0 and linger.stdout.strip() == "yes" else "the user's systemd manager is not one that lingers"
+        if not why:
+            probe = subprocess.run([CAPPED, "--version"], capture_output=True, text=True, timeout=30,
+                                   env={**os.environ, **env}, stdin=subprocess.DEVNULL)
+            why = "" if probe.returncode == 0 else (probe.stderr.strip().splitlines() or [f"exit {probe.returncode}"])[-1]
+    except (OSError, subprocess.SubprocessError) as e:
+        why = str(e)
+    if not why:
+        return CAPPED, env, teq, ""
+    return teq, {}, teq, f"board: teq runs without its memory cap on this machine ({' '.join(why.split())[:160]})"
 
 
 def major(cmd, rx):
@@ -1057,6 +1092,7 @@ def jvm_fits(spec, jdk):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--row")
+    ap.add_argument("--except", dest="rest_of")
     ap.add_argument("--only")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--update", action="store_true")
@@ -1070,14 +1106,20 @@ def main():
         for r in table:
             print(f"{r.name}\t{r.kind}\t{r.path}\t{r.source}\t{'cannot run: ' + r.cannot if r.cannot else ' '.join(r.flags)}")
         return 0
-    names = args.row.split(",") if args.row else [r.name for r in table]
-    unknown = [n for n in names if n not in {r.name for r in table}]
+    every = [r.name for r in table]
+    if args.row and args.rest_of:
+        die("--row and --except exclude each other")
+    named = (args.rest_of or args.row or "").split(",") if (args.rest_of or args.row) else []
+    unknown = [n for n in named if n not in every]
     if unknown:
         die(f"no row {', '.join(unknown)} (--rows lists them)")
+    names = [n for n in every if n not in named] if args.rest_of else (named or every)
     ctx = Ctx()
     ctx.root = corpus()
     ctx.lib = scala_library()
-    ctx.teq, ctx.teq_env, ctx.binary = teq_command()
+    ctx.teq, ctx.teq_env, ctx.binary, bare = teq_command()
+    if bare:
+        print(bare, flush=True)  # before whatever ends the run on stderr: the gate keeps a log's last line
     ctx.out = os.path.abspath(os.environ.get("BOARD_OUT") or os.path.join(REPO, "out", "board", "dotty"))
     ctx.cache = os.path.join(ctx.out, ".cache")
     os.makedirs(ctx.cache, exist_ok=True)
@@ -1086,6 +1128,8 @@ def main():
     ctx.node = major(["node", "--version"], r"v(\d+)")
     warm(ctx)
     status = 0
+    unlisted, passing, stale_lists = [], [], []  # what was not as listed, in the order the last line names it
+    totals = collections.Counter()
     for name in names:
         row = next(r for r in table if r.name == name)
         if not row.cannot and row.kind in ("pos", "run") and not ctx.jdk:
@@ -1144,12 +1188,65 @@ def main():
             continue
         failing = {n: (v + ": " if v != "fail" else "") + l for n, v, _, l in rows_out if v in ("fail", "timeout", "crash")}
         ran = {n for n, v, _, _ in rows_out if v != "cannot run"}
-        if not pending.hold("dotty-" + row.name, ran, failing, args.update, args.add):
+        suite = "dotty-" + row.name
+        # What the pending list's check is about to say, kept for the run's last line.
+        listed = pending.read(suite)
+        new = [] if args.add else sorted(n for n in failing if n not in listed)
+        fixed = [] if args.update else sorted(n for n in listed if n in ran and n not in failing)
+        held = pending.hold(suite, ran, failing, args.update, args.add)
+        unlisted += [f"{row.name}/{n} fails and is not in tests/pending/{suite}.txt" for n in new]
+        passing += [f"{row.name}/{n} passes: its line in tests/pending/{suite}.txt must go (--update)" for n in fixed]
+        stale = []
+        if not (args.update or args.add):
+            stale = stale_verdicts(row.name, {n: v for n, v, _, _ in rows_out}, set(new) | set(fixed))
+            if stale:
+                print(f"{suite}: {len(stale)} verdicts of tests/board/dotty/{row.name}.tsv are not this run's (write the list again: --update): "
+                      + ", ".join(f"{n} (the list: {was}, the run: {now})" for n, was, now in stale[:40]) + (" ..." if len(stale) > 40 else ""))
+            stale_lists += [f"{row.name}/{n} is {now} where tests/board/dotty/{row.name}.tsv says {was} (--update)" for n, was, now in stale]
+        if not held or stale:
             status = 1
         elif args.update or args.add:
             os.makedirs(os.path.join(HERE, "dotty"), exist_ok=True)
             shutil.copyfile(fresh, os.path.join(HERE, "dotty", row.name + ".tsv"))
+        totals.update(counts)
+        totals["rows"] += 1
+    if not (args.only or args.show):
+        print(last_line(unlisted + passing + stale_lists, totals))
     return status
+
+
+def stale_verdicts(row, verdicts, named):
+    """Where the row's committed list (tests/board/dotty/<row>.tsv) does not have the run's verdict of a test:
+    (test, the list's verdict, the run's), but for the tests the pending list's check has named already (a test
+    that stopped passing is not answered by writing the list again)."""
+    committed = {}
+    path = os.path.join(HERE, "dotty", row + ".tsv")
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                parts = line.rstrip("\n").split("\t")
+                if not line.startswith("#") and len(parts) > 1:
+                    committed[parts[0]] = parts[1]
+    out = [(n, committed.get(n, "no line"), v) for n, v in sorted(verdicts.items()) if n not in named and committed.get(n) != v]
+    return out + [(n, v, "no such test") for n, v in sorted(committed.items()) if n not in verdicts]
+
+
+def last_line(problems, totals):
+    """The run's last line, which the gate's table keeps: what was not as listed, row and test, as many as fit
+    (the lines above have all), the tests that fail unlisted before the others, a test that stopped passing being
+    what a landing must not bring; or the counts of a run that was as listed."""
+    if not problems:
+        failed = totals["fail"] + totals["timeout"] + totals["crash"]
+        return (f"board: {totals['rows']} row{'' if totals['rows'] == 1 else 's'} as listed: {sum(totals.values()) - totals['rows']} tests, "
+                f"{totals['pass']} pass, {failed} fail, {totals['cannot run']} cannot run")
+    line = f"board: {len(problems)} not as listed: {problems[0]}"
+    shown = 1
+    for p in problems[1:]:
+        if len(line) + len(p) + 2 > LAST_LINE:
+            break
+        line += "; " + p
+        shown += 1
+    return line + (f"; and {len(problems) - shown} more" if shown < len(problems) else "")
 
 
 if __name__ == "__main__":

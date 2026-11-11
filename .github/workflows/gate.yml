@@ -27,6 +27,9 @@ env:
   # The scala/scala3 commit whose tests/run, tests/neg, tests/pos and tests/warn the harnesses walk; the
   # baselines in tests/scala3/*.txt and tests/scala3-typing/expected.txt were recorded on it.
   SCALA3_REF: 7414c83e175a27726eb3f9b18d4185d9c470d884
+  # The commit of scala/scala3's tag 3.8.4, whose tests the conformance board's lines run (tests/board/dotty.py
+  # refuses another): its `tests` and `compiler/test`, in scala3-3.8.4 beside the checkout above.
+  SCALA3_TAG_REF: 7d4833b619d31ea9acac97fccf1e74b42b89c49f
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -141,6 +144,13 @@ jobs:
             suites: scala3-run scala3-interp scala3-macros scala3-macros-interp scala3-typing
             minutes: 30
             scala3: true
+          # The conformance board: dotty's own suites at the tag 3.8.4, the three longest rows a line each and
+          # the other rows in the rest; the JDK for the class files and the programs, the library's jar for all.
+          - group: board
+            suites: board-run board-run-scalajs board-pos board-rest
+            minutes: 30
+            jars: true
+            board: true
           - group: prop
             suites: prop
             minutes: 45
@@ -196,6 +206,21 @@ jobs:
             git remote add origin https://github.com/scala/scala3.git
             git sparse-checkout set tests
             git fetch -q --depth 1 origin "$SCALA3_REF"
+            git checkout -q FETCH_HEAD
+          fi
+      - if: matrix.board
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/teq-ref/scala3-3.8.4
+          key: scala3-tag-${{ env.SCALA3_TAG_REF }}
+      - if: matrix.board
+        run: |
+          if [ ! -d ~/teq-ref/scala3-3.8.4/tests ]; then
+            git init -q ~/teq-ref/scala3-3.8.4
+            cd ~/teq-ref/scala3-3.8.4
+            git remote add origin https://github.com/scala/scala3.git
+            git sparse-checkout set tests compiler/test
+            git fetch -q --depth 1 origin "$SCALA3_TAG_REF"
             git checkout -q FETCH_HEAD
           fi
       # The property tests are a crate of their own (proptests/), whose dependencies come from crates.io.
