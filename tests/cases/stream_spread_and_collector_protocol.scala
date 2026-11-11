@@ -1,16 +1,20 @@
 // A sequence spread into a Java method's varargs is copied, an array spread is the array itself
 // (`Stream.of(xs*)`, `IntStream.of`). And a collector's protocol as the JDK's `ReferencePipeline.collect` follows it: a
 // parallel stream asks whether the collector is `CONCURRENT` and then, ordered, `UNORDERED`
-// before the sequential stream's questions, whatever thread runs it.
+// before the sequential stream's questions, whatever thread runs it. A `CONCURRENT` collector's one container
+// takes the elements from several threads at once: the probe's is the JDK's concurrent queue, so that its
+// count is the stream's two elements however the threads run (`synchronized` in the program would not do: it
+// takes no monitor in teq's output, docs/COMPATIBILITY.md).
 import java.util.stream.{Collector, IntStream, Stream}
 import java.util.function.{Supplier, BiConsumer, BinaryOperator, Function}
+import java.util.concurrent.ConcurrentLinkedQueue
 import scala.collection.immutable.ArraySeq
 
-class Probe(concurrent: Boolean, unordered: Boolean) extends Collector[String, java.util.ArrayList[String], Int]:
-  def supplier(): Supplier[java.util.ArrayList[String]] = { println("supplier"); () => new java.util.ArrayList[String]() }
-  def accumulator(): BiConsumer[java.util.ArrayList[String], String] = { println("accumulator"); (a, s) => { a.add(s); () } }
-  def combiner(): BinaryOperator[java.util.ArrayList[String]] = { println("combiner"); (a, b) => { a.addAll(b); a } }
-  def finisher(): Function[java.util.ArrayList[String], Int] = { println("finisher"); a => a.size() }
+class Probe(concurrent: Boolean, unordered: Boolean) extends Collector[String, ConcurrentLinkedQueue[String], Int]:
+  def supplier(): Supplier[ConcurrentLinkedQueue[String]] = { println("supplier"); () => new ConcurrentLinkedQueue[String]() }
+  def accumulator(): BiConsumer[ConcurrentLinkedQueue[String], String] = { println("accumulator"); (a, s) => { a.add(s); () } }
+  def combiner(): BinaryOperator[ConcurrentLinkedQueue[String]] = { println("combiner"); (a, b) => { a.addAll(b); a } }
+  def finisher(): Function[ConcurrentLinkedQueue[String], Int] = { println("finisher"); a => a.size() }
   def characteristics(): java.util.Set[Collector.Characteristics] = new java.util.HashSet[Collector.Characteristics]():
     override def contains(x: Any): Boolean =
       println("asked " + x)

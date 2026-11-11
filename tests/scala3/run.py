@@ -13,8 +13,11 @@ A test's options are read as tests/scala3-typing/harness.py reads them (`scalac_
 `-source` and `-language` reach teq as flags, recorded with the test's result; files naming two source versions
 are left out (a compile-error of the topic "conflicting options"), never compiled under one of them.
 
-Writes results.json, summary.md and, with --update, the allow-list passing.txt (a test passing under flags its
-options gave lists them after a tab); without --update a listed test that no longer passes fails the run.
+Writes results.json and summary.md. The run is held to the list of the tests expected to fail,
+tests/pending/scala3-run.txt (scala3-interp, scala3-macros, scala3-macros-interp for the other target and suite;
+tests/support/pending.py): it fails when a listed test passes and when an unlisted one fails. --update takes the
+tests that pass now out of the list, --add writes the unlisted failures in, and either writes the suite's row of
+the board (tests/board/suites/).
 """
 import argparse
 import collections
@@ -32,7 +35,9 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 # `-language` reach teq as its flags.
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.join(REPO, "tests", "scala3-typing"))
+sys.path.insert(0, os.path.join(REPO, "tests", "support"))
 from harness import scalac_options, teq_flags  # noqa: E402
+import pending  # noqa: E402
 
 
 def default_scala3():
@@ -328,11 +333,12 @@ def main():
     ap.add_argument("--compile-timeout", type=float, default=20)
     ap.add_argument("--run-timeout", type=float, default=20)
     ap.add_argument("--only", help="regex over test names")
-    ap.add_argument("--update", action="store_true", help="rewrite passing.txt from this run")
+    ap.add_argument("--update", action="store_true", help="take the tests that pass now out of the pending list")
+    ap.add_argument("--add", action="store_true", help="write the unlisted failures into the pending list")
     ap.add_argument("--no-dirs", action="store_true", help="single-file tests only")
-    ap.add_argument("--target", default="js", choices=["js", "interp"], help="interp runs the tests in the interpreter; the allow-list is then tests/scala3/interp-passing.txt")
-    ap.add_argument("--listed", action="store_true", help="only the tests of passing.txt (the JavaScript allow-list)")
-    ap.add_argument("--suite", default="run", choices=["run", "run-macros"], help="run-macros runs the quoted-macro tests; their allow-lists are tests/scala3/macros-passing.txt and macros-interp-passing.txt")
+    ap.add_argument("--target", default="js", choices=["js", "interp"], help="interp runs the tests in the interpreter")
+    ap.add_argument("--listed", action="store_true", help="only the tests the JavaScript row of the board says pass")
+    ap.add_argument("--suite", default="run", choices=["run", "run-macros"], help="run-macros runs the quoted-macro tests")
     args = ap.parse_args()
 
     root = os.path.join(DEFAULT_SCALA3, "tests", args.suite)
@@ -355,8 +361,7 @@ def main():
         rx = re.compile(args.only)
         tests = [t for t in tests if rx.search(t[0])]
     if args.listed:
-        with open(os.path.join(HERE, prefix + "passing.txt")) as f:
-            listed = {l.split("\t")[0].strip() for l in f if l.strip() and not l.startswith("#")}
+        listed = set(pending.passing("scala3-" + ("run" if args.suite == "run" else "macros")))
         tests = [t for t in tests if t[0] in listed]
     os.makedirs(args.out, exist_ok=True)
     t0 = time.monotonic()
@@ -374,34 +379,14 @@ def main():
     if args.target == "js" and args.suite == "run":
         report_pending(args)
 
-    passing_path = os.path.join(HERE, prefix + ("passing.txt" if args.target == "js" else args.target + "-passing.txt"))
-    passing_now = {r["name"] for r in results if r["status"] == "pass"}
-    if args.update:
-        # A test that passed under flags its options gave lists them after a tab.
-        flags_of = {r["name"]: r.get("flags", "") for r in results}
-        with open(passing_path, "w") as f:
-            f.write("\n".join(n + ("\t" + flags_of[n] if flags_of.get(n) else "") for n in sorted(passing_now)) + "\n")
-        print(f"wrote {len(passing_now)} names to passing.txt")
-        return 0
-    if not os.path.exists(passing_path):
-        print("no passing.txt yet; run with --update to create it")
-        return 0
-    with open(passing_path) as f:
-        listed = {l.split("\t")[0].strip() for l in f if l.strip() and not l.startswith("#")}
+    # The run held to the list of the tests expected to fail (tests/support/pending.py).
+    suite = "scala3-" + ("run" if args.suite == "run" else "macros") + ("" if args.target == "js" else "-" + args.target)
     ran = {r["name"] for r in results}
-    regressed = sorted((listed & ran) - passing_now)
-    new = sorted(passing_now - listed)
-    if new:
-        print(f"{len(new)} newly passing (add with --update): " + ", ".join(new))
-    if regressed:
-        by_name = {r["name"]: r for r in results}
-        print(f"REGRESSION: {len(regressed)} listed tests no longer pass:")
-        for n in regressed:
-            r = by_name[n]
-            print(f"  {n}: {r['status']} {r.get('error', '')[:120]}")
-        return 1
-    print(f"all {len(listed & ran)} listed tests still pass")
-    return 0
+    failing = {r["name"]: (r["status"] + ": " + " ".join(str(r.get("error", "")).split())[:160]).rstrip(": ") for r in results if r["status"] != "pass"}
+    held = pending.hold(suite, ran, failing, args.update, args.add)
+    if held and (args.update or args.add) and not args.only and not args.listed and not args.no_dirs:
+        pending.write_board_list(suite, ran, failing, {})
+    return 0 if held else 1
 
 
 if __name__ == "__main__":

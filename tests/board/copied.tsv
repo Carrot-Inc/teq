@@ -1,0 +1,10 @@
+# The stopped branch's fixtures that are in the tree and whose checks are lines the branch added to a runner
+# script, which this tree does not have: each suite's scenarios are ported by a part of its own. What this tree's
+# own runner reads of them runs in the suite's row; the rest is read by nothing.
+# suite	files	what is not run
+workers scenarios	121	the 13 fixture directories of tests/workers, none named by tests/workers.sh; the branch's script adds 336 lines, 37 of them naming a check
+modules scenarios	190	the 52 case directories run under this tree's script (the row modules); the branch's script adds 144 lines to it
+split scenarios	29	5 of the 8 fixture directories have an .expected and run (the row split), 3 are read by nothing; the branch's script adds 90 lines, 14 of them naming a check
+classpath scenarios	68	the programs run (the row classpath); the branch's script adds 22 lines, 6 of them naming a check
+tasty scenarios	87	the fixtures are read (the row tasty); the branch's script adds 17 lines, 2 of them naming a check
+modules-scalac-split.sh	2	a tool that records scalac's own builds for tests/modules.sh, no test

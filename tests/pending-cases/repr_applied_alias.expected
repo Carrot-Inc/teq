@@ -1,0 +1,3 @@
+scala.ImpureFunction1[scala.Int, scala.Int] | AppliedType(TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "ImpureFunction1"), List(TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "Int"), TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "Int")))
+scala.collection.immutable.List[scala.Int] | AppliedType(TypeRef(TermRef(TermRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "collection"), "immutable"), "List"), List(TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "Int")))
+A.G[scala.Int] | AppliedType(TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<empty>")), "A"), "G"), List(TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "Int")))

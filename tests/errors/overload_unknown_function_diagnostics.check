@@ -1,0 +1,19 @@
+tests/errors/overload_unknown_function_diagnostics.scala:9:5: error: Ambiguous overload. The overloaded alternatives of method unary in object PrototypeDiagnostics with types
+ (f: String => String): String
+ (f: Int => Int): Int
+both match arguments (<?> => <?>)
+      unary(x => x)
+      ^^^^^
+tests/errors/overload_unknown_function_diagnostics.scala:10:5: error: Ambiguous overload. The overloaded alternatives of method binary in object PrototypeDiagnostics with types
+ (f: (Int, Boolean) => Int): String
+ (f: (Int, String) => Int): Int
+both match arguments ((Int, <?>) => <?>)
+      binary((x: Int, y) => x)
+      ^^^^^^
+tests/errors/overload_unknown_function_diagnostics.scala:11:5: error: Ambiguous overload. The overloaded alternatives of method cases in object PrototypeDiagnostics with types
+ (f: PartialFunction[String, String]): String
+ (f: PartialFunction[Int, Int]): Int
+both match arguments (<?>)
+      cases { case x => x }
+      ^^^^^
+3 errors found

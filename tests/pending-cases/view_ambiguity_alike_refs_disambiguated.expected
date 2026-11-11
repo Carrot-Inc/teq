@@ -1,0 +1,7 @@
+scalac 3.8.4: rejected, 1 error(s)
+view_ambiguity_alike_refs_disambiguated.scala:21:49: Found:    R
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object ops in object T and object ops² in object T provide an extension method `pick` on R
+  where:    ops  is a object in object T
+  ops² is a object in object T

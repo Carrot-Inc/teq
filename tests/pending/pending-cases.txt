@@ -1,0 +1,170 @@
+alias_bound_stable_path	< ok
+alias_bound_term_ref	< ok
+alias_rhs_bound_through_class_param_bound	< scalac 3.8.4: rejected, 1 error(s)
+and_base_invariant_argument_shown	< scalac 3.8.4: rejected, 1 error(s)
+annotated_primary_constructor	< 1
+annotation_after_ascription_line	< 1
+any_kind_bound	< K1$ K2$
+applied_member_through_subtype_prefix	< ok
+binary_int_literal	< 5
+case_companion_initialising_apply	< k2 |
+classfile_reader_lone_surrogate	< d83d
+conflicting_base_types_through_trait	< scalac 3.8.4: rejected, 1 error(s)
+conversion_ambiguity_member_order	< scalac 3.8.4: rejected, 1 error(s)
+conversion_ambiguity_sorted	< scalac 3.8.4: rejected, 1 error(s)
+conversion_inner_level_over_extension_given	< 2
+copy_on_intersection_receiver	< 3
+curried_alias_application	< 2 65 66
+default_getter_selected_by_name	< scalac 3.8.4: rejected, 1 error(s)
+directive_java_source	< k 7
+directive_target_scope_experimental	< scala-cli 1.17.1: rejected, 1 error(s)
+directive_test_scope_own	< main
+empty_package_import_beside_packaging	< 1
+enum_case_alias_parent	< 3
+enum_case_annotation_tparam	< 1
+eta_param_from_expected_function	< List(List(P(2), P(1)), List(P(4), P(3)))
+export_case_apply_overload_named	< scalac 3.8.4: rejected, 1 error(s)
+export_shifted_getter_own_clause	< scalac 3.8.4: rejected, 1 error(s)
+export_using_path_omitted_inline_defaults	< scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_implicit_scope_order	< scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_import_order	< scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_inherited_companion	< scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_package	< scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_right_assoc	< scalac 3.8.4: rejected, 2 error(s)
+extension_ambiguity_self_type_declared_after	< scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_self_type_order	< scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_sorted	< scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_top_level_owner	< scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_type_variable	< scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_unindexed_order	< scalac 3.8.4: rejected, 1 error(s)
+extension_companion_beside_using_given	< companion
+extension_nullified_alias_bound	< scalac 3.8.4: rejected, 1 error(s)
+extension_through_two_instances_prefix	< ok
+extension_unindexed_object_more_specific	< a
+extension_view_too_unspecific	< scalac 3.8.4: rejected, 3 error(s)
+extension_view_too_unspecific_applied	< scalac 3.8.4: rejected, 2 error(s)
+fbound_path_in_type_arg	< show
+for_yield_unit_discard_through_var	< 1
+function_xxl_deep_array_signature	< 325
+given_alias_of_bounded_param_part	< 13
+given_block_later_local	< 3
+given_double_definition_one_error	< scalac 3.8.4: rejected, 1 error(s)
+given_import_through_two_instances	< ok
+given_local_object_forward	< qc
+given_params_tail_call	< overflow
+harmonize_nested_if_against_open_var	< 15
+hk_binder_lower_bound_bare_constructor	< scalac 3.8.4: rejected, 3 error(s)
+hk_bounded_wildcard_bare_constructor	< scalac 3.8.4: rejected, 2 error(s)
+hk_member_lambda_override	< Map(a -> 1)
+hk_param_bare_constructor_bound_kind	< scalac 3.8.4: rejected, 5 error(s)
+hk_param_constructor_arity	< scalac 3.8.4: rejected, 2 error(s)
+hk_pattern_type_variable_capture	< List(1) 1
+inferred_type_bounds_checked	< scalac 3.8.4: rejected, 1 error(s)
+inline_anon_class_this_arg	< 2 3 5 6
+inline_collapsed_primitive_param	< 42,-42,42,0
+inline_collapsed_primitive_select	< 42,42,42
+inline_param_type_prefix	< scalac 3.8.4: rejected, 1 error(s)
+inline_prefix_lift_bindings	> argT 6
+inline_val_float	< 0.0
+interleaved_type_clause	< 1
+iterable_once_iterator_only	< TreeSet(1, 2)
+jar_inline_forwarder_argument_order	< eval b
+jar_inline_forwarder_inline_param_default	< 1279
+java_enum_ordinal_through_enum_js	< 4
+java_lang_string_type	< a
+java_wildcard_object_bound	< 1
+kind_error_argument_in_match_scrutinee	< scalac 3.8.4: rejected, 1 error(s)
+lambda_param_refined_type	< 2
+local_class_match_scrutinee_avoided	< 1
+local_object_forward	< 2
+macro_annotation_object_member_classes	< 15
+math_round_overloads	< 2 1234567890123456789
+member_ctor_lambda_bound	< 1
+method_type_arg_kind	< 1
+mirror_of_intersection	< CC(3)
+nowarn_alias_chain_33	< 1
+object_finalize_override	< true
+overload_typed_lambda_untupled	< Map(A -> 2, B -> 3)
+override_tracked_param	< 3
+patdef_bound_whole	< val $N$, bind $N$, bind a, bind b, val a, val b
+patdef_wildcard_vals	< (none)
+pattern_cons_extractor	< 1
+pattern_mirror_typer_base	< The `--offline` option is experimental
+plain_class_dollar_name	< Foo(1)
+poly_override_lower_bound	< scalac 3.8.4: rejected, 2 error(s)
+primitive_eq_selected	< false
+products_extension_export_inline_getter	< 235
+products_super_getter_after_using_clause	< 45,111u9
+qualified_super_default_in_inner_class	< 3
+qualified_super_mix	< 3
+quoted_type_block	< 1
+realizable_covariant_bases	< ok
+repr_abstract_dealias	< A.T | dealias=A.T | widen=A.T
+repr_alias_reference	< O.P | TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<empty>")), "O"), "P") | O$.P
+repr_annotated_type	< scala.Int @mark(7) | AnnotatedType(TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "Int"), Apply(Select(New(TypeIdent("mark")), "<init>"), List(Literal(IntConstant(7))))) | scala.
+repr_applied_alias	< scala.ImpureFunction1[scala.Int, scala.Int] | AppliedType(TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "ImpureFunction1"), List(TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<r
+repr_base_classes_of_object	< scala.ContextFunction01,java.lang.Object,scala.Matchable,scala.Any | scala$ContextFunction01$$T1,scala$ContextFunction01$$R | x$0
+repr_bounds_constructed	< TypeBounds(TypeRef(ThisType(TypeRef(NoPrefix(), "scala")), "Int"), TypeRef(ThisType(TypeRef(NoPrefix(), "scala")), "Int")) | scala.Int | scala.Int
+repr_byname_symbol	< TypeRef(ThisType(TypeRef(NoPrefix(), "scala")), "Int") | scala.Int | symbol=scala.Int
+repr_child_prefix_assertion	< scalac 3.8.4: an unhandled exception in the typer, java.lang.AssertionError: assertion failed
+repr_match_case_range_local_class_crash	< scalac 3.8.4: an unhandled exception in the typer, scala.MatchError: TypeRef(ThisType(TypeRef(NoPrefix,module class scala)),class Nothing) (of class dotty.tools.dotc.core.Types$CachedTypeRef)
+repr_match_case_range_unstable_arg_crash	< scalac 3.8.4: an unhandled exception in the typer, scala.MatchError: TypeRef(ThisType(TypeRef(NoPrefix,module class scala)),class Nothing) (of class dotty.tools.dotc.core.Types$CachedTypeRef)
+repr_match_case_range_wild_prefix_crash	< scalac 3.8.4: an unhandled exception in the typer, scala.MatchError: TypeRef(ThisType(TypeRef(NoPrefix,module class scala)),class Nothing) (of class dotty.tools.dotc.core.Types$CachedTypeRef)
+repr_member_alias_capture	< 1
+repr_member_flags_deferred_given	< U: apply(given x) deferred implicit; f(y) deferred
+repr_opaque_symbol	< class=false; typedef=true; opaque=true
+repr_retains_annotation_clash	< -- [E120] Naming Error: tests/pending-cases/repr_retains_annotation_clash.scala:8:6
+repr_term_member_type_prefix	< s
+repr_union_alias	< O.U | TypeRef(TermRef(ThisType(TypeRef(NoPrefix(), "<empty>")), "O"), "U") | O$.U
+repr_wildcard_equal_bounds	< scala.collection.immutable.List[_ >: scala.Int <: scala.Int] | AppliedType(TypeRef(TermRef(TermRef(TermRef(ThisType(TypeRef(NoPrefix(), "<root>")), "scala"), "collection"), "immutable"), "List"), Li
+root_empty_package_member	< scalac 3.8.4: rejected, 1 error(s)
+scala3_i17132	< scalac 3.8.4: rejected, 1 error(s)
+scalajs_js_custom_function_types	< scalac 3.8.4: rejected, 7 error(s)
+scalajs_js_custom_function_types_backend	< scalac 3.8.4: rejected, 2 error(s)
+scalajs_js_members_bad_signatures_brackets	< scalac 3.8.4: rejected, 8 error(s)
+scalajs_js_members_bad_signatures_setters	< scalac 3.8.4: rejected, 4 error(s)
+scalajs_js_native_members	< scalac 3.8.4: rejected, 25 error(s)
+scalajs_js_non_native_members	< scalac 3.8.4: rejected, 6 error(s)
+scalajs_js_non_native_members_overloaded	< scalac 3.8.4: rejected, 6 error(s)
+scalajs_js_non_native_members_qualified_private	< scalac 3.8.4: rejected, 12 error(s)
+scalajs_js_sam_of_non_function_type	< scalac 3.8.4: rejected, 6 error(s)
+scalajs_js_trait_ctor_param	< scalac 3.8.4: rejected, 1 error(s)
+scalajs_js_trait_members	< scalac 3.8.4: rejected, 8 error(s)
+scalajs_js_trait_members_wrong_kind	< scalac 3.8.4: rejected, 4 error(s)
+scalajs_js_type_override_equals_hashcode	< scalac 3.8.4: rejected, 8 error(s)
+select_field_mismatch_point	< scalac 3.8.4: rejected, 2 error(s)
+settings_conflicting_alias	< scalac 3.8.4: rejected, 1 error(s)
+settings_deprecated_alias	< scalac 3.8.4: rejected, 1 error(s)
+settings_unchecked_false	< scalac 3.8.4: accepted, 1 warning
+singleton_bounded_given	< ok
+singleton_selector_unreachable	< scalac 3.8.4: rejected, 1 error(s)
+std_known_sizes	> warning: there was 1 deprecation warning; re-run with --deprecation for details
+summon_ambiguity_member_order	< scalac 3.8.4: rejected, 2 error(s)
+summon_ambiguity_package_object_order	< scalac 3.8.4: rejected, 1 error(s)
+summon_ambiguity_rank_pair	< scalac 3.8.4: rejected, 1 error(s)
+summon_ambiguity_sorted	< scalac 3.8.4: rejected, 1 error(s)
+summon_singleton_argument	< 1
+super_extension_default_in_trait	< 51
+symbol_operator_chars	< (5,8)
+trait_param_override_values	< 1 1
+treeset_own_collection	< TreeSet(2, 3) TreeSet(2, 3) TreeSet(2, 3)
+try_handler_shape	< bind ex$, val $N$
+tuple_cast_runtime_size	< 3
+union_alias_conversion_receiver	< List((opening,1), (middlegame,1), (endgame,1))
+unit_as_any_print	< ()
+unreducible_application_in_inferred_type	< scalac 3.8.4: rejected, 1 error(s)
+unresolved_nested_value_pattern	< scalac 3.8.4: rejected, 1 error(s)
+unresolved_pattern_reachability	< scalac 3.8.4: rejected, 1 error(s)
+unresolved_pattern_reachability_second	< scalac 3.8.4: rejected, 1 error(s)
+unresolved_selections_interpolated	< scalac 3.8.4: rejected, 1 error(s)
+unresolved_stable_pattern	< scalac 3.8.4: rejected, 1 error(s)
+unresolved_stable_pattern_retained_argument	< scalac 3.8.4: rejected, 1 error(s)
+view_ambiguity_alike_refs_disambiguated	< scalac 3.8.4: rejected, 1 error(s)
+view_conversion_ambiguity_at_qualifier	< scalac 3.8.4: rejected, 1 error(s)
+view_mismatch_select_qualifier_position	< scalac 3.8.4: rejected, 4 error(s)
+view_mismatch_type_apply_qualifier_position	< scalac 3.8.4: rejected, 2 error(s)
+view_open_var_extension_specificity	< box of list of double
+view_search_bottom_builtin_members	< scalac 3.8.4: rejected, 7 error(s)
+wildcard_bound_new_wildcard	< scalac 3.8.4: rejected, 1 error(s)
+wildcard_bound_parent_wildcard	< scalac 3.8.4: rejected, 2 error(s)
+wildcard_bound_path_prefix	< 5

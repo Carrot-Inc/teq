@@ -1,0 +1,14 @@
+# dotty 3.8.4 (7d4833b6) printing, pos; compiler/test/dotty/tools/dotc/printing/PrintingTest.scala:71; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+annot-18064.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+annot-19846b.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+annot-printing.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+dependent-annot-default-args.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+dependent-annot.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+export-param-flags.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+i13306.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+i19019.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+i22349.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+i620.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+infix-operations.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+lambdas.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation

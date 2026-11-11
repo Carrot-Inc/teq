@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+scala3_i17132.scala:14:11: Error while emitting scala3_i17132.scala Recursion limit exceeded. Maybe there is an illegal cyclic reference?

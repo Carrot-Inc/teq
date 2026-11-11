@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+export_case_apply_overload_named.scala:13:18: method mk in object Z3: (s: String): Pt does not have a parameter y

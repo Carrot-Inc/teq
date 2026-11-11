@@ -1,0 +1,4 @@
+tests/interop/js_trait_bracket_access_non_native.scala:7:3: error: @JSBracketAccess is not allowed in non-native JS classes
+    @JSBracketAccess def read(): Int
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1 error found

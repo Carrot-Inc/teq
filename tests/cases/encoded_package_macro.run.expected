@@ -1,0 +1,4 @@
+tests/cases/encoded_package_macro/model.scala:1:9: warning: The package name `a-b` will be encoded on the classpath, and can lead to undefined behaviour.
+  package `a-b`
+          ^^^^^
+C

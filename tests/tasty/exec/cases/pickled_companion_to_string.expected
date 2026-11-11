@@ -1,0 +1,2 @@
+object scala.Int
+object scala.Boolean object scala.Long object scala.Double

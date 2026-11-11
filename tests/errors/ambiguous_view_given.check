@@ -1,0 +1,7 @@
+tests/errors/ambiguous_view_given.scala:7:10: error: Found:    X
+Required: ?{ foo: ? }
+Note that implicit extension methods cannot be applied because they are ambiguous;
+both given instance xa and given instance xb provide an extension method `foo` on X
+  def t = X().foo
+          ^^^
+1 error found

@@ -1,0 +1,5 @@
+scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_package.scala:15:52: Found:    List[Int]
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object a in package q.r and object b in package q.r provide an extension method `pick` on List[Int]

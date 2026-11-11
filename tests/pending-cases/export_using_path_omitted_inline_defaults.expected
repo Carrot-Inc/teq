@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+export_using_path_omitted_inline_defaults.scala:15:22: missing argument for parameter b of method r in object WU: (b: Int, c: Int): Int

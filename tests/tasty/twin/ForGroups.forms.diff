@@ -1,0 +1,30 @@
+3,29c3
+<   def f: List[Int] = (((List.apply{([1], scala.collection.immutable.Seq): java.lang.Object}[Int]([1]*).map{([1], Function1): scala.collection.immutable.List}[(Int, Int)](x => {
+<     val a: Int = x
+<     Tuple2.apply{([2], java.lang.Object, java.lang.Object): Tuple2}[Int, Int](x, a)
+<   }).withFilter{(Function1): scala.collection.WithFilter}((x$1: (Int, Int)) => x$1 match {
+<     case Tuple2[Int, Int](x, a) => a >{(Int): Boolean} 0
+<   })).map{([1], Function1): java.lang.Object}[((Int, Int), Int)]((x$1: (Int, Int)) => x$1 match {
+<     case $1 @ Tuple2[Int, Int](x, a) => {
+<       val b: Int = x
+<       Tuple2.apply{([2], java.lang.Object, java.lang.Object): Tuple2}[(Int, Int), Int]($1, b)
+<     }
+<   }).withFilter{(Function1): scala.collection.WithFilter}((x$1: ((Int, Int), Int)) => x$1 match {
+<     case Tuple2[(Int, Int), Int](Tuple2[Int, Int](x, a), b) => b >{(Int): Boolean} 0
+<   })).map{([1], Function1): java.lang.Object}[(((Int, Int), Int), (Int, Int))]((x$1: ((Int, Int), Int)) => x$1 match {
+<     case $2 @ Tuple2[(Int, Int), Int](Tuple2[Int, Int](x, a), b) => {
+<       <synthetic> val $4: ((Int, Int), Int, Int) = (Tuple2.apply{([2], java.lang.Object, java.lang.Object): Tuple2}[Int, Int](1, 2): (Int, Int) @RuntimeChecked) match {
+<         case $3 @ Tuple2[Int, Int](c, d) => Tuple3.apply{([3], java.lang.Object, java.lang.Object, java.lang.Object): Tuple3}[(Int, Int), Int, Int]($3, c, d)
+<       }
+<       val $3: (Int, Int) = $4._1
+<       val c: Int = $4._2
+<       val d: Int = $4._3
+<       Tuple2.apply{([2], java.lang.Object, java.lang.Object): Tuple2}[((Int, Int), Int), (Int, Int)]($2, $3)
+<     }
+<   }).withFilter{(Function1): scala.collection.WithFilter}((x$1: (((Int, Int), Int), (Int, Int))) => x$1 match {
+<     case Tuple2[((Int, Int), Int), (Int, Int)](Tuple2[(Int, Int), Int](Tuple2[Int, Int](x, a), b), Tuple2[Int, Int](c, d)) => c >{(Int): Boolean} 0
+<   })).map{([1], Function1): java.lang.Object}[Int]((x$1: (((Int, Int), Int), (Int, Int))) => x$1 match {
+<     case Tuple2[((Int, Int), Int), (Int, Int)](Tuple2[(Int, Int), Int](Tuple2[Int, Int](x, a), b), Tuple2[Int, Int](c, d)) => (((x +{(Int): Int} a) +{(Int): Int} b) +{(Int): Int} c) +{(Int): Int} d
+<   })
+---
+>   def f: List[Int] = <elided: List[Int]>

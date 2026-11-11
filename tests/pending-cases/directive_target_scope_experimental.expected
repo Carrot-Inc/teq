@@ -1,0 +1,2 @@
+scala-cli 1.17.1: rejected, 1 error(s)
+directive_target_scope_experimental.scala:1:11: Directives errors: The `//> using target.scope main` directive is experimental.

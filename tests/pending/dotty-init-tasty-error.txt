@@ -1,0 +1,2 @@
+typedef	marks: no error where 1 are marked
+val-or-defdef	marks: no error where 1 are marked

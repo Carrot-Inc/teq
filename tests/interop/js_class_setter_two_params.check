@@ -1,0 +1,4 @@
+tests/interop/js_class_setter_two_params.scala:6:3: error: JS setters must have exactly one argument
+    def x_=(a: Int, b: Int): Unit = ()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1 error found

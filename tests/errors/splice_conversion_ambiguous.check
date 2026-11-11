@@ -1,0 +1,7 @@
+tests/errors/splice_conversion_ambiguous.scala:10:36: error: Found:    X
+Required: Seq[Int] | Array[? <: Int]
+Note that implicit conversions cannot be applied because they are ambiguous;
+both method seq and method arr convert from X to Seq[Int] | Array[? <: Int]
+  @main def run(): Unit = println(f(X()*))
+                                    ^^^
+1 error found

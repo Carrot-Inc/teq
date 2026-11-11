@@ -1,0 +1,13 @@
+tests/errors/predef_unimport_conversion.scala:11:30: error: Found:    Byte
+Required: Byte²
+
+where:    Byte  is a class in package scala
+          Byte² is a class in package java.lang
+
+      val b: java.lang.Byte = (1: Byte)
+                               ^^^^^^^
+tests/errors/predef_unimport_conversion.scala:12:32: error: Found:    (1 : Int)
+Required: Integer
+      val i: java.lang.Integer = 1
+                                 ^
+2 errors found

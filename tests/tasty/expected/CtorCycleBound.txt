@@ -1,0 +1,13 @@
+// tests/tasty/fixtures/CtorCycleBound.tasty (TASTy 28.8, 883 bytes)
+package fix.shapes
+@SourceFile class CtorCycleBound[A <: CtorCycleBound.Bound](val value: A) extends Object {
+}
+@SourceFile object CtorCycleBound extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  trait Bound extends Object {
+  }
+  object Value extends Object, Bound {
+    <synthetic> private def writeReplace(): AnyRef = ...
+  }
+}
+

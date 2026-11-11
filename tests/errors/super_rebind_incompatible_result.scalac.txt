@@ -1,0 +1,30 @@
+-- [E137] Declaration Error: tests/errors/super_rebind_incompatible_result.scala:11:6 
+11 |class Fail extends B with C
+   |      ^
+   |class Fail cannot be defined due to a conflict between its parents when
+   |implementing a super-accessor for f in trait C:
+   |
+   |1. One of its parent (C) contains a call super.f in its body,
+   |   and when a super-call in a trait is written without an explicit parent
+   |   listed in brackets, it is implemented by a generated super-accessor in
+   |   the class that extends this trait based on the linearization order of
+   |   the class.
+   |2. Because B comes before C in the linearization
+   |   order of Fail, and because B overrides f,
+   |   the super-accessor in Fail is implemented as a call to
+   |   super[B].f.
+   |3. However,
+   |   [U](x: U): X (the type of super[B].f in Fail)
+   |   is not a subtype of
+   |   [U](x: U): Y (the type of f in trait C).
+   |   Hence, the super-accessor that needs to be generated in Fail
+   |   is illegal.
+   |
+   |Here are two possible ways to resolve this:
+   |
+   |1. Change the linearization order of Fail such that
+   |   C comes before B.
+   |2. Alternatively, replace super.f in the body of trait C by a
+   |   super-call to a specific parent, e.g. super[A].f
+1 error found
+Compilation failed

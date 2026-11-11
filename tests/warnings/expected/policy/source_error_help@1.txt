@@ -1,0 +1,2 @@
+exit 1
+error bogus is not a valid choice for -source

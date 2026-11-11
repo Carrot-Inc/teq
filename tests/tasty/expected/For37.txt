@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/For37.tasty (TASTy 28.8, 1827 bytes)
+package fix.forh37
+@SourceFile object For37 extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def f: List[Int] = ...
+}

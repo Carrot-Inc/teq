@@ -29,7 +29,17 @@ cd "$(dirname "$0")/.."
 STUB=tests/interop/scalajs-stub
 # The programs of the first loop: those with their expected output, but the stub and the programs of the JVM's
 # platform (files, the process), which have no JavaScript run (tests/run.sh). A program's unit is its path under
-# tests/, `cases/x`, `interop/x` or `split/x`.
+# tests/, `cases/x`, `interop/x` or `split/x`. A program of tests/cases or tests/interop its own suite expects to fail
+# (tests/pending/cases.txt, tests/pending/interop.txt) is not run here: one that does not pass as a single file has
+# no split output to hold. The programs of tests/split are this suite's own, held to tests/pending/split.txt
+# (tests/support/pending.sh; --update and --add as it takes them): a program fails with the first of its checks
+# that fails, and a listed one's failures are neither printed nor counted.
+declare -A base_pending
+for base_suite in cases interop; do
+  while IFS=$'\t' read -r base_name _; do
+    [ -n "$base_name" ] && base_pending[$base_suite/$base_name]=1
+  done < <(cat "tests/pending/$base_suite.txt" 2> /dev/null)
+done
 split_programs() {
   local src name
   for src in tests/cases/*.scala tests/cases/*/ tests/interop/*.scala tests/interop/*/ tests/split/*/; do
@@ -37,6 +47,8 @@ split_programs() {
     name=${src##*/}
     [ "$src" != "$STUB" ] && [ -f "${src%/*}/${name%.scala}.expected" ] || continue
     grep -q -h '^//> using platform jvm' "$src" "$src"/*.scala 2> /dev/null && continue
+    unit_of "$src"
+    [ -z "${base_pending[$unit]:-}" ] || continue
     echo "$src"
   done
 }
@@ -53,6 +65,12 @@ suite_units() {
   printf '%s\n' hello hot names source-path quote-keys one-input exports-order input-order unrelated-storage natives \
     reflect-hot incremental incremental-hot lazy-order unreached-cast watch-file workers parser-threads
 }
+pending_args=()
+plain_args=()
+for arg in "$@"; do
+  case $arg in --update | --add) pending_args+=("$arg") ;; *) plain_args+=("$arg") ;; esac
+done
+set -- "${plain_args[@]}"
 ! pieces_option split "$1" "$2" || shift 2
 [ $# = 0 ] || pieces_usage
 TEQ=${TEQ:-./target/release/teq}
@@ -63,8 +81,18 @@ mkdir -p $so
 built=()
 pass=0
 fail=0
+. tests/support/pending.sh
+pending_begin split "$so" "${pending_args[@]}"
+[ -z "$PIECE" ] || PENDING_PARTIAL=1
+# The program of tests/split whose checks are running, and each such program's first failure.
+own=
+declare -A own_seen own_failed
 ok() { pass=$((pass + 1)); }
 bad() {
+  if [ -n "$own" ]; then
+    [ -n "${own_failed[$own]:-}" ] || own_failed[$own]=$1
+    pending_listed "$own" && return
+  fi
   echo "FAIL $1"
   fail=$((fail + 1))
 }
@@ -84,6 +112,8 @@ for src in $(split_programs); do
   piece_ran "$unit" || continue
   name=$(basename "$src" .scala)
   suite=$(dirname "$src")
+  own=
+  [ "$suite" != tests/split ] || { own=$name; own_seen[$name]=1; }
   expected="$suite/$name.expected"
   # A departure the lean targets keep has their output apart (tests/run.sh).
   [ -f "tests/lean-expected/$name.expected" ] && expected="tests/lean-expected/$name.expected"
@@ -111,8 +141,10 @@ for src in $(split_programs); do
     timeout 20 bash -c '"$0" compiler build "$@" && exec node "${@: -1}/main.mjs"' "$TEQ" "$src" $extra $flags --split "$dir" > "$actual" 2>&1
   fi
   check "$expected" "$actual" "$name"
-  built+=("$dir")
+  # a listed program of tests/split that does not build has no modules to parse below
+  [ -n "$own" ] && [ -n "${own_failed[$own]:-}" ] || built+=("$dir")
 done
+own=
 
 # Under --module-per-file and --hot a module that is not per file takes what it refers to in a
 # per-file module through the runtime, in the place of imports: every program of tests/split runs
@@ -124,6 +156,8 @@ for src in tests/split/*/; do
   [ -f "$expected" ] || continue
   piece_holds "split/$name" || continue
   piece_ran "split/$name" hot || continue
+  own=$name
+  own_seen[$name]=1
   flags=$(grep -h -o '^// teq: .*' "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
   for module in $so/$name/*.mjs; do
     package=$(basename "$module" .mjs)
@@ -134,6 +168,7 @@ for src in tests/split/*/; do
     check "$expected" "$dir.actual" "$name with $package per file under --hot"
   done
 done
+own=
 
 # Every module parses: a name declared twice, among the early errors, fails a module as a whole.
 parsed=ok
@@ -790,6 +825,11 @@ if piece_has parser-threads; then
   rm -rf "$work"
 fi
 
+# The programs of tests/split this run held, against the list of those expected to fail.
+for name in "${!own_seen[@]}"; do
+  if [ -n "${own_failed[$name]:-}" ]; then pending_fail "$name" "${own_failed[$name]}"; else pending_pass "$name"; fi
+done
+pending_end || fail=$((fail + 1))
 echo "$pass passed, $fail failed"
 # Whether the modules parse is a verdict of the whole suite's, apart from the counts.
 if [ $parsed = ok ]; then counts="passed=$((pass - 1)) failed=$fail"; else counts="passed=$pass failed=$((fail - 1))"; fi

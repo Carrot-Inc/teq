@@ -1,0 +1,6 @@
+exit 1
+warning 12:26 Extension method size will never be selected from type Box
+warning 13:26 Extension method get will never be selected from type Box
+warning 15:26 Extension method take will never be selected from type Box
+warning 17:26 Extension method toLong will never be selected from type Int
+warning 7:26 Extension method size will never be selected from type Box

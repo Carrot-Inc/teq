@@ -21,6 +21,15 @@ with_fixture_classes() {
 fail=0
 passed=0
 skipped=0
+# The programs of tests/classpath, tests/classpath/jvm and tests/classpath/js are held to the list of those expected
+# to fail (tests/pending/classpath.txt, tests/support/pending.sh; --update and --add as it takes them): a program is
+# named by its file (`jvm/<name>`, `js/<name>`), fails on the first of its rows that fails, and a listed one's
+# failure is not printed. The other checks of the suite fail it as before.
+. tests/support/pending.sh
+mkdir -p out/classpath
+pending_begin classpath out/classpath "$@"
+# said <test> <lines...>: a failure's lines, unless the test is on the list
+said() { local t=$1; shift; pending_listed "$t" || printf '%s\n' "$@"; }
 # A run's build keeps its diagnostics apart from the program's output, which its expectation holds alone (real
 # Scala recorded the program's stdout): `diagnostics <log> <expectation> <row>` compares the build's streams with
 # the file beside the expectation that ends in .diagnostics in the place of .expected (what scalac 3.8.4 reports
@@ -40,40 +49,35 @@ diagnostics() {
   return 1
 }
 for src in tests/classpath/*.scala; do
+  name=$(basename "$src" .scala)
   jars_of "$src"
   if [ -n "$JARS_MISSING" ]; then
     echo "skip $src: not in the coursier cache:$JARS_MISSING"
     skipped=$((skipped + 1))
+    pending_skip "$name" "not in the coursier cache:$JARS_MISSING"
     continue
   fi
   out=$(timeout 60 "$TEQ" compiler check "$src" --classpath "$JARS_CP" --std=scala-library 2>&1)
   code=$?
+  why=
   if grep -q '^// expect: ' "$src"; then
     if [ $code -ne 1 ]; then
-      echo "FAIL $src: exit code $code"
-      echo "$out"
-      fail=1
-      continue
+      said "$name" "FAIL $src: exit code $code" "$out"
+      why="exit code $code"
+    else
+      while IFS= read -r line; do
+        expected=${line#// expect: }
+        if ! grep -qF -- "$expected" <<< "$out"; then
+          said "$name" "FAIL $src: missing '$expected'" "$out"
+          why=${why:-"missing '$expected'"}
+        fi
+      done < <(grep '^// expect: ' "$src")
     fi
-    ok=1
-    while IFS= read -r line; do
-      expected=${line#// expect: }
-      if ! grep -qF -- "$expected" <<< "$out"; then
-        echo "FAIL $src: missing '$expected'"
-        echo "$out"
-        ok=0
-      fi
-    done < <(grep '^// expect: ' "$src")
-    [ $ok = 1 ] && passed=$((passed + 1)) || fail=1
-  else
-    if [ $code -ne 0 ]; then
-      echo "FAIL $src: exit code $code"
-      echo "$out"
-      fail=1
-      continue
-    fi
-    passed=$((passed + 1))
+  elif [ $code -ne 0 ]; then
+    said "$name" "FAIL $src: exit code $code" "$out"
+    why="exit code $code: $(grep -m1 -o 'error: .*' <<< "$out")"
   fi
+  if [ -z "$why" ]; then passed=$((passed + 1)); pending_pass "$name"; else pending_fail "$name" "$why"; fi
 done
 # tests/classpath/forked/*/: a program of several files checked as above, against the jars of its `// jars:` line,
 # at one, two and sixteen workers (`--threads`), each without an error: what a worker of the body phase keeps past
@@ -113,7 +117,7 @@ for src in tests/classpath/jvm/*.scala tests/classpath/jvm/*/; do
     if ! timeout 120 scala-cli run -S "$scala_version" --jvm system "$src" --server=false -q > "$expected" 2> "out/classpath/$name.ref.err"; then
       echo "REF FAIL $name (see out/classpath/$name.ref.err)"
       rm -f "$expected"
-      fail=1
+      pending_fail "jvm/$name" "no expectation: scala-cli gave none"
       continue
     fi
   fi
@@ -121,6 +125,7 @@ for src in tests/classpath/jvm/*.scala tests/classpath/jvm/*/; do
   if [ -n "$JARS_MISSING" ]; then
     echo "skip $src: not in the coursier cache:$JARS_MISSING"
     skipped=$((skipped + 1))
+    pending_skip "jvm/$name" "not in the coursier cache:$JARS_MISSING"
     continue
   fi
   # The JDK's own warnings on stderr (`sun.misc.Unsafe` under scala-library's lazy vals) are
@@ -130,12 +135,14 @@ for src in tests/classpath/jvm/*.scala tests/classpath/jvm/*/; do
   RUN_DIAGNOSTICS=out/classpath/$name.diagnostics run_jvm 120 "out/classpath/$name.jar" "$jvm_cp" --build "$src" --target jvm --classpath "$jvm_cp" 2>&1 \
     | { grep -v '^WARNING: ' > "out/classpath/$name.actual" || true; }
   if [ "${PIPESTATUS[0]}" = 0 ] && diff -q "$expected" "out/classpath/$name.actual" > /dev/null; then
-    diagnostics "out/classpath/$name.diagnostics" "$expected" "$src (jvm run)" && passed=$((passed + 1)) || fail=1
+    if shown=$(diagnostics "out/classpath/$name.diagnostics" "$expected" "$src (jvm run)"); then
+      passed=$((passed + 1)); pending_pass "jvm/$name"
+    else
+      said "jvm/$name" "$shown"; pending_fail "jvm/$name" "the build's diagnostics"
+    fi
   else
-    echo "FAIL $src (jvm run)"
-    diff "$expected" "out/classpath/$name.actual" | head -10
-    head -10 "out/classpath/$name.diagnostics" 2> /dev/null
-    fail=1
+    said "jvm/$name" "FAIL $src (jvm run)" "$(diff "$expected" "out/classpath/$name.actual" | head -10)" "$(head -10 "out/classpath/$name.diagnostics" 2> /dev/null)"
+    pending_fail "jvm/$name" "$(head -1 "out/classpath/$name.diagnostics" 2> /dev/null | grep . || diff "$expected" "out/classpath/$name.actual" | grep -m1 '^[<>]')"
   fi
 done
 # The entry points of a program as scalac's discovery finds them and `java` launches them by name: built as
@@ -209,7 +216,7 @@ for src in tests/classpath/js/*.scala; do
     if ! timeout 120 scala-cli run -S "$scala_version" --jvm system "$src" --server=false -q > "$expected" 2> "out/classpath/$name.ref.err"; then
       echo "REF FAIL $name (see out/classpath/$name.ref.err)"
       rm -f "$expected"
-      fail=1
+      pending_fail "js/$name" "no expectation: scala-cli gave none"
       continue
     fi
   fi
@@ -217,8 +224,10 @@ for src in tests/classpath/js/*.scala; do
   if [ -n "$JARS_MISSING" ]; then
     echo "skip $src: not in the coursier cache:$JARS_MISSING"
     skipped=$((skipped + 1))
+    pending_skip "js/$name" "not in the coursier cache:$JARS_MISSING"
     continue
   fi
+  why=
   modes=$(grep -h -o '^// std: .*' "$src" | head -1 | sed 's|^// std: ||')
   flags=$(grep -h -o '^// teq: .*' "$src" | head -1 | sed 's|^// teq: ||')
   targets=$(grep -h -o '^// targets: .*' "$src" | head -1 | sed 's|^// targets: ||')
@@ -249,16 +258,18 @@ for src in tests/classpath/js/*.scala; do
       RUN_DIAGNOSTICS=$diag run_js 120 "$output" "$src" --target "$target" $std_flag --classpath "$cp" $flags > "out/classpath/$name.actual" 2>&1
     fi
     if [ $? -eq 0 ] && diff -q "$expected" "out/classpath/$name.actual" > /dev/null; then
-      diagnostics "$diag" "$expected" "$src ($target run${std_flag:+, $std_flag})" && passed=$((passed + 1)) || fail=1
+      if shown=$(diagnostics "$diag" "$expected" "$src ($target run${std_flag:+, $std_flag})"); then
+        passed=$((passed + 1))
+      else
+        said "js/$name" "$shown"; why=${why:-"$target run${std_flag:+, $std_flag}: the build's diagnostics"}
+      fi
     else
-      echo "FAIL $src ($target run${std_flag:+, $std_flag})"
-      diff "$expected" "out/classpath/$name.actual" | head -10
-      head -10 "$diag" 2> /dev/null
-      [ -s "out/classpath/$name.err" ] && grep -v "^WARNING" "out/classpath/$name.err" | head -10
-      fail=1
+      said "js/$name" "FAIL $src ($target run${std_flag:+, $std_flag})" "$(diff "$expected" "out/classpath/$name.actual" | head -10)" "$(head -10 "$diag" 2> /dev/null)" "$([ -s "out/classpath/$name.err" ] && grep -v "^WARNING" "out/classpath/$name.err" | head -10)"
+      why=${why:-$target run${std_flag:+, $std_flag}: $(head -1 "$diag" 2> /dev/null | grep . || diff "$expected" "out/classpath/$name.actual" | grep -m1 '^[<>]')}
     fi
   done
   done
+  if [ -z "$why" ]; then pending_pass "js/$name"; else pending_fail "js/$name" "$why"; fi
 done
 # A TASTy entry the search for reflectively instantiatable classes cannot read is an error, in
 # every build: its contents are not made up and kept in the jar cache.
@@ -483,4 +494,5 @@ else
   skipped=$((skipped + 1))
 fi
 echo "classpath: $passed passed, $skipped skipped"
+pending_end || fail=1
 exit $fail

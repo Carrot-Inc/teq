@@ -1,0 +1,17 @@
+# dotty 3.8.4 (7d4833b6) explicit-nulls/unsafe-common, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:241; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+unsafe-cast-function.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-cast.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-chain.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-extensions.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-implicit.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-implicit2.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-implicit3.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-java-call	fail	-	java source: teq reads none
+unsafe-java-chain	fail	-	java source: teq reads none
+unsafe-java-varargs-src	fail	-	java source: teq reads none
+unsafe-java-varargs.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-overload.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-path.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-select-type-member.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-select.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)

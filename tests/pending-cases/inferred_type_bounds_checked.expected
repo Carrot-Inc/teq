@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+inferred_type_bounds_checked.scala:12:15: Type argument IS does not conform to upper bound BS[BS[?, IS]#T, IS] in inferred type BS[?, IS]

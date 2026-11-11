@@ -1,0 +1,5 @@
+scalac 3.8.4: rejected, 2 error(s)
+inferred_type_apply_mismatch_point.scala:9:20: Found:    Option[Nothing]
+  Required: String
+inferred_type_apply_mismatch_point.scala:10:20: Found:    List[Nothing]
+  Required: String

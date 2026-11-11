@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+alias_rhs_bound_through_class_param_bound.scala:8:14: Type argument X does not conform to upper bound C[X]

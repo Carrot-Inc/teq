@@ -1,0 +1,5 @@
+exit 0
+warning 10:48 Extension method size will never be selected from type Box
+warning 11:57 Extension method size will never be selected from type Box
+warning 8:52 Extension method size will never be selected from type Box
+warning 9:45 Extension method size will never be selected from type Box

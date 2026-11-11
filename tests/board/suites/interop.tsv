@@ -1,0 +1,53 @@
+# test	verdict	the other ways	the first line of the difference
+abstract_var_js_object	pass	-	
+callbacks	pass	-	
+capture_template_names	pass	-	
+dom_std_shapes	pass	-	
+dynamic	pass	-	
+eta_defaults	pass	-	
+exit	pass	-	
+export statement of exports	pass	-	
+exports	pass	-	
+exports_toplevel	pass	-	
+facade_parenthesized_arguments	fail	-	< c.txt
+first line of imports	pass	-	
+first line of jsvalues	pass	-	
+import statements of jsvalues	pass	-	
+import statements of multi	pass	-	
+imports	pass	-	
+imports with the default output path	pass	-	
+intrinsic_objects	pass	-	
+java_stand_in	pass	-	
+js_class_accessor_halves	fail	-	< false
+js_class_accessor_names	fail	-	< 1
+js_class_members	fail	-	< 3
+js_class_members_local	fail	-	< 5
+js_class_native_superclass	fail	-	< 0
+js_class_private_member	fail	-	< 16
+js_class_private_names	fail	-	< init
+js_class_setter_call	pass	-	
+js_class_setter_two_params	fail	-	< tests/interop/js_class_setter_two_params.scala:6:3: error: JS setters must have exactly one argument
+js_class_varargs_call	pass	-	
+js_closure_unit_result	fail	-	< undefined
+js_exception	pass	-	
+js_function_lambdas	pass	-	
+js_native_secondary_ctor	fail	-	< tests/interop/js_native_secondary_ctor.scala:11:26: error: A secondary constructor of a native JS class may only call the primary constructor
+js_trait_bracket_access_non_native	fail	-	< tests/interop/js_trait_bracket_access_non_native.scala:7:3: error: @JSBracketAccess is not allowed in non-native JS classes
+js_trait_setter_call	fail	-	< 7
+js_trait_setter_on_class	pass	-	
+jsobjects	pass	-	
+jsvalues	pass	-	
+jsvalues with the default output path	pass	-	
+locale	pass	-	
+multi	pass	-	
+native	pass	-	
+native_ctor_params	pass	-	
+number_classes	pass	-	
+overloads	pass	-	
+overloads_rejected	pass	-	
+prelude	pass	-	
+summoner_ctor	pass	-	
+template_precedence	pass	-	
+template_precedence_early	fail	-	< 1
+trycatch	pass	-	
+unsupported_platform	pass	-	

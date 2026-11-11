@@ -1,0 +1,6 @@
+tests/classpath/jvm/jar_inline_extension_forwarders.scala:15:22: warning: Extension method g should not have a default argument for its receiver.
+    export InlExports.{g, h, f}
+                       ^
+tests/classpath/jvm/jar_inline_extension_forwarders.scala:15:25: warning: Extension method h should not have a default argument for its receiver.
+    export InlExports.{g, h, f}
+                          ^

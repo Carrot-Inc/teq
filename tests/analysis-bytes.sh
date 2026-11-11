@@ -74,6 +74,8 @@ failed_answer() {
 for d in tests/modules/*/ tests/analysis/cases/*/; do
   c=$(basename "$d")
   grep -q "^$c build " tests/modules/deferred.txt 2> /dev/null && continue
+  # a case tests/modules.sh expects to fail (tests/pending/modules.txt) has no build to hold here
+  grep -q "^$c\([[:space:]]\|\$\)" tests/pending/modules.txt 2> /dev/null && continue
   modules=()
   for m in a b c main; do
     [ -d "$d$m" ] && modules+=("$m")

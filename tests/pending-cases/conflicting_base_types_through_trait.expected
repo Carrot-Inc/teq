@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+conflicting_base_types_through_trait.scala:12:6: class Impl cannot be instantiated since it has conflicting base types Box[Int] and Box[String]

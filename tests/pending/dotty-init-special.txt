@@ -1,0 +1,1 @@
+i12128	option: -Wsafe-init with -Werror (teq has no flag for it)

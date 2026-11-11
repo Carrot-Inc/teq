@@ -1,0 +1,10 @@
+# scalac 3.8.4's own whole and split builds of this case write these files differently: written by
+# tests/modules-scalac-split.sh, never by hand; tests/modules.sh requires teq's two builds to differ
+# in the rows they stand for, and in these files alone.
+sources c47ed51974b99e38
+jvm b/app/TestAssertions$.class
+jvm b/app/TestAssertions.class
+jvm b/app/TestAssertions.tasty
+js b/app/TestAssertions$.sjsir
+js b/app/TestAssertions.sjsir
+js b/app/TestAssertions.tasty

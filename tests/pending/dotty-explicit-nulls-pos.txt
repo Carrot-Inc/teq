@@ -1,0 +1,77 @@
+AnyValOrNull.scala	option: -Yexplicit-nulls (teq has no flag for it)
+after-termination.scala	option: -Yexplicit-nulls (teq has no flag for it)
+annotaions-args	java source: teq reads none
+anyref-equal-nulls.scala	option: -Yexplicit-nulls (teq has no flag for it)
+array.scala	option: -Yexplicit-nulls (teq has no flag for it)
+dont-widen-src	java source: teq reads none
+enums.scala	option: -Yexplicit-nulls (teq has no flag for it)
+eq-ne.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-basic.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-condition.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-flexible.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-inline.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-match.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-predef-eq.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-singleton.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-stable-path.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-tref-caching.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-val-def.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-while-loop.scala	option: -Yexplicit-nulls (teq has no flag for it)
+force-track-var-fields.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i10001.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i11694.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i13040	java source: teq reads none
+i13197.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i13486.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i13608.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i14682.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i14947.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i16236.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i19202.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i19808.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i21392.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i23933.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i23936.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i24440.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i24599.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i25228	java source: teq reads none
+i8981.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop-applied-types	java source: teq reads none
+interop-constructor-src	java source: teq reads none
+interop-constructor.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop-enum-src-separate	java source: teq reads none
+interop-java-varargs.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop-nn-src	java source: teq reads none
+interop-ortype-src	java source: teq reads none
+interop-poly-src	java source: teq reads none
+interop-sam-src	java source: teq reads none
+interop-static-src	java source: teq reads none
+interop-tostring.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop-valuetypes.scala	option: -Yexplicit-nulls (teq has no flag for it)
+java-collectors.scala	option: -Yexplicit-nulls (teq has no flag for it)
+match-flow-typing.scala	option: -Yexplicit-nulls (teq has no flag for it)
+match-pat.scala	option: -Yexplicit-nulls (teq has no flag for it)
+match-with-applied-types.scala.scala	option: -Yexplicit-nulls (teq has no flag for it)
+matchable.scala	option: -Yexplicit-nulls (teq has no flag for it)
+nn.scala	option: -Yexplicit-nulls (teq has no flag for it)
+nn2.scala	option: -Yexplicit-nulls (teq has no flag for it)
+notNull.scala	option: -Yexplicit-nulls (teq has no flag for it)
+notnull	java source: teq reads none
+notnull-separate	java source: teq reads none
+nullable-union.scala	option: -Yexplicit-nulls (teq has no flag for it)
+option-transform.scala	option: -Yexplicit-nulls (teq has no flag for it)
+override-java	java source: teq reads none
+override-java-object-arg-src	java source: teq reads none
+override-java-object-arg.scala	option: -Yexplicit-nulls (teq has no flag for it)
+override-java-varargs	java source: teq reads none
+override-type-params.scala	option: -Yexplicit-nulls (teq has no flag for it)
+sam-parameter-javadefined	java source: teq reads none
+sam-type.scala	option: -Yexplicit-nulls (teq has no flag for it)
+test-not-null.scala	option: -Yexplicit-nulls (teq has no flag for it)
+union-contains-contextual-function.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unpickler.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-block.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-chain.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-match-null-pat.scala	option: -Yexplicit-nulls (teq has no flag for it)
+widen-dont.scala	option: -Yexplicit-nulls (teq has no flag for it)
+widen-nullable-union.scala	option: -Yexplicit-nulls (teq has no flag for it)

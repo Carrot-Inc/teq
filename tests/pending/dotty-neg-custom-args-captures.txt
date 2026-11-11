@@ -1,0 +1,348 @@
+apply-fresh.scala	marks: error on an unmarked line apply-fresh.scala:6: expected '=', found identifier
+apply-rule.scala	marks: 8 errors where 6 are marked: apply-rule.scala:7:17: expected ',' or ']', found identifier
+assumesafe-emptypkg.scala	marks: no error where 1 are marked
+bad-uses-2.scala	marks: 6 errors where 7 are marked
+bad-uses.scala	marks: 2 errors where 1 are marked: bad-uses.scala:3:14: expected an identifier, found '@'
+boundary-homebrew.scala	marks: 6 errors where 1 are marked: boundary-homebrew.scala:6:41: `val` or `var` expected
+boundary.scala	marks: 1 errors where 3 are marked
+boundschecks.scala	marks: 4 errors where 7 are marked
+boundschecks2.scala	marks: 4 errors where 3 are marked: boundschecks2.scala:9:18: expected ',' or ']', found identifier
+boundschecks3.scala	marks: 5 errors where 4 are marked: boundschecks3.scala:9:18: expected ',' or ']', found identifier
+box-adapt-boxing.scala	marks: 37 errors where 1 are marked: box-adapt-boxing.scala:3:17: expected ',' or ')', found identifier
+box-adapt-cases.scala	marks: 15 errors where 3 are marked: box-adapt-cases.scala:5:26: expected an identifier, found '['
+box-adapt-contra.scala	marks: 43 errors where 3 are marked: box-adapt-contra.scala:8:17: expected ',' or ')', found identifier
+box-adapt-cov.scala	marks: 17 errors where 2 are marked: box-adapt-cov.scala:3:18: expected ',' or ')', found identifier
+box-adapt-cs.scala	marks: 26 errors where 2 are marked: box-adapt-cs.scala:3:18: expected ',' or ')', found identifier
+box-adapt-depfun.scala	marks: 12 errors where 1 are marked: box-adapt-depfun.scala:3:18: expected ',' or ')', found identifier
+box-adapt-typefun.scala	marks: 10 errors where 1 are marked: box-adapt-typefun.scala:3:18: expected ',' or ')', found identifier
+box-unsoundness-global.scala	marks: 9 errors where 1 are marked: box-unsoundness-global.scala:3:14: expected '=', found identifier
+box-unsoundness.scala	marks: 9 errors where 1 are marked: box-unsoundness.scala:3:19: expected ',' or ')', found identifier
+boxed-consume.scala	marks: 19 errors where 2 are marked: boxed-consume.scala:4:16: expected '=', found identifier
+branding.scala	marks: 10 errors where 2 are marked: branding.scala:14:18: expected ',' or ']', found identifier
+branding2.scala	marks: 9 errors where 2 are marked: branding2.scala:14:30: expected a declaration, found identifier
+byname-closure.scala	marks: 2 errors where 1 are marked: byname-closure.scala:4:20: expected ',' or ')', found '{'
+byname.scala	marks: 10 errors where 3 are marked: byname.scala:8:23: expected a declaration, found identifier
+cap-paramlists6.scala	marks: 7 errors where 2 are marked: cap-paramlists6.scala:6:13: expected '=', found identifier
+caps-reach.scala	marks: 19 errors where 5 are marked: caps-reach.scala:5:16: expected '=', found identifier
+capset-bound.scala	marks: 19 errors where 3 are marked: capset-bound.scala:6:23: expected ',' or ')', found identifier
+capset-bound2.scala	marks: 4 errors where 2 are marked: capset-bound2.scala:5:8: expected ',' or ']', found identifier
+capset-members-nohat.scala	marks: 29 errors where 5 are marked: capset-members-nohat.scala:4:17: expected ',' or ']', found identifier
+capset-members.scala	marks: 29 errors where 5 are marked: capset-members.scala:4:17: expected ',' or ']', found identifier
+capset-members2.scala	marks: 4 errors where 3 are marked: capset-members2.scala:5:9: expected end of statement, found identifier
+capset-members3.scala	marks: 3 errors where 1 are marked: capset-members3.scala:5:9: expected end of statement, found identifier
+capset-members4.scala	marks: 14 errors where 1 are marked: capset-members4.scala:5:13: expected '=', found identifier
+capset-members5.scala	marks: 57 errors where 6 are marked: capset-members5.scala:7:13: expected '=', found identifier
+capset-variance.scala	marks: 14 errors where 4 are marked: capset-variance.scala:4:12: expected ',' or ']', found identifier
+capt-capability.scala	marks: 2 errors where 1 are marked: capt-capability.scala:7:56: type mismatch: found Capability, required SharedCapability
+capt-depfun.scala	marks: 4 errors where 1 are marked: capt-depfun.scala:11:18: expected a declaration, found identifier
+capt-depfun2.scala	marks: no error where 1 are marked
+capt-env-global.scala	marks: 2 errors where 1 are marked: capt-env-global.scala:2:13: expected end of statement, found identifier
+capt-env.scala	marks: 2 errors where 1 are marked: capt-env.scala:2:13: expected end of statement, found identifier
+capt-test.scala	marks: 2 errors where 1 are marked: capt-test.scala:8:48: expected ',' or ')', found identifier
+capt-wf-typer.scala	marks: 3 errors where 2 are marked: capt-wf-typer.scala:3:13: expected end of statement, found identifier
+capt-wf.scala	marks: 25 errors where 6 are marked: capt-wf.scala:4:13: expected end of statement, found identifier
+capt1.scala	marks: 8 errors where 10 are marked
+capt2.scala	marks: 8 errors where 3 are marked: capt2.scala:3:13: expected end of statement, found identifier
+capture-parameters.scala	marks: 15 errors where 1 are marked: capture-parameters.scala:5:11: expected ',' or ']', found identifier
+capture-poly.scala	marks: 26 errors where 3 are marked: capture-poly.scala:6:9: expected end of statement, found identifier
+capture-vars-subtyping2.scala	marks: 70 errors where 3 are marked: capture-vars-subtyping2.scala:7:17: expected ',' or ')', found identifier
+caseclass	marks: 11 errors where 2 are marked: Test_2.scala:5:20: expected a declaration, found identifier
+cc-annot-value-classes.scala	marks: 8 errors where 2 are marked: cc-annot-value-classes.scala:5:15: expected ',' or ']', found identifier
+cc-annot-value-classes2.scala	marks: 13 errors where 2 are marked: cc-annot-value-classes2.scala:4:18: expected ':', found identifier
+cc-depfun.scala	marks: 8 errors where 2 are marked: cc-depfun.scala:4:18: expected ',' or ')', found identifier
+cc-existential-conformance.scala	marks: 16 errors where 4 are marked: cc-existential-conformance.scala:9:28: expected a declaration, found identifier
+cc-glb.scala	marks: 7 errors where 1 are marked: cc-glb.scala:5:21: expected ',' or ')', found identifier
+cc-poly-1.scala	marks: 5 errors where 2 are marked: cc-poly-1.scala:9:10: expected ',' or ']', found identifier
+cc-poly-2-global.scala	marks: 9 errors where 2 are marked: cc-poly-2-global.scala:9:10: expected ',' or ']', found identifier
+cc-poly-2.scala	marks: 9 errors where 2 are marked: cc-poly-2.scala:9:10: expected ',' or ']', found identifier
+cc-poly-source.scala	marks: 25 errors where 1 are marked: cc-poly-source.scala:12:17: expected ',' or ']', found identifier
+cc-selftype-unsound.scala	marks: 5 errors where 1 are marked: cc-selftype-unsound.scala:6:20: expected ',' or ')', found identifier
+cc-subst-param-exact.scala	marks: 29 errors where 2 are marked: cc-subst-param-exact.scala:7:24: expected ',' or ')', found identifier
+cc-this-shared.scala	marks: 7 errors where 3 are marked: cc-this-shared.scala:22:25: expected ',' or ')', found identifier
+cc-this.scala	marks: 7 errors where 3 are marked: cc-this.scala:22:25: expected ',' or ')', found identifier
+cc-this2	marks: 3 errors where 2 are marked: D_2.scala:3:10: expected '=>', found identifier
+cc-this3.scala	marks: 6 errors where 2 are marked: cc-this3.scala:10:10: expected '=>', found identifier
+cc-this4.scala	marks: no error where 1 are marked
+cc-this5.scala	marks: no error where 3 are marked
+cc1.scala	marks: no error where 2 are marked
+check-dummy-symbol.scala	marks: 5 errors where 2 are marked: check-dummy-symbol.scala:4:9: expected end of statement, found identifier
+check-inferred.scala	marks: 22 errors where 10 are marked: check-inferred.scala:9:10: expected end of statement, found 'def'
+class-caps.scala	marks: 12 errors where 3 are marked: class-caps.scala:13:13: expected '=>', found identifier
+class-constr-global.scala	marks: 31 errors where 4 are marked: class-constr-global.scala:12:19: expected a declaration, found identifier
+class-constr.scala	marks: 31 errors where 4 are marked: class-constr.scala:9:19: expected a declaration, found identifier
+class-contra.scala	marks: 8 errors where 1 are marked: class-contra.scala:3:13: expected end of statement, found identifier
+class-level-attack.scala	marks: 11 errors where 1 are marked: class-level-attack.scala:9:10: expected end of statement, found 'def'
+class-uses.scala	marks: 10 errors where 5 are marked: class-uses.scala:10:37: expected 'extends' or a template body, found identifier
+classes.scala	marks: 7 errors where 2 are marked: classes.scala:2:13: expected end of statement, found identifier
+classified-inheritance.scala	marks: no error where 2 are marked
+classified-inheritance2.scala	marks: 5 errors where 1 are marked: classified-inheritance2.scala:6:10: expected end of statement, found 'def'
+classified-tp.scala	marks: 10 errors where 3 are marked: classified-tp.scala:9:18: expected a declaration, found identifier
+classified-wf.scala	marks: 4 errors where 1 are marked: classified-wf.scala:7:20: expected a declaration, found identifier
+classifiers-1.scala	marks: 1 errors where 2 are marked
+classifiers-secondclass.scala	marks: 22 errors where 3 are marked: classifiers-secondclass.scala:16:5: 'erased' is not part of the supported Scala subset
+closure-result-typing-global.scala	marks: 2 errors where 1 are marked: closure-result-typing-global.scala:1:14: expected '=', found identifier
+closure-result-typing.scala	marks: 2 errors where 1 are marked: closure-result-typing.scala:1:19: expected ',' or ')', found identifier
+console-use-2	marks: 2 errors where 4 are marked
+constructor-uses.scala	marks: 13 errors where 4 are marked: constructor-uses.scala:6:14: expected '=', found identifier
+consume-in-constructor.scala	marks: 13 errors where 3 are marked: consume-in-constructor.scala:5:18: expected ',' or ')', found identifier
+consume-overrides.scala	marks: 9 errors where 3 are marked: consume-overrides.scala:4:19: expected ':', found identifier
+consume-tvar-bound.scala	marks: 19 errors where 4 are marked: consume-tvar-bound.scala:7:15: expected ',' or ']', found identifier
+contracap.scala	marks: 13 errors where 1 are marked: contracap.scala:7:10: expected end of statement, found 'def'
+curried-closures.scala	marks: 27 errors where 1 are marked: curried-closures.scala:11:44: expected a declaration, found identifier
+dcs-tvar.scala	marks: 6 errors where 2 are marked: dcs-tvar.scala:3:13: expected ',' or ']', found identifier
+delayedRunops.scala	marks: 24 errors where 4 are marked: delayedRunops.scala:3:15: expected ',' or ']', found identifier
+depfun-reach.scala	marks: 51 errors where 2 are marked: depfun-reach.scala:10:20: expected ',' or ')', found identifier
+effect-swaps-explicit.scala	marks: 17 errors where 3 are marked: effect-swaps-explicit.scala:10:47: expected ',' or ')', found identifier
+effect-swaps.scala	marks: 9 errors where 3 are marked: effect-swaps.scala:22:18: expected '=>', found identifier
+emptyref-in-self.scala	marks: 4 errors where 1 are marked: emptyref-in-self.scala:1:50: expected ',' or ')', found identifier
+erased-methods2.scala	marks: 17 errors where 2 are marked: erased-methods2.scala:12:48: expected ',' or ')', found identifier
+eta.scala	marks: 12 errors where 2 are marked: eta.scala:2:21: expected ',' or ')', found identifier
+exception-definitions.scala	marks: 6 errors where 3 are marked: exception-definitions.scala:3:12: expected '=>', found identifier
+exception-leak.scala	marks: 5 errors where 2 are marked: exception-leak.scala:4:10: expected '=>', found identifier
+exceptions.scala	marks: error on an unmarked line exceptions.scala:7: throws takes 1 type argument(s), 2 given
+existential-mapping.scala	marks: 60 errors where 12 are marked: existential-mapping.scala:5:20: expected ',' or ')', found identifier
+explain-under-approx.scala	marks: 5 errors where 2 are marked: explain-under-approx.scala:5:43: expected ',' or ']', found identifier
+extending-cap-classes.scala	marks: 1 errors where 4 are marked
+filevar-expanded-global.scala	marks: 9 errors where 1 are marked: filevar-expanded-global.scala:9:24: expected ',' or ')', found identifier
+filevar-expanded.scala	marks: 9 errors where 1 are marked: filevar-expanded.scala:9:24: expected ',' or ')', found identifier
+filevar-multi-ios.scala	marks: 15 errors where 3 are marked: filevar-multi-ios.scala:12:21: expected a declaration, found identifier
+filevar.scala	marks: 5 errors where 1 are marked: filevar.scala:8:17: expected '=', found identifier
+freeze-boxes.scala	marks: 5 errors where 4 are marked: freeze-boxes.scala:9:10: expected end of statement, found 'def'
+freeze-double-flip.scala	marks: 12 errors where 1 are marked: freeze-double-flip.scala:9:10: expected end of statement, found 'def'
+freeze.scala	marks: 4 errors where 1 are marked: freeze.scala:4:28: expected '=', found identifier
+fresh-counter.scala	marks: 10 errors where 2 are marked: fresh-counter.scala:7:10: expected end of statement, found 'def'
+fresh-fields.scala	marks: 6 errors where 5 are marked: fresh-fields.scala:2:11: expected '=', found identifier
+fresh-outside-result.scala	marks: 17 errors where 5 are marked: fresh-outside-result.scala:6:17: expected a declaration, found identifier
+frozen-result.scala	marks: 11 errors where 2 are marked: frozen-result.scala:3:18: expected ':', found identifier
+gears-problem-1.scala	marks: 8 errors where 1 are marked: gears-problem-1.scala:10:46: expected ',' or ']', found identifier
+gears-problem.scala	marks: 12 errors where 2 are marked: gears-problem.scala:10:46: expected ',' or ']', found identifier
+global-capability.scala	marks: 3 errors where 2 are marked: global-capability.scala:4:39: expected '=', found identifier
+global-mutables.scala	marks: 5 errors where 4 are marked: global-mutables.scala:7:10: expected end of statement, found 'def'
+heal-tparam-cs.scala	marks: 33 errors where 5 are marked: heal-tparam-cs.scala:6:29: expected ',' or ')', found identifier
+hk-param.scala	marks: 9 errors where 3 are marked: hk-param.scala:2:59: expected ',' or ']', found identifier
+ho-ref-global.scala	marks: 13 errors where 1 are marked: ho-ref-global.scala:3:14: expected '=', found identifier
+ho-ref.scala	marks: 13 errors where 1 are marked: ho-ref.scala:3:19: expected ',' or ')', found identifier
+i15049.scala	marks: 4 errors where 2 are marked: i15049.scala:4:31: expected '=', found identifier
+i15116.scala	marks: 5 errors where 4 are marked: i15116.scala:3:17: expected ',' or ')', found identifier
+i15749.scala	marks: error on an unmarked line i15749.scala:6: expected end of statement, found identifier
+i15772.scala	marks: 32 errors where 6 are marked: i15772.scala:5:18: expected ',' or ')', found identifier
+i15921.scala	marks: error on an unmarked line i15921.scala:4: expected ',' or ')', found identifier
+i15922.scala	marks: 7 errors where 2 are marked: i15922.scala:4:25: expected an identifier, found '['
+i15923.scala	marks: 15 errors where 1 are marked: i15923.scala:2:24: expected an identifier, found '['
+i15923a.scala	marks: error on an unmarked line i15923a.scala:5: expected ',' or ')', found identifier
+i15923b.scala	marks: 2 errors where 1 are marked: i15923b.scala:5:30: expected ',' or ')', found identifier
+i16114.scala	marks: 26 errors where 4 are marked: i16114.scala:4:17: expected '=', found identifier
+i16226.scala	marks: 14 errors where 2 are marked: i16226.scala:4:18: expected a declaration, found identifier
+i16725.scala	marks: 3 errors where 1 are marked: i16725.scala:6:29: expected an identifier, found '['
+i18518.scala	marks: 6 errors where 3 are marked: i18518.scala:2:13: expected an identifier, found '['
+i19330-alt.scala	marks: 6 errors where 1 are marked: i19330-alt.scala:4:30: expected ',' or ')', found identifier
+i19330-alt2.scala	marks: 4 errors where 3 are marked: i19330-alt2.scala:6:30: expected ',' or ')', found identifier
+i19330.scala	marks: 7 errors where 4 are marked: i19330.scala:6:30: expected ',' or ')', found identifier
+i19470.scala	marks: 5 errors where 1 are marked: i19470.scala:5:14: expected ',' or ')', found identifier
+i20169.scala	marks: 4 errors where 1 are marked: i20169.scala:4:38: type -> not found
+i20481.scala	marks: error on an unmarked line i20481.scala:5: expected '=', found identifier
+i20503.scala	marks: 6 errors where 2 are marked: i20503.scala:11:13: expected ',' or ']', found identifier
+i21313.scala	marks: 13 errors where 2 are marked: i21313.scala:4:19: expected ',' or ']', found identifier
+i21347.scala	marks: 5 errors where 2 are marked: i21347.scala:3:13: expected ',' or ']', found identifier
+i21401.scala	marks: 16 errors where 3 are marked: i21401.scala:5:22: expected ',' or ')', found identifier
+i21442.scala	marks: error on an unmarked line i21442.scala:9: expected ',' or ']', found identifier
+i21614.scala	marks: 7 errors where 2 are marked: i21614.scala:9:21: expected ',' or ')', found identifier
+i21620-global.scala	marks: 7 errors where 2 are marked: i21620-global.scala:2:9: expected '=', found identifier
+i21620.scala	marks: 8 errors where 2 are marked: i21620.scala:2:14: expected ',' or ')', found identifier
+i21868b.scala	marks: 41 errors where 4 are marked: i21868b.scala:10:9: expected end of statement, found identifier
+i21920.scala	marks: 10 errors where 1 are marked: i21920.scala:4:20: expected '=>', found identifier
+i22005.scala	marks: 10 errors where 1 are marked: i22005.scala:6:18: expected ',' or ')', found identifier
+i22808.scala	marks: 5 errors where 3 are marked: i22808.scala:3:21: expected ',' or ')', found identifier
+i23207.scala	marks: 8 errors where 4 are marked: i23207.scala:9:20: expected ',' or ')', found identifier
+i23223.scala	marks: 1 errors where 2 are marked
+i23303.scala	marks: 7 errors where 2 are marked: i23303.scala:13:17: expected ',' or ']', found identifier
+i23389-1.scala	marks: 6 errors where 2 are marked: i23389-1.scala:5:10: expected end of statement, found 'def'
+i23389-2.scala	marks: 8 errors where 6 are marked: i23389-2.scala:5:3: expected a definition, found identifier
+i23431.scala	marks: error on an unmarked line i23431.scala:3: expected ',' or ')', found identifier
+i23582.scala	marks: 14 errors where 1 are marked: i23582.scala:10:49: expected a declaration, found identifier
+i23726.scala	marks: 46 errors where 3 are marked: i23726.scala:5:10: expected end of statement, found 'def'
+i23746.scala	marks: 14 errors where 2 are marked: i23746.scala:4:19: expected ',' or ']', found identifier
+i23820.scala	marks: 16 errors where 3 are marked: i23820.scala:6:24: expected ',' or ')', found identifier
+i23823.scala	marks: 8 errors where 2 are marked: i23823.scala:4:26: expected ',' or ']', found identifier
+i23850.scala	marks: 6 errors where 1 are marked: i23850.scala:10:27: type -> not found
+i24309-region-orig.scala	marks: 14 errors where 2 are marked: i24309-region-orig.scala:7:12: expected '=>', found identifier
+i24309a.scala	marks: 10 errors where 1 are marked: i24309a.scala:2:13: expected ',' or ']', found identifier
+i24310.scala	marks: 20 errors where 1 are marked: i24310.scala:6:10: expected end of statement, found 'def'
+i24335.scala	marks: error on an unmarked line i24335.scala:17: type ^ not found
+i24373.scala	marks: 26 errors where 3 are marked: i24373.scala:2:11: expected end of statement, found 'def'
+i24373a.scala	marks: 13 errors where 6 are marked: i24373a.scala:6:21: expected ':', found identifier
+i24667.scala	marks: 7 errors where 2 are marked: i24667.scala:3:18: expected ',' or ')', found identifier
+i24676.scala	marks: 39 errors where 6 are marked: i24676.scala:4:22: expected ',' or ')', found identifier
+i25025.scala	marks: 27 errors where 7 are marked: i25025.scala:3:10: expected ',' or ']', found identifier
+i25028.scala	marks: 3 errors where 2 are marked: i25028.scala:1:30: a by-name type can only be the type of a parameter
+i25251.scala	marks: error on an unmarked line i25251.scala:8: expected end of statement, found 'def'
+i25320a.scala	marks: error on an unmarked line i25320a.scala:4: expected ',' or ']', found identifier
+i25320b.scala	marks: error on an unmarked line i25320b.scala:4: expected ',' or ']', found identifier
+i25390.scala	marks: no error where 1 are marked
+i25459.scala	marks: error on an unmarked line i25459.scala:7: type -> not found
+i25605.scala	marks: 8 errors where 2 are marked: i25605.scala:2:26: expected an identifier, found '['
+i25622.scala	marks: 5 errors where 1 are marked: i25622.scala:3:16: expected ',' or ')', found identifier
+i25759.scala	marks: 1 errors where 4 are marked
+implied-capability.scala	marks: no error where 2 are marked
+implied-capsets.scala	marks: 11 errors where 5 are marked: implied-capsets.scala:13:12: expected '=', found identifier
+implied-ro.scala	marks: 7 errors where 1 are marked: implied-ro.scala:9:13: expected a declaration, found identifier
+impurefuns.scala	marks: error on an unmarked line impurefuns.scala:1: expected ',' or ')', found identifier
+indirect-avoid.scala	marks: 38 errors where 4 are marked: indirect-avoid.scala:6:10: expected end of statement, found 'def'
+inner-classes.scala	marks: 8 errors where 1 are marked: inner-classes.scala:8:26: expected a declaration, found identifier
+language-imports.scala	marks: no error where 2 are marked
+lazyListState.scala	marks: 5 errors where 1 are marked: lazyListState.scala:5:32: expected '=', found identifier
+lazylist-global.scala	marks: 17 errors where 7 are marked: lazylist-global.scala:4:20: expected '=>', found identifier
+lazylist.scala	marks: 17 errors where 6 are marked: lazylist.scala:4:20: expected '=>', found identifier
+lazylists-exceptions.scala	marks: 18 errors where 1 are marked: lazylists-exceptions.scala:4:20: expected '=>', found identifier
+lazylists1.scala	marks: 24 errors where 1 are marked: lazylists1.scala:2:14: expected end of statement, found identifier
+lazylists2.scala	marks: 40 errors where 7 are marked: lazylists2.scala:2:14: expected end of statement, found identifier
+lazyref-global.scala	marks: 16 errors where 7 are marked: lazyref-global.scala:3:14: expected end of statement, found identifier
+lazyref.scala	marks: 16 errors where 7 are marked: lazyref.scala:3:14: expected end of statement, found identifier
+lazyvals-sep.scala	marks: 45 errors where 9 are marked: lazyvals-sep.scala:8:10: expected end of statement, found 'def'
+lazyvals.scala	marks: 9 errors where 3 are marked: lazyvals.scala:8:23: expected '=', found identifier
+lazyvals2.scala	option: -Yimports:scala,scala.Predef (teq has no flag for it)
+lazyvals3.scala	marks: 21 errors where 2 are marked: lazyvals3.scala:5:13: expected end of statement, found identifier
+lazyvals4.scala	marks: 21 errors where 4 are marked: lazyvals4.scala:10:33: expected ',' or ')', found identifier
+lazyvals5.scala	option: -Yimports:scala,scala.Predef (teq has no flag for it)
+lazyvals6.scala	marks: 44 errors where 11 are marked: lazyvals6.scala:6:16: expected a declaration, found identifier
+leak-problem-2.scala	marks: 8 errors where 1 are marked: leak-problem-2.scala:5:14: expected ',' or ']', found identifier
+leak-problem-unboxed.scala	marks: 21 errors where 6 are marked: leak-problem-unboxed.scala:7:28: expected ',' or ')', found identifier
+leak-problem.scala	marks: 27 errors where 5 are marked: leak-problem.scala:8:28: expected ',' or ')', found identifier
+leaked-curried-shared.scala	marks: 9 errors where 2 are marked: leaked-curried-shared.scala:7:20: expected '=', found '('
+leaked-curried.scala	marks: 9 errors where 2 are marked: leaked-curried.scala:4:27: expected ',' or ')', found identifier
+leaking-iterators.scala	marks: 22 errors where 1 are marked: leaking-iterators.scala:6:30: expected a declaration, found 'this'
+leaky.scala	marks: 18 errors where 3 are marked: leaky.scala:10:43: refinement cannot have a body
+levels.scala	marks: 8 errors where 2 are marked: levels.scala:3:19: expected ',' or ')', found identifier
+lexical-control.scala	marks: 8 errors where 2 are marked: lexical-control.scala:5:10: expected end of statement, found identifier
+linear-buffer-2.scala	marks: 32 errors where 5 are marked: linear-buffer-2.scala:5:11: expected end of statement, found 'def'
+linear-buffer.scala	marks: 44 errors where 11 are marked: linear-buffer.scala:5:10: expected end of statement, found 'def'
+local-mutables-2.scala	marks: 3 errors where 2 are marked: local-mutables-2.scala:5:10: expected end of statement, found 'def'
+local-mutables.scala	marks: 30 errors where 6 are marked: local-mutables.scala:6:10: expected end of statement, found 'def'
+localReaches.scala	marks: 18 errors where 4 are marked: localReaches.scala:7:22: expected a declaration, found identifier
+lubs.scala	marks: 10 errors where 3 are marked: lubs.scala:8:14: expected a declaration, found identifier
+match-return-avoid.scala	marks: 2 errors where 1 are marked: match-return-avoid.scala:6:13: expected ',' or ')', found identifier
+match.scala	marks: 10 errors where 3 are marked: match.scala:5:23: expected ',' or ')', found identifier
+matrix.scala	marks: 16 errors where 2 are marked: matrix.scala:10:10: expected end of statement, found 'def'
+method-uses.scala	marks: 3 errors where 12 are marked
+mut-iterator.scala	marks: 3 errors where 5 are marked
+mut-iterator1.scala	marks: 3 errors where 1 are marked: mut-iterator1.scala:9:12: expected end of statement, found 'def'
+mut-iterator2.scala	marks: 9 errors where 3 are marked: mut-iterator2.scala:5:10: expected end of statement, found 'def'
+mut-iterator3.scala	marks: 24 errors where 2 are marked: mut-iterator3.scala:5:10: expected end of statement, found 'def'
+mut-iterator4-global.scala	marks: 18 errors where 2 are marked: mut-iterator4-global.scala:5:10: expected end of statement, found 'def'
+mut-iterator4.scala	marks: 18 errors where 2 are marked: mut-iterator4.scala:5:10: expected end of statement, found 'def'
+mut-iterator5.scala	marks: 9 errors where 2 are marked: mut-iterator5.scala:5:10: expected end of statement, found 'def'
+mut-outside-mutable.scala	marks: 8 errors where 3 are marked: mut-outside-mutable.scala:4:30: expected a declaration, found 'this'
+mut-override.scala	marks: 13 errors where 2 are marked: mut-override.scala:4:30: expected a declaration, found 'this'
+mut-widen-empty.scala	marks: 7 errors where 2 are marked: mut-widen-empty.scala:4:28: expected '=', found identifier
+mutability.scala	marks: 10 errors where 18 are marked
+mutability2.scala	marks: no error where 1 are marked
+mutable-inheritance.scala	marks: 2 errors where 3 are marked
+mutvars.scala	marks: 8 errors where 15 are marked
+nested-classes-2.scala	marks: 9 errors where 1 are marked: nested-classes-2.scala:3:59: expected '=', found identifier
+nested-objects-printing.scala	check: diagnostic 1 of 1: scalac's is error nested-objects-printing.scala:4:20 Found: (B : B.type); teq's is error nested-objects-printing.scala:4:20 type mismatch: found B, required Int
+nestedclass.scala	marks: error on an unmarked line nestedclass.scala:2: expected end of statement, found identifier
+nicolas1.scala	marks: 7 errors where 1 are marked: nicolas1.scala:9:63: expected a declaration, found identifier
+nicolas2.scala	marks: 7 errors where 1 are marked: nicolas2.scala:9:63: expected a declaration, found identifier
+non-local-consume.scala	marks: 33 errors where 4 are marked: non-local-consume.scala:6:16: expected ':', found identifier
+nonsensical-for-pure.scala	check: diagnostic 1 of 1: scalac's is error nonsensical-for-pure.scala:1:8 Int is a pure type, it makes no sense to add a capture set to it; teq's is error nonsensical-for-pure.scala:1:11 expected '=', found identifier
+object-uses.scala	marks: error on an unmarked line object-uses.scala:6: expected '=', found identifier
+outer-fresh.scala	marks: 23 errors where 4 are marked: outer-fresh.scala:8:12: expected ',' or ']', found identifier
+outer-var.scala	marks: error on an unmarked line outer-var.scala:3: expected end of statement, found identifier
+outerRefsUses-global.scala	marks: 5 errors where 1 are marked: outerRefsUses-global.scala:2:11: expected '=', found identifier
+outerRefsUses.scala	marks: 5 errors where 1 are marked: outerRefsUses.scala:2:16: expected ',' or ')', found identifier
+override-adapt-box-selftype.scala	marks: 46 errors where 2 are marked: override-adapt-box-selftype.scala:11:18: expected ',' or ')', found identifier
+override-adapt-box.scala	marks: 8 errors where 1 are marked: override-adapt-box.scala:4:3: expected an identifier, found 'def'
+override-boxed.scala	marks: 4 errors where 1 are marked: override-boxed.scala:4:16: expected ',' or ')', found identifier
+path-box.scala	marks: 16 errors where 1 are marked: path-box.scala:2:11: expected '=', found identifier
+path-connection.scala	marks: 12 errors where 2 are marked: path-connection.scala:13:23: expected '=', found identifier
+path-illigal.scala	marks: 7 errors where 1 are marked: path-illigal.scala:2:11: expected '=', found identifier
+path-patmat-should-be-pos.scala	marks: 21 errors where 1 are marked: path-patmat-should-be-pos.scala:5:38: expected ',' or ')', found identifier
+path-prefix-global.scala	marks: 33 errors where 2 are marked: path-prefix-global.scala:6:16: expected '=', found identifier
+path-prefix.scala	marks: 33 errors where 2 are marked: path-prefix.scala:6:16: expected '=', found identifier
+path-simple.scala	marks: 33 errors where 1 are marked: path-simple.scala:3:11: expected '=', found identifier
+paths-complex-consume.scala	marks: 34 errors where 7 are marked: paths-complex-consume.scala:8:17: expected ',' or ')', found identifier
+paths-derivedcaps-consume.scala	marks: 26 errors where 7 are marked: paths-derivedcaps-consume.scala:11:10: expected end of statement, found 'def'
+polyCaptures.scala	marks: 16 errors where 2 are marked: polyCaptures.scala:3:14: a polymorphic function literal takes a function literal after `=>`
+primer-examples.scala	marks: 8 errors where 2 are marked: primer-examples.scala:13:21: expected a declaration, found identifier
+reach-in-results.scala	marks: 14 errors where 1 are marked: reach-in-results.scala:3:26: expected ',' or ')', found identifier
+reaches.scala	marks: 67 errors where 13 are marked: reaches.scala:6:25: expected ',' or ')', found identifier
+reaches2.scala	marks: 7 errors where 1 are marked: reaches2.scala:6:51: expected a declaration, found identifier
+read-only-use.scala	marks: 25 errors where 3 are marked: read-only-use.scala:3:10: expected end of statement, found 'def'
+readOnly.scala	marks: 16 errors where 3 are marked: readOnly.scala:7:10: expected end of statement, found 'def'
+real-try.scala	marks: 1 errors where 4 are marked
+recursive-leaking-local-cap.scala	marks: 4 errors where 1 are marked: recursive-leaking-local-cap.scala:5:24: expected ',' or ')', found identifier
+ref-with-file.scala	marks: 6 errors where 2 are marked: ref-with-file.scala:6:10: expected end of statement, found 'def'
+reference-cc.scala	marks: 13 errors where 4 are marked: reference-cc.scala:7:41: expected ',' or ')', found identifier
+refine-reach-shallow.scala	marks: 13 errors where 7 are marked: refine-reach-shallow.scala:5:12: expected '=', found identifier
+refine-withFile.scala	marks: 4 errors where 3 are marked: refine-withFile.scala:4:14: expected an identifier, found '['
+restrict-subsumes.scala	marks: 5 errors where 2 are marked: restrict-subsumes.scala:9:20: expected a declaration, found identifier
+ro-buf.scala	marks: 5 errors where 2 are marked: ro-buf.scala:5:15: expected '=>', found identifier
+ro-mut-conformance.scala	marks: 12 errors where 3 are marked: ro-mut-conformance.scala:8:10: expected end of statement, found 'def'
+safemode-1	marks: 1 errors where 6 are marked
+safemode-2.scala	marks: no error where 6 are marked
+safemode-3.scala	marks: no error where 2 are marked
+safemode-emptypkg.scala	marks: no error where 1 are marked
+safemode-refs.scala	marks: 3 errors where 12 are marked
+sam-leak.scala	marks: 22 errors where 2 are marked: sam-leak.scala:14:13: expected ',' or ']', found identifier
+scope-extrude-mut.scala	marks: error on an unmarked line scope-extrude-mut.scala:7: expected '=', found identifier
+scope-extrusions.scala	option: -Yimports:scala,scala.Predef (teq has no flag for it)
+scoped-caps-global.scala	marks: 75 errors where 7 are marked: scoped-caps-global.scala:7:15: expected '=', found identifier
+scoped-caps.scala	marks: 79 errors where 7 are marked: scoped-caps.scala:6:20: expected ',' or ')', found identifier
+scoped-caps2.scala	marks: 18 errors where 5 are marked: scoped-caps2.scala:4:23: expected a declaration, found identifier
+selftype.scala	marks: no error where 1 are marked
+sep-box.scala	marks: 5 errors where 1 are marked: sep-box.scala:24:10: expected end of statement, found 'def'
+sep-compose.scala	marks: 33 errors where 8 are marked: sep-compose.scala:3:34: expected a declaration, found identifier
+sep-consume.scala	marks: 31 errors where 4 are marked: sep-consume.scala:7:10: expected end of statement, found 'def'
+sep-counter.scala	marks: 8 errors where 1 are marked: sep-counter.scala:7:10: expected end of statement, found 'def'
+sep-curried-par.scala	marks: 21 errors where 6 are marked: sep-curried-par.scala:4:35: expected a declaration, found identifier
+sep-curried-redux.scala	marks: 12 errors where 1 are marked: sep-curried-redux.scala:7:10: expected end of statement, found 'def'
+sep-curried.scala	marks: 60 errors where 6 are marked: sep-curried.scala:7:10: expected end of statement, found 'def'
+sep-lazyListState.scala	marks: 6 errors where 1 are marked: sep-lazyListState.scala:5:32: expected '=', found identifier
+sep-list.scala	marks: 5 errors where 1 are marked: sep-list.scala:24:10: expected end of statement, found 'def'
+sep-pairs-2.scala	marks: 8 errors where 1 are marked: sep-pairs-2.scala:7:10: expected end of statement, found 'def'
+sep-pairs-global.scala	marks: 21 errors where 3 are marked: sep-pairs-global.scala:7:10: expected end of statement, found 'def'
+sep-pairs-unboxed.scala	marks: 22 errors where 6 are marked: sep-pairs-unboxed.scala:7:10: expected end of statement, found 'def'
+sep-pairs.scala	marks: 21 errors where 3 are marked: sep-pairs.scala:7:10: expected end of statement, found 'def'
+sep-shared.scala	marks: 3 errors where 1 are marked: sep-shared.scala:4:13: expected ',' or ')', found identifier
+sep-use.scala	marks: 21 errors where 7 are marked: sep-use.scala:4:19: expected ':', found identifier
+sep-use2.scala	marks: 38 errors where 8 are marked: sep-use2.scala:3:19: expected ':', found identifier
+sepchecks.scala	marks: 34 errors where 4 are marked: sepchecks.scala:11:10: expected end of statement, found 'def'
+sepchecks2.scala	marks: 51 errors where 5 are marked: sepchecks2.scala:4:40: expected ',' or ')', found identifier
+sepchecks3.scala	marks: 12 errors where 2 are marked: sepchecks3.scala:4:40: expected ',' or ')', found identifier
+sepchecks4.scala	marks: 2 errors where 3 are marked
+sepchecks5.scala	marks: 10 errors where 3 are marked: sepchecks5.scala:7:15: expected ':', found identifier
+simple-using.scala	marks: 2 errors where 1 are marked: simple-using.scala:2:41: expected ',' or ')', found identifier
+singletons.scala	marks: 4 errors where 1 are marked: singletons.scala:5:17: expected a declaration, found identifier
+spread-problem.scala	marks: 11 errors where 2 are marked: spread-problem.scala:5:14: expected ',' or ']', found identifier
+stack-alloc.scala	marks: 7 errors where 1 are marked: stack-alloc.scala:9:10: expected end of statement, found 'def'
+toplevelUses.scala	marks: 10 errors where 3 are marked: toplevelUses.scala:8:17: expected '=', found identifier
+toplevelUses1.scala	marks: 1 errors where 10 are marked
+toplevelUsesInit.scala	marks: 6 errors where 7 are marked
+try-boundary.scala	marks: no error where 2 are marked
+try-control.scala	marks: no error where 1 are marked
+try.scala	marks: 5 errors where 4 are marked: try.scala:8:48: expected ',' or ')', found identifier
+try3.scala	marks: 8 errors where 1 are marked: try3.scala:4:25: expected end of statement, found identifier
+unbox-overrides.scala	marks: 18 errors where 3 are marked: unbox-overrides.scala:4:21: expected ',' or ']', found identifier
+unscoped-classifier-global.scala	marks: 3 errors where 5 are marked
+unscoped-classifier.scala	marks: 3 errors where 5 are marked
+unscoped-extrude.scala	marks: 4 errors where 1 are marked: unscoped-extrude.scala:6:10: expected end of statement, found 'def'
+unsound-reach-2.scala	marks: 13 errors where 3 are marked: unsound-reach-2.scala:11:18: expected ',' or ')', found identifier
+unsound-reach-3.scala	marks: 15 errors where 4 are marked: unsound-reach-3.scala:8:39: expected ',' or ')', found identifier
+unsound-reach-4.scala	marks: 13 errors where 3 are marked: unsound-reach-4.scala:10:39: expected ',' or ')', found identifier
+unsound-reach-5.scala	marks: 13 errors where 1 are marked: unsound-reach-5.scala:3:36: expected a declaration, found identifier
+unsound-reach-6.scala	marks: 14 errors where 4 are marked: unsound-reach-6.scala:6:15: expected ':', found identifier
+unsound-reach.scala	marks: 25 errors where 3 are marked: unsound-reach.scala:5:39: expected ',' or ')', found identifier
+update-call.scala	marks: 13 errors where 2 are marked: update-call.scala:4:30: expected a declaration, found 'this'
+use-alternatives.scala	marks: 17 errors where 4 are marked: use-alternatives.scala:5:16: expected a declaration, found identifier
+use-capset.scala	marks: 19 errors where 3 are marked: use-capset.scala:3:8: expected ',' or ']', found identifier
+uses.scala	marks: 13 errors where 4 are marked: uses.scala:2:14: expected ',' or ')', found identifier
+usingFile.scala	marks: 6 errors where 1 are marked: usingFile.scala:7:31: expected ',' or ')', found identifier
+usingLogFile.scala	marks: 10 errors where 4 are marked: usingLogFile.scala:16:43: expected ',' or ')', found identifier
+var-access.scala	marks: 8 errors where 2 are marked: var-access.scala:8:16: expected a declaration, found identifier
+vars-simple-global.scala	marks: 7 errors where 3 are marked: vars-simple-global.scala:2:14: expected end of statement, found identifier
+vars-simple.scala	marks: 7 errors where 3 are marked: vars-simple.scala:2:14: expected end of statement, found identifier
+vars.scala	marks: 16 errors where 6 are marked: vars.scala:4:14: expected end of statement, found identifier
+wf-reach-1.scala	marks: 3 errors where 1 are marked: wf-reach-1.scala:2:18: expected a declaration, found identifier
+widen-reach-global.scala	marks: 22 errors where 4 are marked: widen-reach-global.scala:6:19: expected '=', found identifier
+widen-reach.scala	marks: 22 errors where 4 are marked: widen-reach.scala:6:19: expected '=', found identifier
+withFile.scala	marks: 3 errors where 5 are marked

@@ -1,0 +1,3 @@
+scalac 3.8.4: rejected, 2 error(s)
+wildcard_bound_parent_wildcard.scala:10:19: Type argument must be fully defined
+wildcard_bound_parent_wildcard.scala:11:19: Type argument must be fully defined

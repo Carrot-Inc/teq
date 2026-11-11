@@ -1,0 +1,13 @@
+unsafe-cast-function.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-chain.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-implicit.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-implicit2.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-implicit3.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-java-call	java source: teq reads none
+unsafe-java-chain	java source: teq reads none
+unsafe-java-varargs-src	java source: teq reads none
+unsafe-java-varargs.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-overload.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-path.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-select-type-member.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-select.scala	option: -Yexplicit-nulls (teq has no flag for it)

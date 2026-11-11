@@ -1,0 +1,28 @@
+17069.scala	17069.scala:9:14: value getGenericReturnType is not a member of Method
+aliases.scala	aliases.scala:8:13: value getGenericReturnType is not a member of Method
+andTypes.scala	andTypes.scala:11:19: value getTypeParameters is not a member of Method
+arrayBound.scala	output: line 1: the .check has 'T <: java.lang.Object', the program printed nothing
+boundParameters.scala	output: line 1: the .check has 'T <: java.util.List<?>', the program printed nothing
+boundsInterfaces.scala	output: line 1: the .check has 'T <: java.io.Serializable', the program printed nothing
+derivedNames.scala	derivedNames.scala:6:22: value getGenericReturnType is not a member of Method
+higherKinded.scala	output: line 1: the .check has 't <: java.lang.Object', the program printed nothing
+i10834.scala	output: line 3: the .check has 'public A1(X)', the program printed 'public A1(java.lang.Object)'
+i15385	java source: teq reads none
+i3411.scala	i3411.scala:8:13: value toGenericString is not a member of Method
+i3476.scala	i3476.scala:6:26: value getTypeParameters is not a member of Method
+i3653.scala	i3653.scala:14:13: value toGenericString is not a member of Method
+i4248.scala	i4248.scala:8:13: value toGenericString is not a member of Method
+i6349.scala	output: line 1: the .check has 'Foo<java.lang.String>', the program printed 'class Foo'
+lowerBoundClass.scala	output: line 1: the .check has 'T <: java.util.Calendar', the program printed nothing
+mangledNames.scala	output: line 1: the .check has '$bang$bang$bang <: java.util.Date', the program printed nothing
+mangledNames2.scala	output: line 1: the .check has '$bang$u005B$u005D$colon$u003B$bang$bang <: java.util.Date', the program printed nothing
+nestedClassTypeParams.scala	nestedClassTypeParams.scala:26:24: value toGenericString is not a member of Method
+nullable-unions.scala	nullable-unions.scala:11:15: value getGenericParameterTypes is not a member of Method
+outer-ref-elimination.scala	output: line 2: the .check has 'List(public T2$$anon$1$C2())', the program printed 'List(public T2$$anon$a83buk_370$C2(T2$$anon$a83buk_370))'
+primitives.scala	output: line 1: the .check has 'A <: byte[]', the program printed nothing
+shadowedTypeParam.scala	shadowedTypeParam.scala:47:24: value toGenericString is not a member of Method
+simple.scala	output: line 1: the .check has 'T', the program printed nothing
+simpleBoundParameters.scala	output: line 1: the .check has 'T <: java.util.List<?>', the program printed nothing
+superClassParams.scala	output: line 1: the .check has 'B: A<java.lang.Object>', the program printed 'B: A'
+valueClassBound.scala	output: line 1: the .check has 'T <: VC', the program printed nothing
+wildcards.scala	output: line 1: the .check has 'T <: java.util.List<? extends java.util.Calendar>', the program printed nothing

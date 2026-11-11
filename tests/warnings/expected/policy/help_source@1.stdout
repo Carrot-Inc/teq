@@ -1,0 +1,3 @@
+-feature  Emit warning and location for usages of features that should be
+          imported explicitly.
+

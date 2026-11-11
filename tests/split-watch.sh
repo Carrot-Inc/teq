@@ -47,9 +47,14 @@ STUB=tests/interop/scalajs-stub
 . tests/support/sessions.sh
 pass=0
 fail=0
+# The checks expected to fail are tests/pending/split-watch.txt, by the name on their FAIL line (tests/support/pending.sh):
+# the suite fails when a listed check fails no more and when an unlisted one fails; --pending-update takes the
+# checks that pass now out of the list, --pending-add writes the unlisted failures in.
+. tests/support/pending.sh
+pending_fails_begin split-watch out/split-watch-pending "$@"
 ok() { pass=$((pass + 1)); }
 bad() {
-  echo "FAIL $1"
+  said_fail "$1"
   fail=$((fail + 1))
 }
 expect() {
@@ -1416,12 +1421,21 @@ STEPS
   stop
 fi
 
+# A program its own suite expects to fail (tests/pending/cases.txt, tests/pending/interop.txt) is not run here:
+# one that does not pass as a single build has no session to hold.
+declare -A base_pending
+for base_suite in cases interop; do
+  while IFS=$'\t' read -r base_name _; do
+    [ -n "$base_name" ] && base_pending[tests/$base_suite/$base_name]=1
+  done < <(cat "tests/pending/$base_suite.txt" 2> /dev/null)
+done
 for case in tests/cases/*.scala tests/cases/*/ tests/interop/*.scala tests/interop/*/; do
   case=${case%/}
   name=$(basename "$case" .scala)
   suite=$(dirname "$case")
   [ "$case" = "$STUB" ] && continue
   [ -f "$suite/$name.expected" ] || continue
+  [ -z "${base_pending[$suite/$name]:-}" ] || continue
   # A case whose header includes sources (`//> using file`, the scripts' library) is teq interp's alone.
   grep -q -h '^//> using files\? ' "$case" "$case"/*.scala 2> /dev/null && continue
   # A case whose `// std:` line names the std modes its expectations hold under, and not the lean
@@ -1501,4 +1515,4 @@ retype_sweep
 
 sessions_forked split-watch
 echo "$pass passed, $fail failed"
-[ $fail = 0 ]
+pending_fails_end $fail $pass

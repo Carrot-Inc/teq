@@ -1,0 +1,214 @@
+12974.scala	marks: 0 warnings where 1 are marked
+14034b.scala	marks: 7 warnings where 8 are marked
+15981.scala	marks: 0 warnings where 1 are marked
+17284.scala	marks: an error where warnings are marked: 17284.scala:4:3: value synchronized is not a member of Int
+18493.scala	marks: 0 warnings where 2 are marked
+21557.scala	marks: 0 warnings where 4 are marked
+21681.scala	check: diagnostic 1 of 1: scalac's is migration warning 21681.scala:3:3 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21681.scala:3:3 Deprecated syntax: since 3.7 this is interpreted a
+21681b.scala	check: diagnostic 1 of 1: scalac's is migration warning 21681b.scala:3:3 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21681b.scala:3:3 Deprecated syntax: since 3.7 this is interpreted
+21681c.scala	check: diagnostic 1 of 1: scalac's is migration warning 21681c.scala:5:3 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21681c.scala:5:3 Deprecated syntax: since 3.7 this is interpreted
+21770.scala	check: diagnostic 1 of 1: scalac's is migration warning 21770.scala:5:10 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21770.scala:5:10 Deprecated syntax: since 3.7 this is interpreted
+3324f.scala	marks: 1 warnings where 2 are marked
+3324g.scala	marks: 1 warnings where 2 are marked
+JavaSeqLiteral.scala	marks: 0 warnings where 1 are marked
+applied_constructor_types.scala	marks: an error where warnings are marked: applied_constructor_types.scala:6:24: expected '=', found '('
+conditionalWarnings.scala	marks: 1 warnings where 2 are marked
+convertible.scala	option: -preview (teq has no flag for it)
+deprecated-origin-verbose.scala	check: diagnostic 1 of 2: scalac's is warning deprecated-origin-verbose.scala:12:19 class C in package p is deprecated since 1.0: Old style; teq's is warning deprecated-origin-verbose.scala:12:19 class C in package p is deprecated
+deprecated-override.scala	marks: 0 warnings where 4 are marked
+enum-approx2.scala	marks: 2 warnings where 3 are marked
+feature-shadowing.scala	marks: 0 warnings where 1 are marked
+gadt-contradictory-pattern.scala	marks: 1 warnings where 3 are marked
+gadt.scala	marks: 0 warnings where 1 are marked
+i10247.scala	marks: 2 warnings where 4 are marked
+i10930.scala	marks: 0 warnings where 4 are marked
+i10994.scala	marks: an error where warnings are marked: i10994.scala:4:20: expected '=>', found ':'
+i11022.scala	marks: an error where warnings are marked: i11022.scala:14:5: pattern definitions are only supported inside blocks
+i11097.scala	marks: 0 warnings where 2 are marked
+i11178.scala	marks: 3 warnings where 4 are marked
+i11963a.scala	marks: 0 warnings where 1 are marked
+i11963b.scala	marks: 0 warnings where 1 are marked
+i11963c.scala	marks: 0 warnings where 1 are marked
+i12253.scala	marks: 0 warnings where 3 are marked
+i12460.scala	marks: 0 warnings where 2 are marked
+i12597.scala	marks: 0 warnings where 1 are marked
+i13011.scala	marks: 0 warnings where 5 are marked
+i13433c	marks: an error where warnings are marked: A_1.scala:8:10: this type cannot be tested at runtime: Matcher[A]
+i13440.scala	check: diagnostic 1 of 3: scalac's is migration warning i13440.scala:5:5 given is now a keyword, write `given` instead of given to keep it as an identifier; teq's is warning i13440.scala:5:5 given is now a keyword, write `given` instead of
+i13542.scala	marks: 0 warnings where 4 are marked
+i14705.scala	marks: 0 warnings where 1 are marked
+i14721.scala	marks: 0 warnings where 1 are marked
+i15226.scala	marks: an error where warnings are marked: i15226.scala:9:67: type mismatch: found (Proj, String), required ((pj.a : Proj), (pj.b : String))
+i15264.scala	marks: 0 warnings where 2 are marked
+i15474.scala	marks: 0 warnings where 2 are marked
+i15479.scala	marks: 0 warnings where 1 are marked
+i15503d.scala	marks: 23 warnings where 20 are marked
+i15503f.scala	marks: an error where warnings are marked: i15503f.scala:38:21: expected ':', found '['
+i15503g.scala	marks: 6 warnings where 7 are marked
+i15503i.scala	marks: 38 warnings where 37 are marked
+i15662.scala	marks: an error where warnings are marked: i15662.scala:7:19: expected '=>', found '['
+i15893.min.scala	marks: an error where warnings are marked: i15893.min.scala:11:14: expected '=>', found ':'
+i15893.scala	marks: an error where warnings are marked: i15893.scala:28:14: expected '=>', found ':'
+i16451.scala	marks: 9 warnings where 8 are marked
+i16610.scala	marks: 0 warnings where 1 are marked
+i16649-refutable.scala	marks: 4 warnings where 1 are marked
+i16723.scala	marks: 0 warnings where 1 are marked
+i16723a.scala	marks: 0 warnings where 1 are marked
+i16728.scala	marks: 0 warnings where 1 are marked
+i16743.scala	marks: an error where warnings are marked: i16743.scala:111:25: type mismatch: found "x", required G
+i17266.scala	marks: an error where warnings are marked: i17266.scala:4:3: not found: synchronized
+i17493.scala	marks: 0 warnings where 1 are marked
+i17612a.scala	marks: 0 warnings where 8 are marked
+i17613a.scala	marks: 0 warnings where 7 are marked
+i18366.scala	marks: an error where warnings are marked: i18366.scala:9:10: method foo in trait Builder must be called with () argument
+i18559a.scala	marks: 0 warnings where 3 are marked
+i18559b.scala	marks: 0 warnings where 1 are marked
+i18559c.scala	marks: 1 warnings where 3 are marked
+i18564.scala	marks: 0 warnings where 1 are marked
+i18722.scala	marks: 3 warnings where 4 are marked
+i19002.scala	marks: 0 warnings where 9 are marked
+i19013-a.scala	check: diagnostic 1 of 1: scalac's is warning i19013-a.scala:5:14 the type test for E cannot be checked at runtime because it refers to an abstract type member or type parameter; teq's is warning i19013-a.scala:5:14 the type test for E cann
+i19013-b.scala	check: diagnostic 1 of 1: scalac's is warning i19013-b.scala:7:30 the type test for E cannot be checked at runtime because it refers to an abstract type member or type parameter; teq's is warning i19013-b.scala:7:30 the type test for E cann
+i19077.scala	marks: an error where warnings are marked: i19077.scala:14:3: there is no parameter named w
+i19416.scala	marks: 0 warnings where 1 are marked
+i19505.scala	marks: 0 warnings where 1 are marked
+i19506.scala	marks: an error where warnings are marked: i19506.scala:4:74: type mismatch: found 42, required Reader[?0]
+i19657-mega.scala	marks: 1 warnings where 3 are marked
+i19657.scala	marks: an error where warnings are marked: i19657.scala:22:16: no given instance of type Schema[Foo] was found for parameter x$1
+i19687a.scala	check: diagnostic 1 of 1: scalac's is warning i19687a.scala:11:3 match may not be exhaustive.; teq's is warning i19687a.scala:11:3 match may not be exhaustive.
+i19913.scala	check: diagnostic 1 of 2: scalac's is warning i19913.scala:13:3 method inlineMethod in object Deprecated is deprecated: test; teq's is warning i19913.scala:12:3 method method in object Deprecated is deprecated: test
+i20105.scala	marks: 0 warnings where 1 are marked
+i20121.scala	marks: warning on an unmarked line i20121.scala:9: Unreachable case except for null (if this is intentional, consider writing case null => instead).
+i20122.scala	marks: 0 warnings where 1 are marked
+i20123.scala	marks: 0 warnings where 1 are marked
+i20128.scala	marks: 0 warnings where 1 are marked
+i20129.scala	marks: 0 warnings where 1 are marked
+i20131.scala	marks: 1 warnings where 0 are marked
+i20132.future-Left.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i20132.scala	marks: 0 warnings where 1 are marked
+i20132.stream-Tuple2.safeNulls.fixed.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i20132.stream-Tuple2.safeNulls.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i20132.stream-Tuple2.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i20420.scala	marks: an error where warnings are marked: i20420.scala:26:52: ambiguous given instances for ValidatorForPredicate[Int, LessEqual[3]]: validatorForLessEqual, validatorForDescribedOr
+i20860.scala	marks: an error where warnings are marked: 1 warning found, errors under --werror
+i21036a.scala	marks: 0 warnings where 1 are marked
+i21036b.scala	marks: 0 warnings where 1 are marked
+i21187.scala	marks: an error where warnings are marked: i21187.scala:9:55: missing parameter type
+i21190.scala	marks: an error where warnings are marked: i21190.scala:20:29: type mismatch: found FromEnd, required Int
+i21207	java source: teq reads none
+i21239.Frac.scala	marks: 0 warnings where 1 are marked
+i21258.scala	marks: 0 warnings where 1 are marked
+i21525.scala	marks: an error where warnings are marked: 3 warnings found, errors under --werror
+i21805.scala	marks: an error where warnings are marked: i21805.scala:6:3: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+i21816.scala	marks: an error where warnings are marked: i21816.scala:13:13: method className in trait Iterable cannot be accessed as a member of CC from object O; protected method className can only be accessed from trait Iterable or one of its subclass
+i21845.orig.scala	marks: 1 warnings where 0 are marked
+i21860.scala	marks: an error where warnings are marked: i21860.scala:5:8: illegal inheritance: self type Triangle of case Triangle does not conform to self type Product of parent trait Product
+i21860.unenum.scala	marks: an error where warnings are marked: i21860.unenum.scala:6:15: illegal inheritance: self type Triangle of object Triangle does not conform to self type Product of parent trait Product
+i22051.scala	marks: an error where warnings are marked: i22051.scala:16:12: type mismatch: found local.(T => local.Break), required T => RuntimeException
+i22212	marks: 0 warnings where 1 are marked
+i22232.scala	marks: 0 warnings where 4 are marked
+i22233.scala	marks: 0 warnings where 1 are marked
+i22267.scala	marks: 0 warnings where 1 are marked
+i22279.scala	marks: 0 warnings where 1 are marked
+i22412.scala	check: diagnostic 1 of 1: scalac's is warning i22412.scala:3:35 A try without catch or finally is equivalent to putting; teq's is warning i22412.scala:3:35 A try without catch or finally is equivalent to putting its body in a block; no exce
+i22439.scala	marks: 1 warnings where 3 are marked
+i22527.scala	marks: an error where warnings are marked: i22527.scala:6:7: expected ',' or ')', found literal
+i22672	marks: 2 warnings where 1 are marked
+i22705.scala	marks: an error where warnings are marked: i22705.scala:15:22: Node cannot be instantiated
+i22706.scala	marks: an error where warnings are marked: i22706.scala:17:22: N cannot be instantiated
+i22795	marks: 0 warnings where 1 are marked
+i22896	java source: teq reads none
+i22899.scala	marks: an error where warnings are marked: i22899.scala:20:30: a named pattern is only allowed in a tuple or constructor pattern
+i22981.scala	marks: an error where warnings are marked: i22981.scala:8:31: expected an identifier, found 'type'
+i23018.scala	marks: an error where warnings are marked: i23018.scala:18:31: type mismatch: found 42, required C
+i23200.scala	marks: 1 warnings where 2 are marked
+i23250.scala	marks: 0 warnings where 1 are marked
+i23277.scala	marks: an error where warnings are marked: i23277.scala:16:16: recursive use of run needs an explicit result type
+i23369.scala	marks: 2 warnings where 1 are marked
+i23541.scala	marks: 0 warnings where 3 are marked
+i23620b.scala	marks: 0 warnings where 3 are marked
+i23704.scala	marks: 3 warnings where 5 are marked
+i23822.scala	marks: 0 warnings where 1 are marked
+i24034	marks: an error where warnings are marked: circe.scala:30:7: missing argument for parameter mirror
+i24246.scala	marks: 0 warnings where 1 are marked
+i24265.scala	option: -Wall with -Werror (teq has no flag for it)
+i24322.scala	marks: 0 warnings where 1 are marked
+i24466.scala	marks: 0 warnings where 2 are marked
+i24562.scala	marks: an error where warnings are marked: i24562.scala:42:5: value D is not a member of Baz
+i24750.scala	marks: 0 warnings where 1 are marked
+i24825.scala	marks: an error where warnings are marked: i24825.scala:9:20: trait Y overrides nothing
+i25094.scala	marks: 0 warnings where 1 are marked
+i25158.scala	marks: 0 warnings where 5 are marked
+i25347.scala	marks: an error where warnings are marked: i25347.scala:30:5: type mismatch: found Test.j.D, required Int
+i25548.scala	marks: an error where warnings are marked: i25548.scala:3:16: expected 'extends' or a template body, found '@'
+i25548b.scala	marks: an error where warnings are marked: i25548b.scala:3:16: expected 'extends' or a template body, found '@'
+i25553.scala	option: -Wvalue-discard with -Werror (teq has no flag for it)
+i2673.scala	marks: 0 warnings where 1 are marked
+i2673b.scala	marks: 0 warnings where 1 are marked
+i2673c.scala	marks: 0 warnings where 1 are marked
+i3561.scala	marks: 0 warnings where 2 are marked
+i4008.scala	marks: 0 warnings where 8 are marked
+i4297.scala	marks: 6 warnings where 5 are marked
+i4364.scala	marks: 0 warnings where 1 are marked
+i4812.scala	marks: 0 warnings where 7 are marked
+i4936b.scala	marks: 0 warnings where 1 are marked
+i4986b.scala	marks: 0 warnings where 8 are marked
+i5013b.scala	marks: 0 warnings where 1 are marked
+i5077.scala	marks: an error where warnings are marked: i5077.scala:22:25: value < is not a member of Any
+i5826.scala	marks: 1 warnings where 5 are marked
+i7821.scala	marks: 0 warnings where 1 are marked
+i7821b.scala	marks: 0 warnings where 7 are marked
+i8427.scala	marks: 0 warnings where 1 are marked
+i8781b.scala	marks: 0 warnings where 1 are marked
+i8932.scala	marks: 1 warnings where 2 are marked
+i9166.scala	marks: 0 warnings where 1 are marked
+i9241.scala	marks: 0 warnings where 8 are marked
+i9266.scala	marks: an error where warnings are marked: i9266.scala:7:24: expected a definition, found identifier
+i9408a.scala	marks: an error where warnings are marked: i9408a.scala:18:21: type mismatch: found "qwerty", required Int
+i9740.scala	check: diagnostic 1 of 2: scalac's is warning i9740.scala:10:10 Implausible pattern:; teq's is warning i9740.scala:10:10 unreachable case
+i9740b.scala	marks: 0 warnings where 2 are marked
+i9740c.scala	marks: 0 warnings where 1 are marked
+i9740d.scala	marks: 0 warnings where 2 are marked
+i9751.scala	marks: 0 warnings where 2 are marked
+i9776.scala	marks: 0 warnings where 2 are marked
+i9880.scala	marks: an error where warnings are marked: i9880.scala:15:9: missing parameter type
+implicit-conversions.scala	marks: 0 warnings where 3 are marked
+infer-or-type.scala	marks: 0 warnings where 2 are marked
+infix-named-args-migration.scala	marks: an error where warnings are marked: infix-named-args-migration.scala:4:11: value + is not a member of Int
+inline-givens.scala	marks: 0 warnings where 3 are marked
+into-as-mod.scala	option: -preview (teq has no flag for it)
+looping-givens.scala	marks: an error where warnings are marked: looping-givens.scala:9:17: type mismatch: found Any, required A
+manifest-summoning-b.scala	marks: an error where warnings are marked: manifest-summoning-b.scala:3:35: No Manifest available for List[Int].
+matchable.scala	marks: 0 warnings where 6 are marked
+multiple-entry-points	marks: an error where warnings are marked: 1_First.scala:4:7: several entry points: First.main, Second.main; choose one with --main
+newline-braces.scala	marks: an error where warnings are marked: newline-braces.scala:5:5: missing parameter type
+nonunit-statement.scala	marks: 0 warnings where 20 are marked
+nowarn.scala	marks: 20 warnings where 22 are marked
+old-syntax.scala	marks: an error where warnings are marked: old-syntax.scala:5:12: a for expression needs a generator
+or-type-trees.scala	marks: 0 warnings where 3 are marked
+ovlazy.scala	marks: an error where warnings are marked: ovlazy.scala:7:21: lazy value x may not override non-lazy value x in class A
+patmat-nothing-exhaustive.scala	marks: 2 warnings where 0 are marked
+patmat-type-member-nothing-exhaustive.scala	marks: 1 warnings where 0 are marked
+quote-simple-hole.scala	marks: 0 warnings where 2 are marked
+redundant-null.scala	marks: 11 warnings where 14 are marked
+refined-types.scala	marks: 0 warnings where 4 are marked
+refinements-this.scala	marks: 0 warnings where 1 are marked
+rewrite-messages.scala	check: diagnostic 1 of 2: scalac's is migration warning rewrite-messages.scala:3:19 `_` is no longer supported for a wildcard import; use `*` instead; teq's is warning rewrite-messages.scala:3:19 `_` is no longer supported for a wildcard im
+sub-cases-exhaustivity.scala	marks: an error where warnings are marked: sub-cases-exhaustivity.scala:16:24: expected '=>', found 'match'
+supertraits-b.scala	marks: 0 warnings where 5 are marked
+suppressed-type-test-warnings.scala	marks: 2 warnings where 3 are marked
+switches.scala	marks: 2 warnings where 6 are marked
+symbolic-packages.scala	marks: an error where warnings are marked: symbolic-packages.scala:7:1: a package clause after other definitions needs a body: `package p:` or `package p { ... }`
+t11620.scala	marks: an error where warnings are marked: t11620.scala:8:23: type mismatch: found Any, required X
+t2755.scala	marks: 17 warnings where 2 are marked
+t3235-minimal.scala	check: diagnostic 2 of 4: scalac's is warning t3235-minimal.scala:6:12 method round in package scala.math is deprecated since 2.11.0: This is an integer type; there is no reason to round it. Perhaps you meant to call this with a floating-po
+tostring-interpolated.scala	marks: 14 warnings where 15 are marked
+tuple-exhaustivity.scala	marks: an error where warnings are marked: It would fail on pattern case: EmptyTuple
+type-lambda.scala	marks: 0 warnings where 1 are marked
+type-test-paths-2.scala	marks: 6 warnings where 4 are marked
+type-test-paths.scala	marks: 3 warnings where 1 are marked
+type-test-syntesize-b.scala	marks: 4 warnings where 3 are marked
+unused-can-equal.scala	marks: an error where warnings are marked: unused-can-equal.scala:16:3: values of types Box[Int] and Box[Long] cannot be compared with == or !=
+unused-params.scala	marks: an error where warnings are marked: unused-params.scala:124:16: method call overrides nothing
+warn-value-discard.scala	marks: 0 warnings where 5 are marked
+with-type-operator-future-migration.scala	check: diagnostic 1 of 1: scalac's is migration warning with-type-operator-future-migration.scala:5:14 with as a type operator has been deprecated; use & instead; teq's is warning with-type-operator-future-migration.scala:5:14 with as a typ

@@ -1,0 +1,5 @@
+scalac 3.8.4: rejected, 1 error(s)
+conversion_ambiguity_member_order.scala:15:29: Found:    R
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both given instance c2 in trait T2 and given instance c1 in trait T1 provide an extension method `pick` on R

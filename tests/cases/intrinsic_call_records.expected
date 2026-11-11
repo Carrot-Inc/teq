@@ -1,0 +1,19 @@
+s.isEmpty()
+s.toUpperCase()
+super.toString
+s.length()
+s.toUpperCase()
+false
+ABC
+3
+expected a constant value but found: s.isEmpty()
+expected a constant value but found: s.toUpperCase()
+expected a constant value but found: super.toString()
+expected a constant value but found: s.length()
+argument to compileError must be a statically known String but was: s.isEmpty().toString()
+argument to compileError must be a statically known String but was: s.toUpperCase()
+argument to compileError must be a statically known String but was: super.toString()
+argument to compileError must be a statically known String but was: s.length().toString()
+s.charAt(1)
+s.substring(1)
+s.substring(1, 2)

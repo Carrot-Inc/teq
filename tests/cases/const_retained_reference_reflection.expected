@@ -1,0 +1,2 @@
+def read(c: C): scala.Int = c.x
+def readY: scala.Int = Lib.y

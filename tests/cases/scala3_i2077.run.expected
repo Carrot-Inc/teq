@@ -1,0 +1,7 @@
+tests/cases/scala3_i2077.scala:8:7: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+        1
+        ^
+tests/cases/scala3_i2077.scala:10:7: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+        2
+        ^
+hi

@@ -1,0 +1,4 @@
+# dotty 3.8.4 (7d4833b6) init/tasty-error, neg; compiler/test/dotty/tools/dotc/CompilationTests.scala:330-374; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+typedef	fail	-	marks: no error where 1 are marked
+val-or-defdef	fail	-	marks: no error where 1 are marked

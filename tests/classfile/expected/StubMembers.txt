@@ -1,0 +1,9 @@
+// tests/classfile/fixtures/fix/StubMembers.class (class file 65.0, 440 bytes)
+package fix
+class StubMembers extends Object {
+  static var field: StubGone
+  def this() = ...
+  static def bounded[T <: StubGone](): T = ...
+  static def thrower(): Unit throws StubGoneEx = ...
+}
+

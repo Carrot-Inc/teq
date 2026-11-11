@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+default_getter_selected_by_name.scala:9:14: value h$default$2 is not a member of O

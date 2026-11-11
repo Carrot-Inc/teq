@@ -1,0 +1,25 @@
+scalac 3.8.4: rejected, 8 error(s)
+scalajs_js_type_override_equals_hashcode.scala:37:15: error overriding method hashCode(): Int in a JS class;
+  method hashCode(): Int is considered final in trait js.Any;
+  if you want to define a method named "hashCode" in JavaScript, use a different name and add @JSName("hashCode").
+scalajs_js_type_override_equals_hashcode.scala:38:15: error overriding method equals(that: Any): Boolean in a JS class;
+  method equals(that: Any): Boolean is considered final in trait js.Any;
+  if you want to define a method named "equals" in JavaScript, use a different name and add @JSName("equals").
+scalajs_js_type_override_equals_hashcode.scala:56:15: error overriding method hashCode(): Int in a JS class;
+  method hashCode(): Int is considered final in trait js.Any;
+  if you want to define a method named "hashCode" in JavaScript, use a different name and add @JSName("hashCode").
+scalajs_js_type_override_equals_hashcode.scala:57:15: error overriding method equals(that: Any): Boolean in a JS class;
+  method equals(that: Any): Boolean is considered final in trait js.Any;
+  if you want to define a method named "equals" in JavaScript, use a different name and add @JSName("equals").
+scalajs_js_type_override_equals_hashcode.scala:62:15: error overriding method hashCode(): Int in a JS class;
+  method hashCode(): Int is considered final in trait js.Any;
+  if you want to define a method named "hashCode" in JavaScript, use a different name and add @JSName("hashCode").
+scalajs_js_type_override_equals_hashcode.scala:63:15: error overriding method equals(that: Any): Boolean in a JS class;
+  method equals(that: Any): Boolean is considered final in trait js.Any;
+  if you want to define a method named "equals" in JavaScript, use a different name and add @JSName("equals").
+scalajs_js_type_override_equals_hashcode.scala:67:15: error overriding method hashCode(): Int in a JS class;
+  method hashCode(): Int is considered final in trait js.Any;
+  if you want to define a method named "hashCode" in JavaScript, use a different name and add @JSName("hashCode").
+scalajs_js_type_override_equals_hashcode.scala:68:15: error overriding method equals(that: Any): Boolean in a JS class;
+  method equals(that: Any): Boolean is considered final in trait js.Any;
+  if you want to define a method named "equals" in JavaScript, use a different name and add @JSName("equals").

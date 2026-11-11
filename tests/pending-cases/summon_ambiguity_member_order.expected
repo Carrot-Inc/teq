@@ -1,0 +1,3 @@
+scalac 3.8.4: rejected, 2 error(s)
+summon_ambiguity_member_order.scala:14:30: Ambiguous given instances: both given instance a in trait T1 and given instance b in trait T2 match type Ops of parameter x of method summon in object Predef
+summon_ambiguity_member_order.scala:16:30: Ambiguous given instances: both given instance b in trait T2 and given instance a in trait T1 match type Ops of parameter x of method summon in object Predef

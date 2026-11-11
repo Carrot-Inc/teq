@@ -1,0 +1,9 @@
+tests/cases/inline_substitution_splice_quote/wrap.scala:7:31: warning: Canceled quote directly inside a splice. ${ '{ XYZ } } is equivalent to XYZ.
+    inline def direct: String = ${ '{ Pos.here } }
+                                ^^^^^^^^^^^^^^^^^^
+tests/cases/inline_substitution_splice_quote/wrap.scala:8:50: warning: Canceled quote directly inside a splice. ${ '{ XYZ } } is equivalent to XYZ.
+    inline def direct2(inline s: String): String = ${ '{ s + Pos.here } }
+                                                   ^^^^^^^^^^^^^^^^^^^^^^
+main.scala:1:10
+amain.scala:2:10
+main.scala:3:10

@@ -1,0 +1,13 @@
+tests/errors/ambiguous_view_where_before_notes.scala:9:22: error: Found:    Unit
+Required: ?{ foo: ? }
+Note that implicit extension methods cannot be applied because they are ambiguous;
+both method cv in object C and method cv² in object C provide an extension method `foo` on Unit
+
+where:    cv  is a method in object C
+          cv² is a method in object C
+
+
+Maybe you are missing an else part for the conditional?
+  def t(c: Boolean) = (if c then println()).foo
+                       ^^^^^^^^^^^^^^^^^^^
+1 error found

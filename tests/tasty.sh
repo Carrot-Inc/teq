@@ -3,10 +3,15 @@
 # (compiled from tests/tasty/src with Scala 3.8.4; see tests/tasty/README) has to print what
 # tests/tasty/expected holds, and `teq tasty --body` the bodies of tests/tasty/src/bodies.scala.
 # `tests/tasty.sh --update` rewrites the expectations.
+# The checks expected to fail are tests/pending/tasty.txt, by the name on their FAIL line (tests/support/pending.sh):
+# the suite fails when a listed check fails no more and when an unlisted one fails; --pending-update takes the
+# checks that pass now out of the list, --pending-add writes the unlisted failures in.
 cd "$(dirname "$0")/.."
 teq=${TEQ:-./target/release/teq}
 pass=0
 fail=0
+. tests/support/pending.sh
+pending_fails_begin tasty out/tasty-pending "$@"
 mkdir -p tests/tasty/expected
 for f in tests/tasty/fixtures/*.tasty; do
   name=$(basename "$f" .tasty)
@@ -20,7 +25,7 @@ for f in tests/tasty/fixtures/*.tasty; do
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    echo "FAIL $name"
+    said_fail "$name"
     diff <(printf '%s\n' "$actual") "$expected" | head -20
   fi
 done
@@ -38,7 +43,7 @@ for name in Bodies Base Point Pretty; do
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    echo "FAIL body $name"
+    said_fail "body $name"
     diff <(printf '%s\n' "$actual") "$expected" | head -20
   fi
 done
@@ -67,7 +72,7 @@ for src in tests/tasty/capture/*.scala tests/tasty/capture/*/ tests/tasty/src/bo
     built=$?
     if [ $built != 0 ]; then
       fail=$((fail + 1))
-      echo "FAIL capture $name at $t worker(s): the product check fails: $(head -2 "$capture_tmp/log")"
+      said_fail "capture $name at $t worker(s): the product check fails: $(head -2 "$capture_tmp/log")"
     elif [ $t = 1 ]; then
       cp -R "$capture_tmp/p" "$extra/capture-$name"
       cat "$capture_tmp/bodies" >> "$extra/bodies.census" 2> /dev/null
@@ -83,7 +88,7 @@ for src in tests/tasty/capture/*.scala tests/tasty/capture/*/ tests/tasty/src/bo
       pass=$((pass + 1))
     else
       fail=$((fail + 1))
-      echo "FAIL capture $name at $t worker(s)"
+      said_fail "capture $name at $t worker(s)"
       grep -m3 'the merge left' "$capture_tmp/log"
       diff <(printf '%s\n' "$actual") "$expected" | head -20
     fi
@@ -101,14 +106,14 @@ while IFS=$'\t' read -r def captured; do
     compared=$((compared + 1))
   else
     fail=$((fail + 1))
-    echo "FAIL capture interpolation parts of $def: $captured, scalac's $pickled"
+    said_fail "capture interpolation parts of $def: $captured, scalac's $pickled"
   fi
 done < <(cat "$capture_tmp/parts" 2> /dev/null)
 if [ "$compared" -gt 0 ] && [ "$compared" == "$(grep -c '' "$capture_tmp/parts")" ]; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
-  echo "FAIL capture interpolation parts: $compared of $(grep -c '' "$capture_tmp/parts" 2> /dev/null) as scalac pickles them"
+  said_fail "capture interpolation parts: $compared of $(grep -c '' "$capture_tmp/parts" 2> /dev/null) as scalac pickles them"
 fi
 rm -rf "$capture_tmp"
 # The worker comparison refuses to pass without the storage it works in or without the census of
@@ -116,13 +121,13 @@ rm -rf "$capture_tmp"
 if [ "$1" != "--update" ]; then
   if TMPDIR=/nonexistent/capture-census tests/capture-census.sh --workers > /dev/null 2>&1; then
     fail=$((fail + 1))
-    echo "FAIL capture census without a temporary directory: passed"
+    said_fail "capture census without a temporary directory: passed"
   else
     pass=$((pass + 1))
   fi
   if TEQ=$(command -v false) tests/capture-census.sh --workers > /dev/null 2>&1; then
     fail=$((fail + 1))
-    echo "FAIL capture census without the fixtures' censuses: passed"
+    said_fail "capture census without the fixtures' censuses: passed"
   else
     pass=$((pass + 1))
   fi
@@ -136,14 +141,14 @@ for jar in org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar \
   [ "$1" = "--update" ] && break
   if [ ! -f "$M2/$jar" ]; then
     fail=$((fail + 1))
-    echo "FAIL bodies: no $M2/$jar in the coursier cache (incomplete validation)"
+    said_fail "bodies: no $M2/$jar in the coursier cache (incomplete validation)"
     continue
   fi
   if out=$(timeout 120 "$teq" tasty --bodies "$M2/$jar" 2>&1) && grep -q " 0 errors$" <<< "$out"; then
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    echo "FAIL bodies $(basename "$jar")"
+    said_fail "bodies $(basename "$jar")"
     echo "$out" | head -20
   fi
 done
@@ -152,13 +157,13 @@ done
 izumi="$M2/dev/zio/izumi-reflect_sjs1_3/3.0.9/izumi-reflect_sjs1_3-3.0.9.jar"
 if [ "$1" != "--update" ] && [ ! -f "$izumi" ]; then
   fail=$((fail + 1))
-  echo "FAIL load: no $izumi in the coursier cache (incomplete validation)"
+  said_fail "load: no $izumi in the coursier cache (incomplete validation)"
 elif [ "$1" != "--update" ]; then
   if out=$(timeout 60 "$teq" tasty --load "$izumi" 2>&1) && grep -q " 0 errors in " <<< "$out"; then
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    echo "FAIL load $(basename "$izumi")"
+    said_fail "load $(basename "$izumi")"
     echo "$out" | head -20
   fi
 fi
@@ -175,7 +180,7 @@ for src in tests/classpath/js/reader_*.scala; do
   jars_of "$src"
   if [ -n "$JARS_MISSING" ]; then
     fail=$((fail + 1))
-    echo "FAIL reader $name: not in the coursier cache:$JARS_MISSING (incomplete validation)"
+    said_fail "reader $name: not in the coursier cache:$JARS_MISSING (incomplete validation)"
     continue
   fi
   modes=$(grep -h -o '^// std: .*' "$src" | head -1 | sed 's|^// std: ||')
@@ -190,7 +195,7 @@ for src in tests/classpath/js/reader_*.scala; do
       # A listing counts only from a build that succeeded and wrote one.
       if [ "$status" -ne 0 ] || [ -z "$actual" ]; then
         fail=$((fail + 1))
-        echo "FAIL reader $name ($mode, $threads workers): exit $status, $(cat "$reader_tmp/dump" 2> /dev/null | grep -c .) listing lines: $(grep -m1 . "$reader_tmp/log")"
+        said_fail "reader $name ($mode, $threads workers): exit $status, $(cat "$reader_tmp/dump" 2> /dev/null | grep -c .) listing lines: $(grep -m1 . "$reader_tmp/log")"
         continue
       fi
       if [ "$1" = "--update" ]; then
@@ -201,7 +206,7 @@ for src in tests/classpath/js/reader_*.scala; do
         pass=$((pass + 1))
       else
         fail=$((fail + 1))
-        echo "FAIL reader $name ($mode, $threads workers)"
+        said_fail "reader $name ($mode, $threads workers)"
         diff <(printf '%s\n' "$actual") "$expected" | head -20
       fi
     done
@@ -222,7 +227,7 @@ products_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tasty-products.XXXXXX") || { echo "tas
 teq_abs=$(cd "$(dirname "$teq")" && pwd)/$(basename "$teq")
 if ! (cd tests/tasty/src && "$teq_abs" compiler check --products "$products_tmp/decl" reader_decl.scala reader_java.scala --classpath "$javafix") > "$products_tmp/decl.log" 2>&1; then
   fail=$((fail + 1))
-  echo "FAIL reader products: $(head -3 "$products_tmp/decl.log")"
+  said_fail "reader products: $(head -3 "$products_tmp/decl.log")"
 else
   (cd "$products_tmp/decl" && python3 -c "
 import os, zipfile
@@ -246,7 +251,7 @@ with zipfile.ZipFile('../decl.jar', 'w') as z:
       actual=$(grep -E $'^[a-z]+\tfix\\.' "$products_tmp/dump" 2> /dev/null | LC_ALL=C sort -u)
       if [ "$status" -ne 0 ] || [ -z "$actual" ]; then
         fail=$((fail + 1))
-        echo "FAIL reader products $name ($mode): exit $status: $(grep -m1 . "$products_tmp/log")"
+        said_fail "reader products $name ($mode): exit $status: $(grep -m1 . "$products_tmp/log")"
         continue
       fi
       differs=$(diff <(printf '%s\n' "$actual") "$listing")
@@ -256,7 +261,7 @@ with zipfile.ZipFile('../decl.jar', 'w') as z:
         pass=$((pass + 1))
       else
         fail=$((fail + 1))
-        echo "FAIL reader products $name ($mode)"
+        said_fail "reader products $name ($mode)"
         diff <(printf '%s\n' "$differs") "$expected" | head -20
       fi
       [ -z "$targets" ] || [[ "$targets " == *" js "* ]] || continue
@@ -265,7 +270,7 @@ with zipfile.ZipFile('../decl.jar', 'w') as z:
         pass=$((pass + 1))
       else
         fail=$((fail + 1))
-        echo "FAIL reader products $name ($mode): the program's output"
+        said_fail "reader products $name ($mode): the program's output"
         diff "$products_tmp/out.txt" "tests/classpath/js/$name.expected" | head -5
       fi
     done
@@ -290,7 +295,7 @@ for src in tests/tasty/probes/*.scala; do
     extra_units+=("probe-$name")
   else
     fail=$((fail + 1))
-    echo "FAIL probe $name: the product check fails: $(head -2 "$extra/probe-$name.log")"
+    said_fail "probe $name: the product check fails: $(head -2 "$extra/probe-$name.log")"
   fi
 done
 census_actual=$(tests/support/bodies-census.sh "$extra/bodies.census" 2> /dev/null)
@@ -300,7 +305,7 @@ elif [ "$census_actual" == "$(cat tests/tasty/expected/bodies.census 2> /dev/nul
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
-  echo "FAIL bodies census of the capture's programs and the probes"
+  said_fail "bodies census of the capture's programs and the probes"
   diff <(printf '%s\n' "$census_actual") tests/tasty/expected/bodies.census | head -10
 fi
 # The twin: the fixtures' sources compiled by teq's writer (`teq compiler check --products`) and every
@@ -335,7 +340,7 @@ for src in tests/tasty/src/*.scala; do
   [ "$name" = pext_inlined ] && srcs+=(tests/tasty/src/pext_dsl.scala)
   if ! "$teq" compiler check --products "$twin/$name" "${srcs[@]}" > "$twin/$name.log" 2>&1; then
     fail=$((fail + 1))
-    echo "FAIL twin $name: $(head -3 "$twin/$name.log")"
+    said_fail "twin $name: $(head -3 "$twin/$name.log")"
     continue
   fi
   twin_units+=("$name")
@@ -346,7 +351,7 @@ for src in tests/tasty/src/*.scala; do
         continue
       fi
       fail=$((fail + 1))
-      echo "FAIL twin $name: scalac's $stem.tasty has no counterpart among teq's pickles"
+      said_fail "twin $name: scalac's $stem.tasty has no counterpart among teq's pickles"
     done
   done
 done
@@ -359,7 +364,7 @@ js_units=()
 for name in facades unmod33; do
   if ! "$teq" compiler check --products "$twin/$name" "tests/tasty/src/$name.scala" > "$twin/$name.log" 2>&1; then
     fail=$((fail + 1))
-    echo "FAIL twin $name: $(head -3 "$twin/$name.log")"
+    said_fail "twin $name: $(head -3 "$twin/$name.log")"
     continue
   fi
   js_units+=("$name")
@@ -369,7 +374,7 @@ for name in "${twin_units[@]}"; do
     stem=$(basename "$t" .tasty)
     if [ ! -f "tests/tasty/fixtures/$stem.tasty" ]; then
       fail=$((fail + 1))
-      echo "FAIL twin $name: teq's $stem.tasty has no scalac fixture to be compared with"
+      said_fail "twin $name: teq's $stem.tasty has no scalac fixture to be compared with"
       continue
     fi
     expected="tests/tasty/twin/$stem.diff"
@@ -381,7 +386,7 @@ for name in "${twin_units[@]}"; do
       pass=$((pass + 1))
     else
       fail=$((fail + 1))
-      echo "FAIL twin $stem"
+      said_fail "twin $stem"
       diff <(printf '%s\n' "$actual") "$expected" | head -20
     fi
     # The forms: the bodies of the two pickles as `teq tasty
@@ -400,7 +405,7 @@ for name in "${twin_units[@]}"; do
       pass=$((pass + 1))
     else
       fail=$((fail + 1))
-      echo "FAIL twin forms $stem"
+      said_fail "twin forms $stem"
       diff <(printf '%s\n' "$forms_actual") "$forms" | head -20
     fi
   done
@@ -420,16 +425,21 @@ if out=$(python3 tests/tasty/origins/check.py uuid $(find "$twin" -name '*.tasty
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
-  printf '%s\n' "$out" | head -10
+  printf '%s\n' "$out" | grep -v '^FAIL ' | head -10
+  said_fails_of "twin uuid check" "$out"
 fi
 if [ "$1" = "--update" ]; then
   printf '%s\n' "$uuids" > tests/tasty/twin/uuids.txt
 elif [ "$uuids" == "$(cat tests/tasty/twin/uuids.txt 2> /dev/null)" ]; then
   pass=$((pass + 1))
 else
+  # Pickle by pickle, so that the list of the checks expected to fail names the pickles it is about and every
+  # other pickle stays held: one whose UUID is not the pinned one, one written that none is pinned for, one
+  # pinned that is not written.
   fail=$((fail + 1))
-  echo "FAIL twin UUIDs"
-  diff <(printf '%s\n' "$uuids") tests/tasty/twin/uuids.txt | head -10
+  while IFS= read -r pickle; do
+    said_fail "twin UUID $pickle: not the UUID tests/tasty/twin/uuids.txt pins"
+  done < <(diff <(printf '%s\n' "$uuids") tests/tasty/twin/uuids.txt | sed -n 's/^[<>] \([^ ]*\) .*/\1/p' | LC_ALL=C sort -u)
 fi
 again_ok=1
 for name in "${twin_units[@]}" "${js_units[@]}"; do
@@ -437,12 +447,12 @@ for name in "${twin_units[@]}" "${js_units[@]}"; do
   [ "$name" = pext_inlined ] && srcs+=(tests/tasty/src/pext_dsl.scala)
   "$teq" compiler check --products "$twin/again/$name" "${srcs[@]}" > /dev/null 2>&1
   for t in $(cd "$twin/$name" && find . -name '*.tasty'); do
-    cmp -s "$twin/$name/$t" "$twin/again/$name/$t" || { again_ok=0; echo "FAIL twin $name: a second build writes $t otherwise"; }
+    cmp -s "$twin/$name/$t" "$twin/again/$name/$t" || { again_ok=0; said_fail "twin $name: a second build writes $t otherwise"; }
   done
 done
 "$teq" compiler check --products "$twin/beside" tests/tasty/src/bodies.scala tests/tasty/origins/several/Several.scala > /dev/null 2>&1
 for t in $(cd "$twin/bodies" && find . -name '*.tasty'); do
-  cmp -s "$twin/bodies/$t" "$twin/beside/$t" || { again_ok=0; echo "FAIL twin bodies: a build beside an unused file writes $t otherwise"; }
+  cmp -s "$twin/bodies/$t" "$twin/beside/$t" || { again_ok=0; said_fail "twin bodies: a build beside an unused file writes $t otherwise"; }
 done
 [ $again_ok = 1 ] && pass=$((pass + 1)) || fail=$((fail + 1))
 # The TASTy inspector's shape over its own jars (tests/tasty/inspector): Inspector.scala's
@@ -465,13 +475,13 @@ insp_scalac() {
 }
 if ! command -v scala-cli > /dev/null || [ ! -f "$insp_jar" ]; then
   fail=$((fail + 1))
-  echo "FAIL inspector: no scala-cli or no scala3-tasty-inspector 3.8.4 in the coursier cache (incomplete validation)"
+  said_fail "inspector: no scala-cli or no scala3-tasty-inspector 3.8.4 in the coursier cache (incomplete validation)"
 elif ! "$teq" compiler build --target jvm --products "$insp_tmp/tq" --classpath "$insp_cp" "$insp/Inspector.scala" > "$insp_tmp/tq.log" 2>&1; then
   fail=$((fail + 1))
-  echo "FAIL inspector: teq's products: $(head -3 "$insp_tmp/tq.log")"
+  said_fail "inspector: teq's products: $(head -3 "$insp_tmp/tq.log")"
 elif ! log=$(insp_scalac "$insp_tmp/sc" --classpath "$insp_jar" "$PWD/$insp/Inspector.scala"); then
   fail=$((fail + 1))
-  echo "FAIL inspector: scalac's classes: $log"
+  said_fail "inspector: scalac's classes: $log"
 else
   insp_read=$insp_tmp/tq
   actual=$(diff <("$teq" tasty "$insp_tmp/sc/tinsp/Inspector.tasty" | tail -n +2 | sed 's/<body@[0-9]*>/<body>/g') \
@@ -482,7 +492,7 @@ else
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    echo "FAIL inspector twin"
+    said_fail "inspector twin"
     diff <(printf '%s\n' "$actual") "$insp/Inspector.diff" | head -20
   fi
   if [ "$1" != "--update" ]; then
@@ -490,14 +500,14 @@ else
       pass=$((pass + 1))
     else
       fail=$((fail + 1))
-      echo "FAIL inspector: scalac over teq's products: $log"
+      said_fail "inspector: scalac over teq's products: $log"
     fi
     for up in sc tq; do
       if "$teq" compiler build --target jvm --products "$insp_tmp/use-over-$up" --classpath "$insp_cp:$insp_tmp/$up" "$insp/UseInspector.scala" > "$insp_tmp/use-over-$up.log" 2>&1; then
         pass=$((pass + 1))
       else
         fail=$((fail + 1))
-        echo "FAIL inspector: teq over the $up products: $(head -3 "$insp_tmp/use-over-$up.log")"
+        said_fail "inspector: teq over the $up products: $(head -3 "$insp_tmp/use-over-$up.log")"
       fi
     done
   fi
@@ -509,7 +519,7 @@ fi
 if [ "$1" != "--update" ]; then
   if ! command -v scala-cli > /dev/null; then
     fail=$((fail + 1))
-    echo "FAIL twin read: no scala-cli, so scalac reads none of the pickles (incomplete validation)"
+    said_fail "twin read: no scala-cli, so scalac reads none of the pickles (incomplete validation)"
   else
     : > "$twin/fromtasty.jobs"
     for name in "${twin_units[@]}"; do
@@ -537,7 +547,7 @@ if [ "$1" != "--update" ]; then
         pass=$((pass + 1))
       else
         fail=$((fail + 1))
-        echo "FAIL twin read $name"
+        said_fail "twin read $name"
         awk -v j="FAIL $name" '$0 == j { on = 1; next } /^(ok|FAIL) / { on = 0 } on' "$twin/fromtasty.out" | head -5
       fi
     done
@@ -551,7 +561,8 @@ if [ "$1" != "--update" ]; then
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    printf '%s\n' "$out" | head -10
+    printf '%s\n' "$out" | grep -v '^FAIL ' | head -10
+    said_fails_of "stdshapes" "$out"
   fi
 fi
 # The annotations: scalac reads teq's pickles of
@@ -561,7 +572,7 @@ fi
 if [ "$1" != "--update" ]; then
   if ! command -v scala-cli > /dev/null; then
     fail=$((fail + 1))
-    echo "FAIL annotations: no scala-cli, so scalac reads none of the annotations (incomplete validation)"
+    said_fail "annotations: no scala-cli, so scalac reads none of the annotations (incomplete validation)"
   else
     ann_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tasty-annotations.XXXXXX") || { echo "tasty: no temporary directory for the annotations"; exit 1; }
     tests/tasty/annotations/check.sh "$(cd "$(dirname "$teq")" && pwd)/$(basename "$teq")" "$ann_tmp" > "$ann_tmp/out" 2>&1
@@ -569,7 +580,8 @@ if [ "$1" != "--update" ]; then
     pass=$((pass + $(grep -c '^ok ' "$ann_tmp/out")))
     if [ $ann_status != 0 ]; then
       fail=$((fail + 1))
-      grep -v '^ok ' "$ann_tmp/out" | head -20
+      grep -v -E '^(ok|FAIL) ' "$ann_tmp/out" | head -20
+      said_fails_of "annotations" "$(grep -v '^ok ' "$ann_tmp/out")"
     fi
     rm -rf "$ann_tmp"
   fi
@@ -581,7 +593,7 @@ fi
 # Without scala-cli a failure (incomplete validation).
 if ! command -v scala-cli > /dev/null; then
   fail=$((fail + 1))
-  echo "FAIL representation: no scala-cli, so scalac observes nothing (incomplete validation)"
+  said_fail "representation: no scala-cli, so scalac observes nothing (incomplete validation)"
 else
   rep_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tasty-representation.XXXXXX") || { echo "tasty: no temporary directory for the representation oracle"; exit 1; }
   tests/tasty/representation/check.sh "$(cd "$(dirname "$teq")" && pwd)/$(basename "$teq")" "$rep_tmp/work" ${1:+"$1"} > "$rep_tmp/out" 2>&1
@@ -589,7 +601,8 @@ else
   pass=$((pass + $(grep -c '^ok ' "$rep_tmp/out")))
   if [ $rep_status != 0 ]; then
     fail=$((fail + 1))
-    grep -v '^ok ' "$rep_tmp/out" | head -30
+    grep -v -E '^(ok|FAIL) ' "$rep_tmp/out" | head -30
+    said_fails_of "representation" "$(grep -v '^ok ' "$rep_tmp/out")"
   fi
   rm -rf "$rep_tmp"
 fi
@@ -603,7 +616,7 @@ fi
 if [ "$1" != "--update" ]; then
   if ! command -v scala-cli > /dev/null; then
     fail=$((fail + 1))
-    echo "FAIL positions: no scala-cli, so no comparison with scalac's unpickler (incomplete validation)"
+    said_fail "positions: no scala-cli, so no comparison with scalac's unpickler (incomplete validation)"
   else
     pos_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tasty-positions.XXXXXX") || { echo "tasty: no temporary directory for the positions"; exit 1; }
     : > "$pos_tmp/requested.txt"
@@ -624,22 +637,23 @@ if [ "$1" != "--update" ]; then
     root=$PWD
     abs_teq=$(cd "$(dirname "$teq")" && pwd)/$(basename "$teq")
     for r in $(cat "$pos_tmp/requested.txt"); do
-      [ -f "$pos_tmp/$r" ] || { fail=$((fail + 1)); echo "FAIL positions: $r was not copied for scalac's unpickler (incomplete validation)"; }
+      [ -f "$pos_tmp/$r" ] || { fail=$((fail + 1)); said_fail "positions: $r was not copied for scalac's unpickler (incomplete validation)"; }
     done
     # The oracle has to end well and to answer for every file it was given: what it left out is
     # no pass.
     if [ -z "$sjs" ] || [ ! -f "$sjs3" ]; then
       fail=$((fail + 1))
-      echo "FAIL positions: no scalajs-library_2.13 or scala3-library_sjs1_3 3.8.4 in the coursier cache, which scalac's unpickler needs for the Scala.js fixtures (incomplete validation)"
+      said_fail "positions: no scalajs-library_2.13 or scala3-library_sjs1_3 3.8.4 in the coursier cache, which scalac's unpickler needs for the Scala.js fixtures (incomplete validation)"
     elif ! (cd "$pos_tmp" && COURSIER_MODE=offline timeout 300 scala-cli --power run -S 3.8.4 --jvm system --server=false --offline -q \
       "$root/tests/tasty/positions/Oracle.scala" -- "-cp=cp:$sjs:$sjs3:$root/tests/classfile/fixtures" $(cat requested.txt) > oracle.txt 2> oracle.err); then
       fail=$((fail + 1))
-      echo "FAIL positions: scalac's unpickler did not end well (incomplete validation): $(grep -v hint "$pos_tmp/oracle.err" | head -3)"
+      said_fail "positions: scalac's unpickler did not end well (incomplete validation): $(grep -v hint "$pos_tmp/oracle.err" | head -3)"
     elif out=$(cd "$pos_tmp" && python3 "$root/tests/tasty/positions/check.py" "$abs_teq" oracle.txt --requested requested.txt --skip /fix/qpat/LayerMacros.tasty /fix/qpat/QpProbe.tasty --unread /UmBodies.tasty); then
       pass=$((pass + $(echo "$out" | sed -n 's/^positions: \([0-9]*\) passed.*/\1/p')))
     else
       fail=$((fail + 1))
-      echo "$out" | head -40
+      echo "$out" | grep -v '^FAIL ' | head -40
+      said_fails_of "positions" "$out"
       grep -m3 -i error "$pos_tmp/oracle.err"
     fi
     rm -rf "$pos_tmp"
@@ -661,7 +675,7 @@ places_nosrc=$(places_lib_nosrc_jar)
 places_decl=$(places_decl_jar)
 if [ ! -f "$places_lib" ] || [ ! -f "$places_nosrc" ] || [ ! -f "$places_decl" ]; then
   fail=$((fail + 1))
-  echo "FAIL places: tests/support/places_lib not built (no scala-cli?): incomplete validation"
+  said_fail "places: tests/support/places_lib not built (no scala-cli?): incomplete validation"
 else
   ptmp=$(mktemp -d "${TMPDIR:-/tmp}/teq-places.XXXXXX") || { echo "tasty: no temporary directory for the places"; exit 1; }
   for strip in noattr:Attributes noposition:Positions "bare:Attributes Positions"; do
@@ -684,7 +698,7 @@ else
       pass=$((pass + 1))
     else
       fail=$((fail + 1))
-      echo "FAIL places $name (exit $status)"
+      said_fail "places $name (exit $status)"
       diff <(printf '%s\n' "$actual") "$expected" | head -20
     fi
   done
@@ -711,7 +725,7 @@ origins_build() {
   shift
   if ! "$teq" compiler build --target jvm --products "$otmp/$dir" "$@" > "$otmp/$dir.log" 2>&1; then
     fail=$((fail + 1))
-    echo "FAIL origins: the products $dir: $(head -3 "$otmp/$dir.log")"
+    said_fail "origins: the products $dir: $(head -3 "$otmp/$dir.log")"
   fi
 }
 origins_build pa $o/collide/Use29115316.scala
@@ -744,7 +758,7 @@ for dir in ex oc; do
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    echo "FAIL origins classes $dir"
+    said_fail "origins classes $dir"
     diff <(printf '%s\n' "$named") <(printf '%s\n' "$made") | head -10
   fi
 done
@@ -753,7 +767,7 @@ if [ "$callees" = 3 ]; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
-  echo "FAIL origins callees: $callees records of Make.greeter in Use.tasty, where its three INLINEDs are"
+  said_fail "origins callees: $callees records of Make.greeter in Use.tasty, where its three INLINEDs are"
 fi
 # A top-level transparent method's expansion: its record names the file's `$package` object, the
 # same bytes beside an unused file and through the fork at two and four workers.
@@ -770,7 +784,7 @@ if [ "$callees" = 1 ] && [ $same = 1 ]; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
-  echo "FAIL origins top-level callee: $callees records of inc in Use.tasty, the same bytes elsewhere: $same"
+  said_fail "origins top-level callee: $callees records of inc in Use.tasty, the same bytes elsewhere: $same"
 fi
 for case in "pa collide/Use29115316.scala oa" "pabz collide/ZZZ87kqi0.scala oz" "sv several/Several.scala sv" "un unicode/Notes.scala un"; do
   read -r dir src pkg <<< "$case"
@@ -779,7 +793,7 @@ for case in "pa collide/Use29115316.scala oa" "pabz collide/ZZZ87kqi0.scala oz" 
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    echo "FAIL origins roundtrip $dir: ${out:-no pickles}"
+    said_fail "origins roundtrip $dir: ${out:-no pickles}"
   fi
 done
 # origins_listing <case> <class path> <source>: the program's `origin` and `token` lines, sorted,
@@ -810,7 +824,7 @@ elif [ "$listing" == "$(cat $o/expected.txt 2> /dev/null)" ]; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
-  echo "FAIL origins listing"
+  said_fail "origins listing"
   diff <(printf '%s\n' "$listing") $o/expected.txt | head -20
 fi
 for pair in "apart $otmp/pb:$otmp/pa $o/use/Pair.scala" "same $otmp/sb:$otmp/sa $o/use/Same.scala" "classes $otmp/b/classes:$otmp/a/classes $o/use/Same.scala"; do
@@ -819,7 +833,7 @@ for pair in "apart $otmp/pb:$otmp/pa $o/use/Pair.scala" "same $otmp/sb:$otmp/sa 
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    echo "FAIL origins: the listing of $name changes with the class path's order"
+    said_fail "origins: the listing of $name changes with the class path's order"
   fi
 done
 # The section of another version, a payload malformed within its framing, a broken frame.
@@ -838,13 +852,13 @@ for how in version variant frame; do
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    echo "FAIL origins $how: exit $status, $(grep -v '^\[classpath\]' "$otmp/$how.log" | head -3)"
+    said_fail "origins $how: exit $status, $(grep -v '^\[classpath\]' "$otmp/$how.log" | head -3)"
   fi
 done
 if [ "$1" != "--update" ]; then
   if ! command -v scala-cli > /dev/null; then
     fail=$((fail + 1))
-    echo "FAIL origins: no scala-cli, so scalac's printer is not run on a pickle with the section (incomplete validation)"
+    said_fail "origins: no scala-cli, so scalac's printer is not run on a pickle with the section (incomplete validation)"
   else
     echo 'object Dummy' > "$otmp/Dummy.scala"
     (cd "$otmp" && COURSIER_MODE=offline timeout 300 scala-cli --power run -S 3.8.4 --jvm system --server=false --offline -q Dummy.scala \
@@ -855,7 +869,7 @@ if [ "$1" != "--update" ]; then
       pass=$((pass + 1))
     else
       fail=$((fail + 1))
-      echo "FAIL origins: scalac's TastyPrinter on a product's pickle, exit $status: $(grep -v hint <<< "$printed" | head -3)"
+      said_fail "origins: scalac's TastyPrinter on a product's pickle, exit $status: $(grep -v hint <<< "$printed" | head -3)"
     fi
   fi
 fi
@@ -872,7 +886,7 @@ if [ "$status" -ne 0 ] && [ "$status" -ne 124 ] && [ "$status" -ne 134 ] \
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
-  echo "FAIL malformed cyclic name: exit $status, $(head -2 <<< "$malformed")"
+  said_fail "malformed cyclic name: exit $status, $(head -2 <<< "$malformed")"
 fi
 # A version this reader does not know has to be refused with a message, not misread.
 bad=$(mktemp -t teq-tasty.XXXXXX).tasty
@@ -881,8 +895,13 @@ if "$teq" tasty "$bad" 2>&1 | grep -q "TASTy version 29.0 is not supported"; the
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
-  echo "FAIL version check"
+  said_fail "version check"
 fi
 rm -f "$bad"
 echo "tasty: $pass passed, $fail failed"
-[ $fail -eq 0 ]
+# --update rewrote the expectations and compared nothing: the list of the checks expected to fail is not read
+if [ "$1" = "--update" ]; then
+  [ $fail -eq 0 ]
+else
+  pending_fails_end $fail $pass
+fi

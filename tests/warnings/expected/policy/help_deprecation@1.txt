@@ -1,0 +1,2 @@
+exit 0
+help -deprecation  Emit warning and location for usages of deprecated APIs.

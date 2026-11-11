@@ -1,0 +1,10 @@
+int, any, no sum, no list, open
+int, any, plus one, no list, open
+int, any, no sum, no list, open
+int, any, no sum, length, open
+other, any, no sum, list of 2, open
+other, any, no sum, list of any, open
+other, any, no sum, path through a local, open
+other, any, no sum, no list, open
+other, any, no sum, no list, closed 5
+false true

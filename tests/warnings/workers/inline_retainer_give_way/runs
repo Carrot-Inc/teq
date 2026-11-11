@@ -1,0 +1,4 @@
+# An inline override of a non-inline member in every file (`inline def pick` over `P.pick`): its body retainer
+# (Inlines.bodyRetainer, entered by Typer.typedDefDef) is a member of a class made before the fork, which a forked
+# worker cannot enter; the build gives way to one worker, which enters it.
+0

@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/ForGroups.tasty (TASTy 28.8, 2928 bytes)
+package fix.forh
+@SourceFile object ForGroups extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def f: List[Int] = ...
+}

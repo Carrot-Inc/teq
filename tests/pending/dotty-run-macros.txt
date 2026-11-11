@@ -1,0 +1,199 @@
+BigFloat	BigFloatFromDigitsImpl_1.scala:12:31: no given instance of type ToExpr[BigInt] was found for parameter to
+TypeRepr-isTupleN	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
+ValDef-let-flags	Macro_1.scala:7:5: None of the overloaded alternatives of method let in object ValDef with types
+Xmacro-settings-compileTimeEnv	option: -Xmacro-settings:a,b=1,c.b.a=x.y.z=1,myLogger.level=INFO (teq has no flag for it)
+Xmacro-settings-simple	option: -Xmacro-settings:one,two,three (teq has no flag for it)
+annot-add-global-class	output: line 2: the .check has 'executed in: Bar$macro$5', the program printed 'executed in: Test_2$package$'
+annot-add-global-object	Macro_1.scala:17:117: missing parameter type
+annot-add-local-class	output: line 2: the .check has 'executed in: Test_2$package$Baz$1', the program printed 'executed in: Test_2$package$'
+annot-add-local-object	Macro_1.scala:17:99: missing parameter type
+annot-add-nested-class	output: line 2: the .check has 'executed in: Foo$Bar$macro$1', the program printed 'executed in: Foo'
+annot-add-nested-object	Macro_1.scala:17:117: missing parameter type
+annot-arg-value-in-java	java source: teq reads none
+annot-changeVal	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
+annot-concrete-class	Test_2.scala:7:7: class Foo needs to be abstract, since def foo: String in trait AFoo is not defined
+annot-export	run: exit 1: Exception in thread "main" scala.NotImplementedError: an implementation is missing
+annot-gen2	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
+annot-java-tree	S.scala:4:3: exception in macro: java.lang.AssertionError: assertion failed: Expected List(a, b) arguments for SuppressWarnings annotation of Foo but got List() (called by checkSuppressWarnings)
+annot-macro-main	run: exit 1: Caused by: java.lang.ClassNotFoundException: Test
+annot-mod-class-add-def	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Foo@…
+annot-mod-class-add-inner-class	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Foo@…
+annot-mod-class-add-lazy-val	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Foo@…
+annot-mod-class-add-local-class	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Foo@…
+annot-mod-class-add-val	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Foo@…
+annot-mod-class-add-var	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Foo@…
+annot-mod-class-data	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Foo@…
+annot-mod-class-equals	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
+annot-mod-class-mod-def	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: ?
+annot-mod-class-mod-val	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: ?
+annot-mod-class-override-def	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Foo@…
+annot-mod-class-override-val	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: ?
+annot-result-order	output: line 1: the .check has 'before: foo', the program printed nothing
+annot-simple-fib	output: line 5: the .check has 'compute fib of 4', the program printed 'compute fib of 1'
+annot-unrollLast	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodException: Bar.foo(java.lang.String,int)
+beta-reduce-inline-result	Test_2.scala:18:9: error overriding method apply in trait Function1 of type (v1: T1): R: method apply of type (i: Int): (i : Int) has incompatible type
+exports	output: line 3: the .check has "extracted with TreeAccumulator: '{export Messages.{logMessage => log}}, '{export Messages.{count}}", the program printed 'extracted with TreeAccumulator: '
+expr-map-1	Test_2.scala:4:13: exception in macro: java.lang.StackOverflowError (called by rewrite in object Macro_1$package) (in the body of Macro_1$package.rewrite)
+expr-map-2	output: line 3: the .check has '4', the program printed '2'
+expr-map-3	Macro_1.scala:14:28: type mismatch: found String, required String & T
+expr-mirror-info	Macro_1.scala:21:114: no given instance of type ToExpr[(String, List[String], String, String, List[String])] was found for parameter to
+f-interpolation-1	FQuote_1.scala:8:52: not found: this
+f-interpolator-tests.scala	f-interpolator-tests.scala:374:7: expected end of statement, found identifier
+flops-rewrite	output: line 1: the .check has 'scala.Nil.map[scala.Nothing](((x: scala.Nothing) => x))', the program printed 'Nil.map[scala.Nothing](((x: scala.Nothing) => x))'
+flops-rewrite-2	output: line 11: the .check has '0.+(a).+(b)', the program printed 'Macro_1$package.plus(a, 0).+(Macro_1$package.plus(0, b))'
+flops-rewrite-3	output: line 11: the .check has '0.+(a).+(b)', the program printed 'Macro_1$package.plus(a, 0).+(Macro_1$package.plus(0, b))'
+gestalt-optional-staging	Macro_1.scala:10:75: not found: this
+gestalt-type-toolbox-reflect	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed:
+i10863	Macro_1.scala:4:18: no given instance of type Type[T] was found for parameter evidence$1
+i10880	Test_2.scala:7:29: missing argument for parameter name (in the body of Dsl.ent)
+i11685	Test_2.scala:13:28: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by client in object MyMacro) (in the body of test.MyMacro.client)
+i12021	Test_2.scala:7:10: 'erased' is not part of the supported Scala subset
+i12188	teq: jvm backend: Test_2$package$.Test: the local c is not in scope of the generated method
+i12351	option: -Xread-docs (teq has no flag for it)
+i12352	option: -Xread-docs (teq has no flag for it)
+i12392	output: line 1: the .check has 'scala.Option[java.lang.String] to scala.Option[scala.Int]', the program printed 'scala.Option[scala.Predef.String] to scala.Option[scala.Predef.String]'
+i12417b	Tuples.scala:247:12:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
+i14902	output: line 2: the .check has 'List(Y, Z, X)', the program printed 'List(Y, Z)'
+i15968	output: line 2: the .check has ' type Z = java.lang.String', the program printed ' val arg: Z = "foo"'
+i16734a	Macro_1.scala:3:27: type AnyKind not found
+i16734b	Macro_1.scala:5:31: type AnyKind not found
+i16734c	Macro_1.scala:3:32: type AnyKind not found
+i17105	Macro_2.scala:7:51: value apply is not a member of Any
+i17105b	Macro_1.scala:11:26: 'erased' is not part of the supported Scala subset
+i17257	run: exit 1: Exception in thread "main" java.lang.NoSuchMethodError: 'void scala.runtime.TupleXXL.<init>(java.lang.Object, java.lang.Object, java.lang.Object, java.lang.Object, java.lang.Object, java.lang.Object, java.lang.Object, java.lang
+i17445-new-default	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: Expected P(4, 7) but got P(3,7)
+i17905	Macro_1.scala:6:80: value apply is not a member of Any
+i18283	output: line 1: the .check has '(Test_2$package.Id,Test_2$package.Id,scala.Long)', the program printed '(Id,Id,Id)'
+i18806	run: exit 1: Exception in thread "main" scala.NotImplementedError: an implementation is missing
+i19676	Test_2.scala:9:5: pattern definitions are only supported inside blocks
+i19732	output: line 1: the .check has 'Map(b -> 23)', the program printed 'Map()'
+i19905	Test_2.scala:5:11: exception in macro: scala.MatchError: scala.Unit (of class scala.quoted.Type) (called by noPrefixStructure in object Macro_1$package) (in the body of Macro_1$package.noPrefixStructure)
+i19951-java-annotations-tasty-compat	java source: teq reads none
+i19951-java-annotations-tasty-compat-2	java source: teq reads none
+i20052	java source: teq reads none
+i20449	output: line 2: the .check has 'Original: Main_2$package.UserName.T', the program printed 'Original: UserName.T'
+i21225	Macro_1.scala:12:35: not found: GivenSelector
+i22260	Macros_1.scala:16:26: not found: MethodTypeKind
+i22395	output: line 1: the .check has 'TypeRef(AppliedType(TypeRef(ThisType(TypeRef(ThisType(TypeRef(NoPrefix,module class <root>)),module class <empty>)),Foo),List(TypeRef(TermRef(ThisType(TypeRef(NoPrefix,module class <root>)),object scala),Int)
+i22616c	out/dotty-3.8.4/tests/run-macros/i22616c/MyTypeRepr_3.scala: cannot write TASTy for the reflection API's type TypeRepr outside a method of a Quotes in MyTypeRepr
+i24006	Test.scala:3:20: not supported yet in a macro: reading stdin is an effect, which a compile-time evaluation cannot have (called by eval in object Eval)
+i5119	output: line 1: the .check has 'Select(Typed(Apply(Select(New(TypeIdent("StringContextOps")), "<init>"), List(Apply(Select(Select(Select(Ident("_root_"), "scala"), "StringContext"), "apply"), List(Typed(Repeated(List(Literal(StringConstant(
+i5119b	output: line 3: the .check has 'Apply(Ident("foo"), List(Literal(IntConstant(4))))', the program printed 'Ident("arg1$1")'
+i5941	usage_2.scala:12:15: Unsupported syntax. Example: `GenLens[Address](_.streetNumber)`
+i6253-c	run: exit 1: Exception in thread "main" scala.NotImplementedError: an implementation is missing
+i6270	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
+i6518	Macro_1.scala:9:20: type argument Function1 does not have the same kind as its bound
+i6765	output: line 1: the .check has 'scala.List.apply[java.lang.String]("One")', the program printed 'List.apply[scala.collection.immutable.Seq[scala.Predef.String]](("One": scala.<repeated>[scala.Predef.String]))'
+i6765-b	output: line 1: the .check has 'scala.List.apply[java.lang.String]("One")', the program printed 'List.apply[scala.collection.immutable.Seq[scala.Predef.String]](("One": scala.<repeated>[scala.Predef.String]))'
+i6765-c	output: line 1: the .check has 'scala.Nil', the program printed 'Nil'
+i6772	Macro_1.scala:10:42:None:None: the body of Macros.toExprOfList is withheld from the products of $OUT/run-macros/i6772/jvm.products (elided: unstated the singleton type of the local buff): the TASTy writer's queue of the shapes it withholds
+i6988	FirstArg_1.scala:11:7:None:None: the body of foo.Macros.argsImpl is withheld from the products of $OUT/run-macros/i6988/jvm.products (elided: unstated a default getter of a local method): the TASTy writer's queue of the shapes it withholds
+i7048	Lib_1.scala:21:5:None:None: the body of Lib_1$package.mcrImpl is withheld from the products of $OUT/run-macros/i7048/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another shape): the TASTy wr
+i7887	Macro_1.scala:2:10: cannot resolve import: quotes is not an object or a package
+i7898	output: line 1: the .check has 'scala.List.apply[scala.PartialFunction[scala.Int, scala.Predef.String]](((x$1: scala.Int) => x$1 match {', the program printed 'List.apply[scala.collection.immutable.Seq[scala.PartialFunction[scala.Int, scala
+i7987	output: line 1: the .check has 'scala.deriving.Mirror.Product {', the program printed 'Product{type MirroredMonoType = Some[Int]; type MirroredType = Some[Int]; type MirroredLabel = "Some"; type MirroredElemTypes = (Int); type MirroredElemL
+i8514	output: line 1: the .check has 'List(class Object, trait Matchable, class Any)', the program printed 'List(AnyRef, Any)'
+i8514b	output: line 2: the .check has 'A[[T >: scala.Nothing <: scala.Any] =>> P[T], scala.Predef.String]', the program printed 'A[P, scala.Predef.String]'
+i8520	Macro_1.scala:11:11: type argument T does not have the same kind as its bound
+i8746	Macro_1.scala:7:32: type mismatch: found tpe2, required "anything"
+i9206	Macros_1.scala:5:27: type AnyKind not found
+i9570	Test_2.scala:6:16: exception in macro: scala.MatchError: Macros.HList.HNil (of class scala.quoted.Expr) (called by size in object HList) (in the body of Macros.size)
+i9812b	Macro_1.scala:50:31: type mismatch: found (Quotes) ?=> Expr[Lst[Int]], required Expr[Lst[Int]]
+inline-beta-reduce-polyfunction.scala	output: line 1: the .check has '{', the program printed 'foo([X] => (x: X) => { println(x); x })'
+inline-case-objects	Macro_1.scala:5:7:None:None: the body of Macros.impl is withheld from the products of $OUT/run-macros/inline-case-objects/jvm.products (elided: unstated the std's Class.getCanonicalName, which scala-library has under another shape): the TAS
+inline-option	quotes.scala:193:35: no given instance of type FromExpr[T | Null] was found for parameter from
+inline-tuples-1	Macro_1.scala:8:100: no given instance of type FromExpr[(Int, Int, Int, Int)] was found for parameter from
+is-in-typer	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
+lib-StringContext	StringContext.scala:92:38: expected end of statement, found identifier
+macro-erased	Macro_1.scala:15:13: 'erased' is not part of the supported Scala subset
+newClass	Test_2.scala:2:13: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass in object Macro_1$package) (in the body of Macro_1$package.makeClass)
+newClassAnnotation	java source: teq reads none
+newClassExtends	Test_2.scala:2:18: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass in object Macro_1$package) (in the body of Macro_1$package.makeClass)
+newClassExtendsClassParams	Test_2.scala:2:18: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass in object Macro_1$package) (in the body of Macro_1$package.makeClass)
+newClassExtendsJavaClass	java source: teq reads none
+newClassParams	Macro_1.scala:12:13: there is no parameter named clsFlags
+newClassParamsExtendsClassParams	Macro_1.scala:11:13: too many arguments: expected 5
+newClassSelf	Test_2.scala:2:16: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass in object Macro_1$package) (in the body of Macro_1$package.makeClass)
+newClassTraitAndAbstract	Macro_1.scala:32:30: value apply is not a member of PolyType
+newClassTypeParams	Macro_1.scala:10:30: value apply is not a member of PolyType
+newClassTypeParamsDoc	Macro_1.scala:11:30: value apply is not a member of PolyType
+no-symbol	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed
+opaque-inline	TestEmail.scala:5:14: Not a constant
+paramSymss	output: line 11: the .check has 'paramSymss: List(List(Test$._$T))', the program printed 'paramSymss: List(List(T))'
+pattern-scope-extrusion	quoted_1.scala:9:29: value apply is not a member of Any
+places-proto	Macros_1.scala:4:7:None:None: the body of Places.withPlace is withheld from the products of $OUT/run-macros/places-proto/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another shape): the TAST
+quote-impure-by-name	output: line 1: the .check has '1 + {Index.zero["bar", scala.Tuple2["baz", scala.Unit]]}', the program printed '1 + {Index.zero}'
+quote-inline-function	output: line 6: the .check has ' f$proxy1.apply(i)', the program printed ' {'
+quote-match-more-that-22-splices	Macro_1.scala:5:5:None:None: the body of Macro_1$package.fExpr is withheld from the products of $OUT/run-macros/quote-match-more-that-22-splices/jvm.products (elided: unstated a raw array): the TASTy writer's queue of the shapes it withhold
+quote-match-poly-function-1	output: line 2: the .check has 'not matched', the program printed 'Case 2 matched'
+quote-match-poly-function-1-regression	output: line 2: the .check has 'not matched', the program printed 'Case 2 matched'
+quote-match-poly-function-2	Macro_1.scala:7:42: value apply is not a member of Any
+quote-matcher-runtime	quoted_1.scala:15:36: type mismatch: found Type[?] & AnyRef, required Type[T]
+quote-matcher-string-interpolator-2	quoted_2.scala:6:13: exception in macro: java.lang.StackOverflowError (called by xyz in object Macros) (in the body of Macros.xyz)
+quote-matcher-symantics-2	quoted_1.scala:30:15: value apply is not a member of Any
+quote-matcher-symantics-3	quoted_1.scala:40:15: value apply is not a member of Any
+quote-matching-open	Macro_1.scala:9:27: value apply is not a member of Any
+quote-matching-optimize-1	output: line 1: the .check has 'Original: ls.filter(((x: scala.Int) => x.<(3))).filter(((`x₂`: scala.Int) => `x₂`.>(1)))', the program printed 'Original: ls.filter(((x: scala.Int) => x.<(3))).filter(((x: scala.Int) => x.>(1)))'
+quote-matching-optimize-2	output: line 1: the .check has 'Original: ls.filter(((x: scala.Int) => x.<(3))).filter(((`x₂`: scala.Int) => `x₂`.>(1)))', the program printed 'Original: ls.filter(((x: scala.Int) => x.<(3))).filter(((x: scala.Int) => x.>(1)))'
+quote-matching-optimize-3	output: line 1: the .check has 'Original: ls.filter(((x: scala.Int) => x.<(3))).filter(((`x₂`: scala.Int) => `x₂`.>(1)))', the program printed 'Original: ls.filter(((x: scala.Int) => x.<(3))).filter(((x: scala.Int) => x.>(1)))'
+quote-matching-optimize-4	output: line 1: the .check has 'Original: ls.filter(((x: scala.Int) => x.<(3))).filter(((`x₂`: scala.Int) => `x₂`.>(1)))', the program printed 'Original: ls.filter(((x: scala.Int) => x.<(3))).filter(((x: scala.Int) => x.>(1)))'
+quote-matching-optimize-5	output: line 1: the .check has 'Original: ls.filter(((x: scala.Int) => x.<(3))).filter(((`x₂`: scala.Int) => `x₂`.>(1)))', the program printed 'Original: ls.filter(((x: scala.Int) => x.<(3))).filter(((x: scala.Int) => x.>(1)))'
+quote-type-matcher	quoted_1.scala:13:38: type mismatch: found Type[?] & AnyRef, required Type[T]
+quoted-ToExpr-derivation-macro	Derivation_1.scala:15:48: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
+quoted-liftable-derivation-macro	Derivation_1.scala:18:50: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
+quoted-liftable-derivation-macro-2	Derivation_1.scala:20:50: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
+quoted-matching-docs	output: line 5: the .check has 'args$proxy5.sum[scala.Int](scala.math.Numeric.IntIsIntegral)', the program printed 'Test.seq.sum[scala.Int](scala.math.Numeric.IntIsIntegral)'
+quoted-matching-docs-2	output: line 5: the .check has '4.+(Macro_1$package.sum(Test.seq: _*))', the program printed '4.+(Macro_1$package.sum(Test.seq))'
+quoted-pattern-open-expr	Macro_1.scala:8:29: value apply is not a member of Any
+quoted-pattern-open-expr-0	Macro_1.scala:7:29: value apply is not a member of Any
+quoted-pattern-open-expr-simple-eval	Macro_1.scala:7:30: value apply is not a member of Any
+quoted-pattern-type	Macro_1.scala:9:36: type mismatch: found Expr[Boolean], required Expr[T]
+quoted-toExprOfClass	Test_2.scala:3:36: not supported yet in a macro: no literal holds long (called by wildcard in object Macros_1$package) (in the body of Macros_1$package.wildcard)
+refined-apply	Macro_1.scala:12:22: value newTypeAlias is not a member of Symbol
+refined-selectable-macro	Macro_1.scala:9:61: not found: this
+reflect-inline	test_2.scala:7:12: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+reflect-isFunctionType	test_2.scala:61:41: expected ',' or ')', found identifier
+reflect-method-type-kind	macro_1.scala:29:12: value methodTypeKind is not a member of MethodType
+reflect-select-constructor	test_2.scala:20:5: value of type Boolean does not take parameters
+reflect-sourceCode	output: line 6: the .check has '{ f }', the program printed 'f'
+reflect-typeChecks	test_2.scala:12:5: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+requiredSymbols	Test_2.scala:4:13: exception in macro: java.util.NoSuchElementException: class java.lang.Object not found (called by foo in object Macro) (in the body of Macro.foo)
+self	output: line 1: the .check has 'ExprType(TypeRef(TermRef(ThisType(TypeRef(NoPrefix,module class <root>)),object scala),Int))', the program printed 'B.this.X'
+simple-interpreter	Macro_1.scala:33:51: `yield` or `do` expected
+simple-switch	Main_2.scala:7:3: not supported yet in a macro: a case whose pattern is no pattern tree (called by switch in object Macro_1$package) (in the body of Macro_1$package.switch)
+splice-position	Test.scala:5:34: missing parameter type
+string-context-implicits	Test_2.scala:6:41: expected '}', found ';'
+summonIgnoring	output: line 2: the .check has 'TC[C2] generated in macro without TC[C1]', the program printed 'TC[C2] generated in macro using:'
+switch-match	Main_2.scala:5:3: not a match
+tasty-argument-tree-1	output: line 2: the .check has 'tree: Inlined(None, Nil, Literal(IntConstant(3)))', the program printed 'tree: Literal(IntConstant(3))'
+tasty-construct-types	Macro_1.scala:29:15: type argument [A] =>> List[A] does not have the same kind as its bound
+tasty-create-method-symbol	Macro_1.scala:163:7: value apply is not a member of PolyType
+tasty-dealias	output: line 1: the .check has 'java.lang.String', the program printed 'scala.Predef.String'
+tasty-dealiasKeepOpaques	output: line 1: the .check has 'java.lang.String', the program printed 'scala.Predef.String'
+tasty-definitions-1	quoted_1.scala:7:7:None:None: the body of Macros.testDefinitionsImpl is withheld from the products of $OUT/run-macros/tasty-definitions-1/jvm.products (elided: unstated the std's defn.FunctionClass$default$3, which scala-library has under a
+tasty-definitions-2	output: line 1: the .check has 'DefDef("foo", Nil, TypeIdent("Int"), Some(Apply(Select(Literal(IntConstant(1)), "+"), List(Literal(IntConstant(2))))))', the program printed 'DefDef("foo", List(), Inferred(TypeRef(ThisType(TypeRef(NoPrefix()
+tasty-definitions-3	output: line 1: the .check has 'DefDef("foo", Nil, TypeIdent("Int"), Some(Apply(Select(Literal(IntConstant(1)), "+"), List(Literal(IntConstant(2))))))', the program printed 'DefDef("foo", List(), Inferred(TypeRef(ThisType(TypeRef(NoPrefix()
+tasty-extractors-3	output: line 3: the .check has 'TermRef(NoPrefix(), "x")', the program printed 'TypeRef(NoPrefix(), "x")'
+tasty-extractors-owners	output: line 2: the .check has 'ValDef("macro", Inferred(), None)', the program printed 'DefDef("main", List(TermParamClause(List(ValDef("args", Inferred(AppliedType(TypeRef(ThisType(TypeRef(NoPrefix(), "scala")), "Array"), List(TypeRef(Thi
+tasty-getfile-implicit-by-name-fun-context	Macro_1.scala:8:5: type mismatch: found Macro[String], required Expr[String]
+tasty-getfile-implicit-fun-context	Macro_1.scala:9:5: type mismatch: found Macro[String], required Expr[String]
+tasty-implicit-fun-context-2	Macro_1.scala:9:5: type mismatch: found (Quotes) ?=> Tastier[(Quotes) ?=> Macro[String]], required Expr[String]
+tasty-interpolation-1	Macro.scala:57:17:None:None: the body of MacroStringInterpolator.getStaticStringContext is withheld from the products of $OUT/run-macros/tasty-interpolation-1/jvm.products (elided: unstated an extractor pattern): the TASTy writer's queue of
+tasty-load-tree-1	output: line 1: the .check has 'DefDef("foo", Nil, TypeIdent("Int"), Some(Apply(Select(Literal(IntConstant(1)), "+"), List(Literal(IntConstant(2))))))', the program printed 'DefDef("foo", List(), Inferred(TypeRef(ThisType(TypeRef(NoPrefix()
+tasty-load-tree-2	output: line 1: the .check has 'DefDef("foo", Nil, TypeIdent("Int"), Some(Apply(Select(Literal(IntConstant(1)), "+"), List(Literal(IntConstant(2))))))', the program printed 'DefDef("foo", List(), Inferred(TypeRef(ThisType(TypeRef(NoPrefix()
+tasty-macro-assert	output: line 2: the .check has 'Error left did not equal right:', the program printed 'Condition was false'
+tasty-macro-const	quoted_2.scala:6:13: Parameter must be a known constant
+tasty-macro-positions	quoted_2.scala:27:10: only classes can have declared but undefined members
+tasty-overload-secondargs	Test_2.scala:5:14: not supported yet in a macro: the selection of andThen on X.type does not type: Ambiguous overload. The overloaded alternatives of method andThen in object X with types
+tasty-seal-method	quoted_1.scala:9:7:None:None: the body of Asserts.zeroLastArgsImpl is withheld from the products of $OUT/run-macros/tasty-seal-method/jvm.products (elided: unstated the std's Function3.apply, which scala-library has under another shape): th
+tasty-simplified	quoted_2.scala:15:23: type argument a does not have the same kind as its bound [_]
+tasty-string-interpolation-reporter-test	run: exit 1: Exception in thread "main" java.lang.AssertionError: assertion failed: actual: List((0,252,271,Cannot use #))
+tasty-tree-map	quoted_2.scala:21:13: not supported yet in a macro: Typed.unapply on a tree that is no ascription (called by identityMaped in object Macros) (in the body of Macros.identityMaped)
+tasty-typeof	output: line 3: the .check has 'Macros', the program printed 'Macros.type'
+term-show	Test_2.scala:6:19: 'erased' is not part of the supported Scala subset
+type-members	Macro_1.scala:6:31: type AnyKind not found
+type-show	Macro_1.scala:4:24: type AnyKind not found
+xml-interpolation-1	XmlQuote_1.scala:11:59: not found: this
+xml-interpolation-2	XmlQuote_1.scala:12:57: not found: this
+xml-interpolation-4	Macros_1.scala:12:15:None:None: the body of XmlQuote.impl is withheld from the products of $OUT/run-macros/xml-interpolation-4/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another shape): th
+xml-interpolation-7	Macros_1.scala:29:15: extension method xml is not applicable to Any

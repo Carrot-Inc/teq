@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/UhC.tasty (TASTy 28.8, 401 bytes)
+package fix.unaryhanded
+@SourceFile class UhC() extends Object {
+  def h: UhC = ...
+  val x: 42 = ...
+}
+

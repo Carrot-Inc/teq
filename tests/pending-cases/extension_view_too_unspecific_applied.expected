@@ -1,0 +1,9 @@
+scalac 3.8.4: rejected, 2 error(s)
+extension_view_too_unspecific_applied.scala:11:13: Found:    Nothing
+  Required: ?{ pick: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ pick: [applied to (1) returning [applied to (args.length) returning Any]] }
+extension_view_too_unspecific_applied.scala:12:21: Found:    Null
+  Required: ?{ pick: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ pick: [applied to (2) returning String] }

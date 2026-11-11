@@ -1,0 +1,25 @@
+tests/cases/unused_params_constant_bodies.scala:15:10: warning: unused explicit parameter
+    def a1(x: Int) = C.one
+           ^
+tests/cases/unused_params_constant_bodies.scala:16:10: warning: unused explicit parameter
+    def a2(x: Int) = { println(); C.one }
+           ^
+tests/cases/unused_params_constant_bodies.scala:17:10: warning: unused explicit parameter
+    def a3(x: Int) = C.three
+           ^
+tests/cases/unused_params_constant_bodies.scala:18:10: warning: unused explicit parameter
+    def a4(x: Int) = { println(); (1: Int) }
+           ^
+tests/cases/unused_params_constant_bodies.scala:19:10: warning: unused explicit parameter
+    def a5(x: Int) = "a".length
+           ^
+tests/cases/unused_params_constant_bodies.scala:20:10: warning: unused explicit parameter
+    def a6(x: Int) = { println(); () }
+           ^
+tests/cases/unused_params_constant_bodies.scala:21:10: warning: unused explicit parameter
+    def a8(x: Int) = { println(); null }
+           ^
+tests/cases/unused_params_constant_bodies.scala:22:10: warning: unused explicit parameter
+    def a9(x: Int): Unit = "a".length
+           ^
+true

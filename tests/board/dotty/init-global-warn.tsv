@@ -1,0 +1,48 @@
+# dotty 3.8.4 (7d4833b6) init-global/warn, warn; compiler/test/dotty/tools/dotc/CompilationTests.scala:272; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+call-before-super.scala	fail	-	marks: 0 warnings where 1 are marked
+call-before-super2.scala	fail	-	marks: 0 warnings where 1 are marked
+call-before-super3.scala	fail	-	marks: 0 warnings where 1 are marked
+context-sensitivity.scala	fail	-	marks: 0 warnings where 1 are marked
+cyclic-object.scala	fail	-	marks: 0 warnings where 1 are marked
+global-cycle1.scala	fail	-	marks: 0 warnings where 2 are marked
+global-cycle10.scala	fail	-	marks: 0 warnings where 2 are marked
+global-cycle14.scala	fail	-	marks: 0 warnings where 2 are marked
+global-cycle2.scala	fail	-	marks: 0 warnings where 1 are marked
+global-cycle3.scala	fail	-	marks: 0 warnings where 1 are marked
+global-cycle4.scala	fail	-	marks: 0 warnings where 1 are marked
+global-cycle5.scala	fail	-	marks: 0 warnings where 1 are marked
+global-cycle7.scala	fail	-	marks: 0 warnings where 2 are marked
+global-irrelevance1.scala	fail	-	marks: 0 warnings where 1 are marked
+global-irrelevance2.scala	fail	-	marks: 0 warnings where 1 are marked
+global-irrelevance3.scala	fail	-	marks: 0 warnings where 1 are marked
+global-irrelevance4.scala	fail	-	marks: 0 warnings where 1 are marked
+global-irrelevance5.scala	fail	-	marks: an error where warnings are marked: global-irrelevance5.scala:2:27: new Array takes one type argument
+global-irrelevance6.scala	fail	-	marks: an error where warnings are marked: global-irrelevance6.scala:5:27: new Array takes one type argument
+global-irrelevance7.scala	fail	-	marks: an error where warnings are marked: global-irrelevance7.scala:5:27: new Array takes one type argument
+global-local-var.scala	fail	-	marks: 0 warnings where 1 are marked
+global-region1.scala	fail	-	marks: 0 warnings where 1 are marked
+i11262.scala	fail	-	marks: 0 warnings where 2 are marked
+i15883.scala	fail	-	marks: 0 warnings where 1 are marked
+i9176.scala	fail	-	marks: 0 warnings where 2 are marked
+inner-extends-outer.scala	fail	-	marks: 0 warnings where 1 are marked
+lazy-field.scala	fail	-	marks: 0 warnings where 1 are marked
+lazy-local-val.scala	fail	-	marks: 0 warnings where 1 are marked
+local-class.scala	fail	-	marks: 0 warnings where 1 are marked
+mutable-read1.scala	fail	-	marks: 0 warnings where 1 are marked
+mutable-read2.scala	fail	-	marks: 0 warnings where 1 are marked
+mutable-read3.scala	fail	-	marks: an error where warnings are marked: mutable-read3.scala:6:29: new Array takes one type argument
+mutable-read4.scala	fail	-	marks: 0 warnings where 1 are marked
+mutable-read5.scala	fail	-	marks: 0 warnings where 1 are marked
+mutable-read6.scala	fail	-	marks: 0 warnings where 1 are marked
+partial-ordering.scala	fail	-	marks: 0 warnings where 1 are marked
+patmat-unapplySeq.scala	fail	-	marks: an error where warnings are marked: patmat-unapplySeq.scala:4:27: new Array takes one type argument
+resolve-outer-of-parent.scala	fail	-	marks: 0 warnings where 1 are marked
+resolve-parent-this.scala	fail	-	marks: 0 warnings where 2 are marked
+return.scala	fail	-	marks: 0 warnings where 1 are marked
+return2.scala	fail	-	marks: 1 warnings where 2 are marked
+t9261.scala	fail	-	marks: 0 warnings where 2 are marked
+unapply-implicit-arg.scala	fail	-	marks: 0 warnings where 1 are marked
+unapply-implicit-arg2.scala	fail	-	marks: 0 warnings where 1 are marked
+unapply-implicit-arg3.scala	fail	-	marks: 0 warnings where 1 are marked
+unsoundness.scala	fail	-	marks: 0 warnings where 1 are marked

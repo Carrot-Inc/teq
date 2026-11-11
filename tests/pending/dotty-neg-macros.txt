@@ -1,0 +1,181 @@
+BigFloat	marks: 3 errors where 1 are marked: BigFloatFromDigitsImpl_1.scala:12:31: no given instance of type ToExpr[BigInt] was found for parameter to
+GenericNumLits	marks: 4 errors where 2 are marked: Test_2.scala:4:18: type mismatch: found 1234, required Even
+annot-MacroAnnotation-direct.scala	marks: no error where 1 are marked
+annot-accessIndirect	marks: 1 errors where 2 are marked
+annot-crash	marks: no error where 1 are marked
+annot-empty-result	marks: no error where 3 are marked
+annot-error-annot	marks: no error where 24 are marked
+annot-ill-abort	marks: no error where 1 are marked
+annot-mod-class-add-top-method	marks: no error where 2 are marked
+annot-mod-class-add-top-val	marks: no error where 2 are marked
+annot-mod-top-method-add-top-method	marks: no error where 2 are marked
+annot-mod-top-method-add-top-val	marks: no error where 2 are marked
+annot-nested.scala	marks: 6 errors where 10 are marked
+annot-on-type	marks: 1 errors where 3 are marked
+annot-result-owner	marks: no error where 2 are marked
+annot-suspend-cycle	marks: no error where 1 are marked
+beta-reduce-inline-result	check: diagnostic 1 of 1: scalac's is error Test_2.scala:11:17 Found: Int; teq's is error Test_2.scala:11:17 type mismatch: found Int, required 4
+delegate-match-1	marks: 7 errors where 1 are marked: Macro_1.scala:12:7: expected 'case', found identifier
+delegate-match-2	marks: 6 errors where 1 are marked: Macro_1.scala:12:7: expected 'case', found identifier
+delegate-match-3	marks: 3 errors where 1 are marked: Macro_1.scala:12:7: expected 'case', found identifier
+higher-order-quoted-expressions.scala	marks: 1 errors where 3 are marked
+i10127-a.scala	marks: no error where 1 are marked
+i10127-b.scala	marks: no error where 1 are marked
+i11386	marks: 1 errors where 2 are marked
+i11483	marks: 6 errors where 1 are marked: Macro_1.scala:42:64: ambiguous given instances for Type[<error>]: evidence$2, evidence$1
+i11688.scala	marks: no error where 1 are marked
+i12019.scala	marks: 2 errors where 4 are marked
+i12196.scala	marks: no error where 1 are marked
+i12196b.scala	marks: no error where 1 are marked
+i12225.scala	marks: no error where 1 are marked
+i12471.scala	marks: no error where 2 are marked
+i12606.scala	marks: 2 errors where 1 are marked: i12606.scala:4:16: recursive use of q needs an explicit result type
+i12788	marks: no error where 1 are marked
+i13376a.scala	marks: 1 errors where 2 are marked
+i13407.scala	marks: 1 errors where 2 are marked
+i13516	marks: no error where 1 are marked
+i13809	marks: 6 errors where 1 are marked: Test_2.scala:6:64: type CB not found
+i13991	check: diagnostic 1 of 1: scalac's is error Test_2.scala:6:6 Error; teq's is error Test_2.scala:6:6 Error
+i14123a.scala	marks: 2 errors where 1 are marked: i14123a.scala:4:14: a splice takes an Expr, but this has type Nothing
+i14123b.scala	marks: 2 errors where 3 are marked
+i14137	marks: no error where 1 are marked
+i14696.scala	marks: error on an unmarked line i14696.scala:9: unbound placeholder parameter; incorrect use of `_`
+i14772.scala	marks: error on an unmarked line i14772.scala:7: recursive use of impl needs an explicit result type
+i15009a.scala	marks: 5 errors where 6 are marked
+i15159	marks: no error where 1 are marked
+i15413.scala	marks: no error where 1 are marked
+i15917.scala	marks: no error where 1 are marked
+i16355b.scala	marks: no error where 2 are marked
+i16522.scala	marks: error on an unmarked line i16522.scala:11: type argument tl does not conform to upper bound HList
+i16532.scala	marks: no error where 1 are marked
+i16582	marks: error on an unmarked line check.products!Macro_1$package:5: recursive value o2 needs type (in the body of Macro_1$package)
+i16835	marks: 2 errors where 1 are marked: Macro_1.scala:7:5:None:None: the body of Macro_1$package.fooExpr is withheld from the products of $OUT/neg-macros/i16835/check.products (elided: unstated the reflection API's ImplicitSearchSuccessTypeTest
+i17103.scala	marks: no error where 1 are marked
+i17152	marks: error on an unmarked line DFBits.scala:45: Cannot call macro method getWidthMacro defined in the same source file
+i17294	marks: error on an unmarked line Width.scala:12: Cannot call macro method getWidthMacro defined in the same source file
+i17338.scala	marks: no error where 1 are marked
+i17351	marks: no error where 1 are marked
+i17545a	marks: no error where 1 are marked
+i17545b	marks: no error where 1 are marked
+i17545c	marks: no error where 1 are marked
+i18113	check: diagnostic 1 of 1: scalac's is error Test_2.scala:7:0 ; teq's is error Test_2.scala:7:3 not supported yet in a macro: the method plus is selected without its arguments (called by test in object X) (in the body of x.X.test)
+i18113b	check: diagnostic 1 of 1: scalac's is error Test_2.scala:7:0 ; teq's is error Test_2.scala:7:3 value of type Int => Int does not take parameters
+i18228.scala	marks: error on an unmarked line i18228.scala:11: no given instance of type FromExpr[Map[String, String]] was found for parameter from
+i18677-a	marks: no error where 1 are marked
+i18677-b	marks: no error where 1 are marked
+i18695.scala	marks: 2 errors where 1 are marked: i18695.scala:67:57: no given instance of type SumOf[A]{type MirroredElemTypes = m.MirroredElemTypes; type MirroredLabel = m.MirroredLabel} was found for parameter m
+i18825	marks: no error where 1 are marked
+i19342.scala	check: diagnostic 1 of 1: scalac's is error i19342.scala:5:27 Type must be fully defined.; teq's is error i19342.scala:5:26 value apply is not a member of Any
+i19526	marks: 2 errors where 1 are marked: Test.scala:12:5: type mismatch: found Dynamic, required Stack
+i19601	marks: 8 errors where 1 are marked: Macro.scala:27:51: type mismatch: found Int, required A
+i19676	marks: no error where 1 are marked
+i19842-a	marks: 3 errors where 1 are marked: Macro.scala:17:7: missing parameter type
+i19842-b	marks: 3 errors where 1 are marked: Macro.scala:19:7: missing parameter type
+i19856.scala	marks: no error where 1 are marked
+i19856b.scala	marks: 3 errors where 4 are marked
+i19941.scala	marks: no error where 1 are marked
+i21916	marks: error on an unmarked line check.products!Macro:4: classOf[Array] needs a class type (in the body of Macro)
+i22616.scala	marks: no error where 2 are marked
+i22616b.scala	marks: 1 errors where 2 are marked
+i23008	marks: no error where 1 are marked
+i4044a.scala	marks: no error where 3 are marked
+i4044b.scala	marks: no error where 3 are marked
+i4396b.scala	marks: no error where 1 are marked
+i4433.scala	marks: 2 errors where 1 are marked: i4433.scala:4:16: not found: true
+i4493-b.scala	marks: error on an unmarked line i4493-b.scala:6: type mismatch: found Expr[Index[K]], required Expr[Any]
+i4493.scala	marks: error on an unmarked line i4493.scala:6: type mismatch: found Expr[Index[K]], required Expr[Any]
+i4803e.scala	marks: no error where 1 are marked
+i4803f.scala	marks: no error where 1 are marked
+i4846.scala	marks: no error where 3 are marked
+i5015.scala	marks: 3 errors where 4 are marked
+i5547.scala	marks: no error where 1 are marked
+i5840.scala	marks: no error where 1 are marked
+i5954b.scala	marks: no error where 1 are marked
+i5954c.scala	marks: no error where 1 are marked
+i6432	check: diagnostic 1 of 3: scalac's is error Test_2.scala:4:7 abc; teq's is error Test_2.scala:4:3 abc
+i6432b	check: diagnostic 1 of 3: scalac's is error Test_2.scala:4:9 abc; teq's is error Test_2.scala:4:3 abc
+i6436.scala	marks: 1 errors where 2 are marked
+i6739.scala	marks: no error where 1 are marked
+i6783.scala	marks: no error where 1 are marked
+i6976	check: diagnostic 1 of 1: scalac's is error Test_2.scala:5:41 Exception occurred while executing macro expansion.; teq's is error Test_2.scala:5:41 exception in macro: scala.MatchError: 2 (of class scala.quoted.Expr) (called by mcr in objec
+i6991.scala	check: diagnostic 1 of 2: scalac's is error i6991.scala:11:15 expression does not take parameters; teq's is error i6991.scala:11:14 value apply is not a member of Foo
+i6997.scala	marks: no error where 2 are marked
+i6997b.scala	marks: 2 errors where 3 are marked
+i7013c.scala	marks: 2 errors where 1 are marked: i7013c.scala:4:8: only classes can have declared but undefined members
+i7048e.scala	marks: no error where 1 are marked
+i7052.scala	marks: no error where 1 are marked
+i7052b.scala	marks: no error where 1 are marked
+i7068-c.scala	marks: 1 errors where 3 are marked
+i7121.scala	marks: no error where 2 are marked
+i7142	marks: no error where 1 are marked
+i7142b	marks: 2 errors where 1 are marked: Macro_1.scala:6:30: a splice takes an Expr, but this has type Nothing
+i7142c	marks: no error where 1 are marked
+i7142d	marks: 2 errors where 1 are marked: Macro_1.scala:6:43: type mismatch: found Expr[Nothing], required Expr[Int]
+i7142e	marks: no error where 1 are marked
+i7142f	marks: no error where 1 are marked
+i7142g	marks: no error where 1 are marked
+i7142h	marks: no error where 1 are marked
+i7323.scala	marks: no error where 1 are marked
+i7603.scala	marks: 4 errors where 2 are marked: i7603.scala:4:17: expected an identifier, found splice
+i7698.scala	marks: 1 errors where 2 are marked
+i7839.scala	marks: no error where 1 are marked
+i7892.scala	marks: no error where 1 are marked
+i7919.scala	marks: 2 errors where 7 are marked
+i8045.scala	marks: no error where 1 are marked
+i8045b.scala	marks: error on an unmarked line i8045b.scala:4: type Nested is not a member of (q : Quotes)
+i8052.scala	marks: error on an unmarked line i8052.scala:12: object creation impossible, since def test(): Unit in trait TC is not defined
+i8216	marks: no error where 1 are marked
+i8749.scala	marks: no error where 1 are marked
+i8865.scala	marks: 3 errors where 1 are marked: i8865.scala:7:12: expected an identifier, found splice
+i8871.scala	marks: 3 errors where 1 are marked: i8871.scala:6:12: expected an identifier, found splice
+i8871b.scala	marks: 2 errors where 1 are marked: i8871b.scala:6:10: type $tpe not found
+i8887.scala	marks: no error where 1 are marked
+i9014b	check: diagnostic 1 of 1: scalac's is error Test_2.scala:1:24 No given instance of type Bar was found for parameter x of method summon in object Predef.; teq's is error Test_2.scala:1:24 no given instance of type Bar was found for parameter
+i9570.scala	marks: error on an unmarked line i9570.scala:15: missing parameter type
+i9972	marks: 4 errors where 1 are marked: Macro_1.scala:6:19: type T not found
+ill-abort	check: diagnostic 1 of 1: scalac's is error quoted_2.scala:1:12 Macro expansion was aborted by the macro without any errors reported. Macros should issue errors to end-users when aborting a macro expansion with StopMacroExpansion.; teq's is
+inline-macro-staged-interpreter	marks: error on an unmarked line Main_2.scala:6: Expected a known value.
+inline-option	marks: 3 errors where 2 are marked: quotes.scala:193:35: no given instance of type FromExpr[T | Null] was found for parameter from
+inline-quote.scala	marks: no error where 1 are marked
+inline-tuples-1	marks: 41 errors where 44 are marked
+macro-class-not-found-1	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 exception in macro: java.lang.NoClassDefFoundError (called by myMacro in object Foo)
+macro-class-not-found-2	check: diagnostic 1 of 1: scalac's is error Bar.scala:4:3 Exception occurred while executing macro expansion.; teq's is error Bar.scala:4:3 exception in macro: java.lang.NoClassDefFoundError (called by myMacro in object Foo)
+macro-experimental.scala	marks: no error where 1 are marked
+macros-in-same-project-4	check: diagnostic 1 of 0: scalac's is nothing; teq's is error :0:0 Cyclic macro dependencies in $SCALA3/tests/neg-macros/macros-in-same-project-4/Bar.scala.
+macros-in-same-project-6	marks: 2 errors where 1 are marked: Bar.scala:4:3: some error
+newClassParamsMissingArgument	marks: 4 errors where 2 are marked: Macro_1.scala:11:13: too many arguments: expected 5
+old-inline-param-macro.scala	marks: no error where 1 are marked
+quote-0.scala	marks: no error where 4 are marked
+quote-1.scala	marks: no error where 2 are marked
+quote-MacroOverride.scala	marks: no error where 1 are marked
+quote-complex-top-splice.scala	marks: no error where 5 are marked
+quote-interpolator-core-old.scala	marks: no error where 6 are marked
+quote-macro-2-splices.scala	marks: no error where 1 are marked
+quote-macro-complex-arg-0.scala	marks: no error where 1 are marked
+quote-macro-splice.scala	marks: no error where 4 are marked
+quote-pattern-implemnetation-restrictions.scala	marks: no error where 7 are marked
+quote-pattern-type-var-bounds.scala	marks: 9 errors where 6 are marked: quote-pattern-type-var-bounds.scala:3:11: expected an identifier, found 'type'
+quote-pcp-in-arg.scala	marks: no error where 1 are marked
+quote-splice-interpret-1.scala	marks: 2 errors where 1 are marked: quote-splice-interpret-1.scala:6:18: not found: true
+quote-sym-newtype	option: -Yno-experimental (teq has no flag for it)
+quote-this-a.scala	marks: no error where 1 are marked
+quote-this-b.scala	marks: no error where 2 are marked
+quote-this-c.scala	marks: 1 errors where 2 are marked
+quote-type-variable-no-inference-2.scala	marks: no error where 1 are marked
+quote-type-variable-no-inference-3.scala	marks: no error where 1 are marked
+quote-type-variable-no-inference.scala	marks: 4 errors where 1 are marked: quote-type-variable-no-inference.scala:6:13: expected an identifier, found 'type'
+quoted-pattern-with-bounded-type-params-regression.scala	check: diagnostic 1 of 1: scalac's is error quoted-pattern-with-bounded-type-params-regression.scala:11:49 Type must be fully defined.; teq's is error quoted-pattern-with-bounded-type-params-regression.scala:11:48 value apply is not a membe
+quoted-pattern-with-bounded-type-params.scala	check: diagnostic 1 of 1: scalac's is error quoted-pattern-with-bounded-type-params.scala:11:51 Implementation restriction: Type arguments to Open pattern are expected to have no bounds; teq's is error quoted-pattern-with-bounded-type-param
+quoted-pattern-with-type-params-regression.scala	check: diagnostic 1 of 3: scalac's is error quoted-pattern-with-type-params-regression.scala:8:32 Type must be fully defined.; teq's is error quoted-pattern-with-type-params-regression.scala:8:31 value apply is not a member of Any
+quoted-pattern-with-type-params.scala	check: diagnostic 1 of 3: scalac's is error quoted-pattern-with-type-params.scala:6:31 Implementation restriction: A higher-order pattern must carry value arguments; teq's is error quoted-pattern-with-type-params.scala:6:31 value apply is n
+quotedPatterns-2.scala	marks: no error where 2 are marked
+quotedPatterns-3.scala	marks: 3 errors where 6 are marked
+quotedPatterns-5.scala	marks: 2 errors where 1 are marked: quotedPatterns-5.scala:5:18: only classes can have declared but undefined members
+quotedPatterns-6.scala	marks: 3 errors where 2 are marked: quotedPatterns-6.scala:4:18: expected an identifier, found splice
+scope-extrusion	marks: no error where 3 are marked
+splice-in-top-level-splice-1.scala	marks: no error where 1 are marked
+splice-pat.scala	marks: 3 errors where 2 are marked: splice-pat.scala:13:5: expected a pattern, found 'import'
+tasty-macro-assert-1	marks: no error where 1 are marked
+tasty-macro-assert-2	marks: no error where 1 are marked
+toexproftuple.scala	marks: 7 errors where 2 are marked: toexproftuple.scala:5:43: type mismatch: found Expr[Int], required Expr[1]
+wrong-owner	marks: no error where 1 are marked

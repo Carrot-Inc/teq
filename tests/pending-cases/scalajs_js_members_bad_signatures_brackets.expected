@@ -1,0 +1,9 @@
+scalac 3.8.4: rejected, 8 error(s)
+scalajs_js_members_bad_signatures_brackets.scala:27:6: @JSBracketAccess methods must have one or two parameters
+scalajs_js_members_bad_signatures_brackets.scala:30:6: @JSBracketAccess methods must have one or two parameters
+scalajs_js_members_bad_signatures_brackets.scala:33:6: @JSBracketAccess methods with two parameters must return Unit
+scalajs_js_members_bad_signatures_brackets.scala:36:6: @JSBracketAccess methods may not have repeated parameters
+scalajs_js_members_bad_signatures_brackets.scala:39:6: @JSBracketAccess methods may not have default parameters
+scalajs_js_members_bad_signatures_brackets.scala:44:6: @JSBracketCall methods must have at least one non-repeated parameter
+scalajs_js_members_bad_signatures_brackets.scala:47:6: @JSBracketCall methods must have at least one non-repeated parameter
+scalajs_js_members_bad_signatures_brackets.scala:50:6: @JSBracketCall methods must have at least one non-repeated parameter

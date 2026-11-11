@@ -1,0 +1,9 @@
+tests/errors/erased_use_definition_tie.scala:7:14: error: method erasedValue is declared as `erased`, but is in fact used
+  inlined from tests/errors/erased_use_definition_tie.scala:4
+  val result = broken
+               ^^^^^^
+tests/errors/erased_use_definition_tie.scala:7:14: error: method erasedValue is declared as `erased`, but is in fact used
+  inlined from tests/errors/erased_use_definition_tie.scala:5
+  val result = broken
+               ^^^^^^
+2 errors found

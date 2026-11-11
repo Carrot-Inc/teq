@@ -1,0 +1,225 @@
+# dotty 3.8.4 (7d4833b6) patmat, patmat; compiler/test/dotty/tools/dotc/transform/PatmatExhaustivityTest.scala:20, :65-84; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+3144.scala	fail	-	check: line 1: the .check has '6: Pattern Match Exhaustivity: _: Foo[T]', teq gives '6: Pattern Match Exhaustivity: _: Foo[Any]'
+3144b.scala	fail	-	check: line 1: the .check has nothing, teq gives '4: Pattern Match'
+3144c.scala	fail	-	check: line 2: the .check has nothing, teq gives '7: Match case Unreachable'
+3145.scala	fail	-	check: line 1: the .check has nothing, teq gives '39: Match case Unreachable'
+3333.scala	pass	-	
+3454.scala	fail	-	check: line 1: the .check has nothing, teq gives '6: Pattern Match Exhaustivity: (IExpr(_), BExpr(_)), (BExpr(_), IExpr(_))'
+3455.scala	fail	-	check: line 1: the .check has '11: Pattern Match Exhaustivity: Decimal', teq gives '11: Pattern Match Exhaustivity: Decimal(), Integer()'
+3543.scala	pass	-	
+NonAbstractSealed.scala	pass	-	
+TwoTrait.scala	pass	-	
+aladdin1055	pass	-	
+aliasing.scala	fail	-	check: line 1: the .check has '14: Pattern Match Exhaustivity: _: Trait & Alias1, _: Clazz & Alias1', teq gives "15: (error) expected an expression, found ';'"
+andtype-opentype-interaction.scala	fail	-	check: line 1: the .check has '23: Pattern Match Exhaustivity: _: Trait & OpenTrait, _: Clazz & OpenTrait, _: AbstractClass & OpenTrait', teq gives "24: (error) expected an expression, found ';'"
+andtype-refinedtype-interaction.scala	fail	-	check: line 1: the .check has '32: Pattern Match Exhaustivity: _: Trait & C1{val x: Int}', teq gives "33: (error) expected an expression, found ';'"
+andtype.scala	fail	-	check: line 1: the .check has '9: Pattern Match Exhaustivity: _: B', teq gives "10: (error) expected an expression, found ';'"
+anonym.scala	fail	-	check: line 1: the .check has '10: Pattern Match Exhaustivity: _: Base (anonymous)', teq gives nothing
+boxing.scala	fail	-	check: line 1: the .check has nothing, teq gives '4: Match case Unreachable'
+byte.scala	fail	-	check: line 1: the .check has '5: Match case Unreachable', teq gives '3: Match case Unreachable'
+dotty-trees.scala	pass	-	
+dotty-unreachable.scala	pass	-	
+dotty.scala	pass	-	
+enum	fail	-	java source: teq reads none
+enum-HList.scala	fail	-	check: line 1: the .check has nothing, teq gives '9: (error) type mismatch: found Any, required HLst'
+enum-Tree.scala	pass	-	
+enum-approx.scala	fail	-	check: line 1: the .check has '24: Pattern Match Exhaustivity: Fun.ConstNullClass(_)', teq gives '24: Pattern Match Exhaustivity: ConstNullClass(_)'
+enumColor.scala	pass	-	
+exhausting.scala	fail	-	check: line 3: the .check has '32: Pattern Match Exhaustivity: List(_, _*)', teq gives '32: Pattern Match Exhaustivity: ::(_, _)'
+exhaustive_heuristics.scala	fail	-	check: line 1: the .check has '11: Pattern Match Exhaustivity: _: List', teq gives '11: Pattern Match Exhaustivity: _: List[Int]'
+file.scala	pass	-	
+for.scala	pass	-	
+gadt-basic.scala	fail	-	check: line 1: the .check has nothing, teq gives "19: (error) expected an expression, found ';'"
+gadt-covariant.scala	pass	-	
+gadt-invariant.scala	fail	-	check: line 1: the .check has nothing, teq gives '6: Pattern Match Exhaustivity: (IExpr(_), BExpr(_)), (BExpr(_), IExpr(_))'
+gadt-nontrivial.scala	fail	-	check: line 1: the .check has '7: Pattern Match Exhaustivity: (IntExpr(_), AddExpr(_, _))', teq gives '7: Pattern Match Exhaustivity: (BoolExpr(_), IntExpr(_)), (BoolExpr(_), AddExpr(_, _)), (IntExpr(_), BoolExpr(_)), (IntExpr(_), AddExpr(_
+gadt-nontrivial2.scala	fail	-	check: line 1: the .check has nothing, teq gives '11: Pattern Match Exhaustivity: (NCons(_, _), _), (_, NCons(_, _))'
+gadt.scala	fail	-	check: line 4: the .check has '55: Pattern Match Exhaustivity: Sum(_, _)', teq gives '50: Pattern Match Exhaustivity: BooleanLit(_), Or(_, _)'
+gadt2.scala	fail	-	check: line 1: the .check has nothing, teq gives '12: Pattern Match Exhaustivity: (VC(_, _), _), (_, VC(_, _))'
+gadt3.scala	fail	-	check: line 1: the .check has nothing, teq gives '6: Pattern Match Exhaustivity: (IntExpr(_), BooleanExpr(_)), (BooleanExpr(_), IntExpr(_))'
+gadt4.scala	fail	-	check: line 1: the .check has '12: Pattern Match Exhaustivity: (VN(), VC(_, _)), (VC(_, _), VN())', teq gives '12: Pattern Match Exhaustivity: (VC(_, _), _), (_, VC(_, _))'
+gadt5.scala	fail	-	check: line 1: the .check has '63: Pattern Match Exhaustivity: (Try3.VN(), Try3.VC(_, _)), (Try3.VC(_, _), Try3.VN())', teq gives '24: Pattern Match Exhaustivity: (VC(_, _), _), (_, VC(_, _))'
+i10085.scala	fail	-	check: line 1: the .check has nothing, teq gives '13: Pattern Match Exhaustivity: SFalse'
+i10174b.scala	fail	-	check: line 1: the .check has '3: Pattern Match Exhaustivity: _: Int', teq gives '59: Match case Unreachable'
+i10667.scala	fail	-	check: line 1: the .check has nothing, teq gives '10: (error) type mismatch: found Nums, required Nums & A'
+i11541.scala	fail	-	check: line 1: the .check has nothing, teq gives '10: Pattern Match Exhaustivity: Test.this.A, _: Null'
+i12020.scala	fail	-	check: line 1: the .check has '19: Pattern Match Exhaustivity: _: x$1.reflect.TypeDef', teq gives '19: Pattern Match Exhaustivity: _: TypeDef'
+i12026.scala	fail	-	check: line 1: the .check has nothing, teq gives '2: Pattern Match Exhaustivity: A, B'
+i12026b.scala	fail	-	check: line 1: the .check has nothing, teq gives '2: Pattern Match Exhaustivity: A, B'
+i12241.scala	fail	-	check: line 1: the .check has '54: Pattern Match Exhaustivity: (EndpointInput.Pair(), EndpointInput.MappedPair()), (EndpointInput.Pair(), EndpointInput.Pair2()), (EndpointInput.Pair(), EndpointInput.MappedPair2()), (EndpointInput.Pair(), En
+i12279.scala	fail	-	check: line 1: the .check has nothing, teq gives '4: Pattern Match Exhaustivity: T'
+i12337.scala	fail	-	check: line 2: the .check has '17: Pattern Match Exhaustivity: Foo(Status.Active(_))', teq gives '17: Pattern Match Exhaustivity: Foo(Active(_))'
+i12358.scala	fail	-	check: line 1: the .check has '3: Pattern Match Exhaustivity: List(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _*), List(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _), List(_, _, _, _, _, _, _, _, _
+i12408.scala	pass	-	
+i12475.scala	fail	-	check: line 1: the .check has nothing, teq gives '15: Pattern Match Exhaustivity: (ty : Ty) & Ty'
+i12475b.scala	fail	-	check: line 1: the .check has nothing, teq gives '9: (error) type mismatch: found ADT, required ADT & SomeRestriction'
+i12485.scala	pass	-	
+i12530.scala	pass	-	
+i12546.scala	fail	-	check: line 1: the .check has nothing, teq gives '9: (error) type mismatch: found ADT, required ADT & SomeRestriction'
+i12559.scala	fail	-	check: line 1: the .check has '10: Match case Unreachable', teq gives nothing
+i12602.scala	pass	-	
+i12681.scala	pass	-	
+i12805-fallout.scala	pass	-	
+i12805.scala	fail	-	check: line 1: the .check has '10: Match case Unreachable', teq gives '6: Pattern Match Exhaustivity: "1m", "2m", "1H"'
+i12805b.scala	fail	-	check: line 1: the .check has '4: Match case Unreachable', teq gives '1: Pattern Match Exhaustivity: 1, 2'
+i12808.scala	fail	-	check: line 1: the .check has nothing, teq gives '7: Pattern Match Exhaustivity: Left(_)'
+i13110.scala	pass	-	
+i13189.scala	pass	-	
+i13342-testing.scala	fail	-	check: line 1: the .check has '13: Match case Unreachable', teq gives '13: Pattern Match Exhaustivity: Thu, Fri'
+i13342.scala	fail	-	check: line 1: the .check has '8: Match case Unreachable', teq gives nothing
+i13485.scala	pass	-	
+i13737.scala	fail	-	check: line 1: the .check has '14: Pattern Match Exhaustivity: _: Success', teq gives '14: Pattern Match Exhaustivity: Success(_, _)'
+i13931.scala	pass	-	
+i14102.min.scala	pass	-	
+i14102.scala	pass	-	
+i14407.dupe.scala	fail	-	check: line 1: the .check has '6: Match case Unreachable', teq gives nothing
+i14407.scala	pass	-	
+i17184.scala	pass	-	
+i18118.scala	pass	-	
+i18507.scala	pass	-	
+i2253.scala	fail	-	check: line 1: the .check has '28: Pattern Match Exhaustivity: HasIntXStringM, HasIntXIntM', teq gives "28: (error) expected an expression, found ';'"
+i2254.scala	fail	-	check: line 1: the .check has nothing, teq gives "5: (error) expected an expression, found ';'"
+i2363.scala	fail	-	check: line 1: the .check has '15: Pattern Match Exhaustivity: List(_, _*)', teq gives '15: Pattern Match Exhaustivity: ::(_, _)'
+i2502.scala	fail	-	check: line 1: the .check has '5: Pattern Match Exhaustivity: _: BTypes.this.ClassBType', teq gives '5: Pattern Match Exhaustivity: _: ClassBType'
+i2502b.scala	fail	-	check: line 1: the .check has '5: Pattern Match Exhaustivity: _: BTypes.this.ClassBType', teq gives '5: Pattern Match Exhaustivity: ClassBType(_)'
+i3004.scala	pass	-	
+i3206.scala	pass	-	
+i3443.scala	pass	-	
+i3574.scala	fail	-	check: line 1: the .check has nothing, teq gives '18: Pattern Match Exhaustivity: Atoms01.Zero, Atoms01.One, Atoms01.Two'
+i3645.scala	fail	-	check: line 1: the .check has '20: Pattern Match Exhaustivity: KInt', teq gives '8: (error) type T not found'
+i3645b.scala	fail	-	check: line 1: the .check has '21: Pattern Match Exhaustivity: K2, K3', teq gives nothing
+i3645c.scala	fail	-	check: line 1: the .check has '21: Pattern Match Exhaustivity: K2, K3', teq gives nothing
+i3645d.scala	fail	-	check: line 1: the .check has '21: Pattern Match Exhaustivity: K2, K3', teq gives nothing
+i3645e.scala	fail	-	check: line 1: the .check has '29: Pattern Match Exhaustivity: K1', teq gives '29: Pattern Match Exhaustivity: K1()'
+i3645f.scala	fail	-	check: line 1: the .check has '30: Pattern Match Exhaustivity: K1', teq gives '30: Pattern Match Exhaustivity: K1()'
+i3645g.scala	fail	-	check: line 1: the .check has '29: Pattern Match Exhaustivity: K1', teq gives '29: Pattern Match Exhaustivity: K1()'
+i3938.scala	fail	-	check: line 1: the .check has '34: Pattern Match Exhaustivity: foo.bar.C()', teq gives '34: Pattern Match Exhaustivity: C()'
+i4030.scala	fail	-	check: line 1: the .check has '9: Pattern Match Exhaustivity: (C4(), _), (_, C4())', teq gives '9: Pattern Match Exhaustivity: (C1, _), (C2, _), (C4(), _), (_, C1), (_, C2), (_, C4())'
+i4225.scala	pass	-	
+i4225b.scala	pass	-	
+i4225c.scala	pass	-	
+i4226.scala	fail	-	check: line 1: the .check has '11: Pattern Match Exhaustivity: Just(_)', teq gives '11: Pattern Match Exhaustivity: Just(_), _: Empty[Int]'
+i4226b.scala	pass	-	
+i4227.scala	fail	-	check: line 1: the .check has nothing, teq gives '2: Pattern Match Exhaustivity: Some(_)'
+i4227b.scala	pass	-	
+i4314.scala	pass	-	
+i4314b.scala	fail	-	check: line 1: the .check has '9: Match case Unreachable', teq gives nothing
+i4315.scala	pass	-	
+i4880.scala	pass	-	
+i4880a.scala	pass	-	
+i4880b.scala	pass	-	
+i5422.scala	pass	-	
+i6088.scala	fail	-	check: line 1: the .check has nothing, teq gives '25: (error) type mismatch: found ExprF[R, Int], required ExprF[B, I]'
+i6197.scala	pass	-	
+i6197b.scala	pass	-	
+i6197c.scala	fail	-	check: line 1: the .check has '3: Match case Unreachable', teq gives '2: Pattern Match'
+i6197d.scala	fail	-	check: line 1: the .check has '6: Pattern Match Exhaustivity: _: Array[String]', teq gives nothing
+i6255.scala	pass	-	
+i6255b.scala	fail	-	check: line 1: the .check has '3: Pattern Match Exhaustivity: _: scala.quoted.Expr[Int]', teq gives nothing
+i6490.scala	fail	-	check: line 1: the .check has '8: Pattern Match Exhaustivity: Foo()', teq gives '8: Pattern Match Exhaustivity: _: Foo'
+i7186.scala	fail	-	check: line 1: the .check has nothing, teq gives '214: (error) value valueOf is not a member of Temporaries'
+i8203.scala	fail	-	check: line 1: the .check has nothing, teq gives '4: (error) illegal inheritance: self type Pink of case Pink does not conform to self type Product of parent trait Product'
+i8690.scala	pass	-	
+i8690b.scala	pass	-	
+i8708.scala	pass	-	
+i8757.scala	fail	-	check: line 1: the .check has '8: Pattern Match Exhaustivity: C()', teq gives nothing
+i8922.scala	fail	-	check: line 1: the .check has nothing, teq gives '28: Match case Unreachable'
+i8922c.scala	fail	-	check: line 1: the .check has '26: Pattern Match Exhaustivity: (_: Int, _: String, _), (_: Int, _: Int, BANG), (_: Int, _: Int, BANG_EQUAL), (_: Int, _: Int, EQUAL), (_: Int, _: Int, EQUAL_EQUAL), (_: Int, true, _)', teq gives '26: Pattern 
+i9067.scala	pass	-	
+i9190.scala	pass	-	
+i947.scala	pass	-	
+i9489.scala	pass	-	
+i9489b.scala	pass	-	
+i9603.scala	pass	-	
+i9631.scala	pass	-	
+i9841.scala	pass	-	
+identifier.scala	pass	-	
+irrefutable.scala	fail	-	check: line 1: the .check has '22: Pattern Match Exhaustivity: _: A, _: B, C(_, _)', teq gives '12: Pattern Match Exhaustivity: _: A, _: B, C(_, _)'
+isSubspace-Typ-Prod.scala	pass	-	
+java-enum1	fail	-	java source: teq reads none
+nontrivial-andtype.scala	fail	-	check: line 1: the .check has '16: Pattern Match Exhaustivity: _: A, B(), _: C, D', teq gives "17: (error) expected an expression, found ';'"
+null.scala	fail	-	check: line 1: the .check has '6: Match case Unreachable', teq gives '5: Match case Unreachable'
+optionless.scala	pass	-	
+outer-ref-checks.scala	fail	-	check: line 1: the .check has nothing, teq gives '24: Pattern Match Exhaustivity: O.Inner'
+partial-function.scala	pass	-	
+patmat-adt.scala	fail	-	check: line 2: the .check has '19: Pattern Match Exhaustivity: Some(_)', teq gives '20: (error) unreachable case: type Int is not a subclass of class Double'
+patmat-extractor.scala	fail	-	check: line 2: the .check has '15: Match case Unreachable', teq gives nothing
+patmat-indent.scala	fail	-	check: line 2: the .check has '24: Pattern Match Exhaustivity: true, false', teq gives '14: Pattern Match Exhaustivity: Nil'
+patmat-lazy-nothing-not-exhaustive.scala	pass	-	
+patmatexhaust-huge.scala	pass	-	
+patmatexhaust.scala	fail	-	check: line 1: the .check has '7: Pattern Match Exhaustivity: Baz', teq gives '7: Pattern Match Exhaustivity: Baz()'
+planets.scala	fail	-	check: line 1: the .check has nothing, teq gives '18: (error) None of the overloaded alternatives of method valueOf in object Predef with types'
+reader.scala	fail	-	check: line 1: the .check has '8: Match case Unreachable', teq gives nothing
+sealed-java-enums.scala	fail	-	check: line 1: the .check has '5: Pattern Match Exhaustivity: BLOCKED, TIMED_WAITING, TERMINATED', teq gives nothing
+t10019.scala	fail	-	check: line 1: the .check has '2: Pattern Match Exhaustivity: (List(_, _, _*), _: List), (Nil, List(_, _*)), (_: List, List(_, _, _*)), (List(_, _*), Nil)', teq gives '2: Pattern Match Exhaustivity: (List(_, _, _*), _), (Nil, ::(_, _)), (_,
+t10100.scala	fail	-	check: line 1: the .check has '12: Pattern Match Exhaustivity: (_, NonExhaustive#FancyFoo(_))', teq gives '11: Pattern Match Exhaustivity: (_, FancyFoo(_))'
+t10502.scala	fail	-	check: line 1: the .check has '6: Pattern Match Exhaustivity: Perhaps(None)', teq gives '6: Pattern Match Exhaustivity: Some(_), None'
+t1056.scala	pass	-	
+t11283.scala	fail	-	check: line 1: the .check has nothing, teq gives '12: Pattern Match Exhaustivity: Red, Blue, Green'
+t11457.scala	pass	-	
+t11457b.scala	fail	-	check: line 1: the .check has nothing, teq gives '20: (error) type mismatch: found CreateReply, required R'
+t11620.scala	fail	-	check: line 1: the .check has '36: Pattern Match Exhaustivity: B(A2(_, _))', teq gives '16: (error) type mismatch: found B[T], required Aux[_A, T]'
+t11620b.scala	pass	-	
+t11649.scala	pass	-	
+t12237.scala	fail	-	check: line 1: the .check has '21: Pattern Match Exhaustivity: Root, PathAndQuery./(_, _), PathAndQuery.===(_, _), PathAndQuery.:&(_, PathAndQuery.===(_, _)), PathAndQuery.+?(_, PathAndQuery.===(_, _))', teq gives '21: Pattern Match Exhaust
+t2425.scala	fail	-	check: line 1: the .check has nothing, teq gives '6: Pattern Match'
+t2442	fail	-	java source: teq reads none
+t3097.scala	pass	-	
+t3098	pass	-	
+t3111.scala	pass	-	
+t3163.scala	fail	-	check: line 1: the .check has '3: Pattern Match Exhaustivity: _: AnyVal', teq gives nothing
+t3683.scala	pass	-	
+t3683a.scala	pass	-	
+t4020.scala	fail	-	check: line 1: the .check has nothing, teq gives '15: Pattern Match Exhaustivity: Foo1(_)'
+t4526.scala	fail	-	check: line 1: the .check has '3: Pattern Match Exhaustivity: _: Int', teq gives '8: Pattern Match Exhaustivity: (_, _)'
+t4661.scala	fail	-	check: line 13: the .check has '46: Match case Unreachable', teq gives '45: Match case Unreachable'
+t4661b.scala	fail	-	check: line 1: the .check has '11: Pattern Match Exhaustivity: _: c.Foo', teq gives '14: Match case Unreachable'
+t4691.scala	pass	-	
+t4691_exhaust_extractor.scala	pass	-	
+t5440.scala	fail	-	check: line 1: the .check has '2: Pattern Match Exhaustivity: (List(_, _*), Nil), (Nil, List(_, _*))', teq gives '2: Pattern Match Exhaustivity: (::(_, _), Nil), (Nil, ::(_, _))'
+t5968.scala	pass	-	
+t6008.scala	pass	-	
+t6146.scala	fail	-	check: line 1: the .check has nothing, teq gives '19: Pattern Match Exhaustivity: Decimal(), Integer()'
+t6420.scala	fail	-	check: line 1: the .check has '5: Pattern Match Exhaustivity: (_: List, _: List)', teq gives '5: Pattern Match Exhaustivity: (_, _)'
+t6450.scala	pass	-	
+t6582_exhaust_big.scala	fail	-	check: line 1: the .check has '27: Pattern Match Exhaustivity: Z.Z11()', teq gives '27: Pattern Match Exhaustivity: Z11()'
+t6818.scala	pass	-	
+t7020.scala	fail	-	check: line 1: the .check has '3: Pattern Match Exhaustivity: List(_, _*)', teq gives '3: Pattern Match Exhaustivity: ::(_, _)'
+t7285.scala	pass	-	
+t7285a.scala	pass	-	
+t7298.scala	pass	-	
+t7353.scala	pass	-	
+t7437.scala	pass	-	
+t7466.scala	pass	-	
+t7631.scala	pass	-	
+t7669.scala	pass	-	
+t8068.scala	fail	-	check: line 1: the .check has nothing, teq gives '9: Pattern Match Exhaustivity: O()'
+t8178.scala	fail	-	check: line 1: the .check has '6: Pattern Match Exhaustivity: FailsChild2(_)', teq gives '14: Pattern Match Exhaustivity: VarArgs1(_)'
+t8412.scala	pass	-	
+t8430.scala	pass	-	
+t8511.scala	pass	-	
+t8546.scala	pass	-	
+t8606.scala	fail	-	check: line 1: the .check has nothing, teq gives '4: Pattern Match Exhaustivity: AObj(), BObj()'
+t8700a	fail	-	java source: teq reads none
+t9129.scala	pass	-	
+t9232.scala	fail	-	check: line 3: the .check has '21: Pattern Match Exhaustivity: Node1(Foo()), Node2()', teq gives '21: Pattern Match Exhaustivity: Node1(_), Node2()'
+t9289.scala	fail	-	check: line 1: the .check has '9: Pattern Match Exhaustivity: module.LetR()', teq gives '9: Pattern Match Exhaustivity: LetR()'
+t9351.scala	fail	-	check: line 1: the .check has '9: Pattern Match Exhaustivity: _: A', teq gives '18: Pattern Match Exhaustivity: (_, _)'
+t9398.scala	fail	-	check: line 1: the .check has '11: Pattern Match Exhaustivity: CC(_, B2)', teq gives '10: Pattern Match Exhaustivity: CC(_, B2)'
+t9399.scala	pass	-	
+t9411a.scala	pass	-	
+t9411b.scala	pass	-	
+t9573.scala	pass	-	
+t9630.scala	pass	-	
+t9657.scala	fail	-	check: line 1: the .check has '29: Pattern Match Exhaustivity: Bus(_)', teq gives '24: Pattern Match Exhaustivity: Bicycle'
+t9672.scala	fail	-	check: line 1: the .check has '22: Pattern Match Exhaustivity: SimpleExpr.IntExpr(_)', teq gives '22: Pattern Match Exhaustivity: If(_, _, _), Word(_), IntExpr(_)'
+t9677.scala	fail	-	check: line 1: the .check has '18: Pattern Match Exhaustivity: _: Base (anonymous)', teq gives nothing
+t9779.scala	fail	-	check: line 1: the .check has '10: Pattern Match Exhaustivity: _: a.Elem[?]', teq gives '10: Pattern Match Exhaustivity: _: Elem[Any]'
+t9809.scala	fail	-	check: line 1: the .check has '4: Pattern Match Exhaustivity: (_, _)', teq gives '3: Pattern Match Exhaustivity: (_, _)'
+t9926.scala	fail	-	check: line 1: the .check has nothing, teq gives '13: Pattern Match Exhaustivity: Equality(StringField, Bool(_)), Equality(BoolField, Literal(_))'
+try.scala	pass	-	
+try2.scala	pass	-	
+tuple.scala	pass	-	
+virtpatmat_apply.scala	fail	-	check: line 1: the .check has '2: Pattern Match Exhaustivity: List(_, _*)', teq gives '2: Pattern Match Exhaustivity: ::(_, _)'
+virtpatmat_reach_sealed_unsealed.scala	pass	-	

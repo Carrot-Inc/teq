@@ -1,0 +1,2 @@
+exit 1
+error missing argument for option -Wconf

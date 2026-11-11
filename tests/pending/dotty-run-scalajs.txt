@@ -1,0 +1,403 @@
+16405.scala	16405.scala:14:15: type a not found
+1938-2.scala	1938-2.scala:23:12: this is not a case class or enum case
+2772.scala	2772.scala:7:23: type mismatch: found PrintStream, required OutputStream
+9416.scala	9416.scala:18:16: type mismatch: found "foo", required Extract[M]
+CollectionTests.scala	CollectionTests.scala:153:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
+IArrayOps.scala	iarray.scala:63:16: type Set not found
+MeterCaseClass.scala	MeterCaseClass.scala:17:10: object creation impossible, since def apply(v1: Double): Meter in trait Function1 is not defined
+NestedClasses.scala	NestedClasses.scala:59:27: expected an identifier, found 'super'
+Parser.scala	option: -preview (teq has no flag for it)
+Predef.readLine.scala	<jdk>:1:1: not supported on JavaScript: class BufferedReader java.io.BufferedReader (a Java definition without an implementation in the std's platform layer)
+PrivateAnd.scala	PrivateAnd.scala:4:38: type mismatch: found Int => Int, required Int
+Providers.scala	Providers.scala:55:41: no given instance of type Select[(Int, String, List[Int]), Int] was found for parameter x
+Signals.scala	Signals.scala:12:28: covariant type T occurs in contravariant position in type (Signal[Any]) ?=> T of parameter expr
+Typeable.scala	Typeable.scala:45:29: expected '=>', found '['
+abstract-givens.scala	abstract-givens.scala:6:8: object creation impossible, since given def z[T](using x$1: T): Seq[T] in trait T is not defined
+adding-growing-set.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+anon-mirror-gen-local.scala	anon-mirror-gen-local.scala:85:47: not supported yet: an instance of Seed, a class nested in a class, made outside that class
+applydynamic_sip.scala	applydynamic_sip.scala:30:3: a member of js.Dynamic takes no type arguments
+array-erasure.scala	array-erasure.scala:27:16: value apply is not a member of Array[?] & T
+array-existential-bound.scala	array-existential-bound.scala:2:18: value length is not a member of Q
+arraycopy.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+arrays.scala	<jdk>:1:1: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition without an implementation in the std's platform layer)
+binaryLiterals.scala	binaryLiterals.scala:3:19: expected an expression, found a blank line
+bridges.scala	bridges.scala:64:21: error overriding method f in class Foo___ of type Foo___.this.I: method f in trait Bar_If of type I has incompatible type
+builder.scala	output: line 1: the .check has 'Table(Row(Cell(top left), Cell(top right)), Row(Cell(botttom left), Cell(bottom right)))', the program printed 'Table()'
+byname-given.scala	byname-given.scala:3:3: local givens cannot take parameters
+caseclasses.scala	caseclasses.scala:22:20: expected an expression, found ';'
+catch-sub-cases.scala	catch-sub-cases.scala:13:28: expected '=>', found 'if'
+classmanifests_new_alias.scala	Manifest.scala:65:96:None:None: not supported yet: value <:< of Manifest[T] (needed by scala.reflect.Manifest.equals)
+classtags_contextbound.scala	output: line 1: the .check has 'class [I', the program printed 'class [Ljava.lang.Object;'
+cochis.scala	cochis.scala:9:27: type ⇒ not found
+collections.scala	collections.scala:23:44: expected ',' or ')', found identifier
+collective-extensions.scala	collective-extensions.scala:7:32: 'this' is not available outside of a class
+config.scala	config.scala:130:42: no given instance of type CanThrow was found for parameter of Possibly[Configured[String]]
+context-functions.scala	context-functions.scala:34:29: operator + cannot be applied to Int and Ctx[Int]
+convertible.scala	option: -preview (teq has no flag for it)
+creator-applys.scala	creator-applys.scala:126:11: value Object is not a member of lang
+curried-mirror.scala	curried-mirror.scala:7:74: no given instance of type Product{type MirroredType[T] = Prod0} was found for parameter x
+deriving-interesting-prefixes.scala	deriving-interesting-prefixes.scala:31:14: Test.a.TC1[C] cannot be derived: the companion of the type class has no derived method
+double-pattern-type.scala	double-pattern-type.scala:26:12: wrong number of patterns for C2: expected 2, found 3
+drop-apply-optimization.scala	drop-apply-optimization.scala:15:7: value + is not a member of Any
+dynamic-anyval.scala	run: exit 1: TypeError: x.dingo is not a function
+dynamicDynamicTests.scala	dynamicDynamicTests.scala:69:66: a vararg splice is only allowed as the last argument
+eff-dependent.scala	eff-dependent.scala:22:12: type mismatch: found A => (f.Eff) ?=> B, required A => B
+enrich-gentraversable.scala	crash: teq: signal 6
+enum-HList.scala	enum-HList.scala:9:37: type mismatch: found Any, required HLst
+enum-custom-toString.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: Tag.IntTag.productPrefix = IntTagImpl
+enum-nat.scala	enum-nat.scala:22:32: type mismatch: found Any, required (Nat.Zero : Nat) | Succ[?]
+enum-values-order.scala	run: exit 1: SyntaxError: Identifier 'LatinAlphabet$M' has already been declared
+enums-java-compat.scala	enums-java-compat.scala:10:6: object creation impossible, since it has 2 unimplemented members: valueOf, values
+equality.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: 5 == 5
+erased-18.scala	erased-18.scala:7:15: expected ',' or ')', found identifier
+erased-19.scala	erased-19.scala:7:15: expected ',' or ')', found identifier
+erased-20.scala	erased-20.scala:6:18: expected ',' or ')', found identifier
+erased-21.scala	erased-21.scala:5:24: expected ',' or ')', found identifier
+erased-25.scala	erased-25.scala:11:17: 'erased' is not part of the supported Scala subset
+erased-26.scala	erased-26.scala:7:25: 'erased' is not part of the supported Scala subset
+erased-7.scala	erased-7.scala:6:11: 'erased' is not part of the supported Scala subset
+erased-inline-product-1.scala	erased-inline-product-1.scala:21:10: No given instance of type ProductOf[(p : (Int, Long))] was found.
+erased-inline-product-2.scala	erased-inline-product-2.scala:17:16: type p not found
+erased-machine-state.scala	erased-machine-state.scala:20:20: 'erased' is not part of the supported Scala subset
+erased-poly-ref.scala	erased-poly-ref.scala:9:11: 'erased' is not part of the supported Scala subset
+errorhandling	Result.scala:45:35: type mismatch: found Err[Any], required Result[*:[T, U], List[E]]
+exceptions-2.scala	exceptions-2.scala:233:79: expected an expression, found ';'
+exceptions-nest.scala	output: line 7: the .check has 'OK', the program printed '1000'
+export-in-extension.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+extmethods2.scala	extmethods2.scala:5:9: object creation impossible, since def apply(v1: TC): AnyRef in trait Function1 is not defined
+extra-implicits.scala	extra-implicits.scala:14:3: missing argument for parameter b
+final-fields.scala	output: line 5: the .check has '3 2 3 -4', the program printed '-1 -2 -3 -4'
+fors.scala	<jdk>:1:1: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition without an implementation in the std's platform layer)
+fragables-extension.scala	fragables-extension.scala:11:3: missing parameter type
+fully-abstract-interface.scala	run: exit 1: RangeError: Maximum call stack size exceeded
+fully-abstract-nat-2.scala	run: exit 1: RangeError: Maximum call stack size exceeded
+fully-abstract-nat-4.scala	fully-abstract-nat-4.scala:20:12: this is not a case class or enum case
+fully-abstract-nat-5.scala	fully-abstract-nat-5.scala:20:12: this is not a case class or enum case
+fully-abstract-nat-6.scala	fully-abstract-nat-6.scala:20:12: this is not a case class or enum case
+fully-abstract-nat-7.scala	fully-abstract-nat-7.scala:20:12: this is not a case class or enum case
+fully-abstract-nat.scala	fully-abstract-nat.scala:27:28: type mismatch: found Any, required ?{ pred: ? }. Note that implicit extension methods cannot be applied because they are ambiguous; both method SuccDeco in class Numbers and method SuccDeco in object Unbounde
+genericNumLits.scala	genericNumLits.scala:5:19: number too large
+given-disambiguation.scala	given-disambiguation.scala:21:10: expected end of statement, found ':'
+hk-alias-unification.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: I should not be summoned!
+hmap-covariant.scala	hmap-covariant.scala:75:22: expected ']', found '='
+hmap.scala	hmap.scala:76:22: expected ']', found '='
+i10068d.scala	i10068d.scala:26:20: type mismatch: found () => it, required SAM_B2
+i10511.scala	i10511.scala:27:29: type mismatch: found (t : (Bool.True : Bool)), required Not[(Bool.False : Bool)]
+i10997.scala	i10997.scala:13:60: no given instance of type Of[(ClassWrapper.this.Qux : Qux)] was found for parameter x
+i11008b.scala	i11008b.scala:7:17: a sequence wildcard can only end a sequence pattern
+i11052a.scala	lang.scala:1:1: not supported on JavaScript: method getType of java.lang.reflect.Field (a Java definition without an implementation in the std's platform layer)
+i11052b.scala	lang.scala:1:1: not supported on JavaScript: method getType of java.lang.reflect.Field (a Java definition without an implementation in the std's platform layer)
+i11174.scala	run: exit 1: TypeError: Cannot read properties of undefined (reading 'Square')
+i11174local.scala	run: exit 1: TypeError: Cannot read properties of undefined (reading 'apply')
+i11419.scala	output: line 1: the .check has 'List(x, foo)', the program printed 'List(x)'
+i11583.scala	Tuples.scala:247:12:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
+i11630.scala	i11630.scala:5:11: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+i11938.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+i11996.scala	i11996.scala:10:38: 'erased' is not part of the supported Scala subset
+i12032.scala	i12032.scala:11:22: method append overrides nothing
+i12328.scala	i12328.scala:34:23: No given instance of type Schema[A] was found.
+i12328a.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+i1240.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+i12656.scala	i12656.scala:13:11: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+i12914.scala	i12914.scala:3:21: type String not found
+i13087.scala	i13087.scala:11:5: expected an expression, found end of indented block
+i13146poly.scala	i13146poly.scala:13:12: type argument Mono does not have the same kind as its bound [_]
+i13181.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+i13215.scala	option: -WunstableInlineAccessors with -Werror (teq has no flag for it)
+i13332.scala	i13332.scala:22:81: no given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x
+i13332a.scala	i13332a.scala:17:15: no given instance of type Mirror{type MirroredType[X] = Scope.this.IList[X]; type MirroredMonoType = Scope.this.IList[?]; type MirroredElemTypes <: [_] =>> Tuple} was found for parameter x
+i13332anonprod.scala	i13332anonprod.scala:23:81: no given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x
+i13332intersection.scala	i13332intersection.scala:230:54: cannot reduce summonFrom with
+i13332shapeless-b.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+i13332shapeless.scala	i13332shapeless.scala:338:29: type argument CListRefl[tl] does not conform to upper bound CList
+i13433.scala	i13433.scala:8:10: this type cannot be tested at runtime: Matcher[A]
+i13433b.scala	i13433b.scala:8:10: this type cannot be tested at runtime: Matcher[A]
+i13461-b.scala	i13461-b.scala:33:5: only defs are allowed in an extension
+i1354b.scala	run: exit 1: NotImplementedError [scala.NotImplementedError]: an implementation is missing
+i13691b.scala	i13691b.scala:7:15: throws takes 1 type argument(s), 2 given
+i13703.scala	i13703.scala:5:3: value i is not a member of Foo{def i_=(x$1: Int): Unit}
+i13950.scala	i13950.scala:6:3: value apply is not a member of S
+i13961a.scala	i13961a.scala:6:15: throws takes 1 type argument(s), 2 given
+i13968.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: ((),())
+i14020.scala	run: exit 1: TypeError: Cannot read properties of undefined (reading 'a')
+i14150.scala	i14150.scala:67:83: no given instance of type Aux[("SubT1", "SubT2"), ("SubT1", "SubT2")] was found for parameter ev
+i1432.scala	i1432.scala:5:11: expected '=', found '@'
+i14340.scala	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
+i14623.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+i1490.scala	run: exit 1: NotImplementedError [scala.NotImplementedError]: an implementation is missing
+i15234.scala	i15234.scala:18:10: value fromProduct is not a member of Mirror{type MirroredType = (Nil : Nil); type MirroredMonoType = (Nil : Nil); type MirroredElemTypes <: Tuple}
+i15287.scala	i15287.scala:6:3: not found: f
+i15302a.scala	i15302a.scala:6:28: type mismatch: found *:[Int, *:[bh, bt] & (Int, Int)], required (Int, Int, Int)
+i15374.scala	run: exit 1: ReferenceError: $this1qacu60_6 is not defined
+i15702.scala	i15702.scala:18:15: expected an identifier, found 'super'
+i15725.scala	output: line 1: the .check has '2 meters', the program printed 'ToString@2'
+i15840.scala	i15840.scala:9:32: expected ':', found 'val'
+i15855.scala	i15855.scala:10:57: type mismatch: found () => R, required MyFunction0[R]
+i15998.scala	i15998.scala:11:3: extension method isRotationOf is not applicable to String
+i16006.scala	i16006.scala:6:37: None of the overloaded alternatives of method toString in class Foo with types
+i16458.scala	i16458.scala:5:38: expected end of statement, found identifier
+i16459.scala	i16459.scala:6:6: expected end of statement, found identifier
+i16464.scala	i16464.scala:10:20: operator - cannot be applied to Int and Seq[Int]
+i16943.scala	run: exit 1: NotImplementedError [scala.NotImplementedError]: an implementation is missing
+i17115.scala	i17115.scala:3:7: object creation impossible, since def apply(v1: A[Tail[Tup]]): A[Tup] in trait Function1 is not defined
+i17332.scala	<jdk>:1:1: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+i17761.scala	output: line 3: the .check has 'WrappedVarArgs(class java.lang.String, int)', the program printed 'ArraySeq(class java.lang.String, int)'
+i18150.scala	i18150.scala:4:7: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+i18183.findRef.scala	i18183.findRef.scala:5:10: expected an identifier, found 'this'
+i18183.given.scala	i18183.given.scala:30:30: ambiguous given instances for Foo: foo, foo
+i18183.mixed.scala	i18183.mixed.scala:18:30: ambiguous given instances for Foo: foo, foo
+i18183.scala	i18183.scala:15:34: ambiguous given instances for Foo: foo, foo
+i18315.scala	i18315.scala:17:40: missing parameter type
+i18612-a.scala	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
+i18612-b.scala	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
+i18612-c.scala	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
+i18612-d.scala	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
+i19394.scala	i19394.scala:11:7: bar is already defined as method bar
+i1990b.scala	run: exit 1: ReferenceError: Must call super constructor in derived class before accessing 'this' or returning from derived constructor
+i20145.scala	i20145.scala:3:5: Cannot rewrite recursive call: it is not in tail position
+i21213-min.scala	i21213-min.scala:4:35: expected ':', found 'val'
+i21213.scala	i21213.scala:4:18: expected ':', found 'val'
+i22150.scala	i22150.scala:7:17: expected ')', found '@'
+i22649	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: Was TypeRef(NoPrefix(), "{z1 => AnyRef{type T; def make: z1.T}}")
+i22900.scala	i22900.scala:10:28: a named pattern is only allowed in a tuple or constructor pattern
+i22968.scala	i22968.scala:5:13: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+i23131.scala	i23131.scala:5:10: name is not a field of Some[(name : String)]
+i23440.scala	i23440.scala:9:28: type mismatch: found (<error>, <error>) => Unit, required (a : Int, b : String) => Any
+i23897.scala	i23897.scala:19:15: no given instance of type Semigroup[(Int)] was found for parameter s
+i2964.scala	output: line 1: the .check has 'class Foo$$anon$1', the program printed 'class Foo$$anon$1sif5ob_114'
+i2964b.scala	output: line 1: the .check has 'class Foo$$anon$1', the program printed 'class Foo$$anon$v1v1bf_103'
+i2964c.scala	output: line 1: the .check has 'class Foo$Inner$1', the program printed 'class Inner'
+i2964d.scala	output: line 1: the .check has 'class Foo$Inner$2$', the program printed 'class Inner'
+i2964e.scala	output: line 1: the .check has 'class foo.bar.Foo$$anon$1', the program printed 'class Foo$$anon$11p2z7y_164'
+i3000b.scala	output: line 1: the .check has 'Foo$$anon$1', the program printed 'Foo$$anon$oqzmt3_105'
+i3207.scala	i3207.scala:3:37: expected ',' or ')', found identifier
+i3248d.scala	i3248d.scala:9:20: a sequence wildcard can only end a sequence pattern
+i3339	Test_3.scala:1:8: several entry points: Test.main, Test.main; choose one with --main
+i3339.scala	i3339.scala:15:8: several entry points: Test.main, Test.main; choose one with --main
+i3448.scala	i3448.scala:8:33: missing parameter type
+i3539.scala	i3539.scala:4:12: value asInstanceOf is not a member of Int => ""
+i3920.scala	i3920.scala:6:26: expected ':', found 'val'
+i4073.scala	run: exit 1: TypeError: d.some is not a function
+i4364a.scala	i4364a.scala:12:9: method f in object Test must be called with () argument
+i4496a.scala	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
+i4496b.scala	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
+i4528.scala	i4528.scala:8:3: this expression cannot be assigned to
+i4557.scala	i4557.scala:50:22: a parent has to be a class or a trait
+i4600.scala	i4600.scala:34:12: values of types Dynamic and String cannot be compared with == or !=
+i4659b.scala	run: exit 1: RangeError: Maximum call stack size exceeded
+i4984b.scala	i4984b.scala:16:10: this is not a case class or enum case
+i4984c.scala	i4984c.scala:16:10: this is not a case class or enum case
+i4984d.scala	i4984d.scala:19:10: this is not a case class or enum case
+i4984e.scala	i4984e.scala:20:10: this is not a case class or enum case
+i5077.scala	i5077.scala:21:25: value < is not a member of Any
+i5455.scala	i5455.scala:16:22: value asInstanceOf is not a member of Int
+i5527.scala	i5527.scala:11:7: missing parameter type
+i6490b.scala	i6490b.scala:10:19: a sequence wildcard can only end a sequence pattern
+i7487.scala	i7487.scala:5:26: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+i7488.scala	i7488.scala:9:16: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+i768.scala	output: line 1: the .check has 'WrappedVarArgs(a, bc)', the program printed 'ArraySeq(a, bc)'
+i7788.scala	i7788.scala:8:3: value fold is not a member of Show[B]
+i7868.scala	i7868.scala:6:22: no given instance of type ValueOf[S[0]] was found for parameter x
+i7963.scala	util.scala:1:1: not supported on JavaScript: method min of java.util.Collections (a Java definition without an implementation in the std's platform layer)
+i8073.scala	i8073.scala:17:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
+i8073b.scala	i8073b.scala:18:46: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
+i8425.scala	i8425.scala:5:16: anonymous class T$$anon$1xoc7vx_90 cannot extend final class PrintStream
+i8577a.scala	i8577a.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577b.scala	i8577b.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577c.scala	i8577c.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577d.scala	i8577d.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577e.scala	i8577e.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577f.scala	i8577f.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577g.scala	i8577g.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577h.scala	i8577h.scala:11:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577i.scala	i8577i.scala:12:10: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8582.scala	i8582.scala:10:7: run in trait BeforeAndAfterAll cannot override the concrete run in trait Suite without a member that both override
+i876.scala	i876.scala:7:16: type mismatch: found String, required Int
+i8977.scala	run: exit 1: TypeError: "out".printf is not a function
+i9225.scala	i9225.scala:8:33: expected an identifier, found 'super'
+i9341.scala	i9341.scala:3:15: expected an identifier, found 'super'
+i9404.scala	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
+i9482.scala	i9482.scala:47:32: no given instance of type OptManifest[A] was found for parameter evidence$1
+i9530.scala	i9530.scala:16:7: object creation impossible, since it has 2 unimplemented members: combine, value
+iarrays.scala	iarrays.scala:49:12: value concat is not a member of IArray
+ift-return.scala	run: exit 1: Node.js v25.9.0
+impconvtimes.scala	impconvtimes.scala:17:40: operator * cannot be applied to Double and Hour
+implicit-alias.scala	implicit-alias.scala:56:11: local givens cannot take parameters
+implicit-specifity.scala	implicit-specifity.scala:34:33: expected ':', found ','
+implicitFuns2.scala	implicitFuns2.scala:32:12: values of types (A) ?=> (B) ?=> Int and Int cannot be compared with == or !=
+implicitShortcut	Test_3.scala:8:10: values of types (C) ?=> Int and Int cannot be compared with == or !=
+implicits-numeric.scala	implicits-numeric.scala:6:29: no given instance of type AnyVal was found for parameter e
+implied-priority.scala	implied-priority.scala:51:29: ambiguous given instances for E[String]: t1, t2
+implied-specifity-2.scala	implied-specifity-2.scala:61:21: ambiguous given instances for Bam: lo, hi
+inline-numeric	Fractional.scala:20:55: expected end of statement, found ','
+interleaving.scala	interleaving.scala:5:26: expected '=', found '['
+interpolation-opt.scala	run: exit 1: NotImplementedError [scala.NotImplementedError]: an implementation is missing
+interpolationArgs.scala	output: line 1: the .check has 'java.lang.IllegalArgumentException: wrong number of arguments (1) for interpolated string with 3 parts', the program printed 'scala.NotImplementedError: an implementation is missing'
+iterables.scala	output: line 1: the .check has 'false', the program printed '5,6,7,8,9'
+iterator-from.scala	iterator-from.scala:53:45: not found: Value
+kmpSliceSearch.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+lambda-null.scala	output: line 7: the .check has 'specialized Function1: 0', the program printed 'specialized Function1: null'
+lazy-exprs.scala	run: exit 1: MatchError [scala.MatchError]
+llift.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+longmap.scala	lang.scala:1:1: not supported on JavaScript: method highestOneBit of java.lang.Long (a Java definition without an implementation in the std's platform layer)
+loops-alt.scala	loops-alt.scala:19:12: no given instance of type Label[Unit] was found for parameter label
+loops.scala	timeout: the program: over 45 s
+lst	Lst.scala:35:9: expected 'case', found 'var'
+match-sub-cases.scala	match-sub-cases.scala:20:27: expected '=>', found 'if'
+named-patterns.scala	named-patterns.scala:17:12: Person is not a case class, so it cannot be used as a pattern
+named-tuple-ops.scala	named-tuple-ops.scala:40:16: type mismatch: found EmptyTuple, required Drop[(name : String, zip : Int, pop : Int), 3] (in the body of scala.NamedTupleDecomposition.drop)
+named-tuples-mirror.scala	named-tuples-mirror.scala:22:58: No given instance of type Mirror.Of[(foo : Int, bla : String)] was found.
+named-tuples-strawman-2.scala	named-tuples-strawman-2.scala:147:41: value asInstanceOf is not a member of NT
+named-tuples-xxl.scala	named-tuples-xxl.scala:31:14: value age is not a member of (Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, String, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int)
+named-tuples.scala	named-tuples.scala:15:21: type Concat not found
+namedtuples-buildcolumn.scala	namedtuples-buildcolumn.scala:23:48: value weight is not a member of NamedTuple[N, V]
+numbereq.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: -32768/class java.lang.Integer != -32768/class scala.math.BigDecimal
+optimizer-array-load.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: should have thrown exception
+option-extract.scala	option-extract.scala:20:11: value orElse is not a member of ExtractResult[B]
+ordinal-innerclass.scala	ordinal-innerclass.scala:18:65: value asInstanceOf is not a member of Test.o.T
+overloads.scala	run: exit 1: RangeError: Maximum call stack size exceeded
+patmat-spec.scala	patmat-spec.scala:29:12: FirstChars is not a case class, so it cannot be used as a pattern
+patmatch-classtag.scala	patmatch-classtag.scala:21:57: no given instance of type ClassTag[CaseDef] was found for parameter e
+pf-sub-cases.scala	pf-sub-cases.scala:4:23: expected '=>', found 'match'
+pkgobjvals.scala	pkgobjvals.scala:19:11: a singleton type needs a val, a parameter or an object
+planets.scala	planets.scala:18:12: None of the overloaded alternatives of method valueOf in object Predef with types
+poly-kinded-derives.scala	poly-kinded-derives.scala:15:16: Show[Mono] cannot be derived: the companion of the type class has no derived method
+productElementName.scala	productElementName.scala:43:16: method productElementName overrides nothing
+protectedacc.scala	protectedacc.scala:117:43: not found: meth1
+publicInBinary	option: -WunstableInlineAccessors with -Werror (teq has no flag for it)
+quotes-add-erased	Test_2.scala:4:19: 'erased' is not part of the supported Scala subset
+quotes-reflection	Test_2.scala:7:10: 'erased' is not part of the supported Scala subset
+reducable.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: 4
+saferExceptions.scala	saferExceptions.scala:20:18: throws takes 1 type argument(s), 2 given
+sammy_repeated.scala	output: line 1: the .check has 'WrappedVarArgs(1)', the program printed 'ArraySeq(1)'
+scala-tests-typeChecks.scala	scala-tests-typeChecks.scala:13:12: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+scala2-library-test	Main.scala:26:26: value unapply is not a member of Some
+selectable-new.scala	run: exit 1: java.lang.UnsupportedOperationException: reflection is not available on JavaScript
+single-case-expr.scala	single-case-expr.scala:5:29: expected an expression, found 'case'
+spread-patterns.scala	spread-patterns.scala:12:18: a sequence wildcard can only end a sequence pattern
+spreads-subtyping.scala	spreads-subtyping.scala:7:16: type mismatch: found CharSequence, required Seq[CharSequence] | Array[? <: CharSequence]
+spreads.scala	spreads.scala:18:26: type mismatch: found 1, required Seq[Int] | Array[? <: Int]
+string-context-implicits-with-conversion.scala	string-context-implicits-with-conversion.scala:21:41: expected '}', found ';'
+string-extractor.scala	run: exit 1: TypeError: x.iterator is not a function
+structural-compat.scala	structural-compat.scala:85:21: missing parameter type
+structural.scala	structural.scala:83:21: missing parameter type
+sysprops.scala	lang.scala:1:1: not supported on JavaScript: method clearProperty of java.lang.System (a Java definition without an implementation in the std's platform layer)
+t0017.scala	run: exit 1: TypeError: Cannot read properties of undefined (reading '0')
+t10290.scala	t10290.scala:14:16: expected an identifier, found 'super'
+t12290	java source: teq reads none
+t1406b.scala	t1406b.scala:23:30: expected ',' or ')', found identifier
+t1423.scala	output: line 1: the .check has '1', the program printed '????'
+t1505.scala	t1505.scala:2:11: not found: Value
+t2111.scala	t2111.scala:4:28: not found: Value
+t2755.scala	output: line 2: the .check has '2', the program printed '1'
+t3126.scala	t3126.scala:6:9: value unapply is not a member of C
+t3186.scala	t3186.scala:1:59: not found: Value
+t3199b.scala	output: line 1: the .check has '[1, 2, 3]', the program printed '[(), (), ()]'
+t3220-3.scala	t3220-3.scala:42:18: value in backtick quoted identifier is not a member of Literals
+t3346g.scala	t3346g.scala:8:11: value copy is not a member of String
+t3346h.scala	t3346h.scala:8:11: value y is not a member of String
+t3452h.scala	t3452h.scala:1:7: error overriding method f in class Foo of type I: method f in trait Bar of type Bar.this.I has incompatible type
+t3502.scala	t3502.scala:5:18: recursive use of apply needs an explicit result type
+t3603.scala	lang.scala:1:1: not supported on JavaScript: method highestOneBit of java.lang.Long (a Java definition without an implementation in the std's platform layer)
+t3616.scala	t3616.scala:2:13: not found: Value
+t3687.scala	t3687.scala:1:43: not found: Value
+t3887.scala	t3887.scala:9:18: expected a pattern, found 'this'
+t3950.scala	t3950.scala:3:18: not found: Value
+t4122.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: ab != ArraySeq((), ())
+t4300.scala	t4300.scala:9:17: expected an identifier, found 'super'
+t4570.scala	t4570.scala:2:13: not found: Value
+t4601.scala	<jdk>:1:1: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition without an implementation in the std's platform layer)
+t4742.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+t4859.scala	output: line 8: the .check has 'About to reference O.N.apply()', the program printed nothing
+t4871.scala	output: line 1: the .check has 'class Test$C', the program printed 'null'
+t5040.scala	t5040.scala:11:3: privateMethod is private to Prova2
+t5588.scala	t5588.scala:3:15: not found: Value
+t5612.scala	t5612.scala:2:25: not found: Value
+t5733.scala	t5733.scala:20:11: values of types Dynamic and String cannot be compared with == or !=
+t5866.scala	output: line 2: the .check has 'Foo(0)', the program printed 'null'
+t6090.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+t6114.scala	<jdk>:1:1: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's platform layer)
+t6246.scala	t6246.scala:7:13: value <:< is not a member of ClassTag[_]
+t627.scala	output: line 1: the .check has 'ArraySeq(1, 2, 3, 4)', the program printed 'ArraySeq((), (), (), ())'
+t6353.scala	run: exit 1: TypeError: f.apply is not a function
+t6355.scala	run: exit 1: TypeError: x.bippy is not a function
+t6406-regextract.scala	Regex.scala:341:24:None:None: pattern is private to Matcher (in the body of scala.util.matching.Regex.unapplySeq)
+t6443b.scala	t6443b.scala:11:8: object creation impossible, since def foo(d: A.this.D)(d2: (d : A.this.D)): Unit in trait A is not defined
+t6534.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+t6663.scala	t6663.scala:14:11: a member of js.Dynamic takes no type arguments
+t6706.scala	lang.scala:1:1: not supported on JavaScript: method gc of java.lang.System (a Java definition without an implementation in the std's platform layer)
+t6827.scala	output: line 1: the .check has 'start at -5: OOB', the program printed 'start at -5: ok'
+t7200.scala	t7200.scala:19:9: recursive use of coflatMap needs an explicit result type
+t7223.scala	output: line 1: the .check has '0', the program printed nothing
+t7396.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+t7992.scala	t7992.scala:9:9: expected an identifier, found 'super'
+t7992b.scala	t7992b.scala:9:9: expected an identifier, found 'super'
+t8199.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed: reallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongnamereallylongna
+t8346.scala	t8346.scala:5:33: not found: Value
+t8601d.scala	run: exit 1: java.lang.RuntimeException: failed to throw NPE
+t8611b.scala	lang.scala:1:1: not supported on JavaScript: method getType of java.lang.reflect.Field (a Java definition without an implementation in the std's platform layer)
+t8803.scala	t8803.scala:20:68: expected an identifier, found 'super'
+t8933b	<jdk>:1:1: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition without an implementation in the std's platform layer)
+t8933c.scala	<jdk>:1:1: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition without an implementation in the std's platform layer)
+t949.scala	t949.scala:6:20: not found: Value
+tagless.scala	tagless.scala:86:18: expected end of statement, found ','
+tailrec-return.scala	tailrec-return.scala:4:7: Cannot rewrite recursive call: it is not in tail position
+targetName.scala	output: line 1: the .check has 'strings: WrappedVarArgs(hello)', the program printed 'strings: ArraySeq(hello)'
+tcpoly_parseridioms.scala	tcpoly_parseridioms.scala:94:5: type argument (ParserIdioms.this.ParserIdiom : ParserIdiom) does not conform to upper bound Idiom[[t] =>> ParserIdioms.this.Parser[t]]
+toplevel-mixed	A_1.scala:4:7: x is already defined as value x; overloading a value with a method is not supported
+transparent	run: exit 1: ReferenceError: $thisnbtu8x_616 is not defined
+transparentProtected.scala	run: exit 1: ReferenceError: $this1hob1ao_83 is not defined
+try-catch-unify.scala	scala-library-3.8.4.jar!scala.util.control.Exception:17:1: not supported yet: a closure outside the block that defines its method (in the body of scala.util.control.Exception.Catch)
+tuple-concat.scala	scala-library-3.8.4.jar!scala.runtime.Tuples:12:1: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the bo
+tuple-cons.scala	Tuples.scala:247:12:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
+tuple-erased.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+tuple-patmat-extract.scala	run: exit 1: MatchError [scala.MatchError]
+tuple-patmat-size.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+tuple-patmat.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+tuple-patterns.scala	output: line 3: the .check has '3', the program printed '()'
+tuple-tail.scala	Tuples.scala:350:14:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
+tupled-function-andThen.scala	tupled-function-andThen.scala:10:28: (Int, Int) => (Int, Int, Int) cannot be tupled as Tuple => Tuple
+tupled-function-apply.scala	tupled-function-apply.scala:10:13: too many arguments: expected 0
+tupled-function-compose.scala	tupled-function-compose.scala:9:28: (Int, Int) => (Int, Int, Int) cannot be tupled as Tuple => Tuple
+tupled-function-extension-method.scala	tupled-function-extension-method.scala:18:21: (Int, Int) => (Int, Int) cannot be tupled as ((Int, Int)) => R
+tupled-function-tupled.scala	tupled-function-tupled.scala:10:13: (Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) => Int cannot be tupled as Tuple => R
+tupled-function-untupled.scala	tupled-function-untupled.scala:8:36: () => Int cannot be tupled as Tuple & EmptyTuple => Int
+tuples-empty.scala	Tuples.scala:350:14:None:None: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef (in the body of scala.runtime.
+tuples1.scala	tuples1.scala:83:72: type mismatch: found Concat[X, (y : Y)], required Concat[X, Y]
+tuples1b.scala	output: line 4: the .check has '()', the program printed '0'
+type-propagation.scala	type-propagation.scala:3:5: value asInstanceOf is not a member of String
+typeCheckErrors.scala	typeCheckErrors.scala:6:18: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+typealias_overriding.scala	typealias_overriding.scala:17:24: expected an identifier, found 'super'
+typeclass-derivation1.scala	typeclass-derivation1.scala:23:55: value asInstanceOf is not a member of Cons[T]
+typeclass-derivation2a.scala	typeclass-derivation2a.scala:142:19: type mismatch: found Lst[T], required Lst[T]
+typeclass-derivation2b.scala	typeclass-derivation2b.scala:117:31: type mismatch: found ? <: T, required _
+typeclass-derivation2d.scala	typeclass-derivation2d.scala:87:7: value asInstanceOf is not a member of Lst
+typelevel-numeric.scala	typelevel-numeric.scala:27:14: MathLib is abstract; it cannot be instantiated
+typelevel-peano.scala	typelevel-peano.scala:9:12: this type cannot be tested at runtime: ?
+typetest.scala	output: line 1: the .check has 'true', the program printed 'false'
+tyql.scala	tyql.scala:1:8: cannot resolve import: NamedTuple is not an object or a package
+unambiref.scala	unambiref.scala:3:13: Reference to x is ambiguous.
+unapply-tparam.scala	unapply-tparam.scala:26:13: expected '=>', found '['
+unapply.scala	unapply.scala:40:12: wrong number of patterns for an extractor of Product2[Int, String]: found 2
+unicodeEscapes.scala	unicodeEscapes.scala:14:36: not found: ida
+uninitialized-field-values.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+unroll-caseclass-integration	UnrollTestMain_1.scala:18:9: wrong number of patterns for Unrolled: expected 4, found 2
+unroll-classMethod-integration	Unrolled_2.scala:6:7: type Unrolled is already defined
+unroll-clause-interleaving	Unrolled_1.scala:6:24: expected '=', found '['
+unroll-curriedMethod-integration	Unrolled_2.scala:6:7: type Unrolled is already defined
+unroll-genericMethod-integration	Unrolled_2.scala:6:7: type Unrolled is already defined
+unroll-methodWithImplicit-integration	Unrolled_2.scala:6:7: type Unrolled is already defined
+unroll-multiple.scala	run: exit 1: java.lang.IndexOutOfBoundsException: 1
+unroll-objectMethod-integration	Unrolled_2.scala:6:8: Unrolled is already defined as object Unrolled in $SCALA3/tests/run/unroll-objectMethod-integration/Unrolled_1.scala
+unroll-primaryConstructor-integration	Unrolled_2.scala:6:7: type Unrolled is already defined
+unroll-secondParameterList-integration	Unrolled_2.scala:6:7: type Unrolled is already defined
+unroll-secondaryConstructor-integration	Unrolled_2.scala:6:7: type Unrolled is already defined
+unroll-traitMethod-integration	Unrolled_2.scala:6:7: type Unrolled is already defined
+unroll-value-class	Unrolled_2.scala:5:7: type Unrolled is already defined
+value-class-extractor-2.scala	value-class-extractor-2.scala:96:10: this is not a case class or enum case
+value-class-extractor.scala	value-class-extractor.scala:24:10: SomeProduct is not a case class, so it cannot be used as a pattern
+vc-equals.scala	run: exit 1: AssertionError [java.lang.AssertionError]: assertion failed
+virtpatmat_switch.scala	output: line 5: the .check has 'got b', the program printed 'got some letter'
+weak-conformance.scala	weak-conformance.scala:14:38: type mismatch: found List[Byte | Int], required List[Byte]
+xml.scala	xml.scala:17:21: expected end of statement, found identifier
+zero-arity-case-class.scala	zero-arity-case-class.scala:5:12: value unapply is not a member of Foo

@@ -1,0 +1,399 @@
+abstract_function_tupled	error: not supported yet: value apply of Function2[T1, T2, R] (needed by scala.Function2.curried)
+alias_method_refinement_variance	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+and_base_override_through_instances	error: error overriding method unapply in trait Ex of type (x: Any): Option[A]: method unapply of type (x: Any): Option[Int & String] has in
+and_base_three_instances	error: type mismatch: found ? >: (Int | String) <: Int & String, required Double
+anon_hidden_generic	output differs
+applied_member_declared_variance	error: type mismatch: found (f : (c: A) => c.FC[c.Ab]), required A => A#FC[String]
+approx_store_application_agree	error: type mismatch: found (f : (c: Am) => Cov[c.FCt[c.T]]), required Am => Cov[Am#FCt[Null]]
+argument_block_ascriptions	output differs
+arity_class_names_found	error: type ContextFunction01 not found
+array_index_bounds	output differs
+array_iterator_live	output differs
+array_makers_as_functions	output differs
+array_spread_alias	output differs
+arrays_generic	output differs
+bench_strings	RangeError: Maximum call stack size exceeded
+bigdecimal_arith	error: not supported on JavaScript: method getType of java.lang.reflect.Field (a Java definition without an implementation in the std's plat
+bigdecimal_conv	output differs
+bson_macros	error: cannot resolve import: reactivemongo not found
+bson_opaque_list_handler	error: cannot resolve import: reactivemongo not found
+callable_secondary_parent	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+case_class_parent_selector_interfaces	TypeError: $getClass(...).getInterfaces is not a function
+cast_array_kinds	output differs
+cats_dispatch_rebuild	error: cannot resolve import: cats not found
+charset_utf8_replacement	output differs
+class_literal_qualifier	TypeError: Cannot read properties of null (reading '$qname')
+class_tag_array_evidence	output differs
+class_tag_stable_erasure	error: No ClassTag available for Array[A] & S
+class_tag_synthesis	ReferenceError: Ids$Id is not defined
+class_tag_synthesis_jvm	output differs
+code_of_evaluated_argument	output differs
+code_of_extension_calls	output differs
+code_of_extension_clauses	output differs
+code_of_folded_constants	output differs
+code_of_library_members	output differs
+code_of_parameterless_and_block	output differs
+code_of_type_prefixes	output differs
+code_of_type_trees	output differs
+codec_default	error: too many arguments: expected 0 (in the body of scala.io.Codec.fromUTF8)
+collection_class_name	output differs
+collection_seq_extractor_concat	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
+collections	RangeError: Maximum call stack size exceeded
+companion_initializer_order	output differs
+companion_method_lib	error: cannot resolve import: cmlib not found
+compiletime_string_ops	error: type mismatch: found "urge", required Substring["hamburger", 4, 8]
+concat_order_calls	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+concurrent_hash_map_views	error: Ambiguous overload. The overloaded alternatives of method append in class StringBuilder with types
+cons_pattern_binders	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+const_handed_on_operations	error: value unary_+ is not a member of Int
+const_ident_before_init	output differs
+const_ident_nonfinal	output differs
+const_identity_conversion_block_before_init	output differs
+const_identity_conversion_effect_before_init	output differs
+const_macro_provider_forward	output differs
+const_macro_trait_parent	output differs
+const_trait_parent_argument	output differs
+const_unary_operand_before_init	output differs
+const_unary_plus_block_before_init	output differs
+const_unary_plus_effect_before_init	output differs
+conversion_open_var_lock	error: ambiguous given instances for Enc[List[Double]]: Enc.seq, Enc.list
+conversion_open_var_prefix	error: ambiguous given instances for Enc[List[Double]]: Enc.seq, Enc.list
+curried_alias_null_comparison	error: type mismatch: found Null, required Const[Any, Int]
+curried_alias_synthesized_givens	TypeError: CanEqual$(...).derived is not a function
+curried_alias_third_application	error: type mismatch: found (Int, String, Boolean), required Curried[Int, String, Boolean]
+decimal_format	RangeError: Maximum call stack size exceeded
+decimal_format_scientific	RangeError: Maximum call stack size exceeded
+dynamic_written_apply	TypeError: (intermediate value).go is not a function
+enum_case_prefix_ascription	output differs
+enum_case_prefix_effects	output differs
+enum_case_prefix_method	output differs
+enum_case_prefix_pure	output differs
+enum_case_widen_lifting	error: None of the overloaded alternatives of method which in object Main with types
+enum_case_widened_through_prefix	error: type mismatch: found a.E.E, required a.E
+enum_case_widening	error: type mismatch: found (k : a.E), required a.Tr
+enum_lookups	output differs
+enum_ordinal_null	TypeError: Cannot read properties of null (reading 'ordinal')
+enum_reference	TypeError: Token$Plus.equals is not a function
+enum_usage	output differs
+enum_value_effectful_prefix	output differs
+enum_value_null_receiver	output differs
+enum_value_receiver_effects	output differs
+equals_trait	TypeError: e.canEqual is not a function
+erasure_deep_types	ReferenceError: O$O33 is not defined
+erasure_nested_bounds	ReferenceError: O$Id is not defined
+erasure_opaque_pure_phase	output differs
+erasure_pure_gadt	output differs
+erasure_pure_intersection	output differs
+erasure_universal_lub	output differs
+export_extension_byname_default	TypeError: ops$x0(...).h$default$2(...) is not a function
+export_extension_inline_getter_index	output differs
+export_extension_member_has_defaults	error: missing argument for parameter a
+export_extension_shifted_defaults	error: the default argument of g has no tree to expand
+export_forwarder_byname_default	TypeError: O$(...).ops.f$default$1(...) is not a function
+export_infix_type_flags	output differs
+export_inline_class_path_defaults	TypeError: Cannot read properties of undefined (reading 's')
+exports_order_jar	error: value some is not a member of Int
+extension_conversion_contextual	output differs
+extension_result_application	error: type mismatch: found Int, required String
+extractor_pattern_bound_types	error: value size is not a member of Any
+extractor_selected_bounds	error: type mismatch: found Any, required String
+extractor_sequence_wrapper_result	error: Slots is not a case class, so it cannot be used as a pattern
+extractor_through_value_import	RangeError: Maximum call stack size exceeded
+extractor_vals	output differs
+file_module_overrides	error: method toString does not take parameters
+files_directories	error: not supported on JavaScript: method createDirectories of java.nio.file.Files (a Java definition without an implementation in the std'
+files_generator	error: not supported on JavaScript: method createDirectories of java.nio.file.Files (a Java definition without an implementation in the std'
+files_open_options	error: not supported on JavaScript: class FileOutputStream java.io.FileOutputStream (a Java definition without an implementation in the std'
+files_read_write	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
+files_same_target	error: not supported on JavaScript: method copy of java.nio.file.Files (a Java definition without an implementation in the std's platform la
+files_stream_close	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
+files_stream_ops	error: not supported on JavaScript: method createDirectories of java.nio.file.Files (a Java definition without an implementation in the std'
+files_tree_visitor	error: not supported on JavaScript: class SimpleFileVisitor java.nio.file.SimpleFileVisitor (a Java definition without an implementation in
+files_walk_copy	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
+for_generator_callee_guard	error: cannot infer the element type of this generator
+for_generator_callee_parameter	error: cannot infer the element type of this generator
+function_synthetic_class_reflection	error: type ContextFunction01 not found
+function_synthetic_named_arguments	error: type Function023 not found
+function_value_callee	error: missing parameter type
+function_xxl	error: type Function023 not found
+function_xxl_arity256	output differs
+function_xxl_erased_class	error: type Function023 not found
+function_xxl_jvm	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+future_prepare	error: type IllegalThreadStateException not found
+futures	error: type IllegalThreadStateException not found
+given_class_index_export_given	output differs
+given_class_index_match_part	output differs
+given_implicit_scope_match_part	error: no given instance of type A was found for parameter x
+given_import_index_part_selectors	error: no given instance of type A was found for parameter x
+given_index_dependent_parameter_later_clause	error: no given instance of type A was found for parameter x
+given_index_dependent_parameter_same_clause	error: no given instance of type A was found for parameter x
+given_object_instance_lazy	error: type IllegalThreadStateException not found
+given_object_publication_super	RangeError: Maximum call stack size exceeded
+given_open_variable_tapir_joins	error: cannot resolve import: sttp not found
+import_value_type_member	RangeError: Maximum call stack size exceeded
+impure_function_alias	error: type ImpureFunction1 not found
+inference_leftovers_retired	TypeError: CanEqual$(...).derived is not a function
+inferred_result_java_enum	error: type mismatch: found (e.d : ElementType), required (ElementType.FIELD : ElementType)
+inferred_result_tracked	error: expected ':', found 'val'
+inferred_result_types	error: error overriding method x in trait B of type Int: method x of type Any has incompatible type
+infix_alphanumeric_exempt	error: cannot resolve import: cats not found
+init_field_zero	TypeError: Cannot read properties of undefined (reading 'charCodeAt')
+inline_bodies_scalac_product	error: cannot resolve import: inlinebodies not found
+inline_case_renewed_import	error: not found: render
+inline_default_this_receiver	TypeError: Cannot read properties of undefined (reading 's')
+inline_definition_gaps	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+inline_final_block_argument	TypeError: (intermediate value).getOrElse is not a function
+inline_inner_class_quote	ReferenceError: $this13zlxbg_473 is not defined
+inline_outer_private_member	ReferenceError: $this1sepepr_560 is not defined
+inline_outer_this_in_local_class	ReferenceError: $thisw13lme_371 is not defined
+inline_outer_through_block_class	ReferenceError: $this1sivzzj_489 is not defined
+inline_phase_wire_siblings	error: cannot resolve import: softwaremill not found
+inline_substitution_classes	RangeError: Maximum call stack size exceeded
+inline_substitution_local_classes	RangeError: Maximum call stack size exceeded
+interpolate_forcing_boundaries	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+interpolators	throw NotImplementedError.$new1();
+intrinsic_call_records	error: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+intrinsic_call_reflection	error: wrong number of arguments at inlining (while expanding macro) for (s: String)(i: Int): Char: (charAt : (s: String)(i: Int): Char), ex
+jar_case_class_selectors	error: cannot resolve import: play not found
+jar_class_unicode_name	error: cannot resolve import: reactivemongo not found
+jar_signed_extension_macro	error: not found: inlinebodies
+java_atomics	error: String cannot be instantiated
+java_byte_short_constants	error: Cannot reduce `inline if` because its condition is not a constant value: java.lang.Short.MAX_VALUE > 100
+java_collection_defaults	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
+java_converters_buffer_iterator	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
+java_io_streams	RangeError: Maximum call stack size exceeded
+java_member_class_depth	error: cannot resolve import: nest not found
+java_parens	error: not supported on JavaScript: method random of java.lang.Math (a Java definition without an implementation in the std's platform layer
+java_stand_ins	error: not found: println
+java_time_parse_iso	error: not supported on JavaScript: class DateTimeException java.time.DateTimeException (a Java definition without an implementation in the
+java_util_bits	output differs
+java_varargs_spread	error: not found: fix
+java_varargs_spread_unimported	error: type mismatch: found Array[String], required Seq[String]
+jdk_abstract_members_jvm	error: class Empty needs to be abstract, since def read(): Int in class Reader is not defined
+jdk_enum_stable_values	error: a singleton type needs a val, a parameter or an object
+jdk_member_missing_class	error: type mismatch: found Throwable, required IllegalStateException
+jdk_routes_compiler_subset	error: not supported on JavaScript: class File java.io.File (a Java definition without an implementation in the std's platform layer)
+jdk_static_values_stable	error: a singleton type needs a val, a parameter or an object
+jdk_statics_import	error: not found: getType
+junit_comparison_failure	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+jvm_synchronized_cleanup	output differs
+jvm_varargs_backing_arrays	output differs
+lazy_initializer_release	TypeError: $getClass(...).getDeclaredField is not a function
+library_body_casts	error: not found: bodycasts
+library_body_std_defaults	error: cannot resolve import: stddefaultslib not found
+library_overloads_erased_alike	error: type PairMaker not found
+library_quote_pattern_bound_reference	error: cannot resolve import: qnest not found
+library_quote_pattern_enclosing_given	error: cannot resolve import: qnest not found
+library_quote_pattern_nested_fresh	error: cannot resolve import: qnest not found
+library_quote_pattern_outer_type	error: cannot resolve import: qnest not found
+library_type_pattern_from_above	error: cannot resolve import: qnest not found
+library_val_overridden	error: cannot resolve import: lvlib not found
+local_class_nested_members	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+long_map	error: not supported on JavaScript: method highestOneBit of java.lang.Long (a Java definition without an implementation in the std's platfor
+macro_bundle	error: not supported yet in a macro: no resource bundle msgs on the class path (called by message in object Macros)
+macro_by_name_views	output differs
+macro_ctor_clauses	output differs
+macro_ctor_printers	error: wrong number of arguments at inlining (while expanding macro) for (a: Int)(b: Int): D[Int]: (D[Int]#<init> : (a: Int)(b: Int): D[Int]
+macro_files	error: not supported yet in a macro: java.nio.file.Files$ is a JDK class, which has no body for exists to run; put a library implementing it
+macro_inline_arg_subtrees	output differs
+macro_inlined_copy_shape	output differs
+macro_jar_ctor_val	error: cannot resolve import: ctorinitlib not found
+macro_java_annotation_constructor	output differs
+macro_library_body_attempt	error: not found: cats
+macro_module_class_names	output differs
+macro_new_eta_type	output differs
+macro_new_type_children	error: value apply is not a member of TypeProjection
+macro_patterns	error: no given instance of type FromExpr[T | Null] was found for parameter from
+macro_position_named_arg	output differs
+macro_quoted_reduced_refold	output differs
+macro_reflect_application_order	output differs
+macro_source_path	error: type Path not found
+macro_substitute_prefixed_parameter	output differs
+macro_suspended_after_jar_macro	error: cannot resolve import: quotepatterns33 not found
+macro_type_lambda_bounds	output differs
+macro_unapply_seq_plan	error: Digits is not a case class, so it cannot be used as a pattern
+macwire_lambda_param	error: cannot resolve import: softwaremill not found
+macwire_local_def_deferred	error: cannot resolve import: softwaremill not found
+macwire_module	error: cannot resolve import: softwaremill not found
+macwire_wire	error: cannot resolve import: softwaremill not found
+macwire_wire_untyped	error: cannot resolve import: softwaremill not found
+macwire_wire_using	error: cannot resolve import: softwaremill not found
+macwire_wire_using_split	error: cannot resolve import: softwaremill not found
+mapped_class_constants	output differs
+member_retry_matrix	output differs
+member_retry_splice	output differs
+method_type_arg_kind	error: type argument P#F[Int] does not have the same kind as its bound [_]
+method_type_arg_kinds_accepted	error: type AnyKind not found
+mirror_declared_parent_interfaces	TypeError: c.getInterfaces is not a function
+module_init_after_try	output differs
+module_selection_effectful_qualifier	error: missing parameter type
+mutable_multimap	its summaries of hidden warnings are not scalac's (tests/stdlib-summaries.txt)
+named_reorder_block_prefix_defaults	output differs
+named_reorder_companion_init	output differs
+named_reorder_prefix_kept	output differs
+native_overload_reflection	output differs
+nested_companion_lib	error: cannot resolve import: nclib not found
+new_without_parents	RangeError: Maximum call stack size exceeded
+opaque_selector_matchable	output differs
+overload_jdk_using	error: String cannot be instantiated
+overloaded_type_argument_kinds	error: type argument [X] =>> Int does not have the same kind as its bound
+package_extension_path	error: value pk is not a member of p
+parser_combinators_regex	error: cannot resolve import: parsing not found
+parser_combinators_sequence	error: cannot resolve import: parsing not found
+path_operations	error: not supported on JavaScript: method getProperties of java.lang.System (a Java definition without an implementation in the std's platf
+pattern_array_gadt	output differs
+pattern_literal_primitive_types	output differs
+pattern_seq_rest_plan	output differs
+play_json_macros	error: cannot resolve import: play not found
+poly_function_class_tag	error: No ClassTag available for PolyFunction & Array[A]{def apply(x: Int): Int}
+poly_function_parent_erasure	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+poly_function_type_tests	error: this type cannot be tested at runtime: [A] => (x$1: A) => A
+postfix_operators_option	RangeError: Maximum call stack size exceeded
+predef_copy_array	output differs
+primitive_stream_stages	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+print_writer	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+process_environment	error: not supported on JavaScript: class File java.io.File (a Java definition without an implementation in the std's platform layer)
+process_handle_pid_range	error: not supported on JavaScript: method current of java.lang.ProcessHandle (a Java definition without an implementation in the std's plat
+process_lifecycle	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
+process_redirects	error: not supported on JavaScript: class File java.io.File (a Java definition without an implementation in the std's platform layer)
+process_streams	error: not supported on JavaScript: class BufferedReader java.io.BufferedReader (a Java definition without an implementation in the std's pl
+quote_pattern_ascribed_holes	output differs
+quote_patterns_28_3_from_above	error: cannot resolve import: quotepatterns33 not found
+quote_patterns_28_3_type_names	error: cannot resolve import: quotepatterns33 not found
+quoted_jar_statement_extractors	error: cannot resolve import: fix not found
+quoted_select_type_test	error: cannot resolve import: cats not found
+quoted_values_class_tests	error: exception in macro: scala.MatchError: (a,1) (of class scala.Tuple2) (called by show in object Probe)
+quoted_values_reflection_kinds	output differs
+reader_utf8_boundary	error: not supported on JavaScript: class InputStreamReader java.io.InputStreamReader (a Java definition without an implementation in the st
+reader_utf8_pipe	error: not supported on JavaScript: class InputStreamReader java.io.InputStreamReader (a Java definition without an implementation in the st
+reducer_literal_bound	error: type mismatch: found ReducerLiteralC[[X] =>> 1, _, _], required ReducerLiteralC[[X] =>> 1, ?, ? <: 1]
+reducer_wildcard_bound	error: type mismatch: found ReducerC[[X] =>> X, _, _], required ReducerC[[X] =>> X, ? <: String, ? <: String]
+refinement_intersection_part_member	output differs
+reflect_declared_method	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+reflect_declared_parameters	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+reflect_dynamic_encoded_parameter	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+reflect_encoded_parameter	output differs
+reflective_selectable	output differs
+regex_beyond_javascript	throw new PatternSyntaxException(error, regex, -1);
+regex_char_sequence	error: not supported on JavaScript: method split of java.util.regex.Pattern (a Java definition without an implementation in the std's platfo
+regex_class_sets	error: not supported on JavaScript: method split of java.util.regex.Pattern (a Java definition without an implementation in the std's platfo
+regex_scoped_flags	throw new PatternSyntaxException(error, regex, -1);
+regex_unicode_class_case	throw new PatternSyntaxException(error, regex, -1);
+regroup_bincompat_lib	error: not found: rgb
+runtime_objects	error: not supported on JavaScript: method equals of scala.runtime.BoxesRunTime (a Java definition without an implementation in the std's pl
+sam_conversion_after_overloaded_apply	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+scala3_overloads	RangeError: Maximum call stack size exceeded
+scala3_t627	output differs
+scala_library_deprecated_members	its summaries of hidden warnings are not scalac's (tests/stdlib-summaries.txt)
+scala_package_member_before_predef	output differs
+script_bounded_output	error: not found: Script
+script_json_python	error: not found: Json
+script_library	error: not found: Script
+script_lsp	error: not found: Script
+script_owned_children	error: not found: Script
+script_owned_signal	error: not found: Script
+secondary_constructors	RangeError: Maximum call stack size exceeded
+secondary_ctor_parent	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+selectable_anon_members	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+shutdown_hooks	error: not supported on JavaScript: class ProcessBuilder java.lang.ProcessBuilder (a Java definition without an implementation in the std's
+signal_handlers	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
+socket_accept	error: not supported on JavaScript: class BufferedReader java.io.BufferedReader (a Java definition without an implementation in the std's pl
+socket_lifecycle	error: not supported on JavaScript: class InetSocketAddress java.net.InetSocketAddress (a Java definition without an implementation in the s
+socket_shutdown_input	error: not supported on JavaScript: class InputStreamReader java.io.InputStreamReader (a Java definition without an implementation in the st
+socket_write_signal	error: not supported on JavaScript: class ServerSocket java.net.ServerSocket (a Java definition without an implementation in the std's platf
+splice_conversion	output differs
+std_byteswap	error: not supported on JavaScript: method reverseBytes of java.lang.Long (a Java definition without an implementation in the std's platform
+std_collection_protocol	output differs
+std_duration_parse	RangeError: Maximum call stack size exceeded
+std_formats	output differs
+std_strings	error: not supported on JavaScript: method isISOControl of java.lang.Character (a Java definition without an implementation in the std's pla
+std_surface	error: not supported on JavaScript: method format of scala.String (a Java definition without an implementation in the std's platform layer)
+stdin_lines	error: not supported on JavaScript: class BufferedReader java.io.BufferedReader (a Java definition without an implementation in the std's pl
+stream_descriptors	error: not supported on JavaScript: class ProcessBuilder java.lang.ProcessBuilder (a Java definition without an implementation in the std's
+stream_ops	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+stream_spread_and_collector_protocol	output differs
+streams_jdk_semantics	error: not supported on JavaScript: class BufferedReader java.io.BufferedReader (a Java definition without an implementation in the std's pl
+strict_equality	TypeError: CanEqual$(...).derived is not a function
+strict_equality_given_pair	error: not supported on JavaScript: method nextAfter of java.lang.Math (a Java definition without an implementation in the std's platform la
+string_constant_fold_surrogates	output differs
+string_count_members	output differs
+string_f_targ	throw NotImplementedError.$new1();
+string_plus_selection	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+string_utf16_units	error: not supported on JavaScript: method format of scala.String (a Java definition without an implementation in the std's platform layer)
+structural_encoded_parameter	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+structural_erased_signatures	output differs
+structural_erasure_lists	output differs
+structural_reflective_calls	output differs
+structural_signatures	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+super_rebind_result	TypeError: this.choose$Any$super1 is not a function
+symbol_name	error: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition withou
+system_properties	error: not supported on JavaScript: class ProcessBuilder java.lang.ProcessBuilder (a Java definition without an implementation in the std's
+thread_concurrent_map_put_interrupted	error: type IllegalThreadStateException not found
+thread_concurrent_map_read_during_compute	error: type IllegalThreadStateException not found
+thread_condition_interrupt_signal	error: type IllegalThreadStateException not found
+thread_condition_signal_transfer	error: type IllegalThreadStateException not found
+thread_condition_timed_signal	error: type IllegalThreadStateException not found
+thread_condition_zero_wait	error: type IllegalThreadStateException not found
+thread_daemon	error: not supported on JavaScript: class IllegalThreadStateException java.lang.IllegalThreadStateException (a Java definition without an im
+thread_ended_lock_and_join	error: type IllegalThreadStateException not found
+thread_future_cancel_interrupt	error: type IllegalThreadStateException not found
+thread_interrupt_sleep	error: type IllegalThreadStateException not found
+thread_join_timeout	error: not supported on JavaScript: class IllegalThreadStateException java.lang.IllegalThreadStateException (a Java definition without an im
+thread_latch_fanout	error: type IllegalThreadStateException not found
+thread_latch_interrupt_release	error: type IllegalThreadStateException not found
+thread_lazy_interrupt	error: type IllegalThreadStateException not found
+thread_lazy_race	error: type IllegalThreadStateException not found
+thread_lifecycle	error: type IllegalThreadStateException not found
+thread_local_inherit_construction	error: type IllegalThreadStateException not found
+thread_local_lazy_race	error: type IllegalThreadStateException not found
+thread_local_values	error: type IllegalThreadStateException not found
+thread_lock_interrupt_release	error: type IllegalThreadStateException not found
+thread_main_inherits_nothing	error: type IllegalThreadStateException not found
+thread_module_race	error: type IllegalThreadStateException not found
+thread_pool_futures	error: type IllegalThreadStateException not found
+thread_queue_handoff	error: type IllegalThreadStateException not found
+thread_scheduled_cancel	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
+thread_scheduled_policy_after_shutdown	error: not supported on JavaScript: class AbstractExecutorService java.util.concurrent.AbstractExecutorService (a Java definition without an
+thread_scheduled_shutdown_now	error: not supported on JavaScript: class AbstractExecutorService java.util.concurrent.AbstractExecutorService (a Java definition without an
+thread_spin	error: type IllegalThreadStateException not found
+thread_sync_queue_handoff	error: String cannot be instantiated
+thread_synchronized_counter	error: type IllegalThreadStateException not found
+thread_timer_stale_head	error: type IllegalThreadStateException not found
+thread_uncaught	error: type IllegalThreadStateException not found
+thread_wait_argument_order	output differs
+thread_wait_notify	error: type IllegalThreadStateException not found
+thread_wait_null_receiver	output differs
+time_clock	error: not supported on JavaScript: class ProcessBuilder java.lang.ProcessBuilder (a Java definition without an implementation in the std's
+time_formatter_value_widths	error: not supported on JavaScript: method from of java.time.LocalDateTime (a Java definition without an implementation in the std's platfor
+time_formatter_widths	error: not supported on JavaScript: method from of java.time.LocalDate (a Java definition without an implementation in the std's platform la
+to_string_null	TypeError: Cannot read properties of null (reading 'toString')
+trait_empty_parameters	error: parameterized trait Empty is indirectly implemented, needs to be implemented directly so that arguments can be passed
+tuple_cons_deep	output differs
+tuple_xxl	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+tuple_xxl_typed	error: type mismatch: found IArray[AnyRef], required AnyRef. Note that implicit conversions were not tried because the result of an implicit
+type_checks_nested_package_clauses	error: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+unapply_seq_product	output differs
+union_erasure_bases	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+unit_printed	output differs
+unused_params_constant_bodies	output differs
+view_import_ineligible_shadow	error: type mismatch: found 7, required Wrapped
+view_import_renamed_prefixes	error: type mismatch: found 1, required Box[Int]
+view_kinds	output differs
+view_lib_alias	error: cannot resolve import: viewlib not found
+view_lib_quotes	error: cannot resolve import: viewlib not found
+wildcard_capture_param_bounds	error: type mismatch: found C[[A] =>> List[A], _], required C[?, ? <: Seq[Int]]
+windows_paths	error: not supported on JavaScript: class FileSystemException java.nio.file.FileSystemException (a Java definition without an implementation
+windows_process	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
+zio_runtime_blocking	error: cannot resolve import: zio not found
+zio_runtime_hello	error: cannot resolve import: zio not found
+zio_runtime_interrupt	error: cannot resolve import: zio not found
+zio_runtime_lazy_race	error: cannot resolve import: zio not found
+zio_runtime_module_race	error: cannot resolve import: zio not found
+zio_runtime_pipe	error: cannot resolve import: zio not found
+zio_runtime_sleep_fork	error: cannot resolve import: zio not found
+zio_signal_handler	error: not found: Unsafe
+zip_default_zone	error: value zoneName is not a member of zip
+zip_digest	error: not supported on JavaScript: class CRC32 java.util.zip.CRC32 (a Java definition without an implementation in the std's platform layer
+zip_entry_times	error: not supported on JavaScript: class DeflaterOutputStream java.util.zip.DeflaterOutputStream (a Java definition without an implementati
+zip_stream_incremental	error: not supported on JavaScript: class CRC32 java.util.zip.CRC32 (a Java definition without an implementation in the std's platform layer
+zip_time_precision	error: not supported on JavaScript: class DeflaterOutputStream java.util.zip.DeflaterOutputStream (a Java definition without an implementati

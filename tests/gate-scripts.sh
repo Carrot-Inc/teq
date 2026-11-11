@@ -365,7 +365,7 @@ check "pieces: modules lists the checks once a run and the split programs as uni
   [ "$(units_of modules | grep -v "^split-" | grep -c -v -x -F -f <(printf "%s\n" $modules_checks))" = "$(ls -d tests/modules/*/ | wc -l)" ]'
 check "pieces: jvm-watch lists a program by its list, the two on both lists twice, and its nine sessions one after another" "$work/pieces-jvm-watch.1" eval \
   '[ "$(units_of jvm-watch | grep -c -x -E "(passing|watch-only)/(inline_definition_gaps|scala3_typeclass-derivation3)")" = 4 ] &&
-  [ "$(units_of jvm-watch | grep -c "^passing/")" = "$(wc -w < tests/jvm-passing.txt)" ] && [ "$(units_of jvm-watch | grep -c "^retype/")" = 9 ]'
+  [ "$(units_of jvm-watch | grep -c "^passing/")" = "$(python3 tests/support/pending.py passing jvm | wc -w)" ] && [ "$(units_of jvm-watch | grep -c "^retype/")" = 9 ]'
 check "pieces: lsp lists every scenario of the driver once, the idle minute, the jar fetch and the libraries' sources among them" "$work/pieces-lsp.1" eval \
   '[ "$(units_of lsp | sort)" = "$(sed -n "s/^const scenarios = { \(.*\) }$/\1/p" tests/lsp/driver.mjs | tr -d " " | tr "," "\n" | sort)" ] &&
   [ "$(units_of lsp | grep -c -x -E "idleMinute|jarFetch|librarySources|sourcesFailures|sourcesHeld|sourcesBackoff|sourcesPaths")" = 7 ]'
@@ -834,7 +834,7 @@ git -C "$landing" checkout -q tests/jvm-watch.sh
 check "pieces: a body run twice behind its guard, or dropped behind it, a retype session called twice or not at all, fails the piece" "$work/mutants.log" eval '[ $code = 1 ] &&
   grep -q -x "FAIL pieces: the unit retype/entry ran 2 times, 1 due" "$work/mutants.log" &&
   grep -q -x "FAIL pieces: the unit retype/reads never ran" "$work/mutants.log" &&
-  [ "$(grep -c -E "^FAIL pieces: the unit passing/[^ ]+ ran 2 times, 1 due$" "$work/mutants.log")" = "$(wc -w < tests/jvm-passing.txt)" ] &&
+  [ "$(grep -c -E "^FAIL pieces: the unit passing/[^ ]+ ran 2 times, 1 due$" "$work/mutants.log")" = "$(python3 tests/support/pending.py passing jvm | wc -w)" ] &&
   [ "$(grep -c -E "^FAIL pieces: the unit watch-only/[^ ]+ never ran$" "$work/mutants.log")" = 6 ] &&
   grep -q -x "FAIL pieces: the unit owned-mirrors never ran" "$work/mutants.log"'
 # gate <log> <pool lines> <gate's arguments...>: the landing's gate over a fresh pool of stand-in machines.

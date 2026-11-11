@@ -1,0 +1,14 @@
+scalac 3.8.4: rejected, 4 error(s)
+view_mismatch_select_qualifier_position.scala:26:14: Found:    R
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object a in object R and object b in object R provide an extension method `pick` on (O.d : => R)
+view_mismatch_select_qualifier_position.scala:27:16: Found:    (O.P.q : R)
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object a in object R and object b in object R provide an extension method `pick` on (O.P.q : R)
+view_mismatch_select_qualifier_position.scala:28:14: Found:    (h.r : R)
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object a in object R and object b in object R provide an extension method `pick` on (h.r : R)
+view_mismatch_select_qualifier_position.scala:29:16: value pick2 is not a member of R

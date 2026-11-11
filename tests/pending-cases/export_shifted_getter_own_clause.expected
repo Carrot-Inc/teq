@@ -1,0 +1,3 @@
+scalac 3.8.4: rejected, 1 error(s)
+export_shifted_getter_own_clause.scala:13:10: Found:    Int => Int
+  Required: Int

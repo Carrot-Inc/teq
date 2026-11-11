@@ -1,0 +1,5 @@
+replace(scala.Char, scala.Char)
+replace(java.lang.CharSequence, java.lang.CharSequence)
+replace(scala.Char, scala.Char)
+bonono
+bANANa

@@ -1,0 +1,8 @@
+tests/errors/inline_val_purity.scala:18:18: error: inline value must be pure
+    inline val y = yes()
+                   ^^^^^
+tests/errors/inline_val_purity.scala:20:34: error: inline value must be pure but was: yes()
+  inlined from tests/errors/inline_val_purity.scala:15
+  @main def main(): Unit = println(f() && g())
+                                   ^^^
+2 errors found

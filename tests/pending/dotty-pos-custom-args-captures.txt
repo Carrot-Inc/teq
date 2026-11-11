@@ -1,0 +1,210 @@
+annot-i20272a.scala	annot-i20272a.scala:3:39: expected '=>', found identifier
+any-only.scala	any-only.scala:3:16: expected a declaration, found identifier
+ascribe-apply.scala	ascribe-apply.scala:2:32: expected ',' or ')', found identifier
+bounded.scala	bounded.scala:2:14: expected end of statement, found identifier
+boxed-use.scala	boxed-use.scala:4:54: expected a declaration, found identifier
+boxed1.scala	boxed1.scala:9:16: expected a declaration, found identifier
+boxmap-paper.scala	boxmap-paper.scala:3:22: expected an identifier, found '['
+buffers.scala	buffers.scala:16:39: the type arguments of ArrayBuffer cannot be inferred here; write them out
+byname-closure.scala	byname-closure.scala:4:20: expected ',' or ')', found '{'
+byname.scala	byname.scala:4:14: expected end of statement, found identifier
+bynamefun.scala	bynamefun.scala:4:17: expected ',' or ')', found identifier
+cached.scala	cached.scala:6:27: type -> not found
+cap-paramlist8-desugared.scala	cap-paramlist8-desugared.scala:8:19: expected a declaration, found identifier
+cap-paramlists.scala	cap-paramlists.scala:4:13: expected '=', found identifier
+cap-paramlists2.scala	cap-paramlists2.scala:4:9: expected end of statement, found identifier
+cap-paramlists3.scala	cap-paramlists3.scala:6:13: expected '=', found identifier
+cap-paramlists4.scala	cap-paramlists4.scala:3:12: expected ',' or ']', found identifier
+cap-paramlists5.scala	cap-paramlists5.scala:5:13: expected '=', found identifier
+cap-paramlists6.scala	cap-paramlists6.scala:4:13: expected '=', found identifier
+cap-paramlists7.scala	cap-paramlists7.scala:4:13: expected '=', found identifier
+cap-paramlists8.scala	cap-paramlists8.scala:4:13: expected '=', found identifier
+cap-problem.scala	cap-problem.scala:13:21: type mismatch: found (CancelSuspension.this.suspension : ac.support.Suspension), required CancelSuspension.this.ac.support.Suspension
+cap-refine.scala	cap-refine.scala:9:26: expected a declaration, found identifier
+caps-universal.scala	caps-universal.scala:4:15: type -> not found
+capset-members.scala	capset-members.scala:4:13: expected '=', found identifier
+capset-members2.scala	capset-members2.scala:6:13: expected '=', found identifier
+capset-problem.scala	capset-problem.scala:9:20: expected ',' or ']', found identifier
+capset-uses.scala	capset-uses.scala:3:10: expected ',' or ']', found identifier
+capt-capability.scala	capt-capability.scala:3:30: expected a declaration, found identifier
+capt-depfun.scala	capt-depfun.scala:14:15: expected ':', found identifier
+capt-depfun2.scala	capt-depfun2.scala:9:15: expected ':', found identifier
+capt-env.scala	capt-env.scala:2:13: expected end of statement, found identifier
+capt-separate	Lib_1.scala:4:31: type -> not found
+capt-test.scala	capt-test.scala:22:13: expected end of statement, found identifier
+capt-wf2.scala	capt-wf2.scala:4:15: expected a declaration, found identifier
+capt0.scala	capt0.scala:4:15: expected '=', found identifier
+capt1.scala	capt1.scala:5:13: expected end of statement, found identifier
+capt2.scala	capt2.scala:6:11: expected '=', found identifier
+captureRef-separate-compilation	Future_1.scala:3:36: expected ',' or ')', found identifier
+caseclass.scala	caseclass.scala:4:24: expected ',' or ')', found identifier
+cc-cast.scala	cc-cast.scala:11:36: expected '=', found identifier
+cc-def-fresh.scala	cc-def-fresh.scala:4:28: expected '=', found identifier
+cc-dep-param.scala	cc-dep-param.scala:6:20: expected a declaration, found identifier
+cc-expand.scala	cc-expand.scala:12:21: expected a declaration, found identifier
+cc-poly-1.scala	cc-poly-1.scala:10:10: expected ',' or ']', found identifier
+cc-poly-source-capability.scala	cc-poly-source-capability.scala:11:17: expected ',' or ']', found identifier
+cc-poly-varargs-original.scala	cc-poly-varargs-original.scala:1:30: expected ',' or ']', found identifier
+cc-poly-varargs.scala	cc-poly-varargs.scala:5:28: expected ',' or ')', found identifier
+cc-setup-impure-classes.scala	cc-setup-impure-classes.scala:5:28: expected ',' or ')', found identifier
+cc-this.scala	cc-this.scala:9:24: expected ',' or ')', found identifier
+cc-use-iterable.scala	cc-use-iterable.scala:4:19: expected ',' or ']', found identifier
+check-override-typebounds-2.scala	check-override-typebounds-2.scala:6:24: expected a declaration, found identifier
+check-override-typebounds.scala	check-override-typebounds.scala:13:13: expected ',' or ']', found identifier
+classes.scala	classes.scala:3:13: expected end of statement, found identifier
+closure-avoidance.scala	closure-avoidance.scala:6:16: expected ',' or ')', found identifier
+closure-result-typing.scala	closure-result-typing.scala:4:17: expected a declaration, found identifier
+colltest.scala	colltest.scala:7:32: expected a declaration, found 'this'
+compare-refined.scala	compare-refined.scala:5:13: expected end of statement, found identifier
+concat-iterator.scala	concat-iterator.scala:4:13: expected '=>', found identifier
+constr-uses.scala	constr-uses.scala:2:13: expected '=>', found identifier
+consume-shared.scala	consume-shared.scala:4:17: expected ':', found identifier
+correct-capture-variable-resolve.scala	correct-capture-variable-resolve.scala:3:16: expected ',' or ')', found identifier
+ctest.scala	ctest.scala:3:13: expected end of statement, found identifier
+deep-adapt.scala	deep-adapt.scala:10:10: expected end of statement, found 'def'
+dep-reach.scala	dep-reach.scala:4:15: expected ',' or ']', found identifier
+dependent-pure.scala	dependent-pure.scala:3:26: expected end of statement, found identifier
+discardUses.scala	discardUses.scala:1:19: expected ',' or ')', found identifier
+drop-refinement.scala	drop-refinement.scala:3:80: expected ',' or ')', found identifier
+erased-methods.scala	erased-methods.scala:11:11: expected ',' or ')', found identifier
+erased-methods2-shared.scala	erased-methods2-shared.scala:12:48: expected ',' or ')', found identifier
+eta-expansions.scala	eta-expansions.scala:6:15: expected ',' or ')', found identifier
+extending-impure-function.scala	extending-impure-function.scala:5:23: type -> not found
+filevar-tracked.scala	filevar-tracked.scala:9:24: expected ',' or ')', found identifier
+filevar.scala	filevar.scala:9:24: expected ',' or ')', found identifier
+fill-cbn.scala	fill-cbn.scala:5:12: expected '=', found identifier
+filter-iterable.scala	filter-iterable.scala:5:38: expected ',' or ')', found identifier
+flatmapInPlace.scala	flatmapInPlace.scala:5:45: expected ',' or ')', found identifier
+freeze.scala	freeze.scala:5:28: expected '=', found identifier
+function-combinators.scala	function-combinators.scala:2:28: expected end of statement, found identifier
+future-traverse.scala	future-traverse.scala:11:55: expected ',' or ')', found identifier
+gears-problem-poly.scala	gears-problem-poly.scala:10:21: expected ',' or ']', found identifier
+i13816.scala	i13816.scala:7:50: type ?-> not found
+i15749.scala	i15749.scala:5:15: expected end of statement, found identifier
+i15749a.scala	i15749a.scala:8:15: expected end of statement, found identifier
+i15923-cases.scala	i15923-cases.scala:2:14: expected an identifier, found '['
+i15925.scala	i15925.scala:7:15: expected an identifier, found '['
+i16116.scala	i16116.scala:19:34: expected a declaration, found 'this'
+i16226.scala	i16226.scala:4:18: expected a declaration, found identifier
+i16415.scala	i16415.scala:6:16: expected ',' or ')', found identifier
+i18699.scala	i18699.scala:7:12: expected ',' or ']', found identifier
+i19076.scala	i19076.scala:3:15: expected ',' or ')', found identifier
+i19661.scala	i19661.scala:4:43: expected ',' or ')', found identifier
+i19662.scala	i19662.scala:3:33: expected '=>', found identifier
+i19751.scala	i19751.scala:6:39: expected a declaration, found 'this'
+i19990.scala	i19990.scala:3:38: expected '=>', found identifier
+i20135-explicit.scala	i20135-explicit.scala:5:27: expected ',' or ')', found identifier
+i20135.scala	i20135.scala:5:29: expected ',' or ')', found identifier
+i20231.scala	i20231.scala:3:32: expected a declaration, found identifier
+i20237-explicit.scala	i20237-explicit.scala:10:50: expected a declaration, found identifier
+i20237.scala	i20237.scala:14:52: expected a declaration, found identifier
+i21313.scala	i21313.scala:4:19: expected ',' or ']', found identifier
+i21347.scala	i21347.scala:5:14: expected ',' or ']', found identifier
+i21507.scala	i21507.scala:4:14: expected ',' or ']', found identifier
+i21868.scala	i21868.scala:7:9: expected end of statement, found identifier
+i22723.scala	i22723.scala:9:15: expected a declaration, found 'this'
+i23170.scala	i23170.scala:5:18: expected a declaration, found identifier
+i23389.scala	i23389.scala:7:12: expected end of statement, found 'def'
+i23421.scala	i23421.scala:5:10: expected end of statement, found 'def'
+i23422.scala	i23422.scala:7:16: expected ',' or ')', found identifier
+i23570.scala	i23570.scala:1:8: expected ',' or ']', found identifier
+i23727.scala	i23727.scala:2:40: expected a declaration, found identifier
+i23737.scala	i23737.scala:7:11: expected ',' or ']', found identifier
+i23820.scala	i23820.scala:6:23: expected ',' or ')', found identifier
+i24039.scala	i24039.scala:4:13: expected '=', found identifier
+i24137.scala	i24137.scala:6:17: expected ',' or ')', found identifier
+i24309-region.scala	i24309-region.scala:12:17: expected ',' or ']', found identifier
+i24309.scala	i24309.scala:2:15: expected ',' or ']', found identifier
+i24309b.scala	i24309b.scala:2:13: expected ',' or ']', found identifier
+i24334.scala	i24334.scala:3:10: expected ',' or ']', found identifier
+i24372.scala	i24372.scala:2:11: expected end of statement, found 'def'
+i24373b.scala	i24373b.scala:7:18: expected ',' or ')', found identifier
+i24543a.scala	i24543a.scala:5:17: expected ',' or ')', found identifier
+i24556.scala	i24556.scala:6:30: expected ',' or ')', found identifier
+i24729.scala	i24729.scala:7:80: expected ',' or ')', found identifier
+i25251.scala	i25251.scala:6:22: expected '=>', found identifier
+i25303.scala	i25303.scala:2:74: expected a declaration, found 'this'
+i25460.scala	i25460.scala:23:31: expected ':', found 'val'
+i25525.scala	i25525.scala:11:13: expected ',' or ')', found identifier
+i25579	a.scala:9:13: expected '=', found identifier
+i25630	Test_1.scala:6:32: expected ',' or ')', found identifier
+impurefun.scala	impurefun.scala:3:10: type ImpureFunction1 not found
+infer-exists.scala	infer-exists.scala:8:23: expected a declaration, found identifier
+inferred-type-ok.scala	inferred-type-ok.scala:4:11: expected '=', found identifier
+inline-problem.scala	inline-problem.scala:3:51: expected a declaration, found identifier
+inlined-closure.scala	inlined-closure.scala:2:28: expected end of statement, found identifier
+invariant-cc.scala	invariant-cc.scala:6:43: expected a declaration, found identifier
+iterators.scala	iterators.scala:5:30: expected a declaration, found 'this'
+lazylists-exceptions.scala	lazylists-exceptions.scala:9:25: expected a declaration, found 'this'
+lazylists-mono.scala	lazylists-mono.scala:2:14: expected end of statement, found identifier
+lazylists.scala	lazylists.scala:2:14: expected end of statement, found identifier
+lazylists1.scala	lazylists1.scala:2:14: expected end of statement, found identifier
+lazyref.scala	lazyref.scala:7:18: expected a declaration, found identifier
+leveltest.scala	leveltest.scala:6:16: expected ',' or ')', found identifier
+lists.scala	lists.scala:33:24: expected a declaration, found identifier
+logger-tracked.scala	logger-tracked.scala:6:28: expected ')', found 'val'
+logger.scala	logger.scala:9:18: expected a declaration, found identifier
+mark-free-ro.scala	mark-free-ro.scala:5:31: expected ',' or ']', found identifier
+matrix.scala	matrix.scala:10:10: expected end of statement, found 'def'
+mut-collections.scala	mut-collections.scala:7:22: expected '=>', found identifier
+mut-iterator.scala	mut-iterator.scala:5:10: expected end of statement, found 'def'
+mutRef.scala	mutRef.scala:5:10: expected end of statement, found 'def'
+mutable-capturing-sharable.scala	mutable-capturing-sharable.scala:6:31: expected ',' or ')', found identifier
+mutable-hiding-shared.scala	mutable-hiding-shared.scala:7:12: expected '=>', found identifier
+nested-classes-tracked.scala	nested-classes-tracked.scala:7:25: expected ')', found 'val'
+nested-classes.scala	nested-classes.scala:8:16: expected a declaration, found identifier
+nested-traits.scala	nested-traits.scala:4:18: expected '=>', found identifier
+nicolas1.scala	nicolas1.scala:9:15: expected ',' or ']', found identifier
+no-redundant-capability.scala	no-redundant-capability.scala:15:45: expected a declaration, found identifier
+nonvariant-inf.scala	nonvariant-inf.scala:6:27: expected end of statement, found identifier
+open-existential.scala	open-existential.scala:5:43: expected ',' or ']', found identifier
+override-adapt-box-pos-alt.scala	override-adapt-box-pos-alt.scala:12:16: expected ',' or ')', found identifier
+override-adapt-box-pos.scala	override-adapt-box-pos.scala:13:16: expected ',' or ')', found identifier
+pairs.scala	pairs.scala:16:21: expected a declaration, found identifier
+path-use.scala	path-use.scala:5:19: expected ',' or ')', found identifier
+paths-simple-suffix-consume.scala	paths-simple-suffix-consume.scala:7:17: expected ',' or ')', found identifier
+polycap.scala	polycap.scala:3:21: expected ',' or ']', found identifier
+reach-capability.scala	reach-capability.scala:15:14: expected ',' or ']', found identifier
+reach-in-results-shared.scala	reach-in-results-shared.scala:7:16: expected ',' or ')', found identifier
+reach-in-results.scala	reach-in-results.scala:6:16: expected ',' or ')', found identifier
+reach-problem.scala	reach-problem.scala:4:26: expected ',' or ']', found identifier
+reaches.scala	reaches.scala:2:17: expected ',' or ']', found identifier
+ref-of-proc.scala	ref-of-proc.scala:2:13: expected end of statement, found identifier
+ref-with-file.scala	ref-with-file.scala:6:10: expected end of statement, found 'def'
+reference-cc.scala	reference-cc.scala:4:41: expected ',' or ')', found identifier
+relative-new.scala	relative-new.scala:4:14: expected '=', found identifier
+restrict-subsumes.scala	restrict-subsumes.scala:7:20: expected a declaration, found identifier
+restrict-try.scala	restrict-try.scala:14:40: expected a declaration, found identifier
+rinaudo.scala	rinaudo.scala:10:34: type ?-> not found
+ro-array.scala	ro-array.scala:5:28: expected '=', found identifier
+saferExceptions.scala	saferExceptions.scala:9:29: type -> not found
+scoped-caps.scala	scoped-caps.scala:6:20: expected ',' or ')', found identifier
+sealed-value-class.scala	sealed-value-class.scala:1:26: expected ',' or ')', found identifier
+secondary-constructors.scala	secondary-constructors.scala:7:28: expected '=>', found identifier
+selftype-alias.scala	selftype-alias.scala:3:42: expected end of statement, found identifier
+selftypes.scala	selftypes.scala:18:11: expected '=>', found identifier
+sep-compose.scala	sep-compose.scala:4:34: expected a declaration, found identifier
+sep-eq.scala	sep-eq.scala:5:21: expected ',' or ')', found identifier
+sep-exclusive.scala	sep-exclusive.scala:4:13: expected ',' or ')', found identifier
+sep-pairs.scala	sep-pairs.scala:7:10: expected end of statement, found 'def'
+setup	a_1.scala:5:10: expected ',' or ']', found identifier
+shared-capability.scala	shared-capability.scala:7:28: expected '=', found identifier
+simple-apply.scala	simple-apply.scala:3:20: expected ',' or ')', found identifier
+singleton-subtyping.scala	singleton-subtyping.scala:3:19: expected ',' or ')', found identifier
+skolems2.scala	skolems2.scala:5:18: expected ':', found identifier
+stack-alloc.scala	stack-alloc.scala:9:10: expected end of statement, found 'def'
+steppers.scala	steppers.scala:8:46: expected ',' or ']', found identifier
+strip-implied-cs.scala	strip-implied-cs.scala:15:45: expected a declaration, found identifier
+tablediff.scala	tablediff.scala:4:38: expected ',' or ')', found identifier
+trickyTrailingUpArrow.scala	trickyTrailingUpArrow.scala:9:18: expected '=', found identifier
+try.scala	try.scala:7:48: expected ',' or ')', found identifier
+try3.scala	try3.scala:22:60: type mismatch: found -1, required 0
+unsafe-captures.scala	unsafe-captures.scala:4:83: expected ',' or ')', found identifier
+unsafeAssumePure.scala	unsafeAssumePure.scala:4:13: expected ',' or ')', found identifier
+unscoped-ref-result.scala	unscoped-ref-result.scala:3:10: expected end of statement, found 'def'
+untracked-captures.scala	untracked-captures.scala:3:70: expected ',' or ')', found identifier
+untracked-mutvars.scala	untracked-mutvars.scala:5:10: expected end of statement, found 'def'
+unzip.scala	unzip.scala:2:37: type -> not found
+use-alternatives.scala	use-alternatives.scala:4:10: expected ',' or ']', found identifier
+use.scala	use.scala:6:39: expected ',' or ')', found identifier
+vars.scala	vars.scala:8:17: expected a declaration, found identifier

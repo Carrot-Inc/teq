@@ -1,0 +1,15 @@
+# dotty 3.8.4 (7d4833b6) explicit-nulls/flexible-types-common, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:240; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+i7883.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-array-src	fail	-	java source: teq reads none
+interop-chain.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-enum-src	fail	-	java source: teq reads none
+interop-generics	fail	-	java source: teq reads none
+interop-implicit.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-java-call	fail	-	java source: teq reads none
+interop-java-chain	fail	-	java source: teq reads none
+interop-java-varargs-src	fail	-	java source: teq reads none
+interop-java-varargs.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-method-src	fail	-	java source: teq reads none
+interop-propagate.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-select-type-member.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)

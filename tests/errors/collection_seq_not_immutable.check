@@ -1,0 +1,25 @@
+tests/errors/collection_seq_not_immutable.scala:5:85: error: Found:    (xs : scala.collection.Seq[Int])
+Required: Seq²[Int]
+
+where:    Seq  is a trait in package scala.collection
+          Seq² is a trait in package scala.collection.immutable
+
+  def immutable(xs: scala.collection.Seq[Int]): scala.collection.immutable.Seq[Int] = xs
+                                                                                      ^^
+tests/errors/collection_seq_not_immutable.scala:7:56: error: Found:    (xs : scala.collection.Seq[Int])
+Required: Seq²[Int] | Array[? <: Int]
+
+where:    Seq  is a trait in package scala.collection
+          Seq² is a trait in package scala.collection.immutable
+
+  def spread(xs: scala.collection.Seq[Int]): Int = count(xs*)
+                                                         ^^
+tests/errors/collection_seq_not_immutable.scala:8:70: error: Found:    (xs : scala.collection.IndexedSeq[Int])
+Required: IndexedSeq²[Int]
+
+where:    IndexedSeq  is a trait in package scala.collection
+          IndexedSeq² is a trait in package scala.collection.immutable
+
+  def indexed(xs: scala.collection.IndexedSeq[Int]): IndexedSeq[Int] = xs
+                                                                       ^^
+3 errors found

@@ -1,0 +1,7 @@
+scalac 3.8.4: rejected, 6 error(s)
+scalajs_js_sam_of_non_function_type.scala:30:18: Using an anonymous function as a SAM for the JavaScript type A1 is not allowed because it is not a trait extending js.Function. Use an anonymous class instead.
+scalajs_js_sam_of_non_function_type.scala:31:18: Using an anonymous function as a SAM for the JavaScript type A2 is not allowed because it is not a trait extending js.Function. Use an anonymous class instead.
+scalajs_js_sam_of_non_function_type.scala:32:21: Using an anonymous function as a SAM for the JavaScript type A3 is not allowed because it is not a trait extending js.Function. Use an anonymous class instead.
+scalajs_js_sam_of_non_function_type.scala:44:18: Using an anonymous function as a SAM for the JavaScript type B1 is not allowed because it is a native JS type. It is not possible to directly implement it.
+scalajs_js_sam_of_non_function_type.scala:45:18: Using an anonymous function as a SAM for the JavaScript type B2 is not allowed because it is a native JS type. It is not possible to directly implement it.
+scalajs_js_sam_of_non_function_type.scala:52:18: Using an anonymous function as a SAM for the JavaScript type C1 is not allowed because its single abstract method is not named `apply`. Use an anonymous class instead.

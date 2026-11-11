@@ -1,0 +1,7 @@
+tests/errors/ext_ambiguous.scala:11:14: error: Found:    Foo
+Required: ?{ show: ? }
+Note that implicit extension methods cannot be applied because they are ambiguous;
+both object given_Ops_Foo in object Foo and object Foo provide an extension method `show` on Foo
+    println(Foo().show)
+            ^^^^^
+1 error found

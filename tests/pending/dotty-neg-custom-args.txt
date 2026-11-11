@@ -1,0 +1,4 @@
+i20491/Test.scala	marks: no error where 1 are marked
+sourcepath/outer/nested/Test1.scala	option: -sourcepath (teq has no flag for it)
+sourcepath2/hi	option: -sourcepath (teq has no flag for it)
+toplevel-samesource	marks: no error where 1 are marked

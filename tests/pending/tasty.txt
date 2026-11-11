@@ -1,0 +1,41 @@
+positions cp/fix/javatemplate/JavaBox.tasty	scalac's unpickler gave no answer for it
+positions cp/fix/javatemplate/JavaTemplate.tasty	scalac's unpickler gave no answer for it
+twin After37
+twin AfterGroups
+twin AfterNested
+twin ProxyDerivation
+twin UUID constref/fix/constref/CrHolder.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID constref/fix/constref/CrRead.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID constructorcycle/fix/shapes/CtorCycleBound.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID constructorcycle/fix/shapes/CtorCycleLinked.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID constructorcycle/fix/shapes/CtorCycleParent.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders/fix/forh/AfterGroups.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders/fix/forh/AfterNested.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders/fix/forh/ForGroups.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders/fix/forh/ForNested.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders37/fix/forh37/After37.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders37/fix/forh37/For37.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID inlineproxy/fix/inlineproxy/ProxyDerivation.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID inlineproxy/fix/inlineproxy/ProxyReader.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID inlineproxy/fix/inlineproxy/proxyAuto.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID longspans/fix/longspans/LongSpans.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID nestacc/fix/nestacc/AccNest.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID toparser/fix/toparser/ToParser.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryhanded/fix/unaryhanded/UhC.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryhanded/fix/unaryhanded/UhHolder.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryhanded/fix/unaryhanded/UhLib.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryparams/fix/unaryparams/UpBox.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryparams/fix/unaryparams/UpLib.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryref/fix/unaryref/UrC.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryref/fix/unaryref/UrHolder.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryref/fix/unaryref/UrLib.tasty	not the UUID tests/tasty/twin/uuids.txt pins
+twin forms After37
+twin forms AfterGroups
+twin forms AfterNested
+twin forms ProxyDerivation
+twin forms UhHolder
+twin forms UhLib
+twin forms UpBox
+twin forms UpLib
+twin forms UrHolder
+twin forms UrLib

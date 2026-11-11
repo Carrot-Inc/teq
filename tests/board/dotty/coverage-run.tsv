@@ -1,0 +1,19 @@
+# dotty 3.8.4 (7d4833b6) coverage/run, run; compiler/test/dotty/tools/dotc/coverage/CoverageTests.scala:37; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+currying	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+erased	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+extend-case-class	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+i16940	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+i18233	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+i18233-min	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+inheritance	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+inline-def	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+interpolation	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+java-methods	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+lifting	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+lifting-bool	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+macro-suspend	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+parameterless	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+trait	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+type-apply	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation
+varargs	cannot run	-	scalac's coverage instrumentation: the statements it records are the expectation

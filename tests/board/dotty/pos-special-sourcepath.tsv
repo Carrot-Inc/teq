@@ -1,0 +1,11 @@
+# dotty 3.8.4 (7d4833b6) pos-special/sourcepath/outer, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:39-40; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+Test.scala	fail	check:fail	option: -sourcepath (teq has no flag for it)
+Test2.scala	fail	check:fail	option: -sourcepath (teq has no flag for it)
+Test3.scala	fail	check:fail	option: -sourcepath (teq has no flag for it)
+Test4.scala	fail	check:fail	option: -sourcepath (teq has no flag for it)
+indent2.scala	fail	check:fail	option: -sourcepath (teq has no flag for it)
+nested	fail	-	java source: teq reads none
+nested2	fail	check:fail	option: -sourcepath (teq has no flag for it)
+pkg.scala	fail	check:fail	option: -sourcepath (teq has no flag for it)
+toplevel2.scala	fail	check:fail	option: -sourcepath (teq has no flag for it)

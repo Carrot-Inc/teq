@@ -1,0 +1,9 @@
+two 1 2
+first 3 then List(4, 5)
+none
+List(6, 7, 8)
+pair 1 2
+head 3 rest List(4, 5)
+empty
+two 1 2: lc(2) ap(0) ap(1) lc(1) ap(0) lc(2) ap(0) ap(1)
+zero then List(5): lc(2) ap(0) ap(1) lc(1) ap(0) drop(1)

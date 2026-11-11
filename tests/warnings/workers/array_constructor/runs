@@ -1,0 +1,4 @@
+# A generic array's construction in every file (`new Array[T](n)` with the parameter's `ClassTag`): the builtin Array's
+# constructor (`Definitions.ArrayConstructor`) is declared on the first, under the loader's lock, the class being a
+# record the workers share once forked.
+0

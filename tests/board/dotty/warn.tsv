@@ -1,0 +1,356 @@
+# dotty 3.8.4 (7d4833b6) warn, warn; compiler/test/dotty/tools/dotc/CompilationTests.scala:145; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+12974.scala	fail	-	marks: 0 warnings where 1 are marked
+14034b.scala	fail	-	marks: 7 warnings where 8 are marked
+15981.scala	fail	-	marks: 0 warnings where 1 are marked
+17284.scala	fail	-	marks: an error where warnings are marked: 17284.scala:4:3: value synchronized is not a member of Int
+1828.scala	pass	-	
+18493.scala	fail	-	marks: 0 warnings where 2 are marked
+21557.scala	fail	-	marks: 0 warnings where 4 are marked
+21681.scala	fail	-	check: diagnostic 1 of 1: scalac's is migration warning 21681.scala:3:3 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21681.scala:3:3 Deprecated syntax: since 3.7 this is interpreted a
+21681b.scala	fail	-	check: diagnostic 1 of 1: scalac's is migration warning 21681b.scala:3:3 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21681b.scala:3:3 Deprecated syntax: since 3.7 this is interpreted
+21681c.scala	fail	-	check: diagnostic 1 of 1: scalac's is migration warning 21681c.scala:5:3 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21681c.scala:5:3 Deprecated syntax: since 3.7 this is interpreted
+21770.scala	fail	-	check: diagnostic 1 of 1: scalac's is migration warning 21770.scala:5:10 Deprecated syntax: since 3.7 this is interpreted as a named tuple with one element,; teq's is warning 21770.scala:5:10 Deprecated syntax: since 3.7 this is interpreted
+3324b.scala	pass	-	
+3324f.scala	fail	-	marks: 1 warnings where 2 are marked
+3324g.scala	fail	-	marks: 1 warnings where 2 are marked
+IsInstanceOfClassTag2.scala	pass	-	
+JavaSeqLiteral.scala	fail	-	marks: 0 warnings where 1 are marked
+alphanumeric-infix-operator-3.4.scala	pass	-	
+alphanumeric-infix-operator.scala	pass	-	
+applied_constructor_types.scala	fail	-	marks: an error where warnings are marked: applied_constructor_types.scala:6:24: expected '=', found '('
+avoid-warn-deprecation.scala	pass	-	
+conditionalWarnings.scala	fail	-	marks: 1 warnings where 2 are marked
+context-bounds-migration-3.4.scala	pass	-	
+convertible.scala	fail	-	option: -preview (teq has no flag for it)
+deprecated-origin-verbose.scala	fail	-	check: diagnostic 1 of 2: scalac's is warning deprecated-origin-verbose.scala:12:19 class C in package p is deprecated since 1.0: Old style; teq's is warning deprecated-origin-verbose.scala:12:19 class C in package p is deprecated
+deprecated-origin.scala	pass	-	
+deprecated-override.scala	fail	-	marks: 0 warnings where 4 are marked
+enum-approx2.scala	fail	-	marks: 2 warnings where 3 are marked
+ext-override.scala	pass	-	
+feature-shadowing.scala	fail	-	marks: 0 warnings where 1 are marked
+gadt-contradictory-pattern.scala	fail	-	marks: 1 warnings where 3 are marked
+gadt.scala	fail	-	marks: 0 warnings where 1 are marked
+html.scala	pass	-	
+i10247.scala	fail	-	marks: 2 warnings where 4 are marked
+i10930.scala	fail	-	marks: 0 warnings where 4 are marked
+i10994.scala	fail	-	marks: an error where warnings are marked: i10994.scala:4:20: expected '=>', found ':'
+i11022.scala	fail	-	marks: an error where warnings are marked: i11022.scala:14:5: pattern definitions are only supported inside blocks
+i11097.scala	fail	-	marks: 0 warnings where 2 are marked
+i11178.scala	fail	-	marks: 3 warnings where 4 are marked
+i11333.scala	pass	-	
+i11344.scala	pass	-	
+i11963a.scala	fail	-	marks: 0 warnings where 1 are marked
+i11963b.scala	fail	-	marks: 0 warnings where 1 are marked
+i11963c.scala	fail	-	marks: 0 warnings where 1 are marked
+i12253.scala	fail	-	marks: 0 warnings where 3 are marked
+i12460.scala	fail	-	marks: 0 warnings where 2 are marked
+i12597.scala	fail	-	marks: 0 warnings where 1 are marked
+i13011.scala	fail	-	marks: 0 warnings where 5 are marked
+i13433c	fail	-	marks: an error where warnings are marked: A_1.scala:8:10: this type cannot be tested at runtime: Matcher[A]
+i13440.scala	fail	-	check: diagnostic 1 of 3: scalac's is migration warning i13440.scala:5:5 given is now a keyword, write `given` instead of given to keep it as an identifier; teq's is warning i13440.scala:5:5 given is now a keyword, write `given` instead of 
+i13542.scala	fail	-	marks: 0 warnings where 4 are marked
+i14579.scala	pass	-	
+i14705.scala	fail	-	marks: 0 warnings where 1 are marked
+i14721.scala	fail	-	marks: 0 warnings where 1 are marked
+i15226.scala	fail	-	marks: an error where warnings are marked: i15226.scala:9:67: type mismatch: found (Proj, String), required ((pj.a : Proj), (pj.b : String))
+i15264.scala	fail	-	marks: 0 warnings where 2 are marked
+i15474.scala	fail	-	marks: 0 warnings where 2 are marked
+i15479.scala	fail	-	marks: 0 warnings where 1 are marked
+i15503a.scala	pass	-	
+i15503b.scala	pass	-	
+i15503c.scala	pass	-	
+i15503d.scala	fail	-	marks: 23 warnings where 20 are marked
+i15503e.scala	pass	-	
+i15503f.scala	fail	-	marks: an error where warnings are marked: i15503f.scala:38:21: expected ':', found '['
+i15503g.scala	fail	-	marks: 6 warnings where 7 are marked
+i15503h.scala	pass	-	
+i15503i.scala	fail	-	marks: 38 warnings where 37 are marked
+i15503j.scala	pass	-	
+i15503k.scala	pass	-	
+i15503kb	pass	-	
+i15661.scala	pass	-	
+i15662.scala	fail	-	marks: an error where warnings are marked: i15662.scala:7:19: expected '=>', found '['
+i15893.min.scala	fail	-	marks: an error where warnings are marked: i15893.min.scala:11:14: expected '=>', found ':'
+i15893.scala	fail	-	marks: an error where warnings are marked: i15893.scala:28:14: expected '=>', found ':'
+i15967.scala	pass	-	
+i16451.scala	fail	-	marks: 9 warnings where 8 are marked
+i16610.scala	fail	-	marks: 0 warnings where 1 are marked
+i16639a.scala	pass	-	
+i16649-refutable.scala	fail	-	marks: 4 warnings where 1 are marked
+i16723.scala	fail	-	marks: 0 warnings where 1 are marked
+i16723a.scala	fail	-	marks: 0 warnings where 1 are marked
+i16728.scala	fail	-	marks: 0 warnings where 1 are marked
+i16743.scala	fail	-	marks: an error where warnings are marked: i16743.scala:111:25: type mismatch: found "x", required G
+i16930.scala	pass	-	
+i17230.min1.scala	pass	-	
+i17230.orig.scala	pass	-	
+i17266.scala	fail	-	marks: an error where warnings are marked: i17266.scala:4:3: not found: synchronized
+i17314.scala	pass	-	
+i17314a.scala	pass	-	
+i17314b.scala	pass	-	
+i17318.scala	pass	-	
+i17371.scala	pass	-	
+i17429.scala	pass	-	
+i17493.scala	fail	-	marks: 0 warnings where 1 are marked
+i17612a.scala	fail	-	marks: 0 warnings where 8 are marked
+i17613a.scala	fail	-	marks: 0 warnings where 7 are marked
+i17667.scala	pass	-	
+i17667b.scala	pass	-	
+i17753.scala	pass	-	
+i17762.scala	pass	-	
+i18313.scala	pass	-	
+i18341.scala	pass	-	
+i18366.scala	fail	-	marks: an error where warnings are marked: i18366.scala:9:10: method foo in trait Builder must be called with () argument
+i18559a.scala	fail	-	marks: 0 warnings where 3 are marked
+i18559b.scala	fail	-	marks: 0 warnings where 1 are marked
+i18559c.scala	fail	-	marks: 1 warnings where 3 are marked
+i18564.scala	fail	-	marks: 0 warnings where 1 are marked
+i18661.scala	pass	-	
+i18722.scala	fail	-	marks: 3 warnings where 4 are marked
+i18862-3.4.scala	pass	-	
+i18862-future-migration.scala	pass	-	
+i18867-3.4.scala	pass	-	
+i18867.scala	pass	-	
+i19002.scala	fail	-	marks: 0 warnings where 9 are marked
+i19013-a.scala	fail	-	check: diagnostic 1 of 1: scalac's is warning i19013-a.scala:5:14 the type test for E cannot be checked at runtime because it refers to an abstract type member or type parameter; teq's is warning i19013-a.scala:5:14 the type test for E cann
+i19013-b.scala	fail	-	check: diagnostic 1 of 1: scalac's is warning i19013-b.scala:7:30 the type test for E cannot be checked at runtime because it refers to an abstract type member or type parameter; teq's is warning i19013-b.scala:7:30 the type test for E cann
+i19031.ci-reg1.scala	pass	-	
+i19031.ci-reg2.scala	pass	-	
+i19031.scala	pass	-	
+i19031b.scala	pass	-	
+i19077.scala	fail	-	marks: an error where warnings are marked: i19077.scala:14:3: there is no parameter named w
+i19252.scala	pass	-	
+i19275.scala	pass	-	
+i19302.scala	pass	-	
+i19359.scala	pass	-	
+i19416.scala	fail	-	marks: 0 warnings where 1 are marked
+i19505.scala	fail	-	marks: 0 warnings where 1 are marked
+i19506.scala	fail	-	marks: an error where warnings are marked: i19506.scala:4:74: type mismatch: found 42, required Reader[?0]
+i19657-mega.scala	fail	-	marks: 1 warnings where 3 are marked
+i19657.scala	fail	-	marks: an error where warnings are marked: i19657.scala:22:16: no given instance of type Schema[Foo] was found for parameter x$1
+i19687.scala	pass	-	
+i19687a.scala	fail	-	check: diagnostic 1 of 1: scalac's is warning i19687a.scala:11:3 match may not be exhaustive.; teq's is warning i19687a.scala:11:3 match may not be exhaustive.
+i19687b.scala	pass	-	
+i19687c.scala	pass	-	
+i19913.scala	fail	-	check: diagnostic 1 of 2: scalac's is warning i19913.scala:13:3 method inlineMethod in object Deprecated is deprecated: test; teq's is warning i19913.scala:12:3 method method in object Deprecated is deprecated: test
+i20105.scala	fail	-	marks: 0 warnings where 1 are marked
+i20121.scala	fail	-	marks: warning on an unmarked line i20121.scala:9: Unreachable case except for null (if this is intentional, consider writing case null => instead).
+i20122.scala	fail	-	marks: 0 warnings where 1 are marked
+i20123.scala	fail	-	marks: 0 warnings where 1 are marked
+i20128.scala	fail	-	marks: 0 warnings where 1 are marked
+i20129.scala	fail	-	marks: 0 warnings where 1 are marked
+i20130.scala	pass	-	
+i20131.scala	fail	-	marks: 1 warnings where 0 are marked
+i20132.alt.scala	pass	-	
+i20132.future-Left.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
+i20132.list-Seq.scala	pass	-	
+i20132.scala	fail	-	marks: 0 warnings where 1 are marked
+i20132.stream-Tuple2.safeNulls.fixed.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
+i20132.stream-Tuple2.safeNulls.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
+i20132.stream-Tuple2.scala	fail	-	option: -Yexplicit-nulls (teq has no flag for it)
+i20132.wo.scala	pass	-	
+i20146.scala	pass	-	
+i20372.scala	pass	-	
+i20420.scala	fail	-	marks: an error where warnings are marked: i20420.scala:26:52: ambiguous given instances for ValidatorForPredicate[Int, LessEqual[3]]: validatorForLessEqual, validatorForDescribedOr
+i20520.scala	pass	-	
+i20536.scala	pass	-	
+i20860.scala	fail	-	marks: an error where warnings are marked: No warnings can be incurred under -Werror
+i20951.scala	pass	-	
+i21036a.scala	fail	-	marks: 0 warnings where 1 are marked
+i21036b.scala	fail	-	marks: 0 warnings where 1 are marked
+i21036c.scala	pass	-	
+i21187.scala	fail	-	marks: an error where warnings are marked: i21187.scala:9:55: missing parameter type
+i21190.scala	fail	-	marks: an error where warnings are marked: i21190.scala:20:29: type mismatch: found FromEnd, required Int
+i21207	fail	-	java source: teq reads none
+i21218.scala	pass	-	
+i21239.Frac.scala	fail	-	marks: 0 warnings where 1 are marked
+i21258.scala	fail	-	marks: 0 warnings where 1 are marked
+i21420.scala	pass	-	
+i21525.scala	fail	-	marks: an error where warnings are marked: No warnings can be incurred under -Werror
+i21649.scala	pass	-	
+i21805.scala	fail	-	marks: an error where warnings are marked: i21805.scala:6:3: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+i21809.scala	pass	-	
+i21816.scala	fail	-	marks: an error where warnings are marked: i21816.scala:13:13: method className in trait Iterable cannot be accessed as a member of CC from object O; protected method className can only be accessed from trait Iterable or one of its subclass
+i21845.orig.scala	fail	-	marks: 1 warnings where 0 are marked
+i21845.scala	pass	-	
+i21860.scala	fail	-	marks: an error where warnings are marked: i21860.scala:5:8: illegal inheritance: self type Triangle of case Triangle does not conform to self type Product of parent trait Product
+i21860.unenum.scala	fail	-	marks: an error where warnings are marked: i21860.unenum.scala:6:15: illegal inheritance: self type Triangle of object Triangle does not conform to self type Product of parent trait Product
+i21917.scala	pass	-	
+i22051.scala	fail	-	marks: an error where warnings are marked: i22051.scala:16:12: type mismatch: found local.(T => local.Break), required T => RuntimeException
+i22212	fail	-	marks: 0 warnings where 1 are marked
+i22232.scala	fail	-	marks: 0 warnings where 4 are marked
+i22233.scala	fail	-	marks: 0 warnings where 1 are marked
+i22267.scala	fail	-	marks: 0 warnings where 1 are marked
+i22279.scala	fail	-	marks: 0 warnings where 1 are marked
+i22371.scala	pass	-	
+i22412.scala	fail	-	check: diagnostic 1 of 1: scalac's is warning i22412.scala:3:35 A try without catch or finally is equivalent to putting; teq's is warning i22412.scala:3:35 A try without catch or finally is equivalent to putting its body in a block; no exce
+i22439.scala	fail	-	marks: 1 warnings where 3 are marked
+i22440.scala	pass	-	
+i22507.scala	pass	-	
+i22527.scala	fail	-	marks: an error where warnings are marked: i22527.scala:6:7: expected ',' or ')', found literal
+i22590.arity2.scala	pass	-	
+i22590.scala	pass	-	
+i22629.scala	pass	-	
+i22670-test.scala	pass	-	
+i22672	fail	-	marks: 2 warnings where 1 are marked
+i22681.scala	pass	-	
+i22705.scala	fail	-	marks: an error where warnings are marked: i22705.scala:15:22: Node cannot be instantiated
+i22706.scala	fail	-	marks: an error where warnings are marked: i22706.scala:17:22: N cannot be instantiated
+i22727.scala	pass	-	
+i22731.scala	pass	-	
+i22742.scala	pass	-	
+i22744.scala	pass	-	
+i22746.scala	pass	-	
+i22787.scala	pass	-	
+i22795	fail	-	marks: 0 warnings where 1 are marked
+i22896	fail	-	java source: teq reads none
+i22899.scala	fail	-	marks: an error where warnings are marked: i22899.scala:20:30: a named pattern is only allowed in a tuple or constructor pattern
+i22969.scala	pass	-	
+i22971.scala	pass	-	
+i22981.scala	fail	-	marks: an error where warnings are marked: i22981.scala:8:31: expected an identifier, found 'type'
+i22983.scala	pass	-	
+i23018.scala	fail	-	marks: an error where warnings are marked: i23018.scala:18:31: type mismatch: found 42, required C
+i23033.scala	pass	-	
+i23047.scala	pass	-	
+i23049.scala	pass	-	
+i23164.scala	pass	-	
+i23200.scala	fail	-	marks: 1 warnings where 2 are marked
+i23250.scala	fail	-	marks: 0 warnings where 1 are marked
+i23250b.scala	pass	-	
+i23277.scala	fail	-	marks: an error where warnings are marked: i23277.scala:16:16: recursive use of run needs an explicit result type
+i23323.scala	pass	-	
+i2333.scala	pass	-	
+i23347.scala	pass	-	
+i23349.scala	pass	-	
+i23369.scala	fail	-	marks: 2 warnings where 1 are marked
+i23494.scala	pass	-	
+i23541.scala	fail	-	marks: 0 warnings where 3 are marked
+i23620b.scala	fail	-	marks: 0 warnings where 3 are marked
+i23621	pass	-	
+i23651.scala	pass	-	
+i23693.scala	pass	-	
+i23694.scala	pass	-	
+i23704.scala	fail	-	marks: 3 warnings where 5 are marked
+i23758.scala	pass	-	
+i23822.scala	fail	-	marks: 0 warnings where 1 are marked
+i23905	pass	-	
+i24034	fail	-	marks: an error where warnings are marked: circe.scala:30:7: missing argument for parameter mirror
+i24082.scala	pass	-	
+i24246.scala	fail	-	marks: 0 warnings where 1 are marked
+i24248	pass	-	
+i24263.scala	pass	-	
+i24265.scala	fail	-	option: -Wall with -Werror (teq has no flag for it)
+i24322.scala	fail	-	marks: 0 warnings where 1 are marked
+i24457.scala	pass	-	
+i24459.scala	pass	-	
+i24466.scala	fail	-	marks: 0 warnings where 2 are marked
+i24562.scala	fail	-	marks: an error where warnings are marked: i24562.scala:42:5: value D is not a member of Baz
+i24633.scala	pass	-	
+i24646.scala	pass	-	
+i24665.scala	pass	-	
+i24698.scala	pass	-	
+i24750.scala	fail	-	marks: 0 warnings where 1 are marked
+i24825.scala	fail	-	marks: an error where warnings are marked: i24825.scala:9:20: trait Y overrides nothing
+i25004	pass	-	
+i25004b	pass	-	
+i25094.scala	fail	-	marks: 0 warnings where 1 are marked
+i25100.scala	pass	-	
+i25158.scala	fail	-	marks: 0 warnings where 5 are marked
+i25227.scala	pass	-	
+i25347.scala	fail	-	marks: an error where warnings are marked: i25347.scala:30:5: type mismatch: found Test.j.D, required Int
+i25548.scala	fail	-	marks: an error where warnings are marked: i25548.scala:3:16: expected 'extends' or a template body, found '@'
+i25548b.scala	fail	-	marks: an error where warnings are marked: i25548b.scala:3:16: expected 'extends' or a template body, found '@'
+i25553.scala	fail	-	option: -Wvalue-discard with -Werror (teq has no flag for it)
+i25928.scala	pass	-	
+i2673.scala	fail	-	marks: 0 warnings where 1 are marked
+i2673b.scala	fail	-	marks: 0 warnings where 1 are marked
+i2673c.scala	fail	-	marks: 0 warnings where 1 are marked
+i3323.scala	pass	-	
+i3324.scala	pass	-	
+i3561.scala	fail	-	marks: 0 warnings where 2 are marked
+i4008.scala	fail	-	marks: 0 warnings where 8 are marked
+i4297.scala	fail	-	marks: 6 warnings where 5 are marked
+i4364.scala	fail	-	marks: 0 warnings where 1 are marked
+i4812.scala	fail	-	marks: 0 warnings where 7 are marked
+i4936b.scala	fail	-	marks: 0 warnings where 1 are marked
+i4986b.scala	fail	-	marks: 0 warnings where 8 are marked
+i5013.scala	pass	-	
+i5013b.scala	fail	-	marks: 0 warnings where 1 are marked
+i5077.scala	fail	-	marks: an error where warnings are marked: i5077.scala:22:25: value < is not a member of Any
+i5422.scala	pass	-	
+i5826.scala	fail	-	marks: 1 warnings where 5 are marked
+i6190b.scala	pass	-	
+i7314.scala	pass	-	
+i7821.scala	fail	-	marks: 0 warnings where 1 are marked
+i7821b.scala	fail	-	marks: 0 warnings where 7 are marked
+i8427.scala	fail	-	marks: 0 warnings where 1 are marked
+i8781b.scala	fail	-	marks: 0 warnings where 1 are marked
+i8922b.scala	pass	-	
+i8932.scala	fail	-	marks: 1 warnings where 2 are marked
+i9166.scala	fail	-	marks: 0 warnings where 1 are marked
+i9241.scala	fail	-	marks: 0 warnings where 8 are marked
+i9266.scala	fail	-	marks: an error where warnings are marked: i9266.scala:7:24: expected a definition, found identifier
+i9408a.scala	fail	-	marks: an error where warnings are marked: i9408a.scala:18:21: type mismatch: found "qwerty", required Int
+i9740.scala	fail	-	check: diagnostic 1 of 2: scalac's is warning i9740.scala:10:10 Implausible pattern:; teq's is warning i9740.scala:10:10 unreachable case
+i9740b.scala	fail	-	marks: 0 warnings where 2 are marked
+i9740c.scala	fail	-	marks: 0 warnings where 1 are marked
+i9740d.scala	fail	-	marks: 0 warnings where 2 are marked
+i9751.scala	fail	-	marks: 0 warnings where 2 are marked
+i9776.scala	fail	-	marks: 0 warnings where 2 are marked
+i9880.scala	fail	-	marks: an error where warnings are marked: i9880.scala:15:9: missing parameter type
+implicit-conversions-old.scala	pass	-	
+implicit-conversions.scala	fail	-	marks: 0 warnings where 3 are marked
+infer-or-type.scala	fail	-	marks: 0 warnings where 2 are marked
+infix-named-args-migration.scala	fail	-	marks: an error where warnings are marked: infix-named-args-migration.scala:4:11: value + is not a member of Int
+inline-givens.scala	fail	-	marks: 0 warnings where 3 are marked
+into-as-mod.scala	fail	-	option: -preview (teq has no flag for it)
+looping-givens.scala	fail	-	marks: an error where warnings are marked: looping-givens.scala:9:17: type mismatch: found Any, required A
+manifest-summoning-b.scala	fail	-	marks: an error where warnings are marked: manifest-summoning-b.scala:3:35: No Manifest available for List[Int].
+matchable.scala	fail	-	marks: 0 warnings where 6 are marked
+multiple-entry-points	fail	-	marks: an error where warnings are marked: 1_First.scala:4:7: several entry points: First.main, Second.main; choose one with --main
+newline-braces.scala	fail	-	marks: an error where warnings are marked: newline-braces.scala:5:5: missing parameter type
+nonunit-statement.scala	fail	-	marks: 0 warnings where 20 are marked
+nowarn.scala	fail	-	marks: 20 warnings where 22 are marked
+old-syntax.scala	fail	-	marks: an error where warnings are marked: old-syntax.scala:5:12: a for expression needs a generator
+opaque-match.scala	pass	-	
+or-type-trees.scala	fail	-	marks: 0 warnings where 3 are marked
+ovlazy.scala	fail	-	marks: an error where warnings are marked: ovlazy.scala:7:21: lazy value x may not override non-lazy value x in class A
+patmat-exhaustive.scala	pass	-	
+patmat-nothing-exhaustive.scala	fail	-	marks: 2 warnings where 0 are marked
+patmat-type-member-nothing-exhaustive.scala	fail	-	marks: 1 warnings where 0 are marked
+private-this-3.4.scala	pass	-	
+private-this-future-migration.scala	pass	-	
+quote-simple-hole.scala	fail	-	marks: 0 warnings where 2 are marked
+redundant-null.scala	fail	-	marks: 11 warnings where 14 are marked
+refined-types.scala	fail	-	marks: 0 warnings where 4 are marked
+refinements-this.scala	fail	-	marks: 0 warnings where 1 are marked
+rewrite-messages.scala	fail	-	check: diagnostic 1 of 2: scalac's is migration warning rewrite-messages.scala:3:19 `_` is no longer supported for a wildcard import; use `*` instead; teq's is warning rewrite-messages.scala:3:19 `_` is no longer supported for a wildcard im
+scala2-t11681.scala	pass	-	
+strict-pattern-bindings-3.2.scala	pass	-	
+sub-cases-exhaustivity.scala	fail	-	marks: an error where warnings are marked: sub-cases-exhaustivity.scala:16:24: expected '=>', found 'match'
+supertraits-b.scala	fail	-	marks: 0 warnings where 5 are marked
+suppressed-type-test-warnings.scala	fail	-	marks: 2 warnings where 3 are marked
+switches.scala	fail	-	marks: 2 warnings where 6 are marked
+symbolic-packages.scala	fail	-	marks: an error where warnings are marked: symbolic-packages.scala:7:1: a package clause after other definitions needs a body: `package p:` or `package p { ... }`
+t10373.scala	pass	-	
+t11620.scala	fail	-	marks: an error where warnings are marked: t11620.scala:8:23: type mismatch: found Any, required X
+t13095.scala	pass	-	
+t2755.scala	fail	-	marks: 17 warnings where 2 are marked
+t3235-minimal.scala	fail	-	check: diagnostic 2 of 4: scalac's is warning t3235-minimal.scala:6:12 method round in package scala.math is deprecated since 2.11.0: This is an integer type; there is no reason to round it. Perhaps you meant to call this with a floating-po
+t5830.scala	pass	-	
+tostring-interpolated.scala	fail	-	marks: 14 warnings where 15 are marked
+tuple-exhaustivity.scala	fail	-	marks: an error where warnings are marked: No warnings can be incurred under -Werror
+type-lambda.scala	fail	-	marks: 0 warnings where 1 are marked
+type-test-paths-2.scala	fail	-	marks: 6 warnings where 4 are marked
+type-test-paths.scala	fail	-	marks: 3 warnings where 1 are marked
+type-test-syntesize-b.scala	fail	-	marks: 4 warnings where 3 are marked
+uninitialized-3.4.scala	pass	-	
+uninitialized-future-migration.scala	pass	-	
+unused-can-equal.scala	fail	-	marks: an error where warnings are marked: unused-can-equal.scala:16:3: values of types Box[Int] and Box[Long] cannot be compared with == or !=
+unused-locals.scala	pass	-	
+unused-params.scala	fail	-	marks: an error where warnings are marked: unused-params.scala:124:16: method call overrides nothing
+unused-privates.scala	pass	-	
+warn-value-discard.scala	fail	-	marks: 0 warnings where 5 are marked
+with-type-operator-future-migration.scala	fail	-	check: diagnostic 1 of 1: scalac's is migration warning with-type-operator-future-migration.scala:5:14 with as a type operator has been deprecated; use & instead; teq's is warning with-type-operator-future-migration.scala:5:14 with as a typ
+xfatalWarnings.scala	pass	-	

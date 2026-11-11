@@ -1,0 +1,9 @@
+id23(null) null
+id023(null) null
+mk(1..23) 4324
+id23(mk) 4324
+id23(lambda) 276
+mk64(1..64) 2080
+Sum23C via Function23 276
+Last23 via id23 23
+FunctionErasure.id(null) null

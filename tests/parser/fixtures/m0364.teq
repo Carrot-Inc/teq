@@ -1,0 +1,3 @@
+m0364.scala:11:10: error: an identifier expected, but ':' found
+m0364.scala:28:16: error: value nested is not a member of Rules
+m0364.scala:32:23: error: value nested is not a member of Rules

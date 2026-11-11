@@ -1,0 +1,4 @@
+# dotty 3.8.4 (7d4833b6) printing/posttyper, pos; compiler/test/dotty/tools/dotc/printing/PrintingTest.scala:74; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+i22533.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+patdef.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation

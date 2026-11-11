@@ -1,0 +1,133 @@
+captured-quoted-multy-stage	Macro_1.scala:7:45: not found: $x
+captured-quoted-type-2	Macro_1.scala:3:41: no given instance of type Type[T] was found for parameter evidence$1
+erasedArgs	Macro_1.scala:6:21: 'erased' is not part of the supported Scala subset
+forced-inline-typeChecks.scala	forced-inline-typeChecks.scala:3:13: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+hk-quoted-type-patterns	Macro_1.scala:7:18: only classes can have declared but undefined members
+i10151	Macro_1.scala:35:79: type argument CB does not have the same kind as its bound
+i10211	Macro_1.scala:83:67: type argument CB does not have the same kind as its bound
+i10573	Test_2.scala:2:12: did not match
+i10864	Macro_1.scala:9:14: expected an identifier, found 'type'
+i10864a	Macro_1.scala:9:14: expected an identifier, found 'type'
+i10910	Macro_1.scala:65:71: type argument CB does not have the same kind as its bound
+i11401	X_1.scala:56:57: type argument Future does not have the same kind as its bound
+i11415.scala	i11415.scala:23:27: expected end of statement, found identifier
+i11738.scala	i11738.scala:6:12: expected an identifier, found 'type'
+i12188b	Macro_1.scala:6:7:None:None: the body of MatchTest.testImpl is withheld from the products of $OUT/pos-macros/i12188b/jvm.products (elided: unstated an extractor pattern): the TASTy writer's queue of the shapes it withholds writes it (in the
+i12188c	Test_2.scala:1:20: not supported yet in a macro: a case whose pattern is no pattern tree (called by test in object MatchTest) (in the body of MatchTest.test)
+i12253	Macro_1.scala:8:7:None:None: the body of MacroUtils.extractNameFromSelectorImpl is withheld from the products of $OUT/pos-macros/i12253/jvm.products (elided: unstated a reference to the body's u$0 the body does not define): the TASTy writer
+i12309	Test_2.scala:2:3: not supported yet in a macro: the method getResult is selected without its arguments (called by test in object TestMacro) (in the body of TestMacro.test)
+i12440.scala	i12440.scala:9:10: only classes can have declared but undefined members
+i12850	Test_2.scala:1:12: exception in macro: java.util.NoSuchElementException: method scala.Some.unapply not found (called by foo in object Macros_1$package) (in the body of Macros_1$package.foo)
+i13376a.scala	i13376a.scala:5:44: type mismatch: found Expr[C], required Expr[C{def foo: x.T}]
+i13461-d	Test_2.scala:8:45: Cannot prove that (x : Int) <:< MyOpaque.
+i13563.scala	i13563.scala:3:27: a splice takes an Expr, but this has type Nothing
+i14180	Macro_1.scala:2:5:None:None: the body of Macro_1$package.impl is withheld from the products of $OUT/pos-macros/i14180/jvm.products (elided: unstated the tuple's builtin apply): the TASTy writer's queue of the shapes it withholds writes it (
+i14185	Macro_1.scala:9:16: type argument M does not have the same kind as its bound
+i14373.scala	i14373.scala:7:22: a splice takes an Expr, but this has type Nothing
+i14536b	Test_2.scala:1:12: exception in macro: scala.MatchError: package$package.typeCheckErrors("val a: String = 2") (of class scala.quoted.Expr) (called by assertCompiles in object Macro_1$package) (in the body of Macro_1$package.assertCompiles)
+i14603.scala	i14603.scala:8:5: a splice takes an Expr, but this has type Nothing
+i14740	Macro_1.scala:9:25: type argument Foo does not have the same kind as its bound
+i15165a	Macro_1.scala:8:32: type α not found
+i15165b	Macro_1.scala:8:32: type α not found
+i15165c	Macro_1.scala:8:48: value apply is not a member of Any
+i15400	Macros_1.scala:7:15: missing argument for parameter typeDom
+i15413	option: -WunstableInlineAccessors with -Werror (teq has no flag for it)
+i15413b	option: -WunstableInlineAccessors with -Werror (teq has no flag for it)
+i15779	Macro_1.scala:15:5:None:None: the body of Macro_1$package.fromMirrorImpl is withheld from the products of $OUT/pos-macros/i15779/jvm.products (elided: unstated a reference to the type parameter tpe outside its scope): the TASTy writer's que
+i16265.scala	i16265.scala:7:29: type argument tail does not conform to upper bound Tuple
+i16318	Test_2.scala:2:11: exception in macro: java.util.NoSuchElementException: head of empty list (called by ann in object Macro_1$package) (in the body of Macro_1$package.ann)
+i16420	Test.scala:6:5: type mismatch: found Meow, required Nothing
+i16522.scala	i16522.scala:11:34: type argument tl does not conform to upper bound HList
+i16630.scala	i16630.scala:6:30: expected end of statement, found identifier
+i16636	Macro_1.scala:16:7:None:None: the body of ReproTransformer.getTransformerMacro is withheld from the products of $OUT/pos-macros/i16636/jvm.products (elided: unstated a reference to the type parameter src outside its scope): the TASTy writer
+i16835	Macro_1.scala:59:15:None:None: the body of Derivation.lookupShowFor is withheld from the products of $OUT/pos-macros/i16835/jvm.products (elided: unstated the reflection API's ImplicitSearchSuccessTypeTest, which scala-library has under ano
+i16959	Test_2.scala:1:11: exception in macro: java.lang.AssertionError: assertion failed (called by test in object Macro_1$package) (in the body of Macro_1$package.test)
+i16960	Macro_1.scala:15:14:None:None: extension method tpt is not applicable to ValOrDefDef (in the body of Macro_1$package.myMacroImpl)
+i16961	Macro_1.scala:5:5:None:None: the body of Macro_1$package.myMacroImpl is withheld from the products of $OUT/pos-macros/i16961/jvm.products (elided: unstated a type that did not check): the TASTy writer's queue of the shapes it withholds writ
+i16963	Test_2.scala:1:20: exception in macro: scala.MatchError: {
+i17103c	Macro_1.scala:5:5:None:None: the body of Macro_1$package.testExpr is withheld from the products of $OUT/pos-macros/i17103c/jvm.products (elided: unstated the singleton type of the local c): the TASTy writer's queue of the shapes it withhold
+i17434a	Test.scala:5:7: field is a member of a JS trait, which can only hold abstract members and vals set to js.undefined
+i17506	Test_2.scala:5:3: the body of Macro_1$package.regularCurriedCtxFun2BetaReduceTest is withheld from the products of $OUT/pos-macros/i17506/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another
+i17606	Macros_1.scala:8:7:None:None: the body of example.A.impl is withheld from the products of $OUT/pos-macros/i17606/jvm.products (elided: unstated the std's String.newString, which scala-library has under another shape): the TASTy writer's que
+i17610	Macros.scala:7:30: no given instance of type Type[I] was found for parameter evidence$1
+i18197a.scala	i18197a.scala:5:26: type mismatch: found Expr[Int], required Expr[(Int) ?=> Int]
+i18228.scala	i18228.scala:11:11: value value is not a member of Expr[Map[String, String]]
+i18228b.scala	i18228b.scala:11:11: value value is not a member of Expr[Map[String, String]]
+i18353	Macro_1.scala:55:15: value fromTuple is not a member of ProductOf[T]{type MirroredElemTypes = elementTypes}
+i18358	teq: jvm backend: E$1t9g4af_140: the local hole$0 is not in scope of the generated method
+i19191	Macro_1.scala:8:14: cannot resolve import: quotes is not an object or a package
+i19436	Test_2.scala:2:16: No given instance of type Int was found.
+i19526b	Test.scala:16:5: type mismatch: found Dynamic, required Stack
+i19767.scala	i19767.scala:7:24: type argument k1 does not conform to upper bound Singleton
+i19909	teq: jvm backend: examples/select/Dynamic0$.runTimeError: JavaScript interop
+i19909b	teq: jvm backend: examples/select/Dynamic0$.runTimeError: JavaScript interop
+i19947	Test_2.scala:1:17: exception in macro: scala.MatchError: Tuple1.apply[scala.Int](1) (of class java.lang.String) (called by expandMacro in object Macro_1$package) (in the body of Macro_1$package.expandMacro)
+i20309	Test_2.scala:7:3: the body of Macros.transformContextLambda is withheld from the products of $OUT/pos-macros/i20309/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another shape): the TASTy wri
+i20471	Main_2.scala:5:9: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by derive in object MacroFlatMap) (in the body of MacroFlatMap.derive)
+i21721-a	Test.scala:3:3: not supported yet: scala.quoted Reflect.InlinedMethods.Inlined.body (called by impl in object Macro)
+i21721-b	Macro_1.scala:8:10: unreachable case: type TypeBlock and class Block are unrelated
+i21802	Test.scala:7:7: not found: counters
+i22424	Test_2.scala:4:3: exception in macro: scala.MatchError: PolymorphicTrait.Embedded.ATrait[scala.Predef.String, scala.Int] (of class scala.quoted.Type) (called by transparentInlineMock in object MockMaker) (in the body of MockMaker.transparen
+i22584	Macro.scala:18:9: type mismatch: found Symbol => ValOrDefDef, required Symbol => ValDef | DefDef
+i22585	Macro.scala:16:49: type mismatch: found Any, required Hammer[?, Int]
+i23589	Macro_1.scala:8:38: value apply is not a member of Any
+i23969	Macro.scala:15:3: value ensureApplied is not a member of Select
+i24821	Macro_1.scala:36:26: method pSelect in trait Foo cannot be accessed as a member of Macro_1$package$$anon$1t9g4af_732 from anonymous class Macro_1$package$$anon$1t9g4af_732$$anon$1t9g4af_794; protected method pSelect can only be accessed fro
+i25697	Test_2.scala:7:3: Pattern.compile("SomeString", Pattern.CASE_INSENSITIVE.|(Pattern.COMMENTS)).matcher("value").matches()
+i4023	Test_2.scala:2:3: not supported yet in a macro: the local evidence$1 is not in scope (called by ff in object Macro) (in the body of Macro.ff)
+i6142.scala	i6142.scala:5:10: only classes can have declared but undefined members
+i6535	Test_2.scala:7:5: exception in macro: scala.MatchError: Test.neverRuns(package.error("Sad times 1")) (of class scala.quoted.Expr) (called by assert in object scalatest) (in the body of scalatest.assert)
+i6588.scala	i6588.scala:3:19: type AnyKind not found
+i7011	Macros_1.scala:11:21:None:None: extension method asExpr is not applicable to contextual$2.reflect.Term (in the body of Macros_1$package.mcrImpl)
+i7046.scala	i7046.scala:5:22: type mismatch: found Expr[Int], required Expr[1]
+i7264.scala	i7264.scala:6:13: expected an identifier, found 'type'
+i7264b.scala	i7264b.scala:4:25: type argument t does not conform to upper bound Tuple
+i7405b.scala	i7405b.scala:8:13: method y needs `override` modifier to override method y in trait A
+i8045b.scala	i8045b.scala:5:24: type Nested is not a member of (q : Quotes)
+i8052.scala	i8052.scala:12:7: object creation impossible, since def test(): Unit in trait TC is not defined
+i8100.scala	i8100.scala:12:19: type E is not a member of (m : tt)
+i8100b.scala	i8100b.scala:23:10: only classes can have declared but undefined members
+i8521	Macro_1.scala:4:23: type AnyKind not found
+i8577a	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577b	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577c	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577d	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577e	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577f	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577g	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577h	Main_2.scala:8:7: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8858	Test_2.scala:3:27: exception in macro: scala.MatchError: x (of class scala.quoted.Expr) (called by mcr in object Macro_1$package) (in the body of Macro_1$package.mcr)
+i8945.scala	i8945.scala:19:28: expected end of statement, found identifier
+i9251	Macro_1.scala:29:25: type argument F does not have the same kind as its bound
+i9254	Macros_1.scala:48:25: type argument F does not have the same kind as its bound
+i9296	Macros_1.scala:17:18: type argument F does not have the same kind as its bound
+i9360.scala	i9360.scala:17:21: only classes can have declared but undefined members
+i9361.scala	i9361.scala:9:23: type argument m2 does not have the same kind as its bound [_]
+i9518	Macro_1.scala:13:12: type argument [X] =>> CB[X] does not have the same kind as its bound
+i9894	Macro_1.scala:48:67: type argument CB does not have the same kind as its bound
+macro-classloaders	Caller.scala:2:3: not supported yet in a macro: java.lang.Thread$ is a JDK class, which has no body for currentThread to run; put a library implementing it on the class path (called by f in object Macro)
+macro-docs.scala	macro-docs.scala:11:9: recursive use of apply needs an explicit result type
+macro-with-array	Test_2.scala:24:26: No ClassTag available for T
+mirrorQuotePattern2.scala	mirrorQuotePattern2.scala:6:18: only classes can have declared but undefined members
+multiline-quote-patterns.scala	multiline-quote-patterns.scala:4:5: expected an identifier, found 'type'
+newClassExtendsWithSymbolInParent	Macro_1.scala:16:13: there is no parameter named conParams
+path-dependent-type-capture	Macro_1.scala:28:12: only classes can have declared but undefined members
+power-macro-3	Test_2.scala:1:20: the body of Macro_1$package.withGiven is withheld from the products of $OUT/pos-macros/power-macro-3/jvm.products (elided: unstated the std's ContextFunction1.apply, which scala-library has under another shape): the TASTy
+quote-aliases.scala	quote-aliases.scala:11:27: (r : => (q.reflect : Reflect)) is not a valid type prefix, since it is not an immutable path
+quote-liftable.scala	quote-liftable.scala:8:9: recursive use of apply needs an explicit result type
+quote-sym-newboundedtype	option: -Yno-experimental (teq has no flag for it)
+quote-sym-newtype	option: -Yno-experimental (teq has no flag for it)
+quote-sym-newtype-in-trait	option: -Yno-experimental (teq has no flag for it)
+quote-this.scala	quote-this.scala:18:43: not found: this
+quoted-patten-with-type-params.scala	quoted-patten-with-type-params.scala:10:38: value apply is not a member of Any
+quoted-pattern-type.scala	quoted-pattern-type.scala:9:9: type mismatch: found Expr[Boolean], required Expr[T & Boolean]
+quoted-splice-pattern-applied.scala	quoted-splice-pattern-applied.scala:4:11: value apply is not a member of Any
+quoted-with-precise-types.scala	quoted-with-precise-types.scala:3:19: type AnyKind not found
+quotedPatterns.scala	quotedPatterns.scala:29:18: only classes can have declared but undefined members
+scala2-macro-compat-1.scala	scala2-macro-compat-1.scala:5:31: expected end of statement, found identifier
+skolem	Test_2.scala:7:3: not supported yet in a macro: reading stdin is an effect, which a compile-time evaluation cannot have (called by macr in object Macro) (in the body of Macro.macr)
+splice-with-explicit-context.scala	splice-with-explicit-context.scala:5:19: a splice takes an Expr, but this has type (<error>) ?=> Expr[Int]
+tasty-constant-type	Test_2.scala:4:14: Int is not a constant type; cannot take constValue
+toexproftuple.scala	toexproftuple.scala:5:43: type mismatch: found Expr[Int], required Expr[1]
+treemap-unapply	Test.scala:1:18: not supported yet in a macro: tpt of a tree that is no val (called by mcr)
+typedProjectionApply	Macro_1.scala:13:20: value apply is not a member of TypeProjection

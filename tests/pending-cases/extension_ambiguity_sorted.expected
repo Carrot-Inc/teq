@@ -1,0 +1,8 @@
+scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_sorted.scala:17:49: Found:    R
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object b in trait T2 and object a in trait T1 provide an extension method `pick` on R
+  One of the following imports might fix the problem:
+  import Main.a.pick
+  import Main.b.pick

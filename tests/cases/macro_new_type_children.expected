@@ -1,0 +1,14 @@
+Box[Int]
+Box[Box[Int]]
+Box
+false
+true
+true
+true
+true
+true
+true
+Item:Item:true:true:Other
+Item:Item:true:true
+Renamed:Renamed
+true:false:true

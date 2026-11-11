@@ -1,0 +1,25 @@
+new p.C()
+p.obj
+List.empty[p.C]
+(x: p.C) => x
+p.O.mk
+new p.G[q.C]()
+Option.empty[r.s.C]
+null.asInstanceOf[p.T]
+classOf[p.C]
+new p.O.In()
+classOf[java.util.Locale]
+null.asInstanceOf[java.util.Map.Entry[String, Int]]
+Option.empty[String]
+List.empty[Option[Int]]
+List.empty[Int => String]
+List.empty[Tuple2[Int, String]]
+List.empty[A & B]
+List.empty[A | B]
+List.empty[Or[Int, String]]
+List.empty[(Int, String) => Boolean]
+List.empty[Array[Int]]
+List.empty[Pair[Int, String]]
+List.empty[Option[? >: Nothing <: Any]]
+List.empty[(Int) ?=> String]
+List.empty[(x : Int, y : String)]

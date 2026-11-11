@@ -1,0 +1,7 @@
+M.one
+M.two()
+M.three + 1
+{
+  println("hi")
+  3
+}

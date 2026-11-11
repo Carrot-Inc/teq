@@ -1,0 +1,6 @@
+# dotty 3.8.4 (7d4833b6) printing/untyped, pos; compiler/test/dotty/tools/dotc/printing/PrintingTest.scala:77; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+annot-printing.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+dependent-annot.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+i19643.java	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation
+strings.scala	cannot run	-	scalac's tree printer: the output of -Xprint is the expectation

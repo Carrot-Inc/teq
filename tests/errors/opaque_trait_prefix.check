@@ -1,0 +1,9 @@
+tests/errors/opaque_trait_prefix.scala:12:24: error: Found:    (h : Html.Tag[Node])
+Required: Svg.Tag[Node]
+  val s: Svg.Tag[Node] = h
+                         ^
+tests/errors/opaque_trait_prefix.scala:13:27: error: Found:    Html.Tag[Node]
+Required: String
+  val t: String = Html[Node]("div")
+                  ^^^^^^^^^^^^^^^^^
+2 errors found

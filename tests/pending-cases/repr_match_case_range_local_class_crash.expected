@@ -1,0 +1,3 @@
+scalac 3.8.4: an unhandled exception in the typer, scala.MatchError: TypeRef(ThisType(TypeRef(NoPrefix,module class scala)),class Nothing) (of class dotty.tools.dotc.core.Types$CachedTypeRef)
+  at dotty.tools.dotc.core.Types$MatchTypeCaseSpec$.analyze(Types.scala:5427)
+  at dotty.tools.dotc.core.Types$MatchType.reduced$$anonfun$1(Types.scala:5325)

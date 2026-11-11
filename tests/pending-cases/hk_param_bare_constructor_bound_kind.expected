@@ -1,0 +1,6 @@
+scalac 3.8.4: rejected, 5 error(s)
+hk_param_bare_constructor_bound_kind.scala:10:13: Type argument List does not have the same kind as its bound [_$2] <: List
+hk_param_bare_constructor_bound_kind.scala:12:13: Type argument List does not have the same kind as its bound [_$3] <: Seq
+hk_param_bare_constructor_bound_kind.scala:13:13: Type argument Vector does not have the same kind as its bound [_$3] <: Seq
+hk_param_bare_constructor_bound_kind.scala:15:13: Type argument Seq does not have the same kind as its bound [_$4] >: List <: Seq
+hk_param_bare_constructor_bound_kind.scala:16:13: Type argument List does not have the same kind as its bound [_$4] >: List <: Seq

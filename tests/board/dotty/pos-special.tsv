@@ -1,0 +1,8 @@
+# dotty 3.8.4 (7d4833b6) pos-special, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:43-46, :49, :52; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+i18589	pass	check:pass	
+i24547	fail	check:fail	ReproTest_2.scala:16:5: not supported yet in a macro: ValDef.unapply on a tree that is no val (called by transform in object ReproMacro)
+java-param-names	fail	-	java source: teq reads none
+stdlib	fail	check:fail	Test1.scala:9:43: expected ',' or ')', found identifier
+utf16encoded.scala	fail	check:fail	option: -encoding (teq has no flag for it)
+utf8encoded.scala	pass	check:pass	

@@ -1,0 +1,6 @@
+expose-flexible-types.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow-match.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i21577.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop	java source: teq reads none
+pattern-matching.scala	option: -Yexplicit-nulls (teq has no flag for it)
+unnecessary-nn.scala	option: -Yexplicit-nulls (teq has no flag for it)

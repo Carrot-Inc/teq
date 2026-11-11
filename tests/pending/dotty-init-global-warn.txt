@@ -1,0 +1,46 @@
+call-before-super.scala	marks: 0 warnings where 1 are marked
+call-before-super2.scala	marks: 0 warnings where 1 are marked
+call-before-super3.scala	marks: 0 warnings where 1 are marked
+context-sensitivity.scala	marks: 0 warnings where 1 are marked
+cyclic-object.scala	marks: 0 warnings where 1 are marked
+global-cycle1.scala	marks: 0 warnings where 2 are marked
+global-cycle10.scala	marks: 0 warnings where 2 are marked
+global-cycle14.scala	marks: 0 warnings where 2 are marked
+global-cycle2.scala	marks: 0 warnings where 1 are marked
+global-cycle3.scala	marks: 0 warnings where 1 are marked
+global-cycle4.scala	marks: 0 warnings where 1 are marked
+global-cycle5.scala	marks: 0 warnings where 1 are marked
+global-cycle7.scala	marks: 0 warnings where 2 are marked
+global-irrelevance1.scala	marks: 0 warnings where 1 are marked
+global-irrelevance2.scala	marks: 0 warnings where 1 are marked
+global-irrelevance3.scala	marks: 0 warnings where 1 are marked
+global-irrelevance4.scala	marks: 0 warnings where 1 are marked
+global-irrelevance5.scala	marks: an error where warnings are marked: global-irrelevance5.scala:2:27: new Array takes one type argument
+global-irrelevance6.scala	marks: an error where warnings are marked: global-irrelevance6.scala:5:27: new Array takes one type argument
+global-irrelevance7.scala	marks: an error where warnings are marked: global-irrelevance7.scala:5:27: new Array takes one type argument
+global-local-var.scala	marks: 0 warnings where 1 are marked
+global-region1.scala	marks: 0 warnings where 1 are marked
+i11262.scala	marks: 0 warnings where 2 are marked
+i15883.scala	marks: 0 warnings where 1 are marked
+i9176.scala	marks: 0 warnings where 2 are marked
+inner-extends-outer.scala	marks: 0 warnings where 1 are marked
+lazy-field.scala	marks: 0 warnings where 1 are marked
+lazy-local-val.scala	marks: 0 warnings where 1 are marked
+local-class.scala	marks: 0 warnings where 1 are marked
+mutable-read1.scala	marks: 0 warnings where 1 are marked
+mutable-read2.scala	marks: 0 warnings where 1 are marked
+mutable-read3.scala	marks: an error where warnings are marked: mutable-read3.scala:6:29: new Array takes one type argument
+mutable-read4.scala	marks: 0 warnings where 1 are marked
+mutable-read5.scala	marks: 0 warnings where 1 are marked
+mutable-read6.scala	marks: 0 warnings where 1 are marked
+partial-ordering.scala	marks: 0 warnings where 1 are marked
+patmat-unapplySeq.scala	marks: an error where warnings are marked: patmat-unapplySeq.scala:4:27: new Array takes one type argument
+resolve-outer-of-parent.scala	marks: 0 warnings where 1 are marked
+resolve-parent-this.scala	marks: 0 warnings where 2 are marked
+return.scala	marks: 0 warnings where 1 are marked
+return2.scala	marks: 1 warnings where 2 are marked
+t9261.scala	marks: 0 warnings where 2 are marked
+unapply-implicit-arg.scala	marks: 0 warnings where 1 are marked
+unapply-implicit-arg2.scala	marks: 0 warnings where 1 are marked
+unapply-implicit-arg3.scala	marks: 0 warnings where 1 are marked
+unsoundness.scala	marks: 0 warnings where 1 are marked

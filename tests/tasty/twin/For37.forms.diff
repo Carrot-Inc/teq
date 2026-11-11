@@ -1,0 +1,16 @@
+3,15c3
+<   def f: List[Int] = List.apply{([1], scala.collection.immutable.Seq): java.lang.Object}[(Int, Int)]([Tuple2.apply{([2], java.lang.Object, java.lang.Object): Tuple2}[Int, Int](1, 2)]*).map{([1], Function1): scala.collection.immutable.List}[((Int, Int), (Int, Int))]((x$1: (Int, Int)) => (x$1: (Int, Int) @RuntimeChecked) match {
+<     case $1 @ Tuple2[Int, Int](x, y) => {
+<       <synthetic> val $3: ((Int, Int), Int, Int) = (Tuple2.apply{([2], java.lang.Object, java.lang.Object): Tuple2}[Int, Int](3, 4): (Int, Int) @RuntimeChecked) match {
+<         case $2 @ Tuple2[Int, Int](a, b) => Tuple3.apply{([3], java.lang.Object, java.lang.Object, java.lang.Object): Tuple3}[(Int, Int), Int, Int]($2, a, b)
+<       }
+<       val $2: (Int, Int) = $3._1
+<       val a: Int = $3._2
+<       val b: Int = $3._3
+<       Tuple2.apply{([2], java.lang.Object, java.lang.Object): Tuple2}[(Int, Int), (Int, Int)]($1, $2)
+<     }
+<   }).map{([1], Function1): scala.collection.immutable.List}[Int]((x$1: ((Int, Int), (Int, Int))) => x$1 match {
+<     case Tuple2[(Int, Int), (Int, Int)](Tuple2[Int, Int](x, y), Tuple2[Int, Int](a, b)) => ((x +{(Int): Int} y) +{(Int): Int} a) +{(Int): Int} b
+<   })
+---
+>   def f: List[Int] = <elided: List[Int]>

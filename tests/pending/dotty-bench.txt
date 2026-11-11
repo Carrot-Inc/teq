@@ -1,0 +1,2 @@
+inductive-implicits.scala	inductive-implicits.scala:64:33: no given instance of type Selector[::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[I
+string-interpolation-macro	Test.scala:4:22: exception in macro: scala.NotImplementedError: an implementation is missing (called by x in object Macro)

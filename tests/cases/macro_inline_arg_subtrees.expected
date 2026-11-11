@@ -1,0 +1,6 @@
+sum(sum(int,int),int)
+three
+literal
+apply(tree,tree)
+lambda(tree)
+sum(three,int)

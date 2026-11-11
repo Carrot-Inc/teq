@@ -1,0 +1,13 @@
+scalac 3.8.4: rejected, 3 error(s)
+extension_view_too_unspecific.scala:12:13: Found:    Null
+  Required: ?{ pick: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ pick: Any }
+extension_view_too_unspecific.scala:13:13: Found:    Nothing
+  Required: ?{ pick: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ pick: Any }
+extension_view_too_unspecific.scala:14:13: Found:    Null
+  Required: ?{ pick: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ pick: <?> }

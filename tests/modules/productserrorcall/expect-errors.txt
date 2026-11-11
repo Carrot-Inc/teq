@@ -1,0 +1,4 @@
+tests/modules/productserrorcall/b/Use.scala:8:29: error: value nosuch is not a member of String
+    def c: String = pec.Lib.s.nosuch + "b"
+                    ^^^^^^^^^^^^^^^^
+1 error found

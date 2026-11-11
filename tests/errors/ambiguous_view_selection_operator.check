@@ -1,0 +1,7 @@
+tests/errors/ambiguous_view_selection_operator.scala:7:10: error: Found:    X
+Required: ?{ +++ : ? }
+Note that implicit extension methods cannot be applied because they are ambiguous;
+both method xa and method xb provide an extension method `+++` on X
+  def t = X() +++ 1
+          ^^^
+1 error found

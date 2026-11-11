@@ -1,0 +1,5 @@
+tests/errors/argument_parenthesized_mismatch.scala:3:19: error: Found:    (1 : Int)
+Required: String
+    val result = f((1))
+                    ^
+1 error found

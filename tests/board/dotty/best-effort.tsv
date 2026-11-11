@@ -1,0 +1,7 @@
+# dotty 3.8.4 (7d4833b6) best-effort, nocrash; compiler/test/dotty/tools/dotc/BestEffortOptionsTests.scala:39; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+broken-macro-executed-in-dependency	cannot run	-	scalac's best-effort TASTy
+broken-macro-executed-in-dependent	cannot run	-	scalac's best-effort TASTy
+compiler-semanticdb-crash	cannot run	-	scalac's best-effort TASTy
+mirrors-in-dependency	cannot run	-	scalac's best-effort TASTy
+simple-type-error	cannot run	-	scalac's best-effort TASTy

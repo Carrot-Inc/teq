@@ -17,7 +17,7 @@
 # signature's infix type under `future`, its operator's backquotes taken off and put back. Then a parent
 # argument's comprehension, its pattern put in parentheses and its body in braces. Then
 # the owned program (tests/split/owned): under `--own` the class files of one root are those of the whole
-# program's build. Then every program of tests/jvm-passing.txt, and the few that build without
+# program's build. Then every case tests/run_jvm.sh passes (tests/board/suites/jvm.tsv), and the few that build without
 # printing scalac's output (`WATCH_ONLY`), gets a comment inserted and its first string literal
 # changed, each followed by an incremental build and the comparison; a program's `// jars:`
 # line puts those jars on its class path, and without one of them in the coursier cache it
@@ -35,7 +35,7 @@ WATCH_ONLY="extension_then_conversion indexed_seq_defaults inline_definition_gap
 RETYPES="entry reads facade roots state state_pair cacheable jar_state quotes"
 suite_units() {
   printf '%s\n' scripted first-builds syntax inline infix-signature for-parens owned owned-extensions owned-mirrors
-  for name in $(cat tests/jvm-passing.txt); do echo "passing/$name"; done
+  for name in $(python3 tests/support/pending.py passing jvm); do echo "passing/$name"; done
   for name in $WATCH_ONLY; do echo "watch-only/$name"; done
   for name in $RETYPES; do echo "retype/$name"; done
 }
@@ -840,8 +840,8 @@ program_case() {
   fi
   stop
 }
-# The programs of tests/jvm-passing.txt, then those of WATCH_ONLY (above).
-for name in $(cat tests/jvm-passing.txt); do
+# The cases tests/run_jvm.sh passes, then those of WATCH_ONLY (above).
+for name in $(python3 tests/support/pending.py passing jvm); do
   piece_has "passing/$name" && program_case "$name" "passing/$name"
 done
 for name in $WATCH_ONLY; do

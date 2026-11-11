@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+summon_ambiguity_rank_pair.scala:16:59: Ambiguous given instances: both given instance c in trait C and given instance a in trait A match type Ops of parameter x of method summon in object Predef

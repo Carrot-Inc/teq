@@ -1,0 +1,28 @@
+# scalac 3.8.4's own whole and split builds of this case write these files differently: written by
+# tests/modules-scalac-split.sh, never by hand; tests/modules.sh requires teq's two builds to differ
+# in the rows they stand for, and in these files alone.
+sources f3e6b559e3af11c8
+jvm b/gdb/IntBox.class
+jvm b/gdb/IntBox.tasty
+jvm b/gdb/QualifiedImpl.class
+jvm b/gdb/QualifiedImpl.tasty
+jvm b/gdb/Site$Obj$.class
+jvm b/gdb/Site$Plain.class
+jvm b/gdb/Site.class
+jvm b/gdb/Site.tasty
+jvm b/gdb/Sorted.class
+jvm b/gdb/Sorted.tasty
+js b/gdb/IntBox.sjsir
+js b/gdb/IntBox.tasty
+js b/gdb/QualifiedImpl.sjsir
+js b/gdb/QualifiedImpl.tasty
+js b/gdb/Site$Obj$.sjsir
+js b/gdb/Site$Plain.sjsir
+js b/gdb/Site.tasty
+js b/gdb/Sorted.sjsir
+js b/gdb/Sorted.tasty
+jvm c/gdc/Here$Local.class
+jvm c/gdc/Here.class
+jvm c/gdc/Here.tasty
+js c/gdc/Here$Local.sjsir
+js c/gdc/Here.tasty

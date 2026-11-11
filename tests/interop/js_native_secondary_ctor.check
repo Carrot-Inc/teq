@@ -1,0 +1,4 @@
+tests/interop/js_native_secondary_ctor.scala:11:26: error: A secondary constructor of a native JS class may only call the primary constructor
+    def this(b: Boolean) = this("x")
+                           ^^^^^^^^^
+1 error found

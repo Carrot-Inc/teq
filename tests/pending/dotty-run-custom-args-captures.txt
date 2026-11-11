@@ -1,0 +1,4 @@
+colltest5	CollectionStrawManCC5_1.scala:25:44: expected end of statement, found identifier
+minicheck-mutable.scala	minicheck-mutable.scala:59:49: expected ',' or ')', found identifier
+minicheck-toplevel.scala	minicheck-toplevel.scala:74:21: expected ',' or ')', found identifier
+minicheck.scala	minicheck.scala:75:21: expected ',' or ')', found identifier

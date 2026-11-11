@@ -1,0 +1,25 @@
+# test	verdict	the other ways	the first line of the difference
+case_objects	pass	-	
+class_synthesis	pass	-	
+defaults	pass	-	
+entry_points	pass	-	
+enums	pass	-	
+erasure	pass	-	
+exports	pass	-	
+given_instances	pass	-	
+givens	pass	-	
+java_package	pass	-	
+member_meet	fail	-	not in scalac's layout: < meetmin/Api threeResult(Lmeetmin/A;Ljava/lang/String;)Ljava/lang/String; public,static
+mirror_forwarders	pass	-	
+nested_objects	pass	-	
+object_forwarders	pass	-	
+private_params	pass	-	
+selectors	pass	-	
+super_accessors	pass	-	
+target_name_units	fail	-	not in scalac's layout: < targetnameunits/TN $uD83D()I public
+target_names	pass	-	
+trait_fields	pass	-	
+trait_params	pass	-	
+trait_statics	pass	-	
+value_classes	pass	-	
+volatile	pass	-	

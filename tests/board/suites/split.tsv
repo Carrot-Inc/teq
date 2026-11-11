@@ -1,0 +1,35 @@
+# test	verdict	the other ways	the first line of the difference
+anon_order	pass	-	
+capture	pass	-	
+cats_kernel	fail	-	cats_kernel with cats.arrow per file under --hot
+cycle	pass	-	
+cycles	pass	-	
+enum_shared	pass	-	
+exceptions	pass	-	
+get_class_fork	pass	-	
+given_memo	pass	-	
+held	pass	-	
+inferred	pass	-	
+inherit	pass	-	
+inline	pass	-	
+inline_stored_tests	pass	-	
+macro_run_types_std_body	pass	-	
+macro_run_types_std_body_walk	pass	-	
+outline	pass	-	
+outline_fresh	pass	-	
+overloads	pass	-	
+publish	pass	-	
+quote_copies	pass	-	
+quote_keys	pass	-	
+reflect	pass	-	
+retype	pass	-	
+retype_init	pass	-	
+retype_quotes	pass	-	
+retype_reads	pass	-	
+retype_roots	pass	-	
+retype_state	pass	-	
+retype_state_pair	pass	-	
+small	pass	-	
+storage_unrelated	pass	-	
+taken	pass	-	
+tuple_match_patdef	pass	-	

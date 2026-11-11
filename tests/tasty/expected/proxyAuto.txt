@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/proxyAuto.tasty (TASTy 28.8, 544 bytes)
+package fix.inlineproxy
+@SourceFile object proxyAuto extends Object, ProxyDerivation {
+  <synthetic> private def writeReplace(): AnyRef = ...
+}
+

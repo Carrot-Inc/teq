@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/UrC.tasty (TASTy 28.8, 392 bytes)
+package fix.unaryref
+@SourceFile class UrC() extends Object {
+  def h: UrC = ...
+  val x: 42 = ...
+}
+

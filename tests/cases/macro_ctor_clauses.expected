@@ -1,0 +1,9 @@
+Apply(Apply(Select(New(C), <init>), [Literal(1)]), [Literal(x)])
+Apply(Apply(Apply(TypeApply(Select(New(D), <init>), [Int]), [Literal(1)]), [Literal(2)]), [Literal(u)])
+Apply(Apply(Apply(TypeApply(Select(New(D), <init>), [Int]), [Literal(1)]), [Literal(2)]), [Literal(u)])
+Apply(Apply(Select(New(C), <init>), [NamedArg(a, Literal(1))]), [NamedArg(b, Literal(y))])
+Apply(Apply(Apply(Select(New(F), <init>), [Literal(1)]), [Literal(2)]), [Literal(3)])
+Apply(Apply(TypeApply(Select(New(G), <init>), [Int, String]), [Literal(1)]), [Literal(g)])
+Apply(Apply(Select(New(BN), <init>), [Apply(Select(Ident(n), +), [Literal(1)])]), [Literal(2)])
+(b: scala.Predef.String)C <init> C
+(c: scala.Int)F <init> F

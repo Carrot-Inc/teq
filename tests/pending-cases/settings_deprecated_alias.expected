@@ -1,0 +1,3 @@
+scalac 3.8.4: rejected, 1 error(s)
+warning: Option -Xfatal-warnings is a deprecated alias: use -Werror instead
+error: No warnings can be incurred under -Werror

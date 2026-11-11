@@ -1,0 +1,5 @@
+warning: there were 3 deprecation warnings; re-run with --deprecation for details
+root 3
+root q=x
+a b c
+1 2 List(3)

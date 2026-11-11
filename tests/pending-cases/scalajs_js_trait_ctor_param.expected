@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+scalajs_js_trait_ctor_param.scala:18:34: A non-native JS trait cannot have constructor parameters

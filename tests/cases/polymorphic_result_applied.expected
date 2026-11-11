@@ -1,0 +1,6 @@
+List(a, List(1), b)
+List(a, List(1), b)
+List(a, List(2), b)
+List(1, 1, 2)
+List(2, 1, 2)
+List(1, 2, 1)

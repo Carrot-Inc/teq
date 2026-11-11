@@ -1,0 +1,3 @@
+scalac 3.8.4: rejected, 2 error(s)
+hk_param_constructor_arity.scala:7:15: Too many type arguments for G[_]
+hk_param_constructor_arity.scala:8:34: Not enough type arguments for F[X, Y]

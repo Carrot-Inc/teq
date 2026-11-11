@@ -1,0 +1,2 @@
+i16191.scala	output: line 1: the .check has 'List(private final Context C.ctx)', the program printed 'List(private Context C.ctx, private java.lang.Object C.given_Context$lzy, private java.lang.Object C.given_C$lzy)'
+tuple-cons.scala	tuple-cons.scala:42:7: expected 'case', found identifier

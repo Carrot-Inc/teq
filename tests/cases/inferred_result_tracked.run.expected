@@ -1,0 +1,4 @@
+tests/cases/inferred_result_tracked.scala:13:16: warning: cannot override val parameter value b in class A
+    override val b = IntBox
+                 ^
+3

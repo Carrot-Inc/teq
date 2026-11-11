@@ -1,0 +1,7 @@
+scalac 3.8.4: rejected, 6 error(s)
+scalajs_js_non_native_members.scala:19:6: A non-native JS class cannot declare a concrete method named `apply` without `@JSName`
+scalajs_js_non_native_members.scala:22:6: @JSBracketAccess is not allowed in non-native JS classes
+scalajs_js_non_native_members.scala:25:6: @JSBracketCall is not allowed in non-native JS classes
+scalajs_js_non_native_members.scala:29:6: A member named apply represents function application in JavaScript. A parameterless member should be exported as a property. You must add @JSName("apply")
+scalajs_js_non_native_members.scala:38:6: A member named apply represents function application in JavaScript. A parameterless member should be exported as a property. You must add @JSName("apply")
+scalajs_js_non_native_members.scala:47:6: A member named apply represents function application in JavaScript. A parameterless member should be exported as a property. You must add @JSName("apply")

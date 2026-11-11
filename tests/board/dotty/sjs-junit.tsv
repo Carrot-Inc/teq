@@ -1,0 +1,5 @@
+# dotty 3.8.4 (7d4833b6) sjs-junit, run; project/Build.scala:2194; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+test	cannot run	-	an sbt build with Scala.js's JUnit runner
+test-require-async-await	cannot run	-	an sbt build with Scala.js's JUnit runner
+test-require-multi-modules	cannot run	-	an sbt build with Scala.js's JUnit runner

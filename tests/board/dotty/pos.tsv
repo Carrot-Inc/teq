@@ -1,0 +1,3628 @@
+# dotty 3.8.4 (7d4833b6) pos, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:36-37; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+10077.scala	fail	check:fail	10077.scala:3:45: type argument f does not have the same kind as its bound [_[_]]
+10510.scala	fail	check:fail	10510.scala:16:18: type mismatch: found STrue, required SBool[Not[B]]
+10747-onnxmin.scala	pass	check:pass	
+10747-shapeless-min-spec.scala	pass	check:pass	
+10747-shapeless-min.scala	pass	check:pass	
+10867.scala	pass	check:pass	
+11463.scala	pass	check:pass	
+11484	fail	-	java source: teq reads none
+11512	fail	-	java source: teq reads none
+11973.scala	pass	check:pass	
+11982-a	pass	check:pass	
+12093.scala	pass	check:pass	
+12278.scala	pass	check:pass	
+12800.scala	pass	check:pass	
+12944	pass	check:pass	
+13455.scala	fail	check:fail	13455.scala:5:9: type z not found
+13469.scala	pass	check:pass	
+13491.scala	pass	check:pass	
+13495.scala	pass	check:fail	
+13633.scala	fail	check:fail	13633.scala:26:31: expected '=>', found identifier
+13855.scala	pass	check:pass	
+14952.scala	fail	check:fail	option: -Xkind-projector:underscores (teq has no flag for it)
+1567	pass	check:pass	
+16583.scala	pass	check:fail	
+16654.scala	pass	check:fail	
+16727	fail	-	java source: teq reads none
+17077.scala	fail	check:fail	17077.scala:15:12: this is not a case class or enum case
+18789.scala	pass	check:pass	
+20088.scala	pass	check:pass	
+20088b.scala	pass	check:pass	
+20519.scala	pass	check:pass	
+20519b.scala	pass	check:pass	
+20519c.scala	pass	check:pass	
+20538.scala	pass	check:pass	
+20538b.scala	pass	check:pass	
+21400.scala	fail	check:fail	option: -Xkind-projector:underscores (teq has no flag for it)
+21400b.scala	fail	check:fail	option: -Xkind-projector:underscores (teq has no flag for it)
+21681d.scala	pass	check:pass	
+22219.scala	pass	check:pass	
+22219b.scala	pass	check:pass	
+23056.scala	pass	check:fail	
+3190.scala	fail	check:fail	3190.scala:8:3: None of the overloaded alternatives of method overload in object Test with types
+3403	fail	-	java source: teq reads none
+6322.scala	pass	check:pass	
+6362.scala	pass	check:pass	
+6687.scala	fail	check:fail	6687.scala:9:26: type mismatch: found "", required T[X]
+6697.scala	pass	check:pass	
+6709.scala	fail	check:fail	6709.scala:36:12: this type cannot be tested at runtime: ?
+7512.scala	pass	check:pass	
+8313.scala	pass	check:pass	
+8647.scala	pass	check:pass	
+8649.scala	pass	check:pass	
+8778.scala	fail	check:fail	8778.scala:17:48: value asInstanceOf is not a member of =:=[Int, Int]
+8905-2.scala	pass	check:pass	
+8905.scala	pass	check:pass	
+9239.scala	fail	check:fail	9239.scala:17:29: type argument --[d] does not conform to upper bound Bin
+9623.scala	fail	check:fail	9623.scala:21:5: type mismatch: found T[++:[Int, ++:[Double, TNil]]], required T[:--[++:[Int, ++:[String, ++:[Double, TNil]]], String]]
+9675.scala	fail	check:fail	9675.scala:12:65: No singleton value available for IndexOf[[A] =>> List[A], ++:[[A] =>> List[A], ++:[Option, TNil]]]; eligible singleton types for `ValueOf` synthesis include literals and stable paths.
+9757.scala	fail	check:fail	9757.scala:4:12: type newType not found
+9871.scala	pass	check:pass	
+9890.scala	pass	check:pass	
+A.scala	pass	check:pass	
+AE-23b20eba14de058f02b69cb1093063fe12b639fb.scala	pass	check:pass	
+AE-9a131723f09b9f77c99c52b709965e580a61706e.scala	pass	check:pass	
+Arrays.scala	pass	check:pass	
+B.scala	pass	check:pass	
+Bridges.scala	pass	check:pass	
+CanThrow.scala	fail	check:fail	CanThrow.scala:6:48: expected ',' or ')', found identifier
+Coder.scala	pass	check:fail	
+CoderTrait.scala	pass	check:fail	
+Dynamic.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+ErasureAnd.scala	pass	check:pass	
+Foo.scala	pass	check:pass	
+FromString-cb-companion.scala	fail	check:fail	FromString-cb-companion.scala:11:3: not found: N
+FromString-named.scala	pass	check:pass	
+FromString-typeparam.scala	pass	check:pass	
+FromString.scala	fail	check:fail	FromString.scala:7:27: missing parameter type
+HelloWorld.scala	pass	check:pass	
+IArrayToArraySeq.scala	pass	check:pass	
+Iter2.scala	pass	check:pass	
+Iterable.scala	fail	check:fail	Iterable.scala:40:75: value asInstanceOf is not a member of IterableCompanion[Iterable] & CollectionCompanion[CC]
+KillLambdaLift.scala	pass	check:fail	
+Labels.scala	pass	check:pass	
+List1.scala	pass	check:pass	
+MathSpec.scala	pass	check:fail	
+Meter.scala	pass	check:fail	
+Monoid.scala	pass	check:pass	
+NoCyclicReference.scala	pass	check:pass	
+Orderings.scala	pass	check:pass	
+Repeated.scala	fail	check:fail	Repeated.scala:152:64: type mismatch: found WithFilter[A, Seq], required WithFilter[A, Repeated]
+Result.scala	pass	check:pass	
+S1.scala	pass	check:pass	
+S3.scala	pass	check:pass	
+S5.scala	pass	check:pass	
+S8.scala	pass	check:pass	
+SI-4012-a.scala	pass	check:pass	
+SI-4012-b.scala	pass	check:pass	
+SI-5788.scala	pass	check:pass	
+SI-7060.scala	pass	check:pass	
+SI-7100.scala	pass	check:pass	
+SI-7638.scala	pass	check:pass	
+SI-7638a.scala	pass	check:pass	
+StringContext.scala	fail	check:fail	StringContext.scala:327:7: expected '}', found 'val'
+Transactions.scala	pass	check:pass	
+Tuple.Drop.scala	pass	check:pass	
+Tuple.Elem.scala	pass	check:pass	
+TupleReverse.scala	pass	check:fail	
+TupleReverseOnto.scala	pass	check:fail	
+X.scala	fail	check:fail	X.scala:8:119: type argument m.MirroredElemTypes does not conform to upper bound [_[_]] =>> Any
+Z.scala	pass	check:pass	
+abstract-inline-val.scala	fail	check:fail	abstract-inline-val.scala:6:18: inline value must have a literal constant type
+abstract-tracked-2.scala	fail	check:fail	abstract-tracked-2.scala:5:11: expected end of statement, found 'val'
+abstract-tracked.scala	fail	check:fail	abstract-tracked.scala:5:11: expected end of statement, found 'val'
+abstract.scala	pass	check:pass	
+adhoc-extension	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+alias-new.scala	pass	check:pass	
+alias.scala	pass	check:pass	
+aliasNew.scala	fail	check:fail	aliasNew.scala:6:6: type mismatch: found "abc", required Nothing
+aliases.scala	pass	check:pass	
+alphanumeric-infix-operator-compat	cannot run	-	an older compiler: a group is compiled by scalac 3.0.0
+and-inf.scala	fail	check:fail	and-inf.scala:12:43: type mismatch: found B, required A
+andtypes.scala	pass	check:pass	
+annot-17242.scala	pass	check:pass	
+annot-17939.scala	pass	check:pass	
+annot-17939b.scala	pass	check:pass	
+annot-18064.scala	pass	check:pass	
+annot-19846.scala	pass	check:pass	
+annot-19846b.scala	pass	check:pass	
+annot-5789.scala	pass	check:pass	
+annot-body.scala	pass	check:pass	
+annot-bootstrap.scala	pass	check:pass	
+annot-constant	fail	-	java source: teq reads none
+annot-default-arg-22874.scala	pass	check:fail	
+annot-inner.scala	pass	check:pass	
+annot-main-22364.scala	pass	check:pass	
+annot-main-22364b.scala	pass	check:pass	
+annot-main-22364c.scala	pass	check:pass	
+annot-refining-avoid.scala	pass	check:fail	
+annot.scala	pass	check:fail	
+annotDepMethType.scala	pass	check:fail	
+annotations	fail	-	java source: teq reads none
+annotations-in-java	fail	-	java source: teq reads none
+annotations.scala	pass	check:pass	
+annotations1	pass	check:pass	
+annotations2.scala	pass	check:fail	
+annotationsJava	fail	-	java source: teq reads none
+annotationsJavaRepeatable	fail	-	java source: teq reads none
+anonBridge.scala	pass	check:pass	
+anonClassSubtyping.scala	pass	check:pass	
+anykind.scala	fail	check:fail	anykind.scala:25:18: type AnyKind not found
+applied_constructor_types.scala	fail	check:fail	applied_constructor_types.scala:3:19: expected ':', found 'val'
+apply-equiv.scala	pass	check:pass	
+approximateUnion.scala	fail	check:fail	approximateUnion.scala:48:45: type mismatch: found (X.this.x : D), required C[? >: A & B <: (A | B)] & D
+argDenot-alpakka.min.scala	pass	check:pass	
+argDenot-alpakka.scala	fail	check:fail	argDenot-alpakka.scala:17:8: contravariant type In occurs in invariant position in type  = Flow[In, O, Mat] of type Repr
+array-clone.scala	pass	check:pass	
+array-interfaces.scala	pass	check:fail	
+array-overload.scala	fail	check:fail	array-overload.scala:7:24: type mismatch: found Array[Int], required Array[Byte]
+arrays2.scala	pass	check:pass	
+arrays3.scala	fail	check:fail	arrays3.scala:6:21: value length is not a member of Repr
+assignments.scala	fail	check:fail	assignments.scala:23:3: this expression cannot be assigned to
+attributes.scala	pass	check:pass	
+autoTuplingTest.scala	pass	check:pass	
+automatic-tupling-of-function-parameters.scala	pass	check:pass	
+avoid.scala	pass	check:pass	
+backquoted_type_operator.scala	pass	check:pass	
+bad-footprint.scala	pass	check:pass	
+basicFromTasty.scala	pass	check:pass	
+bcode_throw_null	pass	check:pass	
+better-fors-given.scala	fail	check:fail	better-fors-given.scala:38:7: expected '=', found '@'
+better-fors-i21804.scala	pass	check:pass	
+bigint.scala	pass	check:pass	
+blockescapes.scala	pass	check:pass	
+boundary-variations.scala	pass	check:fail	
+bounds.scala	pass	check:pass	
+bson	fail	check:fail	bson.scala:24:66: expected ':', found '['
+bubbleUpNothing.scala	pass	check:pass	
+builders.scala	pass	check:pass	
+byNameVarargs.scala	pass	check:pass	
+byname-implicits-1.scala	pass	check:pass	
+byname-implicits-10.scala	pass	check:pass	
+byname-implicits-12.scala	pass	check:pass	
+byname-implicits-13.scala	fail	check:fail	byname-implicits-13.scala:51:46: expected a pattern, found identifier
+byname-implicits-14.scala	fail	check:fail	byname-implicits-14.scala:51:46: expected a pattern, found identifier
+byname-implicits-15.scala	pass	check:pass	
+byname-implicits-19.scala	pass	check:pass	
+byname-implicits-2.scala	pass	check:pass	
+byname-implicits-20.scala	pass	check:pass	
+byname-implicits-22.scala	pass	check:pass	
+byname-implicits-23.scala	pass	check:pass	
+byname-implicits-24.scala	pass	check:pass	
+byname-implicits-25.scala	pass	check:pass	
+byname-implicits-27.scala	pass	check:pass	
+byname-implicits-29.scala	pass	check:pass	
+byname-implicits-3.scala	pass	check:pass	
+byname-implicits-7.scala	pass	check:pass	
+byname-implicits-8.scala	pass	check:pass	
+byname-implicits-9.scala	pass	check:pass	
+bynamefuns.scala	pass	check:pass	
+caps-universal.scala	fail	check:fail	caps-universal.scala:4:13: type -> not found
+capture-variance.scala	fail	check:fail	capture-variance.scala:10:27: type mismatch: found List[Cov2[Any]], required List[Cov2[Hi]]
+capture.scala	pass	check:pass	
+capturedVars.scala	pass	check:pass	
+capturedVars2.scala	pass	check:pass	
+case-semi.scala	pass	check:pass	
+case-signature.scala	pass	check:pass	
+caseClassInMethod.scala	pass	check:pass	
+caseaccs.scala	pass	check:pass	
+caseclass-access.scala	pass	check:pass	
+cb-companion-joins.scala	fail	check:fail	cb-companion-joins.scala:25:11: expected end of statement, found ':'
+cbproxy-expansion.scala	fail	check:fail	cbproxy-expansion.scala:5:11: a context bound needs a type constructor with one parameter
+cc-backwards-compat	fail	check:fail	Iter.scala:5:13: expected '=>', found identifier
+cc-self-fluid	fail	check:fail	Test_2.scala:8:20: expected '=>', found identifier
+cc-use-alternatives.scala	fail	check:fail	cc-use-alternatives.scala:7:16: expected a declaration, found identifier
+cfcrash.scala	pass	check:pass	
+chan.scala	pass	check:pass	
+chang	fail	-	java source: teq reads none
+change-lambda.scala	pass	check:pass	
+checkInstantiable.scala	pass	check:pass	
+class-dependent-extension-method.scala	pass	check:pass	
+class-gadt	fail	check:fail	inheritance.scala:12:24: type mismatch: found T, required Int
+class-refinement.scala	pass	check:pass	
+classWithCompObj.scala	pass	check:pass	
+classtag-typetest	pass	check:pass	
+clear-retains-for-inferred-types	fail	check:fail	S1.scala:4:58: expected a declaration, found 'this'
+closure-args.scala	fail	check:fail	closure-args.scala:10:3: expected a definition, found '('
+cls.scala	pass	check:pass	
+cls1.scala	pass	check:pass	
+clsrefine.scala	pass	check:pass	
+collectGenericCC.scala	pass	check:fail	
+combine.scala	fail	check:fail	combine.scala:5:27: expected ':', found '['
+comma-separated.scala	pass	check:pass	
+comp-rec-test.scala	pass	check:fail	
+companions.scala	pass	check:pass	
+compare-singletons.scala	pass	check:pass	
+compile.scala	pass	check:pass	
+compile1.scala	pass	check:pass	
+complex-self-call.scala	pass	check:pass	
+compound.scala	pass	check:pass	
+concats.scala	pass	check:pass	
+conforms.scala	pass	check:pass	
+conformsWild.scala	pass	check:pass	
+constants.scala	pass	check:pass	
+constfold.scala	pass	check:fail	
+constr-proxy-shadowing.scala	pass	check:pass	
+constraining-lub.scala	pass	check:pass	
+constrs.scala	pass	check:pass	
+constvalue-of-failed-match-type.scala	pass	check:pass	
+consume.scala	pass	check:fail	
+contextbounds-for-poly-functions.scala	pass	check:pass	
+contextbounds-implicits-old.scala	pass	check:fail	
+contrib467.scala	pass	check:pass	
+conversion-function-prototype.scala	fail	check:fail	conversion-function-prototype.scala:19:66: missing parameter type
+convert.scala	fail	check:fail	convert.scala:8:25: ambiguous extension methods: both given_Conversion_Int_String and given_Conversion_Int_Date provide convert on Int
+covariant-opaque.scala	pass	check:pass	
+creators	pass	check:pass	
+curried-colon-lambda.scala	pass	check:pass	
+curried.scala	pass	check:pass	
+cycle	fail	-	java source: teq reads none
+cyclics-pos.scala	pass	check:pass	
+debug-reset-local-attrs.scala	pass	check:pass	
+default-getter-variance.scala	pass	check:pass	
+default-getter.scala	pass	check:pass	
+default-param-interface.scala	pass	check:pass	
+default-super.scala	pass	check:pass	
+deferred-givens-singletons.scala	fail	check:fail	deferred-givens-singletons.scala:5:12: expected end of statement, found ':'
+deferred-givens.scala	fail	check:fail	deferred-givens.scala:7:13: expected end of statement, found ':'
+deferredSummon.scala	fail	check:fail	deferredSummon.scala:14:12: expected end of statement, found ':'
+delambdafy-lambdalift.scala	pass	check:pass	
+dep-context-bounds.scala	fail	check:fail	dep-context-bounds.scala:6:11: a context bound needs a type constructor with one parameter
+dep-match.scala	pass	check:pass	
+dep-poly-class.scala	pass	check:pass	
+depclass-1.scala	fail	check:fail	depclass-1.scala:2:17: expected ':', found 'val'
+dependent-annot-type-param.scala	pass	check:pass	
+dependent-annot.scala	pass	check:pass	
+dependent-annot2.scala	pass	check:pass	
+dependent-closures.scala	pass	check:pass	
+dependent-extractors.scala	pass	check:pass	
+dependent-implicits.scala	fail	check:fail	dependent-implicits.scala:5:19: type mismatch: found T{type X = String}, required String
+depfun.scala	pass	check:pass	
+depfuntype.scala	pass	check:pass	
+depmet_1_pos.scala	pass	check:pass	
+depmet_implicit_chaining_zw.scala	pass	check:pass	
+depmet_implicit_norm_ret.scala	fail	check:fail	depmet_implicit_norm_ret.scala:29:42: type mismatch: found ZipWith[S => Nothing => Nothing]{type T = Stream[S] => Stream[Nothing] => Stream[Nothing]}, required ZipWith[A => B]
+depmet_implicit_tpbetareduce.scala	fail	check:fail	depmet_implicit_tpbetareduce.scala:9:10: covariant type x occurs in invariant position in type  = List[x] of type m
+deprecated-no-kind-polymorphism-anykind.scala	fail	check:fail	deprecated-no-kind-polymorphism-anykind.scala:5:16: type AnyKind not found
+derive-eq.scala	fail	check:fail	derive-eq.scala:16:53: Values of types Lst[Lst[One]] and Lst[Lst[Two]] cannot be compared with == or !=
+derives-obj.scala	pass	check:pass	
+devalify.scala	pass	check:pass	
+doWhile.scala	fail	check:fail	doWhile.scala:3:3: `do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
+duplicate-parents.scala	pass	check:pass	
+dynamicExtendsNoImport.scala	pass	check:fail	
+eff-compose.scala	fail	check:fail	eff-compose.scala:17:12: type mismatch: found A => (E) ?=> B, required A => B
+elidable-tparams.scala	pass	check:fail	
+end-given.scala	pass	check:pass	
+end-nested.scala	pass	check:pass	
+endmarkers.scala	pass	check:pass	
+ensuring.scala	pass	check:fail	
+enum-List-control.scala	pass	check:fail	
+enum-companion-first.scala	pass	check:pass	
+enum-interop.scala	pass	check:pass	
+enum-refinement.scala	fail	check:fail	enum-refinement.scala:9:19: expected ':', found 'val'
+enum-variance.scala	pass	check:pass	
+enum-widen.scala	fail	check:fail	enum-widen.scala:14:8: type mismatch: found Option[Nothing], required Some[Int]
+enums-capture.scala	pass	check:pass	
+erased-24.scala	fail	check:fail	erased-24.scala:11:11: 'erased' is not part of the supported Scala subset
+erased-args-lifted.scala	fail	check:fail	erased-args-lifted.scala:4:11: 'erased' is not part of the supported Scala subset
+erased-asInstanceOf.scala	fail	check:fail	erased-asInstanceOf.scala:4:14: 'erased' is not part of the supported Scala subset
+erased-class-as-args.scala	fail	check:fail	erased-class-as-args.scala:9:30: expected ',' or ')', found identifier
+erased-class-separate	fail	check:fail	Test_2.scala:2:1: 'erased' is not part of the supported Scala subset
+erased-conforms.scala	pass	check:fail	
+erased-deep-context.scala	fail	check:fail	erased-deep-context.scala:5:15: 'erased' is not part of the supported Scala subset
+erased-export.scala	fail	check:fail	erased-export.scala:4:3: 'erased' is not part of the supported Scala subset
+erased-extension-method.scala	fail	check:fail	erased-extension-method.scala:4:11: 'erased' is not part of the supported Scala subset
+erased-lub-2.scala	pass	check:pass	
+erased-lub.scala	pass	check:pass	
+erased-pathdep-1.scala	fail	check:fail	erased-pathdep-1.scala:9:29: 'erased' is not part of the supported Scala subset
+erased-pathdep-2.scala	fail	check:fail	erased-pathdep-2.scala:9:18: expected ':', found 'val'
+erased-pure.scala	fail	check:fail	erased-pure.scala:8:12: 'erased' is not part of the supported Scala subset
+erased-singleton.scala	fail	check:fail	erased-singleton.scala:6:3: 'erased' is not part of the supported Scala subset
+erased-soft-keyword.scala	fail	check:fail	erased-soft-keyword.scala:3:16: 'erased' is not part of the supported Scala subset
+erased-typedef.scala	pass	check:pass	
+erasure-array.scala	pass	check:pass	
+erasure-nsquared.scala	pass	check:pass	
+escapes2.scala	pass	check:pass	
+escapingRefs.scala	pass	check:pass	
+eta.scala	pass	check:pass	
+exbound.scala	pass	check:pass	
+exhaust_2.scala	pass	check:pass	
+exhaust_alternatives.scala	pass	check:pass	
+existential-java-case-class	fail	-	java source: teq reads none
+existentials-harmful.scala	pass	check:fail	
+existentials.scala	pass	check:pass	
+expeimental-flag-with-lang-feature-2.scala	fail	check:fail	expeimental-flag-with-lang-feature-2.scala:6:27: expected ']', found '='
+experimental-erased-2.scala	pass	check:fail	
+experimental-erased.scala	pass	check:fail	
+experimental-flag.scala	pass	check:pass	
+experimental-import-with-top-level-val-underscore.scala	pass	check:pass	
+experimental-imports-empty.scala	pass	check:pass	
+experimental-imports-top.scala	fail	check:fail	experimental-imports-top.scala:7:1: 'erased' is not part of the supported Scala subset
+experimental-inheritance.scala	pass	check:pass	
+experimental-package-imports.scala	pass	check:pass	
+experimentalErased.scala	fail	check:fail	experimentalErased.scala:10:1: 'erased' is not part of the supported Scala subset
+explicitOuter.scala	pass	check:fail	
+exponential-spec.scala	fail	check:fail	exponential-spec.scala:8:10: expected ',' or ')', found '_'
+export-enum.scala	pass	check:pass	
+export-in-extension-rename.scala	pass	check:pass	
+export-main.scala	pass	check:pass	
+export-opaque.scala	pass	check:pass	
+export-param-flags	pass	check:pass	
+export-proxies.scala	pass	check:pass	
+extend-java-enum.scala	pass	check:pass	
+extmethods-2.scala	pass	check:pass	
+extmethods.scala	pass	check:pass	
+extractor-types.scala	pass	check:pass	
+extractors.scala	fail	check:fail	extractors.scala:29:12: Apply is not a case class, so it cannot be used as a pattern
+f-bounded-case-class.scala	pass	check:pass	
+f112.scala	fail	check:fail	f112.scala:6:10: this is not a case class or enum case
+factory-conversion.scala	fail	check:fail	factory-conversion.scala:6:17: type mismatch: found List, required Factory[Int, Col[Int]]
+false-companion	pass	check:pass	
+fbounds.scala	pass	check:pass	
+fewer-braces.scala	pass	check:pass	
+fieldsOf.scala	fail	check:fail	fieldsOf.scala:11:37: type mismatch: found From[Person], required (name : String, age : Int)
+finalvals.scala	pass	check:pass	
+first-class-patterns.scala	pass	check:pass	
+flatten.scala	pass	check:pass	
+flow.scala	pass	check:pass	
+folds.scala	fail	check:fail	folds.scala:14:32: type mismatch: found a, required Nothing
+freezeBounds.scala	pass	check:pass	
+function-arity.scala	pass	check:pass	
+functions1.scala	pass	check:pass	
+functorial-functors.scala	pass	check:pass	
+gadt-EQK.scala	fail	check:fail	gadt-EQK.scala:9:33: type mismatch: found F[A], required G[A]
+gadt-GadtStlc.scala	fail	check:fail	gadt-GadtStlc.scala:119:42: expected ']', found '='
+gadt-TailCalls.scala	pass	check:pass	
+gadt-TypeSafeLambda.scala	fail	check:fail	gadt-TypeSafeLambda.scala:60:18: expected ']', found '='
+gadt-accumulatable.scala	pass	check:pass	
+gadt-all-params.scala	pass	check:pass	
+gadt-alt-doc1.scala	pass	check:pass	
+gadt-banal.scala	pass	check:pass	
+gadt-cast-if.scala	pass	check:pass	
+gadt-cast-singleton.scala	fail	check:fail	gadt-cast-singleton.scala:13:7: type mismatch: found T, required L
+gadt-complexEQ.scala	fail	check:fail	gadt-complexEQ.scala:9:29: type mismatch: found D, required B
+gadt-eval.scala	pass	check:pass	
+gadt-foo.scala	pass	check:pass	
+gadt-hk-ordering.scala	fail	check:fail	gadt-hk-ordering.scala:13:26: type mismatch: found Option[Int], required F[Int]
+gadt-hkt-hi-bounds.scala	fail	check:fail	gadt-hkt-hi-bounds.scala:8:18: type mismatch: found F[A], required Int
+gadt-hkt-lo-bounds.scala	fail	check:fail	gadt-hkt-lo-bounds.scala:7:24: type mismatch: found 0, required F[A]
+gadt-hkt-ordering.scala	fail	check:fail	gadt-hkt-ordering.scala:7:23: type mismatch: found F[X], required G[X]
+gadt-hkt-usage.scala	fail	check:fail	gadt-hkt-usage.scala:9:25: type mismatch: found Foo[Int], required F[Int]
+gadt-infer-ascription.scala	pass	check:pass	
+gadt-inference.scala	pass	check:pass	
+gadt-param-unification.scala	pass	check:pass	
+gadt-simpleEQ.scala	fail	check:fail	gadt-simpleEQ.scala:11:25: type mismatch: found A, required C
+gadt-strip-refinement.scala	pass	check:pass	
+gadt-upcast.scala	fail	check:fail	gadt-upcast.scala:8:28: type mismatch: found 0, required A
+gadt-variant-hkt.scala	fail	check:fail	gadt-variant-hkt.scala:14:9: type mismatch: found F[Int], required Option[Int]
+gadts2.scala	pass	check:pass	
+gen-traversable-methods.scala	pass	check:pass	
+getset.scala	pass	check:pass	
+given-constrapps.scala	pass	check:fail	
+given-loop-prevention.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+given-owner-disambiguate.scala	pass	check:pass	
+given-pattern.scala	pass	check:fail	
+given-priority.scala	pass	check:pass	
+given-syntax.scala	fail	check:fail	given-syntax.scala:62:19: expected ':', found identifier
+givenFallback.scala	fail	check:fail	givenFallback.scala:4:18: inline value must have a literal constant type
+givenIn.scala	pass	check:pass	
+gosh.scala	pass	check:fail	
+gui.scala	pass	check:pass	
+hashhash-overloads.scala	pass	check:pass	
+help.scala	fail	check:fail	option: -help (teq has no flag for it)
+hk-deep-subtype.scala	pass	check:pass	
+hk-match	pass	check:pass	
+hk-reduce-variance.scala	pass	check:pass	
+hk-subtyping.scala	pass	check:pass	
+hk-variance.scala	pass	check:pass	
+hk.scala	fail	check:fail	hk.scala:34:10: contravariant type U occurs in invariant position in type  = Ident[U] of type ThisType
+hkRefAlias.scala	pass	check:pass	
+hkarray.scala	pass	check:pass	
+hkgadt.scala	pass	check:pass	
+hklower.scala	pass	check:pass	
+hklub0.scala	pass	check:pass	
+hkrange.scala	pass	check:pass	
+ho-implicits.scala	fail	check:fail	ho-implicits.scala:8:4: no given instance of type String was found for parameter of (String) ?=> Int
+homonym.scala	pass	check:pass	
+hygiene.scala	pass	check:pass	
+hylolib	fail	check:fail	Collection.scala:9:15: expected end of statement, found ':'
+hylolib-cb	fail	check:fail	Collection.scala:8:15: expected end of statement, found ':'
+hylolib-cb-extract.scala	fail	check:fail	hylolib-cb-extract.scala:11:15: expected end of statement, found ':'
+hylolib-deferred-given	fail	check:fail	AnyCollection.scala:25:35: no given instance of type Value[Collection.this.Position] was found for parameter evidence$1
+hylolib-deferred-given-extract.scala	pass	check:pass	
+hylolib-extract.scala	fail	check:fail	hylolib-extract.scala:13:15: expected end of statement, found ':'
+i0239.scala	pass	check:pass	
+i0268.scala	pass	check:pass	
+i0290-type-bind-2.scala	pass	check:pass	
+i0290-type-bind.scala	pass	check:pass	
+i0306.scala	pass	check:pass	
+i0400.scala	pass	check:pass	
+i0881	pass	check:pass	
+i10080.scala	pass	check:pass	
+i10087.scala	pass	check:fail	
+i10107.scala	pass	check:pass	
+i10107c.scala	pass	check:pass	
+i10116.scala	pass	check:pass	
+i10123.scala	pass	check:pass	
+i10129.scala	pass	check:pass	
+i10161.scala	pass	check:pass	
+i10174.scala	pass	check:pass	
+i10217.scala	pass	check:pass	
+i10242.scala	fail	check:fail	i10242.scala:7:20: type argument x does not conform to upper bound String
+i10247.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i10253.scala	pass	check:pass	
+i10256.scala	pass	check:pass	
+i10259.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i10295.scala	fail	check:fail	i10295.scala:22:12: (m : => (m : M)) is not a valid type prefix, since it is not an immutable path
+i10311.scala	pass	check:pass	
+i10325.scala	fail	check:fail	i10325.scala:11:43: type mismatch: found Map[Any, Option[Any]], required Map[String, Option[String]]
+i10343.scala	pass	check:pass	
+i10347	fail	-	java source: teq reads none
+i1036.scala	pass	check:pass	
+i10366.scala	fail	check:fail	i10366.scala:7:3: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+i10369.scala	fail	check:fail	i10369.scala:9:22: value unary_! is not a member of Boolean & t
+i10383.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i10389.scala	pass	check:pass	
+i10430	pass	check:pass	
+i10437.scala	fail	check:fail	i10437.scala:14:5: None of the overloaded alternatives of method apply in class MyClass with types
+i1044.scala	fail	check:fail	i1044.scala:3:5: value getParameterTypes is not a member of Method
+i1045.scala	pass	check:pass	
+i1047.scala	fail	check:fail	i1047.scala:30:33: type mismatch: found AnyRef, required AnyRef{val age: Int} & AnyRef{val meow: Int}
+i10477	pass	check:pass	
+i10477.scala	pass	check:pass	
+i10495.scala	pass	check:pass	
+i10511.scala	fail	check:fail	i10511.scala:16:26: type mismatch: found (t : (Bool.True : Bool)), required Not[(Bool.False : Bool)]
+i1052.scala	pass	check:fail	
+i10521.scala	pass	check:pass	
+i10542.scala	pass	check:pass	
+i10567	fail	-	java source: teq reads none
+i1059.scala	fail	check:fail	i1059.scala:5:26: expected ')', found '@'
+i10634	pass	check:pass	
+i10638.scala	pass	check:pass	
+i10667.scala	fail	check:fail	i10667.scala:10:29: type mismatch: found Nums, required Nums & A
+i10693.scala	pass	check:pass	
+i10715-java	fail	-	java source: teq reads none
+i10715-scala	fail	check:fail	test.scala:17:3: value + is not a member of Int
+i10769.scala	pass	check:pass	
+i10769b.scala	pass	check:pass	
+i10848a.scala	fail	check:fail	i10848a.scala:6:3: 'erased' is not part of the supported Scala subset
+i10848b.scala	fail	check:fail	i10848b.scala:4:3: 'erased' is not part of the supported Scala subset
+i10871.scala	fail	check:fail	i10871.scala:4:15: expected an identifier, found 'super'
+i10897.scala	pass	check:pass	
+i10900.scala	pass	check:pass	
+i10927.scala	pass	check:pass	
+i10929-new-syntax.scala	fail	check:fail	i10929-new-syntax.scala:9:9: a parent has to be a class or a trait
+i10929.scala	fail	check:fail	i10929.scala:12:40: expected ':', found 'val'
+i10945	fail	-	java source: teq reads none
+i10951.scala	fail	check:fail	i10951.scala:6:29: a member of js.Dynamic takes no type arguments
+i10964.scala	pass	check:pass	
+i10964a.scala	pass	check:pass	
+i10966.scala	pass	check:pass	
+i10967.scala	pass	check:pass	
+i10980.scala	fail	check:fail	i10980.scala:2:19: not found: Object
+i10994.scala	fail	check:fail	i10994.scala:2:20: expected '=>', found ':'
+i10997.scala	pass	check:pass	
+i11003.scala	pass	check:pass	
+i11015.scala	pass	check:pass	
+i11020.scala	pass	check:pass	
+i11022.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i1103.scala	pass	check:pass	
+i11057.scala	pass	check:fail	
+i11064.scala	pass	check:pass	
+i11075	pass	check:pass	
+i11078.scala	pass	check:pass	
+i11078b.scala	pass	check:pass	
+i11081.scala	pass	check:pass	
+i11102.scala	pass	check:pass	
+i11114.scala	pass	check:pass	
+i11128-wildcard.scala	pass	check:pass	
+i11128.scala	pass	check:pass	
+i11141.scala	pass	check:pass	
+i11163.scala	pass	check:pass	
+i11168.scala	fail	check:fail	i11168.scala:20:10: value foo3 is not a member of String
+i11170a.scala	pass	check:pass	
+i11174minimisation.scala	pass	check:pass	
+i11175.scala	fail	check:fail	i11175.scala:16:1: given_Printer is already defined as given instance given_Printer
+i11184a.scala	pass	check:pass	
+i11184b.scala	pass	check:pass	
+i11184c.scala	pass	check:pass	
+i11184d.scala	pass	check:pass	
+i11185.scala	fail	check:fail	i11185.scala:4:3: type mismatch: found (Int, Int) => Int, required ((Int, Int)) => Any
+i11220.scala	pass	check:pass	
+i11223.scala	pass	check:pass	
+i11225.scala	pass	check:pass	
+i11226b.scala	pass	check:pass	
+i11230.scala	pass	check:pass	
+i11234.scala	pass	check:pass	
+i11236.scala	pass	check:pass	
+i11243.scala	fail	check:fail	i11243.scala:123:32: ambiguous given instances for Monad[<error>]: eitherMonad, optionMonad, listMonad
+i11247.scala	pass	check:fail	
+i11250	pass	check:pass	
+i11255.scala	pass	check:pass	
+i11277.scala	pass	check:pass	
+i11291.scala	fail	check:fail	i11291.scala:11:12: cannot reduce inline match with
+i1130.scala	pass	check:pass	
+i1131.scala	fail	check:pass	teq: jvm backend: MustBeATrait: the local $this251l2u_6 is not in scope of the generated method
+i11311.scala	pass	check:pass	
+i11318a.scala	pass	check:pass	
+i11318b.scala	pass	check:pass	
+i11318c.scala	fail	check:fail	i11318c.scala:5:32: not found: b
+i11350.scala	pass	check:pass	
+i11353.scala	pass	check:pass	
+i11358.scala	fail	check:fail	i11358.scala:9:15: Ambiguous overload. The overloaded alternatives of method +++ in object Test with types
+i1137-1	pass	check:pass	
+i1137-2	pass	check:pass	
+i1137-3	pass	check:pass	
+i11371.scala	pass	check:pass	
+i11393	fail	check:fail	jvm.products:1:1: illegal cyclic type reference: alias ToFormat of type ToFormat refers back to the type itself
+i11420.scala	pass	check:pass	
+i11421.scala	pass	check:pass	
+i11464.scala	fail	check:fail	i11464.scala:10:21: type mismatch: found Type[Any, AnyRef{type R <: [~ <: Txn[~]] =>> Expr[~, Any]}#R], required Type[A, E]
+i11481.scala	pass	check:pass	
+i11490	fail	-	java source: teq reads none
+i11499.scala	pass	check:pass	
+i11538a.scala	pass	check:pass	
+i11538b.scala	pass	check:pass	
+i11556.scala	pass	check:pass	
+i11557.scala	pass	check:pass	
+i11581.scala	pass	check:pass	
+i11605.scala	fail	check:fail	i11605.scala:13:7: this is not a case class or enum case
+i11631.scala	pass	check:pass	
+i11631b.scala	pass	check:pass	
+i11644.scala	pass	check:pass	
+i11681.scala	pass	check:pass	
+i11682.scala	pass	check:pass	
+i11712.scala	pass	check:pass	
+i11713.scala	pass	check:pass	
+i11725.scala	pass	check:pass	
+i11729.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i11731.scala	pass	check:pass	
+i11732.scala	pass	check:pass	
+i1174.scala	pass	check:pass	
+i11781.scala	fail	check:fail	i11781.scala:12:27: a parent has to be a class or a trait
+i1181.scala	pass	check:pass	
+i11819.scala	pass	check:pass	
+i1181b.scala	pass	check:pass	
+i1181c.scala	pass	check:pass	
+i11864.scala	fail	check:fail	i11864.scala:37:38: 'erased' is not part of the supported Scala subset
+i11866.scala	pass	check:pass	
+i11894.scala	pass	check:pass	
+i11894a.scala	pass	check:pass	
+i11894b.scala	pass	check:pass	
+i11896.scala	fail	check:fail	i11896.scala:6:15: 'erased' is not part of the supported Scala subset
+i11922.scala	pass	check:pass	
+i11955.scala	fail	check:fail	i11955.scala:9:19: covariant type AA occurs in invariant position in type  = Y[AA] of type This
+i11968.scala	pass	check:pass	
+i11968a.scala	pass	check:pass	
+i11977.scala	pass	check:pass	
+i11981.scala	pass	check:pass	
+i11982a.scala	pass	check:pass	
+i11993.scala	pass	check:pass	
+i11994.scala	pass	check:pass	
+i11995.scala	pass	check:pass	
+i11997.scala	pass	check:pass	
+i1202a.scala	pass	check:pass	
+i1202b.scala	pass	check:pass	
+i1202c.scala	pass	check:pass	
+i1202d.scala	fail	check:pass	teq: This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+i12072-b.scala	pass	check:pass	
+i12072-c.scala	pass	check:pass	
+i12072-d.scala	pass	check:pass	
+i12072-e.scala	pass	check:pass	
+i12072.scala	pass	check:pass	
+i12073.scala	pass	check:pass	
+i12077.scala	pass	check:pass	
+i12112.scala	pass	check:pass	
+i1212.scala	pass	check:pass	
+i12126.scala	fail	check:fail	i12126.scala:47:11: recursive use of flatMap needs an explicit result type
+i12127.scala	fail	check:fail	i12127.scala:3:46: missing parameter type
+i12133.scala	pass	check:pass	
+i12140	pass	check:pass	
+i12141.scala	fail	check:fail	i12141.scala:28:10: type mismatch: found Continue[Out[More[Test1 | Test2], Test1], Continue[Out[More[Test3 | Test4], ? >: Test3 & Test4 <: (Test3 | Test4)], Nop]], required P[(chanA : More[Test1 | Test2]), (chanB : More[Test3 | Test4]), (ch
+i1216.scala	pass	check:pass	
+i12168.scala	pass	check:pass	
+i12169.scala	pass	check:pass	
+i1216a.scala	pass	check:pass	
+i12178.scala	fail	check:fail	i12178.scala:22:21: No singleton value available for Singleton & String; eligible singleton types for `ValueOf` synthesis include literals and stable paths.
+i12180a.scala	pass	check:pass	
+i12180b.scala	pass	check:pass	
+i12194-opaque.scala	pass	check:pass	
+i12211.scala	pass	check:pass	
+i12216.scala	fail	check:fail	i12216.scala:21:3: value whyHelloThere is not a member of Comp[Int, Props]
+i12218.scala	pass	check:pass	
+i12226.scala	fail	check:fail	i12226.scala:10:24: type mismatch: found T, required String
+i12247.scala	pass	check:pass	
+i12264.scala	pass	check:pass	
+i12265.scala	pass	check:pass	
+i12273.scala	pass	check:pass	
+i12277.scala	pass	check:pass	
+i12286.scala	pass	check:pass	
+i12299	pass	check:pass	
+i12299.scala	pass	check:pass	
+i12299a.scala	pass	check:pass	
+i12306.scala	fail	check:fail	i12306.scala:22:40: type mismatch: found Record{val parent: String}, required Record{val name: String; val age: Int; val parent: String}
+i1235.scala	pass	check:pass	
+i12373.scala	pass	check:pass	
+i12379a.scala	pass	check:pass	
+i12379b.scala	pass	check:pass	
+i12390-gadt.scala	pass	check:pass	
+i12395.scala	pass	check:pass	
+i12396.scala	fail	check:fail	i12396.scala:6:12: expected an expression, found '.'
+i12474.scala	pass	check:pass	
+i12476.scala	pass	check:pass	
+i12478.scala	fail	check:fail	i12478.scala:9:7: type mismatch: found Bar[F$1], required Foo[T1]
+i12508.scala	pass	check:pass	
+i12508a.scala	pass	check:pass	
+i12508b.scala	pass	check:pass	
+i12508c.scala	pass	check:pass	
+i12583.scala	pass	check:pass	
+i12591	pass	check:pass	
+i12616.scala	pass	check:pass	
+i12632.scala	pass	check:pass	
+i12645.scala	pass	check:fail	
+i12655.scala	pass	check:pass	
+i12663.scala	fail	check:fail	i12663.scala:22:3: Ambiguous overload. The overloaded alternatives of method asd in class HookComponentBuilder with types
+i12677.scala	pass	check:pass	
+i12679.scala	pass	check:pass	
+i1269.scala	pass	check:pass	
+i12708.scala	fail	check:fail	i12708.scala:33:11: type mismatch: found Map[Int, A], required (Int, A)
+i12715	pass	check:pass	
+i12722.scala	pass	check:pass	
+i12723.scala	fail	check:fail	i12723.scala:8:12: expected a pattern, found identifier
+i12730.scala	pass	check:pass	
+i12739-fallout.scala	pass	check:pass	
+i12739.scala	pass	check:pass	
+i12754.scala	pass	check:pass	
+i12757.scala	fail	check:fail	i12757.scala:5:10: expected 'then', found new line
+i12803.scala	pass	check:pass	
+i12834.scala	pass	check:pass	
+i1285.scala	pass	check:pass	
+i1287	pass	check:pass	
+i12896.scala	pass	check:pass	
+i12897	pass	check:pass	
+i12909.scala	pass	check:pass	
+i12910.scala	pass	check:pass	
+i12915.scala	pass	check:pass	
+i12945	fail	check:fail	A_1.scala:10:32: Cannot prove that Int =:= 7.
+i12949.scala	pass	check:pass	
+i12950	fail	check:fail	test_2.scala:4:19: no given instance of type Mul[Two, 2] was found for parameter m
+i12953.scala	pass	check:pass	
+i12955.scala	pass	check:pass	
+i12958.scala	pass	check:pass	
+i12973.scala	pass	check:pass	
+i12991.scala	pass	check:pass	
+i12997.scala	pass	check:pass	
+i13001	fail	check:fail	Main_1.scala:28:48: value asInstanceOf is not a member of Product{type Kind = K0; type MirroredType = T; type MirroredElemTypes <: Tuple}
+i13043	fail	-	java source: teq reads none
+i13044.scala	pass	check:pass	
+i13046	fail	-	java source: teq reads none
+i1307.scala	pass	check:pass	
+i13106.java	fail	-	java source: teq reads none
+i13120	pass	check:pass	
+i13128	pass	check:pass	
+i13134.scala	pass	check:pass	
+i13161.scala	pass	check:pass	
+i1318.scala	pass	check:pass	
+i13197.scala	fail	check:fail	i13197.scala:4:3: value asInstanceOf is not a member of T | String
+i13282.scala	fail	check:fail	i13282.scala:8:3: this expression cannot be assigned to
+i13310.java	fail	-	java source: teq reads none
+i13331.scala	pass	check:pass	
+i13332.scala	pass	check:pass	
+i13334.scala	pass	check:pass	
+i13346.scala	pass	check:pass	
+i13349.scala	pass	check:pass	
+i13349min.scala	pass	check:pass	
+i13392.scala	pass	check:fail	
+i13411.scala	fail	check:fail	i13411.scala:12:12: cannot reduce inline match with
+i13411b	fail	-	java source: teq reads none
+i13426.scala	fail	check:fail	i13426.scala:2:18: missing parameter type
+i13433.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i13433b.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i13460.scala	pass	check:pass	
+i13461-a.scala	fail	check:fail	i13461-a.scala:9:24: type mismatch: found 123, required Opaque
+i13461-c.scala	fail	check:fail	i13461-c.scala:20:26: type mismatch: found List[Seconds], required List[String]
+i13476.scala	pass	check:pass	
+i13487.scala	fail	check:fail	i13487.scala:6:12: type argument Foo[A] does not have the same kind as its bound [_[_],_]
+i13490.scala	fail	check:fail	i13490.scala:10:10: cannot resolve import: MyEnum not found
+i13503.scala	fail	check:fail	i13503.scala:8:30: Cannot prove that s.Out =:= 123.
+i13512.scala	pass	check:pass	
+i1352.scala	pass	check:pass	
+i13526.scala	fail	check:fail	i13526.scala:15:20: missing parameter type
+i13541.scala	pass	check:pass	
+i13548.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i13554.scala	pass	check:pass	
+i13554a.scala	pass	check:pass	
+i13558.scala	pass	check:pass	
+i13565.scala	pass	check:pass	
+i13580.scala	fail	check:fail	i13580.scala:9:16: expected ':', found 'val'
+i13586	pass	check:pass	
+i13586.scala	pass	check:pass	
+i1365.scala	pass	check:fail	
+i1366.scala	pass	check:pass	
+i13660.scala	pass	check:pass	
+i13668.scala	pass	check:pass	
+i13669.scala	pass	check:pass	
+i13739.scala	pass	check:pass	
+i1378.scala	pass	check:pass	
+i13816.scala	fail	check:fail	i13816.scala:6:19: throws takes 1 type argument(s), 2 given
+i13820.scala	pass	check:pass	
+i13842.scala	pass	check:pass	
+i13848.scala	pass	check:pass	
+i1385.scala	pass	check:pass	
+i13859.scala	fail	check:fail	i13859.scala:20:48: no given instance of type Kind1[Product, [X] =>> Test[X]] was found for parameter x
+i13871.scala	fail	check:fail	i13871.scala:9:3: not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+i13889.scala	pass	check:pass	
+i13900.scala	fail	check:fail	i13900.scala:9:9: fromValue is already defined as given instance fromValue
+i13935.scala	pass	check:pass	
+i13941.scala	pass	check:pass	
+i13974.scala	pass	check:pass	
+i13974a.scala	fail	check:fail	i13974a.scala:11:30: type mismatch: found (given_Foo_A : Foo[A]), required Foo[(B, C)]
+i13990.scala	pass	check:pass	
+i13998.scala	pass	check:pass	
+i1401.scala	pass	check:pass	
+i14010.scala	pass	check:pass	
+i14010a.scala	pass	check:pass	
+i14013.scala	pass	check:fail	
+i14042.scala	pass	check:pass	
+i14048.scala	pass	check:pass	
+i14061.scala	pass	check:pass	
+i14096.scala	pass	check:pass	
+i14127.scala	pass	check:pass	
+i14151.scala	pass	check:pass	
+i14151b.scala	pass	check:pass	
+i14151c.scala	pass	check:pass	
+i14152.scala	pass	check:pass	
+i14160.scala	pass	check:pass	
+i14177b.scala	pass	check:pass	
+i14214.scala	fail	check:fail	i14214.scala:9:24: no given instance of type (Dummy) ?=> Foo was found for parameter x
+i14218.http4s.scala	pass	check:pass	
+i14218.scala	pass	check:pass	
+i14224.1.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i14271.scala	pass	check:pass	
+i14278.scala	pass	check:pass	
+i14282.scala	fail	check:fail	i14282.scala:13:13: Deferred inline method foo in trait Foo cannot be invoked
+i14287.min.scala	pass	check:pass	
+i14287.scala	pass	check:pass	
+i1432.scala	fail	check:fail	i1432.scala:2:8: expected '=', found '@'
+i14349.min.scala	pass	check:pass	
+i14349.scala	pass	check:pass	
+i14351.scala	pass	check:pass	
+i14367.scala	fail	check:fail	i14367.scala:3:10: missing parameter type
+i1442.scala	pass	check:fail	
+i1444.scala	pass	check:pass	
+i14442.scala	pass	check:pass	
+i14451.scala	pass	check:pass	
+i1447.scala	pass	check:pass	
+i14477.scala	pass	check:pass	
+i14494.scala	fail	check:fail	i14494.scala:9:14: No implicit view available from Seq[TOP] => IterableOnce[STR | INT].
+i14544.scala	pass	check:pass	
+i14587.hard-union-tuples.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i14588.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i14626.scala	pass	check:pass	
+i14637.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i14642.scala	pass	check:pass	
+i14653.scala	pass	check:pass	
+i14653b.scala	pass	check:pass	
+i14656.scala	pass	check:pass	
+i14660.scala	fail	check:fail	i14660.scala:5:12: type Baz is not a member of Bar
+i14699.scala	pass	check:pass	
+i14707.scala	pass	check:pass	
+i14726-upper.scala	fail	check:fail	i14726-upper.scala:15:25: type mismatch: found 0, required X
+i14726.scala	fail	check:fail	i14726.scala:15:25: type mismatch: found X, required Int
+i14729.scala	pass	check:pass	
+i14739.scala	pass	check:pass	
+i14739.works.scala	pass	check:pass	
+i14760.scala	pass	check:pass	
+i14770.scala	pass	check:pass	
+i14771.scala	pass	check:pass	
+i14776-patmat.scala	pass	check:pass	
+i14776.scala	pass	check:pass	
+i14782.scala	pass	check:pass	
+i14783.scala	fail	check:fail	i14783.scala:22:30: type mismatch: found (tree : tasty.quotes.reflect.Tree), required universe.quotes.reflect.Tree
+i14807.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i14821.scala	pass	check:pass	
+i14830.scala	fail	check:fail	i14830.scala:4:30: type mismatch: found "Fred", required AnyRef{def length: Int}
+i14832.scala	pass	check:pass	
+i14858	pass	check:pass	
+i14896.scala	pass	check:pass	
+i14903a.scala	pass	check:pass	
+i14903b.scala	fail	check:fail	i14903b.scala:18:31: type argument x does not conform to upper bound HList
+i14907.scala	pass	check:pass	
+i14914.scala	pass	check:pass	
+i14921	pass	check:pass	
+i14932.scala	pass	check:pass	
+i14953.scala	pass	check:pass	
+i14966.scala	pass	check:pass	
+i14966a.scala	pass	check:pass	
+i14999.scala	fail	check:fail	i14999.scala:13:10: values of types (String) ?=> Int and Int cannot be compared with == or !=
+i1500.scala	pass	check:pass	
+i15029.bootstrap-reg.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15029.more.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15029.orig.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15029.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15030.scala	fail	check:pass	<jdk>:1:1: illegal inheritance: self type Schema of object Schema does not conform to self type Sum of parent trait Sum
+i15054.scala	pass	check:pass	
+i15097.scala	pass	check:pass	
+i15133a.scala	pass	check:pass	
+i15133b.scala	pass	check:pass	
+i1515.scala	pass	check:pass	
+i15154.scala	pass	check:pass	
+i15155.scala	pass	check:fail	
+i15160.scala	pass	check:pass	
+i15165.scala	pass	check:pass	
+i15166	fail	-	java source: teq reads none
+i15171.scala	pass	check:pass	
+i15174.scala	pass	check:pass	
+i15177.FakeEnum.min.alt2.scala	pass	check:pass	
+i15177.FakeEnum.min.alt3.scala	pass	check:pass	
+i15177.FakeEnum.min.scala	pass	check:pass	
+i15177.FakeEnum.scala	pass	check:pass	
+i15177.app.scala	pass	check:pass	
+i15177.constr-dep.scala	pass	check:pass	
+i15177.hk.scala	pass	check:pass	
+i15177.hk2.scala	pass	check:pass	
+i15177.hylolib.scala	fail	check:fail	i15177.hylolib.scala:5:11: expected end of statement, found ':'
+i15177.orig.scala	pass	check:pass	
+i15177.scala	pass	check:pass	
+i15177.without.scala	pass	check:pass	
+i15178.scala	pass	check:pass	
+i15181.scala	pass	check:pass	
+i15183	fail	check:fail	test_2.scala:6:9: no given instance of type Map[((Env.Local : Env), (Env.Sit : Env), (Env.Prod : Env)), Decoder] was found for parameter d
+i15184.scala	pass	check:pass	
+i15188.scala	fail	check:fail	i15188.scala:7:7: this is not a case class or enum case
+i15188b.scala	fail	check:fail	i15188b.scala:7:7: this is not a case class or enum case
+i15216.scala	pass	check:pass	
+i15264.scala	fail	check:fail	i15264.scala:39:63: type mismatch: found C[Q[V]], required Prio0 => C[V] => C[Q[V]]
+i15274.orig.scala	pass	check:pass	
+i15274.scala	pass	check:pass	
+i15289.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15331.scala	pass	check:pass	
+i15347.scala	pass	check:pass	
+i15365.scala	pass	check:pass	
+i15377.scala	pass	check:pass	
+i15398.scala	fail	check:fail	i15398.scala:6:38: Cannot prove that "Tuple23" =:= "Tuple".
+i1540.scala	fail	check:fail	i1540.scala:11:13: Casey1 is not a case class, so it cannot be used as a pattern
+i15405.scala	pass	check:pass	
+i1540b.scala	fail	check:fail	i1540b.scala:11:13: Casey1 is not a case class, so it cannot be used as a pattern
+i1542.scala	pass	check:pass	
+i15428.scala	fail	check:fail	i15428.scala:6:29: no given instance of type Bar[AnyRef{def f(): Nothing} & Foo] was found for parameter alloc
+i1544.scala	pass	check:pass	
+i15448.scala	fail	check:fail	i15448.scala:19:3: value boom is not a member of Pointer[AnyRef{def boom(): Nothing}]
+i15460.scala	pass	check:pass	
+i15474.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15514.scala	pass	check:pass	
+i15522.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15523.avoid.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15523.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15525.scala	pass	check:pass	
+i15531.scala	fail	check:fail	i15531.scala:8:18: value data is not a member of C$1
+i15546.scala	pass	check:pass	
+i15554.scala	pass	check:pass	
+i15564.scala	pass	check:pass	
+i15579.scala	pass	check:pass	
+i15595.scala	pass	check:pass	
+i15612.scala	pass	check:pass	
+i15649.scala	pass	check:pass	
+i15652.scala	pass	check:pass	
+i15664.scala	pass	check:pass	
+i15666.scala	pass	check:pass	
+i15670.scala	fail	check:fail	i15670.scala:17:27: no given instance of type Read[Set[String]] was found for parameter c
+i15673.scala	pass	check:pass	
+i15692.scala	pass	check:pass	
+i1570.scala	pass	check:pass	
+i15715.scala	pass	check:pass	
+i15717.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15738.scala	pass	check:pass	
+i15743.gadt.scala	fail	check:fail	i15743.gadt.scala:11:22: type argument T does not conform to upper bound Tuple
+i15743.moregadt.scala	fail	check:fail	i15743.moregadt.scala:8:18: type argument T does not conform to upper bound Tuple
+i15743.pass.scala	pass	check:fail	
+i15743.scala	pass	check:fail	
+i15784.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15786.scala	pass	check:pass	
+i15802.scala	pass	check:pass	
+i15813.scala	pass	check:pass	
+i15820.scala	pass	check:pass	
+i15821.scala	pass	check:pass	
+i15827.scala	fail	check:fail	i15827.scala:44:13: only classes can be instantiated with new
+i15850.scala	pass	check:pass	
+i15864.scala	pass	check:pass	
+i15867.scala	fail	check:fail	i15867.scala:13:5: value ** is not a member of S$1
+i15867.specs2.scala	pass	check:pass	
+i15893.scala	fail	check:fail	i15893.scala:26:14: expected '=>', found ':'
+i15897.scala	pass	check:pass	
+i15898.scala	pass	check:pass	
+i1590.scala	pass	check:pass	
+i15922.scala	pass	check:pass	
+i15926.contra.scala	pass	check:pass	
+i15926.extract.scala	fail	check:fail	i15926.extract.scala:12:28: type argument X does not conform to upper bound Nat
+i15926.min.scala	fail	check:fail	i15926.min.scala:12:28: type argument X does not conform to upper bound Nat
+i15926.scala	fail	check:fail	i15926.scala:18:24: type argument Y does not conform to upper bound Succ[NatT]
+i15931.scala	fail	check:fail	i15931.scala:18:17: type mismatch: found Foo#P, required TP#P
+i15934.scala	pass	check:pass	
+i15940.scala	pass	check:pass	
+i15944.scala	fail	check:fail	i15944.scala:44:5: value D is not a member of Baz
+i15960.scala	pass	check:pass	
+i15964.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i15969.scala	pass	check:pass	
+i15976.scala	pass	check:fail	
+i15983a.scala	pass	check:pass	
+i15983b.scala	pass	check:pass	
+i15991.abstract.scala	pass	check:fail	
+i15991.orig.scala	pass	check:pass	
+i15991.scala	pass	check:pass	
+i16004.scala	pass	check:pass	
+i16035.scala	pass	check:pass	
+i16049.scala	pass	check:pass	
+i16076.scala	pass	check:pass	
+i16091.scala	pass	check:pass	
+i16092.scala	pass	check:pass	
+i16104.scala	fail	check:fail	i16104.scala:11:9: local givens cannot take parameters
+i16105.scala	pass	check:pass	
+i16119.scala	pass	check:pass	
+i16123.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16174.scala	pass	check:pass	
+i16183	fail	check:fail	Test_2.scala:4:24: no given instance of type Foo2[Qux] was found for parameter e
+i16186.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16208.scala	pass	check:pass	
+i16236.scala	pass	check:pass	
+i16311.scala	pass	check:pass	
+i16311a.scala	pass	check:pass	
+i16311b.scala	pass	check:pass	
+i16311c.scala	pass	check:pass	
+i16311d.scala	pass	check:pass	
+i16328.scala	pass	check:pass	
+i16338.scala	pass	check:pass	
+i16339.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16342.scala	pass	check:pass	
+i1637.scala	pass	check:fail	
+i16374a.scala	pass	check:pass	
+i16374b.scala	pass	check:pass	
+i16374c.scala	pass	check:pass	
+i16374d.scala	pass	check:pass	
+i1638.scala	pass	check:pass	
+i16407.scala	pass	check:pass	
+i16408.min1.scala	pass	check:pass	
+i16408.min2.scala	pass	check:pass	
+i16408.scala	fail	check:fail	i16408.scala:46:60: type mismatch: found Uri, required URI[TraitRDF]
+i16435.TreeUnpickler.scala	pass	check:pass	
+i16435.avoid.scala	pass	check:pass	
+i16435.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16437	pass	check:pass	
+i16443	pass	check:pass	
+i16451.CanForward.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16451.DiffUtil.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16451.default.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16464.scala	fail	check:fail	i16464.scala:10:22: operator - cannot be applied to Int and Seq[Int]
+i16469.scala	pass	check:pass	
+i16474.scala	pass	check:pass	
+i16484.scala	pass	check:pass	
+i16486	pass	check:pass	
+i16488.scala	pass	check:pass	
+i16500.scala	pass	check:pass	
+i16506.scala	pass	check:pass	
+i16539.min.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16539.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16544a.scala	fail	check:fail	i16544a.scala:8:5: type mismatch: found Dynamic, required Foo
+i16544b.scala	fail	check:fail	i16544b.scala:8:5: type mismatch: found Dynamic, required Foo
+i16544c.scala	fail	check:fail	i16544c.scala:8:5: type mismatch: found Dynamic, required Foo
+i16544d.scala	fail	check:fail	i16544d.scala:10:5: type mismatch: found Dynamic, required Foo
+i16562.scala	pass	check:pass	
+i16590.scala	pass	check:pass	
+i16596.more.scala	pass	check:pass	
+i16596.orig.scala	pass	check:pass	
+i16596.scala	pass	check:pass	
+i16603.scala	pass	check:pass	
+i1661.scala	pass	check:pass	
+i16639false-pos-on-trait.scala	pass	check:pass	
+i1664.scala	pass	check:pass	
+i16641.scala	pass	check:pass	
+i16649-irrefutable.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i1665.scala	fail	check:fail	i1665.scala:3:3: not found: !=
+i16657.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16673	pass	check:pass	
+i16706.scala	fail	check:fail	i16706.scala:7:9: type h not found
+i16707.scala	pass	check:pass	
+i16740.scala	pass	check:pass	
+i16756.scala	pass	check:pass	
+i16777.scala	fail	check:fail	option: -Xkind-projector:underscores (teq has no flag for it)
+i16778.scala	pass	check:pass	
+i16785.scala	pass	check:pass	
+i16792.scala	pass	check:pass	
+i16808.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i16814.scala	pass	check:pass	
+i16869.scala	pass	check:pass	
+i1687.scala	pass	check:pass	
+i1687b.scala	pass	check:pass	
+i16920.scala	pass	check:pass	
+i16950.scala	pass	check:pass	
+i16954.scala	pass	check:pass	
+i16994.scala	pass	check:pass	
+i16997.min.scala	pass	check:pass	
+i16997.scala	fail	check:fail	i16997.scala:34:11: type mismatch: found F$1[A$1], required F[?4]
+i17002.scala	pass	check:pass	
+i17008.scala	pass	check:pass	
+i1704.scala	fail	check:fail	i1704.scala:3:22: AnyRef is a trait; it cannot be instantiated
+i17052.scala	pass	check:pass	
+i17064.scala	pass	check:pass	
+i17066	fail	-	java source: teq reads none
+i17100.scala	pass	check:pass	
+i17100a.scala	fail	check:fail	i17100a.scala:11:12: type mismatch: found (sel2 : Sel{def foo: String}), required Selectable | Dynamic
+i17135.scala	pass	check:pass	
+i17149.scala	pass	check:pass	
+i17155.scala	pass	check:pass	
+i17186a.scala	pass	check:pass	
+i17186b.scala	pass	check:pass	
+i17192.scala	fail	check:fail	i17192.scala:11:14: value v1 is not a member of RT
+i17222.2.scala	pass	check:pass	
+i17222.3.scala	pass	check:pass	
+i17222.4.scala	pass	check:pass	
+i17222.5.scala	pass	check:pass	
+i17222.8.scala	pass	check:pass	
+i17222.izumi.min.scala	pass	check:pass	
+i17222.izumi.rep	fail	check:fail	InspectorBase.scala:7:7: recursive value qctx needs type
+i17222.scala	pass	check:pass	
+i17227.scala	pass	check:pass	
+i1723.scala	pass	check:pass	
+i17230.bootstrap.scala	pass	check:pass	
+i17245.scala	pass	check:pass	
+i17255	fail	-	java source: teq reads none
+i17257.min.scala	pass	check:pass	
+i17310.scala	pass	check:pass	
+i1737.scala	pass	check:pass	
+i17380.scala	pass	check:pass	
+i17381.scala	pass	check:pass	
+i17391	fail	-	java source: teq reads none
+i17394	fail	check:pass	teq: jvm backend: two classes are named example/_1$package
+i17394b	fail	check:pass	teq: jvm backend: two classes are named example/_1$package
+i17395-spec.ordered.scala	pass	check:pass	
+i17395-spec.scala	pass	check:pass	
+i17395.scala	pass	check:pass	
+i17465.scala	fail	check:fail	i17465.scala:3:53: type mismatch: found "Hello", required (StringOps | String){def *(y: Int): StringOps | String}
+i1747.scala	fail	check:fail	i1747.scala:2:16: method toArray overrides nothing
+i1751.scala	pass	check:pass	
+i17525.scala	pass	check:pass	
+i1753.scala	fail	check:fail	i1753.scala:20:28: type mismatch: found (BCodeSkelBuilder.this.int : BackendInterface), required (BCodeSkelBuilder.this.bTypes.int : I)
+i1755.scala	pass	check:pass	
+i17556.scala	pass	check:pass	
+i1756.scala	fail	check:fail	i1756.scala:5:20: this can be used only in a class, object, or template
+i1757.scala	pass	check:pass	
+i17588.scala	pass	check:pass	
+i17631.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i1765.scala	pass	check:pass	
+i17735.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i17735a.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i17741.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i1776.scala	pass	check:pass	
+i17763	fail	-	java source: teq reads none
+i1777.scala	pass	check:fail	
+i1786.scala	fail	check:fail	i1786.scala:12:3: value package is not a member of meta
+i1790.scala	pass	check:pass	
+i1793.scala	pass	check:fail	
+i17948.all.scala	pass	check:pass	
+i17948.scala	pass	check:pass	
+i1795.scala	pass	check:pass	
+i1797.scala	pass	check:pass	
+i1803.scala	pass	check:pass	
+i18062.scala	pass	check:pass	
+i18083.scala	pass	check:pass	
+i18091.scala	pass	check:pass	
+i18096.scala	pass	check:pass	
+i18097.1.scala	pass	check:pass	
+i18097.2.scala	pass	check:pass	
+i18097.2.works.scala	pass	check:pass	
+i18097.3	pass	check:pass	
+i18097.orig.scala	pass	check:pass	
+i1812.scala	pass	check:pass	
+i18123.scala	pass	check:pass	
+i18123b.scala	pass	check:pass	
+i18124	pass	check:pass	
+i1812b.scala	fail	check:fail	i1812b.scala:7:24: type S not found
+i18135.scala	fail	check:fail	i18135.scala:16:12: not found: conf
+i18151a.scala	pass	check:pass	
+i18151b.scala	pass	check:pass	
+i18151c.scala	fail	check:fail	i18151c.scala:17:47: type mismatch: found Any, required Attr
+i18160	fail	check:fail	repro_1.scala:10:40: type argument EventCompatBundle.this.State does not have the same kind as its bound [_]
+i18163.orig.scala	pass	check:pass	
+i18163.scala	pass	check:pass	
+i18175.scala	fail	check:fail	i18175.scala:45:18: expected '=>', found identifier
+i18183.migration.scala	pass	check:pass	
+i18211.scala	fail	check:fail	i18211.scala:24:43: expected ':', found '['
+i18226.scala	pass	check:pass	
+i18226a.scala	pass	check:pass	
+i18247.scala	pass	check:pass	
+i18253.orig.scala	pass	check:pass	
+i18253.scala	pass	check:pass	
+i18260.scala	pass	check:pass	
+i18261	pass	check:pass	
+i18261.min	pass	check:pass	
+i18263.orig.scala	pass	check:pass	
+i18263.scala	pass	check:pass	
+i18275.scala	pass	check:pass	
+i18276a.scala	pass	check:pass	
+i18276b.scala	pass	check:pass	
+i18316.orig.scala	pass	check:pass	
+i18316.scala	pass	check:pass	
+i18345.scala	pass	check:pass	
+i18351.scala	pass	check:pass	
+i18364.Tup.scala	pass	check:pass	
+i18450.scala	fail	check:fail	i18450.scala:14:14: expected an identifier, found 'this'
+i18453.workaround.scala	fail	check:fail	i18453.workaround.scala:8:14: type mismatch: found Any, required X
+i18453.zio.scala	pass	check:pass	
+i18529	fail	-	java source: teq reads none
+i18530	fail	-	java source: teq reads none
+i18531	fail	-	java source: teq reads none
+i18533	cannot run	-	jdk: the test is for JDK 17, this is 24
+i18533b	fail	-	java source: teq reads none
+i18555.scala	pass	check:pass	
+i18569.reg1.scala	pass	check:pass	
+i18569.scala	pass	check:pass	
+i1857.scala	pass	check:pass	
+i18578.scala	pass	check:pass	
+i18584	cannot run	-	jdk: the test is for JDK 25+, this is 24
+i18601.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i18601b.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i18623.scala	fail	check:fail	i18623.scala:10:18: a parent has to be a class or a trait
+i18623a.scala	pass	check:fail	
+i18626.min1.scala	pass	check:pass	
+i18626.scala	pass	check:pass	
+i18645.scala	pass	check:pass	
+i18649.scala	pass	check:pass	
+i1865.scala	pass	check:pass	
+i18654	fail	-	java source: teq reads none
+i1866.scala	pass	check:pass	
+i1867.scala	pass	check:pass	
+i1868.scala	pass	check:pass	
+i1870.scala	pass	check:pass	
+i18713.scala	pass	check:pass	
+i18715.scala	fail	check:fail	i18715.scala:5:14: no eligible member apply at foo
+i18721.min	pass	check:pass	
+i18744.scala	pass	check:pass	
+i18745.scala	pass	check:pass	
+i18768.scala	fail	check:fail	i18768.scala:32:38: type mismatch: found (id : Long), required Exportee.Id
+i18769.scala	pass	check:pass	
+i18784	pass	check:pass	
+i18795.scala	pass	check:fail	
+i18808.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i18867-3.3.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i18867-3.4.scala	pass	check:pass	
+i1891.scala	pass	check:pass	
+i18918.scala	pass	check:pass	
+i18927.scala	pass	check:pass	
+i18933.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i19001.case1.scala	pass	check:pass	
+i19001.case2.scala	pass	check:pass	
+i19001.case3.scala	pass	check:pass	
+i19006a.scala	pass	check:pass	
+i19006b.scala	pass	check:pass	
+i19007	fail	-	java source: teq reads none
+i19009.case1.scala	pass	check:pass	
+i19009.case2.scala	pass	check:pass	
+i19009.case3.scala	pass	check:pass	
+i19009.min3.scala	pass	check:pass	
+i19013-a.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i19013-b.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i19157.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i19198.scala	pass	check:pass	
+i19201.scala	pass	check:pass	
+i19202.scala	pass	check:pass	
+i19219.orig.scala	fail	check:fail	i19219.orig.scala:21:7: this is not a case class or enum case
+i19220.orig.scala	fail	check:fail	i19220.orig.scala:20:7: this is not a case class or enum case
+i19221.orig.scala	fail	check:fail	i19221.orig.scala:17:7: this is not a case class or enum case
+i19221.scala	fail	check:fail	i19221.scala:41:44: Both is not a case class, so it cannot be used as a pattern
+i19301.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i19304.scala	pass	check:pass	
+i1932	pass	check:pass	
+i19354.orig.scala	pass	check:fail	
+i19354.scala	pass	check:pass	
+i19385.scala	pass	check:pass	
+i19386	fail	-	java source: teq reads none
+i19404.scala	pass	check:pass	
+i19407.scala	pass	check:pass	
+i19415.scala	pass	check:pass	
+i19417	pass	check:pass	
+i19433.scala	pass	check:pass	
+i19434.scala	fail	check:fail	i19434.scala:8:42: type argument DropNames[xs] does not conform to upper bound Tuple
+i19445.scala	fail	check:fail	i19445.scala:10:41: type argument UnwrapTypes[xs] does not conform to upper bound Tuple
+i19460.scala	pass	check:pass	
+i19479.scala	fail	check:fail	i19479.scala:4:29: no given instance of type PdxEncoder[Person] was found for parameter x
+i19493.scala	fail	check:fail	i19493.scala:34:14: expected an identifier, found 'this'
+i19505.scala	pass	check:pass	
+i19521.scala	pass	check:pass	
+i19530.scala	pass	check:pass	
+i19548.scala	pass	check:pass	
+i19570.min1.scala	pass	check:pass	
+i19570.min2.scala	pass	check:pass	
+i19570.orig.scala	pass	check:pass	
+i19576.scala	pass	check:fail	
+i1960.scala	pass	check:pass	
+i19607.scala	pass	check:pass	
+i19609.orig.scala	pass	check:pass	
+i19609.scala	pass	check:pass	
+i1961.scala	pass	check:pass	
+i19616.scala	pass	check:pass	
+i19623.scala	fail	check:fail	i19623.scala:22:11: expected '=', found '{'
+i19629.scala	pass	check:pass	
+i19633.scala	pass	check:pass	
+i19637.scala	fail	check:fail	i19637.scala:7:3: missing parameter type
+i19642	fail	-	java source: teq reads none
+i19687.scala	pass	check:pass	
+i19687a.scala	pass	check:pass	
+i19687b.scala	pass	check:pass	
+i19687c.scala	pass	check:pass	
+i19687d.scala	pass	check:pass	
+i19687e.scala	pass	check:pass	
+i19692.scala	pass	check:pass	
+i19702	pass	check:pass	
+i19706.scala	fail	check:fail	i19706.scala:5:62: Cannot prove that Decoded["Tuple(0, EmptyTuple)"] =:= (0).
+i19710.scala	pass	check:fail	
+i19715.scala	pass	check:pass	
+i19724.scala	pass	check:pass	
+i19749.scala	pass	check:pass	
+i1975.scala	pass	check:pass	
+i19789.scala	pass	check:pass	
+i19806	fail	-	java source: teq reads none
+i19808.scala	pass	check:pass	
+i19809.scala	fail	check:fail	i19809.scala:3:29: type mismatch: found AnyRef, required Any{val i: Int}
+i19821.scala	pass	check:pass	
+i19857.scala	fail	check:fail	i19857.scala:11:33: type argument T does not conform to upper bound Product
+i19862.scala	pass	check:pass	
+i19892.scala	fail	check:fail	i19892.scala:3:17: contravariant type _R occurs in invariant position in type  = ZPartialServerEndpoint[R, A, B, I, E, O, _R] of type ThisType
+i1990.scala	fail	check:pass	teq: jvm backend: B: the local $thisefnquj_6 is not in scope of the generated method
+i19907_slow_1000_3.scala	pass	check:pass	
+i19907_slow_1000_4.scala	pass	check:pass	
+i19907_slow_100_3.scala	pass	check:pass	
+i1990a.scala	fail	check:pass	teq: jvm backend: Test$.main: the local $this1lqplm6_6 is not in scope of the generated method
+i19929.scala	pass	check:pass	
+i19942.1.scala	pass	check:pass	
+i19942.scala	pass	check:pass	
+i19950.scala	fail	check:fail	i19950.scala:10:58: missing parameter type
+i19955a.scala	pass	check:pass	
+i19955b.scala	pass	check:pass	
+i19962.scala	pass	check:pass	
+i19988.scala	pass	check:fail	
+i19999.scala	pass	check:pass	
+i20026	fail	-	java source: teq reads none
+i20053b.scala	pass	check:pass	
+i20063	fail	-	java source: teq reads none
+i20070.scala	pass	check:pass	
+i20078	fail	-	java source: teq reads none
+i20080.scala	fail	check:fail	i20080.scala:8:5: type mismatch: found (<error>, <error>) => <error>, required Zippable[A, B]{type Out = Append[A, B]}
+i2009.scala	pass	check:pass	
+i20107.scala	pass	check:pass	
+i20136a.scala	pass	check:pass	
+i20136b	pass	check:pass	
+i20154.scala	pass	check:pass	
+i20166.scala	fail	check:fail	i20166.scala:17:15: type mismatch: found "4", required M[1]
+i20176.scala	fail	check:fail	i20176.scala:6:5: None of the overloaded alternatives of method use in object Accumulator with types
+i20184.scala	fail	check:fail	i20184.scala:12:17: only classes can be instantiated with new
+i20187	pass	check:fail	
+i20206.scala	pass	check:fail	
+i20225.scala	pass	check:pass	
+i20288.scala	pass	check:pass	
+i20296.scala	pass	check:pass	
+i20297.scala	fail	check:fail	i20297.scala:16:9: type mismatch: found Any, required V
+i20300.scala	pass	check:pass	
+i20335.scala	fail	check:pass	i20335.scala:12:17: type mismatch: found FiniteDuration, required TemporalAmount
+i20342.scala	pass	check:pass	
+i20344.scala	pass	check:pass	
+i20377.scala	fail	check:fail	i20377.scala:1:8: cannot resolve import: NamedTuple is not an object or a package
+i20395.scala	pass	check:pass	
+i20415.scala	pass	check:pass	
+i20482.scala	pass	check:pass	
+i20483.scala	pass	check:pass	
+i20484.scala	pass	check:pass	
+i20498	pass	check:pass	
+i2051.scala	pass	check:pass	
+i20512.scala	fail	check:fail	i20512.scala:8:67: type Names not found
+i20521.scala	pass	check:pass	
+i20554-a	fail	-	java source: teq reads none
+i20554-b	fail	-	java source: teq reads none
+i20554-c.scala	pass	check:pass	
+i2056.scala	pass	check:pass	
+i20572.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i20588	fail	check:fail	Baz_2.scala:1:7: class Baz needs to be abstract, since def test(): Unit in class Foo is not defined
+i2064.scala	pass	check:pass	
+i2066.scala	pass	check:pass	
+i2071.scala	pass	check:pass	
+i2071_1.scala	pass	check:pass	
+i2081.scala	pass	check:pass	
+i20858	pass	check:pass	
+i20858-min.scala	pass	check:pass	
+i20897.scala	pass	check:pass	
+i20901	fail	check:fail	option: -Ytest-pickler-check (teq has no flag for it)
+i20952.scala	pass	check:pass	
+i21036.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i2104.scala	pass	check:pass	
+i2104b.scala	pass	check:pass	
+i2112.scala	pass	check:pass	
+i21154	fail	check:fail	option: -Ytest-pickler-check (teq has no flag for it)
+i21176-a	pass	check:pass	
+i21176-b	pass	check:pass	
+i21189-alt.scala	pass	check:pass	
+i21189.scala	pass	check:pass	
+i21212.scala	pass	check:pass	
+i21215.scala	pass	check:pass	
+i21239.alt.scala	pass	check:pass	
+i21239.orig.scala	pass	check:pass	
+i21239.scala	pass	check:pass	
+i21256.scala	pass	check:pass	
+i21275.scala	pass	check:pass	
+i21282.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i21295.scala	pass	check:pass	
+i21300.scala	pass	check:pass	
+i21303	fail	-	java source: teq reads none
+i21303a	fail	-	java source: teq reads none
+i21319	fail	-	java source: teq reads none
+i21320a.scala	pass	check:pass	
+i21320b.scala	pass	check:pass	
+i21352a	fail	check:fail	schema.scala:16:5: type mismatch: found Schema[S], required IsUnionOf[String, S] => Schema[S]
+i21352b.scala	fail	check:fail	i21352b.scala:33:35: ambiguous given instances for Reader[<error>]: UnitReader, StringReader
+i21352c.scala	fail	check:fail	i21352c.scala:10:40: expected ':', found '['
+i21360.scala	pass	check:pass	
+i21390.zio.scala	pass	check:pass	
+i2140.scala	pass	check:pass	
+i21402.scala	pass	check:pass	
+i21405.scala	fail	check:fail	i21405.scala:6:19: reference to IO is ambiguous: it is both imported by import o.* and imported subsequently by import p.*
+i21413.scala	pass	check:pass	
+i21415.scala	fail	check:fail	option: -rewrite (teq has no flag for it)
+i21433.scala	pass	check:pass	
+i2152.scala	pass	check:pass	
+i21544.scala	pass	check:pass	
+i21558.orig.scala	pass	check:pass	
+i21558.scala	pass	check:pass	
+i21568.scala	pass	check:pass	
+i21631_joint	fail	-	java source: teq reads none
+i21631_separ	fail	-	java source: teq reads none
+i21635.scala	pass	check:pass	
+i2166.scala	pass	check:pass	
+i21676.scala	fail	check:pass	i21676.scala:3:3: None of the overloaded alternatives of method collect in trait SortedSetOps with types
+i21682.1.scala	fail	check:fail	i21682.1.scala:15:8: no given instance of type Show[(Boolean, Boolean, Boolean) => Nothing] was found for parameter evidence$1
+i21682.2.scala	fail	check:fail	i21682.2.scala:6:3: None of the overloaded alternatives of method apply in object ForAll with types
+i21682.3.scala	pass	check:pass	
+i21742.1.scala	pass	check:pass	
+i21742.2.scala	pass	check:pass	
+i21749.scala	fail	check:fail	option: -no-indent (teq has no flag for it)
+i21755.scala	pass	check:pass	
+i21757.scala	pass	check:pass	
+i21768.scala	fail	check:fail	i21768.scala:7:3: expected end of statement, found 'def'
+i21769.scala	fail	check:fail	i21769.scala:4:19: expected ',' or ')', found identifier
+i21779	fail	check:fail	Test_2.scala:3:5: type mismatch: found (String, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int), required ("a", 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+i21790.scala	pass	check:pass	
+i2188.scala	pass	check:pass	
+i2192.scala	pass	check:pass	
+i21931.scala	pass	check:pass	
+i21951.scala	fail	check:fail	i21951.scala:6:18: No implicit view available from Int => A.
+i21951b.scala	pass	check:pass	
+i2198.scala	pass	check:pass	
+i21981.alt.scala	pass	check:pass	
+i21981.contrak.scala	pass	check:pass	
+i21981.orig.scala	pass	check:pass	
+i21981.scala	pass	check:pass	
+i2200	pass	check:pass	
+i22018.scala	fail	check:fail	i22018.scala:10:3: value name is not a member of SelectableNT[(name : String, age : Int)]
+i2201a.scala	pass	check:pass	
+i2201c.scala	pass	check:pass	
+i22036.scala	fail	check:fail	i22036.scala:3:11: value _1 is not a member of AnyNamedTuple
+i22061.scala	pass	check:pass	
+i22062.scala	fail	check:fail	i22062.scala:26:33: object creation impossible, since def componentFor(cellInfo: CellRenderer.this.companion.CellInfo): Component in trait CellRenderer is not defined
+i22068.less-min.scala	pass	check:pass	
+i22068.orig.scala	pass	check:pass	
+i22068.scala	pass	check:pass	
+i22070	fail	check:fail	macro.scala:16:35: value asInstanceOf is not a member of Any
+i2212.scala	pass	check:pass	
+i22137.scala	pass	check:pass	
+i2218.scala	pass	check:pass	
+i22192.scala	fail	check:fail	i22192.scala:8:8: name is not a field of Some[(name : String)]
+i22193.scala	fail	check:fail	i22193.scala:132:31: value + is not a member of Int
+i22257.fixed.scala	fail	check:fail	i22257.fixed.scala:41:10: illegal cyclic type reference: alias Node of type Node refers back to the type itself
+i22257.orig.scala	fail	check:fail	i22257.orig.scala:41:10: illegal cyclic type reference: alias FP of type FP refers back to the type itself
+i22257.scala	fail	check:fail	i22257.scala:4:6: illegal cyclic type reference: alias Bound1 of type Bound1 refers back to the type itself
+i22266.scala	pass	check:pass	
+i22266.unenum.scala	pass	check:pass	
+i22300.scala	pass	check:pass	
+i2232.scala	fail	check:fail	i2232.scala:25:35: missing parameter type
+i22324.scala	pass	check:pass	
+i22332.scala	pass	check:pass	
+i2234.scala	fail	check:fail	i2234.scala:11:19: no given instance of type Dummy[Int] was found for parameter d
+i2239.scala	pass	check:pass	
+i22408.scala	pass	check:pass	
+i22436	pass	check:pass	
+i22440.scala	pass	check:pass	
+i22456.scala	fail	check:fail	i22456.scala:3:17: expected ':', found 'val'
+i22468.scala	pass	check:pass	
+i22470.scala	pass	check:pass	
+i2250.scala	pass	check:pass	
+i22513.scala	pass	check:pass	
+i22518.scala	pass	check:pass	
+i22527.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i22528.scala	fail	check:fail	i22528.scala:7:30: Baz is a trait; it cannot be instantiated
+i22548.scala	pass	check:pass	
+i22560.scala	pass	check:pass	
+i22560b	pass	check:pass	
+i22567.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i22589.scala	pass	check:pass	
+i22592.scala	pass	check:pass	
+i22593a.scala	pass	check:pass	
+i22593b	pass	check:pass	
+i22608.scala	pass	check:pass	
+i22643.scala	fail	check:fail	i22643.scala:13:3: value nameB is not a member of NamedTuple[Concat[("nameB"), ("ageB")], (String, Int)]
+i22645a.scala	fail	check:fail	i22645a.scala:10:3: value name is not a member of SelectableNT[("name", "age")]
+i22645b.scala	fail	check:fail	i22645b.scala:12:3: value name is not a member of SelectableNT
+i22648.scala	pass	check:pass	
+i22676.scala	pass	check:pass	
+i22713.scala	pass	check:pass	
+i22724.scala	fail	check:pass	atomic.scala:262:37: String cannot be instantiated
+i2278.scala	pass	check:pass	
+i22833-unroll-final-class.scala	pass	check:pass	
+i22879.scala	pass	check:pass	
+i2292.scala	pass	check:pass	
+i22922.scala	fail	check:fail	i22922.scala:57:21: Cannot prove that (Fx2 : Fx2) & U =:= U & (Fx : SourceEffect[A]) & Fx2.
+i22923.scala	pass	check:pass	
+i22944.scala	pass	check:pass	
+i22974a	pass	check:pass	
+i22974b.scala	pass	check:pass	
+i22974c.scala	pass	check:pass	
+i2300.scala	pass	check:pass	
+i23011.scala	pass	check:pass	
+i23022.scala	pass	check:pass	
+i23025.scala	pass	check:pass	
+i23032.scala	pass	check:pass	
+i23054.scala	pass	check:pass	
+i23086.scala	pass	check:pass	
+i23095	pass	check:pass	
+i23113.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i23119.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i23155b.scala	pass	check:pass	
+i23158.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i23194.scala	pass	check:pass	
+i23217.scala	pass	check:pass	
+i23225.scala	fail	check:fail	i23225.scala:5:33: expected ',' or ')', found identifier
+i23237a.scala	pass	check:pass	
+i23237b.scala	fail	check:fail	i23237b.scala:11:58: type mismatch: found Unit => Any, required Shader[Unit, Unit]
+i2324.scala	pass	check:pass	
+i23261.scala	pass	check:pass	
+i23266.scala	fail	check:fail	i23266.scala:4:21: expected '=', found '['
+i23299.scala	pass	check:pass	
+i23310.scala	pass	check:pass	
+i23317.scala	pass	check:pass	
+i2339.scala	pass	check:pass	
+i23398.scala	fail	check:fail	option: -preview (teq has no flag for it)
+i2340.scala	pass	check:pass	
+i23435-min-3.7.scala	fail	check:fail	i23435-min-3.7.scala:6:41: type mismatch: found Or[Int, String] & Or[String, Int], required Or[Int & String, String & Int]
+i2345.scala	pass	check:fail	
+i23451.scala	pass	check:pass	
+i23459.scala	pass	check:pass	
+i23489.scala	fail	check:fail	i23489.scala:4:12: a context bound needs a type constructor with one parameter
+i23496	pass	check:pass	
+i23526.scala	fail	check:fail	i23526.scala:13:23: No ClassTag available for A
+i23530.scala	fail	check:fail	i23530.scala:18:33: type mismatch: found 1, required Repro.dc2.TestPath#AbsMember
+i23611.scala	fail	check:fail	i23611.scala:11:7: type mismatch: found Path => ZStream[Any, Throwable, File], required Path => ZStream[Any, IOException, File]
+i23611a.scala	fail	check:fail	i23611a.scala:11:7: type mismatch: found Path => ZStream[Any, Throwable, File], required Path => ZStream[Any, IOException, File]
+i23616.scala	pass	check:fail	
+i23620.scala	pass	check:pass	
+i23627.scala	fail	check:fail	i23627.scala:18:33: type mismatch: found 1, required Repro.dc2.TestPath[?]#AbsMember
+i2367.scala	pass	check:pass	
+i23734.scala	pass	check:pass	
+i23752.scala	pass	check:pass	
+i23752min.scala	pass	check:pass	
+i23773.scala	pass	check:pass	
+i23773a.scala	pass	check:pass	
+i23817	pass	check:pass	
+i23817_2	pass	check:pass	
+i23885	fail	check:fail	S_1.scala:4:13: expected ',' or ')', found identifier
+i23897.scala	pass	check:pass	
+i239-packageObj.scala	pass	check:pass	
+i2390.scala	pass	check:pass	
+i2391	pass	check:pass	
+i23928.scala	pass	check:pass	
+i2397.scala	pass	check:pass	
+i24007.scala	pass	check:pass	
+i24038a.scala	fail	check:fail	i24038a.scala:27:7: type mismatch: found *:[BufferOf[h], Tuple], required *:[BufferOf[h], M2[t]]
+i24038b.scala	pass	check:pass	
+i24074	fail	-	java source: teq reads none
+i24076.scala	pass	check:pass	
+i24094.scala	pass	check:pass	
+i24097-a.scala	pass	check:pass	
+i24097-b.scala	pass	check:pass	
+i24134	fail	-	java source: teq reads none
+i24134-nested	fail	-	java source: teq reads none
+i24192.scala	pass	check:pass	
+i24206.scala	fail	check:fail	i24206.scala:7:26: missing parameter type
+i24207.scala	pass	check:pass	
+i24249.scala	pass	check:pass	
+i24250.scala	pass	check:pass	
+i2426.scala	fail	check:fail	i2426.scala:1:11: expected 'extends' or a template body, found '@'
+i2437a.scala	pass	check:pass	
+i2437b.scala	pass	check:pass	
+i24456.scala	pass	check:pass	
+i24479.scala	pass	check:pass	
+i24496.scala	pass	check:pass	
+i24507-jframe.scala	fail	check:fail	i24507-jframe.scala:1:59: None of the overloaded alternatives of constructor AccessibleJFrame in class AccessibleJFrame with types
+i24543.scala	fail	check:fail	i24543.scala:7:16: expected ',' or ']', found identifier
+i24557.scala	pass	check:pass	
+i24571.scala	pass	check:pass	
+i24631	fail	-	java source: teq reads none
+i24631b.scala	fail	check:fail	i24631b.scala:4:3: indented definitions expected, def found
+i2468.scala	pass	check:pass	
+i24686.scala	fail	check:fail	i24686.scala:1:75: no given instance of type InPlaceImpl2[DenseMatrix[Double], DenseMatrix[Double]] was found for parameter x$2
+i24689a.scala	pass	check:pass	
+i24689b.scala	pass	check:pass	
+i24694	pass	check:pass	
+i24696.scala	pass	check:pass	
+i24717.scala	fail	check:fail	i24717.scala:10:22: type mismatch: found 123, required 123 & O
+i24750.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i24813.scala	fail	check:fail	i24813.scala:4:21: type t not found
+i24869	fail	check:fail	Utils_1.scala:7:30: expected 'extends' or a template body, found '@'
+i24891.scala	pass	check:pass	
+i24894a	fail	-	java source: teq reads none
+i24894b	pass	check:pass	
+i24894c	fail	-	java source: teq reads none
+i24917.scala	pass	check:pass	
+i24990.scala	pass	check:fail	
+i25002.scala	pass	check:pass	
+i25091.scala	pass	check:pass	
+i25091b.scala	pass	check:pass	
+i25133.scala	pass	check:pass	
+i25164.scala	fail	check:fail	i25164.scala:7:27: expected ':', found 'val'
+i25164b.scala	fail	check:fail	i25164b.scala:3:30: expected ':', found 'val'
+i25164c.scala	fail	check:fail	i25164c.scala:3:19: expected ':', found 'val'
+i25185.scala	pass	check:pass	
+i25240.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i25250.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i2527.scala	pass	check:pass	
+i2527b.scala	pass	check:pass	
+i25292.scala	pass	check:pass	
+i25362	fail	check:fail	Test_2.scala:13:36: No given instance of type Mirror.ProductOf[BigTuple] was found.
+i25417.scala	pass	check:pass	
+i25427.scala	pass	check:pass	
+i25442.scala	pass	check:pass	
+i25500.scala	pass	check:pass	
+i2551	pass	check:pass	
+i25513.scala	pass	check:pass	
+i2554.scala	pass	check:pass	
+i25542.scala	pass	check:pass	
+i25547.scala	fail	check:fail	i25547.scala:11:50: type mismatch: found (? : Any) @RuntimeChecked, required (Int, String, Double)
+i25634	pass	check:fail	
+i2570.scala	fail	check:fail	i2570.scala:17:29: type mismatch: found Int => Int, required (=> Int) => Int
+i25700.scala	pass	check:pass	
+i2576.scala	pass	check:pass	
+i262-null-subtyping.scala	pass	check:pass	
+i2637.scala	pass	check:pass	
+i2663.scala	fail	check:fail	i2663.scala:12:31: type mismatch: found Foo[String], required Foo[String] & Tr
+i2671.scala	pass	check:pass	
+i2672.scala	pass	check:pass	
+i2673.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i2697.scala	pass	check:pass	
+i2723.scala	pass	check:pass	
+i2732.scala	pass	check:pass	
+i2741.scala	pass	check:pass	
+i2745.scala	pass	check:pass	
+i2749.scala	fail	check:fail	i2749.scala:14:4: no given instance of type (Int) ?=> Char was found for parameter of ((Int) ?=> Char) ?=> Boolean
+i2774.scala	pass	check:pass	
+i2788.scala	pass	check:pass	
+i2797a	pass	check:pass	
+i2833.scala	pass	check:pass	
+i2840.scala	pass	check:pass	
+i2856.scala	pass	check:pass	
+i2858.scala	pass	check:pass	
+i2888.scala	pass	check:pass	
+i2903.scala	pass	check:pass	
+i2906.scala	fail	check:fail	i2906.scala:3:11: expected a definition, found 'case'
+i2941.scala	pass	check:pass	
+i2944.scala	pass	check:pass	
+i2945.scala	pass	check:pass	
+i2948.scala	pass	check:pass	
+i2949.scala	fail	check:fail	i2949.scala:1:14: type A is not a member of Foo
+i2973.scala	pass	check:pass	
+i2974.scala	pass	check:pass	
+i2980.scala	pass	check:pass	
+i2981.scala	pass	check:pass	
+i2982.scala	pass	check:pass	
+i2989.scala	pass	check:pass	
+i2997.scala	pass	check:pass	
+i2998.scala	pass	check:pass	
+i3000.scala	pass	check:pass	
+i3050.scala	pass	check:pass	
+i3058.scala	pass	check:pass	
+i3067.scala	pass	check:pass	
+i3082.scala	pass	check:pass	
+i3083.scala	pass	check:pass	
+i3129.scala	pass	check:pass	
+i3130a.scala	fail	check:pass	teq: jvm backend: O$: the local $thistnx516_43 is not in scope of the generated method
+i3130b.scala	pass	check:fail	
+i3130c.scala	pass	check:pass	
+i3130d.scala	fail	check:pass	teq: jvm backend: Test$: the local $thisolpor1_6 is not in scope of the generated method
+i3139.scala	pass	check:pass	
+i3149.scala	pass	check:pass	
+i3149a.scala	pass	check:pass	
+i3168.scala	pass	check:pass	
+i3171.scala	pass	check:pass	
+i3208.scala	pass	check:pass	
+i324.scala	pass	check:pass	
+i3246.scala	pass	check:pass	
+i3248.scala	fail	check:fail	i3248.scala:8:20: a sequence wildcard can only end a sequence pattern
+i3252.scala	pass	check:pass	
+i3264.scala	pass	check:pass	
+i3273	fail	-	java source: teq reads none
+i3302	pass	check:pass	
+i3323b.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i3343.scala	pass	check:pass	
+i3352.scala	pass	check:pass	
+i3381.scala	pass	check:pass	
+i3412.scala	fail	check:fail	i3412.scala:2:9: expected '=', found '@'
+i342.scala	pass	check:pass	
+i3422	pass	check:pass	
+i3433.scala	pass	check:pass	
+i3460.scala	pass	check:pass	
+i3462.scala	pass	check:pass	
+i3467	pass	check:pass	
+i3479.scala	pass	check:pass	
+i3480.scala	pass	check:pass	
+i3488.scala	pass	check:pass	
+i3495.scala	pass	check:pass	
+i3500.scala	pass	check:pass	
+i3506.scala	pass	check:pass	
+i3538.scala	fail	check:fail	i3538.scala:14:3: type mismatch: found Test, required ?{ right: ? }. Note that implicit extension methods cannot be applied because they are ambiguous; both method Wrong in class Test and method Right in class Test provide an extension meth
+i3540.scala	fail	check:fail	i3540.scala:3:18: Implicit classes must accept exactly one primary constructor parameter
+i3542-1.scala	pass	check:pass	
+i3542-2.scala	pass	check:pass	
+i3544.scala	pass	check:pass	
+i3553.scala	pass	check:pass	
+i3561.scala	pass	check:pass	
+i3564.scala	pass	check:pass	
+i3585.scala	pass	check:fail	
+i3588.scala	pass	check:pass	
+i3589b.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i3590.scala	pass	check:fail	
+i3591.scala	pass	check:pass	
+i3596.scala	pass	check:pass	
+i3598.scala	pass	check:pass	
+i3606.scala	pass	check:pass	
+i3607.scala	pass	check:pass	
+i3608.scala	fail	check:pass	teq: jvm backend: B: the local $thisu5f1zx_6 is not in scope of the generated method
+i3633.scala	pass	check:pass	
+i3636.scala	pass	check:pass	
+i3637.scala	pass	check:pass	
+i3638.scala	pass	check:fail	
+i3647.scala	pass	check:pass	
+i3658.scala	pass	check:pass	
+i3666-gadt.scala	fail	check:fail	i3666-gadt.scala:63:23: expected ']', found '='
+i3669.scala	pass	check:pass	
+i3692.scala	pass	check:pass	
+i3702.scala	pass	check:pass	
+i3703.scala	pass	check:pass	
+i3736.scala	pass	check:fail	
+i3816.scala	pass	check:pass	
+i3857.scala	pass	check:pass	
+i3873.scala	pass	check:pass	
+i3909.scala	pass	check:pass	
+i3917.scala	pass	check:pass	
+i3920.scala	fail	check:fail	i3920.scala:7:26: expected ':', found 'val'
+i3945.scala	pass	check:pass	
+i3955.scala	fail	check:fail	i3955.scala:4:23: expected ']', found '='
+i3956.scala	pass	check:pass	
+i3964.scala	fail	check:fail	i3964.scala:7:21: expected ':', found 'val'
+i3964a	fail	check:fail	Defs_1.scala:7:21: expected ':', found 'val'
+i3965.scala	fail	check:fail	i3965.scala:17:5: Ambiguous overload. The overloaded alternatives of method optionSequence1 in class Test with types
+i3965a.scala	pass	check:pass	
+i3971.scala	pass	check:pass	
+i3976.scala	pass	check:pass	
+i4006.scala	pass	check:pass	
+i4006b.scala	pass	check:pass	
+i4006c.scala	pass	check:pass	
+i4031.scala	pass	check:pass	
+i4032.scala	pass	check:pass	
+i4075-gadt.scala	fail	check:fail	i4075-gadt.scala:11:23: type mismatch: found One[a], required One[Int]
+i4125.scala	fail	check:fail	i4125.scala:4:21: expected ',' or ')', found identifier
+i4130.scala	pass	check:pass	
+i4147.scala	fail	check:fail	i4147.scala:9:31: no given instance of type Higher[Super] was found for parameter bla
+i4166.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i4167	pass	check:pass	
+i4176-gadt.scala	fail	check:fail	i4176-gadt.scala:25:69: type mismatch: found TSum[M$1, N$1, R$1], required TSum[M, N, R]
+i4177.scala	pass	check:pass	
+i4180.scala	pass	check:pass	
+i4184.scala	pass	check:pass	
+i4185.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i4188	pass	check:pass	
+i4196.scala	fail	check:fail	i4196.scala:4:9: values of types (Unit) ?=> Int and Int cannot be compared with == or !=
+i4198.scala	pass	check:pass	
+i4203.scala	pass	check:pass	
+i4316.scala	pass	check:pass	
+i4318.scala	pass	check:pass	
+i4322.scala	pass	check:pass	
+i4328.scala	pass	check:pass	
+i4375.scala	pass	check:pass	
+i4395.scala	fail	check:fail	i4395.scala:2:14: not found: ##
+i4395b.scala	fail	check:fail	i4395b.scala:2:14: not found: ==
+i4419.scala	pass	check:pass	
+i4430.scala	pass	check:pass	
+i4449.scala	pass	check:pass	
+i4466a.scala	pass	check:pass	
+i4466b.scala	pass	check:pass	
+i4471-gadt.scala	fail	check:fail	i4471-gadt.scala:25:11: type mismatch: found Shuffle[((v, w), u), ((v, u), w)], required Shuffle[A1, A4]
+i4509.scala	fail	check:fail	i4509.scala:4:26: expected ',' or ')', found identifier
+i4526-2.scala	pass	check:pass	
+i4526a.scala	pass	check:pass	
+i4526b.scala	pass	check:pass	
+i4557.scala	pass	check:pass	
+i4557a.scala	pass	check:pass	
+i4561.scala	pass	check:pass	
+i4564.scala	pass	check:pass	
+i4582.scala	pass	check:pass	
+i4586.scala	pass	check:pass	
+i4588.scala	pass	check:pass	
+i4590.scala	pass	check:pass	
+i4623.scala	pass	check:pass	
+i4659c.scala	pass	check:pass	
+i4674.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i4678.scala	pass	check:pass	
+i4720.scala	pass	check:pass	
+i4725.scala	fail	check:fail	i4725.scala:7:17: no given instance of type (T[Int]) ?=> T[List[Int]] was found for parameter ev
+i4739.java	fail	-	java source: teq reads none
+i4742.scala	pass	check:pass	
+i4753.scala	pass	check:pass	
+i4753b.scala	pass	check:pass	
+i4758	pass	check:pass	
+i4785.scala	fail	check:fail	i4785.scala:10:24: type mismatch: found Array[String], required Seq[String]
+i480.scala	pass	check:pass	
+i480a.scala	pass	check:pass	
+i4811.scala	pass	check:pass	
+i4819.scala	fail	check:fail	i4819.scala:9:7: class Foo inherits concat as [Dummy](suffix: Int): Y and as (suffix: Int): X, which are both called concat$Int in the JavaScript output, since no ancestor declares the two together; declare the alternatives in one trait
+i4820.scala	pass	check:pass	
+i4820b.scala	pass	check:pass	
+i4837.scala	pass	check:pass	
+i4854.scala	pass	check:pass	
+i4863.scala	pass	check:pass	
+i4867.scala	pass	check:pass	
+i4884.scala	fail	check:fail	i4884.scala:37:27: type argument a does not conform to upper bound D
+i4906.scala	fail	check:fail	i4906.scala:34:26: type argument a does not conform to upper bound D
+i4984.scala	fail	check:fail	i4984.scala:16:10: this is not a case class or enum case
+i4987.scala	pass	check:pass	
+i4988.scala	pass	check:pass	
+i4996.scala	pass	check:pass	
+i4999.scala	pass	check:pass	
+i5001.scala	pass	check:pass	
+i5006.scala	fail	check:fail	i5006.scala:2:16: not found: asInstanceOf
+i503.scala	pass	check:pass	
+i5033b.scala	pass	check:pass	
+i5036.scala	pass	check:pass	
+i5039.scala	pass	check:pass	
+i5068-gadt.scala	pass	check:pass	
+i5090.scala	pass	check:pass	
+i5107.scala	pass	check:pass	
+i5139.scala	pass	check:pass	
+i5140	fail	-	java source: teq reads none
+i5145.scala	pass	check:pass	
+i518.scala	pass	check:pass	
+i5188.scala	pass	check:pass	
+i523.scala	pass	check:pass	
+i5271.scala	pass	check:pass	
+i5288.scala	pass	check:pass	
+i5295.scala	pass	check:pass	
+i530-import-symbolic.scala	pass	check:pass	
+i5309.scala	pass	check:pass	
+i5328.scala	fail	check:fail	i5328.scala:7:7: expected ']', found '='
+i5338.scala	pass	check:pass	
+i536.scala	pass	check:fail	
+i540.scala	pass	check:pass	
+i5402.scala	fail	check:fail	i5402.scala:12:17: expected ')', found '@'
+i5411.scala	pass	check:pass	
+i5413-a.scala	pass	check:pass	
+i5413-b.scala	pass	check:pass	
+i5418.scala	pass	check:pass	
+i5427.scala	fail	check:fail	i5427.scala:35:17: no given instance of type f1.Out was found for parameter f2
+i5481.scala	fail	check:fail	i5481.scala:15:38: missing parameter type
+i5492.scala	pass	check:pass	
+i5498-postfixOps.scala	pass	check:pass	
+i5526a.scala	pass	check:pass	
+i5526b.scala	pass	check:pass	
+i5572.scala	pass	check:pass	
+i5574.scala	fail	check:fail	i5574.scala:8:19: type argument f does not have the same kind as its bound [_]
+i5588a.scala	pass	check:pass	
+i5588b.scala	fail	check:fail	i5588b.scala:18:5: this expression cannot be assigned to
+i5592.scala	pass	check:pass	
+i5625.scala	pass	check:pass	
+i5625b.scala	fail	check:fail	i5625b.scala:11:13: type argument t does not conform to upper bound AnyVal
+i5650.scala	pass	check:pass	
+i5655	fail	-	java source: teq reads none
+i566.scala	pass	check:pass	
+i5666.scala	pass	check:pass	
+i5699.scala	pass	check:pass	
+i5700.scala	pass	check:pass	
+i5711.scala	pass	check:pass	
+i5720.scala	pass	check:pass	
+i5750.scala	pass	check:pass	
+i576.scala	pass	check:pass	
+i5765.scala	pass	check:pass	
+i5766.scala	fail	check:pass	teq: jvm backend: Test1$$anon$rdz9ms_102$rdz9ms_174.next: a lazy val that is not in scope of the generated method
+i5773.scala	fail	check:fail	i5773.scala:14:18: Implicit classes must accept exactly one primary constructor parameter
+i5773a.scala	pass	check:pass	
+i5773b.scala	fail	check:fail	i5773b.scala:21:13: value appendS is not a member of Int
+i5793	pass	check:pass	
+i5794.scala	pass	check:pass	
+i5827.scala	pass	check:pass	
+i5833.scala	pass	check:pass	
+i583a.scala	pass	check:pass	
+i5844.scala	pass	check:pass	
+i5915.scala	pass	check:pass	
+i5938.scala	fail	check:fail	i5938.scala:17:3: 'erased' is not part of the supported Scala subset
+i5966.scala	pass	check:pass	
+i5970.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i5978.scala	fail	check:fail	i5978.scala:92:9: object creation impossible, since def apply(v1: TC): TC in trait Function1 is not defined
+i5980.scala	pass	check:pass	
+i5997.scala	pass	check:pass	
+i6003.scala	pass	check:pass	
+i6009a.scala	fail	check:fail	i6009a.scala:4:22: expected ',' or ')', found identifier
+i6009b.scala	fail	check:fail	i6009b.scala:4:22: expected ',' or ')', found identifier
+i6009c.scala	fail	check:fail	i6009c.scala:4:22: expected ',' or ')', found identifier
+i6014-gadt.scala	fail	check:fail	i6014-gadt.scala:20:17: type argument f does not have the same kind as its bound [_]
+i6015.scala	pass	check:pass	
+i6033.scala	pass	check:pass	
+i6054.scala	pass	check:pass	
+i6083.scala	fail	check:fail	i6083.scala:1:13: type AnyKind not found
+i6089.scala	pass	check:pass	
+i6116.scala	pass	check:pass	
+i6126.scala	pass	check:pass	
+i6127.scala	pass	check:pass	
+i6146.scala	pass	check:pass	
+i6151	fail	-	java source: teq reads none
+i6159.scala	pass	check:pass	
+i618.scala	pass	check:pass	
+i6190a.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i6190c.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i6199a.scala	pass	check:pass	
+i6199b.scala	pass	check:pass	
+i6199c.scala	pass	check:pass	
+i6213.scala	pass	check:pass	
+i6224.scala	pass	check:pass	
+i6227.scala	pass	check:pass	
+i6238.scala	pass	check:pass	
+i6241.scala	pass	check:fail	
+i6247.scala	pass	check:pass	
+i6286.scala	pass	check:pass	
+i6287.scala	pass	check:pass	
+i6288.scala	pass	check:pass	
+i6290.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i6312.scala	pass	check:pass	
+i6312b.scala	pass	check:pass	
+i6373.scala	pass	check:pass	
+i6375.scala	pass	check:pass	
+i6384.scala	fail	check:fail	i6384.scala:12:21: no given instance of type Tc1[X] was found for parameter e
+i6385.scala	fail	check:fail	i6385.scala:15:21: no given instance of type Tc2[X] was found for parameter e
+i6395.scala	pass	check:pass	
+i6419.scala	pass	check:pass	
+i6443.scala	pass	check:pass	
+i6450.scala	fail	check:fail	i6450.scala:24:17: type mismatch: found Double, required Int
+i6451.scala	pass	check:pass	
+i6505.scala	fail	check:fail	i6505.scala:16:16: type mismatch: found (Foo.this.E[Int], Foo.this.E[Int]), required F[Args]
+i6506.scala	pass	check:pass	
+i6507.scala	pass	check:pass	
+i6507b.scala	pass	check:pass	
+i6561.scala	pass	check:pass	
+i6565.scala	pass	check:pass	
+i6621.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i6635.scala	fail	check:fail	i6635.scala:30:74: type mismatch: found (x : Int), required e1.A
+i6635a.scala	fail	check:fail	i6635a.scala:13:75: type mismatch: found e1.A, required Int
+i6655.scala	pass	check:pass	
+i6662.scala	fail	check:fail	i6662.scala:7:46: type mismatch: found Null, required Opt[A]
+i6665	pass	check:pass	
+i6670.scala	pass	check:pass	
+i6678.scala	pass	check:pass	
+i6682a.scala	pass	check:pass	
+i6682b.scala	pass	check:pass	
+i6683.scala	pass	check:pass	
+i6705.scala	pass	check:pass	
+i6716.scala	pass	check:fail	
+i6734.scala	pass	check:pass	
+i6745.scala	pass	check:pass	
+i6750.scala	pass	check:pass	
+i6781.scala	fail	check:fail	i6781.scala:9:26: type mismatch: found Any, required Nat
+i6822.scala	pass	check:pass	
+i6828.scala	pass	check:pass	
+i6847.scala	pass	check:pass	
+i6849a.scala	pass	check:pass	
+i6849b.scala	pass	check:pass	
+i6854.scala	pass	check:pass	
+i6862	pass	check:pass	
+i6862b	pass	check:pass	
+i6863	pass	check:pass	
+i6864.scala	pass	check:pass	
+i6891.scala	pass	check:pass	
+i6900.scala	pass	check:pass	
+i6909.scala	pass	check:pass	
+i6914.scala	fail	check:fail	i6914.scala:8:9: object creation impossible, since def apply(v1: Liftable[T]): ToExpr[T] in trait Function1 is not defined
+i6938.scala	pass	check:pass	
+i6989	pass	check:pass	
+i7034.scala	pass	check:pass	
+i7041.scala	pass	check:fail	
+i7044.scala	pass	check:pass	
+i7056.scala	fail	check:fail	i7056.scala:19:9: value idnt1 is not a member of Any
+i7067.scala	pass	check:pass	
+i7070.scala	pass	check:pass	
+i7078.scala	pass	check:pass	
+i7082.scala	pass	check:pass	
+i7084.scala	pass	check:pass	
+i7087.scala	pass	check:pass	
+i7103.scala	pass	check:pass	
+i7119.scala	pass	check:pass	
+i7132.scala	pass	check:fail	
+i7149.scala	pass	check:pass	
+i7159.scala	pass	check:pass	
+i7175.scala	pass	check:fail	
+i7217.scala	pass	check:pass	
+i7219.scala	pass	check:pass	
+i7219b.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i7219c.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i7247.scala	pass	check:pass	
+i7296.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i7304.scala	pass	check:pass	
+i7342	pass	check:pass	
+i7359.scala	pass	check:pass	
+i7375.scala	pass	check:pass	
+i7383.scala	pass	check:pass	
+i739.scala	pass	check:pass	
+i7392.scala	pass	check:pass	
+i7401.scala	pass	check:pass	
+i7403.scala	pass	check:pass	
+i7413.scala	fail	check:fail	i7413.scala:20:12: value greeter is not a member of Int
+i7414.scala	pass	check:pass	
+i7421.scala	fail	check:fail	i7421.scala:7:9: expected end of statement, found 'else'
+i7424.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i7424b.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i7424c.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i7428.scala	pass	check:pass	
+i743.scala	pass	check:pass	
+i7445a.scala	pass	check:pass	
+i7445b.scala	pass	check:pass	
+i7452.scala	fail	check:fail	i7452.scala:23:23: no given instance of type Aux[Option, Option[String], Nothing] was found for parameter abs
+i7458.scala	pass	check:pass	
+i7467.scala	fail	check:fail	i7467.scala:9:16: method getListCellRendererComponent overrides nothing
+i7477.scala	pass	check:pass	
+i7515.scala	pass	check:pass	
+i7516.scala	pass	check:pass	
+i7525	fail	-	java source: teq reads none
+i7532.scala	pass	check:pass	
+i7575.scala	pass	check:fail	
+i7586.scala	fail	check:fail	i7586.scala:37:37: Cannot prove that (m4_2 : S[S[S[Nat]]]) <:< S[S[S[S[Z]]]].
+i7602.scala	pass	check:pass	
+i7648.scala	pass	check:pass	
+i7650	pass	check:pass	
+i7653.scala	fail	check:fail	i7653.scala:9:5: type mismatch: found AnyRef, required Option[Nothing]
+i7655.scala	pass	check:pass	
+i7700.scala	pass	check:pass	
+i7711	pass	check:pass	
+i7734.scala	pass	check:pass	
+i7735.scala	pass	check:pass	
+i7739.scala	pass	check:pass	
+i7740a.scala	pass	check:pass	
+i7740b.scala	pass	check:pass	
+i7741.scala	fail	check:fail	i7741.scala:7:5: 'erased' is not part of the supported Scala subset
+i7743.scala	pass	check:pass	
+i7744.scala	pass	check:pass	
+i7757.scala	fail	check:fail	i7757.scala:10:3: None of the overloaded alternatives of method g in trait Foo with types
+i7778b.scala	pass	check:pass	
+i7790.scala	pass	check:pass	
+i7793.scala	pass	check:pass	
+i7807.scala	pass	check:pass	
+i7809.scala	pass	check:pass	
+i7819.scala	fail	check:pass	teq: jvm backend: Foo$.equals$extension: the underlying value of a value class without an accessor
+i782.scala	pass	check:pass	
+i7822.scala	pass	check:pass	
+i7829.scala	pass	check:pass	
+i7840.scala	pass	check:fail	
+i7851.scala	fail	check:fail	i7851.scala:35:108: (Wrapped[Float], Wrapped[Float], Wrapped[Float]) => Wrapped[Float] cannot be tupled as Tuple => Wrapped[Float]
+i7863.scala	pass	check:pass	
+i7872.scala	pass	check:pass	
+i7876.scala	pass	check:pass	
+i7877.scala	fail	check:fail	i7877.scala:20:49: Cannot prove that Int =:= Nothing.
+i7878.scala	pass	check:pass	
+i7888.scala	pass	check:pass	
+i7893.scala	pass	check:pass	
+i7894.scala	pass	check:pass	
+i7920.scala	fail	check:fail	i7920.scala:6:14: value glass is not a member of Foo
+i7944.scala	pass	check:pass	
+i7959.java	fail	-	java source: teq reads none
+i7964.scala	fail	check:fail	i7964.scala:9:10: cannot reduce inline match with
+i7965.scala	pass	check:pass	
+i7993.scala	pass	check:pass	
+i7998.scala	pass	check:pass	
+i801.scala	pass	check:pass	
+i8031.scala	pass	check:fail	
+i8042	fail	-	java source: teq reads none
+i8049.scala	pass	check:pass	
+i8056.scala	pass	check:pass	
+i8067.scala	pass	check:pass	
+i8069.scala	fail	check:fail	i8069.scala:12:19: type mismatch: found (d : a.B), required c.a.B
+i8083.scala	fail	check:fail	i8083.scala:6:68: type mismatch: found (A, that.a.B), required ((that.a : A), that.a.B)
+i8084.scala	pass	check:pass	
+i8111.scala	pass	check:fail	
+i8128.scala	pass	check:pass	
+i8129.scala	pass	check:pass	
+i8143.scala	pass	check:pass	
+i815.scala	pass	check:pass	
+i8151.scala	pass	check:pass	
+i8152.scala	pass	check:pass	
+i8181.scala	pass	check:pass	
+i8182.scala	fail	check:fail	i8182.scala:10:12: value show is not a member of Option[String]
+i8188a.scala	pass	check:pass	
+i8188b.scala	pass	check:pass	
+i8188c.scala	pass	check:pass	
+i8198.scala	pass	check:pass	
+i8241.scala	pass	check:pass	
+i8256.scala	pass	check:pass	
+i8276.scala	pass	check:pass	
+i828.scala	pass	check:pass	
+i8284.scala	pass	check:pass	
+i830.scala	pass	check:pass	
+i8300.scala	pass	check:fail	
+i831.scala	pass	check:pass	
+i8319.scala	pass	check:pass	
+i8321.scala	fail	check:fail	i8321.scala:7:18: type mismatch: found ((A, B)) => Concat[A, (_$1 : B)], required ((A, B)) => Concat[A, B]
+i8338.scala	fail	check:fail	i8338.scala:6:23: error overriding method mkX in trait B of type (i: Int): B#X: method mkX of type (i: Int): Int has incompatible type
+i8344-1.scala	fail	check:fail	i8344-1.scala:9:35: type mismatch: found Datatype[T], required Datatype[*:[H, T]]
+i8344-2.scala	pass	check:pass	
+i8357.scala	pass	check:pass	
+i8368.scala	pass	check:pass	
+i8378.scala	fail	check:fail	i8378.scala:15:25: type mismatch: found (A, B) => C, required (A, A) => C
+i8391.scala	pass	check:pass	
+i8397.scala	pass	check:pass	
+i8404.scala	pass	check:pass	
+i8424.scala	pass	check:fail	
+i8449.scala	pass	check:pass	
+i8491.scala	fail	check:fail	i8491.scala:5:38: type mismatch: found Bar, required Foo[?0]
+i851.java	fail	-	java source: teq reads none
+i8516.scala	pass	check:pass	
+i8530.scala	pass	check:pass	
+i8537.scala	pass	check:pass	
+i8573.scala	pass	check:pass	
+i8577.scala	fail	check:fail	i8577.scala:21:10: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8581	fail	check:fail	Test_2.scala:14:5: None of the overloaded alternatives of method expectMsgType in class Test with types
+i8606.scala	pass	check:pass	
+i8612.scala	pass	check:pass	
+i8615.scala	pass	check:pass	
+i8615b.scala	pass	check:pass	
+i8623.scala	pass	check:pass	
+i864.scala	pass	check:pass	
+i8666.scala	pass	check:pass	
+i8712.scala	pass	check:pass	
+i8748.scala	pass	check:pass	
+i8750.scala	pass	check:pass	
+i8758.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i877.scala	pass	check:pass	
+i878.scala	pass	check:pass	
+i8781.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i8786.scala	pass	check:pass	
+i880.scala	pass	check:pass	
+i8801.scala	pass	check:pass	
+i8802.scala	pass	check:pass	
+i8802a.scala	pass	check:pass	
+i8825.scala	pass	check:pass	
+i8833.scala	pass	check:pass	
+i884.scala	pass	check:pass	
+i8842a.scala	pass	check:pass	
+i8842b.scala	pass	check:pass	
+i8843.scala	pass	check:pass	
+i8845.scala	pass	check:pass	
+i8846.scala	pass	check:pass	
+i8874.scala	pass	check:pass	
+i8875.scala	pass	check:pass	
+i8881.scala	pass	check:pass	
+i8892.scala	fail	check:fail	i8892.scala:14:27: value + is not a member of Any
+i8900-cycle.scala	pass	check:pass	
+i8900-polyfunction.scala	pass	check:pass	
+i8900-unflip.scala	pass	check:pass	
+i8900a.scala	pass	check:pass	
+i8900a2.scala	pass	check:pass	
+i8900a3.scala	pass	check:pass	
+i8920	pass	check:fail	
+i8921.scala	pass	check:pass	
+i8925.scala	pass	check:pass	
+i8927.scala	fail	check:fail	i8927.scala:3:15: type AnyKind not found
+i8933.scala	fail	check:fail	i8933.scala:12:7: error overriding method foo in trait Top of type Foo[Top.this.F]: method foo of type Foo[F] has incompatible type
+i8945.scala	fail	check:fail	i8945.scala:21:28: expected end of statement, found identifier
+i8955.scala	pass	check:pass	
+i8956.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i8963.scala	pass	check:fail	
+i8967.scala	pass	check:pass	
+i8968.scala	pass	check:pass	
+i8972.scala	fail	check:fail	i8972.scala:9:10: type mismatch: found (u$0 : num.Nat), required num.Nat
+i8997.scala	pass	check:pass	
+i903.scala	fail	check:fail	i903.scala:20:13: too many arguments: expected 1
+i9045.scala	pass	check:pass	
+i9046.scala	pass	check:pass	
+i9050.scala	pass	check:fail	
+i9051.scala	pass	check:fail	
+i9052	pass	check:pass	
+i9069	pass	check:pass	
+i9103.scala	fail	check:fail	i9103.scala:26:36: no given instance of type Permissions was found for parameter e
+i9109.scala	pass	check:pass	
+i9150-a.scala	pass	check:pass	
+i9150-b.scala	pass	check:pass	
+i9202.scala	pass	check:pass	
+i9207.scala	pass	check:pass	
+i9213.scala	fail	check:pass	teq: jvm backend: O$: no @jvm intrinsic or body for newString of java/lang/String
+i9224.scala	pass	check:pass	
+i9226.scala	pass	check:pass	
+i9228.scala	pass	check:pass	
+i9248.scala	pass	check:pass	
+i9260.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i9266.scala	fail	check:fail	i9266.scala:3:23: expected a definition, found identifier
+i9267.scala	pass	check:pass	
+i9290	pass	check:pass	
+i9295.scala	fail	check:fail	teq: jvm backend: i9295$package$.baz: JavaScript interop
+i9295b.scala	fail	check:fail	teq: jvm backend: i9295b$package$.baz: JavaScript interop
+i9295c.scala	fail	check:fail	teq: jvm backend: i9295c$package$.baz: JavaScript interop
+i9295d.scala	fail	check:fail	teq: jvm backend: i9295d$package$.baz: JavaScript interop
+i9307.scala	pass	check:pass	
+i9314.scala	pass	check:pass	
+i9342a.scala	pass	check:pass	
+i9342b.scala	pass	check:pass	
+i9342c.scala	pass	check:pass	
+i9352.scala	pass	check:pass	
+i9355	pass	check:fail	
+i9363.scala	pass	check:pass	
+i939.scala	pass	check:pass	
+i9391.scala	pass	check:pass	
+i9392	fail	-	java source: teq reads none
+i94-nada.scala	pass	check:pass	
+i9403.scala	fail	check:fail	i9403.scala:7:30: type mismatch: found false, required AnyRef{def compareTo(y: Boolean): Int}
+i941.scala	pass	check:pass	
+i9457.scala	pass	check:pass	
+i9464.scala	pass	check:pass	
+i947.scala	pass	check:pass	
+i9478.scala	pass	check:pass	
+i9479.scala	pass	check:pass	
+i9482.scala	fail	check:fail	i9482.scala:9:26: no given instance of type OptManifest[Int] was found for parameter evidence$1
+i9509.scala	pass	check:pass	
+i9515.scala	pass	check:pass	
+i9525	fail	-	java source: teq reads none
+i9529.scala	pass	check:pass	
+i9530.scala	pass	check:pass	
+i9531.scala	pass	check:pass	
+i9533.scala	pass	check:pass	
+i9562.scala	pass	check:pass	
+i9567.scala	pass	check:pass	
+i9568.scala	pass	check:pass	
+i9626.scala	pass	check:pass	
+i9667.scala	pass	check:pass	
+i9676.scala	fail	check:fail	i9676.scala:6:33: type mismatch: found SubtypeOf[F, G], required SubtypeOf[[A] =>> List[A], [A] =>> Seq[A]]
+i9717	pass	check:pass	
+i974.scala	pass	check:pass	
+i9749.scala	pass	check:pass	
+i9751.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i9751b.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i9769.scala	pass	check:pass	
+i9775.scala	pass	check:pass	
+i9776.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i9780.scala	pass	check:fail	
+i9781.scala	pass	check:pass	
+i9782.scala	pass	check:pass	
+i9788.scala	pass	check:pass	
+i9793.scala	pass	check:pass	
+i9804.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+i982.scala	pass	check:pass	
+i9828.scala	pass	check:pass	
+i9833.scala	fail	check:fail	i9833.scala:6:28: type mismatch: found A, required B
+i9841b.scala	pass	check:pass	
+i9844.scala	pass	check:pass	
+i9965.scala	pass	check:pass	
+i9967.scala	pass	check:fail	
+i9977.scala	pass	check:pass	
+i998.scala	pass	check:pass	
+i9992.scala	pass	check:pass	
+i9994.scala	pass	check:pass	
+i9996.scala	pass	check:pass	
+i9999.scala	fail	check:fail	i9999.scala:10:16: type mismatch: found A, required M2[(x : A | B)]
+i9999a.scala	fail	check:fail	i9999a.scala:9:8: type mismatch: found Any, required T[(x : Any)]
+if-parse.scala	pass	check:pass	
+ift-assign.scala	pass	check:pass	
+ilya	fail	-	java source: teq reads none
+ilya2	fail	-	java source: teq reads none
+imp2-pos.scala	pass	check:pass	
+implicit-conversion.scala	pass	check:pass	
+implicit-dep.scala	pass	check:pass	
+implicit-divergent.scala	pass	check:pass	
+implicit-infix-ops.scala	pass	check:fail	
+implicit-lower-bound.scala	fail	check:fail	implicit-lower-bound.scala:13:7: No implicit view available from Int => Any.
+implicit-match-and-inline-match.scala	fail	check:fail	implicit-match-and-inline-match.scala:9:44: type t not found
+implicit-match-nested.scala	fail	check:fail	implicit-match-nested.scala:15:21: type t not found
+implicit-prefix-disambiguation.scala	pass	check:pass	
+implicit-scope-loop.scala	pass	check:pass	
+implicit-scope.scala	pass	check:pass	
+implicit-shadowing.scala	pass	check:pass	
+implicit-unwrap-tc.scala	pass	check:pass	
+implicitDivergenc.scala	pass	check:pass	
+implicitFuns.scala	fail	check:fail	implicitFuns.scala:25:19: value unary_- is not a member of Int
+implicitNums.scala	pass	check:pass	
+implicit_cache.scala	pass	check:pass	
+implicit_tparam.scala	fail	check:fail	implicit_tparam.scala:11:9: no given instance of type Bar was found for parameter bar
+implicitonSelect.scala	pass	check:pass	
+import-rewrite	pass	check:fail	
+imports-pos.scala	fail	check:fail	imports-pos.scala:8:10: PrintStream is not a valid import prefix, since it is not an immutable path
+indent-colons.scala	fail	check:fail	indent-colons.scala:146:11: value + is not a member of Int
+indent-in-parens.scala	fail	check:fail	indent-in-parens.scala:47:11: expected '}', found identifier
+indent.scala	pass	check:fail	
+indent2.scala	pass	check:pass	
+indent3.scala	pass	check:pass	
+indent4.scala	fail	check:fail	indent4.scala:16:5: expected an expression, found 'val'
+indented-parens.scala	fail	check:fail	indented-parens.scala:7:5: operator + cannot be applied to Int and Int => Int
+inf.scala	pass	check:pass	
+infer-function-type-in-union.scala	fail	check:fail	infer-function-type-in-union.scala:20:5: missing parameter type
+infer-tracked-1.scala	fail	check:fail	infer-tracked-1.scala:29:32: type mismatch: found 6, required Test.IntSet.ord.T
+infer-tracked-explicit-witness.scala	fail	check:fail	infer-tracked-explicit-witness.scala:12:12: a parent has to be a class or a trait
+infer-tracked-parent-refinements.scala	pass	check:pass	
+infer-tracked-parsercombinators-expanded.scala	fail	check:fail	infer-tracked-parsercombinators-expanded.scala:63:24: type mismatch: found (stream : ListBuffer[Int]), required c.f.Context
+infer-tracked.scala	fail	check:fail	infer-tracked.scala:39:16: type mismatch: found f.x.T, required Int
+infer.scala	pass	check:pass	
+infer1.scala	pass	check:pass	
+infer2-pos.scala	pass	check:pass	
+inferOverloaded.scala	fail	check:fail	inferOverloaded.scala:32:3: type mismatch: found ((Int, String)) => Int, required (Int, String) => Any
+inferbroadtype.scala	pass	check:pass	
+inferred.scala	pass	check:pass	
+infersingle.scala	fail	check:fail	infersingle.scala:47:39: expected ']', found '.'
+infinite-loop-potential.scala	pass	check:pass	
+infix-enum.scala	pass	check:pass	
+inine-unnapply.scala	pass	check:pass	
+init.scala	pass	check:fail	
+injectivity-gadt.scala	fail	check:fail	injectivity-gadt.scala:9:26: type mismatch: found (A, B), required (C, D)
+inline-access-levels	pass	check:pass	
+inline-apply.scala	pass	check:pass	
+inline-case-intrinsics.scala	pass	check:pass	
+inline-caseclass.scala	fail	check:fail	inline-caseclass.scala:10:23: type mismatch: found Any, required Nat
+inline-constfold.scala	pass	check:pass	
+inline-eta.scala	pass	check:pass	
+inline-i1773.scala	pass	check:pass	
+inline-i2570.scala	pass	check:pass	
+inline-joint	pass	check:pass	
+inline-match-gadt-nested.scala	pass	check:pass	
+inline-match-gadt.scala	pass	check:pass	
+inline-match-separate	pass	check:pass	
+inline-match-specialize.scala	pass	check:pass	
+inline-match-sub-cases.scala	fail	check:fail	inline-match-sub-cases.scala:8:19: expected '=>', found 'match'
+inline-named-typeargs.scala	pass	check:pass	
+inline-null-wrapper.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
+inline-rewrite.scala	pass	check:pass	
+inline-separate	fail	check:fail	Test_2.scala:6:12: Implicit search problem too large. an implicit search was terminated with failure after trying 50000 expressions. The root candidate for the search was: Foo
+inline-t2425.scala	pass	check:fail	
+inline-unapply.scala	pass	check:pass	
+inline-val-constValue-1.scala	pass	check:pass	
+inline-val-constValue-2.scala	pass	check:pass	
+inline-val-constValue-3.scala	pass	check:pass	
+inline-vals.scala	fail	check:fail	inline-vals.scala:14:33: inline value must have a literal constant type
+inline3.scala	pass	check:pass	
+inlineAccesses.scala	pass	check:pass	
+inlined-class.scala	pass	check:pass	
+inlined-inline-param.scala	pass	check:pass	
+inlined-the.scala	pass	check:pass	
+innerclass.scala	pass	check:pass	
+interfaceObject.scala	pass	check:pass	
+interleaving-ba.scala	fail	check:fail	interleaving-ba.scala:6:20: expected '=', found '['
+interleaving-chainedParams.scala	fail	check:fail	interleaving-chainedParams.scala:8:29: expected '=', found '['
+interleaving-classless.scala	fail	check:fail	interleaving-classless.scala:2:12: expected '=', found '['
+interleaving-functor.scala	fail	check:fail	interleaving-functor.scala:7:24: expected '=', found '['
+interleaving-newline.scala	fail	check:fail	interleaving-newline.scala:4:9: expected an expression, found '['
+interleaving-overload.cleanup.scala	pass	check:pass	
+interleaving-overload.scala	fail	check:fail	interleaving-overload.scala:4:22: expected '=', found '['
+interleaving-params.scala	fail	check:fail	interleaving-params.scala:4:21: expected '=', found '['
+interleaving-signatureCollision.scala	fail	check:fail	interleaving-signatureCollision.scala:4:17: expected '=', found '['
+interleaving-typeApply.scala	fail	check:fail	interleaving-typeApply.scala:5:35: expected '=', found '['
+interop-tostring.scala	pass	check:pass	
+interop-type-field.scala	fail	check:fail	interop-type-field.scala:4:27: type mismatch: found Class[_], required Class[Integer]
+intersection.scala	pass	check:pass	
+into-bigint.scala	fail	check:fail	option: -preview (teq has no flag for it)
+into-class.scala	fail	check:fail	option: -preview (teq has no flag for it)
+into-expr.scala	fail	check:fail	option: -preview (teq has no flag for it)
+into-sam.scala	fail	check:fail	option: -preview (teq has no flag for it)
+into-separate	fail	check:fail	option: -preview (teq has no flag for it)
+isApplicableSafe.scala	pass	check:pass	
+isRef.scala	pass	check:pass	
+itay.scala	pass	check:pass	
+iterator-traversable-mix.scala	pass	check:pass	
+java-annot	fail	-	java source: teq reads none
+java-futures.scala	pass	check:fail	
+java-inherited-type	fail	-	java source: teq reads none
+java-inherited-type1	fail	-	java source: teq reads none
+java-override	fail	-	java source: teq reads none
+java-records	fail	-	java source: teq reads none
+javaConversions-2.10-ambiguity.scala	pass	check:fail	
+javaReadsSigs	fail	-	java source: teq reads none
+jzon	pass	check:pass	
+kind-projector-underscores.scala	fail	check:fail	option: -Xkind-projector:underscores (teq has no flag for it)
+kind-projector.scala	fail	check:fail	kind-projector.scala:19:24: type * not found
+kindPolySemiGroup.scala	fail	check:fail	kindPolySemiGroup.scala:84:32: expected ']', found '='
+kinds.scala	fail	check:fail	kinds.scala:12:27: type mismatch: found Byte, required String | Char
+kinzer.scala	pass	check:fail	
+ksbug1.scala	pass	check:pass	
+lambda.scala	pass	check:pass	
+lambdalift-1.scala	pass	check:pass	
+lambdalift.scala	pass	check:pass	
+lambdalift1.scala	pass	check:pass	
+lambdalift_1.scala	pass	check:pass	
+large.scala	pass	check:pass	
+large2.scala	pass	check:pass	
+largecasetest.scala	pass	check:pass	
+lazyvals.scala	pass	check:pass	
+leading-infix-op.scala	pass	check:pass	
+leak-inferred.scala	pass	check:pass	
+leaks.scala	pass	check:pass	
+lexical.scala	pass	check:fail	
+liftToAnchors-hk.scala	pass	check:pass	
+list-extractor.scala	pass	check:pass	
+list-optim-check.scala	pass	check:pass	
+listAndVector.scala	pass	check:fail	
+listpattern.scala	pass	check:pass	
+literals.scala	pass	check:pass	
+local-objects.scala	pass	check:pass	
+local-signature.scala	pass	check:pass	
+localmodules.scala	pass	check:pass	
+lookuprefined.scala	pass	check:pass	
+lookupswitch.scala	pass	check:pass	
+looping-givens.scala	fail	check:pass	looping-givens.scala:8:17: type mismatch: found Any, required A
+looping-jsig.scala	pass	check:pass	
+macro-deprecate-dont-touch-backquotedidents.scala	pass	check:pass	
+macro.scala	fail	check:fail	macro.scala:3:10: expected end of statement, found 'def'
+main-method-scheme-class-based.scala	pass	check:pass	
+main-method-scheme.scala	pass	check:pass	
+main.scala	pass	check:fail	
+manifest-summoning.scala	fail	check:fail	manifest-summoning.scala:10:48: no given instance of type OptManifest[Inner] was found for parameter m
+match-constant-type.scala	pass	check:pass	
+match-single-sub-case.scala	fail	check:fail	match-single-sub-case.scala:7:25: expected '=>', found 'match'
+match-sub-sub-cases.scala	fail	check:fail	match-sub-sub-cases.scala:6:27: expected '=>', found 'if'
+match-type-disjoint-22076.scala	fail	check:fail	match-type-disjoint-22076.scala:8:20: type mismatch: found Last[?], required Last[CP]
+match-type-disjoint-transitivity.scala	pass	check:pass	
+match-type-enumeration-value-hack.scala	fail	check:fail	match-type-enumeration-value-hack.scala:10:46: Cannot prove that Suit.Value =:= EnumValue[Suit].
+match-type-extract-matchalias.scala	pass	check:pass	
+match-type-extract-path-dependent.scala	pass	check:pass	
+match-type-inference.scala	fail	check:fail	match-type-inference.scala:7:21: type mismatch: found true, required IsString[(x : Any)]
+match-type-printf.scala	fail	check:fail	match-type-printf.scala:18:22: type mismatch: found (String, Int), required ArgTypes["%s is %d"]
+match.scala	pass	check:pass	
+matchable-same-type.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+matches.scala	pass	check:pass	
+matchtype-unusedArg	pass	check:pass	
+matchtype.scala	fail	check:fail	matchtype.scala:16:3: 'erased' is not part of the supported Scala subset
+matrixOps.scala	pass	check:pass	
+matthias1.scala	pass	check:pass	
+matthias3.scala	pass	check:pass	
+matthias4.scala	fail	check:fail	matthias4.scala:34:9: error overriding value A in trait _a of type _a.this.A: value A of type A has incompatible type
+matthias5.scala	pass	check:pass	
+maxim1.scala	pass	check:pass	
+merge-constraint.scala	fail	check:fail	merge-constraint.scala:9:17: type mismatch: found Any, required Lo
+methodTypes.scala	pass	check:pass	
+michel1.scala	pass	check:pass	
+michel2.scala	pass	check:pass	
+michel3.scala	pass	check:pass	
+michel4.scala	pass	check:pass	
+michel5.scala	pass	check:pass	
+michel6.scala	pass	check:pass	
+mirror-implicit-scope.scala	fail	check:fail	mirror-implicit-scope.scala:7:57: value asInstanceOf is not a member of Tuple
+misc-unapply_pos.scala	pass	check:pass	
+mixin-forwarder-clash1.scala	fail	check:fail	mixin-forwarder-clash1.scala:19:7: class Bar2 inherits concat as [Dummy](suffix: Int): Y and as (suffix: Int): X, which are both called concat$Int in the JavaScript output, since no ancestor declares the two together; declare the alternativ
+mixin-forwarder-clash2	pass	check:pass	
+mixin-generic-extended-by-java	fail	-	java source: teq reads none
+mixins.scala	pass	check:pass	
+modules.scala	pass	check:pass	
+modules1.scala	pass	check:pass	
+moduletrans.scala	pass	check:pass	
+mt-deskolemize.scala	fail	check:fail	mt-deskolemize.scala:45:29: type mismatch: found 1, required ExtractValue[E]
+mt-redux-norm.perspective.scala	pass	check:pass	
+mt-scrutinee-widen3.scala	pass	check:pass	
+multi-given.scala	pass	check:pass	
+multiLineOps.scala	pass	check:pass	
+multiple-additional-imports.scala	fail	check:fail	option: -Yimports:scala,java.lang,scala.Predef,scala.annotation,scala.util.matching (teq has no flag for it)
+multiversal.scala	pass	check:pass	
+named-tuple-combinators.scala	fail	check:fail	named-tuple-combinators.scala:6:5: value hi is not a member of NamedTuple[Concat[Names[(hi : Int)], Names[(bla : String)]], Concat[DropNames[(hi : Int)], DropNames[(bla : String)]]]
+named-tuple-downcast.scala	fail	check:fail	named-tuple-downcast.scala:11:13: type mismatch: found (name : String, age : Int) & String, required (String, Int)
+named-tuple-selectable.scala	fail	check:fail	named-tuple-selectable.scala:15:3: value xs is not a member of FromFields
+named-tuple-selections.scala	pass	check:pass	
+named-tuple-unstable.scala	fail	check:fail	named-tuple-unstable.scala:13:18: value myfield is not a member of Foo{val f: Int}
+named-tuple-widen.scala	pass	check:pass	
+named-tuples-i22245.scala	pass	check:pass	
+named-tuples-ops-mirror.scala	fail	check:fail	named-tuples-ops-mirror.scala:14:11: value greet is not a member of Endpoints[GreetService]{type Fields = (greet : Endpoint[(String), String, HttpError], setGreeting : Endpoint[(String, String), Unit, HttpError])}
+named-tuples-strawman.scala	fail	check:fail	named-tuples-strawman.scala:11:36: type argument DropNames[xs] does not conform to upper bound Tuple
+named-tuples1.scala	pass	check:pass	
+named-typeargs.scala	fail	check:fail	named-typeargs.scala:8:28: expected ']', found '='
+namedTypeParams.scala	fail	check:fail	namedTypeParams.scala:8:7: expected ']', found '='
+nameddefaults.scala	pass	check:pass	
+namedtuple-src-incompat.scala	pass	check:pass	
+native-warning.scala	pass	check:pass	
+needstypeearly.scala	pass	check:pass	
+nested.scala	fail	check:pass	teq: jvm backend: A1$D$E.e2: the local $this1v90zyq_319 is not in scope of the generated method
+nested2.scala	pass	check:pass	
+nestedLambdas.scala	pass	check:pass	
+new-array.scala	fail	check:fail	new-array.scala:9:23: new Array takes one type argument
+newline-braces.scala	pass	check:pass	
+news.scala	pass	check:pass	
+no-mirror-derives.scala	pass	check:pass	
+no-selftype.scala	pass	check:pass	
+nonlocal-unchecked.scala	pass	check:pass	
+nontrivial-intersection-gadt.scala	fail	check:fail	nontrivial-intersection-gadt.scala:8:24: type mismatch: found 0, required T
+not-looping-implicit.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+nowarnannot.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+null.scala	pass	check:pass	
+nullarify.scala	pass	check:pass	
+nullary.scala	pass	check:pass	
+nullary_poly.scala	pass	check:pass	
+objXfun.scala	pass	check:pass	
+object-union-inf.scala	pass	check:pass	
+opaque-aliasing.scala	pass	check:pass	
+opaque-digits.scala	pass	check:fail	
+opaque-extension.scala	pass	check:pass	
+opaque-groups-params.scala	pass	check:pass	
+opaque-groups.scala	pass	check:pass	
+opaque-immutable-array.scala	pass	check:pass	
+opaque-inline.scala	pass	check:pass	
+opaque-inline1-transparent.scala	pass	check:pass	
+opaque-inline1.scala	pass	check:pass	
+opaque-inline2-transparent.scala	pass	check:pass	
+opaque-inline2.scala	pass	check:pass	
+opaque-nullable.scala	fail	check:fail	opaque-nullable.scala:11:42: type mismatch: found Null, required Nullable[A]
+opaque-propability-xm.scala	fail	check:fail	opaque-propability-xm.scala:38:32: operator & cannot be applied to Double
+opaque-propability.scala	fail	check:fail	opaque-propability.scala:39:34: operator & cannot be applied to Double
+opaque-simple.scala	pass	check:pass	
+opaque-xm.scala	pass	check:pass	
+opaque.scala	pass	check:pass	
+opaques-patmat.scala	pass	check:pass	
+opaques-queue.scala	pass	check:pass	
+opassign.scala	pass	check:pass	
+open-selftype.scala	pass	check:pass	
+ops.scala	pass	check:pass	
+or-inf.scala	fail	check:fail	or-inf.scala:5:9: type mismatch: found "", required Int
+ord-over-tracked.scala	fail	check:fail	ord-over-tracked.scala:8:22: expected ':', found 'val'
+outdent-dot.scala	pass	check:pass	
+overload-disambiguation.scala	pass	check:pass	
+overloaddefault.scala	pass	check:pass	
+overloaded.scala	fail	check:fail	overloaded.scala:54:3: Ambiguous overload. The overloaded alternatives of method bar in object overloaded with types
+overloadedAccess.scala	pass	check:pass	
+overloaded_ho_fun.scala	pass	check:pass	
+override-via-self.scala	fail	check:fail	override-via-self.scala:14:16: method f overrides nothing
+override.scala	pass	check:pass	
+overrideDataRace.scala	pass	check:pass	
+overrides.scala	fail	check:fail	overrides.scala:7:24: expected '=', found '['
+overzealous-assert-genbcode.scala	pass	check:pass	
+p11210-multiowner.scala	pass	check:pass	
+p11210-refinement.scala	pass	check:pass	
+p11210-values.scala	pass	check:pass	
+package-case.scala	pass	check:pass	
+package-indented.scala	pass	check:pass	
+package-ob-case	pass	check:pass	
+packageObjectValues.scala	fail	check:fail	packageObjectValues.scala:6:11: p is a package, not a value
+packageobject.scala	pass	check:pass	
+packageobjs.scala	pass	check:pass	
+packagings.scala	pass	check:pass	
+padTo.scala	pass	check:fail	
+param-depmeth.scala	pass	check:pass	
+parent-refinement.scala	fail	check:fail	parent-refinement.scala:11:37: a parent has to be a class or a trait
+parents-cycle	fail	check:fail	Def_1.scala:13:20: type Hi is not a member of B3
+parsercombinators-arrow.scala	fail	check:fail	parsercombinators-arrow.scala:22:17: a parent has to be a class or a trait
+parsercombinators-ctx-bounds.scala	fail	check:fail	parsercombinators-ctx-bounds.scala:29:24: expected an identifier, found '['
+parsercombinators-expanded.scala	fail	check:fail	parsercombinators-expanded.scala:32:15: expected ':', found 'val'
+parsercombinators-givens-2.scala	fail	check:fail	parsercombinators-givens-2.scala:49:11: value parse is not a member of Combine[Apply[ListBuffer[Int], Int], Apply[ListBuffer[Int], Int]]
+parsercombinators-givens.scala	fail	check:fail	parsercombinators-givens.scala:31:17: expected ':', found 'val'
+parsercombinators-new-syntax.scala	fail	check:fail	parsercombinators-new-syntax.scala:18:17: a parent has to be a class or a trait
+parsercombinators-this.scala	fail	check:fail	parsercombinators-this.scala:32:6: a context bound needs a type constructor with one parameter
+partialApplications.scala	pass	check:pass	
+partialfun.scala	pass	check:pass	
+pat_gilles.scala	pass	check:pass	
+pat_iuli.scala	fail	check:fail	pat_iuli.scala:16:12: opcodes is not accessible from here: it belongs to an instance of its enclosing class
+patdef.scala	pass	check:pass	
+path-from-class.scala	pass	check:pass	
+patmat-extract-tparam.scala	pass	check:pass	
+patmat.scala	fail	check:fail	patmat.scala:11:11: expected '=>', found ':'
+patmatSeq.scala	pass	check:pass	
+patmatch-in-catch.scala	pass	check:pass	
+patterns.scala	pass	check:pass	
+patterns1.scala	pass	check:pass	
+patterns1213.scala	pass	check:pass	
+patterns2.scala	fail	check:fail	patterns2.scala:3:20: type String not found
+patterns3.scala	pass	check:pass	
+pets.scala	pass	check:pass	
+phantom-Eq.scala	fail	check:fail	phantom-Eq.scala:21:3: 'erased' is not part of the supported Scala subset
+phantom-Eq2	fail	check:fail	Phantom-Eq_1.scala:7:33: expected 'extends' or a template body, found '@'
+phantom-Evidence.scala	fail	check:fail	phantom-Evidence.scala:15:30: expected 'extends' or a template body, found '@'
+philippe1.scala	pass	check:pass	
+philippe2.scala	pass	check:pass	
+philippe3.scala	pass	check:pass	
+philippe4.scala	pass	check:pass	
+pickleAlias.scala	pass	check:fail	
+pickleSkolem.scala	pass	check:pass	
+pickleTypes.scala	fail	check:fail	pickleTypes.scala:9:51: Refinements cannot introduce overloaded definitions
+pickleinf.scala	pass	check:pass	
+pmbug.scala	pass	check:pass	
+poly-erased-functions.scala	fail	check:fail	poly-erased-functions.scala:4:28: expected ',' or ')', found identifier
+poly-inheritance.scala	pass	check:fail	
+poly-override.scala	fail	check:fail	poly-override.scala:8:16: method a overrides nothing
+poly-signature.scala	pass	check:pass	
+polyalias.scala	pass	check:fail	
+polymorphic-case-class.scala	pass	check:pass	
+polymorphic-functions-this.scala	pass	check:pass	
+polytypes.scala	pass	check:pass	
+pos-bug1210.scala	pass	check:pass	
+pos_valueclasses	fail	check:fail	optmatch.scala:28:10: this is not a case class or enum case
+postconditions.scala	pass	check:pass	
+precise-ctx-bound.scala	fail	check:fail	precise-ctx-bound.scala:10:10: a context bound needs a type constructor with one parameter
+precise-indexof.scala	fail	check:fail	precise-indexof.scala:20:22: a context bound needs a type constructor with one parameter
+precise-pattern-type.scala	fail	check:fail	precise-pattern-type.scala:14:7: value isType is not a member of Any
+prefix.scala	pass	check:pass	
+preserve-union.scala	pass	check:pass	
+preview-flag.scala	fail	check:fail	option: -preview (teq has no flag for it)
+printTest.scala	pass	check:pass	
+printbounds.scala	pass	check:pass	
+private-leak.scala	pass	check:pass	
+private-this-future-migration.scala	pass	check:pass	
+private-this.scala	pass	check:pass	
+private-types-after-typer.scala	pass	check:pass	
+privates.scala	pass	check:pass	
+product-to-tuple.scala	pass	check:pass	
+profile-test.scala	pass	check:pass	
+projection.scala	pass	check:pass	
+projections.scala	pass	check:pass	
+propagate.scala	pass	check:pass	
+protected-static	fail	-	java source: teq reads none
+provably-disjoint-infinite-recursion-1.scala	pass	check:pass	
+provably-disjoint-infinite-recursion-2.scala	pass	check:pass	
+pseudo-thistype-constraints.scala	fail	check:fail	pseudo-thistype-constraints.scala:6:28: type mismatch: found Boolean, required TT
+puretest.scala	fail	check:fail	puretest.scala:7:3: type argument Int does not conform to upper bound Pure
+range.scala	pass	check:fail	
+rangepos-anonapply.scala	pass	check:pass	
+rangepos-patmat.scala	pass	check:pass	
+rangepos.scala	pass	check:pass	
+raw-map	fail	-	java source: teq reads none
+rbtree.scala	fail	check:fail	rbtree.scala:28:1: expected a definition, found new line
+realizable-mut.scala	fail	check:fail	realizable-mut.scala:8:10: a singleton type needs a val, a parameter or an object
+rebind.scala	fail	check:fail	rebind.scala:11:7: error overriding method foo in class Foo of type Inner: method foo in trait Bar of type Bar.this.Inner has incompatible type
+recursive-opaques.scala	pass	check:pass	
+reference	fail	check:fail	compile-time.scala:14:12: this type cannot be tested at runtime: ?
+refinedSubtyping.scala	pass	check:pass	
+refinements.scala	fail	check:fail	refinements.scala:3:3: expected an identifier, found 'type'
+relax_implicit_divergence.scala	pass	check:fail	
+renaming-imports.scala	fail	check:fail	renaming-imports.scala:2:8: collection is not a member of the package
+repeatedArgs213.scala	pass	check:pass	
+resultGuidesInference.scala	pass	check:pass	
+return_thistype.scala	pass	check:pass	
+sammy_poly.scala	pass	check:pass	
+sammy_scope.scala	pass	check:pass	
+sammy_single.scala	pass	check:pass	
+sammy_twice.scala	pass	check:pass	
+sams.scala	fail	check:fail	sams.scala:20:14: type mismatch: found Int => 2, required V
+sbtDotrTest.scala	pass	check:pass	
+scala-days-2019-slides	fail	check:fail	metaprogramming-1-match.scala:9:28: type mismatch: found Any, required Nat
+scala-singleton.scala	pass	check:pass	
+scala-uri.scala	pass	check:pass	
+scala2-creators.scala	pass	check:pass	
+scala2-macro-compat-2.scala	fail	check:fail	scala2-macro-compat-2.scala:8:33: expected end of statement, found identifier
+scala2-macro-compat-3.scala	fail	check:fail	scala2-macro-compat-3.scala:5:31: expected end of statement, found identifier
+scala2traits	pass	check:pass	
+scala3mock.scala	pass	check:pass	
+scalaz-redux.scala	pass	check:pass	
+scoping1.scala	pass	check:fail	
+scoping2.scala	pass	check:pass	
+scoping3.scala	pass	check:pass	
+sealed-final.scala	pass	check:pass	
+selectinalways.scala	pass	check:pass	
+selfSym.scala	pass	check:pass	
+selftails.scala	pass	check:pass	
+selftypes.scala	pass	check:pass	
+sepComp	pass	check:pass	
+seq-ordering.scala	pass	check:pass	
+seqtest2.scala	pass	check:pass	
+sequence-argument	fail	-	java source: teq reads none
+sets-tc.scala	fail	check:fail	sets-tc.scala:12:9: type argument ListSet does not have the same kind as its bound
+sets.scala	pass	check:pass	
+sigs.scala	pass	check:pass	
+simple-boundary.scala	pass	check:fail	
+simple-exceptions.scala	pass	check:pass	
+simple-repeated-args.scala	pass	check:pass	
+simple-tuple-extract.scala	pass	check:pass	
+simple.scala	pass	check:pass	
+simpleAnnot.scala	pass	check:pass	
+simpleCaseClass-1.scala	pass	check:pass	
+simpleCaseClass-2.scala	pass	check:pass	
+simpleCaseClass-3.scala	pass	check:pass	
+simpleCaseObject.scala	pass	check:pass	
+simpleClass-2.scala	pass	check:pass	
+simpleClass-3.scala	pass	check:pass	
+simpleClass.scala	pass	check:pass	
+simpleConstructor.scala	pass	check:pass	
+simpleDoWhile.scala	pass	check:pass	
+simpleExtractors-1.scala	pass	check:pass	
+simpleExtractors-2.scala	pass	check:pass	
+simpleInline.scala	pass	check:pass	
+simpleMatchCase.scala	pass	check:pass	
+simpleMatchRef.scala	pass	check:pass	
+simpleRefinement.scala	fail	check:fail	simpleRefinement.scala:6:10: error overriding type U in trait Bar with bounds[X] <: Any;
+simpleSetter.scala	pass	check:pass	
+simpleSingleton.scala	pass	check:pass	
+simpleSuper.scala	pass	check:pass	
+simpleTry.scala	pass	check:pass	
+simpleTypeSelect.scala	pass	check:pass	
+simpleWhile.scala	pass	check:pass	
+simplelists.scala	pass	check:pass	
+simplesams.scala	pass	check:pass	
+single-additional-import.scala	fail	check:fail	option: -Yimports:scala.annotation (teq has no flag for it)
+single-case.scala	pass	check:pass	
+single-unions.scala	pass	check:pass	
+singlesubtypes.scala	pass	check:pass	
+singleton-ctx-bound.scala	fail	check:fail	singleton-ctx-bound.scala:14:25: 'erased' is not part of the supported Scala subset
+singleton-fun-types.scala	pass	check:pass	
+singleton-ops-composition.scala	pass	check:pass	
+singleton-ops-dispatch.scala	pass	check:pass	
+singleton-ops-test-issue-8280.scala	pass	check:pass	
+singleton-ops-test-issue-8287.scala	pass	check:pass	
+singletons.scala	pass	check:pass	
+singletontrait.scala	pass	check:pass	
+sip23-aliasing.scala	pass	check:pass	
+sip23-negative-literals.scala	pass	check:pass	
+slick-migration-api-example.scala	pass	check:pass	
+so68877939.scala	pass	check:pass	
+sort.scala	pass	check:pass	
+source-import-3-0-migration.scala	pass	check:pass	
+source-import-3-0.scala	pass	check:pass	
+source-import-3-1.scala	pass	check:pass	
+source-import-3-2-migration.scala	pass	check:pass	
+source-import-3-2.scala	pass	check:pass	
+source-import-3-3-migration.scala	pass	check:pass	
+source-import-3-3.scala	pass	check:pass	
+source-import-3-4-migration.scala	pass	check:pass	
+source-import-3-4.scala	pass	check:pass	
+source-import-3-5-migration.scala	pass	check:pass	
+source-import-3-5.scala	pass	check:pass	
+source-import-3-6-migration.scala	pass	check:pass	
+source-import-3-6.scala	pass	check:pass	
+source-import-3-7-migration.scala	pass	check:pass	
+source-import-3-7.scala	pass	check:pass	
+spec-Function1.scala	pass	check:pass	
+spec-arrays.scala	pass	check:pass	
+spec-asseenfrom.scala	pass	check:fail	
+spec-constr-new.scala	pass	check:pass	
+spec-constr-old.scala	pass	check:fail	
+spec-cyclic.scala	pass	check:pass	
+spec-example1.scala	pass	check:pass	
+spec-fields-old.scala	pass	check:fail	
+spec-foo.scala	pass	check:pass	
+spec-funs.scala	pass	check:pass	
+spec-groups.scala	pass	check:fail	
+spec-lists.scala	pass	check:fail	
+spec-localdefs.scala	pass	check:pass	
+spec-maps.scala	pass	check:pass	
+spec-multiplectors.scala	pass	check:pass	
+spec-params-old.scala	pass	check:fail	
+spec-partially.scala	pass	check:pass	
+spec-partialmap.scala	pass	check:pass	
+spec-polymeth.scala	pass	check:pass	
+spec-private.scala	pass	check:pass	
+spec-sealed.scala	pass	check:fail	
+spec-short.scala	pass	check:pass	
+spec-simple.scala	pass	check:pass	
+spec-sparsearray-old.scala	pass	check:fail	
+spec-super.scala	pass	check:fail	
+spec-t3497.scala	pass	check:pass	
+spec-t5545	pass	check:pass	
+spec-t6286.scala	pass	check:pass	
+spec-tailcall.scala	pass	check:pass	
+spec-thistype.scala	pass	check:pass	
+spec-traits.scala	pass	check:pass	
+spec-vector.scala	pass	check:pass	
+spec.scala	pass	check:pass	
+specialize10.scala	pass	check:pass	
+specs2-failure.scala	fail	check:fail	specs2-failure.scala:19:25: type mismatch: found String => String, required String
+spurious-overload.scala	pass	check:fail	
+staleSymbol.scala	pass	check:pass	
+stats-in-empty-pkg.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+stm.scala	pass	check:pass	
+strawman-i79.scala	pass	check:fail	
+strict-pattern-bindings-3.0-migration.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+strict-pattern-bindings-3.1.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+stringConstantFold.scala	pass	check:pass	
+strings.scala	pass	check:pass	
+strip-tvars-for-lubbasetypes.scala	pass	check:pass	
+subtyping.scala	pass	check:pass	
+sudoku.scala	pass	check:fail	
+summonInline.scala	pass	check:pass	
+superacc.scala	fail	check:fail	superacc.scala:15:14: expected an identifier, found 'super'
+supercalls.scala	pass	check:pass	
+surrogates.scala	pass	check:pass	
+suspend-strawman	pass	check:fail	
+switch-small.scala	pass	check:pass	
+switchUnbox.scala	pass	check:pass	
+switches.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+syntax-rewrite.scala	pass	check:pass	
+syntaxHeals.scala	pass	check:pass	
+syntaxRewrites.scala	pass	check:pass	
+synthetics.scala	pass	check:pass	
+t0002.scala	pass	check:pass	
+t0017.scala	pass	check:pass	
+t0020.scala	pass	check:pass	
+t0029.scala	pass	check:pass	
+t0030.scala	pass	check:pass	
+t0031.scala	pass	check:pass	
+t0032.scala	fail	check:fail	t0032.scala:3:7: class PromptStream cannot extend final class PrintStream
+t0036.scala	pass	check:pass	
+t0039.scala	pass	check:pass	
+t0049.scala	pass	check:pass	
+t0053.scala	pass	check:pass	
+t0054.scala	pass	check:pass	
+t0055.scala	pass	check:pass	
+t0061.scala	pass	check:pass	
+t0064.scala	pass	check:pass	
+t0066.scala	pass	check:pass	
+t0068.scala	pass	check:pass	
+t0069.scala	pass	check:pass	
+t0076.scala	pass	check:pass	
+t0081.scala	pass	check:pass	
+t0082.scala	pass	check:pass	
+t0085.scala	pass	check:pass	
+t0091.scala	pass	check:pass	
+t0093.scala	pass	check:pass	
+t0095.scala	pass	check:pass	
+t0123.scala	pass	check:pass	
+t0154.scala	pass	check:pass	
+t0165.scala	pass	check:pass	
+t0204.scala	pass	check:pass	
+t0227.scala	pass	check:pass	
+t0231.scala	fail	check:fail	t0231.scala:10:25: expected an identifier, found 'super'
+t0273.scala	pass	check:pass	
+t0301.scala	pass	check:pass	
+t0304.scala	pass	check:pass	
+t0305.scala	pass	check:fail	
+t0438.scala	pass	check:pass	
+t0453.scala	pass	check:pass	
+t0504.scala	pass	check:pass	
+t0591.scala	pass	check:pass	
+t0599.scala	fail	check:fail	t0599.scala:11:23: expected an identifier, found 'super'
+t0612	pass	check:pass	
+t0644.scala	pass	check:pass	
+t0654.scala	pass	check:pass	
+t0674.scala	pass	check:fail	
+t0710.scala	pass	check:pass	
+t0770.scala	pass	check:pass	
+t0774	pass	check:pass	
+t0786.scala	pass	check:pass	
+t0851.scala	fail	check:fail	t0851.scala:10:13: missing argument for parameter 
+t0872.scala	fail	check:fail	t0872.scala:5:13: missing argument for parameter 
+t0904.scala	pass	check:pass	
+t0905.scala	pass	check:pass	
+t1000.scala	pass	check:fail	
+t1001.scala	pass	check:fail	
+t1006.scala	pass	check:fail	
+t1014.scala	pass	check:fail	
+t1027.scala	pass	check:fail	
+t1029	pass	check:pass	
+t1034.scala	pass	check:pass	
+t1035.scala	pass	check:pass	
+t10350	fail	-	java source: teq reads none
+t10387b.scala	pass	check:pass	
+t1048.scala	pass	check:pass	
+t1049.scala	pass	check:pass	
+t1050.scala	pass	check:pass	
+t1053.scala	pass	check:pass	
+t10533.scala	pass	check:pass	
+t1056.scala	pass	check:pass	
+t1070.scala	pass	check:fail	
+t1075.scala	pass	check:fail	
+t1085.scala	pass	check:pass	
+t1090.scala	pass	check:pass	
+t1107a.scala	pass	check:pass	
+t1107b	pass	check:pass	
+t1119.scala	pass	check:pass	
+t1123.scala	pass	check:pass	
+t112606A.scala	pass	check:pass	
+t1131.scala	fail	check:fail	t1131.scala:6:3: expected an identifier, found 'def'
+t1133.scala	pass	check:pass	
+t1136.scala	pass	check:pass	
+t11437.scala	pass	check:pass	
+t1146.scala	pass	check:pass	
+t1147.scala	pass	check:pass	
+t115.scala	pass	check:fail	
+t1159.scala	pass	check:pass	
+t11593	pass	check:fail	
+t116.scala	pass	check:pass	
+t1164.scala	pass	check:pass	
+t1168.scala	pass	check:fail	
+t11788	fail	-	java source: teq reads none
+t11788b	fail	-	java source: teq reads none
+t11788c	fail	-	java source: teq reads none
+t1185.scala	pass	check:pass	
+t119.scala	pass	check:pass	
+t11921.scala	pass	check:pass	
+t1203a.scala	pass	check:pass	
+t1208.scala	pass	check:pass	
+t121.scala	pass	check:pass	
+t1210a.scala	pass	check:pass	
+t122.scala	fail	check:fail	t122.scala:2:12: recursive value v needs type
+t1226.scala	pass	check:pass	
+t1236.scala	pass	check:pass	
+t1236a.scala	pass	check:pass	
+t1237.scala	pass	check:pass	
+t12396	fail	-	java source: teq reads none
+t124.scala	pass	check:pass	
+t12494.scala	pass	check:pass	
+t1260.scala	pass	check:pass	
+t1272.scala	pass	check:pass	
+t12787.scala	pass	check:fail	
+t1279a.scala	pass	check:pass	
+t1280.scala	pass	check:pass	
+t13127.scala	fail	check:fail	t13127.scala:16:26: method max needs `override` modifier to override method max in trait Base
+t1318.scala	pass	check:pass	
+t1385.scala	pass	check:pass	
+t1391.scala	pass	check:pass	
+t1406.scala	pass	check:pass	
+t1422_pos.scala	pass	check:pass	
+t1438.scala	pass	check:pass	
+t1439.scala	pass	check:pass	
+t1480.scala	pass	check:pass	
+t1500a.scala	pass	check:pass	
+t151.scala	fail	check:fail	t151.scala:5:10: (foo : <error>) is not a valid type prefix, since it is not an immutable path
+t1513a.scala	fail	check:fail	t1513a.scala:36:10: expected ']', found '='
+t1513b.scala	fail	check:fail	t1513b.scala:10:8: expected ']', found '='
+t1560.scala	pass	check:fail	
+t1565.scala	pass	check:pass	
+t1569.scala	pass	check:pass	
+t1569a.scala	pass	check:pass	
+t159.scala	pass	check:pass	
+t1591_pos.scala	pass	check:pass	
+t160.scala	pass	check:pass	
+t1614	pass	check:pass	
+t1625.scala	pass	check:pass	
+t1625b.scala	pass	check:pass	
+t1642b.scala	pass	check:pass	
+t1659.scala	pass	check:pass	
+t1675.scala	pass	check:pass	
+t16827.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+t1693.scala	fail	check:fail	t1693.scala:8:3: type mismatch: found Foo, required ?{ foo: ? }. Note that implicit extension methods cannot be applied because they are ambiguous; both method mkSomeOps in object Test and method mkOtherOps in object Test provide an extensi
+t1722	pass	check:pass	
+t1722-A.scala	pass	check:pass	
+t175.scala	pass	check:pass	
+t1756.scala	pass	check:fail	
+t177.scala	pass	check:pass	
+t1785.scala	pass	check:pass	
+t1786-counter.scala	pass	check:pass	
+t1786-cycle.scala	pass	check:pass	
+t1789.scala	pass	check:pass	
+t1798.scala	pass	check:pass	
+t183.scala	pass	check:pass	
+t1832.scala	fail	check:fail	t1832.scala:9:14: operator * cannot be applied to Int and Foo
+t1843.scala	pass	check:pass	
+t1858.scala	pass	check:pass	
+t1896	pass	check:pass	
+t1942	pass	check:pass	
+t1957.scala	pass	check:pass	
+t1974.scala	pass	check:pass	
+t1987a.scala	pass	check:pass	
+t1987b	pass	check:pass	
+t1996.scala	pass	check:pass	
+t201.scala	pass	check:pass	
+t2018.scala	pass	check:pass	
+t2023.scala	pass	check:fail	
+t2038.scala	pass	check:fail	
+t2060.scala	fail	check:fail	t2060.scala:31:11: operator + cannot be applied to Double and Op[Int]
+t2066.scala	pass	check:pass	
+t2081.scala	pass	check:pass	
+t2082.scala	pass	check:pass	
+t2094.scala	pass	check:fail	
+t210.scala	pass	check:pass	
+t211.scala	pass	check:fail	
+t2119.scala	pass	check:pass	
+t2127.scala	pass	check:pass	
+t2130-1.scala	pass	check:pass	
+t2130-2.scala	pass	check:pass	
+t2133.scala	pass	check:pass	
+t2168.scala	pass	check:fail	
+t2171.scala	pass	check:pass	
+t2179.scala	pass	check:pass	
+t2187-2.scala	pass	check:pass	
+t2187.scala	pass	check:fail	
+t2194.scala	pass	check:pass	
+t2208_pos.scala	pass	check:pass	
+t2234.scala	pass	check:fail	
+t2260.scala	pass	check:pass	
+t2261.scala	pass	check:pass	
+t229.scala	pass	check:pass	
+t2305.scala	pass	check:pass	
+t2310.scala	pass	check:fail	
+t2331.scala	pass	check:pass	
+t2368.scala	pass	check:pass	
+t2399.scala	fail	check:fail	t2399.scala:11:69: value next is not a member of This
+t2405.scala	pass	check:pass	
+t2421.scala	pass	check:pass	
+t2421_delitedsl.scala	pass	check:pass	
+t2421b_pos.scala	pass	check:pass	
+t2421c.scala	pass	check:pass	
+t2425.scala	pass	check:fail	
+t2429.scala	pass	check:pass	
+t2435.scala	pass	check:pass	
+t2441pos.scala	pass	check:pass	
+t2444.scala	pass	check:pass	
+t245.scala	pass	check:pass	
+t2454.scala	pass	check:pass	
+t247.scala	pass	check:fail	
+t2484.scala	pass	check:fail	
+t2486.scala	pass	check:pass	
+t2500.scala	pass	check:fail	
+t2503.scala	pass	check:fail	
+t2504.scala	pass	check:pass	
+t252.scala	pass	check:pass	
+t2545.scala	pass	check:pass	
+t2591.scala	fail	check:fail	t2591.scala:14:4: type mismatch: found A, required Int
+t2610.scala	fail	check:fail	t2610.scala:5:5: expected a definition, found identifier
+t2613.scala	pass	check:pass	
+t2619.scala	pass	check:pass	
+t262.scala	pass	check:pass	
+t2624.scala	pass	check:pass	
+t2635.scala	pass	check:pass	
+t2660.scala	pass	check:fail	
+t2664.scala	pass	check:pass	
+t2665.scala	pass	check:pass	
+t2667.scala	pass	check:pass	
+t2669.scala	pass	check:fail	
+t267.scala	pass	check:fail	
+t2683.scala	pass	check:fail	
+t2691.scala	pass	check:pass	
+t2693.scala	pass	check:pass	
+t2698.scala	pass	check:pass	
+t2708.scala	pass	check:pass	
+t2712-1.scala	pass	check:pass	
+t2712-2.scala	pass	check:pass	
+t2712-2b.scala	pass	check:pass	
+t2712-3.scala	pass	check:pass	
+t2712-4.scala	pass	check:pass	
+t2712-5.scala	pass	check:pass	
+t2712-6.scala	fail	check:fail	t2712-6.scala:11:7: type mismatch: found Tagged[Int, Disjunction], required M[A]
+t2712-7.scala	pass	check:pass	
+t2712-8.scala	pass	check:pass	
+t2726	pass	check:pass	
+t2741	pass	check:pass	
+t2794.scala	pass	check:pass	
+t2795-new.scala	pass	check:pass	
+t2795-old.scala	pass	check:fail	
+t2797.scala	pass	check:pass	
+t2799.scala	pass	check:pass	
+t2809.scala	pass	check:pass	
+t284-pos.scala	fail	check:fail	t284-pos.scala:2:24: expected end of statement, found '{'
+t287.scala	pass	check:pass	
+t289.scala	pass	check:pass	
+t2910.scala	fail	check:fail	t2910.scala:8:13: not found: s
+t2913.scala	fail	check:fail	t2913.scala:42:13: missing argument for parameter 
+t2945.scala	pass	check:pass	
+t295.scala	pass	check:fail	
+t296.scala	pass	check:pass	
+t2973.scala	pass	check:pass	
+t2991.scala	pass	check:pass	
+t3020.scala	pass	check:pass	
+t3037.scala	pass	check:pass	
+t304.scala	pass	check:pass	
+t3071.scala	pass	check:pass	
+t3076	pass	check:pass	
+t3079.scala	pass	check:pass	
+t3106.scala	pass	check:pass	
+t3120	fail	-	java source: teq reads none
+t3136.scala	pass	check:pass	
+t3152.scala	pass	check:pass	
+t3160.scala	pass	check:pass	
+t3174.scala	pass	check:pass	
+t3174b.scala	pass	check:pass	
+t3177.scala	pass	check:pass	
+t318.scala	pass	check:pass	
+t319.scala	pass	check:pass	
+t3236	fail	-	java source: teq reads none
+t3249	fail	-	java source: teq reads none
+t3252.scala	pass	check:pass	
+t3274.scala	pass	check:pass	
+t3278.scala	pass	check:fail	
+t3312.scala	pass	check:pass	
+t3343.scala	pass	check:pass	
+t3349	fail	-	java source: teq reads none
+t3371.scala	pass	check:pass	
+t3373.scala	pass	check:pass	
+t3374.scala	pass	check:pass	
+t3384.scala	pass	check:pass	
+t3411.scala	pass	check:pass	
+t3419	pass	check:pass	
+t3420.scala	pass	check:pass	
+t3429	fail	-	java source: teq reads none
+t3430.scala	pass	check:pass	
+t344.scala	pass	check:pass	
+t3440.scala	pass	check:pass	
+t3452f.scala	pass	check:pass	
+t3477.scala	pass	check:pass	
+t3486	fail	-	java source: teq reads none
+t348plus.scala	pass	check:fail	
+t3494.scala	pass	check:pass	
+t3495.scala	pass	check:pass	
+t3498-new.scala	pass	check:pass	
+t3521	fail	-	java source: teq reads none
+t3528.scala	pass	check:pass	
+t3534.scala	pass	check:pass	
+t3560.scala	pass	check:pass	
+t3567	fail	-	java source: teq reads none
+t3570.scala	pass	check:pass	
+t3577.scala	pass	check:pass	
+t3578.scala	pass	check:pass	
+t3582.scala	pass	check:pass	
+t3582b.scala	pass	check:pass	
+t359.scala	pass	check:pass	
+t360.scala	pass	check:pass	
+t361.scala	pass	check:pass	
+t3612.scala	pass	check:pass	
+t3622	fail	-	java source: teq reads none
+t3631.scala	pass	check:pass	
+t3636.scala	pass	check:pass	
+t3642	fail	-	java source: teq reads none
+t3670.scala	pass	check:pass	
+t3671.scala	pass	check:pass	
+t3672.scala	pass	check:pass	
+t3676.scala	pass	check:pass	
+t372.scala	pass	check:pass	
+t374.scala	fail	check:fail	t374.scala:3:17: not found: Value
+t3774.scala	pass	check:pass	
+t3777.scala	pass	check:pass	
+t3792.scala	pass	check:pass	
+t3800.scala	pass	check:pass	
+t3808.scala	pass	check:pass	
+t3836.scala	pass	check:pass	
+t3837.scala	pass	check:pass	
+t3859.scala	pass	check:pass	
+t3861.scala	pass	check:pass	
+t3862.scala	pass	check:pass	
+t3864	pass	check:pass	
+t3866.scala	fail	check:fail	t3866.scala:13:3: Ambiguous overload. The overloaded alternatives of method f in class ImplicitRepeated with types
+t3869.scala	pass	check:pass	
+t3880.scala	pass	check:pass	
+t3883.scala	pass	check:fail	
+t389.scala	pass	check:pass	
+t3890.scala	pass	check:pass	
+t3898.scala	pass	check:pass	
+t3924.scala	pass	check:pass	
+t3927.scala	pass	check:fail	
+t3936	fail	-	java source: teq reads none
+t3946	fail	-	java source: teq reads none
+t3960.scala	pass	check:pass	
+t397.scala	pass	check:pass	
+t3972.scala	pass	check:pass	
+t3986.scala	pass	check:pass	
+t3999	fail	check:fail	a_1.scala:7:41: type Val not found
+t4018.scala	pass	check:pass	
+t402.scala	pass	check:pass	
+t4020.scala	pass	check:pass	
+t4036.scala	pass	check:pass	
+t404.scala	pass	check:pass	
+t4052.scala	pass	check:pass	
+t4062.scala	pass	check:pass	
+t4063.scala	pass	check:pass	
+t4070.scala	fail	check:fail	t4070.scala:4:61: type argument tv does not have the same kind as its bound [X]
+t4070b.scala	pass	check:pass	
+t4112.scala	pass	check:pass	
+t4114.scala	pass	check:pass	
+t415.scala	pass	check:pass	
+t4173.scala	pass	check:pass	
+t4176.scala	pass	check:pass	
+t4176b.scala	pass	check:pass	
+t4188.scala	pass	check:pass	
+t419.scala	pass	check:pass	
+t4220.scala	pass	check:pass	
+t4243.scala	pass	check:pass	
+t4257.scala	pass	check:pass	
+t4266.scala	pass	check:pass	
+t4269.scala	pass	check:pass	
+t4275.scala	pass	check:pass	
+t430-feb09.scala	pass	check:pass	
+t4305.scala	pass	check:fail	
+t432.scala	pass	check:pass	
+t4336.scala	pass	check:pass	
+t439.scala	pass	check:pass	
+t4402	fail	-	java source: teq reads none
+t443.scala	pass	check:pass	
+t4430.scala	pass	check:pass	
+t4432.scala	pass	check:pass	
+t4457_1.scala	pass	check:fail	
+t4494.scala	pass	check:pass	
+t4501.scala	pass	check:pass	
+t4502.scala	pass	check:pass	
+t4524.scala	pass	check:pass	
+t4545.scala	pass	check:pass	
+t4547.scala	pass	check:pass	
+t4579.scala	fail	check:fail	t4579.scala:45:8: object creation impossible, since it has 2 unimplemented members: evaluate, lisp2string
+t4593.scala	pass	check:pass	
+t460.scala	pass	check:pass	
+t4603	fail	-	java source: teq reads none
+t464.scala	pass	check:pass	
+t4651.scala	pass	check:pass	
+t4692.scala	pass	check:pass	
+t4716.scala	pass	check:pass	
+t4717.scala	pass	check:pass	
+t4737	fail	-	java source: teq reads none
+t4744	fail	-	java source: teq reads none
+t4757	pass	check:pass	
+t4758.scala	pass	check:pass	
+t4760.scala	pass	check:fail	
+t4786.scala	pass	check:fail	
+t4812.scala	pass	check:pass	
+t4831.scala	pass	check:pass	
+t4840.scala	pass	check:pass	
+t4842.scala	pass	check:pass	
+t4853.scala	pass	check:pass	
+t4859.scala	pass	check:pass	
+t4869.scala	pass	check:pass	
+t4910.scala	pass	check:pass	
+t4911.scala	pass	check:pass	
+t4938.scala	pass	check:pass	
+t4975.scala	pass	check:pass	
+t5012.scala	pass	check:pass	
+t5013	pass	check:pass	
+t5029.scala	pass	check:pass	
+t5031	pass	check:pass	
+t5031_2.scala	pass	check:pass	
+t5031_3	pass	check:fail	
+t5033.scala	pass	check:pass	
+t5041.scala	pass	check:pass	
+t5070.scala	pass	check:pass	
+t5071.scala	pass	check:pass	
+t5082.scala	pass	check:pass	
+t5084.scala	pass	check:pass	
+t5099.scala	pass	check:pass	
+t5120.scala	pass	check:pass	
+t5127.scala	pass	check:pass	
+t5137.scala	pass	check:pass	
+t514.scala	pass	check:fail	
+t5175.scala	pass	check:pass	
+t5178.scala	fail	check:fail	t5178.scala:8:16: method withLock overrides nothing
+t522.scala	fail	check:fail	t522.scala:14:5: foo is abstract; it cannot be instantiated
+t5240.scala	pass	check:pass	
+t5245.scala	pass	check:pass	
+t530.scala	pass	check:pass	
+t5305.scala	pass	check:pass	
+t5313.scala	pass	check:pass	
+t5330.scala	pass	check:pass	
+t5330b.scala	pass	check:pass	
+t5330c.scala	fail	check:fail	t5330c.scala:3:28: type mismatch: found _, required String | Char
+t5359.scala	pass	check:pass	
+t5384.scala	pass	check:fail	
+t5399.scala	pass	check:pass	
+t5399a.scala	pass	check:pass	
+t5406.scala	pass	check:pass	
+t5444.scala	pass	check:pass	
+t5504	pass	check:pass	
+t5508-min-okay.scala	pass	check:pass	
+t5508-min-okay2.scala	pass	check:pass	
+t5508-min.scala	pass	check:pass	
+t5508.scala	pass	check:pass	
+t5542.scala	pass	check:pass	
+t5577.scala	pass	check:fail	
+t5606.scala	pass	check:pass	
+t5639	pass	check:pass	
+t5643.scala	pass	check:pass	
+t5644	fail	-	java source: teq reads none
+t566.scala	pass	check:pass	
+t5683.scala	pass	check:pass	
+t5702-pos-infix-star.scala	pass	check:fail	
+t5703	fail	-	java source: teq reads none
+t5720-ownerous.scala	pass	check:pass	
+t5726.scala	fail	check:fail	teq: jvm backend: MyApp$.testing: a JavaScript class
+t5727.scala	pass	check:pass	
+t573.scala	pass	check:pass	
+t5760-pkgobj-warn	pass	check:pass	
+t5769.scala	pass	check:pass	
+t577.scala	pass	check:pass	
+t5779-numeq-warn.scala	pass	check:pass	
+t578.scala	pass	check:pass	
+t5796.scala	pass	check:pass	
+t5809.scala	pass	check:pass	
+t5816-noclash.scala	pass	check:pass	
+t5829.scala	pass	check:fail	
+t5846.scala	pass	check:fail	
+t5856b.scala	pass	check:pass	
+t5859.scala	pass	check:pass	
+t5862.scala	pass	check:fail	
+t5877.scala	pass	check:pass	
+t5877b.scala	pass	check:pass	
+t5886.scala	fail	check:fail	t5886.scala:8:6: type mismatch: found Class[_], required () => Any
+t5892.scala	pass	check:pass	
+t5897.scala	pass	check:pass	
+t5900a.scala	pass	check:pass	
+t5910.java	fail	-	java source: teq reads none
+t592.scala	pass	check:pass	
+t5930.scala	pass	check:pass	
+t5932.scala	pass	check:pass	
+t5957	fail	-	java source: teq reads none
+t5958.scala	pass	check:pass	
+t596.scala	pass	check:pass	
+t5967.scala	pass	check:pass	
+t5968.scala	pass	check:pass	
+t599.scala	pass	check:pass	
+t6008.scala	pass	check:pass	
+t6022.scala	pass	check:pass	
+t6022b.scala	pass	check:fail	
+t6028	pass	check:pass	
+t6033.scala	pass	check:fail	
+t604.scala	pass	check:pass	
+t6040.scala	pass	check:fail	
+t607.scala	pass	check:pass	
+t6072.scala	pass	check:pass	
+t6084.scala	pass	check:pass	
+t6089b.scala	pass	check:pass	
+t6091.scala	pass	check:pass	
+t611.scala	pass	check:pass	
+t6117.scala	pass	check:pass	
+t6123-explaintypes-implicits.scala	pass	check:pass	
+t6124.scala	fail	check:fail	t6124.scala:8:18: expected end of statement, found identifier
+t613.scala	pass	check:fail	
+t6145.scala	pass	check:pass	
+t6146.scala	pass	check:pass	
+t615.scala	pass	check:pass	
+t6157.scala	pass	check:pass	
+t616.scala	pass	check:pass	
+t6162-inheritance.scala	pass	check:pass	
+t6184.scala	pass	check:pass	
+t6201.scala	pass	check:pass	
+t6205.scala	fail	check:fail	t6205.scala:6:19: type kt not found
+t6208.scala	pass	check:pass	
+t6210.scala	pass	check:pass	
+t6225.scala	pass	check:pass	
+t6225b.scala	pass	check:pass	
+t6231.scala	pass	check:pass	
+t6231b.scala	pass	check:pass	
+t6231c.scala	pass	check:pass	
+t6245	fail	-	java source: teq reads none
+t6274.scala	pass	check:pass	
+t6275.scala	pass	check:pass	
+t6278-synth-def.scala	pass	check:pass	
+t628.scala	fail	check:fail	t628.scala:15:40: operator * cannot be applied to Double and Unit
+t6301.scala	pass	check:pass	
+t6311.scala	pass	check:pass	
+t6335.scala	pass	check:pass	
+t640.scala	pass	check:pass	
+t6482.scala	pass	check:pass	
+t6499.scala	pass	check:pass	
+t651.scala	pass	check:pass	
+t6514.scala	pass	check:pass	
+t6537.scala	pass	check:pass	
+t6547.scala	pass	check:pass	
+t6551.scala	fail	check:fail	teq: jvm backend: Test$.main: a JavaScript class
+t6552.scala	pass	check:pass	
+t6562.scala	pass	check:pass	
+t6575a.scala	pass	check:pass	
+t6575b.scala	pass	check:pass	
+t6595.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+t6600.scala	pass	check:fail	
+t661.scala	fail	check:fail	t661.scala:12:22: expected an identifier, found 'super'
+t6664.scala	pass	check:pass	
+t6664b.scala	pass	check:pass	
+t6675.scala	pass	check:pass	
+t6712.scala	pass	check:pass	
+t6722.scala	fail	check:fail	t6722.scala:10:3: a member of js.Dynamic takes no type arguments
+t6745.scala	pass	check:pass	
+t675.scala	pass	check:fail	
+t6771.scala	pass	check:pass	
+t6780.scala	fail	check:fail	t6780.scala:15:16: recursive value v1 needs type
+t6797.scala	pass	check:fail	
+t6815.scala	pass	check:pass	
+t6815_import.scala	pass	check:pass	
+t684.scala	pass	check:pass	
+t6896.scala	pass	check:pass	
+t690.scala	pass	check:pass	
+t6921.scala	pass	check:pass	
+t6925.scala	pass	check:pass	
+t6925b.scala	pass	check:pass	
+t694.scala	pass	check:pass	
+t6942	fail	-	java source: teq reads none
+t6948.scala	pass	check:pass	
+t6963c.scala	fail	check:fail	option: -Xmigration:2.9 (teq has no flag for it)
+t6966.scala	pass	check:fail	
+t697.scala	pass	check:pass	
+t6976	pass	check:fail	
+t698.scala	pass	check:fail	
+t6994.scala	pass	check:pass	
+t7011.scala	pass	check:pass	
+t7014	fail	-	java source: teq reads none
+t7022.scala	pass	check:pass	
+t703.scala	pass	check:pass	
+t7033.scala	fail	check:fail	t7033.scala:3:18: only classes can be instantiated with new
+t7091.scala	pass	check:pass	
+t7180.scala	pass	check:pass	
+t7183.scala	pass	check:pass	
+t720.scala	pass	check:fail	
+t7200b.scala	fail	check:fail	t7200b.scala:11:7: recursive use of coflatMap needs an explicit result type
+t7226.scala	pass	check:pass	
+t7232	fail	-	java source: teq reads none
+t7232c	fail	-	java source: teq reads none
+t7232d	fail	-	java source: teq reads none
+t7233.scala	pass	check:pass	
+t7233b.scala	fail	check:fail	t7233b.scala:3:49: not found: toS
+t7264	pass	check:pass	
+t7285a.scala	pass	check:pass	
+t7296.scala	pass	check:pass	
+t7315.scala	pass	check:pass	
+t7322.scala	pass	check:pass	
+t7329.scala	pass	check:pass	
+t7364	fail	-	java source: teq reads none
+t7369.scala	pass	check:pass	
+t7377b.scala	pass	check:pass	
+t7426.scala	pass	check:pass	
+t7427.scala	pass	check:pass	
+t7433.scala	pass	check:pass	
+t7475a.scala	pass	check:pass	
+t7475b.scala	pass	check:pass	
+t7475d.scala	pass	check:pass	
+t7475e.scala	pass	check:pass	
+t7486.scala	pass	check:pass	
+t7517.scala	pass	check:pass	
+t7520.scala	pass	check:pass	
+t7532	fail	-	java source: teq reads none
+t7532b	pass	check:pass	
+t756.scala	pass	check:pass	
+t757.scala	pass	check:fail	
+t757a.scala	pass	check:pass	
+t758.scala	pass	check:pass	
+t759.scala	pass	check:fail	
+t762.scala	fail	check:fail	t762.scala:2:66: type mismatch: found Bar1.this, required Foo{type T <: Bar1.this.T}
+t7668.scala	fail	check:fail	t7668.scala:11:28: type mismatch: found (ss.x : Space.this.T), required s.T
+t767.scala	pass	check:pass	
+t7689.scala	pass	check:pass	
+t7690.scala	pass	check:pass	
+t7694.scala	pass	check:pass	
+t7716.scala	pass	check:pass	
+t7753.scala	pass	check:pass	
+t7782.scala	pass	check:pass	
+t7782b.scala	pass	check:pass	
+t7785.scala	pass	check:pass	
+t7788.scala	pass	check:pass	
+t780.scala	pass	check:pass	
+t7815.scala	pass	check:fail	
+t7853-partial-function.scala	pass	check:pass	
+t7853.scala	pass	check:pass	
+t7864.scala	pass	check:pass	
+t788.scala	pass	check:pass	
+t789.scala	pass	check:pass	
+t7902.scala	pass	check:pass	
+t7919.scala	pass	check:pass	
+t7928.scala	pass	check:pass	
+t7944.scala	pass	check:pass	
+t796.scala	pass	check:fail	
+t7983.scala	pass	check:pass	
+t802.scala	fail	check:fail	t802.scala:11:30: expected an identifier, found 'super'
+t8023.scala	pass	check:pass	
+t8023b.scala	pass	check:pass	
+t803.scala	pass	check:pass	
+t8045.scala	pass	check:fail	
+t8046.scala	fail	check:fail	t8046.scala:19:23: a parent has to be a class or a trait
+t8046b.scala	fail	check:fail	t8046b.scala:10:23: a parent has to be a class or a trait
+t8046c.scala	fail	check:fail	t8046c.scala:10:35: value apply is not a member of Any
+t805.scala	fail	check:fail	t805.scala:8:27: expected an identifier, found 'super'
+t8054.scala	pass	check:pass	
+t8060.scala	pass	check:pass	
+t8062	pass	check:pass	
+t807.scala	pass	check:pass	
+t812.scala	pass	check:fail	
+t8120.scala	pass	check:pass	
+t8128.scala	pass	check:pass	
+t8132.scala	pass	check:pass	
+t8170.scala	pass	check:fail	
+t8177.scala	pass	check:pass	
+t8177a.scala	pass	check:pass	
+t8177b.scala	pass	check:pass	
+t8177d.scala	pass	check:pass	
+t8177e.scala	pass	check:pass	
+t8177g.scala	pass	check:pass	
+t8177h.scala	pass	check:pass	
+t8207.scala	fail	check:fail	t8207.scala:2:10: cannot resolve import: me is not an object or a package
+t8219.scala	pass	check:pass	
+t8230a.scala	pass	check:pass	
+t8237.scala	pass	check:pass	
+t8244d	fail	-	java source: teq reads none
+t8300-conversions-a.scala	pass	check:fail	
+t8300-conversions-b.scala	pass	check:fail	
+t8300-patmat-a.scala	pass	check:fail	
+t8300-patmat-b.scala	pass	check:fail	
+t8301.scala	pass	check:fail	
+t8301b.scala	pass	check:fail	
+t8306.scala	pass	check:pass	
+t8315.scala	pass	check:pass	
+t8315b.scala	pass	check:pass	
+t8324.scala	pass	check:pass	
+t8359.scala	pass	check:pass	
+t8363.scala	pass	check:pass	
+t8364.scala	fail	check:fail	teq: jvm backend: Test$: JavaScript interop
+t8367.scala	pass	check:pass	
+t8369a.scala	pass	check:pass	
+t8376	fail	-	java source: teq reads none
+t839.scala	pass	check:pass	
+t851.scala	pass	check:pass	
+t873.scala	pass	check:pass	
+t892.scala	pass	check:pass	
+t9004.scala	fail	check:fail	t9004.scala:23:32: type mismatch: found _, required ?
+t911.scala	pass	check:pass	
+t9123.scala	pass	check:pass	
+t927.scala	pass	check:fail	
+t9419.jackson.scala	pass	check:pass	
+t9419.specs2.scala	pass	check:pass	
+t942	fail	-	java source: teq reads none
+t946.scala	pass	check:pass	
+t9795.scala	pass	check:pass	
+t9844.scala	pass	check:pass	
+tagging.scala	pass	check:pass	
+tailcall	pass	check:fail	
+tailrec-super.scala	fail	check:fail	tailrec-super.scala:13:20: recursive use of transform needs an explicit result type
+tailrec.scala	fail	check:fail	tailrec.scala:9:11: Cannot rewrite recursive call: it is not in tail position
+tangledCompanion.scala	pass	check:pass	
+targetName-infer-result.scala	fail	check:fail	targetName-infer-result.scala:13:9: recursive use of app needs an explicit result type
+targetName-override	fail	-	java source: teq reads none
+targetName-override.scala	pass	check:pass	
+targetName.scala	pass	check:pass	
+tasty-named-arguments.scala	fail	check:fail	tasty-named-arguments.scala:3:52: missing parameter type
+tasty-parent-unapply.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+tasty-reflect-opaque-api-proto.scala	pass	check:pass	
+tasty-tags-obscure.scala	fail	check:fail	tasty-tags-obscure.scala:13:36: expected ']', found '.'
+tcpoly_boundedmonad.scala	pass	check:pass	
+tcpoly_bounds1.scala	pass	check:pass	
+tcpoly_checkkinds_mix.scala	pass	check:pass	
+tcpoly_gm.scala	pass	check:pass	
+tcpoly_higherorder_bound_method.scala	pass	check:pass	
+tcpoly_infer_easy.scala	pass	check:pass	
+tcpoly_infer_explicit_tuple_wrapper.scala	pass	check:pass	
+tcpoly_infer_implicit_tuple_wrapper.scala	pass	check:pass	
+tcpoly_infer_ticket1864.scala	pass	check:pass	
+tcpoly_infer_ticket474.scala	pass	check:pass	
+tcpoly_infer_ticket716.scala	pass	check:fail	
+tcpoly_late_method_params.scala	pass	check:pass	
+tcpoly_method.scala	pass	check:pass	
+tcpoly_overloaded.scala	pass	check:pass	
+tcpoly_param_scoping.scala	pass	check:pass	
+tcpoly_poly.scala	pass	check:pass	
+tcpoly_return_overriding.scala	pass	check:pass	
+tcpoly_seq.scala	pass	check:pass	
+tcpoly_seq_typealias.scala	fail	check:fail	tcpoly_seq_typealias.scala:110:10: covariant type x occurs in invariant position in type  = List[x] of type m
+tcpoly_subst.scala	pass	check:pass	
+tcpoly_ticket2096.scala	pass	check:fail	
+tcpoly_typeapp.scala	pass	check:pass	
+tcpoly_typesub.scala	pass	check:pass	
+tcpoly_variance_pos.scala	pass	check:pass	
+tcpoly_wildcards.scala	pass	check:pass	
+ted.scala	pass	check:pass	
+templateParents.scala	pass	check:pass	
+test-desugar.scala	fail	check:fail	test-desugar.scala:24:40: too many arguments: expected 1
+test-erasure.scala	pass	check:pass	
+test-implicits.scala	pass	check:pass	
+test-implicits1.scala	pass	check:pass	
+test-implicits2.scala	pass	check:fail	
+test-inliner2.scala	pass	check:pass	
+test-pickler-private-this.scala	pass	check:pass	
+test-typers.scala	pass	check:pass	
+test.scala	pass	check:pass	
+test1.scala	pass	check:pass	
+test4.scala	pass	check:pass	
+test4a.scala	pass	check:pass	
+test4refine.scala	pass	check:pass	
+test5.scala	pass	check:pass	
+test5refine.scala	pass	check:pass	
+testCoercionThis.scala	pass	check:pass	
+testcast.scala	pass	check:pass	
+the-given.scala	pass	check:pass	
+the.scala	pass	check:pass	
+this-implicit-scope.scala	pass	check:pass	
+this-types.scala	pass	check:pass	
+thistype.scala	pass	check:pass	
+thistypes.scala	pass	check:pass	
+ticket0137.scala	pass	check:pass	
+ticket2197.scala	pass	check:pass	
+ticket2201.scala	pass	check:pass	
+tinondefcons.scala	pass	check:pass	
+toplevel-cyclic	pass	check:pass	
+toplevel-match.scala	pass	check:pass	
+toplevel-opaque	pass	check:pass	
+toplevel-opaque-xm	pass	check:pass	
+toplevel-privates	pass	check:pass	
+tparam_inf.scala	pass	check:pass	
+tracked.scala	pass	check:pass	
+trailing-comma-pattern.scala	pass	check:pass	
+trailingCommas	pass	check:pass	
+trait-access.scala	pass	check:pass	
+trait-java-enum.scala	pass	check:pass	
+trait-parents.scala	pass	check:pass	
+traits.scala	pass	check:pass	
+traits_1.scala	pass	check:pass	
+transparent-inline.scala	pass	check:pass	
+transparent-intersect.scala	pass	check:pass	
+transparent-union.scala	pass	check:pass	
+tryTyping.scala	pass	check:pass	
+tryWithoutHandler.scala	pass	check:pass	
+tuple-deconstruct-upcast.scala	pass	check:pass	
+tuple-filter.scala	pass	check:fail	
+tuple-flatmap.scala	pass	check:fail	
+tuple-fold.scala	pass	check:pass	
+tuple-isMappedBy.scala	pass	check:pass	
+tuple-of-literals-deconstruct.scala	pass	check:pass	
+tuple-ops.scala	pass	check:fail	
+tuple-unchecked-deconstruct-complex.scala	pass	check:pass	
+tuple-unchecked-deconstruct-direct.scala	pass	check:pass	
+tuple-unchecked-deconstruct-wildcard.scala	pass	check:pass	
+tuple-unchecked-deconstruct.scala	pass	check:pass	
+tuple-zip.scala	pass	check:pass	
+tuplePatDef.scala	pass	check:pass	
+tupled-function-instances.scala	fail	check:fail	tupled-function-instances.scala:6:10: only classes can have declared but undefined members
+type-projection.scala	fail	check:fail	type-projection.scala:9:16: S is not a legal path
+type-test-matchable.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+type-test-syntesize.scala	pass	check:pass	
+typealias_dubious.scala	pass	check:pass	
+typealiases.scala	pass	check:pass	
+typeclass-aggregates.scala	fail	check:fail	typeclass-aggregates.scala:10:16: expected an identifier, found 'this'
+typeclass-encoding.scala	fail	check:fail	typeclass-encoding.scala:43:5: value asInstanceOf is not a member of Implementation[From]{type Implemented = To}
+typeclass-encoding3.scala	fail	check:fail	typeclass-encoding3.scala:291:15: expected ']', found '='
+typeclass-encoding3b.scala	fail	check:fail	typeclass-encoding3b.scala:134:48: value add is not a member of T
+typeclass-scaling.scala	pass	check:fail	
+typeclasses-arrow.scala	fail	check:fail	typeclasses-arrow.scala:39:17: a parent has to be a class or a trait
+typeclasses-arrow0.scala	pass	check:pass	
+typeclasses-this.scala	fail	check:fail	typeclasses-this.scala:39:18: a parent has to be a class or a trait
+typeclasses.scala	fail	check:fail	typeclasses.scala:34:17: a parent has to be a class or a trait
+typedIdents	pass	check:pass	
+typedapply.scala	pass	check:pass	
+typeinferNull.scala	pass	check:pass	
+typelevel0.scala	fail	check:fail	typelevel0.scala:36:74: value asInstanceOf is not a member of HList
+typerep_pos.scala	pass	check:fail	
+typetestcast.scala	pass	check:pass	
+unapplied-types.scala	pass	check:pass	
+unapply.scala	pass	check:pass	
+unapplyComplex.scala	fail	check:fail	unapplyComplex.scala:16:12: wrong number of patterns for an extractor of Complex: found 2
+unapplyContexts2.scala	pass	check:pass	
+unapplyGeneric.scala	fail	check:fail	unapplyGeneric.scala:11:10: wrong number of patterns for an extractor of Bar[Int, Char]: found 2
+unapplyNeedsMemberType.scala	pass	check:pass	
+unapplyVal.scala	pass	check:fail	
+unary-eq.scala	pass	check:pass	
+unary-with-type-params.scala	pass	check:pass	
+unchecked-a.scala	fail	check:fail	unchecked-a.scala:7:15: type argument Any does not conform to upper bound Y
+unchecked-scrutinee.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+unicode-decode.scala	pass	check:pass	
+unify-wildcard-patterns.scala	pass	check:pass	
+uninitialized-future-migration.scala	pass	check:pass	
+unions.scala	fail	check:fail	unions.scala:12:18: type mismatch: found A, required B | C
+val-same-name-tuple-elem.scala	pass	check:pass	
+valdefs.scala	pass	check:pass	
+vararg-pattern.scala	pass	check:pass	
+varargs-annot-currying.scala	pass	check:pass	
+varargs-annot-generics.scala	pass	check:pass	
+varargs-annot-override.scala	pass	check:pass	
+varargs-position.scala	pass	check:pass	
+varargs-separate	pass	check:pass	
+varargs.scala	pass	check:pass	
+variances-constr.scala	pass	check:pass	
+variances-flip.scala	pass	check:pass	
+variances.scala	pass	check:pass	
+variances_pos.scala	pass	check:pass	
+vcblock.scala	pass	check:pass	
+vcif.scala	pass	check:pass	
+vec-access-syntax.scala	pass	check:pass	
+virtpatmat_alts_subst.scala	pass	check:pass	
+virtpatmat_anonfun_for.scala	pass	check:pass	
+virtpatmat_binding_opt.scala	pass	check:pass	
+virtpatmat_castbinder.scala	pass	check:pass	
+virtpatmat_exhaust.scala	pass	check:pass	
+virtpatmat_exhaust_unchecked.scala	pass	check:pass	
+virtpatmat_exist1.scala	fail	check:fail	virtpatmat_exist1.scala:23:9: covariant type B occurs in invariant position in type HashMap[A, B] {...} of class HashMapCollision1
+virtpatmat_exist2.scala	pass	check:pass	
+virtpatmat_exist3.scala	pass	check:pass	
+virtpatmat_exist4.scala	pass	check:pass	
+virtpatmat_exist_uncurry.scala	pass	check:pass	
+virtpatmat_gadt_array.scala	pass	check:pass	
+virtpatmat_infer_single_1.scala	pass	check:pass	
+virtpatmat_instof_valuetype.scala	pass	check:pass	
+virtpatmat_obj_in_case.scala	pass	check:pass	
+virtpatmat_reach_const.scala	pass	check:pass	
+whitebox-given.scala	pass	check:pass	
+widen-existential.scala	pass	check:pass	
+widen-union.scala	pass	check:pass	
+wildcard-type-syntax-future-migration.scala	pass	check:pass	
+wildcard-type-syntax.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+wildcardBoundInference.scala	fail	check:fail	wildcardBoundInference.scala:40:53: type mismatch: found ExistIndir[_, _], required ExistIndir[? <: String, ? <: String]
+wildcardDefs.scala	pass	check:pass	
+wildcardInInfixType.scala	fail	check:fail	wildcardInInfixType.scala:3:25: type mismatch: found Int => Any, required Any => Any
+wildcards.scala	pass	check:pass	
+with-type-operator-3.3.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+with-type-operator-3.4-migration.scala	pass	check:pass	
+xfatalWarnings.scala	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)
+z1720.scala	pass	check:pass	
+z1730.scala	pass	check:pass	
+zipped.min.scala	pass	check:pass	
+zipped.scala	pass	check:fail	
+zipper.scala	pass	check:pass	
+zoo.scala	pass	check:pass	
+zoo2.scala	pass	check:pass	

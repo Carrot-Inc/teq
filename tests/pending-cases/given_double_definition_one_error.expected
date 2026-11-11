@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+given_double_definition_one_error.scala:18:6: given_Show_Box is already defined as object given_Show_Box in given_double_definition_one_error.scala

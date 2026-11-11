@@ -1,0 +1,3 @@
+a holders/package\$ decorate(Ljava/lang/String;)Ljava/lang/String; flag()Z
+a holders/One\$package\$ increment(I)I number()I
+a holders/Two\$package\$ text()Ljava/lang/String;

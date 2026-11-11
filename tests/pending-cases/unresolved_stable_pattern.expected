@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+unresolved_stable_pattern.scala:5:37: Not found: Nope - did you mean None?

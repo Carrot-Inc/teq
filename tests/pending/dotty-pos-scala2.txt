@@ -1,0 +1,23 @@
+autoUnit.scala	autoUnit.scala:5:3: method f in object Test must be called with () argument
+doWhile.scala	doWhile.scala:2:3: `do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
+hkwild.scala	hkwild.scala:3:23: type mismatch: found CC1[El1], required CC1[?]
+i1792.scala	i1792.scala:3:5: Declaration of method foo not allowed here: only classes can have declared but undefined members
+i2201b.scala	i2201b.scala:13:7: type mismatch: found Two[Y, X], required M[? <: Y, ? <: X]
+i3396.scala	i3396.scala:28:32: ambiguous given instances for NotTagged[Int]: notTaggedAmbiguity1, notTaggedAmbiguity2
+i871.scala	i871.scala:2:7: an abstract def needs a result type
+i8715b.scala	i8715b.scala:3:88: expected ',' or ')', found identifier
+indented-parens.scala	indented-parens.scala:9:7: expected 'case', found 'val'
+naming-resolution	callsite.scala:9:27: type mismatch: found Stream[Path], required Files
+newline-braces.scala	newline-braces.scala:3:5: missing parameter type
+pos-special	i871.scala:2:7: an abstract def needs a result type
+spec-doubledef-old.scala	spec-doubledef-old.scala:16:85: expected ',' or ']', found identifier
+t1292.scala	t1292.scala:2:14: Enum is not a legal path
+t2994.scala	t2994.scala:10:46: n is not a legal path
+t3568.scala	t3568.scala:28:63: T is not a legal path
+t3731.scala	t3731.scala:3:31: M is not a legal path
+t3833.scala	t3833.scala:2:36: T is not a legal path
+t5070.scala	t5070.scala:6:47: W is not a legal path
+t5541.scala	t5541.scala:49:9: expected 'case', found 'val'
+typerep-stephane.scala	typerep-stephane.scala:39:25: expected ',' or ']', found identifier
+unitOverride.scala	unitOverride.scala:13:7: error overriding method f in trait C of type Unit: method f of type (): Unit has incompatible type
+viewtest1.scala	viewtest1.scala:14:19: expected ',' or ']', found identifier

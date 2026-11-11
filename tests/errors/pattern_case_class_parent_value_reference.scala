@@ -1,0 +1,18 @@
+// A constructor pattern of a case class defined in a block whose parent names a value of the block
+// (`E extends D[acc.type]`): the class is compared with the selector's type through that parent.
+// Where the value's type holds a variable still open (`acc` is a `C[?A]` while the argument of
+// `step` is typed), the comparison bounds it (`?A <: String`), so the lambda's result `C[Int]` is
+// rejected as under scalac.
+class C[+A]
+class D[+A]
+def step[A](initial: A)(f: A => A): A = f(initial)
+
+val result = step(new C[Nothing]) { acc =>
+  final case class E(n: Int) extends D[acc.type]
+  (new D[C[String]]: D[C[String]]) match
+    case E(n) => ()
+    case _ => ()
+  new C[Int]
+}
+// expect: 15:3: error: Found:    C[Int]
+// expect: Required: C[String]

@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+unresolved_selections_interpolated.scala:5:8: Not found: b

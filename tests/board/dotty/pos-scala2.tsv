@@ -1,0 +1,31 @@
+# dotty 3.8.4 (7d4833b6) pos-scala2, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:41; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+autoUnit.scala	fail	check:fail	autoUnit.scala:5:3: method f in object Test must be called with () argument
+doWhile.scala	fail	check:fail	doWhile.scala:2:3: `do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
+hk-infer.scala	pass	check:pass	
+hkwild.scala	fail	check:fail	hkwild.scala:3:23: type mismatch: found CC1[El1], required CC1[?]
+i1792.scala	fail	check:fail	i1792.scala:3:5: Declaration of method foo not allowed here: only classes can have declared but undefined members
+i2201b.scala	fail	check:fail	i2201b.scala:13:7: type mismatch: found Two[Y, X], required M[? <: Y, ? <: X]
+i2219.scala	pass	check:pass	
+i3246.scala	pass	check:pass	
+i3396.scala	fail	check:fail	i3396.scala:28:32: ambiguous given instances for NotTagged[Int]: notTaggedAmbiguity1, notTaggedAmbiguity2
+i871.scala	fail	check:fail	i871.scala:2:7: an abstract def needs a result type
+i8715b.scala	fail	check:fail	i8715b.scala:3:88: expected ',' or ')', found identifier
+indented-parens.scala	fail	check:fail	indented-parens.scala:9:7: expected 'case', found 'val'
+naming-resolution	fail	check:pass	callsite.scala:9:27: type mismatch: found Stream[Path], required Files
+newline-braces.scala	fail	check:fail	newline-braces.scala:3:5: missing parameter type
+pos-special	fail	check:fail	i871.scala:2:7: an abstract def needs a result type
+spec-doubledef-old.scala	fail	check:fail	spec-doubledef-old.scala:16:85: expected ',' or ']', found identifier
+t1292.scala	fail	check:fail	t1292.scala:2:14: Enum is not a legal path
+t2030.scala	pass	check:fail	
+t2994.scala	fail	check:fail	t2994.scala:10:46: n is not a legal path
+t3050.scala	pass	check:pass	
+t3568.scala	fail	check:fail	t3568.scala:28:63: T is not a legal path
+t3731.scala	fail	check:fail	t3731.scala:3:31: M is not a legal path
+t3833.scala	fail	check:fail	t3833.scala:2:36: T is not a legal path
+t5070.scala	fail	check:fail	t5070.scala:6:47: W is not a legal path
+t5541.scala	fail	check:fail	t5541.scala:49:9: expected 'case', found 'val'
+t6014.scala	pass	check:pass	
+typerep-stephane.scala	fail	check:fail	typerep-stephane.scala:39:25: expected ',' or ']', found identifier
+unitOverride.scala	fail	check:fail	unitOverride.scala:13:7: error overriding method f in trait C of type Unit: method f of type (): Unit has incompatible type
+viewtest1.scala	fail	check:fail	viewtest1.scala:14:19: expected ',' or ']', found identifier

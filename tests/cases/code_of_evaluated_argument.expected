@@ -1,0 +1,5 @@
+"ab".length() + 1
+false
+"abc".length() + "abc".length()
+true
+"ab".length() + 1

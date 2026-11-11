@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+root_empty_package_member.scala:9:33: type EK is not a member of <root>

@@ -1,0 +1,9 @@
+tests/errors/inferred_type_apply_mismatch_point.scala:9:21: error: Found:    Option[Nothing]
+Required: String
+      val s: String = Option.empty
+                      ^^^^^^^^^^^^
+tests/errors/inferred_type_apply_mismatch_point.scala:10:21: error: Found:    List[Nothing]
+Required: String
+      val t: String = List.empty
+                      ^^^^^^^^^^
+2 errors found

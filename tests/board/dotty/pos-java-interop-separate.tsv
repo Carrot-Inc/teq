@@ -1,0 +1,16 @@
+# dotty 3.8.4 (7d4833b6) pos-java-interop-separate, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:103; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+array-annot	fail	-	java source: teq reads none
+forwarder	fail	-	java source: teq reads none
+i10225	fail	-	java source: teq reads none
+i3273	fail	-	java source: teq reads none
+i3533	fail	-	java source: teq reads none
+i6152	fail	-	java source: teq reads none
+i6868	fail	-	java source: teq reads none
+i8435	fail	-	java source: teq reads none
+i8588	fail	-	java source: teq reads none
+i9492	fail	-	java source: teq reads none
+inner-fbounds	fail	-	java source: teq reads none
+java-object-any-unification-1	fail	-	java source: teq reads none
+static-cycle	fail	-	java source: teq reads none
+t11469_2	fail	-	java source: teq reads none

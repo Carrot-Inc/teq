@@ -116,8 +116,17 @@
 # keeps every build's products there, for comparing the products of two binaries. `--piece <k>/<n>` runs piece k of
 # n alone (tests/support/pieces.sh): a unit is a case, one of the checks made once per run or one of the split
 # programs.
+# The cases expected to fail are tests/pending/modules.txt (tests/support/pending.sh; --update and --add as it
+# takes them): a case fails when one of its checks does, the suite fails when a listed case passes and when an
+# unlisted one fails, and a listed case's failures are neither printed nor counted.
 cd "$(dirname "$0")/.."
 root=$PWD
+pending_args=()
+plain_args=()
+for arg in "$@"; do
+  case $arg in --update | --add) pending_args+=("$arg") ;; *) plain_args+=("$arg") ;; esac
+done
+set -- "${plain_args[@]}"
 . tests/support/pieces.sh
 suite_units() {
   for d in tests/modules/*/; do basename "$d"; done
@@ -1054,6 +1063,9 @@ fi
 # reads of the cases' pickles are gathered in the same order for the one reader after them.
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2> /dev/null || echo 4)}
 mkdir -p "$out/results" "$out/fromtasty.d"
+. tests/support/pending.sh
+pending_begin modules "$out/results" "${pending_args[@]}"
+[ -z "$PIECE" ] && [ -n "$every_case" ] || PENDING_PARTIAL=1
 i=0
 for name in "${cases[@]}"; do
   echo "$i $name"
@@ -1064,13 +1076,22 @@ dealer=$!
 i=0
 for name in "${cases[@]}"; do
   while [ ! -e "$out/results/$i.counts" ] && kill -0 $dealer 2> /dev/null; do sleep 1; done
-  cat "$out/results/$i.out" 2> /dev/null
+  if pending_listed "$name"; then grep -v '^FAIL ' "$out/results/$i.out" 2> /dev/null; else cat "$out/results/$i.out" 2> /dev/null; fi
   if [ -e "$out/results/$i.counts" ] && read -r p f k d s so sr < "$out/results/$i.counts"; then
-    pass=$((pass + p)) fail=$((fail + f)) known_count=$((known_count + k)) deferred_count=$((deferred_count + d))
+    pass=$((pass + p)) known_count=$((known_count + k)) deferred_count=$((deferred_count + d))
     skipped=$((skipped + s)) scalac_ok=$((scalac_ok + so)) scalac_refused=$((scalac_refused + sr))
+    if [ "$f" -gt 0 ]; then
+      pending_listed "$name" || fail=$((fail + f))
+      pending_fail "$name" "$(grep -m1 '^FAIL ' "$out/results/$i.out" | sed 's/^FAIL //')"
+    else
+      pending_pass "$name"
+    fi
   else
-    fail=$((fail + 1))
-    echo "FAIL $name worker: the case's worker ended without its counts (exit $(cat "$out/results/$i.exit" 2> /dev/null || echo none))"
+    pending_listed "$name" || {
+      fail=$((fail + 1))
+      echo "FAIL $name worker: the case's worker ended without its counts (exit $(cat "$out/results/$i.exit" 2> /dev/null || echo none))"
+    }
+    pending_fail "$name" "the case's worker ended without its counts"
   fi
   cat "$out/fromtasty.d/$i" >> "$out/fromtasty.jobs" 2> /dev/null
   i=$((i + 1))
@@ -1418,7 +1439,14 @@ if [ $have_scalac = 1 ] && [ -s "$out/fromtasty.jobs" ]; then
     else
       detail=$(awk -v j="FAIL $job" '$0 == j { on = 1; next } /^(ok|FAIL) / { on = 0 } on' "$out/fromtasty.out")
       [ -n "$detail" ] || detail="no answer from the reader of scalac: $(grep -v hint "$out/fromtasty.err" | head -3)"
-      result "$jcase" "$jcheck" 0 "$detail"
+      # a case on the list of those expected to fail fails here unprinted and uncounted, as its own checks do
+      if pending_listed "$jcase"; then
+        pending_fail "$jcase" "$jcheck"
+      else
+        failed_before=$fail
+        result "$jcase" "$jcheck" 0 "$detail"
+        [ $fail = $failed_before ] || pending_fail "$jcase" "$jcheck"
+      fi
     fi
   done < "$out/fromtasty.jobs"
 fi
@@ -1427,6 +1455,8 @@ if [ $skipped -gt 0 ]; then
   note=" (incomplete validation: no scala-cli, so scalac checked none of $skipped cases)"
   fail=$((fail + 1))
 fi
+# an unlisted failure is counted above, once; a listed case that passes now is the run's failure where there is no other
+pending_end || [ $fail -gt 0 ] || fail=1
 echo "modules: $pass passed, $fail failed, $known_count known departures, $deferred_count deferred; scalac typed $scalac_ok modules and refused $scalac_refused misuses as expected$note"
 pieces_end $((fail > 0)) passed=$pass failed=$((fail - (skipped > 0))) known=$known_count deferred=$deferred_count \
   typed=$scalac_ok refused=$scalac_refused skipped=$skipped any:scalac-missing=$((skipped > 0))

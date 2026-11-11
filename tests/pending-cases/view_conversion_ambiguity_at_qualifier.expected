@@ -1,0 +1,5 @@
+scalac 3.8.4: rejected, 1 error(s)
+view_conversion_ambiguity_at_qualifier.scala:14:13: Found:    R
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both given instance c1 in object Main and given instance c2 in object Main provide an extension method `pick` on R

@@ -1,0 +1,4 @@
+scalac 3.8.4: rejected, 1 error(s)
+extension_nullified_alias_bound.scala: No warnings can be incurred under -Werror
+extension_nullified_alias_bound.scala:13:31: (a warning, E194) Extension method size will never be selected from type B
+extension_nullified_alias_bound.scala:20:15: (a warning, E194) Extension method size will never be selected from type BB

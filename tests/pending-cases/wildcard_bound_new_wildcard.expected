@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+wildcard_bound_new_wildcard.scala:6:14: Type argument must be fully defined

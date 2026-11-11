@@ -1,0 +1,12 @@
+exit 0
+warning 16:28 Extension method gg should not have a default argument for its receiver.
+warning 18:26 Extension method te should not have a default argument for its receiver.
+warning 20:12 Extension method te should not have a default argument for its receiver.
+warning 22:26 Extension method ct should not have a default argument for its receiver.
+warning 24:26 Extension method it should not have a default argument for its receiver.
+warning 25:33 Extension method it2 should not have a default argument for its receiver.
+warning 3:42 Extension method +:: should not have a default argument for its receiver.
+warning 4:47 Extension method +::: should not have a default argument for its receiver.
+warning 5:24 Extension method show2 should not have a default argument for its receiver.
+warning 6:44 Extension method show3 should not have a default argument for its receiver.
+warning 8:26 Extension method t should not have a default argument for its receiver.

@@ -1,0 +1,6 @@
+# dotty 3.8.4 (7d4833b6) neg-custom-args, neg; compiler/test/dotty/tools/dotc/CompilationTests.scala:158-165; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+i20491/Test.scala	fail	-	marks: no error where 1 are marked
+sourcepath/outer/nested/Test1.scala	fail	-	option: -sourcepath (teq has no flag for it)
+sourcepath2/hi	fail	-	option: -sourcepath (teq has no flag for it)
+toplevel-samesource	fail	-	marks: no error where 1 are marked

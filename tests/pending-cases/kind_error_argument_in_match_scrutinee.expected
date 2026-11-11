@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+kind_error_argument_in_match_scrutinee.scala:10:11: Type argument Option[Double] does not have the same kind as its bound [_$1]

@@ -1,0 +1,2 @@
+U: apply(given x) deferred implicit; f(y) deferred
+scala.ContextFunction1: apply(given x$0) deferred implicit

@@ -1,0 +1,77 @@
+BoxE
+  source: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(Applied(TypeIdent("Box"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  treemap: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(Applied(TypeIdent("Box"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  copy: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(Applied(TypeIdent("Box"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  freshNew: new Box[scala.Int][scala.Int](1) | new Box[Int][Int](1) | Apply(TypeApply(Select(New(Inferred()), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  anyArgs: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(Applied(TypeIdent("Box"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  rebuilt: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(Applied(TypeIdent("Box"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+BoxI
+  source: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(TypeIdent("Box")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  treemap: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(TypeIdent("Box")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  copy: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(TypeIdent("Box")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  freshNew: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(Inferred()), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  anyArgs: new Box[scala.Any](1) | new Box[Any](1) | Apply(TypeApply(Select(New(TypeIdent("Box")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  rebuilt: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(TypeIdent("Box")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+DE
+  source: new D[scala.Int](1)(2) | new D[Int](1)(2) | Apply(Apply(TypeApply(Select(New(Applied(TypeIdent("D"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  treemap: new D[scala.Int](1)(2) | new D[Int](1)(2) | Apply(Apply(TypeApply(Select(New(Applied(TypeIdent("D"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  copy: new D[scala.Int](1)(2) | new D[Int](1)(2) | Apply(Apply(TypeApply(Select(New(Applied(TypeIdent("D"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  freshNew: new D[scala.Int][scala.Int](1)(2) | new D[Int][Int](1)(2) | Apply(Apply(TypeApply(Select(New(Inferred()), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  anyArgs: new D[scala.Int](1)(2) | new D[Int](1)(2) | Apply(Apply(TypeApply(Select(New(Applied(TypeIdent("D"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  rebuilt: new D[scala.Int](1)(2) | new D[Int](1)(2) | Apply(Apply(TypeApply(Select(New(Applied(TypeIdent("D"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+DI
+  source: new D[scala.Int](1)(2) | new D[Int](1)(2) | Apply(Apply(TypeApply(Select(New(TypeIdent("D")), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  treemap: new D[scala.Int](1)(2) | new D[Int](1)(2) | Apply(Apply(TypeApply(Select(New(TypeIdent("D")), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  copy: new D[scala.Int](1)(2) | new D[Int](1)(2) | Apply(Apply(TypeApply(Select(New(TypeIdent("D")), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  freshNew: new D[scala.Int](1)(2) | new D[Int](1)(2) | Apply(Apply(TypeApply(Select(New(Inferred()), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  anyArgs: new D[scala.Any](1)(2) | new D[Any](1)(2) | Apply(Apply(TypeApply(Select(New(TypeIdent("D")), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  rebuilt: new D[scala.Int](1)(2) | new D[Int](1)(2) | Apply(Apply(TypeApply(Select(New(TypeIdent("D")), "<init>"), List(Inferred())), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+G6s
+  source: new G6[scala.Int](1, "x") | new G6[Int](1, "x") | Apply(TypeApply(Select(New(Applied(TypeIdent("G6"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+  treemap: new G6[scala.Int](1, "x") | new G6[Int](1, "x") | Apply(TypeApply(Select(New(Applied(TypeIdent("G6"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+  copy: new G6[scala.Int](1, "x") | new G6[Int](1, "x") | Apply(TypeApply(Select(New(Applied(TypeIdent("G6"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+  freshNew: new G6[scala.Int][scala.Int](1, "x") | new G6[Int][Int](1, "x") | Apply(TypeApply(Select(New(Inferred()), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+  anyArgs: new G6[scala.Int](1, "x") | new G6[Int](1, "x") | Apply(TypeApply(Select(New(Applied(TypeIdent("G6"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+  rebuilt: new G6[scala.Int](1, "x") | new G6[Int](1, "x") | Apply(TypeApply(Select(New(Applied(TypeIdent("G6"), List(TypeIdent("Int")))), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+BN
+  source: new BN(1)(2) | new BN(1)(2) | Apply(Apply(Select(New(TypeIdent("BN")), "<init>"), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  treemap: new BN(1)(2) | new BN(1)(2) | Apply(Apply(Select(New(TypeIdent("BN")), "<init>"), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  copy: new BN(1)(2) | new BN(1)(2) | Apply(Apply(Select(New(TypeIdent("BN")), "<init>"), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  freshNew: new BN(1)(2) | new BN(1)(2) | Apply(Apply(Select(New(Inferred()), "<init>"), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  anyArgs: new BN(1)(2) | new BN(1)(2) | Apply(Apply(Select(New(TypeIdent("BN")), "<init>"), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+  rebuilt: new BN(1)(2) | new BN(1)(2) | Apply(Apply(Select(New(TypeIdent("BN")), "<init>"), List(Literal(IntConstant(1)))), List(Literal(IntConstant(2))))
+Pn
+  source: new P(a = 2, b = 1) | new P(a = 2, b = 1) | Apply(Select(New(TypeIdent("P")), "<init>"), List(NamedArg("a", Literal(IntConstant(2))), NamedArg("b", Literal(IntConstant(1)))))
+  treemap: new P(a = 2, b = 1) | new P(a = 2, b = 1) | Apply(Select(New(TypeIdent("P")), "<init>"), List(NamedArg("a", Literal(IntConstant(2))), NamedArg("b", Literal(IntConstant(1)))))
+  copy: new P(a = 2, b = 1) | new P(a = 2, b = 1) | Apply(Select(New(TypeIdent("P")), "<init>"), List(NamedArg("a", Literal(IntConstant(2))), NamedArg("b", Literal(IntConstant(1)))))
+  freshNew: new P(a = 2, b = 1) | new P(a = 2, b = 1) | Apply(Select(New(Inferred()), "<init>"), List(NamedArg("a", Literal(IntConstant(2))), NamedArg("b", Literal(IntConstant(1)))))
+  anyArgs: new P(a = 2, b = 1) | new P(a = 2, b = 1) | Apply(Select(New(TypeIdent("P")), "<init>"), List(NamedArg("a", Literal(IntConstant(2))), NamedArg("b", Literal(IntConstant(1)))))
+  rebuilt: new P(a = 2, b = 1) | new P(a = 2, b = 1) | Apply(Select(New(TypeIdent("P")), "<init>"), List(NamedArg("a", Literal(IntConstant(2))), NamedArg("b", Literal(IntConstant(1)))))
+BI
+  source: new main$package.BI[scala.Int](1) | new BI[Int](1) | Apply(TypeApply(Select(New(TypeIdent("BI")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  treemap: new main$package.BI[scala.Int](1) | new BI[Int](1) | Apply(TypeApply(Select(New(TypeIdent("BI")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  copy: new main$package.BI[scala.Int](1) | new BI[Int](1) | Apply(TypeApply(Select(New(TypeIdent("BI")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  freshNew: new main$package.BI[scala.Int](1) | new BI[Int](1) | Apply(TypeApply(Select(New(Inferred()), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  anyArgs: new main$package.BI[scala.Any](1) | new BI[Any](1) | Apply(TypeApply(Select(New(TypeIdent("BI")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  rebuilt: new main$package.BI[scala.Int](1) | new BI[Int](1) | Apply(TypeApply(Select(New(TypeIdent("BI")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+BA
+  source: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(TypeIdent("BA")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  treemap: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(TypeIdent("BA")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  copy: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(TypeIdent("BA")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  freshNew: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(Inferred()), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  anyArgs: new Box[scala.Any](1) | new Box[Any](1) | Apply(TypeApply(Select(New(TypeIdent("BA")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+  rebuilt: new Box[scala.Int](1) | new Box[Int](1) | Apply(TypeApply(Select(New(TypeIdent("BA")), "<init>"), List(Inferred())), List(Literal(IntConstant(1))))
+G6I
+  source: new main$package.G6I[scala.Int](1, "x") | new G6I[Int](1, "x") | Apply(TypeApply(Select(New(TypeIdent("G6I")), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+  treemap: new main$package.G6I[scala.Int](1, "x") | new G6I[Int](1, "x") | Apply(TypeApply(Select(New(TypeIdent("G6I")), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+  copy: new main$package.G6I[scala.Int](1, "x") | new G6I[Int](1, "x") | Apply(TypeApply(Select(New(TypeIdent("G6I")), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+  freshNew: new main$package.G6I[scala.Int](1, "x") | new G6I[Int](1, "x") | Apply(TypeApply(Select(New(Inferred()), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+  anyArgs: new main$package.G6I[scala.Any](1, "x") | new G6I[Any](1, "x") | Apply(TypeApply(Select(New(TypeIdent("G6I")), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+  rebuilt: new main$package.G6I[scala.Int](1, "x") | new G6I[Int](1, "x") | Apply(TypeApply(Select(New(TypeIdent("G6I")), "<init>"), List(Inferred())), List(Literal(IntConstant(1)), Literal(StringConstant("x"))))
+same=true args=
+same=true args=Int
+same=true tpe=main$package.BI args=
+same=true tpe=main$package.BA args=
+same=true args=String
+same=true args=
+same=true args=

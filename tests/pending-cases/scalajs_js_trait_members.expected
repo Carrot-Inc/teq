@@ -1,0 +1,9 @@
+scalac 3.8.4: rejected, 8 error(s)
+scalajs_js_trait_members.scala:21:6: Members of non-native JS traits must either be abstract, or their right-hand-side must be `js.undefined`.
+scalajs_js_trait_members.scala:22:6: Members of non-native JS traits must either be abstract, or their right-hand-side must be `js.undefined`.
+scalajs_js_trait_members.scala:24:6: Members of non-native JS traits must either be abstract, or their right-hand-side must be `js.undefined`.
+scalajs_js_trait_members.scala:25:6: Members of non-native JS traits must either be abstract, or their right-hand-side must be `js.undefined`.
+scalajs_js_trait_members.scala:27:6: Members of non-native JS traits must either be abstract, or their right-hand-side must be `js.undefined`.
+scalajs_js_trait_members.scala:28:6: Members of non-native JS traits must either be abstract, or their right-hand-side must be `js.undefined`.
+scalajs_js_trait_members.scala:30:24: In non-native JS traits, defs with parentheses must be abstract.
+scalajs_js_trait_members.scala:31:23: In non-native JS traits, defs with parentheses must be abstract.

@@ -16,12 +16,17 @@ pass=0
 fail=0
 ok() { pass=$((pass + 1)); }
 bad() {
-  echo "FAIL $1"
+  said_fail "$1"
   fail=$((fail + 1))
 }
 work=out/workers
 rm -rf "$work"
 mkdir -p "$work"
+# The checks expected to fail are tests/pending/workers.txt, by the name on their FAIL line (tests/support/pending.sh):
+# the suite fails when a listed check fails no more and when an unlisted one fails; --pending-update takes the
+# checks that pass now out of the list, --pending-add writes the unlisted failures in.
+. tests/support/pending.sh
+pending_fails_begin workers "$work" "$@"
 
 # one <name> <count> <teq arguments...>: one invocation at the count; `run <inputs...>` is a build of
 # the inputs to $work/<name>.<count>.js followed by node (or, with `--target jvm`, to a jar followed
@@ -1261,47 +1266,34 @@ PY
 session_removal
 
 # A session's forked full builds keep nothing of theirs: the allocator's blocks in use (`stats`) after the
-# ninetieth as after the thirtieth, each the minimum over three consecutive builds (an object of about 4 KB
-# toggles between builds on master's binary too, so one reading lands on it one time in twelve), within 2 KB in
+# ninetieth build and later as after the thirtieth and earlier, each the lowest of twenty builds' readings, a
+# build's the higher of two (tests/support/session_flat.py: an object of about 4 KB is there after one build in
+# ten on master's binary too, and after runs of builds on a loaded machine, so the lowest of three readings
+# landed on it on one side alone in 7% of the sessions under the JVM suite's load; and one `stats` in thirty-one
+# answers some 750 bytes lower than the next after the same build), within 2 KB in
 # all, through the fork at one worker and at eight (without,
 # every forked build lost the peers' table of every shared arena, 48 KB a build, and every worker and merge
 # thread its own handle, some sixteen bytes a thread, 6.7 KB over the sixty builds at eight; the fixed builds
-# measured 0 and 32 to 240 bytes).
+# measured 0 and 32 to 240 bytes). The reading is shown first on recorded sessions, with no compiler in it: one
+# measured under that load, its two levels and nothing more, is flat, and growing by 112 bytes a build, the
+# 6.7 KB over sixty, is not; one with a lower answer on its early side alone is flat, and with 2,700 bytes more
+# from its sixtieth build on is not (the lowest of twenty single answers read it as 1,980).
 session_flat() {
-  local how
+  local how grown
+  flat_reading() {
+    grown=$(python3 tests/support/session_flat.py series "tests/workers/session_flat_$1.txt" $2)
+    if [ -n "$grown" ] && [ "$grown" -lt 2048 ]; then ok; else bad "session flat's reading: $3 reads as $grown bytes of growth"; fi
+  }
+  grown_reading() {
+    grown=$(python3 tests/support/session_flat.py series "tests/workers/session_flat_$1.txt" $2)
+    if [ -n "$grown" ] && [ "$grown" -ge 2048 ]; then ok; else bad "session flat's reading: $3 reads as $grown bytes of growth"; fi
+  }
+  flat_reading levels "" "a session of two levels and no growth"
+  grown_reading levels 112 "a session growing by 112 bytes a build"
+  flat_reading dip "" "a session with a lower answer on its early side alone and no growth"
+  grown_reading dip 2700@60 "a session 2,700 bytes larger from its sixtieth build on"
   for how in "TEQ_FORK=1 --threads 1" "--threads 8"; do
-    local grown
-    grown=$(timeout 120 python3 - "$TEQ" $how <<'PY'
-import json, os, subprocess, sys
-teq = sys.argv[1]
-env = {k: v for k, v in os.environ.items() if not k.startswith("TEQ_")}
-env["TEQ_COMPACT_EVERY"] = "1"
-args = []
-for a in sys.argv[2:]:
-    if "=" in a:
-        k, v = a.split("=", 1)
-        env[k] = v
-    else:
-        args.append(a)
-p = subprocess.Popen([teq, "compiler", "watch", "--check", "tests/split/cycle", *args], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-def send(c):
-    p.stdin.write(c + "\n")
-    p.stdin.flush()
-    return json.loads(p.stdout.readline())
-json.loads(p.stdout.readline())
-early, late = [], []
-for i in range(1, 91):
-    send("build")
-    if i in (28, 29, 30):
-        early.append(send("stats")["stats"]["allocator"]["live"])
-    if i in (88, 89, 90):
-        late.append(send("stats")["stats"]["allocator"]["live"])
-p.stdin.write("quit\n")
-p.stdin.flush()
-p.wait(timeout=30)
-print(min(late) - min(early))
-PY
-)
+    grown=$(timeout 120 python3 tests/support/session_flat.py session "$TEQ" $how)
     if [ -n "$grown" ] && [ "$grown" -lt 2048 ]; then ok; else bad "session flat ($how): the blocks in use grew by $grown bytes over sixty forked full builds"; fi
   done
 }
@@ -1502,4 +1494,4 @@ done
 COUNTS=$saved_counts
 
 echo "workers: $pass passed, $fail failed, $known known"
-[ $fail = 0 ]
+pending_fails_end $fail $pass

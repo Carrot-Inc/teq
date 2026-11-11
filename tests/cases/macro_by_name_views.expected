@@ -1,0 +1,4 @@
+Apply(Apply(Select(F, c2), 100), 1, NamedArg(b, Apply(x, b, 2))) | true
+Apply(Select(New, <init>), 1, Apply(x, b, 2)) | true
+Apply(Select(New, <init>), 1, NamedArg(b, Apply(x, b, 2))) | true
+Apply(Apply(Select(F, c2), 100), NamedArg(a, 1), NamedArg(b, 2)) | true

@@ -1,0 +1,10 @@
+Point
+Choice
+(x,y)
+(First,Last)
+2
+2
+2
+List(given, mirror, given)
+128
+List(List(x, y), List())

@@ -1,0 +1,17 @@
+# dotty 3.8.4 (7d4833b6) explicit-nulls/run, run; compiler/test/dotty/tools/dotc/CompilationTests.scala:264; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+eq.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+erasure.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+flow.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+from-nullable.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+generic-java-array-src	fail	-	java source: teq reads none
+i11332.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+i25208	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+instanceof-nothing.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+interop-unsound-src	fail	-	java source: teq reads none
+nn.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+pattern-matching.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+tasty-flexible-type	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-nulls.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+while-loop.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)
+xml.scala	fail	interp:fail	option: -Yexplicit-nulls (teq has no flag for it)

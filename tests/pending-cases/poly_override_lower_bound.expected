@@ -1,0 +1,3 @@
+scalac 3.8.4: rejected, 2 error(s)
+poly_override_lower_bound.scala:7:32: error overriding method n in trait Box of type [B >: Int](b: B): B;
+poly_override_lower_bound.scala:10:38: error overriding method n in trait Box of type [B >: Int & String](b: B): B;

@@ -1,0 +1,48 @@
+scalac 3.8.4: rejected, 25 error(s)
+scalajs_js_native_members.scala:80:9: (a warning) Ignoring [this] qualifier.
+  The syntax `private[this]` will be deprecated in the future; just write `private` instead.
+  See: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+scalajs_js_native_members.scala:84:9: (a warning) Ignoring [this] qualifier.
+  The syntax `private[this]` will be deprecated in the future; just write `private` instead.
+  See: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+scalajs_js_native_members.scala:88:9: (a warning) Ignoring [this] qualifier.
+  The syntax `private[this]` will be deprecated in the future; just write `private` instead.
+  See: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+scalajs_js_native_members.scala:92:9: (a warning) Ignoring [this] qualifier.
+  The syntax `private[this]` will be deprecated in the future; just write `private` instead.
+  See: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+scalajs_js_native_members.scala:105:18: (a warning) Ignoring [this] qualifier.
+  The syntax `private[this]` will be deprecated in the future; just write `private` instead.
+  See: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+scalajs_js_native_members.scala:114:44: (a warning) with as a type operator has been deprecated; use & instead
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+scalajs_js_native_members.scala:65:24: A secondary constructor of a native JS class may only call the primary constructor
+scalajs_js_native_members.scala:67:15: Concrete members of JS native types may only call js.native.
+scalajs_js_native_members.scala:68:15: Concrete members of JS native types may only call js.native.
+scalajs_js_native_members.scala:69:15: Concrete members of JS native types may only call js.native.
+scalajs_js_native_members.scala:70:23: Concrete members of JS native types may only call js.native.
+scalajs_js_native_members.scala:73:23: Concrete members of JS native types may only call js.native.
+scalajs_js_native_members.scala:75:37: Concrete members of JS native types may only call js.native.
+scalajs_js_native_members.scala:81:14: Native JS classes may not have private constructors. Use `private[this]` to declare an internal constructor.
+scalajs_js_native_members.scala:82:18: Native JS classes may not have private constructors. Use `private[this]` to declare an internal constructor.
+scalajs_js_native_members.scala:84:20: Native JS classes may not have private members. Use a public member in a private facade instead.
+scalajs_js_native_members.scala:85:14: Native JS classes may not have private members. Use a public member in a private facade instead.
+scalajs_js_native_members.scala:86:18: Native JS classes may not have private members. Use a public member in a private facade instead.
+scalajs_js_native_members.scala:88:20: Native JS classes may not have private members. Use a public member in a private facade instead.
+scalajs_js_native_members.scala:89:14: Native JS classes may not have private members. Use a public member in a private facade instead.
+scalajs_js_native_members.scala:90:18: Native JS classes may not have private members. Use a public member in a private facade instead.
+scalajs_js_native_members.scala:92:20: Native JS classes may not have private members. Use a public member in a private facade instead.
+scalajs_js_native_members.scala:93:14: Native JS classes may not have private members. Use a public member in a private facade instead.
+scalajs_js_native_members.scala:94:18: Native JS classes may not have private members. Use a public member in a private facade instead.
+scalajs_js_native_members.scala:99:10: Native JS classes may not have private constructors. Use `private[this]` to declare an internal constructor.
+scalajs_js_native_members.scala:102:10: Native JS classes may not have private constructors. Use `private[this]` to declare an internal constructor.
+scalajs_js_native_members.scala:112:6: The type of foo must be explicitly specified because it is JS native.
+scalajs_js_native_members.scala:113:6: The type of bar must be explicitly specified because it is JS native.
+scalajs_js_native_members.scala:122:8: A member named apply represents function application in JavaScript. A parameterless member should be exported as a property. You must add @JSName("apply")
+scalajs_js_native_members.scala:133:8: A member named apply represents function application in JavaScript. A parameterless member should be exported as a property. You must add @JSName("apply")
+scalajs_js_native_members.scala:144:8: A member named apply represents function application in JavaScript. A parameterless member should be exported as a property. You must add @JSName("apply")

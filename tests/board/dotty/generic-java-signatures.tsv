@@ -1,0 +1,31 @@
+# dotty 3.8.4 (7d4833b6) generic-java-signatures, run; compiler/test/dotty/tools/dotc/CompilationTests.scala:192; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+17069.scala	fail	interp:fail	17069.scala:9:14: value getGenericReturnType is not a member of Method
+aliases.scala	fail	interp:fail	aliases.scala:8:13: value getGenericReturnType is not a member of Method
+andTypes.scala	fail	interp:fail	andTypes.scala:11:19: value getTypeParameters is not a member of Method
+arrayBound.scala	fail	interp:fail	output: line 1: the .check has 'T <: java.lang.Object', the program printed nothing
+boundParameters.scala	fail	interp:fail	output: line 1: the .check has 'T <: java.util.List<?>', the program printed nothing
+boundsInterfaces.scala	fail	interp:fail	output: line 1: the .check has 'T <: java.io.Serializable', the program printed nothing
+derivedNames.scala	fail	interp:fail	derivedNames.scala:6:22: value getGenericReturnType is not a member of Method
+higherKinded.scala	fail	interp:fail	output: line 1: the .check has 't <: java.lang.Object', the program printed nothing
+i10834.scala	fail	interp:fail	output: line 3: the .check has 'public A1(X)', the program printed 'public A1(java.lang.Object)'
+i15385	fail	-	java source: teq reads none
+i3411.scala	fail	interp:fail	i3411.scala:8:13: value toGenericString is not a member of Method
+i3476.scala	fail	interp:fail	i3476.scala:6:26: value getTypeParameters is not a member of Method
+i3653.scala	fail	interp:fail	i3653.scala:14:13: value toGenericString is not a member of Method
+i4248.scala	fail	interp:fail	i4248.scala:8:13: value toGenericString is not a member of Method
+i6349.scala	fail	interp:fail	output: line 1: the .check has 'Foo<java.lang.String>', the program printed 'class Foo'
+lowerBoundClass.scala	fail	interp:fail	output: line 1: the .check has 'T <: java.util.Calendar', the program printed nothing
+mangledNames.scala	fail	interp:fail	output: line 1: the .check has '$bang$bang$bang <: java.util.Date', the program printed nothing
+mangledNames2.scala	fail	interp:fail	output: line 1: the .check has '$bang$u005B$u005D$colon$u003B$bang$bang <: java.util.Date', the program printed nothing
+nestedClassTypeParams.scala	fail	interp:fail	nestedClassTypeParams.scala:26:24: value toGenericString is not a member of Method
+nullable-unions.scala	fail	interp:fail	nullable-unions.scala:11:15: value getGenericParameterTypes is not a member of Method
+outer-ref-elimination.scala	fail	interp:fail	output: line 2: the .check has 'List(public T2$$anon$1$C2())', the program printed 'List(public T2$$anon$a83buk_370$C2(T2$$anon$a83buk_370))'
+primitiveArrayBound.scala	pass	interp:fail	
+primitives.scala	fail	interp:fail	output: line 1: the .check has 'A <: byte[]', the program printed nothing
+shadowedTypeParam.scala	fail	interp:fail	shadowedTypeParam.scala:47:24: value toGenericString is not a member of Method
+simple.scala	fail	interp:fail	output: line 1: the .check has 'T', the program printed nothing
+simpleBoundParameters.scala	fail	interp:fail	output: line 1: the .check has 'T <: java.util.List<?>', the program printed nothing
+superClassParams.scala	fail	interp:fail	output: line 1: the .check has 'B: A<java.lang.Object>', the program printed 'B: A'
+valueClassBound.scala	fail	interp:fail	output: line 1: the .check has 'T <: VC', the program printed nothing
+wildcards.scala	fail	interp:fail	output: line 1: the .check has 'T <: java.util.List<? extends java.util.Calendar>', the program printed nothing

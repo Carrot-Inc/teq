@@ -1,0 +1,170 @@
+alias_method_refinement_variance	missing '13:35: error: Found: (s : Sink[B])'
+alias_type_arguments_arity	missing 'alias_type_arguments_arity.scala:4:20: error: Not enough type arguments for V.Aux[T, P, R0]'
+ambiguous_extension_given_inherited.check	< tests/errors/ambiguous_extension_given_inherited.scala:10:10: error: Found: X
+ambiguous_view_conversion.check	< tests/errors/ambiguous_view_conversion.scala:6:13: error: Found: P
+ambiguous_view_given.check	< tests/errors/ambiguous_view_given.scala:7:10: error: Found: X
+ambiguous_view_inherited_given.check	< tests/errors/ambiguous_view_inherited_given.scala:10:10: error: Found: X
+ambiguous_view_inherited_given_poly.check	< tests/errors/ambiguous_view_inherited_given_poly.scala:10:10: error: Found: X
+ambiguous_view_inherited_given_using.check	< tests/errors/ambiguous_view_inherited_given_using.scala:10:10: error: Found: X
+ambiguous_view_missing_else.check	< tests/errors/ambiguous_view_missing_else.scala:6:22: error: Found: Unit
+ambiguous_view_same_name.check	< tests/errors/ambiguous_view_same_name.scala:10:10: error: Found: X
+ambiguous_view_selection.check	< tests/errors/ambiguous_view_selection.scala:7:10: error: Found: X
+ambiguous_view_selection_operator.check	< tests/errors/ambiguous_view_selection_operator.scala:7:10: error: Found: X
+ambiguous_view_stable_argument.check	< tests/errors/ambiguous_view_stable_argument.scala:7:12: error: Found: (p : P)
+ambiguous_view_where_before_notes.check	< tests/errors/ambiguous_view_where_before_notes.scala:9:22: error: Found: Unit
+and_base_default_getter	exit code 0
+and_base_member_types	missing '28:33: error: Found: Int & String'
+and_base_override_narrower	exit code 0
+annotated_parameter_printing	missing '7:20: error: missing argument for parameter y of method f in object AnnotatedParameterPrinting: (y: Int): Int'
+approx_store_application_reject	missing '13:28: error: Found: h.KC[?1.A]'
+argument_parenthesized_mismatch.check	< tests/errors/argument_parenthesized_mismatch.scala:3:19: error: Found: (1 : Int)
+arity_class_names	missing '31:12: error: type Tuple23 not found'
+array_any_erasure_overloads	missing '12:7: error: Conflicting definitions:'
+bound_check_after_typer_error	missing '8:16: error: illegal cyclic type reference: lower bound BS[?, H.this.S] of type S refers back to the type itself'
+bound_member_params_seen_from_prefix	exit code 0
+collection_seq_not_immutable.check	< tests/errors/collection_seq_not_immutable.scala:5:85: error: Found: (xs : scala.collection.Seq[Int])
+constructor_proxy_prefix	missing '8:26: error: Outer is not a valid class prefix, since it is not an immutable path'
+copy_default_later_clause	missing '7:25: error: value copy$default$2 is not a member of C'
+directive_hidden_file	present '.policy.scala'
+directive_input_order	exit code 0
+directive_links	present 'P.scala'
+directive_none_read	exit code 2
+directive_scope_main	exit code 0
+directive_unicode_order	exit code 0
+directive_wconf_files	exit code 0
+directive_werror_files	exit code 0
+dynamic_inserted_apply	missing '18:11: error: method apply in trait ContextFunction1 does not take more parameters'
+dynamic_named_missing_given	missing '11:27: error:'
+end_marker_duplicate	exit code 0
+enum_parent_recovery	missing 'extends enum Choice, but extending enums is prohibited.'
+erased_use_definition_tie	missing 'inlined from tests/errors/erased_use_definition_tie.scala:5'
+erased_use_definition_tie.check	< tests/errors/erased_use_definition_tie.scala:7:14: error: method erasedValue is declared as `erased`, but is in fact used
+expanded_function_block_body.check	< tests/errors/expanded_function_block_body.scala:1:12: error: Missing parameter type
+expanded_function_block_implicit.check	< tests/errors/expanded_function_block_implicit.scala:1:20: error: Missing parameter type
+expanded_function_layout.check	< tests/errors/expanded_function_layout.scala:1:10: error: Missing parameter type
+export_case_apply_omitted_default	missing '14:18: error: missing argument for parameter x of method apply in object Z: (x: Int, y: Int): Pt'
+ext_ambiguous.check	< tests/errors/ext_ambiguous.scala:11:14: error: Found: Foo
+extension_contextual_given	exit code 0
+extension_conversion_same_level	exit code 0
+extension_inherited_conversions_ambiguous	missing 'error: Found: (a : A)'
+extension_inner_conversion_method	missing 'error: Found: String'
+extension_inner_conversion_outer	exit code 0
+fbound_through_sibling_member_alias	exit code 0
+fbound_through_sibling_member_alias_member	exit code 0
+file_module_override_packages	exit code 0
+file_module_overrides	exit code 0
+gadt_bound_after_base_type	missing 'gadt_bound_after_base_type.scala:5:17: error: Found: (x : T)'
+given_coherent_intersection_ambiguous	missing '15:44: error: ambiguous given instances for CanEqual[A, B] & Marker: a, b'
+given_failed_heal_reports_original	missing '19:26: error: ambiguous given instances for TC: a, b'
+given_not_imported_note	missing 'was not considered because it was not imported with `import given`.'
+given_opaque_pair_ambiguous	exit code 0
+given_scope_gadt_bounds	exit code 0
+hk_argument_to_proper_parameter_of_param	exit code 0
+hk_param_bounds_both_directions	missing '18:14: error: type argument Option does not conform to lower bound [X] =>> List[X]'
+hk_wildcard_param_bound	missing '13:43: error: Found: (c : C[List, ?])'
+implicit_migration_negation	missing '22:30: migration warning: Ambiguous implicits value n1 in object O and value n2 in object O'
+impure_function_alias_missing_class	missing '7:27: error: Cyclic reference involving type ImpureFunction01'
+inferred_type_apply_mismatch_point	missing '9:21: error: Found: Option[Nothing]'
+inferred_type_apply_mismatch_point.check	< tests/errors/inferred_type_apply_mismatch_point.scala:9:21: error: Found: Option[Nothing]
+infix_after_hidden_overload	missing '7:19: error: Alphanumeric method f is not declared infix; it should not be used as infix operator.'
+inherited_abstract_type_member_cycle	exit code 0
+inline_library_summon_from	present '(in the body of'
+inline_parameter_block_path_final	missing '9:25: error: (x$proxy1 : Int) is not a constant type; cannot take constValue'
+inline_val_purity.check	< tests/errors/inline_val_purity.scala:18:18: error: inline value must be pure
+java_module_not_a_value	missing 'error: Java defined class Future is not a value'
+java_signature_missing_class	exit code 0
+java_signature_missing_class_bound	exit code 0
+java_signature_missing_class_field	exit code 0
+java_signature_missing_class_named	exit code 0
+java_signature_missing_class_selection	exit code 0
+java_signature_missing_class_tasty_first	exit code 0
+java_signature_missing_class_throws	exit code 0
+java_signature_missing_jdk_root_class	exit code 0
+java_signature_missing_parent	exit code 0
+java_signature_missing_scala_class	exit code 0
+lexical_extension_given_heal.check	< tests/errors/lexical_extension_given_heal.scala:19:50: error: Found: R
+lower_bound_cycle_illegal	missing 'lower_bound_cycle_illegal.scala:12:9: error: illegal cyclic type reference: lower bound BS[?, S] of type S refers back to the type itself'
+match_case_not_a_case_dep_method_eta	exit code 0
+match_case_not_a_case_depfun	exit code 0
+match_case_not_a_case_depfun_andthen	missing '12:36: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_case_not_a_case_depfun_contra	missing '11:39: error: this match type case is not a match case once its pattern is approximated: Nothing & MatchCase[?, String]'
+match_case_not_a_case_depfun_lower	missing '11:36: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_case_not_a_case_depfun_mismatch	missing '12:36: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_case_not_a_case_depfun_param	missing '11:33: error: this match type case is not a match case once its pattern is approximated: Nothing & MatchCase[?, String]'
+match_case_not_a_case_depfun_unused	exit code 0
+match_case_not_a_case_intersection_prefix	exit code 0
+match_case_not_a_case_intersection_prefix_mismatch	missing '11:28: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_case_not_a_case_param_bound	missing '9:33: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_case_not_a_case_param_bound_mismatch	missing '8:33: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_type_declared_no_cases	missing '1:5: warning: Match type reduction failed since selector EmptyTuple.type'
+match_type_pattern_wildcards	missing 'case B[_] => Int'
+message_disambiguation.check	< tests/errors/message_disambiguation.scala:6:43: error: Found: (x : Left.Token)
+message_gadt_deferred.check	< tests/errors/message_gadt_deferred.scala:7:26: error: Found: (t : T)
+method_type_arg_check_bounds	missing '14:13: error: type argument Int does not conform to upper bound [_] =>> Any'
+nested_projection_cycle	exit code 0
+new_eta_expanded_opaque	missing 'error: [A] =>> O.F[A] does not have a constructor'
+nonsensical_hidden	present '2:10: error: Only function types can be followed by _'
+opaque_definition_recovery	exit code 0
+opaque_equality_memo	missing 'of types O.T and Int cannot be compared with == or !='
+opaque_trait_prefix.check	< tests/errors/opaque_trait_prefix.scala:12:24: error: Found: (h : Html.Tag[Node])
+overload_parenthesized_method_arg	exit code 0
+overload_unknown_function_diagnostics	missing 'both match arguments (<?> => <?>)'
+overload_unknown_function_diagnostics.check	< both match arguments (<?> => <?>)
+pattern_case_class_parent_value_reference	missing '15:3: error: Found: C[Int]'
+pattern_class_parent_value_reference	exit code 0
+pattern_type_argument_value_reference	exit code 0
+pre_check_kinds_every_constructor	missing '18:21: error: type argument Int does not have the same kind as its bound [_]'
+predef_unimport_conversion.check	< tests/errors/predef_unimport_conversion.scala:11:30: error: Found: Byte
+private_leaks_signature	exit code 0
+projection_type_constructor_qualifier.check	< tests/errors/projection_type_constructor_qualifier.scala:4:18: error: Found: Outer.C
+pure_intersection_double_definition	missing 'Conflicting definitions:'
+scala3_i2887c	missing '21:71: error: Found: (1 : Int)'
+scala3_i2887c.check	< tests/errors/scala3_i2887c.scala:21:71: error: Found: (1 : Int)
+scalajs_anonymous_js_objects	missing '19:5: error: object creation impossible, since val name: String in trait JsTrait in package app is not defined'
+scalajs_import_namespace	missing '23:24: error: The second argument to @JSImport must be literal string or the JSImport.Namespace object.'
+scalajs_js_sam	exit code 0
+scalajs_js_trait_type_tests	missing '19:5: error: isInstanceOf[app.NativeTrait] not supported because it is a JS trait'
+scalajs_jsname_string_arguments	missing '22:11: error: A String argument to JSName must be a literal string'
+scalajs_linking_info_not_constant	exit code 0
+scalajs_package_jvm	exit code 0
+scalajs_prep_js_interop	missing '25:18: error: Concrete members of JS native types may only call js.native.'
+splice_conversion_ambiguous.check	< tests/errors/splice_conversion_ambiguous.scala:10:36: error: Found: X
+store_reducer_contra_member_alias	missing '16:57: error: Found: (x : h.KC[Nothing])'
+strict_equality_null_classes	missing '3:48: error: values of types Const[Any][Int] and Null cannot be compared with == or !='
+super_rebind_incompatible_result	exit code 0
+target_name_parenthesized	exit code 0
+time_stopped_in_inline	missing 'stopped in inline: 1 error'
+time_stopped_in_type	missing 'error: Found: (1 : Int)'
+top_types_no_monitor_methods	missing '6:25: error: value notify is not a member of Any'
+trait_indirect_parameters	missing '2 errors found'
+tuple_index_mismatch_place	missing '2:26: error: Found: Int'
+tuple_index_past_elements	missing '1:5: warning: Match type reduction failed since selector EmptyTuple.type'
+tuple_index_past_elements_typed	missing '1:25: error: Found: Tuple.Elem[EmptyTuple.type, (0 : Int)]'
+unreducible_application_placements	exit code 0
+unreducible_wildcard_application_e043	missing '13:12: error: unreducible application of higher-kinded type [X] =>> h.KC[X] to wildcard arguments'
+unresolved_member_qualifier_interpolated	missing '6:29: error: value foo is not a member of C'
+unresolved_member_qualifier_interpolated.check	< tests/errors/unresolved_member_qualifier_interpolated.scala:6:29: error: value foo is not a member of C
+wildcard_bound_abstract_member_application	exit code 0
+wildcard_bound_both_ends	exit code 0
+wildcard_bound_capture_through_paths	missing 'wildcard_bound_capture_through_paths.scala:11:20: error: type argument Impl[?] does not conform to upper bound BS[BS[?, Impl[?]]#T, Impl[?]]'
+wildcard_bound_dependent_contravariant	exit code 0
+wildcard_bound_dependent_covariant	exit code 0
+wildcard_bound_dependent_edge	exit code 0
+wildcard_bound_dependent_invariant	exit code 0
+wildcard_bound_dependent_on_wildcard	missing '13:23: error: type argument String does not conform to upper bound C[? >: Int, String]#A'
+wildcard_bound_dependent_unbounded	exit code 0
+wildcard_bound_fbound_lower	exit code 0
+wildcard_bound_fbound_lower_instance	exit code 0
+wildcard_bound_fbound_narrow	missing '23:49: error: type argument S does not conform to upper bound BS[BS[? <: String, S]#T, S]'
+wildcard_bound_fbound_param_type	exit code 0
+wildcard_bound_fbound_shapes	missing '29:22: error: type argument X does not conform to upper bound BS[BS[?, X]#T, X]'
+wildcard_bound_hk_param_application	exit code 0
+wildcard_bound_match_scrutinee_nested	exit code 0
+wildcard_bound_nested_positions	exit code 0
+wildcard_bound_other_param	exit code 0
+wildcard_bound_overlap	missing '17:30: error: type argument ? >: T does not overlap with upper bound U'
+wildcard_bound_param_ends	exit code 0
+wildcard_bound_variant_param	exit code 0
+wrong_number_of_type_args_beside_a_syntax_error	missing 'wrong_number_of_type_args_beside_a_syntax_error.scala:11:17: error: Not enough type arguments for V.Aux[T, P, R0]'
+wrong_number_of_type_args_hides_its_arguments	missing 'wrong_number_of_type_args_hides_its_arguments.scala:11:17: error: Not enough type arguments for V.Aux[T, P, R0]'
+wrong_number_of_type_args_message_forms	exit code 0

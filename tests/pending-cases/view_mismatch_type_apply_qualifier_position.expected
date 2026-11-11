@@ -1,0 +1,17 @@
+scalac 3.8.4: rejected, 2 error(s)
+view_mismatch_type_apply_qualifier_position.scala:15:12: Found:    Option[Nothing]
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object a in object Main and object b in object Main provide an extension method `pick` on Option[T]
+  where:    T is a type variable
+  One of the following imports might fix the problem:
+  import Main.a.pick
+  import Main.b.pick
+view_mismatch_type_apply_qualifier_position.scala:16:12: Found:    Option[Nothing]
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object a in object Main and object b in object Main provide an extension method `pick` on Option[A]
+  where:    A is a type variable
+  One of the following imports might fix the problem:
+  import Main.a.pick
+  import Main.b.pick

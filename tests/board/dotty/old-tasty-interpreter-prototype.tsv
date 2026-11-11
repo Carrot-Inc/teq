@@ -1,0 +1,3 @@
+# dotty 3.8.4 (7d4833b6) old-tasty-interpreter-prototype, run; compiler/test/dotty/tools/dotc/BootstrappedOnlyCompilationTests.scala:127; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+old-tasty-interpreter-prototype	cannot run	-	the compiler as a library: the TASTy inspector

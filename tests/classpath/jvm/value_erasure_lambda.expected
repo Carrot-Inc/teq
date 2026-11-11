@@ -1,0 +1,16 @@
+7
+8
+9
+10
+11
+12
+13
+14
+public int Reader.first(int[])
+public int Reader.nested(int[][])
+public int Reader.identity(java.lang.Integer)
+public int Reader.declared(java.lang.Object)
+public int Reader.primitive(int)
+public int Reader.boundedArray(java.lang.Object)
+public int Reader.hidden(int[])
+public int Reader.hiddenDirect(java.lang.Object)

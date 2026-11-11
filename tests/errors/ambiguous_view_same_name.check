@@ -1,0 +1,11 @@
+tests/errors/ambiguous_view_same_name.scala:10:10: error: Found:    X
+Required: ?{ foo: ? }
+Note that implicit extension methods cannot be applied because they are ambiguous;
+both method cv in object C and method cv² in object C provide an extension method `foo` on X
+
+where:    cv  is a method in object C
+          cv² is a method in object C
+
+  def t = X().foo
+          ^^^
+1 error found

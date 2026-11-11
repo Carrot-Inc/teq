@@ -1,0 +1,5 @@
+scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_inherited_companion.scala:16:51: Found:    Foo
+  Required: ?{ show: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object given_Ops_Foo in object Foo and object Foo provide an extension method `show` on Foo

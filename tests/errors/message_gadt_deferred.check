@@ -1,0 +1,22 @@
+tests/errors/message_gadt_deferred.scala:7:26: error: Found:    (t : T)
+Required: String
+
+where:    T is a type in method direct which is an alias of Int
+
+    case Expr.IntLit(i) => t
+                           ^
+tests/errors/message_gadt_deferred.scala:9:26: error: Found:    (t : T)
+Required: String
+
+where:    T is a type in method applied which is an alias of Int
+
+    case Expr.IntLit(i) => t)
+                           ^
+tests/errors/message_gadt_deferred.scala:11:26: error: Found:    (t : T)
+Required: String
+
+where:    T is a type in method member which is an alias of Int
+
+    case Expr.IntLit(i) => t)
+                           ^
+3 errors found

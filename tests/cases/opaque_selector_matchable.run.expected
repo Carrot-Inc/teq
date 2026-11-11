@@ -1,0 +1,8 @@
+tests/cases/opaque_selector_matchable.scala:20:8: warning: pattern selector should be an instance of Matchable,
+but it has unmatchable type O.Id instead
+    case E() => true
+         ^^^
+true
+false
+true
+true

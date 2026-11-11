@@ -1,0 +1,12 @@
+// tests/tasty/fixtures/CtorCycleLinked.tasty (TASTy 28.8, 878 bytes)
+package fix.shapes
+@SourceFile class CtorCycleLinked(val n: Int) extends Object, CtorCycleParent[CtorCycleLinked.Token.type] {
+  def <init>(): Unit = ...
+}
+@SourceFile object CtorCycleLinked extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  object Token extends Object {
+    <synthetic> private def writeReplace(): AnyRef = ...
+  }
+}
+

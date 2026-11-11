@@ -1,0 +1,7 @@
+tests/errors/ambiguous_view_stable_argument.scala:7:12: error: Found:    (p : P)
+Required: Q
+Note that implicit conversions cannot be applied because they are ambiguous;
+both method pq1 and method pq2 convert from (p : P) to Q
+  val q: Q = p
+             ^
+1 error found

@@ -1,0 +1,12 @@
+tests/cases/eta_sam_conversion.scala:19:19: warning: method m is eta-expanded even though S does not have the @FunctionalInterface annotation.
+    val result: S = m
+                    ^
+tests/cases/eta_sam_conversion.scala:21:20: warning: method w is eta-expanded even though W does not have the @FunctionalInterface annotation.
+    val widened: W = w
+                     ^
+tests/cases/eta_sam_conversion.scala:23:22: warning: method same is eta-expanded even though R does not have the @FunctionalInterface annotation.
+    val converted: R = same
+                       ^^^^
+41
+42
+50

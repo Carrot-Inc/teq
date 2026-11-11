@@ -1,0 +1,26 @@
+# dotty 3.8.4 (7d4833b6) bench, pos; compiler/test/dotty/tools/dotc/BootstrappedOnlyCompilationTests.scala:28; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+FindRef.scala	pass	check:pass	
+empty-class.scala	pass	check:pass	
+empty-file.scala	pass	check:pass	
+empty-object.scala	pass	check:pass	
+exhaustivity-I.scala	pass	check:pass	
+exhaustivity-S.scala	pass	check:pass	
+exhaustivity-T.scala	pass	check:pass	
+exhaustivity-V.scala	pass	check:pass	
+i1535.scala	pass	check:pass	
+i1687.scala	pass	check:pass	
+implicit-scope-loop.scala	pass	check:pass	
+implicitNums.scala	pass	check:pass	
+implicit_cache.scala	pass	check:pass	
+inductive-implicits.scala	fail	check:fail	inductive-implicits.scala:64:33: no given instance of type Selector[::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[Int, ::[I
+patmatexhaust.scala	pass	check:pass	
+power-macro	pass	check:pass	
+string-interpolation-macro	fail	check:pass	Test.scala:4:22: exception in macro: scala.NotImplementedError: an implementation is missing (called by x in object Macro)
+transactional	pass	check:fail	
+tuple.scala	pass	check:pass	
+tuple22-apply.scala	pass	check:pass	
+tuple22-creation-apply.scala	pass	check:pass	
+tuple22-creation-cons.scala	pass	check:pass	
+tuple22-size.scala	pass	check:pass	
+tuple22-tails.scala	pass	check:pass	

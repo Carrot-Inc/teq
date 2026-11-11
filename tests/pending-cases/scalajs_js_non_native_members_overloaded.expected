@@ -1,0 +1,7 @@
+scalac 3.8.4: rejected, 6 error(s)
+scalajs_js_non_native_members_overloaded.scala:18:14: Private methods in non-native JS classes cannot be overloaded. Use different names instead.
+scalajs_js_non_native_members_overloaded.scala:19:14: Private methods in non-native JS classes cannot be overloaded. Use different names instead.
+scalajs_js_non_native_members_overloaded.scala:24:28: Private methods in non-native JS classes cannot be overloaded. Use different names instead.
+scalajs_js_non_native_members_overloaded.scala:25:16: Private methods in non-native JS classes cannot be overloaded. Use different names instead.
+scalajs_js_non_native_members_overloaded.scala:30:14: Private methods in non-native JS classes cannot be overloaded. Use different names instead.
+scalajs_js_non_native_members_overloaded.scala:36:28: Private methods in non-native JS classes cannot be overloaded. Use different names instead.

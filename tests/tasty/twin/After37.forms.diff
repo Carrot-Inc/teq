@@ -1,0 +1,4 @@
+3c3
+<   <synthetic> private[this] val $4: (Int, Int) = (List.apply{([1], scala.collection.immutable.Seq): java.lang.Object}[Int]([1, 2]*): List[Int] @unchecked) match {
+---
+>   <synthetic> private[this] val $4: (Int, Int) = ((List.apply{([1], scala.collection.immutable.Seq): scala.collection.immutable.List}[Int]([1, 2]*): List[Int] @unchecked): List[Int] @unchecked) match {

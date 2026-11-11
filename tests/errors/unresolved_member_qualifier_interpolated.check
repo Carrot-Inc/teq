@@ -1,0 +1,7 @@
+tests/errors/unresolved_member_qualifier_interpolated.scala:6:29: error: value foo is not a member of C
+  def f(c: C): String = s"${c.foo.bar}/${c.baz.qux}"
+                            ^^^^^
+tests/errors/unresolved_member_qualifier_interpolated.scala:6:42: error: value baz is not a member of C
+  def f(c: C): String = s"${c.foo.bar}/${c.baz.qux}"
+                                         ^^^^^
+2 errors found

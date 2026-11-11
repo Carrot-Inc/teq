@@ -103,11 +103,29 @@ cargo test --release             # unit tests
 ./tests/rust-warnings.sh         # cargo check of every target, release and checks profiles, warnings denied
 ./tests/no-caps.sh               # numeric cutoffs added to the typing paths since the base, each naming dotty's constant
 ./tests/all.sh [suite...]        # every suite, or the named ones, one summary line each
+python3 tests/board/dotty.py     # dotty's own suites at the tag 3.8.4, each test as dotty's runner runs it (SCALA3_TAG)
+python3 tests/board/board.py     # the board: a row per suite and per reference project, read from the tree's lists
 ```
 
+The tests expected to fail live in the tree on lists, one per suite (`tests/pending/<suite>.txt`,
+`tests/support/pending.py`): a suite fails when a listed test passes and when an unlisted one fails, so a list
+only shrinks. `--update` on a runner takes the tests that pass now out of its list; `--add` writes the unlisted
+failures in, and belongs to the change that brings the tests into the tree, never to one that broke a test. Either
+also writes the suite's row of the board (`tests/board/suites/<suite>.tsv`; `tests/board/dotty/<row>.tsv` for
+dotty's suites, whose rows, flags and kinds are `tests/board/rows.py` and whose table of scalac's options is in
+`tests/board/dotty.py`). The runners that take the two flags: `tests/run.sh` (and with `--dir=tests/pending-cases`),
+`run_errors.sh`, `run_jvm.sh`, `run_interp.sh`, `run_stdlib.sh`, `interp-script.sh`, `run_interop.sh`, `parser.sh`,
+`classpath.sh`, `split.sh`, `modules.sh`, `tests/scala3/run.sh`, `tests/board/scripts.sh` and
+`tests/board/dotty.py`. Three suites name their failures on `FAIL` lines and count their passes unnamed
+(`tests/tasty.sh`, `workers.sh`, `split-watch.sh`): their lists hold those names, a listed check that names no
+failure in a run counts as passing, so they are held whole, never in part, and their flags are `--pending-update`
+and `--pending-add` (`tests/tasty.sh --update` is its expectations' own). A suite over what another passes skips
+what that one expects to fail (`split.sh`, `split-watch.sh`, `analysis-bytes.sh`, `analysis.sh`), and
+`jvm-watch.sh` runs the cases `tests/board/suites/jvm.tsv` says pass. `tests/board/copied.tsv` names the stopped
+branch's fixtures whose scenarios are not ported yet.
+
 Recording expectations: `tests/run.sh --regen` (the `.expected` files from scala-cli),
-`--update` on `tests/run_jvm.sh`, `run_interp.sh`, `run_stdlib.sh`, `tests/scala3/run.sh` and
-`tests/scala3-typing/harness.py` (their allow-lists), `SIZE_RECORD=1 ./teq interp tests/size.scala`,
+`--update` on `tests/scala3-typing/harness.py` (its record of each test's category), `SIZE_RECORD=1 ./teq interp tests/size.scala`,
 `BUDGET_RECORD=1 bench/budget.sh`, `RUNTIME_RECORD=1 tests/runtime.sh`,
 `WATCH_MEMORY_RECORD=1 tests/watch-memory.sh`, `./teq interp tests/source-version.scala -- --capture 3.8.4` and
 `--capture 3.10.0` (each scalac's captures of the source version's runs, pinned apart; 3.10.0's over a coursier cache

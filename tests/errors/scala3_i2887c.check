@@ -1,0 +1,9 @@
+tests/errors/scala3_i2887c.scala:21:71: error: Found:    (1 : Int)
+Required: ([X[_$10,_$11], Y[_$12], Z] =>> X[Z, Y[Z]])[[X²] =>> X², [X²] =>> X²]
+
+where:    X  is a type variable with constraint <: [_, _²] =>> Any
+          X² is a type variable
+
+      baz(new A { type S[X[_,_], Y[_], Z] = X[Z,Y[Z]]; type I[X] = X })(1) // error
+                                                                        ^
+1 error found

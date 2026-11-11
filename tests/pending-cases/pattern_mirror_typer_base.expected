@@ -1,0 +1,12 @@
+The `--offline` option is experimental
+Please bear in mind that non-ideal user experience should be expected.
+If you encounter any bugs or have feedback to share, make sure to reach out to the maintenance team at https://github.com/VirtusLab/scala-cli
+-- [E007] Type Mismatch Error: /home/agent/pi-runs/tmp/codex/cut-instruction-scanner-d1/review-nov6/pattern_mirror_typer_base.scala:4:22 
+4 |    case p: P.type => p
+  |                      ^
+  |                    Found:    (p : P.type & scala.deriving.Mirror.Product)
+  |                    Required: Int
+  |
+  | longer explanation available when compiling with `-explain`
+1 error found
+Compilation failed

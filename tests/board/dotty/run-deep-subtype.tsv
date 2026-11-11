@@ -1,0 +1,17 @@
+# dotty 3.8.4 (7d4833b6) run-deep-subtype, run; compiler/test/dotty/tools/dotc/CompilationTests.scala:180; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+Tuple-append.scala	pass	interp:pass	
+Tuple-apply.scala	pass	interp:pass	
+Tuple-head.scala	pass	interp:pass	
+Tuple-init.scala	pass	interp:pass	
+Tuple-last.scala	pass	interp:pass	
+Tuple-reverse.scala	pass	interp:pass	
+Tuple-size.scala	pass	interp:pass	
+Tuple-tail.scala	pass	interp:pass	
+Tuple-toArray.scala	pass	interp:fail	
+colltest4	pass	interp:fail	
+i16191.scala	fail	interp:fail	output: line 1: the .check has 'List(private final Context C.ctx)', the program printed 'List(private Context C.ctx, private java.lang.Object C.given_Context$lzy, private java.lang.Object C.given_C$lzy)'
+i5256.scala	pass	interp:pass	
+tuple-cons.scala	fail	interp:fail	tuple-cons.scala:42:7: expected 'case', found identifier
+tuple-drop.scala	pass	interp:fail	
+tuple-take.scala	pass	interp:fail	

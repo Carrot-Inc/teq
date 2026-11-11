@@ -5,14 +5,15 @@
 # <name>.stderr: what Scala CLI 1.17.1 gives for `scala-cli run <script> -- <argument>...` under scalac 3.8.4
 # (`--record` runs Scala CLI and writes them again).
 #
-# tests/interp-script-passing.txt lists the runs that pass; a listed run that fails is a regression and fails the
-# script, an unlisted one that passes is reported so that it can be added (`--update` rewrites the list).
+# The runs expected to fail are tests/pending/interp-script.txt (tests/support/pending.py): the suite fails when
+# a listed run passes and when an unlisted one fails; `--update` takes the runs that pass now out of the list,
+# `--add` writes the unlisted failures in, and either writes the suite's row of the board.
 cd "$(dirname "$0")/.."
 export LC_COLLATE=C
 TEQ=${TEQ:-./target/release/teq}
-LIST=tests/interp-script-passing.txt
 mode=check
-case "$1" in --record) mode=record ;; --update) mode=update ;; esac
+update=
+case "$1" in --record) mode=record ;; --update) update=--update ;; --add) update="--update --add" ;; esac
 out=out/interp-script
 rm -rf "$out"
 mkdir -p "$out"
@@ -225,19 +226,8 @@ refusal() {
 
 touch "$out/passed" "$out/failed"
 sort -o "$out/passed" "$out/passed"
-status=0
-if [ $mode = update ]; then
-  cp "$out/passed" "$LIST"
-  echo "$(wc -l < "$LIST" | tr -d ' ') runs listed in $LIST"
-fi
-[ -f "$LIST" ] || touch "$LIST"
-regressed=$(comm -23 "$LIST" "$out/passed")
-new=$(comm -13 "$LIST" "$out/passed")
-[ -s "$out/failed" ] && { echo "failing:"; sed 's/^/  /' "$out/failed"; }
-[ -n "$new" ] && echo "passing, not listed in $LIST: $(echo $new)"
-if [ -n "$regressed" ]; then
-  echo "REGRESSED: $(echo $regressed)"
-  status=1
-fi
 echo "$(wc -l < "$out/passed" | tr -d ' ') passed, $(wc -l < "$out/failed" | tr -d ' ') failed"
-exit $status
+# The run held to the list of the runs expected to fail (tests/support/pending.py): a failed run's line is
+# `<name>: <why>`.
+{ sed 's/^/pass /' "$out/passed"; sed -E $'s/^([^:]+): (.*)$/fail \\1\t\\2/' "$out/failed"; } > "$out/results.txt"
+python3 tests/support/pending.py interp-script "$out/results.txt" $update

@@ -1,0 +1,14 @@
+tests/cases/inline_substitution_quote_by_name/macros.scala:3:28: warning: Canceled quote directly inside a splice. ${ '{ XYZ } } is equivalent to XYZ.
+    inline def runIt: Unit = ${ '{
+                             ^
+      def force(x: => Unit): Unit = x
+  ...
+    } }
+tests/cases/inline_substitution_quote_by_name/macros.scala:8:27: warning: Canceled quote directly inside a splice. ${ '{ XYZ } } is equivalent to XYZ.
+    inline def twice: Int = ${ '{ def force(x: => Int): Int = x + x; force(3) } }
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+forced
+done
+6
+true
+false

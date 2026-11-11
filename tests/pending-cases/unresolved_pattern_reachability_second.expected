@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+unresolved_pattern_reachability_second.scala:5:12: Not found: Nope - did you mean None?

@@ -1,0 +1,82 @@
+abstract-local-js-class.scala	marks: no error where 1 are marked
+enumeration-warnings.scala	marks: no error where 1 are marked
+internal-annotations.scala	marks: 1 errors where 11 are marked
+isinstanceof-js-type.scala	marks: 1 errors where 2 are marked
+js-case-class-object.scala	marks: no error where 4 are marked
+js-custom-function-types-backend.scala	marks: 3 errors where 2 are marked: js-custom-function-types-backend.scala:11:44: type mismatch: found () => 42, required BadThisFunction1
+js-custom-function-types-prepjsinterop.scala	marks: 2 errors where 7 are marked
+js-dynamic-literal.scala	marks: 2 errors where 4 are marked
+js-enums.scala	marks: error on an unmarked line js-enums.scala:17: Any does not have a constructor
+js-members-bad-signatures.scala	marks: 5 errors where 12 are marked
+js-native-call.scala	marks: no error where 1 are marked
+js-native-exports.scala	marks: no error where 4 are marked
+js-native-members.scala	marks: 8 errors where 25 are marked
+js-native-on-scala-type.scala	marks: 3 errors where 6 are marked
+js-native-type-wrong-place.scala	marks: no error where 18 are marked
+js-native-val-def-override.scala	marks: no error where 6 are marked
+js-native-val-def-wrong-place.scala	marks: 11 errors where 27 are marked
+js-native-val-defs.scala	marks: 6 errors where 11 are marked
+js-native-wrong-kind.scala	marks: 2 errors where 6 are marked
+js-non-native-members-conflicts.scala	marks: 1 errors where 2 are marked
+js-non-native-members-overloaded.scala	marks: 4 errors where 6 are marked
+js-non-native-members-qualified-private.scala	marks: 1 errors where 12 are marked
+js-non-native-members.scala	marks: 5 errors where 6 are marked
+js-sam-of-non-function-type.scala	marks: 9 errors where 6 are marked: js-sam-of-non-function-type.scala:11:7: class A3 needs to be abstract, since def foobar(x: Int): Int in class A3 is not defined
+js-trait-ctor-param.scala	marks: no error where 1 are marked
+js-trait-members-override.scala	marks: 4 errors where 6 are marked
+js-trait-members-wrong-kind.scala	marks: 3 errors where 4 are marked
+js-trait-members.scala	check: diagnostic 1 of 8: scalac's is error js-trait-members.scala:5:3 Members of non-native JS traits must either be abstract, or their right-hand-side must be `js.undefined`.; teq's is error js-trait-members.scala:5:7 a1 is a member of a
+js-type-bad-parents.scala	marks: 10 errors where 21 are marked
+js-type-override-equals-hashcode.scala	marks: 1 errors where 8 are marked
+jsconstructorof-error-in-prepjsinterop.scala	marks: 9 errors where 10 are marked
+jsconstructorof-error-in-typer.scala	check: diagnostic 1 of 3: scalac's is error jsconstructorof-error-in-typer.scala:9:28 Type argument ScalaClass does not conform to upper bound scala.scalajs.js.Any; teq's is error jsconstructorof-error-in-typer.scala:9:11 not supported yet:
+jsconstructortag-error-in-prepjsinterop.scala	check: diagnostic 1 of 12: scalac's is warning jsconstructortag-error-in-prepjsinterop.scala:16:43 with as a type operator has been deprecated; use & instead; teq's is error jsconstructortag-error-in-prepjsinterop.scala:13:11 value construc
+jsconstructortag-error-in-typer.scala	check: diagnostic 1 of 3: scalac's is error jsconstructortag-error-in-typer.scala:9:40 No given instance of type scala.scalajs.js.ConstructorTag[ScalaClass] was found for parameter tag of method constructorTag in package scala.scalajs.js.;
+jsexport-bad-tostring.scala	marks: no error where 1 are marked
+jsexport-conflict-method-prop.scala	marks: no error where 3 are marked
+jsexport-conflicts.scala	marks: 1 errors where 5 are marked
+jsexport-double-definition.scala	marks: no error where 2 are marked
+jsexport-double-underscore.scala	marks: 1 errors where 2 are marked
+jsexport-implicit-apply.scala	marks: no error where 3 are marked
+jsexport-js-member.scala	marks: 1 errors where 2 are marked
+jsexport-local.scala	marks: 4 errors where 7 are marked
+jsexport-misplaced-default-or-vararg.scala	marks: no error where 2 are marked
+jsexport-non-public.scala	marks: 14 errors where 15 are marked
+jsexport-on-toplevel.scala	marks: error on an unmarked line jsexport-on-toplevel.scala:5: @JSExport is forbidden on objects and classes. Use @JSExportTopLevel instead.
+jsexport-setter-with-bad-setter-sig.scala	marks: no error where 8 are marked
+jsexportall-bad-names.scala	marks: no error where 2 are marked
+jsexportany-non-literal-arguments.scala	marks: error on an unmarked line jsexportany-non-literal-arguments.scala:18: @JSExportTopLevel needs a valid JS identifier: @JSExportTopLevel("name")
+jsexportstatic-after-stat-or-non-static-field.scala	marks: no error where 6 are marked
+jsexportstatic-conflicts.scala	marks: no error where 10 are marked
+jsexportstatic-twice-same-field.scala	marks: no error where 4 are marked
+jsexportstatic-wrong-kind.scala	marks: no error where 5 are marked
+jsexportstatic-wrong-place.scala	marks: no error where 6 are marked
+jsexporttoplevel-abstract-class-or-trait.scala	marks: error on an unmarked line jsexporttoplevel-abstract-class-or-trait.scala:5: @JSName, @JSBracketAccess and @JSExportTopLevel go on a def or a val
+jsexporttoplevel-conflicts.scala	marks: error on an unmarked line jsexporttoplevel-conflicts.scala:9: A is exported twice
+jsexporttoplevel-in-js-type.scala	marks: 2 errors where 7 are marked
+jsexporttoplevel-invalid-js-identifier.scala	marks: error on an unmarked line jsexporttoplevel-invalid-js-identifier.scala:5: @JSExportTopLevel needs a valid JS identifier: @JSExportTopLevel("name")
+jsexporttoplevel-js-native.scala	marks: 3 errors where 4 are marked
+jsexporttoplevel-local.scala	marks: 4 errors where 7 are marked
+jsexporttoplevel-non-public.scala	marks: 6 errors where 15 are marked
+jsexporttoplevel-non-static.scala	marks: error on an unmarked line jsexporttoplevel-non-static.scala:6: @JSName, @JSBracketAccess and @JSExportTopLevel go on a def or a val
+jsexporttoplevel-wrong-kind.scala	marks: no error where 3 are marked
+jsglobalscope-on-non-object.scala	marks: 9 errors where 7 are marked: jsglobalscope-on-non-object.scala:6:7: @JSGlobalScope is only allowed on an object
+jsname-argument.scala	marks: 13 errors where 8 are marked: jsname-argument.scala:18:7: @JSName needs the name as a string literal: @JSName("name")
+jsname-duplicate.scala	marks: 1 errors where 3 are marked
+jsname-on-private-members.scala	marks: error on an unmarked line jsname-on-private-members.scala:6: @JSName, @JSBracketAccess and @JSExportTopLevel go on a def or a val
+jsname-on-trait.scala	marks: 6 errors where 3 are marked: jsname-on-trait.scala:8:9: @JSName, @JSBracketAccess and @JSExportTopLevel go on a def or a val
+jsname-override.scala	marks: 17 errors where 16 are marked: jsname-override.scala:6:7: @JSName is only allowed on a member of a JS type
+jsname-symbol-override.scala	marks: 21 errors where 18 are marked: jsname-symbol-override.scala:11:7: @JSName needs the name as a string literal: @JSName("name")
+jsname-wrong-place.scala	marks: 24 errors where 26 are marked
+native-load-spec-argument.scala	marks: 32 errors where 20 are marked: native-load-spec-argument.scala:12:8: @JSGlobal takes a name as a string literal, or nothing
+native-load-spec-duplicate.scala	marks: 2 errors where 7 are marked
+native-load-spec-missing.scala	marks: 7 errors where 8 are marked
+native-load-spec-need-explicit-name.scala	marks: 8 errors where 12 are marked
+native-load-spec-nested.scala	marks: 32 errors where 30 are marked: native-load-spec-nested.scala:7:7: a member of a JS type cannot have @JSImport or @JSGlobal
+native-load-spec-on-non-js-native.scala	marks: error on an unmarked line native-load-spec-on-non-js-native.scala:7: @JSImport, @JSGlobal and @JSGlobalScope need @js.native on the class or object
+native-load-spec-on-trait.scala	marks: error on an unmarked line native-load-spec-on-trait.scala:6: a native JS trait has no location; @JSImport, @JSGlobal and @JSGlobalScope go on a class or an object
+non-native-js-types-inside-js-native.scala	marks: 9 errors where 8 are marked: non-native-js-types-inside-js-native.scala:7:9: A1 is nested in a native JS type, which cannot define classes or objects
+package-object-extends-js-any.scala	marks: no error where 1 are marked
+reflective-calls.scala	marks: no error where 5 are marked
+scala-types-inside-js-native.scala	marks: 12 errors where 10 are marked: scala-types-inside-js-native.scala:7:9: A1 is nested in a native JS type, which cannot define classes or objects
+type-mismatch.scala	check: diagnostic 1 of 1: scalac's is error type-mismatch.scala:6:18 Found: (msg : String); teq's is error type-mismatch.scala:6:18 type mismatch: found String, required Int

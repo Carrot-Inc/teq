@@ -60,6 +60,8 @@ else
     # A case whose downstream is refused by design (`expect-errors.txt`) has no analysis to
     # compare, and its failed compile would end sbt's batch.
     [ -f "$d/expect-errors.txt" ] && continue
+    # a case tests/modules.sh expects to fail (tests/pending/modules.txt) has no analysis to compare
+    grep -q "^$c\([[:space:]]\|\$\)" tests/pending/modules.txt 2> /dev/null && continue
     cases+=("$root/tests/modules/$c")
   done
   for d in tests/analysis/cases/*/; do

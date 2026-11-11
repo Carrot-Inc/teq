@@ -1,0 +1,34 @@
+# test	verdict	the other ways	the first line of the difference
+braces-mixed	pass	-	
+broken-array	pass	-	
+broken-case	pass	-	
+broken-import	pass	-	
+broken-result	pass	-	
+broken-type	pass	-	
+case-arrow	pass	-	
+class-header	pass	-	
+ctor-cut-list	pass	-	
+def-missing-colon	pass	-	
+def-missing-eq	pass	-	
+def-result-type	pass	-	
+def-untyped-no-eq	pass	-	
+end-marker	pass	-	
+enum-case	pass	-	
+header-eof-bracket	pass	-	
+header-eof-paren	pass	-	
+import-excluded	pass	-	
+incomplete-consumers	pass	-	
+incomplete-local-body	pass	-	
+indentation	pass	-	
+indentation-continued	pass	-	
+m0364	fail	-	teq reports m0364.scala:11:10: error: an identifier expected, but ':' found m0364.scala:28:10: error: this is not a case class or enum case m0364.scala:29:10: warning: unreachable case m0364.scala:32:
+missing-body	pass	-	
+missing-tag	pass	-	
+operator-eol	pass	-	
+overload-incomplete	pass	-	
+tag-beside-error	pass	-	
+type-alias-incomplete	fail	-	a departure departures.tsv does not list: scalac only: type-alias-incomplete.scala:6: error: not found: f
+unclosed-args	pass	-	
+unclosed-brace	pass	-	
+unclosed-paren	pass	-	
+unterminated-string	pass	-	

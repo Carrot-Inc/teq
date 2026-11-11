@@ -1,0 +1,12 @@
+scalac 3.8.4: rejected, 2 error(s)
+extension_ambiguity_right_assoc.scala:23:28: Found:    List[Int]
+  Required: ?{ *:: : ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object a in object Main and object b in object Main provide an extension method `*::` on List[Int]
+  One of the following imports might fix the problem:
+  import Main.a.*::
+  import Main.b.*::
+extension_ambiguity_right_assoc.scala:25:20: Found:    S
+  Required: ?{ *:: : ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both object c in object S and object d in object S provide an extension method `*::` on S

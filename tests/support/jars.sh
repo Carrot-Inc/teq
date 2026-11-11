@@ -18,7 +18,7 @@
 # sttp-model-core-jvm, sttp-shared-core-jvm and sttp-shared-ws-jvm; the interp-script fixture's lock jars its script reaches, named so that the actions cache holds them (decline-jvm, geny-jvm, os-lib-jvm, os-zip-jvm, magnolia1318-jvm, sttp-client4-core-jvm, sttp-client4-zio-jvm, sttp-shared-zio-jvm, sttp-model-core-1717-jvm, zio-interop-reactivestreams-jvm, zio-managed-jvm, jline-jdk8-jvm, reactive-streams-jvm, scodec-bits-jvm, algebra-jvm, cats-collections-core-jvm, idna4s-core-jvm); abi-callbacks-lib,
 # tests/support/abi_callbacks_lib.scala compiled by scalac (scala-cli) into a jar; typetest-lib,
 # tests/support/typetest_lib.scala compiled the same way; callable-lib, tests/support/callable_lib.scala compiled the
-# same way; ctor-lib, tests/support/ctor_lib.scala compiled the same way; predef-lib,
+# same way; package-overloads-lib, tests/support/package_overloads_lib.scala compiled the same way; ctor-lib, tests/support/ctor_lib.scala compiled the same way; predef-lib,
 # tests/support/predef_lib.scala compiled the same way; depfun-lib, tests/support/depfun_lib.scala
 # compiled the same way; inlinebodies-lib, tests/support/inline_bodies_lib.scala compiled the same way; view-lib, tests/support/view_lib.scala compiled the same way; nestedcompanion-lib,
 # tests/support/nestedcompanion_lib.scala compiled the same way; javareview-lib,
@@ -27,7 +27,9 @@
 # bridgetrait-lib, tests/support/hidden_owner/bridge's Scala trait compiled by scalac with its Java class compiled
 # against it by that javac; inlineabi-v1 and inlineabi-v2, tests/support/hidden_owner/inlineabi's two versions
 # compiled by that javac; throwsclone-lib, tests/support/hidden_owner/throwsclone compiled by scalac;
-# javadefault-lib, tests/support/hidden_owner/javadefault's Java sources compiled by that javac, and
+# javadefault-lib, tests/support/hidden_owner/javadefault's Java sources compiled by that javac; nesting-lib,
+# tests/support/hidden_owner/nesting's compiled the same way; stubparent-lib, tests/support/hidden_owner/stubparent's
+# compiled the same way and Gone.class deleted; and
 # genericclone-lib, polyclone-lib, mixedclone-lib and privateclone-lib, tests/support/hidden_owner's
 # genericclone, polyclone, mixedclone and privateclone traits compiled by scalac, and parammeta-lib, its trait
 # and Java annotation compiled by scalac, each but mixedclone's with
@@ -43,7 +45,11 @@
 # tests/support/traitfields_lib.scala compiled the same way for the JVM; deferred-lib,
 # tests/support/deferred_lib.scala compiled the same way for the JVM; outer-lib,
 # tests/support/outer_lib.scala compiled the same way; unicode-lib, tests/support/unicode_lib.scala compiled
-# the same way; defaults-lib, tests/support/defaults_lib.scala compiled the same way; lazyorder-lib,
+# the same way; defaults-lib, tests/support/defaults_lib.scala compiled the same way; stddefaults-lib,
+# tests/support/std_defaults_lib.scala compiled the same way; erasedoverloads-lib, tests/support/erased_overloads_lib.scala
+# compiled the same way; quotenest-lib, tests/support/quote_nest_lib.scala compiled the same way; missingdep-lib,
+# tests/support/missing_dep/A.scala compiled against dep/B.scala into a jar without it; missingclass-mixed,
+# tests/support/missing_class_mixed's Scala and Java classes compiled against its Gone2 into a jar without it; lazyorder-lib,
 # tests/support/lazyorder_lib.scala compiled the same way; ctorinit-lib, tests/support/ctorinit_lib.scala
 # compiled the same way; state-lib,
 # tests/support/state_lib.scala compiled the same way under a directory named like scala-library's; scala2-lib,
@@ -269,6 +275,32 @@ java_default_jar() {
   fi
   echo "$jar"
 }
+# tests/support/hidden_owner/nesting's Java class compiled by javac into a jar.
+java_nesting_jar() {
+  local src=tests/support/hidden_owner/nesting
+  local jar=$scratch/nesting-lib.jar
+  local work=$scratch/nesting-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
+    rm -rf "$work" && mkdir -p "$work"
+    timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/nest/*.java > /dev/null 2>&1 \
+      && dir_jar "$work" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# tests/support/hidden_owner/stubparent's Java classes compiled by javac into a jar, Present's parent Gone left out.
+java_stub_parent_jar() {
+  local src=tests/support/hidden_owner/stubparent
+  local jar=$scratch/stubparent-lib.jar
+  local work=$scratch/stubparent-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java')" ]; then
+    rm -rf "$work" && mkdir -p "$work"
+    timeout 120 "$fixture_javac" --release 17 -nowarn -d "$work" "$src"/stubp/*.java > /dev/null 2>&1 \
+      && rm -f "$work/stubp/Gone.class" && dir_jar "$work" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
 # tests/support/hidden_owner/<name>'s trait G.scala compiled by scalac into a jar, its class file and TASTy.
 scalac_trait_jar() {
   local src=tests/support/hidden_owner/$1
@@ -353,6 +385,18 @@ callable_lib_jar() {
   fi
   echo "$jar"
 }
+package_overloads_lib_jar() {
+  local src=tests/support/package_overloads_lib.scala
+  local jar=$scratch/package-overloads-lib.jar
+  local dir=$scratch/package-overloads-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/package_overloads_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 ctor_lib_jar() {
   local src=tests/support/ctor_lib.scala
   local jar=$scratch/ctor-lib.jar
@@ -360,6 +404,18 @@ ctor_lib_jar() {
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/ctor_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# The legacy quote-pattern encoding must come from Scala 3.3.7 (TASTy 28.3).
+quote_patterns33_lib_jar() {
+  local src=tests/support/quote_patterns33_lib.scala
+  local jar=$scratch/quote-patterns33-lib.jar dir=$scratch/quote-patterns33-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S 3.3.7 "$dir/quote_patterns33_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
       && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
     rm -rf "$dir"
   fi
@@ -509,6 +565,77 @@ defaults_lib_jar() {
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/defaults_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
       && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
     rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# tests/support/quote_nest_lib.scala compiled by scalac into a jar: a macro's nested quote pattern naming an outer one's type.
+quote_nest_lib_jar() {
+  local src=tests/support/quote_nest_lib.scala
+  local jar=$scratch/quotenest-lib.jar
+  local dir=$scratch/quotenest-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/quote_nest_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# tests/support/erased_overloads_lib.scala compiled by scalac into a jar: overloads scala-library's erasure tells apart.
+erased_overloads_lib_jar() {
+  local src=tests/support/erased_overloads_lib.scala
+  local jar=$scratch/erasedoverloads-lib.jar
+  local dir=$scratch/erasedoverloads-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/erased_overloads_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# tests/support/std_defaults_lib.scala compiled by scalac into a jar: bodies that pass the getters of the
+# standard library's defaults.
+std_defaults_lib_jar() {
+  local src=tests/support/std_defaults_lib.scala
+  local jar=$scratch/stddefaults-lib.jar
+  local dir=$scratch/stddefaults-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/std_defaults_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# tests/support/missing_dep/A.scala compiled by scalac against the classes of tests/support/missing_dep/dep/B.scala,
+# into a jar without them: inline bodies naming a class their user's class path does not hold.
+missingdep_lib_jar() {
+  local src=tests/support/missing_dep
+  local jar=$scratch/missingdep-lib.jar
+  local work=$scratch/missingdep-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.scala')" ]; then
+    rm -rf "${work:?}" && mkdir -p "$work/dep" "$work/lib"
+    timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws-dep" -d "$work/dep" "$src/dep/B.scala" > /dev/null 2>&1 \
+      && timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws-lib" --classpath "$work/dep" -d "$work/lib" "$src/A.scala" > /dev/null 2>&1 \
+      && dir_jar "$work/lib" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "${work:?}"
+  fi
+  echo "$jar"
+}
+# tests/support/missing_class_mixed's Scala object and Java class, compiled by scalac and javac against its Gone2, into
+# a jar without Gone2: a class missing from the class path that a TASTy file and a Java signature both name.
+missingclass_mixed_jar() {
+  local src=tests/support/missing_class_mixed
+  local jar=$scratch/missingclass-mixed.jar
+  local work=$scratch/missingclass-mixed.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.java' -o -newer "$jar" -name '*.scala')" ]; then
+    rm -rf "${work:?}" && mkdir -p "$work/classes"
+    timeout 200 scala-cli --power compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q --workspace "$work/ws" -d "$work/classes" "$src/Gone2.scala" "$src/Uses.scala" > /dev/null 2>&1 \
+      && timeout 120 "$fixture_javac" --release 17 -nowarn -cp "$work/classes:$(scala_library_jar)" -d "$work/classes" "$src/JRef.java" > /dev/null 2>&1 \
+      && rm -f "${work:?}/classes/lib2/Gone2.class" "${work:?}/classes/lib2/Gone2.tasty" \
+      && dir_jar "$work/classes" "$jar.$$" && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "${work:?}"
   fi
   echo "$jar"
 }
@@ -833,7 +960,9 @@ jar_of() {
     javafixdir) echo tests/classfile/fixtures ;;
     abi-callbacks-lib) abi_callbacks_jar ;;
     typetest-lib) typetest_lib_jar ;;
+    quote-patterns33-lib) quote_patterns33_lib_jar ;;
     callable-lib) callable_lib_jar ;;
+    package-overloads-lib) package_overloads_lib_jar ;;
     ctor-lib) ctor_lib_jar ;;
     bundle-lib) bundle_jar ;;
     reflect-lib) reflect_lib_jar ;;
@@ -844,6 +973,11 @@ jar_of() {
     outer-lib) outer_lib_jar ;;
     unicode-lib) unicode_lib_jar ;;
     defaults-lib) defaults_lib_jar ;;
+    stddefaults-lib) std_defaults_lib_jar ;;
+    erasedoverloads-lib) erased_overloads_lib_jar ;;
+    quotenest-lib) quote_nest_lib_jar ;;
+    missingdep-lib) missingdep_lib_jar ;;
+    missingclass-mixed) missingclass_mixed_jar ;;
     predef-lib) predef_lib_jar ;;
     depfun-lib) depfun_lib_jar ;;
     inlinebodies-lib) inline_bodies_lib_jar ;;
@@ -859,6 +993,8 @@ jar_of() {
     throwsclone-lib) throws_clone_jar ;;
     javadefault-lib) java_default_jar ;;
     javadefault-scalac) scalac_use_jar javadefault javadefault-lib ;;
+    nesting-lib) java_nesting_jar ;;
+    stubparent-lib) java_stub_parent_jar ;;
     genericclone-lib) scalac_trait_jar genericclone ;;
     genericclone-scalac) scalac_use_jar genericclone genericclone-lib ;;
     polyclone-lib) scalac_trait_jar polyclone ;;

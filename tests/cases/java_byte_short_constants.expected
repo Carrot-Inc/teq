@@ -1,0 +1,4 @@
+List(127, -32768, -128, 32767)
+short max over 100
+List(max, min, other)
+(127,-128,32767)

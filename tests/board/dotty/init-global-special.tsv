@@ -1,0 +1,3 @@
+# dotty 3.8.4 (7d4833b6) init-global/special/tastySource, warn; compiler/test/dotty/tools/dotc/CompilationTests.scala:279-291; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+tastySource	fail	-	marks: 0 warnings where 1 are marked

@@ -1,0 +1,19 @@
+NamedArg b [b = x("b", 2)] 13:27-13:40 value [x("b", 2)] 13:31-13:40
+NamedArg a [a   =   1] 14:24-14:33 value [1] 14:32-14:33
+NamedArg b [b = (x("b", 2))] 14:35-14:50 value [x("b", 2)] 14:40-14:49
+NamedArg c [c = 3] 15:27-15:32 value [3] 15:31-15:32
+NamedArg a [a = 1] 16:28-16:33 value [1] 16:32-16:33
+NamedArg b [b = "two"] 16:35-16:44 value ["two"] 16:39-16:44
+NamedArg b [b =
+        x("b", 2)] 18:6-19:17 value [x("b", 2)] 19:8-19:17
+NamedArg a [a = 1] 20:39-20:44 value [1] 20:43-20:44
+NamedArg b [b = x("b", 2)] 20:24-20:37 value [] 20:29-20:29
+NamedArg a [a = 1] 21:24-21:29 value [1] 21:28-21:29
+NamedArg b [b = "z"] 21:36-21:43 value ["z"] 21:40-21:43
+NamedArg b [b = x("b", 2)] 22:27-22:40 value [x("b", 2)] 22:31-22:40
+NamedArg b [b = 2] 23:29-23:34 value [2] 23:33-23:34
+NamedArg k [k = _ + 1] 24:27-24:36 value [_ + 1] 24:31-24:36
+NamedArg k [k = (i: Int) => i] 25:27-25:44 value [(i: Int) => i] 25:31-25:44
+NamedArg b [b = x("here", 2)] 10:43-10:59 value [x("here", 2)] 10:47-10:59
+NamedArg b [b = x("pass", 2)] 27:22-27:38 value [x("pass", 2)] 27:26-27:38
+NamedArg b [b = Main.x("there", 2)] 1:49-1:71 value [Main.x("there", 2)] 1:53-1:71

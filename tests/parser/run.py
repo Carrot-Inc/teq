@@ -560,10 +560,24 @@ def main():
             record_scalac_fixtures()
             return
         failures = check_fixtures(teq, "--record-teq" in sys.argv)
+        # The fixtures held to the list of those expected to fail (tests/pending/parser-fixtures.txt,
+        # tests/support/pending.py): a listed fixture's failure is not printed.
+        sys.dont_write_bytecode = True
+        sys.path.insert(0, os.path.join(ROOT, "tests", "support"))
+        import pending
+        failing = {}
         for f in failures:
-            print("FAIL " + f)
-        print("fixtures passed" if not failures else f"fixtures failed: {len(failures)}")
-        sys.exit(1 if failures else 0)
+            failing.setdefault(f.split(":")[0], " ".join(f.split(":", 1)[1].split())[:200])
+        listed = pending.read("parser-fixtures")
+        for f in failures:
+            if f.split(":")[0] not in listed:
+                print("FAIL " + f)
+        ran = {name for name, _ in fixtures()}
+        update, add = "--update" in sys.argv, "--add" in sys.argv
+        held = pending.hold("parser-fixtures", ran, failing, update, add)
+        if held and (update or add):
+            pending.write_board_list("parser-fixtures", ran, failing, {})
+        sys.exit(0 if held else 1)
     records = run_teq(teq, flags, jobs)
     if "--gate" in sys.argv:
         failures = gate(records)

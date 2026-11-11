@@ -1,0 +1,12 @@
+tests/cases/sam_function_value.scala:18:17: warning: method double is eta-expanded even though Sam[Int, Int] does not have the @FunctionalInterface annotation.
+      println(run(double))
+                  ^^^^^^
+tests/cases/sam_function_value.scala:20:17: warning: method named is eta-expanded even though Sam[Int, String] does not have the @FunctionalInterface annotation.
+      println(run(named))
+                  ^^^^^
+42
+22
+n21
+tagged 42
+1
+1

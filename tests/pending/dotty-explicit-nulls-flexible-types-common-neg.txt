@@ -1,0 +1,13 @@
+i7883.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop-array-src	java source: teq reads none
+interop-chain.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop-enum-src	java source: teq reads none
+interop-generics	java source: teq reads none
+interop-implicit.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop-java-call	java source: teq reads none
+interop-java-chain	java source: teq reads none
+interop-java-varargs-src	java source: teq reads none
+interop-java-varargs.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop-method-src	java source: teq reads none
+interop-propagate.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop-select-type-member.scala	option: -Yexplicit-nulls (teq has no flag for it)

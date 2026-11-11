@@ -1,0 +1,18 @@
+// tests/tasty/fixtures/AccNest.tasty (TASTy 28.8, 1250 bytes)
+package fix.nestacc
+@SourceFile object AccNest extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  class Range(from: Int, end: Int) extends Object {
+    inline def foreach(op: Int => Unit): Unit = <body@164>
+    <synthetic> final def inline$fix$nestacc$AccNest$Range$$from: Int = ...
+    <synthetic> final def inline$fix$nestacc$AccNest$Range$$end: Int = ...
+  }
+  object Inner extends Object {
+    <synthetic> private def writeReplace(): AnyRef = ...
+    class Deep(private val k: Int) extends Object {
+      inline def get: Int = <body@387>
+      <synthetic> final def inline$fix$nestacc$AccNest$Inner$Deep$$k: Int = ...
+    }
+  }
+}
+

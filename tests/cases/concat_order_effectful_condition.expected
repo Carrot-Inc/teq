@@ -1,0 +1,10 @@
+a call of a constant type as the condition, in a quote
+  c
+  render x
+  tail
+x!
+the same around an inline parameter
+  c
+  render x
+  tail
+x!

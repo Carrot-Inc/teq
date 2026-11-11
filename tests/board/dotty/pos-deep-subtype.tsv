@@ -1,0 +1,29 @@
+# dotty 3.8.4 (7d4833b6) pos-deep-subtype, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:38; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+3324c.scala	pass	check:pass	
+3324d.scala	pass	check:pass	
+3324e.scala	fail	check:fail	No warnings can be incurred under -Werror
+3324h.scala	fail	check:fail	No warnings can be incurred under -Werror
+CollectionStrawMan1.scala	pass	check:fail	
+CollectionStrawMan4.scala	pass	check:fail	
+CollectionStrawMan5.scala	fail	check:fail	CollectionStrawMan5.scala:154:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
+CollectionStrawMan6.scala	fail	check:fail	CollectionStrawMan6.scala:138:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
+Result.scala	pass	check:pass	
+classTag.scala	pass	check:pass	
+gadt.scala	pass	check:pass	
+i14870.scala	pass	check:pass	
+i15677.scala	pass	check:pass	
+i16899.scala	pass	check:pass	
+i20516.scala	pass	check:pass	
+i21015.scala	pass	check:pass	
+i4036.scala	fail	check:fail	i4036.scala:2:43: a singleton type needs a val, a parameter or an object
+i5876.scala	pass	check:pass	
+i7580.scala	pass	check:pass	
+i9346.scala	pass	check:pass	
+i9631.scala	pass	check:pass	
+i9736.scala	pass	check:pass	
+i9759.scala	fail	check:fail	i9759.scala:7:28: type String not found
+i9782.scala	fail	check:fail	No warnings can be incurred under -Werror
+t8146a.scala	pass	check:pass	
+tuples2.scala	pass	check:fail	
+tuples23.scala	pass	check:fail	

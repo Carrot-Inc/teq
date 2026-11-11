@@ -1,0 +1,4 @@
+m0364.scala:11:10: error: an identifier expected, but ':' found
+m0364.scala:13:5: warning: Line is indented too far to the right, or a `{` or `:` is missing
+m0364.scala:28:16: error: value nested is not a member of object Rules
+m0364.scala:32:23: error: value nested is not a member of object Rules

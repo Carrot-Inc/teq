@@ -1,0 +1,43 @@
+# test	verdict	the other ways	the first line of the difference
+# passed	817
+positions cp/fix/javatemplate/JavaBox.tasty	fail	-	scalac's unpickler gave no answer for it
+positions cp/fix/javatemplate/JavaTemplate.tasty	fail	-	scalac's unpickler gave no answer for it
+twin After37	fail	-	
+twin AfterGroups	fail	-	
+twin AfterNested	fail	-	
+twin ProxyDerivation	fail	-	
+twin UUID constref/fix/constref/CrHolder.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID constref/fix/constref/CrRead.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID constructorcycle/fix/shapes/CtorCycleBound.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID constructorcycle/fix/shapes/CtorCycleLinked.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID constructorcycle/fix/shapes/CtorCycleParent.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders/fix/forh/AfterGroups.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders/fix/forh/AfterNested.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders/fix/forh/ForGroups.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders/fix/forh/ForNested.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders37/fix/forh37/After37.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID forholders37/fix/forh37/For37.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID inlineproxy/fix/inlineproxy/ProxyDerivation.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID inlineproxy/fix/inlineproxy/ProxyReader.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID inlineproxy/fix/inlineproxy/proxyAuto.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID longspans/fix/longspans/LongSpans.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID nestacc/fix/nestacc/AccNest.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID toparser/fix/toparser/ToParser.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryhanded/fix/unaryhanded/UhC.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryhanded/fix/unaryhanded/UhHolder.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryhanded/fix/unaryhanded/UhLib.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryparams/fix/unaryparams/UpBox.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryparams/fix/unaryparams/UpLib.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryref/fix/unaryref/UrC.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryref/fix/unaryref/UrHolder.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin UUID unaryref/fix/unaryref/UrLib.tasty	fail	-	not the UUID tests/tasty/twin/uuids.txt pins
+twin forms After37	fail	-	
+twin forms AfterGroups	fail	-	
+twin forms AfterNested	fail	-	
+twin forms ProxyDerivation	fail	-	
+twin forms UhHolder	fail	-	
+twin forms UhLib	fail	-	
+twin forms UpBox	fail	-	
+twin forms UpLib	fail	-	
+twin forms UrHolder	fail	-	
+twin forms UrLib	fail	-	

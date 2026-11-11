@@ -1,0 +1,10 @@
+// tests/tasty/fixtures/JavaBox.tasty (TASTy 28.8, 550 bytes)
+package fix.javatemplate
+object JavaBox extends Object {
+}
+class JavaBox[T <: Object, U <: Object](first: T) extends Object {
+  var first: T = ...
+  def first_=(x$1: T): Unit = ...
+  def keep[V <: Object](v: V): V = ...
+}
+

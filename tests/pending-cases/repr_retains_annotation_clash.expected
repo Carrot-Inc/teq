@@ -1,0 +1,13 @@
+-- [E120] Naming Error: tests/pending-cases/repr_retains_annotation_clash.scala:8:6 
+8 |  def a(f: scala.ImpureFunction1[Int, Int]): Int = 2
+  |      ^
+  |Conflicting definitions:
+  |def a(f: Int => Int): Int in class ClashImpure at line 7 and
+  |def a(f: Int => Int): Int in class ClashImpure at line 8
+  |have the same type (f: Function1): Int after erasure.
+  |
+  |Consider adding a @targetName annotation to one of the conflicting definitions
+  |for disambiguation.
+  |
+  | longer explanation available when compiling with `-explain`
+1 error found

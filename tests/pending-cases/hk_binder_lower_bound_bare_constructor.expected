@@ -1,0 +1,4 @@
+scalac 3.8.4: rejected, 3 error(s)
+hk_binder_lower_bound_bare_constructor.scala:7:12: Type argument Seq does not conform to lower bound [_] =>> List
+hk_binder_lower_bound_bare_constructor.scala:8:13: Type argument List does not conform to lower bound [_] =>> List
+hk_binder_lower_bound_bare_constructor.scala:9:28: Type argument Seq does not conform to lower bound [_] =>> List

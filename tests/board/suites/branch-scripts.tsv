@@ -1,0 +1,7 @@
+# test	verdict	the other ways	the first line of the difference
+function-xxl	fail	-	exit 1: FAIL teq-callee
+js-builtin-markers	pass	-	
+js-closure-shape	pass	-	
+js-constructor-fields	pass	-	
+js-inline-folded-origin	fail	-	exit 1:
+js-unused-captures	fail	-	exit 1: FAIL: expected no constructor-only capture fields, found 1

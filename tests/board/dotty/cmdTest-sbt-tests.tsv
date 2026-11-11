@@ -1,0 +1,4 @@
+# dotty 3.8.4 (7d4833b6) cmdTest-sbt-tests, run; project/scripts/bootstrappedOnlyCmdTests:125, :137; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+sourcepath-with-inline	cannot run	-	an sbt build driven by a script
+sourcepath-with-inline-api-hash	cannot run	-	an sbt build driven by a script

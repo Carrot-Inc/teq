@@ -1,0 +1,3 @@
+function-xxl	exit 1: FAIL teq-callee
+js-inline-folded-origin	exit 1:
+js-unused-captures	exit 1: FAIL: expected no constructor-only capture fields, found 1

@@ -1,0 +1,6 @@
+# dotty 3.8.4 (7d4833b6) run-custom-args/captures, run; compiler/test/dotty/tools/dotc/CompilationTests.scala:181; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+colltest5	fail	interp:fail	CollectionStrawManCC5_1.scala:25:44: expected end of statement, found identifier
+minicheck-mutable.scala	fail	interp:fail	minicheck-mutable.scala:59:49: expected ',' or ')', found identifier
+minicheck-toplevel.scala	fail	interp:fail	minicheck-toplevel.scala:74:21: expected ',' or ')', found identifier
+minicheck.scala	fail	interp:fail	minicheck.scala:75:21: expected ',' or ')', found identifier

@@ -1,0 +1,11 @@
+i1240.scala	marks: 3 errors where 1 are marked: i1240.scala:11:9: Ambiguous overload. The overloaded alternatives of method foo in class C with types
+i12650.scala	marks: no error where 1 are marked
+i17435.scala	marks: 1 errors where 6 are marked
+i25216.scala	check: diagnostic 1 of 1: scalac's is error i25216.scala:9:15 Found: (z : Z); teq's is error i25216.scala:9:15 type mismatch: found (z : AnyRef{val v: Int}), required Selectable | Dynamic
+i4372.scala	marks: no error where 1 are marked
+i5877.scala	marks: 3 errors where 2 are marked: i5877.scala:28:16: type mismatch: found HasThisType[_], required HasThisType[PThis]
+i6300.scala	marks: 2 errors where 1 are marked: i6300.scala:5:47: type argument Foo[T] does not conform to upper bound Foo[Foo[T]]
+i8464a.scala	marks: 4 errors where 1 are marked: i8464a.scala:16:18: type argument Type does not conform to upper bound Term[Type, Kind]
+interop-polytypes.scala	option: -Yexplicit-nulls (teq has no flag for it)
+matchtype-loop2.scala	marks: 2 errors where 1 are marked: matchtype-loop2.scala:5:8: Recursion limit exceeded.
+test-typers.scala	marks: 10 errors where 13 are marked

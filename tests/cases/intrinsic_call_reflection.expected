@@ -1,0 +1,7 @@
+Apply:isEmpty:0/Apply:isEmpty:0
+Apply:toUpperCase:0/Apply:toUpperCase:0
+Select:toString/Select:toString
+Apply:length:0/Apply:length:0
+Apply:charAt:1/Apply:charAt:1
+Apply:substring:1/Apply:substring:1
+Apply:substring:2/Apply:substring:2

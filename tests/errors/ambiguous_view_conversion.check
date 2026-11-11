@@ -1,0 +1,7 @@
+tests/errors/ambiguous_view_conversion.scala:6:13: error: Found:    P
+Required: Q
+Note that implicit conversions cannot be applied because they are ambiguous;
+both method pq1 and method pq2 convert from P to Q
+  val q: Q = P()
+             ^^^
+1 error found

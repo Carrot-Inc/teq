@@ -1,0 +1,7 @@
+twice(3)
+twice(twice(3))
+twice(m)
+O.p(twice(3))
+twice(3) * 2
+plus(3)(4)
+List.apply[Int]([1 : Int]*).map[Int]((_$1: Int) => twice(_$1))

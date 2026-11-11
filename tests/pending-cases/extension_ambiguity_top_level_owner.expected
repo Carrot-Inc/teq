@@ -1,0 +1,5 @@
+scalac 3.8.4: rejected, 1 error(s)
+extension_ambiguity_top_level_owner.scala:20:49: Found:    p.R
+  Required: ?{ pick: ? }
+  Note that implicit extension methods cannot be applied because they are ambiguous;
+  both given instance a in package p and given instance b in trait U provide an extension method `pick` on p.R

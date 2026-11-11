@@ -1,0 +1,14 @@
+id23(null): null
+id023(null): null
+mk(1..23): 4324
+mk64(1..64): 2080
+id023(lambda): 276
+Last23 via id23: 23
+Sum23C via Function23: 276
+FunctionErasure.id(null): null
+mk is a FunctionXXL: true
+mk.apply(xs): 4324
+Sum23C is a FunctionXXL: true
+Sum23C.apply(xs): 276
+Sum23C.toString: <functionXXL>
+Last23.apply(xs): 23

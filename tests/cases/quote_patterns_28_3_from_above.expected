@@ -1,0 +1,2 @@
+scala.Int | scala.Nothing | scala.Boolean
+scala.Long | scala.Nothing | scala.Char

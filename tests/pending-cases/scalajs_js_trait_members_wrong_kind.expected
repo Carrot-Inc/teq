@@ -1,0 +1,5 @@
+scalac 3.8.4: rejected, 4 error(s)
+scalajs_js_trait_members_wrong_kind.scala:16:11: A non-native JS trait cannot contain lazy vals
+scalajs_js_trait_members_wrong_kind.scala:18:32: In non-native JS traits, defs with parentheses must be abstract.
+scalajs_js_trait_members_wrong_kind.scala:19:38: In non-native JS traits, defs with parentheses must be abstract.
+scalajs_js_trait_members_wrong_kind.scala:20:29: In non-native JS traits, defs with parentheses must be abstract.

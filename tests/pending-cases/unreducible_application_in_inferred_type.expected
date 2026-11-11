@@ -1,0 +1,3 @@
+scalac 3.8.4: rejected, 1 error(s)
+unreducible_application_in_inferred_type.scala: No warnings can be incurred under -Werror
+unreducible_application_in_inferred_type.scala:14:23: (a migration warning, E043) unreducible application of higher-kinded type F to wildcard arguments in inferred type F[? <: Int]

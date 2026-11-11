@@ -1,0 +1,29 @@
+scalac 3.8.4: rejected, 7 error(s)
+view_search_bottom_builtin_members.scala:13:13: Found:    Nothing
+  Required: ?{ toUpperCase: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ toUpperCase: Any }
+view_search_bottom_builtin_members.scala:14:13: Found:    Nothing
+  Required: ?{ foo: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ foo: Any }
+view_search_bottom_builtin_members.scala:15:13: Found:    Nothing
+  Required: ?{ length: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ length: Any }
+view_search_bottom_builtin_members.scala:16:13: Found:    Nothing
+  Required: ?{ toInt: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ toInt: Any }
+view_search_bottom_builtin_members.scala:17:13: Found:    Null
+  Required: ?{ toUpperCase: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ toUpperCase: Any }
+view_search_bottom_builtin_members.scala:18:13: Found:    Null
+  Required: ?{ foo: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ foo: Any }
+view_search_bottom_builtin_members.scala:19:13: Found:    Nothing
+  Required: ?{ max: ? }
+  Note that implicit conversions were not tried because the result of an implicit conversion
+  must be more specific than ?{ max: [applied to (1) returning Any] }

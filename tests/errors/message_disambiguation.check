@@ -1,0 +1,32 @@
+tests/errors/message_disambiguation.scala:6:43: error: Found:    (x : Left.Token)
+Required: Right.Token²
+
+where:    Token  is a class in object Left
+          Token² is a class in object Right
+
+  def symbols(x: Left.Token): Right.Token = x
+                                            ^
+tests/errors/message_disambiguation.scala:7:49: error: Found:    (x : A)
+Required: Int
+
+where:    A is a type in method constrained with bounds <: CharSequence
+
+  def constrained[A <: CharSequence](x: A): Int = x
+                                                  ^
+tests/errors/message_disambiguation.scala:13:20: error: Found:    Alone.type
+Required: String
+  def bare: String = Alone
+                     ^^^^^
+tests/errors/message_disambiguation.scala:14:28: error: Found:    Outer.Inner.type
+Required: String
+  def nested: String = Outer.Inner
+                       ^^^^^^^^^^^
+tests/errors/message_disambiguation.scala:18:33: error: Found:    (x : Any)
+Required: Shadow.Any²
+
+where:    Any  is a class in package scala
+          Any² is a class in object Shadow
+
+    def take(x: scala.Any): Any = x
+                                  ^
+5 errors found

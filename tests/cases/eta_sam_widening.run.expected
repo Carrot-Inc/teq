@@ -1,0 +1,15 @@
+tests/cases/eta_sam_widening.scala:12:14: warning: method m is eta-expanded even though F does not have the @FunctionalInterface annotation.
+    val f: F = m
+               ^
+tests/cases/eta_sam_widening.scala:13:14: warning: method n is eta-expanded even though F does not have the @FunctionalInterface annotation.
+    val g: F = n
+               ^
+tests/cases/eta_sam_widening.scala:14:14: warning: method n is eta-expanded even though G does not have the @FunctionalInterface annotation.
+    val h: G = n
+               ^
+tests/cases/eta_sam_widening.scala:21:16: warning: method p is eta-expanded even though H does not have the @FunctionalInterface annotation.
+    val k: H = M.p
+               ^^^
+6
+4
+12

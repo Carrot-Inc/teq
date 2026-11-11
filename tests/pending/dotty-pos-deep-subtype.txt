@@ -1,0 +1,7 @@
+3324e.scala	1 warning found, errors under --werror
+3324h.scala	2 warnings found, errors under --werror
+CollectionStrawMan5.scala	CollectionStrawMan5.scala:154:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
+CollectionStrawMan6.scala	CollectionStrawMan6.scala:138:9: method isEmpty needs `override` modifier to override method isEmpty in trait IterableOps
+i4036.scala	i4036.scala:2:43: a singleton type needs a val, a parameter or an object
+i9759.scala	i9759.scala:7:28: type String not found
+i9782.scala	1 warning found, errors under --werror

@@ -1,0 +1,3 @@
+false
+LiteralQualifier.qualifier().classOf[String]
+classOf[Box[String]]

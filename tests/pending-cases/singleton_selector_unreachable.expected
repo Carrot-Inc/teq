@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+singleton_selector_unreachable.scala:9:7: Unreachable case

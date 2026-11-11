@@ -1,0 +1,27 @@
+# dotty 3.8.4 (7d4833b6) init/crash, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:303; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+by-name.scala	pass	check:pass	
+explicitOuter.scala	pass	check:fail	
+fors.scala	pass	check:fail	
+i1990b.scala	fail	check:pass	teq: jvm backend: A2: the local $thisr0jxdn_6 is not in scope of the generated method
+i2468.scala	pass	check:pass	
+i5606.scala	pass	check:fail	
+i6109.scala	pass	check:fail	
+i6858.scala	pass	check:fail	
+i6914.scala	fail	check:fail	i6914.scala:8:9: object creation impossible, since def apply(v1: Liftable[T]): ToExpr[T] in trait Function1 is not defined
+i7821.scala	pass	check:fail	
+i8892.scala	fail	check:fail	i8892.scala:14:27: value + is not a member of Any
+i9670.scala	pass	check:pass	
+matthias4.scala	fail	check:fail	matthias4.scala:34:9: error overriding value A in trait _a of type _a.this.A: value A of type A has incompatible type
+opassign.scala	pass	check:pass	
+private-leak.scala	pass	check:pass	
+rbtree.scala	fail	check:fail	rbtree.scala:28:1: expected a definition, found new line
+singleton-ops-test-issue-8287.scala	pass	check:pass	
+t0055.scala	pass	check:pass	
+t10032.scala	pass	check:fail	
+t2111.scala	fail	check:fail	t2111.scala:5:28: not found: Value
+t6888.scala	pass	check:fail	
+t7120	pass	check:fail	
+t8002.scala	pass	check:fail	
+tuples.scala	pass	check:fail	
+virtpatmat_alts.scala	pass	check:pass	

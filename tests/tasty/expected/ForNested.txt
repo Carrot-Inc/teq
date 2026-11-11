@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/ForNested.tasty (TASTy 28.8, 1829 bytes)
+package fix.forh
+@SourceFile object ForNested extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def f: List[Int] = ...
+}

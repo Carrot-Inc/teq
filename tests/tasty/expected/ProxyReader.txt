@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/ProxyReader.tasty (TASTy 28.8, 365 bytes)
+package fix.inlineproxy
+@SourceFile trait ProxyReader extends Object {
+  def read: Int
+}
+

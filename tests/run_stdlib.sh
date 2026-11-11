@@ -2,15 +2,16 @@
 # Every program of tests/cases that uses no JavaScript interop and does not carry `// std: lean`, built with `--std=scala-library`
 # (scala-library from the coursier cache as the standard library, its bodies compiled from
 # TASTy) and compared with its .expected file (scalac's, a lean departure's tests/lean-expected aside).
-# tests/stdlib-passing.txt lists the programs that pass under the mode; a listed one that fails
-# is a regression, and --update rewrites the list from this run. Skips, and counts as passed,
-# without the jar in the cache. STDLIB_REASONS=1 prints the first error of each failure.
+# The programs expected to fail under the mode are tests/pending/stdlib.txt (tests/support/pending.py): the run
+# fails when a listed program passes and when an unlisted one fails; --update takes the programs that pass now out
+# of the list, --add writes the unlisted failures in, and either writes the suite's row of the board. Skips, and
+# counts as passed, without the jar in the cache. STDLIB_REASONS=1 prints the first error of each failure.
 # A build's diagnostics go to out/stdlib-tests/<name>.diagnostics and are compared as tests/run.sh compares them
 # (an expectation holds the warnings its case is about) but for the run's summary of the warnings its flags left
 # unreported: scala-library's TASTy marks deprecated what the lean std's sources do not, so scalac's summary under
-# this mode is no line of the lean std's expectation. The summaries of the listed programs are checked against
-# tests/stdlib-summaries.txt instead: scalac 3.8.4's (`scala-cli compile -S 3.8.4`) in teq's spelling, written by
-# hand, so that a program the list gains is checked against scalac's summary, not this run's.
+# this mode is no line of the lean std's expectation. The summaries of the programs that print scalac's output are
+# checked against tests/stdlib-summaries.txt instead: scalac 3.8.4's (`scala-cli compile -S 3.8.4`) in teq's
+# spelling, written by hand; a program whose summaries are not scalac's fails.
 cd "$(dirname "$0")/.."
 # The lists are sorted bytewise: `sort -u` and `comm` under a locale's collation would take
 # `tail_calls` and `tailcalls` for one name. The character set stays the locale's, which java's
@@ -18,7 +19,6 @@ cd "$(dirname "$0")/.."
 export LC_COLLATE=C
 TEQ=${TEQ:-./target/release/teq}
 . tests/support/jars.sh
-LIST=tests/stdlib-passing.txt
 SUMMARIES=tests/stdlib-summaries.txt
 SUMMARY='^warning: there (was|were) [0-9]+ [a-z]+ warnings?; re-run with --[a-z]+ for details$'
 M2=${COURSIER_CACHE:-$HOME/Library/Caches/Coursier/v1}/https/repo1.maven.org/maven2
@@ -29,6 +29,15 @@ fi
 out=out/stdlib-tests
 mkdir -p "$out"
 rm -f "$out"/*.result "$out"/*.diagnostics "$out/summaries.txt"
+: > "$out/results.txt"
+update=
+add=
+for arg in "$@"; do
+  case $arg in
+    --update) update=--update ;;
+    --add) add=--add ;;
+  esac
+done
 pass=0
 fail=0
 passing=""
@@ -56,32 +65,27 @@ for src in tests/cases/*.scala tests/cases/*/; do
   if [ $code = 0 ] && diff -q "$expected" "$out/$name.actual" > /dev/null; then
     pass=$((pass + 1))
     passing="$passing$name"$'\n'
+    printf 'pass %s\n' "$name" >> "$out/results.txt"
     { grep -E "$SUMMARY" "$out/$name.diagnostics" | sed "s|^|$name: |"; } >> "$out/summaries.txt"
   else
     fail=$((fail + 1))
-    if [ -n "$STDLIB_REASONS" ]; then
-      reason=$(grep -m1 -o 'error: .*' "$out/$name.actual" | cut -c1-140)
-      [ -z "$reason" ] && reason=$(grep -m1 'Error\|error' "$out/$name.actual" | cut -c1-140)
-      [ -z "$reason" ] && reason="output differs"
-      echo "$name: $reason"
-    fi
+    reason=$(grep -m1 -o 'error: .*' "$out/$name.actual" | cut -c1-140)
+    [ -z "$reason" ] && reason=$(grep -m1 'Error\|error' "$out/$name.actual" | cut -c1-140)
+    [ -z "$reason" ] && reason="output differs"
+    printf 'fail %s\t%s\n' "$name" "$(tr '\t' ' ' <<< "$reason")" >> "$out/results.txt"
+    [ -n "$STDLIB_REASONS" ] && echo "$name: $reason"
   fi
 done
 printf '%s' "$passing" | sort > "$out/passing.txt"
 touch "$out/summaries.txt"
 sort -o "$out/summaries.txt" "$out/summaries.txt"
-if [ "$1" = "--update" ]; then
-  cp "$out/passing.txt" "$LIST"
-  echo "wrote $pass names to $LIST"
-fi
-# The summaries of the listed programs that passed, scalac's against this run's.
-checked=$(sort "$LIST" | comm -12 - "$out/passing.txt")
-of_checked() { awk -F': ' 'NR == FNR { p[$0]; next } $1 in p' <(printf '%s\n' "$checked") "$1" | sort; }
-summaries=$(diff <(of_checked "$SUMMARIES") <(of_checked "$out/summaries.txt"))
-regressions=$(comm -23 <(sort "$LIST" 2>/dev/null) "$out/passing.txt" | tr '\n' ' ')
-new=$(comm -13 <(sort "$LIST" 2>/dev/null) "$out/passing.txt" | tr '\n' ' ')
-[ -n "$new" ] && echo "passing but not in $LIST: $new"
-[ -n "$regressions" ] && echo "REGRESSIONS: $regressions"
-[ -n "$summaries" ] && printf 'SUMMARIES (< %s, > this run):\n%s\n' "$SUMMARIES" "$summaries"
-echo "stdlib: $pass passed, $fail failed"
-[ -z "$regressions" ] && [ -z "$summaries" ]
+# A program that prints scalac's output passes when its summaries of hidden warnings are scalac's too
+# (tests/stdlib-summaries.txt): the programs whose summaries differ, scalac's against this run's.
+of_passing() { awk -F': ' 'NR == FNR { p[$0]; next } $1 in p' "$out/passing.txt" "$1" | sort; }
+comm -3 <(of_passing "$SUMMARIES") <(of_passing "$out/summaries.txt") | sed -e $'s/^\t//' -e 's/: .*//' | sort -u > "$out/summaries-differ.txt"
+awk 'FILENAME == ARGV[1] { d[$1]; next }
+  $1 == "pass" && ($2 in d) { print "fail " $2 "\tits summaries of hidden warnings are not scalac'"'"'s (tests/stdlib-summaries.txt)"; next }
+  { print }' "$out/summaries-differ.txt" "$out/results.txt" > "$out/results.judged"
+echo "stdlib: $(grep -c '^pass ' "$out/results.judged") passed, $(grep -c '^fail ' "$out/results.judged") failed"
+# The run held to the list of the programs expected to fail (tests/support/pending.py).
+python3 tests/support/pending.py stdlib "$out/results.judged" $update $add

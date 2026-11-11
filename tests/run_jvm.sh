@@ -13,9 +13,10 @@
 # scalac 3.8.4's run on that JDK wrote (`scala-cli run -S 3.8.4 --jvm system`, that JDK's java
 # first on the PATH, from the repository's root under TZ=UTC), and which a run on that major compares.
 #
-# tests/jvm-passing.txt lists the tests that pass; a listed test that fails is a regression and
-# fails the script, an unlisted one that passes is reported so that it can be added
-# (`--update` rewrites the list). Failures are classified:
+# The cases expected to fail are tests/pending/jvm.txt (tests/support/pending.py): the run fails when a listed
+# case passes and when an unlisted one fails; `--update` takes the cases that pass now out of the list, `--add`
+# writes the unlisted failures in (for the change that brings the cases), and either writes the suite's row of
+# the board, tests/board/suites/jvm.tsv, whose passing cases the other suites over them read. Failures are classified:
 #   backend   the JVM backend reported a construct it does not support (exit code 3)
 #   compile   any other compile failure
 #   verify    the JVM rejected a class (VerifyError, ClassFormatError, linkage errors)
@@ -61,13 +62,14 @@ TEQ=${TEQ:-./target/release/teq}
 export TZ=UTC  # an archive entry's DOS time is local time: the recorded bytes are UTC's
 JDK_MAJOR=$(java -version 2>&1 | sed -nE '1s/^[^"]*"([0-9]+).*/\1/p')
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
-LIST=tests/jvm-passing.txt
 out=out/jvm-tests
-update=0
+update=
+add=
 VERSION=
 for arg in "$@"; do
   case $arg in
-    --update) update=1 ;;
+    --update) update=--update ;;
+    --add) add=--add ;;
     --java-output-version=*) VERSION=${arg#*=} ;;
   esac
 done
@@ -157,17 +159,18 @@ skipped=$(grep '^skip ' "$out/results.txt" | cut -d' ' -f2 | sort | comm -23 - "
 otheros=$(tr '\n' ' ' < "$out/otheros.txt")
 [ -n "$otheros" ] && echo "skipped (another system's): $otheros"
 grep '^pass ' "$out/results.txt" | cut -d' ' -f2 | sort > "$out/passing.txt"
-touch "$LIST"
-if [ $update = 1 ]; then
-  sort -u "$out/passing.txt" <(sort "$LIST" | comm -12 - "$out/otheros.txt") > "$LIST.new" && mv "$LIST.new" "$LIST"
-fi
-regressions=$(comm -23 <(sort "$LIST") <(sort -u "$out/passing.txt" "$out/otheros.txt") | tr '\n' ' ')
-new=$(comm -13 <(sort "$LIST") "$out/passing.txt" | tr '\n' ' ')
-[ -n "$new" ] && echo "passing but not in $LIST: $new"
-if [ -n "$regressions" ]; then
-  echo "REGRESSIONS: $regressions"
-  status=1
-fi
+# The run held to the list of the cases expected to fail (tests/support/pending.py): a case that is skipped, or
+# counted as passed for a jar the cache lacks, is not judged, and its place in the list stands.
+cat "$out"/*.nojar 2> /dev/null | sort > "$out/nojar.txt"
+: > "$out/otherstd.txt"
+awk 'FILENAME == ARGV[1] { os[$1]; next } FILENAME == ARGV[2] { nojar[$1]; next } FILENAME == ARGV[3] { std[$1]; next }
+  $2 in os { print "skip " $2 "\tanother system'"'"'s"; next }
+  $2 in std { print "skip " $2 "\tanother std'"'"'s"; next }
+  $2 in nojar { print "skip " $2 "\ta jar of its not in the coursier cache"; next }
+  $1 == "skip" { print "skip " $2 "\tits expectation is Scala.js'"'"'s"; next }
+  $1 == "pass" { print "pass " $2; next }
+  { print "fail " $2 "\t" $1 }' "$out/otheros.txt" "$out/nojar.txt" "$out/otherstd.txt" "$out/results.txt" > "$out/pending.txt"
+python3 tests/support/pending.py jvm "$out/pending.txt" $update $add || status=1
 
 same_jars() {
   . tests/support/jars.sh
@@ -309,21 +312,26 @@ abi_layout() {
   command -v python3 > /dev/null || return 0
   local f name work fails=0
   mkdir -p "$out/abi"
+  : > "$out/abi/results.txt"
   for f in tests/support/abi/*.scala; do
     name=$(basename "$f" .scala)
     work=$out/abi/$name
     if ! timeout 60 "$TEQ" compiler build "$f" --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
       echo "ABI: tests/support/abi/$name.scala does not build (see $work.log)"
-      fails=1
+      printf 'fail %s\tdoes not build\n' "$name" >> "$out/abi/results.txt"
       continue
     fi
     python3 tests/support/abi/listing.py "$work" $(sed -n 's|^// abi: ||p' "$f") > "$work.txt"
     if ! diff "tests/support/abi/$name.expected" "$work.txt" > "$work.diff"; then
       echo "ABI: the class files of tests/support/abi/$name.scala are not in scalac's layout"
       head -10 "$work.diff"
-      fails=1
+      printf 'fail %s\tnot in scalac'"'"'s layout: %s\n' "$name" "$(grep -m1 '^[<>]' "$work.diff" | tr '\t' ' ' | cut -c1-160)" >> "$out/abi/results.txt"
+    else
+      printf 'pass %s\n' "$name" >> "$out/abi/results.txt"
     fi
   done
+  # The fixtures held to the list of those expected to fail (tests/pending/jvm-abi.txt).
+  python3 tests/support/pending.py jvm-abi "$out/abi/results.txt" $update $add || fails=1
   return $fails
 }
 if [ -z "$VERSION" ]; then

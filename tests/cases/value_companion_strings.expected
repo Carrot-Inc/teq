@@ -1,0 +1,8 @@
+object scala.Boolean
+object scala.Int
+object scala.Long
+object scala.Char
+object scala.Byte
+object scala.Short
+object scala.Float
+object scala.Double

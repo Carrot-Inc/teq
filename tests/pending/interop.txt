@@ -1,0 +1,14 @@
+facade_parenthesized_arguments	< c.txt
+js_class_accessor_halves	< false
+js_class_accessor_names	< 1
+js_class_members	< 3
+js_class_members_local	< 5
+js_class_native_superclass	< 0
+js_class_private_member	< 16
+js_class_private_names	< init
+js_class_setter_two_params	< tests/interop/js_class_setter_two_params.scala:6:3: error: JS setters must have exactly one argument
+js_closure_unit_result	< undefined
+js_native_secondary_ctor	< tests/interop/js_native_secondary_ctor.scala:11:26: error: A secondary constructor of a native JS class may only call the primary constructor
+js_trait_bracket_access_non_native	< tests/interop/js_trait_bracket_access_non_native.scala:7:3: error: @JSBracketAccess is not allowed in non-native JS classes
+js_trait_setter_call	< 7
+template_precedence_early	< 1

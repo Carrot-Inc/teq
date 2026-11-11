@@ -1,0 +1,262 @@
+# dotty 3.8.4 (7d4833b6) pos-custom-args/captures, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:42; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+annot-i20272a.scala	fail	check:fail	annot-i20272a.scala:3:39: expected '=>', found identifier
+any-only.scala	fail	check:fail	any-only.scala:3:16: expected a declaration, found identifier
+ascribe-apply.scala	fail	check:fail	ascribe-apply.scala:2:32: expected ',' or ')', found identifier
+bounded.scala	fail	check:fail	bounded.scala:2:14: expected end of statement, found identifier
+boxed-use.scala	fail	check:fail	boxed-use.scala:4:54: expected a declaration, found identifier
+boxed1.scala	fail	check:fail	boxed1.scala:9:16: expected a declaration, found identifier
+boxmap-paper.scala	fail	check:fail	boxmap-paper.scala:3:22: expected an identifier, found '['
+buffers.scala	fail	check:fail	buffers.scala:16:39: the type arguments of ArrayBuffer cannot be inferred here; write them out
+byname-closure.scala	fail	check:fail	byname-closure.scala:4:20: expected ',' or ')', found '{'
+byname-getorelse.scala	pass	check:fail	
+byname-purefuns-adapt	pass	check:pass	
+byname-varargs.scala	pass	check:pass	
+byname.scala	fail	check:fail	byname.scala:4:14: expected end of statement, found identifier
+bynamefun.scala	fail	check:fail	bynamefun.scala:4:17: expected ',' or ')', found identifier
+cached.scala	fail	check:fail	cached.scala:6:27: type -> not found
+cap-paramlist8-desugared.scala	fail	check:fail	cap-paramlist8-desugared.scala:8:19: expected a declaration, found identifier
+cap-paramlists.scala	fail	check:fail	cap-paramlists.scala:4:13: expected '=', found identifier
+cap-paramlists2.scala	fail	check:fail	cap-paramlists2.scala:4:9: expected end of statement, found identifier
+cap-paramlists3.scala	fail	check:fail	cap-paramlists3.scala:6:13: expected '=', found identifier
+cap-paramlists4.scala	fail	check:fail	cap-paramlists4.scala:3:12: expected ',' or ']', found identifier
+cap-paramlists5.scala	fail	check:fail	cap-paramlists5.scala:5:13: expected '=', found identifier
+cap-paramlists6.scala	fail	check:fail	cap-paramlists6.scala:4:13: expected '=', found identifier
+cap-paramlists7.scala	fail	check:fail	cap-paramlists7.scala:4:13: expected '=', found identifier
+cap-paramlists8.scala	fail	check:fail	cap-paramlists8.scala:4:13: expected '=', found identifier
+cap-problem.scala	fail	check:fail	cap-problem.scala:13:21: type mismatch: found (CancelSuspension.this.suspension : ac.support.Suspension), required CancelSuspension.this.ac.support.Suspension
+cap-refine.scala	fail	check:fail	cap-refine.scala:9:26: expected a declaration, found identifier
+caps-universal.scala	fail	check:fail	caps-universal.scala:4:15: type -> not found
+capset-members.scala	fail	check:fail	capset-members.scala:4:13: expected '=', found identifier
+capset-members2.scala	fail	check:fail	capset-members2.scala:6:13: expected '=', found identifier
+capset-problem.scala	fail	check:fail	capset-problem.scala:9:20: expected ',' or ']', found identifier
+capset-uses.scala	fail	check:fail	capset-uses.scala:3:10: expected ',' or ']', found identifier
+capt-capability.scala	fail	check:fail	capt-capability.scala:3:30: expected a declaration, found identifier
+capt-depfun.scala	fail	check:fail	capt-depfun.scala:14:15: expected ':', found identifier
+capt-depfun2.scala	fail	check:fail	capt-depfun2.scala:9:15: expected ':', found identifier
+capt-env.scala	fail	check:fail	capt-env.scala:2:13: expected end of statement, found identifier
+capt-separate	fail	check:fail	Lib_1.scala:4:31: type -> not found
+capt-test.scala	fail	check:fail	capt-test.scala:22:13: expected end of statement, found identifier
+capt-wf2.scala	fail	check:fail	capt-wf2.scala:4:15: expected a declaration, found identifier
+capt0.scala	fail	check:fail	capt0.scala:4:15: expected '=', found identifier
+capt1.scala	fail	check:fail	capt1.scala:5:13: expected end of statement, found identifier
+capt2.scala	fail	check:fail	capt2.scala:6:11: expected '=', found identifier
+captureRef-separate-compilation	fail	check:fail	Future_1.scala:3:36: expected ',' or ')', found identifier
+caseclass.scala	fail	check:fail	caseclass.scala:4:24: expected ',' or ')', found identifier
+casts.scala	pass	check:pass	
+cc-cast.scala	fail	check:fail	cc-cast.scala:11:36: expected '=', found identifier
+cc-def-fresh.scala	fail	check:fail	cc-def-fresh.scala:4:28: expected '=', found identifier
+cc-dep-param.scala	fail	check:fail	cc-dep-param.scala:6:20: expected a declaration, found identifier
+cc-expand.scala	fail	check:fail	cc-expand.scala:12:21: expected a declaration, found identifier
+cc-experimental.scala	pass	check:fail	
+cc-poly-1.scala	fail	check:fail	cc-poly-1.scala:10:10: expected ',' or ']', found identifier
+cc-poly-source-capability.scala	fail	check:fail	cc-poly-source-capability.scala:11:17: expected ',' or ']', found identifier
+cc-poly-varargs-original.scala	fail	check:fail	cc-poly-varargs-original.scala:1:30: expected ',' or ']', found identifier
+cc-poly-varargs.scala	fail	check:fail	cc-poly-varargs.scala:5:28: expected ',' or ')', found identifier
+cc-setup-impure-classes.scala	fail	check:fail	cc-setup-impure-classes.scala:5:28: expected ',' or ')', found identifier
+cc-this.scala	fail	check:fail	cc-this.scala:9:24: expected ',' or ')', found identifier
+cc-use-iterable.scala	fail	check:fail	cc-use-iterable.scala:4:19: expected ',' or ']', found identifier
+check-override-typebounds-2.scala	fail	check:fail	check-override-typebounds-2.scala:6:24: expected a declaration, found identifier
+check-override-typebounds.scala	fail	check:fail	check-override-typebounds.scala:13:13: expected ',' or ']', found identifier
+checkbounds.scala	pass	check:pass	
+classes.scala	fail	check:fail	classes.scala:3:13: expected end of statement, found identifier
+closure-avoidance.scala	fail	check:fail	closure-avoidance.scala:6:16: expected ',' or ')', found identifier
+closure-result-typing.scala	fail	check:fail	closure-result-typing.scala:4:17: expected a declaration, found identifier
+cmp-singleton-2.scala	pass	check:pass	
+cmp-singleton.scala	pass	check:pass	
+colltest.scala	fail	check:fail	colltest.scala:7:32: expected a declaration, found 'this'
+compare-refined.scala	fail	check:fail	compare-refined.scala:5:13: expected end of statement, found identifier
+concat-iterator.scala	fail	check:fail	concat-iterator.scala:4:13: expected '=>', found identifier
+constr-uses.scala	fail	check:fail	constr-uses.scala:2:13: expected '=>', found identifier
+consume-shared.scala	fail	check:fail	consume-shared.scala:4:17: expected ':', found identifier
+correct-capture-variable-resolve.scala	fail	check:fail	correct-capture-variable-resolve.scala:3:16: expected ',' or ')', found identifier
+ctest.scala	fail	check:fail	ctest.scala:3:13: expected end of statement, found identifier
+deep-adapt.scala	fail	check:fail	deep-adapt.scala:10:10: expected end of statement, found 'def'
+dep-reach.scala	fail	check:fail	dep-reach.scala:4:15: expected ',' or ']', found identifier
+dependent-pure.scala	fail	check:fail	dependent-pure.scala:3:26: expected end of statement, found identifier
+disambiguate-select.scala	pass	check:pass	
+discardUses.scala	fail	check:fail	discardUses.scala:1:19: expected ',' or ')', found identifier
+dotty-experimental.scala	pass	check:fail	
+drop-refinement.scala	fail	check:fail	drop-refinement.scala:3:80: expected ',' or ')', found identifier
+enum-extends.scala	pass	check:pass	
+erased-methods.scala	fail	check:fail	erased-methods.scala:11:11: expected ',' or ')', found identifier
+erased-methods2-shared.scala	fail	check:fail	erased-methods2-shared.scala:12:48: expected ',' or ')', found identifier
+eta-expansions.scala	fail	check:fail	eta-expansions.scala:6:15: expected ',' or ')', found identifier
+extending-impure-function.scala	fail	check:fail	extending-impure-function.scala:5:23: type -> not found
+filevar-tracked.scala	fail	check:fail	filevar-tracked.scala:9:24: expected ',' or ')', found identifier
+filevar.scala	fail	check:fail	filevar.scala:9:24: expected ',' or ')', found identifier
+fill-cbn.scala	fail	check:fail	fill-cbn.scala:5:12: expected '=', found identifier
+filter-iterable.scala	fail	check:fail	filter-iterable.scala:5:38: expected ',' or ')', found identifier
+flatmapInPlace.scala	fail	check:fail	flatmapInPlace.scala:5:45: expected ',' or ')', found identifier
+foreach.scala	pass	check:pass	
+foreach2.scala	pass	check:pass	
+freeze.scala	fail	check:fail	freeze.scala:5:28: expected '=', found identifier
+fromJavaObject.scala	pass	check:pass	
+function-combinators.scala	fail	check:fail	function-combinators.scala:2:28: expected end of statement, found identifier
+future-traverse.scala	fail	check:fail	future-traverse.scala:11:55: expected ',' or ')', found identifier
+gadt-ycheck.scala	pass	check:fail	
+gears-problem-poly.scala	fail	check:fail	gears-problem-poly.scala:10:21: expected ',' or ']', found identifier
+i13816.scala	fail	check:fail	i13816.scala:7:50: type ?-> not found
+i15749.scala	fail	check:fail	i15749.scala:5:15: expected end of statement, found identifier
+i15749a.scala	fail	check:fail	i15749a.scala:8:15: expected end of statement, found identifier
+i15923-cases.scala	fail	check:fail	i15923-cases.scala:2:14: expected an identifier, found '['
+i15925.scala	fail	check:fail	i15925.scala:7:15: expected an identifier, found '['
+i16116.scala	fail	check:fail	i16116.scala:19:34: expected a declaration, found 'this'
+i16224.scala	pass	check:pass	
+i16226.scala	fail	check:fail	i16226.scala:4:18: expected a declaration, found identifier
+i16226a.scala	pass	check:pass	
+i16415.scala	fail	check:fail	i16415.scala:6:16: expected ',' or ')', found identifier
+i16871.scala	pass	check:pass	
+i18699.scala	fail	check:fail	i18699.scala:7:12: expected ',' or ']', found identifier
+i18909.scala	pass	check:pass	
+i19076.scala	fail	check:fail	i19076.scala:3:15: expected ',' or ')', found identifier
+i19661.scala	fail	check:fail	i19661.scala:4:43: expected ',' or ')', found identifier
+i19662.scala	fail	check:fail	i19662.scala:3:33: expected '=>', found identifier
+i19751.scala	fail	check:fail	i19751.scala:6:39: expected a declaration, found 'this'
+i19990.scala	fail	check:fail	i19990.scala:3:38: expected '=>', found identifier
+i20135-explicit.scala	fail	check:fail	i20135-explicit.scala:5:27: expected ',' or ')', found identifier
+i20135.scala	fail	check:fail	i20135.scala:5:29: expected ',' or ')', found identifier
+i20231.scala	fail	check:fail	i20231.scala:3:32: expected a declaration, found identifier
+i20237-explicit.scala	fail	check:fail	i20237-explicit.scala:10:50: expected a declaration, found identifier
+i20237.scala	fail	check:fail	i20237.scala:14:52: expected a declaration, found identifier
+i21313.scala	fail	check:fail	i21313.scala:4:19: expected ',' or ']', found identifier
+i21347.scala	fail	check:fail	i21347.scala:5:14: expected ',' or ']', found identifier
+i21390.TrieMap.scala	pass	check:pass	
+i21507.scala	fail	check:fail	i21507.scala:4:14: expected ',' or ']', found identifier
+i21646.scala	pass	check:fail	
+i21868.scala	fail	check:fail	i21868.scala:7:9: expected end of statement, found identifier
+i22723.scala	fail	check:fail	i22723.scala:9:15: expected a declaration, found 'this'
+i23027.scala	pass	check:pass	
+i23170.scala	fail	check:fail	i23170.scala:5:18: expected a declaration, found identifier
+i23389.scala	fail	check:fail	i23389.scala:7:12: expected end of statement, found 'def'
+i23421.scala	fail	check:fail	i23421.scala:5:10: expected end of statement, found 'def'
+i23422.scala	fail	check:fail	i23422.scala:7:16: expected ',' or ')', found identifier
+i23570.scala	fail	check:fail	i23570.scala:1:8: expected ',' or ']', found identifier
+i23727.scala	fail	check:fail	i23727.scala:2:40: expected a declaration, found identifier
+i23737.scala	fail	check:fail	i23737.scala:7:11: expected ',' or ']', found identifier
+i23820.scala	fail	check:fail	i23820.scala:6:23: expected ',' or ')', found identifier
+i24039.scala	fail	check:fail	i24039.scala:4:13: expected '=', found identifier
+i24137.scala	fail	check:fail	i24137.scala:6:17: expected ',' or ')', found identifier
+i24207.scala	pass	check:pass	
+i24309-region.scala	fail	check:fail	i24309-region.scala:12:17: expected ',' or ']', found identifier
+i24309.scala	fail	check:fail	i24309.scala:2:15: expected ',' or ']', found identifier
+i24309b.scala	fail	check:fail	i24309b.scala:2:13: expected ',' or ']', found identifier
+i24334.scala	fail	check:fail	i24334.scala:3:10: expected ',' or ']', found identifier
+i24372.scala	fail	check:fail	i24372.scala:2:11: expected end of statement, found 'def'
+i24373b.scala	fail	check:fail	i24373b.scala:7:18: expected ',' or ')', found identifier
+i24456.scala	pass	check:pass	
+i24543a.scala	fail	check:fail	i24543a.scala:5:17: expected ',' or ')', found identifier
+i24556.scala	fail	check:fail	i24556.scala:6:30: expected ',' or ')', found identifier
+i24556a.scala	pass	check:pass	
+i24729.scala	fail	check:fail	i24729.scala:7:80: expected ',' or ')', found identifier
+i24901.scala	pass	check:fail	
+i25006	pass	check:fail	
+i25251.scala	fail	check:fail	i25251.scala:6:22: expected '=>', found identifier
+i25303.scala	fail	check:fail	i25303.scala:2:74: expected a declaration, found 'this'
+i25389.scala	pass	check:pass	
+i25460.scala	fail	check:fail	i25460.scala:23:31: expected ':', found 'val'
+i25497.scala	pass	check:pass	
+i25525.scala	fail	check:fail	i25525.scala:11:13: expected ',' or ')', found identifier
+i25575.scala	pass	check:fail	
+i25579	fail	check:fail	a.scala:9:13: expected '=', found identifier
+i25601.scala	pass	check:pass	
+i25602.scala	pass	check:pass	
+i25630	fail	check:fail	Test_1.scala:6:32: expected ',' or ')', found identifier
+i25849.scala	pass	check:pass	
+impurefun.scala	fail	check:fail	impurefun.scala:3:10: type ImpureFunction1 not found
+infer-exists.scala	fail	check:fail	infer-exists.scala:8:23: expected a declaration, found identifier
+inferred-type-ok.scala	fail	check:fail	inferred-type-ok.scala:4:11: expected '=', found identifier
+inline-problem.scala	fail	check:fail	inline-problem.scala:3:51: expected a declaration, found identifier
+inlined-closure.scala	fail	check:fail	inlined-closure.scala:2:28: expected end of statement, found identifier
+invariant-cc.scala	fail	check:fail	invariant-cc.scala:6:43: expected a declaration, found identifier
+iterators.scala	fail	check:fail	iterators.scala:5:30: expected a declaration, found 'this'
+lazylists-exceptions.scala	fail	check:fail	lazylists-exceptions.scala:9:25: expected a declaration, found 'this'
+lazylists-mono.scala	fail	check:fail	lazylists-mono.scala:2:14: expected end of statement, found identifier
+lazylists.scala	fail	check:fail	lazylists.scala:2:14: expected end of statement, found identifier
+lazylists1.scala	fail	check:fail	lazylists1.scala:2:14: expected end of statement, found identifier
+lazyref-mutvar.scala	pass	check:fail	
+lazyref.scala	fail	check:fail	lazyref.scala:7:18: expected a declaration, found identifier
+leveltest.scala	fail	check:fail	leveltest.scala:6:16: expected ',' or ')', found identifier
+lists.scala	fail	check:fail	lists.scala:33:24: expected a declaration, found identifier
+logger-tracked.scala	fail	check:fail	logger-tracked.scala:6:28: expected ')', found 'val'
+logger.scala	fail	check:fail	logger.scala:9:18: expected a declaration, found identifier
+mapconserve-capturing.scala	pass	check:pass	
+mark-free-ro.scala	fail	check:fail	mark-free-ro.scala:5:31: expected ',' or ']', found identifier
+matchtypes.scala	pass	check:pass	
+matrix.scala	fail	check:fail	matrix.scala:10:10: expected end of statement, found 'def'
+mut-arrays.scala	pass	check:pass	
+mut-collections.scala	fail	check:fail	mut-collections.scala:7:22: expected '=>', found identifier
+mut-iterator.scala	fail	check:fail	mut-iterator.scala:5:10: expected end of statement, found 'def'
+mutRef.scala	fail	check:fail	mutRef.scala:5:10: expected end of statement, found 'def'
+mutable-capturing-sharable.scala	fail	check:fail	mutable-capturing-sharable.scala:6:31: expected ',' or ')', found identifier
+mutable-hiding-shared.scala	fail	check:fail	mutable-hiding-shared.scala:7:12: expected '=>', found identifier
+nested-classes-tracked.scala	fail	check:fail	nested-classes-tracked.scala:7:25: expected ')', found 'val'
+nested-classes.scala	fail	check:fail	nested-classes.scala:8:16: expected a declaration, found identifier
+nested-traits.scala	fail	check:fail	nested-traits.scala:4:18: expected '=>', found identifier
+nicolas1.scala	fail	check:fail	nicolas1.scala:9:15: expected ',' or ']', found identifier
+no-redundant-capability.scala	fail	check:fail	no-redundant-capability.scala:15:45: expected a declaration, found identifier
+nonvariant-inf.scala	fail	check:fail	nonvariant-inf.scala:6:27: expected end of statement, found identifier
+null-logger.scala	pass	check:fail	
+opaque-cap.scala	pass	check:fail	
+opaque-inline-problem.scala	pass	check:fail	
+open-existential.scala	fail	check:fail	open-existential.scala:5:43: expected ',' or ']', found identifier
+override-adapt-box-pos-alt.scala	fail	check:fail	override-adapt-box-pos-alt.scala:12:16: expected ',' or ')', found identifier
+override-adapt-box-pos.scala	fail	check:fail	override-adapt-box-pos.scala:13:16: expected ',' or ')', found identifier
+overrides	pass	check:pass	
+overrides.scala	pass	check:fail	
+pairs.scala	fail	check:fail	pairs.scala:16:21: expected a declaration, found identifier
+path-use.scala	fail	check:fail	path-use.scala:5:19: expected ',' or ')', found identifier
+paths-simple-suffix-consume.scala	fail	check:fail	paths-simple-suffix-consume.scala:7:17: expected ',' or ')', found identifier
+polycap.scala	fail	check:fail	polycap.scala:3:21: expected ',' or ']', found identifier
+reach-capability.scala	fail	check:fail	reach-capability.scala:15:14: expected ',' or ']', found identifier
+reach-in-results-shared.scala	fail	check:fail	reach-in-results-shared.scala:7:16: expected ',' or ')', found identifier
+reach-in-results.scala	fail	check:fail	reach-in-results.scala:6:16: expected ',' or ')', found identifier
+reach-problem.scala	fail	check:fail	reach-problem.scala:4:26: expected ',' or ']', found identifier
+reaches.scala	fail	check:fail	reaches.scala:2:17: expected ',' or ']', found identifier
+ref-of-proc.scala	fail	check:fail	ref-of-proc.scala:2:13: expected end of statement, found identifier
+ref-with-file.scala	fail	check:fail	ref-with-file.scala:6:10: expected end of statement, found 'def'
+reference-cc.scala	fail	check:fail	reference-cc.scala:4:41: expected ',' or ')', found identifier
+relative-new.scala	fail	check:fail	relative-new.scala:4:14: expected '=', found identifier
+restrict-subsumes.scala	fail	check:fail	restrict-subsumes.scala:7:20: expected a declaration, found identifier
+restrict-try.scala	fail	check:fail	restrict-try.scala:14:40: expected a declaration, found identifier
+rinaudo.scala	fail	check:fail	rinaudo.scala:10:34: type ?-> not found
+ro-array.scala	fail	check:fail	ro-array.scala:5:28: expected '=', found identifier
+safemode-synthetic	pass	check:fail	
+saferExceptions.scala	fail	check:fail	saferExceptions.scala:9:29: type -> not found
+scoped-caps.scala	fail	check:fail	scoped-caps.scala:6:20: expected ',' or ')', found identifier
+sealed-lowerbound.scala	pass	check:pass	
+sealed-value-class.scala	fail	check:fail	sealed-value-class.scala:1:26: expected ',' or ')', found identifier
+secondary-constructors.scala	fail	check:fail	secondary-constructors.scala:7:28: expected '=>', found identifier
+selftype-alias.scala	fail	check:fail	selftype-alias.scala:3:42: expected end of statement, found identifier
+selftypes.scala	fail	check:fail	selftypes.scala:18:11: expected '=>', found identifier
+sep-compose.scala	fail	check:fail	sep-compose.scala:4:34: expected a declaration, found identifier
+sep-eq.scala	fail	check:fail	sep-eq.scala:5:21: expected ',' or ')', found identifier
+sep-exclusive.scala	fail	check:fail	sep-exclusive.scala:4:13: expected ',' or ')', found identifier
+sep-pairs.scala	fail	check:fail	sep-pairs.scala:7:10: expected end of statement, found 'def'
+setup	fail	check:fail	a_1.scala:5:10: expected ',' or ']', found identifier
+shared-capability.scala	fail	check:fail	shared-capability.scala:7:28: expected '=', found identifier
+simple-apply.scala	fail	check:fail	simple-apply.scala:3:20: expected ',' or ')', found identifier
+singleton-conformance.scala	pass	check:pass	
+singleton-subtyping.scala	fail	check:fail	singleton-subtyping.scala:3:19: expected ',' or ')', found identifier
+skolems2.scala	fail	check:fail	skolems2.scala:5:18: expected ':', found identifier
+stack-alloc.scala	fail	check:fail	stack-alloc.scala:9:10: expected end of statement, found 'def'
+steppers.scala	fail	check:fail	steppers.scala:8:46: expected ',' or ']', found identifier
+strictlists.scala	pass	check:pass	
+strip-implied-cs.scala	fail	check:fail	strip-implied-cs.scala:15:45: expected a declaration, found identifier
+tablediff.scala	fail	check:fail	tablediff.scala:4:38: expected ',' or ')', found identifier
+trickyTrailingUpArrow.scala	fail	check:fail	trickyTrailingUpArrow.scala:9:18: expected '=', found identifier
+try.scala	fail	check:fail	try.scala:7:48: expected ',' or ')', found identifier
+try3.scala	fail	check:fail	try3.scala:22:60: type mismatch: found -1, required 0
+tuple-ops-2.scala	pass	check:pass	
+tuple-ops.scala	pass	check:pass	
+unsafe-captures.scala	fail	check:fail	unsafe-captures.scala:4:83: expected ',' or ')', found identifier
+unsafe-unbox.scala	pass	check:pass	
+unsafeAssumePure.scala	fail	check:fail	unsafeAssumePure.scala:4:13: expected ',' or ')', found identifier
+unscoped-ref-result.scala	fail	check:fail	unscoped-ref-result.scala:3:10: expected end of statement, found 'def'
+untracked-captures.scala	fail	check:fail	untracked-captures.scala:3:70: expected ',' or ')', found identifier
+untracked-mutvars.scala	fail	check:fail	untracked-mutvars.scala:5:10: expected end of statement, found 'def'
+unzip.scala	fail	check:fail	unzip.scala:2:37: type -> not found
+use-alternatives.scala	fail	check:fail	use-alternatives.scala:4:10: expected ',' or ']', found identifier
+use.scala	fail	check:fail	use.scala:6:39: expected ',' or ')', found identifier
+vars.scala	fail	check:fail	vars.scala:8:17: expected a declaration, found identifier
+vars1.scala	pass	check:fail	

@@ -540,7 +540,8 @@ fi
 # failures <log>: the tests a suite's log names as failing, one per line, sorted.
 failures() {
   { grep -E '^(FAIL|REF FAIL) ' "$1" | sed -E 's/^(REF )?FAIL ([^ :]*).*/\2/'
-    grep -E '^REGRESSIONS:' "$1" | sed 's/^REGRESSIONS://' | tr ' ' '\n'
+    # the failures a suite's pending list lacks (tests/support/pending.py names them under its line)
+    awk -F'\t' '/ fail and are not in tests\/pending\// { on = 1; next } on && /^  / { sub(/^  /, "", $1); print $1; next } { on = 0 }' "$1"
   } | grep -v '^$' | sort -u
 }
 # out_dir_of <suite>: where the suite keeps its files per test, a failure's own record beside the
@@ -561,7 +562,7 @@ incomplete() {
 }
 # completed <log>: whether a suite printed its own last line, its count of the tests it ran.
 completed() {
-  tail -n 5 "$1" | grep -qE '[0-9]+ passed|^error tests (passed|failed)$|still pass|no category changed'
+  tail -n 5 "$1" | grep -qE '[0-9]+ passed|^error tests (passed|failed)$|tests/pending/[^ ]*\.txt|no category changed'
 }
 # check_completed <exit> <log>: whether a check ran to its end, exiting 0, or 1 with its count of
 # errors as its last line (as bench/app/api-check.sh has it).

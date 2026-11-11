@@ -1,0 +1,5 @@
+scalac 3.8.4: rejected, 4 error(s)
+scalajs_js_members_bad_signatures_setters.scala:19:6: JS setters must return Unit
+scalajs_js_members_bad_signatures_setters.scala:20:6: JS setters must have exactly one argument
+scalajs_js_members_bad_signatures_setters.scala:21:6: JS setters may not have repeated params
+scalajs_js_members_bad_signatures_setters.scala:22:6: JS setters may not have default params

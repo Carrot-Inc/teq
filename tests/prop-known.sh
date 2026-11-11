@@ -19,7 +19,8 @@
 #    with scalac 3.8.4's output as its .expected; a program that prints a floating value's text
 #    (a `.t` line) is a Scala.js case (`//> using platform js`, the .expected Scala.js's) with the
 #    JVM's output in tests/jvm-expected/, as the suites read them. The case is run on the three
-#    targets and added to the interpreter's and the JVM's passing lists where it passes. A session
+#    targets and written into the interpreter's and the JVM's rows of the board where it passes (the cases
+#    those suites pass, tests/board/suites/interp.tsv and jvm.tsv, which tests/jvm-watch.sh reads). A session
 #    trigger shrinks to a history, which the script keeps and names; its case is a split-watch
 #    scenario written by hand.
 # 4. What is left by hand: the guard (the sites that ask for the name), the entry in known.rs, the
@@ -224,15 +225,14 @@ else
   fi
   echo "== $source, its expected output scalac's"
   listed() {
-    local list=$1
-    # In at its place, the list's other lines as they stand.
-    grep -qx "$case_name" "$list" || { awk -v name="$case_name" '!done && $0 > name { print name; done = 1 } { print } END { if (!done) print name }' "$list" > "$work/list" && cp "$work/list" "$list"; }
+    # In at its place among the cases the suite passes, the list's other lines as they stand.
+    python3 tests/support/pending.py listed "$1" "$case_name"
   }
   . tests/support/jars.sh
   run_js 60 "$work/case.js" "$source" > "$work/case.js.out" 2>&1 && cmp -s "$work/case.js.out" "tests/cases/$case_name.expected" \
     && echo "   JavaScript: passes" || { ok=0; echo "   JavaScript: FAILS ($work/case.js.out)"; }
   if timeout 60 "$TEQ" interp "$source" > "$work/case.interp.out" 2>&1 && cmp -s "$work/case.interp.out" "$jvm_expected"; then
-    listed tests/interp-passing.txt; echo "   interpreter: passes, listed"
+    listed interp; echo "   interpreter: passes, listed"
   else ok=0; echo "   interpreter: FAILS ($work/case.interp.out)"; fi
   # As tests/run_jvm.sh runs a case, linked against scala-library's jar.
   jvm() {
@@ -242,7 +242,7 @@ else
       && cmp -s "$out.out" "$jvm_expected" && listed "$list"
   }
   cp=$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar
-  jvm link tests/jvm-passing.txt --classpath "$cp" && echo "   JVM: passes, listed" || { ok=0; echo "   JVM: FAILS ($work/jvm-link.*)"; }
+  jvm link jvm --classpath "$cp" && echo "   JVM: passes, listed" || { ok=0; echo "   JVM: FAILS ($work/jvm-link.*)"; }
 fi
 [ $ok = 1 ] || { echo "NOT RETIRED: the case fails on $TEQ"; exit 1; }
 echo "== by hand, in one commit with the case: take the guard out"

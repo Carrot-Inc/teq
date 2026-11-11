@@ -1,0 +1,5 @@
+augmentString(s).reverse
+augmentString(s).reverse:String
+augmentString(s).reverse + "!"
+intWrapper(3).abs + 1
+charWrapper(s.charAt(1)).isDigit

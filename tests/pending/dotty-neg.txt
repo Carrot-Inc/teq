@@ -1,0 +1,1193 @@
+10349.scala	marks: error on an unmarked line 10349.scala:7: type mismatch: found Option[Any], required X
+11982.scala	marks: error on an unmarked line 11982.scala:39: type mismatch: found Any, required "msg"
+12050.scala	marks: 2 errors where 1 are marked: 12050.scala:3:6: Recursion limit exceeded.
+12249.scala	marks: no error where 1 are marked
+12261.scala	marks: no error where 5 are marked
+14034.scala	marks: no error where 6 are marked
+16463.scala	marks: 8 errors where 1 are marked: 16463.scala:29:22: type argument IndexOfRec[T, Fold[Tail[T], Head[T], [A, B] =>> (A, B) match { case (Int, Int) => Max[A, B] }], 0] does not conform to upper bound Int
+17211.scala	check: diagnostic 1 of 1: scalac's is error 17211.scala:14:14 IsInt[Foo.Foo] is not a constant type; cannot take constValue; teq's is error 17211.scala:14:3 IsInt[Foo] is not a constant type; cannot take constValue
+17579.scala	marks: 5 errors where 6 are marked
+18031.scala	marks: 5 errors where 6 are marked
+19087.scala	check: diagnostic 1 of 4: scalac's is error 19087.scala:4:3 Illegal start of toplevel definition; teq's is error 19087.scala:4:3 expected a definition, found identifier
+19680.scala	check: diagnostic 1 of 1: scalac's is error 19680.scala:9:62 Found: Config; teq's is error 19680.scala:9:62 type mismatch: found Config, required Int
+19680b.scala	check: diagnostic 1 of 1: scalac's is error 19680b.scala:2:22 Found: ("hello" : String); teq's is error 19680b.scala:2:22 type mismatch: found "hello", required Int
+21538.scala	marks: no error where 1 are marked
+22145.scala	check: diagnostic 1 of 1: scalac's is error 22145.scala:5:3 value foo is not a member of foo.Collection; teq's is error 22145.scala:5:3 value foo is not a member of Collection
+22145b.scala	marks: 4 errors where 3 are marked: 22145b.scala:15:15: value isWithin is not a member of Any
+22145c.scala	check: diagnostic 1 of 1: scalac's is error 22145c.scala:4:31 value foo is not a member of foo.Collection; teq's is error 22145c.scala:4:31 value foo is not a member of Collection
+22145d.scala	check: diagnostic 1 of 1: scalac's is error 22145d.scala:10:3 value f is not a member of Int, but could be made available as an extension method.; teq's is error 22145d.scala:10:3 value f is not a member of Int
+22145e.scala	check: diagnostic 1 of 1: scalac's is error 22145e.scala:11:3 value f is not a member of Int, but could be made available as an extension method.; teq's is error 22145e.scala:11:3 value f is not a member of Int
+22145f.scala	check: diagnostic 1 of 1: scalac's is error 22145f.scala:11:5 value f is not a member of Int, but could be made available as an extension method.; teq's is error 22145f.scala:11:5 value f is not a member of Int
+22550.scala	marks: error on an unmarked line 22550.scala:4: expected '=', found '['
+22550b.scala	marks: error on an unmarked line 22550b.scala:8: expected '=', found '['
+24782.scala	check: diagnostic 1 of 1: scalac's is error 24782.scala:4:29 expression does not take more parameters; teq's is error 24782.scala:4:29 value apply is not a member of S
+3559.scala	check: diagnostic 1 of 1: scalac's is error 3559.scala:3:10 forward reference not allowed from self constructor invocation; teq's is error 3559.scala:3:10 not found: b
+3559d.scala	check: diagnostic 1 of 1: scalac's is error 3559d.scala:7:10 Not found: f; teq's is error 3559d.scala:7:10 f is not accessible from constructor arguments
+5541.scala	marks: no error where 1 are marked
+6314-2.scala	marks: 2 errors where 4 are marked
+6314-6.scala	check: diagnostic 1 of 2: scalac's is error 6314-6.scala:26:4 object creation impossible, since def apply(fa: String): Int in trait XX in object Test3 is not defined; teq's is error 6314-6.scala:26:4 object creation impossible, since def ap
+6314.scala	check: diagnostic 1 of 4: scalac's is error 6314.scala:28:28 Found: (1 : Int); teq's is error 6314.scala:28:28 type mismatch: found 1, required Bar[Y | Test.this.Type]
+6570-1.scala	check: diagnostic 1 of 2: scalac's is error 6570-1.scala:23:15 Found: Object with Trait1 {...}; teq's is error 6570-1.scala:23:15 type mismatch: found Trait1, required M[Cov[Box[Int & String]]]
+6570.scala	marks: 9 errors where 8 are marked: 6570.scala:26:49: type mismatch: found M[T], required Trait2
+6571.scala	check: diagnostic 1 of 2: scalac's is error 6571.scala:6:40 Found: ("" : String); teq's is error 6571.scala:6:40 type mismatch: found "", required M[Inv[Int] & Inv[String]]
+6890.scala	marks: no error where 1 are marked
+7722.scala	marks: no error where 1 are marked
+8702.scala	marks: no error where 8 are marked
+EmptyCaseClassParams.scala	marks: no error where 3 are marked
+EmptyEnum.scala	check: diagnostic 1 of 1: scalac's is error EmptyEnum.scala:1:6 Enumerations must contain at least one case; teq's is error EmptyEnum.scala:1:6 enum EmptyEnum needs at least one case
+Iter3.scala	marks: 1 errors where 3 are marked
+OpaqueEscape.scala	marks: 3 errors where 2 are marked: OpaqueEscape.scala:9:7: class Escaper needs to be abstract, since def unwrap(i: Wrapped): Int in class EscaperBase is not defined
+WrongBounds.java	java source: teq reads none
+abstract-givens-new.scala	marks: 4 errors where 1 are marked: abstract-givens-new.scala:7:23: This defines an abstract given, which is no longer supported. Use a `deferred` given instead.
+abstract-givens.scala	marks: 4 errors where 3 are marked: abstract-givens.scala:8:9: given instance y cannot override final member given instance y in trait T
+abstract-inline-val.scala	marks: 1 errors where 2 are marked
+abstract-tracked-1.scala	marks: 3 errors where 1 are marked: abstract-tracked-1.scala:5:11: expected end of statement, found 'val'
+abstract-tracked.scala	marks: 7 errors where 5 are marked: abstract-tracked.scala:4:1: expected a definition, found identifier
+adhoc-extension	marks: no error where 1 are marked
+aliasing-subtypes.scala	marks: no error where 1 are marked
+ambiref.scala	check: diagnostic 2 of 4: scalac's is error ambiref.scala:10:15 Reference to x is ambiguous.; teq's is error ambiref.scala:10:15 Reference to x is ambiguous.
+and-wildcard.scala	marks: no error where 1 are marked
+annot-printing.scala	check: diagnostic 1 of 1: scalac's is error annot-printing.scala:5:47 Found: ("abc" : String); teq's is error annot-printing.scala:5:47 type mismatch: found "abc", required Int
+anonymous-instance-cannot-be-empty.scala	marks: no error where 1 are marked
+anykind.scala	marks: 7 errors where 9 are marked
+anykind1.scala	marks: 9 errors where 5 are marked: anykind1.scala:4:19: type AnyKind not found
+anykind2.scala	marks: 5 errors where 4 are marked: anykind2.scala:3:14: type AnyKind not found
+anykind3.scala	marks: 24 errors where 8 are marked: anykind3.scala:5:3: type argument [A] =>> List[A] does not have the same kind as its bound
+anykind4.scala	marks: 4 errors where 1 are marked: anykind4.scala:4:18: type AnyKind not found
+applied_constructor_types.scala	marks: 6 errors where 3 are marked: applied_constructor_types.scala:8:12: expected '=', found '('
+applydynamic_sip.scala	marks: 8 errors where 11 are marked
+assignments.scala	marks: 3 errors where 2 are marked: assignments.scala:16:5: this expression cannot be assigned to
+autoTuplingTest.scala	marks: no error where 3 are marked
+autoTuplingTestb.scala	marks: no error where 3 are marked
+bad-selftype.scala	marks: 1 errors where 3 are marked
+bad-unapplies.scala	marks: 9 errors where 6 are marked: bad-unapplies.scala:22:10: Ambiguous overload. The overloaded alternatives of method unapply in object A with types
+badAuxConstr.scala	marks: 3 errors where 2 are marked: badAuxConstr.scala:6:16: secondary constructor must call a preceding constructor
+binaryLiterals.scala	marks: 9 errors where 6 are marked: binaryLiterals.scala:3:12: expected end of statement, found identifier
+block-ending-in-def.scala	marks: error on an unmarked line block-ending-in-def.scala:2: type mismatch: found Unit, required List[Int]
+blockescapesNeg.scala	marks: no error where 1 are marked
+boundspropagation.scala	marks: 4 errors where 3 are marked: boundspropagation.scala:8:24: type mismatch: found Tree[Nothing], required Tree[Null]
+by-name.scala	marks: 4 errors where 3 are marked: by-name.scala:3:18: 'erased' is not part of the supported Scala subset
+cannot-call-java-enum-constructor.scala	marks: no error where 1 are marked
+cannot-reduce-inline-match.scala	check: diagnostic 1 of 1: scalac's is error cannot-reduce-inline-match.scala:9:3 cannot reduce inline match with; teq's is error cannot-reduce-inline-match.scala:9:3 cannot reduce inline match with
+capture-vars-subtyping.scala	marks: 43 errors where 7 are marked: capture-vars-subtyping.scala:5:11: expected ',' or ']', found identifier
+capture1.scala	marks: no error where 1 are marked
+cb-companion-leaks.scala	marks: 4 errors where 3 are marked: cb-companion-leaks.scala:11:9: expected end of statement, found ':'
+cc-fresh-levels.scala	marks: 7 errors where 3 are marked: cc-fresh-levels.scala:9:17: expected ',' or ')', found identifier
+cc-only-defs.scala	marks: 6 errors where 5 are marked: cc-only-defs.scala:10:11: expected a declaration, found identifier
+class-mods.scala	marks: 5 errors where 6 are marked
+classOf.scala	marks: 1 errors where 3 are marked
+classtag-typetest	marks: no error where 2 are marked
+closure-args.scala	marks: 13 errors where 11 are marked: closure-args.scala:2:26: a by-name type can only be the type of a parameter
+constrParams.scala	marks: no error where 2 are marked
+constructor-only.scala	marks: no error where 2 are marked
+constructor-proxy-shadowing.scala	check: diagnostic 1 of 3: scalac's is error constructor-proxy-shadowing.scala:11:13 Reference to constructor proxy for class A22 in class A; teq's is error constructor-proxy-shadowing.scala:11:13 Reference to constructor proxy for class A22
+constructor-proxy-values.scala	marks: 5 errors where 3 are marked: constructor-proxy-values.scala:10:12: missing argument for parameter s
+context-bounds-migration-future.scala	check: diagnostic 1 of 1: scalac's is error context-bounds-migration-future.scala:9:3 method foo does not take more parameters; teq's is error context-bounds-migration-future.scala:9:3 value apply is not a member of Unit
+context-function-syntax.scala	marks: 3 errors where 7 are marked
+ctx-bounds-priority-migration.scala	marks: 2 errors where 1 are marked: ctx-bounds-priority-migration.scala:6:29: value toOrdering is not a member of Eq[Element]
+curried-dependent-ift.scala	marks: 2 errors where 1 are marked: curried-dependent-ift.scala:18:3: Implementation restriction: Expected result type (c1: Ctx1) ?=> (Ctx2) ?=> (c1.T, Ctx2)
+cycles.scala	marks: 5 errors where 8 are marked
+cyclic.scala	marks: 2 errors where 1 are marked: cyclic.scala:3:7: recursive use of f needs an explicit result type
+default-arg-in-refinement.scala	marks: 1 errors where 2 are marked
+deferred-givens-2.scala	marks: 8 errors where 2 are marked: deferred-givens-2.scala:6:15: expected end of statement, found ':'
+deferred-givens.scala	marks: 6 errors where 3 are marked: deferred-givens.scala:11:7: No given instance of type Ctx was found for inferring the implementation of the deferred given instance ctx in trait A
+depfuns.scala	marks: 2 errors where 1 are marked: depfuns.scala:5:20: expected ',' or ')', found identifier
+deptypes.scala	marks: 5 errors where 3 are marked: deptypes.scala:3:24: expected end of statement, found '=>>'
+derive-eq.scala	marks: 6 errors where 2 are marked: derive-eq.scala:15:53: Values of types Lst[Lst[One]] and Lst[Lst[Two]] cannot be compared with == or !=
+deriving-duplicate.scala	marks: 3 errors where 1 are marked: deriving-duplicate.scala:20:14: derived$TC1 is already defined as given instance derived$TC1
+doubleDefinition-late.scala	marks: 2 errors where 3 are marked
+doubleDefinition.scala	check: diagnostic 1 of 20: scalac's is error doubleDefinition.scala:14:6 Conflicting definitions:; teq's is error doubleDefinition.scala:14:6 Conflicting definitions:
+duplicate-parents.scala	marks: no error where 2 are marked
+dynamicApplyDynamicTest1.scala	marks: no error where 1 are marked
+dynamicApplyDynamicTest2.scala	marks: no error where 1 are marked
+dynamicApplyDynamicTest4.scala	marks: no error where 1 are marked
+dynamicApplyDynamicTest5.scala	marks: no error where 3 are marked
+dynamicApplyDynamicTest9.scala	marks: no error where 1 are marked
+dynamicApplyNamedDynamicTest1.scala	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest1.scala:6:22: named arguments are only allowed in argument lists
+dynamicApplyNamedDynamicTest2.scala	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest2.scala:9:22: named arguments are only allowed in argument lists
+dynamicApplyNamedDynamicTest4.scala	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest4.scala:6:32: named arguments are only allowed in argument lists
+dynamicApplyNamedDynamicTest5.scala	marks: 2 errors where 4 are marked
+dynamicApplyNamedDynamicTest6.scala	marks: 2 errors where 1 are marked: dynamicApplyNamedDynamicTest6.scala:8:32: named arguments are only allowed in argument lists
+dynamicApplyNamedDynamicTest7.scala	marks: 3 errors where 1 are marked: dynamicApplyNamedDynamicTest7.scala:8:19: type mismatch: found Dynamic, required Int
+dynamicApplyNamedDynamicTest8.scala	marks: no error where 1 are marked
+dynamicDynamicImplicitsTest3.scala	marks: 2 errors where 1 are marked: dynamicDynamicImplicitsTest3.scala:12:21: type mismatch: found Dynamic, required String
+dynamicNoImport.scala	marks: no error where 6 are marked
+dynamicSelectDynamicTest1.scala	marks: no error where 1 are marked
+dynamicSelectDynamicTest2.scala	marks: no error where 1 are marked
+dynamicSelectDynamicTest3.scala	marks: no error where 1 are marked
+dynamicSelectDynamicTest5.scala	marks: no error where 1 are marked
+dynamicSelectDynamicTest7.scala	marks: no error where 1 are marked
+dynamicUpdateDynamicTest1.scala	marks: no error where 1 are marked
+dynamicUpdateDynamicTest2.scala	marks: no error where 1 are marked
+dynamicUpdateDynamicTest4.scala	marks: no error where 1 are marked
+empty-given.scala	marks: error on an unmarked line empty-given.scala:1: expected an identifier, found '{'
+endmarkers.scala	marks: no error where 6 are marked
+endmarkers1.scala	marks: no error where 4 are marked
+ensureReported.scala	marks: error on an unmarked line ensureReported.scala:2: missing parameter type
+enum-constrs.scala	marks: no error where 1 are marked
+enum-values.scala	check: diagnostic 1 of 8: scalac's is error enum-values.scala:32:42 value values is not a member of object example.Tag.; teq's is error enum-values.scala:32:42 value values is not a member of Tag
+enum-variance.scala	check: diagnostic 1 of 2: scalac's is error enum-variance.scala:4:13 contravariant type T occurs in covariant position in type T => T of value f; teq's is error enum-variance.scala:4:13 contravariant type T occurs in covariant position in t
+enums.scala	marks: 15 errors where 12 are marked: enums.scala:4:3: explicit extends clause needed because both enum case and enum class have type parameters
+enumsAccess.scala	marks: 4 errors where 14 are marked
+enumsLabel-singleimpl.scala	marks: no error where 2 are marked
+eql.scala	marks: 6 errors where 8 are marked
+equality.scala	marks: 13 errors where 28 are marked
+equality1.scala	marks: 6 errors where 15 are marked
+erased-15.scala	marks: error on an unmarked line erased-15.scala:16: 'erased' is not part of the supported Scala subset
+erased-4.scala	marks: 9 errors where 1 are marked: erased-4.scala:6:14: 'erased' is not part of the supported Scala subset
+erased-5.scala	marks: error on an unmarked line erased-5.scala:5: expected ',' or ')', found identifier
+erased-6.scala	marks: 1 errors where 4 are marked
+erased-assign.scala	marks: error on an unmarked line erased-assign.scala:5: 'erased' is not part of the supported Scala subset
+erased-can-serialize.scala	marks: 3 errors where 1 are marked: erased-can-serialize.scala:8:93: 'erased' is not part of the supported Scala subset
+erased-case-class.scala	marks: 1 errors where 2 are marked
+erased-class.scala	marks: no error where 3 are marked
+erased-def-rhs.scala	marks: error on an unmarked line erased-def-rhs.scala:4: 'erased' is not part of the supported Scala subset
+erased-if-else.scala	marks: 1 errors where 4 are marked
+erased-in-tuples.scala	marks: 15 errors where 7 are marked: erased-in-tuples.scala:7:23: expected ',' or ')', found identifier
+erased-inline-unrealizable-path.scala	marks: no error where 1 are marked
+erased-lazy-given.scala	marks: no error where 1 are marked
+erased-lazy-val.scala	marks: 2 errors where 3 are marked
+erased-match.scala	marks: 1 errors where 4 are marked
+erased-path.scala	marks: error on an unmarked line erased-path.scala:6: 'erased' is not part of the supported Scala subset
+erased-return.scala	marks: 1 errors where 2 are marked
+erased-try.scala	marks: error on an unmarked line erased-try.scala:4: 'erased' is not part of the supported Scala subset
+erased-val-rhs.scala	marks: error on an unmarked line erased-val-rhs.scala:4: 'erased' is not part of the supported Scala subset
+erasedValueb.scala	marks: error on an unmarked line erasedValueb.scala:6: 'erased' is not part of the supported Scala subset
+errpos.scala	marks: error on an unmarked line errpos.scala:3: expected an expression, found 'val'
+existentials.scala	marks: no error where 8 are marked
+expeimental-flag.scala	marks: no error where 5 are marked
+experimental-imports.scala	marks: 6 errors where 12 are marked
+experimental-message-experimental-flag	marks: no error where 1 are marked
+experimental-message.scala	marks: no error where 3 are marked
+experimental-nested-imports-2.scala	marks: no error where 12 are marked
+experimental-nested-imports-3.scala	marks: no error where 12 are marked
+experimental-nested-imports.scala	marks: no error where 12 are marked
+experimental.scala	marks: 5 errors where 3 are marked: experimental.scala:7:25: expected ']', found '='
+experimentalAnnot.scala	marks: no error where 1 are marked
+experimentalCaseClass.scala	marks: no error where 7 are marked
+experimentalDefaultParams.scala	marks: no error where 3 are marked
+experimentalEnum.scala	marks: no error where 3 are marked
+experimentalInline.scala	marks: no error where 1 are marked
+experimentalInline2.scala	marks: no error where 1 are marked
+experimentalMembers.scala	marks: no error where 1 are marked
+experimentalOverloads.scala	marks: no error where 2 are marked
+experimentalOverride.scala	marks: no error where 5 are marked
+experimentalRHS.scala	marks: no error where 4 are marked
+experimentalSam.scala	marks: no error where 2 are marked
+experimentalSignature.scala	marks: no error where 16 are marked
+experimentalTerms.scala	marks: no error where 5 are marked
+experimentalTests.scala	marks: no error where 1 are marked
+experimentalType.scala	marks: no error where 5 are marked
+experimentalTypeRHS.scala	marks: no error where 1 are marked
+experimentalTypes2.scala	marks: no error where 5 are marked
+experimentalUnapply.scala	marks: no error where 5 are marked
+export-in-extension.scala	marks: 9 errors where 7 are marked: export-in-extension.scala:20:14: expected an identifier, found 'this'
+export-leaks.scala	marks: no error where 2 are marked
+exports.scala	marks: 17 errors where 10 are marked: exports.scala:35:12: expected an identifier, found 'this'
+exports2.scala	marks: no error where 1 are marked
+exports3.scala	marks: 14 errors where 7 are marked: exports3.scala:5:10: expected an identifier, found 'this'
+extend-java-enum-migration.scala	marks: no error where 4 are marked
+extend-java-enum-nonstatic.scala	marks: no error where 4 are marked
+extend-java-enum.scala	marks: no error where 3 are marked
+extend-matchable.scala	marks: 7 errors where 3 are marked: extend-matchable.scala:4:17: Any does not have a constructor
+extension-colon.scala	marks: no error where 1 are marked
+extension-methods.scala	marks: 4 errors where 5 are marked
+extension-specificity2.scala	marks: 5 errors where 1 are marked: extension-specificity2.scala:7:9: local givens cannot take parameters
+extensions-can-only-have-using.scala	marks: 2 errors where 1 are marked: extensions-can-only-have-using.scala:1:19: an extension needs exactly one receiver parameter
+extmethod-overload.scala	marks: 2 errors where 1 are marked: extmethod-overload.scala:11:11: ambiguous extension methods: both a and b provide |+| on Int
+f-interpolator-tests.scala	marks: no error where 2 are marked
+fEscapes.scala	marks: no error where 1 are marked
+fieldsOf.scala	marks: 1 errors where 2 are marked
+final-sealed.scala	marks: 3 errors where 2 are marked: final-sealed.scala:2:7: class B cannot extend final class A
+floatlits.scala	marks: 2 errors where 1 are marked: floatlits.scala:11:1: expected an identifier, found end of indented block
+foldinf-ill-kinded.scala	check: diagnostic 1 of 1: scalac's is error foldinf-ill-kinded.scala:9:7 Found: Foo[List]; teq's is error foldinf-ill-kinded.scala:9:7 type mismatch: found Foo[[x] =>> <error>], required Foo[Nothing]
+function-arity-2.scala	marks: 3 errors where 2 are marked: function-arity-2.scala:6:27: type mismatch: found (<error>, <error>) => Int, required (=> (Int, Int)) => Int
+function-arity.scala	marks: 13 errors where 7 are marked: function-arity.scala:7:29: type mismatch: found 0, required String
+gadt-alias-injectivity.scala	marks: 6 errors where 3 are marked: gadt-alias-injectivity.scala:10:22: type mismatch: found X, required Y
+gadt-alt-expr3.scala	marks: 5 errors where 3 are marked: gadt-alt-expr3.scala:20:5: type mismatch: found B, required T
+gadt-alt-expr5.scala	marks: 2 errors where 1 are marked: gadt-alt-expr5.scala:12:17: type mismatch: found T, required A
+gadt-approximation-interaction.scala	marks: 11 errors where 1 are marked: gadt-approximation-interaction.scala:7:7: value + is not a member of S$1
+gadt-banal.scala	marks: 2 errors where 3 are marked
+gadt-injectivity.scala	marks: 7 errors where 3 are marked: gadt-injectivity.scala:9:26: type mismatch: found (A, B), required (C, D)
+gadt-lhs-union.scala	marks: 2 errors where 1 are marked: gadt-lhs-union.scala:8:9: type mismatch: found 3, required T
+genericNumbers.scala	marks: 10 errors where 8 are marked: genericNumbers.scala:5:19: number too large
+given-ambiguous-1.scala	check: diagnostic 1 of 1: scalac's is error given-ambiguous-1.scala:12:24 No best given instance of type B was found for parameter x of method summon in object Predef.; teq's is error given-ambiguous-1.scala:12:24 ambiguous given instances
+given-ambiguous-2.scala	check: diagnostic 1 of 1: scalac's is error given-ambiguous-2.scala:10:16 Ambiguous given instances: both given instance a1 and given instance a2 match type A of parameter a of method g; teq's is error given-ambiguous-2.scala:10:16 ambiguou
+given-ambiguous-default-1.scala	check: diagnostic 1 of 1: scalac's is error given-ambiguous-default-1.scala:18:24 No best given instance of type B was found for parameter x of method summon in object Predef.; teq's is error given-ambiguous-default-1.scala:18:24 ambiguous
+given-ambiguous-default-2.scala	check: diagnostic 1 of 1: scalac's is error given-ambiguous-default-2.scala:18:24 No best given instance of type C was found for parameter x of method summon in object Predef.; teq's is error given-ambiguous-default-2.scala:18:24 ambiguous
+given-loop-prevention.scala	marks: no error where 1 are marked
+given-pattern.scala	marks: 2 errors where 4 are marked
+given-triangle.scala	marks: no error where 1 are marked
+hidden-type-errors	marks: no error where 1 are marked
+hk-bounds.scala	marks: 5 errors where 6 are marked
+hk-variance.scala	marks: no error where 2 are marked
+hk-variance2.scala	marks: no error where 4 are marked
+hk-variance3.scala	marks: no error where 2 are marked
+hklower2.scala	marks: no error where 1 are marked
+i0248-inherit-refined.scala	marks: 4 errors where 2 are marked: i0248-inherit-refined.scala:6:19: a parent has to be a class or a trait
+i10075.scala	marks: no error where 8 are marked
+i10082.scala	marks: 2 errors where 1 are marked: i10082.scala:7:28: type mismatch: found Nothing, required ?{ +: ? }. Note that implicit extension methods cannot be applied because they are ambiguous; both method Integer2int and method Long2long provide
+i10268.scala	check: diagnostic 1 of 1: scalac's is error i10268.scala:2:17 Not found: ?; teq's is error i10268.scala:2:17 not found: ?
+i10369.scala	marks: 2 errors where 1 are marked: i10369.scala:6:39: type mismatch: found PolyFunction{def apply[T](x: T): Upgrade[T]}, required [t] => (x$1: t) => Upgrade[t]
+i1050.scala	marks: 3 errors where 11 are marked
+i1050a.scala	marks: no error where 2 are marked
+i1050c.scala	marks: 4 errors where 7 are marked
+i10546.scala	marks: 4 errors where 1 are marked: i10546.scala:3:23: expected end of statement, found '('
+i10552b.scala	marks: 8 errors where 6 are marked: i10552b.scala:6:13: type AnyKind not found
+i10603a.scala	check: diagnostic 1 of 1: scalac's is error i10603a.scala:2:36 No given instance of type List[Boolean] was found for parameter e of method implicitly in object Predef; teq's is error i10603a.scala:2:36 No implicit view available from Int =>
+i10605.scala	marks: no error where 2 are marked
+i10666.scala	check: diagnostic 1 of 1: scalac's is error i10666.scala:8:7 class Bar needs to be abstract, since def foo[T <: B](tx: T): Unit in trait Foo is not defined; teq's is error i10666.scala:8:7 class Bar needs to be abstract, since def foo[T <:
+i10757.scala	check: diagnostic 1 of 1: scalac's is error i10757.scala:4:8 Wrong number of argument patterns for Var; expected: (String); teq's is error i10757.scala:4:8 wrong number of patterns for Var: expected 1, found 2
+i10817.scala	marks: no error where 1 are marked
+i10870.scala	check: diagnostic 1 of 1: scalac's is error i10870.scala:10:13 value x is not a member of A.; teq's is error i10870.scala:10:9 recursive use of x needs an explicit result type
+i10901.scala	marks: 2 errors where 3 are marked
+i10943.scala	check: diagnostic 1 of 1: scalac's is error i10943.scala:5:11 Found: T.A; teq's is error i10943.scala:5:11 type mismatch: found A, required Int
+i10970.scala	marks: no error where 1 are marked
+i11061.scala	marks: 3 errors where 1 are marked: i11061.scala:4:33: missing parameter type
+i11066.scala	check: diagnostic 1 of 1: scalac's is error i11066.scala:15:38 Ambiguous given instances: both given instance joesPrompt in object JoesPrefs and given instance jillsPrompt in object JillsPrefs match type PreferredPrompt of parameter prompt
+i11072.scala	check: diagnostic 1 of 1: scalac's is error i11072.scala:3:18 Sealed[Foo] cannot be derived since trait Sealed has no companion object; teq's is error i11072.scala:3:6 Sealed[Foo] cannot be derived: the companion of the type class has no de
+i11081.scala	marks: no error where 2 are marked
+i11100.scala	marks: no error where 1 are marked
+i11118.scala	check: diagnostic 1 of 2: scalac's is warning i11118.scala:2:13 pattern's type (Any, Any) does not match the right hand side expression's type (Int, Int, Int); teq's is error i11118.scala:2:5 pattern definitions are only supported inside bl
+i11130.scala	marks: 1 errors where 2 are marked
+i11170.scala	marks: no error where 1 are marked
+i11208.scala	marks: no error where 1 are marked
+i11208a.scala	marks: no error where 1 are marked
+i11225.scala	marks: no error where 11 are marked
+i11226.scala	check: diagnostic 1 of 1: scalac's is error i11226.scala:13:37 Cannot resolve reference to type (Unsubscriber.this.bus : ManagedActorClassification).Subscriber.; teq's is error i11226.scala:13:49 type mismatch: found ActorRef, required (Uns
+i11226a.scala	check: diagnostic 1 of 1: scalac's is error i11226a.scala:12:49 Found: (a : ActorRef); teq's is error i11226a.scala:12:49 type mismatch: found ActorRef, required (Unsubscriber.this.bus : ManagedActorClassification).Subscriber (which cann
+i11350.scala	marks: 1 errors where 2 are marked
+i11419.scala	marks: no error where 1 are marked
+i11437.scala	check: diagnostic 1 of 1: scalac's is error i11437.scala:1:30 Not found: error; teq's is error i11437.scala:1:30 not found: error
+i11457.scala	marks: no error where 1 are marked
+i11544.scala	marks: no error where 1 are marked
+i11561.scala	marks: 5 errors where 2 are marked: i11561.scala:2:26: reassignment to val text
+i11581.scala	marks: no error where 4 are marked
+i11616	java source: teq reads none
+i11637.scala	marks: no error where 2 are marked
+i1169.scala	marks: no error where 1 are marked
+i11694.scala	marks: 9 errors where 6 are marked: i11694.scala:16:51: missing parameter type
+i11719.scala	marks: no error where 1 are marked
+i11719a.scala	marks: error on an unmarked line i11719a.scala:17: type mismatch: found Sub => Boolean, required Base => Boolean
+i11761.scala	marks: 2 errors where 3 are marked
+i11797.scala	check: diagnostic 1 of 1: scalac's is error i11797.scala:6:18 Oops; teq's is error i11797.scala:6:18 no given instance of type Bar was found for parameter x
+i11859.scala	marks: no error where 2 are marked
+i11897.scala	marks: 5 errors where 10 are marked
+i11938.scala	marks: no error where 1 are marked
+i11985.scala	marks: error on an unmarked line i11985.scala:20: this type cannot be tested at runtime: ?
+i11994.scala	check: diagnostic 1 of 2: scalac's is error i11994.scala:2:23 type meow is not a member of object Tuple; teq's is error i11994.scala:2:23 type meow not found
+i12049.scala	marks: 8 errors where 7 are marked: i12049.scala:6:17: type mismatch: found M[B], required String
+i12049d.scala	check: diagnostic 1 of 1: scalac's is error i12049d.scala:14:53 Found: (2 : Int); teq's is error i12049d.scala:14:53 type mismatch: found 2, required M[NotRelevant[Nothing], Relevant[Nothing]]
+i12150.scala	marks: error on an unmarked line i12150.scala:3: expected an expression, found end of file
+i12169.scala	marks: no error where 1 are marked
+i12177.scala	check: diagnostic 1 of 4: scalac's is error i12177.scala:2:18 `inline val` with `null` is not supported.; teq's is error i12177.scala:2:18 inline value must contain a literal constant value.
+i12211.scala	marks: 1 errors where 2 are marked
+i12232.scala	check: diagnostic 1 of 2: scalac's is error i12232.scala:17:16 No given instance of type Op[Int, Int, V] was found for parameter op of method min in object Foo; teq's is error i12232.scala:17:16 no given instance of type Op[Int, Int, Double
+i12284.scala	check: diagnostic 1 of 1: scalac's is error i12284.scala:6:27 Found: (xx : Vector[Any]); teq's is error i12284.scala:6:27 type mismatch: found Vector[F[_]], required Vector[F[Any]]
+i12348.scala	marks: 5 errors where 1 are marked: i12348.scala:2:16: expected ':', found identifier
+i123577.scala	check: diagnostic 1 of 1: scalac's is error i123577.scala:11:5 Found: String => Nothing; teq's is error i123577.scala:11:5 type mismatch: found String => Nothing, required MillRpcChannel
+i12361.scala	marks: 4 errors where 2 are marked: i12361.scala:3:23: expected end of statement, found '.'
+i12384.scala	marks: 2 errors where 1 are marked: i12384.scala:6:21: type Nat not found
+i1240b.scala	marks: no error where 1 are marked
+i12432.scala	marks: 2 errors where 3 are marked
+i12448.scala	marks: 5 errors where 4 are marked: i12448.scala:2:7: Declaration of method mkArray not allowed here: only classes can have declared but undefined members
+i12456.scala	marks: no error where 1 are marked
+i12482.scala	check: diagnostic 1 of 1: scalac's is error i12482.scala:3:3 Not found: FileZipArchive; teq's is error i12482.scala:3:3 not found: FileZipArchive
+i12537.scala	marks: no error where 1 are marked
+i12554a.scala	marks: 1 errors where 3 are marked
+i12554b.scala	marks: 1 errors where 4 are marked
+i12555b.scala	marks: error on an unmarked line i12555b.scala:18: Deferred inline method noop in trait Noop cannot be invoked
+i12557.scala	marks: no error where 1 are marked
+i12573.scala	check: diagnostic 1 of 1: scalac's is error i12573.scala:23:19 value getDFType is not a member of DFBits[(8 : Int)].; teq's is error i12573.scala:23:19 value getDFType is not a member of DFBits[W]
+i12605.scala	marks: 7 errors where 4 are marked: i12605.scala:3:33: expected end of statement, found 'case'
+i1263.scala	marks: 2 errors where 1 are marked: i1263.scala:5:18: missing argument for parameter s
+i12682.scala	check: diagnostic 1 of 2: scalac's is error i12682.scala:6:13 Reference to m is ambiguous.; teq's is error i12682.scala:6:13 Reference to m is ambiguous.
+i12729.scala	marks: 1 errors where 6 are marked
+i12828.scala	check: diagnostic 1 of 1: scalac's is error i12828.scala:7:8 object creation impossible, since def foo(x: A): Unit in trait Foo is not defined; teq's is error i12828.scala:7:8 object creation impossible, since def foo(x: Int): Unit in trait
+i12828d.scala	marks: no error where 1 are marked
+i12941.scala	marks: 3 errors where 2 are marked: i12941.scala:4:11: several entry points: func, hello; choose one with --main
+i13044.scala	check: diagnostic 1 of 1: scalac's is error i13044.scala:61:41 No given instance of type Schema[B] was found.; teq's is error i13044.scala:61:41 No given instance of type Schema[B] was found.
+i13075.scala	marks: 7 errors where 2 are marked: i13075.scala:32:15: expected '=>', found '@'
+i13076.scala	check: diagnostic 1 of 1: scalac's is error i13076.scala:6:7 class C needs to be abstract, since:; teq's is error i13076.scala:6:7 class C needs to be abstract, since it has 2 unimplemented members: f, g
+i13089.scala	marks: 1 errors where 2 are marked
+i13091.scala	marks: no error where 1 are marked
+i13190	marks: 2 errors where 1 are marked: B_2.scala:10:17: type mismatch: found FieldType["A", Int], required Int
+i13190b.scala	marks: 2 errors where 1 are marked: i13190b.scala:14:17: type mismatch: found FieldType["A", Int], required Int
+i13320.scala	check: diagnostic 1 of 3: scalac's is error i13320.scala:8:21 type Boo is not a member of object Foo - did you mean Foo.Boo.type?; teq's is error i13320.scala:4:8 type Booo not found
+i13332shapeless.scala	marks: 6 errors where 4 are marked: i13332shapeless.scala:26:35: No given instance of type Mirror.Of[Atoms01.Atom] was found.
+i13340.scala	marks: 2 errors where 1 are marked: i13340.scala:3:9: too many arguments: expected 1
+i13435.scala	marks: no error where 1 are marked
+i13466.scala	check: diagnostic 1 of 1: scalac's is error i13466.scala:9:7 object creation impossible, since:; teq's is error i13466.scala:9:7 object creation impossible, since it has 3 unimplemented members: foo, withTV, withTV2
+i13487.scala	marks: 2 errors where 1 are marked: i13487.scala:6:12: type argument Foo[A] does not have the same kind as its bound [_,_[_]]
+i13570.scala	check: diagnostic 1 of 1: scalac's is error i13570.scala:8:3 cannot reduce inline match with; teq's is error i13570.scala:8:3 cannot reduce inline match with
+i13580.scala	marks: 3 errors where 1 are marked: i13580.scala:9:22: expected ')', found 'val'
+i13701.scala	marks: no error where 1 are marked
+i13703.scala	check: diagnostic 1 of 1: scalac's is error i13703.scala:3:53 Found: Object with Foo {...}; teq's is error i13703.scala:3:53 type mismatch: found Foo{def i_=(x$1: Int): Unit}, required Foo{val i: Int; def i_=(x: Int): Unit}
+i13757-match-type-anykind.scala	marks: 3 errors where 6 are marked
+i13769.scala	check: diagnostic 1 of 1: scalac's is error i13769.scala:2:22 Unbound wildcard type; teq's is error i13769.scala:2:18 type mismatch: found Int => List[Int], required [t] => (x$1: t) => F[t]
+i13780-1.scala	marks: 4 errors where 2 are marked: i13780-1.scala:38:25: type mismatch: found h, required SelectH[VS]
+i13780.scala	check: diagnostic 1 of 3: scalac's is error i13780.scala:12:33 Found: ("" : String); teq's is error i13780.scala:12:33 type mismatch: found "", required Head[X]
+i13808.scala	marks: 1 errors where 2 are marked
+i13838.scala	option: -Ximplicit-search-limit (teq has no flag for it)
+i13846.scala	marks: 1 errors where 2 are marked
+i13848.scala	marks: no error where 1 are marked
+i13849.scala	marks: error on an unmarked line i13849.scala:8: throws takes 1 type argument(s), 2 given
+i13864.scala	marks: 1 errors where 2 are marked
+i13946	marks: no error where 1 are marked
+i13960.scala	check: diagnostic 1 of 1: scalac's is error i13960.scala:13:10 [31mA [0m is not a valid result type of an unapply method of an [35mextractor [0m.; teq's is error i13960.scala:13:10 A is not a case class, so it cannot be used as a pattern
+i13991.scala	check: diagnostic 1 of 1: scalac's is error i13991.scala:5:0 ; teq's is error i13991.scala:5:3 No given instance of type Foo[String] was found.
+i13997.scala	marks: error on an unmarked line i13997.scala:6: type mismatch: found CovariantArray[String], required CovariantArray[Any]
+i14025.scala	check: diagnostic 1 of 2: scalac's is error i14025.scala:1:89 No given instance of type scala.deriving.Mirror.Product{type MirroredType[X] = [Y] =>> (X, Y)} was found for parameter x of method summon in object Predef. Failed to synthesize a
+i14062.scala	marks: no error where 1 are marked
+i14177c.scala	marks: no error where 3 are marked
+i1424.scala	marks: no error where 1 are marked
+i14363.scala	check: diagnostic 1 of 1: scalac's is error i14363.scala:2:14 Found: (1 : Int); teq's is error i14363.scala:2:14 type mismatch: found 1, required T
+i14367.scala	marks: no error where 1 are marked
+i14386.scala	marks: 4 errors where 3 are marked: i14386.scala:34:2: The start of this line does not match any of the previous indentation widths.
+i14401.scala	marks: 1 errors where 5 are marked
+i14401b.scala	check: diagnostic 1 of 1: scalac's is error i14401b.scala:5:18 forward reference to x extends over the definition of x (on line 6); teq's is error i14401b.scala:5:18 not found: x
+i14401c.scala	marks: no error where 1 are marked
+i14415.scala	check: diagnostic 1 of 1: scalac's is error i14415.scala:21:7 error overriding method m in trait C of type (a: Int): Int;; teq's is error i14415.scala:21:7 method m is accessed from super in trait C; class X has no concrete m behind that tr
+i14432.scala	check: diagnostic 1 of 1: scalac's is error i14432.scala:13:34 No given instance of type scala.deriving.Mirror.Of[example.Foo] was found for parameter x of method summon in object Predef. Failed to synthesize an instance of type scala.deriv
+i14432a.scala	marks: 2 errors where 1 are marked: i14432a.scala:14:44: No given instance of type Mirror.Of[Foo] was found.
+i14432b.scala	marks: no error where 1 are marked
+i14432c.scala	check: diagnostic 1 of 2: scalac's is error i14432c.scala:12:19 constructor Foo cannot be accessed as a member of example.Foo from class Bar.; teq's is error i14432c.scala:12:19 the constructor of Foo is private to Foo
+i14432d.scala	marks: no error where 1 are marked
+i14544.scala	marks: 1 errors where 2 are marked
+i14564.scala	check: diagnostic 1 of 1: scalac's is error i14564.scala:5:27 spread operator `*` not allowed here; must come last in a parameter list; teq's is error i14564.scala:5:19 value * is not a member of List[Int]
+i14659.scala	marks: error on an unmarked line i14659.scala:9: type mismatch: found "abc", required Bar.Out
+i14660.scala	marks: no error where 1 are marked
+i14783.scala	marks: 3 errors where 2 are marked: i14783.scala:3:7: type mismatch: found (<error>, <error>) => Int, required (=> (Int, Int)) => Int
+i14818.scala	check: diagnostic 1 of 3: scalac's is error i14818.scala:9:16 no eligible member B at M; teq's is error i14818.scala:9:16 A is already defined as type A
+i14823.scala	check: diagnostic 1 of 1: scalac's is error i14823.scala:8:51 No given instance of type scala.deriving.Mirror.Of[SubA[Int] | SubB[Int]] was found for parameter x of method summon in object Predef. Failed to synthesize an instance of type sc
+i14823a.scala	marks: 2 errors where 4 are marked
+i14834.scala	marks: error on an unmarked line i14834.scala:1: illegal cyclic type reference: alias F of type F refers back to the type itself
+i14842.scala	check: diagnostic 1 of 1: scalac's is error i14842.scala:11:29 Found: Either[String, Any]; teq's is error i14842.scala:11:29 type mismatch: found Either[String, Any], required Either[Int, Any]
+i14966.scala	marks: 2 errors where 1 are marked: i14966.scala:7:7: trait T inherits f as (x: List[Int]): Int and as (x: List[String]): A, which are both called f$List in the JavaScript output, since no ancestor declares the two together; declare the alt
+i14966a.scala	check: diagnostic 1 of 1: scalac's is error i14966a.scala:3:7 Conflicting definitions:; teq's is error i14966a.scala:3:7 Conflicting definitions:
+i15000.scala	marks: error on an unmarked line i15000.scala:19: not found: barY
+i1503.scala	marks: 1 errors where 2 are marked
+i15144.scala	option: --release (teq has no flag for it)
+i15158.scala	marks: 2 errors where 4 are marked
+i15177.ub.scala	marks: 1 errors where 2 are marked
+i15266.scala	check: diagnostic 1 of 2: scalac's is error i15266.scala:5:1 Modifier opaque is not allowed for this definition; teq's is error i15266.scala:1:13 an opaque type needs a right-hand side
+i15272.scala	marks: 6 errors where 1 are marked: i15272.scala:9:25: type argument from does not conform to upper bound nt
+i15287.scala	check: diagnostic 1 of 1: scalac's is error i15287.scala:4:20 None of the overloaded alternatives of method f with types; teq's is error i15287.scala:4:20 None of the overloaded alternatives of method f with types
+i15311.scala	marks: error on an unmarked line i15311.scala:18: type mismatch: found food.Clone, required F
+i15312.scala	check: diagnostic 1 of 1: scalac's is error i15312.scala:7:28 Found: ("asd" : String); teq's is error i15312.scala:7:28 type mismatch: found "asd", required F[AnyRef{type A = Int}]
+i15377.scala	marks: no error where 1 are marked
+i15381.scala	check: diagnostic 1 of 1: scalac's is error i15381.scala:5:14 Found: $.type; teq's is error i15381.scala:5:14 type mismatch: found $, required Int
+i15468.scala	marks: 3 errors where 2 are marked: i15468.scala:3:26: value size is not a member of String
+i15474b.scala	marks: no error where 1 are marked
+i15507.scala	marks: 6 errors where 10 are marked
+i15568.scala	marks: no error where 1 are marked
+i15569.scala	marks: 20 errors where 7 are marked: i15569.scala:6:11: several entry points: Test, Test2, Test3, Test3ok, Test4, Test5, Test6, Test7; choose one with --main
+i15575.scala	check: diagnostic 1 of 2: scalac's is error i15575.scala:5:28 Type argument T & Any does not conform to lower bound Any; teq's is error i15575.scala:5:22 type argument T does not conform to lower bound Any
+i15614.scala	marks: 30 errors where 17 are marked: i15614.scala:3:21: expected ':', found identifier
+i15618.scala	marks: 1 errors where 2 are marked
+i1568.scala	marks: no error where 1 are marked
+i15741.scala	marks: no error where 2 are marked
+i15750.scala	marks: 2 errors where 3 are marked
+i15784.scala	marks: 10 errors where 2 are marked: i15784.scala:2:21: expected ')', found '@'
+i15785.scala	marks: no error where 1 are marked
+i15850-a.scala	marks: no error where 1 are marked
+i15850-b.scala	marks: no error where 1 are marked
+i15939.scala	marks: no error where 5 are marked
+i15987.scala	check: diagnostic 1 of 1: scalac's is error i15987.scala:26:41 derived instance ShowWithExplicit[Person] failed to generate:; teq's is error i15987.scala:26:12 type mismatch: found String => ShowWithExplicit[A], required ShowWithExplicit[Pe
+i15991.abstract.scala	marks: 8 errors where 2 are marked: i15991.abstract.scala:10:9: wrong number of patterns for an extractor of (String, String, String, String): found 3
+i15991.scala	marks: 4 errors where 1 are marked: i15991.scala:6:9: wrong number of patterns for an extractor of (String, String): found 3
+i15998.scala	check: diagnostic 1 of 2: scalac's is error i15998.scala:6:13 Found: (1 : Int); teq's is error i15998.scala:6:13 type mismatch: found 1, required CC[A]
+i16035.scala	marks: no error where 2 are marked
+i16035a.scala	marks: 2 errors where 1 are marked: i16035a.scala:4:48: type mismatch: found B, required S.this.Uses[A, B]
+i16092-members-only.scala	marks: 2 errors where 1 are marked: i16092-members-only.scala:11:7: class Evil needs to be abstract, since it has 3 unimplemented members: t, x1, x2
+i16092.scala	marks: error on an unmarked line i16092.scala:9: type mismatch: found (Z.this.t : x.T), required Z.this.x.T
+i16130.scala	check: diagnostic 1 of 1: scalac's is error i16130.scala:3:17 missing argument for parameter x of constructor Foo in trait Foo: (x: Int): Foo; teq's is error i16130.scala:3:17 missing argument for parameter x
+i16146.scala	marks: no error where 1 are marked
+i1639.scala	marks: 1 errors where 2 are marked
+i16407.scala	marks: 1 errors where 2 are marked
+i1643.scala	marks: 6 errors where 7 are marked
+i16452.scala	marks: error on an unmarked line i16452.scala:1: expected end of statement, found ':'
+i16453.scala	marks: 12 errors where 6 are marked: i16453.scala:10:9: local givens cannot take parameters
+i16453b1.scala	check: diagnostic 1 of 1: scalac's is error i16453b1.scala:11:20 No given instance of type Ctx => Option[Int] was found for parameter fn of method get; teq's is error i16453b1.scala:11:20 No implicit view available from Ctx => Option[Int].
+i16453b2.scala	marks: 2 errors where 1 are marked: i16453b2.scala:9:9: local givens cannot take parameters
+i16464.scala	marks: 2 errors where 1 are marked: i16464.scala:4:7: Conflicting definitions:
+i1647.scala	marks: error on an unmarked line i1647.scala:1: class ann needs to be abstract, since def foo(): Unit in class ann is not defined
+i1649.scala	marks: no error where 1 are marked
+i1652.scala	marks: 2 errors where 1 are marked: i1652.scala:2:22: type argument Array does not have the same kind as its bound
+i16601.scala	check: diagnostic 1 of 1: scalac's is error i16601.scala:1:27 ExecutionContext is a trait; it cannot be instantiated; teq's is error i16601.scala:1:23 ExecutionContext is a trait; it cannot be instantiated
+i16601a.scala	check: diagnostic 1 of 1: scalac's is error i16601a.scala:3:27 ExecutionContext is a trait; it cannot be instantiated; teq's is error i16601a.scala:3:23 ExecutionContext is a trait; it cannot be instantiated
+i1662.scala	marks: 2 errors where 3 are marked
+i16653.scala	check: diagnostic 1 of 1: scalac's is error i16653.scala:1:8 Not found: demo - did you mean Demo?; teq's is error i16653.scala:1:8 cannot resolve import: demo not found
+i16655.scala	marks: 2 errors where 1 are marked: i16655.scala:3:3: reassignment to val x
+i16696.scala	marks: 4 errors where 3 are marked: i16696.scala:7:15: type argument Some does not have the same kind as its bound
+i1679.scala	marks: 4 errors where 1 are marked: i1679.scala:4:13: expected ']', found '='
+i16815.scala	marks: 1 errors where 7 are marked
+i16820.scala	check: diagnostic 1 of 4: scalac's is error i16820.scala:5:12 missing argument list for method f in object Test; teq's is error i16820.scala:5:12 missing argument list for method f in object Test
+i16842.scala	marks: 2 errors where 1 are marked: i16842.scala:24:9: type mismatch: found Int => SemanticArray[SemanticInt], required SemanticArray[SemanticType]
+i16850.scala	check: diagnostic 1 of 1: scalac's is error i16850.scala:7:34 Found: (elm : Y); teq's is error i16850.scala:7:34 type mismatch: found (elm : Y), required Class.this.Y
+i16872.scala	check: diagnostic 1 of 6: scalac's is error i16872.scala:8:7 Not found: aa; teq's is error i16872.scala:8:7 not found: aa
+i1688.scala	marks: 1 errors where 2 are marked
+i16888.scala	check: diagnostic 1 of 1: scalac's is error i16888.scala:3:39 No given instance of type scala.quoted.Quotes was found for parameter x of method summon in object Predef; teq's is error i16888.scala:3:39 no given instance of type Quotes was f
+i16920.scala	check: diagnostic 1 of 7: scalac's is error i16920.scala:19:5 value wow is not a member of String.; teq's is error i16920.scala:19:5 value wow is not a member of String
+i17002.scala	marks: no error where 3 are marked
+i17021.ext-java	java source: teq reads none
+i1703.scala	marks: no error where 1 are marked
+i1707.scala	marks: 8 errors where 3 are marked: i1707.scala:16:22: expected end of statement, found '{'
+i1708b.scala	marks: no error where 1 are marked
+i17121.scala	marks: no error where 4 are marked
+i17122.scala	check: diagnostic 1 of 1: scalac's is error i17122.scala:7:15 No given instance of type A was found for parameter of C; teq's is error i17122.scala:7:15 no given instance of type A was found for parameter of (A) ?=> B
+i17123.scala	check: diagnostic 2 of 11: scalac's is error i17123.scala:9:3 missing argument list for method m2 in object ConfusingErrorMessage; teq's is error i17123.scala:9:3 method m2 in object ConfusingErrorMessage must be called with () argument
+i17132.min.scala	marks: no error where 1 are marked
+i17132.scala	marks: error on an unmarked line i17132.scala:8: Recursion limit exceeded.
+i1716.scala	marks: 4 errors where 2 are marked: i1716.scala:4:20: expected '=>', found '['
+i17183.scala	marks: 3 errors where 2 are marked: i17183.scala:11:24: type mismatch: found (<error>, <error>) => Nothing, required MyFunc
+i17183b.scala	marks: 3 errors where 2 are marked: i17183b.scala:9:24: type mismatch: found (<error>, <error>) => Nothing, required MyFunc
+i17292.scala	marks: no error where 1 are marked
+i17292b.scala	marks: no error where 7 are marked
+i17467.scala	marks: 6 errors where 8 are marked
+i1747.scala	marks: no error where 1 are marked
+i17581.scala	marks: 2 errors where 1 are marked: i17581.scala:5:41: value bar is not a member of A
+i17612b	option: -Wshadow:private-shadow with -Werror (teq has no flag for it)
+i17613b	option: -Wshadow:type-parameter-shadow with -Werror (teq has no flag for it)
+i1771.scala	marks: no error where 1 are marked
+i17738-toplevel-infix.scala	marks: 4 errors where 5 are marked
+i1779.scala	marks: 1 errors where 2 are marked
+i1793.scala	marks: 2 errors where 1 are marked: i1793.scala:3:46: type argument T does not conform to upper bound AnyRef
+i17944.scala	marks: 4 errors where 1 are marked: i17944.scala:39:14: extension method ->> is not applicable to String
+i17981.scala	check: diagnostic 1 of 1: scalac's is error i17981.scala:1:7 Repeated modifier final; teq's is error i17981.scala:1:7 repeated modifier final
+i1802.scala	marks: 1 errors where 2 are marked
+i18020.scala	marks: 9 errors where 14 are marked
+i18058.scala	check: diagnostic 1 of 1: scalac's is error i18058.scala:4:22 invalid new prefix <: F cannot replace (f : <: F) in type f.A; teq's is error i18058.scala:4:10 invalid new prefix <: F cannot replace (f : <: F) in type f.A
+i1806.scala	marks: 3 errors where 2 are marked: i1806.scala:5:23: expected an identifier, found 'super'
+i18090.scala	marks: no error where 7 are marked
+i18122.scala	check: diagnostic 1 of 13: scalac's is error i18122.scala:10:17 positional after named argument; teq's is error i18122.scala:10:5 positional after named argument
+i18171.scala	marks: 2 errors where 1 are marked: i18171.scala:5:35: type argument T does not conform to upper bound Tuple
+i18188.scala	marks: no error where 1 are marked
+i18265.scala	marks: 2 errors where 1 are marked: i18265.scala:5:9: Declaration of method twice not allowed here: only classes can have declared but undefined members
+i18274.scala	check: diagnostic 1 of 1: scalac's is error i18274.scala:3:8 object Foo cannot extend AnyVal; teq's is error i18274.scala:3:20 only a class can extend AnyVal
+i18302a.scala	marks: error on an unmarked line i18302a.scala:1: type mismatch: found PolyFunction{def apply(x: Int): Int}, required Selectable | Dynamic
+i18302b.scala	marks: error on an unmarked line i18302b.scala:1: type mismatch: found PolyFunction{def apply(x: Int)(y: Int): Int}, required Selectable | Dynamic
+i18302c.scala	marks: 1 errors where 2 are marked
+i18302d.scala	marks: 1 errors where 2 are marked
+i18302e.scala	marks: error on an unmarked line i18302e.scala:1: polyFun needs a body; only @js and @jsImport definitions go without one
+i18302f.scala	marks: no error where 5 are marked
+i18302i.scala	marks: no error where 6 are marked
+i18302j.scala	marks: 2 errors where 4 are marked
+i18408a.scala	check: diagnostic 1 of 3: scalac's is error i18408a.scala:2:1 Illegal start of toplevel definition; teq's is error i18408a.scala:2:1 expected a definition, found identifier
+i18408b.scala	check: diagnostic 1 of 3: scalac's is error i18408b.scala:2:1 Illegal start of toplevel definition; teq's is error i18408b.scala:2:1 expected a definition, found identifier
+i18408c.scala	check: diagnostic 1 of 3: scalac's is error i18408c.scala:2:1 Illegal start of toplevel definition; teq's is error i18408c.scala:2:1 expected a definition, found identifier
+i18458.scala	marks: no error where 1 are marked
+i1846.scala	marks: 21 errors where 12 are marked: i1846.scala:6:20: expected a pattern, found indented block
+i18533	java source: teq reads none
+i18545.scala	marks: 2 errors where 5 are marked
+i18552.scala	marks: no error where 1 are marked
+i18588.scala	check: diagnostic 1 of 2: scalac's is error i18588.scala:7:3 covariant type A occurs in invariant position in type A of variable cached; teq's is error i18588.scala:7:15 covariant type A occurs in invariant position in type A of variable ca
+i18632.scala	option: -Wnonunit-statement with -Werror (teq has no flag for it)
+i18650.scala	marks: 3 errors where 1 are marked: i18650.scala:25:24: type mismatch: found Any, required Church[Int]
+i18657.scala	marks: 3 errors where 1 are marked: i18657.scala:2:28: type mismatch: found Int => Int, required (Int, Int) => Int
+i18670.scala	check: diagnostic 1 of 1: scalac's is error i18670.scala:11:39 No given instance of type TC[A] was found for a context parameter of constructor Payload in class Payload.; teq's is error i18670.scala:11:37 no given instance of type TC[Nothin
+i18678.scala	check: diagnostic 1 of 9: scalac's is error i18678.scala:11:15 Found: Unit; teq's is error i18678.scala:11:15 type mismatch: found scala.Unit, required Unit
+i18678b.scala	check: diagnostic 1 of 1: scalac's is error i18678b.scala:3:17 Found: ("" : String); teq's is error i18678b.scala:3:17 type mismatch: found "", required String
+i18682.scala	check: diagnostic 1 of 10: scalac's is error i18682.scala:3:9 Not found: Fop - did you mean Foo?; teq's is error i18682.scala:3:9 not found: Fop
+i18684.scala	check: diagnostic 1 of 4: scalac's is error i18684.scala:3:7 no pattern match extractor named s was found; teq's is error i18684.scala:3:7 not found: s
+i18686.scala	check: diagnostic 1 of 6: scalac's is error i18686.scala:13:13 value Bar1 cannot be accessed as a member of Foo.type from object Main.; teq's is error i18686.scala:13:13 Bar1 is private to Foo
+i18686b.scala	marks: 8 errors where 6 are marked: i18686b.scala:15:13: Bar1 is private to Foo
+i18686c.scala	check: diagnostic 1 of 1: scalac's is error i18686c.scala:8:3 method foo cannot be accessed as a member of (foo² : Bar.Foo) from the top-level definitions in package <empty>.; teq's is error i18686c.scala:8:3 method foo in class Foo cannot
+i18734.scala	marks: 8 errors where 7 are marked: i18734.scala:7:9: expected ',' or ')', found literal
+i18737.scala	check: diagnostic 1 of 2: scalac's is error i18737.scala:3:37 Found: (v : String & Long); teq's is error i18737.scala:3:37 type mismatch: found String & Long, required String & Integer & List[String]
+i18750-format.scala	marks: 3 errors where 1 are marked: i18750-format.scala:4:8: expected a pattern, found identifier
+i18750.scala	marks: 15 errors where 11 are marked: i18750.scala:3:5: expected a pattern, found 'do'
+i18922.scala	check: diagnostic 1 of 1: scalac's is error i18922.scala:11:20 Found: Resource; teq's is error i18922.scala:11:20 type mismatch: found Resource, required AnyRef{def close(): Unit}
+i18933.scala	marks: 1 errors where 2 are marked
+i1905.scala	marks: no error where 1 are marked
+i19077.scala	marks: 5 errors where 8 are marked
+i19100.scala	marks: 10 errors where 3 are marked: i19100.scala:5:10: expected a pattern, found identifier
+i19248	marks: no error where 1 are marked
+i19328.scala	check: diagnostic 1 of 1: scalac's is error i19328.scala:14:6 No given instance of type Boolean was found for parameter bool of method bar in object i19328; teq's is error i19328.scala:14:6 no given instance of type Boolean was found for pa
+i19328conversion.scala	check: diagnostic 1 of 1: scalac's is error i19328conversion.scala:13:6 No given instance of type Boolean was found for parameter bool of method bar in object i19328conversion; teq's is error i19328conversion.scala:13:6 no given instance of
+i19334.scala	marks: 2 errors where 1 are marked: i19334.scala:6:3: too many arguments: expected 0
+i19364.scala	marks: no error where 10 are marked
+i19372.scala	marks: 2 errors where 5 are marked
+i19414-desugared.scala	check: diagnostic 1 of 1: scalac's is error i19414-desugared.scala:22:35 No best given instance of type BodySerializer[JsObject] was found for parameter x of method summon in object Predef.; teq's is error i19414-desugared.scala:22:35 ambig
+i19414.scala	marks: 2 errors where 1 are marked: i19414.scala:12:42: type mismatch: found Printer, required Writer[?0]
+i19445.scala	marks: 3 errors where 2 are marked: i19445.scala:12:41: type argument UnwrapTypes[xs] does not conform to upper bound Tuple
+i19594.scala	check: diagnostic 5 of 6: scalac's is error i19594.scala:26:3 No given instance of type String was found; teq's is error i19594.scala:26:13 no given instance of type String was found for parameter s
+i19619	java source: teq reads none
+i19731.scala	check: diagnostic 2 of 3: scalac's is error i19731.scala:7:7 class F2 needs to be abstract, since:; teq's is error i19731.scala:7:7 class F2 needs to be abstract, since def foo(): Unit in class F2 is not defined
+i19746.scala	marks: error on an unmarked line i19746.scala:10: type mismatch: found Any, required T
+i19762.scala	check: diagnostic 1 of 1: scalac's is error i19762.scala:8:32 Missing return type; teq's is error i19762.scala:8:32 unmatched closing bracket
+i19809.scala	marks: no error where 1 are marked
+i1992.scala	marks: no error where 2 are marked
+i19958.scala	check: diagnostic 1 of 2: scalac's is error i19958.scala:1:9 value unit is not a member of Object - did you mean Object.wait?; teq's is error i19958.scala:1:9 value unit is not a member of AnyRef
+i2000.scala	marks: error on an unmarked line i2000.scala:3: method foo overrides nothing
+i2001.scala	marks: error on an unmarked line i2001.scala:2: recursive use of odd needs an explicit result type
+i2001a.scala	marks: error on an unmarked line i2001a.scala:2: recursive use of odd needs an explicit result type
+i2001b.scala	marks: error on an unmarked line i2001b.scala:2: recursive use of odd needs an explicit result type
+i2005.scala	marks: no error where 1 are marked
+i2006.scala	marks: error on an unmarked line i2006.scala:3: no given instance of type Int was found for parameter of (Int) ?=> Int
+i20105.scala	check: diagnostic 1 of 2: scalac's is warning i20105.scala:6:7 The tail recursive def foo contains a recursive call inside the non-inlined inner def bar; teq's is error i20105.scala:3:5 TailRec optimisation not applicable, method foo contai
+i20127.scala	check: diagnostic 2 of 2: scalac's is error i20127.scala:14:15 foo!; teq's is error i20127.scala:14:15 no given instance of type X was found for parameter x
+i20245	marks: no error where 2 are marked
+i20265-1.scala	marks: no error where 1 are marked
+i20265.scala	marks: 6 errors where 2 are marked: i20265.scala:8:27: X is not a legal path
+i2030.scala	marks: 2 errors where 1 are marked: i2030.scala:4:26: No given instance of type scala.quoted.Quotes was found for a quote
+i20317a.scala	marks: 1 errors where 2 are marked
+i2032.scala	marks: no error where 1 are marked
+i2033.scala	marks: 4 errors where 2 are marked: i2033.scala:6:38: type mismatch: found Unit, required OutputStream
+i20338a.scala	check: diagnostic 1 of 1: scalac's is error i20338a.scala:10:16 Found: ("hello" : String); teq's is error i20338a.scala:10:16 type mismatch: found "hello", required Int
+i20338b.scala	check: diagnostic 1 of 1: scalac's is error i20338b.scala:10:9 Found: (42 : Int); teq's is error i20338b.scala:10:9 type mismatch: found 42, required String
+i20338c.scala	check: diagnostic 1 of 1: scalac's is error i20338c.scala:9:3 Reassignment to val x; teq's is error i20338c.scala:9:3 reassignment to val x
+i20474.scala	marks: 3 errors where 2 are marked: i20474.scala:11:21: type mismatch: found (a : A), required (b2 : (a : A) & B)
+i20511-1.scala	marks: 6 errors where 5 are marked: i20511-1.scala:7:8: Int => Double is not a valid export prefix, since it is not an immutable path
+i20511.scala	marks: 4 errors where 3 are marked: i20511.scala:7:20: expected '.', found ','
+i20517.scala	marks: 2 errors where 1 are marked: i20517.scala:9:44: type mismatch: found (elem : String), required From[(foo : Foo[Any])]
+i20533.scala	marks: 3 errors where 1 are marked: i20533.scala:5:5: type mismatch: found [X] => (x: <error>, y: <error>) => Map[Nothing, Nothing], required [X, Y] => (x$1: X, x$2: Y) => Map[X, Y]
+i20546.scala	marks: error on an unmarked line i20546.scala:1: cannot resolve import: NamedTuple is not an object or a package
+i20554-a	java source: teq reads none
+i20554-b	java source: teq reads none
+i2066.scala	marks: no error where 2 are marked
+i2086a.scala	marks: no error where 1 are marked
+i2086b.scala	marks: no error where 1 are marked
+i2088.scala	marks: 3 errors where 4 are marked
+i21071.scala	marks: 2 errors where 1 are marked: i21071.scala:9:3: Ambiguous overload. The overloaded alternatives of method foo in object MySuite with types
+i2117.scala	marks: 3 errors where 1 are marked: i2117.scala:2:5: expected an identifier, found 'super'
+i21207.scala	marks: 6 errors where 5 are marked: i21207.scala:20:11: method foo1 in class P must be called with () argument
+i21212.scala	marks: no error where 1 are marked
+i21239.orig.scala	check: diagnostic 1 of 1: scalac's is error i21239.orig.scala:32:9 Found: AnyRef; teq's is error i21239.orig.scala:32:9 type mismatch: found AnyRef, required V
+i21239.scala	check: diagnostic 1 of 1: scalac's is error i21239.scala:14:19 Found: AnyRef; teq's is error i21239.scala:14:19 type mismatch: found AnyRef, required V
+i21303	java source: teq reads none
+i21321.scala	marks: 1 errors where 4 are marked
+i21351.scala	marks: 1 errors where 2 are marked
+i2142.scala	marks: 2 errors where 7 are marked
+i21535.scala	check: diagnostic 1 of 1: scalac's is error i21535.scala:7:3 Found: (Int | Short) @uncheckedVariance; teq's is error i21535.scala:7:13 type mismatch: found Short, required ? >: Int & Short <: (Int | Short)
+i21543.scala	check: diagnostic 1 of 2: scalac's is error i21543.scala:10:16 Found: ("1" : String); teq's is error i21543.scala:10:16 type mismatch: found "1", required CompilerCrash$$anon$b5lmxp_119.this.Event
+i21652.scala	check: diagnostic 1 of 1: scalac's is error i21652.scala:1:9 Implementation restriction: PolyFunction apply must have exactly one parameter list and optionally type arguments. No by-name nor varags are allowed.; teq's is error i21652.scala:
+i21696.scala	marks: no error where 1 are marked
+i21841.scala	check: diagnostic 1 of 1: scalac's is error i21841.scala:20:10 [31mOption[(Test.Expr[Test.T], Test.Expr[Test.T])] [0m is not a valid result type of an unapplySeq method of an [35mextractor [0m.; teq's is error i21841.scala:20:11 expected
+i21918.scala	marks: no error where 1 are marked
+i21944.scala	check: diagnostic 1 of 1: scalac's is error i21944.scala:1:6 class Orientation may not be a value class; teq's is error i21944.scala:1:26 only a class can extend AnyVal
+i22192.scala	marks: 3 errors where 6 are marked
+i22192a.scala	marks: 2 errors where 4 are marked
+i22193.scala	marks: 8 errors where 6 are marked: i22193.scala:15:69: expected an expression, found end of single-line lambda
+i22320.scala	check: diagnostic 1 of 1: scalac's is error i22320.scala:19:13 value z is not a member of a.System.; teq's is error i22320.scala:19:13 value z is not a member of System
+i22333.scala	check: diagnostic 1 of 1: scalac's is error i22333.scala:5:34 Found: ((6 : Int), (8 : Int)); teq's is error i22333.scala:5:34 type mismatch: found (6, 8), required Tail[(1, 2, 3)]
+i22357.scala	marks: 2 errors where 1 are marked: i22357.scala:1:2: expected an identifier, found '('
+i22357a.scala	check: diagnostic 1 of 1: scalac's is error i22357a.scala:2:7 [A] =>> Int does not have a constructor; teq's is error i22357a.scala:2:3 Int cannot be instantiated
+i22367.scala	marks: no error where 2 are marked
+i22423.scala	check: diagnostic 1 of 1: scalac's is error i22423.scala:35:3 cannot reduce summonFrom with; teq's is warning i22423.scala:18:5 A pure expression does nothing in statement position
+i22439.scala	marks: 9 errors where 6 are marked: i22439.scala:7:3: missing argument for parameter i
+i22498.scala	marks: no error where 1 are marked
+i22552.scala	check: diagnostic 1 of 2: scalac's is error i22552.scala:3:13 Context bounds are not allowed in this position; teq's is error i22552.scala:3:10 Context bounds are not allowed in this position
+i22560.scala	marks: 1 errors where 3 are marked
+i22560c	marks: 2 errors where 5 are marked
+i22575.scala	check: diagnostic 1 of 1: scalac's is error i22575.scala:11:16 expected a constant value but found: (x: Int) => (x * 2):(Int => Int).apply(2); teq's is error i22575.scala:11:3 expected a constant value but found: f(2)
+i22589.scala	check: diagnostic 1 of 1: scalac's is error i22589.scala:15:1 Inferred implementation of the deferred given instance given_MyCodec_E in trait CompanionEssentials is self-recursive.; teq's is error i22589.scala:15:8 Inferred implementation o
+i22589b.scala	marks: 2 errors where 1 are marked: i22589b.scala:13:8: myc is already defined as given instance myc
+i22589c.scala	check: diagnostic 1 of 1: scalac's is error i22589c.scala:8:0 ; teq's is error i22589c.scala:8:8 Inferred implementation of the deferred given instance given_TC_T in trait Base is self-recursive.
+i22592.scala	marks: no error where 6 are marked
+i22620.scala	check: diagnostic 1 of 2: scalac's is error i22620.scala:4:23 contravariant type M occurs in invariant position in type scala.collection.mutable.ArrayBuffer[M] of value v; teq's is error i22620.scala:4:35 contravariant type M occurs in inva
+i22660.scala	check: diagnostic 1 of 1: scalac's is error i22660.scala:2:13 Context bounds are not allowed in this position; teq's is error i22660.scala:2:10 Context bounds are not allowed in this position
+i22670	marks: no error where 1 are marked
+i22671.scala	check: diagnostic 1 of 11: scalac's is error i22671.scala:41:17 Found: Char; teq's is error i22671.scala:9:3 reassignment to val w
+i22721	check: diagnostic 1 of 1: scalac's is error test2.scala:3:1 foobar is already defined as method foobar in tests/neg/i22721/test1.scala; teq's is error test2.scala:3:13 foobar is already defined as method foobar in $SCALA3/tests/neg/i22721/t
+i22752.scala	marks: no error where 1 are marked
+i22792.scala	check: diagnostic 1 of 1: scalac's is error i22792.scala:8:18 missing argument for parameter ev of method run in class Foo: (implicit ev: Permit): Unit; teq's is error i22792.scala:8:18 missing argument for parameter ev
+i22890	java source: teq reads none
+i22903.scala	marks: 3 errors where 1 are marked: i22903.scala:1:7: class CustomProduct needs to be abstract, since it has 2 unimplemented members: productArity, productElement
+i22906.scala	option: -rewrite (teq has no flag for it)
+i23036.scala	check: diagnostic 1 of 10: scalac's is error i23036.scala:2:3 imports are not allowed inside extensions; teq's is error i23036.scala:2:3 only defs are allowed in an extension
+i23111.scala	marks: 4 errors where 2 are marked: i23111.scala:2:46: missing parameter type
+i23119.scala	marks: 9 errors where 2 are marked: i23119.scala:4:17: `yield` or `do` expected
+i23155a.scala	marks: 2 errors where 1 are marked: i23155a.scala:4:10: wrong number of patterns for an extractor of (x : Int, y : Int): found 2
+i23156.scala	marks: 3 errors where 1 are marked: i23156.scala:3:10: wrong number of patterns for an extractor of <error>: found 2
+i23179-reverse.scala	marks: 1 errors where 2 are marked
+i23350.scala	marks: no error where 1 are marked
+i23400.scala	option: -preview (teq has no flag for it)
+i23402.scala	check: diagnostic 1 of 1: scalac's is error i23402.scala:6:6 Conflicting definitions:; teq's is error i23402.scala:6:6 apply is already defined as method apply
+i23402b.scala	check: diagnostic 1 of 1: scalac's is error i23402b.scala:4:6 Conflicting definitions:; teq's is error i23402b.scala:4:6 Conflicting definitions:
+i23402c.scala	check: diagnostic 1 of 1: scalac's is error i23402c.scala:4:6 Conflicting definitions:; teq's is error i23402c.scala:4:6 Conflicting definitions:
+i23402d.scala	check: diagnostic 1 of 1: scalac's is error i23402d.scala:5:5 Conflicting definitions:; teq's is error i23402d.scala:5:5 Conflicting definitions:
+i23406.scala	marks: 3 errors where 2 are marked: i23406.scala:3:9: 'erased' is not part of the supported Scala subset
+i23459.scala	check: diagnostic 1 of 2: scalac's is error i23459.scala:8:15 Sequence wildcard pattern is not allowed for unapply, only unapplySeq is allowed; teq's is error i23459.scala:8:15 a sequence wildcard can only end a sequence pattern
+i23459b.scala	marks: 4 errors where 2 are marked: i23459b.scala:5:10: wrong number of patterns for Test: expected 0, found 1
+i23474.scala	check: diagnostic 1 of 5: scalac's is error i23474.scala:5:12 class Y needs to be abstract, since var comment_=(x$1: String): Unit in trait Comment is not defined; teq's is error i23474.scala:5:12 class Y needs to be abstract, since var com
+i23504.scala	marks: 4 errors where 2 are marked: i23504.scala:2:3: type argument [T] =>> () => Any does not have the same kind as its bound
+i23637.scala	check: diagnostic 1 of 1: scalac's is error i23637.scala:6:10 (Test.foo.pin : Object) is not a valid export prefix, since it is not an immutable path; teq's is error i23637.scala:6:10 cannot resolve export: pin not found
+i23729.scala	marks: 4 errors where 3 are marked: i23729.scala:17:34: expected an expression, found 'match'
+i23815.scala	marks: 1 errors where 2 are marked
+i23832a.scala	check: diagnostic 1 of 1: scalac's is error i23832a.scala:9:9 Conflicting definitions:; teq's is error i23832a.scala:9:3 given_Special_Option is already defined as given instance given_Special_Option
+i23832b.scala	marks: no error where 1 are marked
+i24067.scala	marks: no error where 1 are marked
+i24096.scala	check: diagnostic 1 of 1: scalac's is error i24096.scala:10:32 Found: (r : Pull.Terminal[_] & Pull[F, O, Unit]); teq's is error i24096.scala:10:32 type mismatch: found Terminal[Any], required Pull[F2, O2, Unit]
+i24250.scala	marks: 2 errors where 3 are marked
+i24460.scala	check: diagnostic 1 of 1: scalac's is error i24460.scala:12:0 ; teq's is error i24460.scala:12:11 cannot reduce summonFrom with
+i24496.scala	marks: 3 errors where 2 are marked: i24496.scala:12:24: expected an expression, found 'case'
+i24681.scala	check: diagnostic 1 of 1: scalac's is error i24681.scala:3:10 @targetName annotation may not be used on a constructor; teq's is error i24681.scala:3:11 expected 'extends' or a template body, found '@'
+i24711-java-nested-types.scala	check: diagnostic 1 of 3: scalac's is error i24711-java-nested-types.scala:2:21 Found: java.util.Map.Entry[String, Int]; teq's is error i24711-java-nested-types.scala:2:21 type mismatch: found Entry[String, Int], required Int
+i2473.scala	marks: 1 errors where 2 are marked
+i24745.scala	marks: 4 errors where 1 are marked: i24745.scala:18:14: expected ',' or ')', found identifier
+i24789.scala	marks: 1 errors where 2 are marked
+i24825c.scala	marks: 7 errors where 3 are marked: i24825c.scala:17:3: modifier override is not allowed for this definition
+i24917.scala	marks: no error where 1 are marked
+i24995.scala	check: diagnostic 1 of 4: scalac's is error i24995.scala:2:8 Not found: type Mop - did you mean Map?; teq's is error i24995.scala:2:8 type Mop not found
+i25077.scala	check: diagnostic 1 of 1: scalac's is error i25077.scala:6:0 ; teq's is error i25077.scala:6:3 For comprehension with multiple val assignments may change result type in 3.8
+i2512.scala	marks: 12 errors where 5 are marked: i2512.scala:4:15: expected an identifier, found 'implicit'
+i2514.scala	marks: 10 errors where 6 are marked: i2514.scala:3:12: expected an identifier, found 'implicit'
+i2514a.scala	marks: no error where 1 are marked
+i25248.scala	marks: 4 errors where 2 are marked: i25248.scala:2:3: expected 'then', found 'val'
+i25260.scala	marks: 2 errors where 1 are marked: i25260.scala:3:31: expected end of statement, found ':'
+i2539.scala	marks: 33 errors where 5 are marked: i2539.scala:2:46: type mismatch: found () => 42, required (() => Int){def foo(): Int}
+i25442	marks: no error where 7 are marked
+i25456.scala	marks: 2 errors where 4 are marked
+i25531.scala	check: diagnostic 1 of 1: scalac's is error i25531.scala:3:7 class Walker needs to be abstract, since:; teq's is error i25531.scala:3:7 class Walker needs to be abstract, since it has 4 unimplemented members: postVisitDirectory, preVisitDir
+i25531b.scala	marks: no error where 1 are marked
+i25548.scala	marks: error on an unmarked line i25548.scala:3: expected 'extends' or a template body, found '@'
+i2564.scala	marks: no error where 1 are marked
+i2564b.scala	marks: no error where 1 are marked
+i25683.scala	marks: 4 errors where 2 are marked: i25683.scala:8:5: unmatched closing bracket
+i25716.scala	marks: 4 errors where 5 are marked
+i2642.scala	marks: 4 errors where 6 are marked
+i2770.scala	marks: 3 errors where 4 are marked
+i2771.scala	marks: 7 errors where 3 are marked: i2771.scala:18:9: expected ']', found '='
+i2771a.scala	marks: 1 errors where 2 are marked
+i2771b.scala	marks: 1 errors where 2 are marked
+i2771c.scala	marks: 1 errors where 2 are marked
+i2778.scala	marks: 2 errors where 1 are marked: i2778.scala:7:5: parameter first is given twice
+i2887b.scala	marks: 2 errors where 1 are marked: i2887b.scala:8:28: this type does not take type arguments
+i2928.scala	marks: no error where 1 are marked
+i2960.scala	marks: 3 errors where 1 are marked: i2960.scala:66:1: No given instance of type scala.quoted.Quotes was found for a quote
+i3012	java source: teq reads none
+i3067.scala	marks: 2 errors where 6 are marked
+i3067b.scala	marks: 1 errors where 2 are marked
+i3083.scala	marks: 2 errors where 3 are marked
+i3161.scala	marks: no error where 2 are marked
+i3332.scala	marks: 6 errors where 4 are marked: i3332.scala:19:24: expected '=>', found '@'
+i3364.scala	marks: no error where 2 are marked
+i3557.scala	marks: no error where 1 are marked
+i3630.scala	marks: no error where 1 are marked
+i3736b.scala	marks: no error where 1 are marked
+i3745a.scala	marks: no error where 1 are marked
+i3745b.scala	marks: no error where 1 are marked
+i3812.scala	marks: 12 errors where 6 are marked: i3812.scala:6:20: expected a pattern, found indented block
+i3812b.scala	marks: 1 errors where 7 are marked
+i3900.scala	marks: 4 errors where 5 are marked
+i3976.scala	marks: 5 errors where 6 are marked
+i3989.scala	marks: no error where 1 are marked
+i3989b.scala	marks: no error where 1 are marked
+i3989c.scala	marks: no error where 1 are marked
+i3989d.scala	marks: 2 errors where 1 are marked: i3989d.scala:2:24: covariant type _X occurs in invariant position in type = _X of type X
+i3989e.scala	marks: no error where 2 are marked
+i3989f.scala	marks: no error where 1 are marked
+i3989g.scala	marks: no error where 1 are marked
+i4004.scala	marks: 2 errors where 8 are marked
+i4058.scala	marks: error on an unmarked line i4058.scala:10: g is already defined as method g
+i4060.scala	marks: 5 errors where 1 are marked: i4060.scala:7:14: 'erased' is not part of the supported Scala subset
+i4196.scala	marks: 2 errors where 1 are marked: i4196.scala:4:9: values of types (Unit) ?=> Int and Int cannot be compared with == or !=
+i4247.scala	marks: no error where 1 are marked
+i4247b.scala	marks: no error where 1 are marked
+i4339.scala	marks: 15 errors where 4 are marked: i4339.scala:9:16: expected end of statement, found '{'
+i4368.scala	marks: 22 errors where 15 are marked: i4368.scala:10:9: illegal cyclic type reference: alias Z.A of type A refers back to the type itself
+i4369a.scala	marks: error on an unmarked line i4369a.scala:2: type argument Z does not conform to lower bound X[Z, Z]
+i4369b.scala	marks: 1 errors where 2 are marked
+i4369c.scala	marks: 1 errors where 2 are marked
+i4370.scala	marks: error on an unmarked line i4370.scala:2: illegal cyclic type reference: alias R of type R refers back to the type itself
+i4373.scala	marks: 23 errors where 36 are marked
+i4373a.scala	marks: 2 errors where 3 are marked
+i4373b.scala	marks: error on an unmarked line i4373b.scala:4: expected '}', found end of file
+i4373c.scala	marks: 3 errors where 1 are marked: i4373c.scala:3:17: expected '}', found end of file
+i4377.scala	marks: no error where 1 are marked
+i4382.scala	marks: no error where 4 are marked
+i4453.scala	marks: error on an unmarked line i4453.scala:1: pattern definitions are only supported inside blocks
+i4470a.scala	marks: error on an unmarked line i4470a.scala:8: Foo is already defined as value Foo
+i4470b.scala	marks: 3 errors where 2 are marked: i4470b.scala:7:8: derived$CanEqual is already defined as given instance derived$CanEqual
+i4470c.scala	marks: 10 errors where 6 are marked: i4470c.scala:7:8: type Maybe is already defined
+i4520.scala	marks: 2 errors where 1 are marked: i4520.scala:6:37: error overriding method _2 in trait EdgeLike of type T: method _2 of type U has incompatible type
+i4557.scala	marks: error on an unmarked line i4557.scala:12: a parent has to be a class or a trait
+i4564.scala	marks: 8 errors where 7 are marked: i4564.scala:3:15: recursive use of apply needs an explicit result type
+i4564a.scala	marks: 1 errors where 2 are marked
+i4653.scala	marks: no error where 2 are marked
+i4659.scala	marks: error on an unmarked line i4659.scala:1: type T is not a member of (a : A)
+i4668.scala	marks: 5 errors where 1 are marked: i4668.scala:11:3: Implementation restriction: Expected result type (A: Type, B: Type, F: Type1) ?=> (Functor[F.T]) ?=> F.T[A.T] => (A.T => B.T) => F.T[B.T]
+i4709.scala	marks: 4 errors where 2 are marked: i4709.scala:8:18: recursive value ctx needs type
+i4721a.scala	marks: no error where 1 are marked
+i4819.scala	marks: 2 errors where 1 are marked: i4819.scala:9:7: class Foo inherits concat as [Dummy](suffix: Int): Y and as (suffix: Int): X, which are both called concat$Int in the JavaScript output, since no ancestor declares the two together; decla
+i4934.scala	marks: 2 errors where 3 are marked
+i4935.scala	check: diagnostic 1 of 6: scalac's is error i4935.scala:2:8 Not found: A; teq's is error i4935.scala:2:8 not found: A
+i4984.scala	marks: 10 errors where 6 are marked: i4984.scala:28:10: this is not a case class or enum case
+i4986a.scala	check: diagnostic 1 of 1: scalac's is error i4986a.scala:6:58 Cannot construct a collection of type List[String] with elements of type Int based on a collection of type List[Int]..; teq's is error i4986a.scala:6:58 Cannot construct a collec
+i4986c.scala	check: diagnostic 1 of 16: scalac's is error i4986c.scala:38:9 Missing X$Y for Test[Char]; teq's is error i4986c.scala:38:9 no given instance of type X$Y was found for parameter xy
+i4986d.scala	marks: 2 errors where 3 are marked
+i50-volatile.scala	marks: 2 errors where 3 are marked
+i5004.scala	marks: 3 errors where 1 are marked: i5004.scala:3:1: expected 'case', found 'def'
+i5005.scala	marks: 1 errors where 4 are marked
+i5008.scala	marks: 5 errors where 4 are marked: i5008.scala:3:18: this type cannot be extended
+i5032a.scala	marks: error on an unmarked line i5032a.scala:1: expected 'extends' or a template body, found '@'
+i5032b.scala	marks: 2 errors where 1 are marked: i5032b.scala:1:8: expected 'extends' or a template body, found '@'
+i5037.scala	marks: 3 errors where 1 are marked: i5037.scala:2:1: modifier abstract is not allowed for this definition
+i5044.scala	marks: error on an unmarked line i5044.scala:9: type I1 not found
+i5101.scala	check: diagnostic 1 of 1: scalac's is error i5101.scala:11:12 no pattern match extractor named A0 was found; teq's is error i5101.scala:11:12 not found: A0
+i5202.scala	marks: 6 errors where 5 are marked: i5202.scala:4:11: type mismatch: found 5, required Int & String
+i5278.scala	marks: 3 errors where 1 are marked: i5278.scala:2:5: expected an identifier, found 'type'
+i5302.scala	marks: no error where 1 are marked
+i5311.scala	marks: 3 errors where 1 are marked: i5311.scala:11:5: missing argument for parameter f
+i5313.scala	marks: 1 errors where 5 are marked
+i5327-b.scala	marks: 3 errors where 2 are marked: i5327-b.scala:3:39: a polymorphic function type takes a function type after `=>`
+i5328.scala	marks: 4 errors where 1 are marked: i5328.scala:7:7: expected ']', found '='
+i533	java source: teq reads none
+i5397.scala	marks: error on an unmarked line i5397.scala:7: Cannot rewrite recursive call: it is not in tail position
+i5427.scala	marks: 6 errors where 2 are marked: i5427.scala:11:8: no given instance of type Foo[A] was found for parameter f1
+i5433.scala	marks: no error where 1 are marked
+i5453	java source: teq reads none
+i5481.scala	marks: 3 errors where 1 are marked: i5481.scala:15:38: missing parameter type
+i5498-postfixOps.scala	marks: 4 errors where 5 are marked
+i5521.scala	marks: no error where 2 are marked
+i5525.scala	option: -preview (teq has no flag for it)
+i5525b.scala	marks: 5 errors where 7 are marked
+i5636.scala	marks: 2 errors where 1 are marked: i5636.scala:7:29: The type of a class parent cannot refer to constructor parameters, but Bar[(a : A)] refers to a
+i5638.scala	marks: 1 errors where 2 are marked
+i5640.scala	marks: 2 errors where 1 are marked: i5640.scala:2:14: expected an identifier, found '('
+i5823.scala	marks: no error where 2 are marked
+i5854.scala	marks: 1 errors where 2 are marked
+i5888.scala	marks: 5 errors where 3 are marked: i5888.scala:1:25: type mismatch: found String => Int, required <:<[String, Int]
+i5976.scala	marks: 1 errors where 2 are marked
+i6047.scala	marks: no error where 9 are marked
+i6047a.scala	marks: 1 errors where 11 are marked
+i6055.scala	check: diagnostic 1 of 4: scalac's is error i6055.scala:1:1 opaque type must have a right-hand side; teq's is error i6055.scala:1:13 an opaque type needs a right-hand side
+i6056.scala	marks: 6 errors where 4 are marked: i6056.scala:4:16: expected an identifier, found '_'
+i6057.scala	marks: 2 errors where 1 are marked: i6057.scala:3:20: expected end of statement, found '{'
+i6059.scala	marks: 3 errors where 2 are marked: i6059.scala:2:16: expected ',' or ')', found identifier
+i6060.scala	marks: no error where 3 are marked
+i6061.scala	marks: error on an unmarked line i6061.scala:1: modifier opaque is not allowed for this definition
+i6183.scala	marks: 1 errors where 2 are marked
+i6205.scala	marks: no error where 1 are marked
+i6225.scala	marks: no error where 5 are marked
+i6226.scala	marks: no error where 5 are marked
+i6336.scala	check: diagnostic 1 of 2: scalac's is error i6336.scala:2:19 Found: ("foo" : String); teq's is error i6336.scala:2:19 type mismatch: found "foo", required AnyVal. Note that implicit conversions were not tried because the result of an imp
+i6368.scala	marks: 3 errors where 2 are marked: i6368.scala:3:5: None of the overloaded alternatives of constructor A in class A with types
+i6391.scala	marks: no error where 1 are marked
+i6419.scala	marks: no error where 1 are marked
+i6450.scala	marks: 1 errors where 4 are marked
+i6501.scala	marks: no error where 1 are marked
+i6601.scala	marks: 7 errors where 6 are marked: i6601.scala:3:10: enum case does not extend its enum class Var
+i6716.scala	marks: no error where 1 are marked
+i6724.scala	check: diagnostic 1 of 1: scalac's is error i6724.scala:7:14 type Baz is not a member of object Foo - did you mean Foo.Bar?; teq's is error i6724.scala:7:14 type Baz not found
+i6762b.scala	check: diagnostic 1 of 1: scalac's is error i6762b.scala:4:40 Found: Expr[String]; teq's is error i6762b.scala:4:40 type mismatch: found Expr[String], required Expr[G[String]]
+i6778.scala	marks: 1 errors where 2 are marked
+i6779.scala	check: diagnostic 1 of 3: scalac's is error i6779.scala:10:30 Found: F[T]; teq's is error i6779.scala:10:30 type mismatch: found F[T], required F[G[T]]
+i6795-b.scala	check: diagnostic 1 of 1: scalac's is error i6795-b.scala:1:12 values cannot be sealed; teq's is error i6795-b.scala:1:1 modifier sealed is not allowed for this definition
+i6826.scala	marks: no error where 1 are marked
+i7028.scala	marks: error on an unmarked line i7028.scala:2: value foo is not a member of String
+i7045.scala	marks: 3 errors where 1 are marked: i7045.scala:7:31: 'with' expected, but ':' found
+i705-inner-value-class.scala	marks: 3 errors where 6 are marked
+i705-inner-value-class2.scala	marks: 1 errors where 2 are marked
+i7060.scala	marks: 2 errors where 1 are marked: i7060.scala:5:44: expected ')', found '=>'
+i7078.scala	marks: no error where 3 are marked
+i7092.scala	marks: 10 errors where 8 are marked: i7092.scala:24:20: no given instance of type F[String] was found for parameter x
+i7195.scala	check: diagnostic 1 of 1: scalac's is error i7195.scala:10:9 Found: B.T; teq's is error i7195.scala:10:9 type mismatch: found T, required T
+i7294.scala	check: diagnostic 1 of 1: scalac's is error i7294.scala:7:16 Found: Any; teq's is error i7294.scala:7:16 value g is not a member of Nothing
+i7325.scala	marks: no error where 1 are marked
+i7359-f.scala	marks: no error where 1 are marked
+i7359-g.scala	check: diagnostic 1 of 1: scalac's is error i7359-g.scala:5:20 Found: () => String; teq's is error i7359-g.scala:5:20 type mismatch: found () => "Hello", required SAMTrait
+i7359.scala	marks: no error where 1 are marked
+i7387.scala	marks: 1 errors where 2 are marked
+i7438.scala	marks: 3 errors where 1 are marked: i7438.scala:10:17: type mismatch: found Some[Double], required None => Some[Any]
+i7529.scala	marks: no error where 1 are marked
+i7575.scala	marks: no error where 1 are marked
+i7575b.scala	marks: no error where 1 are marked
+i7613.scala	marks: 2 errors where 1 are marked: i7613.scala:10:17: no given instance of type Baz[A] was found for parameter x$1
+i7709.scala	marks: 2 errors where 8 are marked
+i7742.scala	marks: 2 errors where 1 are marked: i7742.scala:2:5: a for expression needs a generator
+i7748.scala	marks: no error where 2 are marked
+i7751.scala	marks: 7 errors where 3 are marked: i7751.scala:2:19: expected end of statement, found '=>'
+i7812.scala	marks: 3 errors where 2 are marked: i7812.scala:2:5: f is already defined as method f; overloading a value with a method is not supported
+i7814.scala	marks: no error where 1 are marked
+i7817.scala	marks: 2 errors where 1 are marked: i7817.scala:6:20: method F in class A must be called with () argument
+i7820.scala	marks: no error where 3 are marked
+i7879.scala	marks: 2 errors where 1 are marked: i7879.scala:2:7: type mismatch: found SeqView[Int], required C & SeqOps[A, CC, C]
+i7926b.scala	marks: 6 errors where 3 are marked: i7926b.scala:9:15: private method p cannot override method p in class B
+i7926c.scala	marks: 2 errors where 1 are marked: i7926c.scala:10:15: private method p cannot override method p in trait B
+i7969.scala	marks: no error where 1 are marked
+i8032.scala	marks: 1 errors where 2 are marked
+i8194.scala	marks: no error where 1 are marked
+i8219.scala	marks: 2 errors where 1 are marked: i8219.scala:2:22: type AnyKind not found
+i827.scala	check: diagnostic 1 of 2: scalac's is error i827.scala:3:9 trait Inner cannot have the same name as trait Inner in trait A -- cannot define trait member with the same name as a trait member in self reference self.; teq's is error i827.scala
+i8299.scala	marks: no error where 1 are marked
+i8337.scala	marks: no error where 2 are marked
+i8464.scala	marks: 7 errors where 5 are marked: i8464.scala:3:18: type Id not found
+i8569a.scala	check: diagnostic 1 of 1: scalac's is error i8569a.scala:13:15 (Test.outer2 : => Outer2) is not a valid type prefix, since it is not an immutable path; teq's is error i8569a.scala:13:15 (outer2 : => Outer2) is not a valid type prefix, since
+i8623.scala	marks: error on an unmarked line i8623.scala:9: local givens cannot take parameters
+i8623a.scala	marks: error on an unmarked line i8623a.scala:14: type mismatch: found Int, required String
+i8681.scala	marks: 2 errors where 3 are marked
+i8711.scala	marks: 2 errors where 3 are marked
+i8715.scala	check: diagnostic 1 of 1: scalac's is error i8715.scala:2:47 bad use of `*` - sequence pattern not allowed here; teq's is warning i8715.scala:2:12 match may not be exhaustive.
+i8731.scala	marks: no error where 2 are marked
+i8736.scala	check: diagnostic 1 of 3: scalac's is error i8736.scala:29:23 Found: Any; teq's is error i8736.scala:29:23 type mismatch: found Any, required String
+i876.scala	marks: 2 errors where 1 are marked: i876.scala:6:19: type mismatch: found Int, required String
+i8827a.scala	check: diagnostic 1 of 1: scalac's is error i8827a.scala:16:27 No given instance of type pkg.Order[List[pkg.Foo]] was found for parameter x of method summon in object Predef.; teq's is error i8827a.scala:16:27 no given instance of type Orde
+i8827b.scala	check: diagnostic 1 of 1: scalac's is error i8827b.scala:16:29 No given instance of type pkg.Order[Option[pkg.Foo]] was found for parameter x of method summon in object Predef.; teq's is error i8827b.scala:16:29 no given instance of type Or
+i8841.scala	check: diagnostic 1 of 3: scalac's is error i8841.scala:2:21 inline value must have a literal constant type; teq's is error i8841.scala:2:31 inline value must have a literal constant type
+i8861.scala	marks: 4 errors where 1 are marked: i8861.scala:19:17: type mismatch: found Int, required R
+i8894.scala	marks: error on an unmarked line i8894.scala:11: poql is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8896-b.scala	marks: 3 errors where 2 are marked: i8896-b.scala:10:15: `implicit` parameters are no longer supported, use a `using` clause instead
+i8900-promote.scala	marks: no error where 2 are marked
+i8900.scala	marks: 1 errors where 2 are marked
+i8925.scala	marks: 2 errors where 1 are marked: i8925.scala:15:18: method parametersOf in object Demo must be called with () argument
+i8976.scala	marks: no error where 1 are marked
+i8988.scala	check: diagnostic 1 of 1: scalac's is error i8988.scala:3:18 Found: (ys : List[Int]); teq's is error i8988.scala:3:18 type mismatch: found List[Int], required String
+i9023.scala	marks: no error where 6 are marked
+i9044.scala	marks: no error where 1 are marked
+i9100.scala	marks: 3 errors where 1 are marked: i9100.scala:2:30: expected end of statement, found identifier
+i9115	java source: teq reads none
+i9185.scala	check: diagnostic 1 of 3: scalac's is error i9185.scala:7:16 value pure is not a member of String.; teq's is error i9185.scala:7:26 ambiguous given instances for M[<error>]: listMonad, optionMonad
+i9287.scala	marks: error on an unmarked line i9287.scala:2: type mismatch: found Unit, required Int
+i9294.scala	marks: no error where 2 are marked
+i9295a.scala	marks: no error where 1 are marked
+i9295b.scala	marks: no error where 3 are marked
+i9295c.scala	marks: no error where 1 are marked
+i9295d.scala	marks: no error where 1 are marked
+i9299.scala	marks: 1 errors where 2 are marked
+i9309.scala	marks: 2 errors where 1 are marked: i9309.scala:2:14: foo is already defined as value foo
+i9310.scala	marks: 3 errors where 1 are marked: i9310.scala:2:11: expected a pattern, found 'this'
+i9327.scala	marks: 1 errors where 2 are marked
+i9328.scala	marks: 12 errors where 5 are marked: i9328.scala:16:1: unmatched closing bracket
+i9329.scala	check: diagnostic 1 of 1: scalac's is error i9329.scala:8:7 class GrandSon needs to be abstract, since def name: String in trait Parent is not defined; teq's is error i9329.scala:8:7 class GrandSon needs to be abstract, since def name: Stri
+i9330.scala	marks: error on an unmarked line i9330.scala:2: values of types Unit and String cannot be compared with == or !=
+i9331.scala	marks: error on an unmarked line i9331.scala:2: expected a definition, found '('
+i9332.scala	marks: no error where 1 are marked
+i9408b	marks: error on an unmarked line Test_2.scala:8: type mismatch: found "abc", required Int
+i9432.scala	marks: no error where 1 are marked
+i9436.scala	check: diagnostic 1 of 2: scalac's is error i9436.scala:8:11 method f1 must be called with () argument; teq's is error i9436.scala:8:11 missing argument list for method f1
+i9437.scala	check: diagnostic 1 of 1: scalac's is error i9437.scala:7:11 method selectDynamic in trait Selectable does not take parameters; teq's is error i9437.scala:7:11 value apply is not a member of Int
+i9460.scala	check: diagnostic 1 of 1: scalac's is error i9460.scala:3:7 parameterized trait A is indirectly implemented,; teq's is error i9460.scala:3:7 parameterized trait A is indirectly implemented, needs to be implemented directly so that arguments
+i9472a	marks: no error where 1 are marked
+i9472b	marks: no error where 1 are marked
+i9529.scala	marks: error on an unmarked line i9529.scala:1: type mismatch: found Unit, required Int
+i9568.scala	check: diagnostic 1 of 1: scalac's is error i9568.scala:13:11 No given instance of type => Monad[F] was found for parameter ev of method blaMonad in object Test.; teq's is error i9568.scala:13:16 type mismatch: found Bla[[A] =>> Id[A], Unit
+i9735.scala	marks: no error where 5 are marked
+i9790.scala	marks: 2 errors where 1 are marked: i9790.scala:5:3: The start of this line does not match any of the previous indentation widths.
+i9803.scala	check: diagnostic 1 of 1: scalac's is error i9803.scala:15:11 Reference to f421 is ambiguous.; teq's is error i9803.scala:15:11 reference to f421 is ambiguous: it is both imported by name by import bugs.shadowing.x.f421 and imported by name
+i9958.scala	marks: error on an unmarked line i9958.scala:1: no given instance of type [X] =>> (X, X) was found for parameter x
+i997.scala	marks: no error where 15 are marked
+i997a.scala	marks: 1 errors where 2 are marked
+iarrays1.scala	marks: no error where 1 are marked
+if-error.scala	check: diagnostic 1 of 1: scalac's is error if-error.scala:2:3 Found: Unit; teq's is error if-error.scala:2:3 type mismatch: found Unit, required Int
+illegal-match-types.scala	marks: 4 errors where 6 are marked
+implicit-funs.scala	marks: no error where 4 are marked
+implicit-migration.scala	check: diagnostic 2 of 7: scalac's is error implicit-migration.scala:9:16 `implicit` conversion methods are no longer supported. They can usually be; teq's is error implicit-migration.scala:3:16 `implicit` classes are no longer supported. T
+implicit-params.scala	marks: 10 errors where 6 are marked: implicit-params.scala:12:17: expected '=', found 'given'
+implicitDefs.scala	marks: 4 errors where 3 are marked: implicitDefs.scala:7:16: type of implicit definition needs to be given explicitly
+implicitSearch.scala	check: diagnostic 1 of 2: scalac's is error implicitSearch.scala:13:13 No given instance of type Test.Ord[List[List[T]]] was found for parameter o of method sort in object Test.; teq's is error implicitSearch.scala:13:13 no given instance o
+import-given.scala	marks: 2 errors where 3 are marked
+indent-colons.scala	marks: 2 errors where 11 are marked
+indent-experimental.scala	marks: no error where 2 are marked
+indentLeft.scala	marks: 1 errors where 2 are marked
+indentRight.scala	option: -no-indent (teq has no flag for it)
+infer-tracked-explicit-witness.scala	marks: 5 errors where 2 are marked: infer-tracked-explicit-witness.scala:12:12: a parent has to be a class or a trait
+infer-union-warning-id.scala	marks: no error where 1 are marked
+infix-named-args.scala	check: diagnostic 1 of 5: scalac's is error infix-named-args.scala:2:11 None of the overloaded alternatives of method + in class Int with types; teq's is error infix-named-args.scala:2:11 operator + cannot be applied to Int and (x : Int)
+infix-then-complex-expr.scala	marks: 3 errors where 1 are marked: infix-then-complex-expr.scala:3:3: expected end of statement, found identifier
+inline-abstract.scala	marks: 2 errors where 1 are marked: inline-abstract.scala:1:7: class A needs to be abstract, since def f(): Int in class A is not defined
+inline-error-pos.scala	check: diagnostic 1 of 1: scalac's is error inline-error-pos.scala:8:11 cannot reduce inline match with; teq's is error inline-error-pos.scala:8:11 cannot reduce inline match with
+inline-foreach.scala	marks: 1 errors where 2 are marked
+inline-override.scala	marks: no error where 7 are marked
+inline-param-unstable-path.scala	marks: 1 errors where 2 are marked
+inline-parameter-override.scala	marks: no error where 5 are marked
+inline-unstable-accessors.scala	option: -WunstableInlineAccessors with -Werror (teq has no flag for it)
+inlineAccess	marks: no error where 1 are marked
+inlinevals.scala	marks: 3 errors where 5 are marked
+inner-classes-of-universal-traits.scala	marks: no error where 3 are marked
+insertapply.scala	marks: 2 errors where 1 are marked: insertapply.scala:1:7: class C needs to be abstract, since def apply: C in class C is not defined
+instantiateAbstract.scala	marks: 3 errors where 8 are marked
+interleaving-ab.scala	marks: 4 errors where 2 are marked: interleaving-ab.scala:6:17: expected '=', found '['
+interleaving-params.scala	marks: 9 errors where 6 are marked: interleaving-params.scala:3:21: expected '=', found '['
+interleaving-signatureCollision.scala	marks: 2 errors where 1 are marked: interleaving-signatureCollision.scala:3:19: expected '=', found '['
+interleaving-typeApply.scala	marks: 3 errors where 5 are marked
+interleaving-unmatched.scala	marks: 5 errors where 3 are marked: interleaving-unmatched.scala:3:14: expected ',' or ']', found '('
+interleavingExperimental.scala	marks: 2 errors where 1 are marked: interleavingExperimental.scala:3:16: expected '=', found '['
+interpolator-dollar.scala	marks: no error where 1 are marked
+into-inferred.scala	option: -preview (teq has no flag for it)
+into-mods.scala	option: -preview (teq has no flag for it)
+into-override.scala	option: -preview (teq has no flag for it)
+irrefutable.scala	check: diagnostic 1 of 2: scalac's is error irrefutable.scala:27:30 value withFilter is not a member of Lst[Foo[Any]]; teq's is error irrefutable.scala:27:5 value withFilter is not a member of Lst[Foo[Any]]
+java-ann-extends	java source: teq reads none
+java-ann-extends-separate	java source: teq reads none
+java-ann-super-class	java source: teq reads none
+java-ann-super-class2	java source: teq reads none
+java-ann-super-class3	java source: teq reads none
+java-annot	java source: teq reads none
+java-fake-ann	java source: teq reads none
+java-fake-ann-separate	java source: teq reads none
+java-trait-access	java source: teq reads none
+java-wrong-bounds	java source: teq reads none
+kind-projector-underscores.scala	option: -Xkind-projector:underscores (teq has no flag for it)
+kind-projector.scala	marks: 5 errors where 3 are marked: kind-projector.scala:7:24: type argument [_$kp$1, _$kp$2] =>> Either[_$kp$1, _$kp$2] does not have the same kind as its bound [_]
+kinds2.scala	check: diagnostic 1 of 1: scalac's is error kinds2.scala:14:5 Missing type parameter for Test.C; teq's is error kinds2.scala:14:3 type argument C does not have the same kind as its bound
+labelNotFound.scala	check: diagnostic 1 of 1: scalac's is error labelNotFound.scala:4:31 No given instance of type scala.util.boundary.Label[Int] was found for parameter label of method break in object boundary; teq's is error labelNotFound.scala:4:31 no given
+lambda-infer.scala	marks: 7 errors where 4 are marked: lambda-infer.scala:3:26: expected ',' or ')', found identifier
+lambda-rename.scala	marks: 5 errors where 4 are marked: lambda-rename.scala:4:34: type mismatch: found (x: Int) => Foo[(x : Int)], required (x: Int) => Bar[(x : Int)]
+leading-infix-miss.scala	marks: error on an unmarked line leading-infix-miss.scala:2: type mismatch: found Unit, required Boolean
+leak-type.scala	marks: no error where 1 are marked
+leaks.scala	marks: no error where 2 are marked
+localReaches.scala	marks: 18 errors where 2 are marked: localReaches.scala:7:22: expected a declaration, found identifier
+lucre-23441-min.scala	marks: error on an unmarked line lucre-23441-min.scala:6: type argument T does not conform to upper bound Txn[T]
+macro.scala	marks: 2 errors where 1 are marked: macro.scala:3:24: expected end of statement, found identifier
+magic-canthrow.scala	marks: 2 errors where 1 are marked: magic-canthrow.scala:6:37: 'erased' is not part of the supported Scala subset
+magic-offset-header-a_wrapper.scala	option: -Ymagic-offset-header:TEST_MARKER (teq has no flag for it)
+magic-offset-header-b_wrapper.scala	option: -Ymagic-offset-header:TEST_MARKER (teq has no flag for it)
+magic-offset-header-c_wrapper.scala	option: -Ymagic-offset-header:SOURCE_CODE_START_MARKER (teq has no flag for it)
+magic-offset-header-d_wrapper.scala	option: -Ymagic-offset-header:SOURCE_CODE_START_MARKER (teq has no flag for it)
+magic-offset-header-e_wrapper.scala	option: -Ymagic-offset-header:TEST_MARKER (teq has no flag for it)
+magic-offset-header-f_wrapper.scala	option: -Ymagic-offset-header:TEST_MARKER (teq has no flag for it)
+main-functions-doubledef.scala	marks: 3 errors where 2 are marked: main-functions-doubledef.scala:4:13: bar is already defined as class bar
+main-functions2.scala	marks: 4 errors where 5 are marked
+match-type-enumeration-value-hack.scala	check: diagnostic 1 of 1: scalac's is error match-type-enumeration-value-hack.scala:11:41 Cannot prove that Suit#Value =:= EnumValue[Suit].; teq's is error match-type-enumeration-value-hack.scala:11:41 Cannot prove that Suit#Value =:= EnumV
+matchtype-seq.scala	check: diagnostic 1 of 31: scalac's is error matchtype-seq.scala:9:19 Found: ("" : String); teq's is error matchtype-seq.scala:9:19 type mismatch: found "", required T1[3]
+mirror-synthesis-errors-b.scala	marks: 11 errors where 8 are marked: mirror-synthesis-errors-b.scala:21:57: no given instance of type ProductOf[Cns[Int] & Sm[Int]] was found for parameter x
+mirror-synthesis-errors.scala	marks: 6 errors where 7 are marked
+missing-implicit-2.scala	check: diagnostic 1 of 2: scalac's is error missing-implicit-2.scala:4:25 Cannot find an implicit ExecutionContext. You might add; teq's is error missing-implicit-2.scala:4:25 Cannot find an implicit ExecutionContext. You might add
+missing-implicit-3.scala	check: diagnostic 1 of 2: scalac's is error missing-implicit-3.scala:6:45 Found: (Int, java.util.concurrent.TimeUnit); teq's is error missing-implicit-3.scala:6:45 type mismatch: found (Int, TimeUnit), required Duration
+missing-implicit1.scala	check: diagnostic 1 of 3: scalac's is error missing-implicit1.scala:17:5 No given instance of type testObjectInstance.Zip[Option] was found for parameter xs of method ff in object testObjectInstance; teq's is error missing-implicit1.scala:1
+missing-implicit2.scala	marks: error on an unmarked line missing-implicit2.scala:9: local givens cannot take parameters
+missing-implicit3.scala	check: diagnostic 1 of 1: scalac's is error missing-implicit3.scala:13:37 No given instance of type ord.Ord[ord.Foo] was found for a context parameter of method sort in package ord.; teq's is error missing-implicit3.scala:13:37 no given ins
+missing-implicit4.scala	check: diagnostic 1 of 3: scalac's is error missing-implicit4.scala:14:5 No given instance of type Zip[Option] was found for parameter xs of method ff; teq's is error missing-implicit4.scala:14:5 no given instance of type Zip[Option] was fo
+missing-implicit5.scala	check: diagnostic 1 of 3: scalac's is error missing-implicit5.scala:15:3 value first is not a member of List[Int], but could be made available as an extension method.; teq's is error missing-implicit5.scala:15:3 value first is not a member
+missing-implicit6.scala	check: diagnostic 2 of 6: scalac's is error missing-implicit6.scala:33:5 value xxx is not a member of Int, but could be made available as an extension method.; teq's is error missing-implicit6.scala:33:5 value xxx is not a member of Int
+missing-targetName.scala	option: -Yrequire-targetName (teq has no flag for it)
+mixed_cc	marks: 2 errors where 1 are marked: B.scala:4:16: expected a declaration, found identifier
+mixin-class-member-clash.scala	marks: no error where 1 are marked
+mixin-forwarder-clash1.scala	check: diagnostic 1 of 1: scalac's is error mixin-forwarder-clash1.scala:15:7 Name clash between inherited members:; teq's is error mixin-forwarder-clash1.scala:15:7 class Bar2 inherits concat as [Dummy](suffix: Int): Y and as (suffix: Int)
+mixin-forwarder-clash2	marks: no error where 1 are marked
+modifier-not-allowed.scala	marks: 4 errors where 3 are marked: modifier-not-allowed.scala:2:3: modifier opaque is not allowed for this definition
+module-class-name.scala	check: diagnostic 1 of 5: scalac's is error module-class-name.scala:7:14 Found: Test.C.type; teq's is error module-class-name.scala:7:14 type mismatch: found Test.C, required Test.C
+mt-deskolemize-2.scala	marks: error on an unmarked line mt-deskolemize-2.scala:5: Recursion limit exceeded.
+mt-deskolemize.scala	marks: 2 errors where 1 are marked: mt-deskolemize.scala:5:8: Recursion limit exceeded.
+mt-recur.cov.scala	marks: error on an unmarked line mt-recur.cov.scala:4: Recursion limit exceeded.
+mt-recur.scala	marks: error on an unmarked line mt-recur.scala:7: Recursion limit exceeded.
+mt-scrutinee-widen2.scala	marks: no error where 1 are marked
+multi-file-error	check: diagnostic 1 of 2: scalac's is error A.scala:2:3 Not found: foo; teq's is error A.scala:2:3 not found: foo
+multi-param-derives.scala	marks: 33 errors where 6 are marked: multi-param-derives.scala:15:16: Show[Mono] cannot be derived: the companion of the type class has no derived method
+multi-patterns.scala	marks: 3 errors where 2 are marked: multi-patterns.scala:2:16: expected '=', found ','
+multiLineOps.scala	marks: error on an unmarked line multiLineOps.scala:12: value ! is not a member of Unit
+multiple-args-consume.scala	marks: 8 errors where 2 are marked: multiple-args-consume.scala:3:9: 'erased' is not part of the supported Scala subset
+multiple-args.scala	marks: 10 errors where 2 are marked: multiple-args.scala:3:17: 'erased' is not part of the supported Scala subset
+name-hints.scala	marks: 21 errors where 18 are marked: name-hints.scala:6:12: value maxvalue is not a member of Int
+named-tuple-apply.scala	marks: 3 errors where 5 are marked
+named-tuples-2.scala	check: diagnostic 2 of 3: scalac's is error named-tuples-2.scala:4:10 Unreachable case; teq's is error named-tuples-2.scala:4:10 unreachable case: type (String, Int, Boolean) is not a subclass of class Tuple2
+named-tuples-3.scala	check: diagnostic 1 of 1: scalac's is error named-tuples-3.scala:5:17 Found: NamedTuple.NamedTuple[(Int, Any), (Int, String)]; teq's is error named-tuples-3.scala:5:17 type mismatch: found NamedTuple[(Int, Any), (Int, String)], required
+named-tuples-4.scala	check: diagnostic 1 of 4: scalac's is error named-tuples-4.scala:10:36 Illegal combination of named and unnamed tuple elements; teq's is error named-tuples-4.scala:10:10 Illegal combination of named and unnamed tuple elements
+named-tuples-mirror.scala	check: diagnostic 1 of 2: scalac's is error named-tuples-mirror.scala:5:48 No given instance of type scala.deriving.Mirror.SumOf[(foo : Int, bla : String)] was found for parameter x of method summon in object Predef. Failed to synthesize an
+named-tuples.scala	marks: 20 errors where 21 are marked
+namedTypeParams.scala	marks: 39 errors where 20 are marked: namedTypeParams.scala:2:9: expected an identifier, found 'type'
+no-self-leaks.scala	marks: 3 errors where 2 are marked: no-self-leaks.scala:3:3: expected an identifier, found 'type'
+no-unit.scala	marks: no error where 2 are marked
+noimports-additional.scala	option: -Yno-imports (teq has no flag for it)
+noimports.scala	option: -Yno-imports (teq has no flag for it)
+noimports2.scala	option: -Yno-imports (teq has no flag for it)
+nopredef-additional.scala	option: -Yno-predef (teq has no flag for it)
+nopredef.scala	option: -Yno-predef (teq has no flag for it)
+not-accessible.scala	check: diagnostic 1 of 5: scalac's is error not-accessible.scala:8:22 value x cannot be accessed as a member of (a : foo.A) from class B.; teq's is error not-accessible.scala:15:22 x is private to A
+notfound-term-but-type.scala	check: diagnostic 1 of 1: scalac's is error notfound-term-but-type.scala:1:23 Expected a term, but found a type: T; teq's is error notfound-term-but-type.scala:1:23 not found: T
+notfound-type-but-term.scala	check: diagnostic 1 of 1: scalac's is error notfound-type-but-term.scala:3:13 Expected a type, but found a term: O - did you mean O.type?; teq's is error notfound-type-but-term.scala:3:13 type O not found
+nowarn-parser-error.scala	check: diagnostic 1 of 2: scalac's is error nowarn-parser-error.scala:5:7 an identifier expected, but 'def' found; teq's is error nowarn-parser-error.scala:5:7 expected an identifier, found 'def'
+nowarn-typer-error.scala	check: diagnostic 1 of 1: scalac's is error nowarn-typer-error.scala:6:12 Not found: /; teq's is error nowarn-typer-error.scala:6:12 not found: /
+nullless.scala	marks: 2 errors where 4 are marked
+opaque-bounds-1.scala	marks: 2 errors where 1 are marked: opaque-bounds-1.scala:4:23: the underlying type String does not conform to the bound FlagSet
+opaque-bounds.scala	marks: 5 errors where 4 are marked: opaque-bounds.scala:5:23: the underlying type String does not conform to the bound FlagSet
+opaque-self-encoding.scala	marks: 4 errors where 1 are marked: opaque-self-encoding.scala:2:3: expected an identifier, found 'type'
+opaque.scala	marks: 9 errors where 12 are marked
+ostermann.scala	marks: no error where 1 are marked
+outdent-dot.scala	marks: 4 errors where 3 are marked: outdent-dot.scala:6:6: The start of this line does not match any of the previous indentation widths.
+overconstrained-type-variables-gadt.scala	marks: 3 errors where 4 are marked
+overloading-specifity-2.scala	marks: no error where 1 are marked
+overloading-specifity.scala	marks: error on an unmarked line overloading-specifity.scala:26: no given instance of type Context was found for parameter ctx
+override-inner-class.scala	marks: no error where 1 are marked
+override-scala2-macro.scala	marks: no error where 1 are marked
+overrideClass.scala	marks: 3 errors where 2 are marked: overrideClass.scala:13:22: expected an identifier, found 'super'
+overrideFinalImplicit.scala	marks: no error where 1 are marked
+overrides.scala	marks: 17 errors where 22 are marked
+parent-refinement-access.scala	check: diagnostic 1 of 1: scalac's is error parent-refinement-access.scala:6:7 error overriding value x in trait Year2 of type Int;; teq's is error parent-refinement-access.scala:6:53 a parent has to be a class or a trait
+parent-refinement.scala	marks: 9 errors where 4 are marked: parent-refinement.scala:7:12: class Year needs to be abstract, since def compare(that: Year): Int in trait Ordered is not defined
+parser-stability-1.scala	marks: 3 errors where 2 are marked: parser-stability-1.scala:2:1: expected '}', found identifier
+parser-stability-10.scala	marks: error on an unmarked line parser-stability-10.scala:2: expected '}', found 'def'
+parser-stability-11.scala	marks: 1 errors where 5 are marked
+parser-stability-14.scala	marks: 5 errors where 3 are marked: parser-stability-14.scala:2:1: expected '}', found '{'
+parser-stability-16.scala	marks: error on an unmarked line parser-stability-16.scala:1: class x0 needs to be abstract, since val x1: x0 in class x0 is not defined
+parser-stability-17.scala	marks: 6 errors where 5 are marked: parser-stability-17.scala:1:10: expected an identifier, found ']'
+parser-stability-18.scala	marks: 5 errors where 1 are marked: parser-stability-18.scala:3:5: expected ',' or ')', found '{'
+parser-stability-19.scala	marks: 7 errors where 2 are marked: parser-stability-19.scala:2:17: expected an identifier, found ']'
+parser-stability-2.scala	marks: 2 errors where 1 are marked: parser-stability-2.scala:2:1: expected '}', found 'new'
+parser-stability-20.scala	marks: 3 errors where 1 are marked: parser-stability-20.scala:2:1: expected '}', found 'def'
+parser-stability-21.scala	marks: 3 errors where 2 are marked: parser-stability-21.scala:1:13: expected an identifier, found ']'
+parser-stability-23.scala	marks: 5 errors where 3 are marked: parser-stability-23.scala:2:35: expected an identifier, found '}'
+parser-stability-25.scala	marks: 8 errors where 5 are marked: parser-stability-25.scala:15:9: expected ')', found end of file
+parser-stability-3.scala	marks: 10 errors where 5 are marked: parser-stability-3.scala:2:1: expected '}', found 'def'
+parser-stability-4.scala	marks: 4 errors where 2 are marked: parser-stability-4.scala:2:24: expected ')', found '=>'
+parser-stability-5.scala	marks: 5 errors where 1 are marked: parser-stability-5.scala:2:1: expected '}', found identifier
+parser-stability-6.scala	marks: 2 errors where 1 are marked: parser-stability-6.scala:2:7: not found: x1
+parser-stability-7.scala	marks: 2 errors where 3 are marked
+parser-stability-8.scala	marks: 1 errors where 2 are marked
+parser-stability.scala	marks: 3 errors where 2 are marked: parser-stability.scala:2:28: expected ')', found '=>'
+partialApplications.scala	marks: 2 errors where 3 are marked
+patmat2.scala	marks: no error where 1 are marked
+patternUnsoundness.scala	marks: no error where 1 are marked
+patvars.scala	marks: 5 errors where 6 are marked
+points.scala	marks: 2 errors where 1 are marked: points.scala:9:7: class ColoredPoint has conflicting base types Comparable[Point] and Comparable[ColoredPoint]
+poly-overloads.scala	marks: 2 errors where 1 are marked: poly-overloads.scala:10:3: type mismatch: found Int, required String
+poly-override.scala	marks: 8 errors where 9 are marked
+polymorphic-erased-functions-types.scala	marks: 6 errors where 4 are marked: polymorphic-erased-functions-types.scala:3:44: expected ',' or ')', found identifier
+polymorphic-erased-functions-used.scala	marks: 6 errors where 2 are marked: polymorphic-erased-functions-used.scala:3:25: expected ',' or ')', found identifier
+polymorphic-functions1.scala	check: diagnostic 1 of 1: scalac's is error polymorphic-functions1.scala:1:34 Found: [T] => (x: Int) => (x : Int); teq's is error polymorphic-functions1.scala:1:34 type mismatch: found [T] => (x: Int) => (x : Int), required [T] => (x: T)
+polymorphic-functions2.scala	marks: 8 errors where 4 are marked: polymorphic-functions2.scala:1:43: type mismatch: found [T] => (x: <error>, y: <error>) => <error>, required [T, S] => (x$1: T, x$2: S) => T
+preview-message.scala	marks: error on an unmarked line preview-message.scala:6: not found: ???
+preview-non-viral	option: -preview (teq has no flag for it)
+previewOverloads.scala	marks: no error where 2 are marked
+previewOverride.scala	marks: error on an unmarked line previewOverride.scala:33: not found: ???
+print-infix-type.scala	check: diagnostic 1 of 1: scalac's is error print-infix-type.scala:8:30 Found: Int over String; teq's is error print-infix-type.scala:8:30 type mismatch: found over[Int, String], required over[String, Int]
+print-tuple-union.scala	marks: 2 errors where 1 are marked: print-tuple-union.scala:2:27: type argument A does not conform to upper bound Tuple
+publicInBinary-not-accessible.scala	option: -WunstableInlineAccessors with -Werror (teq has no flag for it)
+publicInBinary.scala	option: -WunstableInlineAccessors with -Werror (teq has no flag for it)
+publicInBinaryOverride.scala	marks: no error where 1 are marked
+pureStatement.scala	marks: 2 errors where 3 are marked
+puretest.scala	marks: 3 errors where 2 are marked: puretest.scala:7:3: type argument Int does not conform to upper bound Pure
+quote-MacroOverride.scala	marks: no error where 2 are marked
+realizability.scala	marks: no error where 2 are marked
+reassignment.scala	marks: 8 errors where 5 are marked: reassignment.scala:4:9: reassignment to val x
+recursive-lower-constraint.scala	marks: 1 errors where 2 are marked
+refutable-pattern-binding-messages-old.scala	check: diagnostic 1 of 6: scalac's is error refutable-pattern-binding-messages-old.scala:6:7 pattern binding uses refutable extractor `Test.Positive`; teq's is warning refutable-pattern-binding-messages-old.scala:5:7 pattern binding uses re
+refutable-pattern-binding-messages.scala	check: diagnostic 1 of 6: scalac's is error refutable-pattern-binding-messages.scala:6:7 pattern binding uses refutable extractor `Test.Positive`; teq's is warning refutable-pattern-binding-messages.scala:5:7 pattern binding uses refutable
+renaming-imports.scala	marks: 3 errors where 2 are marked: renaming-imports.scala:8:10: foo is not a member of the package
+repeatable	java source: teq reads none
+rightassoc-extmethod.scala	check: diagnostic 1 of 1: scalac's is error rightassoc-extmethod.scala:2:20 right-associative extension method must start with a single parameter, consider a tupled parameter instead; teq's is error rightassoc-extmethod.scala:2:24 right-ass
+runtimeChecked-2.scala	marks: no error where 1 are marked
+safe-setting.scala	marks: no error where 1 are marked
+safeThrowsStrawman.scala	marks: 3 errors where 2 are marked: safeThrowsStrawman.scala:24:5: 'erased' is not part of the supported Scala subset
+saferExceptions.scala	marks: 3 errors where 2 are marked: saferExceptions.scala:7:20: throws takes 1 type argument(s), 2 given
+scala-uri.scala	check: diagnostic 1 of 1: scalac's is error scala-uri.scala:30:60 No best given instance of type QueryKeyValue[(String, None.type)] was found for parameter x of method summon in object Predef.; teq's is error scala-uri.scala:30:60 ambiguous
+scala2-macro-compat-no-scala3-implementation.scala	marks: 3 errors where 1 are marked: scala2-macro-compat-no-scala3-implementation.scala:3:31: expected end of statement, found identifier
+scala_enum_testing.scala	marks: 10 errors where 9 are marked: scala_enum_testing.scala:26:38: No given instance of type Mirror.ProductOf[Color] was found.
+sd143.scala	check: diagnostic 1 of 1: scalac's is error sd143.scala:5:20 Super call cannot be emitted: the selected method m is declared in class A, which is not the direct superclass of class C.; teq's is error sd143.scala:5:20 Super call cannot be em
+serialversionuid-not-const.scala	marks: no error where 1 are marked
+singleton-ctx-bound.scala	marks: 8 errors where 6 are marked: singleton-ctx-bound.scala:25:12: expected end of statement, found ':'
+singleton-ops-any.scala	marks: 14 errors where 6 are marked: singleton-ops-any.scala:6:24: type mismatch: found true, required false
+singleton-ops-double.scala	marks: 57 errors where 27 are marked: singleton-ops-double.scala:4:34: Cannot prove that +[2.0, 3.0] =:= -[6.0, 1.0].
+singleton-ops-float.scala	marks: 57 errors where 27 are marked: singleton-ops-float.scala:4:38: Cannot prove that +[2.0f, 3.0f] =:= -[6.0f, 1.0f].
+singleton-ops-int.scala	marks: 49 errors where 40 are marked: singleton-ops-int.scala:6:22: Cannot prove that 4 =:= 3.
+singleton-ops-long.scala	marks: 86 errors where 39 are marked: singleton-ops-long.scala:4:30: Cannot prove that +[2L, 3L] =:= -[6L, 1L].
+singleton-ops-string.scala	marks: 15 errors where 9 are marked: singleton-ops-string.scala:6:22: type mismatch: found "33", required "3"
+singletons.scala	marks: 6 errors where 5 are marked: singletons.scala:6:10: expected an identifier, found 'null'
+sip54.scala	check: diagnostic 1 of 2: scalac's is error sip54.scala:12:9 Reference to meth is ambiguous.; teq's is error sip54.scala:12:9 reference to meth is ambiguous: it is both imported by import A.* and imported subsequently by import B.*
+ski.scala	marks: 9 errors where 11 are marked
+skolemize.scala	marks: 1 errors where 2 are marked
+spaces-vs-tabs.scala	marks: 2 errors where 5 are marked
+spread-patterns.scala	marks: 2 errors where 1 are marked: spread-patterns.scala:12:21: a sequence wildcard can only end a sequence pattern
+stackoverflowmacro	check: diagnostic 1 of 1: scalac's is error 2_Use.scala:2:14 String constant is too long for the JVM; teq's is error 2_Use.scala:2:14 not supported yet: scala.compiletime.testing.typeChecks (a type check of a string of code)
+static-implements.scala	marks: no error where 1 are marked
+static-no-companion.scala	marks: no error where 1 are marked
+structural-2.scala	marks: 9 errors where 5 are marked: structural-2.scala:56:3: expected an identifier, found 'def'
+structural.scala	marks: 13 errors where 12 are marked: structural.scala:6:30: refinement cannot have a body
+summon-function.scala	check: diagnostic 1 of 1: scalac's is error summon-function.scala:2:24 No given instance of type Int => String was found for parameter x of method summon in object Predef; teq's is error summon-function.scala:2:24 No implicit view available
+summonInline.scala	check: diagnostic 1 of 2: scalac's is error summonInline.scala:19:16 Missing One; teq's is error summonInline.scala:19:16 No given instance of type Missing1 was found.
+symlits.scala	marks: 4 errors where 1 are marked: symlits.scala:3:11: No given instance of type scala.quoted.Quotes was found for a quote
+syntax-error-recovery.scala	marks: 22 errors where 19 are marked: syntax-error-recovery.scala:3:17: expected ')', found 'then'
+t11900.scala	marks: 1 errors where 4 are marked
+t12290	java source: teq reads none
+t12715b.scala	marks: 3 errors where 1 are marked: t12715b.scala:7:3: modifier abstract is not allowed for this definition
+t1292.scala	marks: 3 errors where 1 are marked: t1292.scala:2:14: Enum is not a legal path
+t1625.scala	check: diagnostic 1 of 2: scalac's is error t1625.scala:2:20 spread operator `*` not allowed here; must come last in a parameter list; teq's is error t1625.scala:2:14 a vararg parameter must come last
+t1672b.scala	marks: 5 errors where 6 are marked
+t2994.scala	marks: 3 errors where 5 are marked
+t3683-modified.scala	marks: 3 errors where 1 are marked: t3683-modified.scala:7:14: cyclic reference involving type T
+t4727.scala	check: diagnostic 1 of 3: scalac's is error t4727.scala:10:9 Found: Null; teq's is error t4727.scala:10:5 type mismatch: found Null, required Int
+t4731.scala	marks: no error where 1 are marked
+t4815.scala	marks: 4 errors where 5 are marked
+t5702-neg-bad-and-wild.scala	marks: 10 errors where 12 are marked
+t5702-neg-bad-brace.scala	marks: 4 errors where 2 are marked: t5702-neg-bad-brace.scala:8:21: expected ',' or ')', found identifier
+t6124.scala	marks: 8 errors where 16 are marked
+t6355b.scala	marks: no error where 2 are marked
+t6476.scala	marks: 4 errors where 1 are marked: t6476.scala:3:7: invalid escape sequence
+t6574.scala	marks: error on an unmarked line t6574.scala:4: Cannot rewrite recursive call: it is not in tail position
+t6663.scala	marks: 2 errors where 1 are marked: t6663.scala:16:11: a member of js.Dynamic takes no type arguments
+t6810.scala	marks: 5 errors where 6 are marked
+t6920.scala	marks: 2 errors where 1 are marked: t6920.scala:9:25: named arguments are only allowed in argument lists
+t7259.scala	marks: no error where 2 are marked
+t7278.scala	marks: 2 errors where 6 are marked
+t7292-removal.scala	marks: 5 errors where 3 are marked: t7292-removal.scala:3:14: invalid escape sequence
+t7294.scala	marks: no error where 1 are marked
+t8006.scala	marks: 2 errors where 1 are marked: t8006.scala:3:10: named arguments are only allowed in argument lists
+t8300-overloading.scala	marks: no error where 1 are marked
+t9419.scala	marks: no error where 2 are marked
+t9419.zio-http.scala	marks: no error where 1 are marked
+tailrec-2.scala	marks: error on an unmarked line tailrec-2.scala:10: TailRec optimisation not applicable, method f contains no recursive calls
+tailrec-3.scala	marks: error on an unmarked line tailrec-3.scala:5: Cannot rewrite recursive call: it is not in tail position
+tailrec-and-or.scala	marks: error on an unmarked line tailrec-and-or.scala:6: Cannot rewrite recursive call: it is not in tail position
+tailrec.scala	marks: error on an unmarked line tailrec.scala:50: Cannot rewrite recursive call: it is not in tail position
+targetName-early.scala	marks: no error where 2 are marked
+targetName-illegal.scala	marks: no error where 1 are marked
+targetName-override.scala	marks: 6 errors where 4 are marked: targetName-override.scala:14:7: class Beta needs to be abstract, since def foo(x: String): String in class Alpha is not defined
+targetName-override0	java source: teq reads none
+targetName-override1	java source: teq reads none
+targetName-refine.scala	check: diagnostic 1 of 1: scalac's is error targetName-refine.scala:7:27 Found: C; teq's is error targetName-refine.scala:7:27 type mismatch: found C, required T{def f: Int}
+targetName-toplevel.scala	marks: 3 errors where 6 are marked
+tate.scala	marks: 2 errors where 1 are marked: tate.scala:9:18: type mismatch: found Bound[U, _], required Bound[U, B]
+tcpoly_typealias.scala	marks: no error where 2 are marked
+tcpoly_variance_enforce.scala	marks: no error where 11 are marked
+toplevel-package	marks: no error where 1 are marked
+toplevel-privates	marks: no error where 3 are marked
+tracked.scala	marks: 16 errors where 8 are marked: tracked.scala:2:17: expected ':', found identifier
+trailing-comma-pattern.scala	marks: 3 errors where 1 are marked: trailing-comma-pattern.scala:2:7: a val needs a type or an initializer
+trailing-comma-pattern2.scala	marks: error on an unmarked line trailing-comma-pattern2.scala:2: pattern definitions are only supported inside blocks
+trailingCommas.scala	marks: 20 errors where 29 are marked
+transparent-inline.scala	marks: 4 errors where 5 are marked
+transparent-override	marks: no error where 1 are marked
+transparent-trait.scala	marks: no error where 1 are marked
+transparent.scala	marks: 3 errors where 6 are marked
+tuple-filter-compat.scala	marks: 2 errors where 1 are marked: tuple-filter-compat.scala:9:8: error overriding type X in trait A with bounds[Tup, P] >: OldFilter[Tup, P] <: OldFilter[Tup, P];
+tuple-isMappedBy-2.scala	marks: no error where 1 are marked
+tupled-function-instances-2.scala	marks: 1201 errors where 51 are marked: tupled-function-instances-2.scala:9:35: expected ',' or ')', found identifier
+tupled-function-instances.scala	marks: 57 errors where 12 are marked: tupled-function-instances.scala:5:10: only classes can have declared but undefined members
+type-lambdas-posttyper.scala	marks: 1 errors where 15 are marked
+type-params.scala	marks: 16 errors where 19 are marked
+type-projections.scala	marks: no error where 4 are marked
+type-qmark.scala	marks: 4 errors where 15 are marked
+typeclass-derivation2.scala	marks: 9 errors where 1 are marked: typeclass-derivation2.scala:151:17: type mismatch: found Lst[T], required Lst[T]
+typeclass-encoding2.scala	marks: error on an unmarked line typeclass-encoding2.scala:24: this type does not take type arguments
+typedapply.scala	marks: 3 errors where 4 are marked
+unary-with-type-params.scala	marks: 2 errors where 1 are marked: unary-with-type-params.scala:3:4: expected an expression, found '['
+unboundWildcard.scala	marks: no error where 10 are marked
+unchecked-patterns.scala	marks: 1 errors where 2 are marked
+unicodeEscapes-interpolations.scala	marks: 11 errors where 12 are marked
+unicodeEscapes.scala	marks: 3 errors where 7 are marked
+unroll-abstractMethod.scala	marks: no error where 2 are marked
+unroll-clash.scala	marks: no error where 2 are marked
+unroll-clause-interleaving.scala	marks: 3 errors where 1 are marked: unroll-clause-interleaving.scala:6:36: expected '=', found '['
+unroll-duped.scala	marks: no error where 3 are marked
+unroll-illegal.scala	marks: no error where 9 are marked
+unroll-illegal2.scala	check: diagnostic 1 of 1: scalac's is error unroll-illegal2.scala:7:11 The final modifier is not allowed on local definitions; teq's is error unroll-illegal2.scala:7:15 The final modifier is not allowed on local definitions
+unroll-illegal3.scala	marks: no error where 3 are marked
+unroll-multipleParams.scala	marks: no error where 1 are marked
+unroll-no-default.scala	marks: no error where 1 are marked
+unroll-traitConstructor.scala	marks: no error where 1 are marked
+unselectable-fields.scala	check: diagnostic 1 of 1: scalac's is error unselectable-fields.scala:4:9 Cannot use selectDynamic here since it needs another selectDynamic to be invoked; teq's is error unselectable-fields.scala:4:9 value xyz is not a member of Selectable
+unsound-union-gadt.scala	marks: no error where 2 are marked
+unsound-union-object-gadt.scala	marks: 2 errors where 1 are marked: unsound-union-object-gadt.scala:12:9: type mismatch: found "", required T
+use-experimental-def.scala	marks: no error where 1 are marked
+validate-parsing.scala	marks: 10 errors where 6 are marked: validate-parsing.scala:2:3: modifier sealed is not allowed for this definition
+validate-refchecks.scala	marks: 1 errors where 2 are marked
+validate.scala	marks: 15 errors where 17 are marked
+valueClasses.scala	marks: no error where 2 are marked
+valueclasses-doubledefs2.scala	marks: no error where 1 are marked
+varargs-annot-2.scala	marks: no error where 1 are marked
+varargs-annot.scala	marks: no error where 9 are marked
+variances-constr.scala	marks: 1 errors where 2 are marked
+variances.scala	marks: 9 errors where 10 are marked
+variances1.scala	marks: no error where 1 are marked
+while-loops.scala	marks: error on an unmarked line while-loops.scala:6: Cannot rewrite recursive call: it is not in tail position
+wildbase.scala	marks: no error where 3 are marked
+wildcard-match.scala	marks: 4 errors where 5 are marked
+yimports-custom	option: -Yimports:hello.world.minidef (teq has no flag for it)
+yimports-nojava.scala	option: -Yimports:scala,scala.Predef (teq has no flag for it)
+yimports-nosuch.scala	option: -Yimports:skala,scala.Predeff (teq has no flag for it)
+yimports-order.scala	check: diagnostic 1 of 3: scalac's is error yimports-order.scala:9:17 Not found: Map; teq's is error yimports-order.scala:9:17 not found: Map
+yimports-predef.scala	option: -Yimports:scala,scala.Predef (teq has no flag for it)
+yimports-stable	option: -Yimports:scala,scala.Predef,hello.world.potions (teq has no flag for it)
+zipped.scala	marks: no error where 1 are marked

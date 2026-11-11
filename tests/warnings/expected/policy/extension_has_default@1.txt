@@ -1,0 +1,5 @@
+exit 0
+warning 10:48 Extension method show should not have a default argument for its receiver.
+warning 6:15 Extension method pad should not have a default argument for its receiver.
+warning 6:20 Extension method wrap should not have a default argument for its receiver.
+warning 8:26 Extension method tag should not have a default argument for its receiver.

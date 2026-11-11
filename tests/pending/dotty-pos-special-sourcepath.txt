@@ -1,0 +1,9 @@
+Test.scala	option: -sourcepath (teq has no flag for it)
+Test2.scala	option: -sourcepath (teq has no flag for it)
+Test3.scala	option: -sourcepath (teq has no flag for it)
+Test4.scala	option: -sourcepath (teq has no flag for it)
+indent2.scala	option: -sourcepath (teq has no flag for it)
+nested	java source: teq reads none
+nested2	option: -sourcepath (teq has no flag for it)
+pkg.scala	option: -sourcepath (teq has no flag for it)
+toplevel2.scala	option: -sourcepath (teq has no flag for it)

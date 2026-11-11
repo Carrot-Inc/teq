@@ -1,0 +1,3 @@
+# dotty 3.8.4 (7d4833b6) init/special/i12128, pos; compiler/test/dotty/tools/dotc/CompilationTests.scala:311-324; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+i12128	fail	check:fail	option: -Wsafe-init with -Werror (teq has no flag for it)

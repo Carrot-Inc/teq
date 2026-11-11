@@ -1,0 +1,2 @@
+exit 0
+warning 6:42 method old in object O is deprecated since 1: old

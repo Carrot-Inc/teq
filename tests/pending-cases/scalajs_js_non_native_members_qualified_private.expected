@@ -1,0 +1,17 @@
+scalac 3.8.4: rejected, 12 error(s)
+scalajs_js_non_native_members_qualified_private.scala:77:21: (a warning) Ignoring [this] qualifier.
+  The syntax `private[this]` will be deprecated in the future; just write `private` instead.
+  See: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html
+  This construct can be rewritten automatically under -rewrite -source 3.4-migration.
+scalajs_js_non_native_members_qualified_private.scala:31:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:32:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:33:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:45:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:46:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:47:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:55:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:56:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:57:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:69:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:70:32: Qualified private members in non-native JS classes must be final
+scalajs_js_non_native_members_qualified_private.scala:71:32: Qualified private members in non-native JS classes must be final

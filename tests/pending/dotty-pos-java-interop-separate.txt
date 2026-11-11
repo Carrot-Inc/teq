@@ -1,0 +1,14 @@
+array-annot	java source: teq reads none
+forwarder	java source: teq reads none
+i10225	java source: teq reads none
+i3273	java source: teq reads none
+i3533	java source: teq reads none
+i6152	java source: teq reads none
+i6868	java source: teq reads none
+i8435	java source: teq reads none
+i8588	java source: teq reads none
+i9492	java source: teq reads none
+inner-fbounds	java source: teq reads none
+java-object-any-unification-1	java source: teq reads none
+static-cycle	java source: teq reads none
+t11469_2	java source: teq reads none

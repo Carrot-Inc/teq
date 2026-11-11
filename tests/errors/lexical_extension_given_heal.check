@@ -1,0 +1,7 @@
+tests/errors/lexical_extension_given_heal.scala:19:50: error: Found:    R
+Required: ?{ pick: ? }
+Note that implicit extension methods cannot be applied because they are ambiguous;
+both given instance a in object Main and given instance b in object Main provide an extension method `pick` on R
+    def main(args: Array[String]): Unit = println((new R).pick)
+                                                   ^^^^^
+1 error found

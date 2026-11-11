@@ -1,0 +1,68 @@
+# test	verdict	the other ways	the first line of the difference
+backticked-main	pass	-	
+dirs-package	pass	-	
+echo-args	pass	-	
+echo-args-none	pass	-	
+excluded excluded-directive	pass	-	
+excluded excluded-directive-dot	pass	-	
+excluded excluded-typed	pass	-	
+excluded excluded-typed-dot	pass	-	
+exit-status-0	pass	-	
+exit-status-3	pass	-	
+exit-status-fail	pass	-	
+fixture add-api	pass	-	
+fixture add-web	pass	-	
+fixture block-comment-code	pass	-	
+fixture classifier-quoted	pass	-	
+fixture classifier-unquoted	pass	-	
+fixture dep-unicode-escape	pass	-	
+fixture evicted	pass	-	
+fixture init	pass	-	
+fixture list	pass	-	
+fixture log	pass	-	
+fixture no-sources-module	pass	-	
+fixture probe	pass	-	
+fixture race	pass	-	
+fixture teardown	pass	-	
+fixture usage	pass	-	
+hyphen-main	pass	-	
+hyphen-mirror	pass	-	
+hyphen-object-reference	pass	-	
+hyphen-package-main	pass	-	
+hyphen-package-merge	pass	-	
+hyphen-package-raw-reference	pass	-	
+hyphen-package-reference	pass	-	
+main-object	pass	-	
+nested-app	pass	-	
+nested-main	pass	-	
+parenthesised-main	pass	-	
+products product-closure	pass	-	
+products product-source	pass	-	
+reads-other-args	pass	-	
+refusal ambiguous	pass	-	
+refusal ambiguous-classpath	pass	-	
+refusal compile-only-version	pass	-	
+refusal dep-parameter	pass	-	
+refusal dep-unicode-invalid	pass	-	
+refusal key-empty	pass	-	
+refusal key-missing	pass	-	
+refusal key-quoted	pass	-	
+refusal key-unclosed	pass	-	
+refusal lib-version	pass	-	
+refusal missing-dep	pass	-	
+refusal missing-dep-classpath	pass	-	
+refusal missing-dep-platform-js	pass	-	
+refusal no-sources	pass	-	
+refusal no-sources-classpath	pass	-	
+refusal outside	pass	-	
+refusal outside-classpath	pass	-	
+refusal product-wrong-version	pass	-	
+refusal queue-version	pass	-	
+refusal source-after-lexer	pass	-	
+refusal wrong-version	pass	-	
+refusal wrong-version-backtick	pass	-	
+refusal wrong-version-classpath	pass	-	
+refusal wrong-version-tab	pass	-	
+script-paths	pass	-	
+script-paths-dir	pass	-	
+uses-defs	pass	-	

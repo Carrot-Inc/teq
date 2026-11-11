@@ -1,0 +1,2 @@
+scalac 3.8.4: rejected, 1 error(s)
+inline_param_type_prefix.scala:14:45: (b : Box) is not a valid type prefix, since it is not an immutable path

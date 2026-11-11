@@ -1,0 +1,1 @@
+cats_kernel	cats_kernel with cats.arrow per file under --hot

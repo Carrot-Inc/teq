@@ -9,20 +9,30 @@
 # Scala.js library written in the facade syntax. A `// jars: <names>` line puts those jars on the
 # class path (tests/support/jars.sh); without one of them in the coursier cache the case counts as
 # passed.
+# The checks expected to fail are tests/pending/interop.txt (tests/support/pending.sh): the suite fails when a
+# listed check passes and when an unlisted one fails; --update takes the checks that pass now out of the list,
+# --add writes the unlisted failures in, and either writes the suite's row of the board. A listed check's
+# difference is not printed.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 . tests/support/jars.sh
 STUB=tests/interop/scalajs-stub
 mkdir -p out/interop
+. tests/support/pending.sh
+pending_begin interop out/interop "$@"
 pass=0
 fail=0
 check() {
   if diff -q "$1" "$2" > /dev/null; then
     pass=$((pass + 1))
+    pending_pass "$3"
   else
-    echo "FAIL $3"
-    diff "$1" "$2" | head -${DIFF_LINES:-10}
+    if ! pending_listed "$3"; then
+      echo "FAIL $3"
+      diff "$1" "$2" | head -${DIFF_LINES:-10}
+    fi
     fail=$((fail + 1))
+    pending_fail "$3" "$(diff "$1" "$2" | grep -m1 '^[<>]')"
   fi
 }
 for src in tests/interop/*.scala tests/interop/*/; do
@@ -37,6 +47,7 @@ for src in tests/interop/*.scala tests/interop/*/; do
   if [ -n "$JARS_MISSING" ]; then
     echo "skip $name: not in the coursier cache:$JARS_MISSING"
     pass=$((pass + 1))
+    pending_skip "$name" "not in the coursier cache:$JARS_MISSING"
     continue
   fi
   [ -n "$JARS_CP" ] && extra="$extra --classpath $JARS_CP"
@@ -78,9 +89,11 @@ done
 expect() {
   if [ "$2" = "$3" ]; then
     pass=$((pass + 1))
+    pending_pass "$1"
   else
-    echo "FAIL $1: expected $3, found $2"
+    pending_listed "$1" || echo "FAIL $1: expected $3, found $2"
     fail=$((fail + 1))
+    pending_fail "$1" "expected $3, found $2"
   fi
 }
 expect "import statements of multi" "$(grep -c '^import ' out/interop/multi.mjs)" 3
@@ -89,4 +102,4 @@ expect "first line of jsvalues" "$(head -1 out/interop/jsvalues.js)" '"use stric
 expect "first line of imports" "$(head -1 out/interop/imports.mjs)" 'import { join as $imp0 } from "node:path";'
 expect "export statement of exports" "$(grep -c '^export { \$exp0 as version, ' out/interop/exports.mjs)" 1
 echo "$pass passed, $fail failed"
-[ $fail = 0 ]
+pending_end

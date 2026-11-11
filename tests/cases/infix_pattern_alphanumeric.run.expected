@@ -1,0 +1,6 @@
+warning: there was 1 deprecation warning; re-run with --deprecation for details
+a 1
+xxx
+left: 1 2 3
+right: 1 2 3
+1 List() List(2, 3)

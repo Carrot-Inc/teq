@@ -1,0 +1,5 @@
+tests/errors/projection_type_constructor_qualifier.scala:4:18: error: Found:    Outer.C
+Required: ?{ T: ? }
+  type Bad = Outer.C#T
+             ^^^^^^^
+1 error found

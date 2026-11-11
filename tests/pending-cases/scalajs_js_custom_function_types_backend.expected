@@ -1,0 +1,3 @@
+scalac 3.8.4: rejected, 2 error(s)
+scalajs_js_custom_function_types_backend.scala:20:46: The SAM or apply method for a js.ThisFunction must have a leading non-varargs parameter
+scalajs_js_custom_function_types_backend.scala:21:48: The SAM or apply method for a js.ThisFunction must have a leading non-varargs parameter

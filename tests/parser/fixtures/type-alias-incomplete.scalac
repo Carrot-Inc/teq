@@ -1,0 +1,2 @@
+type-alias-incomplete.scala:5:1: error: an identifier expected, but 'def' found
+type-alias-incomplete.scala:6:33: error: not found: f

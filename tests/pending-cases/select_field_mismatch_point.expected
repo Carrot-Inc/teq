@@ -1,0 +1,5 @@
+scalac 3.8.4: rejected, 2 error(s)
+select_field_mismatch_point.scala:15:22: Found:    (O.r : R)
+  Required: String
+select_field_mismatch_point.scala:16:22: Found:    (h.r : R)
+  Required: String

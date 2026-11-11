@@ -8,9 +8,10 @@
 # a Scala.js library's (scala-java-locales' java.text) its output is Scala.js's. A test with
 # tests/lean-expected/<name>.expected, a departure the lean targets keep, is compared with that.
 #
-# tests/interp-passing.txt lists the tests that pass; a listed test that fails is a regression and
-# fails the script, an unlisted one that passes is reported so that it can be added
-# (`--update` rewrites the list). Failures are classified:
+# The cases expected to fail are tests/pending/interp.txt (tests/support/pending.py): the run fails when a listed
+# case passes and when an unlisted one fails; `--update` takes the cases that pass now out of the list, `--add`
+# writes the unlisted failures in (for the change that brings the cases), and either writes the suite's row of
+# the board, tests/board/suites/interp.tsv, whose passing cases the other suites over them read. Failures are classified:
 #   unsupported the interpreter reported an IR shape or a builtin it lacks (exit code 3), or the test depends
 #               on a Scala 2 artifact, whose classes the interpreter does not read
 #   compile     any other compile failure
@@ -38,9 +39,14 @@ export LC_COLLATE=C
 TEQ=${TEQ:-./target/release/teq}
 export TZ=UTC  # an archive entry's DOS time is local time: the recorded bytes are UTC's
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
-LIST=tests/interp-passing.txt
-update=0
-[ "$1" = "--update" ] && update=1
+update=
+add=
+for arg in "$@"; do
+  case $arg in
+    --update) update=--update ;;
+    --add) add=--add ;;
+  esac
+done
 out=out/interp-tests
 rm -rf "$out"
 mkdir -p "$out"
@@ -145,17 +151,18 @@ skipped=$(grep '^skip ' "$out/results.txt" | cut -d' ' -f2 | sort | comm -23 - "
 otheros=$(tr '\n' ' ' < "$out/otheros.txt")
 [ -n "$otheros" ] && echo "skipped (another system's): $otheros"
 grep '^pass ' "$out/results.txt" | cut -d' ' -f2 | sort > "$out/passing.txt"
-touch "$LIST"
-if [ $update = 1 ]; then
-  sort -u "$out/passing.txt" <(sort "$LIST" | comm -12 - "$out/otheros.txt") > "$LIST.new" && mv "$LIST.new" "$LIST"
-fi
-regressions=$(comm -23 <(sort "$LIST") <(sort -u "$out/passing.txt" "$out/otheros.txt") | tr '\n' ' ')
-new=$(comm -13 <(sort "$LIST") "$out/passing.txt" | tr '\n' ' ')
-[ -n "$new" ] && echo "passing but not in $LIST: $new"
-if [ -n "$regressions" ]; then
-  echo "REGRESSIONS: $regressions"
-  status=1
-fi
+# The run held to the list of the cases expected to fail (tests/support/pending.py): a case that is skipped, or
+# counted as passed for a jar the cache lacks, is not judged, and its place in the list stands.
+cat "$out"/*.nojar 2> /dev/null | sort > "$out/nojar.txt"
+printf '%s\n' "$otherstd" | grep . > "$out/otherstd.txt"
+awk 'FILENAME == ARGV[1] { os[$1]; next } FILENAME == ARGV[2] { nojar[$1]; next } FILENAME == ARGV[3] { std[$1]; next }
+  $2 in os { print "skip " $2 "\tanother system'"'"'s"; next }
+  $2 in std { print "skip " $2 "\tanother std'"'"'s"; next }
+  $2 in nojar { print "skip " $2 "\ta jar of its not in the coursier cache"; next }
+  $1 == "skip" { print "skip " $2 "\tits expectation is Scala.js'"'"'s"; next }
+  $1 == "pass" { print "pass " $2; next }
+  { print "fail " $2 "\t" $1 }' "$out/otheros.txt" "$out/nojar.txt" "$out/otherstd.txt" "$out/results.txt" > "$out/pending.txt"
+python3 tests/support/pending.py interp "$out/pending.txt" $update $add || status=1
 exit_out=$(timeout 30 "$TEQ" interp tests/cases/sys_exit_status.scala -- exit 2> "$out/sys_exit_status.exit.err")
 exit_code=$?
 if [ $exit_code != 2 ] || [ "$exit_out" != "before the exit" ] || [ "$(cat "$out/sys_exit_status.exit.err")" != "usage: sys_exit_status" ]; then

@@ -1,0 +1,1058 @@
+10838	compile-error: test contains Java sources
+16405	compile-error: type a not found
+1938-2	compile-error: this is not a case class or enum case
+25-1	compile-error: test contains Java sources
+25-2	compile-error: test contains Java sources
+9416	compile-error: type mismatch: found "foo", required Extract[M]
+CollectionTests	compile-error: augmentString is not a member of the package
+ConfManagement	compile-error: value > is not a member of Int
+Course-2002-01	wrong-output
+Course-2002-02	wrong-output
+Course-2002-04	wrong-output
+Course-2002-08	wrong-output
+Course-2002-09	wrong-output
+Course-2002-10	wrong-output
+IArrayOps	compile-error: type mismatch: found Seq[Int], required IArray[Int]
+IArrayOps-Factory	compile-error: value convertIArrayToFactory is not a member of IArray
+IArrayOps-IsSeq	compile-error: cannot resolve import: generic not found
+IArrayOps-experimental-BuildFrom	compile-error: no given instance of type BuildFrom[ArraySeq[Long], Long, IArray[Long]] was found for parameter bf
+Meter	compile-error: type App not found
+MeterCaseClass	compile-error: type App not found
+NestedClasses	compile-error: expected an identifier, found 'super'
+OrderingTest	compile-error: type App not found
+Parser	compile-error: cannot resolve import: Conversion is not an object or a package
+Pouring2	compile-error: type App not found
+Predef.readLine	compile-error: StringReader is not a member of the package
+PrivateAnd	compile-error: type mismatch: found Int => Int, required Int
+Providers	compile-error: type mismatch: found *:[Provider[X], Tuple], required Provider[*:[X, Xs]]
+ReplacementMatching	compile-error: this is not a case class or enum case
+ReverseSeqView	compile-error: type App not found
+Signals	compile-error: covariant type T occurs in contravariant position in type (Signal[Any]) ?=> T of parameter expr
+StringConcat	compile-error: value append is not a member of CharBuffer
+Typeable	compile-error: expected '=>', found '['
+UnrolledBuffer	compile-error: UnrolledBuffer is not a member of the package
+abstract-givens	compile-error: type App not found
+annotation-info-not-erased	compile-error: test contains Java sources
+anon-mirror-gen-local	compile-error: not supported yet: an instance of Seed, a class nested in a class, made outside that class
+applydynamic_sip	compile-error: type App not found
+array-charSeq	compile-error: ArrayCharSequence is not a member of the package
+array-erasure	compile-error: value apply is not a member of Array[?] & T
+array-existential-bound	compile-error: value length is not a member of Q
+arrayclone-new	compile-error: type App not found
+arrays-from-java	compile-error: test contains Java sources
+arybufgrow	compile-error: type App not found
+assert-stack	wrong-output
+backwardsCompat-implicitParens	compile-error: missing argument for parameter y
+beans	compile-error: test contains Java sources
+better-fors	compile-error: type App not found
+binaryLiterals	compile-error: expected an expression, found a blank line
+bitsets	compile-error: BitSet is not a member of the package
+blame_eye_triple_eee-double	compile-error: type App not found
+blame_eye_triple_eee-float	compile-error: type App not found
+boolord	compile-error: value < is not a member of Boolean
+box-to-byte	compile-error: value boxToByte is not a member of BoxesRunTime
+break-opt	compile-error: boundary is not a member of the package
+breaks	compile-error: boundary is not a member of the package
+bridges	compile-error: error overriding method f in class Foo___ of type Foo___.this.I: method f in trait Bar_If of type I has incompatible type
+builder	wrong-output
+byNameVarargs	compile-error: type App not found
+byname-given	compile-error: local givens cannot take parameters
+byname-implicits-17	compile-error: type App not found
+byname-implicits-28	compile-error: type App not found
+byname-implicits-4	compile-error: type App not found
+byname-implicits-5	compile-error: type App not found
+byname-implicits-6	compile-error: type App not found
+capturing	compile-error: type App not found
+case-class-23	compile-error: type App not found
+case-class-serializable	compile-error: type NotSerializableException not found
+caseclasses	compile-error: expected an expression, found ';'
+catch-sub-cases	compile-error: expected '=>', found 'if'
+classmanifests_new_alias	compile-error: type App not found
+classof	compile-error: type Class not found
+classtags_contextbound	compile-error: type App not found
+cochis	compile-error: type App not found
+cochis-example	compile-error: type App not found
+collection-stacks	compile-error: type App not found
+collections	compile-error: expected ',' or ')', found identifier
+colltest	compile-error: type App not found
+colltest1	compile-error: type App not found
+colltest5	compile-error: augmentString is not a member of the package
+colltest6	compile-error: augmentString is not a member of the package
+companion-loading	compile-error: 'erased' is not part of the supported Scala subset
+comparable-comparator	compile-error: no given instance of type Ordering[C2] was found for parameter ord
+complex-outer	compile-error: test contains Java sources
+complicatedmatch	compile-error: type App not found
+config	compile-error: type App not found
+constant-optimization	compile-error: type App not found
+context-functions	compile-error: operator + cannot be applied to Int and Ctx[Int]
+contextbounds-for-poly-functions	compile-error: type App not found
+contrarivant	compile-error: type App not found
+contrib674	compile-error: type App not found
+convertible	compile-error: cannot resolve import: Conversion is not an object or a package
+coop-equality	compile-error: type App not found
+correct-bind	compile-error: type App not found
+creator-applys	compile-error: type App not found
+curried-mirror	compile-error: type App not found
+deadlock	run-error: Node.js v25.9.0
+decorators	compile-error: value mkString is not a member of Array[?] & A
+dedented-string-literals	compile-error: expected ',' or ')', found literal
+defaults-serizaliable-no-forwarders	compile-error: ObjectInputStream is not a member of the package
+defaults-serizaliable-with-forwarders	compile-error: ObjectInputStream is not a member of the package
+delayedInit	compile-error: type App not found
+derived-specificity	compile-error: type App not found
+deriving	compile-error: type App not found
+deriving-constructor-order	compile-error: type App not found
+deriving-from-product-typed	compile-error: type App not found
+deriving-interesting-prefixes	compile-error: type App not found
+double-pattern-type	compile-error: wrong number of patterns for C2: expected 2, found 3
+drop-apply-optimization	compile-error: value + is not a member of Any
+duration-coarsest	compile-error: type App not found
+dynamic-anyval	compile-error: type Dynamic not found
+dynamicDynamicTests	compile-error: type Dynamic not found
+eff-dependent	compile-error: type App not found
+elidable-noflags	compile-error: cannot resolve import: elidable not found
+empty-array	compile-error: value emptyByteArray is not a member of Array
+enrich-gentraversable	compile-error: type App not found
+enum-HList	compile-error: type mismatch: found Any, required HLst
+enum-constrs	compile-error: type App not found
+enum-custom-toString	compile-error: type EnumValue not found
+enum-efficient-collections	compile-error: value EnumSet is not a member of util
+enum-java	compile-error: test contains Java sources
+enum-java-scala	compile-error: test contains Java sources
+enum-nat	compile-error: type mismatch: found Any, required (Nat.Zero : Nat) | Succ[?]
+enum-values	compile-error: value stringOf is not a member of ScalaRunTime
+enum-values-order	run-error: SyntaxError: Identifier 'LatinAlphabet$M' has already been declared
+enums	compile-error: type Enumeration not found
+enums-java-compat	compile-error: object creation impossible, since it has 2 unimplemented members: valueOf, values
+enums-serialization-compat	compile-error: expected ')', found '@'
+eq-xmethod	compile-error: type App not found
+equality	run-error: AssertionError [java.lang.AssertionError]: assertion failed: 5 == 5
+erased-18	compile-error: expected ',' or ')', found identifier
+erased-19	compile-error: expected ',' or ')', found identifier
+erased-20	compile-error: expected ',' or ')', found identifier
+erased-21	compile-error: expected ',' or ')', found identifier
+erased-25	compile-error: 'erased' is not part of the supported Scala subset
+erased-26	compile-error: 'erased' is not part of the supported Scala subset
+erased-7	compile-error: 'erased' is not part of the supported Scala subset
+erased-inline-product-1	compile-error: No given instance of type ProductOf[(p : (Int, Long))] was found.
+erased-inline-product-2	compile-error: type p not found
+erased-inline-vals	compile-error: value getDeclaredMethods is not a member of Class[B]
+erased-lambdas	compile-error: expected ',' or ')', found identifier
+erased-machine-state	compile-error: 'erased' is not part of the supported Scala subset
+erased-poly-ref	compile-error: 'erased' is not part of the supported Scala subset
+errorhandling	compile-error: expected ',' or ')', found identifier
+escaped-space	compile-error: invalid escape sequence
+exc	compile-error: type App not found
+exc1	compile-error: type App not found
+exc2	compile-error: type App not found
+exceptions-2	compile-error: expected an expression, found ';'
+exceptions-nest	compile-error: type App not found
+exoticnames	compile-error: type App not found
+export-in-extension	run-error: Error: AssertionError: assertion failed
+exports	compile-error: type App not found
+extension-methods	compile-error: type App not found
+extmethod-overload	compile-error: type App not found
+extmethods2	compile-error: type App not found
+extra-implicits	compile-error: missing argument for parameter b
+final-fields	wrong-output
+finally	compile-error: type App not found
+fors	compile-error: type App not found
+forwarder	compile-error: value getModifiers is not a member of Method
+forwarder-java-package-private	compile-error: test contains Java sources
+fragables-extension	compile-error: missing parameter type
+fully-abstract-interface	run-error: RangeError: Maximum call stack size exceeded
+fully-abstract-nat	compile-error: type mismatch: found Any, required ?{ pred: ? }. Note that implicit extension methods cannot be applied because they are ambiguous; both method SuccDeco in clas
+fully-abstract-nat-2	run-error: RangeError: Maximum call stack size exceeded
+fully-abstract-nat-4	compile-error: this is not a case class or enum case
+fully-abstract-nat-5	compile-error: this is not a case class or enum case
+fully-abstract-nat-6	compile-error: this is not a case class or enum case
+fully-abstract-nat-7	compile-error: this is not a case class or enum case
+future-flatmap-exec-count	run-error: Node.js v25.9.0
+gadts	compile-error: type App not found
+genericNumLits	compile-error: number too large
+genericValueClass	compile-error: type App not found
+getclass	compile-error: cannot resolve import: Properties not found
+given-disambiguation	compile-error: expected end of statement, found ':'
+hashhash	run-error: AssertionError [java.lang.AssertionError]: assertion failed: 5.## == 5.hashCode (but should not)
+hashsetremove	compile-error: type App not found
+hk-alias-unification	run-error: Error: AssertionError: assertion failed: I should not be summoned!
+hmap	compile-error: expected ']', found '='
+hmap-covariant	compile-error: expected ']', found '='
+i10068c	compile-error: type App not found
+i10068d	compile-error: type App not found
+i10511	compile-error: type mismatch: found (t : (Bool.True : Bool)), required Not[(Bool.False : Bool)]
+i10866	compile-error: type App not found
+i10884	compile-error: test contains Java sources
+i10889	compile-error: value tap is not a member of Int
+i10930	compile-error: asMatchable is not a member of the package
+i10997	compile-error: no given instance of type Of[(ClassWrapper.this.Qux : Qux)] was found for parameter x
+i11008b	compile-error: a sequence wildcard can only end a sequence pattern
+i11052a	compile-error: type Enumeration not found
+i11052b	compile-error: type Enumeration not found
+i11114	compile-error: cannot resolve import: Tuple2 is not an object or a package
+i11174	run-error: TypeError: Cannot read properties of undefined (reading 'Square')
+i11174local	run-error: TypeError: Cannot read properties of undefined (reading 'apply')
+i11332	compile-error: value findVirtual is not a member of Lookup
+i11367	compile-error: value getDeclaredFields is not a member of Class[_]
+i11419	wrong-output
+i11486	compile-error: Executable is not a member of the package
+i11571	compile-error: value scalaUtilChainingOps is not a member of chaining
+i11583	compile-error: type mismatch: found *:[A, Tuple], required *:[A, T]
+i11630	compile-error: value testing is not a member of compiletime
+i11938	run-error: Error: AssertionError: assertion failed
+i11996	compile-error: 'erased' is not part of the supported Scala subset
+i12032	compile-error: method append overrides nothing
+i12086	compile-error: test contains Java sources
+i12204	compile-error: test contains Java sources
+i12328	compile-error: No given instance of type Schema[A] was found.
+i12328a	run-error: Error: AssertionError: assertion failed
+i1240	run-error: Error: AssertionError: assertion failed
+i12492	compile-error: test contains Java sources
+i12656	compile-error: value testing is not a member of compiletime
+i12753	compile-error: test contains Java sources
+i12914	compile-error: type String not found
+i12976	run-error: AssertionError [java.lang.AssertionError]: assertion failed
+i13087	compile-error: expected an expression, found end of indented block
+i13096	compile-error: type App not found
+i13146poly	compile-error: type argument m.MirroredElemTypes does not have the same kind as its bound [_]
+i13181	run-error: Error: AssertionError: assertion failed
+i13332	compile-error: no given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x
+i13332a	compile-error: no given instance of type Mirror{type MirroredType[X] = Scope.this.IList[X]; type MirroredMonoType = Scope.this.IList[?]; type MirroredElemTypes <: [_] =>> Tupl
+i13332anonprod	compile-error: no given instance of type Of[Elem[(scope.INil[?0], scope.ICons[?1]), 1]] was found for parameter x
+i13332intersection	compile-error: value dropInPlace is not a member of ListBuffer[Int]
+i13332shapeless	compile-error: type argument CListRefl[tl] does not conform to upper bound CList
+i13332shapeless-b	run-error: Error: AssertionError: assertion failed
+i13433	compile-error: this type cannot be tested at runtime: Matcher[A]
+i13433b	compile-error: this type cannot be tested at runtime: Matcher[A]
+i13461-b	compile-error: only defs are allowed in an extension
+i1354	compile-error: Boolean cannot be instantiated
+i1354b	compile-error: Boolean cannot be instantiated
+i13691	compile-error: type Erased not found
+i13691b	compile-error: throws takes 1 type argument(s), 2 given
+i13703	compile-error: value i is not a member of Foo{def i_=(x$1: Int): Unit}
+i1387	compile-error: classOf[<error>] needs a class type
+i13950	compile-error: value apply is not a member of S
+i13961a	compile-error: throws takes 1 type argument(s), 2 given
+i13986	compile-error: type App not found
+i13987	compile-error: type App not found
+i14020	run-error: TypeError: Cannot read properties of undefined (reading 'a')
+i14083	compile-error: value getConstructors is not a member of Class[Outer#Inner]
+i14150	compile-error: type mismatch: found *:[HRes, Tuple], required *:[HRes, TRes]
+i14198	compile-error: value gc is not a member of System
+i1432	compile-error: expected '=', found '@'
+i14340	run-error: Node.js v25.9.0
+i14623	run-error: Error: AssertionError: assertion failed
+i1490	compile-error: value box is not a member of Int
+i15199	compile-error: test contains Java sources
+i15234	compile-error: value fromProduct is not a member of Mirror{type MirroredType = (Foo.A : (Foo.A : Foo)); type MirroredMonoType = (Foo.A : (Foo.A : Foo)); type MirroredElemTypes
+i15287	compile-error: not found: f
+i15302a	compile-error: type mismatch: found *:[Int, Tuple], required (Int, Int, Int)
+i15318	compile-error: test contains Java sources
+i15374	run-error: ReferenceError: $this1qacu60_6 is not defined
+i1543	compile-error: type App not found
+i15702	compile-error: expected an identifier, found 'super'
+i15723	compile-error: type App not found
+i15725	wrong-output
+i15840	compile-error: expected ':', found 'val'
+i15855	compile-error: type mismatch: found () => R, required MyFunction0[R]
+i15903	compile-error: value getGenericReturnType is not a member of Method
+i15903b	compile-error: value getGenericReturnType is not a member of Method
+i15903c	compile-error: value getGenericReturnType is not a member of Method
+i15903d	compile-error: value getGenericReturnType is not a member of Method
+i15913	compile-error: type App not found
+i15998	compile-error: extension method isRotationOf is not applicable to String
+i16006	compile-error: None of the overloaded alternatives of method toString in class Foo with types
+i16458	compile-error: expected end of statement, found identifier
+i16459	compile-error: expected end of statement, found identifier
+i16464	compile-error: operator - cannot be applied to Int and Seq[Int]
+i16474	compile-error: test contains Java sources
+i16806	run-error: Error: UnsupportedOperationException: Thread.start is not available on JavaScript
+i1692	compile-error: value getDeclaredField is not a member of Class[_]
+i1692b	compile-error: value getDeclaredField is not a member of Class[_]
+i16943	compile-error: not found: caps
+i17021.ext-java	compile-error: test contains Java sources
+i17115	compile-error: object creation impossible, since def apply(v1: A[Tail[Tup]]): A[Tup] in trait Function1 is not defined
+i17255	compile-error: test contains Java sources
+i18150	compile-error: value testing is not a member of compiletime
+i18183	compile-error: ambiguous given instances for Foo: foo, foo
+i18183.findRef	compile-error: expected an identifier, found 'this'
+i18183.given	compile-error: ambiguous given instances for Foo: foo, foo
+i18183.mixed	compile-error: ambiguous given instances for Foo: foo, foo
+i18315	compile-error: missing parameter type
+i18701	compile-error: value getEnclosingMethod is not a member of Class[_]
+i18701.fixed	compile-error: value getEnclosingMethod is not a member of Class[_]
+i19224	compile-error: type App not found
+i19270	compile-error: value getDeclaringClass is not a member of Method
+i19394	compile-error: bar is already defined as method bar
+i19619	compile-error: test contains Java sources
+i1990b	run-error: ReferenceError: Must call super constructor in derived class before accessing 'this' or returning from derived constructor
+i20145	compile-error: Cannot rewrite recursive call: it is not in tail position
+i20561_gadts	compile-error: test contains Java sources
+i20561_joint	compile-error: test contains Java sources
+i20561_separ	compile-error: test contains Java sources
+i20856	compile-error: not found: ObjectOutputStream
+i21213	compile-error: expected ':', found 'val'
+i21213-min	compile-error: expected ':', found 'val'
+i22150	compile-error: expected ')', found '@'
+i22497	compile-error: value getConstructors is not a member of Class[Foo]
+i22628	compile-error: test contains Java sources
+i22649	run-error: Error: AssertionError: assertion failed: Was TypeRef(NoPrefix(), "{z1 => AnyRef{type T; def make: z1.T}}")
+i2266	compile-error: type App not found
+i2275	run-error: Node.js v25.9.0
+i22900	compile-error: a named pattern is only allowed in a tuple or constructor pattern
+i22968	compile-error: cannot resolve import: testing not found
+i22979	compile-error: value getDeclaredField is not a member of Class[Leak]
+i22991	compile-error: test contains Java sources
+i23131	compile-error: name is not a field of Some[(name : String)]
+i23245a	compile-error: missing parameter type
+i23305	compile-error: type Erased not found
+i23440	compile-error: type mismatch: found (<error>, <error>) => Unit, required (a : Int, b : String) => Any
+i23479	compile-error: test contains Java sources
+i23479b	compile-error: value getDeclaredMethods is not a member of Class[_]
+i23897	compile-error: type mismatch: found *:[H, Tuple], required *:[H, T]
+i24056	run-error: Error: AssertionError: assertion failed
+i24204	run-error: TypeError: Cannot read properties of null (reading 'length')
+i24420-inline-local-ref	compile-error: Cannot reduce `inline if` because its condition is not a constant value: g() > 0
+i24420-inline-val	compile-error: inline value must have a literal constant type
+i24507	compile-error: test contains Java sources
+i24653	compile-error: value getDeclaredMethods is not a member of Class[Foo[Unit]]
+i2567	compile-error: type App not found
+i25725	compile-error: 'erased' is not part of the supported Scala subset
+i25947	compile-error: type mismatch: found AnyRef{def nextBytes(bytes: Array[Byte]): Unit}, required Selectable | Dynamic
+i26099	compile-error: type mismatch: found *:[H, Tuple], required TupleGiven[*:[H, T]]
+i26800-trait-init-binary-compat	run-error: Error: UnsupportedOperationException: reflection is not available on JavaScript
+i2738	run-error: TypeError: Cannot read properties of undefined (reading 'getMethodName')
+i2760	compile-error: test contains Java sources
+i2772	compile-error: value setErr is not a member of System
+i2780	compile-error: test contains Java sources
+i2795	compile-error: type App not found
+i2883	compile-error: type App not found
+i2964	wrong-output
+i2964b	wrong-output
+i2964c	wrong-output
+i2964d	wrong-output
+i2964e	wrong-output
+i3000b	wrong-output
+i3006	run-error: TypeError: Cannot read properties of undefined (reading 'getMethodName')
+i3006b	run-error: TypeError: Cannot read properties of undefined (reading 'getMethodName')
+i3189	compile-error: type App not found
+i3207	compile-error: expected ',' or ')', found identifier
+i3248d	compile-error: a sequence wildcard can only end a sequence pattern
+i3339	compile-error: type App not found
+i3340	run-error: Node.js v25.9.0
+i3448	compile-error: type App not found
+i3539	compile-error: value asInstanceOf is not a member of Int => ""
+i389	compile-error: test contains Java sources
+i3920	compile-error: expected ':', found 'val'
+i3930	compile-error: type App not found
+i4073	compile-error: type Dynamic not found
+i4192	compile-error: value getEnclosingClass is not a member of Class[_]
+i4241	compile-error: type App not found
+i4364a	compile-error: method f in object Test must be called with () argument
+i4404a	compile-error: Modifier is not a member of the package
+i4404b	compile-error: Modifier is not a member of the package
+i4404c	compile-error: Modifier is not a member of the package
+i4446	compile-error: type ObjectOutputStream not found
+i4523	compile-error: value getDeclaredMethods is not a member of Class[C]
+i4528	compile-error: this expression cannot be assigned to
+i4557	compile-error: a parent has to be a class or a trait
+i4600	compile-error: type Dynamic not found
+i4659b	compile-error: type App not found
+i4947	wrong-output
+i4947a2	wrong-output
+i4947b	wrong-output
+i4947c	wrong-output
+i4984b	compile-error: this is not a case class or enum case
+i4984c	compile-error: this is not a case class or enum case
+i4984d	compile-error: this is not a case class or enum case
+i4984e	compile-error: this is not a case class or enum case
+i502	compile-error: type App not found
+i5077	compile-error: value < is not a member of Any
+i5224	compile-error: type App not found
+i533	compile-error: test contains Java sources
+i5386	compile-error: type App not found
+i5455	compile-error: value asInstanceOf is not a member of Int
+i5527	compile-error: missing parameter type
+i5606	compile-error: type App not found
+i5976	compile-error: type App not found
+i6109	compile-error: type App not found
+i6219	compile-error: expected an expression, found '}'
+i6341	compile-error: type App not found
+i6490b	compile-error: a sequence wildcard can only end a sequence pattern
+i659	compile-error: type App not found
+i6834	compile-error: value getConstructors is not a member of Class[_]
+i6858	compile-error: type App not found
+i7086	compile-error: type App not found
+i7212	compile-error: test contains Java sources
+i7487	compile-error: cannot resolve import: testing not found
+i7488	compile-error: cannot resolve import: testing not found
+i7675	compile-error: type App not found
+i7783	compile-error: type App not found
+i7788	compile-error: value fold is not a member of Show[B]
+i7843	run-error: Node.js v25.9.0
+i7868	compile-error: type App not found
+i7960	run-error: Node.js v25.9.0
+i7963	compile-error: value min is not a member of Collections
+i7990	compile-error: test contains Java sources
+i7991	compile-error: type App not found
+i8001	compile-error: test contains Java sources
+i8033	compile-error: type ObjectOutputStream not found
+i8073	compile-error: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
+i8073b	compile-error: no given instance of type Of[(x : CC{val a: (aa : A{type B = Int})})] was found for parameter x
+i8101	compile-error: test contains Java sources
+i8425	compile-error: anonymous class T$$anon$1xoc7vx_90 cannot extend final class PrintStream
+i8530-b	compile-error: no given instance of type ValueOf[Pattern] was found for parameter vt
+i8531	compile-error: test contains Java sources
+i8577a	compile-error: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577b	compile-error: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577c	compile-error: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577d	compile-error: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577e	compile-error: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577f	compile-error: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577g	compile-error: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577h	compile-error: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8577i	compile-error: mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
+i8582	compile-error: run in trait BeforeAndAfterAll cannot override the concrete run in trait Suite without a member that both override
+i8599	compile-error: test contains Java sources
+i8602	compile-error: test contains Java sources
+i8661	compile-error: test contains Java sources
+i876	compile-error: type App not found
+i8977	compile-error: value printf is not a member of PrintStream
+i9011	compile-error: type App not found
+i9068	compile-error: type Product3 not found
+i9155	run-error: Error: UnsupportedOperationException: reflection is not available on JavaScript
+i9175	compile-error: value empty is not a member of SortedMap[String, Int]
+i9225	compile-error: expected an identifier, found 'super'
+i9341	compile-error: expected an identifier, found 'super'
+i9482	compile-error: OptManifest is not a member of the package
+i9530	compile-error: object creation impossible, since it has 2 unimplemented members: combine, value
+i9881	compile-error: type ObjectOutputStream not found
+i9939	wrong-output
+iarrays	compile-error: type App not found
+ift-return	compile-error: type mismatch: found Ctx#T, required contextual$1.T
+impconvtimes	compile-error: operator * cannot be applied to Double and Hour
+implicit-alias	compile-error: type App not found
+implicit-disambiguation	compile-error: type App not found
+implicit-functors	compile-error: type App not found
+implicit-functors2	compile-error: type App not found
+implicit-specifity	compile-error: expected ':', found ','
+implicit-specifity-2	compile-error: type App not found
+implicitFuns	compile-error: value unary_! is not a member of Boolean
+implicitFuns2	compile-error: values of types (A) ?=> (B) ?=> Int and Int cannot be compared with == or !=
+implicitMatch	compile-error: type App not found
+implicitShortcut	compile-error: type App not found
+implicitclasses	compile-error: type App not found
+implicits-numeric	compile-error: type App not found
+implied-divergence	compile-error: type App not found
+implied-for	compile-error: type App not found
+implied-priority	compile-error: ambiguous given instances for E[String]: t1, t2
+implied-specifity-2	compile-error: type App not found
+indexedSeq-apply	compile-error: type App not found
+infiniteloop	compile-error: type App not found
+infix	compile-error: type App not found
+inline-numeric	compile-error: expected end of statement, found ','
+inline-trait-body-lazy-val	compile-error: modifier inline is not allowed for this definition
+inline-trait-body-override-def	compile-error: modifier inline is not allowed for this definition
+inline-trait-body-override-val	compile-error: modifier inline is not allowed for this definition
+inline-trait-body-statements	compile-error: modifier inline is not allowed for this definition
+inline-trait-body-var	compile-error: modifier inline is not allowed for this definition
+inline-trait-child-and-grandchild-override	compile-error: modifier inline is not allowed for this definition
+inline-trait-clash-method-method	compile-error: modifier inline is not allowed for this definition
+inline-trait-clash-method-val-param	compile-error: modifier inline is not allowed for this definition
+inline-trait-clash-param-method	compile-error: modifier inline is not allowed for this definition
+inline-trait-clash-param-param	compile-error: modifier inline is not allowed for this definition
+inline-trait-clash-param-val-param	compile-error: modifier inline is not allowed for this definition
+inline-trait-clash-param-var-param	compile-error: modifier inline is not allowed for this definition
+inline-trait-clash-val-param-val-param	compile-error: modifier inline is not allowed for this definition
+inline-trait-clashing-parent-params	compile-error: modifier inline is not allowed for this definition
+inline-trait-enclosing-super-call	compile-error: modifier inline is not allowed for this definition
+inline-trait-enclosing-supercall-in-inline-trait	compile-error: modifier inline is not allowed for this definition
+inline-trait-indirect-with-params	compile-error: modifier inline is not allowed for this definition
+inline-trait-inheritance-diamond-simple-trait	compile-error: modifier inline is not allowed for this definition
+inline-trait-inheritance-inline-ancestors	compile-error: modifier inline is not allowed for this definition
+inline-trait-inheritance-inline-grandparent	compile-error: modifier inline is not allowed for this definition
+inline-trait-maximum-name-clash	compile-error: modifier inline is not allowed for this definition
+inline-trait-nested	compile-error: modifier inline is not allowed for this definition
+inline-trait-non-inline-blocks-inlining	compile-error: modifier inline is not allowed for this definition
+inline-trait-override-in-parent-triangle	compile-error: modifier inline is not allowed for this definition
+inline-trait-param-shadows-parent-indirect	compile-error: modifier inline is not allowed for this definition
+inline-trait-signature-parameters-val-block	compile-error: modifier inline is not allowed for this definition
+inline-trait-signature-side-effects-1	compile-error: modifier inline is not allowed for this definition
+inline-trait-signature-side-effects-2	compile-error: modifier inline is not allowed for this definition
+inline-trait-specialized-desugar	compile-error: modifier inline is not allowed for this definition
+inline-trait-super-call	compile-error: modifier inline is not allowed for this definition
+inline-trait-super-chain	compile-error: modifier inline is not allowed for this definition
+inline-trait-varargs	compile-error: modifier inline is not allowed for this definition
+inlineAddDeserializeLambda	compile-error: type App not found
+inliner-infer	compile-error: type App not found
+instanceof-serializable	wrong-output
+instances	compile-error: type App not found
+instances-anonymous	compile-error: type App not found
+interleaving	compile-error: expected '=', found '['
+interpolation-opt	compile-error: type App not found
+interpolationArgs	compile-error: type App not found
+intmap	compile-error: type App not found
+iq	compile-error: type mismatch: found List[Int], required Int
+is-valid-num	compile-error: value isDecimalFloat is not a member of BigDecimal
+isInstanceOf-eval	compile-error: type App not found
+iterables	compile-error: type App not found
+iterator-from	compile-error: type App not found
+java-ann-super-class	compile-error: test contains Java sources
+java-ann-super-class-separate	compile-error: test contains Java sources
+java-annot-params	compile-error: test contains Java sources
+java-intersection	compile-error: test contains Java sources
+java-longnames	compile-error: test contains Java sources
+java-no-scala-import	compile-error: test contains Java sources
+java-package-private-bridge	compile-error: test contains Java sources
+java-package-protected	compile-error: test contains Java sources
+java-varargs	compile-error: test contains Java sources
+java-varargs-2	compile-error: test contains Java sources
+java-varargs-3	compile-error: test contains Java sources
+java-vc-overload	compile-error: test contains Java sources
+junitForwarders	compile-error: test contains Java sources
+kmpSliceSearch	compile-error: SeqLike is not a member of the package
+lambda-null	wrong-output
+lambda-serialization	compile-error: ObjectInputStream is not a member of the package
+lambda-serialization-gc	compile-error: URLClassLoader is not a member of the package
+lambda-serialization-others	compile-error: expected ',' or ')', found identifier
+lambda-serialization-security	compile-error: ObjectInputStream is not a member of the package
+lazy-exprs	compile-error: type App not found
+lazy-impl	compile-error: cannot resolve import: Unsafe not found
+lazy-override-run	compile-error: type App not found
+lazy-threadUnsafe-transient	compile-error: type ObjectOutputStream not found
+lazy-traits	compile-error: type App not found
+lazy-val-pattern	wrong-output
+lift-and-unlift	run-error: Error: AssertionError: assertion failed
+llift	run-error: Error: AssertionError: assertion failed
+longmap	compile-error: type App not found
+loops	compile-error: boundary is not a member of the package
+loops-alt	compile-error: boundary is not a member of the package
+lst	compile-error: expected 'case', found 'var'
+manifest-summoning	compile-error: NoManifest is not a member of the package
+map_test	compile-error: type App not found
+match-sub-cases	compile-error: expected '=>', found 'if'
+matcharraytail	compile-error: type App not found
+matchbytes	compile-error: type App not found
+matchemptyarray	compile-error: type App not found
+matchintasany	compile-error: type App not found
+matchonseq	compile-error: type App not found
+matchonstream	compile-error: type App not found
+memoTest	compile-error: type App not found
+missingparams	compile-error: type App not found
+mixin-bridge-methods	compile-error: value getDeclaredMethods is not a member of Class[Sub]
+mixins1	compile-error: type App not found
+mutable-treeset	compile-error: type App not found
+named-patterns	compile-error: Person is not a case class, so it cannot be used as a pattern
+named-tuple-ops	compile-error: asMatchable is not a member of the package
+named-tuple-ordering	compile-error: no given instance of type Ordering[(name : String, age : Int)] was found for parameter x
+named-tuples	compile-error: type Concat not found
+named-tuples-mirror	compile-error: No given instance of type Mirror.Of[(foo : Int, bla : String)] was found.
+named-tuples-strawman-2	compile-error: type Filter not found
+named-tuples-xxl	compile-error: type Concat not found
+namedtuples-buildcolumn	compile-error: type Disjoint not found
+no-unused-nested-object-field	compile-error: value getDeclaredFields is not a member of Class[_]
+no-useless-forwarders	compile-error: value getDeclaredMethods is not a member of Class[_]
+noProtectedSuper	compile-error: type App not found
+nonlocal-return	compile-error: cannot resolve import: NonLocalReturns not found
+nothing-lazy-val	compile-error: value getDeclaredFields is not a member of Class[Foo]
+nothing-val	compile-error: value getDeclaredFields is not a member of Class[Foo]
+nothing-var	compile-error: value getDeclaredFields is not a member of Class[Foo]
+nothingTypeDce	compile-error: type App not found
+nothingTypeNoFramesNoDce	compile-error: type App not found
+nothingTypeNoOpt	compile-error: type App not found
+null-lazy-val	compile-error: value getDeclaredFields is not a member of Class[_]
+null-val	compile-error: value getDeclaredFields is not a member of Class[_]
+null-var	compile-error: value getDeclaredFields is not a member of Class[_]
+nullInstanceEval	compile-error: type App not found
+numbereq	run-error: AssertionError [java.lang.AssertionError]: assertion failed: -32768/class java.lang.Integer != -32768/class scala.math.BigDecimal
+opaque-immutable-array-xm	compile-error: type App not found
+optimizer-array-load	run-error: AssertionError [java.lang.AssertionError]: assertion failed: should have thrown exception
+option-extract	compile-error: value orElse is not a member of ExtractResult[B]
+ordinal-innerclass	compile-error: type App not found
+outer-synchronized	compile-error: value getDeclaredMethods is not a member of Class[_]
+overload_repeated	compile-error: test contains Java sources
+overloading-specifity	compile-error: type App not found
+paramForwarding	compile-error: value getDeclaredFields is not a member of Class[_]
+paramForwarding_separate	compile-error: value getDeclaredFields is not a member of Class[_]
+paramForwarding_together	compile-error: value getDeclaredFields is not a member of Class[_]
+paramForwarding_together_b	compile-error: value getDeclaredFields is not a member of Class[_]
+patmat-finally	compile-error: type App not found
+patmat-spec	compile-error: FirstChars is not a case class, so it cannot be used as a pattern
+patmatch-classtag	compile-error: no given instance of type ClassTag[CaseDef] was found for parameter x
+pf-sub-cases	compile-error: expected '=>', found 'match'
+phantomValueClass	compile-error: type App not found
+pkgobjvals	compile-error: a singleton type needs a val, a parameter or an object
+planets	compile-error: no given instance of type ValueOf[T] was found for parameter vt
+poly-kinded-derives	compile-error: type App not found
+polymorphic-functions	compile-error: expected ']', found '='
+predef-cycle	compile-error: value package is not a member of scala
+productElementName	compile-error: method productElementName overrides nothing
+properties-version-string	compile-error: value Properties is not a member of util
+protectedSuper	compile-error: type App not found
+protectedacc	compile-error: FileWriter is not a member of the package
+proxy	compile-error: type App not found
+publicInBinary	compile-error: expected 'extends' or a template body, found '@'
+quotes-add-erased	compile-error: 'erased' is not part of the supported Scala subset
+quotes-reflection	compile-error: 'erased' is not part of the supported Scala subset
+range	compile-error: type BigDecimalAsIfIntegral not found
+range-unit	wrong-output
+rawstrings	compile-error: type App not found
+reducable	compile-error: type App not found
+redundantParents	compile-error: value getSuperclass is not a member of Class[_]
+repeatable	compile-error: test contains Java sources
+rescue	compile-error: cannot resolve import: NonLocalReturns not found
+rescue-boundary	compile-error: boundary is not a member of the package
+returning	compile-error: type App not found
+richs	compile-error: value stripLineEnd is not a member of String
+runtime-richChar	compile-error: type App not found
+safeThrowsStrawman	compile-error: type Erased not found
+safeThrowsStrawman2	compile-error: type Erased not found
+saferExceptions	compile-error: throws takes 1 type argument(s), 2 given
+scala-tests-typeChecks	compile-error: cannot resolve import: testing not found
+scala2-library-test	compile-error: cannot resolve import: testing not found
+search	compile-error: type App not found
+seqlike-kmp	compile-error: value indexOfSlice is not a member of Seq[A]
+serialization-new	compile-error: type ObjectOutputStream not found
+serialization-new-legacy	compile-error: type ObjectOutputStream not found
+serialize	compile-error: type ObjectOutputStream not found
+serialize-stream	compile-error: type ObjectOutputStream not found
+single-case-expr	compile-error: expected an expression, found 'case'
+singleQuoteStrings	compile-error: expected end of statement, found literal
+sip23-valueof	compile-error: type App not found
+slices	compile-error: type App not found
+sort	compile-error: type App not found
+specialized-trait-all-general-raw	compile-error: modifier inline is not allowed for this definition
+specialized-trait-argument-specializes-current-trait	compile-error: modifier inline is not allowed for this definition
+specialized-trait-array-of-specialized-trait-classtag	compile-error: modifier inline is not allowed for this definition
+specialized-trait-as-parameter	compile-error: modifier inline is not allowed for this definition
+specialized-trait-as-return-type	compile-error: modifier inline is not allowed for this definition
+specialized-trait-as-val	compile-error: modifier inline is not allowed for this definition
+specialized-trait-body-macro-uses-type-param	compile-error: modifier inline is not allowed for this definition
+specialized-trait-call-method-in-other-file	compile-error: modifier inline is not allowed for this definition
+specialized-trait-check-bridge-exists	compile-error: modifier inline is not allowed for this definition
+specialized-trait-check-bridge-exists-hidden-by-inline	compile-error: modifier inline is not allowed for this definition
+specialized-trait-check-specialized-method-called	compile-error: modifier inline is not allowed for this definition
+specialized-trait-class-extends-specialized-trait-check-specialized	compile-error: modifier inline is not allowed for this definition
+specialized-trait-collections-example	compile-error: modifier inline is not allowed for this definition
+specialized-trait-diamond	compile-error: modifier inline is not allowed for this definition
+specialized-trait-erasure	compile-error: modifier inline is not allowed for this definition
+specialized-trait-erasure-impl-classes	compile-error: modifier inline is not allowed for this definition
+specialized-trait-inline-specialization-macro	compile-error: modifier inline is not allowed for this definition
+specialized-trait-inline-specialized-instance	compile-error: modifier inline is not allowed for this definition
+specialized-trait-inline-specialized-instance-hidden	compile-error: modifier inline is not allowed for this definition
+specialized-trait-inline-specialized-instance-with-specialization	compile-error: modifier inline is not allowed for this definition
+specialized-trait-inline-trait-ordering-edge-case	compile-error: modifier inline is not allowed for this definition
+specialized-trait-inlining-loop	compile-error: modifier inline is not allowed for this definition
+specialized-trait-list-of-specialized-trait	compile-error: modifier inline is not allowed for this definition
+specialized-trait-list-zip-example	compile-error: modifier inline is not allowed for this definition
+specialized-trait-manual-class-extend-not-top-of-hierarchy	compile-error: modifier inline is not allowed for this definition
+specialized-trait-masked-inline-specialization-via-inlining	compile-error: modifier inline is not allowed for this definition
+specialized-trait-masked-inline-specialized	compile-error: modifier inline is not allowed for this definition
+specialized-trait-maths	compile-error: modifier inline is not allowed for this definition
+specialized-trait-multiple-files	compile-error: modifier inline is not allowed for this definition
+specialized-trait-multiple-package-same-file	compile-error: modifier inline is not allowed for this definition
+specialized-trait-multiple-package-same-file-nested	compile-error: modifier inline is not allowed for this definition
+specialized-trait-multiple-parameter-packs	compile-error: modifier inline is not allowed for this definition
+specialized-trait-multiple-parameter-packs-method	compile-error: modifier inline is not allowed for this definition
+specialized-trait-one-parent-is-inline	compile-error: modifier inline is not allowed for this definition
+specialized-trait-package	compile-error: modifier inline is not allowed for this definition
+specialized-trait-package-contains-object	compile-error: modifier inline is not allowed for this definition
+specialized-trait-package-contains-object-multi-file	compile-error: modifier inline is not allowed for this definition
+specialized-trait-pathological-context-bounds	compile-error: modifier inline is not allowed for this definition
+specialized-trait-requires-inline-trait-inlining	compile-error: modifier inline is not allowed for this definition
+specialized-trait-scoped-inside-object	compile-error: modifier inline is not allowed for this definition
+specialized-trait-scoped-inside-object-2	compile-error: modifier inline is not allowed for this definition
+specialized-trait-scoped-inside-object-3	compile-error: modifier inline is not allowed for this definition
+specialized-trait-self-inline	compile-error: modifier inline is not allowed for this definition
+specialized-trait-subtyping-once-specialized	compile-error: modifier inline is not allowed for this definition
+specialized-trait-super-chain	compile-error: modifier inline is not allowed for this definition
+specialized-trait-varargs	compile-error: modifier inline is not allowed for this definition
+specialized-trait-variance	compile-error: modifier inline is not allowed for this definition
+specialized-trait-vector-dot-product	compile-error: modifier inline is not allowed for this definition
+specialized-trait-vector-zip	compile-error: modifier inline is not allowed for this definition
+spread-patterns	compile-error: a sequence wildcard can only end a sequence pattern
+spreads	compile-error: type mismatch: found 1, required Seq[Int] | Array[? <: Int]
+spreads-subtyping	compile-error: type mismatch: found CharSequence, required Seq[CharSequence] | Array[? <: CharSequence]
+stream-stack-overflow-filter-map	compile-error: type App not found
+stream_flatmap_odds	compile-error: type App not found
+string-context-implicits-with-conversion	compile-error: expected '}', found ';'
+string-extractor	run-error: TypeError: x.iterator is not a function
+string-switch	wrong-output
+structural	compile-error: missing parameter type
+structural-compat	compile-error: type mismatch: found (x : AnyRef{def sel0: Int; def sel1: Int => Int; def fun0(x: Int): Int; def fun1(x: Int)(y: Int): Int; def fun2(x: Int): Int => Int; def fu
+summonFrom	compile-error: type App not found
+switches	compile-error: type App not found
+sysprops	compile-error: not found: BooleanProp
+t0017	compile-error: type App not found
+t0042	compile-error: type App not found
+t0607	compile-error: type App not found
+t0631	compile-error: type App not found
+t0668	compile-error: type App not found
+t0677-old	compile-error: type App not found
+t0807	compile-error: type App not found
+t0883	compile-error: type App not found
+t0936	compile-error: type App not found
+t10032	compile-error: type App not found
+t10232	compile-error: ObjectInputStream is not a member of the package
+t10290	compile-error: expected an identifier, found 'super'
+t1044	compile-error: type App not found
+t1074	wrong-output
+t10889	compile-error: test contains Java sources
+t11255	compile-error: type ObjectOutputStream not found
+t1192	compile-error: type App not found
+t1220	compile-error: type App not found
+t12290	compile-error: test contains Java sources
+t12300	compile-error: test contains Java sources
+t12348	compile-error: IntRef is not a member of the package
+t1300	compile-error: type App not found
+t13033	compile-error: type App not found
+t1323	compile-error: type App not found
+t1373	compile-error: type App not found
+t1381	compile-error: type App not found
+t1406b	compile-error: expected ',' or ')', found identifier
+t1423	compile-error: type App not found
+t1466	compile-error: type App not found
+t1505	compile-error: type Enumeration not found
+t1524	compile-error: type App not found
+t153	compile-error: type App not found
+t1535	compile-error: type App not found
+t1591	compile-error: type App not found
+t1718	compile-error: type App not found
+t1747	compile-error: type App not found
+t1829	compile-error: values of types LongMap[Nothing] and HashMap[Nothing, Nothing] cannot be compared with == or !=
+t1909b	compile-error: type App not found
+t1909c	compile-error: type App not found
+t1939	compile-error: type App not found
+t2075	compile-error: type App not found
+t2111	compile-error: type App not found
+t2147	compile-error: type App not found
+t216	compile-error: type App not found
+t2176	compile-error: type App not found
+t2177	compile-error: type App not found
+t2255	compile-error: type App not found
+t2378	run-error: Error: AssertionError: assertion failed
+t2488	compile-error: type App not found
+t2544	compile-error: object creation impossible, since def buildCC[B](items: Array[B]): Seq[B] in trait IterableOps is not defined
+t2552	compile-error: type App not found
+t2755	wrong-output
+t2788	compile-error: type App not found
+t2818	compile-error: type App not found
+t2849	compile-error: value until is not a member of SortedSet[Int]
+t2857	compile-error: type App not found
+t298	compile-error: type App not found
+t3038	compile-error: type App not found
+t3038b	compile-error: type App not found
+t3038d	compile-error: type ObjectInputStream not found
+t3088	run-error: RangeError: Invalid array length
+t3097	compile-error: type App not found
+t3126	compile-error: value unapply is not a member of C
+t3186	compile-error: type Enumeration not found
+t3220-3	compile-error: value in backtick quoted identifier is not a member of Literals
+t3235-minimal	run-error: Error: AssertionError: assertion failed
+t3273	run-error: TypeError: Cannot read properties of undefined (reading 'map')
+t3327	compile-error: type mismatch: found 'e', required String
+t3346a	compile-error: type App not found
+t3346d	compile-error: type App not found
+t3346g	compile-error: type App not found
+t3346h	compile-error: type App not found
+t3353	compile-error: type App not found
+t3452a	compile-error: test contains Java sources
+t3452b	compile-error: test contains Java sources
+t3452b-bcode	compile-error: test contains Java sources
+t3452d	compile-error: test contains Java sources
+t3452e	compile-error: test contains Java sources
+t3452g	compile-error: test contains Java sources
+t3452h	compile-error: error overriding method f in class Foo of type I: method f in trait Bar of type Bar.this.I has incompatible type
+t3488	compile-error: type App not found
+t3493	compile-error: value stringOf is not a member of ScalaRunTime
+t3502	compile-error: recursive use of apply needs an explicit result type
+t3540	compile-error: value isEmpty is not a member of (LazyList[Int], Int)
+t3613	compile-error: type AbstractListModel not found
+t3616	compile-error: type Enumeration not found
+t3619	compile-error: type App not found
+t3670	compile-error: type App not found
+t3687	compile-error: type Enumeration not found
+t3719	compile-error: type Enumeration not found
+t3726	compile-error: type App not found
+t3763	compile-error: type App not found
+t3829	compile-error: value empty is not a member of Map[Int, Int]
+t3832	compile-error: type App not found
+t3835	compile-error: type App not found
+t3887	compile-error: expected a pattern, found 'this'
+t3950	compile-error: type Enumeration not found
+t3984	compile-error: type mismatch: found Map, required Factory[(IH, IH), HashMap[IH, IH]]
+t3994	compile-error: type App not found
+t4023	compile-error: value getDeclaredClasses is not a member of Class[_]
+t4024	compile-error: type App not found
+t4027	compile-error: type App not found
+t405	compile-error: type App not found
+t4119	compile-error: test contains Java sources
+t4147	compile-error: values of types SortedSet[Int] and SortedSet[Int] cannot be compared with == or !=
+t4190	compile-error: type App not found
+t4238	compile-error: test contains Java sources
+t4300	compile-error: expected an identifier, found 'super'
+t4317	compile-error: test contains Java sources
+t4332b	compile-error: type App not found
+t4535	compile-error: type ArrayStack not found
+t4536	compile-error: type Dynamic not found
+t4537	compile-error: type App not found
+t4570	compile-error: type Enumeration not found
+t4656	compile-error: value prependToList is not a member of ListBuffer[Int]
+t4742	compile-error: type App not found
+t4750	compile-error: type App not found
+t4777	compile-error: type App not found
+t4813	compile-error: type App not found
+t4859	wrong-output
+t4871	compile-error: not found: classOf
+t4897	compile-error: type App not found
+t4930	compile-error: type mismatch: found Iterable[Byte], required Seq[Byte]
+t4935	compile-error: type App not found
+t498	compile-error: type App not found
+t5009	compile-error: type App not found
+t5040	compile-error: type Dynamic not found
+t5045	compile-error: type App not found
+t5053	compile-error: type App not found
+t5171	compile-error: type App not found
+t5201	compile-error: type App not found
+t5262	compile-error: type ObjectOutputStream not found
+t5328	compile-error: type App not found
+t5377	compile-error: value permutations is not a member of LazyList[Int]
+t5387	compile-error: type App not found
+t5394	compile-error: type App not found
+t5407	compile-error: type App not found
+t5530	compile-error: type App not found
+t5532	compile-error: type App not found
+t5588	compile-error: type Enumeration not found
+t5590	compile-error: type ObjectOutputStream not found
+t5610a	compile-error: type App not found
+t5612	compile-error: type Enumeration not found
+t5614	compile-error: type App not found
+t5629b	compile-error: type App not found
+t5656	compile-error: value addString is not a member of SeqView[List[Char]]
+t5680	compile-error: type App not found
+t5688	compile-error: type App not found
+t5729	compile-error: type App not found
+t5733	compile-error: type Dynamic not found
+t5830	compile-error: type App not found
+t5856	compile-error: type App not found
+t5857	run-error: Error: AssertionError: assertion failed: 8959
+t5866	wrong-output
+t5867	compile-error: UnrolledBuffer is not a member of the package
+t5879	compile-error: value merged is not a member of HashMap[Int, String]
+t5923c	compile-error: type App not found
+t5974	compile-error: type App not found
+t5986	compile-error: type mismatch: found Iterable[Foo], required Set[Foo]
+t6011b	compile-error: type App not found
+t6011c	compile-error: type App not found
+t6064	compile-error: type App not found
+t6070	compile-error: type App not found
+t6077_patmat_cse_irrefutable	compile-error: type App not found
+t6090	run-error: Error: AssertionError: assertion failed
+t6104	compile-error: type App not found
+t6111	compile-error: type App not found
+t6114	compile-error: type App not found
+t6138	compile-error: test contains Java sources
+t6138-2	compile-error: test contains Java sources
+t6154	run-error: RangeError: Maximum call stack size exceeded
+t6168	compile-error: test contains Java sources
+t6168b	compile-error: test contains Java sources
+t6246	compile-error: type App not found
+t6260-delambdafy	compile-error: Modifier is not a member of the package
+t6271	compile-error: type App not found
+t6333	compile-error: type App not found
+t6353	compile-error: type App not found
+t6355	compile-error: type Dynamic not found
+t6380	compile-error: type App not found
+t6406-regextract	compile-error: type App not found
+t6443b	compile-error: object creation impossible, since def foo(d: A.this.D)(d2: (d : A.this.D)): Unit in trait A is not defined
+t6488	compile-error: cannot resolve import: process not found
+t6500	compile-error: type App not found
+t6534	run-error: Error: AssertionError: assertion failed
+t6541	compile-error: type App not found
+t6574b	compile-error: type App not found
+t6611	compile-error: type App not found
+t6611b	compile-error: type App not found
+t6614	compile-error: type App not found
+t6628	compile-error: object creation impossible, since def buildCC[B](items: Array[B]): Iterable[B] in trait IterableOps is not defined
+t6632	compile-error: type App not found
+t6633	compile-error: type App not found
+t6634	compile-error: type App not found
+t6637	compile-error: type App not found
+t6644	compile-error: type App not found
+t6663	compile-error: type Dynamic not found
+t6673	compile-error: type App not found
+t6706	compile-error: value gc is not a member of System
+t6793	compile-error: type App not found
+t6827	compile-error: type App not found
+t6888	compile-error: type App not found
+t7120	compile-error: type App not found
+t7120b	compile-error: type App not found
+t7171	compile-error: type App not found
+t7181	compile-error: type App not found
+t7200	compile-error: type App not found
+t7214	compile-error: value getDeclaredFields is not a member of Class[_]
+t7215	compile-error: type App not found
+t7223	compile-error: type App not found
+t7231	compile-error: type App not found
+t7242	compile-error: type App not found
+t7249	compile-error: type App not found
+t7269	compile-error: type App not found
+t7300	compile-error: type App not found
+t7336	run-error: Node.js v25.9.0
+t7341	compile-error: type App not found
+t7374	compile-error: test contains Java sources
+t7396	run-error: Error: AssertionError: assertion failed
+t7445	compile-error: type App not found
+t7571	compile-error: type App not found
+t7584	compile-error: type App not found
+t7584b	compile-error: type App not found
+t7899	compile-error: type App not found
+t7912	run-error: NotImplementedError [scala.NotImplementedError]: an implementation is missing
+t7985	compile-error: type App not found
+t7985b	compile-error: type App not found
+t7992	compile-error: expected an identifier, found 'super'
+t7992b	compile-error: expected an identifier, found 'super'
+t8002	compile-error: type App not found
+t8010	compile-error: type App not found
+t8015-ffc	compile-error: type App not found
+t8087	compile-error: type App not found
+t8188	compile-error: ObjectInputStream is not a member of the package
+t8197	compile-error: type App not found
+t8197b	compile-error: type App not found
+t8199	compile-error: type App not found
+t8346	compile-error: type App not found
+t8428	compile-error: type App not found
+t8549b	compile-error: cannot resolve import: Modifier not found
+t8601b	run-error: TypeError: Cannot read properties of null (reading 'length')
+t8601c	compile-error: type IntRef not found
+t8601d	run-error: Node.js v25.9.0
+t8601e	compile-error: test contains Java sources
+t8610	compile-error: type App not found
+t8611a	compile-error: type App not found
+t8611b	compile-error: type Enumeration not found
+t8611c	compile-error: type App not found
+t8690	compile-error: Source is not a member of the package
+t8803	compile-error: expected an identifier, found 'super'
+t8823	compile-error: type Product2 not found
+t8845	compile-error: type App not found
+t8888	compile-error: type App not found
+t889	compile-error: type App not found
+t9400	compile-error: type Retention not found
+t949	compile-error: type App not found
+t978	compile-error: type App not found
+t9915	compile-error: test contains Java sources
+tagless	compile-error: expected end of statement, found ','
+tailrec-return	compile-error: Cannot rewrite recursive call: it is not in tail position
+targetName-interop	compile-error: test contains Java sources
+targetName-modules-1	compile-error: test contains Java sources
+targetName-modules-2	compile-error: test contains Java sources
+targetName1	compile-error: type App not found
+tcpoly_monads	compile-error: type App not found
+tcpoly_overriding	compile-error: type App not found
+tcpoly_parseridioms	compile-error: type argument (ParserIdioms.this.ParserIdiom : ParserIdiom) does not conform to upper bound Idiom[[t] =>> ParserIdioms.this.Parser[t]]
+test-implicits	compile-error: type App not found
+throws-annot	compile-error: expected 'extends' or a template body, found '@'
+toplevel-defs	compile-error: type App not found
+toplevel-implicits	compile-error: type App not found
+toplevel-mixed	compile-error: x is already defined as value x; overloading a value with a method is not supported
+toplevel-stale	compile-error: foo234 is already defined as method foo234 in /home/agent/teq/../teq-ref/scala3/tests/run/toplevel-stale/A_1.scala
+trait-extends-inline-trait-uses	compile-error: modifier inline is not allowed for this definition
+trait-static-forwarder	compile-error: test contains Java sources
+traitNoInit	run-error: Error: UnsupportedOperationException: reflection is not available on JavaScript
+transform	compile-error: type mismatch: found ArrayBuffer, required Factory[Int, Any]
+transparent	compile-error: method default overrides nothing
+transparent-foreach	compile-error: type App not found
+transparentArrowAssoc	compile-error: value BigIntIsIntegral is not a member of Numeric
+transparentProtected	compile-error: type App not found
+triemap-hash	compile-error: Hashing is not a member of the package
+try	compile-error: type App not found
+try-catch-unify	compile-error: cannot resolve import: Exception not found
+tuple-concat	compile-error: type App not found
+tuple-cons	compile-error: type App not found
+tuple-map	compile-error: type App not found
+tuple-ops	compile-error: type mismatch: found Tuple, required *:[(Int, Int), *:[(Long, Char), Tuple]]
+tuple-patterns	compile-error: type App not found
+tuple-split	compile-error: type App not found
+tuple-tail	compile-error: type App not found
+tuple-typetests	compile-error: type App not found
+tuple-zip	compile-error: type App not found
+tupled-function-andThen	compile-error: TupledFunction is not a member of the package
+tupled-function-apply	compile-error: TupledFunction is not a member of the package
+tupled-function-compose	compile-error: TupledFunction is not a member of the package
+tupled-function-extension-method	compile-error: TupledFunction is not a member of the package
+tupled-function-tupled	compile-error: TupledFunction is not a member of the package
+tupled-function-untupled	compile-error: TupledFunction is not a member of the package
+tuples	compile-error: type App not found
+tuples1	compile-error: type App not found
+tuples1a	compile-error: type App not found
+tuples1b	compile-error: type App not found
+type-propagation	compile-error: type App not found
+typeCheckErrors	compile-error: cannot resolve import: testing not found
+typealias_overriding	compile-error: expected an identifier, found 'super'
+typeclass-derivation-doc-example	compile-error: type App not found
+typeclass-derivation1	compile-error: value asInstanceOf is not a member of Cons[T]
+typeclass-derivation2a	compile-error: type mismatch: found Lst[T], required Lst[T]
+typeclass-derivation2b	compile-error: type mismatch: found ? <: T, required _
+typeclass-derivation2d	compile-error: value asInstanceOf is not a member of Lst
+typeclass-derivation3	compile-error: value trimStart is not a member of ListBuffer[Int]
+typelevel-numeric	compile-error: type App not found
+typelevel-overrides	compile-error: type App not found
+typelevel-peano	compile-error: type App not found
+typetest	wrong-output
+tyql	compile-error: cannot resolve import: NamedTuple is not an object or a package
+unambiref	compile-error: Reference to x is ambiguous.
+unapply	compile-error: type Product2 not found
+unapply-tparam	compile-error: expected '=>', found '['
+unboxingBug	compile-error: type App not found
+unchecked-patterns	compile-error: type App not found
+unicodeEscapes	compile-error: not found: ida
+uninitialized-field-values	run-error: Error: AssertionError: assertion failed
+unit-lazy-val	compile-error: value getDeclaredFields is not a member of Class[_]
+unit-val	compile-error: value getDeclaredFields is not a member of Class[_]
+unit-var	compile-error: value getDeclaredFields is not a member of Class[_]
+unit-volatile-var	compile-error: value getDeclaredFields is not a member of Class[_]
+unittest_collection	compile-error: type mismatch: found ListBuffer[String], required ArrayBuffer[String]
+unreachable	compile-error: type App not found
+unroll-caseclass-integration	compile-error: wrong number of patterns for Unrolled: expected 4, found 2
+unroll-classMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-classMethod-integra
+unroll-clause-interleaving	compile-error: expected '=', found '['
+unroll-curriedMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-curriedMethod-integ
+unroll-genericMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-genericMethod-integ
+unroll-methodWithImplicit-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-methodWithImplicit-
+unroll-multiple	run-error: Error: IndexOutOfBoundsException: 1
+unroll-objectMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-objectMethod-integr
+unroll-primaryConstructor-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-primaryConstructor-
+unroll-secondParameterList-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-secondParameterList
+unroll-secondaryConstructor-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-secondaryConstructo
+unroll-traitMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-traitMethod-integra
+unroll-value-class	compile-error: type Unrolled is already defined
+value-class-extractor	compile-error: type Product3 not found
+value-class-extractor-2	compile-error: this is not a case class or enum case
+value-class-extractor-seq	compile-error: value stringOf is not a member of ScalaRunTime
+valueclasses-constr	compile-error: type App not found
+varargs-abstract	compile-error: test contains Java sources
+varargs-extend-java	compile-error: test contains Java sources
+varargs-extend-java-2	compile-error: test contains Java sources
+variable-pattern-access	compile-error: value getDeclaredFields is not a member of Class[_]
+vc-equals	compile-error: type App not found
+view-iterator-stream	compile-error: generic is not a member of the package
+viewtest	compile-error: type App not found
+virtpatmat_alts	compile-error: type App not found
+virtpatmat_apply	compile-error: type App not found
+virtpatmat_casting	compile-error: type App not found
+virtpatmat_literal	compile-error: type App not found
+virtpatmat_npe	compile-error: type App not found
+virtpatmat_opt_sharing	compile-error: type App not found
+virtpatmat_partial_backquoted	compile-error: type App not found
+virtpatmat_stringinterp	compile-error: type App not found
+virtpatmat_switch	compile-error: type App not found
+virtpatmat_tailcalls_verifyerror	compile-error: type App not found
+virtpatmat_try	compile-error: type App not found
+virtpatmat_typed	compile-error: type App not found
+virtpatmat_unapply	compile-error: type App not found
+virtpatmat_unapplyseq	compile-error: type App not found
+virtpatmat_valdef	compile-error: type App not found
+weak-conformance	compile-error: type App not found
+weakconform	compile-error: type App not found
+xml	compile-error: expected end of statement, found identifier
+zero-arity-case-class	compile-error: value unapply is not a member of Foo

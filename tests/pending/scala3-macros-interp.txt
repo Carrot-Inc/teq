@@ -1,0 +1,220 @@
+BigFloat	compile-error: FromDigits is not a member of the package
+TypeRepr-isTupleN	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+ValDef-let-flags	compile-error: None of the overloaded alternatives of method let in object ValDef with types
+Xmacro-settings-compileTimeEnv	wrong-output
+Xmacro-settings-simple	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+annot-add-global-class	compile-error: MacroAnnotation is not a member of the package
+annot-add-global-object	compile-error: MacroAnnotation is not a member of the package
+annot-add-local-class	compile-error: MacroAnnotation is not a member of the package
+annot-add-local-object	compile-error: MacroAnnotation is not a member of the package
+annot-add-nested-class	compile-error: MacroAnnotation is not a member of the package
+annot-add-nested-object	compile-error: MacroAnnotation is not a member of the package
+annot-annot-order	compile-error: MacroAnnotation is not a member of the package
+annot-arg-value-in-java	compile-error: test contains Java sources
+annot-bind	compile-error: MacroAnnotation is not a member of the package
+annot-changeVal	compile-error: MacroAnnotation is not a member of the package
+annot-concrete-class	compile-error: MacroAnnotation is not a member of the package
+annot-export	compile-error: MacroAnnotation is not a member of the package
+annot-gen2	compile-error: MacroAnnotation is not a member of the package
+annot-generate	compile-error: MacroAnnotation is not a member of the package
+annot-java-tree	compile-error: exception in macro: java.lang.AssertionError: assertion failed: Expected List(a, b) arguments for SuppressWarnings annotation of Foo but got List() (called by c
+annot-macro-main	compile-error: MacroAnnotation is not a member of the package
+annot-memo	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-add-def	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-add-inner-class	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-add-lazy-val	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-add-local-class	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-add-val	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-add-var	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-data	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-equals	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-mod-def	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-mod-val	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-override-def	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-override-val	compile-error: MacroAnnotation is not a member of the package
+annot-mod-class-unused-new-sym	compile-error: MacroAnnotation is not a member of the package
+annot-result-order	compile-error: MacroAnnotation is not a member of the package
+annot-simple-fib	compile-error: MacroAnnotation is not a member of the package
+annot-unrollLast	compile-error: MacroAnnotation is not a member of the package
+beta-reduce-inline-result	compile-error: error overriding method apply in trait Function1 of type (v1: T1): R: method apply of type (i: Int): (i : Int) has incompatible type
+exports	wrong-output
+expr-map-1	run-error: scala.String.reverse has no body to run
+expr-map-2	wrong-output
+expr-map-3	compile-error: type mismatch: found String, required String & T
+expr-mirror-info	compile-error: no given instance of type ToExpr[(String, List[String], String, String, List[String])] was found for parameter to
+f-interpolation-1	compile-error: not found: this
+f-interpolator-tests	compile-error: expected end of statement, found identifier
+flops-rewrite	wrong-output
+flops-rewrite-2	wrong-output
+flops-rewrite-3	wrong-output
+gestalt-optional-staging	compile-error: not found: this
+gestalt-type-toolbox-reflect	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+i10863	compile-error: no given instance of type Type[T] was found for parameter evidence$1
+i11685	compile-error: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by client in object MyMacro)
+i12021	compile-error: 'erased' is not part of the supported Scala subset
+i12351	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+i12352	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+i12392	wrong-output
+i12417	compile-error: type App not found
+i14902	wrong-output
+i15968	wrong-output
+i16734a	compile-error: type AnyKind not found
+i16734b	compile-error: type AnyKind not found
+i16734c	compile-error: type AnyKind not found
+i17105	compile-error: value apply is not a member of Any
+i17105b	compile-error: 'erased' is not part of the supported Scala subset
+i17445	run-error: argument 0 is no Array
+i17445-new-default	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed: Expected P(4, 7) but got P(3,7)
+i17905	compile-error: value apply is not a member of Any
+i18283	wrong-output
+i18806	compile-error: MacroAnnotation is not a member of the package
+i19676	compile-error: MacroAnnotation is not a member of the package
+i19732	wrong-output
+i19905	compile-error: exception in macro: scala.MatchError: scala.Unit (of class scala.quoted.Type) (called by noPrefixStructure)
+i19951-java-annotations-tasty-compat	compile-error: test contains Java sources
+i19951-java-annotations-tasty-compat-2	compile-error: test contains Java sources
+i20052	compile-error: test contains Java sources
+i20449	wrong-output
+i21225	compile-error: not found: GivenSelector
+i22260	compile-error: not found: MethodTypeKind
+i22395	wrong-output
+i24006	compile-error: not supported yet in a macro: println is an effect, which a compile-time evaluation cannot have (called by eval in object Eval)
+i26626	compile-error: cannot resolve import: testing not found
+i4947e	run-error: Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: Index 1 out of bounds for length 0
+i4947f	run-error: Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: Index 1 out of bounds for length 0
+i5119	wrong-output
+i5119b	wrong-output
+i5533b	compile-error: value Predef is not a member of scala
+i5536	compile-error: value Predef is not a member of scala
+i5629	compile-error: value Predef is not a member of scala
+i5715	compile-error: value Predef is not a member of scala
+i5941	compile-error: Unsupported syntax. Example: `GenLens[Address](_.streetNumber)`
+i6171	compile-error: value Predef is not a member of scala
+i6253-c	run-error: Exception in thread "main" scala.NotImplementedError: an implementation is missing
+i6270	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+i6518	compile-error: type argument Function1 does not have the same kind as its bound
+i6765	wrong-output
+i6765-b	wrong-output
+i6765-c	wrong-output
+i6988	compile-error: not supported yet in a macro: the selection of p1 on scala.Any does not type: value p1 is not a member of Any (called by create in object FirstArg)
+i7716	compile-error: type App not found
+i7887	compile-error: cannot resolve import: quotes is not an object or a package
+i7898	wrong-output
+i7964	compile-error: type App not found
+i7987	wrong-output
+i8007	wrong-output
+i8514	wrong-output
+i8514b	wrong-output
+i8520	compile-error: type argument T does not have the same kind as its bound
+i8746	compile-error: type mismatch: found tpe2, required "anything"
+i9206	compile-error: type AnyKind not found
+i9812b	compile-error: type mismatch: found (Quotes) ?=> Expr[Lst[Int]], required Expr[Lst[Int]]
+inline-beta-reduce-polyfunction	wrong-output
+inline-case-objects	compile-error: value getCanonicalName is not a member of Class[_]
+inline-tuples-1	compile-error: no given instance of type FromExpr[(Int, Int, Int, Int)] was found for parameter from
+is-in-typer	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+lib-StringContext	compile-error: expected end of statement, found identifier
+macro-erased	compile-error: 'erased' is not part of the supported Scala subset
+macros-in-same-project1	compile-error: type App not found
+newClass	compile-error: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass)
+newClassAnnotation	compile-error: test contains Java sources
+newClassExtends	compile-error: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass)
+newClassExtendsClassParams	compile-error: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass)
+newClassExtendsJavaClass	compile-error: test contains Java sources
+newClassParams	compile-error: there is no parameter named clsFlags
+newClassParamsExtendsClassParams	compile-error: too many arguments: expected 5
+newClassSelf	compile-error: not supported yet in a macro: scala.quoted.Reflect$Symbol$ has no member newClass (called by makeClass)
+newClassTraitAndAbstract	compile-error: value apply is not a member of PolyType
+newClassTypeParams	compile-error: value apply is not a member of PolyType
+newClassTypeParamsDoc	compile-error: value apply is not a member of PolyType
+no-symbol	run-error: Exception in thread "main" java.lang.AssertionError: assertion failed
+opaque-inline	compile-error: Not a constant
+paramSymss	wrong-output
+pattern-scope-extrusion	compile-error: value apply is not a member of Any
+places-proto	compile-error: exception in macro: scala.MatchError: Apply(TypeApply(Ident("apply"), List(Inferred(TypeRef(ThisType(TypeRef(NoPrefix(), "scala")), "Int")))), List(Ident("arr")
+quote-implicitMatch	compile-error: type App not found
+quote-impure-by-name	wrong-output
+quote-inline-function	wrong-output
+quote-match-more-that-22-splices	compile-error: not supported yet in a macro: a tuple of more than eight results (called by f)
+quote-match-poly-function-1	wrong-output
+quote-match-poly-function-1-regression	wrong-output
+quote-match-poly-function-2	compile-error: value apply is not a member of Any
+quote-matcher-runtime	compile-error: type QuoteMatching not found
+quote-matcher-symantics-2	compile-error: value apply is not a member of Any
+quote-matcher-symantics-3	compile-error: value apply is not a member of Any
+quote-matching-open	compile-error: value apply is not a member of Any
+quote-matching-optimize-1	wrong-output
+quote-matching-optimize-2	wrong-output
+quote-matching-optimize-3	wrong-output
+quote-matching-optimize-4	wrong-output
+quote-matching-optimize-5	wrong-output
+quote-toExprOfTuple	compile-error: type App not found
+quote-type-matcher	compile-error: type QuoteMatching not found
+quoted-ToExpr-derivation-macro	compile-error: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
+quoted-liftable-derivation-macro	compile-error: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
+quoted-liftable-derivation-macro-2	compile-error: type mismatch: found Sum{type MirroredElemTypes = mirroredElemTypes}, required Sum{type MirroredElemTypes = mirroredElemTypes; type MirroredMonoType = T}
+quoted-matching-docs	compile-error: type App not found
+quoted-matching-docs-2	compile-error: type App not found
+quoted-pattern-open-expr	compile-error: value apply is not a member of Any
+quoted-pattern-open-expr-0	compile-error: value apply is not a member of Any
+quoted-pattern-open-expr-simple-eval	compile-error: value apply is not a member of Any
+quoted-pattern-type	compile-error: type mismatch: found Expr[Boolean], required Expr[T]
+quoted-toExprOfClass	compile-error: not supported yet in a macro: no literal holds long (called by wildcard)
+refined-apply	compile-error: value newTypeAlias is not a member of Symbol
+refined-selectable-macro	compile-error: not found: this
+reflect-dsl	compile-error: value Predef is not a member of scala
+reflect-inline	compile-error: not found: augmentString
+reflect-isFunctionType	compile-error: expected ',' or ')', found identifier
+reflect-lambda	compile-error: value Predef is not a member of scala
+reflect-method-type-kind	compile-error: value methodTypeKind is not a member of MethodType
+reflect-pos-fun	compile-error: value Predef is not a member of scala
+reflect-select-constructor	compile-error: value Predef is not a member of scala
+reflect-select-copy	compile-error: value Predef is not a member of scala
+reflect-select-copy-2	compile-error: value Predef is not a member of scala
+reflect-select-symbol-constructor	compile-error: value Predef is not a member of scala
+reflect-select-value-class	compile-error: value Predef is not a member of scala
+reflect-sourceCode	wrong-output
+reflect-typeChecks	compile-error: value testing is not a member of compiletime
+requiredSymbols	compile-error: exception in macro: java.util.NoSuchElementException: class java.lang.Object not found (called by foo in object Macro)
+self	wrong-output
+simple-interpreter	compile-error: `yield` or `do` expected
+simple-switch	compile-error: not supported yet in a macro: a case whose pattern is no pattern tree (called by switch)
+splice-position	compile-error: missing parameter type
+string-context-implicits	compile-error: expected '}', found ';'
+summonIgnoring	wrong-output
+switch-match	compile-error: not a match
+tasty-argument-tree-1	wrong-output
+tasty-construct-types	compile-error: type argument List does not have the same kind as its bound
+tasty-create-method-symbol	compile-error: value apply is not a member of PolyType
+tasty-dealias	wrong-output
+tasty-dealiasKeepOpaques	wrong-output
+tasty-definitions-1	wrong-output
+tasty-definitions-2	wrong-output
+tasty-definitions-3	wrong-output
+tasty-extractors-1	compile-error: value box is not a member of Int
+tasty-extractors-2	compile-error: only classes can have declared but undefined members
+tasty-extractors-3	wrong-output
+tasty-extractors-owners	wrong-output
+tasty-extractors-types	wrong-output
+tasty-getfile-implicit-by-name-fun-context	compile-error: type mismatch: found Macro[String], required Expr[String]
+tasty-getfile-implicit-fun-context	compile-error: type mismatch: found Macro[String], required Expr[String]
+tasty-implicit-fun-context-2	compile-error: type mismatch: found (Quotes) ?=> Tastier[(Quotes) ?=> Macro[String]], required Expr[String]
+tasty-interpolation-1	compile-error: Expected statically known StringContext
+tasty-load-tree-1	wrong-output
+tasty-load-tree-2	wrong-output
+tasty-macro-assert	wrong-output
+tasty-macro-const	compile-error: Parameter must be a known constant
+tasty-macro-positions	compile-error: only classes can have declared but undefined members
+tasty-overload-secondargs	compile-error: not supported yet in a macro: the selection of andThen on X.type does not type: Ambiguous overload. The overloaded alternatives of method andThen in object X wi
+tasty-seal-method	compile-error: exception in macro: java.lang.Exception: Expected an expression. This is a partially applied Term. Try eta-expanding the term first. (called by zeroLastArgs in
+tasty-simplified	compile-error: type argument a does not have the same kind as its bound [_]
+tasty-string-interpolation-reporter-test	run-error: but expected: List((0,256,259,Cannot use #))
+tasty-tree-map	compile-error: not supported yet in a macro: Typed.unapply on a tree that is no ascription (called by identityMaped in object Macros)
+tasty-typeof	wrong-output
+term-show	compile-error: 'erased' is not part of the supported Scala subset
+type-members	compile-error: type AnyKind not found
+type-print	wrong-output
+type-show	compile-error: type AnyKind not found
+xml-interpolation-1	compile-error: not found: this
+xml-interpolation-2	compile-error: not found: this
+xml-interpolation-7	compile-error: extension method xml is not applicable to Any

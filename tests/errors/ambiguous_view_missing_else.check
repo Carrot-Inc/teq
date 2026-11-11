@@ -1,0 +1,9 @@
+tests/errors/ambiguous_view_missing_else.scala:6:22: error: Found:    Unit
+Required: ?{ foo: ? }
+Note that implicit extension methods cannot be applied because they are ambiguous;
+both method ua and method ub provide an extension method `foo` on Unit
+
+Maybe you are missing an else part for the conditional?
+  def t(c: Boolean) = (if c then println()).foo
+                       ^^^^^^^^^^^^^^^^^^^
+1 error found

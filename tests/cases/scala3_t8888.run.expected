@@ -1,0 +1,3 @@
+tests/cases/scala3_t8888.scala:6:9: warning: Discarded non-Unit value of type () => (C, C). Add `: Unit` to discard silently.
+          () => (x, y) // used to trigger a ClassFormatError under -Ydelambdafy:method
+          ^^^^^^^^^^^^

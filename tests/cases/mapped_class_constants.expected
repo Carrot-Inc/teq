@@ -1,0 +1,6 @@
+classOf[Box[String]]
+classOf[Array[String]]
+classOf[Array[Array[Int]]]
+classOf[Array[String]]
+classOf[Array[Int]]
+classOf[Box[String]]

@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/CrHolder.tasty (TASTy 28.8, 362 bytes)
+package fix.constref
+@SourceFile class CrHolder() extends Object {
+  val x: 42 = ...
+}
+

@@ -1,0 +1,15 @@
+eq.scala	option: -Yexplicit-nulls (teq has no flag for it)
+erasure.scala	option: -Yexplicit-nulls (teq has no flag for it)
+flow.scala	option: -Yexplicit-nulls (teq has no flag for it)
+from-nullable.scala	option: -Yexplicit-nulls (teq has no flag for it)
+generic-java-array-src	java source: teq reads none
+i11332.scala	option: -Yexplicit-nulls (teq has no flag for it)
+i25208	option: -Yexplicit-nulls (teq has no flag for it)
+instanceof-nothing.scala	option: -Yexplicit-nulls (teq has no flag for it)
+interop-unsound-src	java source: teq reads none
+nn.scala	option: -Yexplicit-nulls (teq has no flag for it)
+pattern-matching.scala	option: -Yexplicit-nulls (teq has no flag for it)
+tasty-flexible-type	option: -Yexplicit-nulls (teq has no flag for it)
+unsafe-nulls.scala	option: -Yexplicit-nulls (teq has no flag for it)
+while-loop.scala	option: -Yexplicit-nulls (teq has no flag for it)
+xml.scala	option: -Yexplicit-nulls (teq has no flag for it)

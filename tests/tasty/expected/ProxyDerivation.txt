@@ -1,0 +1,11 @@
+// tests/tasty/fixtures/ProxyDerivation.tasty (TASTy 28.8, 930 bytes)
+package fix.inlineproxy
+@SourceFile trait ProxyDerivation extends Object {
+  inline def viaClass: Int = <body@34>
+  <synthetic> def inline$fix$inlineproxy$ProxyDerivation$$hidden: Int = ...
+}
+@SourceFile object ProxyDerivation extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  private[inlineproxy] val hidden: Int = ...
+}
+

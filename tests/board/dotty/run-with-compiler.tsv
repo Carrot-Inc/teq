@@ -1,0 +1,6 @@
+# dotty 3.8.4 (7d4833b6) run-with-compiler, run; compiler/test/dotty/tools/dotc/BootstrappedOnlyCompilationTests.scala:121; JDK 24, node 25
+# test	verdict	the other ways	the first line of the difference
+compiler-version-string.scala	cannot run	-	the compiler as a library: the test is compiled against scalac's own classes
+intmaptest.scala	cannot run	-	the compiler as a library: the test is compiled against scalac's own classes
+maptest.scala	cannot run	-	the compiler as a library: the test is compiled against scalac's own classes
+settest.scala	cannot run	-	the compiler as a library: the test is compiled against scalac's own classes

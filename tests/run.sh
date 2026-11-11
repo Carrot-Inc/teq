@@ -15,6 +15,13 @@
 # (docs/internal/DIFFERENCES.md: the std's erased `ClassTag` evidence) is compared with
 # tests/lean-expected/<name>.expected here and in tests/run_interp.sh, written by hand; its .expected
 # stays scalac's, which tests/run_jvm.sh compares with.
+# The cases expected to fail are tests/pending/cases.txt (tests/support/pending.py): the run fails when a listed
+# case passes and when an unlisted one fails; --update takes the cases that pass now out of the list, --add
+# writes the unlisted failures in (for the change that brings the cases), and either writes the suite's row of
+# the board, tests/board/suites/cases.tsv. A listed case's difference is not printed.
+# --dir=<directory> runs the programs of another directory the same way, as a suite of the directory's name with
+# a list of its own (tests/pending-cases: the programs teq does not pass yet, which no other suite runs); there a
+# program without an .expected beside it is skipped, never given one.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 export TZ=UTC  # an archive entry's DOS time is local time: the recorded bytes are UTC's
@@ -25,14 +32,34 @@ limit_case=${TEQ_TEST_TIMEOUT:-20}
 . tests/support/jars.sh
 scala_version=${SCALA_VERSION:-3.8.4}
 regen=0
-[ "$1" = "--regen" ] && regen=1
+update=
+add=
+dir=tests/cases
+for arg in "$@"; do
+  case $arg in
+    --regen) regen=1 ;;
+    --update) update=--update ;;
+    --add) add=--add ;;
+    --dir=*) dir=${arg#--dir=}; dir=${dir%/} ;;
+  esac
+done
+suite=$(basename "$dir")
+[ "$dir" = tests/cases ] || out=$out-$suite
 mkdir -p "$out"
+: > "$out/results.txt"
+declare -A listed
+while IFS=$'\t' read -r listed_name _; do [ -n "$listed_name" ] && listed[$listed_name]=1; done < <(cat "tests/pending/$suite.txt" 2> /dev/null)
 pass=0
 fail=0
-for src in tests/cases/*.scala tests/cases/*/; do
+for src in "$dir"/*.scala "$dir"/*/; do
   src=${src%/}
   name=$(basename "$src" .scala)
-  expected="tests/cases/$name.expected"
+  expected="$dir/$name.expected"
+  if [ "$dir" != tests/cases ] && [ ! -f "$expected" ]; then
+    echo "skip $name: no .expected beside it"
+    printf 'skip %s\tno .expected beside it\n' "$name" >> "$out/results.txt"
+    continue
+  fi
   if [ $regen = 1 ] || [ ! -f "$expected" ]; then
     limit=120
     grep -q -h '^//> using platform js' "$src" "$src"/*.scala 2>/dev/null && limit=300
@@ -40,6 +67,7 @@ for src in tests/cases/*.scala tests/cases/*/; do
       echo "REF FAIL $name (see $out/$name.ref.err)"
       rm -f "$expected"
       fail=$((fail + 1))
+      printf 'fail %s\tno expectation: scala-cli gave none\n' "$name" >> "$out/results.txt"
       continue
     fi
   fi
@@ -47,6 +75,7 @@ for src in tests/cases/*.scala tests/cases/*/; do
   if grep -q -h '^//> using platform jvm' "$src" "$src"/*.scala 2>/dev/null; then
     echo "skip $name: the JVM's platform"
     pass=$((pass + 1))
+    printf 'skip %s\tthe JVM'"'"'s platform\n' "$name" >> "$out/results.txt"
     continue
   fi
   flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
@@ -54,17 +83,22 @@ for src in tests/cases/*.scala tests/cases/*/; do
   if [ -n "$JARS_MISSING" ]; then
     echo "skip $name: not in the coursier cache:$JARS_MISSING"
     pass=$((pass + 1))
+    printf 'skip %s\tnot in the coursier cache:%s\n' "$name" "$JARS_MISSING" >> "$out/results.txt"
     continue
   fi
   [ -n "$JARS_CP" ] && flags="$flags --classpath $JARS_CP"
   if run_js "$limit_case" "$out/$name.js" "$src" $flags > "$out/$name.actual" 2>&1 \
     && diff -q "$expected" "$out/$name.actual" > /dev/null; then
     pass=$((pass + 1))
+    printf 'pass %s\n' "$name" >> "$out/results.txt"
   else
-    echo "FAIL $name"
-    diff "$expected" "$out/$name.actual" | head -${DIFF_LINES:-10}
+    if [ -z "${listed[$name]:-}" ]; then
+      echo "FAIL $name"
+      diff "$expected" "$out/$name.actual" | head -${DIFF_LINES:-10}
+    fi
     fail=$((fail + 1))
+    printf 'fail %s\t%s\n' "$name" "$(diff "$expected" "$out/$name.actual" | grep -m1 '^[<>]' | cut -c1-200 | tr '\t' ' ')" >> "$out/results.txt"
   fi
 done
 echo "$pass passed, $fail failed"
-[ $fail = 0 ]
+python3 tests/support/pending.py "$suite" "$out/results.txt" $update $add

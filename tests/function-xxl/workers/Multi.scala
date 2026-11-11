@@ -1,0 +1,22 @@
+package largeimport
+object Other0 { def f: Int = LargeImport.f() + 0 }
+object Other1 { def f: Int = LargeImport.f() + 1 }
+object Other2 { def f: Int = LargeImport.f() + 2 }
+object Other3 { def f: Int = LargeImport.f() + 3 }
+object Other4 { def f: Int = LargeImport.f() + 4 }
+object Other5 { def f: Int = LargeImport.f() + 5 }
+object Other6 { def f: Int = LargeImport.f() + 6 }
+object Other7 { def f: Int = LargeImport.f() + 7 }
+object Other8 { def f: Int = LargeImport.f() + 8 }
+object Other9 { def f: Int = LargeImport.f() + 9 }
+object Other10 { def f: Int = LargeImport.f() + 10 }
+object Other11 { def f: Int = LargeImport.f() + 11 }
+object Other12 { def f: Int = LargeImport.f() + 12 }
+object Other13 { def f: Int = LargeImport.f() + 13 }
+object Other14 { def f: Int = LargeImport.f() + 14 }
+object Other15 { def f: Int = LargeImport.f() + 15 }
+object Other16 { def f: Int = LargeImport.f() + 16 }
+object Other17 { def f: Int = LargeImport.f() + 17 }
+object Other18 { def f: Int = LargeImport.f() + 18 }
+object Other19 { def f: Int = LargeImport.f() + 19 }
+@main def main(): Unit = println(Other19.f)

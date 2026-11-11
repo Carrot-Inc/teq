@@ -1,0 +1,8 @@
+tests/cases/lambda_discard_pinned_unit.scala:8:33: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+    val x: Unit => Unit = f(() => 1)
+                                  ^
+tests/cases/lambda_discard_pinned_unit.scala:10:30: warning: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
+    val y: Box[Unit] = k(() => 2)
+                               ^
+f ()
+Box(())

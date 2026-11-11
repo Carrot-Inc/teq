@@ -1,0 +1,932 @@
+# test	verdict	the other ways	the first line of the difference
+abstract_equals_overload	pass	-	
+abstract_member_misplaced	pass	-	
+abstract_member_variance	pass	-	
+abstract_var_accessors	pass	-	
+alias_branch_join	pass	-	
+alias_method_refinement_variance	fail	-	missing '13:35: error: Found: (s : Sink[B])'
+alias_type_arguments_arity	fail	-	missing 'alias_type_arguments_arity.scala:4:20: error: Not enough type arguments for V.Aux[T, P, R0]'
+alternative_binder	pass	-	
+ambiguous_extension_given_inherited	pass	-	
+ambiguous_extension_given_inherited.check	fail	-	< tests/errors/ambiguous_extension_given_inherited.scala:10:10: error: Found: X
+ambiguous_imports	pass	-	
+ambiguous_view_conversion	pass	-	
+ambiguous_view_conversion.check	fail	-	< tests/errors/ambiguous_view_conversion.scala:6:13: error: Found: P
+ambiguous_view_given	pass	-	
+ambiguous_view_given.check	fail	-	< tests/errors/ambiguous_view_given.scala:7:10: error: Found: X
+ambiguous_view_inherited_given	pass	-	
+ambiguous_view_inherited_given.check	fail	-	< tests/errors/ambiguous_view_inherited_given.scala:10:10: error: Found: X
+ambiguous_view_inherited_given_poly	pass	-	
+ambiguous_view_inherited_given_poly.check	fail	-	< tests/errors/ambiguous_view_inherited_given_poly.scala:10:10: error: Found: X
+ambiguous_view_inherited_given_using	pass	-	
+ambiguous_view_inherited_given_using.check	fail	-	< tests/errors/ambiguous_view_inherited_given_using.scala:10:10: error: Found: X
+ambiguous_view_missing_else	pass	-	
+ambiguous_view_missing_else.check	fail	-	< tests/errors/ambiguous_view_missing_else.scala:6:22: error: Found: Unit
+ambiguous_view_same_name	pass	-	
+ambiguous_view_same_name.check	fail	-	< tests/errors/ambiguous_view_same_name.scala:10:10: error: Found: X
+ambiguous_view_selection	pass	-	
+ambiguous_view_selection.check	fail	-	< tests/errors/ambiguous_view_selection.scala:7:10: error: Found: X
+ambiguous_view_selection_operator	pass	-	
+ambiguous_view_selection_operator.check	fail	-	< tests/errors/ambiguous_view_selection_operator.scala:7:10: error: Found: X
+ambiguous_view_stable_argument	pass	-	
+ambiguous_view_stable_argument.check	fail	-	< tests/errors/ambiguous_view_stable_argument.scala:7:12: error: Found: (p : P)
+ambiguous_view_where_before_notes	pass	-	
+ambiguous_view_where_before_notes.check	fail	-	< tests/errors/ambiguous_view_where_before_notes.scala:9:22: error: Found: Unit
+and_base_default_getter	fail	-	exit code 0
+and_base_member_types	fail	-	missing '28:33: error: Found: Int & String'
+and_base_override_narrower	fail	-	exit code 0
+annotated_parameter_printing	fail	-	missing '7:20: error: missing argument for parameter y of method f in object AnnotatedParameterPrinting: (y: Int): Int'
+anon_class_bound	pass	-	
+anon_class_bound_avoid	pass	-	
+anon_classes	pass	-	
+anon_missing_member	pass	-	
+any_member_curried	pass	-	
+anyval_extractor_no_view	pass	-	
+anyval_overload_adaptation	pass	-	
+applied_indirect_kind	pass	-	
+apply_argument_order	pass	-	
+approx_store_application_reject	fail	-	missing '13:28: error: Found: h.KC[?1.A]'
+argument_parenthesized_mismatch	pass	-	
+argument_parenthesized_mismatch.check	fail	-	< tests/errors/argument_parenthesized_mismatch.scala:3:19: error: Found: (1 : Int)
+arity_class_names	fail	-	missing '31:12: error: type Tuple23 not found'
+array_any_erasure_overloads	fail	-	missing '12:7: error: Conflicting definitions:'
+array_case_unreachable	pass	-	
+array_literal_spread_mismatch	pass	-	
+array_test_unchecked	pass	-	
+ascription_cast_constants	pass	-	
+auto_apply	pass	-	
+backquoted_wildcard	pass	-	
+binder_annotation_args	pass	-	
+binder_annotation_checks	pass	-	
+binder_annotation_constant_type	pass	-	
+binder_annotations	pass	-	
+binder_completion_cycle	pass	-	
+binder_completion_kinds	pass	-	
+binder_completion_reads	pass	-	
+binder_cycle_map_branches	pass	-	
+binder_java_annotation_args	pass	-	
+binder_java_annotation_nested	pass	-	
+binder_kind_verdicts	pass	-	
+binder_named_context_cycle	pass	-	
+binder_named_function_cycle	pass	-	
+binder_named_function_parts	pass	-	
+binder_simple_member_kind	pass	-	
+block_unbound_placeholder	pass	-	
+bound_check_after_typer_error	fail	-	missing '8:16: error: illegal cyclic type reference: lower bound BS[?, H.this.S] of type S refers back to the type itself'
+bound_member_params_seen_from_prefix	fail	-	exit code 0
+byname_positions	pass	-	
+byname_types	pass	-	
+cacheable_state_names	pass	-	
+cacheable_state_names_build	pass	-	
+callsyntax	pass	-	
+can_equal_fixed_operands	pass	-	
+canequal_nested_ambiguity	pass	-	
+canequal_nested_ambiguity_warm	pass	-	
+case_class_deferred_synthesized	pass	-	
+case_class_own_deferred	pass	-	
+case_clause_bar_before_case	pass	-	
+case_clause_bar_missing_operand	pass	-	
+case_clause_guard_colon_lambda_inline	pass	-	
+case_clause_in_parens	pass	-	
+case_companion_apply_defaults	pass	-	
+case_copy_clauses	pass	-	
+cast_primitive_conversion	pass	-	
+cast_primitive_deprecated	pass	-	
+check_dir_script	pass	-	
+class_param_modifier_without_val	pass	-	
+class_pattern_unreachable	pass	-	
+class_prefix_unstable	pass	-	
+class_tag_missing	pass	-	
+class_tag_missing_jvm	pass	-	
+classtag_poly_function_param_parent	pass	-	
+collection_seq_not_immutable	pass	-	
+collection_seq_not_immutable.check	fail	-	< tests/errors/collection_seq_not_immutable.scala:5:85: error: Found: (xs : scala.collection.Seq[Int])
+colon_lambda_end	pass	-	
+colon_lambda_single_line	pass	-	
+companion_apply_inserted	pass	-	
+companion_apply_path	pass	-	
+companion_apply_plain_class	pass	-	
+companion_apply_private_alias	pass	-	
+companion_default_later_clause	pass	-	
+companion_proxy_access	pass	-	
+companion_proxy_prefix	pass	-	
+conflicting_bases	pass	-	
+conformance_extras	pass	-	
+constructor_proxy_prefix	fail	-	missing '8:26: error: Outer is not a valid class prefix, since it is not an immutable path'
+constructor_proxy_shadows	pass	-	
+context_bound_evidence_name	pass	-	
+context_bound_merge	pass	-	
+context_function_ascribed_no_given	pass	-	
+context_function_inferred	pass	-	
+conversion_given_result_checked	pass	-	
+conversion_method_scope	pass	-	
+conversion_numeric_receiver	pass	-	
+conversion_union_ambiguity	pass	-	
+conversion_union_ambiguity_warm	pass	-	
+conversions	pass	-	
+copy_default_later_clause	fail	-	missing '7:25: error: value copy$default$2 is not a member of C'
+cyclic_bound_member	pass	-	
+cyclic_bound_through_path	pass	-	
+cyclic_bound_through_path_intersection	pass	-	
+cyclic_bound_wide_intersection	pass	-	
+declared_signature_override	pass	-	
+default_getter_companion_scope	pass	-	
+default_getter_prototypes	pass	-	
+default_getter_recursive	pass	-	
+deferred_inline_receiver	pass	-	
+dependent_constant_argument	pass	-	
+dependent_function_types	pass	-	
+dependent_override_mismatch	pass	-	
+derives	pass	-	
+derives_several_param_lists	pass	-	
+dialect_explicit_result_types	pass	-	
+dialect_no_implicit_conversions	pass	-	
+dialect_no_inline	pass	-	
+dialect_no_nonlocal_returns	pass	-	
+dialect_no_overloading	pass	-	
+dialect_no_scala2_implicits	pass	-	
+dialect_strict	pass	-	
+dialect_toml	pass	-	
+directive_hidden_file	fail	-	present '.policy.scala'
+directive_input_order	fail	-	exit code 0
+directive_links	fail	-	present 'P.scala'
+directive_none_read	fail	-	exit code 2
+directive_scope_main	fail	-	exit code 0
+directive_test_scope	pass	-	
+directive_unicode_order	fail	-	exit code 0
+directive_wconf_files	fail	-	exit code 0
+directive_werror_files	fail	-	exit code 0
+duplicates	pass	-	
+dynamic_inserted_apply	fail	-	missing '18:11: error: method apply in trait ContextFunction1 does not take more parameters'
+dynamic_named_missing_given	fail	-	missing '11:27: error:'
+encoded_key_script	pass	-	
+end_marker_duplicate	fail	-	exit code 0
+entry_points	pass	-	
+enum_case_infix_search	pass	-	
+enum_case_override_nothing	pass	-	
+enum_case_parents	pass	-	
+enum_case_refs	pass	-	
+enum_checks	pass	-	
+enum_parent_recovery	fail	-	missing 'extends enum Choice, but extending enums is prohibited.'
+enum_value_case_prefix	pass	-	
+equality	pass	-	
+erased_use_definition_tie	fail	-	missing 'inlined from tests/errors/erased_use_definition_tie.scala:5'
+erased_use_definition_tie.check	fail	-	< tests/errors/erased_use_definition_tie.scala:7:14: error: method erasedValue is declared as `erased`, but is in fact used
+erased_value_binder	pass	-	
+erased_value_copied_jvm	pass	-	
+erased_value_once	pass	-	
+erased_value_unusable_reads	pass	-	
+erased_value_used	pass	-	
+eta_function_types	pass	-	
+eta_open_expected_method_types	pass	-	
+eta_poly_bottom_refused	pass	-	
+eta_poly_union_refused	pass	-	
+eta_sam_mismatch	pass	-	
+evidence	pass	-	
+evidence_no_bound	pass	-	
+exc_syntax	pass	-	
+exc_types	pass	-	
+exhaustivity	pass	-	
+exhaustivity_counterexamples	pass	-	
+exhaustivity_counterexamples.check	pass	-	
+exhaustivity_elided	pass	-	
+exhaustivity_elided.check	pass	-	
+exhaustivity_split_fatal	pass	-	
+exhaustivity_wide_product	pass	-	
+exhaustivity_wide_product.check	pass	-	
+expanded_function_block_body	pass	-	
+expanded_function_block_body.check	fail	-	< tests/errors/expanded_function_block_body.scala:1:12: error: Missing parameter type
+expanded_function_block_implicit	pass	-	
+expanded_function_block_implicit.check	fail	-	< tests/errors/expanded_function_block_implicit.scala:1:20: error: Missing parameter type
+expanded_function_layout	pass	-	
+expanded_function_layout.check	fail	-	< tests/errors/expanded_function_layout.scala:1:10: error: Missing parameter type
+expected_last_list_union	pass	-	
+export_case_apply_omitted_default	fail	-	missing '14:18: error: missing argument for parameter x of method apply in object Z: (x: Int, y: Int): Pt'
+export_conflicts	pass	-	
+export_erroneous_path	pass	-	
+export_in_extension	pass	-	
+export_inherited_incompatible	pass	-	
+export_inline_error	pass	-	
+export_overrides_any_member	pass	-	
+export_package_wildcard	pass	-	
+export_protected_member	pass	-	
+export_signature	pass	-	
+export_value_forwarders	pass	-	
+export_value_path_during_inference	pass	-	
+export_value_type_conflict	pass	-	
+exports	pass	-	
+exports_blocked	pass	-	
+exports_cycle_alone	pass	-	
+exports_cycle_split	pass	-	
+exports_order_cycle	pass	-	
+exports_order_excluded	pass	-	
+exports_syntax	pass	-	
+exports_toplevel	pass	-	
+ext_ambiguous	pass	-	
+ext_ambiguous.check	fail	-	< tests/errors/ext_ambiguous.scala:11:14: error: Found: Foo
+ext_param_shadow	pass	-	
+extension_called_by_name_ambiguous	pass	-	
+extension_contextual_given	fail	-	exit code 0
+extension_conversion_same_level	fail	-	exit code 0
+extension_direct_specific_receiver	pass	-	
+extension_import_ambiguity	pass	-	
+extension_inherited_conversions_ambiguous	fail	-	missing 'error: Found: (a : A)'
+extension_inherited_other_instance	pass	-	
+extension_inner_conversion_method	fail	-	missing 'error: Found: String'
+extension_inner_conversion_outer	fail	-	exit code 0
+extension_instance_overload	pass	-	
+extension_method_modifiers	pass	-	
+extension_nearest_scope	pass	-	
+extension_private_implicit_scope	pass	-	
+extension_private_same_name_package	pass	-	
+extension_private_top_level	pass	-	
+extension_scope_widens_receiver	pass	-	
+extension_specific_receiver	pass	-	
+extractor_abstract_input	pass	-	
+extractor_binder_types	pass	-	
+extractor_contravariant_input	pass	-	
+extractor_path_repeat	pass	-	
+extractor_pattern_val_refutable	pass	-	
+extractor_tested_coverage	pass	-	
+fbound_through_sibling_member_alias	fail	-	exit code 0
+fbound_through_sibling_member_alias_member	fail	-	exit code 0
+fbounded_crash	pass	-	
+file_module_override_packages	fail	-	exit code 0
+file_module_overrides	fail	-	exit code 0
+final_val_ascribed_constant	pass	-	
+float_decimal_literals	pass	-	
+foldleft_empty_inferred	pass	-	
+for_id_pattern_refutable	pass	-	
+for_id_pattern_types	pass	-	
+for_lambda_selector_checks	pass	-	
+for_map_generator_refutable	pass	-	
+for_paren_stable_id_3_3	pass	-	
+for_paren_stable_id_3_4_migration	pass	-	
+for_tupling_migration	pass	-	
+for_unused_generators	pass	-	
+for_xxl_given_3_7	pass	-	
+for_yield_view_refusals	pass	-	
+function_parent	pass	-	
+gadt_alternatives	pass	-	
+gadt_bound_after_base_type	fail	-	missing 'gadt_bound_after_base_type.scala:5:17: error: Found: (x : T)'
+gadt_fresh_abstract	pass	-	
+generator_refutable_part	pass	-	
+given_abstract_misplaced	pass	-	
+given_abstract_own	pass	-	
+given_abstract_unimplemented	pass	-	
+given_coherent_intersection_ambiguous	fail	-	missing '15:44: error: ambiguous given instances for CanEqual[A, B] & Marker: a, b'
+given_deferred_ambiguous	pass	-	
+given_deferred_incompatible	pass	-	
+given_deferred_lazy_value	pass	-	
+given_deferred_marker	pass	-	
+given_deferred_missing	pass	-	
+given_deferred_overrides	pass	-	
+given_deferred_parameterized	pass	-	
+given_deferred_protected	pass	-	
+given_deferred_renamed	pass	-	
+given_deferred_self_recursive	pass	-	
+given_divergence_open_variables	pass	-	
+given_export_given_alternative	pass	-	
+given_failed_heal_reports_original	fail	-	missing '19:26: error: ambiguous given instances for TC: a, b'
+given_import_bound_admits	pass	-	
+given_import_bound_constrained	pass	-	
+given_import_bound_error_order	pass	-	
+given_import_bound_missing	pass	-	
+given_import_four_contexts_ambiguous	pass	-	
+given_import_level_ambiguous	pass	-	
+given_local_inline_nested	pass	-	
+given_local_inline_recursive	pass	-	
+given_macro_failure	pass	-	
+given_missing_at_call_end	pass	-	
+given_names	pass	-	
+given_not_given_user	pass	-	
+given_not_imported_note	fail	-	missing 'was not considered because it was not imported with `import given`.'
+given_opaque_pair_ambiguous	fail	-	exit code 0
+given_open_variable_refusals	pass	-	
+given_pattern_val	pass	-	
+given_same_object_tie_no_import_note	pass	-	
+given_scope_gadt_bounds	fail	-	exit code 0
+given_specificity_alias	pass	-	
+given_syntax_migration	pass	-	
+given_syntax_old_colon	pass	-	
+givens_ambiguous	pass	-	
+givens_ambiguous_clause_before_missing	pass	-	
+givens_ambiguous_warm	pass	-	
+givens_divergence	pass	-	
+givens_first_ambiguous_argument	pass	-	
+givens_imports	pass	-	
+givens_local_imports	pass	-	
+givens_name_shadowing	pass	-	
+givens_nested_ambiguity	pass	-	
+givens_nested_ambiguity_warm	pass	-	
+hard_union_inferred	pass	-	
+hidden_owner_private_nested_jvm	pass	-	
+hidden_owner_unwritable_jvm	pass	-	
+higher_kinded_display	pass	-	
+hk_alias_lower_bound_join	pass	-	
+hk_argument_to_proper_parameter_of_param	fail	-	exit code 0
+hk_bound_argument	pass	-	
+hk_lambda_escape	pass	-	
+hk_param_bounds_both_directions	fail	-	missing '18:14: error: type argument Option does not conform to lower bound [X] =>> List[X]'
+hk_param_context_bound	pass	-	
+hk_wildcard_param_bound	fail	-	missing '13:43: error: Found: (c : C[List, ?])'
+i22593a_private_object_export	pass	-	
+implicit_lambda_context_function	pass	-	
+implicit_migration_negation	fail	-	missing '22:30: migration warning: Ambiguous implicits value n1 in object O and value n2 in object O'
+implicit_nested_ambiguity_heals_not	pass	-	
+implicit_not_found	pass	-	
+implicit_not_found_members	pass	-	
+implicitly_unconstrained	pass	-	
+import_class_instance_val	pass	-	
+import_class_instance_val_cycle	pass	-	
+import_expression_prefix_members	pass	-	
+import_given_bound_unresolved	pass	-	
+import_given_with_clauses	pass	-	
+import_hides_extension	pass	-	
+import_language_misuse	pass	-	
+import_path_realizability_bounds	pass	-	
+import_prefix_completed_plain	pass	-	
+import_prefix_expression	pass	-	
+import_prefix_lazy_bad_bounds	pass	-	
+import_prefixless	pass	-	
+import_scope_statement	pass	-	
+import_value_given_conversion	pass	-	
+import_value_var	pass	-	
+import_value_wildcard	pass	-	
+imports_scoped	pass	-	
+impossible_type_test	pass	-	
+impossible_type_test_classes	pass	-	
+impossible_type_test_typer	pass	-	
+impure_function_alias_missing_class	fail	-	missing '7:27: error: Cyclic reference involving type ImpureFunction01'
+incomplete_def_at_eof	pass	-	
+incomplete_local_val	pass	-	
+indirect_member_kind	pass	-	
+inference_details	pass	-	
+inference_direction	pass	-	
+inference_leftovers_rejected	pass	-	
+inference_misc	pass	-	
+inferred_range_simplified	pass	-	
+inferred_type_apply_mismatch_point	fail	-	missing '9:21: error: Found: Option[Nothing]'
+inferred_type_apply_mismatch_point.check	fail	-	< tests/errors/inferred_type_apply_mismatch_point.scala:9:21: error: Found: Option[Nothing]
+infix_after_hidden_overload	fail	-	missing '7:19: error: Alphanumeric method f is not declared infix; it should not be used as infix operator.'
+infix_failed_application	pass	-	
+infix_line_end	pass	-	
+infix_operand_blank	pass	-	
+infix_overload_deep_view_none	pass	-	
+infix_pattern_mixed_associativity	pass	-	
+infix_types_mixed	pass	-	
+infix_unresolved_selection	pass	-	
+inherit_members	pass	-	
+inherit_parents	pass	-	
+inherited_abstract_type_member_cycle	fail	-	exit code 0
+inherited_given_two_objects	pass	-	
+inline_arg_given	pass	-	
+inline_arg_result_boundary	pass	-	
+inline_bodies_block_path	pass	-	
+inline_bodies_erased_value	pass	-	
+inline_bodies_impure_path	pass	-	
+inline_body_import_ambiguous	pass	-	
+inline_case_class	pass	-	
+inline_conditions	pass	-	
+inline_constants	pass	-	
+inline_definition_bounds	pass	-	
+inline_definition_errors	pass	-	
+inline_definition_failed	pass	-	
+inline_definition_restrictions	pass	-	
+inline_definition_splice	pass	-	
+inline_error_positions	pass	-	
+inline_errors	pass	-	
+inline_errors_expansion	pass	-	
+inline_evaluated_argument_not_constant	pass	-	
+inline_if_demanded	pass	-	
+inline_if_final_val_call	pass	-	
+inline_inferred_result_call	pass	-	
+inline_library_summon_from	fail	-	present '(in the body of'
+inline_local_forward_ambiguous	pass	-	
+inline_local_forward_extension	pass	-	
+inline_local_forward_failed	pass	-	
+inline_local_forward_reference	pass	-	
+inline_match_guard	pass	-	
+inline_parameter_block_path	pass	-	
+inline_parameter_block_path_final	fail	-	missing '9:25: error: (x$proxy1 : Int) is not a constant type; cannot take constValue'
+inline_parameter_impure_path	pass	-	
+inline_parameter_widened_path	pass	-	
+inline_phase_cross_file	pass	-	
+inline_phase_gadt_summon	pass	-	
+inline_phase_lifted_boundary	pass	-	
+inline_phase_local_method	pass	-	
+inline_phase_macro_cycle	pass	-	
+inline_phase_macro_cycle.check	pass	-	
+inline_phase_transparent_error	pass	-	
+inline_phase_transparent_error_typing	pass	-	
+inline_phase_two_roots	pass	-	
+inline_result_bindings_avoided	pass	-	
+inline_retained_if	pass	-	
+inline_retry_typing_error	pass	-	
+inline_stored_class_mismatch	pass	-	
+inline_substitution_guard_error	pass	-	
+inline_substitution_inferred_targs	pass	-	
+inline_substitution_require_const	pass	-	
+inline_substitution_summon_from_failures	pass	-	
+inline_summon_from_guards	pass	-	
+inline_summon_from_patterns	pass	-	
+inline_summon_scope_ends	pass	-	
+inline_trees_limit	pass	-	
+inline_typing_macro_cycle	pass	-	
+inline_typing_macro_cycle.check	pass	-	
+inline_typing_suspension_after_cut	pass	-	
+inline_typing_suspension_alias_after_cut	pass	-	
+inline_typing_suspension_demand_default	pass	-	
+inline_typing_suspension_demand_typeof	pass	-	
+inline_typing_suspension_late_demand	pass	-	
+inline_typing_suspension_nested	pass	-	
+inline_typing_suspension_prefix	pass	-	
+inline_typing_suspension_suffix	pass	-	
+inline_typing_suspension_top_before	pass	-	
+inline_val_ascribed	pass	-	
+inline_val_ascribed_body	pass	-	
+inline_val_kept_expr	pass	-	
+inline_val_purity	pass	-	
+inline_val_purity.check	fail	-	< tests/errors/inline_val_purity.scala:18:18: error: inline value must be pure
+inner_class_creators	pass	-	
+inserted_apply_value	pass	-	
+inst_direction_refused	pass	-	
+interp_escape	pass	-	
+interpolation_controls	pass	-	
+interpolation_open_receiver_overload	pass	-	
+intersection_member_alias_cycle	pass	-	
+intersection_member_ambiguous	pass	-	
+intersection_member_bounds	pass	-	
+intersection_member_bounds_unsubstituted	pass	-	
+intersection_member_i8736	pass	-	
+intersection_member_lambda_refusals	pass	-	
+intersection_member_noalt	pass	-	
+intersection_member_range_input	pass	-	
+intersection_member_refined	pass	-	
+intersection_member_refinements	pass	-	
+irrefutable_extractor_partial	pass	-	
+jar_hk_lower_bound	pass	-	
+jar_private_ctors	pass	-	
+java_module_not_a_value	fail	-	missing 'error: Java defined class Future is not a value'
+java_package_source_nullary	pass	-	
+java_signature_missing_class	fail	-	exit code 0
+java_signature_missing_class_bound	fail	-	exit code 0
+java_signature_missing_class_field	fail	-	exit code 0
+java_signature_missing_class_named	fail	-	exit code 0
+java_signature_missing_class_selection	fail	-	exit code 0
+java_signature_missing_class_tasty_first	fail	-	exit code 0
+java_signature_missing_class_throws	fail	-	exit code 0
+java_signature_missing_jdk_root_class	fail	-	exit code 0
+java_signature_missing_parent	fail	-	exit code 0
+java_signature_missing_scala_class	fail	-	exit code 0
+jdk_abstract_unimplemented_jvm	pass	-	
+jsinterop	pass	-	
+kind_error_argument_in_bound	pass	-	
+kind_null_path	pass	-	
+kinds	pass	-	
+lambda_open_result_hygiene	pass	-	
+lambda_open_result_param_path	pass	-	
+lambda_open_result_refusals	pass	-	
+language_import_intersection	pass	-	
+leading_infix_operand_placement	pass	-	
+lexical_extension_failure_beside_scope	pass	-	
+lexical_extension_failure_detail	pass	-	
+lexical_extension_given_ambiguity	pass	-	
+lexical_extension_given_heal	pass	-	
+lexical_extension_given_heal.check	fail	-	< tests/errors/lexical_extension_given_heal.scala:19:50: error: Found: R
+lexical_extension_import_ambiguity	pass	-	
+lexical_extension_plain_given_error	pass	-	
+lexical_extension_prefix_boundaries	pass	-	
+lexical_extension_trailing_ambiguous	pass	-	
+lexical_extension_trailing_missing	pass	-	
+lifted_block_error_argument	pass	-	
+literal_constant_boundaries	pass	-	
+literal_soft_union_inferred	pass	-	
+literal_types	pass	-	
+local_final	pass	-	
+local_given_recursive	pass	-	
+local_object_duplicate	pass	-	
+lossy_constant_conversion	pass	-	
+lower_bound_cycle_illegal	fail	-	missing 'lower_bound_cycle_illegal.scala:12:9: error: illegal cyclic type reference: lower bound BS[?, S] of type S refers back to the type itself'
+macro_abort	pass	-	
+macro_apply_function_value	pass	-	
+macro_apply_poly_unapplied	pass	-	
+macro_apply_wrong_arity	pass	-	
+macro_files_write	pass	-	
+macro_modifiers	pass	-	
+macro_records_stale	pass	-	
+macro_records_stale_shown	pass	-	
+macro_report_inlined	pass	-	
+macro_same_file	pass	-	
+macro_same_file_transparent	pass	-	
+macro_selector_check	pass	-	
+mangled_names_alias_encoded_class	pass	-	
+mangled_names_duplicate_term	pass	-	
+mangled_names_duplicate_type	pass	-	
+mangled_names_encoded_key	pass	-	
+mangled_names_package_members_only	pass	-	
+mangled_names_root_package_only	pass	-	
+mangled_names_value_before_object	pass	-	
+mangled_names_value_encoded_object	pass	-	
+map_tombstone_private	pass	-	
+match_alias_forcing	pass	-	
+match_case_not_a_case_dep_method_eta	fail	-	exit code 0
+match_case_not_a_case_depfun	fail	-	exit code 0
+match_case_not_a_case_depfun_andthen	fail	-	missing '12:36: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_case_not_a_case_depfun_contra	fail	-	missing '11:39: error: this match type case is not a match case once its pattern is approximated: Nothing & MatchCase[?, String]'
+match_case_not_a_case_depfun_lower	fail	-	missing '11:36: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_case_not_a_case_depfun_mismatch	fail	-	missing '12:36: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_case_not_a_case_depfun_param	fail	-	missing '11:33: error: this match type case is not a match case once its pattern is approximated: Nothing & MatchCase[?, String]'
+match_case_not_a_case_depfun_unused	fail	-	exit code 0
+match_case_not_a_case_intersection_prefix	fail	-	exit code 0
+match_case_not_a_case_intersection_prefix_mismatch	fail	-	missing '11:28: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_case_not_a_case_param_bound	fail	-	missing '9:33: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_case_not_a_case_param_bound_mismatch	fail	-	missing '8:33: error: this match type case is not a match case once its pattern is approximated: Nothing'
+match_prefix_spaces	pass	-	
+match_type_declared_no_cases	fail	-	missing '1:5: warning: Match type reduction failed since selector EmptyTuple.type'
+match_type_dependent	pass	-	
+match_type_pattern_wildcards	fail	-	missing 'case B[_] => Int'
+match_types	pass	-	
+max_inlines_default	pass	-	
+max_inlines_toml	pass	-	
+member_fallback_boundary	pass	-	
+member_fallback_clauses	pass	-	
+member_fallback_inline_error	pass	-	
+member_fallback_nested_retry	pass	-	
+member_retry_dependent_warning	pass	-	
+member_retry_later_using	pass	-	
+member_retry_refusals	pass	-	
+member_retry_warnings	pass	-	
+member_variance_controls	pass	-	
+message_disambiguation	pass	-	
+message_disambiguation.check	fail	-	< tests/errors/message_disambiguation.scala:6:43: error: Found: (x : Left.Token)
+message_gadt_deferred	pass	-	
+message_gadt_deferred.check	fail	-	< tests/errors/message_gadt_deferred.scala:7:26: error: Found: (t : T)
+method_type_arg_check_bounds	fail	-	missing '14:13: error: type argument Int does not conform to upper bound [_] =>> Any'
+mirror_bounded_elems	pass	-	
+mirror_false_mono_type	pass	-	
+mirror_from_product_override	pass	-	
+mirror_from_product_typed_mismatch	pass	-	
+mirror_from_tuple_not_product_of	pass	-	
+mirror_member_bound_by_name	pass	-	
+mirror_parent_after_typer	pass	-	
+mirror_refined_elems	pass	-	
+mirror_refusals	pass	-	
+mirror_term_refinement	pass	-	
+mirror_types_after_typer	pass	-	
+modifiers	pass	-	
+modifiers_table	pass	-	
+named_tuple_mismatch	pass	-	
+named_tuple_mixed	pass	-	
+narrowed_constant_tag	pass	-	
+negative_literal_comment_newline	pass	-	
+nested_class_override	pass	-	
+nested_class_prefix_identity	pass	-	
+nested_class_prefix_review	pass	-	
+nested_class_prefix_spaces	pass	-	
+nested_object_not_implicit	pass	-	
+nested_object_singleton	pass	-	
+nested_object_singleton_other_instance	pass	-	
+nested_projection_cycle	fail	-	exit code 0
+new_alias_too_many_targs	pass	-	
+new_eta_expanded_opaque	fail	-	missing 'error: [A] =>> O.F[A] does not have a constructor'
+new_written_empty_first_list	pass	-	
+new_written_empty_first_list_anon	pass	-	
+no_entry_point	pass	-	
+nonsensical_hidden	fail	-	present '2:10: error: Only function types can be followed by _'
+nonsensical_mismatch_hidden	pass	-	
+not_found_selection_once	pass	-	
+null_equality_value_tparam	pass	-	
+null_types	pass	-	
+nullary_java_package_no_jdk	pass	-	
+nullary_local_parens	pass	-	
+nullary_method_as_sam	pass	-	
+nullary_over_java_overload	pass	-	
+nullary_parens_refused	pass	-	
+number_suffixed_range	pass	-	
+numeric_ascription_layers	pass	-	
+numeric_harmonize	pass	-	
+numeric_narrowing	pass	-	
+object_member_override	pass	-	
+object_override_incompatible	pass	-	
+object_path_display	pass	-	
+opaque_definition_recovery	fail	-	exit code 0
+opaque_equality_memo	fail	-	missing 'of types O.T and Int cannot be compared with == or !='
+opaque_missing_rhs_recovery	pass	-	
+opaque_scope	pass	-	
+opaque_trait_prefix	pass	-	
+opaque_trait_prefix.check	fail	-	< tests/errors/opaque_trait_prefix.scala:12:24: error: Found: (h : Html.Tag[Node])
+opaque_union_argument	pass	-	
+overload_arg_position	pass	-	
+overload_common_formal_function	pass	-	
+overload_definitions	pass	-	
+overload_inheritance	pass	-	
+overload_named_lambda_partial	pass	-	
+overload_parenthesized_method_arg	fail	-	exit code 0
+overload_resolution	pass	-	
+overload_unknown_function_diagnostics	fail	-	missing 'both match arguments (<?> => <?>)'
+overload_unknown_function_diagnostics.check	fail	-	< both match arguments (<?> => <?>)
+override_access_block	pass	-	
+override_access_boundary	pass	-	
+override_checks	pass	-	
+override_class	pass	-	
+override_clause_shape	pass	-	
+override_given_final	pass	-	
+override_nullary_loose	pass	-	
+override_rules	pass	-	
+package_not_value	pass	-	
+package_private_access	pass	-	
+param_clause_blank_line	pass	-	
+param_clause_next_line	pass	-	
+parens	pass	-	
+pattern_binder_types	pass	-	
+pattern_binding_refutable	pass	-	
+pattern_binding_refutable_future	pass	-	
+pattern_binding_refutable_future_import	pass	-	
+pattern_binding_runtime_checked_ascribed	pass	-	
+pattern_binding_runtime_checked_ascribed_jvm	pass	-	
+pattern_binding_runtime_checked_ascribed_unused	pass	-	
+pattern_binding_runtime_checked_ascribed_unused_jvm	pass	-	
+pattern_binding_runtime_checked_elements	pass	-	
+pattern_binding_runtime_checked_join	pass	-	
+pattern_binding_runtime_checked_named	pass	-	
+pattern_binding_runtime_checked_typed	pass	-	
+pattern_binding_tuple_components	pass	-	
+pattern_case_class_parent_value_reference	fail	-	missing '15:3: error: Found: C[Int]'
+pattern_class_parent_value_reference	fail	-	exit code 0
+pattern_runtime_checked_match	pass	-	
+pattern_type_argument_value_reference	fail	-	exit code 0
+placeholder_name_written	pass	-	
+placeholder_named_argument	pass	-	
+plain_method_type_and_using_arguments	pass	-	
+polyfunction_refinement	pass	-	
+polyfunction_refinement_members	pass	-	
+positional_after_named	pass	-	
+postfix_import_scope	pass	-	
+postfix_trailing_operator	pass	-	
+pre_check_kinds_every_constructor	fail	-	missing '18:21: error: type argument Int does not have the same kind as its bound [_]'
+predef_any2stringadd	pass	-	
+predef_unimport	pass	-	
+predef_unimport_conversion	pass	-	
+predef_unimport_conversion.check	fail	-	< tests/errors/predef_unimport_conversion.scala:11:30: error: Found: Byte
+primitive_selection_erroneous_receiver	pass	-	
+private_ctor	pass	-	
+private_leaks_signature	fail	-	exit code 0
+private_trait_ctor	pass	-	
+private_var_setter	pass	-	
+projection_type_constructor_qualifier	pass	-	
+projection_type_constructor_qualifier.check	fail	-	< tests/errors/projection_type_constructor_qualifier.scala:4:18: error: Found: Outer.C
+protected_given	pass	-	
+proxy_apply_access	pass	-	
+proxy_private_apply	pass	-	
+pure_intersection_double_definition	fail	-	missing 'Conflicting definitions:'
+qualified_this_not_enclosing	pass	-	
+refinement_converted_receiver_not_narrowed	pass	-	
+refinement_cyclic_alias	pass	-	
+refinement_erased_signature	pass	-	
+refinement_extension_not_narrowed	pass	-	
+refinement_forward_reference	pass	-	
+refinement_generic_erasure	pass	-	
+refinement_intersection_overload	pass	-	
+refinement_modifiers	pass	-	
+refinement_operand	pass	-	
+refinement_overload	pass	-	
+refinement_overload_kept	pass	-	
+refinement_overload_not_narrowed	pass	-	
+refinement_structural_refusals	pass	-	
+refinement_target_name	pass	-	
+refinement_variance	pass	-	
+refutable_extractor_binding	pass	-	
+refutable_patterns	pass	-	
+return_stmt	pass	-	
+right_assoc_ext	pass	-	
+right_assoc_extension_calls	pass	-	
+right_assoc_extension_prefix	pass	-	
+right_assoc_extension_selected	pass	-	
+sam_by_name_declared	pass	-	
+sam_context_function_result	pass	-	
+sam_lambda_declared_param	pass	-	
+scala2_control	pass	-	
+scala2_implicits	pass	-	
+scala3_doubleDefinition	pass	-	
+scala3_harmonize	pass	-	
+scala3_i1501a	pass	-	
+scala3_i1531	pass	-	
+scala3_i24914	pass	-	
+scala3_i2887c	fail	-	missing '21:71: error: Found: (1 : Int)'
+scala3_i2887c.check	fail	-	< tests/errors/scala3_i2887c.scala:21:71: error: Found: (1 : Int)
+scala3_i4368	pass	-	
+scala3_i8731a	pass	-	
+scala3_implicitDefs	pass	-	
+scala3_null-conforms	pass	-	
+scala3_overloaded	pass	-	
+scala3_singletons	pass	-	
+scala3_t12715	pass	-	
+scala3_union	pass	-	
+scala3_variances	pass	-	
+scalajs_anonymous_js_objects	fail	-	missing '19:5: error: object creation impossible, since val name: String in trait JsTrait in package app is not defined'
+scalajs_facades	pass	-	
+scalajs_import_namespace	fail	-	missing '23:24: error: The second argument to @JSImport must be literal string or the JSImport.Namespace object.'
+scalajs_js_sam	fail	-	exit code 0
+scalajs_js_trait_type_tests	fail	-	missing '19:5: error: isInstanceOf[app.NativeTrait] not supported because it is a JS trait'
+scalajs_jsname_string_arguments	fail	-	missing '22:11: error: A String argument to JSName must be a literal string'
+scalajs_linking_info_not_constant	fail	-	exit code 0
+scalajs_package_jvm	fail	-	exit code 0
+scalajs_prep_js_interop	fail	-	missing '25:18: error: Concrete members of JS native types may only call js.native.'
+script_header	pass	-	
+sealed_child_owner_prefix	pass	-	
+sealed_child_prefix_fields	pass	-	
+secondary_constructor_rules	pass	-	
+secondary_constructor_syntax	pass	-	
+select_overload_block_receiver	pass	-	
+select_overload_curried_ambiguous	pass	-	
+select_overload_deep_error	pass	-	
+select_overload_empty_clause	pass	-	
+select_overload_if_receiver	pass	-	
+select_overload_missing_given	pass	-	
+select_overload_only_default	pass	-	
+selector_target_name_clash	pass	-	
+self_reference	pass	-	
+self_type_member	pass	-	
+self_type_private_members	pass	-	
+self_types	pass	-	
+singleton_bound_unstable	pass	-	
+singleton_type_given	pass	-	
+singleton_types	pass	-	
+small_syntax	pass	-	
+sourcecode	pass	-	
+space_sequence_extractors	pass	-	
+space_sequence_library	pass	-	
+splice_conversion_ambiguous	pass	-	
+splice_conversion_ambiguous.check	fail	-	< tests/errors/splice_conversion_ambiguous.scala:10:36: error: Found: X
+splice_union_mismatch	pass	-	
+statement_eta_expansion	pass	-	
+store_reducer_contra_member_alias	fail	-	missing '16:57: error: Found: (x : h.KC[Nothing])'
+strict_equality	pass	-	
+strict_equality_import	pass	-	
+strict_equality_null_classes	fail	-	missing '3:48: error: values of types Const[Any][Int] and Null cannot be compared with == or !='
+structural_abstract	pass	-	
+structural_members	pass	-	
+structural_target_name	pass	-	
+structural_unstable_erasure	pass	-	
+subtyping_laws	pass	-	
+successor_natural	pass	-	
+super_rebind_incompatible_result	fail	-	exit code 0
+superclass_deferred_any_member	pass	-	
+syntax	pass	-	
+synthesized_collision_after_typer_error	pass	-	
+synthesized_erased_collision	pass	-	
+synthesized_target_name_collision	pass	-	
+tailrec	pass	-	
+tailrec_walk	pass	-	
+target_name_parenthesized	fail	-	exit code 0
+time_stopped_in_inline	fail	-	missing 'stopped in inline: 1 error'
+time_stopped_in_type	fail	-	missing 'error: Found: (1 : Int)'
+top_types_no_monitor_methods	fail	-	missing '6:25: error: value notify is not a member of Any'
+trait_evidence_scope	pass	-	
+trait_indirect_parameters	fail	-	missing '2 errors found'
+trait_param_rules	pass	-	
+trait_params	pass	-	
+transparent_widened_ascription	pass	-	
+tuple1_as_binary_constructor	pass	-	
+tuple_index_bounds	pass	-	
+tuple_index_bounds_inlined	pass	-	
+tuple_index_message_written	pass	-	
+tuple_index_mismatch_place	fail	-	missing '2:26: error: Found: Int'
+tuple_index_past_elements	fail	-	missing '1:5: warning: Match type reduction failed since selector EmptyTuple.type'
+tuple_index_past_elements_typed	fail	-	missing '1:25: error: Found: Tuple.Elem[EmptyTuple.type, (0 : Int)]'
+tuple_xxl_selection	pass	-	
+type_alias_incomplete	pass	-	
+type_arg_bounds	pass	-	
+type_lambda_hk_binders	pass	-	
+type_lambda_hk_bound	pass	-	
+type_lambda_hk_kinds	pass	-	
+type_lambda_variance	pass	-	
+type_member_match	pass	-	
+type_member_overrides	pass	-	
+type_member_paths	pass	-	
+type_member_variance	pass	-	
+type_members	pass	-	
+type_on_next_line_nested	pass	-	
+type_on_next_line_second	pass	-	
+type_param_owners	pass	-	
+type_param_pattern_spaces	pass	-	
+type_params_before_completion_analysis	pass	-	
+type_test_synthesis_negative	pass	-	
+type_union_blank	pass	-	
+typed_array_constructor_alternatives	pass	-	
+typer_state_bound_call_alternative	pass	-	
+typer_state_cached_arg_error	pass	-	
+typer_state_cached_nested_error	pass	-	
+typer_state_check_cut_promoted	pass	-	
+typer_state_cut_promoted	pass	-	
+typer_state_dropped_promoted_warning	pass	-	
+typer_state_early_expansion_error	pass	-	
+typer_state_early_expansion_warning	pass	-	
+typer_state_early_expansion_warning_clean	pass	-	
+typer_state_inline_given_error	pass	-	
+typer_state_kept_promoted	pass	-	
+typer_state_lost_body_error	pass	-	
+typer_state_lost_inline_check	pass	-	
+typer_state_narrow_failed	pass	-	
+typer_state_pending_given_path	pass	-	
+typer_state_retry_conversion_nested	pass	-	
+typer_state_set_aside_late	pass	-	
+typer_state_transparent_given_error	pass	-	
+typer_state_tuple_index_bounds	pass	-	
+types	pass	-	
+unapply_selection	pass	-	
+unapply_synthetic_clash	pass	-	
+union_constant_conversion	pass	-	
+union_instantiation	pass	-	
+union_joins	pass	-	
+union_widening	pass	-	
+unit_discard	pass	-	
+universal_trait_anyref	pass	-	
+unreachable	pass	-	
+unreachable_deep_product	pass	-	
+unreducible_application_placements	fail	-	exit code 0
+unreducible_wildcard_application_e043	fail	-	missing '13:12: error: unreducible application of higher-kinded type [X] =>> h.KC[X] to wildcard arguments'
+unresolved_member_qualifier_interpolated	fail	-	missing '6:29: error: value foo is not a member of C'
+unresolved_member_qualifier_interpolated.check	fail	-	< tests/errors/unresolved_member_qualifier_interpolated.scala:6:29: error: value foo is not a member of C
+unterminated_backquote_operator	pass	-	
+untupled_lambda_mismatch	pass	-	
+unused_imports_alias	pass	-	
+unused_imports_alias_given	pass	-	
+unused_imports_annotation	pass	-	
+unused_imports_annotation_args	pass	-	
+unused_imports_annotation_nowarn	pass	-	
+unused_imports_annotation_tparam	pass	-	
+unused_imports_blocks	pass	-	
+unused_imports_can_equal_bound	pass	-	
+unused_imports_can_equal_wildcard	pass	-	
+unused_imports_class_header_annotations	pass	-	
+unused_imports_conversion_receiver	pass	-	
+unused_imports_crlf	pass	-	
+unused_imports_duplicates	pass	-	
+unused_imports_given_prefixes	pass	-	
+unused_imports_givens	pass	-	
+unused_imports_hiding	pass	-	
+unused_imports_inline_receiver	pass	-	
+unused_imports_inlines	pass	-	
+unused_imports_module_prefixes	pass	-	
+unused_imports_nested	pass	-	
+unused_imports_nowarns	pass	-	
+unused_imports_packages	pass	-	
+unused_imports_patterns	pass	-	
+unused_imports_qualified	pass	-	
+unused_imports_receiver	pass	-	
+unused_imports_renames	pass	-	
+unused_imports_selectors	pass	-	
+unused_imports_settled	pass	-	
+unused_imports_testing_name	pass	-	
+value_class_rules	pass	-	
+value_import_given_conversion	pass	-	
+value_import_wildcard_givens	pass	-	
+var_default_init_future	pass	-	
+var_default_init_local	pass	-	
+var_numbers_per_body	pass	-	
+vararg_eta	pass	-	
+variance	pass	-	
+variance_bounds	pass	-	
+variance_hk_param_args	pass	-	
+variance_private	pass	-	
+variance_rules	pass	-	
+variance_unchecked	pass	-	
+view_kinds_negative	pass	-	
+wait_argument_types	pass	-	
+wait_type_arguments	pass	-	
+wait_using_clause	pass	-	
+wild_join_instance	pass	-	
+wildcard_bound_abstract_member_application	fail	-	exit code 0
+wildcard_bound_both_ends	fail	-	exit code 0
+wildcard_bound_capture_through_paths	fail	-	missing 'wildcard_bound_capture_through_paths.scala:11:20: error: type argument Impl[?] does not conform to upper bound BS[BS[?, Impl[?]]#T, Impl[?]]'
+wildcard_bound_dependent_contravariant	fail	-	exit code 0
+wildcard_bound_dependent_covariant	fail	-	exit code 0
+wildcard_bound_dependent_edge	fail	-	exit code 0
+wildcard_bound_dependent_invariant	fail	-	exit code 0
+wildcard_bound_dependent_on_wildcard	fail	-	missing '13:23: error: type argument String does not conform to upper bound C[? >: Int, String]#A'
+wildcard_bound_dependent_unbounded	fail	-	exit code 0
+wildcard_bound_fbound_lower	fail	-	exit code 0
+wildcard_bound_fbound_lower_instance	fail	-	exit code 0
+wildcard_bound_fbound_narrow	fail	-	missing '23:49: error: type argument S does not conform to upper bound BS[BS[? <: String, S]#T, S]'
+wildcard_bound_fbound_param_type	fail	-	exit code 0
+wildcard_bound_fbound_shapes	fail	-	missing '29:22: error: type argument X does not conform to upper bound BS[BS[?, X]#T, X]'
+wildcard_bound_hk_param_application	fail	-	exit code 0
+wildcard_bound_match_scrutinee_nested	fail	-	exit code 0
+wildcard_bound_nested_positions	fail	-	exit code 0
+wildcard_bound_other_param	fail	-	exit code 0
+wildcard_bound_overlap	fail	-	missing '17:30: error: type argument ? >: T does not overlap with upper bound U'
+wildcard_bound_param_ends	fail	-	exit code 0
+wildcard_bound_variant_param	fail	-	exit code 0
+wildcard_bounds	pass	-	
+wildcard_bounds_order	pass	-	
+wildcard_member_upper_bound	pass	-	
+wildcard_param_bound_variance	pass	-	
+wrapper_object_collision	pass	-	
+wrapper_value_collision	pass	-	
+wrong_number_of_type_args_beside_a_syntax_error	fail	-	missing 'wrong_number_of_type_args_beside_a_syntax_error.scala:11:17: error: Not enough type arguments for V.Aux[T, P, R0]'
+wrong_number_of_type_args_hides_its_arguments	fail	-	missing 'wrong_number_of_type_args_hides_its_arguments.scala:11:17: error: Not enough type arguments for V.Aux[T, P, R0]'
+wrong_number_of_type_args_message_forms	fail	-	exit code 0
+wrong_number_of_type_args_under_a_syntax_error_at_its_end	pass	-	
+zio_tag	pass	-	
