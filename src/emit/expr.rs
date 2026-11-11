@@ -176,15 +176,10 @@ impl<'a> Emitter<'a> {
     /// `owner`), one no object is of (`ContextFunction1`, a trait of the program's) is called as it is; the
     /// typer's application of a function value (`CallClosure`) names none.
     fn emit_function_call(&mut self, f: TExprId, args: ListRef, owner: Option<ClassId>) {
-        if args.len != 1 || self.callee_is_function(f) || owner.is_some_and(|c| !self.may_be_object(c)) {
+        let Some(helper) = self.function_call_helper(f, args, owner) else {
             return self.emit_closure_call(f, args);
-        }
-        let reread = match self.peek(f) {
-            TExpr::Local(_) | TExpr::This => true,
-            TExpr::Field(r, _) => matches!(self.peek(r), TExpr::Local(_) | TExpr::This),
-            _ => false,
         };
-        if reread {
+        if helper == "$jsFn" {
             self.note_text("$jsFn");
             self.out.push_str("(typeof ");
             self.emit_value(f);
@@ -200,6 +195,21 @@ impl<'a> Emitter<'a> {
             self.emit_value(f);
             self.emit_more_args(args, ", ");
         }
+    }
+
+    /// The runtime helper `emit_function_call` writes for the call of the function value `f` on `args`: `$jsFn`
+    /// where the callee is read again as it stands, `$ap` where it is evaluated once, none for a plain JS call. The
+    /// scope walk names it, so that no local of the body takes the helper's name.
+    pub(super) fn function_call_helper(&self, f: TExprId, args: ListRef, owner: Option<ClassId>) -> Option<&'static str> {
+        if args.len != 1 || self.callee_is_function(f) || owner.is_some_and(|c| !self.may_be_object(c)) {
+            return None;
+        }
+        let reread = match self.peek(f) {
+            TExpr::Local(_) | TExpr::This => true,
+            TExpr::Field(r, _) => matches!(self.peek(r), TExpr::Local(_) | TExpr::This),
+            _ => false,
+        };
+        Some(if reread { "$jsFn" } else { "$ap" })
     }
 
     /// The arguments of the template call `template(args)` that leave Scala for JavaScript's own code as functions
@@ -256,7 +266,7 @@ impl<'a> Emitter<'a> {
     /// calling convention, `emit_function_call`), but an `@objectFunction` trait's, whose classes' instances
     /// are objects (`super::is_callable_class`), called as their member. An overloaded `apply` of a trait
     /// is a member of its own.
-    fn is_function_apply(&self, s: SymId) -> bool {
+    pub(super) fn is_function_apply(&self, s: SymId) -> bool {
         let info = self.syms.sym(s);
         if info.name != crate::names::APPLY {
             return false;

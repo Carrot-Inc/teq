@@ -1659,11 +1659,27 @@ impl<'a> Emitter<'a> {
                             }
                         }
                     },
-                    _ => self.walk(w, r),
+                    _ => {
+                        // A function value's `apply`, which the emitter writes through a runtime helper where the
+                        // value may be an object (`function_call_helper`).
+                        if self.is_function_apply(s) {
+                            let owner = match self.syms.sym(s).owner {
+                                Owner::Class(k) => Some(k),
+                                _ => None,
+                            };
+                            if let Some(helper) = self.function_call_helper(r, args, owner) {
+                                w.name(helper);
+                            }
+                        }
+                        self.walk(w, r)
+                    }
                 }
                 self.walk_args(w, args);
             }
             TExpr::CallClosure(f, args) => {
+                if let Some(helper) = self.function_call_helper(f, args, None) {
+                    w.name(helper);
+                }
                 self.walk(w, f);
                 self.walk_args(w, args);
             }
