@@ -254,6 +254,20 @@ fn wait_child(it: &mut Interp, child: usize, deadline: Option<Instant>) -> R<Opt
     }
 }
 
+/// The process a `ProcessHandle`'s pid names, as the JDK takes it: the long made a `pid_t` (a
+/// DWORD on Windows), so `4294967297` is process 1; on Unix one not above 0 is no process's, as
+/// neither `/proc` nor `kill` has one there (`kill` would signal a group, or every process).
+#[cfg(unix)]
+fn jdk_pid(pid: i64) -> Option<u32> {
+    let pid = pid as i32;
+    (pid > 0).then_some(pid as u32)
+}
+
+#[cfg(windows)]
+fn jdk_pid(pid: i64) -> Option<u32> {
+    Some(pid as u32)
+}
+
 /// Ends a child that has not ended: SIGTERM, or SIGKILL when `force`, on Unix; `TerminateProcess`
 /// with status 1 on Windows, as the JDK's. The lock its reaper takes to record the status is held,
 /// so that the process is still the child's (a zombie at worst) when it is signalled.
@@ -1223,7 +1237,7 @@ pub(super) fn install(it: &mut Table) {
         if it.pure {
             return it.impure("the process table");
         }
-        Ok(Value::Bool(pid > 0 && pid <= u32::MAX as i64 && os::alive(pid as u32)))
+        Ok(Value::Bool(jdk_pid(pid).is_some_and(os::alive)))
     });
     reg!(it, "java.lang.processSignal", |it, a| {
         let pid = long(it, a, 0)?;
@@ -1231,7 +1245,7 @@ pub(super) fn install(it: &mut Table) {
             return it.impure("ending a process");
         }
         let force = matches!(a.get(1), Some(Value::Bool(true)));
-        Ok(Value::Bool(pid > 0 && pid <= u32::MAX as i64 && os::end_pid(pid as u32, force)))
+        Ok(Value::Bool(jdk_pid(pid).is_some_and(|pid| os::end_pid(pid, force))))
     });
     // The process table, a pid and its parent's alternating.
     reg!(it, "java.lang.processTable", |it, _a| {
@@ -1247,7 +1261,7 @@ pub(super) fn install(it: &mut Table) {
         if it.pure {
             return it.impure("the process table");
         }
-        let (command, args) = os::info(pid as u32);
+        let (command, args) = jdk_pid(pid).map_or((None, None), os::info);
         let mut out = vec![command.map_or(Value::Null, Value::string)];
         match args {
             Some(args) => {
@@ -1643,10 +1657,19 @@ mod os {
         unsafe { _exit(code) }
     }
 
+    /// `kill`'s argument for a signal to the one process `pid`: none for 0 (the caller's own group) or past
+    /// `i32::MAX`, which the cast makes negative (`-1` is every process the user may signal, the login's session
+    /// among them). Every signal of this module goes through it.
+    pub fn pid_target(pid: u32) -> Option<c_int> {
+        (pid >= 1 && pid <= i32::MAX as u32).then(|| pid as c_int)
+    }
+
     pub fn signal_pid(pid: u32, sig: c_int) {
-        // SAFETY: a plain signal to a child of this process, not yet reaped.
-        unsafe {
-            kill(pid as c_int, sig);
+        if let Some(target) = pid_target(pid) {
+            // SAFETY: a plain signal to a child of this process, not yet reaped.
+            unsafe {
+                kill(target, sig);
+            }
         }
     }
 
@@ -1663,14 +1686,16 @@ mod os {
     }
 
     pub fn alive(pid: u32) -> bool {
+        let Some(target) = pid_target(pid) else { return false };
         // SAFETY: signal 0 tests the process alone.
-        let r = unsafe { kill(pid as c_int, 0) };
+        let r = unsafe { kill(target, 0) };
         r == 0 || std::io::Error::last_os_error().raw_os_error() == Some(EPERM)
     }
 
     pub fn end_pid(pid: u32, force: bool) -> bool {
+        let Some(target) = pid_target(pid) else { return false };
         // SAFETY: a plain signal, as `ProcessHandle.destroy` sends it.
-        unsafe { kill(pid as c_int, if force { SIGKILL } else { SIGTERM }) == 0 }
+        unsafe { kill(target, if force { SIGKILL } else { SIGTERM }) == 0 }
     }
 
     pub fn on_path(program: &str) -> Option<std::path::PathBuf> {
@@ -2144,6 +2169,37 @@ mod os {
 
 #[cfg(test)]
 mod tests {
+    /// Every signal of the module goes through `pid_target`: the unset value and a pid the cast makes negative send
+    /// nothing. The call sites are tested with signal 0 alone (`alive`), which probes without signalling, so that the
+    /// test sends no signal before the guard either.
+    #[cfg(unix)]
+    #[test]
+    fn a_signal_goes_to_one_process_alone() {
+        assert_eq!(super::os::pid_target(0), None, "0, the caller's own group");
+        assert_eq!(super::os::pid_target(u32::MAX), None, "a pid cast to -1, every process the user may signal");
+        assert_eq!(super::os::pid_target(i32::MAX as u32 + 1), None, "past i32::MAX the cast is negative");
+        assert_eq!(super::os::pid_target(1), Some(1));
+        assert_eq!(super::os::pid_target(4321), Some(4321));
+        assert!(!super::os::alive(0), "no process is pid 0");
+        assert!(!super::os::alive(u32::MAX), "kill(-1, 0) probed every process before the guard");
+        assert!(super::os::alive(std::process::id()));
+    }
+
+    /// A `ProcessHandle`'s pid as the JDK's `pid_t`: every long past the int range wraps, and one
+    /// that wraps to 0 or below is no process, never `kill`'s group or every process.
+    #[cfg(unix)]
+    #[test]
+    fn a_handles_pid_is_the_jdks_pid_t() {
+        assert_eq!(super::jdk_pid(4294967295), None, "-1 as a pid_t");
+        assert_eq!(super::jdk_pid(2147483648), None, "i32::MIN as a pid_t");
+        assert_eq!(super::jdk_pid(-1), None);
+        assert_eq!(super::jdk_pid(0), None);
+        assert_eq!(super::jdk_pid(4294967296), None, "0 as a pid_t");
+        assert_eq!(super::jdk_pid(4294967297), Some(1), "1 as a pid_t");
+        assert_eq!(super::jdk_pid(-4294967295), Some(1));
+        assert_eq!(super::jdk_pid(4321), Some(4321));
+    }
+
     use super::*;
 
     /// The JDK's block: names ordered as Windows compares them (`_` after `Z`, not before as by

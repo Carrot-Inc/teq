@@ -286,21 +286,25 @@ package java.lang:
 
     private[lang] final class Of(id: scala.Long) extends ProcessHandle:
       def pid(): scala.Long = id
+      // The process the JDK's natives name by the handle's long, `pid()` as given: its low 32 bits, a
+      // `pid_t` on Unix (a DWORD on Windows), as `of` took it.
+      private def sysPid: scala.Long = if java.nio.file.windowsPaths then id & 0xffffffffL else id.toInt.toLong
       def parent(): java.util.Optional[ProcessHandle] =
         val table = processTable()
         var i = 0
         var found: ProcessHandle = null
         while i + 1 < table.length && found == null do
-          if table(i) == id && table(i + 1) > 0 then found = new Of(table(i + 1))
+          if table(i) == sysPid && table(i + 1) > 0 then found = new Of(table(i + 1))
           i += 2
         java.util.Optional.ofNullable(found)
-      // The processes whose parent this one is; and theirs, breadth first.
-      def children(): java.util.stream.Stream[ProcessHandle] = below(false)
-      def descendants(): java.util.stream.Stream[ProcessHandle] = below(true)
-      private def below(all: scala.Boolean): java.util.stream.Stream[ProcessHandle] =
+      // The processes whose parent this one is (the native `getProcessPids0`, of the native pid); and
+      // theirs, breadth first, from the long itself, which the JDK's own walk compares with each parent.
+      def children(): java.util.stream.Stream[ProcessHandle] = below(false, sysPid)
+      def descendants(): java.util.stream.Stream[ProcessHandle] = below(true, id)
+      private def below(all: scala.Boolean, from: scala.Long): java.util.stream.Stream[ProcessHandle] =
         val table = processTable()
         val list = new java.util.ArrayList[ProcessHandle]()
-        var parents = List(id)
+        var parents = List(from)
         while parents.nonEmpty do
           var next: List[scala.Long] = Nil
           var i = 0

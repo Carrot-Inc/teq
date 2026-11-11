@@ -1554,6 +1554,7 @@ private_ctor
 private_param_reads
 private_qualified_inherited
 process_environment
+process_handle_pid_range
 process_lifecycle
 process_redirects
 process_streams

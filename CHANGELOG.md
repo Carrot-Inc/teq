@@ -57,6 +57,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- `ProcessHandle.of` under `teq interp` takes its pid as the JDK does: a number that wraps to 0 or below names no
+  process, where `ProcessHandle.of(4294967295L)` gave a handle whose `destroy` signalled every process of the user.
 - An enum case's `override val` parameter passed on to its enum's own is accepted, as scalac accepts it, and an
   override through a qualified-private accessor is warned about as scalac warns.
 - A class's constructor code reads its own parameters where it names their accessors, so a subclass's override no

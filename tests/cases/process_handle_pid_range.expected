@@ -1,0 +1,11 @@
+4294967295 none
+2147483648 none
+-1 none
+0 none
+4294967296 none
+4294967297 4294967297
+current true
+wrapped true
+wrapped parent true
+wrapped child true
+wrapped descendant false
