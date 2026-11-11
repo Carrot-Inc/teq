@@ -1820,8 +1820,14 @@ impl<'a> Emitter<'a> {
                 // function whose parameters name it there (`Emitter::template_binds`).
                 let binds = self.template_binds(t, args);
                 let binders: Vec<String> = (0..args.len()).filter(|&k| binds & (1 << k) != 0).map(|k| format!("$t{}", k)).collect();
+                // A function that leaves for JavaScript's own code is written through a runtime helper
+                // (`Emitter::emit_leaving_function`), where its argument is written.
+                let leaving = self.leaving_functions(t, args);
                 for (k, &a) in args.iter().enumerate() {
                     if binds & (1 << k) != 0 {
+                        if leaving & (1 << k) != 0 {
+                            w.name("$jsFn");
+                        }
                         self.walk(w, a);
                     }
                 }
@@ -1834,6 +1840,9 @@ impl<'a> Emitter<'a> {
                     let mark = w.top;
                     for n in names.iter().chain(binders.iter()) {
                         w.bind_fixed(n);
+                    }
+                    if leaving & (1 << k) != 0 {
+                        w.name("$jsFn");
                     }
                     // A spread of literal varargs is written as its elements.
                     let spread = prog.strings[t.idx()].contains(&format!("...${}", k));

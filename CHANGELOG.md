@@ -58,7 +58,7 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <summary>Conformance with scalac and the JDK</summary>
 
 - A local named `$jsFn` or `$ap` no longer shadows the JavaScript runtime's helper for a call of a function value
-  that may be an object.
+  that may be an object, or for such a value passed on to a method (`xs.filter(p)`).
 - `ProcessHandle.of` under `teq interp` takes its pid as the JDK does: a number that wraps to 0 or below names no
   process, where `ProcessHandle.of(4294967295L)` gave a handle whose `destroy` signalled every process of the user.
 - An enum case's `override val` parameter passed on to its enum's own is accepted, as scalac accepts it, and an

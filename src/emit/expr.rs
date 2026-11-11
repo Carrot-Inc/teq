@@ -215,7 +215,7 @@ impl<'a> Emitter<'a> {
     /// The arguments of the template call `template(args)` that leave Scala for JavaScript's own code as functions
     /// of one argument, by bit: those given for a parameter of a function type of one argument (Scala.js's
     /// `js.Function1` is `scala.Function1` here) whose value is not statically a JS function (`callee_is_function`).
-    fn leaving_functions(&self, template: StrRef, args: &[TExprId]) -> u64 {
+    pub(super) fn leaving_functions(&self, template: StrRef, args: &[TExprId]) -> u64 {
         let Some(&s) = self.prog.template_syms.get(&template) else { return 0 };
         let Some(sig) = self.syms.sym(s).info.sig.as_deref() else { return 0 };
         let params: usize = sig.clauses.iter().map(|c| c.params.len()).sum();
@@ -236,7 +236,8 @@ impl<'a> Emitter<'a> {
 
     /// A function of one argument leaving for JavaScript's own code (`leaving_functions`): as a JS function,
     /// which a value whose instances are objects becomes (`$jsFn`), as Scala.js's `js.Any.fromFunction1`
-    /// makes one.
+    /// makes one. The scope walk names the helper where such an argument is written, so that no local of the
+    /// body takes its name.
     fn emit_leaving_function(&mut self, a: TExprId) {
         self.note_text("$jsFn");
         self.out.push_str("$jsFn(");
