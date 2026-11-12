@@ -789,7 +789,7 @@ i1432.scala	fail	check:fail	i1432.scala:2:8: expected '=', found '@'
 i14349.min.scala	pass	check:pass	
 i14349.scala	pass	check:pass	
 i14351.scala	pass	check:pass	
-i14367.scala	fail	check:fail	i14367.scala:3:10: missing parameter type
+i14367.scala	pass	check:pass	
 i1442.scala	pass	check:fail	
 i1444.scala	pass	check:pass	
 i14442.scala	pass	check:pass	
@@ -1148,7 +1148,7 @@ i18345.scala	pass	check:pass
 i18351.scala	pass	check:pass	
 i18364.Tup.scala	pass	check:pass	
 i18450.scala	fail	check:fail	i18450.scala:14:14: expected an identifier, found 'this'
-i18453.workaround.scala	fail	check:fail	i18453.workaround.scala:8:14: type mismatch: found Any, required X
+i18453.workaround.scala	pass	check:pass	
 i18453.zio.scala	pass	check:pass	
 i18529	fail	-	java source: teq reads none
 i18530	fail	-	java source: teq reads none

@@ -544,7 +544,7 @@ neg/i1424.scala	accepts
 neg/i1430.scala	same	
 neg/i14303	oos	an older scalac's file
 neg/i14363.scala	same	
-neg/i14367.scala	accepts	
+neg/i14367.scala	same	
 neg/i14386.scala	different	The start of this line does not match any of the previous indentation widths.
 neg/i14401.scala	subset	1/5 lines
 neg/i14401b.scala	same	
@@ -2816,7 +2816,7 @@ pos/i1432.scala	syntax	expected {}, found {}
 pos/i14349.min.scala	accepts	
 pos/i14349.scala	accepts	
 pos/i14351.scala	accepts	
-pos/i14367.scala	rejects	missing parameter type
+pos/i14367.scala	accepts	
 pos/i1442.scala	rejects	value {} is not a member of {}
 pos/i1444.scala	accepts	
 pos/i14442.scala	accepts	
@@ -3182,7 +3182,7 @@ pos/i18345.scala	accepts
 pos/i18351.scala	accepts	
 pos/i18364.Tup.scala	accepts	
 pos/i18450.scala	syntax	expected identifier, found {}
-pos/i18453.workaround.scala	rejects	type mismatch
+pos/i18453.workaround.scala	accepts	
 pos/i18453.zio.scala	accepts	
 pos/i18529	oos	java
 pos/i18530	oos	java

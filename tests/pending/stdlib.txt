@@ -121,7 +121,6 @@ for_generator_callee_guard	error: cannot infer the element type of this generato
 for_generator_callee_parameter	error: cannot infer the element type of this generator
 function_synthetic_class_reflection	error: type ContextFunction01 not found
 function_synthetic_named_arguments	error: type Function023 not found
-function_value_callee	error: missing parameter type
 function_xxl	error: type Function023 not found
 function_xxl_arity256	output differs
 function_xxl_erased_class	error: type Function023 not found

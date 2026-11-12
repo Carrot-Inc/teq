@@ -224,7 +224,10 @@ impl<'a> Parser<'a> {
             }
         };
         let block = match lambda {
-            Some((lambda_start, params)) => self.ast.add_expr(Expr::Lambda(params, body), lambda_start.to(self.prev_span())),
+            Some((lambda_start, params)) => {
+                self.mark_closure_body(body, true);
+                self.ast.add_expr(Expr::Lambda(params, body), lambda_start.to(self.prev_span()))
+            }
             None => body,
         };
         // A brace block that keeps no node of its own (one expression, a lambda over the rest): its span, for an
@@ -356,7 +359,24 @@ impl<'a> Parser<'a> {
         let start = self.span();
         let params = self.parse_lambda_params();
         let body = self.parse_block_or_expr();
+        self.mark_closure_body(body, false);
         self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()))
+    }
+
+    /// Marks the closure's body `body` where dotty's parser makes it a `Block` (`Ast::block_bodies`):
+    /// `in_block`, a closure a block's statement starts, whose body is the block's rest
+    /// (`Parsers.closureRest`, `Location.InBlock`: `block()`, which keeps the block around one
+    /// expression); or a body written in braces, alone or under parentheses (`blockExpr`'s
+    /// `block(simplify)` simplifies an indented region only), which the span the parser kept for
+    /// the collapsed block tells by its brace.
+    fn mark_closure_body(&mut self, body: ExprId, in_block: bool) {
+        let braces = || {
+            let from = self.ast.written_args.partition_point(|&(e, ..)| e < body);
+            self.ast.written_args[from..].iter().take_while(|&&(e, ..)| e == body).any(|&(_, written, _)| self.text.as_bytes().get(written.start as usize) == Some(&b'{'))
+        };
+        if in_block || braces() {
+            self.ast.mark_block_body(body);
+        }
     }
 
     /// `{ a; x => b; c }`: a lambda a block's statement starts takes the rest of the block as its
@@ -378,6 +398,7 @@ impl<'a> Parser<'a> {
                 self.ast.add_expr(Expr::Block(l), body_start.to(self.prev_span()))
             }
         };
+        self.mark_closure_body(body, true);
         self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()))
     }
 
@@ -389,6 +410,7 @@ impl<'a> Parser<'a> {
         let params = self.parse_lambda_params();
         let indented = self.at(Tok::Indent) && self.span().start == self.span().end;
         let body = if indented { self.parse_block() } else { self.parse_block_or_expr() };
+        self.mark_closure_body(body, false);
         self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()))
     }
 

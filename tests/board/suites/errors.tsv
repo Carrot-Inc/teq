@@ -490,6 +490,13 @@ kinds	pass	-
 lambda_open_result_hygiene	pass	-	
 lambda_open_result_param_path	pass	-	
 lambda_open_result_refusals	pass	-	
+lambda_param_callee_argument_twice	pass	-	
+lambda_param_callee_block_statement	pass	-	
+lambda_param_callee_braces_no_formal	pass	-	
+lambda_param_callee_refused_no_formal	pass	-	
+lambda_param_callee_refused_open_formal	pass	-	
+lambda_param_callee_repeated_plain	pass	-	
+lambda_param_callee_spread_beside_argument	pass	-	
 language_import_intersection	pass	-	
 leading_infix_operand_placement	pass	-	
 lexical_extension_failure_beside_scope	pass	-	

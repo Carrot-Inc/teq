@@ -30,6 +30,15 @@ struct BlockLocals {
     own: Vec<SymId>,
 }
 
+/// A parameter of the callee a lambda's body applies to the lambda's parameters
+/// (`Worker::callee_formal`): its type, a repeated one's as the sequence, and whether the callee
+/// takes it by name.
+#[derive(Clone, Copy)]
+struct CalleeFormal {
+    ty: TypeId,
+    by_name: bool,
+}
+
 /// The template a body withheld from its products is typed as.
 pub const WITHHELD_TEMPLATE: &str = "$withheld";
 
@@ -3716,6 +3725,9 @@ impl<'a> Worker<'a> {
         // Parameters that do not take the tuple's elements make a function of several.
         let exp_partial = exp_partial.filter(|_| lps.len() == 1 || untupled.is_some());
         if untupled.is_none() {
+            // The callee the body applies to the parameters, found for the first parameter that
+            // asks (dotty's lazy `calleeType`).
+            let mut callee: Option<Option<(ExprId, Vec<usize>)>> = None;
             for (i, lp) in lps.iter().enumerate() {
                 let ty = match lp.ty {
                     // A library body's lambda typed `(fa: => F[Unit]) => ..` takes a thunk.
@@ -3735,9 +3747,22 @@ impl<'a> Worker<'a> {
                     }
                     None => match exp_fn.as_ref().and_then(|(p, _)| p.get(i).copied()) {
                         Some(t) if exp_fn.as_ref().map_or(false, |(p, _)| p.len() == lps.len()) => {
+                            // A formal that is an open variable nothing bounds below is not known
+                            // (`isFullyDefined(formal, forceDegree)` fails on it): the callee's
+                            // parameter bounds it above first (`inferredFromTarget`'s `formal <:<
+                            // target`), and its maximization then gives that type (`flipBottom`).
+                            // A by-name parameter is no type the formal is below.
+                            if self.unbounded_below(t) {
+                                if let Some(target) = self.callee_formal(&mut callee, body, &lps, i, true).filter(|f| !f.by_name) {
+                                    let mark = self.snapshot();
+                                    if !self.is_sub(t, target.ty) {
+                                        self.rollback(&mark);
+                                    }
+                                }
+                            }
                             self.lambda_param_type(t)
                         }
-                        _ => match self.param_type_from_body(body, lp.name) {
+                        _ => match self.callee_formal(&mut callee, body, &lps, i, false).map(|f| f.ty) {
                             Some(t) => t,
                             None => {
                                 self.error_unless_unknown(lp.span, "missing parameter type".to_string(), &expected.into_iter().collect::<Vec<_>>());
@@ -4428,14 +4453,81 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// For `f(1, _)`: the parameter type comes from the matching parameter of `f`.
-    pub(super) fn param_type_from_body(&mut self, body: ExprId, param: Name) -> Option<TypeId> {
+    /// The callee a lambda's body applies to its parameters, and each parameter's place among
+    /// the arguments (dotty's `calleeType`, Typer.typedFunctionValue): the body is an
+    /// application, every parameter of the lambda stands exactly once among its arguments, as an
+    /// identifier or as `x*` (`paramIndices`, `refersTo`), and the function part names none of
+    /// them (`containsParamRef`). An argument written in parentheses or in braces is a node of
+    /// its own there (`Parens`, `Block`) and no identifier; the parser keeps neither node but
+    /// the span of what it collapsed (`Ast::written_arg`), which opens with the parenthesis or
+    /// the brace. A colon argument's indented region is the expression itself (`blockExpr`'s
+    /// `simplify`), whatever the parser recorded of it. A body that is a block there, a
+    /// closure's of a block's statement or one in braces, is no application (`Ast::is_block_body`).
+    fn callee_arguments(&self, body: ExprId, lps: &[ast::LambdaParam]) -> Option<(ExprId, Vec<usize>)> {
         let ast = self.cur_ast();
+        if ast.is_block_body(body) {
+            return None;
+        }
         let Expr::Apply(f, args) = ast.expr(body) else { return None };
-        let position = ast
-            .expr_list(args)
-            .iter()
-            .position(|&a| matches!(ast.expr(a), Expr::Ident(n) if n == param))?;
+        let text = self.source(self.env.file).text.as_bytes();
+        let bare = |a: ExprId| !ast.written_arg(a).is_some_and(|(written, _)| matches!(text.get(written.start as usize), Some(b'(' | b'{')));
+        let refers_to = |a: ExprId, param: Name| {
+            if !bare(a) {
+                return false;
+            }
+            let a = match ast.expr(a) {
+                Expr::Typed(inner, t) if matches!(ast.ty(t), TyExpr::Repeated(_)) => inner,
+                _ => a,
+            };
+            bare(a) && matches!(ast.expr(a), Expr::Ident(n) if n == param)
+        };
+        let mut places = Vec::with_capacity(lps.len());
+        for lp in lps {
+            let mut found = ast.expr_list(args).iter().enumerate().filter(|&(_, &a)| refers_to(a, lp.name)).map(|(at, _)| at);
+            let place = found.next()?;
+            if found.next().is_some() {
+                return None;
+            }
+            places.push(place);
+        }
+        // The function part names no parameter of the lambda (dotty's `containsParamRef`, a fold
+        // over the whole part). teq reads a parameter type from a path and its type arguments
+        // (`callee_formal`): the path's identifiers, and any term identifier in a type
+        // argument's tree (`one[x.type](x)`), which is resolved before the parameter is bound.
+        let params: Vec<Name> = lps.iter().map(|lp| lp.name).collect();
+        let mut part = f;
+        loop {
+            match ast.expr(part) {
+                Expr::TypeApply(g, targs) => {
+                    if ast.ty_list(targs).iter().any(|&t| crate::parser::references_name(ast, t, &params)) {
+                        return None;
+                    }
+                    part = g;
+                }
+                Expr::Select(g, _) => part = g,
+                Expr::Ident(n) if params.contains(&n) => return None,
+                _ => break,
+            }
+        }
+        Some((f, places))
+    }
+
+    /// The parameter of the callee that parameter `i` of a lambda is the argument of, the type a
+    /// parameter the expected type leaves open is typed from (`f(1, _)` takes the type of `f`'s
+    /// second parameter): dotty's target of `inferredFromTarget`, the callee's `paramInfos` at
+    /// the argument's place, a repeated parameter's as the sequence it is in the body
+    /// (`translateFromRepeated`). `callee` holds `callee_arguments` of the body once asked.
+    ///
+    /// The callee is read from its declaration, where dotty types the function part against the
+    /// arguments. Under an `open` formal, where the answer bounds a variable that would be `Any`,
+    /// it is given only where the declaration is what that typing finds: not for a class another
+    /// creator of which the arguments could select (`has_other_creators`), nor for a member seen
+    /// through a class that is not its owner, whose parameter types are the owner's
+    /// (`declared_in_place`).
+    fn callee_formal(&mut self, callee: &mut Option<Option<(ExprId, Vec<usize>)>>, body: ExprId, lps: &[ast::LambdaParam], i: usize, open: bool) -> Option<CalleeFormal> {
+        let (f, places) = callee.get_or_insert_with(|| self.callee_arguments(body, lps)).as_ref()?;
+        let (f, position) = (*f, places[i]);
+        let ast = self.cur_ast();
         // `identity[Int](_)`: the parameter's type is the instantiated method's.
         let (f, targs) = match ast.expr(f) {
             Expr::TypeApply(g, targs) => (g, Some(targs)),
@@ -4445,23 +4537,38 @@ impl<'a> Worker<'a> {
         if targs.is_some() && self.constructed_class(callee).is_some() {
             return None;
         }
+        if open && !self.declared_in_place(callee) {
+            return None;
+        }
         if let Some(c) = self.constructed_class(callee) {
             self.complete_class(c);
-            let info = self.syms.class(c);
-            if !info.tparams.is_empty() {
+            if open && self.has_other_creators(c) {
                 return None;
             }
-            let clause = info.ctor.iter().find(|c| !c.is_using)?;
-            return clause.params.get(position).map(|p| p.ty);
+            let (p, count) = {
+                let info = self.syms.class(c);
+                if !info.tparams.is_empty() {
+                    return None;
+                }
+                let clause = info.ctor.iter().find(|c| !c.is_using)?;
+                (clause.params.get(position)?.clone(), clause.params.len())
+            };
+            if p.repeated && self.spread_beside_argument(body, count) {
+                return None;
+            }
+            return Some(self.declared_formal(&p, p.ty));
         }
         let sym = callee.sym()?;
         // Kept while the type arguments are resolved against its type parameters.
         let sig = self.sig_arc(sym);
         if self.syms.sym(sym).kind == SymKind::Def {
             let clause = sig.clauses.iter().find(|c| !c.is_using)?;
-            let pty = clause.params.get(position)?.ty;
+            let p = clause.params.get(position)?;
+            if p.repeated && self.spread_beside_argument(body, clause.params.len()) {
+                return None;
+            }
             return match targs {
-                None if sig.tparams.is_empty() => Some(pty),
+                None if sig.tparams.is_empty() => Some(self.declared_formal(p, p.ty)),
                 Some(targs) if ast.ty_list(targs).len() == sig.tparams.len() => {
                     // The arguments are resolved again with the call, which reports what fails.
                     let mark = self.diags.items.len();
@@ -4469,9 +4576,10 @@ impl<'a> Worker<'a> {
                     let subst: Subst = sig.tparams.iter().copied().zip(targs.into_iter().map(|t| self.resolve_type(t))).collect();
                     if self.diags.items.len() > mark {
                         self.drop_reported_since(mark);
-                        return Some(ERROR);
+                        return Some(CalleeFormal { ty: ERROR, by_name: false });
                     }
-                    Some(self.types.subst(pty, &subst))
+                    let ty = self.types.subst(p.ty, &subst);
+                    Some(self.declared_formal(p, ty))
                 }
                 _ => None,
             };
@@ -4480,7 +4588,68 @@ impl<'a> Worker<'a> {
             return None;
         }
         let (ptys, _) = self.as_function(sig.ret)?;
-        ptys.get(position).copied()
+        let ty = *ptys.get(position)?;
+        Some(CalleeFormal { ty, by_name: self.by_name_arg(ty).is_some() })
+    }
+
+    /// Whether the body's application gives the callee's repeated parameter, the last of `count`,
+    /// a sequence argument (`xs*`) beside another argument. scalac refuses the application (the
+    /// sequence argument "is not the only argument to be passed to the corresponding repeated
+    /// parameter"); the typing of a repeated parameter's arguments here takes the first for the
+    /// sequence, so a parameter typed from the callee as the sequence would be accepted there:
+    /// no target is read, and the lambda is refused as it is without one.
+    fn spread_beside_argument(&self, body: ExprId, count: usize) -> bool {
+        let ast = self.cur_ast();
+        let Expr::Apply(_, args) = ast.expr(body) else { return false };
+        let args = ast.expr_list(args);
+        args.len() > count && args[count - 1..].iter().any(|&a| matches!(ast.expr(a), Expr::Typed(_, t) if matches!(ast.ty(t), TyExpr::Repeated(_))))
+    }
+
+    /// Whether the callee `callee` names is declared where the reference finds it: a definition
+    /// of a block or a package, a class, or a member of the very object or enclosing class it is
+    /// read on. A member inherited there, or read on a value, has the parameter types of its
+    /// owner, which the call sees from the prefix.
+    fn declared_in_place(&self, callee: super::resolve::TermRef) -> bool {
+        use super::resolve::TermRef;
+        match callee {
+            TermRef::Local(_) | TermRef::Global(_) | TermRef::Class(_) => true,
+            TermRef::ModuleMember(c, s) | TermRef::This(c, s) => self.syms.sym(s).owner == Owner::Class(c),
+            _ => false,
+        }
+    }
+
+    /// Whether an application of the class `c` by its name can be another creator than its primary
+    /// constructor: a secondary constructor, or an `apply` its companion has or inherits.
+    fn has_other_creators(&mut self, c: ClassId) -> bool {
+        if !self.syms.class(c).ctors.is_empty() {
+            return true;
+        }
+        let Some(o) = self.syms.class(c).companion else { return false };
+        self.complete_class(o);
+        let bases: Vec<ClassId> = self.syms.class(o).base_types.iter().map(|&(b, _)| b).collect();
+        bases.into_iter().any(|b| self.syms.class(b).members.contains_key(&names::APPLY))
+    }
+
+    /// The declared parameter `p` of a method or a constructor, its type `ty` as the call sees
+    /// it, as a lambda's parameter is typed from it.
+    fn declared_formal(&mut self, p: &ParamSig, ty: TypeId) -> CalleeFormal {
+        let mut ty = ty;
+        if p.repeated {
+            if let Some(seq) = self.seq_class() {
+                ty = self.types.class(seq, &[ty]);
+            }
+        }
+        CalleeFormal { ty, by_name: p.by_name }
+    }
+
+    /// Whether the formal `t` is an open variable that nothing bounds below: one dotty's
+    /// `isFullyDefined` fails on under `IfBottom.fail` and maximizes under `flipBottom`.
+    fn unbounded_below(&mut self, t: TypeId) -> bool {
+        let head = self.deref(t);
+        match self.types.get(head) {
+            Type::Var(v) => self.tvars[v].inst.is_none() && self.tvars[v].lower.is_empty(),
+            _ => false,
+        }
     }
 
     /// The type of a lambda parameter as the expected function type gives it. An open variable

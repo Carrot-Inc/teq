@@ -800,7 +800,7 @@ function_synthetic_class_reflection	fail	-	< scala.ContextFunction01: -scala$Con
 function_synthetic_named_arguments	fail	-	< 123
 function_trait_instances	pass	-	
 function_type_tests	pass	-	
-function_value_callee	fail	-	< n=3
+function_value_callee	pass	-	
 function_value_helper_leaving_local	pass	-	
 function_value_helper_local_names	pass	-	
 function_xxl	fail	-	< 4324
@@ -1445,7 +1445,15 @@ lambda_open_result_named_arg	pass	-
 lambda_open_result_nested_apply	pass	-	
 lambda_open_result_strict	pass	-	
 lambda_open_result_variance	pass	-	
+lambda_param_from_callee	pass	-	
+lambda_param_from_callee_colon_argument	pass	-	
+lambda_param_from_callee_forms	pass	-	
+lambda_param_from_callee_indented_body	pass	-	
+lambda_param_from_callee_two_params	pass	-	
+lambda_param_from_callee_type_argument	pass	-	
 lambda_param_ordered_vars	pass	-	
+lambda_param_overload_same_count	pass	-	
+lambda_param_spread_argument	pass	-	
 lambda_union_expected	pass	-	
 lambdas	pass	-	
 layout_mixed	pass	-	

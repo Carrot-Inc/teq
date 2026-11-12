@@ -371,6 +371,10 @@ impl<'a> Cmp<'a> {
         if self.old.is_braced(a) != self.new.is_braced(b) || written(self.old, a) != written(self.new, b) {
             return false;
         }
+        // A closure's body that is a block there (`Ast::is_block_body`) and one that is not are two trees.
+        if self.old.is_block_body(a) != self.new.is_block_body(b) {
+            return false;
+        }
         match (self.old.expr(a), self.new.expr(b)) {
             (IntLit(x), IntLit(y)) | (LongLit(x), LongLit(y)) => x == y,
             (DoubleLit(x), DoubleLit(y)) => x.to_bits() == y.to_bits(),

@@ -933,6 +933,14 @@ pub struct Ast {
     /// its id, set by the parser (`mark_braced`): the mark dotty's `Block` node is, read where a
     /// node is typed.
     pub braced: Vec<u64>,
+    /// The bodies of the closures whose body dotty's parser makes a `Block`, which is then no
+    /// application a parameter's type is read from (`Typer.typedFunctionValue`'s `calleeType`):
+    /// a closure a block's statement starts, whose body is the rest of the block
+    /// (`Parsers.closureRest`: `if location == Location.InBlock then block()`), and a body
+    /// written in braces (`blockExpr`, `block` without `simplify`); an indented body is the
+    /// expression itself (`simplify` on `INDENT`). A bit per expression, by its id, set by the
+    /// parser (`mark_block_body`); `braced` is also an indented region's and cannot tell.
+    pub block_bodies: Vec<u64>,
 }
 
 /// What the converter of a library body keeps beside the AST it makes: the declaration each
@@ -1173,6 +1181,7 @@ impl Ast {
             cut_args: Vec::new(),
             broken_cases: Vec::new(),
             braced: Vec::new(),
+            block_bodies: Vec::new(),
         }
     }
 
@@ -1303,6 +1312,22 @@ impl Ast {
     pub fn is_braced(&self, e: ExprId) -> bool {
         let i = e.idx();
         self.braced.get(i / 64).is_some_and(|w| w >> (i % 64) & 1 != 0)
+    }
+
+    /// Whether `e` is a closure's body that dotty's parser reads as a block (`block_bodies`).
+    #[inline]
+    pub fn is_block_body(&self, e: ExprId) -> bool {
+        let i = e.idx();
+        self.block_bodies.get(i / 64).is_some_and(|w| w >> (i % 64) & 1 != 0)
+    }
+
+    /// `e` is a closure's body that dotty's parser reads as a block.
+    pub fn mark_block_body(&mut self, e: ExprId) {
+        let i = e.idx();
+        if self.block_bodies.len() <= i / 64 {
+            self.block_bodies.resize(i / 64 + 1, 0);
+        }
+        self.block_bodies[i / 64] |= 1 << (i % 64);
     }
 
     /// `e` collapsed out of the parentheses or the block written over `written` (`written_args`): for a

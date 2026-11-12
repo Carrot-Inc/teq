@@ -214,7 +214,6 @@ i14214.scala	i14214.scala:9:24: no given instance of type (Dummy) ?=> Foo was fo
 i14224.1.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i14282.scala	i14282.scala:13:13: Deferred inline method foo in trait Foo cannot be invoked
 i1432.scala	i1432.scala:2:8: expected '=', found '@'
-i14367.scala	i14367.scala:3:10: missing parameter type
 i14494.scala	i14494.scala:9:14: No implicit view available from Seq[TOP] => IterableOnce[STR | INT].
 i14587.hard-union-tuples.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
 i14588.scala	option: -Wsafe-init with -Werror (teq has no flag for it)
@@ -313,7 +312,6 @@ i18160	repro_1.scala:10:40: type argument EventCompatBundle.this.State does not 
 i18175.scala	i18175.scala:45:18: expected '=>', found identifier
 i18211.scala	i18211.scala:24:43: expected ':', found '['
 i18450.scala	i18450.scala:14:14: expected an identifier, found 'this'
-i18453.workaround.scala	i18453.workaround.scala:8:14: type mismatch: found Any, required X
 i18529	java source: teq reads none
 i18530	java source: teq reads none
 i18531	java source: teq reads none

@@ -71,7 +71,6 @@ for_generator_callee_guard	< 4
 for_generator_callee_parameter	< 3
 function_synthetic_class_reflection	< scala.ContextFunction01: -scala$ContextFunction01$$T1, +scala$ContextFunction01$$R | (x$0) | AnyRef: true | trait: true
 function_synthetic_named_arguments	< 123
-function_value_callee	< n=3
 function_xxl	< 4324
 function_xxl_arity256	< true
 function_xxl_erased_class	< List(xxl, xxl, f2, other)

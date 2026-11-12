@@ -245,5 +245,6 @@ impl Ast {
             + array(&self.cut_args)
             + array(&self.broken_cases)
             + array(&self.braced)
+            + array(&self.block_bodies)
     }
 }

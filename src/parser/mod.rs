@@ -4,6 +4,8 @@ mod expr;
 mod pat;
 mod types;
 
+pub(crate) use types::references_name;
+
 use crate::ast::*;
 use crate::intern::{Interner, Name};
 use crate::lexer::LexResult;

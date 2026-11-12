@@ -81,7 +81,6 @@ for_generator_callee_guard	compile
 for_generator_callee_parameter	compile
 function_synthetic_class_reflection	compile
 function_synthetic_named_arguments	compile
-function_value_callee	compile
 function_xxl	compile
 function_xxl_arity256	output
 function_xxl_erased_class	compile
