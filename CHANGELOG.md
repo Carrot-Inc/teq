@@ -67,6 +67,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 - A local class made through a second constructor that reads a local of the enclosing method works on every
   target (the interpreter refused it, JavaScript printed `undefined`, the JVM rejected the class).
+- A macro whose implementation needs a definition of its own build (a class it constructs, an object it reads, a
+  method it calls whose body makes a class) expands the same whatever the number of workers that type the build:
+  a correct program is no longer refused with `not supported yet in a macro: ... has no constructor to run`, and
+  a build is no longer typed a second time by one worker for it.
 - An enum's `valueOf` or `fromOrdinal` passed as a function (`names.map(Tone.valueOf)`) compiles as under scalac
   (it was refused: `value valueOf is not a member of Tone`).
 - A macro that makes a method with `Symbol.newMethod` and a `MethodType`, closes over a method reference with

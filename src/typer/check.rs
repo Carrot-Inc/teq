@@ -3650,6 +3650,11 @@ impl<'a> Worker<'a> {
         // published with the signature (the lock is held by work that never waits on a cell).
         let sig = if self.forked && self.shared_sym(sym) && !self.program_file(file) {
             self.with_loader_for(crate::measure::Hold::Signature, |w| w.complete_sig_inner(sym, file, def_id, owner, kind, span))
+        } else if self.shared_sym(sym) {
+            // What the completion of a shared member's signature types and publishes with it (the
+            // body an inferred result is read from, a default's getter) is the member's own,
+            // whichever maker was the first to ask for the signature (`outside_settling`).
+            self.outside_settling(|w| w.complete_sig_inner(sym, file, def_id, owner, kind, span))
         } else {
             self.complete_sig_inner(sym, file, def_id, owner, kind, span)
         };
@@ -4413,13 +4418,21 @@ impl<'a> Worker<'a> {
             self.wait_cell(CellKey::new(CELL_BODY, sym.0), |w| w.syms.sym(sym).body() == Completion::Done);
             return;
         }
-        self.type_member_body_with(sym, sig);
-        // The traversal reaches the method's getters after it (`Desugar.addDefaultGetters`'s
-        // `Thicket`), their trees its record's before the record is every worker's.
-        self.reach_getters(crate::tir::DefaultOf::Method(sym));
-        self.fill_own_getters(sym);
         if self.shared_sym(sym) {
-            self.publish_body(sym);
+            // A shared member's body is typed and published outside the makers under way, as a
+            // shared class's check is (`check_class_once`).
+            self.outside_settling(|t| {
+                t.type_member_body_with(sym, sig);
+                // The traversal reaches the method's getters after it (`Desugar.addDefaultGetters`'s
+                // `Thicket`), their trees its record's before the record is every worker's.
+                t.reach_getters(crate::tir::DefaultOf::Method(sym));
+                t.fill_own_getters(sym);
+                t.publish_body(sym);
+            });
+        } else {
+            self.type_member_body_with(sym, sig);
+            self.reach_getters(crate::tir::DefaultOf::Method(sym));
+            self.fill_own_getters(sym);
         }
     }
 
@@ -5189,6 +5202,18 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        if self.shared_class(c) {
+            // A shared class is checked and published outside the makers under way: a macro's
+            // run that is the first to need it gets a check whose classes are the class's own.
+            self.outside_settling(|t| t.check_claimed_class(c));
+        } else {
+            self.check_claimed_class(c);
+        }
+        self.syms.check_cells.set(c.0, Completion::Done);
+    }
+
+    /// The check of `c`, whose cell this worker claimed, and its publication where it is shared.
+    fn check_claimed_class(&mut self, c: ClassId) {
         let outer = if self.deps.is_some() { Some(self.deps_enter_class_body(c)) } else { None };
         let frame = self.var_frame_begin();
         if crate::measure::on() || super::prep::capturing() {
@@ -5206,7 +5231,6 @@ impl<'a> Worker<'a> {
         if self.shared_class(c) && crate::shared::lock_depth() == 0 {
             self.publish_check_bundle(c);
         }
-        self.syms.check_cells.set(c.0, Completion::Done);
     }
 
     pub(super) fn check_class_timed(&mut self, c: ClassId) {

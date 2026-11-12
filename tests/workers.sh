@@ -545,6 +545,59 @@ else
   ok
 fi
 
+# A definition of the program that a macro's run is the first to need: the implementation constructs
+# a class, reads an object or an enum's value, or calls a method whose body makes a class, all of
+# Kinds.scala, the program's smallest file, which holds no quoted code and which the walk takes last.
+# The worker whose run needs it checks the class, types the body or completes the signature (an
+# inferred result's body, a default's getter) on demand, and what that makes is every worker's before
+# the check's, the body's or the signature's cell is done (`Worker::outside_settling`), so no other
+# worker's run finds the definition checked and without a body ("has no constructor to run").
+# The early files' call is an extension macro's as an argument of a transparent inline call, expanded
+# while the workers type the bodies; `macro_run_class_dependent`'s macro has a result type that depends
+# on a parameter and expands as typed. At two and eight workers each program's JavaScript, its JVM class
+# files and its interpreter's output are one worker's, which prints scalac's output (without, a worker's
+# run in the window failed and the build was refused); and with the phase forked the build stays on its
+# workers (without, the error held for the phase gave it to one worker).
+saved_counts=$COUNTS
+COUNTS="2 8"
+macro_run_class() {
+  local name=$1 want=$2 t i
+  shift 2
+  same_build "$name" 1 "$@"
+  same_build "${name}_jvm" 1 "$@" --target jvm
+  same_output "${name}_interp" 1 interp "$@"
+  if [ "$(cat "$work/${name}_interp.one")" = "$want" ]; then
+    ok
+  else
+    bad "$name: one worker's output is not scalac's: $(head -2 "$work/${name}_interp.one" | tr '\n' ' ' | cut -c1-200)"
+  fi
+  for t in $COUNTS; do
+    for i in 1 2; do
+      if TEQ_PHASE_FORK=1 TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler check "$@" --threads $t 2>&1 | grep -q 'typed again'; then
+        bad "${name}_phase_fork: a definition a macro's run needed first gave the build to one worker at $t workers"
+        return
+      fi
+    done
+  done
+  ok
+}
+macro_run_class macro_run_class_plain "$(printf '26\n29')" tests/workers/macro_run_class/use tests/workers/macro_run_class/plain
+macro_run_class macro_run_class_object "$(printf '21\n24')" tests/workers/macro_run_class/use tests/workers/macro_run_class/object
+macro_run_class macro_run_class_enum_value "$(printf '17\n20')" tests/workers/macro_run_class/use tests/workers/macro_run_class/enum_value
+macro_run_class macro_run_class_nested "$(printf '17\n20')" tests/workers/macro_run_class/use tests/workers/macro_run_class/nested
+macro_run_class macro_run_class_case_class "$(printf '19\n22')" tests/workers/macro_run_class/use tests/workers/macro_run_class/case_class
+macro_run_class macro_run_class_def_anon "$(printf '17\n20')" tests/workers/macro_run_class/use tests/workers/macro_run_class/def_anon
+macro_run_class macro_run_class_def_sam "$(printf '17\n20')" tests/workers/macro_run_class/use tests/workers/macro_run_class/def_sam
+macro_run_class macro_run_class_val_inferred "$(printf '17\n20')" tests/workers/macro_run_class/use tests/workers/macro_run_class/val_inferred
+macro_run_class macro_run_class_def_default "$(printf '17\n20')" tests/workers/macro_run_class/use tests/workers/macro_run_class/def_default
+macro_run_class macro_run_class_sig_request "$(printf '17\n20')" tests/workers/macro_run_class/use tests/workers/macro_run_class/sig_request
+macro_run_class macro_run_class_dependent 36 tests/workers/macro_run_class_dependent
+# The same completion reached from another maker: a local class's body is the first to read the inferred
+# result of `Deep.inner`, whose body makes an anonymous class, and goes on while the macro's runs on the
+# other workers call the method.
+macro_run_class macro_run_class_local "$(printf '27\n41')" tests/workers/macro_run_class_local
+COUNTS=$saved_counts
+
 # The inlining phase's second queue, forked whatever the count of kept calls (`TEQ_PHASE_FORK=1`):
 # each unit of the walk (a member's or a class statement's calls) expanded whole by one worker, the
 # records merged in the walk's order. The expansion cases print one worker's output at two and

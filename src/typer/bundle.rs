@@ -362,6 +362,17 @@ impl<'a> Worker<'a> {
         out
     }
 
+    /// Runs `f`, the check of a shared class, the typing of a shared member's body or the
+    /// completion of its signature that this worker claimed, outside the makers under way
+    /// (`settling_classes`): what it makes is the definition's own, no copy a maker fixes up in
+    /// place, and is registered by the definition's publication, before its cell is done.
+    pub(super) fn outside_settling<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let scopes = std::mem::take(&mut self.tclass_settling_scopes);
+        let out = f(self);
+        self.tclass_settling_scopes = scopes;
+        out
+    }
+
     /// The worker's own `TClass`es the next publication registers, by their index among its own:
     /// the ones made since the last, but those their maker still fixes up in place
     /// (`tclasses_settling`), those made in a class check still under way
