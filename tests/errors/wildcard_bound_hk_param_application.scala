@@ -3,8 +3,8 @@
 // 116-123), so `F[? >: String]` needs `String <: Int`, and `F[String]` too. scalac 3.8.4 rejects both (E057):
 //   8:24 Type argument  >: String does not overlap with upper bound Int
 //   9:24 Type argument String does not conform to upper bound Int
-// and accepts `F[Int]`. teq shows the wildcard as `? >: String`. (Until round 23 teq collected no parameters for the
-// application of a type parameter, resolve.rs's `_ => Vec::new()` arm, and accepted all three.)
+// and accepts `F[Int]`. The expectation shows the wildcard as `? >: String`. (Collecting no parameters
+// for the application of a type parameter accepts all three.)
 def f[F[_ <: Int]](x: F[? >: String]): Int = 1
 def g[F[_ <: Int]](x: F[String]): Int = 1
 def h[F[_ <: Int]](y: F[Int]): Int = 1

@@ -1,5 +1,5 @@
 // A function type test past 255 parameters is FunctionXXL's (`functionTypeErasure`): the arity saturates instead of
-// wrapping (the adversary's probe Trunc2.scala on the M2e refold, where Function256 tested as Function0).
+// wrapping (Function256 testing as Function0).
 package function_xxl_arity256
 
 object Trunc2 {

@@ -1,7 +1,7 @@
 package fix.forh
 
-// The holders after a `for` take their numbers after every name `makeFor` takes (the pass's probes on 566d48857,
-// ForGroups.scala and ForNested.scala): each run of aliases after a guard binds the fallback's generator over the tuple
+// The holders after a `for` take their numbers after every name `makeFor` takes (`ForGroups`,                   
+// `ForNested`): each run of aliases after a guard binds the fallback's generator over the tuple                        
 // of the written patterns to a fresh name (`makeIdPat(Tuple(allpats))`), and an alias of a nested given pattern goes
 // the fallback's way under 3.8 (`isNestedGivenPattern`). The object after each takes the next number.
 object ForGroups {

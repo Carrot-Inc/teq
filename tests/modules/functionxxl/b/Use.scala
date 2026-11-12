@@ -2,8 +2,8 @@ package fxb
 
 import fxa.*
 
-// teq's caller of the API over a's products, teq's or scalac's (`over-scalac`): every call passes, returns or applies
-// a scala.runtime.FunctionXXL, which both compilers' class files must agree on.
+// The caller of the API that teq is to build over a's products, teq's or scalac's (`over-scalac`): every call passes,
+// returns or applies a scala.runtime.FunctionXXL, which both compilers' class files must agree on.
 @main def run(): Unit =
   val c = new Callee
   println("id23(null) " + c.id23(null))

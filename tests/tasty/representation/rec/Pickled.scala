@@ -5,7 +5,7 @@ package repr.rec
 
 class C { type T; val a: Any = null }
 
-// The signed-name pair (the review on b047da41b): two overloads whose first parameter signatures, each a class named
+// The signed-name pair: two overloads whose first parameter signatures, each a class named
 // with the signature separators, flatten alike; `Kinds.signed` calls one of them, its first parameter's signature the
 // macro's choice.
 class X
@@ -69,7 +69,7 @@ object Pickled:
     val other = Kinds.returnTo("hop", "hopS")
     val v = Kinds.locals(outer = true)
     v
-  // The signed-name pair through the fallback (the review on b047da41b): a call to the first of `Overloads`' two `f`
+  // The signed-name pair through the fallback: a call to the first of `Overloads`' two `f`
   // overloads, whose parameter signatures flatten alike, inside a body scalac's reflection cannot read; the variant
   // reads `Kinds.signed(first = false)`, the call to the second.
   def blindSigned: Int =
@@ -116,7 +116,7 @@ object Pickled:
   val returnedNamed = Kinds.returnTargetNamed(true)
   // A float's raw bits, a signalling NaN (the same review's probe): the variant reads its quiet twin.
   val nanBits = Kinds.floatBits(true)
-  // The symbol reference's decisions (the ruling on 4c8ba8586), each with its variant in check.sh: overloads whose
+  // The symbol reference's decisions, each with its variant in check.sh: overloads whose
   // target names are `super$jumpS` and `jumpS` (an ordinary method's target name is never unmangled), a return to one;
   @scala.annotation.targetName("super$jumpS") def jumpS(x: List[Int]): Int = 1
   @scala.annotation.targetName("jumpS") def jumpS(x: List[String]): Int = 2
@@ -139,7 +139,7 @@ object Pickled:
   def sigShaped(x: Int): Int = x
   def sigShapedRef: Int @shape(Pickled.`sigShaped(scala.Int)scala.Int`) = 1
   // A refined method's selection: its result the refinement's (`String`), which the `TermRef` the selection is typed
-  // by gives as its own type, read and not looked up (the ruling on dc2a3dfec's pass, finding 2).
+  // by gives as its own type, read and not looked up.
   val refinedM: RefM { def f(x: Int): String } = null
   def refinedSelect: Int @shape(Pickled.refinedM.f(1)) = 1
   // A `summonFrom` in an annotation argument's inline definition (the review's probe on d54cf60be).
@@ -186,7 +186,7 @@ class Sup extends Base:
 
 trait RefM { def f(x: Int): Any }
 
-// The fallback's quoted member names (the pass over 3693c7cff): a name holding an overload suffix's `#`, one holding
+// The fallback's quoted member names: a name holding an overload suffix's `#`, one holding
 // an owner record's `:owner`, and a supplementary character, each body unreadable as the probes' are; and two unpaired
 // surrogates, which scalac's name table encodes alike.
 object Odd:

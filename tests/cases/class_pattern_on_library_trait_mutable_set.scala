@@ -1,6 +1,6 @@
 // A typed pattern between one of `List`, `Option`, `Either`, `Try` (classes) and `mutable.Set`, a trait of scala-library's:
 // scalac warns that the case is unreachable and the program runs (tests/cases/class_pattern_on_library_trait).
-// The std declares the name as an alias of the class `HashSet`, so teq refuses the pattern as one between two unrelated classes.
+// teq is to run the program too.
 import scala.annotation.nowarn
 import scala.collection.mutable
 

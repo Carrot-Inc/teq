@@ -1,8 +1,8 @@
 //> using platform jvm
-// A type pattern over an array of a type parameter (`Array[A]` against `Array[Boolean]`) is a test of the
-// array's class: the refinement the case brings to `A` makes the scrutinee conform to the pattern only
-// inside the case, and `TypeTestsCasts` sees the scrutinee's own type. JavaScript and the interpreter have
-// no element kinds (docs/COMPATIBILITY.md): there every array passes, so this runs on the JVM alone.
+// A type pattern over an array of a type parameter (`Array[A]` against
+// `Array[Boolean]`) is a test of the array's class: the refinement the case brings
+// to `A` makes the scrutinee conform to the pattern only inside the case, and
+// `TypeTestsCasts` sees the scrutinee's own type. This runs on the JVM alone.
 def direct[A](array: Array[A]): String = array match
   case x: Array[Boolean] => "bool"
   case x: Array[Int] => "int"

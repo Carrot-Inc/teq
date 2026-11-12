@@ -865,7 +865,7 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
         }
     }
     let typing = std::time::Instant::now();
-    // The round's typing thread owns the round's typing (tests/semanticdb/TABLE.md, ruling 1): it types the round and
+    // The round's typing thread owns the round's typing (tests/semanticdb/TABLE.md, decision 1): it types the round and
     // hands back its attempts and documents; where a semantic rule is configured it then serves the rules' SemanticDB
     // questions (`serve`) until the round drops its link after the last document, and the round joins it there; else
     // the round joins it at once.
@@ -1242,7 +1242,7 @@ struct Served {
     busy_us: u64,
 }
 
-/// The round's SemanticDB service (`fix::service`; tests/semanticdb/TABLE.md, ruling 1), on the round's typing thread
+/// The round's SemanticDB service (`fix::service`; tests/semanticdb/TABLE.md, decision 1), on the round's typing thread
 /// after its typing: each question answered from the typer that typed the round (`typer`, one worker's, its index
 /// holding SemanticDB's records, `Worker::sem_records`: the round's rules may ask, `asks_service`) until the round
 /// drops its link after its last document. Nothing is typed for it, and the answers read no retained form

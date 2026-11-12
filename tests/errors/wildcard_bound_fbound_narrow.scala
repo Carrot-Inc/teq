@@ -1,7 +1,7 @@
 // `narrowBound` (TypeOps.scala 636-684) only where it is dotty's: the argument a parameter's own F-bound names
 // (`lazyRefs`, the `LazyRef` of `BS`'s `S <: BS[T, S]`, Checking.scala 386) and its bound's wildcards massaged. The
-// GADT lower bound it installs, `BS[BS[?, S]#T, S]`, holds the check only where the checked bound is that one
-// (pi-scratch/r23b/dotty/probe.log). scalac 3.8.4 rejects each line:
+// GADT lower bound it installs, `BS[BS[?, S]#T, S]`, holds the check only where the checked bound is that one.
+// scalac 3.8.4 rejects each line:
 //   23:48 Type argument S does not conform to upper bound BS[BS[? <: String, S]#T, S]
 //   24:46 Type argument R does not conform to upper bound BS[BS[?, R]#T, R]
 //   25:38 Type argument S does not conform to upper bound BS[BS[?, S]#T, S]

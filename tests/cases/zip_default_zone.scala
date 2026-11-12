@@ -2,8 +2,8 @@
 // An archive entry's DOS time is local time in the default `TimeZone` (`ZipUtils`, `ZoneId.systemDefault()`),
 // written and read in the zone the program set, as the JDK's are: an entry written in one zone and read in another
 // moves by the difference. `TimeZone.getDefault()` is the machine's zone until `setDefault`, `ZoneId.systemDefault()`
-// follows it, and a fixed offset's `getOffset` is its own. JavaScript has no archives, so this runs in the
-// interpreter and on the JVM alone.
+// follows it, and a fixed offset's `getOffset` is its own.
+// This runs in the interpreter and on the JVM alone.
 import java.util.TimeZone
 import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 

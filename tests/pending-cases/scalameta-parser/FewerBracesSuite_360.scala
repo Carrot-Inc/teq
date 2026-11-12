@@ -1,8 +1,8 @@
 // Program 360 of tests/fix/scalameta, from scalameta 4.17.4's FewerBracesSuite (line 1105, "scalafmt #3720 3
 // complex, space after op, object indented"): scalac 3.8.4's parser reads it as scalameta does, `module object a {
-// foo.bar(arg) ++ baz(arg) ++ qux`, and teq's otherwise. The expectation is scalameta's tree under dialects.Scala3,
-// which teq fix's tree answers to: a node a line, its start and end in UTF-16 units from the program's first line
-// below.
+// foo.bar(arg) ++ baz(arg) ++ qux`. The expectation is scalameta's tree under
+// dialects.Scala3, which teq fix's tree is to answer to: a node a line, its
+// start and end in UTF-16 units from the program's first line below.
 //   Source 0 82
 //     Defn.Object 0 81
 //       Term.Name 7 11

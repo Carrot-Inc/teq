@@ -2,8 +2,8 @@
 // expect: 1 error found
 // scalac 3.8.4 rejects this program with a type mismatch (E007: Found (c : C[?, ?]), Required C[?, ? <: Inv[Int]]),
 // not a crash: comparing the parameter bounds builds the match type over the case its approximation leaves no
-// MatchCase application (`Nothing`), which that comparison does not reduce. teq reports that case as no match case
-// where scalac reports the mismatch: the program is rejected by both.
+// MatchCase application (`Nothing`), which that comparison does not reduce. teq is to report that case as no match
+// case where scalac reports the mismatch.
 class Inv[X]
 class C[A, B <: Inv[Int match { case A => String }]]
 def h(c: C[?, ?]): C[?, ? <: Inv[Int]] = c

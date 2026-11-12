@@ -111,8 +111,8 @@ range-departures/OrType.scala	pending
 range-departures/TypeBounds.scala	pending
 bound-order/BoundOrder.scala	pending
 bound-order/Lower.scala	pending
-alias-bound/AliasBound.scala	pending	an alias of an annotated type meeting a type parameter: scalac's `In[Int]` and `Out[Int]` (`TypeComparer`'s `NamedType` alias arms before the annotation arms and the constraint), teq keeps the alias (`In[Marked]`, a retained alias over its expansion where dotty keeps the `TypeRef`); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
-module-singleton/ModuleRef.scala	pending	an object referenced as a value: scalac's `SingleType(modref/Obj.)`, teq the module class's type (a module's `TermRef` as the type); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
+alias-bound/AliasBound.scala	pending	an alias of an annotated type meeting a type parameter: scalac's `In[Int]` and `Out[Int]` (`TypeComparer`'s `NamedType` alias arms before the annotation arms and the constraint), teq keeps the alias (`In[Marked]`, a retained alias over its expansion where dotty keeps the `TypeRef`); type-representation's
+module-singleton/ModuleRef.scala	pending	an object referenced as a value: scalac's `SingleType(modref/Obj.)`, teq the module class's type (a module's `TermRef` as the type); type-representation's
 annotated-source/annotated-client/Client.scala	pending
 annotated-source/annotated-lib/Lib.scala	pending
 annotated-classes/annotated-client/Client.scala	pending
@@ -121,10 +121,10 @@ nested-annotated-source/nested-client/Client.scala	pending
 nested-annotated-source/nested-lib/Nested.scala	pending
 nested-annotated-classes/nested-client/Client.scala	pending
 nested-annotated-jar/nested-client/Client.scala	pending
-generic-annotated-source/generic-client/GenericClient.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
-generic-annotated-source/generic-lib/GenericAnn.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
-generic-annotated-classes/generic-client/GenericClient.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
-generic-annotated-jar/generic-client/GenericClient.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's (the pass over 32fc738c3; the owner's rule of 2026-10-23)
+generic-annotated-source/generic-client/GenericClient.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's
+generic-annotated-source/generic-lib/GenericAnn.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's
+generic-annotated-classes/generic-client/GenericClient.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's
+generic-annotated-jar/generic-client/GenericClient.scala	pending	a generic inner class through a path as an annotation: scalac's `Box[Int @Ann]`, teq drops the annotation (its `Lambda` over a `Nested` where dotty has one `TypeRef`); type-representation's
 retained-maps/Phantom.scala	pending
 retained-maps/Retained.scala	pending
 rules/forbidden/Example.scala	pending

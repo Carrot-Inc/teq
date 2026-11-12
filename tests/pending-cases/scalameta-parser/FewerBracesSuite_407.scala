@@ -1,7 +1,7 @@
 // Program 407 of tests/fix/scalameta, from scalameta 4.17.4's FewerBracesSuite (line 2281, "#4152 not fewer braces:
-// extension 1"): scalac 3.8.4's parser accepts it, teq's reports "expected extension methods". The expectation is
-// scalameta's tree under dialects.Scala3, which teq fix's tree answers to: a node a line, its start and end in
-// UTF-16 units from the program's first line below.
+// extension 1"): scalac 3.8.4's parser accepts it. The expectation is scalameta's
+// tree under dialects.Scala3, which teq fix's tree is to answer to: a node a
+// line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 58
 //     Defn.Object 0 57
 //       Term.Name 7 11

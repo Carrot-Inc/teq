@@ -1,9 +1,9 @@
-// A numeric unary_+ over a reference, a parameter or a field, whose lowering hands on the reference's node, a getClass
-// and a numeric widening of a reference: TASTy writes the Select of the member over the reference
-// (TreePickler.scala:476-508), the member found on the reference's widened type, which is the widening's source class
-// too (Types.scala:1380-1392). getClass's TypeApply keeps its type argument, as written or as inferred, the receiver's
-// type widened (Definitions.scala:309-315, TreePickler.scala:542-547). From session b's check of master efddb38de3
-// against the head a3bba6320d, and the review of tr/cut-head-tail-c2 e1f120536d (P1-1).
+// A numeric unary_+ over a reference, a parameter or a field, a getClass and a                                        
+// numeric widening of a reference: TASTy writes the Select of the member over                    
+// the reference (TreePickler.scala:476-508), the member found on the reference's                                     
+// widened type, which is the widening's source class too (Types.scala:1380-1392).                                     
+// getClass's TypeApply keeps its type argument, as written or as inferred, the                                    
+// receiver's type widened (Definitions.scala:309-315, TreePickler.scala:542-547).      
 package fix.unaryparams
 
 class UpBox(val n: Int):

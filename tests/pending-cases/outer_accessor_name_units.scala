@@ -1,10 +1,10 @@
-// An inner class's outer accessor is `nme.OUTER.expandedName(cls)` (ExplicitOuter.scala 195-196), over the class's own
-// name, its parts' code units put together: scalac names it `outer_accessor_name_units$O$A$I$$$outer` whatever `A`'s
-// target name, which names the class file alone (`O$A$uD83D`). teq's JVM branch builds the accessor's name from
-// `scala_name`'s text (src/typer/anon.rs, `scalac_outer_accessor_name`), which would show U+FFFD for a lone unit of
-// the class's own name: a name a class file gives once its names keep their units (classfile-reader-names; table
-// (c)'s c-77 on the M2e refold). This program's first line also waits on target-name-renaming. Queued as
-// classfile-reader-names.
+// An inner class's outer accessor is `nme.OUTER.expandedName(cls)`
+// (ExplicitOuter.scala 195-196), over the class's own
+// name, its parts' code units put together: scalac names
+// it `outer_accessor_name_units$O$A$I$$$outer` whatever
+// `A`'s target name, which names the class file alone
+// (`O$A$uD83D`). Queued as classfile-reader-names. This
+// program's first line also waits on target-name-renaming.
 //> using platform jvm
 package outer_accessor_name_units
 

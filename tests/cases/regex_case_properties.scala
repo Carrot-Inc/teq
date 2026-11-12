@@ -1,9 +1,9 @@
 // Unicode properties under `(?i)`, as JDK 24 reads them: `Lu`, `Ll` and `Lt` (written alone or
 // as a `gc=` value) are the three categories together, inside a class and outside one,
 // complemented by `\P` or by the class; no other property folds, and the ASCII letters beside
-// them fold as `(?i)` folds them, so that a plain `(?i)` never takes the engine's own folding
-// (the Kelvin sign is no `k`, the long s no `s`). Under `(?iu)` the engine folds, and the
-// combining ypogegrammeni, whose folding is iota's, is left out here.
+// them fold as `(?i)` folds them, so that under a plain `(?i)` the Kelvin sign is no `k`,
+// the long s no `s`. Under `(?iu)` the combining ypogegrammeni,
+// whose folding is iota's, is left out here.
 object Main:
   val cased = List("a", "A", "z", "\u00e9", "\u00c9", "\u0131", "\u0130", "\u01c4", "\u01c5", "\u01c6", "\u017f", "\u212a", "k", "K", "1", "\u03b9", "\u0399", "\u1fbe", "\u00aa", "\u02b0", "\u2170", "\u24b6", "\uD835\uDC00", "\uD801\uDC28", "_")
   def shown(s: String): String =

@@ -2951,7 +2951,7 @@ async function cancelTeardown() {
 /** Position queries asked on a text whose build is held, then an edit above their positions: where the build is cancelled
  * before typing, the program that answers is the edit's and every one of them answers `ContentModified`, never the symbol
  * at the old offset in the newer text; where the build typed, the program that answers is the one of the text they were
- * given on, and each answers that text's symbol (the ruling of 2026-10-27). */
+ * given on, and each answers that text's symbol. */
 async function positionRevisions() {
   const root = join(work, "link/position-revisions")
   mkdirSync(root, { recursive: true })
@@ -6833,7 +6833,7 @@ async function sourcesPaths() {
         })
       }
     }
-    // The pass on 6d7d21e30's probe: the document a definition gave, open in the client, and teq's whole
+    // The document a definition gave, open in the client, and teq's whole
     // cache removed under it. Hover, definition, references with the declaration and call hierarchy's
     // preparation at `def make`, in the open document: the first finds the sources nowhere and reports
     // it, one transfer places them again, the document is written again, and each answers in the same

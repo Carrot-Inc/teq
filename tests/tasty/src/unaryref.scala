@@ -1,7 +1,7 @@
-// A primitive unary operator and a numeric conversion whose lowering hands on its operand's node (an Int's unary_+,
-// an Int's toInt), of a constant val selected through an effectful prefix: TASTy keeps each selection (Pickler before
-// FirstTransform, Compiler.scala:50-63; TreePickler.scala:476-508), which FirstTransform then takes to { pre; 42 }.
-// From Codex's review of tr/cut-head-tail-c2 321811cbb6 (P1-1).
+// A primitive unary operator and a numeric conversion (an Int's unary_+, an Int's toInt)                           
+// of a constant val selected through an effectful prefix: TASTy keeps each selection                                 
+// (Pickler before FirstTransform, Compiler.scala:50-63; TreePickler.scala:476-508),                                
+// which FirstTransform then takes to { pre; 42 }.              
 package fix.unaryref
 
 class UrC:

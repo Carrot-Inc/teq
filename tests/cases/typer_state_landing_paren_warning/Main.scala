@@ -1,7 +1,7 @@
-// An argument that is a macro's expansion in parentheses, which are no tree for scalac either, or
-// a later argument, is reused by the extension the retry applies with its warning, as scalac's
-// retry expands it again: the warnings, 5 and 6. One inside braces, an ascription or another
-// inline method's argument declines.
+// An argument that is a macro's expansion
+// in parentheses (which are no tree for
+// scalac), or a later argument: scalac's retry
+// expands it again, the warnings, 5 and 6.
 class Box:
   def put(y: Int, z: String): Int = 0
   def put2(a: Int, y: Int, z: String): Int = 0

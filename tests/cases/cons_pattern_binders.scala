@@ -1,5 +1,5 @@
-// `h *: t` patterns with typed binders under either std: the lean std's `*:` object has scala-library's `unapply`,
-// found before the trait it accompanies, and the object is callable as a term.
+// `h *: t` patterns with typed binders under either std: the `*:` object is to have scala-library's `unapply`,
+// and the object is to be callable as a term.
 object Main:
   def main(args: Array[String]): Unit =
     val t: Int *: String *: EmptyTuple = (1, "a")

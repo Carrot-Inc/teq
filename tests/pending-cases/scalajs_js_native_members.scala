@@ -2,9 +2,9 @@
 // dotty 3.8.4's tests/neg-scalajs/js-native-members.scala: a native JS type's members, constructors and private
 // members (transformValOrDefDefInJSType, checkJSNativeDefinition), its diagnostics as scalac 3.8.4 -scalajs gives
 // them on this file. An expectation's L:C is where scalac's caret begins (the start of dotty's span), 1-based.
-// pending: teq's namer rejects `@JSBracketAccess def e` with its own text ("@JSBracketAccess goes on apply (a read)
-// or update (a write)"), a typer-phase error that closes PrepJSInterop's gate: none of the 25 errors is reported (teq
-// gives the six warnings, without scalac's count line).
+// pending: teq is to report the
+// 25 errors, and the six warnings
+// with scalac's count line.
 // expect: 80:10: warning: Ignoring [this] qualifier.
 // expect: The syntax `private[this]` will be deprecated in the future; just write `private` instead.
 // expect: See: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html

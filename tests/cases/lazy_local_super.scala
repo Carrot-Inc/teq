@@ -1,9 +1,9 @@
-// `super` in a local lazy val's initialiser forced from another class: dotty's LambdaLift lifts the initialiser into
-// the declaring class, where the call stays an `invokespecial` of that class's parent; teq writes the initialiser and
-// the accessor there too (`Gen::lazy_method`), and the reader calls them through the holder. Through a class's
-// superclass, a qualified `super[A]`, a mixed-in trait, inside a trait's own method (its super accessor), an object's,
-// a lambda in the initialiser, the declaring method reading the val too, and a hierarchy whose classes each declare
-// one (no accessor of theirs to clash).
+// `super` in a local lazy val's initialiser forced from another class: dotty's
+// LambdaLift lifts the initialiser into the declaring class, where the call stays an
+// `invokespecial` of that class's parent. Through a class's superclass, a qualified
+// `super[A]`, a mixed-in trait, inside a trait's own method (its super accessor), an
+// object's, a lambda in the initialiser, the declaring method reading the val too,
+// and a hierarchy whose classes each declare one (no accessor of theirs to clash).
 import java.util.concurrent.Callable
 class Parent { def value: Int = 21; def twice(n: Int): Int = n * 2 }
 trait T { def value: Int = 31; def label(s: String): String = s"T $s" }

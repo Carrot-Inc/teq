@@ -1,8 +1,8 @@
-// The store's application of a type lambda and a match alias's approximation where both compilers reject (the
-// closure adversary of the pass on 861d8acf1, round 22, rows ST3 and ST4, and C.* through an alias): scalac 3.8.4
-// captures the wildcard (`h.KC[?1.A]`, teq `h.KC[_]`) where row ST4's store application would read the contravariant
-// parameter invariant, folds `2 + 1` to `(3 : Int)` (teq `3`), and approximates `Contra[MT[c.T]]` to
-// `Contra[Nothing]` (teq `Contra[Nothing & Any]`, the same type).
+// The application of a type lambda and a match
+// alias's approximation where scalac 3.8.4 rejects
+// and teq is to reject: scalac captures the wildcard
+// (`h.KC[?1.A]`), folds `2 + 1` to `(3 : Int)`, and
+// approximates `Contra[MT[c.T]]` to `Contra[Nothing]`.
 import scala.compiletime.ops.int.+
 class H:
   type KC[-X]

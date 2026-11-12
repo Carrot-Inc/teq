@@ -1,7 +1,7 @@
 /*
 rules = ["file:../../support/LiteralUnits.scala"]
 */
-// The literals' values as UTF-16 units, as scalameta 4.17.4 reads them (the review of 2f7c9255a): a string's value a
+// The literals' values as UTF-16 units, as scalameta 4.17.4 reads them: a string's value a                          
 // `String`, a lone surrogate's unit kept in a string, an interpolation part and a char, a pair one character.
 object LiteralUnits {
   val plain = "hello" // assert: LiteralUnits.string

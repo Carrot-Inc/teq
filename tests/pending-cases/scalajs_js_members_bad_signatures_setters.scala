@@ -3,8 +3,8 @@
 // checkSetterSignature on a native JS class's setters (transformValOrDefDefInJSType), its errors as scalac 3.8.4
 // -scalajs gives them on this file. An expectation's L:C is where scalac's caret begins (the start of dotty's span),
 // 1-based.
-// pending: teq gives dotty's four texts and the count, each at the setter's name (column 7) where scalac's caret
-// begins at the definition (column 3): the walk's MemberDef#pos is the record's span, not the tree's.
+// pending: teq is to give dotty's four texts each where
+// scalac's caret begins, at the definition (column 3).
 // expect: 19:3: error: JS setters must return Unit
 // expect: 20:3: error: JS setters must have exactly one argument
 // expect: 21:3: error: JS setters may not have repeated params

@@ -2,7 +2,7 @@
 // `Checking.checkAppliedType`): nested in another application, in a method's parameter and result, a type
 // parameter's bound, a val's and a var's type, a refinement, a using clause, an opaque alias, a self type, a type
 // test, an ascription and another wildcard's bound. scalac 3.8.4 reports every one (E057, `Type argument  >: X does
-// not overlap with upper bound Int`, the same text at each) at the wildcard, one column before teq's.
+// not overlap with upper bound Int`, the same text at each) at the wildcard, one column before the expectation's.
 class C[T <: Int]
 type L = List[C[? >: String]]
 type M = Map[String, C[? >: CharSequence]]

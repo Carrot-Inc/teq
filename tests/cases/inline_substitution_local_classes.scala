@@ -1,8 +1,8 @@
-// A named local class of a stored inline body, copied at each expansion and named by the site of
-// the expansion and the repetition there, as an anonymous class is: two expansions at one site
-// and one at another are three classes (the retype path names the class by its definition's
-// position alone, and the second expansion's class takes the first's name: a JavaScript that does
-// not load, class files the JVM backend refuses). scalac prints the lines of the .expected file.
+// A named local class of a stored inline
+// body, copied at each expansion: two
+// expansions at one site and one at
+// another are three classes. scalac
+// prints the lines of the .expected file.
 trait Show[A]:
   def show(a: A): String
 inline def make[A](label: String, inline f: A => String): Show[A] =

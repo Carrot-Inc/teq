@@ -434,7 +434,7 @@ pub struct Inlining {
     /// The typed records of the nodes the phase changed in place (a kept call's, the index of a
     /// tuple its expansion folded), with their recorded types: the typed view reflection reads
     /// (`Worker::typed_expr`), as dotty's `defTree`, set by `PostTyper` before `Inlining`, keeps
-    /// the call (ruling 3's frozen typed publication). A session keeps them with the trees.
+    /// the call (the frozen typed publication). A session keeps them with the trees.
     pub(super) journal: FxMap<TExprId, (crate::tir::TExpr, Option<TypeId>)>,
     /// The typed view's copies of definitions' trees made for reflection, by root, for the unit
     /// the phase expands (`Worker::typed_body`), and whether a copy is being made.

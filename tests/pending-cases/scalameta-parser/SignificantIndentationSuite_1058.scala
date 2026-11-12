@@ -1,6 +1,6 @@
 // Program 1058 of tests/fix/scalameta, from scalameta 4.17.4's SignificantIndentationSuite (line 2431, "#3261
-// chained `match` with outdent, block, in if cond"): scalac 3.8.4's parser accepts it, teq's reports "expected
-// 'then', found 'match'". The expectation is scalameta's tree under dialects.Scala3, which teq fix's tree answers
+// chained `match` with outdent, block, in if cond"): scalac 3.8.4's parser accepts it. The
+// expectation is scalameta's tree under dialects.Scala3, which teq fix's tree is to answer
 // to: a node a line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 192
 //     Defn.Object 0 191

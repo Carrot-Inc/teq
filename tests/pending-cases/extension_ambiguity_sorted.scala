@@ -1,8 +1,8 @@
-// The givens in scope are tried in `sort`'s order (`compareEligibles`, Implicits.scala:1584-1595): of one level and
-// arity, the one whose owner has more base classes first, so the ambiguity, the qualifier's mismatch
-// (Typer.scala:4346-4353), names `b` (of `T2`, which extends `Extra`) before `a` (scalac 3.8.4). teq tries them in that
-// order but reports its own ambiguity at the selection; master (efddb38de3) and the head (61c1af7941) "both a and b
-// provide pick on R". Queued: push 6 (typeMismatch whole).
+// The givens in scope are tried in `sort`'s order (`compareEligibles`,
+// Implicits.scala:1584-1595): of one level and arity, the one whose
+// owner has more base classes first, so the ambiguity, the qualifier's
+// mismatch (Typer.scala:4346-4353), names `b` (of `T2`, which extends
+// `Extra`) before `a` (scalac 3.8.4). Queued: push 6 (typeMismatch whole).
 class R
 trait Ops:
   extension (r: R) def pick: String

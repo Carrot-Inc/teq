@@ -1,8 +1,8 @@
 // teq: --deprecation --werror
 //> using options -deprecation -Werror
-// A binder's `@nowarn` whose filter is a stable alias 33 links from its literal: `Annotations.argumentConstant`'s
-// `widenTermRefExpr` follows the chain to its end, so scalac 3.8.4 is silent under `-deprecation -Werror`; teq's
-// `widen_path` stops at 32 links (master's shared cap, the caps' inventory: the ruling on the review of b23cfe2a3).
+// A binder's `@nowarn` whose filter is a stable alias 33 links from its
+// literal: `Annotations.argumentConstant`'s `widenTermRefExpr` follows the
+// chain to its end, so scalac 3.8.4 is silent under `-deprecation -Werror`.
 @deprecated("old", "1") class Old
 def f = {
   val s0: "cat=deprecation" = "cat=deprecation"

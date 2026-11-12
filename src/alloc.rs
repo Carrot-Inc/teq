@@ -2931,7 +2931,7 @@ mod tests {
     }
 
     /// At the system's bound on the count of mappings (`vm.max_map_count`), where an unmapping inside a larger
-    /// mapping would split it and the system refuses (the push pass of 9afa287f3, its probe): what the allocator
+    /// mapping would split it and the system refuses: what the allocator
     /// unmaps stays its own. A kept mapping between two live ones of the band's reserve, which the idle point
     /// cannot unmap, stays kept, cold, its pages but the header's given back; a shrink there keeps its length and
     /// gives back the pages past the block; a range no list names is held for a later idle point; and once the
@@ -3299,7 +3299,7 @@ mod tests {
 
     /// A block grown under a bound on the address space that has room for its new size's class and not for
     /// the room a growing block is given: it grows without the room, its contents kept, a mapping's and a
-    /// system block's from before the mode alike (the push pass of 96499a77c, its probe: 102 blocks of
+    /// system block's from before the mode alike (102 blocks of
     /// 512 KB pinned, the bound 2 MB over what is mapped, one block grown to 900 KB).
     #[cfg(target_os = "linux")]
     #[test]
@@ -3347,8 +3347,8 @@ mod tests {
 
     /// Requests aligned past 16 bytes, the system allocator's, under a bound on the address space that the
     /// reserve's unused rest fills: the reserve gives way and they are served, a request aligned to 32 and
-    /// to 4096 bytes and a block of 64 KB aligned to 32 from before the mode grown (the push pass of
-    /// 61f4a7410, its probes, where master serves both). The requests are of 48 MB, past glibc's largest
+    /// to 4096 bytes and a block of 64 KB aligned to 32 from before the mode grown
+    /// (master serves both). The requests are of 48 MB, past glibc's largest
     /// threshold of a request it maps on its own (`DEFAULT_MMAP_THRESHOLD_MAX`, 32 MB on 64-bit) and past any
     /// free space of its main arena's, so that they need address space of their own.
     #[cfg(target_os = "linux")]
@@ -3415,8 +3415,8 @@ mod tests {
         }
     }
 
-    /// A look at the pages (`resident_pages`, `stats`) over more mappings than a list of 32 KB holds (the
-    /// push pass of d6adad162: some 1,365) makes no mapping of the allocator's and leaves none kept: its list
+    /// A look at the pages (`resident_pages`, `stats`) over more mappings than a list of 32 KB holds
+    /// (some 1,365) makes no mapping of the allocator's and leaves none kept: its list
     /// is a mapping of the system's of its own.
     #[cfg(target_os = "linux")]
     #[test]
@@ -3457,8 +3457,8 @@ mod tests {
     }
 
     /// Reallocs that master serves in place or with the difference of address space alone, served so
-    /// under a bound that leaves no room for a second copy of the block (the push pass of 7673c0bff, its
-    /// probe and the sweep after it): a system block of before the mode shrunk stays the system's, and
+    /// under a bound that leaves no room for a second copy of the block:
+    /// a system block of before the mode shrunk stays the system's, and
     /// grown where a mapping is refused grows by the system's realloc; a mapping shrunk far below its
     /// length where a smaller one is refused stays in its own; a mapping grown where a new one is refused
     /// is given the new length by the system (Linux's `mremap`). The system blocks are of 48 MB, past
@@ -3564,7 +3564,7 @@ mod tests {
         }
     }
 
-    /// The push pass of 6280b3c82, its first probe: a mapping of 10 MiB shrunk in place to 256 KiB with no
+    /// A mapping of 10 MiB shrunk in place to 256 KiB with no
     /// address space to spare (the bound at the address space before the shrink), then grown to 288 KiB, given
     /// 288 KiB again, shrunk to 256 KiB and given 256 KiB again, all at its address: the shrink gives back the
     /// address space past the block's pages, as the system's allocator's does for a chunk it mapped, and the
@@ -3597,7 +3597,7 @@ mod tests {
         }
     }
 
-    /// The push pass of 6280b3c82, its second probe: a mapping of 10 MiB shrunk in place to 256 KiB, then with
+    /// A mapping of 10 MiB shrunk in place to 256 KiB, then with
     /// the bound at the address space after the shrink (none to spare), a realloc to the same 256 KiB and one
     /// within the block's last page: within the mapping's length, so served in place with no address space,
     /// contents kept.
@@ -3765,7 +3765,7 @@ mod tests {
         outcomes
     }
 
-    /// The differential test of the realloc rule (the push pass of 6280b3c82): seeded sequences of
+    /// The differential test of the realloc rule: seeded sequences of
     /// requests over 32 KB, before the process is resident and after, the rest bounded at the address
     /// space it has (no room for a request that needs address space of its own), each run once through
     /// the global allocator and once through the system's allocator alone, each in a process of its own

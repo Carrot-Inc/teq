@@ -1,9 +1,9 @@
-// A downstream of a/ as tests/modules builds it. `Named(..)` calls the apply of an upstream case class (no written
-// companion). scalac 3.8.4 prints the .expected, and so does each of teq's runs. scalac's pickle, and teq's over a/'s
-// products, call `Named.apply`; teq's whole build pickles `new Named(..)` (SELECTin <init>), so b/'s pickle and
-// classes differ between the whole build and the split one (tests/modules' classes, subset, check-lean-whole). Cause
-// not located. The same on integration b602956824; visible in tests/modules/typenamedbinding once the SELECTtpt port
-// lets its products build.
+// A downstream of a/ as tests/modules builds it. `Named(..)`
+// calls the apply of an upstream case class (no written
+// companion). scalac 3.8.4 prints the .expected. scalac's pickle
+// calls `Named.apply`; teq's whole build's is to call it too,
+// b/'s pickle and classes the same in the whole build and the
+// split one (tests/modules' classes, subset, check-lean-whole).
 package zab
 
 import tnba.*

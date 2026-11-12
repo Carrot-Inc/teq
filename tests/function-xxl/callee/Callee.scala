@@ -1,11 +1,11 @@
 package fxl
 
-// The callee of tests/function-xxl.sh, built by teq and by scalac 3.8.4: an API over functions past 22 parameters,
-// which erase to scala.runtime.FunctionXXL (`Definitions.functionTypeErasure`), as table (b)'s cross/Callee.scala
-// and cross/FunctionErasure.scala have it: methods taking, returning, building and applying a Function23, a spelled
-// Function023, a Function64 and a ContextFunction23, and a class and an object implementing Function23, which take
-// FunctionXXL's `apply(Object[])` (`FunctionXXLForwarders`) and its `toString`; one beside another `apply` of the arity,
-// whose forwarder is the overriding one's (the pass's probe on 39ba4cf2d).
+// The callee of tests/function-xxl.sh, which teq and scalac 3.8.4 are to build: an API over functions past
+// 22 parameters, which erase to scala.runtime.FunctionXXL (`Definitions.functionTypeErasure`): methods
+// taking, returning, building and applying a Function23, a spelled Function023, a Function64 and a
+// ContextFunction23, and a class and an object implementing Function23, which take FunctionXXL's
+// `apply(Object[])` (`FunctionXXLForwarders`) and its `toString`; one beside another `apply` of the
+// arity, whose forwarder is the overriding one's.
 class Callee:
   def id23(f: Function23[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int]): Function23[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int] = f
   def id023(f: Function023[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int]): Function023[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int] = f

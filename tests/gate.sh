@@ -276,7 +276,7 @@ app_fix_pin() {
 }
 project_lines="lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test tyrian-export tyrian-compile tyrian-test tyrian-run indigo-export indigo-compile indigo-test indigo-run"
 # The lines run only when --only or --with names them: the scalac oracle, at a release and nightly. The reference
-# projects' lines run in every gate (the owner's ruling, 2026-10-16: every reference project in, the gate never weakened
+# projects' lines run in every gate (the rule: every reference project in, the gate never weakened
 # to make it faster; a gate past thirty minutes is answered with machines, never with fewer lines).
 optional="app-scalac"
 names=" $compare $local_lines $project_lines "

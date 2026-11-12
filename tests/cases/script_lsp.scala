@@ -1,6 +1,6 @@
 //> using platform jvm
 //> using file ../../tools/script
-// The scripts' library speaking JSON-RPC with a resident child: `teq lsp` (TEQ names it; the
+// The scripts' library speaking JSON-RPC with a resident child: the language server (TEQ names it; the
 // suites set it) started, initialized, shut down and ended, its replies read as frames counted in
 // bytes, within deadlines. What is printed holds for any version of the server.
 object Main:

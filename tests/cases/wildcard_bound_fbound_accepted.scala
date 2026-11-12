@@ -3,7 +3,7 @@
 // through an alias's own F-bound, nested applications, a function type, a result type, by-name and repeated
 // parameters, an `extends` clause, match type patterns (`Mode.Pattern`), a given, a using parameter, a higher-kinded
 // parameter's `LambdaParam` bound, pos/i6146 through a given and an alias, pos/t2613's shapes, Java's `Enum`, both
-// bounds, a constructor's parameters and a typed pattern. The closure adversary of the pass on 5bd85bcd1 (round 23).
+// bounds, a constructor's parameters and a typed pattern.
 trait BS[T, S <: BS[T, S]]
 trait IS extends BS[Int, IS]
 type Fb[S <: BS[?, S]] = BS[?, S]

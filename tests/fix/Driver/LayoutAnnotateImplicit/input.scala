@@ -3,7 +3,7 @@ rules = ["file:../../support/DumpLayout.scala"]
 */
 // Each written annotation ascription a `Term.Annotate` of its own, its annotations its own (nested in parentheses, two
 // in one ascription, an ascription of `@nowarn` alone inside and outside parentheses), and an implicit lambda's
-// parameter and clause from its `implicit`, a `Mod.Implicit` each (the review of e0d4a9c4f), as scalameta 4.17.4's.
+// parameter and clause from its `implicit`, a `Mod.Implicit` each, as scalameta 4.17.4's.                          
 import scala.annotation.nowarn
 object AnnotateImplicit:
   val marker = 0 // assert: DumpLayout.layout

@@ -1,7 +1,7 @@
 // `lazy` on an object, which scalac accepts: the module class keeps only the flags a module class retains
 // (`Desugar.moduleDef`, `mods.toTypeFlags & RetainedModuleClassFlags | ModuleClassCreationFlags`), so that the term's
-// `Lazy` never reads as the class's `Trait`, and the products' pickles are written (the M3 adversary's probes n05,
-// n13 and n14, where writing them panicked on the kinds).
+// `Lazy` never reads as the class's `Trait`, and the products' pickles are written
+// (writing them once panicked on the kinds).
 package lazy_object
 
 lazy object Top { val x = 1 }

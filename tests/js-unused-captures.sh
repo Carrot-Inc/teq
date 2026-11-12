@@ -1,5 +1,5 @@
 #!/bin/bash
-# Type-only inline receivers keep their evaluation, but need no anonymous-class field.
+# Type-only inline receivers are to keep their evaluation, but need no anonymous-class field.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}

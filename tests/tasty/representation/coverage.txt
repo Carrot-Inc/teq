@@ -82,7 +82,7 @@ ClassDefMethods.self printed ClassDef
 ClassDefModule.apply excluded constructor: makes a ClassDef from its arguments, reading no node
 ClassDefModule.copy excluded constructor: makes a ClassDef from its arguments, reading no node
 ClassDefModule.module excluded constructor: makes a ClassDef from its arguments, reading no node
-ClassDefModule.unapply excluded operation ClassDefMethods.constructor, ClassDefMethods.parents, ClassDefMethods.self, ClassDefMethods.body: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw (the pass over 334a43adf)
+ClassDefModule.unapply excluded operation ClassDefMethods.constructor, ClassDefMethods.parents, ClassDefMethods.self, ClassDefMethods.body: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw
 ClassOfConstantModule.apply excluded constructor: makes a ClassOfConstant from its arguments, reading no node
 ClassOfConstantModule.unapply printed ClassOfConstant
 ClosureMethods.meth excluded operation ClosureModule.unapply: a field of the printed extractor
@@ -103,7 +103,7 @@ DefDefMethods.termParamss excluded operation DefDefMethods.paramss: the term cla
 DefDefMethods.trailingParamss excluded operation DefDefMethods.paramss: the clauses of `paramss` after the leading type clause
 DefDefModule.apply excluded constructor: makes a DefDef from its arguments, reading no node
 DefDefModule.copy excluded constructor: makes a DefDef from its arguments, reading no node
-DefDefModule.unapply excluded operation DefDefMethods.paramss, DefDefMethods.returnTpt, DefDefMethods.rhs: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw (the pass over 334a43adf)
+DefDefModule.unapply excluded operation DefDefMethods.paramss, DefDefMethods.returnTpt, DefDefMethods.rhs: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw
 DefinitionMethods.name printed TermRef
 DoubleConstantModule.apply excluded constructor: makes a DoubleConstant from its arguments, reading no node
 DoubleConstantModule.unapply printed DoubleConstant
@@ -521,7 +521,7 @@ TypeCaseDefModule.unapply printed TypeCaseDef
 TypeDefMethods.rhs printed TypeDef
 TypeDefModule.apply excluded constructor: makes a TypeDef from its arguments, reading no node
 TypeDefModule.copy excluded constructor: makes a TypeDef from its arguments, reading no node
-TypeDefModule.unapply excluded operation TypeDefMethods.rhs: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw (the pass over 334a43adf)
+TypeDefModule.unapply excluded operation TypeDefMethods.rhs: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw
 TypeIdentMethods.name excluded operation TypeIdentModule.unapply: a field of the printed extractor
 TypeIdentModule.apply excluded constructor: makes a TypeIdent from its arguments, reading no node
 TypeIdentModule.copy excluded constructor: makes a TypeIdent from its arguments, reading no node
@@ -602,7 +602,7 @@ ValDefMethods.tpt printed ValDef
 ValDefModule.apply excluded constructor: makes a ValDef from its arguments, reading no node
 ValDefModule.copy excluded constructor: makes a ValDef from its arguments, reading no node
 ValDefModule.let excluded constructor: makes a ValDef from its arguments, reading no node
-ValDefModule.unapply excluded operation ValDefMethods.tpt, ValDefMethods.rhs: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw (the pass over 334a43adf)
+ValDefModule.unapply excluded operation ValDefMethods.tpt, ValDefMethods.rhs: the extractor of the printed fields: the arm reads each field apart, so that a field the reader cannot give is that field's Threw
 ValOrDefDefMethods.rhs excluded operation ValDefMethods.rhs, DefDefMethods.rhs: the `rhs` each definition gives
 ValOrDefDefMethods.tpt excluded operation ValDefMethods.tpt, DefDefMethods.returnTpt: the `tpt` each definition gives
 WhileMethods.body excluded operation WhileModule.unapply: a field of the printed extractor

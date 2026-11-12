@@ -1,6 +1,6 @@
 //> using platform jvm
 // Adapted from scala3 tests/run/exceptions-2.scala (Apache-2.0, see tests/scala3/README.md); replaced: an empty case
-// body `=> ;` by `=> ()`, and a case body's last line indented under its first, as teq's parser takes them.
+// body `=> ;` by `=> ()`, and a case body's last line indented under its first.
 // scalajs: --compliant-semantics
 
 /*

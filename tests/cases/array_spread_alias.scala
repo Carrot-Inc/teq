@@ -1,7 +1,7 @@
-// An array spread into a Scala varargs parameter is wrapped as it is, not copied (dotty's `ElimRepeated.arrayToSeq`,
-// `ScalaRunTime.wrapRefArray` and its primitive and generic siblings), so a later write to the array shows in the
-// sequence (master's JVM printed `before` and `ArraySeq(1, 2)`: the typer's conversion copied it); a sequence spread
-// stays itself.
+// An array spread into a Scala varargs parameter is wrapped as it is, not
+// copied (dotty's `ElimRepeated.arrayToSeq`, `ScalaRunTime.wrapRefArray`
+// and its primitive and generic siblings), so a later write to the array
+// shows in the sequence; a sequence spread stays itself.
 def keep(xs: String*): Seq[String] = xs
 def ints(xs: Int*): Seq[Int] = xs
 def gen[T](xs: T*): Seq[T] = xs

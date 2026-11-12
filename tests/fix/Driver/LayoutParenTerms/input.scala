@@ -67,7 +67,7 @@ object ParenTerms:
   val handler: PartialFunction[Throwable, Int] = { case _ => 0 }
   val catchAll = try 1 catch (handler)
   val caseGen = for case (a, b) <- (List((1, 2))) yield a
-  // A guard's condition and a colon argument's body in parentheses (the ledger of 2865c7af2's pass, rows 6 and 10).
+  // A guard's condition and a colon argument's body in parentheses.                                                
   val guardCondition = for x <- List(1) if (x > 0) yield x
   val colonBody = List(1).map: x =>
     (x)

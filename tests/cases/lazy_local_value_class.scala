@@ -1,6 +1,6 @@
 // A local lazy val in a value class's method, whose body its companion holds (`m$extension`, `this` the underlying
-// value): its accessor and initialiser are the value class's methods, taking its box, which an anonymous class made
-// there holds (`Gen::load_instance_of` boxes the underlying value) and the extension's own reads and lambdas pass.
+// value), with an anonymous class made there,
+// the extension's own reads and lambdas.
 import java.util.concurrent.Callable
 class V(val u: Int) extends AnyVal {
   def go(): Int = { lazy val x = u + 1; new Callable[Int] { def call(): Int = x }.call() }

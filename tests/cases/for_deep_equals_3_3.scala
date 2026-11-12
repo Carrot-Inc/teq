@@ -1,5 +1,5 @@
 // teq: --source 3.3
-// Before better fors (3.3) no trailing `map` is left out (the review of 1888ac4df).
+// Before better fors (3.3) no trailing `map` is left out.
 class Seq1[A](val xs: List[A]):
   def map[B](f: A => B): Seq1[B] = { println("map"); Seq1(xs.map(f)) }
   def withFilter(p: A => Boolean): Seq1[A] = Seq1(xs.filter(p))

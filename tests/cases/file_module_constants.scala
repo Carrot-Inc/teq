@@ -1,7 +1,7 @@
 //> using platform jvm
 // split-watch: jvm
-// Top-level final vals as dotty's `isConstExprFinalVal` sorts them by the result type the typer records: a block with
-// an effect, an ascribed literal, a folded sum, a class literal, a Float and a Double, a reference to another
+// Top-level final vals as dotty's `isConstExprFinalVal` sorts them by the result type dotty's typer records: a block
+// with an effect, an ascribed literal, a folded sum, a class literal, a Float and a Double, a reference to another
 // constant are constants (no field, the getter answering the constant, the block still run for its effect); an `if`
 // is an `Int`, a field. Inline vals of array classes, erased, each read the `ldc` of the class. A `null` and a `()`
 // are left out of the listing: scalac keeps no field for them either, by `Memoize`'s erasable bottom fields

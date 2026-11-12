@@ -1,7 +1,7 @@
-// The interpreter's strings count UTF-16 units as the JVM's do: a supplementary character is two
-// units, a half of it taken apart is a lone surrogate that joins its other half again, and every
-// native that takes or gives an index (substring, charAt, indexOf, slices, patch, search, hash
-// and comparison) sees the units.
+// The interpreter's strings are to count UTF-16 units as the JVM's do: a supplementary
+// character is two units, a half of it taken apart is a lone surrogate that joins
+// its other half again, and every operation that takes or gives an index (substring,
+// charAt, indexOf, slices, patch, search, hash and comparison) is to see the units.
 object Main:
   class Empty:
     override def toString = ""
@@ -147,8 +147,8 @@ object Main:
     println(show(new StringBuilder(hi + "x" + lo).reverse.toString))
     println(show("%c".format(0x1D11E)))
     println(show(f"${0x1D11E}%c"))
-    // A pair whose code point lies in the range the compiler keeps lone surrogates in stays two
-    // units, however it is put together.
+    // The pair below stays two units,
+    // however it is put together.
     val top = 0xdbfe.toChar.toString + 0xdc00.toChar.toString
     println(top.length)
     println(top.toCharArray.map(_.toInt).mkString(","))

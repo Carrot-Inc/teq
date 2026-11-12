@@ -1,14 +1,14 @@
 // jars: scala-library defaults-lib
-// A jar's inline forwarders made through a companion extension method (tests/support/defaults_lib.scala's
-// `InlExports` and its top-level `tg`), called and re-exported: each is expanded from its pickled body (`Inlines.inlineCall`
-// over the TASTy body, `bodyToInline`), a re-export of one an inline forwarder too. Their parameters carry no folded
-// default, the forwarders' getters being numbered for their members (dotty's forwarder parameters have no default
-// trees): a call leaving an argument out applies the getter of its name, `f`'s `b` the getter of `c`, `h2`'s `b` the
-// inline getter of `a`, expanded from its own pickled body, and through a generic path method with the call's type
-// arguments (`InlGeneric.r`'s `b`). Before, the loader folded `g`'s getter over the receiver's
-// own clause into the receiver ("not found: s") or `x3`'s "y" into `a: Int`, the body failed teq's typing, the forwarder
-// lost its `Inline`, and the program called `InlExports$.g(String, int)`, which scalac never emits (NoSuchMethodError).
-// Q's `g` and `h` warn as scalac does (E208, the receivers' shifted defaults).
+// A jar's inline forwarders made through a companion extension method
+// (tests/support/defaults_lib.scala's `InlExports` and its top-level `tg`), called
+// and re-exported: each is expanded from its pickled body (`Inlines.inlineCall`
+// over the TASTy body, `bodyToInline`), a re-export of one an inline forwarder
+// too. The forwarders' getters are numbered for their members (dotty's forwarder
+// parameters have no default trees): a call leaving an argument out applies
+// the getter of its name, `f`'s `b` the getter of `c`, `h2`'s `b` the inline
+// getter of `a`, expanded from its own pickled body, and through a generic
+// path method with the call's type arguments (`InlGeneric.r`'s `b`). Q's `g`
+// and `h` are to warn as scalac does (E208, the receivers' shifted defaults).
 import defaultslib.*
 
 object Q {

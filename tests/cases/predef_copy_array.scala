@@ -1,6 +1,6 @@
-// scala-library's `Predef.copyArrayToImmutableIndexedSeq` called as it is written: an immutable
-// `IndexedSeq` copied from the array, which the array's later writes leave alone; `null` for a
-// `null` array. The lean std has it as a method alone (`std/collections.scala`).
+// scala-library's `Predef.copyArrayToImmutableIndexedSeq` called as it
+// is written: an immutable `IndexedSeq` copied from the array, which
+// the array's later writes leave alone; `null` for a `null` array.
 import scala.annotation.nowarn
 
 @nowarn("cat=deprecation")

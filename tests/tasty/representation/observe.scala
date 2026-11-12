@@ -161,7 +161,7 @@ object Observe:
    *  <the exception's class>, <its message>)` in the order the walk met them. The child itself stands as `Threw` in the
    *  text. The field is the record's own: a raw space never stands inside a quoted text (`quoted` writes it `\u0020`)
    *  and `|` never outside one (a name holding it is quoted), so a record's first ` |` is its field's start whatever
-   *  its names and strings hold (the pass over 7a9ec6133). */
+   *  its names and strings hold. */
   def record(head: String, walked: => String): String =
     threw = Nil
     enclosing = Nil
@@ -298,8 +298,8 @@ object Observe:
 
   // ---- A symbol, as the API gives it (README.md, "Symbols"): the observer observes and decides nothing. ----
 
-  /** A symbol by what scalac's Quotes API gives for it, nothing computed from a prefix (the ruling on dc2a3dfec's
-   *  pass): no symbol as `NoSymbol`; a package by its full name, `Pkg(<path>)`; a symbol this observation defines by
+  /** A symbol by what scalac's Quotes API gives for it, nothing computed from a prefix: no symbol as `NoSymbol`;
+   *  a package by its full name, `Pkg(<path>)`; a symbol this observation defines by
    *  its index, `Addr(<name>#<i>)`; any other by its tuple, `Sym(<owner>, <name>, <signature>, <target>, <privacy>)`:
    *  its owner by the same tuple, its name, `Symbol.signature` (`nameSig`), its `@targetName` annotation's argument as
    *  written (`targetName`) and its privacy flags. The tuple is injective by the compiler's own double-definition
@@ -333,7 +333,7 @@ object Observe:
 
   /** A symbol's `@targetName` annotation's argument as written, `TargetName(<tree>)`, the annotation found by its
    *  class's identity as the API recognizes it (`Symbol.getAnnotation` with the class's symbol, QuotesImpl 2988-2989:
-   *  the annotation's constructor's owner, so an alias of the class names it too, the pass over bd771417f); `-`
+   *  the annotation's constructor's owner, so an alias of the class names it too); `-`
    *  without one. Nothing is derived from it: a module class's name, a super accessor's and an expanded name are the
    *  API's names as they are. */
   def targetName(using Quotes)(s: quotes.reflect.Symbol): String =
@@ -446,7 +446,7 @@ object Observe:
       case Unapply(fun, implicits, patterns) => hit("Unapply"); s"Unapply(${tree(fun)}, ${trees(implicits)}, ${trees(patterns)})"
       case Alternatives(patterns) => hit("Alternatives"); s"Alternatives(${trees(patterns)})"
       // Definitions and statements (339-788). Each child is read on its own (`attempt`): a body the reader cannot give
-      // (scalac's unpickler's MatchError on a macro's inlined tree, the pass over 334a43adf) is that child's `Threw`
+      // (scalac's unpickler's MatchError on a macro's inlined tree) is that child's `Threw`
       // in its place and its entry in the record's outcome field (`record`), and the definition's metadata, which the API gives apart (`Symbol.annotations`, its flags and
       // information), is observed all the same; the extractors would force the body before any of it.
       case d: ValDef =>

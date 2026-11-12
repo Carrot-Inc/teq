@@ -1,6 +1,6 @@
-// An overriding `tracked` parameter (experimental modularity), which RefChecks (1.12) leaves alone
-// (`!member.is(Tracked)`) behind a private parameter passed another value: scalac 3.8.4 accepts it with -Werror; teq's
-// parser refuses `tracked`. Pinned to a modularity part.
+// An overriding `tracked` parameter (experimental modularity), which RefChecks
+// (1.12) leaves alone (`!member.is(Tracked)`) behind a private parameter passed
+// another value: scalac 3.8.4 accepts it with -Werror. Pinned to a modularity part.
 import scala.language.experimental.modularity
 import scala.language.future
 class A(val s: Int)

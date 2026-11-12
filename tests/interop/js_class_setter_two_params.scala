@@ -1,6 +1,6 @@
-// A JS setter of two parameters is the preparation's error, reported once the typing is joined; the call typed before
-// it is a method's, not a JavaScript assignment that has no place for a second argument. scalac 3.8.4 under Scala.js
-// 1.22.0 reports the same message, at the setter's name where teq reports its definition's start.
+// A JS setter of two parameters is an error, and the call of it is to be a method's, not a JavaScript
+// assignment that has no place for a second argument. The expectation is scalac 3.8.4's message
+// under Scala.js 1.22.0, at the definition's start where scalac reports it at the setter's name.
 import scala.scalajs.js
 class C extends js.Object:
   def x_=(a: Int, b: Int): Unit = ()

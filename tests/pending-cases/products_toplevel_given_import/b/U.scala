@@ -1,8 +1,8 @@
-// A downstream of a/ as tests/modules builds it. scalac 3.8.4 prints the .expected, and so does teq's whole build.
-// Built over a/'s products, b/ is refused: "no given instance of type T was found", the same for Int (tests/modules'
-// build): `import tga.given` finds no top-level given of a product, a given object (`given G2: T with`) or an alias
-// (`given x3: Int`). The same on integration a097de53d9. Found by the interim reviewer of the workers exports
-// helper's push 10 (its O2).
+// A downstream of a/ as tests/modules builds it. scalac
+// 3.8.4 prints the .expected. Built over a/'s products, teq
+// is to accept b/ (tests/modules' build): `import tga.given`
+// is to find a product's top-level givens, a given object
+// (`given G2: T with`) and an alias (`given x3: Int`).
 package tgb
 
 import tga.*

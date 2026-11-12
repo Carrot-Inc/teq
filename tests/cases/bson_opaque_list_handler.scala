@@ -2,9 +2,9 @@
 //> using platform jvm
 // jars: reactivemongo-bson-api
 // split-watch: jvm
-// reactivemongo's Macros.handler of a case class holding a list of opaque ids, its collection writer found
-// with an opaque writer of lila's shape (given through an object's parent trait and an import of its
-// givens); the interpreter's IndexedSeq.newBuilder builds the array.
+// reactivemongo's Macros.handler of a case class holding a list of opaque
+// ids, its collection writer found with an opaque writer of lila's shape
+// (given through an object's parent trait and an import of its givens).
 import reactivemongo.api.bson.*
 
 trait SameRuntime[A, B]:

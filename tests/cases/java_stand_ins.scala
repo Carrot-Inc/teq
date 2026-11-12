@@ -1,4 +1,4 @@
-// A definition in package scala takes the place of the standard library's stand-in for a
+// A definition in package scala is to take the place of the standard library's stand-in for a
 // java.lang member, as it shadows java.lang.Integer or java.lang.Comparable under scalac.
 package scala
 

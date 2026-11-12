@@ -1,10 +1,10 @@
 //> using platform jvm
-// Pending on lazy-val-names (queued): teq's walk of a file's lazy definitions meets an anonymous class's superclass
-// arguments twice (with the `New`'s arguments and again with the class's parents), where dotty's MegaPhase meets each
-// surviving definition once; teq's names are unique and the same on every run, scalac's numbers are the
-// expectation, here 3 for the class's own `x`.
-// A lazy val in an anonymous class's superclass argument and a lazy member of the anonymous class, then the
-// enclosing class's lazy member: the declared fields of the enclosing class name its holder by the unit's counter.
+// Pending on lazy-val-names (queued): dotty's MegaPhase
+// meets each surviving definition once; scalac's numbers
+// are the expectation, here 3 for the class's own `x`.
+// A lazy val in an anonymous class's superclass argument and a lazy member of
+// the anonymous class, then the enclosing class's lazy member: the declared
+// fields of the enclosing class name its holder by the unit's counter.
 class Base(val n: Int)
 class Outer:
   def go(): Unit =

@@ -1,7 +1,7 @@
 // Program 692 of tests/fix/scalameta, from scalameta 4.17.4's MacroSuite (line 183, "macro-quote-this-within-splice:
-// ${ 'this }"): scalac 3.8.4's parser reads it as scalameta does, `${'{this}}`, and teq's otherwise. The expectation
-// is scalameta's tree under dialects.Scala3, which teq fix's tree answers to: a node a line, its start and end in
-// UTF-16 units from the program's first line below.
+// ${ 'this }"): scalac 3.8.4's parser reads it as scalameta does, `${'{this}}`. The
+// expectation is scalameta's tree under dialects.Scala3, which teq fix's tree is to answer
+// to: a node a line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 42
 //     Defn.Object 0 41
 //       Term.Name 7 11

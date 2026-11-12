@@ -1,8 +1,8 @@
-// A primitive unary operator or numeric conversion whose lowering hands on its operand's node (an Int's unary_+, a
-// Long's toLong), where that operand is itself a primitive unary operation or conversion: TASTy keeps both selections
-// (Pickler before FirstTransform, Compiler.scala:50-63; TreePickler.scala:476-508), each of the constant type ConstFold
-// gives it (ConstFold.scala:49-54), which FirstTransform then takes to { pre; v }. From Codex's review of
-// tr/cut-head-tail-c2 93e2011e3c (P1-1).
+// A primitive unary operator or numeric conversion (an Int's unary_+, a Long's toLong) whose                      
+// operand is itself a primitive unary operation or conversion: TASTy keeps both selections                           
+// (Pickler before FirstTransform, Compiler.scala:50-63; TreePickler.scala:476-508), each                               
+// of the constant type ConstFold gives it (ConstFold.scala:49-54), which FirstTransform                  
+// then takes to { pre; v }.             
 package fix.unaryhanded
 
 class UhC:

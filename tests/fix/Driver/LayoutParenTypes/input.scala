@@ -40,7 +40,7 @@ object ParenTypes:
   def typedPattern(x: Any): Int = x match { case y: (Int) => y case _ => 0 }
   val newTyped = new Outer: (Outer)
   trait Selfish { self: (Outer) => }
-  // A parameter's type in parentheses in every clause (the ledger of 2865c7af2's pass, rows 4, 5 and 9): a lambda's,
+  // A parameter's type in parentheses in every clause: a lambda's,                                                  
   // ordinary, of two, a colon argument's, polymorphic, context and under its expected type; a class's, case class's,
   // trait's, enum case's, given's, using's, anonymous using's, implicit's, extension's and secondary constructor's;
   // a dependent function type's named parameter; an ascription's type in an argument.

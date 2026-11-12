@@ -187,7 +187,7 @@ mod tests {
         let root = std::env::current_dir().unwrap().join("root");
         let inside = root.join("p").join("In.scala");
         assert_eq!(parts(&relative_path(&inside, &root)), ["p", "In.scala"]);
-        // An interior `.` of a path outside the root is kept, as Java's path keeps it (the pass over 2f3b147c1).
+        // An interior `.` of a path outside the root is kept, as Java's path keeps it.
         let dotted = Path::new("outside/./Other.scala");
         assert_eq!(uri_of(&parts(&relative_path(dotted, &root))), "outside/./Other.scala");
         assert_eq!(uri_of(&parts(&relative_path(&root.join(".").join("p").join("In.scala"), &root))), "p/In.scala");

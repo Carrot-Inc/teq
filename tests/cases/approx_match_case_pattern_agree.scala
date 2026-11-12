@@ -1,9 +1,9 @@
-// The match-type case carrier where every case the approximation answers stays a match case (the closure adversary
-// of the pass on 861d8acf1, round 22): a dependent function type's result holding a match type whose case pattern names the
+// The match-type case carrier where every case the approximation answers stays a match case:
+// a dependent function type's result holding a match type whose case pattern names the
 // parameter, at variance +1 (`Cov[..]`, the case's pattern a bounds argument, `derivedAppliedType` at v > 0) and at
 // the top, its body naming the parameter in an invariant argument, and a class parameter's bound over another's
 // wildcard compared at no invariant end; the match alias `MT[c.T]` in an invariant and a contravariant argument
-// (dotty's `range(Nothing, Any)` for the alias's head, teq's `Inv[_]` and `Contra[Nothing & Any]`). scalac 3.8.4 and
+// (dotty's `range(Nothing, Any)` for the alias's head). scalac 3.8.4 and
 // teq accept each.
 class Cov[+X]
 class Inv[X]

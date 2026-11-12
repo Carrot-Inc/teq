@@ -2734,8 +2734,8 @@ pub fn is_outer_accessor_name(name: &str, defined: bool) -> bool {
 mod depth_exit_pins {
     use super::*;
 
-    /// `TypeOps.avoid`'s `AvoidMap` traverses a finite type whole, guarding only actual recursion (the pass over
-    /// 317e8fb73's 6): a missing class under 26 retained alias applications, each canonically `Int`, is seen. teq's
+    /// `TypeOps.avoid`'s `AvoidMap` traverses a finite type whole, guarding only actual recursion:
+    /// a missing class under 26 retained alias applications, each canonically `Int`, is seen. teq's
     /// `mentions_missing` stops at its `depth > 24` exit, a bound master's walks carry and a part of its own lifts
     /// (TABLE.md section 6).
     #[test]

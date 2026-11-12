@@ -1,4 +1,4 @@
-// The byte streams of `java.io`, `StringBuffer` and `Matcher.region` of the platform layer.
+// The byte streams of `java.io`, `StringBuffer` and `Matcher.region`.
 package javaiostreams
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, FilterInputStream, IOException, InputStream, OutputStream}

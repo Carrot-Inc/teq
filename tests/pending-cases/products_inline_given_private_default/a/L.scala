@@ -1,4 +1,4 @@
-// The library, built by teq into products: an inline given and an inline method whose inline using parameter's
+// The library, built into products: an inline given and an inline method whose inline using parameter's
 // default reads a private member of the class.
 package lib7
 class C(private val k: Int):

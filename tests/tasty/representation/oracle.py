@@ -276,8 +276,8 @@ def masked(line):
 
 def detect_evidence(diff):
     """Each detection section's difference must stand outside the children a reader could not give: a pair of
-    records that differs only in their outcome fields is no evidence of the variant being seen (the pass over
-    334a43adf). Fails on a section whose every difference is such a pair, and names each such pair."""
+    records that differs only in their outcome fields is no evidence of the variant being seen.
+    Fails on a section whose every difference is such a pair, and names each such pair."""
     ok, section, recs = True, None, {}
     def close():
         nonlocal ok
@@ -393,8 +393,8 @@ def unread_of(cell):
 
 def excise(reference, cell):
     """The cell with each child its reference could not give (the reference cell's outcome fields) replaced by
-    `Threw` and dropped from its own field, so that the comparison holds what the reference observed and no more (the
-    pass over 7a9ec6133): that child's evidence is the products' tags (`tags`, check 11), never this record. A child
+    `Threw` and dropped from its own field, so that the comparison holds what the reference observed and no more:
+    that child's evidence is the products' tags (`tags`, check 11), never this record. A child
     whose place the record does not have is left as it is, a difference as any."""
     gone = unread_of(reference)
     for l in lines(cell):
@@ -433,7 +433,7 @@ TAG_ADDR = {"TERMREFdirect", "TYPEREFdirect", "TERMREFsymbol", "TYPEREFsymbol", 
 BINDER_TAGS = {"LAMBDA", "LAMBDAtpt", "METHODtype", "POLYtype", "TYPELAMBDAtype", "RECtype"}
 
 
-# Check 11's fields whose raw value is not compared as it stands (the ruling on 8aa2ab15a's pass): the identity map
+# Check 11's fields whose raw value is not compared as it stands: the identity map
 # replaces an address, and a name record's `ref` is the names section's index, replaced by the identity of the entry it
 # names. The records keep every field, with the identity in place of the address or index. Nothing else is left out.
 LEFT_OUT = [
@@ -746,7 +746,7 @@ def tag_enclosing(nodes, parents, a):
 
 
 def tag_identity(nodes, parents, specs, a):
-    """A definition's identity as a structured value, never a joined string (the ruling on 0324edfab's pass): the
+    """A definition's identity as a structured value, never a joined string: the
     owner's spec (`object:<full name>` or `class:<full name>`), then one `[name, occurrence]` component per nesting
     level from the owner down, the name the record's own text (unquoted, never re-joined) and the occurrence 1-based
     among the same-named definitions at that level. A local's components continue its enclosing definition's; a
@@ -864,7 +864,7 @@ def tag_locate(nodes, owners, key, names, role):
 
 
 def records_selfcheck(cells):
-    """Check 11's records of their own (the ruling on 8aa2ab15a's pass): for every `(record kind, field)` the
+    """Check 11's records of their own: for every `(record kind, field)` the
     fixtures' unread children hold, one occurrence's value in the parsed dump is changed (a number plus one, a string
     one character inside its quotes), the child's evidence is rebuilt through `tag_records`, and it must change. A
     field LEFT_OUT leaves out is not mutated as a value; every such entry must name a field some record has. An
@@ -1000,7 +1000,7 @@ def records_selfcheck(cells):
 
 
 def identity_selfcheck(cells):
-    """The identities' own check (the ruling on 0324edfab's pass): every definition address and every binder address
+    """The identities' own check: every definition address and every binder address
     a product dump holds gets `tag_identity`'s or `tag_binder`'s identity, and two different addresses of one dump must
     never get the same identity. Every parsed dump the fallback reads is one `<cell>-tags.txt.input` context; the same
     dump repeated for several children is checked once. Fails naming the two addresses and the identity."""
@@ -1274,7 +1274,7 @@ def read_unread(accounts):
 
 
 def incomplete(cells, accounts):
-    """An incomplete reference observation is no evidence, subtree by subtree (the pass over 7a9ec6133): every child a
+    """An incomplete reference observation is no evidence, subtree by subtree: every child a
     reference cell's reader could not give (its records' outcome fields, ss- and ps- cells) is red unless it is
     observed apart, through the products' tags (`<cell>-tags.txt`, located), and, where another reader reads the same
     product (`OTHER`, `TWIN`), accounted for in unread.txt, `case` (the tags, scalac's answer, against that reading) or
@@ -1324,7 +1324,7 @@ def incomplete(cells, accounts):
 
 
 def incomplete_selfcheck(cells, accounts, work):
-    """Check 11's own mutations (the pass over 7a9ec6133), each with the outcome it must have: the products' tags
+    """Check 11's own mutations, each with the outcome it must have: the products' tags
     removed, every unread child fails, whether teq's record of it differs from scalac's or equals it (whole-record
     inequality stands for nothing); an account removed, its child fails; a name and a string spelling the outcome field
     (`api.scala`'s `Marker`, quoted) are no unread child."""
@@ -1403,7 +1403,7 @@ def strip(cell):
 
 
 # A pin's landing: one of type-representation's seven (1 to 7, `op` the opaque-proxies landing), or another part's by
-# the ledger entry that gives it the mechanism (`mixin-forwarders(shared-helpers-61)`, ~/reports/shared-helpers.txt).
+# the ledger entry that gives it the mechanism (`mixin-forwarders(shared-helpers-61)`).
 LANDING = re.compile(r"^(?:[1-7]|op|[a-z][a-z0-9-]*\(shared-helpers-[0-9]+[a-z]?\))$")
 
 
@@ -1521,7 +1521,7 @@ def pins(pinfile, diffs, mapfile=None):
 
 
 def pins_selfcheck(pinfile, st_diff, ts_diff, enc_diff, mapfile, work, *more):
-    """The pins check's own mutations (the pass on 3362b74bf), each against copies, each with the outcome it must
+    """The pins check's own mutations, each against copies, each with the outcome it must
     have: every identity record deleted fails (their accounts are stale); an identity record added with no account
     fails; a mapped record pinned in place of its mapping passes (a pin of a present record is no stale one); a
     record both pinned and mapped fails; a pin whose landing names another part without its ledger entry fails."""

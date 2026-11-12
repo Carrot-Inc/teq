@@ -1,8 +1,8 @@
 //> using platform jvm
-// Pending on memoize-bottom-fields (proposed for the queue; master alike): teq keeps a field for a val of type Null,
-// Nothing or Unit, where dotty's `Memoize.isErasableBottomField` makes its getter answer `null`, throw or
-// `BoxedUnit.UNIT` and `Constructors` drops the field nothing reads then, its initialiser run for its effects; the
-// expectation is scalac 3.8.4's.
+// Pending on memoize-bottom-fields (proposed for the queue): for a val of type Null,
+// Nothing or Unit dotty's `Memoize.isErasableBottomField` makes its getter answer
+// `null`, throw or `BoxedUnit.UNIT` and `Constructors` drops the field nothing reads
+// then, its initialiser run for its effects; the expectation is scalac 3.8.4's.
 // Vals of type Null and Unit in an object, a class and a file module, final or not, a var among them: their values,
 // then each class's declared fields. Read by reflection, on the JVM.
 package bottom

@@ -1,7 +1,7 @@
 // Program 599 of tests/fix/scalameta, from scalameta 4.17.4's InfixSuite (line 696, "scalafmt #3825 1"): scalac
-// 3.8.4's parser reads it as scalameta does, `module object a { foo.map(i => i + 1) *> bar`, and teq's otherwise.
-// The expectation is scalameta's tree under dialects.Scala3, which teq fix's tree answers to: a node a line, its
-// start and end in UTF-16 units from the program's first line below.
+// 3.8.4's parser reads it as scalameta does, `module object a { foo.map(i => i + 1) *> bar`.
+// The expectation is scalameta's tree under dialects.Scala3, which teq fix's tree is to answer
+// to: a node a line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 71
 //     Defn.Object 0 70
 //       Term.Name 7 11

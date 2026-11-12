@@ -1,9 +1,9 @@
-// The classes a stored inline body makes (an anonymous class, a lambda's class of a trait with one
-// abstract method, a class inside such a class), copied at each expansion and named as the
-// retype path names the class it types there: two expansions at one outer site numbered in the
-// order they are made, a class in a branch the expansion discards consuming no name, what a class
-// captures (a parameter's proxy, a val of the body, the receiver) the retype path's. scalac prints
-// the lines of the .expected file.
+// The classes a stored inline body makes (an anonymous class, a
+// lambda's class of a trait with one abstract method, a class
+// inside such a class), copied at each expansion: two expansions
+// at one outer site, a class in a branch the expansion discards,
+// what a class captures (a parameter's proxy, a val of the body,
+// the receiver). scalac prints the lines of the .expected file.
 trait Show[A]:
   def show(a: A): String
 trait Step:

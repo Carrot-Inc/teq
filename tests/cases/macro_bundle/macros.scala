@@ -2,7 +2,7 @@
 import scala.quoted.*
 
 // A macro reading a resource bundle of the class path at expansion time, as scalactic's
-// `Resources` does: the interpreter reads the `.properties` file as `java.util.Properties`
+// `Resources` does: the interpreter is to read the `.properties` file as `java.util.Properties`
 // does, escapes, continuation lines and both separators included.
 object Macros:
   inline def message(inline key: String): String = ${ messageImpl('key) }

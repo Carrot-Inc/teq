@@ -1,8 +1,8 @@
-// Pinned for the queued part inlining-lila-folds (the gate of 5010f41f8 and the review's finding 1: the typing of a
-// typed function literal cached after its adaptation to the first alternative, `pretype_typed_lambda`, broke
-// tests/scala3's boehm-berarducci and pos/i12211, pos/i3945; reverted). scalac accepts and prints the expected
-// output; teq rejects the overloaded `map` with the typed, untupled literal. The port is `FunProto.typedArg`'s
-// unadapted typing cached once and adapted per candidate with `normArg`'s untupling.
+// Pinned for the queued part inlining-lila-folds.
+// scalac accepts and prints the expected
+// output. The port is `FunProto.typedArg`'s
+// unadapted typing cached once and adapted
+// per candidate with `normArg`'s untupling.
 // A function literal whose parameters are all typed, passed to an overloaded method, is typed
 // against the first alternative's formal, the next alternative's where that typing errs
 // (`FunProto.cacheTypedArg`), and untupled where the formal takes a function of one tuple

@@ -1,8 +1,8 @@
 //> using platform jvm
 // std: scala-library
-// A final val of a Java enum's value keeps the value's singleton type, overriding a member or not (dotty's
-// Namer.inferredResultType, `isJavaEnumValue`). The std's Java enums are Scala classes; the JDK's ElementType is
-// read from its class file.
+// A final val of a Java enum's value keeps the value's singleton type,
+// overriding a member or not (dotty's Namer.inferredResultType,
+// `isJavaEnumValue`). The JDK's ElementType is read from its class file.
 import java.lang.annotation.ElementType
 trait E:
   def d: ElementType

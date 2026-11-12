@@ -21,13 +21,13 @@ trait Both extends H1 with H2 { def c07: BS[?, S] }
 trait Own { type S <: BS[?, S]; def ok: BS[?, S] }
 // `boundsViolations`' check of an F-bounded parameter's argument where another argument is a wildcard (TypeOps.scala
 // 630-701): the skolemized `<app>#T` in the bound, `compareCaptured`'s capture of the left root's wildcard
-// (TypeComparer.scala 1870-1891) and `narrowBound`'s GADT state, each beside scalac 3.8.4's E057 (the adversary of
-// the pass on 97f0487ac, round 24, item 1). A point argument that is an application with a wildcard (`Impl[?]`), a
+// (TypeComparer.scala 1870-1891) and `narrowBound`'s GADT state, each beside scalac 3.8.4's E057.
+// A point argument that is an application with a wildcard (`Impl[?]`), a
 // lower-bounded wildcard's overlap, an abstract member's reference through a path, through an intersection prefix,
 // seen from a subtrait, an object and an intersection's trait, a member bounded by the F-bounded one, and mutual
 // F-bounds over two parameters are rejected; the member's own `BS[?, S]` inside its trait (`Own.ok`) is accepted
 // (the GADT bound `narrowBound` installs is in `H.this` terms, which the path `h.S` and the subtrait's `Sub.this.S`
-// are not). Master rejects only `c06` and `c07`, with the bound unskolemized (`BS[?, Low.this.R]`). scalac's columns are 0-based, the selection's point its name (`h.S`'s `S`).
+// are not). scalac's columns are 0-based, the selection's point its name (`h.S`'s `S`).
 // expect: wildcard_bound_capture_through_paths.scala:11:20: error: type argument Impl[?] does not conform to upper bound BS[BS[?, Impl[?]]#T, Impl[?]]
 // expect: wildcard_bound_capture_through_paths.scala:12:16: error: type argument ? >: D <: C[?] does not overlap with upper bound C[C[? >: D <: C[?]]#A]
 // expect: wildcard_bound_capture_through_paths.scala:13:26: error: type argument h.S does not conform to upper bound BS[BS[?, h.S]#T, h.S]

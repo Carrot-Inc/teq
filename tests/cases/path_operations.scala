@@ -1,6 +1,6 @@
 //> using platform jvm
-// `java.nio.file.Path` as the JDK's `UnixPath` answers, and the process a program under
-// `teq interp` sees: a path as its parser writes it, `relativize`, `normalize`, `startsWith`,
+// `java.nio.file.Path` as the JDK's `UnixPath` answers, and the process an interpreted
+// program sees: a path as its parser writes it, `relativize`, `normalize`, `startsWith`,
 // `resolve`, and `toAbsolutePath` against `user.dir` (the working directory), whether or not the
 // file is there; the environment is the process's.
 import java.nio.file.{Path, Paths}

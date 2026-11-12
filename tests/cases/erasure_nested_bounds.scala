@@ -1,5 +1,5 @@
 //> using platform jvm
-// A bound nested in itself erases however deep it goes, each re-entry smaller than the last: a member `F[X] <: X` and an
+// A bound nested in itself erases however deep it goes: a member `F[X] <: X` and an
 // opaque `Id[X] = X` applied 33 times over `String` erase to `String`, for a checked cast, a type test and a ClassTag.
 import scala.reflect.ClassTag
 trait T:

@@ -3,9 +3,9 @@
 // transformStatOrExpr's Closure arm, a lambda typed against a JS type that is no non-native JS function trait, its
 // errors as scalac 3.8.4 -scalajs gives them on this file. An expectation's L:C is where scalac's caret begins (the
 // start of dotty's span), 1-based.
-// pending: teq types none of the lambdas against a JS SAM type ("missing parameter type": landing 4's SAMType) and
-// reports RefChecks' "class A3 needs to be abstract" before PrepJSInterop, closing the walk's gate: none of the six
-// is reported.
+// pending: teq is to type the
+// lambdas against a JS SAM type
+// (SAMType) and report the six.
 // expect: 30:17: error: Using an anonymous function as a SAM for the JavaScript type A1 is not allowed because it is not a trait extending js.Function. Use an anonymous class instead.
 // expect: 31:17: error: Using an anonymous function as a SAM for the JavaScript type A2 is not allowed because it is not a trait extending js.Function. Use an anonymous class instead.
 // expect: 32:20: error: Using an anonymous function as a SAM for the JavaScript type A3 is not allowed because it is not a trait extending js.Function. Use an anonymous class instead.

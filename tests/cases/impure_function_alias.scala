@@ -1,7 +1,7 @@
 // `scala.ImpureFunctionN` and its kin are `Definitions.newFunctionNType`'s aliases (Definitions.scala 113-129), not
 // classes: the function type of the name without `Impure` with its retaining annotation, which capture checking alone
-// reads. A function converts to the alias and back, whatever its arity's spelling (the pass's probe on 566d48857,
-// Impure.scala, which head rejected both ways).
+// reads. A function converts to the alias and back, whatever its arity's
+// spelling.
 package impure_function_alias
 
 object Impure:

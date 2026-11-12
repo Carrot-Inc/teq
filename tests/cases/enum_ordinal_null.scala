@@ -1,7 +1,7 @@
 //> using platform jvm
-// `ordinal` through `scala.reflect.Enum` on `null` fails as any call on `null` does
-// (`NullPointerException`), the receiver's implementation or an enum case's alike; on JavaScript
-// a member selected from `null` is the engine's `TypeError` (docs/COMPATIBILITY.md).
+// `ordinal` through `scala.reflect.Enum` on `null` fails
+// as any call on `null` does (`NullPointerException`),
+// the receiver's implementation or an enum case's alike.
 case class Manual(x: Int) extends scala.reflect.Enum:
   def ordinal: Int = 42
 

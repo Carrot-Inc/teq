@@ -1,9 +1,9 @@
 //> using platform jvm
-// `UNICODE_CHARACTER_CLASS` (`(?U)`) brings `UNICODE_CASE` with it, set and cleared together
-// (the JDK's `Pattern.addFlag`, `subFlag`), and under `CASE_INSENSITIVE` a Unicode lowercase,
-// uppercase or titlecase class takes all three (`CharPredicates.getPosixPredicate`,
-// `getUnicodePredicate`, `forProperty`), scoped flags included. JavaScript's translator has no
-// `(?U)` (COMPATIBILITY).
+// `UNICODE_CHARACTER_CLASS` (`(?U)`) brings `UNICODE_CASE` with it,
+// set and cleared together (the JDK's `Pattern.addFlag`, `subFlag`),
+// and under `CASE_INSENSITIVE` a Unicode lowercase, uppercase or
+// titlecase class takes all three (`CharPredicates.getPosixPredicate`,
+// `getUnicodePredicate`, `forProperty`), scoped flags included.
 import java.util.regex.Pattern
 
 object Main:

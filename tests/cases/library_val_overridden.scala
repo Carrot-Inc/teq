@@ -1,8 +1,8 @@
 // jars: lazyval-lib
-// A val of a jar's class that a subclass overrides with a val, in the jar's own body (scalacheck's
-// `Test.Parameters.cpy`) and in the program: on JavaScript teq reads a jar's val through a getter, which
-// takes the value the subclass assigns, and so does a val read through an accessor method (one that
-// implements a def, a `hashCode`), whose setter is a method.
+// A val of a jar's class that a subclass overrides with a val,
+// in the jar's own body (scalacheck's `Test.Parameters.cpy`)
+// and in the program, and a val read through an accessor
+// method (one that implements a def, a `hashCode`).
 import lvlib.*
 
 class Gold extends Badge:

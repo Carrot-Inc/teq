@@ -1,7 +1,7 @@
 // teq: --source 3.7
 // A tuple pattern past 22 elements is extracted by `TupleXXL.unapplySeq`, whose elements are `Any`s
 // (`UnapplyArgs.argTypes`): a given bind's type, annotated `@unchecked` by `makeLambda` (`tests/warn/i23164.scala`),
-// is refutable against it in a generator checked as `IrrefutableGenFrom` (the review of 1888ac4df).
+// is refutable against it in a generator checked as `IrrefutableGenFrom`.
 class T1[F[_]]
 @main def Test =
   val xs: List[(Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, T1[Option])] =

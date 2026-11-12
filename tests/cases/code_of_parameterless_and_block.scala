@@ -1,5 +1,5 @@
 // `codeOf` (and the inline val purity message) shows a tree as dotty's printer does: a parameterless method's
-// reference without an argument list (dotty's `Select`, which teq calls), a block of expressions on lines of its own.
+// reference without an argument list (dotty's `Select`), a block of expressions on lines of its own.
 // scalac prints the lines of the .expected file.
 import scala.compiletime.codeOf
 object M:

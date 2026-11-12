@@ -4,7 +4,7 @@
 // search going on from what it found (`rank`'s `migrateTo3` arm, Implicits.scala:1497-1506), and where it then succeeds
 // (`b`) `warnAmbiguousNegation` warns (1546-1554): scalac 3.8.4 compiles the program with the migration warning
 // "Ambiguous implicits value n1 in object O and value n2 in object O / seem to be used to implement a local failure in
-// order to negate an implicit search. ...". The object holds four implicit names. `--werror` fails the run.
+// order to negate an implicit search. ...". The object holds four implicit names. `--werror` is to fail the run.
 trait TC
 trait Need
 trait X

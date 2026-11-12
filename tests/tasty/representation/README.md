@@ -42,11 +42,11 @@ annotation's local definitions go through too: a `DefDef` with every parameter c
 metadata and its right-hand side as the pickle holds it (every downstream observation retains the trees it reads,
 scalac's `-Yretain-trees` and teq's `--retain-trees`, the direct ones, the generated traversals, the cross reads and
 the probes alike: without them `Symbol.tree` gives an ordinary method an empty body, `FromSymbol.defDefFromSym`, and
-an annotation inside it goes unobserved, the pass over 1c61410d5), a `ClassDef` with its constructor, parents, self and body, a `ValDef`, a `TypeDef`, and every term and type
-tree below them. The owner's body is every statement of its template in order, as TreePickler writes them (678-711): a definition `Symbol.tree` puts in it (every declaration but the primary constructor, secondary constructors and synthetic members included) by its key, `Member(<key>)`, on a line of its own, and any other statement (an initializer's expression, the pass over 92c156369) serialized in place, in the owner's `Body([..])`; a name declared more than once keys its second and later declarations `<name>#<n>`. A nested
+an annotation inside it goes unobserved), a `ClassDef` with its constructor, parents, self and body, a `ValDef`, a `TypeDef`, and every term and type
+tree below them. The owner's body is every statement of its template in order, as TreePickler writes them (678-711): a definition `Symbol.tree` puts in it (every declaration but the primary constructor, secondary constructors and synthetic members included) by its key, `Member(<key>)`, on a line of its own, and any other statement (an initializer's expression) serialized in place, in the owner's `Body([..])`; a name declared more than once keys its second and later declarations `<name>#<n>`. A nested
 class's body is in its tree whole. Every symbol a node writes is printed by what scalac's Quotes API gives for it and
-nothing computed from a prefix (`designator`; the observer observes and decides nothing, the ruling on dc2a3dfec's
-pass): a package by its full name, `Pkg(<path>)`; a symbol the observation defines by its index,
+nothing computed from a prefix (`designator`; the observer observes and decides nothing): a package by its full
+name, `Pkg(<path>)`; a symbol the observation defines by its index,
 `Addr(<name>#<index>)`; any other by its tuple, `Sym(<owner>, <name>, <signature>, <target>, <privacy>)`, its owner by
 the same tuple, its name, `Symbol.signature` (`NotAMethod` for the sentinel), its `@targetName` annotation's argument
 as written (`TargetName(<tree>)`, `-` without one; the annotation found by its class's identity, `Symbol.getAnnotation`, so an alias of the class names it too) and its privacy flags (`Private`, `Protected`, `Local`). The tuple
@@ -128,7 +128,7 @@ every Tree and TypeRepr of 3.8.4's `Quotes.scala`, 282–2421 and 2678–3470, h
   <the exception's class>, "<message>")` per such child (observe.scala `record`). The field is the record's own, never
   a substring of its text: its ` |` is a raw space, which a quoted text never holds (it writes `\u0020`), then `|`,
   which only a quoted text holds (a name with it is quoted), so a name or a string spelling the field
-  (`api.scala`'s `Marker`) is text (the passes over 7a9ec6133 and febb521c4).
+  (`api.scala`'s `Marker`) is text.
 
 **Transport.** The observation is printable ASCII: a quoted text keeps the printable ASCII characters but `\` and
 `"`, writes `\n`, `\r` and `\t` by their escapes and every other UTF-16 unit as `\uXXXX` (the space, every control
@@ -147,15 +147,15 @@ refuses to compile gives its S·T cell `refused: <teq's first line>`.
 
 ## The reflection's probes
 
-`probes.scala`, beside the observer and compiled with it, holds each probe the review passes over dc2a3dfec,
-3362b74bf and 4f95a8370 ran against teq's reflection, the ruling on 4f95a8370's pass making each a record: a call
-`Probe.run[T](<name>)` asks what its pass asked of the API (a reference widened, `widenTermRefByName`; a parameter
+`probes.scala`, beside the observer and compiled with it,
+holds the probes of teq's reflection, each a record: a call
+`Probe.run[T](<name>)` asks one thing of the API (a reference widened, `widenTermRefByName`; a parameter
 reference's binder after a second widening; an annotation's tree read twice; a method made with a given information,
 `Symbol.newMethod`, its reference widened) and reports `probe:<name> <answer>` as the observer reports, every type
 written by the observer's own walk (`Observe.walk`), so that a probe decides nothing. `use/probe.scala` makes a call a
 record, one a line in the form `oracle.py teq` reads. Two cells hold them: `T-S:probe`, the subjects scalac's product
 read by each reflection as the other fixtures are (`ss-probe` against `ts-probe`, in `expected/T-S.diff`), and
-`R:probe`, the subjects compiled with the calls as the passes ran them, each compiler's reflection answering its own
+`R:probe`, the subjects compiled with the calls, each compiler's reflection answering its own
 typing (`ps-probe` against `pt-probe`, `expected/probes.diff`). Scalac's answer is the expectation; teq's reflection,
 master's, differs on each, and each difference is pinned to the landing whose port closes it: a method's information
 from its symbols with its binder (`MethodType.fromSymbols`, `adaptParamInfo`, the uncached `MethodOrPoly` whose
@@ -189,7 +189,7 @@ of an uninstantiated variable has no probe: no product holds a TypeVar and the A
    `Kinds.returnTarget(false)` for `Kinds.returnTarget(true)`, a return whose target is the other of two overloads of
    `jump`, `Kinds.returnTargetNamed(false)` for `(true)`, the other of two overloads of one erasure apart by
    `@targetName` alone, and `Kinds.floatBits(false)` for `(true)`, a float constant's quiet NaN for a signalling one;
-   and the 4c8ba8586 pass's pairs, kept as cases: `Kinds.returnTo("jumpS", "jumpS")` for `("jumpS", "super$jumpS")`, a return
+   and more pairs, kept as cases: `Kinds.returnTo("jumpS", "jumpS")` for `("jumpS", "super$jumpS")`, a return
    to the other of two overloads one named `super$jumpS` by `@targetName` (its argument as written); `AndA & AndBC`
    for `AndA & AndB` (a member `C` under an intersection prefix), `OrA | OrQ` for `OrA | OrB` (a member under a union
    prefix), a refinement's `type T = String` for `= Int` (a member under a refinement),
@@ -197,14 +197,14 @@ of an uninstantiated variable has no probe: no product holds a TypeVar and the A
    ``@shape(Pickled.`sigShaped(scala.Int)scala.Int`)`` (a val whose name is a signature's shape beside the method), and
    `OtherR.Inner` for `CompR.Inner` in `CompR.m` (a companion's class against another object's), and
    `RefM { def f(x: Int): CharSequence }` for `{ def f(x: Int): String }` (`refinedSelect`, an annotation selecting a
-   refined method, its result the selection's `TermRef`'s own type); and the 1c61410d5 pass's pair, `@memberTag(78)`
+   refined method, its result the selection's `TermRef`'s own type); and the pair `@memberTag(78)`
    for `@memberTag(77)` on a local val inside an ordinary method's body (`Product.f`), seen only with the trees
-   retained; and the 92c156369 pass's pair, `@memberTag(88)` for `@memberTag(87)` on a local val in an
-   initializer's statement (`Product`'s `locally { .. }`), seen in the owner's body; and the bd771417f pass's pair, `Kinds.returnTo("jumpA", "jumpAS")` for `("jumpA", "jumpAI")`,
+   retained; and the pair `@memberTag(88)` for `@memberTag(87)` on a local val in an
+   initializer's statement (`Product`'s `locally { .. }`), seen in the owner's body; and the pair `Kinds.returnTo("jumpA", "jumpAS")` for `("jumpA", "jumpAI")`,
    a return to the other of two overloads apart by a `@targetName` written through an alias of its class
-   (`type TN = scala.annotation.targetName`), which the observer finds by the class's identity (`Symbol.getAnnotation`); and the 334a43adf pass's pair, `@tagged(98)` for `@tagged(97)` on a val whose body scalac's own unpickler
+   (`type TN = scala.annotation.targetName`), which the observer finds by the class's identity (`Symbol.getAnnotation`); and the pair `@tagged(98)` for `@tagged(97)` on a val whose body scalac's own unpickler
    cannot read (`Kinds.locals(outer = true)`'s inlined tree, `MatchError(129)`), its annotation observed apart; and
-   the 7a9ec6133 pass's pair, `@tagged(108)` for `@tagged(107)` on a local val inside a method's body scalac's
+   the pair `@tagged(108)` for `@tagged(107)` on a local val inside a method's body scalac's
    reflection cannot read (`blindBody`), which no record of the reflection holds and check 11's tags see.
    The sections `api-generated` and `rec-generated` hold the pairs through the generated traversal, scalac's
    reflection answering each call teq's is asked (`gs-api` against `gs-api8`, `gs-rec` against `gs-rec8`); the
@@ -214,13 +214,13 @@ of an uninstantiated variable has no probe: no product holds a TypeVar and the A
    compilation, scalac's against teq's, are `expected/probes.diff`. Each holds what the reference observed and no
    more: the reference's outcome fields dropped, the other side's record excised of each child the reference could
    not give (`oracle.py excise`, the child's text `Threw` there too), that child's evidence being check 11's.
-   **The evidence** (the passes over 334a43adf and 7a9ec6133): the observer reads each child of a definition on its
+   **The evidence**: the observer reads each child of a definition on its
    own, so that a child a reader cannot give (scalac's unpickler's `MatchError` on a macro's inlined body) is that
    child's outcome (`Threw` and its entry in the record's field) and the definition's metadata, which the API gives
    apart, is observed all the same; a detection section's difference must stand outside the outcome fields
    (`oracle.py detect-evidence`); and the reference's unread children are judged one by one, check 11.
-11. **The unread** (`oracle.py incomplete`, `expected/unread-tags.txt`, `unread.txt`; the pass over 7a9ec6133 and
-   the ruling on 8aa2ab15a's pass): every child a reference cell's reader could not give (an `Unread` of a record of
+11. **The unread** (`oracle.py incomplete`, `expected/unread-tags.txt`, `unread.txt`): every child a reference
+   cell's reader could not give (an `Unread` of a record of
    an ss- or ps- cell) is red, whatever the rest of its record holds and whether or not the other side's record
    differs, unless it is observed apart, through the products' tags: the pickle scalac wrote, read tag by tag
    (`teq tasty --nodes`, the route the encoding check's references take; `oracle.py tags`, the child located by the
@@ -247,7 +247,7 @@ of an uninstantiated variable has no probe: no product holds a TypeVar and the A
    a binder); a shared tree is followed to its target, a tree that recurs cut where it recurs. `LEFT_OUT`, one list
    in `oracle.py`, names every field whose raw value is not compared, with its reason: the addresses the identity map
    replaces (`at`, `parent`, `addr`, `binder`); nothing else is left out. An identity is a structured value, never a
-   joined string (the ruling on 0324edfab's pass): its first component is the owner's spec, then one `[<name>,
+   joined string: its first component is the owner's spec, then one `[<name>,
    <occurrence>]` per nesting level from the owner down, the name the record's own `name` (a simple name's UTF-8
    text, another kind's structure, never joined); a binder's identity is its defining definition's plus `["binder",
    <tag>, <position>]`. The table and the records carry these lists as JSON values. Beside the records' check,
@@ -316,7 +316,7 @@ of an uninstantiated variable has no probe: no product holds a TypeVar and the A
    `I:<twin>`), where the observation reads the two alike. The owners those records need are observed (the
    annotation classes and `Cased` in `use/api.scala`, `myAnnot` in `use/refining.scala`). The report's lines say
    which is which: S·T and T·S are identity, this check encoding.
-10. **The inventory** (the pass over 334a43adf): landing 1's list, the Quotes API symbols the observer and the
+10. **The inventory**: landing 1's list, the Quotes API symbols the observer and the
    probes refer to (`closure/entries-observer.txt`), regenerated from their SemanticDB on every run
    (`closure/observer.sh <work> <out>`) and compared with the committed one, so that it cannot fall behind them.
 8. **Generation** (run last): scalac's reflection answering the generated traversal of each of scalac's cells teq

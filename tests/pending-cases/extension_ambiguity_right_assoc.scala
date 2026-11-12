@@ -1,8 +1,8 @@
-// A right-associative operator's view search is on its right operand, dotty's qualifier: the ambiguity is that
-// operand's mismatch and names its type, among the givens in scope as in the operand's implicit scope
-// (Typer.scala:4346-4353; scalac 3.8.4 at both right operands). teq reports its own ambiguity at the application, the
-// first on the left operand's type: master (efddb38de3) and the head (61c1af7941) "both a and b provide *:: on R".
-// Queued: push 6 (typeMismatch whole).
+// A right-associative operator's view search is on its right
+// operand, dotty's qualifier: the ambiguity is that operand's
+// mismatch and names its type, among the givens in scope as in the
+// operand's implicit scope (Typer.scala:4346-4353; scalac 3.8.4
+// at both right operands). Queued: push 6 (typeMismatch whole).
 class R
 class S
 trait Ops:

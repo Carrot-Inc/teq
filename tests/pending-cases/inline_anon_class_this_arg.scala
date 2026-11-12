@@ -1,7 +1,7 @@
-// A top-level inline method making an anonymous class over its argument, called in a class's constructor code with an
-// argument reading the class's member (`wrapN(s)` by name, `wrapI(s + 1)` inline): the class reads the accessor through
-// the instance under construction (scalac `2 3 5 6`). teq's anonymous class reads its own `this` for it: the
-// interpreter `0 1 0 1`, JavaScript `undefined 0 undefined 0`, the JVM a ClassCastException; master the same.
+// A top-level inline method making an anonymous class over its argument,
+// called in a class's constructor code with an argument reading the class's
+// member (`wrapN(s)` by name, `wrapI(s + 1)` inline): the class reads the
+// accessor through the instance under construction (scalac `2 3 5 6`).
 abstract class Fn:
   def apply(): Int
 inline def wrapN(x: => Int): Fn = new Fn { def apply() = x }

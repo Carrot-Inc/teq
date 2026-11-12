@@ -1,6 +1,6 @@
 // A class extending a function type past 22 parameters gets FunctionXXLForwarders' `apply(Object[])` of the `apply`
-// that overrides the function's (`allOverriddenSymbols`), never of another overload of the arity (the pass's probe on
-// 39ba4cf2d, where the forwarder called `apply(String, ..)` and failed with a ClassCastException).
+// that overrides the function's (`allOverriddenSymbols`), never of another overload of the arity
+// (a forwarder that calls `apply(String, ..)` fails with a ClassCastException).
 package function_xxl_overloaded_apply
 
 class Overloaded extends Function23[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int] {

@@ -1,5 +1,5 @@
 // teq: --source 3.8 --wconf msg=multiple.val:e
-// `DropForMap`'s `TuplingMigrationForMap` (the review of 1888ac4df, dotty's `tests/neg/i25077.scala`): the better
+// `DropForMap`'s `TuplingMigrationForMap` (dotty's `tests/neg/i25077.scala`): the better
 // path's application over more than one alias, whose receiver's `map` alternatives differ in their final result
 // types, is warned of, made an error by `-Wconf`.
 def f(x: Int): (Int, Int) = (1, x)

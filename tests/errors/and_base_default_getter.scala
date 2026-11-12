@@ -13,6 +13,6 @@ trait SB extends Box[String]
 trait Both extends IB with SB
 def h(x: IB | SB): Int = x.put(???)
 def f(x: Both): Int = x.put(1) + x.put("s")
-// Where the TypeMismatch parts from scalac's: Applications.defaultArgument (the found type's
-// `@uncheckedVariance`, which scalac shows and teq does not).
+// Where the expected TypeMismatch parts from scalac's: Applications.defaultArgument (the found type's
+// `@uncheckedVariance`, which scalac shows and the expectation does not).
 // expect: Required: List[Int & String]

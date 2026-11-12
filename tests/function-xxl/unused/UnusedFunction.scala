@@ -1,6 +1,6 @@
-// Imports of synthetic function classes and an impure alias of an arity no program could apply, which read no
-// information of theirs: scalac compiles them, as `newFunctionNType` publishes each uncompleted (the pass's
-// UnusedFunction.scala on 823cd97b1).
+// Imports of synthetic function classes and an impure alias of an arity
+// no program could apply, which read no information of theirs: scalac
+// compiles them, as `newFunctionNType` publishes each uncompleted.
 import scala.ContextFunction100000000
 import scala.Function100000000
 import scala.ImpureFunction100000000

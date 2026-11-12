@@ -3,7 +3,7 @@
 # own count); every round's documents dispatched and done once each, with their slots' generations, by workers of the
 # run's; no round serial where it has documents for several workers, no barrier waited for in vain, no worker evaluating
 # two documents at once. A round with four documents or more a worker it could take is the parallel-execution witness
-# (fix-speed's ruling 2, a corpus large enough to overlap): its overlap, read from the recorded evaluation intervals
+# (a corpus large enough to overlap): its overlap, read from the recorded evaluation intervals
 # (`start_us`, `finish_us`), not from the workers' ids, which a serialized schedule may spread, reaches at least two at
 # once and half those workers (the toy corpus's 1,000 documents at sixteen workers peak at ten). A smaller round (jzon's
 # two documents, which worker 0 may finish before worker 1 has started) is a cost cell: complete, its utilization

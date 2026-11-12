@@ -1,8 +1,8 @@
 // std: lean
-// A version never writes into an array another version can reach, so a held vector or map
-// keeps its own elements and no more: the backing array of a one-element vector stays one
-// element long while ten thousand appends derive from it (`unsafeArray` is the std's own
-// accessor of that array, so the expectation is written by hand), a traversal's predicate
+// The test expects that a version never writes into an array another version can
+// reach, so that a held vector or map keeps its own elements and no more: the backing
+// array of a one-element vector stays one element long while ten thousand appends
+// derive from it (the expectation is written by hand), a traversal's predicate
 // that appends does not extend what the traversal sees, two branches of one version do not
 // see each other's element, a slice past the end is empty, and the same holds for the entries
 // of a map and a set held across the updates made from them.

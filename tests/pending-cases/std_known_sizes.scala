@@ -1,8 +1,8 @@
 // The std collections' `knownSize` against scala-library's, empty and not. A collection that knows its size where
 // scala-library's does not would give `Builder.sizeHint(coll, delta)` a hint scalac gives none for: the immutable
-// sorted sets, `ListSet` and `ListMap` keep scala-library's -1 (an empty `ListSet` or `ListMap` 0). The std still
-// reports -1 where scala-library's know their size, so a hint scalac gives is missing: `Nil`, `Vector`, `IndexedSeq`,
-// `ArraySeq`, `Range`, an empty `LazyList`, an empty iterator and one of an array, a vector or a range,
+// sorted sets, `ListSet` and `ListMap` are to keep scala-library's -1 (an empty `ListSet` or `ListMap` 0). The std is
+// to report the size where scala-library's know their size, so that no hint scalac gives is missing: `Nil`, `Vector`,
+// `IndexedSeq`, `ArraySeq`, `Range`, an empty `LazyList`, an empty iterator and one of an array, a vector or a range,
 // `ArrayBuffer`, `ListBuffer`, the mutable `Queue` and `Stack`, an array's and a string's sequence, a map's `values`.
 // Queued: the std collections' `knownSize` as scala-library's.
 import scala.collection.{immutable => im, mutable => mu}

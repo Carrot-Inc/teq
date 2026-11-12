@@ -1,7 +1,7 @@
 // Program 492 of tests/fix/scalameta, from scalameta 4.17.4's GivenSyntax36Suite (line 767, "named, param clause
 // first, coloneol"): scalac 3.8.4's parser reads it as scalameta does, `given ord with clauses (a: A)(using Ord[A])
-// of parent Ord[List[A]]`, and teq's otherwise. The expectation is scalameta's tree under dialects.Scala3, which teq
-// fix's tree answers to: a node a line, its start and end in UTF-16 units from the program's first line below.
+// of parent Ord[List[A]]`. The expectation is scalameta's tree under dialects.Scala3, which teq fix's tree
+// is to answer to: a node a line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 78
 //     Defn.Object 0 77
 //       Term.Name 7 11

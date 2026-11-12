@@ -1,5 +1,5 @@
-// A union alias's reference is its TypeRef (dotty's `TypeRef` to a `TypeAlias`): scalac's reflection sees `O.U` and
-// its symbol, teq's the union and no symbol. Moves with type-representation's landing 4.
+// A union alias's reference is its TypeRef (dotty's `TypeRef` to a `TypeAlias`): scalac's reflection
+// sees `O.U` and its symbol, and teq's is to see them too. Moves with type-representation.
 import scala.quoted.*
 object Reflect:
   inline def shape[T]: String = ${ shapeImpl[T] }

@@ -1,5 +1,5 @@
-// Where a variable left open (`Inferencing.interpolateTypeVars`) is instantiated before teq's
-// comparison or reduction needs it: inside a type-level operation or a match type, or as a
+// Where a variable left open (`Inferencing.interpolateTypeVars`) is to be
+// instantiated: inside a type-level operation or a match type, or as a
 // higher-kinded variable (dotty's comparer constrains it there: `compareS`, a match's reduction,
 // `canInstantiate`); where an adaptation fails (`adaptToSubType`'s `recover`); at a selection the
 // variable's member decides (`couldInstantiateTypeVar`); at the end of a lambda's body, an anonymous

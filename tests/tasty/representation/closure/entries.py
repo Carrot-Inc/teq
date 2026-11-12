@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The landings' entries from the table's rows (README.md, "The entries"; the ruling on round 12, 2): per landing,
+"""The landings' entries from the table's rows (README.md, "The entries"): per landing,
 every dotty member a row of that landing cites, an entry where it is in `core/` or in the landing's own mechanism
 files, else a reader, generated rather than kept by hand, so that a row cannot be added without its entry.
 
@@ -24,14 +24,14 @@ import re
 MECH = {"2": ["typer/ProtoTypes.scala", "typer/Inferencing.scala"],
         "3": ["typer/ProtoTypes.scala", "typer/Inferencing.scala"],
         "4": [],
-        # The printers are above their cut at opaque-proxies for compiletime.codeOf's printed tree (round 11's ruling).
+        # The printers are above their cut at opaque-proxies for compiletime.codeOf's printed tree.
         "op": ["inlines/", "ast/TreeTypeMap.scala", "ast/Trees.scala", "ast/tpd.scala", "printing/"],
         "5": ["ast/TreeTypeMap.scala", "ast/Trees.scala", "ast/tpd.scala", "cc/", "sbt/ExtractAPI.scala"],
-        # Scala.js's checks and closures on a JS type, ported at 6 (round 11's ruling, landing 6's rows).
+        # Scala.js's checks and closures on a JS type, ported at 6.
         "6": ["transform/sjs/"], "7": []}
 # A landing's mechanism members beside core/, by symbol prefix: the implicit scope's computation, ImplicitRunInfo's
 # members (implicitScope, computeIScope with its locals liftToAnchors and collectCompanions, the anchors' helpers
-# isAnchor and isExcluded), is landing 4's; the rest of Implicits.scala is read (the ruling on 2026-10-25).
+# isAnchor and isExcluded), is landing 4's; the rest of Implicits.scala is read.
 MECH_MEMBERS = {"4": ["dotty/tools/dotc/typer/ImplicitRunInfo#"]}
 NAMES = {"2": "foundation", "3": "binders", "4": "references", "op": "opaque-proxies", "5": "annotations",
          "6": "js-hierarchy", "7": "remainder"}

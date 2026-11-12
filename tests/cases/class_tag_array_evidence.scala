@@ -1,11 +1,11 @@
-// The `ClassTag` evidence of the array-making members is evaluated once, in its argument's place, and
-// makes the array: `Array.fill`, `tabulate`, `empty`, `ofDim` (the outer arrays by the tag's `wrap`) and
-// an array's `map` call the tag's `newArray` first, then fill it, as scala-library's do. A program's own
-// tag is the one asked; the standard ones (`ClassTag.Int`, the compiler's) make the array a program
-// cannot tell apart. (A collection's `toArray`, which classes of libraries override, keeps its tag erased
-// outside the JVM: docs/COMPATIBILITY.md.)
-// `ClassTag.Nothing` and `Null` are scala-library's, of the runtime classes `classOf[Nothing]` and
-// `classOf[Null]` name.
+// The `ClassTag` evidence of the array-making members is evaluated once,
+// in its argument's place, and makes the array: `Array.fill`,
+// `tabulate`, `empty`, `ofDim` (the outer arrays by the tag's `wrap`)
+// and an array's `map` call the tag's `newArray` first, then fill it, as
+// scala-library's do. A program's own tag is the one asked; the standard
+// ones (`ClassTag.Int`, the compiler's) make the array a program cannot
+// tell apart. `ClassTag.Nothing` and `Null` are scala-library's, of the
+// runtime classes `classOf[Nothing]` and `classOf[Null]` name.
 import scala.reflect.ClassTag
 
 class Logged[T](name: String, base: ClassTag[T]) extends ClassTag[T]:

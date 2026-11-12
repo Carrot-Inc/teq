@@ -1,7 +1,7 @@
 // Program 353 of tests/fix/scalameta, from scalameta 4.17.4's FewerBracesSuite (line 876, "scalafmt #3720 2 complex,
-// break after op, top-level, not indented"): scalac 3.8.4's parser accepts it, teq's reports "expected end of
-// statement, found identifier". The expectation is scalameta's tree under dialects.Scala3, which teq fix's tree
-// answers to: a node a line, its start and end in UTF-16 units from the program's first line below.
+// break after op, top-level, not indented"): scalac 3.8.4's parser accepts it. The
+// expectation is scalameta's tree under dialects.Scala3, which teq fix's tree is to answer
+// to: a node a line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 72
 //     Defn.Object 0 71
 //       Term.Name 7 11

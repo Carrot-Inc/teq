@@ -3,9 +3,9 @@
 // (`UTF_8.Decoder.decodeArrayLoop` under `StreamDecoder`): one already malformed is replaced at once
 // (a lead c0, c1, f5 or ff, a continuation alone, e0 80, f0 8f, f4 90, f0 90 41), only one that
 // more bytes can still complete waits for them, and at the end of the input a prefix is one
-// replacement. Over a socket (the interpreter's stream under the std's reader, a 250 ms timeout
-// showing any wait) and over a stream of the program's that refuses to be read past its pieces; the
-// native path is `reader_utf8_pipe`'s. The second review's `ReaderBoundary`.
+// replacement. Over a socket (a 250 ms timeout showing any wait) and over
+// a stream of the program's that refuses to be read past its pieces; a
+// child's pipe is `reader_utf8_pipe`'s. The second review's `ReaderBoundary`.
 import java.io.{IOException, InputStream, InputStreamReader}
 import java.net.{ServerSocket, Socket}
 

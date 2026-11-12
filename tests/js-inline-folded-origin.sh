@@ -1,5 +1,5 @@
 #!/bin/bash
-# Constant folding retains argument provenance for inline-body sharing.
+# Constant folding is to retain argument provenance for inline-body sharing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}

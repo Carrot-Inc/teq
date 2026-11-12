@@ -1,8 +1,8 @@
 package uaa
 
-// A union side erases as the emitter erases it, to an array of the classes `erasedLub` reads the base classes of
-// (TypeErasure.scala:815-819, 439-445): a match type's bound, and an applied parameter's bound over its argument. Those
-// classes are completed whatever else the build loads, so `f` and `g` take `Exception[]` in this module alone too.
+// A union side erases to an array of the classes `erasedLub` reads the base classes of
+// (TypeErasure.scala:815-819, 439-445): a match type's bound, and an applied parameter's
+// bound over its argument. `f` and `g` are to take `Exception[]` in this module alone too.
 import java.util.concurrent.{CancellationException, TimeoutException}
 
 object P:

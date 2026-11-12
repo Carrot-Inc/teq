@@ -3,7 +3,7 @@
 // `ProcessBuilder` against the JDK: a child's three streams piped (the default), inherited,
 // discarded, merged (`redirectErrorStream`), read from a file, written and appended to files; the
 // stream of a redirect that is no pipe reads nothing and refuses a write; the redirects' texts and
-// equality; what the interpreter printed comes before an inheriting child's output. The children
+// equality; what the program printed comes before an inheriting child's output. The children
 // are `sh` and `printf`; the files are under target/ of the working directory, removed at the end.
 import java.io.File
 import java.lang.ProcessBuilder.Redirect

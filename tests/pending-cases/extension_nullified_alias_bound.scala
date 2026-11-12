@@ -1,11 +1,11 @@
 //> using options -Werror
 // teq: --werror
-// `targetOfHiddenExtension` (RefChecks.scala:1204-1217) names the receiver's `typeSymbol`: for a method's own type
-// parameter `T <: B` it is the bound's, and `TypeRef(C11, B).typeSymbol` is the alias `B` itself, not seen through
-// (Types.scala:617-623). scalac 3.8.4 says "from type B" (and "from type BB" through an export forwarder's own type
-// parameter); teq says "from type Box": the bound it stores is the alias dealiased where the type parameter completes
-// (check.rs's `resolve_type` of the bound), so the alias is gone before the check reads it. A representation seam of a
-// type parameter's bound, not of the check. Reviewer #6's [3] and reviewer #7's [B] of the workers exports helper.
+// `targetOfHiddenExtension` (RefChecks.scala:1204-1217) names the receiver's
+// `typeSymbol`: for a method's own type parameter `T <: B` it is the bound's, and
+// `TypeRef(C11, B).typeSymbol` is the alias `B` itself, not seen through (Types.scala:617-623).
+// scalac 3.8.4 says "from type B" (and "from type BB" through an export forwarder's
+// own type parameter). Waiting on the representation of a type parameter's bound.
+// Reviewer #6's [3] and reviewer #7's [B] of the workers exports helper.
 class Box(val n: Int):
   def size: Int = n
 object C11:

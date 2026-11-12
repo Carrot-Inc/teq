@@ -1,9 +1,9 @@
 //> using platform jvm
 // os: unix
 // What a child is given against the JDK: the arguments as written, one each (a space, an empty
-// string, quotes, a backslash and non-ASCII text kept), no shell between; the environment the
-// interpreter has, a variable added, changed and removed for the child alone; a cleared one, the
-// program still found on the interpreter's PATH; the working directory, relative or absolute,
+// string, quotes, a backslash and non-ASCII text kept), no shell between; the environment its
+// parent has, a variable added, changed and removed for the child alone; a cleared one, the
+// program still found on the parent's PATH; the working directory, relative or absolute,
 // and a missing one. The child is `sh`; the directory is under target/, removed at the end.
 import java.io.File
 import java.nio.file.{Files, Paths}

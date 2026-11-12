@@ -5,7 +5,7 @@
 // opaque array is an array whose elements are lubbed (`IArray[A]` is `Array[? <: A]`), and two value classes under
 // opaque types erase to `Object`. A match type erases as its bound, an array kept; `Pure` is no lub; a value class
 // does not derive from `Object`, so its union with `Null` is `Object`, inside an array too, and so does a universal
-// trait. The JDK's classes are lubbed by their own base classes, the class file's, though nothing else reads them. A
+// trait. The JDK's classes are lubbed by their own base classes, the class file's. A
 // class whose written parents are universal traits (`Serializable`) still derives from `Object` (`ensureFirstIsClass`),
 // and so does a universal trait with an ancestor that is none (`Comparable`, `Ordered` through it).
 trait T

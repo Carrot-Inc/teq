@@ -1,4 +1,4 @@
-// Applications.resolveOverloaded selects the native alternative of each call by its own arguments
+// Applications.resolveOverloaded selects the alternative of each call by its own arguments
 // (narrowByTypes, isApplicableMethodRef) and the typed Apply keeps that denotation: two calls of one
 // name with different argument types keep two different methods, whichever is typed first.
 @main def run(): Unit =

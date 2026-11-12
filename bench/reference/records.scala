@@ -881,7 +881,7 @@ final case class TestEvidence(invocations: Vector[Invocation], units: Vector[Str
     listedSuites: Option[Vector[(String, String)]] = None, debt: Vector[String] = Vector.empty, problems: Vector[String] = Vector.empty,
     owed: Vector[String] = Vector.empty, types: (String, String) => Boolean = (_, _) => false)
 
-// A run line's named assertions (run.json, ruling of 2026-10-16: named assertions, never a digest of a page or a count
+// A run line's named assertions (run.json: named assertions, never a digest of a page or a count
 // of its colours): its scope the assertions the run names, each checked once; its debt each one the run did not hold,
 // identified by its name and how (`<name>: failed`, `<name>: not reached`), so that a known violation the run no longer
 // shows is gone, and one never reached must pass once a run reaches it; a run whose build failed is its block,

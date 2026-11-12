@@ -1,6 +1,6 @@
 //> using platform js
 // A condition of a constant type that is no idempotent expression, folded in an expansion: scalac keeps it in front
-// of the branch it selects (InlineTyper.typedIf's Block(cond :: Nil, selected)), and the chain of + goes on through
+// of the selected branch (InlineTyper.typedIf's Block(cond :: Nil, selected)), and the chain of + goes on through
 // that block on the JVM, in a quote's copy as around an inline parameter.
 import Macros.*
 

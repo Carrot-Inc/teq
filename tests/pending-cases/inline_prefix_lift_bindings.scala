@@ -1,12 +1,12 @@
-// dotty's `Inlines.inlineCall` lifts the statements of a block the call's prefix is, and an `Inlined` prefix's
-// bindings, out before the call (`liftBindings`), stopping at a plain method's body, ascribed its result type
-// (`PrepareInlineable.wrapRHS`'s `Typed`); `canElideThis` then reads the type of what is left, and an elided prefix is
-// not evaluated (`registerType` makes no proxy where `canElideThis` holds). scalac: `{ println("a"); this }` and
-// `{ val k = 1; this }` are the ThisType (3, "a" printed); a call of a method of the class's type keeps the proxy (2,
-// "arg 5" printed); one of `this.type` is the ThisType, its body's `println` never run (3, no "argT 6"); a
-// subclass's `this` keeps the proxy (2). teq binds a prefix with statements to the proxy, evaluating it
-// (`2 2 2 2 2 7 sub 2 2`, the same on 68031d1913); a prefix that is a block without statements is its value's type
-// (tests/classpath/js/jar_alias_this.scala's transparent result). Waiting on `liftBindings`, a mechanism of its own.
+// dotty's `Inlines.inlineCall` lifts the statements of a block the call's prefix is,
+// and an `Inlined` prefix's bindings, out before the call (`liftBindings`), stopping
+// at a plain method's body, ascribed its result type (`PrepareInlineable.wrapRHS`'s
+// `Typed`); `canElideThis` then reads the type of what is left, and an elided prefix
+// is not evaluated (`registerType` makes no proxy where `canElideThis` holds). scalac:
+// `{ println("a"); this }` and `{ val k = 1; this }` are the ThisType (3, "a" printed);
+// a call of a method of the class's type keeps the proxy (2, "arg 5" printed); one
+// of `this.type` is the ThisType, its body's `println` never run (3, no "argT 6"); a
+// subclass's `this` keeps the proxy (2). Waiting on `liftBindings`, a mechanism of its own.
 object Obj:
   val o = 7
   inline def om: Int = o

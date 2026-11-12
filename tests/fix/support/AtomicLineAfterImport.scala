@@ -1,6 +1,6 @@
 import teq.fix.*
 
-/** The line break after each import removed, an atomic patch (the pass over 0f91053d7's `Ghost`). */
+/** The line break after each import removed, an atomic patch. */
 final class AtomicLineAfterImport extends SyntacticRule("AtomicLineAfterImport"):
   override def fix(using doc: SyntacticDocument): Patch =
     doc.tree.collect { case i: Import =>

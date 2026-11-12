@@ -1,5 +1,5 @@
 // teq: --source 3.8 --werror --wunused all
-// A generator's binder is a pattern variable whatever its lambda (the review of 1888ac4df): `makeLambda`'s
+// A generator's binder is a pattern variable whatever its lambda: `makeLambda`'s
 // `IdPattern` parameter is `derivedValDef`'s, marked `PatternVar`.
 @main def m =
   for x <- List(1) do println("a")

@@ -1,13 +1,13 @@
 //> using platform js
 // std: lean
-// The keys of the immutable Map and Set compare as the target's store compares them:
+// The test expects the keys of the immutable Map and Set to compare as follows on each target:
 // on JavaScript 1 and 1.0 are one key (one JS number) and 1L another,
 // NaN one key; on the JVM and the interpreter the cooperative equality of boxed numbers makes
 // 1, 1L and 1.0 one key and NaN two; 0.0 and -0.0 are one key everywhere, null is a key, a case
 // class compares structurally, keys with one hash stay apart, an update of a present key keeps
-// its slot and its stored key, a removed and re-added key goes to the end. The expectations are the documented contract of each target
-// (master's output), not scala-cli's: Scala.js would merge 1 and 1L, so `tests/run.sh --regen`
-// must leave this file alone.
+// its slot and its stored key, a removed and re-added key goes to the end. The
+// expectations are the documented contract of each target, not scala-cli's: Scala.js
+// would merge 1 and 1L, so `tests/run.sh --regen` must leave this file alone.
 final case class P(x: Int, y: Int)
 
 final class Const(val n: Int):

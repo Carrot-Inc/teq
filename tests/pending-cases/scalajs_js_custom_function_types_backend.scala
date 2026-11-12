@@ -1,9 +1,9 @@
 //> using platform js
-// dotty 3.8.4's tests/neg-scalajs/js-custom-function-types-backend.scala (no .check): a js.ThisFunction's SAM without a
-// leading non-varargs parameter (JSCodeGen#genClosure's rejection, an error of the back end), its errors as scalac 3.8.4
-// -scalajs gives them on this file. An expectation's L:C is where scalac's caret begins (the start of dotty's span), 1-based.
-// pending: teq types neither lambda (no SAM of a JS function trait before landing 4's SAMType and the switch, R34.23-9) and
-// reports its own type mismatches; js_closure_errors (src/emit/js_closure.rs) reports the two once the lambdas type.
+// dotty 3.8.4's tests/neg-scalajs/js-custom-function-types-backend.scala (no .check): a
+// js.ThisFunction's SAM without a leading non-varargs parameter (JSCodeGen#genClosure's rejection,
+// an error of the back end), its errors as scalac 3.8.4 -scalajs gives them on this file.
+// An expectation's L:C is where scalac's caret begins (the start of dotty's span), 1-based.
+// pending on SAMType and the switch: teq is to type both lambdas and report the two.
 // expect: 20:44: error: The SAM or apply method for a js.ThisFunction must have a leading non-varargs parameter
 // expect: 21:44: error: The SAM or apply method for a js.ThisFunction must have a leading non-varargs parameter
 // expect: 2 errors found

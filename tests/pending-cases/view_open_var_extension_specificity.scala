@@ -3,8 +3,8 @@ import scala.language.implicitConversions
 // An extension whose only clause after its receiver is a using clause, on a view's chain (`List(0.5).self.extAny`):
 // the extension is tried in a fresh typer state that owns none of the view's variables, so `tvarsInParams` leaves
 // the view's `?A` open, and the search for `Enc[Box[?A]]` asks `box` for an `Enc[?A]` with `?A >: List[Double]`.
-// dotty settles it by its given-result comparison, `list` over `seq`; teq reports the two as ambiguous and the
-// extension does not apply (implicit specificity for invariant result types).
+// dotty settles it by its given-result comparison, `list` over `seq`;
+// teq is to settle it so too (implicit specificity for invariant result types).
 trait Enc[A]:
   def name: String
 trait EncLow:

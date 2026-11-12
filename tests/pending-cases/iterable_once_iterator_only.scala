@@ -1,7 +1,7 @@
-// scala-library's `IterableOnce` has `iterator` abstract and no `foreach`; the std's declares `foreach` abstract and
-// derives `iterator` from it, so a source defining its iterator alone is refused, and the std's own walks of a source
-// (`iterableToArray`, the sorted collections' `from` and `concat`) take its `foreach`. Queued: the std's
-// `IterableOnce` as scala-library's.
+// scala-library's `IterableOnce` has `iterator`
+// abstract and no `foreach`; the program's
+// source defines its iterator alone. Queued:
+// the std's `IterableOnce` as scala-library's.
 import scala.collection.immutable.TreeSet
 class OnlyIter(xs: List[Int]) extends IterableOnce[Int]:
   def iterator: Iterator[Int] = xs.iterator

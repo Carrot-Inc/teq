@@ -1,7 +1,7 @@
 // Program 1036 of tests/fix/scalameta, from scalameta 4.17.4's SignificantIndentationSuite (line 1693,
 // "colon-eol-comment1"): scalac 3.8.4's parser reads it as scalameta does, `module object Foo { def foo: Int = ???
-// def bar: Int = ???`, and teq's otherwise. The expectation is scalameta's tree under dialects.Scala3, which teq
-// fix's tree answers to: a node a line, its start and end in UTF-16 units from the program's first line below.
+// def bar: Int = ???`. The expectation is scalameta's tree under dialects.Scala3, which teq fix's tree
+// is to answer to: a node a line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 83
 //     Defn.Object 0 82
 //       Term.Name 7 12

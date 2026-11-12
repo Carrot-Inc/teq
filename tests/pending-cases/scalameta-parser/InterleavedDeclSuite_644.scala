@@ -1,8 +1,8 @@
 // Program 644 of tests/fix/scalameta, from scalameta 4.17.4's InterleavedDeclSuite (line 106, "f[A](a: A, as:
 // A*)[B](b: B, bs: B*)[C](implicit c: C): B [run with breaks before LP]"): scalac 3.8.4's parser reads it as
-// scalameta does, `f[A](a1, a2)[B](b1, b2, b3)[C]`, and teq's otherwise. The expectation is scalameta's tree under
-// dialects.Scala3, which teq fix's tree answers to: a node a line, its start and end in UTF-16 units from the
-// program's first line below.
+// scalameta does, `f[A](a1, a2)[B](b1, b2, b3)[C]`. The expectation is scalameta's
+// tree under dialects.Scala3, which teq fix's tree is to answer to: a node a line,
+// its start and end in UTF-16 units from the program's first line below.
 //   Source 0 54
 //     Defn.Object 0 53
 //       Term.Name 7 11

@@ -1,5 +1,5 @@
 // Adapted from scala3 tests/run/i16879.scala (Apache-2.0, see tests/scala3/README.md).
-// Pending: D12: the companion of a zero-parameter case class prints like an instance; R8: failing assert crashes.
+// Pending: D12, the printing of a zero-parameter case class's companion; R8, a failing assert.
 trait Companion:
   final override def toString: String = "Companion"
 

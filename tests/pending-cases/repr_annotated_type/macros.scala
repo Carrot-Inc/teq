@@ -1,5 +1,5 @@
-// An annotated type is `AnnotatedType(parent, annot)`, the annotation's arguments kept (Types.scala 5883 on): scalac's
-// reflection sees `Int @mark(7)`, teq's `Int`. Moves with type-representation's landing 5.
+// An annotated type is `AnnotatedType(parent, annot)`, the annotation's arguments kept (Types.scala 5883
+// on): scalac's reflection sees `Int @mark(7)`, and teq's is to see it too. Moves with type-representation.
 import scala.quoted.*
 object Reflect:
   inline def shape[T]: String = ${ shapeImpl[T] }

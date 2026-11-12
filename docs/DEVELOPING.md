@@ -420,7 +420,7 @@ one, it fails at the start, and it runs `teq test --verbose`, whose runner names
 (`[success]`, `[skipped]`, `[fail]`), so that each suite of the inventory has to have run in its project with each of
 its cases as the inventory has it, or be a departure `deviations.json` holds (`tests/lila-test-verb.sh`), the lines of
 suites that ran at once on the runner's pool taken by their suites' names. The project lines run in every gate, unnamed
-(the owner's ruling, 2026-10-16: every reference project in, the gate never weakened to make it faster), `--without`
+(the rule: every reference project in, the gate never weakened to make it faster), `--without`
 leaving named ones out; a gate past thirty minutes is answered with machines, never with fewer lines. A project's
 lines are a chain (export, compile,
 test, run, one after another) dealt to a free remote machine that holds its checkout: its pool line carries

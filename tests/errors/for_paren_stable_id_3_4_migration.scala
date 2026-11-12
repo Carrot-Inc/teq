@@ -1,5 +1,5 @@
 // teq: --source 3.4-migration --werror
-// `(K)` is no `IdPattern` (the review of 1888ac4df): checked under `Check`, a migration warning at 3.4-migration.
+// `(K)` is no `IdPattern`: checked under `Check`, a migration warning at 3.4-migration.
 val K = 1
 @main def m =
   for (K) <- List(1, 1) do println("k")

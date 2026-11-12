@@ -1,5 +1,5 @@
 // jars: fixtures
-// A library's macro, read from its TASTy, matching a block's statements with the reflection API's `Import` and
+// A library's macro matching a block's statements with the reflection API's `Import` and
 // `Export` extractors, which its pickle reads through their `TypeTest` givens (`Quotes`' `ImportTypeTest` and
 // `ExportTypeTest`), as ultraviolet's `CreateShaderAST.walkStatement` does.
 import fix.rstats.StatementKinds

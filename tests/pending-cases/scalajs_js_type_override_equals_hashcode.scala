@@ -2,9 +2,9 @@
 // dotty 3.8.4's tests/neg-scalajs/js-type-override-equals-hashcode.scala: equals and hashCode overridden in JS types
 // (transformValOrDefDefInJSType), its errors as scalac 3.8.4 -scalajs gives them on this file. An expectation's L:C
 // is where scalac's caret begins (the start of dotty's span), 1-based.
-// pending: teq rejects `override def finalize(): Unit` ("method finalize overrides nothing"; scalac's
-// java.lang.Object has finalize), a typer-phase error that closes PrepJSInterop's gate: none of the eight is
-// reported.
+// pending: teq is to accept
+// `override def finalize(): Unit` (scalac's
+// java.lang.Object has finalize) and report the eight.
 // expect: 37:16: error: error overriding method hashCode(): Int in a JS class;
 // expect: method hashCode(): Int is considered final in trait js.Any;
 // expect: if you want to define a method named "hashCode" in JavaScript, use a different name and add @JSName("hashCode").

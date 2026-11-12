@@ -1,13 +1,13 @@
 //> using platform jvm
 // os: windows
-// Windows' processes against the JDK on Windows (run there with `teq.cmd interp`; its
-// expectation is the Windows JDK's): the environment a child inherits, an entry replaced and one removed
-// by keys of another case; a child's absolute working directory, with a space; the command line a child
-// is given for arguments with spaces, an empty one and one ending in a backslash, as `cmd /c echo` shows
-// it (an argument holding a quote is quoted otherwise by teq: its differences note); a pipe read past the
-// child's end, `available` and a partial read first, then the end of the stream; a deadline missed, then
-// the child destroyed and another destroyed forcibly, each status the JDK's (1: Windows has no signals);
-// a copied `.cmd` file run by `cmd /c` from its directory, whose name has a non-ASCII character.
+// Windows' processes against the JDK on Windows (run there under the interpreter; its
+// expectation is the Windows JDK's): the environment a child inherits, an entry replaced and
+// one removed by keys of another case; a child's absolute working directory, with a space; the
+// command line a child is given for arguments with spaces, an empty one and one ending in a
+// backslash, as `cmd /c echo` shows it; a pipe read past the child's end, `available` and a
+// partial read first, then the end of the stream; a deadline missed, then the child destroyed
+// and another destroyed forcibly, each status the JDK's (1: Windows has no signals); a copied
+// `.cmd` file run by `cmd /c` from its directory, whose name has a non-ASCII character.
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit

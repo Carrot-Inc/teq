@@ -11,10 +11,10 @@
 // `preCheckKinds` (Typer.scala 2794-2802, Checking.scala 189-200) asks every argument of every application whose
 // constructor takes type parameters, whatever the constructor: a class, a lambda, a higher-kinded parameter (`G` of
 // `G[F[_]]`, `G` of `G[_]`), an abstract type member (`h.M`, `N`), in a pattern too; its one exemption the unbounded
-// wildcard (`WildcardTypeBoundsTree`, `NoType` bounds), a bounded one asked as its `TypeBounds`, whose kind is its upper
-// bound's (`? >: List` a proper type's, `? <: List` a constructor's). teq asked a class's and a lambda's arguments
-// alone and no bounded wildcard (the review of 97f0487ac's finding 2, the probes KindParam and KindMember); scalac 3.8.4
-// rejects each line marked so and accepts the others.
+// wildcard (`WildcardTypeBoundsTree`, `NoType` bounds), a bounded
+// one asked as its `TypeBounds`, whose kind is its upper bound's
+// (`? >: List` a proper type's, `? <: List` a constructor's).
+// scalac 3.8.4 rejects each line marked so and accepts the others.
 def f[G[F[_]]](x: G[Int]): Unit = ()
 def f2[G[_]](x: G[List]): Unit = ()
 trait H { type M[F[_]] }

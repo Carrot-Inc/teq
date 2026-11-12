@@ -1,13 +1,13 @@
-// A program that waits for dotty's TypeErasure to be ported whole (the signature of deeply nested arrays):
-// an `apply` past 22 parameters whose first parameter nests 18
-// arrays, beside a base's overload that differs from it in that parameter's element type alone, the class a Function23
-// too. dotty tells the base's two alternatives apart by the parameter's signature name (`TypeErasure.sigName`'s
-// `JavaArrayType` arm, `scala.Int` with 18 `[]`) in `atSignature` and the double definition check; teq reads the name
-// through declared.rs's older `sig_name`, which names no type past 16 nesting levels, so it reports the two as
-// conflicting definitions. At the rebase onto printstream's module `member_sig_of` reads its `sigName` and the older
-// helper's use in that path is retired. Past that seam (at 15 levels, master alike) teq stops at its dispatch naming
-// ("apply in class C overrides methods that are called apply$Any$..."), a limitation of its own: the case moves to
-// tests/cases with the change that makes both pass.
+// A program that waits for dotty's TypeErasure to be ported
+// whole (the signature of deeply nested arrays): an `apply`
+// past 22 parameters whose first parameter nests 18 arrays,
+// beside a base's overload that differs from it in that
+// parameter's element type alone, the class a Function23
+// too. dotty tells the base's two alternatives apart by
+// the parameter's signature name (`TypeErasure.sigName`'s
+// `JavaArrayType` arm, `scala.Int` with 18 `[]`) in
+// `atSignature` and the double definition check. The case
+// moves to tests/cases with the change that makes it pass.
 object Deep {
   type I18 = Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Int]]]]]]]]]]]]]]]]]]
   type S18 = Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[Array[String]]]]]]]]]]]]]]]]]]

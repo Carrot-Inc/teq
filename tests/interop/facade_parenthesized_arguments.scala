@@ -1,5 +1,5 @@
-// A facade's annotation arguments and a native default written in parentheses, which the typed tree reads
-// through: the import is bound and the default is `js.native`, an omitted argument.
+// A facade's annotation arguments and a native default written in parentheses: the import is to be
+// bound and the default is to be `js.native`, an omitted argument.
 import scala.scalajs.js
 import scala.scalajs.js.annotation.{JSGlobal, JSImport}
 

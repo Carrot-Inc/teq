@@ -1,5 +1,5 @@
 // An alias's reference is a TypeRef kept until a reader expands it (dotty's `TypeRef`, `dealias`, Types.scala
-// 1546-1572): scalac's reflection sees `O.P`, teq's the expansion `Int`. Moves with type-representation's landing 4.
+// 1546-1572): scalac's reflection sees `O.P`, and teq's is to see it too. Moves with type-representation.
 import scala.quoted.*
 object Reflect:
   inline def shape[T]: String = ${ shapeImpl[T] }

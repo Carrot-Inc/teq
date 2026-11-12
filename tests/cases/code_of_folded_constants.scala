@@ -1,4 +1,4 @@
-// `codeOf` shows its argument as the typer typed it (`Tree.show`): an operation ConstFold gave a constant type as
+// `codeOf` shows its argument as dotty's typer typed it (`Tree.show`): an operation ConstFold gave a constant type as
 // written, a constant member behind its stable path as that selection, its prefix as the printer shows an identifier's,
 // a transparent call as its expansion after its bindings, and inside an inline method's body the literal its InlineTyper makes of them.
 // scalac prints the lines of the .expected file.

@@ -1,5 +1,5 @@
 // A wildcard argument is real bounds, equal ends kept (`TypeBounds.apply`, Types.scala 5844-5845): scalac's
-// reflection sees `List[_ >: Int <: Int]`, teq's `List[Int]`. Moves with type-representation's landing 2.
+// reflection sees `List[_ >: Int <: Int]`, and teq's is to see it too. Moves with type-representation.
 import scala.quoted.*
 object Reflect:
   inline def shape[T]: String = ${ shapeImpl[T] }

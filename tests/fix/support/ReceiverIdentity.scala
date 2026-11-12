@@ -1,8 +1,8 @@
 import teq.fix.*
 
 /** The receiver of `collect` and `traverse` visited as itself, not a handle made anew: `t eq root` holds of the first node
-  * each visits, as of the body that visited `this` (the push pass of fix-speed's `becf46896`, its Root and Identity
-  * probes); a lint each at the token `marker`. */
+  * each visits, as of the body that visited `this`;
+  * a lint each at the token `marker`. */
 final class ReceiverIdentity extends SyntacticRule("ReceiverIdentity"):
   override def fix(using doc: SyntacticDocument): Patch =
     val at = doc.tokens.find(_.text == "marker").map(_.pos).getOrElse(doc.tree.pos)

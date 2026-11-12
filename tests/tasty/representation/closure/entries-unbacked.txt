@@ -2,10 +2,10 @@
 # yet: each owed its row, a landing's `--ready` failing while any of its own remains; `--entries` drops one as
 # soon as a row gives it. Not added to by hand.
 landing 2 foundation
-# Round 12's assembly dropped 29 of landing 2's (fold12-resolve.md, R12.resolve-8): 26 the generated entries reach
-# anyway, Type#dealiasKeepOpaques (mixin-forwarders', ledger 55), and two members 3.8.4's compiler never references.
+# 29 of landing 2's were dropped (R12.resolve-8): 26 the generated entries reach
+# anyway, Type#dealiasKeepOpaques (mixin-forwarders'), and two members 3.8.4's compiler never references.
 landing 3 binders
-# Round 12's assembly dropped 133 of landing 3's (fold12-resolve.md, R12.resolve-10): 114 the generated entries
+# 133 of landing 3's were dropped (R12.resolve-10): 114 the generated entries
 # reach anyway, 12 landing 2's members landing 3's walk does not reach, another part's, an unreferenced one, and
 # five whose design rows name other landings; TypeComparer#isSameRef is placed by R12.resolve-10's row.
 landing 4 references

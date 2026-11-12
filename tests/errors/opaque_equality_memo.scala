@@ -1,7 +1,7 @@
-// The primitive selection of `==` on an opaque type's value is made where it is typed: inside the alias's scope the
-// type is `Int` and `x == 0` is `Int`'s; outside it is no `Int`, and the comparison with an `Int` is refused
-// (E172), as scalac 3.8.4 reports it at `x` (L:C is where its caret begins, 1-based). Under TEQ_CHECK_MEMOS a
-// selection kept from inside for outside differed from the one made again.
+// The primitive selection of `==` on an opaque type's value is made where it is
+// typed: inside the alias's scope the type is `Int` and `x == 0` is `Int`'s;
+// outside it is no `Int`, and the comparison with an `Int` is refused (E172),
+// as scalac 3.8.4 reports it at `x` (L:C is where its caret begins, 1-based).
 // expect: 13:32: error:
 // expect: of types O.T and Int cannot be compared with == or !=
 // expect: 1 error found

@@ -5,7 +5,7 @@
 // (scalac's stack trace of the MatchError; the log is not kept in the tree)
 // The expectation is teq's own, scalac having no diagnostic to record: it crashes.
 // Require the primary diagnostic at 12:36, a failing compilation and recovery without a crash;
-// the recovered case has ErrorType, so no secondary diagnostic is required.
+// no secondary diagnostic is required.
 class Inv[X]
 class A:
   type T

@@ -1,5 +1,5 @@
 // Adapted from scala3 tests/run/t4859.scala (Apache-2.0, see tests/scala3/README.md).
-// Pending: `{ ...; O }.N.apply()` for a zero-parameter case class N: the selection constructs N instead of naming its companion. The other prefixes are evaluated.
+// Pending: `{ ...; O }.N.apply()` for a zero-parameter case class N: the selection is to name N's companion.
 object O {
   case class N()
   object P

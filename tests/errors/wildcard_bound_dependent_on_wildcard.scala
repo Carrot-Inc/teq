@@ -2,7 +2,7 @@
 // `<app>#A` (`Checking.checkAppliedType`'s `paramInfoAsSeenFrom(tree.tpe)`, Checking.scala 118; `argForParam`'s
 // `TypeRef(pre, tparam)`, Types.scala 2794), bounded by the wildcard: below it only what is below its lower end,
 // above it only what is above its upper end; a covariant parameter's with no lower bound the alias of its upper end
-// (`argDenot`, Types.scala 2597). Both reject each line and show the skolem (E057):
+// (`argDenot`, Types.scala 2597). scalac rejects each line and shows the skolem, as teq is to (E057):
 //   13:22 Type argument String does not conform to upper bound C[? >: Int, String]#A
 //   15:22 Type argument String does not conform to lower bound L[? <: Int, String]#A
 //   17:16 Type argument String does not conform to upper bound EI[?, String]#T

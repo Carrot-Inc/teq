@@ -1,7 +1,7 @@
 // Strings: StringBuilder, interpolation, split, parsing numbers, mkString, and the character
 // loops underneath them. One round formats 48 records, parses them back and folds a hash over
-// the result. Separators are plain characters, since teq takes a one-character separator
-// literally where scalac reads a regular expression.
+// the result. Separators are plain characters,
+// where scalac reads a regular expression.
 object StringsBench:
   // Rounds, timed iterations and whether the per-iteration line is printed on stderr, when the
   // command line gives none; bench/runtime.sh compiles copies with its own values in this line,

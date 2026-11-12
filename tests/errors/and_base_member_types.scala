@@ -14,8 +14,8 @@
 // `argForParam`'s `AndOrType` arm (Types.scala 2802-2811) and `AsSeenFromMap.derivedSelect`'s range (6711-6712): a
 // member of a base two or three instances give, seen from an intersection, a refinement over it, a self type, an
 // overloaded member, a trait whose parents give the two, the trait and a third, and a given's; a result takes the
-// range's upper end (`Int & String`), a parameter its lower (`Int | String`), as scalac 3.8.4 reports each. The
-// closure adversary of the pass on 5bd85bcd1 (round 23).
+// range's upper end (`Int & String`), a parameter its lower (`Int | String`),
+// as scalac 3.8.4 reports each.
 trait Box[A]:
   def get: A
   def put(a: A): Int

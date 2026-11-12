@@ -4,11 +4,11 @@
 // whose expansion meets the class, `A.inl(1)` and `Fw.h2("x")(a = 5)`, whose omitted `b` takes the inline getter of
 // `a` (the forwarder's getters numbered for its member): "undefined: new dep.Dep ... at inlining", the second with its
 // inline stack trace; the call that writes every argument expands nothing that names it. teq's check of such a body
-// fails on the class too. A non-retained inline method has no method at run time, so its call is an error at the
-// call, the body's own diagnostics moved there with where they were inlined from, never a plain call: the program
-// once built and threw NoSuchMethodError on `A$.inl(int)` (dotty reports an expansion's errors at the call, and
-// `Erasure.checkNotErased` refuses any inline method's reference that survives, Erasure.scala:525-536). `B.d8`'s
-// body fails with a default beside it: the method's error, not its default's alone.
+// is to fail on the class too. A non-retained inline method has no method at run time, so its call is to be an error
+// at the call, the body's own diagnostics moved there with where they were inlined from, never a plain call
+// (dotty reports an expansion's errors at the call, and `Erasure.checkNotErased` refuses any inline method's
+// reference that survives, Erasure.scala:525-536). `B.d8`'s body is to fail with a default beside it: the
+// method's error, not its default's alone.
 // expect: jar_inline_body_missing_class.scala:21:11: error:
 // expect: (in the body of mdlib.A.inl)
 // expect: jar_inline_body_missing_class.scala:22:11: error:

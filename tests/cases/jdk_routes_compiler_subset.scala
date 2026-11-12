@@ -1,5 +1,5 @@
 //> using platform jvm
-// The JDK members play's routes compiler reads, as the interpreter has them: `File.toURI` (`file:`
+// The JDK members play's routes compiler reads: `File.toURI` (`file:`
 // and the absolute path, a directory's ending in `/`), `File.createNewFile`, `Character.
 // isJavaIdentifierStart` and a `WeakHashMap` (scala-parser-combinators' cache).
 import java.io.File

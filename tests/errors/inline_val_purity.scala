@@ -4,8 +4,8 @@
 // expect: 2 errors found
 // An `inline val` whose constant is its initialiser's type is that constant where the
 // initialiser is pure (scalac 3.8.4's `exprPurity` in `InlineVals`): a call of `def yes(): true`
-// is not, effects or none, at the val of a plain method and where an inline body expands, the
-// same two errors as scalac's.
+// is not, effects or none, at the val of a plain method and where an inline body expands;
+// the two errors expected are scalac's.
 def yes(): true =
   println("effect")
   true

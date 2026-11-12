@@ -1,7 +1,7 @@
 // Program 704 of tests/fix/scalameta, from scalameta 4.17.4's MacroSuite (line 211, "macro-splice-id-within-splice:
-// ${ $x }"): scalac 3.8.4's parser reads it as scalameta does, `${$x}`, and teq's otherwise. The expectation is
-// scalameta's tree under dialects.Scala3, which teq fix's tree answers to: a node a line, its start and end in
-// UTF-16 units from the program's first line below.
+// ${ $x }"): scalac 3.8.4's parser reads it as scalameta does, `${$x}`. The expectation
+// is scalameta's tree under dialects.Scala3, which teq fix's tree is to answer to: a
+// node a line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 39
 //     Defn.Object 0 38
 //       Term.Name 7 11

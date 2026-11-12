@@ -1,5 +1,5 @@
 // Bounds a macro makes are real bounds, equal ends kept (`TypeBounds.apply`, Types.scala 5844-5845): scalac's
-// reflection reads `Int`/`Int` back, teq's `Nothing`/`Any`. Moves with type-representation's landing 2.
+// reflection reads `Int`/`Int` back, and teq's is to read them back too. Moves with type-representation.
 import scala.quoted.*
 object Reflect:
   inline def bounds: String = ${ boundsImpl }

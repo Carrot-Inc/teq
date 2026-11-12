@@ -1,8 +1,8 @@
 //> using platform jvm
-// A field read before its initialiser ran holds its type's zero (`0`, `false`, `0.0`) or `null`, as
-// on the JVM, in the interpreter too; on JavaScript it is `undefined` (COMPATIBILITY, "Known
-// differences"), so this runs on the JVM's platform alone. An enum constructor reading a field
-// of its companion, which makes the values first, reads it so.
+// A field read before its initialiser ran holds its type's zero (`0`,
+// `false`, `0.0`) or `null`, as on the JVM; this runs on the JVM's platform
+// alone (COMPATIBILITY, "Known differences"). An enum constructor reading a
+// field of its companion, which makes the values first, reads it so.
 enum E:
   case A
   val n: Int = E.seed

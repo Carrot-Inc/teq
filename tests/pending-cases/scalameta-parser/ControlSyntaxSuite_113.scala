@@ -1,8 +1,8 @@
 // Program 113 of tests/fix/scalameta, from scalameta 4.17.4's ControlSyntaxSuite (line 1988, "match-chained
 // unindented"): scalac 3.8.4's parser reads it as scalameta does, `xs match { case Nil => "empty" case x :: xs1 =>
-// "nonempty" } match { case "empty" => 0 case "nonempty" => 1`, and teq's otherwise. The expectation is scalameta's
-// tree under dialects.Scala3, which teq fix's tree answers to: a node a line, its start and end in UTF-16 units from
-// the program's first line below.
+// "nonempty" } match { case "empty" => 0 case "nonempty" => 1`. The expectation is
+// scalameta's tree under dialects.Scala3, which teq fix's tree is to answer to: a
+// node a line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 119
 //     Defn.Object 0 118
 //       Term.Name 7 11

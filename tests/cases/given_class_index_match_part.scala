@@ -1,6 +1,6 @@
-// `given_import_index_match_part` read lexically, in the body of the object that fixes the parameter: the class's
-// given index keeps `Marker & Pick[T]`, an `A` through `Lib`, for every class, so it beats the outer `fallback`
-// (scalac 3.8.4: 13).
+// `given_import_index_match_part` read lexically, in the body of
+// the object that fixes the parameter: `Marker & Pick[T]`, an `A`
+// through `Lib`, beats the outer `fallback` (scalac 3.8.4: 13).
 trait Marker
 class A(val n: Int)
 type Pick[T] = T match

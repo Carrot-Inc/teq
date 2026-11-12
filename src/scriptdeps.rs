@@ -347,8 +347,8 @@ fn product_sources(export: &Export, key: &Key, script: &str, program: &[(String,
     Ok(files.into_iter().filter(|f| seen.insert(identity(f))).map(|f| f.to_string_lossy().into_owned()).collect())
 }
 
-/// The inputs of the configurations whose products the classpath of `key` holds, its product closure
-/// (ruling 4), as the build's verbs type them (`Export::session_inputs`: their source roots and stand-ins
+/// The inputs of the configurations whose products the classpath of `key` holds, its product closure,
+/// as the build's verbs type them (`Export::session_inputs`: their source roots and stand-ins
 /// on disk), since teq interp builds no product and runs their sources with the script's. The closure is
 /// one program, as a verb's resident is: refused where its build keeps a configuration from another's
 /// sight (`transitive: false`, `Export::one_program_refusals`), and where a product's sources wait for a

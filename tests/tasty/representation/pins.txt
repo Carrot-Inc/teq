@@ -331,10 +331,10 @@ I:js repr/js/Conversions:[] 4 (4) the writer writes an import's qualifier `scala
 I:js repr/js/Conversions:[["OBJECTCLASS",["UTF8","Conversions"]],"back"] 6 (6) teq's std aliases `js.Function1` to `scala.Function1`, so `back`'s body holds no `js.Any.toFunction1` conversion, which scalac's does (with its `Int`s and `scala.scalajs.js`)
 I:refining repr/refining/Refining:[] 4 (4) the writer writes an import's qualifier `scala.annotation` as the package's reference (`TERMREFpkg`) where scalac writes the selection the source wrote (`SELECT annotation` of `scala`): one package, written by another form
 I:refining repr/refining/myAnnot:[] 4 (4) the writer writes an import's qualifier `scala.annotation` as the package's reference (`TERMREFpkg`) where scalac writes the selection the source wrote (`SELECT annotation` of `scala`): one package, written by another form
-# The reflection's probes (probes.scala, README.md "The reflection's probes"): each probe the passes over dc2a3dfec,
-# 3362b74bf and 4f95a8370 ran against teq's reflection, over scalac's product of the subjects (T-S:probe) and over
+# The reflection's probes (probes.scala, README.md "The reflection's probes"): each probe of teq's reflection,
+# over scalac's product of the subjects (T-S:probe) and over
 # the subjects compiled with the calls (R:probe), scalac's answer the expectation; master's reflection differs on
-# each, pinned to the landing whose port closes it (the ruling on 4f95a8370's pass).
+# each, pinned to the landing whose port closes it.
 T-S:probe probe:this-type 4 the reflection widens `x: this.type` to `Self`'s class TypeRef: dotty's widening reads the denotation's information, the ThisType kept (Types.widenTermRefExpr; the references)
 T-S:probe probe:module-class 4 teq's reflection refuses `Model.o.Inner`, a nested object through a val's path, as no named type, where dotty's widening gives its module class's TypeRef `Inner$` (the references)
 T-S:probe probe:method-info 3 the information is the result alone, no MethodType: a method's information from its symbols with its binder (NamerOps.methodType, MethodType.fromSymbols)
@@ -347,7 +347,7 @@ T-S:probe probe:inline-param 5 (3) no MethodType, so no parameter, and adaptPara
 T-S:probe probe:binder-retained 3 no PolyType; dotty's ParamRef keeps its binder for good, two widenings giving one binder (the uncached MethodOrPoly, a ParamRef's binder fixed at newParamRef)
 T-S:probe probe:adapted-bound 4 (3) no PolyType; (4) the bound seen from `C[String]`, `B <: String`, through the extractor (AsSeenFromMap's mapOverLambda over the parameters' bounds)
 T-S:probe probe:adapted-bound-accessor 4 (3) no PolyType; (4) the bound seen from `C[String]`, `B <: String`, through `paramBounds` (AsSeenFromMap's mapOverLambda)
-T-S:probe probe:joint mixin-forwarders(shared-helpers-61) the member found through `HasL & HasR` is `HasR`'s alone; dotty's information is both arms' joint one, `L & R` (findMember's goAnd, Denotation.meet: the findMember family, mixin-forwarders' by ledger 61)
+T-S:probe probe:joint mixin-forwarders(shared-helpers-61) the member found through `HasL & HasR` is `HasR`'s alone; dotty's information is both arms' joint one, `L & R` (findMember's goAnd, Denotation.meet: the findMember family, mixin-forwarders')
 T-S:probe probe:annotation-tree 5 no AnnotatedType (the val's annotation lost); dotty's annotation is one tree, read twice the same (ConcreteAnnotation.tree)
 T-S:probe probe:by-name-nested 3 a method made with `=> (=> Int)` widens to it whole; dotty's widenExpr removes the outer ExprType alone, `=> Int` (Types.widenExpr)
 T-S:probe probe:by-name-annotated 5 teq's AnnotatedType.apply keeps no annotation, so the made method's information is `=> Int`; dotty's widening leaves the AnnotatedType over its ExprType as it is (widenExpr tests the outer type alone)
@@ -363,11 +363,11 @@ R:probe probe:inline-param 5 (3) no MethodType, so no parameter, and adaptParamI
 R:probe probe:binder-retained 3 no PolyType; dotty's ParamRef keeps its binder for good, two widenings giving one binder (the uncached MethodOrPoly, a ParamRef's binder fixed at newParamRef)
 R:probe probe:adapted-bound 4 (3) no PolyType; (4) the bound seen from `C[String]`, `B <: String`, through the extractor (AsSeenFromMap's mapOverLambda over the parameters' bounds)
 R:probe probe:adapted-bound-accessor 4 (3) no PolyType; (4) the bound seen from `C[String]`, `B <: String`, through `paramBounds` (AsSeenFromMap's mapOverLambda)
-R:probe probe:joint mixin-forwarders(shared-helpers-61) the member found through `HasL & HasR` is `HasR`'s alone; dotty's information is both arms' joint one, `L & R` (findMember's goAnd, Denotation.meet: the findMember family, mixin-forwarders' by ledger 61)
+R:probe probe:joint mixin-forwarders(shared-helpers-61) the member found through `HasL & HasR` is `HasR`'s alone; dotty's information is both arms' joint one, `L & R` (findMember's goAnd, Denotation.meet: the findMember family, mixin-forwarders')
 R:probe probe:annotation-tree 5 no AnnotatedType (the val's annotation lost); dotty's annotation is one tree, read twice the same (ConcreteAnnotation.tree)
 R:probe probe:by-name-nested 3 a method made with `=> (=> Int)` widens to it whole; dotty's widenExpr removes the outer ExprType alone, `=> Int` (Types.widenExpr)
 R:probe probe:by-name-annotated 5 teq's AnnotatedType.apply keeps no annotation, so the made method's information is `=> Int`; dotty's widening leaves the AnnotatedType over its ExprType as it is (widenExpr tests the outer type alone)
-# The downstream observations with the trees retained (the pass over 1c61410d5): the definitions' bodies and type
+# The downstream observations with the trees retained: the definitions' bodies and type
 # trees as the pickles hold them, and the body pair `object Product`.
 S-T:api class:repr.Bounded.B 7 (7) the writer writes a definition's type trees as their types (`Inferred`), where scalac's pickle holds the trees it typed (`TypeIdent`, `TypeSelect`, `Applied`, `TypeBoundsTree` over them), which the observation reads now that the downstream retains the trees
 S-T:api class:repr.Bounded.C 7 (7) the writer writes a definition's type trees as their types (`Inferred`), where scalac's pickle holds the trees it typed (`TypeIdent`, `TypeSelect`, `Applied`, `TypeBoundsTree` over them), which the observation reads now that the downstream retains the trees
@@ -420,7 +420,7 @@ T-S:api class:repr.Marker.field 7 (7) teq's reflection gives a loaded stable val
 T-S:api class:repr.Marker.text 7 (7) teq's reflection gives a loaded stable val `FieldAccessor`, `Lazy` and `StableRealizable` (src/interp/quoted.rs 7165); (4) the val's `java.lang.String` read as a TypeRef of `String` in the scala package
 T-S:api object:repr.Product:members 7 teq's reflection's `declarations` of a loaded object leave out its synthetic members (`writeReplace`)
 T-S:api object:repr.Product:owner 7 teq's reflection builds no loaded class's tree (`<init>` is no type)
-# The aliased target-name pair (the pass over bd771417f): `@TN(..)` through `type TN = scala.annotation.targetName`.
+# The aliased target-name pair: `@TN(..)` through `type TN = scala.annotation.targetName`.
 T-S:rec object:repr.rec.Pickled.TN 4 a type member is no declaration in teq's reflection: aliases, abstract and opaque types become type symbols in the references landing
 T-S:rec object:repr.rec.Pickled.jumpA 7 (3) the info is the result alone, no MethodType, PolyType or ExprType; (7) teq's reflection gives a loaded method's parameters `Local`; (7) teq's reflection gives a loaded definition's annotation no tree (`annotation_trees`, src/interp/quoted.rs 7772), its `@targetName` among them
 T-S:rec object:repr.rec.Pickled.jumpA#2 7 (3) the info is the result alone, no MethodType, PolyType or ExprType; (7) teq's reflection gives a loaded method's parameters `Local`; (7) teq's reflection gives a loaded definition's annotation no tree (`annotation_trees`, src/interp/quoted.rs 7772), its `@targetName` among them
@@ -428,7 +428,7 @@ T-S:rec object:repr.rec.Pickled.hop 7 (3) the info is the result alone, no Metho
 T-S:rec object:repr.rec.Pickled.hop#2 7 (3) the info is the result alone, no MethodType, PolyType or ExprType; (4) the alias expanded (`Predef.String` read as `String`); (7) teq's reflection gives a loaded method's parameters `Local`; (7) teq's reflection gives a loaded definition's annotation no tree (`annotation_trees`, src/interp/quoted.rs 7772), its `@targetName` among them
 T-S:rec object:repr.rec.Pickled."hop#2" 7 (3) the info is the result alone, no MethodType, PolyType or ExprType; (7) teq's reflection gives a loaded method's parameters `Local`; (7) teq's reflection gives a loaded definition's annotation no tree (`annotation_trees`, src/interp/quoted.rs 7772), its `@targetName` among them
 T-S:rec object:repr.rec.Pickled.returnedAliased 7 (7) teq's reflection gives a loaded stable val `FieldAccessor` and `StableRealizable` (src/interp/quoted.rs 7165); (5) a type annotation lost: teq keeps none on a type but RuntimeChecked
-# The unreadable body (the pass over 334a43adf): scalac's own reader throws on the body, which is that child's Threw
+# The unreadable body: scalac's own reader throws on the body, which is that child's Threw
 T-S:rec object:repr.rec.Pickled.taggedLocals 7 (5) the type's annotation dropped by the loader: teq keeps none on a type but RuntimeChecked; (7) teq's reflection gives the loaded definition's `@tagged(97)` no tree, and a loaded stable val `FieldAccessor`, `Lazy` and `StableRealizable`; the body, which scalac's own reader cannot give (MatchError(129), its unpickler on the macro's inlined tree), is excised from both records and observed through the products' tags (check 11), its account unread.txt's `case`
 T-S:rec object:repr.rec.Pickled.blindBody 7 (3) the info is the result alone, no ExprType; (7) teq's reflection gives the method's result type tree as its type (`Inferred`), where scalac's pickle holds the tree it typed (`TypeIdent`); the body, which scalac's own reader cannot give (MatchError(129)), is excised from both records and observed through the products' tags (check 11), its account unread.txt's `case`
 T-S:rec object:repr.rec.Pickled.blindNewline 7 (3) the info is the result alone, no ExprType; (7) teq's reflection gives the method's result type tree as its type (`Inferred`), where scalac's pickle holds the tree it typed (`TypeIdent`); the body, which scalac's own reader cannot give (MatchError(129)), is excised from both records and observed through the products' tags (check 11), its account unread.txt's `case`

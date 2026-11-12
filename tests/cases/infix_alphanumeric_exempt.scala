@@ -2,7 +2,7 @@
 //> using dep org.typelevel::cats-core:2.13.0
 // Alphanumeric methods written infix that `Checking.checkValidInfix` lets pass, so that no warning is printed: a
 // method of a library compiled before 3.4 (cats-core 2.13.0's TASTy is 28.3: `concatNel`), one declared `infix`,
-// a backquoted one, one followed by a block, scala-library's (`max`, `map`, which the std stands for) and an
+// a backquoted one, one followed by a block, scala-library's (`max`, `map`) and an
 // operator whose name ends in `_` and symbols.
 import cats.data.NonEmptyList
 

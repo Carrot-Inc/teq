@@ -1,7 +1,7 @@
 // jars: scala-library cats-kernel cats-core
-// A library class's method overriding a root whose name the reach pass suffixes after the final
-// naming passes (cats' `Reducible.isEmpty` over `Foldable.isEmpty`): a rebuild names it as a
-// fresh build does.
+// A library class's method overriding a root
+// (cats' `Reducible.isEmpty` over `Foldable.isEmpty`):
+// a rebuild is to name it as a fresh build does.
 import cats.*
 import cats.data.*
 import cats.syntax.all.*

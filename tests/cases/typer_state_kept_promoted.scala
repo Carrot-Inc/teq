@@ -1,6 +1,6 @@
-// `h`'s body is typed on demand inside the first alternative of `pair` and warns; the alternative is
-// retracted keeping the warning, its definition's, so the outer `combine`'s first alternative
-// applies, as in scalac: `s i2bz` with the warning.
+// `h`'s body is typed on demand inside the first
+// alternative of `pair` and warns; scalac applies the outer
+// `combine`'s first alternative: `s i2bz` with the warning.
 trait Ops:
   extension [T](x: Int)
     def combine(y: String, z: String): String = "s " + y + z

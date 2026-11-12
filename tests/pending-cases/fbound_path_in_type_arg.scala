@@ -1,5 +1,5 @@
-// A bound that names its own member through a path inside a type argument is no cycle, as
-// under scalac (`type M <: List[t.b.M]`): a member lookup that runs deep through it stays quiet.
+// A bound that names its own member through a path inside a type argument is no cycle under
+// scalac (`type M <: List[t.b.M]`): a member lookup that runs deep through it is to stay quiet.
 object fb:
   object a:
     trait T { t =>

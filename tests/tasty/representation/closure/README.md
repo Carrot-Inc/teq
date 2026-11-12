@@ -36,7 +36,7 @@ documents (591 documents, no diagnostic). `closure.py` reads them with `tests/se
   its class's vals and vars, the parent constructor its class's parent clause selects (the plugin's `parent` record,
   naming the overload the clause selects) and a trait parent's initializer, which no clause selects, by the class's
   parents (SemanticDB's), whose own vals, vars and parent run in turn, dotty running a parent's constructor, its field
-  initializers included, at every construction of a subclass (the ruling on round 12's points, 5). Import
+  initializers included, at every construction of a subclass. Import
   lines refer to nothing.
 - **Dynamic dispatch, listed**: at a call to a method its subclasses override, every override (SemanticDB's
   `overridden_symbols`, inverted and closed) is listed as a candidate of the method called, not walked.
@@ -56,7 +56,7 @@ opaque-proxies: the inliner, the tree maps and copiers, and the printers, above 
 `compiletime.codeOf`'s printed tree; annotations: the tree maps and copiers, the capture annotations, the API
 extraction; js-hierarchy: `transform/sjs/`'s checks), or when an `above` or `split` line walks it above its cut where
 the line holds; else a reader (`reader <symbol>`), which calls the mechanism and is not walked. The entries are
-generated from the table, never kept by hand (the ruling on round 12, 2): `closure.py --entries <table> <work dir>
+generated from the table, never kept by hand: `closure.py --entries <table> <work dir>
 entries-generated.txt` (`entries.py`) reads every row of the table's sections 3 and 16 that has a landing column, its
 landings that column's lead (`2`, `2, 3`, `op`):
 - the members a row's landing cell cites by symbol (`landing-<N>.txt @ <symbol>`, a candidate's citation aside) are
@@ -73,33 +73,33 @@ landings that column's lead (`2`, `2, 3`, `op`):
 Where a row places a member earlier than its list status, the generation writes it beside the out file
 (`entries-generated.txt.moved`): the row's placement holds. `entries-unbacked.txt` holds the entries kept by hand before
 round 12 that no row places yet, each owed its row; `--entries` drops one as soon as a row gives it, and `--ready`
-fails on a landing while any of its own remains. Landing 6's entries are the brief's seam 6
-(`Definitions.isFunctionNType`/`isFunctionType`, 1851–1861, with `isNonRefinedFunction`; `SAMType`), which 16.6's rows
+fails on a landing while any of its own remains. Landing 6's entries are
+`Definitions.isFunctionNType`/`isFunctionType` (1851–1861, with `isNonRefinedFunction`) and `SAMType`, which 16.6's rows
 give, with the Scala.js checks its rows port.
 
-Lines before the first landing hold for every landing (the ruling of 2026-10-24 on 16.0's points, ledger 69):
+Lines before the first landing hold for every landing:
 - `cut <symbol or prefix*> <cut>(ledger-69)`: a feature of dotty's own that is another mechanism with its own owner
   (REVIEWING.md "What counts" 2), a boundary as an external dependency is, by what the inputs select: diagnostics and
   message rendering, the printers, the debug printers and paths, symbol completion from source (Namer's completers),
-  and capture checking where dotty decides it, at ccEnabled (the ruling on the four points, 1): the paths dotty takes
+  and capture checking where dotty decides it, at ccEnabled: the paths dotty takes
   with capture checking off are in scope, those it takes only with it on (Setup, CheckCaptures, the capture sets'
   solving, the capabilities, `CapturingType`'s answers in the cc phases) are cut member by member,
   `ccEnabled-true(ledger-69)`, the input that selects them the experimental import. The walk stops at a member under a cut (the longest matching prefix); the member is listed in its
   own section, `cut <entry> <file>:<line> below <cut> <the count of members calling it>`, its callers written beside
   the work dir (`cut-callers-<landing>.txt`), and the dispatch candidates of a call into it go with it.
-- `owner <symbol or prefix*> <part> <ledger entry>`: a member another part ports, by the ledger's latest line
-  (`~/reports/shared-helpers.txt`), its status `ported-by:<part>(shared-helpers-<n>)`; `first-of(a,b)` where the ledger
+- `owner <symbol or prefix*> <part> <ledger entry>`: a member another part ports, by the ledger's latest line,
+  its status `ported-by:<part>(shared-helpers-<n>)`; `first-of(a,b)` where the ledger
   gives the copy to whichever of two lands first.
 - `flag <symbol or prefix*> <teq's flag>`: a Settings read the list keeps as a member, teq's flag beside it,
   `teq:<flag>`; one with no counterpart `none:default` (teq takes dotty's default branch), `none:<branch>` (the branch
   teq takes, named), or `add:cli-settings` (a setting a scalac user selects that teq's users need, a flag to add,
-  pinned to the queued part cli-settings; the ruling on the four points).
+  pinned to the queued part cli-settings).
 - `split <symbol or prefix*> <setting>`: a member that serves both of a setting's branches (capture checking:
   `ccEnabled(false:in-scope,true:boundary)`), walked and listed with ` split:<setting>`; its calls that run only with
   the setting on stop at their own `cut` lines or are declined. A `split` line more specific than a cut prefix walks its
   member (the longest line wins).
 - `above <symbol or prefix*> <why>`: a member a cut takes that an input selects, walked above the boundary and
-  listed with ` above:<why>` (the ruling on round 11): in a landing's block for that landing alone, before the first
+  listed with ` above:<why>`: in a landing's block for that landing alone, before the first
   for every one. The speculative typing's StoreReporter and the Reporter members it reads (`issueUnconfigured`,
   `removeBufferedMessages`, `hasUnreportedMessages`, `flush`, the counts) are above the diagnostics cut everywhere; at
   opaque-proxies, `Namer#index(+1)`, which the inliner's typing pass dispatches to InlineTyper's override, is above the
@@ -109,8 +109,8 @@ Lines before the first landing hold for every landing (the ruling of 2026-10-24 
   alone), the input that would select it named; the list's `declined` section lists each one its walk met. Capture
   checking's are the cc-on calls of split members and of core members into in-scope cc/ members; landing 2's is its
   edge no foundation input selects (a pre-3.5.0 quote pattern; the unpickled template's parents forced with their
-  arguments are walked since round 12, review 41 item 1: a loaded annotation's argument holding a class with parent
-  arguments selects them, so `tpd.TreeOps#changeOwner` is landing 2's); the third the four points' ruling declined, an annotation's arguments under a map, is walked since round 11's ruling (a
+  arguments are walked: a loaded annotation's argument holding a class with parent
+  arguments selects them, so `tpd.TreeOps#changeOwner` is landing 2's); the edge of an annotation's arguments under a map is walked (a
   member selection over an annotated type parameter selects it, dotty's pos/annot-5789), so `TreeTypeMap` is landing
   2's. Landing 3 declines `constrainResult`'s deep argument check (`FunProto#typedArg`), selected only by a prototype a
   failed implicit argument search deepens (landing 4's).
@@ -121,7 +121,7 @@ the boundary without one fail the tool.
 
 ## Dotty's plumbing (`plumbing.txt`, ledger 77)
 
-The owner's end state (2026-10-24 09:55 PT): teq's typer is dotty's typer mechanisms in Rust over teq's own
+The end state: teq's typer is dotty's typer mechanisms in Rust over teq's own
 infrastructure (the store, the workers and the merge, the records, the loader's completion, the reporter and the
 post-typer barrier); a port stops at dotty's plumbing, which is mapped as contracts, the observable effect alone, and
 realized by teq's structures; a cache or stamp ported as a field is a finding. In the tool the plumbing is a second
@@ -133,17 +133,17 @@ denotation switching and the completers' scheduling (SymbolLoaders), Contexts (b
 search's), TyperState's bookkeeping (fresh, gc, ownedVars, the reporter swap, the nesting and committable marks; its
 commit and rollback semantics stay the mechanism's), Uniques, the loaders' parsing (the class file's reader, its
 constant pool, inner-class table and member completers; what they produce, a loaded symbol's information and the
-class file's signature reading, is the representation's), and every cache, memo field and run stamp (the owner's
-answer of 07:00, its first application; `isProvisional` as the contract). The walk stops at such a member as at any
+class file's signature reading, is the representation's), and every cache, memo field and run stamp
+(`isProvisional` as the contract). The walk stops at such a member as at any
 cut; the list writes it in its cuts section (`below plumbing(ledger-77)`) and its contract in the `contracts` section
 (`contract <entry> <observable> => <structure>`). A plumbing line without a contract fails the tool.
 
 ## The destinations (`ports.txt`, `unported-<N>.txt`, `--ready`, `--citations`)
 
-Every member a landing reaches carries its destination in the tool, not only in the table's prose (the ruling on
-round 12, 1): `port <symbol or prefix*> <teq function>[ older]` in `ports.txt` (entries.txt's `include ports.txt`
+Every member a landing reaches carries its destination in the tool, not only in the table's prose:
+`port <symbol or prefix*> <teq function>[ older]` in `ports.txt` (entries.txt's `include ports.txt`
 reads it before the first landing, so a line holds for every landing), the function one to write (`+<name>`) or an
-existing one (`src/<path>.rs:<name>`) with the disposition `older` (ledger 78): teq's existing function kept as the one
+existing one (`src/<path>.rs:<name>`) with the disposition `older`: teq's existing function kept as the one
 copy, its branch comparison in the table, never a second copy beside a port (a port deletes teq's older code for the
 same mechanism in the same commit; two functions for one dotty member is a P1); or the member's `owner` line (another part's port) or `flag` line (a Settings read, teq's flag
 beside it); a `cut` or `decline` line keeps a member out of the list. Many members may name one function where a
@@ -161,22 +161,22 @@ closure.py --citations <table> lists                      # the table's citation
 `--ready <N> ... [<table>]` regenerates the lists as the default run does (with the table, first the entries,
 compared with `entries-generated.txt`, and the table's citations, `--citations`) and fails unless landing N's `unported-<N>.txt` is empty,
 and every landing's before it in landing order (2, 3, 4, op, 5, 6, 7) too: a helper lands with or before its first
-caller, so a landing whose earlier landings still lack destinations is not ready either (the stricter of the ruling's
-two readings; landing N is table ready when the verb passes and its round-13 pass is clean). `--citations` resolves
+caller, so a landing whose earlier landings still lack destinations is not ready either.
+`--citations` resolves
 each of the table's citations of a list, `landing-<N>.txt @ <symbol or prefix*>`, against that list (a member, a
 candidate, a cut entry, a declined edge's caller or callee, a reader or a boundary symbol; a prefix names one at
 least) and fails on one that names nothing there, and on any citation by line (`landing-<N>.txt:<line>`), which the
-lists' regeneration moves (the ruling on round 12, 2). An older list's citation (a path prefix other than
+lists' regeneration moves. An older list's citation (a path prefix other than
 `closure/lists/` or `lists/`, e.g. `out/closure/versions/febb521c4/landing-2.txt @ ...`) is a record of the round that
-read it outside the rows, counted and skipped, and fails on a row: a row's evidence cites today's lists (the ruling on
-round 12's points, 6).
+read it outside the rows, counted and skipped, and fails on a row: a row's evidence cites
+today's lists.
 
-### The rules of the landing-2 pass, the stride samples and the cut destinations (the owner's rulings on round 13's
-landing-2 pass, 1, on its stride samples, class 1, and on round 14's class 4)
+### The rules of the ports, the rows' destinations and the cut destinations
 
-Two rules every slice task carried, and which the rows still broke, fail the run, and the stride samples' ruling added
-two checks beside them; round 14's class 4 adds rule d, the cut member a line prescribes as a destination, and reports
-rule a over every row before it fails on it. **(a) The ports, and the rows' destinations.** A `port` line whose symbol falls under a ledger-77 cut line fails the default run, one line per member,
+
+Two rules fail the run, and two checks beside them;
+rule d, the cut member a line prescribes as a destination, fails it too, and rule a is reported
+over every row before the run fails on it. **(a) The ports, and the rows' destinations.** A `port` line whose symbol falls under a ledger-77 cut line fails the default run, one line per member,
 `closure.py: a port line for a member under ledger 77's cut: <symbol> (its contract: <the cut line's text after
 plumbing(ledger-77)>)`: a member under that cut is realized by teq's structure, and its row names the contract instead.
 In the table, a destination row (`| R12.<2|3|4|op|5|6|7>-...`, its six cells `# | dotty | branches | teq arm |
@@ -197,7 +197,7 @@ inheritance SemanticDB records. Sentences end at `. ` and `; `. The line is
 written in bold in the destination cell, `**`+name(...)`**` or `**+name**`, or with none in bold the first one of the
 cell) is an existing `fn <snake_name>` under `src/` (`grep -rhoE "fn [a-z_0-9]+" src`); the teq helpers it calls
 (`+bounds`, `+underlying`) are not its own function. A row is exempt when one of its members (its landing cell's
-`landing-<N>.txt @ <symbol>` citations) has a port line whose disposition is `older` (ledger 78's one copy, its
+`landing-<N>.txt @ <symbol>` citations) has a port line whose disposition is `older` (the one copy, its
 branch comparison in the row). The line is `table:<line> <first cell>: rule b: an existing teq function (<what was
 found>) and "Retires: none", the disposition not older`.
 **(c) The member's port and the row's destination.** A destination row's members are its landing cell's
@@ -205,15 +205,15 @@ found>) and "Retires: none", the disposition not older`.
 the row does: a `+name` port fails when `+name` does not appear in the row's destination cell (the fifth); an `older`
 port (`src/<path>.rs:<name>`) fails when neither its path nor its function's name (the name's last `::` component)
 appears there. The line is
-`table:<line> <first cell>: rule c: ports.txt names <destination> for <symbol>, the row does not` (the owner's ruling
-on round 13's stride samples, class 1: `R12.2-p55-14`'s `+patch` against its `+record_patch` is one). A cell's
+`table:<line> <first cell>: rule c: ports.txt names <destination> for <symbol>, the row does not`
+(`R12.2-p55-14`'s `+patch` against its `+record_patch` is one). A cell's
 literal `|` is written `\|` (code spans included), and a row without exactly six cells fails, its count in the summary,
 not skipped.
-**(d) The cut member a line prescribes as a destination.** Round 14's class 4 (the ruling: rows that contradict each
-other about one member or one destination, `isGetter`'s no accessor bit against `R12.2-38-30`'s `+ACCESSOR`, and
-`TypeVar#owningState` as state against `plumbing.txt`'s cut: the lint fails a member whose rows name it both cut and
-as state, and the verifier reads every row that names the member or the destination together) makes a row's
-destination cell or a note (`- `, after optional spaces) fail when it prescribes a ledger-77 cut field as a
+**(d) The cut member a line prescribes as a destination.** Where rows contradict each
+other about one member or one destination (`isGetter`'s no accessor bit against `R12.2-38-30`'s `+ACCESSOR`, and
+`TypeVar#owningState` as state against `plumbing.txt`'s cut), the lint is to fail a member whose rows name it both cut
+and as state, and the verifier to read every row that names the member or the destination together: a row's
+destination cell or a note (`- `, after optional spaces) fails when it prescribes a ledger-77 cut field as a
 destination: a `+` destination ending in the field's snake-case name (`owningState` -> `owning_state`, `myHash` ->
 `my_hash`), one of `+owning_state`, `+TypeVar.owning_state`, `+TypeVar::owning_state`, the name followed by a non-name
 character. The name counts only where it means the cut member: every val, var or def SemanticDB gives with that name
@@ -241,7 +241,7 @@ line, never fails. Beside the failing rules, `--citations` reports
 rule a's sentence test over the fifth cell of every six-cell row of any id (not only `R12.<N>-`) as
 `table:<line> <first cell>: rule a+: the destination takes ledger 77's <name> (<symbol>) as its argument or state`,
 counted by section and in the summary (`<n> rule a+ lines (report only)`), without failing the run yet: the owner reads
-the count first (round 14's class 4).
+the count first.
 `--citations`
 prints all five rules' lines, counts them in its summary (`<n> rows breaking rule a, <n> rule a+ lines (report only),
 <m> breaking rule b, <k> rows breaking rule c, <k> lines breaking rule d, <k> rows breaking rule e`) and fails on any
@@ -252,7 +252,7 @@ The default run's own check reads every `port <symbol> src/<path>.rs:<name> olde
 `fn intern` in src/intern.rs) and hold `\bfn <last>\b` (an optional `<` or `(` after), `<last>` the name's last `::`
 component. An enum variant, a constant, a struct or a type is no function and fails. One line is printed per such
 port, `closure.py: an older port line names no function: <symbol> <destination> (no fn <last> in src/<path>.rs)`, and
-the run exits nonzero after reading them all (the same ruling, class 1).
+the run exits nonzero after reading them all.
 
 The rules are name-level and leave the per-row verifier what only a reading of the two sides can decide: that a
 destination's argument is not the cut member's name written otherwise (an `h` for a cached hash, a field called
@@ -264,7 +264,7 @@ actually uses.
 ## The observer's list (`observer.sh`, `entries-observer.txt`, `observer/`)
 
 Landing 1 ports no dotty mechanism: the oracle's observer (`../observe.scala`, `../README.md`) reads scalac 3.8.4's
-Quotes API and decides nothing (the ruling on dc2a3dfec's pass). Its list is the API it calls: `observer.sh <work
+Quotes API and decides nothing. Its list is the API it calls: `observer.sh <work
 dir>` compiles the observer, with the reflection's probes beside it (`../probes.scala`), with `-Xsemanticdb` and writes
 `entries-observer.txt`, every `scala.quoted.Quotes` symbol their code refers to (an occurrence or a synthetic), each outside `dotty.tools.dotc` and so the list's boundary. The
 block's `ports` line gives a member reached above the boundary no status but its `port` line's, and fails the tool on

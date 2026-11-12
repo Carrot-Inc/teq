@@ -1,5 +1,5 @@
 // teq: --source 3.8
-// `Desugar.makeFor.deepEquals` over `unsplice` (the review of 1888ac4df): identifiers by name whatever they denote
+// `Desugar.makeFor.deepEquals` over `unsplice`: identifiers by name whatever they denote
 // (`case K` and its body `K`), tuples element by element, a body's parentheses unwrapped, a brace block none.
 class Seq1[A](val xs: List[A]):
   def map[B](f: A => B): Seq1[B] = { println("map"); Seq1(xs.map(f)) }

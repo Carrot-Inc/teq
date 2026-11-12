@@ -1,7 +1,7 @@
 //> using platform jvm
 // split-watch: jvm
-// The JDK's abstract `Reader` and `Number` members implemented without `override`, as on scalac (the lean std's
-// stand-ins of these two declare them otherwise).
+// The JDK's abstract `Reader` and `Number` members
+// implemented without `override`, as on scalac.
 class Empty extends java.io.Reader:
   def read(cbuf: Array[Char], off: Int, len: Int): Int = -1
   def close(): Unit = ()

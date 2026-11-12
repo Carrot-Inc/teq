@@ -1,5 +1,5 @@
-// Binary integer literals (Scala 3.5's `0b`/`0B`, digit separators among them): scalac 3.8.4 reads each as a number,
-// teq's lexer refuses each ("5 errors found").
+// Binary integer literals (Scala 3.5's `0b`/`0B`, digit
+// separators among them): scalac 3.8.4 reads each as a number.
 @main def run(): Unit =
   println(0b101)
   println(0B11L)

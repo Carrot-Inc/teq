@@ -1,17 +1,17 @@
 #!/bin/bash
-# Functions past 22 parameters across the two compilers (docs/TARGETS.md: on the JVM they are scala-library's
-# scala.runtime.FunctionXXL, as scalac 3.8.4 erases them, `Definitions.functionTypeErasure`), as table (b)'s cross/
-# probes run them. tests/function-xxl/callee is an API that takes, returns, builds and applies a Function23, a spelled
+# Functions past 22 parameters across the two compilers (on the JVM they are to be scala-library's
+# scala.runtime.FunctionXXL, as scalac 3.8.4 erases them, `Definitions.functionTypeErasure`).
+# tests/function-xxl/callee is an API that takes, returns, builds and applies a Function23, a spelled
 # Function023, a Function64 and a ContextFunction23, with a class and an object implementing Function23;
-# tests/function-xxl/caller calls all of it. Each leg's run prints tests/function-xxl/expected.txt, scalac-on-scalac's
-# output (the caller built by scalac over scalac's callee, recorded once):
-#   teq-callee      teq builds the callee in the product mode, writing no class under scala/Function (scala-library
-#                   holds every class a function erases to); scalac builds the caller over teq's products, run over
-#                   teq's class files;
-#   linked          the caller scalac built over scalac's callee, run over teq's class files of the callee: the
+# tests/function-xxl/caller calls all of it. Each leg's run is to print tests/function-xxl/expected.txt,
+# scalac-on-scalac's output (the caller built by scalac over scalac's callee, recorded once):
+#   teq-callee      teq is to build the callee in the product mode, writing no class under scala/Function
+#                   (scala-library holds every class a function erases to); scalac is to build the caller over
+#                   teq's products, run over teq's class files;
+#   linked          the caller scalac built over scalac's callee is to run over teq's class files of the callee: the
 #                   descriptors and the classes scalac's own erasure links against;
-#   teq-caller      teq builds the caller over scalac's callee, run over scalac's class files;
-#   teq-on-teq      teq builds the caller over its own callee products, run over them;
+#   teq-caller      teq is to build the caller over scalac's callee, run over scalac's class files;
+#   teq-on-teq      teq is to build the caller over its own callee products, run over them;
 #   scalac-on-scalac  the recorded baseline, so that a scala-cli other than 3.8.4's stands out.
 # scalac is the suites' (`scala-cli --power compile -S 3.8.4 --jvm system --server=false --offline`, as
 # tests/modules.sh runs it). Skips without scala-cli or scala-library's jar in the coursier cache. TEQ names the
@@ -88,8 +88,8 @@ fi
 
 # A synthetic function class's information, and an impure alias's, wait for their first completion (`newFunctionNType`'s
 # completer): tests/function-xxl/unused imports a ContextFunction, a Function and an ImpureFunction of 100000000
-# parameters, reading none, which each target's build compiles under a 4 GiB address-space limit and runs as scalac's
-# does (unused/expected.txt, scalac's run); the JVM runs outside the limit, which its heap's reservation exceeds.
+# parameters, reading none, which each target's build is to compile under a 4 GiB address-space limit and run as
+# scalac's (unused/expected.txt, scalac's run); the JVM runs outside the limit, which its heap's reservation exceeds.
 unused=$src/unused/UnusedFunction.scala
 unused_want=$(cat "$src/unused/expected.txt")
 limited() { (ulimit -v 4194304 && timeout 120 "$TEQ" "$@") 2>&1; }
@@ -109,11 +109,11 @@ else
   bad "unused: products under 4 GiB" "$log"
 fi
 
-# The workers' sync of the arity tables (`Worker::sync_arity_tables`) keeps a class waiting for its first completion out
-# of every worker's table: tests/function-xxl/workers imports ContextFunction10000000 unused beside twenty objects the
-# workers type, checked at 1, 2 and 8 threads outside any address-space limit (under one teq falls back to one worker),
-# its peak resident size held to the same program's with ContextFunction23 plus 32 MiB, where one worker's table of the
-# import's arity takes 80 MiB.
+# An unused arity is to allocate nothing across the workers:
+# tests/function-xxl/workers imports ContextFunction10000000 unused
+# beside twenty objects the workers type, checked at 1, 2 and 8 threads
+# outside any address-space limit, its peak resident size expected
+# within the same program's with ContextFunction23 plus 32 MiB.
 workers=$src/workers
 mkdir -p "$out/workers23"
 sed 's/ContextFunction10000000/ContextFunction23/' "$workers/LargeImport.scala" > "$out/workers23/LargeImport.scala"

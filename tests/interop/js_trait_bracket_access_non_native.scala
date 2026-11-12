@@ -1,6 +1,6 @@
-// `@JSBracketAccess` on a member of a non-native JS trait is the preparation's error, reported once the typing is
-// joined; the call typed before it is a method's, not a bracket access with no index. scalac 3.8.4 under Scala.js
-// 1.22.0 reports the same message, at the member's name where teq reports its definition's start.
+// `@JSBracketAccess` on a member of a non-native JS trait is an error, and the call of it is to
+// be a method's, not a bracket access with no index. The expectation is scalac 3.8.4's message
+// under Scala.js 1.22.0, at the definition's start where scalac reports it at the member's name.
 import scala.scalajs.js
 import scala.scalajs.js.annotation.JSBracketAccess
 trait Bad extends js.Object:

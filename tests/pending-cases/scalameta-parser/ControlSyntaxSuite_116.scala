@@ -1,7 +1,7 @@
 // Program 116 of tests/fix/scalameta, from scalameta 4.17.4's ControlSyntaxSuite (line 2049, "match-chained-
-// complex"): scalac 3.8.4's parser accepts it, teq's reports "expected end of statement, found identifier". The
-// expectation is scalameta's tree under dialects.Scala3, which teq fix's tree answers to: a node a line, its start
-// and end in UTF-16 units from the program's first line below.
+// complex"): scalac 3.8.4's parser accepts it. The expectation is scalameta's
+// tree under dialects.Scala3, which teq fix's tree is to answer to: a node a
+// line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 158
 //     Defn.Object 0 157
 //       Term.Name 7 11

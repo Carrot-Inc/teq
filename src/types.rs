@@ -4825,7 +4825,7 @@ mod tests {
         f(t).unwrap_or_else(|| s.map_parts(t, &mut |x| deep(s, x, f)))
     }
 
-    /// The pass over c14fd75e1's store sequences. `A @Ann` mapped `A -> Int` is `Int @Ann`, the map applied to the
+    /// `A @Ann` mapped `A -> Int` is `Int @Ann`, the map applied to the
     /// annotation's whole parent (`TypeMap.mapOver`'s `AnnotatedType` branch), where the parent is a leaf too; a phantom
     /// alias's argument is named though its canonical type names none (`Phantom[P]` over `Int` names `P`,
     /// `Phantom[x.type]` names `x`), the record read before the canonical leaf.
@@ -4854,7 +4854,7 @@ mod tests {
     }
 
     /// `replace` of a path's member under a retained annotation: the annotation kept over the replacement, as dotty's
-    /// `Substituters.subst` maps an `AnnotatedType` through `TypeMap.mapOver` (the pass over 317e8fb73's store sequence).
+    /// `Substituters.subst` maps an `AnnotatedType` through `TypeMap.mapOver`.
     #[test]
     fn replacement_keeps_an_annotation_over_the_replaced_member() {
         let s = TypeStore::new();
@@ -4912,7 +4912,7 @@ mod tests {
     /// A retained form is traversed before its canonical leaf: an annotation over a type parameter outlives the
     /// parameter's replacement (`A @Ann` at `A := Int` is `Int @Ann`), a phantom alias's arguments are substituted
     /// though its canonical type names none of them (`type Phantom[A] = Int` at `A := String`), and a variable only
-    /// the record holds counts among the form's (the probes of the pass over 2f3b147c1).
+    /// the record holds counts among the form's.
     #[test]
     fn a_retained_record_is_substituted_before_the_canonical_leaf() {
         let s = TypeStore::new();
@@ -4952,7 +4952,7 @@ mod tests {
     }
 
     /// A wildcard whose bounds keep retained forms, `? <: Any @Ann`, is the plain wildcard, the written bounds kept
-    /// over it (`ApproximatingTypeMap.derivedAnnotatedType`'s range, the pass over 2f3b147c1's Ranges.scala).
+    /// over it (`ApproximatingTypeMap.derivedAnnotatedType`'s range, Ranges.scala).
     #[test]
     fn an_annotated_wildcard_is_the_plain_one_with_its_written_bounds() {
         let s = TypeStore::new();
@@ -4968,7 +4968,7 @@ mod tests {
 
     /// Two bounds that are distinct retained forms over one canonical type (`Int @Ann`, `Int @Other`) stay two: the
     /// canonical type is that one type, as without retained forms, the written wildcard of both retained over it
-    /// (`ApproximatingTypeMap.range`'s `lo eq hi`, the pass over c0dbae640's Bounds.scala); one form twice is itself.
+    /// (`ApproximatingTypeMap.range`'s `lo eq hi`, Bounds.scala); one form twice is itself.
     #[test]
     fn bounds_over_one_canonical_type_stay_two_forms() {
         let s = TypeStore::new();

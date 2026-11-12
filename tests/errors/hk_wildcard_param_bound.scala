@@ -1,6 +1,6 @@
 // expect: 13:43: error: Found:    (c : C[List, ?])
 // expect: 1 error found
-// The wildcard argument of the higher-kinded parameter `F` is a range in `B`'s bounds as the comparer reads them
+// The wildcard argument of the higher-kinded parameter `F` is a range in `B`'s bounds as dotty's comparer reads them
 // (`TypeComparer.isSubArgs`' `paramBounds`: `tparam.info.substApprox(tparams2, args2)`, a `TypeBounds` argument
 // `range(lo, hi)`), so `B <: F[Int]` is bounded above by the top of `F`'s kind applied (`TypeApplications.appliedTo`),
 // `Any`. `C[List, ?]`'s `?` met with those bounds is then no `? <: String`. scalac 3.8.4 rejects it:

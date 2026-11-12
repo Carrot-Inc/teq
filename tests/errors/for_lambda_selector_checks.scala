@@ -1,7 +1,7 @@
 // teq: --source 3.8 --werror
 // A generator's case lambda under N parameters takes its selector's check, `IrrefutablePatDef` where the generator's
 // was `None` (`typedFunctionValue`, Typer.scala 2024-2025): a pattern definition's message at the pattern; an
-// `@unchecked` selector silences the type tests made on it alone, a component's test warns (the review of 1888ac4df).
+// `@unchecked` selector silences the type tests made on it alone, a component's test warns.
 class Z(xs: List[(Int, Option[Int])]):
   def withFilter(p: ((Int, Option[Int])) => Boolean): Z2 = Z2(xs.filter(p))
 class Z2(xs: List[(Int, Option[Int])]):

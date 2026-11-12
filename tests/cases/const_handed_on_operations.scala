@@ -1,8 +1,8 @@
-// A primitive unary operator or numeric conversion whose lowering hands on its operand's node (an Int's unary_+, a
-// conversion to the receiver's own type) has the constant type ConstFold gives the operation (Typer.scala:805,
-// ConstFold.scala:49-54), which an expected constant type reads, its operand an effectful selection or itself a unary
-// operation; FirstTransform takes each to { pre; v } (TreeInfo.scala:753-786), so a read before the initialiser has
-// run is the constant. From Codex's review of tr/cut-head-tail-c2 93e2011e3c (P1-1) and its check.
+// A primitive unary operator or numeric conversion (an Int's unary_+, a conversion to the
+// receiver's own type) has the constant type ConstFold gives the operation (Typer.scala:805,
+// ConstFold.scala:49-54), which an expected constant type reads, its operand an effectful
+// selection or itself a unary operation; FirstTransform takes each to { pre; v }
+// (TreeInfo.scala:753-786), so a read before the initialiser has run is the constant.
 class S:
   def h: S = this
   val x: 42 = 42

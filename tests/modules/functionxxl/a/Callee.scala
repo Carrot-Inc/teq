@@ -1,10 +1,10 @@
 package fxa
 
 // A library's API over functions past 22 parameters, which erase to scala.runtime.FunctionXXL
-// (`Definitions.functionTypeErasure`): methods taking, returning and building a Function23, a spelled Function023
-// and a Function64; and classes implementing Function23, which take FunctionXXL's `apply(Object[])`
-// (`FunctionXXLForwarders`) and its `toString`. No body applies a function: the lean std's products withhold such a
-// body (a Function3's as a Function23's), which the JavaScript legs read; tests/function-xxl.sh applies them.
+// (`Definitions.functionTypeErasure`): methods taking, returning and building a
+// Function23, a spelled Function023 and a Function64; and classes implementing
+// Function23, which take FunctionXXL's `apply(Object[])` (`FunctionXXLForwarders`)
+// and its `toString`. No body applies a function; tests/function-xxl.sh applies them.
 class Callee:
   def id23(f: Function23[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int]): Function23[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int] = f
   def id023(f: Function023[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int]): Function023[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int] = f

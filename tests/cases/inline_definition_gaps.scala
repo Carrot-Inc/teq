@@ -1,6 +1,6 @@
-// The four gaps the definition check found on bodies scalac 3.8.4 accepts, each also a gap of
-// plain code: a type variable of a type pattern takes the bound of the parameter it stands for
-// (`t` of `h *: t` is a `Tuple`, `a` of `Box[a]` an `AnyVal`); a singleton instance widens where
+// Bodies scalac 3.8.4 accepts: a type variable of a type pattern takes the
+// bound of the parameter it stands for (`t` of `h *: t` is a `Tuple`,
+// `a` of `Box[a]` an `AnyVal`); a singleton instance widens where
 // a type argument is inferred unless its bound is `Singleton` (`named(own(x))` is `named[B]`, and
 // `x.type & B` a `B`); a type parameter bounded by `String` or a primitive has its bound's
 // operators (`l + "="`, `n + 1`); `head` and `tail` of a tuple whose length is open

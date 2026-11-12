@@ -1,5 +1,5 @@
 // Overloads told apart by @targetName literals that differ only in a lone surrogate keep their code units in every
-// target's names (the adversary's probe TN4.scala on the M2e refold: the JavaScript names collapsed to $u65533).
+// target's names (the JavaScript names once collapsed to $u65533).
 package target_name_surrogate_overloads
 import scala.annotation.targetName
 // Overloads that erase alike, told apart by @targetName literals that differ only in a lone surrogate.

@@ -1,10 +1,10 @@
-// A downstream of a/ as tests/modules builds it. scalac 3.8.4 prints the .expected, and so does each of teq's runs.
-// Counter's accessors `amoa$Counter$$inline$bump` and `amoa$Counter$$inline$count` come after the class's other
-// members in its pickle, as dotty adds them (`addAccessorDefs`, `body ++ accDefs`, AccessProxies.scala:65-69), and so
-// in the JavaScript class of the bundle built over a/'s lean products; the whole build's bundle writes `bump`'s
-// accessor before `bump` (tests/modules' bundle: one file, --split and --release; accessors' and accessorinherited's),
-// the output the same. Master efddb38de3's builds call no accessor and agree: a regression since the whole build calls
-// the accessors, queued with the accessors' read (products_bundle_accessor_read_outline).
+// A downstream of a/ as tests/modules builds it. scalac 3.8.4 prints the .expected. dotty
+// adds Counter's accessors `amoa$Counter$$inline$bump` and `amoa$Counter$$inline$count`
+// after the class's other members (`addAccessorDefs`, `body ++ accDefs`,
+// AccessProxies.scala:65-69). teq's Scala.js bundle of the whole build and the bundle built
+// over a/'s lean products are to place them alike in the JavaScript class (tests/modules'
+// bundle: one file, --split and --release; accessors' and accessorinherited's).
+// Queued with the accessors' read (products_bundle_accessor_read_outline).
 package amob
 
 @main def run(): Unit =

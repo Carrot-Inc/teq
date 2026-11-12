@@ -1,5 +1,5 @@
 // teq: --source 3.8 --wconf any:s
-// `DropForMap` of a comprehension's trailing `map` (the review of 1888ac4df): the receiver where its type widened
+// `DropForMap` of a comprehension's trailing `map`: the receiver where its type widened
 // `=:=` the call's (`map: Any` keeps the call), else a conversion's argument where its type is the call's (a val's
 // `TermRef` is not: the call stays); an extension's receiver its first argument; a leading or trailing using clause;
 // the unit body; an inline `map`'s expansion replaced by the reference to its receiver's binding (dotty's

@@ -2,9 +2,9 @@
 // dotty 3.8.4's tests/neg-scalajs/js-custom-function-types-prepjsinterop.scala (no .check; js.Function is std's): a
 // JS type's apply where it is no JS function type (transformValOrDefDefInJSType), its errors as scalac 3.8.4 -scalajs
 // gives them on this file. An expectation's L:C is where scalac's caret begins (the start of dotty's span), 1-based.
-// pending: teq's check phase reports RefChecks' "class BadFunctionIsClass needs to be abstract" (dotty's RefChecks
-// runs after PrepJSInterop, not past its errors) and its own overload restriction, closing PrepJSInterop's gate: none
-// of the seven is reported.
+// pending: teq is to report the
+// seven (dotty's RefChecks runs after
+// PrepJSInterop, not past its errors).
 // expect: 20:3: error: A non-native JS type can only declare an abstract method named `apply` without `@JSName` if it is the SAM of a trait that extends js.Function
 // expect: 23:3: error: A non-native JS type can only declare an abstract method named `apply` without `@JSName` if it is the SAM of a trait that extends js.Function
 // expect: 27:3: error: A non-native JS type can only declare an abstract method named `apply` without `@JSName` if it is the SAM of a trait that extends js.Function

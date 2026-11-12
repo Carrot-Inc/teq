@@ -1,7 +1,7 @@
 // Program 1002 of tests/fix/scalameta, from scalameta 4.17.4's SignificantIndentationSuite (line 837, "if-else-same-
-// indent"): scalac 3.8.4's parser accepts it, teq's reports "expected end of statement, found 'then'". The
-// expectation is scalameta's tree under dialects.Scala3, which teq fix's tree answers to: a node a line, its start
-// and end in UTF-16 units from the program's first line below.
+// indent"): scalac 3.8.4's parser accepts it. The expectation is scalameta's
+// tree under dialects.Scala3, which teq fix's tree is to answer to: a node a
+// line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 65
 //     Defn.Object 0 64
 //       Term.Name 7 12

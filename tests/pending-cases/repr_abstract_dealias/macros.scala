@@ -1,5 +1,5 @@
-// `dealias` keeps an abstract type's reference (Types.scala 1546-1572: only a `TypeAlias` expands): scalac's
-// reflection gives `A.T`, teq's composite `dealias` its upper bound `String`. Moves with type-representation's landing 4.
+// `dealias` keeps an abstract type's reference (Types.scala 1546-1572: only a `TypeAlias` expands):
+// scalac's reflection gives `A.T`, and teq's is to give it too. Moves with type-representation.
 import scala.quoted.*
 object MoreReflect:
   inline def info[T]: String = ${ impl[T] }

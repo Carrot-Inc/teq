@@ -1,5 +1,5 @@
-// `Symbol.name` of a symbol a macro names by a string holding a lone surrogate answers its code units (the adversary's
-// probe mq on the M2e refold, where the name read back as U+FFFD).
+// `Symbol.name` of a symbol a macro names by a string holding a lone surrogate answers its code units
+// (the name once read back as U+FFFD).
 package mq
 import scala.quoted.*
 object M {

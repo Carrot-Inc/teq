@@ -1,5 +1,5 @@
 //> using platform jvm
-// (JavaScript left out: teq's JavaScript output does not leave the method from a local lazy initialiser's return.)
+// (JavaScript left out.)
 // A `return` in a local lazy val's initialiser leaves the method declaring the val wherever the val is forced: in an
 // anonymous class, a named local class, a local trait's member and initialiser, a super call to it, a local class's
 // default argument, a local def's copy, a lambda inside a class's method, a class made by a lambda, a class made in a

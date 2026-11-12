@@ -1,8 +1,8 @@
 //> using platform jvm
 // An array cast is checked as its erasures relate (`TypeComparer`'s `JavaArrayType`): a primitive
 // array is no array of references, nested or not, an array of `Nothing` (a `Nothing$[]`) is no
-// primitive array, and an array of `Int` none of `Unit`. JavaScript and the interpreter have no
-// element kinds (docs/COMPATIBILITY.md): there every array passes, so this runs on the JVM alone.
+// primitive array, and an array of `Int` none of `Unit`.
+// This runs on the JVM alone (docs/COMPATIBILITY.md).
 def attempt(label: String)(f: => Any): Unit =
   try { f; println(label + " ok") }
   catch case _: ClassCastException => println(label + " CCE")

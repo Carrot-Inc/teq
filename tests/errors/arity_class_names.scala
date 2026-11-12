@@ -2,11 +2,11 @@
 // where `NameOps.isSyntheticFunction` holds (Definitions.scala:218-224, NameOps.scala:276-279), a
 // `FunctionN` past `MaxImplementedFunctionArity` or a prefixed function name at any checked arity;
 // any other name is what scala-library holds or nothing, and no tuple is made by its name. scalac
-// 3.8.4, row by row: the review's probe LeadingZeros.scala whole, Tuple01 and Function01 not found
+// 3.8.4, row by row: `LeadingZeros` whole, Tuple01 and Function01 not found
 // (E008, "type Tuple01 is not a member of scala"); Function22 and Tuple22 scala-library's, taken;
 // Function23 synthesized, taken; ContextFunction1 and ContextFunction01 synthesized at arity 1,
 // taken; Tuple23, Tuple01 and Function01 not found (E008). The taken rows run in
-// tests/cases/arity_class_names_found.scala. The probe's lambda has no parameter type: its
+// tests/cases/arity_class_names_found.scala. `LeadingZeros`'s lambda has no parameter type: its
 // AnonymousFunctionMissingParamType prints the erroneous expected type, so HideNonSensicalMessages hides it.
 // expect: 22:10: error: type Tuple01 not found
 // expect: 23:10: error: type Function01 not found
@@ -32,9 +32,9 @@ object Rows {
   val t01: scala.Tuple01[Int] = ???
   val f01: scala.Function01[Int, Int] = ???
 }
-// The pass on aeaf93410's rows, scalac 3.8.4's verdicts: a 23-element tuple typed before `scala.Tuple23` is
-// named leaves that name not found (teq's own tuple class of the arity is no member of `scala`); `Function023`
-// and `ContextFunction01` are classes of their own, no `Function23` or `ContextFunction1`
+// scalac 3.8.4's verdicts: a 23-element tuple typed before `scala.Tuple23`
+// is named leaves that name not found; `Function023` and `ContextFunction01`
+// are classes of their own, no `Function23` or `ContextFunction1`
 // (`Definitions.newFunctionNType` under the requested name); an arity name as a term is never synthesized, so
 // `scala.Function23`, `scala.ContextFunction1`, `scala.Function2` and `scala.Tuple23` are no values, where
 // scala-library's `object Tuple2` is.

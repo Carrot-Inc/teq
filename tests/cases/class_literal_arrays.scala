@@ -1,7 +1,7 @@
-// `classOf` of an array, the class of an array value and an array's `ClassTag`, supplied or
-// wrapped, are one class, as on the JVM (scala3's run/i13131): off the JVM, where an array value
-// says no element, the one array class; a reflective call reads a literal's element and
-// dimensions where it is compiled (`structural_erased_signatures`).
+// `classOf` of an array, the class of an array
+// value and an array's `ClassTag`, supplied or
+// wrapped, are one class, as on the JVM
+// (scala3's run/i13131).
 import scala.reflect.ClassTag
 
 class Meter(val v: Int) extends AnyVal

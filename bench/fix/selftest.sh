@@ -1,5 +1,5 @@
 #!/bin/bash
-# bench/fix/selftest.sh <teq>: the runner's own checks, the saved controls of the push pass of fix-speed's becf46896: an
+# bench/fix/selftest.sh <teq>: the runner's own checks, its saved controls: an
 # eight-worker run over the toy corpus accepted, its row appended; and each of these rejected, no row appended: the same
 # run serialized (`TEQ_FIX_PLANT=serial`, its record's every document on worker 0), its typing serialized
 # (`TEQ_FIX_PLANT=serial-typing`, the rules' pool parallel: the typing's attempts by one worker), a corpus that is absent, a job teq
@@ -7,7 +7,7 @@
 # corpus that is not the baseline's (empty, or one file of the thousand, flat or behind a directory link the compiler
 # follows: refused before the measured run, the files it lacks counted against the engine's own input set).
 # Then the record's validator over the serialized run's record with its documents spread round-robin over the workers
-# ready at each dispatch (the pass of 1bd060d10's control: no two evaluations overlap, every worker id appears),
+# ready at each dispatch (no two evaluations overlap, every worker id appears),
 # refused, and over the accepted run's, accepted; and the cost-probe runner (bench/fix/probes.sh) over an absent corpus
 # and over one teq refuses, each failing with no row appended. And the cost cell: jzon's two documents at eight workers
 # accepted, its utilization reported, and a record of that shape accepted by the validator. And the parity runner's
@@ -88,7 +88,7 @@ check baseline reject FIX_EXPECT=0:000000000000:$toy bench/fix/run.sh "$teq" sel
 check same-bytes accept FIX_EXPECT=$expect bench/fix/run.sh "$teq" selftest toy all-on.conf 4 cold
 # The typing serial, the rules' pool as asked (fix-parallel-typing): the rules' record a parallel one, the typing's not.
 check serial-typing reject TEQ_FIX_PLANT=serial-typing FIX_EXPECT=$expect bench/fix/run.sh "$teq" selftest toy all-on.conf 8 cold
-# The corpus a row ran over (the pass of 621d498f0): an empty `toy`, with the full corpus's baseline and without one, and
+# The corpus a row ran over: an empty `toy`, with the full corpus's baseline and without one, and
 # a `toy` of one file of the thousand against that baseline, each refused before teq runs, no row appended.
 mkdir -p "$work/empty/toy" "$work/one/toy"
 cp "$(ls out/corpora/toy/*.scala | head -1)" "$work/one/toy/"
@@ -96,7 +96,7 @@ check empty-corpus reject FIX_CORPORA=$work/empty FIX_EXPECT=$expect bench/fix/r
 check empty-alone reject FIX_CORPORA=$work/empty bench/fix/run.sh "$teq" selftest toy all-on.conf 8 cold
 check truncated-corpus reject FIX_CORPORA=$work/one FIX_EXPECT=$expect bench/fix/run.sh "$teq" selftest toy all-on.conf 8 cold
 grep -q '999 of its files missing' "$work/truncated-corpus.log" || { fail=$((fail + 1)); echo "FAIL truncated-corpus: the files it lacks not named: $(tail -1 "$work/truncated-corpus.log")"; }
-# A linked directory (the pass of 672e24ab6): `toy` holding one file and a link to a directory of the other 999, which
+# A linked directory: `toy` holding one file and a link to a directory of the other 999, which
 # the compiler follows: accepted whole, its identity the engine's input set of 1,000 files; with the link removed, the
 # same baseline refused, the 999 it lacks counted.
 mkdir -p "$work/linked/toy" "$work/linked/rest"
@@ -110,7 +110,7 @@ case $linked in *:1000:*) pass=$((pass + 1)) ;; *) fail=$((fail + 1)); echo "FAI
 rm "$work/linked/toy/linked"
 check linked-truncated reject FIX_CORPORA=$work/linked FIX_EXPECT=$linked bench/fix/run.sh "$teq" selftest toy all-on.conf 8 cold
 grep -q '999 of its files missing' "$work/linked-truncated.log" || { fail=$((fail + 1)); echo "FAIL linked-truncated: the files it lacks not counted: $(tail -1 "$work/linked-truncated.log")"; }
-# A cost cell (the pass of 2a3b3a095): jzon's two documents with NoUnusedImports alone at eight workers, which worker 0
+# A cost cell: jzon's two documents with NoUnusedImports alone at eight workers, which worker 0
 # may finish before worker 1 has started, accepted with its utilization reported, no witness asked of it; and the record
 # of that shape (both documents on worker 0, one after the other) accepted by the validator as a cost cell, where the
 # toy corpus's serialized record stays refused as a witness.
@@ -132,7 +132,7 @@ probe_check() {
 }
 probe_check probes-absent "$PWD/$work/none"
 probe_check probes-refused "$PWD/$work/bad"
-# The parity runner (bench/fix/parity.sh, the push pass of ce03e7ddb): both sides read the unused imports alike, check's
+# The parity runner (bench/fix/parity.sh): both sides read the unused imports alike, check's
 # setting taken from the fix run's record (`semantic=`, the engine's predicate over the configured rules). A rule that is
 # a SemanticRule, with no NoUnusedImports named, over a program with unused imports (the shipped TypelevelAs, which asks
 # the SemanticDB service nothing: a rule that may ask, a project's SemanticRule among them, has its round typed by one

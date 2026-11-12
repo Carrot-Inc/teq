@@ -1,5 +1,5 @@
 // teq: --source 3.8 --wconf any:s
-// `makeLambda`'s `IdPattern` (the review of 1888ac4df): an identifier, a typed one (`_: T` among them) is the
+// `makeLambda`'s `IdPattern`: an identifier, a typed one (`_: T` among them) is the
 // function's parameter, `(x)` and `(K)` a case lambda's pattern; a literal or a stable reference as a pattern has
 // its singleton type (`1 <- List[1](1)`, `(O) <- List(O)` irrefutable); a tuple under N parameters takes direct
 // parameters (`patternsToParams`) or the tuple of `x$1`..`x$N` matched, checked as a pattern definition where the

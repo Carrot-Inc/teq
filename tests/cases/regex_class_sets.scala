@@ -1,10 +1,10 @@
-// Character classes as sets, read as JDK 24's `Pattern.clazz` and `range` read them: nested
-// classes join the union, `&&` intersects what precedes with the operand after it (bare or
-// bracketed, several in a row), the characters below U+0100 named alone form one set that every
-// operand of the class shares as it is at the class's end, an empty operand repeats the last
-// element, a leading `]` is itself and a hyphen before `[` or `]` too. On JavaScript a set that no
-// single class of the engine's holds is written with lookaheads, in the same Unicode mode as the
-// rest of the pattern.
+// Character classes as sets, read as JDK 24's `Pattern.clazz` and
+// `range` read them: nested classes join the union, `&&` intersects
+// what precedes with the operand after it (bare or bracketed,
+// several in a row), the characters below U+0100 named alone
+// form one set that every operand of the class shares as it is
+// at the class's end, an empty operand repeats the last element,
+// a leading `]` is itself and a hyphen before `[` or `]` too.
 object Main:
   val alphabet: List[String] =
     (0x20 to 0x7e).map(_.toChar.toString).toList ++ List("\u00e9", "\u00c9", "\u0131", "\u017f", "\u212a", "\u03a9", "\uD834\uDD1E", "\n", "\t", "\u00a0")

@@ -8,10 +8,10 @@
 // expect: 7 errors found
 // `TypeOps.boundsViolations`' loop (TypeOps.scala 704-739) and `check` (688-701) hold a higher-kinded parameter's
 // argument to both bounds as a proper one's: its lower bound below the argument (`check(loBound, hi)`), the
-// constructors compared, and a bounded wildcard's ends overlapping both bounds. teq checked only the upper bound of a
-// higher-kinded parameter and no bounded wildcard against one (the review of 97f0487ac's finding 1); scalac 3.8.4
-// rejects each `Bad` line (E057) and accepts the others: a lambda written as the bound of `F[X]` is the result of
-// `F`'s own lambda (`[X] =>> [Y] =>> List[Y]`), below no constructor of `F`'s kind.
+// constructors compared, and a bounded wildcard's ends overlapping both
+// bounds. scalac 3.8.4 rejects each `Bad` line (E057) and accepts the
+// others: a lambda written as the bound of `F[X]` is the result of `F`'s own
+// lambda (`[X] =>> [Y] =>> List[Y]`), below no constructor of `F`'s kind.
 trait C[F[X] >: List[X]]
 type Ok = C[Seq]
 type Ok2 = C[List]

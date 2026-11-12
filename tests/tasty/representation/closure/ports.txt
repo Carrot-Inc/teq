@@ -1,4 +1,4 @@
-# The members' destinations (closure.py, README.md "The destinations"; the ruling on round 12, 1): a line
+# The members' destinations (closure.py, README.md "The destinations"): a line
 #   port <symbol or prefix*> <teq function>
 # per member a landing ports, its teq function an existing one (`<path>:<name>`) or one to write (`+<name>`), many
 # members to one function where a mechanism's helpers fold into it (the table's row for that function enumerates

@@ -7,6 +7,6 @@ object Use:
 // expect: Required: Int
 // expect: 1 error found
 
-// Remaining diagnostic text: C1 TypeMismatch port (messages.scala:311-371),
-// in C1's set-aside batch. The typedBind semantic unit checks the actual
-// intersection and rejection as Int. Moved by session b's 2026-11-06 ruling.
+// Pending on the TypeMismatch port
+// (messages.scala:311-371), the diagnostic's text.
+// The expected messages are scalac's.

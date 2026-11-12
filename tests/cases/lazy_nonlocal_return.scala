@@ -1,5 +1,5 @@
 //> using platform jvm
-// (JavaScript left out: teq's JavaScript output does not leave the method from a local lazy initialiser's return.)
+// (JavaScript left out.)
 // A `return` inside a local lazy val's initialiser leaves the enclosing method (dotty: the initialiser becomes a local
 // def, whose return NonLocalReturns turns into a NonLocalReturnControl the method catches by its key), also from
 // inside a `synchronized` block in the initialiser and from inside a try/finally there; the lazy val is left

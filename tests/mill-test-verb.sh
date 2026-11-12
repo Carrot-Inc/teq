@@ -309,8 +309,8 @@ mjudged_and_recorded "the overlays' note, then a new error no summary claims, be
 printf '%s\n' 'p.OneSuite:' 'core.js/test: 1 suite, 0 passed, 1 failed in 1 ms (built in 1 ms)' > "$work/transcript.txt"
 mjudged_and_recorded "a summary counting a failure no outcome and no event shows" "core.js: its summary counts 1 failed, its events none"
 rm -f "$work/events-override.txt" "$work/raw"
-# A suite ran where the run's events name it (its own line, `Deviations.ran`), never where a count has room for it
-# (the review of b4d60c3aa): over core.js's listing of p.EmptySuite and p.OneSuite, a run naming p.OneSuite alone with
+# A suite ran where the run's events name it (its own line, `Deviations.ran`), never where a count has room for it:
+# over core.js's listing of p.EmptySuite and p.OneSuite, a run naming p.OneSuite alone with
 # its summary counting 2 suites fails, over a record of none and over a record of a failing case, judged and recorded,
 # the record unchanged; and over a baseline of p.EmptySuite missing under a summary of 1 suite, the same run with the
 # count alone made 2 fails, judged and recorded, the record unchanged (it shrank to none where the count stood for the

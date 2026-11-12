@@ -4,7 +4,7 @@
 //   `e match { case _ => () }` (Desugar.scala:1613): no val, no field;
 // - `val _: T = e` is an IdPattern through the ascription and takes `WildcardParamName.fresh()` (1520): a val `_$N`;
 // - `lazy val _ = e` takes 1613's Lazy exception: the holder `lazy val $N$ = e match { case _ => () }`.
-// teq keeps a val `unnamed$N` for each (src/parser/defs.rs:400). Numbers are masked by the macros.
+// Numbers are masked by the macros.
 def side(): Int = 7
 class C:
   val _ = side()

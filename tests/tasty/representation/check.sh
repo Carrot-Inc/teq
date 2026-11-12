@@ -105,8 +105,8 @@ job compile nulls "" "$W/sc/nulls" "-Yexplicit-nulls" "$PWD/$R/rec/Nulls.scala"
 job compile probe "" "$W/sc/probe" "" "$PWD/$R/probe/Subjects.scala"
 job compile observe "" "$W/sc/observe" "-experimental" "$PWD/$R/observe.scala" "$PWD/$R/compiler/Scalac.scala" "$PWD/$R/probes.scala"
 # Every downstream observation retains the trees it reads (scalac's -Yretain-trees, teq's --retain-trees), so that
-# `Symbol.tree` gives a method its body as the pickle holds it, not the empty one it makes without them (the pass over
-# 1c61410d5): the direct observations, the generated traversals, the cross reads and the probes alike.
+# `Symbol.tree` gives a method its body as the pickle holds it, not the empty one it makes without them:
+# the direct observations, the generated traversals, the cross reads and the probes alike.
 look() { # <cell> <class path> <options> <downstream>
   job observe "$1" "$W/sc/observe:$2" "$W/out-$1" "-experimental -Yretain-trees $3" "$PWD/$R/use/$4.scala"
 }
@@ -265,7 +265,7 @@ elif cmp -s "$W/detect.diff" "$R/expected/detect.diff"; then
 else
   fail "detect (< recorded, > now):"; diff "$R/expected/detect.diff" "$W/detect.diff" | head -10
 fi
-# The three pairs the fallback must keep apart on their own (the ruling on 8aa2ab15a's pass): each independently, so
+# The three pairs the fallback must keep apart on their own: each independently, so
 # that every one whose records still collide is named.
 if ! awk '/^## /{s=$2} /^[<>] /{if (s == "rec-tags" && $0 ~ /Pickled\.blindEscape/) n++} END{exit !(n > 0)}' "$W/detect.diff"; then
   fail "detect: the escape pair (a newline against backslash-n) is not seen apart through the products' tags"
@@ -293,9 +293,9 @@ if timeout 330 "$R/closure/observer.sh" "$W/observer-inv" "$W/entries-observer.t
 else
   fail "inventory: observer.sh failed: $(tail -2 "$W/observer-inv.log")"
 fi
-# 1 and 2-3's evidence: a difference only a reader's outcome field makes is no evidence (the pass over 334a43adf); and
+# 1 and 2-3's evidence: a difference only a reader's outcome field makes is no evidence; and
 # 11, every child a reference reader could not give is red unless the products' tags observe it and unread.txt
-# accounts for it, subtree by subtree, whatever the rest of its record holds (the pass over 7a9ec6133).
+# accounts for it, subtree by subtree, whatever the rest of its record holds.
 python3 "$R/oracle.py" detect-evidence "$W/detect.diff" || status=1
 python3 "$R/oracle.py" incomplete "$c" "$R/unread.txt" || status=1
 mkdir -p "$W/incomplete-self"

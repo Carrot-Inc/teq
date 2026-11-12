@@ -1,4 +1,4 @@
-//! `teq fix`'s SemanticDB service (tests/semanticdb/TABLE.md, ruling 1): a semantic rule's questions about a round's
+//! `teq fix`'s SemanticDB service (tests/semanticdb/TABLE.md, decision 1): a semantic rule's questions about a round's
 //! documents, sent by the rule workers and answered on the round's typing thread from the typer that typed the round
 //! (`engine::serve`), kept there until the round's last document is done; nothing is typed for an answer, and none
 //! reads a retained form (section 6). A question carries its job, round and document's generation, its answer the same:
@@ -25,7 +25,7 @@ pub enum Ask {
     /// Whether the entry `written` of ForbiddenSymbol's configuration, at `place` there and `normalized` as the rule
     /// reads it, names a symbol of the job (`typer::semanticdb::entry`): the run tells an entry no job resolves.
     Entry { written: String, normalized: String, place: String },
-    /// The information of `symbol`: the document's own, else the global table's (ruling 6).
+    /// The information of `symbol`: the document's own, else the global table's (decision 6).
     Info { symbol: String },
     /// The document, as a SemanticDB `TextDocuments` protobuf.
     Doc,

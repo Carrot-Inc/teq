@@ -1,11 +1,11 @@
-// Pinned for the queued part inlining-lila-folds: the commit that made this case pass (db0a8ede5, the lila folds'
-// eta-expansion and context-function changes) broke tests/scala3's boehm-berarducci (scala3-run and scala3-interp)
-// and pos/i12211, pos/i3945 against master (the gate of 5010f41f8), a method value eta-expanded against an expected
-// function type with its variables solved to Any; reverted on 2026-10-20. scalac accepts and prints the expected
-// output.
-// A method eta-expanded against a function type takes the expected parameter type for its
-// parameter (`EtaExpansion.etaExpand` declares none; `Typer.typedFunctionValue` takes the
-// formal where it is fully defined), so a dependent `BuildFrom[xs.type, T, C]` sees a `List`.
+// Pinned for the queued part inlining-lila-folds.
+// scalac accepts and prints the expected output.
+// A method eta-expanded against a function type
+// takes the expected parameter type for its
+// parameter (`EtaExpansion.etaExpand` declares
+// none; `Typer.typedFunctionValue` takes the
+// formal where it is fully defined), so a dependent
+// `BuildFrom[xs.type, T, C]` sees a `List`.
 import scala.collection.BuildFrom
 object Rnd:
   def rev[T, C](xs: IterableOnce[T])(using bf: BuildFrom[xs.type, T, C]): C =

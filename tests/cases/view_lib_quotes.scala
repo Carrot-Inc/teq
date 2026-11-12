@@ -1,9 +1,9 @@
 // jars: view-lib
-// A worker makes its own `Box[Int]` before the loader's lock holder types the library's macros,
-// whose quotes the worker then copies: a deferred inline call's signature names the holder's
-// `Box[Int]`, and an inline call's type argument (the capture's record, under the product modes)
-// another; both are read in the worker's view. The signature below
-// enters `Box` before the fork.
+// A `Box[Int]` made here before the library's
+// macros expand: a deferred inline call's
+// signature names `Box[Int]`, and an inline
+// call's type argument another. The signature
+// below names `Box`.
 import viewlib.*
 
 def loads(b: Box[String]): Unit = ()

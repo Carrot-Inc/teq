@@ -1,10 +1,10 @@
 //> using platform jvm
-// (JavaScript left out: teq's JavaScript output reads the enclosing instance through `this` before the superclass
-// call in the temporaries of named arguments written out of order, lazy val or not, on master too.)
-// Local lazy vals in the temporaries of a superclass call's named arguments written out of order, whose initialisers
-// read the enclosing instance and a constructor parameter, from an inner class and from a local class: their
-// accessors and initialisers are the declaring class's, which the constructor calls before the superclass call
-// with the enclosing instance its outer parameter.
+// (JavaScript left out.)
+// Local lazy vals in the temporaries of a superclass call's named arguments written
+// out of order, whose initialisers read the enclosing instance and a constructor
+// parameter, from an inner class and from a local class: their accessors and
+// initialisers are the declaring class's, which the constructor calls before the
+// superclass call with the enclosing instance its outer parameter.
 class Base(val a: Int, val b: Int)
 
 class Outer:

@@ -1,7 +1,7 @@
 // Program 1019 of tests/fix/scalameta, from scalameta 4.17.4's SignificantIndentationSuite (line 1287,
-// "indented-apply"): scalac 3.8.4's parser reads it as scalameta does, `def method = fun(a, b, c)(d, e)`, and teq's
-// otherwise. The expectation is scalameta's tree under dialects.Scala3, which teq fix's tree answers to: a node a
-// line, its start and end in UTF-16 units from the program's first line below.
+// "indented-apply"): scalac 3.8.4's parser reads it as scalameta does, `def method = fun(a, b,
+// c)(d, e)`. The expectation is scalameta's tree under dialects.Scala3, which teq fix's tree is to
+// answer to: a node a line, its start and end in UTF-16 units from the program's first line below.
 //   Source 0 56
 //     Defn.Object 0 55
 //       Term.Name 7 12

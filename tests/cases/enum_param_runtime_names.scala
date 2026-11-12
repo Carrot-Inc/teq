@@ -1,5 +1,5 @@
-// An enum's parameter that implements a trait's member, so that it is a field behind an accessor, named like a
-// property the runtime keeps on an enum value (`name`, `ordinal`) or a JavaScript function's own (`length`), which a
+// An enum's parameter that implements a trait's member, so that it is a field behind an accessor,
+// named `name`, `ordinal` or like a JavaScript function's own (`length`), which a
 // case's parameter overrides: each value's argument and each case's own, as scalac prints them, plain and when the enum
 // is a function.
 trait Named:

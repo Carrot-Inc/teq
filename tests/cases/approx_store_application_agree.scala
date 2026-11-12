@@ -1,8 +1,8 @@
-// The store's application of a type lambda reached from source (the closure adversary of the pass on 861d8acf1,
-// round 22, rows ST3, ST4 and AT19b): a class's parameter instantiated to a lambda whose result is a compiletime
+// The application of a type lambda:
+// a class's parameter instantiated to a lambda whose result is a compiletime
 // operation (`3` through `b.f`), a lambda whose result applies a match alias over a wildcard argument (`String`),
 // a given's lambda over a contravariant class, and an abstract member applied through a bounded prefix in a dependent
-// result (`A#FCt[Null]`, the member's declared contravariance). scalac 3.8.4 and teq accept each.
+// result (`A#FCt[Null]`, the member's declared contravariance). scalac 3.8.4 accepts each, and teq is to accept each.
 import scala.compiletime.ops.int.+
 class Box[F[_ <: Int], A <: Int]:
   def f: F[A] = ???

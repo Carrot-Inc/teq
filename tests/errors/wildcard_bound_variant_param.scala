@@ -1,9 +1,9 @@
 // A bounded wildcard of a covariant or contravariant parameter is checked by its written ends like any other:
-// `Co[? >: String]` for `+T <: AnyVal`, `Ct[? <: Int]` for `-T >: Null`. Both reject and name the wildcard, its
-// bounds kept whatever the parameter's variance (`typedAppliedTypeTree`'s `typedArg`), scalac 3.8.4 (E057):
+// `Co[? >: String]` for `+T <: AnyVal`, `Ct[? <: Int]` for `-T >: Null`. scalac 3.8.4 rejects them (E057) and
+// names the wildcard, its bounds kept whatever the parameter's variance (`typedAppliedTypeTree`'s `typedArg`):
 //   9:12  Type argument  >: String does not overlap with upper bound AnyVal
 //   11:12 Type argument  <: Int does not overlap with lower bound Null
-// and both accept `Co[? <: String]` and `Ct[? >: Int]`.
+// and accepts `Co[? <: String]` and `Ct[? >: Int]`; teq is to do the same.
 class Co[+T <: AnyVal]
 class Ct[-T >: Null]
 type A = Co[? >: String]

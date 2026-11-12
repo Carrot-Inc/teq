@@ -1,10 +1,10 @@
 // teq: tests/interop/scalajs-stub
-// dotty 3.8.4's tests/neg-scalajs/js-non-native-members.scala: a non-native JS class's members named apply and its
-// @JSBracketAccess/@JSBracketCall members (transformValOrDefDefInJSType), its errors as scalac 3.8.4 -scalajs gives
-// them on this file. An expectation's L:C is where scalac's caret begins (the start of dotty's span), 1-based.
-// pending: teq's own @JSBracketAccess restriction ("only allowed on a member of a native JS type") and its own
-// overload restriction ("method foo is overloaded in class A, a JavaScript class ...") are typer-phase errors that
-// close PrepJSInterop's gate: none of the six is reported.
+// dotty 3.8.4's tests/neg-scalajs/js-non-native-members.scala: a non-native
+// JS class's members named apply and its @JSBracketAccess/@JSBracketCall
+// members (transformValOrDefDefInJSType), its errors as scalac
+// 3.8.4 -scalajs gives them on this file. An expectation's L:C is
+// where scalac's caret begins (the start of dotty's span), 1-based.
+// pending: teq is to report the six.
 // expect: 19:3: error: A non-native JS class cannot declare a concrete method named `apply` without `@JSName`
 // expect: 21:3: error: @JSBracketAccess is not allowed in non-native JS classes
 // expect: 24:3: error: @JSBracketCall is not allowed in non-native JS classes

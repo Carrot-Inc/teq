@@ -1,6 +1,6 @@
-// A static enum's value read through a null receiver of its companion's type, a val and a def: scalac 3.8.4 gives
-// the value without dereferencing the receiver (no NullPointerException), the def's effect kept.
-// From Codex's review of tr/cut-head-tail-c2 580d50aaa4 (P1-2), whose source reading expected an NPE.
+// A static enum's value read through a null receiver of its companion's
+// type, a val and a def: scalac 3.8.4 gives the value without dereferencing
+// the receiver (no NullPointerException), the def's effect kept.
 enum Color { case Red, Green }
 @main def main(): Unit =
   val c: Color.type = null.asInstanceOf[Color.type]

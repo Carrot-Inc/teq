@@ -1,10 +1,10 @@
-// A sequence spread into a Java method's varargs is copied, an array spread is the array itself
-// (`Stream.of(xs*)`, `IntStream.of`). And a collector's protocol as the JDK's `ReferencePipeline.collect` follows it: a
-// parallel stream asks whether the collector is `CONCURRENT` and then, ordered, `UNORDERED`
-// before the sequential stream's questions, whatever thread runs it. A `CONCURRENT` collector's one container
-// takes the elements from several threads at once: the probe's is the JDK's concurrent queue, so that its
-// count is the stream's two elements however the threads run (`synchronized` in the program would not do: it
-// takes no monitor in teq's output, docs/COMPATIBILITY.md).
+// A sequence spread into a Java method's varargs is copied, an array spread is the
+// array itself (`Stream.of(xs*)`, `IntStream.of`). And a collector's protocol as the
+// JDK's `ReferencePipeline.collect` follows it: a parallel stream asks whether the
+// collector is `CONCURRENT` and then, ordered, `UNORDERED` before the sequential
+// stream's questions, whatever thread runs it. A `CONCURRENT` collector's one container
+// takes the elements from several threads at once: the probe's is the JDK's concurrent
+// queue, so that its count is the stream's two elements however the threads run.
 import java.util.stream.{Collector, IntStream, Stream}
 import java.util.function.{Supplier, BiConsumer, BinaryOperator, Function}
 import java.util.concurrent.ConcurrentLinkedQueue

@@ -590,7 +590,7 @@ object Verb:
       val rx = fix(x)
       Sh("chmod", "u+w", dir.toString).check(false).run()
       expect("write failure", rx.status == 2 && rx.errAll().contains("cannot write") && text(x, "core/src/core/Core.scala") == coreSource, s"exit ${rx.status}: ${rx.errAll()}")
-    // The SemanticDB service (tests/semanticdb/TABLE.md, ruling 1): a semantic rule's questions answered from a typing of
+    // The SemanticDB service (tests/semanticdb/TABLE.md, decision 1): a semantic rule's questions answered from a typing of
     // the round's own, made at the round's first question; round two's from its own typing of round one's edits; a run
     // whose semantic rules ask nothing types nothing for it, and one with none starts no service; an answer the service
     // refuses or fails is the asking rule's failure, nothing written. The probe reads the document's header: its MD5,
@@ -660,7 +660,7 @@ object Verb:
     val san = build(work, "service-annotation", "core/src/core/Core.scala" -> annotated, "rules/AskInner.scala" -> askInner, ".scalafix.conf" -> "rules = [\"file:rules/AskInner.scala\"]\n")
     val rsan = fix(san, "core")
     expect("service/annotation argument", rsan.status == 1 && rsan.errAll().contains("[AskInner]: symbols local0") && rsan.errAll().contains(" defined true"), s"exit ${rsan.status}: ${rsan.errAll()}")
-    // The round's texts (the pass over c14fd75e1, Swap.scala): a file written between the document's dispatch and its
+    // The round's texts (Swap.scala): a file written between the document's dispatch and its
     // first question, its own or a dependency's the job does not edit, leaves the service's answers those of the
     // program as the round's typing read it: the answer's MD5 the round's text's, a dependency broken on the disk no
     // failure.
@@ -1077,7 +1077,7 @@ object Typing:
         expect("mapping/record", attempts.nonEmpty && attempts.forall(a => a.mappingRefused && a.asked == 4 && a.effective == 1 && !a.forked && a.outcome == "one"),
           s"exit ${r.status}: ${attempts.mkString("; ")}\n${r.errAll().linesIterator.take(5).mkString("\n")}")
         expect("mapping/files", r.status == one.status && files.forall((f, _) => read(dir.resolve(f)) == one.files(f)), s"exit ${r.status}, the one-worker run's ${one.status}")
-        // The address space bounded a GiB at a time (the push pass of 139c515e8, its reproducer as a sweep): from 6 GiB
+        // The address space bounded a GiB at a time (a sweep): from 6 GiB
         // until the fork is joined, at 4, 8 and 16 workers, a run never aborts. Each gives the one-worker run's exit,
         // lints and files (compile's note of a refused mapping aside), and its record the typer's answer: the mappings
         // refused (`mapping_refused=1`, one worker typing in place), a worker given no thread after the fork
@@ -1117,7 +1117,7 @@ object Typing:
           expect(s"limit/w$w", wrong.result().isEmpty && joined, (if joined then "" else s"the fork never joined up to ${gib - 1} GiB\n  ") + wrong.result().mkString("\n  "))
           if spent > 0 then println(s"typing/limit/w$w: $spent run(s) ended in an allocation the system refused (no start's), counted apart")
           expect(s"limit/w$w/worker-refused", refusedWorker, s"no limit from 6 to ${gib - 1} GiB gave a worker no thread after the fork")
-        // The starts of the typing's threads, each refused (the push pass of 95a753abf, its probe as cells): the body
+        // The starts of the typing's threads, each refused (as cells): the body
         // phase's workers, the inlining phase's and the merge's crew, over a program of inline calls at four workers.
         // The limits where each is met lie in the GiB below the first that joins the fork, a few MiB apart and moving
         // with the schedule: a GiB at a time to that first one, 32 MiB at a time across the GiB below it, then 8 MiB at a
@@ -1336,7 +1336,7 @@ object Typing:
     expect("records/answer", records.err.linesIterator.count(_.contains("[NoUnusedImports.unverified]")) == 2 && records.files == program("records", "records").toMap, records.err)
     val round2 = typed("round2-check", program("round2", "p"), bothConf, 1, 1)
     expect("round2/answer", round2.files("src/p/Input.scala") == "package p\nobject Example { val empty: List[Int] = List.empty }\n", round2.files("src/p/Input.scala"))
-    // The default getter's case (the push pass of 5c171b26f), its fixture tests/workers.sh's: two files, a method with a
+    // The default getter's case, its fixture tests/workers.sh's: two files, a method with a
     // default argument, typed by several workers: the bytes the one-worker run's, in the assertion-enabled build too
     // (a record a publication sealed is never changed before the merge, tests/workers.sh's `default_getter_sealed`).
     val getter = Files.list(Paths.get("tests/workers/default_getter_sealed")).iterator.asScala.toVector.sorted.map(f => s"src/dg/${f.getFileName}" -> read(f))

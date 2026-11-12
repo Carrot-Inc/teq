@@ -1,6 +1,6 @@
 #!/bin/bash
-# Compile the client against scalac's library, then link it against teq's library.
-# Usage: TEQ=/absolute/path/to/teq bash tests/support/member_meet/check.sh [output-dir]
+# The client is compiled against scalac's library, and is to link against teq's library.
+# Usage: TEQ=/absolute/path/to/the/binary bash tests/support/member_meet/check.sh [output-dir]
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 work=${1:-out/member-meet-link}

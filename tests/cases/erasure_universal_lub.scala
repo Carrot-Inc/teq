@@ -1,5 +1,5 @@
 // `Object` among a class's base classes decides a union with `Null` (`erasedLub`): a value class over `Ordered` derives
-// from it through `Comparable`, a plain one does not; a universal trait over the std's universal traits (`IterableOnce`,
+// from it through `Comparable`, a plain one does not; a universal trait over universal traits (`IterableOnce`,
 // `Selectable`, `SeqOps`, `Factory`, each `extends Any` as the library declares it) does not, so its union erases to
 // `Object` and its cast checks nothing.
 import scala.reflect.ClassTag

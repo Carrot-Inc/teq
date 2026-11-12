@@ -1,8 +1,8 @@
 // jars: cats-kernel cats-core sourcecode
-// The determinism of a library's bodies, read from cats' pickles and converted into the pseudo file whose line
-// offsets name their anonymous classes (src/typer/loader/bodies.rs `Conv::line`), built at each worker count and
-// compared: at M2's gate (4b0523a27) the application gate's frontend and API builds wrote different cats.mjs and
-// cats.kernel.mjs from one build to the next, the anonymous classes' numbers off by one.
+// The determinism of a
+// library's bodies, read from
+// cats' pickles, built at each
+// worker count and compared.
 import cats.*
 import cats.data.*
 import cats.kernel.{Eq, Hash, Monoid, Order, Semigroup}

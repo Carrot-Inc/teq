@@ -1,7 +1,7 @@
-// The expansion of the plain given `pg`, found for an argument of a transparent given, types
-// `H.helperW` on demand, whose warning its definition keeps; held for the flush with the rest of
-// what the expansion reported, it leaves no promoted range behind for the first extension
-// alternative's mismatch to stand in (`state::diags_cut_at`): the second alternative applies, `i w!`.
+// The expansion of the plain given `pg`, found
+// for an argument of a transparent given, types
+// `H.helperW` on demand, whose warning its definition
+// keeps: the second alternative applies, `i w!`.
 trait Ops:
   extension [T](x: Int)
     def combine(y: String, z: Int): String = "s " + y

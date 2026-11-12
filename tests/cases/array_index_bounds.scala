@@ -1,7 +1,7 @@
 //> using platform jvm
-// An array's index outside it throws `ArrayIndexOutOfBoundsException`, reading or writing, as the JVM's
-// `iaload`/`iastore` do. JavaScript's arrays are unchecked, as Scala.js's in production, so this runs in the
-// interpreter and on the JVM alone.
+// An array's index outside it throws `ArrayIndexOutOfBoundsException`,
+// reading or writing, as the JVM's `iaload`/`iastore` do.
+// This runs in the interpreter and on the JVM alone.
 object Main:
   def main(args: Array[String]): Unit =
     val a = Array(1, 2)

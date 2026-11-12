@@ -1,6 +1,6 @@
 // teq: --source 3.8
 // A typed `IdPattern` is the function's parameter at its written type, checked where the closure is adapted to the
-// expected function type (the review of 1888ac4df): `typedClosure`'s mismatch at the closure, pattern to body,
+// expected function type: `typedClosure`'s mismatch at the closure, pattern to body,
 // under one parameter and under the N parameters `patternsToParams` makes.
 @main def m =
   for x: String <- List(1) do println(x)

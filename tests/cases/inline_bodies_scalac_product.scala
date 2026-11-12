@@ -1,7 +1,7 @@
 // jars: inlinebodies-lib
-// Inline methods of a jar scalac built (tests/support/inline_bodies_lib.scala), each expanded from
-// the body the definition typed, read from the pickle and stored as a program's own definition is,
-// as dotty expands the definition-typed body its `TreeUnpickler` reads (`Inlines.bodyToInline`):
+// Inline methods of a jar scalac built (tests/support/inline_bodies_lib.scala),
+// each expanded from the body the definition typed, as dotty expands the
+// definition-typed body its `TreeUnpickler` reads (`Inlines.bodyToInline`):
 // a constant argument is the parameter's path (`constValue[x.type]` of `value(3)` is 3); `codeOf`
 // shows the expansion's typed argument, a constant folded, a by-value argument evaluated once into
 // its proxy; each expansion's local class is a class of its own; an `erasedValue` an inline match

@@ -2,7 +2,7 @@
 // jars: macwire-macros
 // Forty sibling vals wired by macwire's `wire`, each `DN` taking one shared `Base`: the macro scans the
 // eligible values (`EligibleValuesFinder`) as declarations, and each call expands once, in the inlining phase
-// after the class is typed, where an expansion at a sibling's typing nested forty deep (scalac prints 40).
+// after the class is typed (scalac prints 40).
 import com.softwaremill.macwire.*
 class Base
 class D0(val base: Base)

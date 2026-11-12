@@ -1,5 +1,5 @@
 // teq: --source 3.8
-// A generator's pattern that is no `IdPattern` is a case lambda's, checked (the review of 1888ac4df): `(K)` against
+// A generator's pattern that is no `IdPattern` is a case lambda's, checked: `(K)` against
 // its `x$1`, a literal at its constant type, an object at its module's, `null` at `Null`; the selector's path is
 // reported unwidened for a singleton pattern type (`(x$1 : Int)`), widened for `Null`.
 val K = 1

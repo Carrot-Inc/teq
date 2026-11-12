@@ -1,7 +1,7 @@
-// A case class's `copy` selected on an intersection receiver (`CC[Int] & K`, `CC[Int] & CC[String]`): scalac 3.8.4
-// finds the member on the receiver's part and types the call, `copy`'s default getter seen from the receiver (the two
-// instances' `CC[Int & String]`). teq reports "value copy is not a member of CC[Int] & K" (master the same). The
-// closure adversary of the pass on 97f0487ac (round 24).
+// A case class's `copy` selected on an intersection receiver
+// (`CC[Int] & K`, `CC[Int] & CC[String]`): scalac 3.8.4 finds the
+// member on the receiver's part and types the call, `copy`'s default
+// getter seen from the receiver (the two instances' `CC[Int & String]`).
 case class CC[A](a: A)
 trait K
 def t(x: CC[Int] & K): CC[Int] = x.copy()

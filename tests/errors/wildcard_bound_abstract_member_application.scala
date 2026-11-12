@@ -5,8 +5,8 @@
 //   12:11 Type argument  >: String does not overlap with upper bound Int
 //   13:11 Type argument String does not conform to upper bound Int
 //   14:17 Type argument String does not conform to upper bound Int
-// and accepts `t.M[Int]`. teq shows the wildcard as `? >: String`. (Until round 23 teq collected no parameters for
-// the application of a type member and accepted all of it.)
+// and accepts `t.M[Int]`. The expectation shows the wildcard as `? >: String`. (Collecting no parameters for
+// the application of a type member accepts all of it.)
 trait T:
   type M[X <: Int]
   def g: M[? >: String]

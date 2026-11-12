@@ -1,8 +1,8 @@
-// `wrongNumberOfTypeArgs`' message (E023): the constructor as its `TypeRef` is shown (`V.L`, `h.L`, `H.this.L` for an
-// alias whose right side is a lambda), and `actual:` lists the argument trees as written, as dotty's printer shows an
-// untyped tree (`(Int) => Int`, ` <: Int`, `[X] =>> X`). teq showed such an alias's lambda and the resolved
-// arguments; master reports none. The closure adversary of the pass on 97f0487ac (round 24). scalac's columns are
-// 0-based.
+// `wrongNumberOfTypeArgs`' message (E023): the constructor as its
+// `TypeRef` is shown (`V.L`, `h.L`, `H.this.L` for an alias whose
+// right side is a lambda), and `actual:` lists the argument trees as
+// written, as dotty's printer shows an untyped tree (`(Int) => Int`,
+// ` <: Int`, `[X] =>> X`). scalac's columns are 0-based.
 trait Validate[T, P] { type R }
 object V:
   type Aux[T, P, R0] = Validate[T, P] { type R = R0 }

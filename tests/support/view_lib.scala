@@ -1,12 +1,12 @@
-// The jar side of tests/cases/view_lib_alias and view_lib_quotes, compiled by scalac: what the
-// loader's lock holder types from TASTy while a worker already holds its own
-// equivalent.
+// The jar side of tests/cases/view_lib_alias and view_lib_quotes, compiled by scalac: what
+// those programs read from its TASTy beside
+// an equivalent of their own.
 package viewlib
 
 import scala.quoted.*
 
-// A match-type alias of a trait that names the trait's parameter, seen through an object: a
-// member lookup copies it once per prefix, which a worker's body and a library body both ask for.
+// A match-type alias of a trait that names the trait's parameter, seen through an object,
+// which a program's body and a library body both ask for.
 trait Kind[T]:
   type Lift[X] = X match
     case Int => T

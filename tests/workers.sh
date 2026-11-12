@@ -859,8 +859,8 @@ typing_rows phase_typing_top_before "Z.scala:2:24 "
 #   completes it, its error standing (before, the unwinding walk published it suspended, `C` suspended on it, and the
 #   error went at one worker; scalac reports B:3 and Z:2).
 typing_rows phase_typing_demanded_after_cut "B.scala:3:29 Z.scala:2:24 "
-# The completions a definition demands through a default and through a type, at their shared boundary (review of
-# f35238245, finding 1):
+# The completions a definition demands through a default and through a type, at their shared
+# boundary:
 # - phase_typing_demand_default: `B.use` calls `Later.get()`, whose default holds an error, before `B.dependent`
 #   reads `A.inferred`; the default is its getter's, completed by the call (`tryDefault`), its error standing
 #   (before, the default was typed with `get`'s body, after `B`'s cut, and the error went; scalac reports B:5, Z:2);

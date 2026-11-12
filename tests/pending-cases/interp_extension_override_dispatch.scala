@@ -1,7 +1,7 @@
-// scalac 3.8.4 prints the .expected, and so do teq's Scala.js and JVM builds. teq's interpreter calls T's extension
-// methods where U overrides them (`^^`, `solo`), from T's own body and through an import of a T: it prints `L^M UP^Q
-// S!` and `X^Y`. The override of the plain method `plain` is dispatched. The same on integration a097de53d9 and on
-// master efddb38de3. Found by reviewer #15 of the workers exports helper (push 9).
+// Extension methods of T that U overrides (`^^`, `solo`), called from T's own
+// body and through an import of a T, beside the plain method `plain` and its
+// override: scalac 3.8.4 prints the .expected, and teq's interpreter is to
+// print it too. Found by reviewer #15 of the workers exports helper (push 9).
 trait T:
   extension (r: String) def ^^(a: String): String = r.concat("^").concat(a)
   def plain(r: String)(a: String): String = r.concat("^").concat(a)

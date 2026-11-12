@@ -2,8 +2,8 @@
 // completed and read before and after, `Await` of a completed future, and a chain of `map`,
 // `flatMap`, `recover`, `recoverWith`, `sequence`, `traverse`, `zip`, `filter`, `failed`,
 // `transform` and `andThen` printed from its completion callback. `main` waits for the chain on
-// the JVM; on JavaScript nothing blocks, so `Await` of the incomplete future times out at once
-// and the callbacks print once `main` returns.
+// the JVM; on JavaScript the test expects `Await` of the incomplete future to time out at once
+// and the callbacks to print once `main` returns.
 import scala.concurrent.*
 import scala.concurrent.duration.*
 import scala.concurrent.ExecutionContext.Implicits.global

@@ -1,7 +1,7 @@
-// A class or enum that is a function (an instance is a JavaScript function) with a field named like a function's own
-// `name` or `length`: the field holds the class's value, an overridden one the subclass's, a case's the case's or its
-// enum's, as scalac prints them. The function's own property is deleted in the constructor, so that the guard that
-// leaves a field a subclass's parameter overrides reads the class's writes alone.
+// A class or enum that is a function with a field named like
+// a JavaScript function's own `name` or `length`: the field holds
+// the class's value, an overridden one the subclass's, a
+// case's the case's or its enum's, as scalac prints them.
 enum E(val name: String) extends (Int => Int):
   def apply(i: Int): Int = i + name.length
   def get = name

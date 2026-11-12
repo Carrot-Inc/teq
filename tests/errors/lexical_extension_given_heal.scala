@@ -3,8 +3,8 @@
 // Two givens that tie, their extensions' receivers alike, are an ambiguity a later given heals
 // only where it is strictly better than both by the givens themselves (dotty's `healAmbiguous`),
 // not by a narrower receiver of its extension (scalac: "both object a in object Main and object b
-// in object Main provide an extension method `pick` on R"; an earlier teq took `A`): `c`, whose
-// receiver is narrower, is no better a given than `a` or `b`.
+// in object Main provide an extension method `pick` on R"): `c`, whose receiver
+// is narrower, is no better a given than `a` or `b`.
 class R
 trait A:
   extension (r: Any) def pick: String = "A"

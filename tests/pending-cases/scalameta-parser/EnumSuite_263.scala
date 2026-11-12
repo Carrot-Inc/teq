@@ -1,7 +1,7 @@
 // Program 263 of tests/fix/scalameta, from scalameta 4.17.4's EnumSuite (line 399, "enum-self-indented"): scalac
-// 3.8.4's parser accepts it, teq's reports "expected end of statement, found 'case'". The expectation is scalameta's
-// tree under dialects.Scala3, which teq fix's tree answers to: a node a line, its start and end in UTF-16 units from
-// the program's first line below.
+// 3.8.4's parser accepts it. The expectation is scalameta's tree under
+// dialects.Scala3, which teq fix's tree is to answer to: a node a line,
+// its start and end in UTF-16 units from the program's first line below.
 //   Source 0 94
 //     Defn.Object 0 93
 //       Term.Name 7 11

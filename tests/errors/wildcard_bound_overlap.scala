@@ -5,9 +5,9 @@
 // scalac 3.8.4 reports it at the argument:
 //   -- [E057] Type Mismatch Error: tate.scala:7:33
 //   Type argument  >: T does not overlap with upper bound U
-// and nothing else: the call below, the wildcard captured with its parameter's bounds (`Inferencing.
-// captureWildcards`), typechecks. Without the check the program is accepted (scala3's tests/neg/tate.scala, the
-// gate of 861d8acf1).
+// and nothing else: the call below, the wildcard captured with its parameter's bounds
+// (`Inferencing.captureWildcards`), typechecks. Without the check the program
+// is accepted (scala3's tests/neg/tate.scala).
 object unsound {
   trait Bound[A, B <: A]
   trait Bind[A] {

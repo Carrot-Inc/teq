@@ -2,7 +2,7 @@ package fix.longspans
 
 // The parser's long constructs: each tree spans more than 4,095 UTF-16 units. The argument list,
 // the block and the interpolation carry three- and four-byte characters, so their unit spans and
-// teq's byte spans differ while their points must agree.
+// their byte spans differ while their points must agree.
 object LongSpans:
   def sum(xs: Int*): Int = xs.size
   def join(xs: String*): String = xs.mkString

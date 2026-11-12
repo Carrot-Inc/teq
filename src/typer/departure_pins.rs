@@ -36,7 +36,7 @@ fn class(w: &Worker, n: &str) -> ClassId {
     (0..w.syms.classes.len()).map(|i| ClassId(i as u32)).find(|&c| w.name_ref(w.syms.class(c).name) == n).expect("the class")
 }
 
-/// `Variances.setStructuralVariances` over `TypeAccumulator.foldArgs` (the pass over c02b18202's 3): a parameter
+/// `Variances.setStructuralVariances` over `TypeAccumulator.foldArgs`: a parameter
 /// applied to a higher-kinded one is read at that one's variance (`type HK[F[+_], A] = F[A]`: `[1, 1]`), and an alias
 /// without parameters of its own reads its right side's (`type L = List` applied is covariant, `type T = [X] =>>
 /// In[X]` applied contravariant). Carried from the dry rebase's scratch (`an_alias_without_parameters_reads_its_right_
@@ -58,8 +58,8 @@ fn source_version_3_structural_variances_through_a_higher_kinded_argument_and_an
     });
 }
 
-/// `TypeApplications.typeParams` following a parameter's bound through another parameter (the pass over c02b18202's
-/// 4): in `class G[F[_], H <: F]` both compilers accept, `H.etaExpand` is a lambda of one parameter, `F`'s. Carried
+/// `TypeApplications.typeParams` following a parameter's bound through another parameter: in
+/// `class G[F[_], H <: F]` both compilers accept, `H.etaExpand` is a lambda of one parameter, `F`'s. Carried
 /// from the dry rebase's scratch (`eta_expansion_of_a_parameter_or_member_by_its_type_params`, source-version-3's
 /// finding 1).
 #[test]
@@ -87,8 +87,8 @@ fn source_version_3_distributes_an_alias_s_escaping_argument_to_its_ends() {
     });
 }
 
-/// `Annotation.mapWith` over an annotation's whole typed tree, its type trees included (the pass over c02b18202's 1,
-/// c14fd75e1's 2): an argument naming an escaping path in a type argument, a type test and a local type definition
+/// `Annotation.mapWith` over an annotation's whole typed tree, its type trees included:
+/// an argument naming an escaping path in a type argument, a type test and a local type definition
 /// approximates the whole annotated type, `Box[?]`, where teq's layer keeps `Box[? <: Any @Ann]`.
 #[test]
 #[ignore = "waits for type-representation's AnnotatedType"]
@@ -102,7 +102,7 @@ fn type_representation_maps_an_annotation_s_type_tree_arguments() {
 }
 
 /// `Annotations.annotClass` through a generic inner class selected through a path (`Types.typeSymbol` of a prefixed
-/// `TypeRef`; the pass over 32fc738c3's 1): `Box[Int @Ann]`, where teq's `Lambda` over a `Nested` drops it.
+/// `TypeRef`): `Box[Int @Ann]`, where teq's `Lambda` over a `Nested` drops it.
 #[test]
 #[ignore = "waits for type-representation's TypeRef"]
 fn type_representation_reads_an_annotation_class_through_a_prefixed_type_ref() {
@@ -113,8 +113,8 @@ fn type_representation_reads_an_annotation_class_through_a_prefixed_type_ref() {
     });
 }
 
-/// `TypeOps.simplify` over an annotated bottom type and `Annotation.mapWith` over an unstable argument's path (the
-/// pass over c02b18202's 6; section 17): `Box[Nothing]` where teq keeps `Box[Nothing @Mark]`, and `Box[Int]` at
+/// `TypeOps.simplify` over an annotated bottom type and `Annotation.mapWith` over an unstable argument's path:
+/// `Box[Nothing]` where teq keeps `Box[Nothing @Mark]`, and `Box[Int]` at
 /// `f(new C)` where teq keeps `Box[Int @Ann]`. A loaded annotation's arguments are not read either (the loader keeps
 /// its class alone), so the same call against a library's classes gives the same.
 #[test]
@@ -127,8 +127,8 @@ fn type_representation_drops_an_annotation_over_nothing_and_over_an_unstable_arg
     });
 }
 
-/// `TypeComparer.firstTry`'s and `secondTry`'s `NamedType` alias arms (the pass over 8b8caaa92's 2 and 32fc738c3's
-/// 2): an alias's `TypeRef` is dealiased before the annotation arms and the constraint, so a parameter meeting
+/// `TypeComparer.firstTry`'s and `secondTry`'s `NamedType` alias arms: an alias's `TypeRef` is
+/// dealiased before the annotation arms and the constraint, so a parameter meeting
 /// `Marked = Int @Ann`, an alias of it and a plain alias is bounded by `Int`.
 #[test]
 #[ignore = "waits for type-representation's TypeRef"]

@@ -217,13 +217,13 @@ def library_groups(lib, client):
     return source, classes, jar
 
 
-# A library whose signature carries an annotation (`Box[Int @Ann]`), the pass over c0dbae640's.
+# A library whose signature carries an annotation (`Box[Int @Ann]`).
 group_annotated_source, group_annotated_classes, group_annotated_jar = library_groups("annotated-lib", "annotated-client")
 # The annotation's class an inner class selected through a path (`Box[Int @outer.Ann]`) and through the enclosing
-# class's `this` (`Box[Int @Ann]` inside `Outer`), the pass over 8b8caaa92's: `Annotations.annotClass`.
+# class's `this` (`Box[Int @Ann]` inside `Outer`): `Annotations.annotClass`.
 group_nested_source, group_nested_classes, group_nested_jar = library_groups("nested-lib", "nested-client")
-# A generic inner class selected through a path as an annotation (`Box[Int @outer.Ann[String]]`), the pass over
-# 32fc738c3's: pending for type-representation, where the class reference is one `TypeRef` (teq's `Lambda` over a
+# A generic inner class selected through a path as an annotation (`Box[Int @outer.Ann[String]]`):
+# pending for type-representation, where the class reference is one `TypeRef` (teq's `Lambda` over a
 # `Nested` stands for it here, and the class extraction does not read it).
 group_generic_source, group_generic_classes, group_generic_jar = library_groups("generic-lib", "generic-client")
 

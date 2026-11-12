@@ -1,10 +1,10 @@
-// `typedAppliedTypeTree` reports `wrongNumberOfTypeArgs` (E023, Typer.scala 2733-2735) before it types the arguments,
-// and types only the first `tparams.length` of them (`args.take`): an argument's later error (`Not found: type Undef`,
-// a kind error `List[Int] does not take type parameters`) lies inside the E023's span, which `UniqueMessagePositions`
-// logged, so scalac 3.8.4 hides it (it shows with `-Yshow-suppressed-errors`), and a dropped argument is never typed.
-// scalac reports the three E023 alone. teq resolved every argument first and reported each one's error beside the
-// E023; master reports no E023 for an alias, only the arguments' errors. The closure adversary of the pass on
-// 97f0487ac (round 24). scalac's columns are 0-based.
+// `typedAppliedTypeTree` reports `wrongNumberOfTypeArgs` (E023, Typer.scala
+// 2733-2735) before it types the arguments, and types only the first `tparams.length`
+// of them (`args.take`): an argument's later error (`Not found: type Undef`,
+// a kind error `List[Int] does not take type parameters`) lies inside the
+// E023's span, which `UniqueMessagePositions` logged, so scalac 3.8.4 hides it
+// (it shows with `-Yshow-suppressed-errors`), and a dropped argument is never
+// typed. scalac reports the three E023 alone. scalac's columns are 0-based.
 trait Validate[T, P] { type R }
 object V:
   type Aux[T, P, R0] = Validate[T, P] { type R = R0 }

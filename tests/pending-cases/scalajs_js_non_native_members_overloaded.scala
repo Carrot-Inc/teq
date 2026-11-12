@@ -2,8 +2,8 @@
 // dotty 3.8.4's tests/neg-scalajs/js-non-native-members-overloaded.scala: private overloads in non-native JS classes
 // (transformValOrDefDefInJSType), its errors as scalac 3.8.4 -scalajs gives them on this file. An expectation's L:C
 // is where scalac's caret begins (the start of dotty's span), 1-based.
-// pending: teq's own overload restriction ("method foo is overloaded in class A, a JavaScript class ...") is a
-// typer-phase error that closes PrepJSInterop's gate: none of dotty's six private-overload errors is reported.
+// pending: teq is to report dotty's
+// six private-overload errors.
 // expect: 18:3: error: Private methods in non-native JS classes cannot be overloaded. Use different names instead.
 // expect: 19:3: error: Private methods in non-native JS classes cannot be overloaded. Use different names instead.
 // expect: 24:5: error: Private methods in non-native JS classes cannot be overloaded. Use different names instead.

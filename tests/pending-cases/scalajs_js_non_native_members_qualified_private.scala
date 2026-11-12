@@ -2,9 +2,9 @@
 // dotty 3.8.4's tests/neg-scalajs/js-non-native-members-qualified-private.scala: qualified-private members of
 // non-native JS types (transformValOrDefDefInJSType), its diagnostics as scalac 3.8.4 -scalajs gives them on this
 // file. An expectation's L:C is where scalac's caret begins (the start of dotty's span), 1-based.
-// pending: teq's check phase reports RefChecks' "class B needs to be abstract, since it has 2 unimplemented members:
-// x, y" (Enclosing3's B) before PrepJSInterop, closing the walk's gate: none of the 12 errors is reported (teq gives
-// the warning, without scalac's count line).
+// pending: teq is to report the
+// 12 errors, and the warning
+// with scalac's count line.
 // expect: 77:22: warning: Ignoring [this] qualifier.
 // expect: The syntax `private[this]` will be deprecated in the future; just write `private` instead.
 // expect: See: https://docs.scala-lang.org/scala3/reference/dropped-features/this-qualifier.html

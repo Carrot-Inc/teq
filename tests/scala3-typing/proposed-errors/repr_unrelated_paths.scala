@@ -2,7 +2,7 @@
 // The design pass's Paths probe: each `fresh()` is a path of its own, which the qualifier skolems of
 // `TypeAssigner.maybeSkolemizePrefix` and `TypeOps.asSeenFrom` keep apart (TypeOps.scala 35-56); scalac refuses it
 // (E007, `where: ?1 is an unknown value of type Box`), teq approximates paths with inference variables and accepts.
-// Moves with type-representation's landing 4.
+// Moves with type-representation.
 trait Box:
   type T
   val value: T

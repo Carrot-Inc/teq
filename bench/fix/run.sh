@@ -40,7 +40,7 @@ cache=out/measure/cache/$label-$corpus-$(basename "$conf" .conf)-$workers
 mkdir -p "$cache" out/measure/runs
 base=out/measure/runs/$label-$corpus-$(basename "$conf" .conf)-$workers-$temp
 rm -f "$base.record"
-# A measurement accepted or none (fix-speed's ruling 7(e)): a corpus with no source, or another than the baseline's (its
+# A measurement accepted or none: a corpus with no source, or another than the baseline's (its
 # identity, the count and the digest of the paths and bytes of the inputs the engine resolves for the job, which
 # `TEQ_FIX_INPUTS` asks of it — the compiler's own input set, its roots, links and exclusions — taken by
 # bench/fix/inventory.py and refused before the measured run, the files it lacks against the baseline's inventory

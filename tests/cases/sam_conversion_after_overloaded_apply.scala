@@ -1,8 +1,8 @@
-// A `Conversion` written as a lambda takes its parameter type from `Conversion`'s single abstract method, the
-// `apply` that overrides `Function1`'s (dotty's `abstractTermMembers`, member denotations merged by signature).
-// A trait that extends a function type and overloads `apply` (an `apply()` beside the
-// function's) made `Function1`'s `apply` an alternative of its name; the SAM of every later `Conversion` was then
-// two methods and its lambdas missed their parameter types. The trait and an anonymous instance of it come first.
+// A `Conversion` written as a lambda takes its parameter type from
+// `Conversion`'s single abstract method, the `apply` that overrides
+// `Function1`'s (dotty's `abstractTermMembers`, member denotations merged by
+// signature). A trait that extends a function type and overloads `apply` (an
+// `apply()` beside the function's) and an anonymous instance of it come first.
 import scala.concurrent.Future
 import scala.language.implicitConversions
 

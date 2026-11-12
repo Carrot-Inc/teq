@@ -11,8 +11,8 @@ object RebuildLambda:
 
   def checkImpl(using q: Quotes): Expr[String] =
     import q.reflect.*
-    // Keep the lambda from the typed argument across the join. Dealiasing Boxed
-    // here could construct it again and hide a lost canonical representative.
+    // Keep the lambda from the typed argument. Dealiasing Boxed
+    // here could construct it again.
     val original = TypeRepr.of[Carrier[[A] =>> List[A]]].typeArgs.head.asInstanceOf[TypeLambda]
     val rebuilt = TypeLambda(
       original.paramNames,

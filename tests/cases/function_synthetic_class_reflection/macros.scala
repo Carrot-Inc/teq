@@ -1,8 +1,8 @@
-// The class `newFunctionNType` makes for a synthetic function name (Definitions.scala 129-142): a trait, its type
-// parameters `scala$<name>$$T1` .. `scala$<name>$$R` (`paramNamePrefix`), contravariant but the last, covariant; its
-// `apply`, whose parameters `syntheticParamNames` names `x$0` on; its parent `Object`. scala-library's `Function1`, which
-// teq makes in its place, as the library declares it. The flags and bases teq's reflection gives otherwise for every
-// class are pinned apart (tests/pending-cases/repr_symbol_flags_and_bases).
+// The class `newFunctionNType` makes for a synthetic function name (Definitions.scala 129-142):
+// a trait, its type parameters `scala$<name>$$T1` .. `scala$<name>$$R` (`paramNamePrefix`),
+// contravariant but the last, covariant; its `apply`, whose parameters `syntheticParamNames`
+// names `x$0` on; its parent `Object`.
+// scala-library's `Function1`, as the library declares it.
 import scala.quoted.*
 object M {
   inline def inspect[F]: String = ${ impl[F] }

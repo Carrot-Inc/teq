@@ -5,8 +5,8 @@
 // reactivemongo's Macros.handler, reader and writer, whose implementation (pickled by Scala 3.3) binds
 // `tt @ '[t]` as a `Type[t]`, matches `'[IsProduct[t]]` under a local `type IsProduct[U <: Product] = U`,
 // lists a product's fields through a `Tuple3 <: Product` mirror and its `_1`..`_n` selectors, and builds
-// the document through `lazyZip` and a `LazyList` taken as a `Seq`. A JVM library: the interpreter and
-// the JVM target run it, a JVM build's macro reaching `java.time.ZoneId.systemDefault` through the
+// the document through `lazyZip` and a `LazyList` taken as a `Seq`. A JVM library: this runs in the interpreter
+// and on the JVM target, a JVM build's macro reaching `java.time.ZoneId.systemDefault` through the
 // package object's handlers.
 import reactivemongo.api.bson.*
 

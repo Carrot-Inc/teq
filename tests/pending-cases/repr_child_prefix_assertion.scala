@@ -1,9 +1,9 @@
-// A sum mirror whose parent's prefix unwinds to NoPrefix before its owners do (round 11's ruling on 38's
-// DIFFERENCES draft, R38.r1-2): dotty's `TypeOps.childPrefix` reaches `subPrefixAt`'s `pre.ensuring(limit == 1)` with
+// A sum mirror whose parent's prefix unwinds to NoPrefix before its owners do:
+// dotty's `TypeOps.childPrefix` reaches `subPrefixAt`'s `pre.ensuring(limit == 1)` with
 // limit 2 (TypeOps.scala:1043) and scalac 3.8.4 crashes in the typer with `java.lang.AssertionError: assertion failed`
-// (its outcome, the .expected). Landing 4 ports `childPrefix` whole; at that point teq reports the same condition as
-// an internal error naming it (`childPrefix: a NoPrefix or super prefix reached with 2 owners left to unwind`), never
-// a silent NoType. teq today accepts the program and runs it.
+// (its outcome, the .expected). Once `childPrefix` is ported whole,
+// teq is to report the same condition as an internal error naming it
+// (`childPrefix: a NoPrefix or super prefix reached with 2 owners left to unwind`), never a silent NoType.
 import scala.deriving.Mirror
 object Outer:
   object A:

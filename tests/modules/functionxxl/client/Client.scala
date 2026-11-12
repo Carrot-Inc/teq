@@ -3,9 +3,9 @@ package fxc
 import fxa.*
 import scala.runtime.FunctionXXL
 
-// scalac's caller of the API, compiled over a's products, teq's or scalac's, and run over teq's class files: the
-// calls name FunctionXXL, scalac's erasure of every function class past 22 parameters, and the classes a defines
-// are FunctionXXLs whose `apply(Object[])` and `toString` scalac's own would have.
+// scalac's caller of the API, which scalac is to compile over a's products, teq's or scalac's, and which is to run over
+// teq's class files: the calls name FunctionXXL, scalac's erasure of every function class past 22 parameters, and the
+// classes a defines are to be FunctionXXLs whose `apply(Object[])` and `toString` scalac's own would have.
 object Client:
   def attempt(name: String)(f: => Any): Unit =
     try println(name + ": " + f)

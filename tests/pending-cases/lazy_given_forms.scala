@@ -1,8 +1,8 @@
 //> using platform jvm
-// (JavaScript and the interpreter left out: teq's other targets keep every given alias in a lazy val.)
-// Pending on uncache-given-aliases (queued): teq keeps every given alias in its thread-safe holder, evaluating the
-// right-hand side once, until dotty's UncacheGivenAliases is ported whole (`needsCache` over the right-hand side's
-// type, `Types.isStable` with its recursive branches); the expectation is scalac 3.8.4's.
+// (JavaScript and the interpreter left out.)
+// Pending on uncache-given-aliases (queued): dotty's UncacheGivenAliases
+// ported whole (`needsCache` over the right-hand side's type, `Types.isStable`
+// with its recursive branches); the expectation is scalac 3.8.4's.
 // UncacheGivenAliases.needsCache by the right-hand side's type (UncacheGivenAliases.scala 31-37): a given alias whose
 // right-hand side's type is a stable TermRef of no prefix, a stable TermRef through its enclosing class's `this`, or a
 // ThisType is a def, evaluated at each use; any other is a lazy val, evaluated once. Each alias prints when its

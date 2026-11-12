@@ -1,5 +1,5 @@
 //> using platform jvm
-// (JavaScript left out: teq's JavaScript output does not leave the method from a local lazy initialiser's return.)
+// (JavaScript left out.)
 // One class holding the keys of two lazy vals of one name (the one a local def reads, the one read directly, each
 // returning from its own method's invocation) and the instances of two local classes of one name, each the home of a
 // local def the class reads: each in a field of its own (LambdaLift's proxies).

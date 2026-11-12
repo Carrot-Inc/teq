@@ -1,6 +1,6 @@
 //> using platform jvm
 // split-watch: jvm
-// A std object standing for a JDK class takes the class's statics it leaves out when an import names
+// A std object standing for a JDK class is to take the class's statics it leaves out when an import names
 // them (`import java.lang.Character.*` then `getType`), as when a selection does: lila's
 // `String.isShouting`. A JVM build's, whose JDK has them.
 object Shout:

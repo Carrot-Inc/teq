@@ -1,10 +1,10 @@
-// The view search's ambiguity is the qualifier's mismatch, reported at the qualifier's point, a `Select`'s at its name,
-// the whole qualifier underlined (`errorTree`, `srcPos`; Typer.scala:4346-4353): scalac 3.8.4 reports `O.d` at `d`,
-// `O.P.q` at `q`, `h.r` at `r`. teq reports its own ambiguity at the selection's start, master (efddb38de3) and the
-// head (61c1af7941) alike; the head names the receivers `(O.P.q : R)` and `(h.r : R)` as scalac does, where master says
-// `R`. The last line's `pick2`, no member, is reported at its name on the head, scalac's point, and at the selection's
-// start on master. Queued: push 6 (typeMismatch whole, at the qualifier, whose typed tree of a field keeps its prefix's
-// span: select_field_mismatch_point).
+// The view search's ambiguity is the qualifier's mismatch, reported at the qualifier's
+// point, a `Select`'s at its name, the whole qualifier underlined (`errorTree`,
+// `srcPos`; Typer.scala:4346-4353): scalac 3.8.4 reports `O.d` at `d`, `O.P.q` at `q`,
+// `h.r` at `r`. teq is to report them there, and to name the receivers `(O.P.q : R)`
+// and `(h.r : R)` as scalac does. The last line's `pick2`, no member, is to be
+// reported at its name, scalac's point. Queued: push 6 (typeMismatch whole, at the
+// qualifier; the span of a field's typed tree is select_field_mismatch_point's).
 class R
 trait Ops:
   extension (r: R) def pick: String

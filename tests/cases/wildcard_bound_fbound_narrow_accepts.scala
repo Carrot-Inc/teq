@@ -1,8 +1,8 @@
 // `narrowBound` (TypeOps.scala 636-684): an argument a parameter's own F-bound names (`lazyRefs`, the `LazyRef` of
 // `BS`'s `S <: BS[T, S]`, Checking.scala 386) whose bound has wildcards gets that bound massaged, `BS[BS[?, S]#T, S]`,
 // as a GADT bound for the check, inside its own bound and outside it alike, for a method's or a class's parameter, an
-// abstract type member (whose GADT bound teq has no state for and reads at the check) and Java's
-// `BaseStream[T, S <: BaseStream[T, S]]`. scalac 3.8.4 accepts all of it (pi-scratch/r23b/dotty/probe.log: each check
+// abstract type member and Java's
+// `BaseStream[T, S <: BaseStream[T, S]]`. scalac 3.8.4 accepts all of it (each check
 // fails without the GADT bound and holds with it).
 import java.util.stream.BaseStream
 trait BS[T, S <: BS[T, S]]:

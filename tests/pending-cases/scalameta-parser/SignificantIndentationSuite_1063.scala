@@ -1,8 +1,8 @@
 // Program 1063 of tests/fix/scalameta, from scalameta 4.17.4's SignificantIndentationSuite (line 2663, "blank after
 // template 2"): scalac 3.8.4's parser reads it as scalameta does, `class DerivationSpec { case class Foo() extends
-// Bar {} { deriveEncoder[Foo] } { deriveEncoder[Foo]`, and teq's otherwise. The expectation is scalameta's tree
-// under dialects.Scala3, which teq fix's tree answers to: a node a line, its start and end in UTF-16 units from the
-// program's first line below.
+// Bar {} { deriveEncoder[Foo] } { deriveEncoder[Foo]`. The expectation is scalameta's
+// tree under dialects.Scala3, which teq fix's tree is to answer to: a node a line,
+// its start and end in UTF-16 units from the program's first line below.
 //   Source 0 138
 //     Defn.Object 0 137
 //       Term.Name 7 12

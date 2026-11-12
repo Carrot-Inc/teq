@@ -1,8 +1,8 @@
 // jars: view-lib
-// A worker asks for `K.Lift` in a body, then the loader's lock holder types a library body that
-// names it: the copy of the match alias seen through `K` is the base's, made under the lock over
-// the worker's prefix exported, one alias for both. The signature
-// below enters `K` and its alias before the fork.
+// A body that names the library's match alias `K.Lift`,
+// then a library body that names it: the alias seen
+// through `K` is one alias for both. The signature
+// below names `K`.
 import viewlib.*
 
 def loads(k: K.type): Unit = ()

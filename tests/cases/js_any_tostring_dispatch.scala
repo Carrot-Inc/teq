@@ -5,8 +5,8 @@ import scala.scalajs.js
 
 // The program's `toString` of a value that may be a JavaScript value is Scala.js's dispatch (`$dp_toString__T`): an
 // object's own, a Scala instance's as its class gives it, whether written on an `Any`, in an inline body over `T :=
-// Any` or after a transparent expansion keeps it universal. The unit, arrays and functions apart, which teq writes
-// as Scala's (docs/COMPATIBILITY.md), are not here.
+// Any` or after a transparent expansion keeps it universal.
+// The unit, arrays and functions (docs/COMPATIBILITY.md) are not here.
 case class P(n: Int)
 
 transparent inline def tr[T](y: T): String = y.toString

@@ -60,10 +60,10 @@ I:refining repr/refining/Refining:[["OBJECTCLASS",["UTF8","Refining"]],"Refined"
 I:refining repr/refining/Refining:[["OBJECTCLASS",["UTF8","Refining"]],"direct"] S-T:refining object:repr.refining.Refining.direct
 I:refining repr/refining/Refining:[["OBJECTCLASS",["UTF8","Refining"]],"refined"] S-T:refining object:repr.refining.Refining.refined
 I:refining repr/refining/myAnnot:["myAnnot"] S-T:refining class:repr.refining.myAnnot:owner
-# The body pair (the pass over 1c61410d5): the method's result type tree, `Int`, scalac's written type tree and teq's
+# The body pair: the method's result type tree, `Int`, scalac's written type tree and teq's
 # inferred one, observed in the S-T record of `Product.f`.
 I:api repr/Product:[["OBJECTCLASS",["UTF8","Product"]],"f"] S-T:api object:repr.Product.f
-# The initializer pair (the pass over 92c156369): the template statement's `locally` and `println`, scalac's
+# The initializer pair: the template statement's `locally` and `println`, scalac's
 # identifiers and teq's selections of `Predef`, observed in the owner's record of `Product`.
 I:api repr/Product:[["OBJECTCLASS",["UTF8","Product"]]] S-T:api object:repr.Product:owner
 # The references the structured dump holds past the string constants whose newline ended the old printed dump

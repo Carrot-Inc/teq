@@ -11,8 +11,8 @@ object G:
 // `checkBase` decides, and no `fourthTry` reaches `compareGADT`: `T <: List[Any]` under the pattern's GADT bound
 // `T = List[Int]` is compared through `T`'s upper bound's base type `List[Any]`, which is not below `List[Int]`, so
 // scalac 3.8.4 rejects `x` in `g01` and `g06` (E007); `T <: Seq[Any]` has no base type of `List` and the GADT bound
-// decides (`g07` accepted). Lane P of round 24 removed a comparer fallback that accepted `g01` and `g06`
-// (`captured_through_its_skolem`'s boundary); master agrees. The adversary of the pass on 97f0487ac (round 24).
+// decides
+// (`g07` accepted).
 // expect: gadt_bound_after_base_type.scala:5:17: error: Found:    (x : T)
 // expect: gadt_bound_after_base_type.scala:7:18: error: Found:    (x : T)
 // expect: 2 errors found

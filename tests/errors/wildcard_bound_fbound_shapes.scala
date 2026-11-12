@@ -18,12 +18,12 @@
 // expect: 55:27: error: type argument H15.this.S does not conform to upper bound BS[BS[? <: Int, H15.this.S]#T, H15.this.S]
 // expect: 56:41: error: type argument S does not conform to upper bound BS[BS[?, S]#T, S]
 // expect: 19 errors found
-// `TypeOps.boundsViolations` (TypeOps.scala 606-740) over F-bounded parameters, as scalac 3.8.4 reports each (one
-// column before teq's, its wildcard ` >: String` teq's `? >: String`): `skolemizeWildcardArgs`' skolem `BS[?, S]#T` through
-// an alias's bound, an alias of the class, an alias's right side, an `extends` clause, a given, a higher-kinded
-// and an abstract member's `LambdaParam` bound, a Java class's F-bound, mutual F-bounds, a refinement over the
-// bound, a value's type, a nested application, a type lambda's body, a context bound, an abstract member's F-bound,
-// a tuple. The closure adversary of the pass on 5bd85bcd1 (round 23).
+// `TypeOps.boundsViolations` (TypeOps.scala 606-740) over F-bounded parameters, as scalac 3.8.4 reports
+// each (one column before the expectation's, its wildcard ` >: String` the expectation's `? >: String`):
+// `skolemizeWildcardArgs`' skolem `BS[?, S]#T` through an alias's bound, an alias of the class, an alias's
+// right side, an `extends` clause, a given, a higher-kinded and an abstract member's `LambdaParam`
+// bound, a Java class's F-bound, mutual F-bounds, a refinement over the bound, a value's type, a
+// nested application, a type lambda's body, a context bound, an abstract member's F-bound, a tuple.
 trait BS[T, S <: BS[T, S]]
 trait IS extends BS[Int, IS]
 type Self[X] = BS[?, X]

@@ -6,10 +6,10 @@ val f2 = unknown2 _
 // hidden.
 // expect: error: Only function types can be followed by _ but the current expression has type <error
 // absent: 2:10: error: Only function types can be followed by _
-// Where teq still differs from scalac's capture, each with its owner (so no count line yet):
-// - E099's place: scalac's 1:19 (the `_`), teq's 1:10 (the typer's report of `x _`, Typer's typedAsFunction).
-// - `<error Not found: unknown1>`: PlainPrinter.toText prints an ErrorType's message; teq's error type of a name not
-//   found carries none and prints `<error >` (typedIdent's errorType of NotFoundMsg).
-// - Line 1's `not found: unknown1`, which scalac's UniqueMessagePositions hides behind the E099 reported before it (the
+// Where the expectation stops short of scalac's capture, each with its owner (so no count line yet):
+// - E099's place: scalac's 1:18 (the `_`): Typer's typedAsFunction.
+// - `<error Not found: unknown1>`: PlainPrinter.toText prints an ErrorType's message
+//   (typedIdent's errorType of NotFoundMsg).
+// - Line 1's `Not found: unknown1`, which scalac's UniqueMessagePositions hides behind the E099 reported before it (the
 //   operand's nested state is committed after the report): the reporter's UniqueMessagePositions.
-// - E006's text, scalac's `Not found: unknown2`, teq's `not found: unknown2` (messages.scala's NotFoundMsg).
+// - E006's text, scalac's `Not found: unknown2` (messages.scala's NotFoundMsg).

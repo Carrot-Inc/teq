@@ -1,11 +1,11 @@
-// A selection the receiver's type lacks is one implicit search in dotty (`tryExtensionOrConversion`, then `inferView`):
-// a conversion method (`Candidate.Conversion`, `methodCandidateKind`) and a given with the extension method
-// (`Candidate.Extension`, `hasExtMethod`) are candidates of the same contexts, ranked by nesting level, and
-// `combineEligibles` hides an outer candidate whose name an inner one has. So the conversion `B.ops` of an inner
-// import, whose result has `pick`, beats the outer given `A.ops`'s extension `pick` (and hides it, of one name), and
-// `B.other` beats it by level: scalac 3.8.4 prints 2 twice. teq looks up the extension givens apart from the
-// conversions (`givens_with_extension`, then `conversions.rs`), so the outer given's extension wins: 1 twice, on
-// master too.
+// A selection the receiver's type lacks is one implicit search in dotty
+// (`tryExtensionOrConversion`, then `inferView`): a conversion method
+// (`Candidate.Conversion`, `methodCandidateKind`) and a given with the extension
+// method (`Candidate.Extension`, `hasExtMethod`) are candidates of the same contexts,
+// ranked by nesting level, and `combineEligibles` hides an outer candidate whose
+// name an inner one has. So the conversion `B.ops` of an inner import, whose
+// result has `pick`, beats the outer given `A.ops`'s extension `pick` (and hides
+// it, of one name), and `B.other` beats it by level: scalac 3.8.4 prints 2 twice.
 import scala.language.implicitConversions
 class R
 class Wrapper:

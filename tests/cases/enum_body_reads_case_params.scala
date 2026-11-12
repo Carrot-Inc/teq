@@ -1,5 +1,5 @@
 // An enum's body reading its case's parameters while the enum is constructed, through a member or as its arguments:
-// the case's fields are written before the enum's `$init` runs (dotty's `Constructors`: `copyParams` before the
+// the case's fields are written before the enum's constructor runs (dotty's `Constructors`: `copyParams` before the
 // superclass's constructor call), a secondary constructor's chain and a `using` list included.
 enum E:
   def x: Int

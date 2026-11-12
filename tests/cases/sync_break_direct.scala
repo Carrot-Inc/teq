@@ -1,10 +1,10 @@
 //> using platform jvm
 // split-watch: jvm
-// A `boundary.break` straight out of a `synchronized` block in its boundary's method releases the monitor and returns
-// the value. The expectation beside is teq's, which parts from scalac here on purpose: scalac
-// 3.8.4's DropBreaks makes that break a labelled return, which its backend writes as a jump past the monitorexit, and
-// the JVM throws IllegalMonitorStateException at the method's return. Through a `try`, or from a local def, the break
-// stays an exception and both compilers release the monitor.
+// A `boundary.break` straight out of a `synchronized` block in its boundary's method is to release the
+// monitor and return the value. The expectation is teq's own, which parts from scalac here on purpose:
+// scalac 3.8.4's DropBreaks makes that break a labelled return, which scalac's backend writes as a jump
+// past the monitorexit, and the JVM throws IllegalMonitorStateException at the method's return. Through
+// a `try`, or from a local def, the break stays an exception and scalac releases the monitor too.
 import scala.util.boundary, boundary.break
 
 object Main:

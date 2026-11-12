@@ -2,7 +2,7 @@
 // selector's type through the value's type. Where that type holds a variable still open (`acc` is
 // a `C[?A]` while the argument of `step` is typed), the comparison bounds it (`?A <: String`, as
 // dotty's `constrainPatternType` does for a final pattern class), so the lambda's result `C[Int]`
-// is rejected as under scalac.
+// is to be rejected as under scalac.
 class C[+A]
 final class D[+A]
 def step[A](initial: A)(f: A => A): A = f(initial)

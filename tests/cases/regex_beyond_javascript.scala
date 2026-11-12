@@ -1,8 +1,8 @@
 //> using platform jvm
-// What JavaScript's regex translator lacks (COMPATIBILITY: the regular expressions on JavaScript), in
-// the interpreter and on the JVM: an atomic group `(?>X)` takes the first way `X` matches and never
-// gives it back, as a possessive quantifier does (`X*+` is `(?>X*)`); Java's POSIX classes are of
-// ASCII characters alone but under UNICODE_CHARACTER_CLASS.
+// Regular expressions in the interpreter and on the JVM: an atomic group
+// `(?>X)` takes the first way `X` matches and never gives it back, as a
+// possessive quantifier does (`X*+` is `(?>X*)`); Java's POSIX classes
+// are of ASCII characters alone but under UNICODE_CHARACTER_CLASS.
 import java.util.regex.Pattern
 
 object Main:

@@ -1,6 +1,6 @@
-// `given_import_index_export_forwarder` through a given wildcard: the forwarders `export Lib.given` makes in
-// `Exp` are read through `Exp`'s given index, which reads the forwarder of `Marker & A` widened as the class test
-// does (scalac 3.8.4: 13).
+// `given_import_index_export_forwarder` through a given wildcard: the forwarders
+// `export Lib.given` makes in `Exp`, the forwarder of `Marker & A`
+// (scalac 3.8.4: 13).
 trait Marker
 class A(val value: Int) extends Marker
 object Lib:

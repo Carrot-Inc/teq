@@ -1,7 +1,7 @@
 /*
 rules = ["file:../../support/Extractors.scala"]
 */
-// The extractors as scalameta 4.17.4's (the review of e9bffbf79): `Defn.Var`'s legacy `rhs`, Some and None, and the
+// The extractors as scalameta 4.17.4's: `Defn.Var`'s legacy `rhs`, Some and None, and the                          
 // formats and value `Lit.Double`, `Lit.Float` and `Lit.String` give, each a `String`.
 class Extractors {
   var initialised = 1 // assert: Extractors.initialised

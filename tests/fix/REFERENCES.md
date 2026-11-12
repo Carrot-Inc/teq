@@ -161,7 +161,7 @@ of the table). The oracle knows no suppression and no lint filter: a `scalac.txt
   `DisableSyntax.scala` at `41cf7983`, `checkTree`); `DisableSyntax/GuardsAllOff`, `GuardsAllOn`, `GuardsApplication` and
   `GuardsMixed` (one input with every check under four configurations, recorded by the rule before its settings were
   asked first); `Driver/ReceiverIdentity` (`collect` and `traverse` visiting their receiver as itself, the root's and an
-  inner node's: the push pass of `becf46896`, its Root and Identity probes; rule `support/ReceiverIdentity.scala`). The
+  inner node's; rule `support/ReceiverIdentity.scala`). The
   `parallel` cases of `tests/fix.scala` generate their corpus. The `typing` cases (fix-parallel-typing) generate their
   witness corpus too, and read the design pass's programs from `support/typing/`: `counter/` (a macro library whose run
   changes state other runs share, read from its products, its users and an edit for round two; `bad/ZBad.scala` a type
@@ -181,8 +181,8 @@ of the table). The oracle knows no suppression and no lint filter: a `scalac.txt
   `Driver/StablePatterns`: a stable identifier as a case's pattern, its `Term.Name` or `Term.Select` a `Pat` as
   scalameta's (rule `support/StablePatterns.scala`).
   `Driver/LayoutParenTerms`, `LayoutParenPatterns` and `LayoutParenTypes`: a term, a pattern and a type in parentheses
-  at every grammar position, against scalameta 4.17.4's layout; the ledger of the parser's parentheses (the pass over
-  `2865c7af2`) added a parameter's type in every clause, a dependent function type's named parameter, an argument's
+  at every grammar position, against scalameta 4.17.4's layout, among them
+  a parameter's type in every clause, a dependent function type's named parameter, an argument's
   ascription, a guard's condition and a colon argument's body. `Driver/ReplaceLambdaParam` (rule
   `support/ReplaceLambdaParam.scala`): an ordinary and a colon argument's lambda parameter of a parenthesized type
   replaced whole, scalafix-core 0.14.9's output. The review of `e0d4a9c4f`: `Driver/LayoutAnnotateImplicit` (each

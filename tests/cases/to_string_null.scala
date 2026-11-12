@@ -1,9 +1,9 @@
 //> using platform jvm
-// The program's `x.toString` is a call, which a `null` receiver throws on (dotty's
-// `BCodeBodyBuilder.genApply` invokes it), whatever the receiver's type: a String's, an Object's,
-// an Any's, a boxed number's, a class's own; a concatenation renders a `null` operand as `null`
-// (`genStringConcat`), and a string by construction keeps its text. On JavaScript a member selected
-// from `null` is the engine's `TypeError` (docs/COMPATIBILITY.md).
+// The program's `x.toString` is a call, which a `null` receiver throws
+// on (dotty's `BCodeBodyBuilder.genApply` invokes it), whatever the
+// receiver's type: a String's, an Object's, an Any's, a boxed number's,
+// a class's own; a concatenation renders a `null` operand as `null`
+// (`genStringConcat`), and a string by construction keeps its text.
 class C:
   override def toString = "C!"
 

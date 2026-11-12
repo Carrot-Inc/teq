@@ -1,10 +1,10 @@
-// The implicit scope is one list (`filterMatching`, Implicits.scala:264-269: the companion references, then the
-// companions' givens), sorted by `compareEligibles` and ranked: a later candidate is tried only where
-// `compareAlternatives` does not prefer the retained one, the extension methods compared only where it ties (1406-1447,
-// 1517-1519). The companion object, a value, is preferred to `given (using X)`, so scalac 3.8.4 runs the companion's
-// extension. teq compares the companion's extension with the given's by their receivers alone and reports an
-// ambiguity; master (efddb38de3) and the head (61c1af7941) alike (apply.rs `extensions_of_scopes`, push 6's first item;
-// push 5's interim review, finding 2).
+// The implicit scope is one list (`filterMatching`, Implicits.scala:264-269:
+// the companion references, then the companions' givens), sorted by
+// `compareEligibles` and ranked: a later candidate is tried only where
+// `compareAlternatives` does not prefer the retained one, the extension
+// methods compared only where it ties (1406-1447, 1517-1519). The
+// companion object, a value, is preferred to `given (using X)`, so
+// scalac 3.8.4 runs the companion's extension. Queued: push 6's first item.
 class X
 object X:
   given X = X()

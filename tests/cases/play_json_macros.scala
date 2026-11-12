@@ -5,8 +5,8 @@
 // play-json's Json.format, reads and writes, whose implementation (pickled by Scala 3.3) summons a
 // `JsonConfiguration.Aux[? <: MacroOptions]` (the alias's refinement bounded by the wildcard), names its
 // fields through `f"..."`, lets a quote pattern's `t` escape its case in an inferred type, and makes an
-// anonymous `OWrites` in an inline call that reads the expansion's `lazy val cfg`. A JVM library whose
-// own collections the interpreter's std does not run; the values are printed without Jackson.
+// anonymous `OWrites` in an inline call that reads the expansion's `lazy val cfg`. A JVM library;
+// the values are printed without Jackson.
 import play.api.libs.json.*
 
 case class Person(name: String, age: Int, nick: Option[String])

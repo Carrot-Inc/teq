@@ -1,6 +1,6 @@
-// A dynamic call by a Class value whose class's name is no identifier: each target's reflective proxies and its
-// run-time classes name it alike (Scala.js's written name on JavaScript, the JVM's encoded one under teq interp and
-// on the JVM), so Selectable.applyDynamic finds the method, as scalac's does.
+// A dynamic call by a Class value whose class's name is
+// no identifier: Selectable.applyDynamic finds the method
+// in scalac's program, and is to find it in teq's too.
 import scala.reflect.Selectable.reflectiveSelectable
 class `Arg-X`
 class Receiver:

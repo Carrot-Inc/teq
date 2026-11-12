@@ -1,6 +1,6 @@
-// `AnyKind` (`Definitions.AnyKindClass`, a synthetic class of `scala`), the bound of a parameter of any kind, which
-// `hasSameKindAs` takes as the same kind as any other (`isAnyKind`): teq has no `AnyKind` ("type AnyKind not
-// found", under either std), a part of its own (the review of `4f8b8bb39`'s item 1, the probe AnyKindArg).
+// `AnyKind` (`Definitions.AnyKindClass`, a synthetic class of `scala`),
+// the bound of a parameter of any kind, which `hasSameKindAs` takes
+// as the same kind as any other (`isAnyKind`): a part of its own.
 import scala.annotation.StaticAnnotation
 class annA[F <: AnyKind] extends StaticAnnotation
 class annS[F <: scala.AnyKind] extends StaticAnnotation

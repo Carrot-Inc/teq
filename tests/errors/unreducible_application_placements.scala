@@ -11,11 +11,11 @@
 // expect: 37:52: error: unreducible application of higher-kinded type [X] =>> h.KC[X] to wildcard arguments
 // expect: 38:29: error: unreducible application of higher-kinded type F to wildcard arguments
 // expect: 12 errors found
-// `Checking.checkAppliedType`'s `checkWildcardApply` (Checking.scala 130-141, E043) at each place a written
-// application meets it, as scalac 3.8.4 reports each (one column before teq's): an alias's right side, a `new`'s type
-// argument, a using parameter, a parent's type argument, a match type's case body, a type lambda's body, a type
-// member's right side, a class's higher-kinded parameter applied to `?`, an alias's, two in one signature, a
-// parameter bounded by a class's lambda. The closure adversary of the pass on 5bd85bcd1 (round 23).
+// `Checking.checkAppliedType`'s `checkWildcardApply` (Checking.scala 130-141, E043) at each place a
+// written application meets it, as scalac 3.8.4 reports each (one column before the expectation's):
+// an alias's right side, a `new`'s type argument, a using parameter, a parent's type argument, a
+// match type's case body, a type lambda's body, a type member's right side, a class's higher-kinded
+// parameter applied to `?`, an alias's, two in one signature, a parameter bounded by a class's lambda.
 class H:
   type KC[-X]
 val h = new H

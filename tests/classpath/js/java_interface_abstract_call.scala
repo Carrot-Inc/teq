@@ -1,5 +1,5 @@
 // std: scala-library
-// A call of an abstract Java interface method on JavaScript runs the receiver's implementation: no JDK code is
+// A call of an abstract Java interface method on JavaScript is to run the receiver's implementation: no JDK code is
 // needed, whatever the std's platform layer gives the interface.
 def invoke(r: java.lang.Readable): Int = r.read(null)
 

@@ -1,7 +1,7 @@
 // A typed pattern between one of `List`, `Option`, `Either`, `Try` (classes) and `java.util.ListIterator`, an
-// interface of the JDK's: scalac warns that the case is unreachable and the program runs
-// (tests/cases/class_pattern_on_library_trait). The std declares it as a class, so teq refuses the pattern as one
-// between two unrelated classes.
+// interface of the JDK's: scalac warns that the case is unreachable and the
+// program runs (tests/cases/class_pattern_on_library_trait).
+// teq is to run the program too.
 import scala.annotation.nowarn
 import java.util.ListIterator
 

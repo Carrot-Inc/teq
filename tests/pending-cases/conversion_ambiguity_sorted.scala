@@ -1,8 +1,8 @@
-// A view search for a member tries the conversions in `sort`'s order (`compareEligibles`, Implicits.scala:1584-1595):
-// of one level and arity, the one whose owner has more base classes first, so scalac 3.8.4 names `c2` (of `T2`, which
-// extends `Extra`) before `c1`. master (efddb38de3), the head (61c1af7941) and push 5 "both value c1 in trait T1 and
-// value c2 in trait T2" (no sort in the conversion search, conversions.rs). Queued: push 6, item 3 (pick_conversion
-// through AmbiguousImplicits.qualify).
+// A view search for a member tries the conversions in `sort`'s order
+// (`compareEligibles`, Implicits.scala:1584-1595): of one level and arity,
+// the one whose owner has more base classes first, so scalac 3.8.4 names
+// `c2` (of `T2`, which extends `Extra`) before `c1`. Queued: push 6,
+// item 3 (the choice of a conversion through AmbiguousImplicits.qualify).
 import scala.language.implicitConversions
 class R
 class HasPick:

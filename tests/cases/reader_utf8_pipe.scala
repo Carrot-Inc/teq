@@ -1,8 +1,8 @@
 //> using platform jvm
 // os: unix
-// A reader over a child's pipe (the interpreter's own stream, read and decoded natively) decides a
-// UTF-8 sequence the input ends inside as the JDK's decoder does: a lone c0 is replaced as soon as it
-// comes, while the child still runs, and a prefix that more bytes complete waits for them.
+// A reader over a child's pipe decides a UTF-8 sequence the input ends inside
+// as the JDK's decoder does: a lone c0 is replaced as soon as it comes, while
+// the child still runs, and a prefix that more bytes complete waits for them.
 import java.io.InputStreamReader
 
 object Main:

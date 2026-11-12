@@ -1,5 +1,5 @@
-// scala-library's members that libraries built for 2.12 and 2.13 still call, deprecated or not,
-// which teq's std holds for their bodies (ScalaTest's and scalactic's on Scala.js among them).
+// scala-library's members that libraries built for 2.12 and 2.13 still
+// call, deprecated or not (ScalaTest and scalactic on Scala.js among them).
 import scala.collection.mutable
 
 case class V(n: Int) extends Ordered[V]:

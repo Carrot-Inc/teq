@@ -1,11 +1,11 @@
 // teq: tests/interop/scalajs-stub
-// dotty 3.8.4's tests/neg-scalajs/js-members-bad-signatures.scala, lines 1-6 and 12-39:
-// transformValOrDefDefInJSType's native @JSBracketAccess and @JSBracketCall arms (checkNoDefaultOrRepeated), its
-// errors as scalac 3.8.4 -scalajs gives them on this file. An expectation's L:C is where scalac's caret begins (the
-// start of dotty's span), 1-based.
-// pending: teq's namer rejects each @JSBracketAccess def not named apply or update with its own text
-// ("@JSBracketAccess goes on apply (a read) or update (a write)"), a typer-phase error that closes PrepJSInterop's
-// gate (Phase#isRunnable): none of the eight is reported.
+// dotty 3.8.4's tests/neg-scalajs/js-members-bad-signatures.scala,
+// lines 1-6 and 12-39: transformValOrDefDefInJSType's
+// native @JSBracketAccess and @JSBracketCall arms
+// (checkNoDefaultOrRepeated), its errors as scalac 3.8.4
+// -scalajs gives them on this file. An expectation's L:C is where
+// scalac's caret begins (the start of dotty's span), 1-based.
+// pending: teq is to report the eight.
 // expect: 26:3: error: @JSBracketAccess methods must have one or two parameters
 // expect: 29:3: error: @JSBracketAccess methods must have one or two parameters
 // expect: 32:3: error: @JSBracketAccess methods with two parameters must return Unit

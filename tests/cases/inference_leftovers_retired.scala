@@ -1,8 +1,8 @@
-// The design pass's witnesses of lines the task list still held, which teq already agrees with scalac on:
-// an applied type variable's argument inferred through a covariant parent (`id(new Box)` as an `F`), a
-// `String`'s `CharSequence` and `Serializable` tests, an array class's `isInstance`, a program's own
-// `ClassTag`, `Tuple`'s entry points and `CanEqual` givens, a generic class's type test over a value of that
-// class (true for an instance, false for `null`) and over `Any`.
+// An applied type variable's argument inferred through a covariant parent
+// (`id(new Box)` as an `F`), a `String`'s `CharSequence` and `Serializable`
+// tests, an array class's `isInstance`, a program's own `ClassTag`, `Tuple`'s
+// entry points and `CanEqual` givens, a generic class's type test over a value
+// of that class (true for an instance, false for `null`) and over `Any`.
 import scala.language.strictEquality
 import scala.reflect.ClassTag
 

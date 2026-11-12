@@ -1,5 +1,5 @@
-// A super selection qualified by its class and a parent (`C.super[T].f`): scalac 3.8.4 accepts it, teq reports
-// "expected an identifier, found 'super'".
+// A super selection qualified by its class and a parent
+// (`C.super[T].f`): scalac 3.8.4 accepts it, and teq is to accept it too.
 class B:
   def f = 1
 trait T:

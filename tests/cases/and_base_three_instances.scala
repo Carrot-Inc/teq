@@ -2,9 +2,9 @@
 // its owner three (`All`'s `Box[Int] & Box[String] & Box[Double]`, dotty's `get: => Int & String & Double`, `put(a:
 // Int | String | Double)`), a class's own three of a higher-kinded base (`LSeq`'s `FromIterator[Iterable] &
 // FromIterator[Seq] & FromIterator[LSeq]`, `fromIterator`'s `LSeq[B]`) and a value of an intersection of three parts
-// over two of them (`C[B] & LSeq[B]`): the closure adversary's probes SRC-AF-* (pass on 5bd85bcd1, round 23). scalac
-// 3.8.4 accepts the program, and so does teq since 50858215f6 (`baseTypeOf`'s glb keeps the third instance, which
-// `met_instances` folds); at 24df636e49 it kept two (`Int & String`, `Seq[SA]`, `C[SA]`) and rejected f, g, r1 and r2.
+// over two of them (`C[B] & LSeq[B]`).
+// scalac 3.8.4 accepts the program,
+// and teq is to accept it too.
 trait Box[A]:
   def get: A
   def put(a: A): Int

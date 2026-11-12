@@ -1,7 +1,7 @@
-// A part that is an alias of a bounded type parameter (`Id[T]`, `type Id[X] = X`, `T <: Base`) is the type the
-// prefix gives (`Sub` through `Lib extends Library[Sub]`): scalac 3.8.4 prints 13. teq's class test reads the part
-// through `class_of`, which dealiases `Id[T]` and follows `T`'s bound to `Base` (`inter_classes_known`,
-// `may_provide`), and rejects the given for `Sub`, so the outer `fallback` wins: 99, on master too.
+// A part that is an alias of a bounded type
+// parameter (`Id[T]`, `type Id[X] = X`, `T <: Base`)
+// is the type the prefix gives (`Sub` through
+// `Lib extends Library[Sub]`): scalac 3.8.4 prints 13.
 trait Marker
 class Base(val n: Int)
 class Sub(n: Int) extends Base(n)

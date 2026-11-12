@@ -1,6 +1,6 @@
-// An argument the compiler evaluates before binding its parameter (tests/fold.sh) is shown by `codeOf` as written, as
-// dotty substitutes an inline parameter's argument as its tree: alone, twice in an operation, passed on to another
-// inline method; a by-value parameter shows its proxy. scalac prints the lines of the .expected file.
+// An argument is shown by `codeOf` as written, as dotty substitutes an inline parameter's
+// argument as its tree: alone, twice in an operation, passed on to another inline method;
+// a by-value parameter shows its proxy. scalac prints the lines of the .expected file.
 import scala.compiletime.codeOf
 inline def shown(inline n: Int): String = codeOf(n)
 inline def shownSum(inline n: Int): String = codeOf(n + n)

@@ -1,6 +1,6 @@
-// A literal or constant pattern stands for its constant of its own type, adapted to a numeric scrutinee's, as the typer
-// adapts it (`case 1` of a `Short` is `1: Short`, `case Byte.MinValue` of a `Long` is `-128L`): none of these cases is
-// unreachable. scalac prints the lines of the .expected file and warns nothing.
+// A literal or constant pattern stands for its constant of its own type, adapted to a numeric scrutinee's, as
+// dotty's typer adapts it (`case 1` of a `Short` is `1: Short`, `case Byte.MinValue` of a `Long` is `-128L`):
+// none of these cases is unreachable. scalac prints the lines of the .expected file and warns nothing.
 def a(s: Short): String = s match { case java.lang.Short.MAX_VALUE => "smax"; case _ => "other" }
 def b(s: Short): String = s match { case Short.MaxValue => "smax"; case _ => "other" }
 def c(x: Byte): String = x match { case java.lang.Byte.MAX_VALUE => "bmax"; case java.lang.Byte.MIN_VALUE => "bmin"; case _ => "other" }

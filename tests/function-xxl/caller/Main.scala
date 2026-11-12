@@ -3,10 +3,10 @@ package fxl.use
 import fxl.*
 import scala.runtime.FunctionXXL
 
-// The caller of tests/function-xxl.sh, built by scalac 3.8.4 over teq's callee and by teq over scalac's, run over
-// either compiler's callee classes, as table (b)'s cross/UseCallee.scala and cross/UseErasure.scala: every call
-// passes, returns or applies a FunctionXXL, which both compilers' class files must agree on; a call that links to
-// nothing or casts to the wrong class prints its error's class in place of its result.
+// The caller of tests/function-xxl.sh, which scalac 3.8.4 is to build over teq's callee and teq over
+// scalac's, run over either compiler's callee classes: every call passes, returns or applies a
+// FunctionXXL, which both compilers' class files must agree on; a call that links to nothing or
+// casts to the wrong class prints its error's class in place of its result.
 object Main:
   def attempt(name: String)(f: => Any): Unit =
     try println(name + ": " + f)

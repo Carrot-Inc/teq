@@ -1,5 +1,5 @@
 //> using platform jvm
-// The main thread, made at the first Thread.currentThread(), takes no InheritableThreadLocal value, as the JDK
+// The main thread takes no InheritableThreadLocal value, as the JDK
 // attaches it without inheritance: childValue runs for the child alone.
 object Main:
   def main(args: Array[String]): Unit =

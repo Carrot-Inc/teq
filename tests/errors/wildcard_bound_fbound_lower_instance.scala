@@ -5,10 +5,10 @@
 //   15:11 Type argument  >: E does not overlap with upper bound D[D[? >: E]#T]
 //   17:11 Type argument  >: String does not overlap with upper bound Comparable[C[? >: String]#T]
 //   18:24 Type argument  >: java.util.concurrent.TimeUnit does not overlap with upper bound Enum[Enum[? >: java.util.concurrent.TimeUnit]#E]
-// teq rejects the three as scalac does since round 23 (the skolem `<app>#T` opened with its denotation, `>: E <:
-// D[<app>#T]`); until then it substituted the wildcard into its own F-bound (`D[? >: E]`), which `E` is below. teq
-// shows the wildcard as `? >: E` and the class unqualified. (With a lower end that is no instance, `D[? >: String]`,
-// both reject.)
+// teq is to reject the three as scalac does; substituted into its
+// own F-bound the wildcard gives `D[? >: E]`, which `E` is below.
+// The expectation shows the wildcard as `? >: E`. (With a lower end
+// that is no instance, `D[? >: String]`, scalac rejects as well.)
 import java.util.concurrent.TimeUnit
 class D[T <: D[T]]
 class E extends D[E]

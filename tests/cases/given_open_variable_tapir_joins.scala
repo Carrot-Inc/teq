@@ -2,7 +2,7 @@
 // jars: tapir-core-jvm magnolia123-jvm sttp-model-core-jvm sttp-shared-core-jvm sttp-shared-ws-jvm
 // tapir 1.13.29's endpoint inputs joined element by element (`ParamConcat`, `Join[P, S]` folded through
 // `Join.Fold.step` and `TupleFoldInstances.tN`), each `.in(...)` resolved over the input tuple of the endpoint
-// before it, the variable the settlement leaves open as given-open-variable's rule has it
+// before it, the variable left open
 // (`Inferencing.interpolateTypeVars` leaves the nonvariant occurrence to the expected type) and bounded by that
 // tuple on both sides: in an inferred val, a generic function's argument, a chain ending in `.mapIn` or
 // `.serverLogic` and a lambda's result. Every endpoint's type is the exact one scalac infers (`Endpoint` is

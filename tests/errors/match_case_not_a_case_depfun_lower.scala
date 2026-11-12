@@ -3,8 +3,8 @@
 // scalac 3.8.4 crashes on this program: the approximation of a dependent function type's result avoiding its
 // parameter (to `A => Inv[? >: String]`) leaves its match type's case no MatchCase application (`Nothing`, the failed
 // distribution of the case pattern's range, derivedAppliedType 6805-6809), and reducing the match type over it throws
-// scala.MatchError in MatchTypeCaseSpec.analyze (Types.scala:5427). teq reports that case as no match case and types
-// the match type no further.
+// scala.MatchError in MatchTypeCaseSpec.analyze (Types.scala:5427). teq is to report that case as no match case and
+// to type the match type no further.
 class Inv[X]
 class A:
   type T
