@@ -57,6 +57,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- In split output a case object whose `equals` comes from a superclass, or from a trait of that superclass, uses
+  it: such an object compared by reference when its superclass was registered after it.
 - `-Wtostring-interpolated` reads an opaque alias as what it stands for: an interpolated value whose type is an
   opaque alias of `String` or of a primitive (refined's `NonEmptyString`) is no longer reported.
 - A given found through an inline given can refer to itself by name: kittens' `derives Eq` over a class with a

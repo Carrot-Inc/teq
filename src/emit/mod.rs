@@ -3701,6 +3701,35 @@ impl<'a> Emitter<'a> {
                 let _ = write!(self.out, " delete {}.prototype.{};", name, method);
             }
         }
+        // A case object's shape has an `equals` too (`$caseObjectProto`), which the rule makes for no
+        // object (`caseModuleSymbols`), so no bit says where the object's `equals` is: where it is the
+        // superclass's or one the superclass inherits (the test of the bits above), the registration's
+        // copy goes as theirs does. One of the object's own, or of a trait it mixes in, is on its
+        // prototype and stays.
+        if let (Some(b'2'), Some(parent)) = (shape_kind, superclass) {
+            let syms = self.syms;
+            let declared: Vec<(ClassId, bool)> = info
+                .base_types
+                .iter()
+                .filter(|&&(b, _)| syms.class(b).kind != ClassKind::Builtin)
+                .filter_map(|&(b, _)| {
+                    let &m = syms.class(b).members.get(&crate::names::EQUALS)?;
+                    let single = [m];
+                    let alts = syms.alternatives(m).unwrap_or(&single);
+                    let a = alts.iter().copied().find(|&a| {
+                        let i = syms.sym(a);
+                        i.kind == SymKind::Def && i.owner == Owner::Class(b) && syms.dispatch_name(a) == crate::names::EQUALS
+                    })?;
+                    Some((b, !self.reach.is_abstract(syms, a)))
+                })
+                .collect();
+            let inherited = syms.member_declaration(&declared).is_some_and(|definer| {
+                definer != tc.id && parent.base_types.iter().any(|&(x, _)| x == definer)
+            });
+            if inherited {
+                let _ = write!(self.out, " delete {}.prototype.equals;", name);
+            }
+        }
         // A trait's method that `$cls` copies first but an abstract redeclaration overrides is no
         // member of the class (`Symbols::member_declaration`): the member's, or the superclass's.
         if !matches!(info.kind, ClassKind::Trait | ClassKind::Enum) {
