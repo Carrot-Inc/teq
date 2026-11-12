@@ -150,11 +150,16 @@ def collect_tests(root):
 
 
 SCALA3_ROOT = os.path.abspath(DEFAULT_SCALA3)
+# The checkout as a diagnostic may spell it: as it was given (tests/all.sh passes `<main tree>/../teq-ref/scala3`,
+# which teq prints as given), made absolute, and with its links resolved; the longest first.
+SCALA3_SPELLINGS = sorted({DEFAULT_SCALA3.rstrip("/"), SCALA3_ROOT, os.path.realpath(DEFAULT_SCALA3)}, key=len, reverse=True)
 
 
 def relative_paths(text):
-    """The checkout's absolute path written as $SCALA3, so the summaries hold no local path."""
-    return text.replace(SCALA3_ROOT + "/", "$SCALA3/").replace(SCALA3_ROOT, "$SCALA3")
+    """The checkout's path written as $SCALA3, so the summaries, the lists and the board's rows hold no local path."""
+    for root in SCALA3_SPELLINGS:
+        text = text.replace(root + "/", "$SCALA3/").replace(root, "$SCALA3")
+    return text
 
 
 def first_error(stderr):
@@ -382,7 +387,8 @@ def main():
     # The run held to the list of the tests expected to fail (tests/support/pending.py).
     suite = "scala3-" + ("run" if args.suite == "run" else "macros") + ("" if args.target == "js" else "-" + args.target)
     ran = {r["name"] for r in results}
-    failing = {r["name"]: (r["status"] + ": " + " ".join(str(r.get("error", "")).split())[:160]).rstrip(": ") for r in results if r["status"] != "pass"}
+    # A note is the same on every machine: the checkout as $SCALA3 before the note is cut to its length.
+    failing = {r["name"]: (r["status"] + ": " + " ".join(relative_paths(str(r.get("error", ""))).split())[:160]).rstrip(": ") for r in results if r["status"] != "pass"}
     held = pending.hold(suite, ran, failing, args.update, args.add)
     if held and (args.update or args.add) and not args.only and not args.listed and not args.no_dirs:
         pending.write_board_list(suite, ran, failing, {})

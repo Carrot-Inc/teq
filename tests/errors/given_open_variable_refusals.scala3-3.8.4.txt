@@ -1,18 +1,6 @@
-d-090 expectation correction evidence (2026-10-30)
-
-Coordinator ruling: 2026-10-30 11:27 UTC, d-090 graph note.
-Correct only tests/errors/given_open_variable_refusals.scala expectation
-records 50, 52, and 54, for source lines 43, 44, and 45 respectively:
-Window[Unit, Nothing] -> Window[Unit, R]. R remains an open type variable.
-All other expectation records are unchanged.
-
-Reference: dotty 3.8.4 reporting.TypeMismatch.msg preserves invariant
-TypeParamRefs. The overload diagnostics likewise retain open R.
-Fresh reproduction of stream b's gate-5 reference, on gate-5:
-  scala-cli compile -S 3.8.4 --server=false --scalac-option -color:never \
-    given_open_variable_refusals.scala
-The input is the fixture with the three expectation comments corrected.
-Exit status: 1 (the seven intended compile errors).
+scalac 3.8.4's output for tests/errors/given_open_variable_refusals.scala
+(scala-cli compile -S 3.8.4 --server=false --scalac-option -color:never; exit status 1: the seven compile
+errors the file intends).
 
 Checking https://repo1.maven.org/maven2/org/scala-lang/scala3-library_3/maven-metadata.xml
 Failed to check https://repo1.maven.org/maven2/org/scala-lang/scala3-library_3/maven-metadata.xml
@@ -22,28 +10,28 @@ Checking https://github.com/coursier/jvm-index/raw/master/index.json
 Checked https://github.com/coursier/jvm-index/raw/master/index.json
 Downloading https://github.com/coursier/jvm-index/raw/master/index.json
 Downloaded https://github.com/coursier/jvm-index/raw/master/index.json
--- [E007] Type Mismatch Error: /home/agent/pi-scratch/lanes/scratch/d-090/reference/given_open_variable_refusals.scala:40:43
+-- [E007] Type Mismatch Error: tests/errors/given_open_variable_refusals.scala:40:43
 40 |  val boundary: Window[Unit, Unit] = saved.focus
    |                                     ^^^^^^^^^^^
    |                                     Found:    Window[Unit, Nothing]
    |                                     Required: Window[Unit, Unit]
    |
    | longer explanation available when compiling with `-explain`
--- [E007] Type Mismatch Error: /home/agent/pi-scratch/lanes/scratch/d-090/reference/given_open_variable_refusals.scala:41:51
+-- [E007] Type Mismatch Error: tests/errors/given_open_variable_refusals.scala:41:51
 41 |  val fixed: Window[Unit, Unit] = Window.fixed(()).focus
    |                                  ^^^^^^^^^^^^^^^^^^^^^^
    |                                  Found:    Window[Unit, String]
    |                                  Required: Window[Unit, Unit]
    |
    | longer explanation available when compiling with `-explain`
--- [E007] Type Mismatch Error: /home/agent/pi-scratch/lanes/scratch/d-090/reference/given_open_variable_refusals.scala:42:55
+-- [E007] Type Mismatch Error: tests/errors/given_open_variable_refusals.scala:42:55
 42 |  val bounded: Window[Unit, Unit] = Window.bounded(()).focus
    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
    |                                    Found:    Window[Unit, CharSequence]
    |                                    Required: Window[Unit, Unit]
    |
    | longer explanation available when compiling with `-explain`
--- [E007] Type Mismatch Error: /home/agent/pi-scratch/lanes/scratch/d-090/reference/given_open_variable_refusals.scala:43:46
+-- [E007] Type Mismatch Error: tests/errors/given_open_variable_refusals.scala:43:46
 43 |  val content: Window[Int, Unit] = Window(()).focus
    |                                   ^^^^^^^^^^^^^^^^
    |                                   Found:    Window[Unit, R]
@@ -52,7 +40,7 @@ Downloaded https://github.com/coursier/jvm-index/raw/master/index.json
    |                                   where:    R is a type variable
    |
    | longer explanation available when compiling with `-explain`
--- [E134] Type Error: /home/agent/pi-scratch/lanes/scratch/d-090/reference/given_open_variable_refusals.scala:44:15
+-- [E134] Type Error: tests/errors/given_open_variable_refusals.scala:44:15
 44 |  val none = F.f(Window(()), true)
    |             ^^^
    |  None of the overloaded alternatives of method f in object F with types
@@ -63,7 +51,7 @@ Downloaded https://github.com/coursier/jvm-index/raw/master/index.json
    |  where:    R  is a type variable
    |            w  is a reference to a value parameter
    |            w² is a reference to a value parameter
--- [E051] Reference Error: /home/agent/pi-scratch/lanes/scratch/d-090/reference/given_open_variable_refusals.scala:45:20
+-- [E051] Reference Error: tests/errors/given_open_variable_refusals.scala:45:20
 45 |  val ambiguous = F.g(Window(()))
    |                  ^^^
    |Ambiguous overload. The overloaded alternatives of method g in object F with types
@@ -72,7 +60,7 @@ Downloaded https://github.com/coursier/jvm-index/raw/master/index.json
    |both match arguments (Window[Unit, R])
    |
    | longer explanation available when compiling with `-explain`
--- [E007] Type Mismatch Error: /home/agent/pi-scratch/lanes/scratch/d-090/reference/given_open_variable_refusals.scala:46:38
+-- [E007] Type Mismatch Error: tests/errors/given_open_variable_refusals.scala:46:38
 46 |  val holder = new Holder(Window(()), "x")
    |                                      ^^^
    |                                      Found:    ("x" : String)

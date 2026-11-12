@@ -955,7 +955,7 @@ throws-annot	compile-error: expected 'extends' or a template body, found '@'
 toplevel-defs	compile-error: type App not found
 toplevel-implicits	compile-error: type App not found
 toplevel-mixed	compile-error: x is already defined as value x; overloading a value with a method is not supported
-toplevel-stale	compile-error: foo234 is already defined as method foo234 in /home/agent/teq/../teq-ref/scala3/tests/run/toplevel-stale/A_1.scala
+toplevel-stale	compile-error: foo234 is already defined as method foo234 in $SCALA3/tests/run/toplevel-stale/A_1.scala
 trait-extends-inline-trait-uses	compile-error: modifier inline is not allowed for this definition
 trait-static-forwarder	compile-error: test contains Java sources
 traitNoInit	run-error: Error: UnsupportedOperationException: reflection is not available on JavaScript
@@ -1014,17 +1014,17 @@ unit-volatile-var	compile-error: value getDeclaredFields is not a member of Clas
 unittest_collection	compile-error: type mismatch: found ListBuffer[String], required ArrayBuffer[String]
 unreachable	compile-error: type App not found
 unroll-caseclass-integration	compile-error: wrong number of patterns for Unrolled: expected 4, found 2
-unroll-classMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-classMethod-integra
+unroll-classMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-classMethod-integration/UnrollTestPlatformSpe
 unroll-clause-interleaving	compile-error: expected '=', found '['
-unroll-curriedMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-curriedMethod-integ
-unroll-genericMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-genericMethod-integ
-unroll-methodWithImplicit-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-methodWithImplicit-
+unroll-curriedMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-curriedMethod-integration/UnrollTestPlatformS
+unroll-genericMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-genericMethod-integration/UnrollTestPlatformS
+unroll-methodWithImplicit-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-methodWithImplicit-integration/UnrollTestPlat
 unroll-multiple	run-error: Error: IndexOutOfBoundsException: 1
-unroll-objectMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-objectMethod-integr
-unroll-primaryConstructor-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-primaryConstructor-
-unroll-secondParameterList-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-secondParameterList
-unroll-secondaryConstructor-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-secondaryConstructo
-unroll-traitMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in /home/agent/teq/../teq-ref/scala3/tests/run/unroll-traitMethod-integra
+unroll-objectMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-objectMethod-integration/UnrollTestPlatformSp
+unroll-primaryConstructor-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-primaryConstructor-integration/UnrollTestPlat
+unroll-secondParameterList-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-secondParameterList-integration/UnrollTestPla
+unroll-secondaryConstructor-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-secondaryConstructor-integration/UnrollTestPl
+unroll-traitMethod-integration	compile-error: UnrollTestPlatformSpecificV3 is already defined as object UnrollTestPlatformSpecificV3 in $SCALA3/tests/run/unroll-traitMethod-integration/UnrollTestPlatformSpe
 unroll-value-class	compile-error: type Unrolled is already defined
 value-class-extractor	compile-error: type Product3 not found
 value-class-extractor-2	compile-error: this is not a case class or enum case

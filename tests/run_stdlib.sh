@@ -69,9 +69,14 @@ for src in tests/cases/*.scala tests/cases/*/; do
     { grep -E "$SUMMARY" "$out/$name.diagnostics" | sed "s|^|$name: |"; } >> "$out/summaries.txt"
   else
     fail=$((fail + 1))
-    reason=$(grep -m1 -o 'error: .*' "$out/$name.actual" | cut -c1-140)
-    [ -z "$reason" ] && reason=$(grep -m1 'Error\|error' "$out/$name.actual" | cut -c1-140)
+    reason=$(grep -m1 -o 'error: .*' "$out/$name.actual")
+    [ -z "$reason" ] && reason=$(grep -m1 'Error\|error' "$out/$name.actual")
     [ -z "$reason" ] && reason="output differs"
+    # A stack frame names the built file by its absolute path: the note keeps the file's name alone, the same on
+    # every machine, and is cut to its length after that (cut first, a long checkout's path leaves a piece of itself).
+    reason=${reason//"$PWD/$out/"/}
+    reason=${reason//"$out/"/}
+    reason=$(cut -c1-140 <<< "$reason")
     printf 'fail %s\t%s\n' "$name" "$(tr '\t' ' ' <<< "$reason")" >> "$out/results.txt"
     [ -n "$STDLIB_REASONS" ] && echo "$name: $reason"
   fi

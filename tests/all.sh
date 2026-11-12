@@ -128,6 +128,7 @@ suite rust-warnings ./tests/rust-warnings.sh
 suite no-caps ./tests/no-caps.sh
 suite gate-coverage ./tests/gate-coverage.sh
 suite gate-scripts  ./tests/gate-scripts.sh
+suite tree-paths    ./tests/tree-paths.sh
 # Outside the groups the gate runs: it needs the crates of proptests/ fetched once, and skips
 # without them.
 suite prop          ./tests/prop.sh

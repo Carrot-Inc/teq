@@ -256,7 +256,7 @@ pieced="lsp:4 jvm-watch:2 modules:2 split:2"
 # pieces_of <suite>: its number of pieces, nothing for a suite run whole.
 pieces_of() { local spec; for spec in $pieced; do [ "${spec%%:*}" != "$1" ] || echo "${spec#*:}"; done; }
 compare="budget runtime sentinel"
-local_lines="records no-caps size instructions instructions-derive app-api-time memory asymptotics app-export app-export-accept app-api app-api-test app-workers app-chain app-cypress app-fix app-scalac"
+local_lines="records no-caps tree-paths size instructions instructions-derive app-api-time memory asymptotics app-export app-export-accept app-api app-api-test app-workers app-chain app-cypress app-fix app-scalac"
 # The application's first commit with its rules under teq fix, which the app-fix line waits for in the pinned snapshot;
 # empty until the application has merged them.
 app_fix_since=
@@ -476,6 +476,12 @@ local_line() {
       code=$?
       result no-caps local $(($(now) - s)) $code "$(tail -1 "$out/no-caps.log")" "$file"
       ;;
+    tree-paths)
+      # a machine's absolute path in a tracked file; the list of tracked files is the worktree's (git ls-files)
+      (cd "$wt" && timeout 120 ./tests/tree-paths.sh) > "$out/tree-paths.log" 2>&1
+      code=$?
+      result tree-paths local $(($(now) - s)) $code "$(tail -1 "$out/tree-paths.log")" "$file"
+      ;;
     size)
       # the minified column of the size budgets is esbuild's output, measured with this machine's esbuild
       (cd "$wt" && TEQ=$bin timeout 600 ./teq interp tests/size.scala) > "$out/size.log" 2>&1
@@ -693,6 +699,7 @@ local_half() {
   fi
   local_line records &
   local_line no-caps &
+  local_line tree-paths &
   local_line size &
   { local_line app-export; local_line app-export-accept; } &
   local_line app-api &

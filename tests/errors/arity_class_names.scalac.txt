@@ -1,37 +1,35 @@
-Scala 3.8.4 evidence for the coordinator's 2026-10-30 11:27 UTC ruling on
-arity_class_names.scala:59 (the type mismatch at source line 46).
-Source: lanes/scratch/fix-b-base/scalac-arity_class_names.txt
-RefinedPrinter.toText (RefinedPrinter.scala:290) uses toTextFunction when
+scalac 3.8.4's output for tests/errors/arity_class_names.scala. The type mismatch at its line 46 prints a
+function type: RefinedPrinter.toText (RefinedPrinter.scala:290) uses toTextFunction when
 Definitions.isFunctionSymbol (Definitions.scala:1661-1662) matches Function023.
 
 The `--offline` option is experimental
 Please bear in mind that non-ideal user experience should be expected.
 If you encounter any bugs or have feedback to share, make sure to reach out to the maintenance team at https://github.com/VirtusLab/scala-cli
--- [E008] Not Found Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:22:15
+-- [E008] Not Found Error: tests/errors/arity_class_names.scala:22:15
 22 |  val t: scala.Tuple01[Int] = Tuple1(1)
    |         ^^^^^^^^^^^^^
    |type Tuple01 is not a member of scala - did you mean scala.Tuple1? or perhaps scala.Tuple11 or scala.Tuple21?
--- [E008] Not Found Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:23:15
+-- [E008] Not Found Error: tests/errors/arity_class_names.scala:23:15
 23 |  val f: scala.Function01[Int, Int] = x => x
    |         ^^^^^^^^^^^^^^^^
    |type Function01 is not a member of scala - did you mean scala.Function0? or perhaps scala.Function1.type or scala.Function1 or scala.Function11?
--- [E008] Not Found Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:31:17
+-- [E008] Not Found Error: tests/errors/arity_class_names.scala:31:17
 31 |  val t23: scala.Tuple23[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int] = ???
    |           ^^^^^^^^^^^^^
    |type Tuple23 is not a member of scala - did you mean scala.Tuple13? or perhaps scala.Tuple2 or scala.Tuple20 or scala.Tuple21?
--- [E008] Not Found Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:32:17
+-- [E008] Not Found Error: tests/errors/arity_class_names.scala:32:17
 32 |  val t01: scala.Tuple01[Int] = ???
    |           ^^^^^^^^^^^^^
    |type Tuple01 is not a member of scala - did you mean scala.Tuple1? or perhaps scala.Tuple11 or scala.Tuple21?
--- [E008] Not Found Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:33:17
+-- [E008] Not Found Error: tests/errors/arity_class_names.scala:33:17
 33 |  val f01: scala.Function01[Int, Int] = ???
    |           ^^^^^^^^^^^^^^^^
    |type Function01 is not a member of scala - did you mean scala.Function0? or perhaps scala.Function1.type or scala.Function1 or scala.Function11?
--- [E008] Not Found Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:43:19
+-- [E008] Not Found Error: tests/errors/arity_class_names.scala:43:19
 43 |  val bogus: scala.Tuple23[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int] = tuple
    |             ^^^^^^^^^^^^^
    |type Tuple23 is not a member of scala - did you mean scala.Tuple13? or perhaps scala.Tuple2 or scala.Tuple20 or scala.Tuple21?
--- [E007] Type Mismatch Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:46:292
+-- [E007] Type Mismatch Error: tests/errors/arity_class_names.scala:46:292
 46 |  def bad(x: scala.Function023[Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int]): scala.Function23[Int, Int, Int, Int, Int, I
    |
    |Found:    (x : (Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int,
@@ -40,26 +38,26 @@ If you encounter any bugs or have feedback to share, make sure to reach out to t
    |  Int, Int, Int, Int, Int, Int, Int, Int) => Int
    |
    | longer explanation available when compiling with `-explain`
--- [E007] Type Mismatch Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:49:84
+-- [E007] Type Mismatch Error: tests/errors/arity_class_names.scala:49:84
 49 |  def bad(x: scala.ContextFunction01[Int, Int]): scala.ContextFunction1[Int, Int] = x
    |                                                                                    ^
    |                                           Found:    (x : (Int) ?=> Int)
    |                                           Required: Int
    |
    | longer explanation available when compiling with `-explain`
--- [E008] Not Found Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:53:25
+-- [E008] Not Found Error: tests/errors/arity_class_names.scala:53:25
 53 |  val function23 = scala.Function23
    |                   ^^^^^^^^^^^^^^^^
    |value Function23 is not a member of scala - did you mean scala.Function? or perhaps scala.Function1?
--- [E008] Not Found Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:54:23
+-- [E008] Not Found Error: tests/errors/arity_class_names.scala:54:23
 54 |  val context1 = scala.ContextFunction1
    |                 ^^^^^^^^^^^^^^^^^^^^^^
    |                 value ContextFunction1 is not a member of scala
--- [E008] Not Found Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:55:24
+-- [E008] Not Found Error: tests/errors/arity_class_names.scala:55:24
 55 |  val function2 = scala.Function2
    |                  ^^^^^^^^^^^^^^^
    |                  value Function2 is not a member of scala
--- [E008] Not Found Error: /home/agent/tr-pool/w30/scratch/acn/arity_class_names.scala:56:22
+-- [E008] Not Found Error: tests/errors/arity_class_names.scala:56:22
 56 |  val tuple23 = scala.Tuple23
    |                ^^^^^^^^^^^^^
    |      value Tuple23 is not a member of scala - did you mean scala.Tuple?
