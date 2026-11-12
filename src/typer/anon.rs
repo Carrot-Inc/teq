@@ -761,6 +761,8 @@ impl<'a> Worker<'a> {
         for locals in &self.inline.outer_locals {
             visible.extend(locals.iter().copied());
         }
+        // A class made while a given's search is open reads that given's lazy local (`open_knots`).
+        visible.extend(self.open_knots());
         visible
     }
 

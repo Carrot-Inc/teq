@@ -57,6 +57,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A class made by an inline given's expansion can read the given's own recursive instance: such a program built
+  JavaScript that threw `ReferenceError: rec$0 is not defined` and was refused on the JVM and by `teq interp`.
 - In split output a case object whose `equals` comes from a superclass, or from a trait of that superclass, uses
   it: such an object compared by reference when its superclass was registered after it.
 - `-Wtostring-interpolated` reads an opaque alias as what it stands for: an interpolated value whose type is an

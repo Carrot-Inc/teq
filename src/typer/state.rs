@@ -824,7 +824,7 @@ impl<'a> Worker<'a> {
         // A call met in a transparent expansion stands where the outermost call does, in the
         // scopes the expanded bodies open around it (`defers_in_expansion`): what its expansion
         // searches at the site, and where it reports, as its `Inlined` stands in dotty's tree.
-        let (env, span, outer_locals) = match (self.inline.depth > 0, self.inline.site_env.clone(), self.inline.sites.first().map(|s| s.span)) {
+        let (env, span, mut outer_locals) = match (self.inline.depth > 0, self.inline.site_env.clone(), self.inline.sites.first().map(|s| s.span)) {
             (true, Some(site), Some(at)) => {
                 let mut locals = self.inline.outer_locals.clone();
                 locals.push(self.env_locals());
@@ -833,6 +833,11 @@ impl<'a> Worker<'a> {
             }
             _ => (self.shared_worker_env(), span, Vec::new()),
         };
+        // The lazy locals of the givens open around the call (`open_knots`), which a class its expansion makes captures.
+        let knots = self.open_knots();
+        if !knots.is_empty() {
+            outer_locals.push(knots);
+        }
         let recv_type = call.recv.and_then(|r| self.inline.recv_types.remove(&r)).map(|t| self.zonk(t));
         let recv_this_written = call.recv.and_then(|r| self.inline.this_written.get(&r).copied());
         let pending = PendingCall {

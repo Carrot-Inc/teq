@@ -1836,7 +1836,7 @@ i5720.scala	pass	check:pass
 i5750.scala	pass	check:pass	
 i576.scala	pass	check:pass	
 i5765.scala	pass	check:pass	
-i5766.scala	fail	check:pass	teq: jvm backend: Test1$$anon$rdz9ms_102$rdz9ms_174.next: a lazy val that is not in scope of the generated method
+i5766.scala	pass	check:pass	
 i5773.scala	fail	check:fail	i5773.scala:14:18: Implicit classes must accept exactly one primary constructor parameter
 i5773a.scala	pass	check:pass	
 i5773b.scala	fail	check:fail	i5773b.scala:21:13: value appendS is not a member of Int
@@ -2284,7 +2284,7 @@ inline-match-sub-cases.scala	fail	check:fail	inline-match-sub-cases.scala:8:19: 
 inline-named-typeargs.scala	pass	check:pass	
 inline-null-wrapper.scala	fail	check:fail	option: -Yexplicit-nulls (teq has no flag for it)
 inline-rewrite.scala	pass	check:pass	
-inline-separate	fail	check:fail	Test_2.scala:6:12: Implicit search problem too large. an implicit search was terminated with failure after trying 50000 expressions. The root candidate for the search was: Foo
+inline-separate	fail	check:fail	Test_2.scala:6:12: no given instance of type Foo was found for parameter ev
 inline-t2425.scala	pass	check:fail	
 inline-unapply.scala	pass	check:pass	
 inline-val-constValue-1.scala	pass	check:pass	

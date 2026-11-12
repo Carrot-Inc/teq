@@ -5557,7 +5557,17 @@ impl<'a> Worker<'a> {
             // (a synthesized mirror's refinement, which a macro's quoted pattern reads).
             let arg_types = std::mem::take(&mut self.inline.arg_types);
             self.inline.site_at_end = true;
+            // The call is kept under the candidate's entry, whose lazy local a class of its expansion
+            // reads (`PendingCall::outer_locals`); the expansion itself runs with no search open, as below.
+            // A candidate without a using clause has no entry and no local of its own, and none is made for it.
+            let own = opened.is_some();
+            if own {
+                self.reopen_given(&mut opened, g, target.unwrap_or(ret_ty));
+            }
             self.defer_plain_inline(te, &call, &sig, &subst, &args, arg_types, ret_ty, ret_ty, span, Some(ret_ty));
+            if own {
+                self.close_given(&mut knot);
+            }
             self.inline.site_at_end = false;
             // Found for an argument of a transparent given expanded where it is found, it is
             // expanded at once, after the pending calls typed before it, as the given's expansion
@@ -5720,6 +5730,14 @@ impl<'a> Worker<'a> {
             None => self.open_given(g, target),
         };
         self.given_stack.push(entry);
+    }
+
+    /// The lazy locals of the givens whose searches are open (`recursive_ref`), each defined in a block around
+    /// its given's instance: a class made meanwhile, or by an inline call kept meanwhile, captures them
+    /// (`visible_to_class`). dotty's lazy implicit is a local of the search's owner (`SearchRoot.linkBynameImplicit`)
+    /// defined around the outermost search's result (`emitDictionary`): in scope for every class in the result.
+    pub(super) fn open_knots(&self) -> Vec<SymId> {
+        self.given_stack.iter().filter_map(|open| open.rec).collect()
     }
 
     /// The end of `reopen_given`'s expansion: a request of the body that referred back to the

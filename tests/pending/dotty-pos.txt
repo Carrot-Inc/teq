@@ -499,7 +499,6 @@ i5574.scala	i5574.scala:8:19: type argument f does not have the same kind as its
 i5588b.scala	i5588b.scala:18:5: this expression cannot be assigned to
 i5625b.scala	i5625b.scala:11:13: type argument t does not conform to upper bound AnyVal
 i5655	java source: teq reads none
-i5766.scala	teq: jvm backend: Test1$$anon$rdz9ms_102$rdz9ms_174.next: a lazy val that is not in scope of the generated method
 i5773.scala	i5773.scala:14:18: Implicit classes must accept exactly one primary constructor parameter
 i5773b.scala	i5773b.scala:21:13: value appendS is not a member of Int
 i5938.scala	i5938.scala:17:3: 'erased' is not part of the supported Scala subset

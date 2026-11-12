@@ -872,7 +872,19 @@ given_inherited_param_result	pass	-
 given_inline_trait_member	pass	-	
 given_intersection	pass	-	
 given_intersection_bounds	pass	-	
+given_knot_class_function_literal	pass	-	
+given_knot_class_inner_given	pass	-	
+given_knot_class_member	pass	-	
+given_knot_class_nested	pass	-	
+given_knot_class_summon_inline	pass	-	
+given_knot_class_through_inline_instance	pass	-	
+given_knot_class_through_instance	pass	-	
+given_knot_class_toplevel	pass	-	
+given_knot_class_transparent	pass	-	
+given_knot_class_two_givens	pass	-	
 given_knot_inline_candidate	pass	-	
+given_knot_none_for_plain_inline_argument	pass	-	
+given_knot_none_for_plain_inline_argument_twice	pass	-	
 given_laziness	pass	-	
 given_lazy_self_init_js	cannot run	-	its expectation is Scala.js's
 given_local_inline	pass	-	
