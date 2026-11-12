@@ -2138,6 +2138,11 @@ sam_conversion_after_overloaded_apply	fail	-	error: not supported on JavaScript:
 sam_eta_java_function	pass	-	
 sam_function_value	pass	-	
 sam_lambda_this	pass	-	
+sam_literal_receiver_shapes	fail	-	error: type IllegalThreadStateException not found
+sam_literal_receiver_synthesized	fail	-	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+sam_literal_receiver_unchanged	pass	-	
+sam_literal_receiver_unchanged_local_default	pass	-	
+sam_literal_receiver_wait_notify	fail	-	error: type IllegalThreadStateException not found
 sam_method_by_name	pass	-	
 sam_outer_name	pass	-	
 sam_overloaded_lambda	pass	-	

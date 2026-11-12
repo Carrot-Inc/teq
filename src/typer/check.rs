@@ -4518,6 +4518,9 @@ impl<'a> Worker<'a> {
                         continue;
                     }
                 }
+                // A default typed where its method stands (a local def's) is its getter's, no part of the
+                // method's body (`plain_member`).
+                let outer_plain = self.plain_member.take();
                 defaults.push(default.map(|e| {
                     // A default is checked with the method's own type parameters open, as
                     // scalac's default getter is; `def f[T](x: T = "abc")` fixes `T` at the call.
@@ -4535,6 +4538,7 @@ impl<'a> Worker<'a> {
                     };
                     if p.by_name { self.prog.add(TExpr::Lambda(ast::ListRef::EMPTY, te)) } else { te }
                 }));
+                self.plain_member = outer_plain;
             }
             if let Frame::Locals { names, givens, .. } = &mut self.env.frames[frame] {
                 names.extend(clause.params.iter().map(|p| (p.name, p.sym)));
@@ -4941,6 +4945,16 @@ impl<'a> Worker<'a> {
         ty
     }
 
+    /// Whether the local definition `sym`, whose body's typing starts with `owners` entries in the owner
+    /// chain, is typed where its statement stands: the scope that binds it opened at that depth.
+    fn at_own_statement(&self, sym: SymId, owners: usize) -> bool {
+        let bound = self.env.frames.iter().rev().find_map(|f| match f {
+            Frame::Locals { names, owner, .. } if names.iter().any(|&(_, s)| s == sym) => Some(*owner as usize),
+            _ => None,
+        });
+        bound == Some(owners)
+    }
+
     fn type_body_in_now(&mut self, sym: SymId, sig: &MethodSig, expected: Option<TypeId>) -> TypeId {
         let (file, def_id) = {
             let s = self.syms.sym(sym);
@@ -4960,6 +4974,22 @@ impl<'a> Worker<'a> {
         }
         let owners_depth = self.sites.owners.len();
         self.sites.owners.push(SiteOwner::Sym(sym));
+        // The member a function literal's unqualified synthesized names are judged by (`plain_member`): an
+        // ordinary method or a field's initialiser of a class. A local definition is its member's where its
+        // statement is reached; typed before that for a name inside another definition or literal, whose
+        // owner chain is then the one at hand, it is no member's.
+        let outer_plain = self.plain_member;
+        if let Owner::Class(c) = self.syms.sym(sym).owner {
+            let plain = def.mods & mods::INLINE == 0
+                && match &def.kind {
+                    DefKind::Fun(_) => def.name != names::INIT,
+                    DefKind::Val { .. } => true,
+                    _ => false,
+                };
+            self.plain_member = plain.then_some((c, owners_depth as u32));
+        } else if self.plain_member.is_some() && !self.at_own_statement(sym, owners_depth) {
+            self.plain_member = None;
+        }
         // What the body's typing reports is its own (`Diagnostic::owner`).
         let outer_owner = self.entered_body(sym);
         self.bodies_in_progress.push(sym);
@@ -5079,6 +5109,7 @@ impl<'a> Worker<'a> {
         self.env.frames.pop();
         self.ext_scope = outer_ext_scope;
         self.sites.owners.truncate(owners_depth);
+        self.plain_member = outer_plain;
         self.bodies_in_progress.pop();
         self.var_frame_end(var_frame);
         self.defining = outer_defining;

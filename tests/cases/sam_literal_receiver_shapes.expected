@@ -1,0 +1,13 @@
+a Java interface: holds the host's monitor: true
+this.synchronized (the control): true
+a Scala function type: true
+a Scala trait of one method: true
+nested, a Java interface in a function in a Java interface: true
+in a local def: true
+passed as an argument (new Thread): true
+in the constructor: true
+in an object: true
+toString, hashCode, getClass, a member: Host 42 Host the host's member
+notifyAll inside the host's block: notified
+a member named as the interface's method: Host.run
+an anonymous class written out: its own true, the host's false

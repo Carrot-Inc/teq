@@ -1,0 +1,12 @@
+a parent's argument: o
+a secondary constructor's argument: so
+a top-level class's parent's argument: t
+a top-level class's secondary constructor's argument: s
+a local class's parent's argument: o
+an enum case's argument: ab
+an object's parent's argument: obo
+an inline method's body, a literal in a literal: n
+an inline method's body, called in a literal: l
+an inline method's body, called from an inner class: l
+an inline method's body that calls an inline method: <>
+an inline parameter's argument in a literal: true true true

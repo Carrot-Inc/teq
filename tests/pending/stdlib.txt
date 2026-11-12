@@ -318,6 +318,9 @@ regex_unicode_class_case	throw new PatternSyntaxException(error, regex, -1);
 regroup_bincompat_lib	error: not found: rgb
 runtime_objects	error: not supported on JavaScript: method equals of scala.runtime.BoxesRunTime (a Java definition without an implementation in the std's pl
 sam_conversion_after_overloaded_apply	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+sam_literal_receiver_shapes	error: type IllegalThreadStateException not found
+sam_literal_receiver_synthesized	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+sam_literal_receiver_wait_notify	error: type IllegalThreadStateException not found
 scala3_exceptions_2	output differs
 scala3_i16806	error: type IllegalThreadStateException not found
 scala3_i20856	error: type IllegalThreadStateException not found

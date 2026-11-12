@@ -2186,6 +2186,11 @@ sam_conversion_after_overloaded_apply	pass	-
 sam_eta_java_function	pass	-	
 sam_function_value	pass	-	
 sam_lambda_this	pass	-	
+sam_literal_receiver_shapes	cannot run	-	the JVM's platform
+sam_literal_receiver_synthesized	pass	-	
+sam_literal_receiver_unchanged	pass	-	
+sam_literal_receiver_unchanged_local_default	pass	-	
+sam_literal_receiver_wait_notify	cannot run	-	the JVM's platform
 sam_method_by_name	pass	-	
 sam_outer_name	pass	-	
 sam_overloaded_lambda	pass	-	

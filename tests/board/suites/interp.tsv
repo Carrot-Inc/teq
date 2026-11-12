@@ -1480,8 +1480,8 @@ lazy_race	fail	-	exception
 lazy_recursion	fail	-	output
 lazy_serialize	fail	-	compile
 lazy_thread_unsafe	pass	-	
-lazy_thread_unsafe_given	fail	-	timeout
-lazy_thread_unsafe_given_sites	fail	-	timeout
+lazy_thread_unsafe_given	fail	-	output
+lazy_thread_unsafe_given_sites	fail	-	output
 lazy_thread_unsafe_reentrant	pass	-	
 lazy_thread_unsafe_reentrant_object	pass	-	
 lazy_thread_unsafe_reentrant_renamed	pass	-	
@@ -2186,6 +2186,11 @@ sam_conversion_after_overloaded_apply	pass	-
 sam_eta_java_function	pass	-	
 sam_function_value	pass	-	
 sam_lambda_this	pass	-	
+sam_literal_receiver_shapes	pass	-	
+sam_literal_receiver_synthesized	pass	-	
+sam_literal_receiver_unchanged	pass	-	
+sam_literal_receiver_unchanged_local_default	fail	-	unsupported
+sam_literal_receiver_wait_notify	pass	-	
 sam_method_by_name	pass	-	
 sam_outer_name	pass	-	
 sam_overloaded_lambda	pass	-	

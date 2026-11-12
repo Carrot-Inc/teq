@@ -956,7 +956,13 @@ impl<'a> Worker<'a> {
                     if let Some(c) = self.this_class() {
                         self.complete_class(c);
                         let self_ty = self.syms.this_type(c);
-                        let this = self.prog.add(TExpr::This);
+                        // Inside a function literal of an ordinary method or a field's initialiser
+                        // (`in_plain_literal`), the enclosing instance as a written `this` names it (`this_ref`):
+                        // a literal converted to an interface has its body in the literal's class, where the
+                        // local that stands for the instance is the receiver, never that class's own `this`
+                        // (dotty types the name as a selection on `This(cls)`, and the literal is a closure of
+                        // the class until ExpandSAMs). Everywhere else the bare `this`.
+                        let this = if self.in_plain_literal(c) { self.this_ref(c) } else { self.prog.add(TExpr::This) };
                         return self.apply_member(this, self_ty, name, targs, lists, span, expected);
                     }
                 }
@@ -10203,6 +10209,39 @@ impl<'a> Worker<'a> {
             }
         }
         Arc::new(out)
+    }
+
+    /// Whether the name being typed stands inside a function literal whose nearest enclosing definition is
+    /// an ordinary method or a field's initialiser of `c` (`plain_member`): between the member's entry in the
+    /// owner chain and here only function literals and local vals and defs that are not inline, a literal
+    /// among them; outside a constructor call's arguments, an inline expansion, an inline definition's
+    /// check and a quote.
+    #[inline(never)]
+    fn in_plain_literal(&self, c: ClassId) -> bool {
+        let Some((member_of, at)) = self.plain_member else { return false };
+        if member_of != c || self.parent_args_of == Some(c) || self.inline.depth > 0 || self.inline.checking > 0 || self.quote.level > 0 {
+            return false;
+        }
+        let owners = &self.sites.owners;
+        let Some(&super::site::SiteOwner::Sym(member)) = owners.get(at as usize) else { return false };
+        if self.syms.sym(member).owner != Owner::Class(c) {
+            return false;
+        }
+        let mut literal = false;
+        for owner in &owners[at as usize + 1..] {
+            match *owner {
+                super::site::SiteOwner::Lambda(_) => literal = true,
+                super::site::SiteOwner::Binder(..) | super::site::SiteOwner::PatternTemp(_) => {}
+                super::site::SiteOwner::Sym(s) => {
+                    let info = self.syms.sym(s);
+                    if info.owner != Owner::Local || info.mods & crate::ast::mods::INLINE != 0 {
+                        return false;
+                    }
+                }
+                super::site::SiteOwner::Dummy(_) => return false,
+            }
+        }
+        literal
     }
 
     /// Whether the class `c` has the member `name` that the compiler gives classes (`copy` a case

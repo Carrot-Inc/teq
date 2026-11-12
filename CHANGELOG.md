@@ -61,6 +61,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- An unqualified `synchronized`, `wait`, `notifyAll`, `toString`, `hashCode` or `getClass` inside a function
+  literal converted to a Java interface is the enclosing instance's, as scalac's is (it was the lambda object's).
 - An implicit search no longer answers "no given instance" because two unrelated classes of a large program fell
   on one bit of the divergence check, which compares the goals' covering sets as scalac does.
 - A lambda whose body leaves its result's type constructor open takes that constructor's arguments as scalac does

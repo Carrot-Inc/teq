@@ -238,6 +238,8 @@ impl<'a> Worker<'a> {
             }
             _ => {}
         }
+        // A default's getter is no body of its method (`plain_member`).
+        let outer_plain = self.plain_member.take();
         // The getter's parameters: the method's type parameters, without their context bounds,
         // and the value parameters of the clauses before the default's own (`getterParamss`).
         let tparams = site.tparams.iter().map(|&p| (self.syms.tparam(p).name, p)).collect();
@@ -285,6 +287,7 @@ impl<'a> Worker<'a> {
         self.ext_scope = outer_ext_scope;
         self.env.frames.pop();
         self.sites.owners.truncate(owners_depth);
+        self.plain_member = outer_plain;
         let stored = if site.param.by_name { self.prog.add(TExpr::Lambda(ast::ListRef::EMPTY, te)) } else { te };
         (stored, ret)
     }

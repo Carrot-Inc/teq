@@ -1093,6 +1093,14 @@ pub struct Worker<'a> {
     /// The members whose bodies are being typed, innermost last: a macro that asks for the
     /// tree of the method it is called in gets the signature, not the body typed again.
     pub bodies_in_progress: Vec<SymId>,
+    /// The ordinary method or the field's initialiser of a class whose body is being typed, as the class
+    /// and the index of the member's own entry in `sites.owners`: an unqualified synthesized member named
+    /// inside a function literal of it takes the enclosing instance as a written `this` names it
+    /// (`in_plain_literal`). Set where a member's body starts, None for any other member (an inline one, a
+    /// given), and cleared in a default's getter; a local definition keeps its member's. What starts no
+    /// member's body (a class's body, a constructor) leaves it as it is, and is told apart there by its
+    /// class and by the owner chain.
+    pub plain_member: Option<(ClassId, u32)>,
     /// The typings under way that number their variables apart (`var_frame_begin`): per frame,
     /// the variables' count at its start and how many the frames nested in it made since.
     pub var_frames: Vec<(u32, u32)>,
@@ -2972,6 +2980,7 @@ impl<'a> Worker<'a> {
             import_heads: FxMap::default(),
             interpolations: FxMap::default(),
             bodies_in_progress: Vec::new(),
+            plain_member: None,
             var_frames: Vec::new(),
             val_init: Default::default(),
             class_done: Default::default(),
@@ -3417,6 +3426,7 @@ impl<'a> Worker<'a> {
             inline_deps: Default::default(),
             interpolations: self.interpolations.clone(),
             bodies_in_progress: Default::default(),
+            plain_member: None,
             var_frames: Vec::new(),
             val_init: self.val_init.attach(),
             class_done: self.class_done.attach(),

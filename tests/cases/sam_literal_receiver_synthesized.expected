@@ -1,0 +1,9 @@
+copy: Point(9,2)
+toString of a case class: Point(1,2)
+hashCode of a case class: true
+productPrefix: Point
+getClass: Point
+ordinal: 1
+toString of a plain class: true
+hashCode of a plain class: true
+toString in a Scala function: true

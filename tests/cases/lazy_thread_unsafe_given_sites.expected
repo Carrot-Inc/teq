@@ -1,7 +1,7 @@
-in an object: 42 42
-in a trait held by a class: 43 43
-at the top level: 44 44
-anonymous: 45 45
-with a using clause (a def): 46 46
+in an object: 42 42, both inside: true
+in a trait held by a class: 43 43, both inside: true
+at the top level: 44 44, both inside: true
+anonymous: 45 45, both inside: true
+with a using clause (a def): 46 46, both inside: true
 reading itself: x = 2 after 2 run(s)
 a local one: 2 after 2 run(s)
