@@ -1,0 +1,7 @@
+exit 0
+warning 29:16 interpolation uses toString
+warning 30:16 interpolation uses toString
+warning 31:16 interpolation uses toString
+warning 32:16 interpolation uses toString
+warning 33:16 interpolation uses toString
+warning 34:16 interpolation uses toString

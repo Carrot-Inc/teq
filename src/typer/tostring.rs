@@ -198,6 +198,21 @@ impl<'a> Worker<'a> {
         if let Type::Union(a, b, _) = self.types.get(ty) {
             return self.lint_to_string(a, span) || self.lint_to_string(b, span);
         }
+        // The lint's phase stands after `ElimOpaque` (`Compiler.scala`), which turns an opaque type into a
+        // normal alias: `=:=` and `isPrimitiveValueType` read through it (refined's `String Refined P`,
+        // `opaque type Refined[+T, P] <: T = T`, is a `String`; an opaque alias of `Int` a primitive). The
+        // widening and the union's split stand before it, as `tp.widen` leaves a reference to an alias as it
+        // is: an opaque alias of `Int | String` or of `"yes"` is no `String` and no primitive, and warns.
+        // An opaque alias that refers back to itself (`opaque type Rec = Rec`, `Grow[T] = Grow[List[T]]`) is a
+        // Cyclic Error at its definition in scalac; teq's typer lets it through, and reading through it has no
+        // end. The count below guards those programs alone and goes when teq has that check: a real chain of
+        // opaque aliases is a handful deep, and a growing one adds a constructor to the type at each step, so
+        // the count bounds that work too. Past it the lint goes on with the type it has, an opaque one.
+        let mut ty = ty;
+        for _ in 0..64 { // more aliases than this are read through only in a program scalac rejects (E140, E046)
+            let Some(under) = self.opaque_erasure(ty) else { break };
+            ty = self.deref(under);
+        }
         let w = crate::source::Warning::id(crate::warnings::id::FORMAT_INTERPOLATION_ERROR);
         let t_string = self.b.t_string;
         if self.is_same(ty, t_string) {
@@ -208,12 +223,16 @@ impl<'a> Worker<'a> {
             self.warn_as(span, "interpolated Unit value", w);
             return true;
         }
+        // `isPrimitiveValueType` asks the type's class (`classSymbol`), which an alias of a singleton
+        // (`opaque type One = 1`) has from the singleton's underlying type.
+        let of_class = self.widen_path(ty);
+        let of_class = self.widen_lit(of_class);
         let b = &self.b;
         let primitives = [b.t_boolean, b.t_byte, b.t_short, b.t_char, b.t_int, b.t_long, b.t_float, b.t_double];
-        if primitives.iter().any(|&p| p == ty) {
+        if primitives.iter().any(|&p| p == of_class) {
             return false;
         }
-        if primitives.iter().any(|&p| self.is_same(ty, p)) {
+        if primitives.iter().any(|&p| self.is_same(of_class, p)) {
             return false;
         }
         self.warn_as(span, "interpolation uses toString", w);
@@ -224,6 +243,42 @@ impl<'a> Worker<'a> {
 #[cfg(test)]
 mod tests {
     use super::first_conversion;
+    use crate::source::Span;
+    use crate::symbols::{Owner, SymKind};
+    use crate::types::{SymId, TypeId};
+
+    /// The declared type of `Cyclic.name` in the typed program, an opaque type.
+    fn member_type(w: &mut super::Worker, name: &str) -> TypeId {
+        let s = (0..w.syms.syms.len() as u32)
+            .map(SymId)
+            .find(|&s| {
+                let info = w.syms.sym(s);
+                matches!(info.kind, SymKind::Def)
+                    && w.name_ref(info.name) == name
+                    && matches!(info.owner, Owner::Class(c) if w.name_ref(w.syms.class(c).name) == "Cyclic")
+            })
+            .unwrap_or_else(|| panic!("no member Cyclic.{}", name));
+        let ty = w.sig_of(s).ret;
+        assert!(w.opaque_erasure(ty).is_some(), "Cyclic.{} is of an opaque type", name);
+        ty
+    }
+
+    /// The shapes of an opaque alias that refers back to itself, which scalac rejects at the definition (E140 and
+    /// E046 Cyclic Error) and teq's typer lets through: the lint returns on each, with the warning of a type that
+    /// is no `String` and no primitive. `Rec`, `A` and `Fix[W]` come back to the type they started from; `Grow` and
+    /// `GA` grow at each step and never do. A nesting of an alias that names no alias is read through to its end.
+    #[test]
+    fn the_lint_returns_on_an_opaque_alias_that_refers_back_to_itself() {
+        const PROGRAM: &str = "object Cyclic:\n  opaque type Rec = Rec\n  opaque type A = B\n  opaque type B = A\n  opaque type W[T] = T\n  opaque type Fix[F[_]] = F[Fix[F]]\n  opaque type Grow[T] = Grow[List[T]]\n  opaque type GA[T] = GB[List[T]]\n  opaque type GB[T] = GA[T]\n  def rec: Rec = ???\n  def a: A = ???\n  def fix: Fix[W] = ???\n  def grow: Grow[Int] = ???\n  def ga: GA[Int] = ???\n  def nested: W[W[W[String]]] = ???\n@main def run(): Unit = println(1)\n";
+        crate::with_typed_program("tostring-cyclic-opaque", PROGRAM, &["--wtostring-interpolated"], |w| {
+            for name in ["rec", "a", "fix", "grow", "ga"] {
+                let ty = member_type(w, name);
+                assert!(w.lint_to_string(ty, Span::new(0, 1)), "Cyclic.{} warns", name);
+            }
+            let nested = member_type(w, "nested");
+            assert!(!w.lint_to_string(nested, Span::new(0, 1)), "W[W[W[String]]] is a String");
+        });
+    }
 
     #[test]
     fn conversions_are_read_as_the_format_checker_reads_them() {

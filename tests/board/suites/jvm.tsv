@@ -2496,6 +2496,7 @@ toplevel_init_failed	cannot run	-	its expectation is Scala.js's
 toplevel_init_given_objects	fail	-	output
 toplevel_init_order	pass	-	
 toplevel_init_triggers	pass	-	
+tostring_opaque_string	pass	-	
 trailing_commas	pass	-	
 trait_body	pass	-	
 trait_empty_parameters	fail	-	compile

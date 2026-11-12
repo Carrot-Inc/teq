@@ -33,6 +33,8 @@ feature_hide: -feature -Werror
 feature_nested: -feature -Werror
 tostring: -Wtostring-interpolated
 tostring:
+tostring_opaque: -Wtostring-interpolated
+tostring_opaque_alias: -Wtostring-interpolated
 interpolation_calls: -Wtostring-interpolated
 nowarn_filter: -Wunused:imports -Werror
 nowarn_typed: -Wunused:explicits

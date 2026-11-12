@@ -104,6 +104,11 @@ method_type_arg_check_bounds	missing '14:13: error: type argument Int does not c
 nested_projection_cycle	exit code 0
 new_eta_expanded_opaque	missing 'error: [A] =>> O.F[A] does not have a constructor'
 nonsensical_hidden	present '2:10: error: Only function types can be followed by _'
+opaque_alias_cyclic_applied	exit code 0
+opaque_alias_cyclic_grow	exit code 0
+opaque_alias_cyclic_grow_pair	exit code 0
+opaque_alias_cyclic_pair	exit code 0
+opaque_alias_cyclic_self	exit code 0
 opaque_definition_recovery	exit code 0
 opaque_equality_memo	missing 'of types O.T and Int cannot be compared with == or !='
 opaque_trait_prefix.check	< tests/errors/opaque_trait_prefix.scala:12:24: error: Found: (h : Html.Tag[Node])

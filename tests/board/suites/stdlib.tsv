@@ -2434,6 +2434,7 @@ toplevel_init_failed	pass	-
 toplevel_init_given_objects	pass	-	
 toplevel_init_order	pass	-	
 toplevel_init_triggers	pass	-	
+tostring_opaque_string	pass	-	
 trailing_commas	pass	-	
 trait_body	pass	-	
 trait_empty_parameters	fail	-	error: parameterized trait Empty is indirectly implemented, needs to be implemented directly so that arguments can be passed

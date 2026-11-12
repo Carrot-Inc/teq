@@ -610,6 +610,11 @@ numeric_narrowing	pass	-
 object_member_override	pass	-	
 object_override_incompatible	pass	-	
 object_path_display	pass	-	
+opaque_alias_cyclic_applied	fail	-	exit code 0
+opaque_alias_cyclic_grow	fail	-	exit code 0
+opaque_alias_cyclic_grow_pair	fail	-	exit code 0
+opaque_alias_cyclic_pair	fail	-	exit code 0
+opaque_alias_cyclic_self	fail	-	exit code 0
 opaque_definition_recovery	fail	-	exit code 0
 opaque_equality_memo	fail	-	missing 'of types O.T and Int cannot be compared with == or !='
 opaque_missing_rhs_recovery	pass	-	

@@ -165,6 +165,7 @@ js/tapir_schemas	pass	-
 js/tapir_sttp_client	pass	-	
 js/tapir_sttp_client_fetch	pass	-	
 js/target_name	pass	-	
+js/tostring_refined_string	pass	-	
 js/tuple_map_cats_syntax	pass	-	
 js/unmod_explicit_implicit	pass	-	
 js/unmod_native_subtrait_vars	pass	-	
