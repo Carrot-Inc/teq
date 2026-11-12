@@ -69,6 +69,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   repeated one is typed as its sequence (`xs => join(xs*)`): such lambdas were refused with `type mismatch: found
   Any` or `missing parameter type`. Where scalac finds no callee to type a parameter from (the parameter twice
   among the arguments, a plain argument of a repeated parameter), the lambda is refused as scalac refuses it.
+- A lambda's open parameter is typed from an enum case its body applies to it, as from a case class
+  (`sink.contramap(Wrapped(_))` with `enum Node: case Wrapped(inner: Inner)`): such a lambda was refused with
+  `type mismatch: found Any`.
 - An unqualified `synchronized`, `wait`, `notifyAll`, `toString`, `hashCode` or `getClass` inside a function
   literal converted to a Java interface is the enclosing instance's, as scalac's is (it was the lambda object's).
 - An implicit search no longer answers "no given instance" because two unrelated classes of a large program fell

@@ -493,6 +493,8 @@ lambda_open_result_refusals	pass	-
 lambda_param_callee_argument_twice	pass	-	
 lambda_param_callee_block_statement	pass	-	
 lambda_param_callee_braces_no_formal	pass	-	
+lambda_param_callee_companion_apply	pass	-	
+lambda_param_callee_enum_case_written_apply	pass	-	
 lambda_param_callee_refused_no_formal	pass	-	
 lambda_param_callee_refused_open_formal	pass	-	
 lambda_param_callee_repeated_plain	pass	-	

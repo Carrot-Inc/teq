@@ -4533,13 +4533,16 @@ impl<'a> Worker<'a> {
             _ => (f, None),
         };
         let callee = self.static_ref(f)?;
-        if targs.is_some() && self.constructed_class(callee).is_some() {
+        // The class the application constructs: a class's, a companion's, or an enum case's,
+        // whose application is its constructor's with the result widened to the enum.
+        let constructed = self.constructed_class(callee).or_else(|| self.enum_case_class(callee));
+        if targs.is_some() && constructed.is_some() {
             return None;
         }
         if open && !self.declared_in_place(callee) {
             return None;
         }
-        if let Some(c) = self.constructed_class(callee) {
+        if let Some(c) = constructed {
             self.complete_class(c);
             if open && self.has_other_creators(c) {
                 return None;
@@ -4602,6 +4605,15 @@ impl<'a> Worker<'a> {
         let Expr::Apply(_, args) = ast.expr(body) else { return false };
         let args = ast.expr_list(args);
         args.len() > count && args[count - 1..].iter().any(|&a| matches!(ast.expr(a), Expr::Typed(_, t) if matches!(ast.ty(t), TyExpr::Repeated(_))))
+    }
+
+    /// The class of an enum case with parameters that `callee` names by the case's object: what
+    /// its application constructs (`Callee::Ctor`), a class `constructed_class` leaves out, which
+    /// answers for a companion of a class of kind `Class`. dotty's callee there is the companion's
+    /// synthetic `apply` over the case's parameters (`Desugar.classDef`).
+    fn enum_case_class(&self, callee: super::resolve::TermRef) -> Option<ClassId> {
+        let c = self.syms.class(self.constructing_object(callee)?).companion?;
+        (self.syms.class(c).kind == ClassKind::EnumCase).then_some(c)
     }
 
     /// Whether the callee `callee` names is declared where the reference finds it: a definition

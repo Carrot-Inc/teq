@@ -1789,9 +1789,15 @@ impl<'a> Worker<'a> {
         if let TermRef::Class(c) | TermRef::ValueClass(_, c) = callee {
             return Some(c);
         }
+        self.companion_class(self.constructing_object(callee)?)
+    }
+
+    /// The object `callee` names, where an application of it is its companion's construction:
+    /// an object without an `apply` of its own (a written `apply` is an alternative beside the
+    /// class's creation, and the arguments choose between them).
+    pub(super) fn constructing_object(&self, callee: TermRef) -> Option<ClassId> {
         let SymKind::Object(o) = self.syms.sym(callee.sym()?).kind else { return None };
-        let class = self.companion_class(o)?;
-        (!self.syms.class(o).members.contains_key(&names::APPLY)).then_some(class)
+        (!self.syms.class(o).members.contains_key(&names::APPLY)).then_some(o)
     }
 
     /// Whether `f` in `f(args) op= rhs` names a value whose element is updated, rather than a
