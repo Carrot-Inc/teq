@@ -9,6 +9,10 @@ exports	pass	-
 given_instances	pass	-	
 givens	pass	-	
 java_package	pass	-	
+lazy_descriptors	pass	-	
+lazy_local_class_names	pass	-	
+lazy_nested_objects	pass	-	
+lazy_vals	pass	-	
 member_meet	fail	-	not in scalac's layout: < meetmin/Api threeResult(Lmeetmin/A;Ljava/lang/String;)Ljava/lang/String; public,static
 mirror_forwarders	pass	-	
 nested_objects	pass	-	

@@ -1915,6 +1915,9 @@ pub struct Worker<'a> {
     /// The vals, vars and class parameters of the sources that `@scala.volatile` marks, resolved
     /// with the `@targetName`s before a JVM build's reach (`Worker::source_target_names`).
     pub jvm_volatile: FxMap<SymId, ()>,
+    /// The lazy members of the sources that `@scala.annotation.threadUnsafe` marks, resolved in the same
+    /// walk (`Worker::source_marks`).
+    pub jvm_thread_unsafe: FxMap<SymId, ()>,
     /// Whether the build writes a module's products (`--products`, either target): what it
     /// reads of upstream products keeps their link path's model, its pickles naming what
     /// scalac's do (a product's top-level definition through its file's object).
@@ -3249,6 +3252,7 @@ impl<'a> Worker<'a> {
             choose_entry: true,
             open_world: false,
             jvm_volatile: FxMap::default(),
+            jvm_thread_unsafe: FxMap::default(),
             writes_products: false,
             emits_bodies: true,
             withheld_met: 0,
@@ -3673,6 +3677,7 @@ impl<'a> Worker<'a> {
             choose_entry: self.choose_entry,
             open_world: self.open_world,
             jvm_volatile: FxMap::default(),
+            jvm_thread_unsafe: FxMap::default(),
             writes_products: self.writes_products,
             emits_bodies: self.emits_bodies,
             withheld_met: 0,

@@ -1,0 +1,4 @@
+object member: initialiser runs 1, readers 8, distinct values 1
+class member: initialiser runs 1, readers 8, distinct values 1
+local: initialiser runs 1, readers 8, distinct values 1
+top-level: initialiser runs 1, readers 8, distinct values 1

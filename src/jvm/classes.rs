@@ -30,21 +30,14 @@ pub(super) struct ClassFileTrait {
     holders: Vec<(String, JType, HolderInit)>,
 }
 
-/// scalac's marker of a lazy val computed to null (`LazyVals.NullValue`).
-const NULL_VALUE: &str = "scala/runtime/LazyVals$NullValue$";
-/// dotty's thread-safe lazy vals (`LazyVals.transformMemberDefThreadSafe`).
-const VAR_HANDLE: &str = "java/lang/invoke/VarHandle";
-const LAZY_EVALUATING: &str = "scala/runtime/LazyVals$Evaluating$";
-const LAZY_WAITING: &str = "scala/runtime/LazyVals$Waiting";
-const LAZY_CONTROL: &str = "scala/runtime/LazyVals$LazyValControlState";
 
-/// How a lazy holder's getter computes the value the first time (`lazy_holder_body`).
+/// What a lazy member's initialiser computes (`Gen::thread_safe_init`): the right-hand side
+/// dotty's tree holds, the forwarder's per `Mixin` for a trait's member.
 #[derive(Clone)]
 pub(super) enum HolderInit {
     /// The trait's static `x$(T)`, which runs the lazy val's or object's initialiser.
     TraitStatic(Rc<str>),
     Expr(TExprId),
-    Unit,
     /// A Scala 2 trait's object, or the companion of a case class nested in the class: its
     /// module class made with the instance as its outer reference, `new T$cell$(this)` (dotty's
     /// `Mixin`, 286-295).
@@ -131,16 +124,32 @@ impl<'a> Gen<'a> {
             self.jar_getter_thunk(&l, g);
             return;
         }
+        // A local lazy val's accessor or initialiser named as another's: never one dropped in silence.
+        if matches!(p.body, PendingBody::LazyAccessor(_) | PendingBody::LazyInit(..)) && self.cw.has_method(&l.name, &l.desc) {
+            self.unsupported(&format!("internal error: a second local lazy val's method {}{} in the class", l.name, l.desc));
+            return;
+        }
         let mut params: Vec<(Option<SymId>, JType)> = Vec::new();
         if l.this {
-            let this = self.lifted_this_type();
+            // A copy of code declared in another class's code takes that class's instance.
+            let this = match l.home.or(self.this_class) {
+                Some(c) => self.class_type(c),
+                None => JType::L(self.this_name.clone()),
+            };
             params.push((None, this));
         }
         let key_slot = params.len() as u16;
         if l.key {
             params.push((None, JType::object()));
         }
+        // The keys that travel with lazy vals' holders, by their slots.
+        let mut keys: Vec<(SymId, u16)> = Vec::new();
         for c in &l.captures {
+            if c.key {
+                keys.push((c.sym, params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>()));
+                params.push((None, c.ty.clone()));
+                continue;
+            }
             params.push((Some(c.sym), if c.cell { JType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() }));
         }
         let first_param = params.len();
@@ -155,7 +164,8 @@ impl<'a> Gen<'a> {
                 let before = self.clause_start(fun.sym, *i);
                 (fun.params[..before].to_vec(), fun.defaults[*i], fun.defaults[*i].into_iter().collect())
             }
-            PendingBody::Lazy(_, init) => (Vec::new(), Some(*init), vec![*init]),
+            PendingBody::LazyInit(_, init) => (Vec::new(), Some(*init), vec![*init]),
+            PendingBody::LazyAccessor(_) => (Vec::new(), None, Vec::new()),
             PendingBody::JarGetter(_) => unreachable!(),
         };
         let is_lambda = matches!(p.body, PendingBody::Lambda(..));
@@ -166,14 +176,30 @@ impl<'a> Gen<'a> {
         }
         self.begin_method(true, false, &params, l.ret.clone(), &roots);
         self.m.lambda = is_lambda;
-        self.m.closure = is_lambda || matches!(p.body, PendingBody::Lazy(..));
+        self.m.closure = is_lambda || matches!(p.body, PendingBody::LazyInit(..));
         if l.key {
             self.m.return_key = Some(key_slot);
+            // A lazy val's accessor and initialiser take the key of its holder.
+            if let PendingBody::LazyAccessor(s) | PendingBody::LazyInit(s, _) = p.body {
+                self.m.lazy_keys.insert(s, key_slot);
+            }
         }
         if l.this {
             self.m.this_slot = Some(0);
+            self.m.this_home = l.home;
         }
-        for c in &l.captures {
+        for (s, slot) in keys {
+            self.m.lazy_keys.insert(s, slot);
+        }
+        // A class's copy of a local def of an object reached statically reads its `MODULE$` for `this`,
+        // and so does what such code lifts.
+        if let PendingBody::Fun(f) | PendingBody::Default(f, _) = p.body {
+            self.m.this_module = self.copy_home_module(cx.input.prog.funs[f.idx()].sym);
+        }
+        if l.module.is_some() {
+            self.m.this_module = l.module.clone();
+        }
+        for c in l.captures.iter().filter(|c| !c.key) {
             if let Some(local) = self.m.locals.get_mut(&c.sym) {
                 local.ty = c.ty.clone();
                 local.cell = c.cell;
@@ -196,57 +222,14 @@ impl<'a> Gen<'a> {
             }
         }
         match (&p.body, body) {
-            (PendingBody::Lazy(sym, init), _) => {
-                // The cell is the last parameter; it holds null until the value is there, a
-                // computed null as the cell itself, which no value of the program is
-                // (`LazyVals.transformLocalDef`'s `LazyRef` keeps an `initialized` flag apart).
-                let cell = JType::L(Rc::from(OBJECT_REF));
-                let cell_slot = params[..params.len() - 1].iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
-                let object = JType::object();
-                let declared = self.sym_type(*sym);
-                let null_once = matches!(declared, JType::L(_));
-                self.m.locals.insert(*sym, Local { slot: cell_slot, ty: declared.clone(), cell: true });
-                let ready = self.code.new_label();
-                let done = self.code.new_label();
-                self.load(cell_slot, &cell);
-                self.getfield(OBJECT_REF, "elem", &object);
-                self.dup();
-                self.jump_if(op::IFNONNULL, 1, ready);
-                self.pop_value(&object);
-                self.expr(*init, &declared);
-                self.adapt(&declared, &object);
-                let vt = self.vt(&object);
-                self.code.retype_top(vt);
-                let value = self.store_new(&object);
-                self.load(cell_slot, &cell);
-                self.load(value, &object);
-                if null_once {
-                    let computed = self.code.new_label();
-                    self.dup();
-                    self.jump_if(op::IFNONNULL, 1, computed);
-                    self.pop_value(&object);
-                    self.load(cell_slot, &cell);
-                    let vt = self.vt(&object);
-                    self.code.retype_top(vt);
-                    self.code.bind(computed);
-                }
-                self.putfield(OBJECT_REF, "elem", &object);
-                self.load(value, &object);
-                self.goto(done);
-                self.code.bind(ready);
-                if null_once {
-                    let held = self.code.new_label();
-                    self.dup();
-                    self.load(cell_slot, &cell);
-                    self.jump_if(op::IF_ACMPNE, 2, held);
-                    self.pop_value(&object);
-                    self.code.op(op::ACONST_NULL);
-                    self.code.push(VT::Null);
-                    self.code.bind(held);
-                }
-                self.code.bind(done);
-                self.adapt(&object, &declared);
-                self.return_value(&declared);
+            // A local lazy val's accessor and initialiser take its holder last (`LazyVals.transformLocalDef`).
+            (PendingBody::LazyAccessor(sym), _) => {
+                let slot = params[..params.len() - 1].iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
+                self.lazy_accessor_body(*sym, slot);
+            }
+            (PendingBody::LazyInit(sym, init), _) => {
+                let slot = params[..params.len() - 1].iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
+                self.lazy_init_body(*sym, *init, slot);
             }
             (PendingBody::Fun(f), Some(body)) => {
                 let fun = &cx.input.prog.funs[f.idx()];
@@ -466,11 +449,15 @@ impl<'a> Gen<'a> {
         }
         let Some(body) = fun.body else { return };
         let proxies = self.proxy_syms(&fun.params[..k]);
-        let pm = self.proxied_mref(&m, &proxies);
+        let extras = self.extras_of(&fun.params[..k], None);
+        let pm = self.proxied_mref(&m, &proxies, &extras);
         let mut params: Vec<(Option<SymId>, JType)> = proxies.iter().zip(&pm.params).map(|(&s, t)| (Some(s), t.clone())).collect();
+        let extras_slot = 1 + params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
+        params.extend(pm.params[proxies.len()..pm.params.len() - m.params.len()].iter().map(|t| (None, t.clone())));
         params.extend(declared.iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
         self.begin_method(false, false, &params, pm.ret.clone(), &[body]);
         self.bind_proxies(&proxies);
+        self.bind_extras(&extras, extras_slot);
         self.code.line(cx.line_of(info.file, info.span.start));
         self.method_body(fun.sym, &fun.params, body);
         self.end_method(ACC_PUBLIC, &pm.name, &pm.desc);
@@ -501,25 +488,60 @@ impl<'a> Gen<'a> {
     }
 
     /// dotty's `isConstExprFinalVal` of the val `s` initialised with `init` (`tir::constant_val`):
-    /// no field holds it, in its class or a class that mixes its trait in.
+    /// no field holds it, in its class or a class that mixes its trait in. A top-level val's owner is
+    /// its file's module class, a Scala object (`Desugar.packageDef`), where dotty asks the same
+    /// (`file_constant`).
     fn constant(&self, s: SymId, init: TExprId) -> Option<ConstVal> {
         let input = &self.cx.input;
+        if matches!(input.syms.sym(s).owner, Owner::Package(_)) {
+            return self.file_constant(s, init);
+        }
         constant_val(input.prog, input.syms, input.types, input.asts, s, init)
     }
 
-    /// The constant a constant val's getter answers: its literal initialiser, or the literal
-    /// type it declares (`Memoize.transformDefDef`).
+    /// dotty's `isConstExprFinalVal` (SymUtils.scala 303-306) of the top-level val `s`: final and
+    /// of a `ConstantType` as its `info.resultType` is, the type the typer recorded for it
+    /// (`MethodSig::ret`) where none is written. Its initialiser, where it is no literal, runs in
+    /// `<clinit>` for its effects, the getter answering the constant. A type written that is no
+    /// literal type makes none: teq's types drop the reference to an alias, which dotty's
+    /// `info.resultType` keeps (`type A = 42; final val x: A` keeps its field), until they keep it
+    /// (queued with `tir::constant_val`, which this goes for then).
+    fn file_constant(&self, s: SymId, init: TExprId) -> Option<ConstVal> {
+        let input = &self.cx.input;
+        let info = input.syms.sym(s);
+        if info.kind != SymKind::Val || info.mods & mods::FINAL == 0 || info.mods & (mods::LAZY | mods::GIVEN | mods::INLINE) != 0 {
+            return None;
+        }
+        let file = info.file.0 as usize;
+        if file < input.asts.len() {
+            let ast = &input.asts[file];
+            if let Some(crate::ast::DefKind::Val { ty: Some(t), .. }) = info.def.and_then(|d| ast.defs.get(d.idx())).map(|def| &def.kind) {
+                if !matches!(ast.ty(*t), crate::ast::TyExpr::Lit(_)) {
+                    return None;
+                }
+            }
+        }
+        let Some(Type::Lit(l)) = info.sig.as_ref().map(|sig| input.types.get(sig.ret)) else { return None };
+        let literal = matches!(input.prog.expr(init), TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_));
+        Some(if literal { ConstVal::Literal } else { ConstVal::Declared(l) })
+    }
+
+    /// The constant a constant val's getter answers: its literal initialiser, or the constant of
+    /// the type it has (`Memoize` leaves the getter, the backend writes its `ConstantType`).
     fn constant_value(&mut self, constant: Option<ConstVal>, init: TExprId, ty: &JType) {
         let Some(ConstVal::Declared(l)) = constant else {
             self.expr(init, ty);
             return;
         };
-        let pushed = match self.cx.input.types.lit_val(l) {
-            // A class constant's value is its initialiser's, the `classOf` tree.
-            LitVal::Class(_) => {
-                self.expr(init, ty);
-                return;
-            }
+        let pushed = self.literal_value(l);
+        self.adapt(&pushed, ty);
+    }
+
+    /// `BCodeBodyBuilder.genConstant` (570-617) of the constant type `l`: its value pushed, of its
+    /// JVM type, every tag the types hold (a `null` and `()` are no constant types here).
+    pub(super) fn literal_value(&mut self, l: LitId) -> JType {
+        match self.cx.input.types.lit_val(l) {
+            LitVal::Class(t) => self.class_constant(t),
             LitVal::Int(v) => {
                 self.iconst(v);
                 JType::I
@@ -556,8 +578,7 @@ impl<'a> Gen<'a> {
                 self.sconst(self.cx.input.interner.get(n));
                 JType::L(Rc::from(STRING))
             }
-        };
-        self.adapt(&pushed, ty);
+        }
     }
 
     /// The value of default `d` as its getter returns it: a by-name parameter's default is typed
@@ -871,37 +892,72 @@ impl<'a> Gen<'a> {
             for (i, s) in self.class_captured(c).into_iter().enumerate() {
                 let base = encode(cx.input.interner.get(syms.sym(s).name));
                 let sinfo = syms.sym(s);
-                let ty = if sinfo.by_name { self.function_type(0) } else { self.sym_type(s) };
+                // A local lazy val is held as its holder (`LazyVals.transformLocalDef`).
+                let ty = if sinfo.by_name { self.function_type(0) } else if self.is_lazy_local(s) { self.lazy_holder_type(s) } else { self.sym_type(s) };
                 let held = self.held(s);
                 let field = if given_class && i == 0 { "$outer".to_string() } else { format!("{}$c{}", base, i) };
                 self.class_captures.push((s, field, ty, held));
             }
+            // The instances and keys its copies of local defs and lazy vals read (`Gen::class_extras`).
+            let extras = self.class_extras(c);
+            for (i, &h) in extras.homes.iter().enumerate() {
+                let field = self.home_field(h, i);
+                self.class_homes.push((h, field));
+            }
+            for (i, &x) in extras.keys.iter().enumerate() {
+                let field = self.key_field(x, i);
+                self.class_keys.push((x, field));
+            }
         }
 
         let fields = if is_trait { Vec::new() } else { self.class_fields(tc, n_captures) };
+        // The class's thread-safe lazy members, registered as they are written (`Gen::lazy_holder`),
+        // their handles declared first and looked up in the `<clinit>` written last.
+        self.lazy_holders.clear();
+        // An object's `<clinit>` is written last, once the handles it looks up first are known; a class with
+        // no lazy member (the names walk numbers none) writes it first, as it always has.
+        let mut module_clinit_wanted = false;
+        let clinit_first = !self.holds_lazy_members(Some(c), info.module_file());
+        // The holders an early `<clinit>` looked up (those of the fields written before it).
+        let mut early_lookups: Option<usize> = None;
         for f in fields.iter().filter(|f| f.constant.is_none()) {
+            if f.lazy && self.is_thread_unsafe(f.sym) {
+                // `@threadUnsafe`: the unsynchronised holder alone, no handle (`lazy_holder_body`).
+                let container = self.lazy_member_names(&f.name).0;
+                self.cw.field(ACC_PRIVATE, &container, "Ljava/lang/Object;");
+                continue;
+            }
+            if f.lazy {
+                // `private @volatile var x$lzyN: AnyRef` (`transformMemberDefThreadSafeNew`).
+                let h = self.lazy_holder(&f.name, &f.ty);
+                self.cw.field(ACC_PRIVATE | ACC_VOLATILE, &h.container, "Ljava/lang/Object;");
+                continue;
+            }
             let mut d = String::new();
-            let stored = if f.lazy { JType::object() } else { f.ty.clone() };
-            stored.desc(&mut d);
-            let access = if !f.lazy && self.is_volatile(f.sym) {
-                ACC_PRIVATE | ACC_VOLATILE
-            } else if f.lazy && cx.inner_given_objects.contains_key(&f.sym) {
-                // An instance's given object, over dotty's thread-safe holder and its `VarHandle`
-                // (`module_holder_init`).
-                self.cw.field(ACC_PRIVATE | ACC_STATIC, &format!("{}$lzy$lzyHandle", f.name), "Ljava/lang/invoke/VarHandle;");
+            f.ty.desc(&mut d);
+            let access = if self.is_volatile(f.sym) {
                 ACC_PRIVATE | ACC_VOLATILE
             } else if cx.private_params.contains_key(&f.sym) {
                 ACC_PRIVATE | ACC_FINAL
             } else {
                 ACC_PRIVATE
             };
-            self.cw.field(access, &if f.lazy { format!("{}$lzy", f.name) } else { f.name.clone() }, &d);
+            self.cw.field(access, &f.name, &d);
         }
         for (s, field, _, _) in self.class_captures.clone() {
             let mut d = String::new();
             self.anon_capture_type(s).desc(&mut d);
             let access = if field == "$outer" { ACC_PRIVATE | ACC_FINAL | ACC_SYNTHETIC } else { ACC_PRIVATE };
             self.cw.field(access, &field, &d);
+        }
+        // An instance of another class is read by the copies of the classes made here too.
+        for (h, field) in self.class_homes.clone() {
+            let mut d = String::new();
+            self.class_type(h).desc(&mut d);
+            self.cw.field(ACC_FINAL | ACC_SYNTHETIC, &field, &d);
+        }
+        for (_, field) in self.class_keys.clone() {
+            self.cw.field(ACC_PRIVATE, &field, "Ljava/lang/Object;");
         }
         if is_object {
             // An object nested in this one is a module val of it, a term member that is no method,
@@ -938,7 +994,12 @@ impl<'a> Gen<'a> {
                 self.cw.field(flags, &field, &desc);
             }
             self.cw.field(MODULE_FIELD, "MODULE$", &format!("L{};", name));
-            self.module_clinit(tc, &fields);
+            if clinit_first {
+                self.module_clinit(tc, &fields);
+                early_lookups = Some(self.lazy_holders.len());
+            } else {
+                module_clinit_wanted = true;
+            }
         }
         // A given object of a package or of objects is scalac's module class, an object's
         // protocol (`BCodeSkelBuilder`, 181-263): `<clinit>` makes the instance, whose constructor
@@ -946,7 +1007,12 @@ impl<'a> Gen<'a> {
         // the given through `MODULE$`.
         if given_module {
             self.cw.field(MODULE_FIELD, "MODULE$", &format!("L{};", name));
-            self.module_clinit(tc, &fields);
+            if clinit_first {
+                self.module_clinit(tc, &fields);
+                early_lookups = Some(self.lazy_holders.len());
+            } else {
+                module_clinit_wanted = true;
+            }
         }
         self.given_object_fields(&tc.init);
         let instance_enum = cx.enum_of_case(c).or(is_enum.then_some(c)).is_some_and(|e| cx.instance_enum(e));
@@ -961,23 +1027,11 @@ impl<'a> Gen<'a> {
             // The values are made together, in declaration order, when the enum is first
             // touched: a read of one initialises its class, and with it this superclass. Those of
             // an enum read through its companion's fields the companion makes (`store_enum_fields`).
-            let companion_makes = cx.has_enum_fields(c);
-            self.begin_method(true, false, &[], JType::V, &[]);
-            for &case in &info.children {
-                let cinfo = syms.class(case);
-                if companion_makes || cinfo.singleton.is_none() || !cx.input.reach.classes[case.idx()] {
-                    continue;
-                }
-                let case_name = self.class_name(case);
-                self.new_object(&case_name);
-                self.sconst(cx.input.interner.get(cinfo.name));
-                self.iconst(cinfo.ordinal as i32);
-                let string = JType::L(Rc::from(STRING));
-                self.invoke(Invoke::Special, &case_name, false, "<init>", &[string, JType::I], &JType::V);
-                self.putstatic(&case_name, "$instance", &JType::L(case_name.clone()));
+            // Its `<clinit>` is written last where it has lazy members (`enum_clinit`).
+            if clinit_first {
+                self.enum_clinit(c);
+                early_lookups = Some(self.lazy_holders.len());
             }
-            self.return_value(&JType::V);
-            self.end_method(ACC_STATIC, "<clinit>", "()V");
             // What the companion calls so that the values exist before its own body runs.
             self.begin_method(true, false, &[], JType::V, &[]);
             self.return_value(&JType::V);
@@ -1079,8 +1133,53 @@ impl<'a> Gen<'a> {
                 self.inner_written_companion_members(k, c);
             }
         }
+        // The `<clinit>`, its lazy members' `VarHandle` lookups first (`addInFront`, `MoveStatics`).
+        if module_clinit_wanted {
+            self.module_clinit(tc, &fields);
+        } else if is_enum && !instance_enum && !clinit_first {
+            self.enum_clinit(c);
+        } else if !self.lazy_holders.is_empty() && !self.cw.has_method("<clinit>", "()V") {
+            self.begin_method(true, false, &[], JType::V, &[]);
+            self.var_handle_lookups();
+            self.return_value(&JType::V);
+            let access = self.clinit_access();
+            self.end_method(access, "<clinit>", "()V");
+        }
+        if early_lookups.is_some_and(|n| self.lazy_holders.len() > n) {
+            self.unsupported("a lazy member the names walk did not number (its handle has no lookup)");
+        }
+        // The methods of its code's local lazy vals, whichever class reads them.
+        self.owned_lazy_methods(Some(c), info.file);
         self.drain_pending();
         self.finish_class(&name)
+    }
+
+    /// The `<clinit>` of an enum's class: its lazy members' handles, then the values, made
+    /// together in declaration order when the enum is first touched (a read of one initialises its
+    /// class, and with it this superclass); those of an enum read through its companion's fields
+    /// the companion makes (`store_enum_fields`).
+    fn enum_clinit(&mut self, c: ClassId) {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let companion_makes = cx.has_enum_fields(c);
+        self.begin_method(true, false, &[], JType::V, &[]);
+        self.var_handle_lookups();
+        for &case in &syms.class(c).children {
+            let cinfo = syms.class(case);
+            if companion_makes || cinfo.singleton.is_none() || !cx.input.reach.classes[case.idx()] {
+                continue;
+            }
+            let case_name = self.class_name(case);
+            self.new_object(&case_name);
+            self.sconst(cx.input.interner.get(cinfo.name));
+            self.iconst(cinfo.ordinal as i32);
+            let string = JType::L(Rc::from(STRING));
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &[string, JType::I], &JType::V);
+            self.putstatic(&case_name, "$instance", &JType::L(case_name.clone()));
+        }
+        self.return_value(&JType::V);
+        let access = self.clinit_access();
+        self.end_method(access, "<clinit>", "()V");
     }
 
     /// The static fields scalac declares in the owner of given objects, `Show$.given_Show_Int`
@@ -1103,6 +1202,9 @@ impl<'a> Gen<'a> {
     /// for `this` in the body, which the caller writes next.
     pub fn begin_module_clinit(&mut self, name: &Rc<str>, roots: &[TExprId]) {
         self.begin_method(true, false, &[], JType::V, roots);
+        // The handles of the module class's lazy members come first (`MoveStatics.rebuild`'s
+        // static constructor, which `genPlainClass` puts before the instance's making).
+        self.var_handle_lookups();
         let this = JType::L(name.clone());
         self.new_object(name);
         self.invoke(Invoke::Special, name, false, "<init>", &[], &JType::V);
@@ -1132,7 +1234,8 @@ impl<'a> Gen<'a> {
         self.store_enum_fields(&name, &enum_values);
         self.class_body(tc, fields, &this);
         self.return_value(&JType::V);
-        self.end_method(ACC_STATIC, "<clinit>", "()V");
+        let access = self.clinit_access();
+        self.end_method(access, "<clinit>", "()V");
     }
 
     /// The body of a class as its constructor runs it after the superclass's: the initialisers
@@ -1187,6 +1290,8 @@ impl<'a> Gen<'a> {
                         let base = self.class_name(b);
                         let mut types = vec![JType::L(base.clone())];
                         types.extend(proxies.iter().map(|&p| self.anon_capture_type(p)));
+                        let extras = self.extras_of(&declared, None);
+                        types.extend(self.extras_types(&extras));
                         self.load(slot, this);
                         self.load_proxies(&proxies, &declared, &given);
                         self.invoke(Invoke::Static, &base, true, "$init$", &types, &JType::V);
@@ -1250,6 +1355,86 @@ impl<'a> Gen<'a> {
         out
     }
 
+    /// The body of a `@threadUnsafe` lazy member's getter over the field `container` of the class being
+    /// written (an `Object`, null until the value is computed): computed once by `init`, then read. Not
+    /// safe across threads, and no state for a value being computed: a read from inside the initialiser
+    /// runs it again, as under dotty's `mkThreadUnsafeDef`, whose flag is set after the right-hand
+    /// side. A computed null is held as scala-library's `LazyVals$NullValue$`, so that it is computed
+    /// once too; an initialiser that throws leaves the holder empty.
+    fn lazy_holder_body(&mut self, name: &str, container: &str, ty: &JType, init: HolderInit) {
+        let owner = self.this_name.clone();
+        let this = JType::L(owner.clone());
+        let object = JType::object();
+        let null_once = matches!(ty, JType::L(_));
+        let ready = self.code.new_label();
+        let done = self.code.new_label();
+        self.load(0, &this);
+        self.getfield(&owner, container, &object);
+        self.dup();
+        self.jump_if(op::IFNONNULL, 1, ready);
+        self.pop_value(&object);
+        match init {
+            HolderInit::TraitStatic(base) => {
+                self.load(0, &this);
+                self.invoke(Invoke::Static, &base, true, &format!("{}$", name), &[JType::L(base.clone())], ty);
+            }
+            HolderInit::Expr(init) => self.expr(init, ty),
+            HolderInit::Module { class, outer } => {
+                self.new_object(&class);
+                self.load(0, &this);
+                self.invoke(Invoke::Special, &class, false, "<init>", &[JType::L(outer)], &JType::V);
+            }
+        }
+        self.adapt(ty, &object);
+        let vt = self.vt(&object);
+        self.code.retype_top(vt);
+        let value = self.store_new(&object);
+        self.load(0, &this);
+        self.load(value, &object);
+        if null_once {
+            self.null_to_sentinel();
+        }
+        self.putfield(&owner, container, &object);
+        self.load(value, &object);
+        self.goto(done);
+        self.code.bind(ready);
+        if null_once {
+            self.sentinel_to_null();
+        }
+        self.code.bind(done);
+        self.adapt(&object, ty);
+    }
+
+    /// The value on the stack, about to be stored in a lazy holder, with null replaced by
+    /// `LazyVals$NullValue$`: the holder's null stands for a value not computed yet.
+    fn null_to_sentinel(&mut self) {
+        let object = JType::object();
+        let null_value = JType::L(Rc::from(NULL_VALUE));
+        let vt = self.vt(&object);
+        self.code.retype_top(vt);
+        let computed = self.code.new_label();
+        self.dup();
+        self.jump_if(op::IFNONNULL, 1, computed);
+        self.pop_value(&object);
+        self.getstatic(NULL_VALUE, "MODULE$", &null_value);
+        self.code.bind(computed);
+    }
+
+    /// The value on the stack, read from a computed lazy holder, with `LazyVals$NullValue$`
+    /// replaced by the null it stands for.
+    fn sentinel_to_null(&mut self) {
+        let object = JType::object();
+        let null_value = JType::L(Rc::from(NULL_VALUE));
+        let held = self.code.new_label();
+        self.dup();
+        self.getstatic(NULL_VALUE, "MODULE$", &null_value);
+        self.jump_if(op::IF_ACMPNE, 2, held);
+        self.pop_value(&object);
+        self.code.op(op::ACONST_NULL);
+        self.code.push(VT::Null);
+        self.code.bind(held);
+    }
+
     /// Whether `@volatile` marks the val or var a field holds, which scalac's field carries as
     /// `ACC_VOLATILE` (`Mixin` copies a trait's var's annotations to the class's member,
     /// `Memoize` to its field): a source's by the annotation's class (`Worker::jvm_volatile`), a
@@ -1257,6 +1442,14 @@ impl<'a> Gen<'a> {
     fn is_volatile(&self, s: SymId) -> bool {
         let input = &self.cx.input;
         input.volatile.map_or(false, |v| v.get(&s).is_some()) || input.source_volatile.map_or(false, |v| v.contains_key(&s))
+    }
+
+    /// Whether `@threadUnsafe` marks the lazy member `s` of the sources (`Worker::jvm_thread_unsafe`): dotty's
+    /// `sym.isThreadUnsafe`, which `LazyVals.transformLazyVal` sends to `transformMemberDefThreadUnsafe`. A class
+    /// holding a trait's marked member asks of the trait's symbol, whose annotations `MixinOps.mkForwarderSym`
+    /// copies to the class's.
+    fn is_thread_unsafe(&self, s: SymId) -> bool {
+        self.cx.input.source_thread_unsafe.map_or(false, |m| m.contains_key(&s))
     }
 
     /// What a class passes to the parameters of a trait it mixes in anew, before the trait's
@@ -1479,13 +1672,11 @@ impl<'a> Gen<'a> {
                     let ty = self.sym_type(s);
                     self.m.locals.insert(s, Local { slot, ty, cell: true });
                 }
-                // The thunk of a lazy val, which a superclass's constructor takes as it is.
-                Held::Thunk => {
-                    self.m.locals.insert(s, Local { slot, ty: stored.clone(), cell: false });
-                }
             }
             slot += if stored.wide() { 2 } else { 1 };
         }
+        let extras = Extras { homes: self.class_homes.iter().map(|h| h.0).collect(), keys: self.class_keys.iter().map(|k| k.0).collect() };
+        self.bind_extras(&extras, slot);
         let this = JType::L(self.this_name.clone());
         let owner = self.this_name.clone();
         if is_value_case {
@@ -1585,6 +1776,20 @@ impl<'a> Gen<'a> {
                 self.putfield(&owner, &field, &t);
                 slot += if t.wide() { 2 } else { 1 };
             }
+            for (h, field) in self.class_homes.clone() {
+                let t = self.class_type(h);
+                self.load(0, &this);
+                self.load(slot, &t);
+                self.putfield(&owner, &field, &t);
+                slot += 1;
+            }
+            for (_, field) in self.class_keys.clone() {
+                let t = JType::object();
+                self.load(0, &this);
+                self.load(slot, &t);
+                self.putfield(&owner, &field, &t);
+                slot += 1;
+            }
         }
         if !is_anon && !fields_first {
             for &p in &tc.ctor_params {
@@ -1594,9 +1799,6 @@ impl<'a> Gen<'a> {
                 self.load(local.slot, &local.ty);
                 self.putfield(&owner, &f.name, &f.ty);
             }
-        }
-        if !is_object {
-            self.init_instance_case_companions(tc.id);
         }
         // An object's body runs in its `<clinit>`, once `MODULE$` holds the instance.
         if !is_object {
@@ -1668,10 +1870,11 @@ impl<'a> Gen<'a> {
     fn ctor_default_getters(&mut self, class: Option<ClassId>, of: Option<crate::tir::DefaultOf>, params: &[SymId], defaults: &[Option<TExprId>], clauses: &[ClauseSig]) {
         let declared: usize = clauses.iter().map(|c| c.params.len()).sum();
         let captures = params.len().saturating_sub(declared);
-        let captured: Vec<SymId> = match class {
-            Some(c) if captures > 0 && self.cx.input.syms.class(c).kind != ClassKind::Anon => self.class_captured(c),
-            _ => params[..captures].to_vec(),
+        let (captured, extras): (Vec<SymId>, Extras) = match class {
+            Some(c) if captures > 0 && self.cx.input.syms.class(c).kind != ClassKind::Anon => (self.class_captured(c), self.class_extras(c)),
+            _ => (params[..captures].to_vec(), Extras::default()),
         };
+        let extras_types = self.extras_types(&extras);
         for (i, d) in defaults.iter().enumerate() {
             let Some(d) = *d else { continue };
             if i < captures {
@@ -1679,6 +1882,8 @@ impl<'a> Gen<'a> {
             }
             let upto = captures + super::gen::clause_shape(clauses, i - captures).0;
             let mut before: Vec<(Option<SymId>, JType)> = captured.iter().map(|&p| (Some(p), self.anon_capture_type(p))).collect();
+            let extras_slot = before.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
+            before.extend(extras_types.iter().map(|t| (None, t.clone())));
             before.extend(params[captures..upto.min(i)].iter().map(|&p| (Some(p), self.sym_type(p))));
             // The getter's type as the typer completed it (`Namer.inferredResultType`), the
             // parameter's where nothing refers to the class's type parameters.
@@ -1690,6 +1895,7 @@ impl<'a> Gen<'a> {
             };
             let by_name = super::gen::clause_shape(clauses, i - captures).1.is_some();
             self.begin_method(true, false, &before, ret.clone(), &[d]);
+            self.bind_extras(&extras, extras_slot);
             for &s in &captured {
                 if self.held(s) == Held::Cell {
                     let ty = self.sym_type(s);
@@ -1706,22 +1912,70 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The class's own lazy members that `transformMemberDefThreadSafe` writes (`Gen::walk_lazy_names`).
+    pub(super) fn lazy_field_syms(&mut self, tc: &TClass) -> FxMap<SymId, ()> {
+        let captures = if self.cx.input.syms.class(tc.id).kind == ClassKind::Anon { tc.ctor_params.len() } else { tc.captures };
+        self.class_fields(tc, captures).iter().filter(|f| f.lazy && f.lazy_owner.is_none()).map(|f| (f.sym, ())).collect()
+    }
+
+    /// The getters of the forwarders `Mixin` gives the class for its traits' lazy members, in the order the class
+    /// holds them (`class_fields`' trait part, then `class_file_storage`'s holders), each with its name as written
+    /// (a class file's holder by its name there decoded, as dotty's unpickler reads it).
+    pub(super) fn lazy_forwarder_names(&mut self, tc: &TClass) -> Vec<(String, String)> {
+        let c = tc.id;
+        let captures = if self.cx.input.syms.class(c).kind == ClassKind::Anon { tc.ctor_params.len() } else { tc.captures };
+        let fields = self.class_fields(tc, captures);
+        let interner = self.cx.input.interner;
+        let mut out: Vec<(String, String)> = fields.iter().filter(|f| f.lazy && f.lazy_owner.is_some()).map(|f| (f.name.clone(), interner.get(self.cx.input.syms.sym(f.sym).name).to_string())).collect();
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let inherited = self.traits_implemented_above(c);
+        let bases: Vec<ClassId> = syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+        for b in bases {
+            if syms.class(b).kind != ClassKind::Trait || inherited.contains(&b) || cx.tclass_of[b.idx()] != u32::MAX {
+                continue;
+            }
+            let read = self.class_file_trait_fields(b);
+            for (name, _, _) in &read.holders {
+                if !fields.iter().any(|f| &f.name == name) && !out.iter().any(|(n, _)| n == name) {
+                    out.push((name.clone(), super::names::decode(name)));
+                }
+            }
+        }
+        out
+    }
+
     fn accessors(&mut self, f: &FieldDef) {
         let owner = self.this_name.clone();
         let this = JType::L(owner.clone());
         let getter_desc = method_desc(&[], &f.ty);
-        self.begin_method(false, false, &[], f.ty.clone(), &f.init.filter(|_| f.lazy && f.lazy_owner.is_none()).into_iter().collect::<Vec<_>>());
-        let mut holder_init = None;
-        if f.lazy && f.lazy_owner.is_none() && f.init.is_some() && self.cx.inner_given_objects.contains_key(&f.sym) {
-            self.module_holder_getter(&f.name, &f.ty);
-            holder_init = f.init;
+        // A `@threadUnsafe` member's getter computes its right-hand side itself (`lazy_holder_body`).
+        let thread_unsafe = f.lazy && self.is_thread_unsafe(f.sym);
+        self.begin_method(false, false, &[], f.ty.clone(), &f.init.filter(|_| thread_unsafe && f.lazy_owner.is_none()).into_iter().collect::<Vec<_>>());
+        let mut holder = None;
+        if thread_unsafe {
+            let container = self.lazy_member_names(&f.name).0;
+            match (f.lazy_owner, f.init) {
+                (Some(t), _) => {
+                    let base = self.class_name(t);
+                    self.lazy_holder_body(&f.name, &container, &f.ty, HolderInit::TraitStatic(base));
+                }
+                (None, Some(init)) => self.lazy_holder_body(&f.name, &container, &f.ty, HolderInit::Expr(init)),
+                (None, None) => self.unsupported("a lazy member without an initialiser"),
+            }
         } else if f.lazy {
+            // `transformMemberDefThreadSafe`: the getter over the holder, the initialiser after it.
             let init = match (f.lazy_owner, f.init) {
-                (Some(t), _) => HolderInit::TraitStatic(self.class_name(t)),
-                (None, Some(init)) => HolderInit::Expr(init),
-                (None, None) => HolderInit::Unit,
+                (Some(t), _) => Some(HolderInit::TraitStatic(self.class_name(t))),
+                (None, Some(init)) => Some(HolderInit::Expr(init)),
+                (None, None) => None,
             };
-            self.lazy_holder_body(&f.name, &f.ty, init);
+            let h = self.lazy_holder(&f.name, &f.ty);
+            self.thread_safe_getter(&h);
+            match init {
+                Some(init) => holder = Some((h, init)),
+                None => self.unsupported("a lazy member without an initialiser"),
+            }
         } else if let (Some(constant), Some(init)) = (f.constant, f.init) {
             self.constant_value(Some(constant), init, &f.ty);
         } else {
@@ -1737,10 +1991,12 @@ impl<'a> Gen<'a> {
         let param = matches!(info.owner, Owner::Class(t) if self.trait_params(t).contains(&f.sym));
         let fin = info.mods & mods::FINAL != 0 || (!param && (info.mods & mods::GIVEN != 0 || info.kind == SymKind::Given));
         // So is the implementation of a deferred given, as dotty's `implementDeferredGivens` makes it,
-        // and the getter of a class's given object, scalac's module.
-        let module = self.cx.inner_given_objects.contains_key(&f.sym);
+        // and the getter of a class's given object or object, scalac's module (`ModuleValCreationFlags`
+        // hold `Final`), or of a lazy given alias or a `final lazy val`, whose symbol LazyVals keeps.
+        let module = self.cx.inner_given_objects.contains_key(&f.sym) || matches!(info.kind, SymKind::Object(_));
+        let lazy_final = f.lazy && fin && !from_trait;
         // A constant's getter is final, as the val is (`Memoize`).
-        let access = if (from_trait && fin) || module || self.implements_deferred(f.sym) || f.constant.is_some() { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC };
+        let access = if (from_trait && fin) || module || lazy_final || self.implements_deferred(f.sym) || f.constant.is_some() { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC };
         self.end_method(access, &f.name, &getter_desc);
         let getter = MRef {
             owner: owner.clone(),
@@ -1758,8 +2014,8 @@ impl<'a> Gen<'a> {
         if typed {
             self.emit_bridges(f.sym, &getter);
         }
-        if let Some(init) = holder_init {
-            self.module_holder_init(&f.name, init);
+        if let Some((h, init)) = holder {
+            self.thread_safe_init(&h, &init);
         }
         if f.mutable {
             self.begin_method(false, false, &[(None, f.ty.clone())], JType::V, &[]);
@@ -1784,260 +2040,11 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The body of a lazy member's getter over teq's holder, the field `x$lzy` of the class
-    /// being written (an `Object`, null until the value is computed): computed once by `init`,
-    /// then read. Not safe across threads. A computed null is held as scala-library's
-    /// `LazyVals$NullValue$`, as scalac's holders hold it, so that it is computed once too (the
-    /// read that computes it answers the value itself, a later one the holder's, as scalac's
-    /// `mkThreadSafeDef`); an initialiser that throws leaves the holder empty.
-    pub(super) fn lazy_holder_body(&mut self, name: &str, ty: &JType, init: HolderInit) {
-        let owner = self.this_name.clone();
-        let this = JType::L(owner.clone());
-        let object = JType::object();
-        let field = format!("{}$lzy", name);
-        let null_once = matches!(ty, JType::L(_));
-        let ready = self.code.new_label();
-        let done = self.code.new_label();
-        self.load(0, &this);
-        self.getfield(&owner, &field, &object);
-        self.dup();
-        self.jump_if(op::IFNONNULL, 1, ready);
-        self.pop_value(&object);
-        match init {
-            HolderInit::TraitStatic(base) => {
-                self.load(0, &this);
-                self.invoke(Invoke::Static, &base, true, &format!("{}$", name), &[JType::L(base.clone())], ty);
-            }
-            HolderInit::Expr(init) => self.expr(init, ty),
-            HolderInit::Unit => self.adapt(&JType::V, ty),
-            HolderInit::Module { class, outer } => {
-                self.new_object(&class);
-                self.load(0, &this);
-                self.invoke(Invoke::Special, &class, false, "<init>", &[JType::L(outer)], &JType::V);
-            }
-        }
-        self.adapt(ty, &object);
-        let vt = self.vt(&object);
-        self.code.retype_top(vt);
-        let value = self.store_new(&object);
-        self.load(0, &this);
-        self.load(value, &object);
-        if null_once {
-            self.null_to_sentinel();
-        }
-        self.putfield(&owner, &field, &object);
-        self.load(value, &object);
-        self.goto(done);
-        self.code.bind(ready);
-        if null_once {
-            self.sentinel_to_null();
-        }
-        self.code.bind(done);
-        self.adapt(&object, ty);
-    }
-
-    /// The getter of an instance's module held as dotty's thread-safe lazy val
-    /// (`LazyVals.transformMemberDefThreadSafe`): the holder read, the module where it is one, else
-    /// `name$lzyINIT` (`module_holder_init`), which makes it once whatever the threads.
-    fn module_holder_getter(&mut self, name: &str, ty: &JType) {
-        let owner = self.this_name.clone();
-        let this = JType::L(owner.clone());
-        let object = JType::object();
-        let JType::L(module) = ty else { unreachable!("a module's type") };
-        let module = module.clone();
-        let ready = self.code.new_label();
-        let done = self.code.new_label();
-        self.load(0, &this);
-        self.getfield(&owner, &format!("{}$lzy", name), &object);
-        self.dup();
-        self.instance_of(&module);
-        self.jump_if(op::IFNE, 1, ready);
-        self.pop_value(&object);
-        self.load(0, &this);
-        self.invoke(Invoke::Special, &owner, false, &format!("{}$lzyINIT", name), &[], &object);
-        self.goto(done);
-        self.code.bind(ready);
-        self.code.bind(done);
-        self.checkcast(&module);
-    }
-
-    /// `name$lzyINIT`, dotty's state machine over the holder: `null`, then `Evaluating` while one
-    /// thread makes the module, `Waiting` once another waits for it, then the module, each step a
-    /// compare-and-set through the holder's `VarHandle` as scalac 3.8's (`LazyVals`'
-    /// `transformMemberDefThreadSafe` over `useVarHandles`), the handle kept in the static
-    /// `name$lzy$lzyHandle` once looked up. An access from the thread making the module waits on
-    /// its own latch, as scalac's does.
-    fn module_holder_init(&mut self, name: &str, init: TExprId) {
-        let owner = self.this_name.clone();
-        let this = JType::L(owner.clone());
-        let object = JType::object();
-        let evaluating = JType::L(Rc::from(LAZY_EVALUATING));
-        let waiting: Rc<str> = Rc::from(LAZY_WAITING);
-        let handle_type = JType::L(Rc::from(VAR_HANDLE));
-        let holder = format!("{}$lzy", name);
-        let handle_field = format!("{}$lzyHandle", holder);
-        self.begin_method(false, false, &[], object.clone(), &[init]);
-        // The holder's handle.
-        self.getstatic(&owner, &handle_field, &handle_type);
-        let vh = self.store_new(&handle_type);
-        // A label's frame holds the locals made before it: made once `vh` is.
-        let have = self.code.new_label();
-        self.load(vh, &handle_type);
-        self.jump_if(op::IFNONNULL, 1, have);
-        let lookup = JType::L(Rc::from("java/lang/invoke/MethodHandles$Lookup"));
-        let class = JType::L(Rc::from("java/lang/Class"));
-        self.invoke(Invoke::Static, "java/lang/invoke/MethodHandles", false, "lookup", &[], &lookup);
-        let class_index = self.cw.cp.class(&owner);
-        self.ldc(class_index);
-        self.code.push(VT::Object(self.cw.cp.class("java/lang/Class")));
-        self.sconst(&holder);
-        let object_index = self.cw.cp.class("java/lang/Object");
-        self.ldc(object_index);
-        self.code.push(VT::Object(self.cw.cp.class("java/lang/Class")));
-        self.invoke(Invoke::Virtual, "java/lang/invoke/MethodHandles$Lookup", false, "findVarHandle", &[class.clone(), JType::L(Rc::from(STRING)), class], &handle_type);
-        self.store(vh, &handle_type);
-        self.load(vh, &handle_type);
-        self.putstatic(&owner, &handle_field, &handle_type);
-        self.code.bind(have);
-        let lp = self.code.new_label();
-        self.code.bind(lp);
-        self.load(0, &this);
-        self.getfield(&owner, &holder, &object);
-        let cur = self.store_new(&object);
-        let not_null = self.code.new_label();
-        self.load(cur, &object);
-        self.jump_if(op::IFNONNULL, 1, not_null);
-        // null: this thread makes the module.
-        self.load(vh, &handle_type);
-        self.load(0, &this);
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        self.getstatic(LAZY_EVALUATING, "MODULE$", &evaluating);
-        self.var_handle_cas();
-        self.jump_if(op::IFEQ, 1, lp);
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        let result = self.store_new(&object);
-        let (start, end, handler) = (self.code.new_label(), self.code.new_label(), self.code.new_label());
-        let protected = self.code.locals_mark();
-        self.code.bind(start);
-        self.expr(init, &object);
-        self.store(result, &object);
-        self.code.bind(end);
-        self.module_holder_finish(&owner, &holder, vh, result);
-        self.load(result, &object);
-        self.return_value(&object);
-        self.code.add_handler(Handler { start, end, handler, catch_type: 0 });
-        self.code.locals_release(protected);
-        let throwable = JType::L(Rc::from("java/lang/Throwable"));
-        let tvt = self.vt(&throwable);
-        self.code.bind_handler(handler, tvt);
-        let exc = self.store_new(&throwable);
-        self.module_holder_finish(&owner, &holder, vh, result);
-        self.load(exc, &throwable);
-        self.code.op(op::ATHROW);
-        self.code.pop();
-        // A control state: `Evaluating` gets a latch to wait on, `Waiting` is waited on.
-        self.code.bind(not_null);
-        let return_cur = self.code.new_label();
-        let not_evaluating = self.code.new_label();
-        let return_null = self.code.new_label();
-        self.load(cur, &object);
-        self.instance_of(LAZY_CONTROL);
-        self.jump_if(op::IFEQ, 1, return_cur);
-        self.load(cur, &object);
-        self.getstatic(LAZY_EVALUATING, "MODULE$", &evaluating);
-        self.jump_if(op::IF_ACMPNE, 2, not_evaluating);
-        self.load(vh, &handle_type);
-        self.load(0, &this);
-        self.load(cur, &object);
-        self.new_object(&waiting);
-        self.invoke(Invoke::Special, &waiting, false, "<init>", &[], &JType::V);
-        self.var_handle_cas();
-        self.pop_value(&JType::Z);
-        self.goto(lp);
-        self.code.bind(not_evaluating);
-        self.load(cur, &object);
-        self.instance_of(&waiting);
-        self.jump_if(op::IFEQ, 1, return_null);
-        self.load(cur, &object);
-        self.checkcast(&waiting);
-        self.invoke(Invoke::Virtual, "java/util/concurrent/CountDownLatch", false, "await", &[], &JType::V);
-        self.goto(lp);
-        self.code.bind(return_null);
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        self.return_value(&object);
-        self.code.bind(return_cur);
-        self.load(cur, &object);
-        self.return_value(&object);
-        self.end_method(ACC_PRIVATE, &format!("{}$lzyINIT", name), "()Ljava/lang/Object;");
-    }
-
     /// `VarHandle.compareAndSet` over the handle, the receiver, the expected and the new value on
     /// the stack, a signature-polymorphic call of scalac's descriptor `(Object, Object, Object)Z`.
-    fn var_handle_cas(&mut self) {
+    pub(super) fn var_handle_cas(&mut self) {
         let object = JType::object();
         self.invoke(Invoke::Virtual, VAR_HANDLE, false, "compareAndSet", &[object.clone(), object.clone(), object], &JType::Z);
-    }
-
-    /// The end of a making of the module: `Evaluating` to the result, or the latch other threads
-    /// installed to the result and counted down (a failure leaves the holder `null` again).
-    fn module_holder_finish(&mut self, owner: &str, holder: &str, vh: u16, result: u16) {
-        let this = JType::L(Rc::from(owner));
-        let object = JType::object();
-        let handle_type = JType::L(Rc::from(VAR_HANDLE));
-        let evaluating = JType::L(Rc::from(LAZY_EVALUATING));
-        let done = self.code.new_label();
-        self.load(vh, &handle_type);
-        self.load(0, &this);
-        self.getstatic(LAZY_EVALUATING, "MODULE$", &evaluating);
-        self.load(result, &object);
-        self.var_handle_cas();
-        self.jump_if(op::IFNE, 1, done);
-        self.load(0, &this);
-        self.getfield(owner, holder, &object);
-        self.checkcast(LAZY_WAITING);
-        let lock = self.store_new(&JType::L(Rc::from(LAZY_WAITING)));
-        self.load(vh, &handle_type);
-        self.load(0, &this);
-        self.load(lock, &JType::L(Rc::from(LAZY_WAITING)));
-        self.load(result, &object);
-        self.var_handle_cas();
-        self.pop_value(&JType::Z);
-        self.load(lock, &JType::L(Rc::from(LAZY_WAITING)));
-        self.invoke(Invoke::Virtual, "java/util/concurrent/CountDownLatch", false, "countDown", &[], &JType::V);
-        self.code.bind(done);
-    }
-
-    /// The value on the stack, about to be stored in a lazy holder, with null replaced by
-    /// `LazyVals$NullValue$`: the holder's null stands for a value not computed yet.
-    fn null_to_sentinel(&mut self) {
-        let object = JType::object();
-        let null_value = JType::L(Rc::from(NULL_VALUE));
-        let vt = self.vt(&object);
-        self.code.retype_top(vt);
-        let computed = self.code.new_label();
-        self.dup();
-        self.jump_if(op::IFNONNULL, 1, computed);
-        self.pop_value(&object);
-        self.getstatic(NULL_VALUE, "MODULE$", &null_value);
-        self.code.bind(computed);
-    }
-
-    /// The value on the stack, read from a computed lazy holder, with `LazyVals$NullValue$`
-    /// replaced by the null it stands for.
-    fn sentinel_to_null(&mut self) {
-        let object = JType::object();
-        let null_value = JType::L(Rc::from(NULL_VALUE));
-        let held = self.code.new_label();
-        self.dup();
-        self.getstatic(NULL_VALUE, "MODULE$", &null_value);
-        self.jump_if(op::IF_ACMPNE, 2, held);
-        self.pop_value(&object);
-        self.code.op(op::ACONST_NULL);
-        self.code.push(VT::Null);
-        self.code.bind(held);
     }
 
     /// Whether `s` is the implementation the class being written was given for a deferred given
@@ -2129,9 +2136,15 @@ impl<'a> Gen<'a> {
                 let t = self.anon_capture_type(p);
                 params.push((Some(p), t));
             }
+            let extras_slot = params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
+            let extras = self.extras_of(&tc.ctor_params[..tc.captures], None);
+            for t in self.extras_types(&extras) {
+                params.push((None, t));
+            }
             let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
             self.begin_method(true, false, &params, JType::V, &roots);
             self.bind_proxies(&proxies);
+            self.bind_extras(&extras, extras_slot);
             self.m.this_slot = Some(0);
             for (field, e) in runs {
                 match field {
@@ -2448,16 +2461,13 @@ impl<'a> Gen<'a> {
                 self.return_value(&JType::V);
                 self.end_method(ACC_PUBLIC, &format!("{}_$eq", field), &setter_desc);
             }
+            // Each a thread-safe lazy val of the class, as `Mixin`'s forwarder of the member is one.
             for (name, ty, init) in &read.holders {
                 let getter_desc = method_desc(&[], ty);
                 if self.cw.has_method(name, &getter_desc) {
                     continue;
                 }
-                self.cw.field(ACC_PRIVATE, &format!("{}$lzy", name), "Ljava/lang/Object;");
-                self.begin_method(false, false, &[], ty.clone(), &[]);
-                self.lazy_holder_body(name, ty, init.clone());
-                self.return_value(ty);
-                self.end_method(ACC_PUBLIC, name, &getter_desc);
+                self.thread_safe_member(name, ty, init.clone(), ACC_PUBLIC);
             }
         }
     }
@@ -3443,6 +3453,29 @@ impl<'a> Gen<'a> {
 
     // ---- the top-level definitions of a file ----
 
+    /// The file module's `<clinit>`: its lazy members' handles looked up first, the instance, then the eager vals
+    /// in order, a constant's initialiser that is no literal run for its effects alone (`Constructors`).
+    fn file_module_clinit(&mut self, name: &Rc<str>, fields: &[FieldDef]) {
+        let this = JType::L(name.clone());
+        let roots: Vec<TExprId> = fields.iter().filter(|f| !f.lazy).filter_map(|f| f.init).collect();
+        self.begin_module_clinit(name, &roots);
+        let slot = self.m.this_slot.unwrap_or(0);
+        for f in fields.iter().filter(|f| !f.lazy) {
+            if let Some(constant) = f.constant {
+                if let ConstVal::Declared(_) = constant {
+                    self.statement(f.init.unwrap());
+                }
+                continue;
+            }
+            self.load(slot, &this);
+            self.expr(f.init.unwrap(), &f.ty);
+            self.putfield(name, &f.name, &f.ty);
+        }
+        self.return_value(&JType::V);
+        let access = self.clinit_access();
+        self.end_method(access, "<clinit>", "()V");
+    }
+
     pub fn emit_file_module(&mut self, file: FileId) -> (String, Vec<u8>) {
         let cx = self.cx;
         let prog = cx.input.prog;
@@ -3472,35 +3505,59 @@ impl<'a> Gen<'a> {
         let group = cx.file_group[file.0 as usize];
         let vals: &[(SymId, TExprId)] = if group == u32::MAX { &[] } else { &cx.layout.file_groups[group as usize].1 };
         let file_reached = reach.files.get(file.0 as usize).copied().unwrap_or(false);
+        self.lazy_holders.clear();
         let mut fields: Vec<FieldDef> = Vec::new();
         for &(s, init) in vals {
+            // An inline val is erased (`isEffectivelyErased`, `Erasure.typedValDef`): no field and no getter, every
+            // read of it the constant the typer folded.
+            if syms.sym(s).mods & mods::INLINE != 0 {
+                continue;
+            }
             let eager = crate::emit::layout::is_eager_top_val(syms, s, &cx.layout.const_vals);
             if (eager && !file_reached) || (!eager && !reach.vals[s.idx()]) || cx.given_objects.contains_key(&s) || cx.given_classes.contains_key(&s) {
                 continue;
             }
             let ty = self.sym_type(s);
             let fname = self.field_name(s);
-            fields.push(FieldDef { sym: s, name: fname, ty, lazy: !eager, lazy_owner: None, init: Some(init), mutable: syms.sym(s).kind == SymKind::Var , constant: None });
+            let info = syms.sym(s);
+            // What dotty's `LazyVals` sees as lazy: a lazy val and a given alias (`Parsers.givenDef`).
+            // A constant (`file_constant`) is `Memoize`'s getter of the constant and no field, an
+            // initialiser that is no literal run in `<clinit>` for its effects; a val the compiler
+            // made is eager, as dotty's are.
+            let lazy = !eager && (info.mods & mods::LAZY != 0 || info.kind == SymKind::Given);
+            let constant = if lazy { None } else { self.constant(s, init) };
+            fields.push(FieldDef { sym: s, name: fname, ty, lazy, lazy_owner: None, init: Some(init), mutable: info.kind == SymKind::Var, constant });
         }
         for f in &fields {
+            if f.lazy && self.is_thread_unsafe(f.sym) {
+                // `@threadUnsafe`: the unsynchronised holder alone (`emit_class`).
+                let container = self.lazy_member_names(&f.name).0;
+                self.cw.field(ACC_PRIVATE, &container, "Ljava/lang/Object;");
+                continue;
+            }
+            if f.lazy {
+                // `private @volatile var x$lzyN: AnyRef` (`emit_class`).
+                let h = self.lazy_holder(&f.name, &f.ty);
+                self.cw.field(ACC_PRIVATE | ACC_VOLATILE, &h.container, "Ljava/lang/Object;");
+                continue;
+            }
+            if f.constant.is_some() {
+                continue;
+            }
             let mut d = String::new();
-            (if f.lazy { JType::object() } else { f.ty.clone() }).desc(&mut d);
-            let access = if !f.lazy && self.is_volatile(f.sym) { ACC_PRIVATE | ACC_VOLATILE } else { ACC_PRIVATE };
-            self.cw.field(access, &if f.lazy { format!("{}$lzy", f.name) } else { f.name.clone() }, &d);
+            f.ty.desc(&mut d);
+            let access = if self.is_volatile(f.sym) { ACC_PRIVATE | ACC_VOLATILE } else { ACC_PRIVATE };
+            self.cw.field(access, &f.name, &d);
         }
         let given_inits: Vec<TInit> = vals.iter().map(|&(s, e)| TInit::Field(s, e)).collect();
         self.given_object_fields(&given_inits);
-        let roots: Vec<TExprId> = fields.iter().filter(|f| !f.lazy).filter_map(|f| f.init).collect();
         let this = JType::L(name.clone());
-        self.begin_module_clinit(&name, &roots);
-        let slot = self.m.this_slot.unwrap_or(0);
-        for f in fields.iter().filter(|f| !f.lazy) {
-            self.load(slot, &this);
-            self.expr(f.init.unwrap(), &f.ty);
-            self.putfield(&name, &f.name, &f.ty);
+        // The `<clinit>` first where the file has no lazy member, as it always was; else after the accessors,
+        // whose lazy members' handles it looks up first.
+        let clinit_first = !self.holds_lazy_members(None, file);
+        if clinit_first {
+            self.file_module_clinit(&name, &fields);
         }
-        self.return_value(&JType::V);
-        self.end_method(ACC_STATIC, "<clinit>", "()V");
         self.begin_method(false, true, &[], JType::V, &[]);
         self.load(0, &this);
         self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &JType::V);
@@ -3508,6 +3565,13 @@ impl<'a> Gen<'a> {
         self.end_method(ACC_PRIVATE, "<init>", "()V");
         for f in &fields {
             self.accessors(f);
+        }
+        if clinit_first {
+            if !self.lazy_holders.is_empty() {
+                self.unsupported("a lazy member the names walk did not number (its handle has no lookup)");
+            }
+        } else {
+            self.file_module_clinit(&name, &fields);
         }
         let mut funs: Vec<FunId> = cx.file_funs[file.0 as usize].iter().copied().filter(|f| reach.funs[f.idx()]).collect();
         funs.sort_by(|&a, &b| crate::emit::layout::compare_syms(syms, cx.input.interner, prog.funs[a.idx()].sym, prog.funs[b.idx()].sym));
@@ -3519,6 +3583,7 @@ impl<'a> Gen<'a> {
         aliases.sort();
         self.companion_forwarders(&aliases);
         self.given_class_defs(Owner::Package(pkg), Some(file));
+        self.owned_lazy_methods(None, file);
         self.drain_pending();
         self.finish_class(&name)
     }

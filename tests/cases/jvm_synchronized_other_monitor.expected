@@ -1,0 +1,4 @@
+inside a block on the box, a worker holds: the box's true, its own false
+signal: notified
+wait: woken
+160000 of 160000 increments kept by eight workers on one box's monitor

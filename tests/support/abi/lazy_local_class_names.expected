@@ -1,0 +1,9 @@
+lazy_local_class_names/A x$lzy2$lzyHandle:Ljava/lang/invoke/VarHandle; private,static,final
+lazy_local_class_names/A x$lzy2:Ljava/lang/Object; private,volatile
+lazy_local_class_names/A x$lzyINIT2()Ljava/lang/Object; private
+lazy_local_class_names/B y$lzy1$lzyHandle:Ljava/lang/invoke/VarHandle; private,static,final
+lazy_local_class_names/B y$lzy1:Ljava/lang/Object; private,volatile
+lazy_local_class_names/B y$lzyINIT1()Ljava/lang/Object; private
+lazy_local_class_names/C z$lzy5$lzyHandle:Ljava/lang/invoke/VarHandle; private,static,final
+lazy_local_class_names/C z$lzy5:Ljava/lang/Object; private,volatile
+lazy_local_class_names/C z$lzyINIT5()Ljava/lang/Object; private

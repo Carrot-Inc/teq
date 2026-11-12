@@ -652,10 +652,15 @@ impl<'a> Worker<'a> {
     /// qualified name: what an annotation's type resolved to is compared, so the class is never
     /// looked up apart from the annotation's own resolution.
     fn is_target_name_class(&self, k: ClassId) -> bool {
+        self.is_scala_annotation_class(k, "targetName")
+    }
+
+    /// Whether `k` is the class `name` of the package `scala.annotation`, by its qualified name.
+    fn is_scala_annotation_class(&self, k: ClassId, name: &str) -> bool {
         let info = self.syms.class(k);
         let Owner::Package(p) = info.owner else { return false };
         let named = |p: PkgId, n: &str| self.interner.get(self.syms.pkg(p).name) == n;
-        self.interner.get(info.name) == "targetName"
+        self.interner.get(info.name) == name
             && named(p, "annotation")
             && self.syms.pkg(p).parent.map_or(false, |q| named(q, "scala") && self.syms.pkg(q).parent.map_or(true, |r| r == ROOT_PKG))
     }
@@ -730,28 +735,46 @@ impl<'a> Worker<'a> {
                 out.insert(s, binary);
             }
         }
-        self.jvm_volatile = self.source_volatile();
+        (self.jvm_volatile, self.jvm_thread_unsafe) = self.source_marks();
         out
     }
 
     /// The vals, vars and class parameters of the program's and the std's sources that
-    /// `@scala.volatile` marks (`Worker::jvm_volatile`, `ACC_VOLATILE` on their fields), resolved
+    /// `@scala.volatile` marks (`Worker::jvm_volatile`, `ACC_VOLATILE` on their fields), and their
+    /// lazy members that `@scala.annotation.threadUnsafe` marks (`Worker::jvm_thread_unsafe`: dotty's
+    /// `SymUtils.isThreadUnsafe`, which `LazyVals.transformLazyVal` asks of a field, never of a
+    /// local), each resolved
     /// as `target_name_of` resolves `@targetName`: by the class its type resolves to, dealiased,
     /// where the definition stands, whatever a program writes (an alias, a renaming import), not a
-    /// class of the program that takes the name; the std's annotations written `volatile` alone.
+    /// class of the program that takes the name; the std's annotations written `volatile` or
+    /// `threadUnsafe` alone.
     /// With `source_target_names`, before the reach, as a resolution may enter the annotation's
     /// class.
-    fn source_volatile(&mut self) -> FxMap<SymId, ()> {
-        let mut out = FxMap::default();
-        let Some(volatile) = self.interner.lookup("volatile") else { return out };
+    fn source_marks(&mut self) -> (FxMap<SymId, ()>, FxMap<SymId, ()>) {
+        let mut volatile_marks = FxMap::default();
+        let mut unsafe_marks = FxMap::default();
+        let volatile = self.interner.lookup("volatile");
+        let thread_unsafe = self.interner.lookup("threadUnsafe");
+        if volatile.is_none() && thread_unsafe.is_none() {
+            return (volatile_marks, unsafe_marks);
+        }
         let mut written_names: FxMap<FileId, Vec<Name>> = FxMap::default();
         for i in 0..self.syms.syms.len() {
             let s = SymId(i as u32);
             let info = self.syms.sym(s);
-            if !matches!(info.kind, SymKind::Val | SymKind::Var) || self.loaded.as_ref().map_or(false, |l| l.syms.contains_key(&s)) {
+            // A given alias without parameters is a lazy val to dotty (`Parsers.givenDef`: `mods1 |= Lazy` and a
+            // `ValDef`; with parameters a def, inline no field), so `LazyVals.transformLazyVal` asks it for
+            // `isThreadUnsafe` as it asks a lazy val.
+            let given_alias = info.kind == SymKind::Given
+                && info.impl_class.is_none()
+                && info.mods & crate::ast::mods::INLINE == 0
+                && info.sig.as_ref().map_or(true, |sig| sig.tparams.is_empty() && sig.clauses.is_empty());
+            let field = matches!(info.kind, SymKind::Val | SymKind::Var);
+            if !(field || given_alias) || self.loaded.as_ref().map_or(false, |l| l.syms.contains_key(&s)) {
                 continue;
             }
             let (file, owner, at, name) = (info.file, info.owner, info.span.start, info.name);
+            let lazy_member = owner != Owner::Local && ((info.kind == SymKind::Val && info.mods & crate::ast::mods::LAZY != 0) || given_alias);
             let ast = self.ast(file);
             // A definition's own annotations, or a class parameter's, its class's clause's.
             let annots: Vec<crate::ast::Annot> = match (info.def, owner) {
@@ -768,10 +791,10 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let names = written_names.entry(file).or_insert_with(|| {
-                let mut names = vec![volatile];
+                let mut names: Vec<Name> = volatile.into_iter().chain(thread_unsafe).collect();
                 for import in ast.imports.iter().chain(&ast.local_imports) {
                     if let crate::ast::ImportSel::Name(n, Some(alias)) = import.sel {
-                        if n == volatile && !names.contains(&alias) {
+                        if (Some(n) == volatile || Some(n) == thread_unsafe) && !names.contains(&alias) {
                             names.push(alias);
                         }
                     }
@@ -779,28 +802,40 @@ impl<'a> Worker<'a> {
                 names
             });
             // A program's annotation is resolved whatever its spelling (`type V = scala.volatile`);
-            // the std's, written `volatile` alone.
+            // the std's, written `volatile` or `threadUnsafe` alone.
             let program = self.is_program_file(file);
             let written: Vec<crate::ast::TyExprId> = annots.iter().filter(|a| program || names.contains(&a.name)).filter_map(|a| Some(ast.annot_new(a)?.0)).collect();
             if written.is_empty() {
                 continue;
             }
             let env = self.env_at(file, owner, at);
-            let found = self.with_env(env, |t| {
+            let (is_volatile, is_unsafe) = self.with_env(env, |t| {
                 let mark = t.diags.items.len();
-                let found = written.iter().any(|&ty| {
+                let mut found = (false, false);
+                for &ty in &written {
                     let resolved = t.resolve_type_ctor(ty);
                     let resolved = t.dealias(resolved);
-                    matches!(t.types.get(resolved), Type::Class(k, _) | Type::Ctor(k) if t.is_scala_class(k, "volatile"))
-                });
+                    if let Type::Class(k, _) | Type::Ctor(k) = t.types.get(resolved) {
+                        found.0 |= field && t.is_scala_class(k, "volatile");
+                        found.1 |= lazy_member && t.is_scala_annotation_class(k, "threadUnsafe");
+                    }
+                    // A definition that is no lazy member is asked for `@volatile` alone, as it was; a given
+                    // alias for `@threadUnsafe` alone.
+                    if (found.0 || !field) && (found.1 || !lazy_member) {
+                        break;
+                    }
+                }
                 t.drop_reported_since(mark);
                 found
             });
-            if found {
-                out.insert(s, ());
+            if is_volatile {
+                volatile_marks.insert(s, ());
+            }
+            if is_unsafe {
+                unsafe_marks.insert(s, ());
             }
         }
-        out
+        (volatile_marks, unsafe_marks)
     }
 
     fn overrides_nothing(&mut self, m: SymId) -> bool {

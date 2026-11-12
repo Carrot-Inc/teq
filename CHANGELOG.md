@@ -61,6 +61,9 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- On the JVM a `lazy val` is initialised once under concurrent readers, as scalac's is (it ran its initialiser
+  once a racing thread), `synchronized` takes its receiver's monitor (it took none), and `@threadUnsafe` gives
+  the unsynchronised getter.
 - A pattern's binder over `T | Null` (a `Regex` pattern's groups against scala-library) has the type `T`, so
   an interpolated binder no longer warns under `-Wtostring-interpolated`.
 - An anonymous class made in the argument of zio's `ZIO.succeed`, or in any function literal applied where it is

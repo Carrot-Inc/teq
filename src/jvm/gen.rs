@@ -114,11 +114,10 @@ pub struct Local {
 /// How an anonymous class holds a local of the scope it stands in.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Held {
+    /// The value; a local lazy val's is its holder (`LazyVals.transformLocalDef`).
     Value,
     /// A `var`, shared with its scope through its cell.
     Cell,
-    /// A lazy val, as the function that reads it.
-    Thunk,
 }
 
 #[derive(Clone)]
@@ -126,6 +125,21 @@ pub struct Capture {
     pub sym: SymId,
     pub cell: bool,
     pub ty: JType,
+    /// The capture is the non-local-return key that travels with the holder of the local lazy val
+    /// `sym` (`Extras::keys`), not the val.
+    pub key: bool,
+}
+
+/// What lifted code takes beyond the locals it names, as `LambdaLift` makes them its free variables:
+/// the instance of each class whose code declares a local def the code copies or a local lazy val whose
+/// methods it calls (`Gen::lazy_method`), where that class is not the code's own and its instance is no
+/// module reached statically (`h.this`, the outer instance dotty reaches them through), and the key of
+/// the non-local returns of the method declaring each lazy val whose initialiser returns
+/// (`NonLocalReturns.nonLocalReturnKey`), which travels with the val's holder.
+#[derive(Clone, Default, PartialEq, Debug)]
+pub struct Extras {
+    pub homes: Vec<ClassId>,
+    pub keys: Vec<SymId>,
 }
 
 /// A static method made from a lambda, a local def or the initialiser of a local lazy val: the
@@ -140,6 +154,19 @@ pub struct Lifted {
     pub captures: Vec<Capture>,
     pub params: Vec<JType>,
     pub ret: JType,
+    /// Where `this` is the instance of a class other than the one being written: a class's copy of a
+    /// local def or lazy val declared in that class's code (`Gen::copy_home`), and what it lifts.
+    pub home: Option<ClassId>,
+    /// Where `this` is a module read statically, its class, taking no `this` (`MethodCx::this_module`):
+    /// what a copy whose `this` is that module lifts.
+    pub module: Option<Rc<str>>,
+}
+
+impl Lifted {
+    /// How many arguments a call passes.
+    pub fn arity(&self) -> usize {
+        self.this as usize + self.key as usize + self.captures.len() + self.params.len()
+    }
 }
 
 pub enum PendingBody {
@@ -148,7 +175,11 @@ pub enum PendingBody {
     Fun(FunId),
     /// The default of parameter `n` of a local def.
     Default(FunId, usize),
-    Lazy(SymId, TExprId),
+    /// A local lazy val's accessor, `if x$lzy.initialized() then x$lzy.value() else x$lzyINIT()`,
+    /// its holder the last parameter (`LazyVals.transformLocalDef`).
+    LazyAccessor(SymId),
+    /// A local lazy val's initialiser over its holder's monitor, the holder the last parameter.
+    LazyInit(SymId, TExprId),
     /// The thunk a by-name parameter's default from a jar is passed as: scalac's getter returns
     /// the value, and the argument calls it (`() => f$default$n(...)`), with the receiver and
     /// the arguments before it captured.
@@ -204,9 +235,25 @@ pub struct MethodCx {
     pub return_key: Option<u16>,
     /// In a value class's `m$extension`, `this` is the underlying value of this type.
     pub this_underlying: Option<JType>,
-    /// The `try` blocks with a finalizer the code being generated stands in, innermost last: a
-    /// `return` leaves through each one's finalizer (`Gen::try_`).
+    /// In a class's copy of a local lazy val's accessor or initialiser or of a local def that stands in a
+    /// method of an object (or of a file's top level), `this` is that object's `MODULE$`
+    /// (`Gen::copy_home_module`).
+    pub this_module: Option<Rc<str>>,
+    /// In a class's copy of a local def or lazy val declared in another class's code, `this` is that
+    /// class's instance (`Lifted::home`).
+    pub this_home: Option<ClassId>,
+    /// The slots holding the keys that travel with local lazy vals' holders (`Extras::keys`).
+    pub lazy_keys: FxMap<SymId, u16>,
+    /// The slots holding the instances of other classes (`Extras::homes`) where no field holds them yet:
+    /// a constructor's and a local trait's member's parameters.
+    pub home_slots: Vec<(ClassId, u16)>,
+    /// The `try` blocks with a finalizer and the `synchronized` blocks the code being generated
+    /// stands in, innermost last: a `return` leaves through each one's finalizer or monitor exit
+    /// (`Gen::try_`, `Gen::synchronized_`).
     pub finalizers: Vec<FinallyFrame>,
+    /// The exits of those frames a `return` has jumped to, as dotty's `shouldEmitCleanup` records
+    /// that a cleanup block is wanted (BCodeBodyBuilder `genReturn`).
+    pub exits_taken: Vec<Label>,
     /// The locals of the matches being emitted that hold a value class's primitive underlying
     /// value, with the class: a type pattern tests, and a `MatchError` holds, its box.
     pub vc_slots: Vec<(u16, ClassId)>,
@@ -235,7 +282,12 @@ impl Default for MethodCx {
             closure: false,
             return_key: None,
             this_underlying: None,
+            this_module: None,
+            this_home: None,
+            lazy_keys: FxMap::default(),
+            home_slots: Vec::new(),
             finalizers: Vec::new(),
+            exits_taken: Vec::new(),
             vc_slots: Vec::new(),
         }
     }
@@ -292,11 +344,21 @@ pub struct Gen<'a> {
     pub line_hold: bool,
     pub pending: Vec<Pending>,
     pub lifted: FxMap<SymId, Rc<Lifted>>,
+    /// The initialiser of each local lazy val the class's code reads (`x$lzyINITN`), beside its
+    /// accessor in `lifted` (`LazyVals.transformLocalDef`).
+    pub lifted_lazy_inits: FxMap<SymId, Rc<Lifted>>,
+    /// The thread-safe lazy members of the class being written, in the order they were met
+    /// (`Gen::lazy_holder`).
+    pub lazy_holders: Vec<super::lazy::LazyHolder>,
     pub lifted_defaults: FxMap<(SymId, usize), Rc<Lifted>>,
     pub an: Analysis,
     pub counter: u32,
     /// The locals an anonymous class holds in fields: symbol, field name, type, and how.
     pub class_captures: Vec<(SymId, String, JType, Held)>,
+    /// The fields of the class being written holding its `Extras`: the other classes' instances and
+    /// the keys of the lazy vals.
+    pub class_homes: Vec<(ClassId, String)>,
+    pub class_keys: Vec<(SymId, String)>,
     pub code: Code,
     pub m: MethodCx,
     pub context: String,
@@ -365,10 +427,14 @@ impl<'a> Gen<'a> {
             line_hold: false,
             pending: Vec::new(),
             lifted: FxMap::default(),
+            lifted_lazy_inits: FxMap::default(),
+            lazy_holders: Vec::new(),
             lifted_defaults: FxMap::default(),
             an: Analysis::default(),
             counter: 0,
             class_captures: Vec::new(),
+            class_homes: Vec::new(),
+            class_keys: Vec::new(),
             code: Code::new(Vec::new()),
             m: MethodCx::default(),
             context: String::new(),
@@ -433,10 +499,14 @@ impl<'a> Gen<'a> {
     pub fn reset_class(&mut self) {
         self.pending.clear();
         self.lifted.clear();
+        self.lifted_lazy_inits.clear();
+        self.lazy_holders.clear();
         self.lifted_defaults.clear();
         self.an = Analysis::default();
         self.counter = 0;
         self.class_captures.clear();
+        self.class_homes.clear();
+        self.class_keys.clear();
     }
 
     // ---- types ----
@@ -2768,7 +2838,7 @@ impl<'a> Gen<'a> {
                 if info.by_name { self.function_type(0) } else { self.sym_type(s) }
             }
             TExpr::Static(s) | TExpr::Field(_, s) => self.sym_type(s),
-            TExpr::This | TExpr::Super(_) => match self.this_class {
+            TExpr::This | TExpr::Super(_) => match self.m.this_home.or(self.this_class) {
                 Some(c) => self.class_type(c),
                 None => JType::object(),
             },
@@ -3079,19 +3149,25 @@ impl<'a> Gen<'a> {
                 }
                 let ret = self.m.ret.clone();
                 if let Some(frame) = self.m.finalizers.last().copied() {
-                    // Through the enclosing finalizer: the value kept in the frame's slot, the
-                    // operands under it dropped into locals, the flag set, the try's exit taken.
+                    // Through the enclosing finalizer or monitor exit: the value kept in the frame's
+                    // slot, the operands under it dropped, dead as the method leaves (dotty's
+                    // `genReturn` jumps to the cleanup over them), the flag set, the frame's exit taken.
                     self.expr(v, &ret);
                     if let Some(slot) = frame.value {
                         self.store(slot, &ret);
                     }
-                    let _ = self.spill_stack();
+                    let dropped = self.drop_stack();
                     self.iconst(1);
                     self.store(frame.pending, &JType::I);
+                    self.m.exits_taken.push(frame.exit);
                     self.goto(frame.exit);
-                    // The code after the jump is dead but verified: it is given a `null` that the
-                    // caller adapts to what it wants (a cast, an unboxing or a pop), so that the try's
-                    // result slot keeps the type the live frame recorded, not a boxed unit.
+                    // The code after the jump is dead but verified, as after a `throw`: the operands
+                    // dropped stand under it again, and it is given a `null` that the caller adapts
+                    // to what it wants (a cast, an unboxing or a pop), so that the try's result slot
+                    // keeps the type the live frame recorded, not a boxed unit.
+                    for vt in dropped {
+                        self.code.push(vt);
+                    }
                     self.code.op(op::ACONST_NULL);
                     self.code.push(VT::Null);
                     return JType::object();
@@ -3310,6 +3386,7 @@ impl<'a> Gen<'a> {
                             self.load(slot, &ret);
                             self.store(outer_slot, &ret);
                         }
+                        self.m.exits_taken.push(outer.exit);
                         self.goto(outer.exit);
                     }
                     None => {
@@ -3333,6 +3410,135 @@ impl<'a> Gen<'a> {
     }
 
     /// Moves the operands on the stack into fresh locals, deepest first.
+    /// `recv.synchronized(body)` as dotty's `genSynchronized` writes it (BCodeSyncAndTry.scala 27-103): the receiver
+    /// loaded once (`genLoadQualifier`) and kept in a local, `monitorenter`, the body protected by a catch-any handler
+    /// that exits the monitor and rethrows (`protect`), its value kept in a local across the normal `monitorexit`. A
+    /// `return` inside leaves through this block's frame (`registerCleanup`): its cleanup, written only where a
+    /// return took it (`shouldEmitCleanup`), exits the monitor and goes on to the next enclosing frame's exit or
+    /// returns (`pendingCleanups`). The value's type is the body's; the operands under the block stay where they
+    /// are, a `return` inside dropping them as it leaves (`drop_stack`).
+    pub fn synchronized_(&mut self, recv: TExprId, body: TExprId) -> JType {
+        let object = JType::object();
+        let t = self.static_type(body);
+        self.monitor_block(|g| g.expr(recv, &object), t, |g, t| g.expr(body, t))
+    }
+
+    /// `genSynchronized`'s layout around the code `body` writes at the type `t`, the monitor the
+    /// object `recv` loads (`synchronized_`, a local lazy val's initialiser over its holder).
+    pub fn monitor_block(&mut self, recv: impl FnOnce(&mut Self), t: JType, body: impl FnOnce(&mut Self, &JType)) -> JType {
+        let object = JType::object();
+        recv(self);
+        self.dup();
+        let monitor = self.store_new(&object);
+        self.code.op(op::MONITORENTER);
+        self.code.pop();
+        // `monitorResult`, and the frame's slots, made before the protected range, whose handler's frame
+        // holds the locals made before it alone.
+        let result = match &t {
+            JType::V => None,
+            JType::L(_) => {
+                self.code.op(op::ACONST_NULL);
+                self.code.push(VT::Null);
+                Some(self.store_new(&t))
+            }
+            _ => {
+                self.adapt(&JType::V, &t);
+                Some(self.store_new(&t))
+            }
+        };
+        let ret = self.m.ret.clone();
+        let return_slot = match &ret {
+            JType::V => None,
+            JType::L(_) => {
+                self.code.op(op::ACONST_NULL);
+                self.code.push(VT::Null);
+                Some(self.store_new(&ret))
+            }
+            _ => {
+                self.adapt(&JType::V, &ret);
+                Some(self.store_new(&ret))
+            }
+        };
+        self.iconst(0);
+        let pending = self.store_new(&JType::I);
+        let (start, end, handler, cleanup, post) =
+            (self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label(), self.code.new_label());
+        self.m.finalizers.push(FinallyFrame { pending, value: return_slot, exit: cleanup });
+        let protected = self.code.locals_mark();
+        self.code.bind(start);
+        let from = self.code.pc();
+        body(self, &t);
+        if let Some(slot) = result {
+            self.store(slot, &t);
+        }
+        // `nopIfNeeded`: a protected range has to hold an instruction.
+        if self.code.pc() == from {
+            self.code.op(op::NOP);
+        }
+        self.code.bind(end);
+        self.m.finalizers.pop();
+        self.load(monitor, &object);
+        self.code.op(op::MONITOREXIT);
+        self.code.pop();
+        self.goto(post);
+        self.code.add_handler(Handler { start, end, handler, catch_type: 0 });
+        self.code.locals_release(protected);
+        let throwable = JType::L(Rc::from(THROWABLE));
+        let throwable_vt = self.vt(&throwable);
+        self.code.bind_handler(handler, throwable_vt);
+        self.load(monitor, &object);
+        self.code.op(op::MONITOREXIT);
+        self.code.pop();
+        self.code.op(op::ATHROW);
+        self.code.pop();
+        self.code.end_path();
+        if self.m.exits_taken.contains(&cleanup) {
+            self.code.bind(cleanup);
+            self.load(monitor, &object);
+            self.code.op(op::MONITOREXIT);
+            self.code.pop();
+            match self.m.finalizers.last().copied() {
+                Some(outer) => {
+                    self.iconst(1);
+                    self.store(outer.pending, &JType::I);
+                    if let (Some(slot), Some(outer_slot)) = (return_slot, outer.value) {
+                        self.load(slot, &ret);
+                        self.store(outer_slot, &ret);
+                    }
+                    self.m.exits_taken.push(outer.exit);
+                    self.goto(outer.exit);
+                }
+                None => {
+                    if let Some(slot) = return_slot {
+                        self.load(slot, &ret);
+                    }
+                    self.return_value(&ret);
+                }
+            }
+        }
+        self.code.bind(post);
+        if let Some(slot) = result {
+            self.load(slot, &t);
+        }
+        t
+    }
+
+    /// Drops every operand on the stack (an uninitialised object's too): what a `return` leaving
+    /// through a frame leaves dead under its value. The operands dropped, the bottom one first.
+    fn drop_stack(&mut self) -> Vec<VT> {
+        let mut dropped = Vec::new();
+        while let Some(&top) = self.code.stack.last() {
+            match top {
+                VT::Long | VT::Double => self.code.op(op::POP2),
+                _ => self.code.op(op::POP),
+            }
+            self.code.pop();
+            dropped.push(top);
+        }
+        dropped.reverse();
+        dropped
+    }
+
     fn spill_stack(&mut self) -> Vec<(u16, JType)> {
         let mut spilled = Vec::new();
         while let Some(&top) = self.code.stack.last() {
@@ -3519,6 +3725,16 @@ impl<'a> Gen<'a> {
     // ---- locals, fields, statics ----
 
     pub fn load_this(&mut self) -> JType {
+        if let Some(module) = self.m.this_module.clone() {
+            let t = JType::L(module.clone());
+            self.getstatic(&module, "MODULE$", &t);
+            return t;
+        }
+        if let (Some(h), Some(slot)) = (self.m.this_home, self.m.this_slot) {
+            let t = self.class_type(h);
+            self.load(slot, &t);
+            return t;
+        }
         if let (Some(u), Some(slot)) = (self.m.this_underlying.clone(), self.m.this_slot) {
             self.load(slot, &u);
             return u;
@@ -3542,15 +3758,6 @@ impl<'a> Gen<'a> {
         self.class_captures.iter().find(|c| c.0 == s).map(|c| (c.1.clone(), c.2.clone(), c.3))
     }
 
-    /// Whether the local lazy val `s` is held here as the function that forces it, which a
-    /// class or a lifted method capturing it takes in place of the cell its own scope keeps.
-    fn lazy_thunk(&self, s: SymId) -> bool {
-        match self.m.locals.get(&s) {
-            Some(l) => !l.cell,
-            None => matches!(self.captured_field(s), Some((_, _, Held::Thunk))),
-        }
-    }
-
     /// Whether the local lives in a cell where the current code sees it.
     pub fn is_cell(&self, s: SymId) -> bool {
         match self.m.locals.get(&s) {
@@ -3572,7 +3779,6 @@ impl<'a> Gen<'a> {
             let t = match held {
                 Held::Value => ty,
                 Held::Cell => cell_type,
-                Held::Thunk => self.function_type(0),
             };
             let owner = self.this_name.clone();
             self.getfield(&owner, &field, &t);
@@ -3587,19 +3793,7 @@ impl<'a> Gen<'a> {
 
     fn load_local(&mut self, s: SymId) -> JType {
         let info = self.cx.input.syms.sym(s);
-        if info.mods & mods::LAZY != 0 && info.kind != SymKind::Def {
-            if self.lazy_thunk(s) {
-                let ty = match self.captured_field(s) {
-                    Some((_, ty, Held::Thunk)) => ty,
-                    _ => self.sym_type(s),
-                };
-                let ft = self.load_capture(s);
-                let JType::L(owner) = &ft else { unreachable!() };
-                let object = JType::object();
-                self.invoke(Invoke::Interface, owner, true, "apply", &[], &object);
-                self.adapt(&object, &ty);
-                return ty;
-            }
+        if self.is_lazy_local(s) {
             return self.lazy_read(s);
         }
         let declared = if info.by_name { self.function_type(0) } else { self.sym_type(s) };
@@ -3650,25 +3844,17 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// `classOf[C]`: the class constant, or a primitive's `TYPE`.
+    /// `classOf[C]`: the class constant, or a primitive's `TYPE` (`push_class`).
     fn class_of(&mut self, e: TExprId, c: ClassId, dims: u8) -> JType {
-        let class = JType::L(Rc::from("java/lang/Class"));
         // An array of a known element says its dimensions (`TExpr::ClassOf`).
-        if dims > 0 {
+        let kind = if dims > 0 {
             let element = match crate::emit::class_of_name(self.cx.input.syms, self.cx.input.interner, c) {
                 Some(n) => n,
                 None => self.class_name(c).to_string(),
             };
-            let name = crate::emit::array_class_name(&element, dims).replace('.', "/");
-            let i = self.cw.cp.class(&name);
-            self.ldc(i);
-            let vt = self.vt(&class);
-            self.code.push(vt);
-            return class;
-        }
-        let info = self.cx.input.syms.class(c);
-        // `classOf[Array[T]]` is the array class of `T`'s erasure, which the node's type says.
-        if info.kind == ClassKind::Builtin && self.cx.input.interner.get(info.name) == "Array" {
+            JType::L(Rc::from(crate::emit::array_class_name(&element, dims).replace('.', "/")))
+        } else {
+            // `classOf[Array[T]]` is the array class of `T`'s erasure, which the node's type says.
             let types = self.cx.input.types;
             let element = self.recorded_type(e).and_then(|t| match types.get(t) {
                 Type::Class(_, args) => types.items(args).first().copied(),
@@ -3677,60 +3863,105 @@ impl<'a> Gen<'a> {
                 Type::Class(_, args) => types.items(args).first().copied(),
                 _ => None,
             });
-            let array = match element {
-                Some(elem) => self.array_type(Some(elem)),
-                None => JType::L(Rc::from(OBJECT_ARRAY)),
-            };
-            let JType::L(name) = &array else { unreachable!() };
-            let i = self.cw.cp.class(name);
-            self.ldc(i);
-            let vt = self.vt(&class);
-            self.code.push(vt);
-            return class;
+            self.class_kind(c, element)
+        };
+        self.push_class(&kind)
+    }
+
+    /// The constant `classOf[t]` of the constant type `class_type`, `Class[t]` (`LitVal::Class`), through the
+    /// class literal `class_of` writes for the tree (`class_kind`).
+    pub(super) fn class_constant(&mut self, class_type: TypeId) -> JType {
+        let types = self.cx.input.types;
+        let kind = match types.get(class_type) {
+            Type::Class(_, args) if !types.items(args).is_empty() => self.class_literal_kind(types.items(args)[0]),
+            _ => {
+                self.unsupported("internal error: a class constant whose type is no `Class[T]`");
+                JType::object()
+            }
+        };
+        self.push_class(&kind)
+    }
+
+    /// `CoreBTypes.toTypeKind` of a class constant's type `t` (`typeToTypeKind` 159-198): a class's by `class_kind`
+    /// (`getClassBType`), `Nothing`'s `srNothingRef`, `Any`'s `Object`, an alias's its expansion's.
+    fn class_literal_kind(&mut self, t: TypeId) -> JType {
+        let types = self.cx.input.types;
+        match types.get(t) {
+            Type::Class(c, args) => {
+                let element = types.items(args).first().copied();
+                self.class_kind(c, element)
+            }
+            Type::Nothing => self.array_marker(0),
+            Type::Any => JType::object(),
+            Type::Alias(a, args) => match self.alias_expansion(a, args) {
+                Some(x) => self.class_literal_kind(x),
+                None => JType::object(),
+            },
+            _ => {
+                self.unsupported("internal error: a class constant of no class type");
+                JType::object()
+            }
         }
-        // An opaque type's class literal is its erasure's (scalac's `ClassTag` of one over `Int`
-        // is `Int`): the underlying type's, which has no class of its own.
+    }
+
+    /// `getClassBType` and `primitiveOrClassToBType` (CoreBTypes.scala) for the class `c` of a class literal:
+    /// `Array`'s the array class of `element`'s erasure, `Nothing`'s and `Null`'s scala-library's `Nothing$` and
+    /// `Null$` (`srNothingRef`, `srNullRef`), an opaque type's its underlying type's erasure (scalac's `ClassTag` of
+    /// one over `Int` is `Int`'s), a primitive's or `Unit`'s its own, any other class's the class.
+    fn class_kind(&mut self, c: ClassId, element: Option<TypeId>) -> JType {
+        let info = self.cx.input.syms.class(c);
+        if info.kind == ClassKind::Builtin {
+            match self.cx.input.interner.get(info.name) {
+                "Array" => {
+                    return match element {
+                        Some(elem) => self.array_type(Some(elem)),
+                        None => JType::L(Rc::from(OBJECT_ARRAY)),
+                    };
+                }
+                "Nothing" => return self.array_marker(0),
+                "Null" => return self.array_marker(1),
+                _ => {}
+            }
+        }
         if info.kind == ClassKind::Opaque {
             if let Some(under) = info.underlying {
-                let erased = self.erase(under);
-                match &erased {
-                    JType::L(name) => {
-                        let i = self.cw.cp.class(name);
-                        self.ldc(i);
-                        let t = VT::Object(self.cw.cp.class("java/lang/Class"));
-                        self.code.push(t);
-                    }
-                    JType::V => self.getstatic("java/lang/Void", "TYPE", &class),
-                    _ => self.getstatic(erased.box_class(), "TYPE", &class),
-                }
-                return class;
+                return self.erase(under);
             }
         }
-        let primitive = if info.kind == ClassKind::Builtin {
-            match self.cx.input.interner.get(info.name) {
-                "Int" => Some("java/lang/Integer"),
-                "Long" => Some("java/lang/Long"),
-                "Double" => Some("java/lang/Double"),
-                "Float" => Some("java/lang/Float"),
-                "Boolean" => Some("java/lang/Boolean"),
-                "Char" => Some("java/lang/Character"),
-                "Byte" => Some("java/lang/Byte"),
-                "Short" => Some("java/lang/Short"),
-                "Unit" => Some("java/lang/Void"),
+        if info.kind == ClassKind::Builtin {
+            let primitive = match self.cx.input.interner.get(info.name) {
+                "Int" => Some(JType::I),
+                "Long" => Some(JType::J),
+                "Double" => Some(JType::D),
+                "Float" => Some(JType::F),
+                "Boolean" => Some(JType::Z),
+                "Char" => Some(JType::C),
+                "Byte" => Some(JType::B),
+                "Short" => Some(JType::S),
+                "Unit" => Some(JType::V),
                 _ => None,
+            };
+            if let Some(t) = primitive {
+                return t;
             }
-        } else {
-            None
-        };
-        if let Some(boxed) = primitive {
-            self.getstatic(boxed, "TYPE", &class);
-            return class;
         }
-        let name = self.class_name(c);
-        let i = self.cw.cp.class(&name);
-        self.ldc(i);
-        let t = VT::Object(self.cw.cp.class("java/lang/Class"));
-        self.code.push(t);
+        JType::L(self.class_name(c))
+    }
+
+    /// `genConstant`'s `ClazzTag` (BCodeBodyBuilder.scala 597-614) for the class of `kind`: a primitive's or `Unit`'s
+    /// boxed class's `TYPE` (`boxedClassOfPrimitive`, `Unit`'s `java.lang.Void`), a reference or array class by `ldc`.
+    fn push_class(&mut self, kind: &JType) -> JType {
+        let class = JType::L(Rc::from("java/lang/Class"));
+        match kind {
+            JType::L(name) => {
+                let i = self.cw.cp.class(name);
+                self.ldc(i);
+                let t = VT::Object(self.cw.cp.class("java/lang/Class"));
+                self.code.push(t);
+            }
+            JType::V => self.getstatic("java/lang/Void", "TYPE", &class),
+            primitive => self.getstatic(primitive.box_class(), "TYPE", &class),
+        }
         class
     }
 
@@ -3810,6 +4041,19 @@ impl<'a> Gen<'a> {
             let t = JType::L(name.clone());
             self.getstatic(&name, "$instance", &t);
             return t;
+        }
+        // A top-level inline val is erased with its getter (`isEffectivelyErased`, `Erasure.typedValDef`): a read is
+        // the constant of its type, which `Namer` keeps for an inline val and `InlineVals` requires, as dotty's typer
+        // inlines it.
+        if info.kind == SymKind::Val && info.mods & mods::INLINE != 0 && matches!(info.owner, Owner::Package(_)) {
+            match info.sig.as_ref().map(|sig| cx.input.types.get(sig.ret)) {
+                Some(Type::Lit(l)) => return self.literal_value(l),
+                _ => {
+                    let name = cx.input.interner.get(info.name);
+                    self.unsupported(&format!("internal error: the inline val {} has no constant type (InlineVals refuses it)", name));
+                    return self.sym_type(s);
+                }
+            }
         }
         let m = self.mref(s);
         if m.kind == Invoke::Static && m.params.is_empty() && !matches!(info.kind, SymKind::Def) {
@@ -4528,8 +4772,7 @@ impl<'a> Gen<'a> {
             let params = lifted.params.clone();
             self.arguments(Some(s), args, &params);
             let owner = self.this_name.clone();
-            let n = lifted.captures.len() + lifted.this as usize + lifted.params.len();
-            self.invoke_desc(Invoke::Static, &owner, self.is_interface, &lifted.name, &lifted.desc, n, &lifted.ret);
+            self.invoke_desc(Invoke::Static, &owner, self.is_interface, &lifted.name, &lifted.desc, lifted.arity(), &lifted.ret);
             return lifted.ret.clone();
         }
         let m = self.mref(s);
@@ -5187,7 +5430,8 @@ impl<'a> Gen<'a> {
         let fun = &cx.input.prog.funs[cx.fun_of_sym[s.idx()] as usize];
         let k = fun.captures as usize;
         let declared: Vec<SymId> = fun.params[..k].to_vec();
-        let mut pm = self.proxied_mref(m, proxies);
+        let extras = self.extras_of(&declared, None);
+        let mut pm = self.proxied_mref(m, proxies, &extras);
         if let TExpr::Super(_) = cx.input.prog.expr(r) {
             let superclass = self.this_class.and_then(|c| cx.input.syms.class(c).superclass);
             self.load_this();
@@ -5221,6 +5465,7 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+        self.load_extras(&extras);
         let rest = ListRef { start: args.start + k as u32, len: args.len.saturating_sub(k as u32) };
         let params = m.params.clone();
         self.arguments(Some(s), rest, &params);
@@ -5237,7 +5482,8 @@ impl<'a> Gen<'a> {
         let declared: Vec<SymId> = fun.params[..k].to_vec();
         let owner = self.class_name(t);
         let this = JType::L(owner.clone());
-        let pm = self.proxied_mref(m, proxies);
+        let extras = self.extras_of(&declared, None);
+        let pm = self.proxied_mref(m, proxies, &extras);
         self.load_this();
         let given: Vec<TExprId> = cx.input.prog.expr_list(args).iter().take(k).copied().collect();
         self.load_proxies(proxies, &declared, &given);
@@ -5512,12 +5758,19 @@ impl<'a> Gen<'a> {
                 self.expr(a, &t);
                 t
             }
+            // A local lazy val is passed as its holder (`LazyVals.transformLocalDef`).
             TExpr::Local(s) if self.is_capturable(s) => self.load_capture(s),
-            // A lazy val this scope holds as its function is passed on as it is.
-            TExpr::Local(s) if cx.input.syms.sym(s).owner == Owner::Local && self.lazy_thunk(s) => self.load_capture(s),
-            TExpr::Local(s) if cx.input.syms.sym(s).owner == Owner::Local && cx.input.syms.sym(s).kind != SymKind::Def => {
-                self.lambda(ListRef::EMPTY, a);
-                self.function_type(0)
+            // Where the class is made inside a local object, the typer passes the object's own val as
+            // `() => this` (`enclosing_object_selfs`): the class takes a holder of that value.
+            TExpr::Lambda(params, body) if params.len == 0 && self.is_lazy_local(p) => {
+                let (class, value) = self.lazy_holder_class(p);
+                self.new_object(&class);
+                self.invoke(Invoke::Special, &class, false, "<init>", &[], &JType::V);
+                self.dup();
+                self.expr(body, &value);
+                self.invoke(Invoke::Virtual, &class, false, "initialize", &[value.clone()], &value);
+                self.pop_value(&value);
+                JType::L(class)
             }
             _ => {
                 let t = self.expr_static(a);
@@ -5539,7 +5792,7 @@ impl<'a> Gen<'a> {
         let params: Vec<SymId> = cx.input.prog.classes[cx.tclass_of[c.idx()] as usize].ctor_params[..n].to_vec();
         for (a, p) in items.into_iter().zip(params) {
             // A local def is not passed: the class gets a copy of the lifted method.
-            if matches!(cx.input.prog.expr(a), TExpr::Local(s) if cx.input.syms.sym(s).kind == SymKind::Def && cx.input.syms.sym(s).owner == Owner::Local) {
+            if matches!(cx.input.prog.expr(a), TExpr::Local(s) if self.is_local_def(s)) {
                 continue;
             }
             self.load_capture_arg(a, p);
@@ -5547,6 +5800,8 @@ impl<'a> Gen<'a> {
         for s in through_defs {
             self.load_capture(s);
         }
+        let extras = self.class_extras(c);
+        self.load_extras(&extras);
     }
 
     /// The declared arguments of a named local class's constructor, after its captures.
@@ -5562,23 +5817,22 @@ impl<'a> Gen<'a> {
 
     /// `load_class_captures` from the capture at `from` on.
     fn load_class_captures_after(&mut self, c: ClassId, from: usize) {
-        let cx = self.cx;
         for s in self.class_captured(c).into_iter().skip(from) {
-            let info = cx.input.syms.sym(s);
-            if info.kind == SymKind::Def && info.owner == Owner::Local {
+            if self.is_local_def(s) {
                 continue;
             }
-            if self.is_capturable(s) || (info.owner == Owner::Local && self.lazy_thunk(s)) {
+            if self.is_capturable(s) {
                 self.load_capture(s);
             } else {
                 self.unsupported("a default argument of a local class that captures this kind of value");
             }
         }
+        let extras = self.class_extras(c);
+        self.load_extras(&extras);
     }
 
     fn is_capturable(&self, s: SymId) -> bool {
-        let info = self.cx.input.syms.sym(s);
-        info.owner == Owner::Local && !(info.mods & mods::LAZY != 0 && info.kind != SymKind::Def)
+        self.cx.input.syms.sym(s).owner == Owner::Local
     }
 
     pub fn ctor_param_types(&mut self, c: ClassId) -> Vec<JType> {
@@ -5610,14 +5864,18 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The constructor of a lifted class takes what its body captured first: a `var` as its cell.
+    /// The constructor of a lifted class takes what its body captured first, a `var` as its cell, then
+    /// its `Extras` (`class_extras`).
     pub fn anon_ctor_params(&mut self, c: ClassId) -> Vec<JType> {
         let cx = self.cx;
         let idx = cx.tclass_of[c.idx()];
         if idx == u32::MAX {
             return Vec::new();
         }
-        self.class_captured(c).into_iter().map(|s| self.anon_capture_type(s)).collect()
+        let mut out: Vec<JType> = self.class_captured(c).into_iter().map(|s| self.anon_capture_type(s)).collect();
+        let extras = self.class_extras(c);
+        out.extend(self.extras_types(&extras));
+        out
     }
 
     /// The locals a lifted class holds in fields: what its body names, a local def left out
@@ -5632,6 +5890,9 @@ impl<'a> Gen<'a> {
         let named = &cx.input.prog.classes[idx as usize].ctor_params[..n];
         let mut out: Vec<SymId> = named.iter().copied().filter(|&s| !self.is_local_def(s)).collect();
         let defs: Vec<SymId> = named.iter().copied().filter(|&s| self.is_local_def(s)).collect();
+        // A local lazy val is held as its holder, and the class's copy of its accessor takes what the
+        // initialiser captures, as a local def's copy does (`LambdaLift`'s free variables of both).
+        let lazies: Vec<SymId> = named.iter().copied().filter(|&s| self.is_lazy_local(s)).collect();
         for s in defs {
             let free = self.an.of_fun(cx, s);
             for &f in &free.syms {
@@ -5640,7 +5901,221 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+        for s in lazies {
+            let free = self.an.of_lazy(cx, s);
+            for &f in &free.syms {
+                if !out.contains(&f) && !self.is_local_def(f) {
+                    out.push(f);
+                }
+            }
+        }
         out
+    }
+
+    /// Where the class being written is not the one whose code declares the local def or lazy val `s` and
+    /// that one is an object reached statically (or the file's top level), the module its copy of `s`
+    /// takes for `this`: dotty's `LambdaLift` lifts `s` into that class, whose instance is its `MODULE$`.
+    pub(super) fn copy_home_module(&mut self, s: SymId) -> Option<Rc<str>> {
+        let cx = self.cx;
+        match cx.local_home(s)? {
+            Some(h) if Some(h) != self.this_class && self.static_home(h) => Some(self.class_name(h)),
+            None if self.this_class.is_some() => {
+                let file = cx.local_file(s).unwrap_or(cx.input.syms.sym(s).file);
+                Some(Rc::from(cx.file_modules[file.0 as usize].as_str()))
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether the instance of `h` is its `MODULE$`, read where it is wanted.
+    fn static_home(&self, h: ClassId) -> bool {
+        self.cx.input.syms.class(h).kind == ClassKind::Object && self.cx.statically_placed(h)
+    }
+
+    /// The class whose instance a copy of the local def or lazy val `s` takes for `this` in the class being
+    /// written, where that is another class's whose instance is no `MODULE$` (`Lifted::home`).
+    pub(super) fn copy_home(&self, s: SymId) -> Option<ClassId> {
+        let h = self.cx.local_home(s)??;
+        (Some(h) != self.this_class && !self.static_home(h)).then_some(h)
+    }
+
+    /// `free`, the captures of the local def or lazy val `s`, without `this` where a module stands for it
+    /// (`copy_home_module`).
+    pub(super) fn copy_free(&mut self, s: SymId, free: Rc<Free>) -> Free {
+        let mut free = (*free).clone();
+        if free.this && self.copy_home_module(s).is_some() {
+            free.this = false;
+        }
+        free
+    }
+
+    /// Whether the initialiser of the local lazy val `s` returns from its method, so that the key of
+    /// those returns travels with its holder.
+    pub(super) fn lazy_keyed(&mut self, s: SymId) -> bool {
+        let cx = self.cx;
+        self.is_lazy_local(s) && self.an.of_lazy(cx, s).nonlocal
+    }
+
+    /// The `Extras` of code holding the locals `declared` (a lifted class's captures, a local trait's
+    /// proxies) in the class `own`: the instances that its copies of local defs and lazy vals read, and
+    /// the keys of the lazy vals it holds or its copies read.
+    pub fn extras_of(&mut self, declared: &[SymId], own: Option<ClassId>) -> Extras {
+        let cx = self.cx;
+        let mut out = Extras::default();
+        let mut lazies: Vec<SymId> = Vec::new();
+        for &s in declared {
+            if self.is_local_def(s) {
+                let free = self.an.of_fun(cx, s);
+                if free.this {
+                    self.add_home(&mut out, s, own);
+                }
+                lazies.extend(free.syms.iter().copied().filter(|&f| self.is_lazy_local(f)));
+            } else if self.is_lazy_local(s) {
+                lazies.push(s);
+                let free = self.an.of_lazy(cx, s);
+                lazies.extend(free.syms.iter().copied().filter(|&f| self.is_lazy_local(f)));
+            }
+        }
+        for x in lazies {
+            let free = self.an.of_lazy(cx, x);
+            if free.this {
+                self.add_home(&mut out, x, own);
+            }
+            if free.nonlocal && !out.keys.contains(&x) {
+                out.keys.push(x);
+            }
+        }
+        out
+    }
+
+    fn add_home(&self, out: &mut Extras, s: SymId, own: Option<ClassId>) {
+        if let Some(Some(h)) = self.cx.local_home(s) {
+            if Some(h) != own && !self.static_home(h) && !out.homes.contains(&h) {
+                out.homes.push(h);
+            }
+        }
+    }
+
+    /// The `Extras` of the lifted class `c`, held in fields after its captures.
+    pub fn class_extras(&mut self, c: ClassId) -> Extras {
+        let cx = self.cx;
+        let idx = cx.tclass_of[c.idx()];
+        if idx == u32::MAX {
+            return Extras::default();
+        }
+        let n = self.capture_count(c);
+        let declared = cx.input.prog.classes[idx as usize].ctor_params[..n].to_vec();
+        self.extras_of(&declared, Some(c))
+    }
+
+    /// The types the `Extras` `e` are passed as.
+    pub fn extras_types(&mut self, e: &Extras) -> Vec<JType> {
+        let mut out: Vec<JType> = e.homes.iter().map(|&h| self.class_type(h)).collect();
+        out.extend(e.keys.iter().map(|_| JType::object()));
+        out
+    }
+
+    /// Pushes the `Extras` `e` as the code being written holds them.
+    pub fn load_extras(&mut self, e: &Extras) {
+        for &h in &e.homes {
+            self.load_instance_of(h);
+        }
+        for &x in &e.keys {
+            self.load_lazy_key(x);
+        }
+    }
+
+    /// Binds the `Extras` `e` that a method takes from the slot `first` on.
+    pub fn bind_extras(&mut self, e: &Extras, first: u16) {
+        let mut slot = first;
+        for &h in &e.homes {
+            self.m.home_slots.push((h, slot));
+            slot += 1;
+        }
+        for &x in &e.keys {
+            self.m.lazy_keys.insert(x, slot);
+            slot += 1;
+        }
+    }
+
+    /// The field of a lifted class holding the instance of `h`, the `i`th of its `Extras::homes` (numbered as the
+    /// captures' fields are, two homes of one name apart).
+    pub fn home_field(&self, h: ClassId, i: usize) -> String {
+        format!("{}$this{}", encode(self.cx.input.interner.get(self.cx.input.syms.class(h).name)), i)
+    }
+
+    /// The field holding the key that travels with the holder of the local lazy val `x`, the `i`th of the
+    /// class's `Extras::keys`.
+    pub fn key_field(&self, x: SymId, i: usize) -> String {
+        format!("{}$lzyKey{}", encode(self.cx.input.interner.get(self.cx.input.syms.sym(x).name)), i)
+    }
+
+    /// Pushes the instance of the class `h` where the code being written reads it: its `MODULE$`, the
+    /// code's own `this`, a parameter holding it, or the field of the class of `this` holding it.
+    pub fn load_instance_of(&mut self, h: ClassId) -> JType {
+        let t = self.class_type(h);
+        if self.static_home(h) {
+            let module = self.class_name(h);
+            self.getstatic(&module, "MODULE$", &t);
+            return t;
+        }
+        let current = self.m.this_home.or(self.this_class);
+        if current == Some(h) && self.m.this_module.is_none() {
+            let held = self.load_this();
+            // In a value class's method its companion holds, `this` is the underlying value: its box.
+            if let (Some(u), None) = (self.m.this_underlying.clone(), self.m.this_home) {
+                self.adapt(&held, &u);
+                self.vc_box(h, &u);
+                return t;
+            }
+            self.adapt(&held, &t);
+            return t;
+        }
+        if let Some(&(_, slot)) = self.m.home_slots.iter().find(|(k, _)| *k == h) {
+            self.load(slot, &t);
+            return t;
+        }
+        if let Some(k) = current.filter(|_| self.m.this_module.is_none()) {
+            let held = if self.m.this_home.is_none() { self.class_homes.iter().position(|(c, _)| *c == h) } else { self.class_extras(k).homes.iter().position(|&c| c == h) };
+            if let Some(i) = held {
+                let owner = self.class_name(k);
+                let field = self.home_field(h, i);
+                self.load_this();
+                self.getfield(&owner, &field, &t);
+                return t;
+            }
+        }
+        let name = self.cx.input.interner.get(self.cx.input.syms.class(h).name).to_string();
+        self.unsupported(&format!("the instance of {} where the generated method has none", name));
+        self.code.op(op::ACONST_NULL);
+        self.code.push(VT::Null);
+        t
+    }
+
+    /// Pushes the key travelling with the holder of the local lazy val `x`: a parameter or a field of the
+    /// code holding the holder, or in the method declaring the val, that method's own key.
+    pub fn load_lazy_key(&mut self, x: SymId) {
+        let object = JType::object();
+        if let Some(&slot) = self.m.lazy_keys.get(&x) {
+            self.load(slot, &object);
+            return;
+        }
+        if self.m.this_home.is_none() && self.m.this_module.is_none() {
+            if let Some(field) = self.class_keys.iter().find(|(s, _)| *s == x).map(|(_, f)| f.clone()) {
+                let owner = self.this_name.clone();
+                self.load_this();
+                self.getfield(&owner, &field, &object);
+                return;
+            }
+        }
+        match self.m.return_key {
+            Some(slot) => self.load(slot, &object),
+            None => {
+                self.unsupported("a non-local return of a lazy val whose method makes no key");
+                self.code.op(op::ACONST_NULL);
+                self.code.push(VT::Null);
+            }
+        }
     }
 
     pub fn is_local_def(&self, s: SymId) -> bool {
@@ -5654,8 +6129,6 @@ impl<'a> Gen<'a> {
             Held::Value
         } else if info.kind == SymKind::Var {
             Held::Cell
-        } else if info.mods & mods::LAZY != 0 && info.kind != SymKind::Def {
-            Held::Thunk
         } else {
             Held::Value
         }
@@ -5671,6 +6144,15 @@ impl<'a> Gen<'a> {
             if !self.is_local_def(p) {
                 if !out.contains(&p) {
                     out.push(p);
+                }
+                // A local lazy val by its holder and what its initialiser captures (`class_captured`).
+                if self.is_lazy_local(p) {
+                    let free = self.an.of_lazy(cx, p);
+                    for &f in &free.syms {
+                        if !out.contains(&f) && !self.is_local_def(f) {
+                            out.push(f);
+                        }
+                    }
                 }
                 continue;
             }
@@ -5699,9 +6181,22 @@ impl<'a> Gen<'a> {
         Some(self.proxy_syms(&fun.params[..k]))
     }
 
-    /// The method `m` taking the proxies first.
-    pub fn proxied_mref(&mut self, m: &MRef, proxies: &[SymId]) -> MRef {
+    /// The `Extras` the member `s` of a local trait takes after its proxies (`extras_of` its declared ones).
+    pub fn member_extras(&mut self, s: SymId) -> Extras {
+        let cx = self.cx;
+        let Some(&f) = cx.fun_of_sym.get(s.idx()) else { return Extras::default() };
+        if f == u32::MAX {
+            return Extras::default();
+        }
+        let fun = &cx.input.prog.funs[f as usize];
+        let declared = fun.params[..fun.captures as usize].to_vec();
+        self.extras_of(&declared, None)
+    }
+
+    /// The method `m` taking the proxies first, then their `Extras`.
+    pub fn proxied_mref(&mut self, m: &MRef, proxies: &[SymId], extras: &Extras) -> MRef {
         let mut params: Vec<JType> = proxies.iter().map(|&p| self.anon_capture_type(p)).collect();
+        params.extend(self.extras_types(extras));
         params.extend(m.params.iter().cloned());
         let desc = method_desc(&params, &m.ret);
         MRef { params, desc, ..m.clone() }
@@ -5742,14 +6237,16 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+        let extras = self.extras_of(declared, None);
+        self.load_extras(&extras);
     }
 
     pub fn anon_capture_type(&mut self, s: SymId) -> JType {
         let info = self.cx.input.syms.sym(s);
         if self.held(s) == Held::Cell {
             JType::L(Rc::from(OBJECT_REF))
-        } else if self.held(s) == Held::Thunk {
-            self.function_type(0)
+        } else if self.is_lazy_local(s) {
+            self.lazy_holder_type(s)
         } else if info.by_name {
             self.function_type(0)
         } else {
@@ -5759,27 +6256,43 @@ impl<'a> Gen<'a> {
 
     // ---- lambdas and lifted definitions ----
 
-    fn fresh_name(&mut self, base: &str) -> String {
+    pub(super) fn fresh_name(&mut self, base: &str) -> String {
         self.counter += 1;
         format!("{}${}", base, self.counter)
     }
 
-    fn make_lifted(&mut self, name: String, free: &Free, params: Vec<JType>, ret: JType) -> Rc<Lifted> {
+    /// The lifted method `name` of the code whose captures are `free`: of a lambda, or the copy of the local def
+    /// or lazy val `copy_of`, its `this` the instance of the class whose code declares it where that is another
+    /// class's (`Lifted::home`), else the code's own.
+    pub(super) fn make_lifted(&mut self, name: String, free: &Free, params: Vec<JType>, ret: JType, copy_of: Option<SymId>) -> Rc<Lifted> {
+        let home = copy_of.and_then(|s| self.copy_home(s));
         let mut captures = Vec::new();
         for &s in &free.syms {
             let info = self.cx.input.syms.sym(s);
             if info.kind == SymKind::Def {
                 continue;
             }
-            let lazy = info.mods & mods::LAZY != 0;
-            let thunk = lazy && self.lazy_thunk(s);
-            let cell = self.is_cell(s) || (lazy && !thunk);
-            let ty = if info.by_name || thunk { self.function_type(0) } else { self.sym_type(s) };
-            captures.push(Capture { sym: s, cell, ty });
+            // A local lazy val travels as its holder (`LazyVals.transformLocalDef`), by value, the
+            // key of its initialiser's returns beside it.
+            if self.is_lazy_local(s) {
+                let ty = self.lazy_holder_type(s);
+                captures.push(Capture { sym: s, cell: false, ty, key: false });
+                if self.lazy_keyed(s) {
+                    captures.push(Capture { sym: s, cell: false, ty: JType::object(), key: true });
+                }
+                continue;
+            }
+            let cell = self.is_cell(s);
+            let ty = if info.by_name { self.function_type(0) } else { self.sym_type(s) };
+            captures.push(Capture { sym: s, cell, ty, key: false });
         }
+        let home = if free.this { home.or(self.m.this_home) } else { None };
+        // In code whose `this` is a module read statically, so is the lifted code's.
+        let module = if free.this && home.is_none() { self.m.this_module.clone() } else { None };
+        let this = free.this && module.is_none();
         let mut all: Vec<JType> = Vec::new();
-        if free.this {
-            all.push(match self.this_class {
+        if this {
+            all.push(match home.or(self.this_class) {
                 Some(c) => self.class_type(c),
                 None => JType::object(),
             });
@@ -5792,23 +6305,37 @@ impl<'a> Gen<'a> {
         }
         all.extend(params.iter().cloned());
         let desc = method_desc(&all, &ret);
-        Rc::new(Lifted { name, desc, this: free.this, key: free.nonlocal, captures, params, ret })
+        Rc::new(Lifted { name, desc, this, key: free.nonlocal, captures, params, ret, home, module })
     }
 
-    fn load_captures(&mut self, lifted: &Lifted) {
+    pub(super) fn load_captures(&mut self, lifted: &Lifted) {
+        self.load_captures_keyed(lifted, None)
+    }
+
+    /// The captures of `lifted`, its key the one travelling with the holder of the lazy val `key_of`
+    /// where it is that val's accessor or initialiser, else the code's own.
+    pub(super) fn load_captures_keyed(&mut self, lifted: &Lifted, key_of: Option<SymId>) {
         if lifted.this {
-            let t = self.load_this();
-            if let (Some(u), Some(c)) = (self.m.this_underlying.clone(), self.this_class) {
-                self.adapt(&t, &u);
-                self.vc_box(c, &u);
+            // Another class's instance (a local lazy val's methods in their declaring class, a copy of a local
+            // def), else the code's own `this`, a value class's box.
+            match lifted.home {
+                Some(h) if Some(h) != self.m.this_home.or(self.this_class) => {
+                    self.load_instance_of(h);
+                }
+                _ => {
+                    let t = self.load_this();
+                    if let (Some(u), Some(c)) = (self.m.this_underlying.clone(), self.this_class) {
+                        self.adapt(&t, &u);
+                        self.vc_box(c, &u);
+                    }
+                }
             }
         }
         if lifted.key {
-            match self.m.return_key {
-                Some(slot) => {
-                    self.load(slot, &JType::object());
-                }
-                None => {
+            match (key_of, self.m.return_key) {
+                (Some(x), _) => self.load_lazy_key(x),
+                (None, Some(slot)) => self.load(slot, &JType::object()),
+                (None, None) => {
                     self.unsupported("a non-local return of a def that makes no key");
                     self.code.op(op::ACONST_NULL);
                     self.code.push(VT::Null);
@@ -5816,9 +6343,8 @@ impl<'a> Gen<'a> {
             }
         }
         for c in &lifted.captures {
-            let info = self.cx.input.syms.sym(c.sym);
-            if info.mods & mods::LAZY != 0 && info.kind != SymKind::Def && c.cell {
-                self.load_lazy_cell(c.sym);
+            if c.key {
+                self.load_lazy_key(c.sym);
             } else {
                 self.load_capture(c.sym);
             }
@@ -5831,7 +6357,7 @@ impl<'a> Gen<'a> {
         let free = self.an.of_lambda(cx, &params, body);
         let name = self.fresh_name("$anonfun");
         let object = JType::object();
-        let lifted = self.make_lifted(name, &free, vec![object.clone(); params.len()], object);
+        let lifted = self.make_lifted(name, &free, vec![object.clone(); params.len()], object, None);
         self.load_captures(&lifted);
         let ft = self.function_type(params.len());
         self.pending.push(Pending { lifted: lifted.clone(), body: PendingBody::Lambda(params.clone(), body) });
@@ -5850,7 +6376,7 @@ impl<'a> Gen<'a> {
         let name = self.fresh_name("$default$thunk");
         let object = JType::object();
         let desc = method_desc(&captured, &object);
-        let lifted = Rc::new(Lifted { name, desc, this: false, key: false, captures: Vec::new(), params: Vec::new(), ret: object });
+        let lifted = Rc::new(Lifted { name, desc, this: false, key: false, captures: Vec::new(), params: Vec::new(), ret: object, home: None, module: None });
         self.pending.push(Pending { lifted: lifted.clone(), body: PendingBody::JarGetter(getter) });
         let ft = self.function_type(0);
         self.call_site(&lifted, &ft, "apply", &captured);
@@ -5861,7 +6387,7 @@ impl<'a> Gen<'a> {
     /// The type of `this` a lifted method takes: the class's whose code it is, the box of a value
     /// class whose body its companion holds (`extension_bodies`) too.
     pub fn lifted_this_type(&mut self) -> JType {
-        match self.this_class {
+        match self.m.this_home.or(self.this_class) {
             Some(c) => self.class_type(c),
             None => JType::L(self.this_name.clone()),
         }
@@ -5870,7 +6396,10 @@ impl<'a> Gen<'a> {
     fn lambda_call_site(&mut self, lifted: &Lifted, interface: &JType, method: &str) {
         let mut captured: Vec<JType> = Vec::new();
         if lifted.this {
-            let this = self.lifted_this_type();
+            let this = match lifted.home {
+                Some(h) => self.class_type(h),
+                None => self.lifted_this_type(),
+            };
             captured.push(this);
         }
         if lifted.key {
@@ -5916,11 +6445,12 @@ impl<'a> Gen<'a> {
         }
         let cx = self.cx;
         let free = self.an.of_fun(cx, s);
+        let free = self.copy_free(s, free);
         let base = encode(cx.input.interner.get(cx.input.syms.sym(s).name));
         let name = self.fresh_name(&base);
         let params = self.param_types(s);
         let ret = self.return_type(s);
-        let lifted = self.make_lifted(name, &free, params, ret);
+        let lifted = self.make_lifted(name, &free, params, ret, Some(s));
         self.lifted.insert(s, lifted.clone());
         // A local inline method has its getters alone (`Desugar.addDefaultGetters`), which
         // take their names from it.
@@ -5948,6 +6478,7 @@ impl<'a> Gen<'a> {
             Some(l) => l.clone(),
             None => {
                 let free = self.an.of_fun(cx, s);
+        let free = self.copy_free(s, free);
                 let fun = self.lifted_fun(s);
                 let name = format!("{}$default${}", fun.name, i + 1);
                 let params: Vec<JType> = fun.params[..self.clause_start(s, i)].to_vec();
@@ -5957,7 +6488,7 @@ impl<'a> Gen<'a> {
                     Some(t) => self.erase(t),
                     None => fun.params[i].clone(),
                 };
-                let l = self.make_lifted(name, &free, params, ret);
+                let l = self.make_lifted(name, &free, params, ret, Some(s));
                 self.lifted_defaults.insert((s, i), l.clone());
                 self.pending.push(Pending { lifted: l.clone(), body: PendingBody::Default(FunId(f), i) });
                 l
@@ -5968,53 +6499,7 @@ impl<'a> Gen<'a> {
             self.load(*slot, t);
         }
         let owner = self.this_name.clone();
-        let n = lifted.captures.len() + lifted.this as usize + lifted.params.len();
-        self.invoke_desc(Invoke::Static, &owner, self.is_interface, &lifted.name, &lifted.desc, n, &lifted.ret);
-        lifted.ret.clone()
-    }
-
-    // ---- local lazy vals ----
-
-    fn lifted_lazy(&mut self, s: SymId) -> Rc<Lifted> {
-        if let Some(l) = self.lifted.get(&s) {
-            return l.clone();
-        }
-        let cx = self.cx;
-        let free = self.an.of_lazy(cx, s);
-        let base = encode(cx.input.interner.get(cx.input.syms.sym(s).name));
-        let name = self.fresh_name(&format!("{}$lzy", base));
-        let ret = self.sym_type(s);
-        let cell = JType::L(Rc::from(OBJECT_REF));
-        let lifted = self.make_lifted(name, &free, vec![cell], ret);
-        self.lifted.insert(s, lifted.clone());
-        if let Some(&init) = self.an.lazy_inits.get(&s) {
-            self.pending.push(Pending { lifted: lifted.clone(), body: PendingBody::Lazy(s, init) });
-        }
-        lifted
-    }
-
-    fn load_lazy_cell(&mut self, s: SymId) {
-        let cell = JType::L(Rc::from(OBJECT_REF));
-        if let Some(l) = self.m.locals.get(&s).cloned() {
-            self.load(l.slot, &cell);
-        } else if let Some((field, _, _)) = self.captured_field(s) {
-            self.load_this();
-            let owner = self.this_name.clone();
-            self.getfield(&owner, &field, &cell);
-        } else {
-            self.unsupported("a lazy val that is not in scope of the generated method");
-            self.code.op(op::ACONST_NULL);
-            self.code.push(VT::Null);
-        }
-    }
-
-    fn lazy_read(&mut self, s: SymId) -> JType {
-        let lifted = self.lifted_lazy(s);
-        self.load_captures(&lifted);
-        self.load_lazy_cell(s);
-        let owner = self.this_name.clone();
-        let n = lifted.captures.len() + lifted.this as usize + 1;
-        self.invoke_desc(Invoke::Static, &owner, self.is_interface, &lifted.name, &lifted.desc, n, &lifted.ret);
+        self.invoke_desc(Invoke::Static, &owner, self.is_interface, &lifted.name, &lifted.desc, lifted.arity(), &lifted.ret);
         lifted.ret.clone()
     }
 
@@ -6100,9 +6585,12 @@ impl<'a> Gen<'a> {
     fn block_statements(&mut self, stmts: ListRef) {
         let cx = self.cx;
         let prog = cx.input.prog;
+        self.hoist_lazy_holders(stmts);
         for s in &prog.stmts[stmts.range()] {
             match *s {
                 TStmt::Expr(x) => self.statement(x),
+                // Its holder stands at the head of the list.
+                TStmt::Val(sym, _) if self.is_lazy_local(sym) => {}
                 TStmt::Val(sym, init) => self.local_val(sym, init),
                 TStmt::Fun(f) => {
                     if cx.input.reach.funs[f.idx()] {
@@ -6140,15 +6628,10 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let info = cx.input.syms.sym(sym);
         let cell_type = JType::L(Rc::from(OBJECT_REF));
+        // A block's lazy vals have their holders at its head (`hoist_lazy_holders`); a prelude's here.
         if info.mods & mods::LAZY != 0 {
             self.an.lazy_inits.insert(sym, init);
-            self.new_object(OBJECT_REF);
-            self.code.op(op::ACONST_NULL);
-            self.code.push(VT::Null);
-            self.invoke(Invoke::Special, OBJECT_REF, false, "<init>", &[JType::object()], &JType::V);
-            let slot = self.store_new(&cell_type);
-            let ty = self.sym_type(sym);
-            self.m.locals.insert(sym, Local { slot, ty, cell: true });
+            self.new_lazy_holder(sym);
             return;
         }
         let ty = self.sym_type(sym);

@@ -1412,7 +1412,7 @@ fn finish_jvm(
     let product_inits = t.loaded.as_ref().map(|l| l.get_mut().cp.product_inits.clone()).unwrap_or_default();
     let before_emit = t_emit.elapsed();
     let output = crate::typer::thread::run(|| {
-        let Worker { prog, syms, types, tvars, interner, file_pkgs, loaded, entry_points, jvm_volatile, getters, .. } = &mut *t;
+        let Worker { prog, syms, types, tvars, interner, file_pkgs, loaded, entry_points, jvm_volatile, jvm_thread_unsafe, getters, .. } = &mut *t;
         // A JVM build always reads the class path: scala-library is on it.
         let crate::typer::loader::Loaded { cp, classes, java, target_names, product_target_names, volatile, .. } = loaded.as_ref().expect("a JVM build reads its class path").get_mut();
         let input = jvm::Input {
@@ -1433,6 +1433,7 @@ fn finish_jvm(
             product_target_names: Some(&*product_target_names),
             volatile: Some(&*volatile),
             source_volatile: Some(&*jvm_volatile),
+            source_thread_unsafe: Some(&*jvm_thread_unsafe),
             link: jvm::Link { jar_classes: &*classes },
             owned: owned.as_deref(),
             all_mains: Some(entry_points.as_slice()),

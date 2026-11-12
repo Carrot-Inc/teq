@@ -102,6 +102,9 @@ impl<'a> Gen<'a> {
                 self.object_member_call(args[0], "hashCode", &[], &JType::I, |_| {});
                 return JType::I;
             }
+            // `x.synchronized(body)`, which the typer keeps for the JVM: the body under x's monitor
+            // (dotty's `genSynchronized`).
+            "$synchronized($0, $1)" => return self.synchronized_(args[0], args[1]),
             "$identityHash($0)" => {
                 self.expr(args[0], &object);
                 self.invoke(Invoke::Static, "java/lang/System", false, "identityHashCode", &[object], &JType::I);

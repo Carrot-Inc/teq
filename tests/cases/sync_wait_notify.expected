@@ -1,0 +1,4 @@
+consumed 1275 of 1275
+timed wait returned after its time: true
+notifyAll woke 4 of 4
+wait outside a block: IllegalMonitorStateException

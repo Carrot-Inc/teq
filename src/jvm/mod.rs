@@ -11,6 +11,7 @@ mod classes;
 mod free;
 mod gen;
 mod intrinsic;
+mod lazy;
 pub mod kept;
 pub mod names;
 mod pattern;
@@ -61,6 +62,8 @@ pub struct Input<'a> {
     pub volatile: Option<&'a crate::arena::SharedMap<SymId, ()>>,
     /// The sources' vals, vars and class parameters that `@volatile` marks (`Worker::jvm_volatile`).
     pub source_volatile: Option<&'a FxMap<SymId, ()>>,
+    /// The sources' lazy members that `@threadUnsafe` marks (`Worker::jvm_thread_unsafe`).
+    pub source_thread_unsafe: Option<&'a FxMap<SymId, ()>>,
     pub link: Link<'a>,
     /// Per file, whether its classes are written (`--own`): the other program files are typed
     /// but their class files belong to another build. The std's files are always written.
@@ -157,6 +160,13 @@ pub struct Cx<'a> {
     /// Every class by its binary name, made when an erasure first asks: the first so named, and
     /// apart the others of a name several classes share (a std stand-in and the JDK's class).
     named: std::sync::OnceLock<(FxMap<String, ClassId>, FxMap<String, Vec<ClassId>>)>,
+    /// Every local lazy val's initialiser and every local def, each with the class whose code declares it, none for a
+    /// file's top level (`lazy_local_init`, `local_home`).
+    lazy_locals: std::sync::OnceLock<FxMap<SymId, LocalPlace>>,
+    /// The local lazy vals of each class's reached code, and of each file's top level (`owned_lazies`).
+    owned_lazies: std::sync::OnceLock<FxMap<(Option<ClassId>, u32), Vec<SymId>>>,
+    /// Per source file, the numbers of its lazy names (`Gen::file_lazy_names`).
+    pub lazy_names: Vec<std::sync::OnceLock<lazy::LazyNames>>,
     /// The given objects of a package or of objects (`given x: T with { ... }`), by their class
     /// and by their given: scalac's module classes `Owner$x$`, which every read reaches through
     /// `MODULE$` (`static_given_objects`).
@@ -179,6 +189,10 @@ pub struct Cx<'a> {
     /// Whether the class path holds `scala.runtime.BoxesRunTime`, whose `unboxToX` scalac's
     /// erasure unboxes through; without it an unboxing is spelled out.
     pub boxes_runtime: bool,
+    /// The classes `scala.runtime.LazyVals.LazyValControlState` derives from as the class path
+    /// declares them, itself among them: a lazy val of such a type is tested against the control
+    /// states rather than for its class (`LazyVals.mkThreadSafeDef` 366-372).
+    pub control_state_bases: Vec<String>,
 }
 
 struct SyncCx<'a>(&'a Cx<'a>);
@@ -245,6 +259,9 @@ impl<'a> Cx<'a> {
             vc_companions: FxMap::default(),
             scala2_pickles: FxMap::default(),
             named: std::sync::OnceLock::new(),
+            lazy_locals: std::sync::OnceLock::new(),
+            owned_lazies: std::sync::OnceLock::new(),
+            lazy_names: (0..input.sources.len()).map(|_| std::sync::OnceLock::new()).collect(),
             given_object_classes: FxMap::default(),
             given_objects: FxMap::default(),
             given_class_classes: FxMap::default(),
@@ -253,6 +270,7 @@ impl<'a> Cx<'a> {
             inner_given_objects: FxMap::default(),
             private_params: FxMap::default(),
             boxes_runtime: false,
+            control_state_bases: Vec::new(),
             input,
         };
         cx.static_given_objects();
@@ -618,6 +636,23 @@ impl<'a> Cx<'a> {
     /// Reads what linking needs of the class path before the emitter threads start.
     fn read_classpath(&mut self, cp: &mut crate::classpath::Classpath) {
         self.boxes_runtime = cp.class_named("scala/runtime/BoxesRunTime").is_some();
+        // `LazyValsControlState.isSubClass(tp.classSymbol)`: the classes it derives from, through
+        // its class file's superclass and interfaces to the end of what the class path holds.
+        let mut bases: Vec<String> = vec![names::LAZY_CONTROL.to_string()];
+        let mut i = 0;
+        while i < bases.len() {
+            let parents = cp.class_named(&bases[i]).and_then(|f| cp.class_file(f).ok()).map(|cf| cf.superclass.clone().into_iter().chain(cf.interfaces.clone()).collect::<Vec<String>>()).unwrap_or_default();
+            for p in parents {
+                if !bases.contains(&p) {
+                    bases.push(p);
+                }
+            }
+            i += 1;
+        }
+        if !bases.iter().any(|b| b == names::OBJECT) {
+            bases.push(names::OBJECT.to_string());
+        }
+        self.control_state_bases = bases;
         let reach = self.input.reach;
         // A class of a source of the build is the one, written whatever the class path holds
         // under its name (another source's product, a stale twin in the module's directory).
@@ -710,6 +745,113 @@ impl<'a> Cx<'a> {
 
     /// A member whose field is filled when first read: a lazy val, a given, an object nested
     /// in a class or trait.
+    /// The initialiser of the local lazy val `s` (a local object's too), wherever its block stands:
+    /// every class whose code reads the val writes its own accessor and initialiser over the one
+    /// holder (`LazyVals.transformLocalDef`, lifted per class as a local def is).
+    pub fn lazy_local_init(&self, s: SymId) -> Option<TExprId> {
+        self.lazy_locals().get(&s).and_then(|&(init, _, _)| init)
+    }
+
+    /// The class whose code declares the local lazy val or local def `s` (`None` for a file's top-level
+    /// code): the class `LambdaLift` lifts it into, whose instance a copy of it in another class reads.
+    pub fn local_home(&self, s: SymId) -> Option<Option<ClassId>> {
+        self.lazy_locals().get(&s).map(|&(_, home, _)| home)
+    }
+
+    /// The file whose top-level code declares the local lazy val or local def `s` (`local_home` `Some(None)`):
+    /// the file of the code, an inline body's expansion included, not of the definition's symbol.
+    pub fn local_file(&self, s: SymId) -> Option<crate::source::FileId> {
+        self.lazy_locals().get(&s).map(|&(_, _, file)| crate::source::FileId(file))
+    }
+
+    /// The local lazy vals of the reached code of the class `home` (with `None`, of the top level of the file
+    /// `file`), by their place: the class's file holds their accessors and initialisers (`Gen::owned_lazy_methods`).
+    pub fn owned_lazies(&self, home: Option<ClassId>, file: crate::source::FileId) -> &[SymId] {
+        let all = self.owned_lazies.get_or_init(|| {
+            let syms = self.input.syms;
+            let mut found: FxMap<SymId, LocalPlace> = FxMap::default();
+            for (r, home, file) in self.local_roots(true) {
+                lazy_locals_in(self, r, home, file, &mut found);
+            }
+            let mut out: FxMap<(Option<ClassId>, u32), Vec<SymId>> = FxMap::default();
+            for (&s, &(init, home, file)) in &found {
+                if init.is_some() {
+                    let file = if home.is_some() { u32::MAX } else { file };
+                    out.entry((home, file)).or_default().push(s);
+                }
+            }
+            for v in out.values_mut() {
+                v.sort_by_key(|&s| (syms.sym(s).file.0, syms.sym(s).span.start, s.0));
+            }
+            out
+        });
+        let key = (home, if home.is_some() { u32::MAX } else { file.0 });
+        all.get(&key).map_or(&[], |v| v.as_slice())
+    }
+
+    /// The roots of the program's code with the class each stands in (`None` for a file's top level) and the file
+    /// of the code: every class's methods, constructors, defaults, initialisers and superclass and trait calls, the
+    /// files' functions and top-level vals; with `reached`, the methods and the files' functions the reach keeps alone.
+    fn local_roots(&self, reached: bool) -> Vec<(TExprId, Option<ClassId>, u32)> {
+        let prog = self.input.prog;
+        let syms = self.input.syms;
+        let kept = |f: crate::tir::FunId| !reached || self.input.reach.funs.get(f.idx()).copied().unwrap_or(false);
+        let mut out: Vec<(TExprId, Option<ClassId>, u32)> = Vec::new();
+        for tc in prog.classes.iter() {
+            let home = Some(tc.id);
+            // The unit holding the class: an expansion's copy is its site's.
+            let file = syms.class(tc.id).module_file().0;
+            for &f in tc.methods.iter().filter(|&&f| kept(f)).chain(&tc.ctors) {
+                out.extend(prog.funs[f.idx()].body.map(|b| (b, home, file)));
+                out.extend(prog.funs[f.idx()].defaults.iter().flatten().map(|&d| (d, home, file)));
+            }
+            out.extend(tc.ctor_defaults.iter().flatten().map(|&d| (d, home, file)));
+            // The superclass call the constructor makes: its named arguments' temporaries and its arguments, which
+            // for an anonymous class are evaluated where it is made (`lazy_locals_in`).
+            let stmt_roots = |l: crate::ast::ListRef| {
+                prog.stmts[l.range()].iter().filter_map(|s| match *s {
+                    TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x) => Some(x),
+                    TStmt::Fun(_) => None,
+                })
+            };
+            out.extend(stmt_roots(tc.parent_prelude).map(|x| (x, home, file)));
+            if syms.class(tc.id).kind != ClassKind::Anon {
+                out.extend(tc.parent_args.iter().flat_map(|&l| prog.expr_list(l).iter().map(|&a| (a, home, file))));
+            }
+            for init in &tc.init {
+                match *init {
+                    TInit::Field(_, e) | TInit::Stmt(e) => out.push((e, home, file)),
+                    TInit::Parent(_, call) => {
+                        out.extend(stmt_roots(call.prelude).map(|x| (x, home, file)));
+                        out.extend(prog.expr_list(call.args).iter().map(|&a| (a, home, file)));
+                    }
+                }
+            }
+        }
+        for (file, funs) in self.file_funs.iter().enumerate() {
+            for &f in funs.iter().filter(|&&f| kept(f)) {
+                out.extend(prog.funs[f.idx()].body.map(|b| (b, None, file as u32)));
+                out.extend(prog.funs[f.idx()].defaults.iter().flatten().map(|&d| (d, None, file as u32)));
+            }
+        }
+        for &(s, e) in prog.top_vals.iter() {
+            out.push((e, None, syms.sym(s).file.0));
+        }
+        out
+    }
+
+    /// The local lazy vals and local defs of the program's code, found by a walk of every class's code and
+    /// the files' the first time one is asked about.
+    fn lazy_locals(&self) -> &FxMap<SymId, LocalPlace> {
+        self.lazy_locals.get_or_init(|| {
+            let mut out: FxMap<SymId, LocalPlace> = FxMap::default();
+            for (r, home, file) in self.local_roots(false) {
+                lazy_locals_in(self, r, home, file, &mut out);
+            }
+            out
+        })
+    }
+
     pub fn is_lazy_member(&self, s: SymId) -> bool {
         let info = self.input.syms.sym(s);
         info.mods & mods::LAZY != 0 || info.kind == SymKind::Given
@@ -1187,4 +1329,139 @@ fn owning_pickle(cp: &mut crate::classpath::Classpath, name: &str) -> Option<Vec
         }
     }
     None
+}
+
+/// The expressions the pattern `p` holds, in the pattern's order: an extractor's call (an inline `unapply`'s
+/// expansion stands there, with the lazy vals and objects it declares), the value a pattern is compared with, a
+/// type test's value. Those `Descendants` (tir.rs) meets in a pattern, for the walks here that list a tree's
+/// children themselves.
+pub(super) fn pat_exprs(prog: &Program, p: TPatId, out: &mut Vec<TExprId>) {
+    match prog.pats[p.idx()] {
+        TPat::Wildcard => {}
+        TPat::Bind(_, inner) => {
+            if let Some(inner) = inner {
+                pat_exprs(prog, inner, out);
+            }
+        }
+        TPat::Test(test, _, inner) => {
+            test_exprs(prog, test, out);
+            pat_exprs(prog, inner, out);
+        }
+        TPat::Equals(e, _) => out.push(e),
+        TPat::Class(_, _, _, subs) | TPat::Alt(subs) => {
+            for &s in &prog.pat_lists[subs.range()] {
+                pat_exprs(prog, s, out);
+            }
+        }
+        TPat::Seq(items, rest) => {
+            for &s in &prog.pat_lists[items.range()] {
+                pat_exprs(prog, s, out);
+            }
+            if let Some(rest) = rest {
+                pat_exprs(prog, rest, out);
+            }
+        }
+        TPat::Unapply(_, call, inner) => {
+            out.push(call);
+            pat_exprs(prog, inner, out);
+        }
+    }
+}
+
+fn test_exprs(prog: &Program, t: TestId, out: &mut Vec<TExprId>) {
+    match prog.tests[t.idx()] {
+        TypeTest::Value(e) => out.push(e),
+        TypeTest::Or(a, b) | TypeTest::And(a, b) => {
+            test_exprs(prog, a, out);
+            test_exprs(prog, b, out);
+        }
+        TypeTest::Outer(_, t) | TypeTest::Proven(t, _) => test_exprs(prog, t, out),
+        _ => {}
+    }
+}
+
+/// A local lazy val's initialiser (none for a local def), the class whose code declares it (`None` for a file's top
+/// level) and the file of that code (`Cx::lazy_local_init`, `local_home`, `local_file`).
+type LocalPlace = (Option<TExprId>, Option<ClassId>, u32);
+
+/// The local lazy vals and local defs the code `e` declares, its lambdas' and local defs' included, each with
+/// `home` and `file` (`Cx::local_home`, `local_file`); a local class's code is its own class's.
+fn lazy_locals_in(cx: &Cx, e: TExprId, home: Option<ClassId>, file: u32, out: &mut FxMap<SymId, LocalPlace>) {
+    let prog = cx.input.prog;
+    let syms = cx.input.syms;
+    let mut stack: Vec<TExprId> = vec![e];
+    while let Some(e) = stack.pop() {
+        match prog.expr(e) {
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _)
+            | TExpr::Spread(r) | TExpr::JsSelect(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::Lambda(_, r) => stack.push(r),
+            TExpr::CallStatic(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args)
+            | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => stack.extend(prog.expr_list(args).iter().copied()),
+            TExpr::New(c, args) => {
+                stack.extend(prog.expr_list(args).iter().copied());
+                // An anonymous class's superclass arguments are evaluated where it is made (`new_arguments`).
+                let idx = cx.tclass_of.get(c.idx()).copied().unwrap_or(u32::MAX);
+                if idx != u32::MAX && syms.class(c).kind == ClassKind::Anon {
+                    if let Some(parent) = prog.classes[idx as usize].parent_args {
+                        stack.extend(prog.expr_list(parent).iter().copied());
+                    }
+                }
+            }
+            TExpr::CallMethod(r, _, args) | TExpr::CallClosure(r, args) => {
+                stack.push(r);
+                stack.extend(prog.expr_list(args).iter().copied());
+            }
+            TExpr::If(c, t, els) => {
+                stack.push(c);
+                stack.push(t);
+                stack.extend(els);
+            }
+            TExpr::While(a, b) | TExpr::Assign(a, b) | TExpr::Prim(_, a, b) => {
+                stack.push(a);
+                stack.push(b);
+            }
+            TExpr::Block(stmts, res) => {
+                for st in &prog.stmts[stmts.range()] {
+                    match *st {
+                        TStmt::Expr(x) => stack.push(x),
+                        TStmt::Pat(p, x) => {
+                            stack.push(x);
+                            pat_exprs(prog, p, &mut stack);
+                        }
+                        TStmt::Val(sym, init) => {
+                            let info = syms.sym(sym);
+                            if info.owner == Owner::Local && info.mods & mods::LAZY != 0 && info.kind != SymKind::Def {
+                                out.insert(sym, (Some(init), home, file));
+                            }
+                            stack.push(init);
+                        }
+                        TStmt::Fun(f) => {
+                            out.insert(prog.funs[f.idx()].sym, (None, home, file));
+                            stack.extend(prog.funs[f.idx()].body);
+                            stack.extend(prog.funs[f.idx()].defaults.iter().flatten().copied());
+                        }
+                    }
+                }
+                stack.push(res);
+            }
+            TExpr::Match(scrut, cases) => {
+                stack.push(scrut);
+                for c in &prog.cases[cases.range()] {
+                    pat_exprs(prog, c.pat, &mut stack);
+                    stack.extend(c.guard);
+                    stack.push(c.body);
+                }
+            }
+            TExpr::Try(i) => {
+                let t = &prog.tries[i as usize];
+                stack.push(t.body);
+                for c in &prog.cases[t.cases.range()] {
+                    pat_exprs(prog, c.pat, &mut stack);
+                    stack.extend(c.guard);
+                    stack.push(c.body);
+                }
+                stack.extend(t.finalizer);
+            }
+            _ => {}
+        }
+    }
 }

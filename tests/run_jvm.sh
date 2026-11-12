@@ -49,7 +49,10 @@
 # jar_companion_touch.scala against jar_companion_touch.expected (left out without javap or the jars). And a
 # constructor loads its parameter where it reads its immutable parameter accessor by an identifier or as `this.s` of
 # an effectively final one (`Constructors.intoConstr`): tests/support/final_select/list.sh's listing of final_select.scala
-# against final_select.expected, listed from scalac's class files (left out without javap). And a constructor calls
+# against final_select.expected, listed from scalac's class files (left out without javap). And a `synchronized` block
+# enters its monitor, exits it on the normal path and in a catch-any handler that rethrows, as scalac's does:
+# tests/support/synchronized/list.sh's listing of synchronized.scala against synchronized.expected, listed from scalac's
+# class files (left out without javap). And a constructor calls
 # its by-name parameter's thunk where its code reads the parameter, a closure there capturing the thunk:
 # tests/support/byname_ctor/list.sh's listing of byname_ctor.scala against byname_ctor.expected, listed from scalac's
 # class files (left out without javap).
@@ -308,6 +311,21 @@ byname_ctor() {
     return 1
   fi
 }
+synchronized_shape() {
+  command -v javap > /dev/null || return 0
+  local work=$out/synchronized
+  rm -rf "$work"
+  if ! timeout 60 "$TEQ" compiler build tests/support/synchronized/synchronized.scala --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
+    echo "SYNCHRONIZED: the fixture does not build (see $work.log)"
+    return 1
+  fi
+  bash tests/support/synchronized/list.sh "$work" > "$work.txt"
+  if ! diff tests/support/synchronized/synchronized.expected "$work.txt" > "$work.diff"; then
+    echo "SYNCHRONIZED: a block's monitor instructions or handler differ from scalac's"
+    head -10 "$work.diff"
+    return 1
+  fi
+}
 abi_layout() {
   command -v python3 > /dev/null || return 0
   local f name work fails=0
@@ -343,6 +361,7 @@ if [ -z "$VERSION" ]; then
   jar_companion_touch || status=1
   final_select || status=1
   byname_ctor || status=1
+  synchronized_shape || status=1
   abi_layout || status=1
 fi
 count() { grep -c "^$1 " "$out/results.txt"; }

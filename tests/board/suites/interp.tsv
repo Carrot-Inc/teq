@@ -278,6 +278,8 @@ charsequence_release	pass	-
 charset_decode_writable	pass	-	
 charset_encode_consumes	pass	-	
 charset_utf8_replacement	pass	-	
+class_constant_arrays	pass	-	
+class_constant_kinds	pass	-	
 class_for_name_arrays	pass	-	
 class_for_name_init	pass	-	
 class_literal_arrays	fail	-	output
@@ -729,7 +731,12 @@ extractor_through_value_import	pass	-
 extractor_vals	pass	-	
 f_interpolator_linked	pass	-	
 field_storage_names	pass	-	
+file_module_constants	fail	-	compile
+file_module_early_constant	fail	-	compile
+file_module_inline_class_literals	pass	-	
+file_module_inline_reads	pass	-	
 file_module_overrides	fail	-	compile
+file_module_storage	fail	-	compile
 files_directories	pass	-	
 files_generator	pass	-	
 files_open_options	pass	-	
@@ -1414,8 +1421,15 @@ js_this_function_null_receiver	cannot run	-	its expectation is Scala.js's
 js_typed_array_iterables	cannot run	-	its expectation is Scala.js's
 js_wrapped_dictionary	cannot run	-	its expectation is Scala.js's
 junit_comparison_failure	fail	-	unsupported
+jvm_lazy_local_closure	pass	-	
+jvm_lazy_trait	pass	-	
+jvm_lazy_val_race	pass	-	
 jvm_return_finally	pass	-	
 jvm_synchronized_cleanup	pass	-	
+jvm_synchronized_nested	pass	-	
+jvm_synchronized_other_monitor	pass	-	
+jvm_synchronized_race	pass	-	
+jvm_synchronized_throw	pass	-	
 jvm_unbox_null	pass	-	
 jvm_varargs_backing_arrays	fail	-	output
 kind_projector	pass	-	
@@ -1433,12 +1447,47 @@ lambda_param_ordered_vars	pass	-
 lambda_union_expected	pass	-	
 lambdas	pass	-	
 layout_mixed	pass	-	
+lazy_given_nested_object	pass	-	
 lazy_initializer_release	fail	-	compile
+lazy_inline_class	pass	-	
+lazy_inline_expansions	pass	-	
+lazy_inline_expansions_jar	pass	-	
+lazy_inline_unapply	pass	-	
 lazy_list_seq	pass	-	
+lazy_local_class_forward_names	fail	-	compile
+lazy_local_constructor_homes	pass	-	
+lazy_local_constructor_names	fail	-	compile
+lazy_local_constructors	pass	-	
+lazy_local_enclosing_this	pass	-	
+lazy_local_extras_names	pass	-	
+lazy_local_finally	pass	-	
+lazy_local_forward	fail	-	unsupported
+lazy_local_homes	pass	-	
+lazy_local_super	pass	-	
+lazy_local_value_class	pass	-	
+lazy_locals	pass	-	
+lazy_made_companion	pass	-	
+lazy_nonlocal_return	pass	-	
+lazy_nonlocal_return_classes	pass	-	
 lazy_null_once	pass	-	
 lazy_object	pass	-	
+lazy_object_init	pass	-	
 lazy_pattern_erased_element	pass	-	
 lazy_pattern_local	pass	-	
+lazy_race	fail	-	exception
+lazy_recursion	fail	-	output
+lazy_serialize	fail	-	compile
+lazy_thread_unsafe	pass	-	
+lazy_thread_unsafe_given	fail	-	timeout
+lazy_thread_unsafe_given_sites	fail	-	timeout
+lazy_thread_unsafe_reentrant	pass	-	
+lazy_thread_unsafe_reentrant_object	pass	-	
+lazy_thread_unsafe_reentrant_renamed	pass	-	
+lazy_thread_unsafe_reentrant_toplevel	pass	-	
+lazy_thread_unsafe_reentrant_trait	pass	-	
+lazy_throw_retry	pass	-	
+lazy_types	pass	-	
+lazy_waiting	pass	-	
 lazy_zip_on_demand	pass	-	
 lazyvals	pass	-	
 leading_infix	pass	-	
@@ -2146,6 +2195,7 @@ scala2_control_mixed	pass	-
 scala2_implicit_ranking	pass	-	
 scala2_implicits	pass	-	
 scala2_std_auto_application	fail	-	unsupported
+scala3_LazyValsLongs	pass	-	
 scala3_ReverseSeqView	pass	-	
 scala3_absoverride	pass	-	
 scala3_automatic-tupling-of-function-parameters	pass	-	
@@ -2162,6 +2212,7 @@ scala3_deriving	pass	-
 scala3_enum-List1	pass	-	
 scala3_enum-Tree	pass	-	
 scala3_exceptions-nest	pass	-	
+scala3_exceptions_2	pass	-	
 scala3_exoticnames	pass	-	
 scala3_extmethod-overload	pass	-	
 scala3_final-var	pass	-	
@@ -2174,16 +2225,22 @@ scala3_i11966	pass	-
 scala3_i11993	pass	-	
 scala3_i1463	pass	-	
 scala3_i1543	pass	-	
+scala3_i16806	pass	-	
+scala3_i1856	pass	-	
+scala3_i1856_local	pass	-	
 scala3_i18638	pass	-	
 scala3_i20095	pass	-	
 scala3_i20395	pass	-	
 scala3_i2077	pass	-	
+scala3_i20856	fail	-	compile
 scala3_i2266	pass	-	
 scala3_i23409b	pass	-	
 scala3_i23693	pass	-	
 scala3_i2916	pass	-	
 scala3_i3018	pass	-	
+scala3_i4451	pass	-	
 scala3_i4559	pass	-	
+scala3_i505	pass	-	
 scala3_i5606	pass	-	
 scala3_i6341	pass	-	
 scala3_i6716	pass	-	
@@ -2197,22 +2254,32 @@ scala3_infix	pass	-
 scala3_isInstanceOf-eval	pass	-	
 scala3_iterator-concat	pass	-	
 scala3_lazyVals	pass	-	
+scala3_lazy_exprs	pass	-	
+scala3_lazy_impl	fail	-	compile
+scala3_lazy_implicit_lists	pass	-	
+scala3_lazy_implicit_nums	pass	-	
+scala3_lazy_override_run	pass	-	
+scala3_lazy_traits	pass	-	
 scala3_list_map	pass	-	
 scala3_missingparams	pass	-	
 scala3_mixin-overrides	pass	-	
 scala3_mixins	pass	-	
 scala3_nested-object-implements-val	pass	-	
 scala3_no-init-enclosing-static-objects	pass	-	
+scala3_nothing_lazy_val	fail	-	compile
 scala3_nullAsInstanceOf	pass	-	
+scala3_null_lazy_val	fail	-	compile
 scala3_numeric-range	pass	-	
 scala3_overloads	pass	-	
 scala3_protectedSuper	pass	-	
 scala3_rawstrings	pass	-	
+scala3_retsynch	pass	-	
 scala3_runtime-richChar	pass	-	
 scala3_sort	pass	-	
 scala3_stable-enum-hashcodes	pass	-	
 scala3_switches	pass	-	
 scala3_t0668	pass	-	
+scala3_t10032	pass	-	
 scala3_t10594	pass	-	
 scala3_t1192	pass	-	
 scala3_t1373	pass	-	
@@ -2241,6 +2308,7 @@ scala3_t5614	pass	-
 scala3_t5923c	pass	-	
 scala3_t6011b	pass	-	
 scala3_t627	pass	-	
+scala3_t704	pass	-	
 scala3_t7249	pass	-	
 scala3_t7300	pass	-	
 scala3_t7341	pass	-	
@@ -2249,6 +2317,7 @@ scala3_t7584	pass	-
 scala3_t7985	pass	-	
 scala3_t8015-ffc	pass	-	
 scala3_t8428	pass	-	
+scala3_t8601d	pass	-	
 scala3_t8738	pass	-	
 scala3_t8888	pass	-	
 scala3_t8893	pass	-	
@@ -2257,6 +2326,7 @@ scala3_tryPatternMatch	pass	-
 scala3_tuple-deconstruct-wildcard-sideeffect	pass	-	
 scala3_typeclass-derivation3	pass	-	
 scala3_unions	pass	-	
+scala3_unit_lazy_val	fail	-	compile
 scala3_view-headoption	pass	-	
 scala3_virtpatmat_alts	pass	-	
 scala3_virtpatmat_apply	pass	-	
@@ -2455,6 +2525,16 @@ suppression_disabled	pass	-
 suppression_inheritance	pass	-	
 symbol_name	pass	-	
 symbolic_type_selection	pass	-	
+sync_break_direct	fail	-	compile
+sync_exits	pass	-	
+sync_exits_jvm	fail	-	compile
+sync_mutual_exclusion	pass	-	
+sync_nesting	pass	-	
+sync_nesting_jvm	pass	-	
+sync_receivers	pass	-	
+sync_results	pass	-	
+sync_return_operands	pass	-	
+sync_wait_notify	pass	-	
 syntax_extras	pass	-	
 syntax_gaps	pass	-	
 synthesized_target_name	pass	-	

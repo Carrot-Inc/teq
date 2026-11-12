@@ -1,0 +1,9 @@
+sync.Blocks return
+value handler any
+value monitorenter monitorexit monitorexit athrow ireturn
+unit handler any
+unit monitorenter monitorexit monitorexit athrow return
+literal handler any
+literal monitorenter monitorexit monitorexit athrow areturn
+own handler any
+own monitorenter monitorexit monitorexit athrow lreturn

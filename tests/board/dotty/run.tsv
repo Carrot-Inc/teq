@@ -1513,7 +1513,7 @@ t8570a.scala	pass	interp:pass
 t8601.scala	pass	interp:pass	
 t8601b.scala	pass	interp:pass	
 t8601c.scala	pass	interp:fail	
-t8601d.scala	fail	interp:pass	run: exit 1: Exception in thread "main" java.lang.RuntimeException: failed to throw NPE
+t8601d.scala	pass	interp:pass	
 t8601e	fail	-	java source: teq reads none
 t8607.scala	pass	interp:pass	
 t8610.scala	pass	interp:fail	

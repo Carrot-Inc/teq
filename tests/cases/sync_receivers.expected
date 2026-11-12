@@ -1,0 +1,10 @@
+class this (true,false)
+class bare (true,false)
+field (true,false)
+trait (true,false)
+object this (true,false)
+object bare (true,false)
+object from outside (true,false)
+class literal (true,false)
+local (true,false)
+expression (true,false) receiver,body

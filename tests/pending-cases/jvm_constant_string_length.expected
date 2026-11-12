@@ -1,0 +1,6 @@
+scalac 3.8.4: a compile error, exit 1
+-- Error: tests/pending-cases/jvm_constant_string_length.scala:8:32
+8 |@main def run(): Unit = println(text.length)
+  |                                ^^^^
+  |                                String constant is too long for the JVM
+1 error found

@@ -1,0 +1,3 @@
+local: stack overflow
+initialiser entered: true
+member: the reader waits on its own latch: true

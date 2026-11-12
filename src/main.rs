@@ -2623,7 +2623,7 @@ fn build_jvm(
     let mut named: Vec<types::ClassId> = class_sites.iter().map(|&(_, c)| c).collect();
     named.sort_unstable();
     named.dedup();
-    let typer::Worker { prog, syms, file_pkgs, types, tvars, interner, loaded, entry_points, mixin_supers, jvm_volatile, getters, .. } = &mut typer;
+    let typer::Worker { prog, syms, file_pkgs, types, tvars, interner, loaded, entry_points, mixin_supers, jvm_volatile, jvm_thread_unsafe, getters, .. } = &mut typer;
     let product_inits = loaded.as_ref().map(|l| l.get_mut().cp.product_inits.clone()).unwrap_or_default();
     // A JVM build always reads the class path: scala-library is on it.
     let typer::loader::Loaded { cp, classes, java, target_names, product_target_names, volatile, .. } = loaded.as_ref().expect("a JVM build reads its class path").get_mut();
@@ -2645,6 +2645,7 @@ fn build_jvm(
         product_target_names: Some(&*product_target_names),
         volatile: Some(&*volatile),
         source_volatile: Some(&*jvm_volatile),
+        source_thread_unsafe: Some(&*jvm_thread_unsafe),
         link: jvm::Link { jar_classes: &*classes },
         owned: owned.as_deref(),
         all_mains: opts.all_mains.then_some(entry_points.as_slice()),

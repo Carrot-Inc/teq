@@ -1,0 +1,39 @@
+z true true
+b 1 true
+s 2 true
+c c true
+i 4 true
+l 5497558138880 true
+f 6.5 true
+d 7.25 true
+unit effect
+u () true
+nl null true
+str null true
+vi 8 true
+vs nine true
+anyVc 10 true
+arr List(11, 12) true
+union 13 true
+inter null true
+unboxed 0 true
+boxedAny 14 true
+boxedNull 0 true
+nothing threw nothing
+nothing threw again nothing
+initialisers run: 22
+lz false true
+lb -1 true
+ls -2 true
+lc x true
+li -4 true
+ll -5497558138880 true
+lf -6.5 true
+ld -7.25 true
+local unit effect
+lu () true
+lnull null true
+lvi -8 true
+lvs local nine true
+local wide arithmetic -11.25 -5497558138884
+local initialisers run: 12

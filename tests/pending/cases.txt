@@ -104,6 +104,11 @@ js_call_unit_argument	< undefined
 js_calling_conventions	< 5
 js_closure_null_param	< 42
 js_computed_name	< 1
+lazy_thread_unsafe_reentrant	< x = 2 after 2 run(s)
+lazy_thread_unsafe_reentrant_object	< x = 2 after 2 run(s)
+lazy_thread_unsafe_reentrant_renamed	< renamed = 2 after 2 run(s)
+lazy_thread_unsafe_reentrant_toplevel	< x = 2 after 2 run(s)
+lazy_thread_unsafe_reentrant_trait	< in a class: x = 2 after 2 run(s)
 library_quote_pattern_enclosing_given	< false
 macro_by_name_views	< Apply(Apply(Select(F, c2), 100), 1, NamedArg(b, Apply(x, b, 2))) | true
 macro_ctor_clauses	< Apply(Apply(Select(New(C), <init>), [Literal(1)]), [Literal(x)])

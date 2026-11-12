@@ -36,7 +36,7 @@
 # <name>-scalac, the directory's Use.scala compiled by scalac against it; companionmethod-lib,
 # tests/support/companion_method_lib.scala compiled the same way; regroup-a1, regroup-a2 and regroup-b,
 # tests/support/regroup/ compiled the same way, b against a1; lazyval-lib, tests/support/lazyval_lib.scala
-# compiled the same way; bodycasts-lib, tests/support/body_casts_lib.scala compiled the same way; extend-lib,
+# compiled the same way; lazy-inline-lib, tests/support/lazy_inline_lib.scala compiled the same way; bodycasts-lib, tests/support/body_casts_lib.scala compiled the same way; extend-lib,
 # tests/support/extend_lib.scala compiled the same way; bundle-lib,
 # tests/support/bundle's properties file as a jar (a resource bundle); reflect-lib,
 # tests/support/reflect_lib.scala compiled the same way for Scala.js; erasure-lib,
@@ -692,6 +692,19 @@ lazyval_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/lazy_inline_lib.scala compiled by scalac into a jar: inline methods declaring a local lazy val.
+lazy_inline_lib_jar() {
+  local src=tests/support/lazy_inline_lib.scala
+  local jar=$scratch/lazy-inline-lib.jar
+  local dir=$scratch/lazy-inline-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/lazy_inline_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/body_casts_lib.scala compiled by scalac into a jar: a GADT cast and a local case class's
 # defaults in bodies.
 bodycasts_lib_jar() {
@@ -1006,6 +1019,7 @@ jar_of() {
     parammeta-scalac) scalac_use_jar parammeta parammeta-lib ;;
     companionmethod-lib) companion_method_lib_jar ;;
     lazyval-lib) lazyval_lib_jar ;;
+    lazy-inline-lib) lazy_inline_lib_jar ;;
     bodycasts-lib) bodycasts_lib_jar ;;
     regroup-a1) regroup_jar a_v1 ;;
     regroup-a2) regroup_jar a_v2 ;;

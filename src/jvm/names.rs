@@ -586,6 +586,14 @@ pub const STRING: &str = "java/lang/String";
 pub const STRING_BUILDER: &str = "java/lang/StringBuilder";
 pub const BOXED_UNIT: &str = "scala/runtime/BoxedUnit";
 pub const OBJECT_REF: &str = "scala/runtime/ObjectRef";
+/// scala-library's holder of a local lazy val of a reference type (`LazyVals.transformLocalDef`).
+pub const LAZY_REF: &str = "scala/runtime/LazyRef";
+/// The runtime of dotty's thread-safe lazy vals (`LazyVals.transformMemberDefThreadSafeNew`).
+pub const NULL_VALUE: &str = "scala/runtime/LazyVals$NullValue$";
+pub const VAR_HANDLE: &str = "java/lang/invoke/VarHandle";
+pub const LAZY_EVALUATING: &str = "scala/runtime/LazyVals$Evaluating$";
+pub const LAZY_WAITING: &str = "scala/runtime/LazyVals$Waiting";
+pub const LAZY_CONTROL: &str = "scala/runtime/LazyVals$LazyValControlState";
 pub const NON_LOCAL_RETURN: &str = "scala/runtime/NonLocalReturnControl";
 pub const MATCH_ERROR: &str = "scala/MatchError";
 pub const THROWABLE: &str = "java/lang/Throwable";

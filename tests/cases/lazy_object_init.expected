@@ -1,0 +1,9 @@
+early value read in the constructor
+computed, constructed
+42
+43
+top lazy top lazy
+List(1, 2)
+3
+runs 2
+true

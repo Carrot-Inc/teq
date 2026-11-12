@@ -460,7 +460,6 @@ t8177f.scala	t8177f.scala:21:25: value toGenericString is not a member of Method
 t8199.scala	teq: This construct can be rewritten automatically under -rewrite -source 3.4-migration.
 t8346.scala	t8346.scala:5:33: not found: Value
 t8549b.scala	run: exit 1: Exception in thread "main" java.lang.ExceptionInInitializerError
-t8601d.scala	run: exit 1: Exception in thread "main" java.lang.RuntimeException: failed to throw NPE
 t8601e	java source: teq reads none
 t8611b.scala	run: exit 1: Exception in thread "main" java.lang.VerifyError: Bad type on operand stack
 t8803.scala	t8803.scala:20:68: expected an identifier, found 'super'

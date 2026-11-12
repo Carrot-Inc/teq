@@ -82,9 +82,16 @@ jar_inline_forwarder_inline_param_default	fail	-	< 1279
 java_enum_ordinal_through_enum_js	fail	-	< 4
 java_lang_string_type	fail	-	< a
 java_wildcard_object_bound	fail	-	< 1
+jvm_constant_string_length	cannot run	-	the JVM's platform
 kind_error_argument_in_match_scrutinee	fail	-	< scalac 3.8.4: rejected, 1 error(s)
 lambda_param_refined_type	fail	-	< 2
+lazy_given_forms	cannot run	-	the JVM's platform
+lazy_given_uncached	pass	-	
+lazy_names_arg_class	cannot run	-	the JVM's platform
+lazy_names_packages	cannot run	-	the JVM's platform
+lazy_names_sibling	cannot run	-	the JVM's platform
 local_class_match_scrutinee_avoided	fail	-	< 1
+local_def_super	pass	-	
 local_object_forward	fail	-	< 2
 macro_annotation_object_member_classes	fail	-	< 15
 macro_under_receiver_class	pass	-	
@@ -92,6 +99,7 @@ macro_under_receiver_object	pass	-
 macro_val_order	pass	-	
 math_round_overloads	fail	-	< 2 1234567890123456789
 member_ctor_lambda_bound	fail	-	< 1
+memoize_bottom_fields	cannot run	-	the JVM's platform
 method_type_arg_kind	fail	-	< 1
 mirror_of_intersection	fail	-	< CC(3)
 nowarn_alias_chain_33	fail	-	< 1

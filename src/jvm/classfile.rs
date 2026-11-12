@@ -776,6 +776,14 @@ impl ClassWriter {
         self.fields.push(Member { access, name, desc, attrs: Vec::new() });
     }
 
+    /// A field declared before every other, as dotty's `LazyVals.addInFront` puts a lazy val's
+    /// `VarHandle` before the template's statements.
+    pub fn field_first(&mut self, access: u16, name: &str, desc: &str) {
+        let name = self.cp.utf8(name);
+        let desc = self.cp.utf8(desc);
+        self.fields.insert(0, Member { access, name, desc, attrs: Vec::new() });
+    }
+
     pub fn has_method(&self, name: &str, desc: &str) -> bool {
         let (Some(&n), Some(&d)) = (self.cp.utf8.get(name), self.cp.utf8.get(desc)) else { return false };
         self.methods.iter().any(|m| m.name == n && m.desc == d)
@@ -1063,6 +1071,8 @@ pub mod op {
     pub const NEWARRAY: u8 = 0xbc;
     pub const ANEWARRAY: u8 = 0xbd;
     pub const ATHROW: u8 = 0xbf;
+    pub const MONITORENTER: u8 = 0xc2;
+    pub const MONITOREXIT: u8 = 0xc3;
     pub const CHECKCAST: u8 = 0xc0;
     pub const INSTANCEOF: u8 = 0xc1;
     pub const IFNULL: u8 = 0xc6;

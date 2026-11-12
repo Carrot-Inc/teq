@@ -1,0 +1,10 @@
+early (5,2) held=false
+operands (5,3) held=false
+nested (10,20) held=false
+finally inside (1,2) held=false
+finally outside (3,4) held=false
+exception inside held=false
+another thread acquires at once: true
+non-local return 2 held=false
+break through try 3 held=false
+break through def 5 held=false

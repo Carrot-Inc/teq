@@ -4204,10 +4204,10 @@ impl<'a> Worker<'a> {
                     let this = cv.expr(Expr::This);
                     return cv.expr(Expr::Apply(this, l));
                 }
-                // `x.synchronized(body)` is the body on JavaScript; under `teq interp`, whose threads
-                // hold monitors, the call the typer makes a monitor of (`universal_member`).
+                // `x.synchronized(body)` is the body on JavaScript; under `teq interp` and on the JVM,
+                // whose threads hold monitors, the call the typer makes a monitor of (`universal_member`).
                 (_, Some("synchronized")) if items.len() == 1 => {
-                    if !self.interp {
+                    if !self.interp && !self.jvm {
                         return items[0];
                     }
                     let recv = self.conv_expr(cv, q);

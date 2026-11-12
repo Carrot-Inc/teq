@@ -1,0 +1,12 @@
+contended: calls=1 first=the value second=the value finished=true
+first initialiser throws: calls=2 first=threw first second=the value finished=true
+contended null: calls=1 first=the value second=the value finished=true
+null computed once: true calls=1
+Any: calls=1 first=the value second=the value finished=true
+AnyRef: calls=1 first=the value second=the value finished=true
+Serializable: calls=1 first=the value second=the value finished=true
+type parameter: calls=1 first=the value second=the value finished=true
+union: calls=1 first=the value second=the value finished=true
+interrupted waiter: calls=1 interrupted=1 value=ok finished=true
+two lazy vals of one instance: a b
+one lazy val of two instances: twin 0, twin 1

@@ -276,6 +276,8 @@ charsequence_release	pass	-
 charset_decode_writable	pass	-	
 charset_encode_consumes	pass	-	
 charset_utf8_replacement	fail	-	output differs
+class_constant_arrays	fail	-	output differs
+class_constant_kinds	fail	-	TypeError: Cannot read properties of undefined (reading 'slice')
 class_for_name_arrays	pass	-	
 class_for_name_init	pass	-	
 class_literal_arrays	pass	-	
@@ -727,7 +729,12 @@ extractor_through_value_import	fail	-	RangeError: Maximum call stack size exceed
 extractor_vals	fail	-	output differs
 f_interpolator_linked	pass	-	
 field_storage_names	pass	-	
+file_module_constants	fail	-	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+file_module_early_constant	fail	-	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+file_module_inline_class_literals	pass	-	
+file_module_inline_reads	pass	-	
 file_module_overrides	fail	-	error: method toString does not take parameters
+file_module_storage	fail	-	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
 files_directories	fail	-	error: not supported on JavaScript: method createDirectories of java.nio.file.Files (a Java definition without an implementation in the std'
 files_generator	fail	-	error: not supported on JavaScript: method createDirectories of java.nio.file.Files (a Java definition without an implementation in the std'
 files_open_options	fail	-	error: not supported on JavaScript: class FileOutputStream java.io.FileOutputStream (a Java definition without an implementation in the std'
@@ -1378,8 +1385,15 @@ jdk_routes_compiler_subset	fail	-	error: not supported on JavaScript: class File
 jdk_static_values_stable	fail	-	error: a singleton type needs a val, a parameter or an object
 jdk_statics_import	fail	-	error: not found: getType
 junit_comparison_failure	fail	-	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+jvm_lazy_local_closure	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
+jvm_lazy_trait	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
+jvm_lazy_val_race	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
 jvm_return_finally	pass	-	
 jvm_synchronized_cleanup	fail	-	output differs
+jvm_synchronized_nested	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
+jvm_synchronized_other_monitor	fail	-	error: type IllegalThreadStateException not found
+jvm_synchronized_race	fail	-	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
+jvm_synchronized_throw	fail	-	error: type IllegalThreadStateException not found
 jvm_unbox_null	pass	-	
 jvm_varargs_backing_arrays	fail	-	output differs
 kind_projector	pass	-	
@@ -1397,12 +1411,47 @@ lambda_param_ordered_vars	pass	-
 lambda_union_expected	pass	-	
 lambdas	pass	-	
 layout_mixed	pass	-	
+lazy_given_nested_object	pass	-	
 lazy_initializer_release	fail	-	TypeError: $getClass(...).getDeclaredField is not a function
+lazy_inline_class	pass	-	
+lazy_inline_expansions	pass	-	
+lazy_inline_expansions_jar	fail	-	error: cannot resolve import: lazyinline not found
+lazy_inline_unapply	pass	-	
 lazy_list_seq	pass	-	
+lazy_local_class_forward_names	fail	-	TypeError: $getClass(...).getDeclaredFields is not a function
+lazy_local_constructor_homes	fail	-	ReferenceError: Must call super constructor in derived class before accessing 'this' or returning from derived constructor
+lazy_local_constructor_names	fail	-	TypeError: $classValue(...).getDeclaredMethods is not a function
+lazy_local_constructors	pass	-	
+lazy_local_enclosing_this	pass	-	
+lazy_local_extras_names	fail	-	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+lazy_local_finally	pass	-	
+lazy_local_forward	fail	-	ReferenceError: Cannot access 'x' before initialization
+lazy_local_homes	fail	-	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+lazy_local_super	fail	-	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+lazy_local_value_class	fail	-	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+lazy_locals	pass	-	
+lazy_made_companion	pass	-	
+lazy_nonlocal_return	fail	-	output differs
+lazy_nonlocal_return_classes	fail	-	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
 lazy_null_once	pass	-	
 lazy_object	pass	-	
+lazy_object_init	pass	-	
 lazy_pattern_erased_element	pass	-	
 lazy_pattern_local	pass	-	
+lazy_race	fail	-	error: type IllegalThreadStateException not found
+lazy_recursion	fail	-	error: type IllegalThreadStateException not found
+lazy_serialize	fail	-	error: type IllegalThreadStateException not found
+lazy_thread_unsafe	pass	-	
+lazy_thread_unsafe_given	fail	-	error: type IllegalThreadStateException not found
+lazy_thread_unsafe_given_sites	fail	-	error: type IllegalThreadStateException not found
+lazy_thread_unsafe_reentrant	fail	-	TypeError: Cannot redefine property: x
+lazy_thread_unsafe_reentrant_object	fail	-	TypeError: Cannot redefine property: x
+lazy_thread_unsafe_reentrant_renamed	fail	-	TypeError: Cannot redefine property: renamed
+lazy_thread_unsafe_reentrant_toplevel	fail	-	output differs
+lazy_thread_unsafe_reentrant_trait	fail	-	TypeError: Cannot redefine property: x
+lazy_throw_retry	pass	-	
+lazy_types	pass	-	
+lazy_waiting	fail	-	error: type IllegalThreadStateException not found
 lazy_zip_on_demand	pass	-	
 lazyvals	pass	-	
 leading_infix	pass	-	
@@ -2098,6 +2147,7 @@ scala2_control_mixed	pass	-
 scala2_implicit_ranking	pass	-	
 scala2_implicits	pass	-	
 scala2_std_auto_application	pass	-	
+scala3_LazyValsLongs	pass	-	
 scala3_ReverseSeqView	pass	-	
 scala3_absoverride	pass	-	
 scala3_automatic-tupling-of-function-parameters	pass	-	
@@ -2114,6 +2164,7 @@ scala3_deriving	pass	-
 scala3_enum-List1	pass	-	
 scala3_enum-Tree	pass	-	
 scala3_exceptions-nest	pass	-	
+scala3_exceptions_2	fail	-	output differs
 scala3_exoticnames	pass	-	
 scala3_extmethod-overload	pass	-	
 scala3_final-var	pass	-	
@@ -2126,16 +2177,22 @@ scala3_i11966	pass	-
 scala3_i11993	pass	-	
 scala3_i1463	pass	-	
 scala3_i1543	pass	-	
+scala3_i16806	fail	-	error: type IllegalThreadStateException not found
+scala3_i1856	pass	-	
+scala3_i1856_local	pass	-	
 scala3_i18638	pass	-	
 scala3_i20095	pass	-	
 scala3_i20395	pass	-	
 scala3_i2077	pass	-	
+scala3_i20856	fail	-	error: type IllegalThreadStateException not found
 scala3_i2266	pass	-	
 scala3_i23409b	pass	-	
 scala3_i23693	pass	-	
 scala3_i2916	pass	-	
 scala3_i3018	pass	-	
+scala3_i4451	pass	-	
 scala3_i4559	pass	-	
+scala3_i505	pass	-	
 scala3_i5606	pass	-	
 scala3_i6341	pass	-	
 scala3_i6716	pass	-	
@@ -2149,22 +2206,32 @@ scala3_infix	pass	-
 scala3_isInstanceOf-eval	pass	-	
 scala3_iterator-concat	pass	-	
 scala3_lazyVals	pass	-	
+scala3_lazy_exprs	fail	-	function $matchError(v) { const c = $exc.MatchError; throw c ? new c(v) : new Error("MatchError: " + $str(v)); }
+scala3_lazy_impl	fail	-	error: type IllegalThreadStateException not found
+scala3_lazy_implicit_lists	pass	-	
+scala3_lazy_implicit_nums	pass	-	
+scala3_lazy_override_run	pass	-	
+scala3_lazy_traits	pass	-	
 scala3_list_map	pass	-	
 scala3_missingparams	pass	-	
 scala3_mixin-overrides	pass	-	
 scala3_mixins	pass	-	
 scala3_nested-object-implements-val	pass	-	
 scala3_no-init-enclosing-static-objects	pass	-	
+scala3_nothing_lazy_val	fail	-	TypeError: $classValue(...).getDeclaredFields is not a function
 scala3_nullAsInstanceOf	pass	-	
+scala3_null_lazy_val	fail	-	TypeError: $getClass(...).getDeclaredFields is not a function
 scala3_numeric-range	pass	-	
 scala3_overloads	fail	-	RangeError: Maximum call stack size exceeded
 scala3_protectedSuper	pass	-	
 scala3_rawstrings	pass	-	
+scala3_retsynch	pass	-	
 scala3_runtime-richChar	pass	-	
 scala3_sort	pass	-	
 scala3_stable-enum-hashcodes	pass	-	
 scala3_switches	pass	-	
 scala3_t0668	pass	-	
+scala3_t10032	pass	-	
 scala3_t10594	pass	-	
 scala3_t1192	pass	-	
 scala3_t1373	pass	-	
@@ -2193,6 +2260,7 @@ scala3_t5614	pass	-
 scala3_t5923c	pass	-	
 scala3_t6011b	pass	-	
 scala3_t627	fail	-	output differs
+scala3_t704	pass	-	
 scala3_t7249	pass	-	
 scala3_t7300	pass	-	
 scala3_t7341	pass	-	
@@ -2201,6 +2269,7 @@ scala3_t7584	pass	-
 scala3_t7985	pass	-	
 scala3_t8015-ffc	pass	-	
 scala3_t8428	pass	-	
+scala3_t8601d	fail	-	at package$$M.error (scala3_t8601d.js:515:11)
 scala3_t8738	pass	-	
 scala3_t8888	pass	-	
 scala3_t8893	pass	-	
@@ -2209,6 +2278,7 @@ scala3_tryPatternMatch	pass	-
 scala3_tuple-deconstruct-wildcard-sideeffect	pass	-	
 scala3_typeclass-derivation3	pass	-	
 scala3_unions	pass	-	
+scala3_unit_lazy_val	fail	-	TypeError: $getClass(...).getDeclaredFields is not a function
 scala3_view-headoption	pass	-	
 scala3_virtpatmat_alts	pass	-	
 scala3_virtpatmat_apply	pass	-	
@@ -2393,6 +2463,16 @@ suppression_disabled	pass	-
 suppression_inheritance	pass	-	
 symbol_name	fail	-	error: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition withou
 symbolic_type_selection	pass	-	
+sync_break_direct	pass	-	
+sync_exits	pass	-	
+sync_exits_jvm	fail	-	error: type IllegalThreadStateException not found
+sync_mutual_exclusion	fail	-	error: type IllegalThreadStateException not found
+sync_nesting	pass	-	
+sync_nesting_jvm	fail	-	output differs
+sync_receivers	fail	-	output differs
+sync_results	pass	-	
+sync_return_operands	pass	-	
+sync_wait_notify	fail	-	error: type IllegalThreadStateException not found
 syntax_extras	pass	-	
 syntax_gaps	pass	-	
 synthesized_target_name	pass	-	

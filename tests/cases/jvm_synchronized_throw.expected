@@ -1,0 +1,4 @@
+inside the block: holds the monitor: true
+caught: thrown inside
+after the throw: holds the monitor: false; another thread enters: true
+160000 of 160000 increments kept where every hundredth call throws inside the block

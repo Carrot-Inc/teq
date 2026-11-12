@@ -1,0 +1,28 @@
+body
+init
+42
+init
+42
+caught
+a init
+c init
+finally 6
+2
+b init g
+c init
+finally 6
+4
+d init
+h 30 60
+3
+d init
+h 0 0
+-1
+inner body
+e init
+5
+f init
+12
+z init
+7
+caught outer

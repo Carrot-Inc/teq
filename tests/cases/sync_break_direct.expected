@@ -1,0 +1,3 @@
+direct 1 held=false
+through try 3 held=false
+through a local def 5 held=false

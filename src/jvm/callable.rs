@@ -1065,11 +1065,10 @@ impl<'a> Gen<'a> {
             if self.cw.has_method(&getter, &desc) {
                 continue;
             }
-            self.cw.field(ACC_PRIVATE, &format!("{}$lzy", getter), "Ljava/lang/Object;");
-            self.begin_method(false, false, &[], ty.clone(), &[]);
-            self.lazy_holder_body(&getter, &ty, super::classes::HolderInit::Module { class: module, outer: self.this_name.clone() });
-            self.return_value(&ty);
-            self.end_method(ACC_PUBLIC, &getter, &desc);
+            // A module val, `Final`: a thread-safe lazy val here, where dotty makes it eagerly when
+            // `allOverriddenSymbols` finds nothing (`transformSyntheticModule`, a queued item).
+            let outer = self.this_name.clone();
+            self.thread_safe_member(&getter, &ty, super::classes::HolderInit::Module { class: module, outer }, ACC_PUBLIC | ACC_FINAL);
         }
     }
 
@@ -1177,45 +1176,19 @@ impl<'a> Gen<'a> {
         self.finish_class(&name)
     }
 
-    /// The enclosing instance's side of `has_instance_case_companion`: the field `K$lzy1` and
-    /// `K()` over it, for each case class nested in the class being written.
+    /// The enclosing instance's side of `has_instance_case_companion`: the getter `K()` of the
+    /// companion of each case class nested in the class being written, a module val, `Final`, held
+    /// in a thread-safe lazy val (dotty makes it eagerly when `allOverriddenSymbols` finds nothing,
+    /// `transformSyntheticModule`; a queued item), made with this instance as its outer one.
     pub fn instance_case_companion_fields(&mut self, o: ClassId) {
         for k in self.cx.instance_case_companions(o) {
-            let (field, accessor, ty) = self.instance_companion_slot(k);
-            let mut d = String::new();
-            ty.desc(&mut d);
-            self.cw.field(ACC_PUBLIC | ACC_FINAL, &field, &d);
-            let this = JType::L(self.this_name.clone());
-            self.begin_method(false, false, &[], ty.clone(), &[]);
-            self.load(0, &this);
-            let owner = self.this_name.clone();
-            self.getfield(&owner, &field, &ty);
-            self.return_value(&ty);
-            self.end_method(ACC_PUBLIC | ACC_FINAL, &accessor, &method_desc(&[], &ty));
+            let cx = self.cx;
+            let accessor = encode(cx.input.interner.get(cx.input.syms.class(k).name));
+            let module: Rc<str> = Rc::from(cx.companion_name(k));
+            let ty = JType::L(module.clone());
+            let outer = self.this_name.clone();
+            self.thread_safe_member(&accessor, &ty, super::classes::HolderInit::Module { class: module, outer }, ACC_PUBLIC | ACC_FINAL);
         }
-    }
-
-    /// In the constructor of the class being written, after its fields: each instance
-    /// companion made with this instance, eagerly as dotty makes a synthetic module.
-    pub fn init_instance_case_companions(&mut self, o: ClassId) {
-        let this = JType::L(self.this_name.clone());
-        for k in self.cx.instance_case_companions(o) {
-            let (field, _, ty) = self.instance_companion_slot(k);
-            let JType::L(class) = ty.clone() else { continue };
-            self.load(0, &this);
-            self.new_object(&class);
-            self.load(0, &this);
-            self.invoke(Invoke::Special, &class, false, "<init>", &[this.clone()], &JType::V);
-            let owner = self.this_name.clone();
-            self.putfield(&owner, &field, &ty);
-        }
-    }
-
-    /// The field, the accessor and the type of the instance companion of the case class `k`.
-    fn instance_companion_slot(&mut self, k: ClassId) -> (String, String, JType) {
-        let cx = self.cx;
-        let name = encode(cx.input.interner.get(cx.input.syms.class(k).name));
-        (format!("{}$lzy1", name), name, JType::L(Rc::from(cx.companion_name(k))))
     }
 
     /// `Color$` for an enum whose companion has no body, with its statics.
@@ -1831,14 +1804,23 @@ impl<'a> Gen<'a> {
         let all_types: Vec<JType> = all.iter().map(|p| p.1.clone()).collect();
         // A class of a class takes its enclosing instance first, which `copy` passes on from its
         // own field: scalac's `copy` of an inner case class takes the class's parameters alone.
-        let captured: Vec<(String, JType)> = self.class_captures.clone().into_iter().map(|(s, f, _, _)| (f, self.anon_capture_type(s))).collect();
-        if captured.len() != tc.captures || tc.captures > all.len() {
+        // The constructor takes what the class captures as `class_captured` expands it (the
+        // captures a local def or a local lazy val brings beside the declared ones), each passed on
+        // from the field holding it.
+        let mut captured: Vec<(String, JType)> = self.class_captures.clone().into_iter().map(|(s, f, _, _)| (f, self.anon_capture_type(s))).collect();
+        // Its `Extras` after them, from their fields too.
+        for (h, f) in self.class_homes.clone() {
+            let t = self.class_type(h);
+            captured.push((f, t));
+        }
+        captured.extend(self.class_keys.iter().map(|(_, f)| (f.clone(), JType::object())));
+        if captured.len() < tc.captures || tc.captures > all.len() {
             return;
         }
         let k = tc.captures;
         let params: Vec<(Option<SymId>, JType)> = all[k..].to_vec();
         let types: Vec<JType> = all_types[k..].to_vec();
-        let init_types: Vec<JType> = captured.iter().take(k).map(|(_, t)| t.clone()).chain(types.iter().cloned()).collect();
+        let init_types: Vec<JType> = captured.iter().map(|(_, t)| t.clone()).chain(types.iter().cloned()).collect();
         let prefix = method_desc(&types, &JType::V);
         let prefix = &prefix[..prefix.len() - 1];
         // A value case class's `copy` answers the underlying value, as scalac's erasure has it.
@@ -1853,7 +1835,7 @@ impl<'a> Gen<'a> {
         } else if !self.cw.method_table().iter().any(|(_, n, d)| n == "copy" && d.starts_with(prefix)) {
             self.begin_method(false, false, &params, this.clone(), &[]);
             self.new_object(&owner);
-            for (field, t) in captured.iter().take(k) {
+            for (field, t) in captured.iter() {
                 self.load(0, &this);
                 self.getfield(&owner, field, t);
             }
@@ -2208,8 +2190,10 @@ impl<'a> Gen<'a> {
             let held = self.load_capture(p);
             self.adapt(&held, &want);
         }
+        let extras = self.member_extras(t);
+        self.load_extras(&extras);
         let tm = self.mref(t);
-        let pm = self.proxied_mref(&tm, proxies);
+        let pm = self.proxied_mref(&tm, proxies, &extras);
         let mut slot = 1u16;
         for (i, ty) in m.params.iter().enumerate() {
             self.load(slot, ty);

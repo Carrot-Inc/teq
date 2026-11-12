@@ -1,0 +1,70 @@
+t1 top val
+t2 top var
+t3 top object
+t4 other file
+g1 block
+g2 if
+g21 if two
+g22 given
+g7 lazy
+g23 if this
+g3 if-throw
+g4 ascribed
+g5 var
+g6 def
+g7 lazy
+g8 self
+g9 selfApp
+g10 obj
+g11 outer member
+g12 outer this
+g13 inherited
+g14 match
+g15 try
+g16 outer param
+g17 literal
+g18 local
+g19 this.v
+g20 this
+g1 block
+g2 if
+g22 given
+g7 lazy
+g23 if this
+g3 if-throw
+g7 lazy
+g8 self
+g9 selfApp
+g10 obj
+g12 outer this
+g13 inherited
+g14 match
+g15 try
+g19 this.v
+g20 this
+l1 param
+l2 byname
+l3 var
+l4 val
+l5 lazy
+l6 this member
+l7 this
+l8 local object
+l9 local def
+l10 local given
+l4 val
+l1 param
+l4 val
+l5 lazy
+l6 this member
+l7 this
+l8 local object
+c1 val param
+c2 plain param
+c1 val param
+c2 plain param
+tg1 trait val
+tg2 trait var
+tg3 trait this
+tg1 trait val
+tg3 trait this

@@ -2617,12 +2617,12 @@ impl<'a> Worker<'a> {
                 Some((te, self.b.t_string))
             }
             // `AnyRef.synchronized`: on JavaScript the one thread holds every monitor, so the body
-            // runs as it is, after the receiver (and so in the JVM's output, which takes no monitor).
+            // runs as it is, after the receiver.
             names::SYNCHRONIZED if one_arg && !matches!(self.is_numeric(recv_class), Some(_)) => {
                 let (body, ty) = self.type_expr(arg(0)?, None);
-                // Under `teq interp`, whose threads hold monitors, the body runs holding the
-                // receiver's (src/interp/threads.rs).
-                if self.interp {
+                // Under `teq interp` and on the JVM, whose threads hold monitors, the body runs holding
+                // the receiver's (src/interp/threads.rs; dotty's `genSynchronized`, src/jvm/intrinsic.rs).
+                if self.interp || self.jvm {
                     let s = self.prog.add_str("$synchronized($0, $1)");
                     let l = self.prog.list(&[recv, body]);
                     let te = self.prog.add(TExpr::Js(s, l));

@@ -1,0 +1,7 @@
+outside: a false, b false
+in a: a true, b false
+in a, in b: a true, b true
+in a, in b, in a again: a true, b true
+in a, after b: a true, b false
+outside again: a false, b false; the blocks' value: 3
+160000 of 160000 increments kept under the nested blocks

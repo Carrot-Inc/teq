@@ -1,0 +1,6 @@
+List(threw ref, ref after 2, ref after 2)
+List(threw int, 40, 40)
+unit after 6
+List(threw unit, (), ())
+List(threw object, 17179869184)
+List(threw local, 2.5, 2.5)

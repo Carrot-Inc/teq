@@ -86,12 +86,13 @@ impl Analysis {
         free
     }
 
-    /// The captures of the initialiser of a local lazy val, the val's own cell left out.
+    /// The captures of the initialiser of a local lazy val, the val's own holder left out (its
+    /// accessor and initialiser take it last).
     pub fn of_lazy(&mut self, cx: &Cx, sym: SymId) -> Rc<Free> {
         if let Some(f) = self.memo.get(&sym) {
             return f.clone();
         }
-        let Some(&init) = self.lazy_inits.get(&sym) else { return Rc::new(Free::default()) };
+        let Some(init) = self.lazy_inits.get(&sym).copied().or_else(|| cx.lazy_local_init(sym)) else { return Rc::new(Free::default()) };
         if self.in_progress.contains(&sym) {
             return Rc::new(Free::default());
         }
@@ -124,6 +125,13 @@ impl Collector<'_, '_> {
         self.nonlocal |= free.nonlocal;
     }
 
+    /// What a copy of a local def or a lazy val's accessor needs where it is read: its captures and
+    /// `this`, not its key, which a lazy val's holder carries (`Extras::keys`) and a def makes itself.
+    fn merge_captures(&mut self, free: &Free) {
+        self.referenced.extend_from_slice(&free.syms);
+        self.this |= free.this;
+    }
+
     fn list(&mut self, l: ListRef) {
         let prog = self.cx.input.prog;
         for &e in prog.expr_list(l) {
@@ -142,7 +150,11 @@ impl Collector<'_, '_> {
         self.referenced.push(s);
         if info.mods & mods::LAZY != 0 && info.kind != SymKind::Def {
             let free = self.an.of_lazy(self.cx, s);
-            self.merge(&free);
+            self.merge_captures(&free);
+        } else if info.kind == SymKind::Def && info.owner == Owner::Local {
+            // A local def a lifted class takes, whose copy there reads what the def captures.
+            let free = self.an.of_fun(self.cx, s);
+            self.merge_captures(&free);
         }
     }
 
@@ -233,6 +245,12 @@ impl Collector<'_, '_> {
                             self.declared.push(sym);
                             if self.cx.input.syms.sym(sym).mods & mods::LAZY != 0 {
                                 self.an.lazy_inits.insert(sym, init);
+                                // An initialiser returning from the method makes the key of its returns
+                                // (`NonLocalReturns`), which the holder carries from there.
+                                if self.cx.input.syms.sym(sym).kind != SymKind::Def {
+                                    let free = self.an.of_lazy(self.cx, sym);
+                                    self.nonlocal |= free.nonlocal;
+                                }
                             } else {
                                 self.expr(init);
                             }

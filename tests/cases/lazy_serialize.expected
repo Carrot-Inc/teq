@@ -1,0 +1,3 @@
+computed: value 1, its copy: value 1, calls=1
+serialised while evaluating: original value 2, copy value 3, calls=3
+serialised while a reader waits: original value 4, copy value 5, calls=5

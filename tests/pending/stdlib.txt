@@ -22,6 +22,8 @@ case_class_parent_selector_interfaces	TypeError: $getClass(...).getInterfaces is
 cast_array_kinds	output differs
 cats_dispatch_rebuild	error: cannot resolve import: cats not found
 charset_utf8_replacement	output differs
+class_constant_arrays	output differs
+class_constant_kinds	TypeError: Cannot read properties of undefined (reading 'slice')
 class_literal_qualifier	TypeError: Cannot read properties of null (reading '$qname')
 class_pattern_on_library_trait_list_iterator	error: unreachable case: type List[Int] and class ListIterator are unrelated
 class_pattern_on_library_trait_path	error: not supported on JavaScript: method get of java.nio.file.Paths (a Java definition without an implementation in the std's platform lay
@@ -102,7 +104,10 @@ extractor_selected_bounds	error: type mismatch: found Any, required String
 extractor_sequence_wrapper_result	error: Slots is not a case class, so it cannot be used as a pattern
 extractor_through_value_import	RangeError: Maximum call stack size exceeded
 extractor_vals	output differs
+file_module_constants	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
+file_module_early_constant	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
 file_module_overrides	error: method toString does not take parameters
+file_module_storage	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
 files_directories	error: not supported on JavaScript: method createDirectories of java.nio.file.Files (a Java definition without an implementation in the std'
 files_generator	error: not supported on JavaScript: method createDirectories of java.nio.file.Files (a Java definition without an implementation in the std'
 files_open_options	error: not supported on JavaScript: class FileOutputStream java.io.FileOutputStream (a Java definition without an implementation in the std'
@@ -178,9 +183,38 @@ jdk_routes_compiler_subset	error: not supported on JavaScript: class File java.i
 jdk_static_values_stable	error: a singleton type needs a val, a parameter or an object
 jdk_statics_import	error: not found: getType
 junit_comparison_failure	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+jvm_lazy_local_closure	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
+jvm_lazy_trait	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
+jvm_lazy_val_race	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
 jvm_synchronized_cleanup	output differs
+jvm_synchronized_nested	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
+jvm_synchronized_other_monitor	error: type IllegalThreadStateException not found
+jvm_synchronized_race	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
+jvm_synchronized_throw	error: type IllegalThreadStateException not found
 jvm_varargs_backing_arrays	output differs
 lazy_initializer_release	TypeError: $getClass(...).getDeclaredField is not a function
+lazy_inline_expansions_jar	error: cannot resolve import: lazyinline not found
+lazy_local_class_forward_names	TypeError: $getClass(...).getDeclaredFields is not a function
+lazy_local_constructor_homes	ReferenceError: Must call super constructor in derived class before accessing 'this' or returning from derived constructor
+lazy_local_constructor_names	TypeError: $classValue(...).getDeclaredMethods is not a function
+lazy_local_extras_names	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+lazy_local_forward	ReferenceError: Cannot access 'x' before initialization
+lazy_local_homes	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+lazy_local_super	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+lazy_local_value_class	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+lazy_nonlocal_return	output differs
+lazy_nonlocal_return_classes	error: not supported on JavaScript: trait Callable java.util.concurrent.Callable (a Java definition without an implementation in the std's p
+lazy_race	error: type IllegalThreadStateException not found
+lazy_recursion	error: type IllegalThreadStateException not found
+lazy_serialize	error: type IllegalThreadStateException not found
+lazy_thread_unsafe_given	error: type IllegalThreadStateException not found
+lazy_thread_unsafe_given_sites	error: type IllegalThreadStateException not found
+lazy_thread_unsafe_reentrant	TypeError: Cannot redefine property: x
+lazy_thread_unsafe_reentrant_object	TypeError: Cannot redefine property: x
+lazy_thread_unsafe_reentrant_renamed	TypeError: Cannot redefine property: renamed
+lazy_thread_unsafe_reentrant_toplevel	output differs
+lazy_thread_unsafe_reentrant_trait	TypeError: Cannot redefine property: x
+lazy_waiting	error: type IllegalThreadStateException not found
 library_body_casts	error: not found: bodycasts
 library_body_std_defaults	error: cannot resolve import: stddefaultslib not found
 library_overloads_erased_alike	error: type PairMaker not found
@@ -284,8 +318,17 @@ regex_unicode_class_case	throw new PatternSyntaxException(error, regex, -1);
 regroup_bincompat_lib	error: not found: rgb
 runtime_objects	error: not supported on JavaScript: method equals of scala.runtime.BoxesRunTime (a Java definition without an implementation in the std's pl
 sam_conversion_after_overloaded_apply	error: not supported on JavaScript: method valueOf of scala.String (a Java definition without an implementation in the std's platform layer)
+scala3_exceptions_2	output differs
+scala3_i16806	error: type IllegalThreadStateException not found
+scala3_i20856	error: type IllegalThreadStateException not found
+scala3_lazy_exprs	function $matchError(v) { const c = $exc.MatchError; throw c ? new c(v) : new Error("MatchError: " + $str(v)); }
+scala3_lazy_impl	error: type IllegalThreadStateException not found
+scala3_nothing_lazy_val	TypeError: $classValue(...).getDeclaredFields is not a function
+scala3_null_lazy_val	TypeError: $getClass(...).getDeclaredFields is not a function
 scala3_overloads	RangeError: Maximum call stack size exceeded
 scala3_t627	output differs
+scala3_t8601d	at package$$M.error (scala3_t8601d.js:515:11)
+scala3_unit_lazy_val	TypeError: $getClass(...).getDeclaredFields is not a function
 scala_library_deprecated_members	its summaries of hidden warnings are not scalac's (tests/stdlib-summaries.txt)
 scala_package_member_before_predef	output differs
 script_bounded_output	error: not found: Script
@@ -329,6 +372,11 @@ structural_reflective_calls	output differs
 structural_signatures	function $fail(n, m) { const c = $exc[n]; throw c ? new c(m) : new Error(n + ": " + m); }
 super_rebind_result	TypeError: this.choose$Any$super1 is not a function
 symbol_name	error: not supported on JavaScript: class ReentrantReadWriteLock java.util.concurrent.locks.ReentrantReadWriteLock (a Java definition withou
+sync_exits_jvm	error: type IllegalThreadStateException not found
+sync_mutual_exclusion	error: type IllegalThreadStateException not found
+sync_nesting_jvm	output differs
+sync_receivers	output differs
+sync_wait_notify	error: type IllegalThreadStateException not found
 system_properties	error: not supported on JavaScript: class ProcessBuilder java.lang.ProcessBuilder (a Java definition without an implementation in the std's
 thread_concurrent_map_put_interrupted	error: type IllegalThreadStateException not found
 thread_concurrent_map_read_during_compute	error: type IllegalThreadStateException not found

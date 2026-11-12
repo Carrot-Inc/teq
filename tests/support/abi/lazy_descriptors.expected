@@ -1,0 +1,12 @@
+lazy_descriptors/Holder arr$lzy1:Ljava/lang/Object; private,volatile
+lazy_descriptors/Holder arr()Ljava/lang/Object; public
+lazy_descriptors/Holder inner$lzy1:Ljava/lang/Object; private,volatile
+lazy_descriptors/Holder inner()Llazy_descriptors/Outer$In; public
+lazy_descriptors/Holder pair$lzy1:Ljava/lang/Object; private,volatile
+lazy_descriptors/Holder pair()Lscala/Tuple2; public
+lazy_descriptors/Holder unit$lzy1:Ljava/lang/Object; private,volatile
+lazy_descriptors/Holder unit()Lscala/runtime/BoxedUnit; public
+lazy_descriptors/Holder wrapped$lzy1:Ljava/lang/Object; private,volatile
+lazy_descriptors/Holder wrapped()Ljava/lang/String; public
+lazy_descriptors/Holder wrappedArray$lzy1:Ljava/lang/Object; private,volatile
+lazy_descriptors/Holder wrappedArray()Ljava/lang/Object; public

@@ -114,7 +114,6 @@ java_varargs_spread_unimported	compile
 jdk_enum_stable_values	compile
 jdk_member_missing_class	compile
 jdk_static_values_stable	compile
-jvm_synchronized_cleanup	output
 jvm_varargs_backing_arrays	output
 lazy_initializer_release	output
 library_quote_pattern_enclosing_given	compile
@@ -142,7 +141,6 @@ method_type_arg_kinds_accepted	compile
 module_selection_effectful_qualifier	compile
 named_reorder_block_prefix_defaults	output
 native_overload_reflection	output
-object_monitor_one_thread	exception
 overload_jdk_using	compile
 overloaded_type_argument_kinds	compile
 package_extension_path	compile
@@ -172,14 +170,7 @@ std_small_members	backend
 string_constant_fold_surrogates	output
 string_f_targ	verify
 super_rebind_result	verify
-thread_lazy_interrupt	output
-thread_lazy_race	output
-thread_local_lazy_race	output
 thread_sync_queue_handoff	compile
-thread_synchronized_counter	output
-thread_wait_argument_widening	exception
-thread_wait_named_argument	exception
-thread_wait_notify	exception
 toplevel_init_given_objects	output
 trait_empty_parameters	compile
 tuple_cons_deep	output
@@ -195,6 +186,4 @@ union_erasure_bases	backend
 vector_retention	compile
 view_import_ineligible_shadow	compile
 view_import_renamed_prefixes	compile
-wait_notify_eta	exception
 wildcard_capture_param_bounds	compile
-zio_runtime_lazy_race	output

@@ -1,0 +1,7 @@
+reentrant inner=true after inner=true then a=false b=false
+two locks a=true b=true then a=false b=false
+lazy initialiser true then a=false b=false
+constructor true then a=false b=false
+lambda a=true b=false then a=false b=false
+by-name a=false b=true then a=false b=false
+local def a=true b=false then a=false b=false

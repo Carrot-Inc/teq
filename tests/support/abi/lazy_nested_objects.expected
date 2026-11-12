@@ -1,0 +1,16 @@
+lazy_nested_objects/A$ <clinit>()V private,static
+lazy_nested_objects/A$ x$lzy2$lzyHandle:Ljava/lang/invoke/VarHandle; private,static,final
+lazy_nested_objects/A$ x$lzy2:Ljava/lang/Object; private,volatile
+lazy_nested_objects/A$ x$lzyINIT2()Ljava/lang/Object; private
+lazy_nested_objects/A$B$ <clinit>()V private,static
+lazy_nested_objects/A$B$ x$lzy1$lzyHandle:Ljava/lang/invoke/VarHandle; private,static,final
+lazy_nested_objects/A$B$ x$lzy1:Ljava/lang/Object; private,volatile
+lazy_nested_objects/A$B$ x$lzyINIT1()Ljava/lang/Object; private
+lazy_nested_objects/A$C$ <clinit>()V private,static
+lazy_nested_objects/A$C$ x$lzy3$lzyHandle:Ljava/lang/invoke/VarHandle; private,static,final
+lazy_nested_objects/A$C$ x$lzy3:Ljava/lang/Object; private,volatile
+lazy_nested_objects/A$C$ x$lzyINIT3()Ljava/lang/Object; private
+lazy_nested_objects/A$C$D$ <clinit>()V private,static
+lazy_nested_objects/A$C$D$ x$lzy4$lzyHandle:Ljava/lang/invoke/VarHandle; private,static,final
+lazy_nested_objects/A$C$D$ x$lzy4:Ljava/lang/Object; private,volatile
+lazy_nested_objects/A$C$D$ x$lzyINIT4()Ljava/lang/Object; private
