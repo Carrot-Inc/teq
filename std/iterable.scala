@@ -688,7 +688,7 @@ object IndexedSeq:
 // own iterators are closures over the two (`FnIterator`). Transformations are lazy where
 // Scala's are, so an endless iterator can be cut with take, takeWhile and the like; the rest of
 // IterableOps consumes the iterator.
-abstract class Iterator[+A] extends IterableOps[A, Iterator, Iterator[A]]:
+trait Iterator[+A] extends IterableOps[A, Iterator, Iterator[A]]:
   def hasNext: Boolean
   def next(): A
   def foreach[U](f: A => U): Unit = while hasNext do f(next())

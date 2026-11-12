@@ -222,6 +222,7 @@ machine=(
   "reference-test-verb ./tests/reference-test-verb.sh"
   "mill-test-verb ./tests/mill-test-verb.sh"
   "std-entered ./tests/std-entered.sh"
+  "std-kinds ./tests/std-kinds.sh"
   "jvm ./tests/run_jvm.sh"
   "jvm-21 ./tests/run_jvm.sh --java-output-version=21"
   "interp ./tests/run_interp.sh"

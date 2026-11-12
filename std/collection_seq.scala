@@ -35,3 +35,11 @@ object IndexedSeq:
   def empty[A]: IndexedSeq[A] = Vector.empty[A]
   def from[A](source: IterableOnce[A]): IndexedSeq[A] = Vector.from(source)
   def newBuilder[A]: mutable.Builder[A, IndexedSeq[A]] = Vector.newBuilder[A]
+
+// scala-library's abstract classes over the sequences, which `List` extends as it does there: here, in the file
+// every program over sequences enters, so that a list brings no other file in.
+abstract class AbstractIterable[+A] extends Iterable[A]
+abstract class AbstractSeq[+A] extends AbstractIterable[A], Seq[A]
+
+package immutable:
+  abstract class AbstractSeq[+A] extends scala.collection.AbstractSeq[A], scala.Seq[A]

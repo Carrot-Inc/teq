@@ -2,9 +2,7 @@ package scala.collection
 
 // The abstract classes a library's anonymous collection extends (cats' `toIterable`, scalactic's
 // `prettyArray`), over the std's traits.
-abstract class AbstractIterable[+A] extends Iterable[A]
 abstract class AbstractIterator[+A] extends Iterator[A]
-abstract class AbstractSeq[+A] extends Seq[A]
 
 /** scala-library's `collection.Map`: what the immutable `Map` and the mutable `HashMap` share, a partial
   * function of its keys (`MapOps`), whose instances stay objects (`@objectFunction`). */

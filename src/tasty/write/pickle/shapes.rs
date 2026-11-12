@@ -463,9 +463,42 @@ impl<'w, 'a> P<'w, 'a> {
         self.std_shape(&owner, &name, "object")
     }
 
+    /// The kind of each of the std's classes and objects (`TEQ_STD_KINDS`), a line each, sorted:
+    /// scala-library's name of it, its kind (`trait`, `abstract class`, `class`, `object`; an enum,
+    /// an enum's case, an opaque type and a class the compiler builds in under words of their own)
+    /// and `sealed`, `final` and `case`, each `-` where it is not, between tabs. tests/std-kinds.sh
+    /// holds the lines to scala-library's own declarations.
+    fn std_kinds(&self, classes: &[ClassId]) -> String {
+        use crate::ast::mods;
+        let mut lines: Vec<String> = classes
+            .iter()
+            .map(|&c| {
+                let info = self.w.syms.class(c);
+                let kind = match info.kind {
+                    ClassKind::Trait => "trait",
+                    ClassKind::Object => "object",
+                    ClassKind::Class if info.mods & mods::ABSTRACT != 0 => "abstract class",
+                    ClassKind::Class => "class",
+                    ClassKind::Enum => "enum",
+                    ClassKind::EnumCase => "enum case",
+                    ClassKind::Opaque => "opaque",
+                    ClassKind::Builtin => "builtin",
+                    ClassKind::GivenImpl => "given",
+                    ClassKind::Anon => "anonymous",
+                };
+                let word = |m, word: &'static str| if info.mods & m != 0 { word } else { "-" };
+                format!("{}\t{}\t{}\t{}\t{}", scala_name(self.w, c), kind, word(mods::SEALED, "sealed"), word(mods::FINAL, "final"), word(mods::CASE, "case"))
+            })
+            .collect();
+        lines.sort();
+        lines.dedup();
+        lines.join("\n") + "\n"
+    }
+
     /// Every key the std can give a body (`TEQ_STD_SHAPES`): its classes' members, constructors,
     /// default getters and objects, and the library members its top-level definitions and
-    /// extensions stand for.
+    /// extensions stand for. With `TEQ_STD_KINDS=<file>` beside it, the kinds of the classes and
+    /// objects the walk meets are written there (`std_kinds`).
     pub(super) fn all_std_shapes(&mut self) -> Vec<String> {
         self.shapes_seen = Some(Vec::new());
         let mut classes = Vec::new();
@@ -511,6 +544,11 @@ impl<'w, 'a> P<'w, 'a> {
                 if !classes.contains(&k) {
                     classes.push(k);
                 }
+            }
+        }
+        if let Some(path) = std::env::var_os("TEQ_STD_KINDS") {
+            if let Err(e) = std::fs::write(&path, self.std_kinds(&classes)) {
+                eprintln!("teq: cannot write {}: {e}", path.to_string_lossy());
             }
         }
         for &c in &classes {

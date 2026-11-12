@@ -1,0 +1,47 @@
+scala.*:	trait sealed in the std, abstract class sealed in scala-library
+scala.<:<	trait sealed in the std, abstract class sealed in scala-library
+scala.=:=	trait sealed in the std, abstract class sealed in scala-library
+scala.CanEqual	trait in the std, trait sealed in scala-library
+scala.Conversion	trait in the std, abstract class in scala-library
+scala.PartialFunction$.AndThen	class final in the std, class in scala-library
+scala.PartialFunction$.Combined	class final in the std, class in scala-library
+scala.PartialFunction$.OrElse	class final in the std, class in scala-library
+scala.StringContext	class final in the std, class case in scala-library
+scala.annotation.Annotation	trait in the std, abstract class in scala-library
+scala.annotation.unchecked.uncheckedCaptures	class final in the std, class in scala-library
+scala.collection.IndexedSeqView$.IndexedSeqViewIterator	class final in the std, class in scala-library
+scala.collection.IndexedSeqView$.IndexedSeqViewReverseIterator	class final in the std, class in scala-library
+scala.collection.JavaConverters$.AsJava	class final in the std, class in scala-library
+scala.collection.JavaConverters$.AsJavaCollection	class final in the std, class in scala-library
+scala.collection.JavaConverters$.AsScala	class final in the std, class in scala-library
+scala.collection.MapView	class final in the std, trait in scala-library
+scala.collection.immutable.ArraySeq	class sealed in the std, abstract class sealed in scala-library
+scala.collection.immutable.ListMap	class final in the std, class sealed in scala-library
+scala.collection.immutable.ListSet	class final in the std, class sealed in scala-library
+scala.collection.immutable.LongMap	class final in the std, abstract class sealed in scala-library
+scala.collection.immutable.Map$.Map3	class final in the std, class in scala-library
+scala.collection.immutable.NumericRange$.Exclusive	class final in the std, class in scala-library
+scala.collection.immutable.NumericRange$.Inclusive	class final in the std, class in scala-library
+scala.collection.immutable.Range	class final in the std, abstract class sealed in scala-library
+scala.collection.immutable.SortedMap	class in the std, trait in scala-library
+scala.collection.immutable.SortedSet	class in the std, trait in scala-library
+scala.collection.immutable.Stream	class final in the std, abstract class sealed in scala-library
+scala.collection.immutable.TreeMap$.TreeMapBuilder	class final in the std, class in scala-library
+scala.collection.immutable.TreeSet$.TreeSetBuilder	class final in the std, class in scala-library
+scala.collection.immutable.Vector	class sealed in the std, abstract class sealed in scala-library
+scala.collection.mutable.ArrayBuffer	class final in the std, class in scala-library
+scala.collection.mutable.ArrayBuilder	class in the std, abstract class sealed in scala-library
+scala.collection.mutable.ArrayBuilder$.ofBoolean	class final in the std, class in scala-library
+scala.collection.mutable.ListBuffer	class final in the std, class in scala-library
+scala.collection.mutable.Map$.WithDefault	class final in the std, class in scala-library
+scala.collection.mutable.PriorityQueue	class final in the std, class sealed in scala-library
+scala.collection.mutable.Queue	class final in the std, class in scala-library
+scala.collection.mutable.SortedSet	class in the std, trait in scala-library
+scala.collection.mutable.Stack	class final in the std, class in scala-library
+scala.collection.mutable.TreeSet	class final in the std, class sealed in scala-library
+scala.concurrent.duration.Deadline	class final case in the std, class case in scala-library
+scala.math.BigDecimal$.RoundingMode$.Value	class final in the std, abstract class in scala-library
+scala.quoted.runtime.StopMacroExpansion	class final in the std, class in scala-library
+scala.util.Either$.MergeableEither	class in the std, class final in scala-library
+scala.util.matching.Regex	class final in the std, class in scala-library
+scala.util.matching.Regex$.Match	class final in the std, class in scala-library

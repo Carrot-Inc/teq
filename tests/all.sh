@@ -105,6 +105,7 @@ suite lila-test-verb ./tests/lila-test-verb.sh
 suite reference-test-verb ./tests/reference-test-verb.sh
 suite mill-test-verb ./tests/mill-test-verb.sh
 suite std-entered   ./tests/std-entered.sh
+suite std-kinds     ./tests/std-kinds.sh
 suite jvm           ./tests/run_jvm.sh
 suite jvm-21        ./tests/run_jvm.sh --java-output-version=21
 suite interp        ./tests/run_interp.sh

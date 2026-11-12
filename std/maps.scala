@@ -288,7 +288,7 @@ def rawMapHash(a: Any): Int
 // A map is `get`, `iterator`, `updated` and `removed`; the rest follows from them. A class of a
 // library implements the four, the std's own map is `PersistentMap` over the hash trie index.
 @predef
-abstract class Map[K, +V] extends IterableOps[(K, V), Iterable, Map[K, V]], scala.collection.Map[K, V]:
+trait Map[K, +V] extends IterableOps[(K, V), Iterable, Map[K, V]], scala.collection.Map[K, V]:
   // `collection.Map`'s, of this map's kind: `IterableOps`'s bodies, written out rather than called
   // through `super`, a call the reach answers with the member of that name of every class.
   override def filter(p: ((K, V)) => Boolean): Map[K, V] =

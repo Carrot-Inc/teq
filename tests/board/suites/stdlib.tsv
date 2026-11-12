@@ -271,6 +271,16 @@ class_literal_beside_scala_library	pass	-
 class_literal_qualifier	fail	-	TypeError: Cannot read properties of null (reading '$qname')
 class_members_over_imports	pass	-	
 class_of	pass	-	
+class_pattern_on_library_trait	pass	-	
+class_pattern_on_library_trait_list_iterator	fail	-	error: unreachable case: type List[Int] and class ListIterator are unrelated
+class_pattern_on_library_trait_mapview	pass	-	
+class_pattern_on_library_trait_mutable_buffer	pass	-	
+class_pattern_on_library_trait_mutable_map	pass	-	
+class_pattern_on_library_trait_mutable_set	pass	-	
+class_pattern_on_library_trait_mutable_sorted_set	pass	-	
+class_pattern_on_library_trait_path	fail	-	error: not supported on JavaScript: method get of java.nio.file.Paths (a Java definition without an implementation in the std's platform lay
+class_pattern_on_library_trait_sorted_map	pass	-	
+class_pattern_on_library_trait_sorted_set	pass	-	
 class_symbol_null_intersection	pass	-	
 class_tag_array_evidence	fail	-	output differs
 class_tag_builder_backing_array	pass	-	
@@ -1405,6 +1415,7 @@ library_type_pattern_from_above	fail	-	error: cannot resolve import: qnest not f
 library_val_overridden	fail	-	error: cannot resolve import: lvlib not found
 lifted_block_arguments	pass	-	
 lifted_receiver_default	pass	-	
+list_class_ancestors	pass	-	
 list_fill_order	pass	-	
 list_map_conserve	pass	-	
 list_range_last_element	pass	-	
@@ -1727,6 +1738,7 @@ new_parameterised_alias	pass	-
 new_unapplied_alias	pass	-	
 new_without_parents	fail	-	RangeError: Maximum call stack size exceeded
 newtype_intersection_erasure	pass	-	
+nil_equals_empty_seq	pass	-	
 nio_byte_order	pass	-	
 nonlocal_return_lambda	pass	-	
 nowarn_demanded_body	pass	-	
@@ -1783,6 +1795,7 @@ operator_object_header	pass	-
 operator_order	pass	-	
 operators_members	pass	-	
 option_as_iterable	pass	-	
+option_narrowed_from_union_exhaustive	pass	-	
 ordered_comparable	pass	-	
 ordering_ordered_evidence	pass	-	
 ordering_tuples_large	pass	-	
@@ -1947,7 +1960,7 @@ probe_arg2	pass	-
 probe_arg2_1	pass	-	
 probe_arg2_3	pass	-	
 process_environment	fail	-	error: not supported on JavaScript: class File java.io.File (a Java definition without an implementation in the std's platform layer)
-process_handle_pid_range	fail	-	error: not supported on JavaScript: method current of java.lang.ProcessHandle (a Java definition without an implementation in the std's plat
+process_handle_pid_range	fail	-	error: not supported on JavaScript: class ProcessBuilder java.lang.ProcessBuilder (a Java definition without an implementation in the std's
 process_lifecycle	fail	-	error: not supported on JavaScript: class AbstractList java.util.AbstractList (a Java definition without an implementation in the std's plat
 process_redirects	fail	-	error: not supported on JavaScript: class File java.io.File (a Java definition without an implementation in the std's platform layer)
 process_streams	fail	-	error: not supported on JavaScript: class BufferedReader java.io.BufferedReader (a Java definition without an implementation in the std's pl

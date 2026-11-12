@@ -5,6 +5,7 @@ approx_store_application_agree	compile
 arity_class_names_found	compile
 callable_field_names	output
 class_literal_qualifier	exception
+class_pattern_on_library_trait_list_iterator	compile
 class_tag_array_evidence	output
 class_tag_builder_backing_array	exception
 class_tag_builder_order	output

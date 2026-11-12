@@ -1755,7 +1755,7 @@ neg/scoped-quoted-expr-proto.scala	same
 neg/sd143.scala	same	
 neg/selfInheritance.scala	same	
 neg/serialversionuid-not-const.scala	accepts	
-neg/shapeless-hcons.scala	accepts	
+neg/shapeless-hcons.scala	same	
 neg/simple-opaque.scala	same	
 neg/singleQuoteStrings-2.scala	syntax	expected end of statement, found {}
 neg/singleQuoteStrings.scala	syntax	unterminated character literal
@@ -2535,7 +2535,7 @@ pos/i11015.scala	accepts
 pos/i11020.scala	accepts	
 pos/i11022.scala	accepts	
 pos/i1103.scala	accepts	
-pos/i11057.scala	std	AbstractSeq
+pos/i11057.scala	accepts	
 pos/i11064.scala	accepts		--source future
 pos/i11075	accepts	
 pos/i11078.scala	accepts	
@@ -4540,7 +4540,7 @@ pos/lexical.scala	std	App
 pos/liftToAnchors-hk.scala	accepts	
 pos/list-extractor.scala	accepts	
 pos/list-optim-check.scala	accepts	
-pos/listAndVector.scala	std	AbstractSeq
+pos/listAndVector.scala	rejects	type mismatch
 pos/listpattern.scala	accepts	
 pos/literals.scala	accepts	
 pos/local-objects.scala	accepts	

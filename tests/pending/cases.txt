@@ -5,6 +5,15 @@ approx_store_application_agree	< KC
 argument_block_ascriptions	> tests/cases/argument_block_ascriptions.scala:6:61: warning: The syntax `x: _*` is no longer supported for vararg splices; use `x*` instead
 arity_class_names_found	< 23
 class_literal_qualifier	< false
+class_pattern_on_library_trait_list_iterator	< a list of 2
+class_pattern_on_library_trait_mapview	< a list of 2
+class_pattern_on_library_trait_mutable_buffer	< an option of 1
+class_pattern_on_library_trait_mutable_map	< a list of 2
+class_pattern_on_library_trait_mutable_set	< an option of 1
+class_pattern_on_library_trait_mutable_sorted_set	< a list of 2
+class_pattern_on_library_trait_path	< an option of 1
+class_pattern_on_library_trait_sorted_map	< a list of 2
+class_pattern_on_library_trait_sorted_set	< a list of 2
 class_tag_pure_intersection	< Z
 class_tag_stable_erasure	< java.lang.Object
 class_tag_synthesis	< Object java.lang.Object

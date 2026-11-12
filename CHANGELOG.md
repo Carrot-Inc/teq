@@ -57,6 +57,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- The lean standard library declares `List`, `Option`, `Either` and `Try` as abstract classes and `Iterator` and
+  `immutable.Map` as traits, as scala-library does, and `List` has its `AbstractSeq` ancestors: a type test on
+  one of them is an `instanceof`, messages say `class List`, and a match over a value narrowed to `Option` is no
+  longer reported as not exhaustive.
 - A class made by an inline given's expansion can read the given's own recursive instance: such a program built
   JavaScript that threw `ReferenceError: rec$0 is not defined` and was refused on the JVM and by `teq interp`.
 - In split output a case object whose `equals` comes from a superclass, or from a trait of that superclass, uses

@@ -273,6 +273,16 @@ class_literal_beside_scala_library	pass	-
 class_literal_qualifier	fail	-	< false
 class_members_over_imports	pass	-	
 class_of	pass	-	
+class_pattern_on_library_trait	pass	-	
+class_pattern_on_library_trait_list_iterator	fail	-	< a list of 2
+class_pattern_on_library_trait_mapview	fail	-	< a list of 2
+class_pattern_on_library_trait_mutable_buffer	fail	-	< an option of 1
+class_pattern_on_library_trait_mutable_map	fail	-	< a list of 2
+class_pattern_on_library_trait_mutable_set	fail	-	< an option of 1
+class_pattern_on_library_trait_mutable_sorted_set	fail	-	< a list of 2
+class_pattern_on_library_trait_path	fail	-	< an option of 1
+class_pattern_on_library_trait_sorted_map	fail	-	< a list of 2
+class_pattern_on_library_trait_sorted_set	fail	-	< a list of 2
 class_symbol_null_intersection	pass	-	
 class_tag_array_evidence	pass	-	
 class_tag_builder_backing_array	pass	-	
@@ -1444,6 +1454,7 @@ lifted_receiver_default	pass	-
 linking_info	pass	-	
 linking_info_module	pass	-	
 linking_info_release	pass	-	
+list_class_ancestors	pass	-	
 list_fill_order	pass	-	
 list_map_conserve	pass	-	
 list_range_last_element	pass	-	
@@ -1768,6 +1779,7 @@ new_parameterised_alias	pass	-
 new_unapplied_alias	pass	-	
 new_without_parents	pass	-	
 newtype_intersection_erasure	pass	-	
+nil_equals_empty_seq	pass	-	
 nio_byte_order	pass	-	
 nonlocal_return_lambda	pass	-	
 nowarn_demanded_body	pass	-	
@@ -1824,6 +1836,7 @@ operator_object_header	pass	-
 operator_order	pass	-	
 operators_members	pass	-	
 option_as_iterable	pass	-	
+option_narrowed_from_union_exhaustive	pass	-	
 ordered_comparable	pass	-	
 ordering_ordered_evidence	pass	-	
 ordering_tuples_large	pass	-	

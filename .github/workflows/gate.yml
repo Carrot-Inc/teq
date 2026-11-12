@@ -108,7 +108,7 @@ jobs:
             minutes: 40
             jars: true
           - group: libraries
-            suites: tasty classfile classpath stdlib
+            suites: tasty classfile classpath stdlib std-kinds
             minutes: 35
             jars: true
           # The modules suite as its two pieces (tests/all.sh's `modules.1/2`): whole it is thirty minutes of the runner.

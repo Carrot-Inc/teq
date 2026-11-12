@@ -23,6 +23,8 @@ cast_array_kinds	output differs
 cats_dispatch_rebuild	error: cannot resolve import: cats not found
 charset_utf8_replacement	output differs
 class_literal_qualifier	TypeError: Cannot read properties of null (reading '$qname')
+class_pattern_on_library_trait_list_iterator	error: unreachable case: type List[Int] and class ListIterator are unrelated
+class_pattern_on_library_trait_path	error: not supported on JavaScript: method get of java.nio.file.Paths (a Java definition without an implementation in the std's platform lay
 class_tag_array_evidence	output differs
 class_tag_stable_erasure	error: No ClassTag available for Array[A] & S
 class_tag_synthesis	ReferenceError: Ids$Id is not defined
