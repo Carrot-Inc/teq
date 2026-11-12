@@ -462,6 +462,47 @@ impl<'a> Worker<'a> {
         tp
     }
 
+    /// A binder's type, simplified only where the simplification is known to be scalac's: a union at the top of
+    /// the type whose members other than `Null` are each a class type of a class that is no object's (module)
+    /// class and no value class, none of them below another. There `TypeOps.simplify`'s `OrType` arm drops `Null`
+    /// and nothing else (`Null` is below such a class, `SymDenotations.isNullableClassAfterErasure`), and the
+    /// answer is the union without it, made here and not asked of master's `simplified`, whose subtyping takes
+    /// `Null` to be below an object's type as well. Every other type (an object's type or a singleton in the
+    /// union, an intersection, a type parameter, an alias, a union inside an argument) is returned as it is, so a
+    /// binder outside the set has the type master gives it. The part null-below-module-class and a port of
+    /// `Typer.simplify` widen the set.
+    fn binder_type(&mut self, t: TypeId) -> TypeId {
+        let top = self.deref(t);
+        let Type::Union(_, _, kind) = self.types.get(top) else { return t };
+        let mut todo = vec![t];
+        let (mut null, mut rest) = (false, Vec::new());
+        while let Some(m) = todo.pop() {
+            let m = self.deref(m);
+            match self.types.get(m) {
+                Type::Union(a, b, _) => todo.extend([b, a]),
+                Type::Class(c, _) if c == self.b.null => null = true,
+                Type::Class(c, _) if self.is_reference_class(c) && self.syms.class(c).kind != ClassKind::Object => rest.push(m),
+                _ => return t,
+            }
+        }
+        if !null || rest.is_empty() {
+            return t;
+        }
+        for (i, &a) in rest.iter().enumerate() {
+            for &b in &rest[i + 1..] {
+                let mark = self.snapshot();
+                let related = self.is_sub(a, b) || self.is_sub(b, a);
+                self.rollback(&mark);
+                if related {
+                    return t;
+                }
+            }
+        }
+        let mut members = rest.into_iter();
+        let first = members.next().expect("a member besides Null");
+        members.fold(first, |acc, m| self.types.union_as(kind, acc, m))
+    }
+
     fn type_pattern_now(&mut self, p: PatId, sty: TypeId) -> TPatId {
         let ast = self.cur_ast();
         let span = ast.pat_spans[p.idx()];
@@ -471,6 +512,12 @@ impl<'a> Worker<'a> {
                 self.error_nodes += 1;
                 self.prog.add_pat(TPat::Wildcard)
             }
+            // dotty's `typedBind` (Typer.scala 2952–2975) gives the binder its body's type after the
+            // body's own `typedUnadapted` simplified it (the wildcard `_` typed `pt` and simplified,
+            // `typedIdent` 626–627; an extractor's or a typed pattern's type), and `pt` as it is to
+            // the binder of a stable identifier or a literal, of a named tuple's pattern
+            // (`isNamedTuplePattern`) and of a tuple pattern past `Tuple22` (the `TupleXXL` arm). teq
+            // simplifies where `binder_type` knows the simplification to be scalac's, and nowhere else.
             Pat::Bind(name, inner) => {
                 let (inner_pat, ty) = match inner {
                     Some(i) => {
@@ -479,9 +526,27 @@ impl<'a> Worker<'a> {
                             Some(t) => t,
                             None => self.narrowed_type(i, sty),
                         };
+                        // The pattern under the binders between: `x @ (y @ p)` takes `y`'s type, which `p` decides.
+                        let (mut under, mut under_ast) = (tp, i);
+                        while let TPat::Bind(_, Some(inner)) = self.prog.pats[under.idx()] {
+                            under = inner;
+                            if let Pat::Bind(_, Some(j)) = ast.pat(under_ast) {
+                                under_ast = j;
+                            }
+                        }
+                        let keeps_pt = matches!(self.prog.pats[under.idx()], TPat::Equals(..))
+                            || match ast.pat(under_ast) {
+                                Pat::Tuple(subs) => {
+                                    let subs = ast.pat_list(subs);
+                                    let xxl = subs.len() > 22; // dotty's `TupleXXL`: past `Definitions.MaxTupleArity`
+                                    xxl || subs.first().is_some_and(|&s| matches!(ast.pat(s), Pat::NamedField(..)))
+                                }
+                                _ => false,
+                            };
+                        let ty = if keeps_pt { ty } else { self.binder_type(ty) };
                         (Some(tp), ty)
                     }
-                    None => (None, sty),
+                    None => (None, self.binder_type(sty)),
                 };
                 let sym = self.new_local(name, SymKind::Val, ty, span);
                 self.bind_local(name, sym);

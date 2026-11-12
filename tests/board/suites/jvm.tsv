@@ -103,7 +103,10 @@ bigdecimal_conv	pass	-
 bigint_ops	pass	-	
 bigint_random_entry_points	pass	-	
 bigint_random_primes	pass	-	
+binder_keeps_null_beside_object	pass	-	
 binder_member_variance	pass	-	
+binder_object_or_null	pass	-	
+binder_object_string_or_null	pass	-	
 block_alias_context	pass	-	
 block_import_alias	pass	-	
 block_infix_argument	pass	-	
@@ -2535,7 +2538,9 @@ toplevel_init_failed	cannot run	-	its expectation is Scala.js's
 toplevel_init_given_objects	fail	-	output
 toplevel_init_order	pass	-	
 toplevel_init_triggers	pass	-	
+tostring_binder_shapes	pass	-	
 tostring_opaque_string	pass	-	
+tostring_regex_binder	pass	-	
 trailing_commas	pass	-	
 trait_body	pass	-	
 trait_empty_parameters	fail	-	compile

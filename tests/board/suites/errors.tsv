@@ -70,6 +70,7 @@ binder_kind_verdicts	pass	-
 binder_named_context_cycle	pass	-	
 binder_named_function_cycle	pass	-	
 binder_named_function_parts	pass	-	
+binder_over_binder_keeps_expected_type	pass	-	
 binder_simple_member_kind	pass	-	
 block_unbound_placeholder	pass	-	
 bound_check_after_typer_error	fail	-	missing '8:16: error: illegal cyclic type reference: lower bound BS[?, H.this.S] of type S refers back to the type itself'

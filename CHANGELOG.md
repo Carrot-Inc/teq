@@ -57,6 +57,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A pattern's binder over `T | Null` (a `Regex` pattern's groups against scala-library) has the type `T`, so
+  an interpolated binder no longer warns under `-Wtostring-interpolated`.
 - An anonymous class made in the argument of zio's `ZIO.succeed`, or in any function literal applied where it is
   written, finds the enclosing class's instance from inside another class's method: an anonymous subclass of an
   inner class made there threw `ClassCastException` on the JVM, and its outer members read `undefined` in JavaScript.
