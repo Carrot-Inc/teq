@@ -61,6 +61,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- An implicit search no longer answers "no given instance" because two unrelated classes of a large program fell
+  on one bit of the divergence check, which compares the goals' covering sets as scalac does.
 - A lambda whose body leaves its result's type constructor open takes that constructor's arguments as scalac does
   (`next.tap(_.traverse_(serve))` over zio and cats has the error type `Nothing`, where it was `Throwable`).
 - On the JVM a `lazy val` is initialised once under concurrent readers, as scalac's is (it ran its initialiser

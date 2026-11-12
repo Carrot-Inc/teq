@@ -456,6 +456,56 @@ impl CoveringSeen {
     }
 }
 
+/// dotty's `coveringSet` of a goal (`Types.CoveringSetAccumulator`): the classes the goal is made of, each once,
+/// kept with an open given from its opening as dotty's `OpenSearch` keeps it with the open search (the goals of a
+/// history grow as nested searches instantiate their variables, which measured later "can mask divergence",
+/// Implicits.scala 1980-1987). The mask of the classes' indices modulo 64 is the first test of two sets: with
+/// different masks they differ; classes 64 indices apart share a bit, so with one mask the classes decide.
+#[derive(Clone, Default)]
+pub struct CoveringSet {
+    mask: u64,
+    first: [u32; CoveringSet::IN_PLACE],
+    /// How many of `first` are classes; the classes past them are in `rest`.
+    len: u8,
+    rest: Option<Box<Vec<u32>>>,
+}
+
+impl CoveringSet {
+    /// The classes held in place: most goals are made of fewer.
+    const IN_PLACE: usize = 8;
+
+    fn add(&mut self, c: ClassId) {
+        let (index, bit) = (c.idx() as u32, 1u64 << (c.idx() % 64));
+        if self.mask & bit != 0 && self.has(index) {
+            return;
+        }
+        self.mask |= bit;
+        if (self.len as usize) < Self::IN_PLACE {
+            self.first[self.len as usize] = index;
+            self.len += 1;
+        } else {
+            self.rest.get_or_insert_with(Default::default).push(index);
+        }
+    }
+
+    fn rest(&self) -> &[u32] {
+        self.rest.as_ref().map_or(&[], |rest| rest.as_slice())
+    }
+
+    fn has(&self, index: u32) -> bool {
+        self.first[..self.len as usize].contains(&index) || self.rest().contains(&index)
+    }
+
+    fn count(&self) -> usize {
+        self.len as usize + self.rest().len()
+    }
+
+    /// Whether the two are one set of classes (`checkDivergence`'s `prev.coveringSet != ptCoveringSet`).
+    fn same(&self, other: &CoveringSet) -> bool {
+        self.mask == other.mask && self.count() == other.count() && self.first[..self.len as usize].iter().chain(self.rest()).all(|&index| other.has(index))
+    }
+}
+
 /// A given whose using clauses are being resolved, or whose inline body is being expanded where
 /// it was found (`reopen_given`), with the type it was asked for measured as scalac does for its
 /// divergence check: the number of applied types in it, the classes it mentions and the type
@@ -464,7 +514,7 @@ pub struct OpenGiven {
     pub given: SymId,
     target: TypeId,
     size: u32,
-    classes: u64,
+    classes: CoveringSet,
     wild: TypeId,
     /// Whether the request was for a by-name using parameter.
     byname: bool,
@@ -4561,13 +4611,18 @@ impl<'a> Worker<'a> {
     /// (dotty's `ptSize`, `ptCoveringSet` and `wildPt` of an `ImplicitSearch`), by three walks
     /// each with its own rule.
     fn open_given(&mut self, g: SymId, target: TypeId) -> OpenGiven {
-        let (size, classes, wild) = match self.measured_target {
-            Some((t, size, classes, wild)) if self.same_type(t, target) => (size, classes, wild),
-            _ => {
+        let last = self.measured_target.as_ref().map(|m| m.0);
+        let measured = match last {
+            Some(t) if self.same_type(t, target) => self.measured_target.as_ref().map(|(_, size, classes, wild)| (*size, classes.clone(), *wild)),
+            _ => None,
+        };
+        let (size, classes, wild) = match measured {
+            Some(measured) => measured,
+            None => {
                 let size = self.type_size(target, &mut Vec::new());
-                let classes = self.covering_classes(target, &mut Default::default());
+                let classes = self.covering_set(target);
                 let wild = self.wild_approx(target, &mut Vec::new());
-                self.measured_target = Some((target, size, classes, wild));
+                self.measured_target = Some((target, size, classes.clone(), wild));
                 (size, classes, wild)
             }
         };
@@ -4668,70 +4723,87 @@ impl<'a> Worker<'a> {
         lo.max(hi)
     }
 
-    /// dotty's `coveringSet` (`Types.CoveringSetAccumulator`) as a mask of class indices: the
-    /// classes the type is made of, an open variable's narrowed bounds included, `Any` and
-    /// `Nothing` left out; every type once (`seen`, a type shared or repeated walked at its first
-    /// occurrence alone, which a union needs no more of).
-    fn covering_classes(&mut self, t: TypeId, seen: &mut CoveringSeen) -> u64 {
+    /// dotty's `coveringSet` of a goal as the constraint holds it now: `open_given` takes it when a given is opened.
+    fn covering_set(&mut self, t: TypeId) -> CoveringSet {
+        let mut classes = CoveringSet::default();
+        self.covering(t, &mut CoveringSeen::default(), &mut classes);
+        classes
+    }
+
+    /// The walk of dotty's `CoveringSetAccumulator`: the classes the type is made of, an open variable's narrowed
+    /// bounds included, `Any` and `Nothing` left out; every type once (`seen`, a type shared or repeated walked at
+    /// its first occurrence alone, which a union needs no more of).
+    fn covering(&mut self, t: TypeId, seen: &mut CoveringSeen, into: &mut CoveringSet) {
         let t = self.deref(t);
         if !seen.insert(t) {
-            return 0;
+            return;
         }
-        let args_classes = |w: &mut Self, args: TList, seen: &mut CoveringSeen| -> u64 {
-            let mut mask = 0;
-            for i in 0..w.types.items(args).len() {
-                let a = w.types.items(args)[i];
-                mask |= w.covering_classes(a, seen);
-            }
-            mask
-        };
         match self.types.get(t) {
-            Type::Class(c, args) => 1 << (c.idx() % 64) | args_classes(self, args, seen),
-            Type::Ctor(c) => 1 << (c.idx() % 64),
-            Type::Var(v) => self.var_classes(v, seen),
-            Type::AppVar(v, args) => self.var_classes(v, seen) | args_classes(self, args, seen),
-            Type::AppParam(_, args) | Type::Alias(_, args) => args_classes(self, args, seen),
-            Type::AppMember(m, args) => self.covering_classes(m, seen) | args_classes(self, args, seen),
+            Type::Class(c, args) => {
+                into.add(c);
+                self.covering_list(args, seen, into);
+            }
+            Type::Ctor(c) => into.add(c),
+            Type::Var(v) => self.covering_var(v, seen, into),
+            Type::AppVar(v, args) => {
+                self.covering_var(v, seen, into);
+                self.covering_list(args, seen, into);
+            }
+            Type::AppParam(_, args) | Type::Alias(_, args) => self.covering_list(args, seen, into),
+            Type::AppMember(m, args) => {
+                self.covering(m, seen, into);
+                self.covering_list(args, seen, into);
+            }
             Type::Refined(parent, r) => {
-                let parent = self.covering_classes(parent, seen);
-                let info = match self.types.refinement(r) {
-                    Refinement::Alias(_, x) | Refinement::Val(_, _, x) => self.covering_classes(x, seen),
-                    Refinement::Bounds(_, lo, hi) => self.covering_classes(lo, seen) | self.covering_classes(hi, seen),
-                    Refinement::Term(_, _, types) => args_classes(self, types, seen),
-                };
-                parent | info
+                self.covering(parent, seen, into);
+                match self.types.refinement(r) {
+                    Refinement::Alias(_, x) | Refinement::Val(_, _, x) => self.covering(x, seen, into),
+                    Refinement::Bounds(_, lo, hi) => {
+                        self.covering(lo, seen, into);
+                        self.covering(hi, seen, into);
+                    }
+                    Refinement::Term(_, _, types) => self.covering_list(types, seen, into),
+                }
             }
             Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) | Type::Nested(a, b) => {
-                self.covering_classes(a, seen) | self.covering_classes(b, seen)
+                self.covering(a, seen, into);
+                self.covering(b, seen, into);
             }
             Type::Lambda(_, body) | Type::Rec(body) | Type::Select(body, _) | Type::Member(body, _) | Type::Poly(_, body) => {
-                self.covering_classes(body, seen)
+                self.covering(body, seen, into);
             }
             Type::Match(scrutinee, m) => {
                 let (bound, cases) = {
                     let info = self.types.match_info(m);
                     (info.bound, info.cases.clone())
                 };
-                let mut mask = self.covering_classes(bound, seen) | self.covering_classes(scrutinee, seen);
+                self.covering(bound, seen, into);
+                self.covering(scrutinee, seen, into);
                 for case in cases.iter() {
-                    mask |= self.covering_classes(case.pattern, seen) | self.covering_classes(case.body, seen);
+                    self.covering(case.pattern, seen, into);
+                    self.covering(case.body, seen, into);
                 }
-                mask
             }
-            _ => 0,
+            _ => {}
         }
     }
 
-    /// An open variable's classes in `covering_classes`: those of its narrowed bounds on both
-    /// sides (`TypeComparer.bounds`), the variable once as any type is.
-    fn var_classes(&mut self, v: TVarId, seen: &mut CoveringSeen) -> u64 {
-        let mut mask = 0;
+    /// The types of a list in `covering`, in their order.
+    fn covering_list(&mut self, list: TList, seen: &mut CoveringSeen, into: &mut CoveringSet) {
+        for i in 0..self.types.items(list).len() {
+            let a = self.types.items(list)[i];
+            self.covering(a, seen, into);
+        }
+    }
+
+    /// An open variable's classes in `covering`: those of its narrowed bounds on both sides
+    /// (`TypeComparer.bounds`), the variable once as any type is.
+    fn covering_var(&mut self, v: TVarId, seen: &mut CoveringSeen, into: &mut CoveringSet) {
         for upper in [false, true] {
             for b in self.narrowed_bounds(v, upper) {
-                mask |= self.covering_classes(b, seen);
+                self.covering(b, seen, into);
             }
         }
-        mask
     }
 
     /// dotty's `wildApprox` (`ProtoTypes`) of a search's target: each open variable a wildcard
@@ -4936,15 +5008,16 @@ impl<'a> Worker<'a> {
     /// given, or a sibling of the same signature, is already open for a type made of the same
     /// classes that is smaller than the one requested now, or as large and alike; an open one
     /// larger, of other classes, or as large and unlike leaves the decision to those opened
-    /// before it (`loop(outer, ..)`).
+    /// before it (`loop(outer, ..)`). "The same classes" is dotty's `prev.coveringSet != ptCoveringSet`, each
+    /// goal's set as it was when its given was opened (`CoveringSet`).
     pub(super) fn diverges(&mut self, open: &OpenGiven) -> bool {
         for i in (0..self.given_stack.len()).rev() {
             let prev = &self.given_stack[i];
-            let (given, size, classes, wild, prev_target) = (prev.given, prev.size, prev.classes, prev.wild, prev.target);
+            let (given, size, wild, prev_target) = (prev.given, prev.size, prev.wild, prev.target);
             if given != open.given && !self.same_signature(given, open.given) {
                 continue;
             }
-            if size > open.size || classes != open.classes {
+            if size > open.size || !self.given_stack[i].classes.same(&open.classes) {
                 continue;
             }
             if size < open.size || self.wild_same(wild, open.wild) {
@@ -5776,5 +5849,65 @@ impl<'a> Worker<'a> {
             below_byname |= open_byname;
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The classes of the test's program: more than the mask's 64 bits, so that two of them have indices equal
+    /// modulo 64.
+    const CLASSES: usize = 70;
+
+    /// The classes of a program and one class over a type: among the classes, two whose indices are 64 apart.
+    fn program() -> String {
+        let mut text = String::from("final class F[A]\n");
+        for i in 0..CLASSES {
+            text.push_str(&format!("class C{}\n", i));
+        }
+        text
+    }
+
+    /// Two targets with other covering sets and one mask, `F[C_a]` and `F[C_b]` where the two classes' indices are
+    /// equal modulo 64, are not of the same classes to the divergence check; a target and itself are.
+    #[test]
+    fn covering_sets_of_one_mask_are_told_apart() {
+        crate::with_typed_program("covering-sets", &program(), &[], |w| {
+            let class = |w: &mut Worker, name: &str| {
+                let n = w.interner.intern(name);
+                w.syms.entry_named(w.interner, ROOT_PKG, n).and_then(|e| e.class).unwrap_or_else(|| panic!("no class {}", name))
+            };
+            let f = class(w, "F");
+            let all: Vec<ClassId> = (0..CLASSES).map(|i| class(w, &format!("C{}", i))).collect();
+            let (a, b) = all
+                .iter()
+                .flat_map(|&a| all.iter().map(move |&b| (a, b)))
+                .find(|(a, b)| a != b && a.idx() % 64 == b.idx() % 64)
+                .expect("two classes whose indices are equal modulo 64");
+            let of = |w: &mut Worker, c: ClassId| {
+                let arg = w.types.class(c, &[]);
+                w.types.class(f, &[arg])
+            };
+            let (ta, tb) = (of(w, a), of(w, b));
+            let (sa, sb, again) = (w.covering_set(ta), w.covering_set(tb), w.covering_set(ta));
+            assert_eq!(sa.mask, sb.mask, "the premise: one mask");
+            assert!(!sa.same(&sb), "two sets of one mask are not the same classes");
+            assert!(sa.same(&again));
+            assert_eq!(sa.count(), 2);
+            // A set past the classes held in place: the same classes in another order are the same set.
+            let (mut forward, mut backward) = (CoveringSet::default(), CoveringSet::default());
+            for &c in &all {
+                forward.add(c);
+            }
+            for &c in all.iter().rev() {
+                backward.add(c);
+                backward.add(c);
+            }
+            assert_eq!(forward.count(), 70);
+            assert!(forward.same(&backward));
+            backward.add(f);
+            assert!(!forward.same(&backward));
+        });
     }
 }

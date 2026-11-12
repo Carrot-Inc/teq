@@ -848,7 +848,9 @@ given_diamond_inheritance	pass	-
 given_divergence_bounded_swap	pass	-	
 given_divergence_intersection_bounds	pass	-	
 given_divergence_match_alias	pass	-	
+given_divergence_not_given	pass	-	
 given_divergence_open_variables	pass	-	
+given_divergence_other_classes	pass	-	
 given_divergence_outer	pass	-	
 given_divergence_refinements	pass	-	
 given_divergence_result_variable	pass	-	

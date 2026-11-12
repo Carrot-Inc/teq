@@ -1148,7 +1148,7 @@ pub struct Worker<'a> {
     pub ref_exported: bool,
     /// The last target measured for the divergence check: the type, its size, its classes and
     /// its shape with open variables blanked out.
-    pub measured_target: Option<(TypeId, u32, u64, TypeId)>,
+    pub measured_target: Option<(TypeId, u32, implicits::CoveringSet, TypeId)>,
     /// The alias given whose right-hand side is being typed, which its own search leaves out.
     pub defining: Option<SymId>,
     /// The body depth of a member whose result type is being inferred, 0 outside one: its plain

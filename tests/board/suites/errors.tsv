@@ -286,7 +286,9 @@ given_deferred_parameterized	pass	-
 given_deferred_protected	pass	-	
 given_deferred_renamed	pass	-	
 given_deferred_self_recursive	pass	-	
+given_divergence_after_sibling_clause	pass	-	
 given_divergence_open_variables	pass	-	
+given_divergence_sibling_givens	pass	-	
 given_export_given_alternative	pass	-	
 given_failed_heal_reports_original	fail	-	missing '19:26: error: ambiguous given instances for TC: a, b'
 given_import_bound_admits	pass	-	
