@@ -37,6 +37,8 @@ struct BlockLocals {
 struct CalleeFormal {
     ty: TypeId,
     by_name: bool,
+    /// The lambda's parameter is spread into the callee's repeated parameter (`xs*`).
+    spread: bool,
 }
 
 /// The template a body withheld from its products is typed as.
@@ -3752,7 +3754,14 @@ impl<'a> Worker<'a> {
                             // target`), and its maximization then gives that type (`flipBottom`).
                             // A by-name parameter is no type the formal is below.
                             if self.unbounded_below(t) {
-                                if let Some(target) = self.callee_formal(&mut callee, body, &lps, i, true).filter(|f| !f.by_name) {
+                                // A repeated parameter the lambda's parameter is spread into does
+                                // not make it a sequence: dotty's variable there is the repeated
+                                // type itself (the function is `T* => R` and takes elements),
+                                // which no function type here stands for. Its sequence is given
+                                // only against a bound it does not conform to, where the two meet
+                                // in a type no argument has, as dotty's `Array[T] & T*`.
+                                let target = self.callee_formal(&mut callee, body, &lps, i, true).filter(|f| !f.by_name);
+                                if let Some(target) = target.filter(|f| !(f.spread && self.within_upper_bounds(t, f.ty))) {
                                     let mark = self.snapshot();
                                     if !self.is_sub(t, target.ty) {
                                         self.rollback(&mark);
@@ -4558,7 +4567,8 @@ impl<'a> Worker<'a> {
             if p.repeated && self.spread_beside_argument(body, count) {
                 return None;
             }
-            return Some(self.declared_formal(&p, p.ty));
+            let spread = p.repeated && self.spread_argument(body, position);
+            return Some(CalleeFormal { spread, ..self.declared_formal(&p, p.ty) });
         }
         let sym = callee.sym()?;
         // Kept while the type arguments are resolved against its type parameters.
@@ -4569,8 +4579,9 @@ impl<'a> Worker<'a> {
             if p.repeated && self.spread_beside_argument(body, clause.params.len()) {
                 return None;
             }
+            let spread = p.repeated && self.spread_argument(body, position);
             return match targs {
-                None if sig.tparams.is_empty() => Some(self.declared_formal(p, p.ty)),
+                None if sig.tparams.is_empty() => Some(CalleeFormal { spread, ..self.declared_formal(p, p.ty) }),
                 Some(targs) if ast.ty_list(targs).len() == sig.tparams.len() => {
                     // The arguments are resolved again with the call, which reports what fails.
                     let mark = self.diags.items.len();
@@ -4578,10 +4589,10 @@ impl<'a> Worker<'a> {
                     let subst: Subst = sig.tparams.iter().copied().zip(targs.into_iter().map(|t| self.resolve_type(t))).collect();
                     if self.diags.items.len() > mark {
                         self.drop_reported_since(mark);
-                        return Some(CalleeFormal { ty: ERROR, by_name: false });
+                        return Some(CalleeFormal { ty: ERROR, by_name: false, spread: false });
                     }
                     let ty = self.types.subst(p.ty, &subst);
-                    Some(self.declared_formal(p, ty))
+                    Some(CalleeFormal { spread, ..self.declared_formal(p, ty) })
                 }
                 _ => None,
             };
@@ -4591,7 +4602,15 @@ impl<'a> Worker<'a> {
         }
         let (ptys, _) = self.as_function(sig.ret)?;
         let ty = *ptys.get(position)?;
-        Some(CalleeFormal { ty, by_name: self.by_name_arg(ty).is_some() })
+        Some(CalleeFormal { ty, by_name: self.by_name_arg(ty).is_some(), spread: false })
+    }
+
+    /// Whether the argument at `position` of the body's application is a sequence argument
+    /// (`xs*`).
+    fn spread_argument(&self, body: ExprId, position: usize) -> bool {
+        let ast = self.cur_ast();
+        let Expr::Apply(_, args) = ast.expr(body) else { return false };
+        ast.expr_list(args).get(position).is_some_and(|&a| matches!(ast.expr(a), Expr::Typed(_, t) if matches!(ast.ty(t), TyExpr::Repeated(_))))
     }
 
     /// Whether the body's application gives the callee's repeated parameter, the last of `count`,
@@ -4650,7 +4669,7 @@ impl<'a> Worker<'a> {
                 ty = self.types.class(seq, &[ty]);
             }
         }
-        CalleeFormal { ty, by_name: p.by_name }
+        CalleeFormal { ty, by_name: p.by_name, spread: false }
     }
 
     /// Whether the formal `t` is an open variable that nothing bounds below: one dotty's
@@ -4661,6 +4680,15 @@ impl<'a> Worker<'a> {
             Type::Var(v) => self.tvars[v].inst.is_none() && self.tvars[v].lower.is_empty(),
             _ => false,
         }
+    }
+
+    /// Whether `ty` conforms to every bound above of the open variable `t`, as it does where `t`
+    /// has none.
+    fn within_upper_bounds(&mut self, t: TypeId, ty: TypeId) -> bool {
+        let head = self.deref(t);
+        let Type::Var(v) = self.types.get(head) else { return false };
+        let upper = self.tvars[v].upper.clone();
+        upper.into_iter().all(|u| self.frozen_sub(ty, u))
     }
 
     /// The type of a lambda parameter as the expected function type gives it. An open variable

@@ -191,6 +191,33 @@ jvm_synchronized_other_monitor	error: type IllegalThreadStateException not found
 jvm_synchronized_race	error: not supported on JavaScript: class CountDownLatch java.util.concurrent.CountDownLatch (a Java definition without an implementation in
 jvm_synchronized_throw	error: type IllegalThreadStateException not found
 jvm_varargs_backing_arrays	output differs
+lambda_spread_bounded_formal_anyref	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_case_class	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_constructor_variable	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_enum_case	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_function_bound	error: type mismatch: found Int => Int, required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_generic_callee	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_iterable_in_a_list	error: type mismatch: found Iterable[Int], required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_placeholder	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_seq_of_any_not_applied	error: type mismatch: found Seq[Any], required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_two_params	error: type mismatch: found AnyRef, required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_two_params_union_bound	error: type mismatch: found Seq[Int] | Array[Int], required Seq[Int]
+lambda_spread_bounded_formal_union_bound	error: type mismatch: found Int | Seq[Int], required Seq[Int] | Array[? <: Int]
+lambda_spread_bounded_formal_wildcard_seq_bound	error: type mismatch: found Seq[Any], required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_any_sequence	error: type mismatch: found Any, required Seq[Any] | Array[?]
+lambda_spread_open_formal_case_class_element	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_enum_case_element	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_in_a_list	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_kept_not_called	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_method_element	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_nested	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_not_applied	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_placeholder_element	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_plain_any_element	error: type mismatch: found 1, required Seq[Any]
+lambda_spread_open_formal_plain_any_sequence	output differs
+lambda_spread_open_formal_result_used	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_open_formal_two_params_element	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
+lambda_spread_poly_function_bound	error: type mismatch: found Any, required Seq[Int] | Array[? <: Int]
 lazy_initializer_release	TypeError: $getClass(...).getDeclaredField is not a function
 lazy_inline_expansions_jar	error: cannot resolve import: lazyinline not found
 lazy_local_class_forward_names	TypeError: $getClass(...).getDeclaredFields is not a function

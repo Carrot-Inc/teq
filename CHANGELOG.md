@@ -73,10 +73,13 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
   `Closure`, or selects a constructor or `asInstanceOf` with `Select.unique` expands as under scalac (tapir's
   `formCaseClassCodec` ended in a `MatchError`).
 - A lambda's parameter that the expected type leaves open is typed from the method, constructor or function its
-  body applies to it (`sink.contramap(Wrapped(_))`, `on(x => wrap(x))`), and a parameter spread into a
-  repeated one is typed as its sequence (`xs => join(xs*)`): such lambdas were refused with `type mismatch: found
-  Any` or `missing parameter type`. Where scalac finds no callee to type a parameter from (the parameter twice
-  among the arguments, a plain argument of a repeated parameter), the lambda is refused as scalac refuses it.
+  body applies to it (`sink.contramap(Wrapped(_))`, `on(x => wrap(x))`), and with no expected type a parameter
+  spread into a repeated one is typed as its sequence (`val f = xs => join(xs*)`): such lambdas were refused with
+  `type mismatch: found Any` or `missing parameter type`. Where scalac finds no callee to type a parameter from
+  (the parameter twice among the arguments, a plain argument of a repeated parameter), the lambda is refused as
+  scalac refuses it. A parameter that an expected type leaves open, or bounds only by a type a sequence
+  conforms to, and that the body spreads into a repeated parameter (`on(xs => join(xs*))`) stays refused: scalac
+  types that function as `Int* => String`, a function of the elements, which teq does not type yet.
 - A lambda's open parameter is typed from an enum case its body applies to it, as from a case class
   (`sink.contramap(Wrapped(_))` with `enum Node: case Wrapped(inner: Inner)`): such a lambda was refused with
   `type mismatch: found Any`.

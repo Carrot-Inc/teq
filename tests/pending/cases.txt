@@ -103,6 +103,33 @@ js_call_unit_argument	< undefined
 js_calling_conventions	< 5
 js_closure_null_param	< 42
 js_computed_name	< 1
+lambda_spread_bounded_formal_anyref	< false
+lambda_spread_bounded_formal_case_class	< false
+lambda_spread_bounded_formal_constructor_variable	< false
+lambda_spread_bounded_formal_enum_case	< false
+lambda_spread_bounded_formal_function_bound	< false
+lambda_spread_bounded_formal_generic_callee	< false
+lambda_spread_bounded_formal_iterable_in_a_list	< 1
+lambda_spread_bounded_formal_placeholder	< false
+lambda_spread_bounded_formal_seq_of_any_not_applied	< 1
+lambda_spread_bounded_formal_two_params	< false
+lambda_spread_bounded_formal_two_params_union_bound	< true
+lambda_spread_bounded_formal_union_bound	< false
+lambda_spread_bounded_formal_wildcard_seq_bound	< false
+lambda_spread_open_formal_any_sequence	< [List(1, 2)]
+lambda_spread_open_formal_case_class_element	< Many(ArraySeq(1))
+lambda_spread_open_formal_enum_case_element	< Many(ArraySeq(1))
+lambda_spread_open_formal_in_a_list	< 1
+lambda_spread_open_formal_kept_not_called	< false
+lambda_spread_open_formal_method_element	< 1
+lambda_spread_open_formal_nested	< made
+lambda_spread_open_formal_not_applied	< 1
+lambda_spread_open_formal_placeholder_element	< 1
+lambda_spread_open_formal_plain_any_element	< [ArraySeq(1)]
+lambda_spread_open_formal_plain_any_sequence	< [ArraySeq(List(1, 2))]
+lambda_spread_open_formal_result_used	< true
+lambda_spread_open_formal_two_params_element	< 3
+lambda_spread_poly_function_bound	< false
 lazy_thread_unsafe_reentrant	< x = 2 after 2 run(s)
 lazy_thread_unsafe_reentrant_object	< x = 2 after 2 run(s)
 lazy_thread_unsafe_reentrant_renamed	< renamed = 2 after 2 run(s)

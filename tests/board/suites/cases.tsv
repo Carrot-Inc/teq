@@ -1459,6 +1459,7 @@ lambda_param_callee_enum_case_renamed_import	pass	-
 lambda_param_callee_enum_case_two_params	pass	-	
 lambda_param_callee_enum_case_using_clause	pass	-	
 lambda_param_callee_generic_enum	pass	-	
+lambda_param_callee_spread_known_formal	pass	-	
 lambda_param_from_callee	pass	-	
 lambda_param_from_callee_colon_argument	pass	-	
 lambda_param_from_callee_forms	pass	-	
@@ -1468,6 +1469,33 @@ lambda_param_from_callee_type_argument	pass	-
 lambda_param_ordered_vars	pass	-	
 lambda_param_overload_same_count	pass	-	
 lambda_param_spread_argument	pass	-	
+lambda_spread_bounded_formal_anyref	fail	-	< false
+lambda_spread_bounded_formal_case_class	fail	-	< false
+lambda_spread_bounded_formal_constructor_variable	fail	-	< false
+lambda_spread_bounded_formal_enum_case	fail	-	< false
+lambda_spread_bounded_formal_function_bound	fail	-	< false
+lambda_spread_bounded_formal_generic_callee	fail	-	< false
+lambda_spread_bounded_formal_iterable_in_a_list	fail	-	< 1
+lambda_spread_bounded_formal_placeholder	fail	-	< false
+lambda_spread_bounded_formal_seq_of_any_not_applied	fail	-	< 1
+lambda_spread_bounded_formal_two_params	fail	-	< false
+lambda_spread_bounded_formal_two_params_union_bound	fail	-	< true
+lambda_spread_bounded_formal_union_bound	fail	-	< false
+lambda_spread_bounded_formal_wildcard_seq_bound	fail	-	< false
+lambda_spread_open_formal_any_sequence	fail	-	< [List(1, 2)]
+lambda_spread_open_formal_case_class_element	fail	-	< Many(ArraySeq(1))
+lambda_spread_open_formal_enum_case_element	fail	-	< Many(ArraySeq(1))
+lambda_spread_open_formal_in_a_list	fail	-	< 1
+lambda_spread_open_formal_kept_not_called	fail	-	< false
+lambda_spread_open_formal_method_element	fail	-	< 1
+lambda_spread_open_formal_nested	fail	-	< made
+lambda_spread_open_formal_not_applied	fail	-	< 1
+lambda_spread_open_formal_placeholder_element	fail	-	< 1
+lambda_spread_open_formal_plain_any_element	fail	-	< [ArraySeq(1)]
+lambda_spread_open_formal_plain_any_sequence	fail	-	< [ArraySeq(List(1, 2))]
+lambda_spread_open_formal_result_used	fail	-	< true
+lambda_spread_open_formal_two_params_element	fail	-	< 3
+lambda_spread_poly_function_bound	fail	-	< false
 lambda_union_expected	pass	-	
 lambdas	pass	-	
 layout_mixed	pass	-	
