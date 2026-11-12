@@ -7,6 +7,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- `teq fix` runs a project's own rules (the configuration's `file:` entries) on every rule worker, as it runs the
+  rules it ships, where a guard that reads the rules' sources sees nothing they keep between documents; where it
+  sees a definition that does, they run on one worker as before, and the run says so in a note at the definition
+  ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
 - `teq fix` runs three more rules, answered by the compiler's own typing: `OptionGetWarn`, `ForbiddenSymbol`
   and `TypelevelHttp4sLiteralsSyntax`. `Option.get` is reported wherever the member is `Option`'s or `None`'s,
   an overrider of a forbidden member where it is referenced, and a configured entry that names no symbol is

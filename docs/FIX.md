@@ -334,11 +334,52 @@ is the first line alone.
   process's (`TEQ_RESIDENT=0` the batch one, for measuring): each typing's threads hand back what they hold as they end
   and the next typing takes it, so that a round's typing does not strand the last one's memory.
 - The rules run over a round's documents on workers of their own, each with the rules' program and an interpreter of
-  its own, when every configured rule is one teq ships (none keeps state across documents): as many as `--threads`
-  (or `TEQ_THREADS`; the cores by default) and the round's documents allow, started once its typing has ended. A
-  `file:` rule keeps one worker for the whole run, so that its instance keeps its state across documents, jobs and
-  rounds. The documents' results are planned in the documents' order, whichever worker ends first, so the output is
-  the one-worker run's byte for byte.
+  its own, where no configured rule keeps anything between documents: as many as `--threads` (or `TEQ_THREADS`; the
+  cores by default) and the round's documents allow, started once its typing has ended. Every worker has instances
+  of its own, configured alike, and the documents' results are planned in the documents' order, whichever worker
+  ends first, so the output is the one-worker run's byte for byte. The rules teq ships keep nothing. A `file:` rule
+  may, and scalafix gives a rule every document of a run on one instance, one after another. A project's rules are
+  taken to keep nothing, and a guard reads their typed sources before any of their code runs: where it sees a
+  definition that keeps something between documents, or a name that reaches outside the program, the project's
+  rules run on one worker for all the run's documents, jobs and rounds, as scalafix runs them, and the run says so
+  once, at the definition:
+
+  ```
+  fix/Tally.scala:6:15: note: seen keeps something between documents or reaches outside the program, so the project's rules run on one worker
+  ```
+
+  The record says the same (`serial reason=project-rules state=fix/Tally.scala:6 seen`). The definition named is
+  the first the guard sees, by the rule files' paths and then by the text; the next shows once that one is gone.
+- What the guard looks for, anywhere in the configuration's `file:` sources: a `var` that is a member of a class, a
+  trait or an object or stands at the top level; a `val`, a `lazy val`, a parameterless given or a class parameter
+  whose type is not known to hold nothing that changes, and a by-name class parameter (known are the primitives and
+  `String`, the immutable collections with `Option`, `Either` and the tuples over such types, a `Regex`, the rule
+  API's types that a rule's sources cannot extend, a case class, an enum or an object of the sources whose members
+  are such values, which no other class of the sources extends and which inherits from the sources and the
+  library's stateless bases alone, a function where the member is written as a function literal, and a
+  `SymbolMatcher` written as `SymbolMatcher.exact(...)` or `SymbolMatcher.normalized(...)`, joined with others by
+  `+` or not; an array, a mutable or a Java collection, a builder, a sorted collection, a class of a library, a
+  plain class of the sources, a type parameter, a wildcard, a rule, a `Diagnostic`, and a function or a matcher a
+  method made are not); a `var` or a value of such a type defined in a member's initialiser or among a template's
+  statements, or in a method whose result can carry what read it out of the call (a rule, a function, a matcher, a
+  type the guard does not know: `withConfiguration`'s own locals are such), a function literal inside such a method
+  included; an object of the sources over a class of a library that is none of the stateless bases. A local of a
+  method whose result is plain data (of `fix`, of a helper that returns a `Patch`, a `Diagnostic`, trees, a number,
+  a list of such) lives for one call and is no state. And a name, wherever the sources write one, in an expression
+  (an identifier, a selected member, an infix operator, an extractor), in a type or in an import, whatever it
+  resolves to (a method of the sources named `print` too; a string that spells one is none): `println`, `print`,
+  `printf`, `Console`, `System`, `Files`, `Paths`, `File`, `PrintWriter`, `FileWriter`, `FileOutputStream` and
+  `printStackTrace`, which reach the process's streams or the file system; `Random`, `random`, `ThreadLocalRandom`,
+  `SecureRandom`, `UUID`, `hashCode`, `##` and `identityHashCode`, a generator's numbers and an identity hash, of
+  which every worker's interpreter keeps a sequence of its own; `withDefault`, `SortedSet`, `SortedMap`, `TreeSet`
+  and `TreeMap`, by which an immutable collection carries a function.
+- The guard is no proof. It takes for state what it cannot tell of a type, so sources that keep nothing may run on
+  one worker (a rule in a list of matchers, a helper class made and dropped inside `fix`, a generic case class): that
+  costs time and nothing else. And it sees only what the sources write: a rule that keeps state through a
+  library's own cache or by reflection, that prints an identity hash by a default `toString`, or that hides a
+  mutable value behind a type the guard knows, is not seen, and its output may then differ with the number of
+  workers. Do not rely on the guard to see such a rule: keep a project's rule a function of the document and its
+  configuration, or give it a member `var`, which the guard sees, to keep the run on one worker.
 
 ## The rules teq ships
 
@@ -415,7 +456,9 @@ again, whether it forked, its outcome, `one`,
 `joined`, `retried` or `refused`, when it began and ended, why it gave way), each round's `round` (its job, its number,
 its documents and its first generation), a `dispatch` and a `done` line a document (its slot, generation and worker, and
 when its rules began and ended, in microseconds since the run began, the worker's CPU time between, and the SemanticDB
-questions its rules asked), a `serial` line where a round runs on one worker, a `serve` line where a semantic rule is
+questions its rules asked), a `serial` line where a round runs on one worker (its `reason`: `one-worker`,
+`one-document`, or `project-rules` with `state=`, the definition of the `file:` sources in which the guard sees
+something kept between documents), a `serve` line where a semantic rule is
 configured (the round's SemanticDB service: the questions it answered or refused, `typed=0` since it types nothing, when it took the first question and gave its last reply, and `busy_us`, the time it spent on the replies),
 and `round-end` (the round's wall time and the sums of its documents' times and CPU times): the fix suite reads it to tell a parallel
 run from a serial one. A `doc` line names each document of each job's round, with the job's key, the configuration

@@ -61,7 +61,7 @@ import scala.jdk.CollectionConverters.*
     // A case the run refuses: `refused.txt` holds what it prints of why.
     val refused = Option.when(Files.exists(c.resolve("refused.txt")))(read(c.resolve("refused.txt")).trim)
     val (r1, out1) = runOn(false)
-    val lints = r1.errAll().replace(work.toString + "/", "")
+    val lints = withoutNote(r1.errAll().replace(work.toString + "/", ""))
     val parsed = lintsOf(lints, name + "/" + inputName)
     val problems = scala.collection.mutable.ListBuffer.empty[String]
     if refused.nonEmpty then
@@ -105,7 +105,7 @@ import scala.jdk.CollectionConverters.*
       val dir = work.resolve(name)
       val r2 = command(teq, name, inputName, extras, confFile, classpath, target.flags, false, work).run()
       if read(dir.resolve(inputName)) != out1 then problems += "a second run changed the file again"
-      if out1 == input && r2.errAll().replace(work.toString + "/", "") != lints then problems += "a second run printed other lints"
+      if out1 == input && withoutNote(r2.errAll().replace(work.toString + "/", "")) != lints then problems += "a second run printed other lints"
       // `--check` changes nothing, and prints round one's lints at the input's lines, which its assertions answer.
       val (rc, outc) = runOn(true)
       problems ++= checkAsserts(input, lintsOf(rc.errAll().replace(work.toString + "/", ""), name + "/" + inputName)).map("--check: " + _)
@@ -143,12 +143,12 @@ import scala.jdk.CollectionConverters.*
       Files.copy(c.resolve(f), dir.resolve(f))
     def fixRun() = Sh(teq, "fix").in(dir).timeout(300).check(false).run()
     val r1 = fixRun()
-    val lints = r1.errAll()
+    val lints = withoutNote(r1.errAll())
     val r2 = fixRun()
     val problems = scala.collection.mutable.ListBuffer.empty[String]
     val expectedStatus = if lints.linesIterator.exists(_.contains(": error: [")) then 1 else 0
     if r1.status != expectedStatus then problems += s"exit ${r1.status}, expected $expectedStatus:\n$lints"
-    if r2.status != r1.status || r2.errAll() != lints then problems += s"the second run exited ${r2.status} printing\n${r2.errAll()}where the first exited ${r1.status} printing\n$lints"
+    if r2.status != r1.status || withoutNote(r2.errAll()) != lints then problems += s"the second run exited ${r2.status} printing\n${r2.errAll()}where the first exited ${r1.status} printing\n$lints"
     for f <- files if f.toString.endsWith(".scala") do
       val output = c.resolve("output").resolve(f)
       val want = read(if Files.exists(output) then output else c.resolve(f))
@@ -191,6 +191,11 @@ def header(input: String, dir: Path): String =
   else
     val text = input.substring(start + 2, end)
     "\"file:([^\"]+)\"".r.replaceAllIn(text, m => java.util.regex.Matcher.quoteReplacement("\"file:" + dir.resolve(m.group(1)).normalize.toString.replace('\\', '/') + "\""))
+
+/** A run's stderr without the note that a project's rules run on one worker (docs/FIX.md, "Patches, suppressions and
+  * rounds"): it says how the run's rules were scheduled and is no lint of a fixture's. */
+def withoutNote(err: String): String =
+  err.split("\n", -1).filterNot(l => l.contains(": note: ") && l.endsWith("so the project's rules run on one worker")).mkString("\n")
 
 /** The text without its leading configuration comment. */
 def withoutHeader(text: String): String =
@@ -722,8 +727,11 @@ object Verb:
   * dispatched once and done once with its slot's generation, by workers of the run's, at least `TEQ_FIX_BARRIER` of them
   * in rule evaluation before any finished, no round serial. Worker counts and times are no evidence; the record's
   * intervals are. The mutation controls (`TEQ_FIX_PLANT`) must fail: `serial` the record's check, `completion` the
-  * bytes. A run with a project rule (`file:`) stays serial for the whole run: its record says so and its rule keeps its
-  * state across documents, jobs and rounds (Count's visits, Stale's refusal of a patch of another document). */
+  * bytes. A run with a project rule (`file:`) in whose sources the guard sees something kept
+  * between documents stays serial for the whole run: its record says so, with the definition, the run says it once in
+  * a note, and its rule keeps its state across documents, jobs and rounds (Count's visits, Stale's refusal of a patch
+  * of another document). A project rule in which the guard sees nothing takes the workers, held to the same checks as
+  * the shipped rules (Marks). */
 object Parallel:
   /** Whether the engine runs the rules' phase in parallel; while it did not, the record's check had to refuse its runs
     * (the witness's negative control, which the `serial` plant keeps). */
@@ -897,6 +905,115 @@ object Parallel:
     val staled = counts.map(w => runOn(teq, work, s"stale-$w", stateFiles, staleConf, w, Seq()))
     expect("stale", staled.head.status == 2 && staled.head.err.contains("another document"), s"exit ${staled.head.status}\n${staled.head.err.linesIterator.take(5).mkString("\n")}")
     for (o, w) <- staled.zip(counts).drop(1) do expect(s"stale/w$w", sameBytes(staled.head, o).isEmpty, sameBytes(staled.head, o).getOrElse(""))
+    // What the guard sees is said once, at the definition, in a note; the rules then run on one worker.
+    def noted(o: Outcome, where: String): Boolean =
+      val (place, name) = (where.takeWhile(_ != ' '), where.dropWhile(_ != ' ').drop(1))
+      val notes = o.err.linesIterator.filter(_.contains(": note: ")).toVector
+      notes.size == 1 && notes.head.contains(place + ":") && notes.head.endsWith(s": note: $name keeps something between documents or reaches outside the program, so the project's rules run on one worker")
+    def shown(o: Outcome): String = s"exit ${o.status}: ${o.err.linesIterator.take(4).mkString("\n")}\n${o.record.filter(l => l.startsWith("run ") || l.startsWith("serial ")).mkString("\n")}"
+    expect("count/note", noted(counted.last, "rules/Count.scala:4 n"), shown(counted.last))
+    expect("stale/note", noted(staled.last, "rules/Stale.scala:6 saved"), shown(staled.last))
+    // A project rule that keeps nothing between documents runs on the run's workers, as a shipped one does: `Marks`
+    // holds its settings, read in `withConfiguration`, in an immutable field, a function written as a literal in
+    // another, and counts with a local `var`. Beside the shipped rules over the corpus: the record's check at every
+    // count, each run the one-worker run's bytes, and no note.
+    val marks = "package rules\nimport teq.fix.*\nfinal class Marks(words: List[String]) extends SyntacticRule(\"Marks\"):\n  def this() = this(Nil)\n  private val wanted: String => Boolean = text => words.contains(text)\n  override def withConfiguration(c: Configuration): Configured[Rule] =\n    c.conf.section(\"Marks\").strings(\"words\", words).map(new Marks(_))\n  override def fix(using doc: SyntacticDocument): Patch =\n    var seen = 0\n    doc.tokens.toList.collect { case t if wanted(t.text) => seen += 1; Patch.lint(Diagnostic(\"word\", t.text + \" \" + seen, t.pos)) }.asPatch\n"
+    val marksConf = conf.replace("NoUnusedImports]", "NoUnusedImports, \"file:rules/Marks.scala\"]") + "Marks.words = [counter, hidden]\n"
+    val marksFiles = files :+ ("rules/Marks.scala" -> marks)
+    val marked = runOn(teq, work, "marks-1", marksFiles, marksConf, 1, Seq())
+    expect("marks", marked.status == 1 && marked.err.contains("[Marks.word]: counter 1") && !marked.err.contains(": note: ") && marked.record.exists(l => l.startsWith("run ") && fieldsOf(l).get("eligible") == Some("1")),
+      s"exit ${marked.status}\n${marked.record.take(3).mkString("\n")}\n${marked.err.linesIterator.take(6).mkString("\n")}")
+    for w <- counts.drop(1) do
+      val o = runOn(teq, work, s"marks-$w", marksFiles, marksConf, w, Seq("TEQ_FIX_BARRIER" -> "4"))
+      expect(s"marks/w$w/bytes", sameBytes(marked, o).isEmpty, sameBytes(marked, o).getOrElse(""))
+      val problems = recordProblems(o.record, w, 4)
+      expect(s"marks/w$w/record", problems.isEmpty, problems.mkString("\n  "))
+    // The shapes a project's rules commonly have, none of which keeps anything, pass the guard together: a class
+    // parameter of an immutable type with a secondary constructor, read in `fix`'s helper; `withConfiguration` making
+    // the rule from a helper object's result; overriding values; string values, one given on the next line; a type
+    // alias; an enum nested in the rule's class, with parameterless cases and cases with parameters, and one whose
+    // cases extend it with arguments; a companion object with an immutable value.
+    val helper = "package rules\nimport teq.fix.*\n\nprivate[rules] object Helper:\n  def strings(section: Conf, key: String, default: List[String]): Configured[List[String]] =\n    section.get(key) match\n      case None => Configured.Ok(default)\n      case Some(list) =>\n        list.asList.flatMap { items =>\n          Configured.all(items.map(item => item.asString.flatMap(text => if text.isEmpty then Configured.NotOk(s\"${item.place}: an empty word\") else Configured.Ok(text))))\n        }\n"
+    val shaped = "package rules\nimport teq.fix.*\n\nclass Shaped(exclusions: List[String]) extends SyntacticRule(\"Shaped\"):\n  def this() = this(Nil)\n  override val isLinter: Boolean = true\n  private val diagnostic =\n    \"a shape\"\n  private val first = \"one\"\n  private val second = \"two\"\n  private type F = Term.FunctionTerm | Term.PartialFunction | Term.AnonymousFunction | Term.PolyFunction\n  override def withConfiguration(config: Configuration): Configured[Rule] =\n    Helper.strings(config.conf.section(\"Shaped\"), \"exclusions\", Nil).map(Shaped(_))\n  private enum Place:\n    case Body, Hook, Top\n    case Named(name: String)\n    case Inside(flag: Boolean)\n  private enum Problem(val text: String):\n    case Loop    extends Problem(\"a loop\")\n    case Guarded extends Problem(\"a guard\")\n    case Branch  extends Problem(\"a branch\")\n  private def placeOf(t: Token): Place = if exclusions.contains(t.text) then Place.Top else if Shaped.roots.contains(t.text) then Place.Named(t.text) else Place.Body\n  override def fix(using doc: SyntacticDocument): Patch =\n    doc.tokens.toList.collect { case t if placeOf(t) == Place.Top => Patch.lint(Diagnostic(\"d\", diagnostic + \" \" + first + second + \" \" + Problem.Loop.text + \" \" + t.text, t.pos)) }.asPatch\n\nobject Shaped:\n  private val roots = Set(\"java\", \"javax\", \"scala\")\n"
+    val shapedConf = conf.replace("NoUnusedImports]", "NoUnusedImports, \"file:rules\"]") + "Shaped.exclusions = [counter, hidden]\n"
+    val shapedFiles = files :+ ("rules/Helper.scala" -> helper) :+ ("rules/Shaped.scala" -> shaped)
+    val shapedOne = runOn(teq, work, "shaped-1", shapedFiles, shapedConf, 1, Seq())
+    expect("shaped", shapedOne.status == 1 && shapedOne.err.contains("[Shaped.d]: a shape onetwo a loop counter") && !shapedOne.err.contains(": note: ") && shapedOne.record.exists(l => l.startsWith("run ") && fieldsOf(l).get("eligible") == Some("1")),
+      s"exit ${shapedOne.status}\n${shapedOne.record.filter(l => l.startsWith("run ") || l.startsWith("serial ")).mkString("\n")}\n${shapedOne.err.linesIterator.take(6).mkString("\n")}")
+    val shapedFour = runOn(teq, work, "shaped-4", shapedFiles, shapedConf, 4, Seq("TEQ_FIX_BARRIER" -> "4"))
+    expect("shaped/w4/bytes", sameBytes(shapedOne, shapedFour).isEmpty, sameBytes(shapedOne, shapedFour).getOrElse(""))
+    expect("shaped/w4/record", recordProblems(shapedFour.record, 4, 4).isEmpty, recordProblems(shapedFour.record, 4, 4).mkString("\n  "))
+    // A run whose `--rules` choose shipped rules alone has no project rule: the workers, and no note, whatever the
+    // configuration's `file:` sources keep.
+    val countShipped = runOn(teq, work, "count-shipped-alone", stateFiles, countConf, 4, Seq(), extra = Seq("--rules", "EmptyCollectionsUnified"))
+    expect("count/shipped rules chosen", countShipped.status != 2 && !countShipped.err.contains(": note: ") && countShipped.record.exists(l => l.startsWith("run ") && fieldsOf(l).get("eligible") == Some("1")), shown(countShipped))
+    // What the guard sees a project's sources keep between documents, a rule a kind: a `var` member, a value of a
+    // mutable collection or of an array, a `var` of an object beside the rule, a `var` of a member's initialiser that a
+    // function kept in the member carries, a class parameter of a mutable type, a function a method made (it may have
+    // closed over anything), a write to the process's streams, which several workers would give once each and in no
+    // order; a `var` whose name holds a `$`; a local `var` of `withConfiguration` that the rule it returns reads; a
+    // value of a type parameter's type; an object over a mutable class of a library; a write named as an infix
+    // operator, or reached by `printStackTrace`; a random generator, whose numbers an interpreter keeps a sequence of,
+    // by its class and by `math.random`; a builder of the immutable package; a tuple under its supertype; a sorted
+    // collection, which carries its ordering; a matcher made by an object of the sources called as the API's is; a
+    // file class behind an import's rename; a context bound's parameter, told as its class. Each keeps one worker, the
+    // record naming the definition and the run noting it once.
+    def rule(name: String, members: String, parameters: String = "", before: String = ""): String =
+      s"package rules\nimport teq.fix.*\n${before}final class $name$parameters extends SyntacticRule(\"$name\"):\n$members  override def fix(using doc: SyntacticDocument): Patch = Patch.empty\n"
+    val keepers = Seq(
+      ("VarMember", rule("VarMember", "  private var n = 0\n"), "rules/VarMember.scala:4 n"),
+      ("MutableValue", rule("MutableValue", "  private val seen = scala.collection.mutable.Set.empty[String]\n"), "rules/MutableValue.scala:4 seen"),
+      ("ArrayValue", rule("ArrayValue", "  val cells = new Array[Int](4)\n"), "rules/ArrayValue.scala:4 cells"),
+      ("ObjectVar", rule("ObjectVar", "", before = "object Tally:\n  var n = 0\n"), "rules/ObjectVar.scala:4 n"),
+      ("CarriedVar", rule("CarriedVar", "  private val next: () => Int =\n    var n = 0\n    () => { n += 1; n }\n"), "rules/CarriedVar.scala:4 next"),
+      ("MutableParameter", rule("MutableParameter", "  def this() = this(scala.collection.mutable.ListBuffer.empty[String])\n", parameters = "(buffer: scala.collection.mutable.ListBuffer[String])"), "rules/MutableParameter.scala:3 buffer"),
+      ("MadeFunction", rule("MadeFunction", "  private val next: () => Int = make()\n  private def make(): () => Int =\n    var n = 0\n    () => { n += 1; n }\n"), "rules/MadeFunction.scala:4 next"),
+      ("Printing", rule("Printing", "  override def withConfiguration(c: Configuration): Configured[Rule] =\n    println(\"configured\")\n    Configured.Ok(this)\n"), "rules/Printing.scala:5 println"),
+      ("DollarName", rule("DollarName", "  private var n$ = 0\n"), "rules/DollarName.scala:4 n$"),
+      ("ConfiguredLocal", rule("ConfiguredLocal", "  override def withConfiguration(c: Configuration): Configured[Rule] =\n    var n = 0\n    Configured.Ok(new SyntacticRule(\"ConfiguredLocal\") {\n      override def fix(using doc: SyntacticDocument): Patch =\n        n += 1\n        Patch.empty\n    })\n"), "rules/ConfiguredLocal.scala:5 n"),
+      ("TypeParameter", rule("TypeParameter", "  private val box = new Box(scala.collection.mutable.Set.empty[String])\n", before = "class Box[S](val held: S)\n"), "rules/TypeParameter.scala:3 held"),
+      ("ObjectOverLibrary", rule("ObjectOverLibrary", "", before = "object Seen extends scala.collection.mutable.HashMap[String, Int]\n"), "rules/ObjectOverLibrary.scala:3 Seen"),
+      ("InfixWrite", rule("InfixWrite", "  override def withConfiguration(c: Configuration): Configured[Rule] =\n    e println \"configured\"\n    Configured.Ok(this)\n", before = "trait Sink:\n  infix def println(text: String): Unit = ()\nobject e extends Sink\n"), "rules/InfixWrite.scala:8 println"),
+      ("StackTrace", rule("StackTrace", "  override def withConfiguration(c: Configuration): Configured[Rule] =\n    new RuntimeException(\"configured\").printStackTrace()\n    Configured.Ok(this)\n"), "rules/StackTrace.scala:5 printStackTrace"),
+      ("Generator", rule("Generator", "  private def next(): Int = scala.util.Random.nextInt(1000)\n"), "rules/Generator.scala:4 Random"),
+      ("OtherGenerator", rule("OtherGenerator", "  private def next(): Int = (math.random() * 1000).toInt\n"), "rules/OtherGenerator.scala:4 random"),
+      ("ImmutableBuilder", rule("ImmutableBuilder", "  private val acc = new scala.collection.immutable.VectorBuilder[String]()\n"), "rules/ImmutableBuilder.scala:4 acc"),
+      ("TupleSupertype", rule("TupleSupertype", "  private val pair: Tuple = (scala.collection.mutable.Set.empty[String], 1)\n"), "rules/TupleSupertype.scala:4 pair"),
+      ("SortedOrdering", rule("SortedOrdering", "  private val sorted = scala.collection.immutable.SortedSet.empty[String]\n"), "rules/SortedOrdering.scala:4 sorted"),
+      ("OwnMatcher", rule("OwnMatcher", "  private val counting: teq.fix.SymbolMatcher = SymbolMatcher.exact(new Array[Int](1))\n", before = "object SymbolMatcher:\n  def exact(cell: Array[Int]): teq.fix.SymbolMatcher = sym => { cell(0) += 1; cell(0) % 3 == 0 }\n"), "rules/OwnMatcher.scala:6 counting"),
+      ("RenamedImport", rule("RenamedImport", "", before = "import java.io.{FileOutputStream => Sink}\n"), "rules/RenamedImport.scala:3 FileOutputStream"),
+      ("ContextBound", rule("ContextBound", "", before = "final class Ranked[T: Ordering](items: List[String])\n"), "rules/ContextBound.scala:3 Ranked"))
+    for (name, text, where) <- keepers do
+      val keeperFiles = Seq("src/A.scala" -> "object A { val a = 1 }\n", "src/B.scala" -> "object B { val b = 2 }\n", s"rules/$name.scala" -> text)
+      val o = runOn(teq, work, s"keeps-$name", keeperFiles, s"rules = [\"file:rules/$name.scala\"]\n", 4, Seq())
+      val serial = o.record.filter(_.startsWith("serial "))
+      expect(s"keeps/$name", o.status == 0 && o.record.exists(l => l.startsWith("run ") && fieldsOf(l).get("eligible") == Some("0")) && serial.nonEmpty && serial.forall(l => l.contains("reason=project-rules state=") && l.endsWith(where)) && noted(o, where), shown(o))
+    // What keeps nothing and the guard must not take for state: a function an inline method's call binds to its
+    // parameter (the binding carries the call's place and the method's file); and data classes that name one another,
+    // each read once (fourteen of them, each holding the others).
+    val mutual = (0 until 14).map(i => s"case class M$i(${(0 until 14).filter(_ != i).map(j => s"f$j: M$j").mkString(", ")}, stop: Option[Int])\n").mkString
+    val passers = Seq(
+      ("InlineBinding", Seq("rules/Helper.scala" -> "package rules\nobject Helper:\n  inline def twice(f: Int => Int): Int = f(f(1))\n",
+        "rules/InlineBinding.scala" -> "package rules\nimport teq.fix.*\nfinal class InlineBinding extends SyntacticRule(\"InlineBinding\"):\n  override def fix(using doc: SyntacticDocument): Patch =\n    val n = Helper.twice(_ + 1)\n    Patch.lint(Diagnostic(\"n\", n.toString, doc.tree.pos))\n"), 1),
+      ("Mutual", Seq("rules/Mutual.scala" -> rule("Mutual", "", before = mutual)), 0))
+    for (name, sources, status) <- passers do
+      val o = runOn(teq, work, s"passes-$name", Seq("src/A.scala" -> "object A { val a = 1 }\n", "src/B.scala" -> "object B { val b = 2 }\n") ++ sources, "rules = [\"file:rules\"]\n", 4, Seq())
+      expect(s"passes/$name", o.status == status && !o.err.contains(": note: ") && o.record.exists(l => l.startsWith("run ") && fieldsOf(l).get("eligible") == Some("1")), shown(o))
+    for (o, w) <- counted.zip(counts).drop(1) do
+      expect(s"count/w$w/state", o.record.exists(l => l.startsWith("serial ") && l.endsWith("rules/Count.scala:4 n")), o.record.filter(_.startsWith("serial ")).mkString("\n"))
+    // The guard's kinds, a rule a file (tests/fix-guard). Each rule of `keeps` keeps something between documents or
+    // reaches outside the program: the guard sees it at the definition keeps.txt names, the run keeps one worker and
+    // notes it. Each rule of `passes` keeps nothing: the workers, and no note.
+    val guard = Paths.get("tests/fix-guard")
+    val two = Seq("src/A.scala" -> "object A { val a = 1 }\n", "src/B.scala" -> "object B { val b = 2 }\n")
+    for where <- read(guard.resolve("keeps.txt")).linesIterator if where.nonEmpty do
+      val name = where.takeWhile(_ != '.')
+      val o = runOn(teq, work, s"guard-keeps-$name", two :+ (s"rules/$name.scala" -> read(guard.resolve("keeps").resolve(name + ".scala"))), s"rules = [\"file:rules/$name.scala\"]\n", 4, Seq())
+      val serial = o.record.filter(_.startsWith("serial "))
+      expect(s"guard/keeps/$name", o.status != 2 && o.record.exists(l => l.startsWith("run ") && fieldsOf(l).get("eligible") == Some("0")) && serial.nonEmpty && serial.forall(_.endsWith("rules/" + where)) && noted(o, "rules/" + where), shown(o))
+    for name <- Files.list(guard.resolve("passes")).iterator.asScala.toVector.map(_.getFileName.toString.stripSuffix(".scala")).sorted do
+      val o = runOn(teq, work, s"guard-passes-$name", two :+ (s"rules/$name.scala" -> read(guard.resolve("passes").resolve(name + ".scala"))), s"rules = [\"file:rules/$name.scala\"]\n", 4, Seq())
+      expect(s"guard/passes/$name", o.status != 2 && !o.err.contains(": note: ") && o.record.exists(l => l.startsWith("run ") && fieldsOf(l).get("eligible") == Some("1")), shown(o))
     (pass, fail)
 
 /** The jobs' typing over several workers (docs/FIX.md, "The run"): each job and round typed as `teq compiler check`

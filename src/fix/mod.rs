@@ -12,3 +12,4 @@ pub mod plan;
 pub mod scanner;
 pub mod service;
 pub mod source;
+pub(crate) mod state;

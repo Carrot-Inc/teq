@@ -7,9 +7,10 @@
 //! document is done (`serve`: nothing is typed again);
 //! each editable document's view handed to a worker, which runs every rule over it, the results gathered in the documents' order; the patches planned, all of them before anything
 //! is written; at most two rounds, the second over the first's text, typed again, for the imports the first's edits
-//! left unused. A run whose rules teq ships takes as many workers as `--threads` (the cores by default) and a round's
-//! documents allow; one with a project rule (`file:`) keeps one worker, whose rule instances keep their state across
-//! documents.
+//! left unused. A run whose rules keep nothing between documents (the shipped ones, and a project's `file:` rules
+//! in whose sources the guard sees nothing kept, `state::kept`) takes as many workers as `--threads` (the cores by
+//! default) and a round's documents allow; one with a project rule in which the guard sees state keeps one worker,
+//! whose rule instances keep their state across documents, and says so.
 
 use super::config::Conf;
 use super::host::{self, Asker, DocView, Host, Results, Severity, Utf16};
@@ -134,6 +135,19 @@ struct RuleInfo {
     semantic: bool,
     /// Whether teq ships the rule (`Driver.shipped`), not a `file:` entry's.
     shipped: bool,
+    /// Of a `file:` entry's rule: the definition of the configuration's `file:` sources that the guard sees keeping
+    /// something between documents (`state::kept`); none where it sees none, and for a shipped rule, which keeps
+    /// nothing by construction.
+    state: Option<Seen>,
+}
+
+/// A definition the guard saw: its file as the rules' program has it, its line and column (from 1), its name.
+#[derive(Clone, PartialEq)]
+struct Seen {
+    path: String,
+    line: usize,
+    col: usize,
+    name: String,
 }
 
 /// What a worker needs to compile and configure the rules.
@@ -158,7 +172,8 @@ struct Pool<'scope, 'env> {
     from: mpsc::Receiver<FromRules>,
     /// Whether each worker answered `Ready`.
     ready: Vec<bool>,
-    /// The workers the run may use: one where a project rule is configured (`drive_rounds`).
+    /// The workers the run may use: one where a project rule that keeps something between documents is configured
+    /// (`drive_rounds`, `state::kept`).
     limit: usize,
     eligible: bool,
     gate: std::sync::Arc<Gate>,
@@ -559,9 +574,15 @@ fn drive_rounds(setup: &Setup, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
         };
         timed(0, ready);
         d.pool.ready[0] = true;
-        // The rules teq ships keep no state across documents (fix-speed's table, §1): their run takes several workers.
-        // A project rule's instance may (Count's visits, Stale's kept token): its run keeps the lead alone.
-        d.pool.eligible = infos.iter().all(|i| i.shipped);
+        // The rules teq ships keep no state across documents: their run takes several workers. A project rule's instance
+        // may (a count of its visits, a token it kept), and scalafix gives a rule every document on one instance, one
+        // after another. A project's rules are taken to keep nothing unless the guard sees otherwise in their sources
+        // (`state::kept`): then the run keeps the lead alone, as scalafix runs it, and says so once, at the definition.
+        let seen = infos.iter().find_map(|i| i.state.as_ref());
+        if let Some(k) = seen {
+            eprintln!("{}:{}:{}: note: {} keeps something between documents or reaches outside the program, so the project's rules run on one worker", shown_path(&setup.display, &k.path), k.line, k.col, k.name);
+        }
+        d.pool.eligible = seen.is_none();
         d.pool.limit = if d.pool.eligible { requested_workers(&d.part.jobs) } else { 1 };
         d.names = infos.iter().map(|i| i.name.clone()).collect();
         d.semantic_rules = infos.iter().map(|i| i.semantic).collect();
@@ -948,7 +969,11 @@ fn round((k, r): (usize, u32), job: &Job, overrides: &HashMap<String, String>, s
     let want = if pool.limit > 1 && n > 1 { pool.limit.min(n) } else { 1 };
     if want == 1 {
         let reason = if !pool.eligible { "project-rules" } else if pool.limit == 1 { "one-worker" } else { "one-document" };
-        record(format_args!("serial reason={}", reason));
+        // A project's rules keep the run on one worker by what the guard sees their sources keep: the definition.
+        match infos.iter().find_map(|i| i.state.as_ref()).filter(|_| !pool.eligible) {
+            Some(k) => record(format_args!("serial reason={} state={}:{} {}", reason, k.path, k.line, k.name)),
+            None => record(format_args!("serial reason={}", reason)),
+        }
     }
     while pool.to.len() < want {
         if let Err(e) = pool.add_worker() {
@@ -1949,6 +1974,17 @@ fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc:
         }
     };
     let file_of: Vec<(crate::types::ClassId, String)> = project.iter().map(|&(c, f)| (c, sources_all.as_slice()[f.0 as usize].path.clone())).collect();
+    // What the guard sees the project's rules keep between documents, read off their typed sources before any of
+    // their code runs: where it sees nothing they run on every rule worker, as a shipped rule does.
+    let kept: Option<Seen> = super::state::kept(&mut w, &rule_files).map(|k| {
+        let f = &sources_all.as_slice()[k.file.0 as usize];
+        let before = f.text.get(..k.at as usize).unwrap_or(&f.text);
+        let line = before.bytes().filter(|&b| b == b'\n').count() + 1;
+        let col = before.rsplit('\n').next().map_or(0, |l| l.chars().count()) + 1;
+        // The file as the run would name it: from the working directory where it is under it.
+        let path = std::env::current_dir().ok().and_then(|cwd| Path::new(&f.path).strip_prefix(&cwd).ok().map(|p| p.to_string_lossy().into_owned())).unwrap_or_else(|| f.path.clone());
+        Seen { path, line, col, name: k.name }
+    });
     let mut interp = crate::interp::Interp::new(&mut w, crate::interp::Limits::unlimited());
     interp.stream = true;
     interp.content_hashes = false;
@@ -1979,7 +2015,7 @@ fn rule_thread(worker: usize, boot: Boot, rx: mpsc::Receiver<ToRules>, tx: mpsc:
         for (n, v, shipped) in &chosen {
             let c = interp.call_method(module.clone(), syms[3], vec![v.clone()]).map_err(|f| format!("teq fix: the configuration of {}: {}", n, failure(&mut interp, f)))?;
             let semantic = interp.call_method(module.clone(), syms[2], vec![c.clone()]).map_err(|f| failure(&mut interp, f))?;
-            infos.push(RuleInfo { name: n.clone(), semantic: matches!(semantic, crate::interp::Value::Bool(true)), shipped: *shipped });
+            infos.push(RuleInfo { name: n.clone(), semantic: matches!(semantic, crate::interp::Value::Bool(true)), shipped: *shipped, state: if *shipped { None } else { kept.clone() } });
             configured.push(c);
         }
         // A setting under a configured rule's section that its decoding never read is unknown (metaconfig's
