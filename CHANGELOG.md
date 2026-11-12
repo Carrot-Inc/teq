@@ -61,6 +61,8 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A lambda whose body leaves its result's type constructor open takes that constructor's arguments as scalac does
+  (`next.tap(_.traverse_(serve))` over zio and cats has the error type `Nothing`, where it was `Throwable`).
 - On the JVM a `lazy val` is initialised once under concurrent readers, as scalac's is (it ran its initialiser
   once a racing thread), `synchronized` takes its receiver's monitor (it took none), and `@threadUnsafe` gives
   the unsynchronised getter.

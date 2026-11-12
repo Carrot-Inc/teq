@@ -2487,6 +2487,7 @@ tailcalls_std	pass	-
 tailrec_inline_choose	pass	-	
 tailrec_param_shadow	pass	-	
 tailrec_parameter_clauses	pass	-	
+tap_traverse_error_type	pass	-	
 target_name_alias_dispatch	pass	-	
 target_name_bridge_alias	pass	-	
 target_name_dispatch	pass	-	

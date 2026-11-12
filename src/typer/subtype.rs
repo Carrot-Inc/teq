@@ -5310,8 +5310,18 @@ impl<'a> Worker<'a> {
         let mut vars = Vec::new();
         self.collect_vars(t, &mut vars);
         let mut solved = false;
+        // The fixed arguments of the constructors that selected variables were instantiated to by a partial
+        // unification (`app_var_instance`), each with the variance it has in its constructor.
+        let mut fixed: Vec<(TVarId, i8)> = Vec::new();
         for v in vars {
             if selected.contains(&v) {
+                if let Some(instance) = self.tvars[v].inst {
+                    for (w, sign) in self.var_variances(instance) {
+                        if self.tvars[w].is_fixed() && self.tvars[w].inst.is_none() {
+                            fixed.push((w, sign));
+                        }
+                    }
+                }
                 self.solve_var(v);
                 solved = true;
             }
@@ -5322,14 +5332,36 @@ impl<'a> Worker<'a> {
         // application): one an argument's interpolation left open inside the instance, which
         // solving the selected one keeps open (`solve_own_in`), is instantiated before the search,
         // so `f(Set(new Dog))` over `f[T: Ev]` searches `Ev[Set[Dog]]`.
-        if solved && !self.open_vars.is_empty() {
+        if solved && (!self.open_vars.is_empty() || !fixed.is_empty()) {
             let z = self.zonk(t);
             if self.types.has_vars(z) {
                 let mut nested = Vec::new();
                 self.collect_vars(z, &mut nested);
                 for w in nested {
-                    if w.index() as u32 >= self.app_base && self.open_vars.contains(&w) {
+                    if (w.index() as u32) < self.app_base {
+                        continue;
+                    }
+                    if self.open_vars.contains(&w) {
                         self.solve_var(w);
+                    } else if let Some(&(_, sign)) = fixed.iter().find(|&&(x, _)| x == w) {
+                        // dotty's selected variable is the constructor itself: minimized where it has a lower
+                        // bound, maximized where it has an upper one alone, left where it has neither
+                        // (`Inferencing.instDecision`). `G >: [X] =>> Z[Any, Nothing, X]` is that constructor.
+                        // teq has replaced `G` by a constructor over these arguments, whose bounds are the
+                        // constructor's: an argument's operand below `G` is a covariant argument's lower bound
+                        // and a contravariant one's upper bound. So a covariant one is taken from below where a
+                        // lower bound is recorded (`Nothing` if that is the bound), a contravariant one from
+                        // above where an upper bound is, each from its other side else, and one no variance
+                        // decides as the interpolation takes it (`below_first`).
+                        if self.tvars[w].lower.is_empty() && self.tvars[w].upper.is_empty() {
+                            continue;
+                        }
+                        let from_below = match sign {
+                            1 => !self.tvars[w].lower.is_empty(),
+                            -1 => self.tvars[w].upper.is_empty(),
+                            _ => self.below_first(w),
+                        };
+                        self.instantiate_from(w, from_below, t);
                     }
                 }
             }
