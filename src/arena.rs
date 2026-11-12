@@ -1429,6 +1429,25 @@ impl<T> Arena<T> {
         self.shared.is_some() && (i.wrapping_sub(self.own_base) as usize) < self.own.len()
     }
 
+    /// How many records of this worker's own there are now (every record, with one worker): the
+    /// boundary `existed_at` reads later.
+    #[inline]
+    pub fn age_mark(&self) -> u32 {
+        self.mine().len() as u32
+    }
+
+    /// Whether the record `i` existed where `age_mark` gave `mark`: with one worker a record below
+    /// the mark; on a forked worker a record of the fork's prefix or one of the worker's own below
+    /// the mark, never a peer's nor one the shared region took since the fork (what a hold of the
+    /// loader's lock publishes).
+    #[inline]
+    pub fn existed_at(&self, i: u32, mark: u32) -> bool {
+        match self.shared {
+            None => i < mark,
+            Some(_) => i < self.prefix_len || i.wrapping_sub(self.own_base) < mark,
+        }
+    }
+
     /// A peer reads a record of this kind only once a publication sealed it (`EscapeMarks`).
     #[cfg(debug_assertions)]
     pub fn peers_read_sealed(&self) {

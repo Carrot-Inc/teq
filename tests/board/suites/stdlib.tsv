@@ -1755,7 +1755,18 @@ macro_string_from_bytes	pass	-
 macro_structural_calls	pass	-	
 macro_substitute_prefixed_parameter	fail	-	output differs
 macro_suspended_after_jar_macro	fail	-	error: cannot resolve import: quotepatterns33 not found
+macro_suspended_after_library_inline_classes	fail	-	error: cannot resolve import: inlinebodies not found
+macro_suspended_after_std_demand	pass	-	
+macro_suspended_after_std_demand_flagged	pass	-	
+macro_suspended_after_std_demand_retried	pass	-	
+macro_suspended_library_class	fail	-	error: type Tally not found
+macro_suspended_library_default	fail	-	error: not found: rounddemand
+macro_suspended_library_path_misses_waiting_call	fail	-	error: value Chosen is not a member of rounddemand
+macro_suspended_library_unboxing	fail	-	error: not found: rounddemand
+macro_suspended_library_unboxing_in_one_call	fail	-	error: not found: rounddemand
 macro_suspended_member_class_bound	pass	-	
+macro_suspended_round_stands_after_std_demand	pass	-	
+macro_suspended_twice_without_demand	pass	-	
 macro_symbol_name_units	pass	-	
 macro_symbol_signature	pass	-	
 macro_sys_env	pass	-	

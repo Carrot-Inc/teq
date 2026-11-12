@@ -973,6 +973,30 @@ if [ "$(cat "$work/phase_fork_retained_journal.one")" = "320" ]; then
 else
   bad "phase_fork_retained_journal: one worker's output is not scalac's: $(head -2 "$work/phase_fork_retained_journal.one" | tr '\n' ' ' | cut -c1-200)"
 fi
+# A file's round given up after a run inside it made the first demand of a body that is no part of the file (an
+# array's `take` of the standard library, whose body holds inline calls, called by the program's macro or by a
+# library's): the body stays as its own compilation left it whichever worker's unit demands it first, and the
+# output and the JavaScript are one worker's, the output scalac's (before, the round given up put the body's
+# nodes back and the next run of it was refused, `scala.buffered has no body to run`: at one worker in the
+# first two programs, the second's build passing and its JavaScript failing under node, and in about one build
+# in three of the third, whose other file runs the library's macro first in the walk's order alone). Six
+# trials: the schedule decides which unit demands the body first.
+for c in cases/macro_suspended_after_std_demand classpath/js/macro_suspended_library_demand_reaches_output classpath/js/macro_suspended_other_file_first; do
+  name=phase_fork_$(basename $c)
+  jars_of tests/$c
+  if [ -n "$JARS_MISSING" ]; then
+    echo "skip $name: not in the coursier cache:$JARS_MISSING"
+    ok
+    continue
+  fi
+  same_output $name 6 run tests/$c ${JARS_CP:+--classpath "$JARS_CP"}
+  if cmp -s "$work/$name.one" tests/$c.expected; then
+    ok
+  else
+    bad "$name: one worker's output is not scalac's: $(head -2 "$work/$name.one" | tr '\n' ' ' | cut -c1-200)"
+  fi
+  same_build ${name}_files 6 tests/$c ${JARS_CP:+--classpath "$JARS_CP"}
+done
 COUNTS=$saved_counts
 # The application corpus's frontend and API (bench/app), whose plain macros run in the phase's workers and
 # demand std bodies and classes, which a worker types under the loader's lock: the unboxings its unit's

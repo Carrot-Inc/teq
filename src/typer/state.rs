@@ -889,6 +889,15 @@ impl<'a> Worker<'a> {
         taken
     }
 
+    /// The pending entries from `start` on that the typing of the file `file` registered, taken out
+    /// of the journal; those another file's typing registered stay, in their order (a round of
+    /// the inlining phase given up takes back its own file's calls alone, `Worker::roll_back`).
+    pub(super) fn drop_pending_of(&mut self, start: usize, file: u32) {
+        debug_assert!(self.attempts.open == 0, "a round given up inside an attempt");
+        let since = self.take_pending_from(start);
+        self.attempts.pending.extend(since.into_iter().filter(|p| p.place.file != file));
+    }
+
     /// The end of a unit the parallel typer publishes once it is made (a member's body, a class's
     /// `TClass`), which the interpreter may also run at once: the calls it registered from `start`
     /// on expanded first, since a published record is not changed before the merge, at one
@@ -1346,8 +1355,12 @@ impl<'a> Worker<'a> {
             eprintln!("flush {} at {:?}: {:?}", name, span, expanded.map(|(e, _)| self.prog.expr(e)));
         }
         // An expansion the inlining phase's first round gave up leaves the call as it was
-        // (`Worker::expand_suspending`).
-        if self.inlining.suspended_hit {
+        // (`Worker::expand_suspending`), and so does one made in the phase while a run is
+        // suspended (`Inlining::run_suspended`): a unit flushed inside the run that stops, its
+        // nested macro's result standing for nothing. The run's owner gives its file's round up
+        // where it ends (`hit_suspension`); at typing time no round is recorded, and the result
+        // is installed.
+        if self.inlining.suspended_hit || (self.inlining.run_suspended && self.inlining.running) {
             return None;
         }
         let (expanded, ty) = expanded?;
@@ -1712,8 +1725,9 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Rewrites the node `te` in place, its prior value journaled while an attempt is open and
-    /// while the inlining phase records a file's round (`Inlining::rewrite_log`).
+    /// Rewrites the node `te` in place, its prior value journaled while an attempt is open and,
+    /// for a node that existed when the round opened, while the inlining phase records a file's
+    /// round (`Inlining::rewrite_log`, `Worker::round_holds`).
     pub(super) fn rewrite_expr(&mut self, te: crate::tir::TExprId, value: crate::tir::TExpr) {
         if self.attempts.open != 0 {
             let len = self.attempts.rewrites.len();
@@ -1721,7 +1735,7 @@ impl<'a> Worker<'a> {
             let prior = self.prog.expr(te);
             self.attempts.rewrites.push(Rewrite::Expr(te, prior));
         }
-        if self.inlining.rewrite_log.is_some() {
+        if self.inlining.rewrite_log.is_some() && self.round_holds(te) {
             let prior = self.prog.expr(te);
             if let Some(log) = self.inlining.rewrite_log.as_mut() {
                 log.push(super::inlining::Prior::Expr(te, prior));
@@ -1738,7 +1752,7 @@ impl<'a> Worker<'a> {
     }
 
     fn journal_type(&mut self, te: crate::tir::TExprId) {
-        if self.inlining.rewrite_log.is_some() && self.prog.record_types {
+        if self.inlining.rewrite_log.is_some() && self.prog.record_types && self.round_holds(te) {
             let prior = self.prog.type_or_aside(te);
             if let Some(log) = self.inlining.rewrite_log.as_mut() {
                 log.push(super::inlining::Prior::Type(te, prior));

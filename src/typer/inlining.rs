@@ -83,6 +83,17 @@ struct Checkpoint {
     lists: [usize; 7],
 }
 
+/// Takes out of `v` the entries from `from` on that are the round's own (`own`): the others, noted
+/// meanwhile for a definition typed on demand, stay in their order, and so does everything before
+/// `from`, whoever noted it.
+fn cut_owned<T>(v: &mut Vec<T>, from: usize, own: impl Fn(&T) -> bool) {
+    if from >= v.len() {
+        return;
+    }
+    let since = v.split_off(from);
+    v.extend(since.into_iter().filter(|x| !own(x)));
+}
+
 /// Where a class statement stands, read off its tree when a call of it is kept (`walk_place`):
 /// the class's check records which statement it types, not its place, which a program keeping no
 /// call never reads.
@@ -101,6 +112,9 @@ pub(super) struct DeferredTrait {
     pub(super) class: ClassId,
     pub(super) member: Option<SymId>,
     pub(super) file: FileId,
+    /// The file whose typing noted the trait (`Worker::typing_unit`): a round given up takes back
+    /// its own file's entries alone (`Worker::roll_back`).
+    pub(super) unit: FileId,
 }
 
 /// A class of a block (a local, an anonymous or a SAM's class, or one an expansion makes) whose
@@ -112,6 +126,8 @@ pub(super) struct Lifted {
     pub(super) visible: Vec<SymId>,
     pub(super) member: Option<SymId>,
     pub(super) file: FileId,
+    /// The file whose typing noted the class (`Worker::typing_unit`), as a deferred trait's.
+    pub(super) unit: FileId,
 }
 
 /// The walk of a unit's typed tree (`Worker::order_unit`): the unit's calls by node with their
@@ -417,8 +433,15 @@ pub struct Inlining {
     /// expansions numbered (`anon_name`), counted back where it is given up.
     pub(super) anon_log: Option<Vec<(FileId, u32, Option<(FileId, u32)>)>>,
     /// While a file's round is recorded, what each node its expansions rewrote in place held
-    /// before (`Worker::rewrite_expr`, `retype_expr`), put back where it is given up.
+    /// before (`Worker::rewrite_expr`, `retype_expr`), put back where it is given up: of the
+    /// nodes that existed when the round opened alone (`round_nodes`), among them the file's typed
+    /// trees a roll-back gives back; a node made since is another definition's, typed on demand,
+    /// or the round's own, reached from nothing once the calls' nodes are put back.
     pub(super) rewrite_log: Option<Vec<Prior>>,
+    /// Where the expression arena stood when the recorded round opened (`Arena::age_mark`), and
+    /// the round's file, whose typing makes again what the round takes back (`Worker::roll_back`).
+    pub(super) round_nodes: u32,
+    pub(super) round_file: u32,
     /// What the suspension of a file reported (a macro's dependency in the file's own source),
     /// which outlives the file's round given up.
     pub(super) suspension_reports: Vec<Diagnostic>,
@@ -925,7 +948,8 @@ impl<'a> Worker<'a> {
             }
         }
         let file = self.syms.class(c).file;
-        self.inlining.lifted.push(Lifted { class: c, visible, member, file });
+        let unit = self.typing_unit();
+        self.inlining.lifted.push(Lifted { class: c, visible, member, file, unit });
     }
 
     /// Whether the local trait `t`, just checked, is lifted after the phase (`DeferredTrait`): its
@@ -968,7 +992,8 @@ impl<'a> Worker<'a> {
             info.owner != crate::symbols::Owner::Local && !self.in_lifted_class(info.owner)
         });
         let file = self.syms.class(t).file;
-        self.inlining.deferred_traits.push(DeferredTrait { class: t, member, file });
+        let unit = self.typing_unit();
+        self.inlining.deferred_traits.push(DeferredTrait { class: t, member, file, unit });
         true
     }
 
@@ -1030,7 +1055,7 @@ impl<'a> Worker<'a> {
                     continue;
                 }
                 let visible = self.visible_to_class(k);
-                self.inlining.lifted.push(Lifted { class: k, visible, member: d.member, file: d.file });
+                self.inlining.lifted.push(Lifted { class: k, visible, member: d.member, file: d.file, unit: d.unit });
             }
         }
     }
@@ -2297,6 +2322,8 @@ impl<'a> Worker<'a> {
         self.inlining.suspension_prefix = None;
         self.inlining.anon_log = Some(Vec::new());
         self.inlining.rewrite_log = Some(Vec::new());
+        self.inlining.round_nodes = self.prog.exprs.age_mark();
+        self.inlining.round_file = range.clone().next().map_or(u32::MAX, |i| self.inlining.kept[i].at.file);
         self.inlining.reached_other = false;
         let l = &self.inlining;
         let lists = [l.unboxes.len(), l.tailrec.len(), l.lifted.len(), l.deferred_traits.len(), l.erased.len(), l.fold_later.len(), l.index_later.len()];
@@ -2310,6 +2337,17 @@ impl<'a> Worker<'a> {
         self.inlining.reached_other = false;
     }
 
+    /// Whether the recorded round's log takes a write of the node `e`: a node that existed when the
+    /// round opened (`Inlining::round_nodes`), on a forked worker one of the fork's prefix or of the
+    /// worker's own records then. What was made since is typed for another definition on demand (a
+    /// body of the std or a library, a class's template, a default's getter), complete where it is
+    /// published and no part of the round, or is the round's own expansion, which nothing reaches
+    /// once the round is given up: neither is put back.
+    #[inline]
+    pub(super) fn round_holds(&self, e: TExprId) -> bool {
+        self.prog.exprs.existed_at(e.0, self.inlining.round_nodes)
+    }
+
     /// The file's round recorded in `c` given up: the nodes its expansions rewrote in place put
     /// back, newest first, what they left pending and listed for after the phase taken back, and
     /// the anonymous classes' places they numbered counted back. What they reported before the
@@ -2318,6 +2356,12 @@ impl<'a> Worker<'a> {
     /// runs after this one (`Driver.finish`), and a retype drops a warning the next round reports
     /// again. What they reported after it goes, as the `SuspendException` leaves the unit there.
     /// The classes and nodes its expansions made stay, met by nothing.
+    ///
+    /// Only what the round's own file's typing made is taken back, entry by entry: what was noted
+    /// meanwhile for a definition typed on demand is that definition's, and stays with it, as
+    /// dotty's reset drops the suspended unit's state and no other's. In this order: the nodes;
+    /// the pending calls, which the unboxings' placing reads (`is_pending_call`); the unboxings;
+    /// the lists; the anonymous classes' counts.
     fn roll_back(&mut self, c: Checkpoint) {
         for prior in self.inlining.rewrite_log.take().unwrap_or_default().into_iter().rev() {
             match prior {
@@ -2330,18 +2374,40 @@ impl<'a> Worker<'a> {
         }
         let reported = std::mem::take(&mut self.inlining.suspension_reports);
         self.diags.extend(reported);
-        drop(self.take_pending_from(c.pending));
-        self.inline_unboxes.truncate(c.inline_unboxes);
+        let file = self.inlining.round_file;
+        // A call another file's typing left pending (a default's getter, completed for a run
+        // inside the round) stays pending: the next flush expands it.
+        self.drop_pending_of(c.pending, file);
+        // An unboxing noted on a node the round found (an installed expansion's stands on the
+        // call's node) is the round's and goes with it. One on a newer node is placed now, the log
+        // gone: where it is a unit's left for its caller (a body typed under a search), it lands on
+        // the unit's node, which stays; the round's own inner ones land on nodes nothing reaches.
+        let from = c.inline_unboxes.min(self.inline_unboxes.len());
+        let noted = self.inline_unboxes.split_off(from);
+        let newer: Vec<(TExprId, TypeId)> = noted.into_iter().filter(|&(e, _)| !self.round_holds(e)).collect();
+        if !newer.is_empty() {
+            let before = std::mem::replace(&mut self.inline_unboxes, newer);
+            self.apply_inline_unboxes();
+            let waiting = std::mem::replace(&mut self.inline_unboxes, before);
+            self.inline_unboxes.extend(waiting);
+        }
         self.erased_values.truncate(c.erased_values);
+        // An unboxing that waits with the phase's records is its kept call's (`apply_inline_unboxes`).
+        let calls: Vec<TExprId> = self.inlining.kept.iter().filter(|k| k.at.file == file).map(|k| k.node).collect();
         let l = &mut self.inlining;
-        l.unboxes.truncate(c.lists[0]);
+        cut_owned(&mut l.unboxes, c.lists[0], |&(e, _)| calls.contains(&e));
         l.tailrec.truncate(c.lists[1]);
-        l.lifted.truncate(c.lists[2]);
-        l.deferred_traits.truncate(c.lists[3]);
+        cut_owned(&mut l.lifted, c.lists[2], |n| n.unit.0 == file);
+        cut_owned(&mut l.deferred_traits, c.lists[3], |d| d.unit.0 == file);
         l.erased.truncate(c.lists[4]);
         l.fold_later.truncate(c.lists[5]);
         l.index_later.truncate(c.lists[6]);
+        // A class's place is its typing unit's: the outermost call site's file, or the file it
+        // stands in where it has no site (`anon_name`).
         for key in self.inlining.anon_log.take().unwrap_or_default().into_iter().rev() {
+            if key.2.map_or(key.0, |site| site.0).0 != file {
+                continue;
+            }
             if let Some(n) = self.anon_sites.get_mut(&key) {
                 *n -= 1;
                 if *n == 0 {

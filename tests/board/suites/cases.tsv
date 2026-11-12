@@ -1794,7 +1794,18 @@ macro_string_from_bytes	pass	-
 macro_structural_calls	pass	-	
 macro_substitute_prefixed_parameter	fail	-	< true
 macro_suspended_after_jar_macro	pass	-	
+macro_suspended_after_library_inline_classes	pass	-	
+macro_suspended_after_std_demand	pass	-	
+macro_suspended_after_std_demand_flagged	pass	-	
+macro_suspended_after_std_demand_retried	pass	-	
+macro_suspended_library_class	pass	-	
+macro_suspended_library_default	pass	-	
+macro_suspended_library_path_misses_waiting_call	pass	-	
+macro_suspended_library_unboxing	pass	-	
+macro_suspended_library_unboxing_in_one_call	pass	-	
 macro_suspended_member_class_bound	pass	-	
+macro_suspended_round_stands_after_std_demand	pass	-	
+macro_suspended_twice_without_demand	pass	-	
 macro_symbol_name_units	pass	-	
 macro_symbol_signature	pass	-	
 macro_sys_env	pass	-	

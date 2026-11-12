@@ -208,8 +208,13 @@ entry_points tests/classpath/entry-root "js jvm interp"
 # program under each std mode it names on JavaScript and in the interpreter; a `// teq: <flags>`
 # line passes those flags to teq, and a `// targets: js interp` line runs it on each target it
 # names (`jvm` under java, its stderr apart, once, linked against scala-library).
-for src in tests/classpath/js/*.scala; do
+# A directory tests/classpath/js/<name>/ is a program of several files, compiled together and run the same way,
+# its header lines in any of its files and its expectation tests/classpath/js/<name>.expected: the files' names
+# are part of the program (the compiler takes a directory's files in their paths' order, which the inlining
+# phase walks them in).
+for src in tests/classpath/js/*.scala tests/classpath/js/*/; do
   [ -e "$src" ] || continue
+  src=${src%/}
   name=$(basename "$src" .scala)
   expected="tests/classpath/js/$name.expected"
   if [ ! -f "$expected" ]; then
@@ -228,9 +233,9 @@ for src in tests/classpath/js/*.scala; do
     continue
   fi
   why=
-  modes=$(grep -h -o '^// std: .*' "$src" | head -1 | sed 's|^// std: ||')
-  flags=$(grep -h -o '^// teq: .*' "$src" | head -1 | sed 's|^// teq: ||')
-  targets=$(grep -h -o '^// targets: .*' "$src" | head -1 | sed 's|^// targets: ||')
+  modes=$(grep -h -o '^// std: .*' "$src" "$src"/*.scala 2> /dev/null | head -1 | sed 's|^// std: ||')
+  flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2> /dev/null | head -1 | sed 's|^// teq: ||')
+  targets=$(grep -h -o '^// targets: .*' "$src" "$src"/*.scala 2> /dev/null | head -1 | sed 's|^// targets: ||')
   for target in ${targets:-js}; do
   target_modes=${modes:-lean}
   [ "$target" = jvm ] && target_modes=link

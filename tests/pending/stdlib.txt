@@ -272,6 +272,12 @@ macro_reflect_application_order	output differs
 macro_source_path	error: type Path not found
 macro_substitute_prefixed_parameter	output differs
 macro_suspended_after_jar_macro	error: cannot resolve import: quotepatterns33 not found
+macro_suspended_after_library_inline_classes	error: cannot resolve import: inlinebodies not found
+macro_suspended_library_class	error: type Tally not found
+macro_suspended_library_default	error: not found: rounddemand
+macro_suspended_library_path_misses_waiting_call	error: value Chosen is not a member of rounddemand
+macro_suspended_library_unboxing	error: not found: rounddemand
+macro_suspended_library_unboxing_in_one_call	error: not found: rounddemand
 macro_type_lambda_bounds	output differs
 macro_unapply_seq_plan	error: Digits is not a case class, so it cannot be used as a pattern
 macwire_lambda_param	error: cannot resolve import: softwaremill not found

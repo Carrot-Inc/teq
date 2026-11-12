@@ -65,6 +65,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 <details>
 <summary>Conformance with scalac and the JDK</summary>
 
+- A file whose inline expansion has to wait for a macro of its own build no longer loses what that expansion had
+  asked of the standard library or of a library on the class path (a method's body a macro ran first, a class, a
+  default argument): a correct program was refused with `not supported yet in a macro: ... has no body to run` or
+  built JavaScript that failed when run, and above one worker the result changed from build to build.
 - A local class made through a second constructor that reads a local of the enclosing method works on every
   target (the interpreter refused it, JavaScript printed `undefined`, the JVM rejected the class).
 - A macro whose implementation needs a definition of its own build (a class it constructs, an object it reads, a

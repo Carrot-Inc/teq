@@ -20,7 +20,8 @@
 # tests/support/typetest_lib.scala compiled the same way; callable-lib, tests/support/callable_lib.scala compiled the
 # same way; package-overloads-lib, tests/support/package_overloads_lib.scala compiled the same way; ctor-lib, tests/support/ctor_lib.scala compiled the same way; predef-lib,
 # tests/support/predef_lib.scala compiled the same way; depfun-lib, tests/support/depfun_lib.scala
-# compiled the same way; inlinebodies-lib, tests/support/inline_bodies_lib.scala compiled the same way; view-lib, tests/support/view_lib.scala compiled the same way; nestedcompanion-lib,
+# compiled the same way; inlinebodies-lib, tests/support/inline_bodies_lib.scala compiled the same way; rounddemand-lib, the directory
+# tests/support/round_demand_lib compiled the same way; view-lib, tests/support/view_lib.scala compiled the same way; nestedcompanion-lib,
 # tests/support/nestedcompanion_lib.scala compiled the same way; javareview-lib,
 # tests/support/javareview_lib.scala compiled the same way; hiddenowner-lib, tests/support/hidden_owner/hidden's
 # Java sources compiled by the javac at hand under --release 17 (JAVAC, else JAVA_HOME's, else PATH's), and
@@ -793,6 +794,21 @@ inline_bodies_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/round_demand_lib (two files: a macro of the library's and a body that calls it) compiled by scalac
+# into a jar: bodies, a class, a default argument and a macro's call that a macro's run reaches first inside a
+# file's round of the inlining phase.
+round_demand_lib_jar() {
+  local src=tests/support/round_demand_lib
+  local jar=$scratch/round-demand-lib.jar
+  local dir=$scratch/round-demand-lib.$$
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -name '*.scala' -newer "$jar")" ]; then
+    mkdir -p "$dir" && cp "$src"/*.scala "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/view_lib.scala compiled by scalac into a jar: what the loader's lock holder types while
 # a worker holds its own equivalent (the parallel typer's views).
 view_lib_jar() {
@@ -994,6 +1010,7 @@ jar_of() {
     predef-lib) predef_lib_jar ;;
     depfun-lib) depfun_lib_jar ;;
     inlinebodies-lib) inline_bodies_lib_jar ;;
+    rounddemand-lib) round_demand_lib_jar ;;
     lazyorder-lib) lazyorder_lib_jar ;;
     ctorinit-lib) ctorinit_lib_jar ;;
     view-lib) view_lib_jar ;;
