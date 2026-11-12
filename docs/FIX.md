@@ -128,7 +128,11 @@ final class NoPrintln(message: String) extends SyntacticRule("NoPrintln"):
        exact up to the class that declares it;
     3. a local is `local<n>`, numbered in the order a document's questions meet it, not in dotty's; a parameter and
        a type parameter are their owner's (`a/B#m().(x)`, `a/B#[T]`) where the owner is a definition of the document
-       or, for a parameter, a method of the class that owns it, else locals; a Java class's static side is written
+       or, for a parameter, a method of the class that owns it, else locals; an extension group's parameter is each
+       of its methods' own, as dotty gives every method the group's clauses: its place holds a definition a method,
+       in the methods' order, and a use in a method's body is that method's (in a group inside a method, where the
+       parameter is a local, the methods' parameters are one local, as dotty numbers them); a Java class's static
+       side is written
        as an object's (`java/util/Date.`, scalac's `java/util/Date#`), and a case class named as a constructor or an
        extractor as the class (`scala/Some#`, scalac's companion `scala/Some.`): the normalized name is scalac's in
        each case, as it is for a member of an object nested in a class (`a/C#O#m().`, scalac's `a/C#O.m().`) and an

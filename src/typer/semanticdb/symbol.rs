@@ -7,7 +7,9 @@
 //! What is answered is what the three semantic rules teq ships ask: the symbols of the occurrences at a name's exact
 //! range, compared normalized (the owner chain's names) or, for a method of an object, exactly. A local symbol is
 //! `local<n>`, numbered in the order a document's questions meet it, not in the order of dotty's traversal: no rule
-//! can tell (`SymbolOps.normalize` leaves a local as it is, and no entry names one). A parameter and a type parameter
+//! can tell (`SymbolOps.normalize` leaves a local as it is, and no entry names one); the parameters the document
+//! declares at one place, which the methods of a local extension group each have, are one local, as dotty's `localIdx`
+//! numbers them. A parameter and a type parameter
 //! are their owner's (`m().(x)`, `C#[T]`) where the owner is a definition of the document or, for a parameter, a
 //! method of the class that owns it; else they are answered as locals.
 
@@ -33,6 +35,12 @@ pub struct DocTable {
     /// The packages its paths name (`Index::packages`).
     packages: Vec<(Span, PkgId)>,
     locals: FxMap<Target, u32>,
+    /// The number of the local parameter the document declares at a place (the file and the span of its name, as the
+    /// index recorded the declaration): the parameters that the methods of a local extension group each have are one
+    /// local, as dotty numbers a unit's local symbols of one name and one starting position
+    /// (`SemanticSymbolBuilder.localIdx`). A parameter declared outside the document has no place here and keeps a
+    /// number of its own.
+    local_places: FxMap<(FileId, u32, u32), u32>,
     /// What each symbol answered stands for, which a later question about the symbol reads (`sem_overridden_of`).
     named: FxMap<String, Target>,
     /// The method each parameter of the document's methods belongs to, and the definition each of its type
@@ -84,10 +92,34 @@ impl DocTable {
                 _ => {}
             }
         }
+        // An extension group's parameter: every method of the group has its own, declared at the group's one place
+        // (dotty gives each method the group's clauses), so the place holds a definition a method, in the methods'
+        // order; a use names its own method's (`Worker::normal_target`). Read off the methods' signatures, not off
+        // the index, whose one parameter a place is navigation's.
+        let methods: Vec<SymId> = decls.iter().filter_map(|&(_, t)| match t {
+            Target::Sym(s) if w.syms.sym(s).kind == SymKind::Def && w.syms.sym(s).ext_clauses > 0 => Some(s),
+            _ => None,
+        }).collect();
+        let mut group: Vec<(Span, Target)> = Vec::new();
+        for m in methods {
+            let leading = w.syms.sym(m).ext_clauses as usize;
+            let sig = w.sig_arc(m);
+            for p in sig.clauses.iter().take(leading).flat_map(|c| c.params.iter()) {
+                // The parameter's own declaration in the document, as the index recorded it: an export's forwarder of
+                // an extension method has the clauses too, and its parameters are declared nowhere.
+                if let Some((_, span)) = w.param_declared(p.sym).filter(|(file, _)| entries.contains(file)) {
+                    group.push((span, Target::Sym(p.sym)));
+                }
+            }
+        }
+        decls.extend(group);
+        // Stable: at one place the declarations stay in their order, the group's parameters in their methods'.
+        decls.sort_by_key(|(span, _)| (span.start, span.end));
+        decls.dedup();
         let mut packages: Vec<(Span, PkgId)> = entries.iter().filter_map(|f| declared.packages.get(f)).flatten().copied().collect();
         packages.sort_by_key(|(span, p)| (span.start, span.end, p.0));
         packages.dedup();
-        DocTable { entries, decls, packages, locals: FxMap::default(), named: FxMap::default(), param_owner, tparam_owner }
+        DocTable { entries, decls, packages, locals: FxMap::default(), local_places: FxMap::default(), named: FxMap::default(), param_owner, tparam_owner }
     }
 }
 
@@ -197,12 +229,23 @@ impl<'a> Worker<'a> {
             }
         }
         if !self.sem_global(t) {
+            let place = match t {
+                Target::Sym(s) if self.syms.sym(s).kind == SymKind::Param => {
+                    self.param_declared(s).filter(|(file, _)| table.entries.contains(file)).map(|(file, span)| (file, span.start, span.end))
+                }
+                _ => None,
+            };
+            let known = table.locals.get(&t).copied().or_else(|| place.and_then(|p| table.local_places.get(&p).copied()));
             let next = table.locals.len() as u32;
-            let number = *table.locals.entry(t).or_insert(next);
+            let number = known.unwrap_or(next);
             let b = format!("local{}", number);
             // What the local stands for, where it is first numbered: a local class's member is asked what it
             // overrides as a global one is.
-            if number == next {
+            if known.is_none() {
+                table.locals.insert(t, number);
+                if let Some(p) = place {
+                    table.local_places.insert(p, number);
+                }
                 table.named.insert(b.clone(), t);
             }
             return Ok(b);

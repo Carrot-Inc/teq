@@ -609,15 +609,25 @@ impl<'a> Worker<'a> {
     }
 
     /// An object is its class, whichever of its two symbols names it.
-    /// An extension group's parameter is its first method's.
+    /// An extension group's parameter is its first method's: navigation's one declaration. For SemanticDB's
+    /// occurrences (`sem_records`) it is its own method's, as dotty's desugaring gives every method of the group the
+    /// group's clauses.
     pub(super) fn normal_target(&self, t: Target) -> Target {
         match t {
             Target::Sym(s) => match self.syms.sym(s).kind {
                 SymKind::Object(c) => Target::Class(c),
+                _ if self.sem_records => t,
                 _ => Target::Sym(self.index.as_ref().and_then(|ix| ix.same_param.get(&s).copied()).unwrap_or(s)),
             },
             _ => t,
         }
+    }
+
+    /// Where the index recorded the declaration of the parameter `p` (`index_param`): its file and the span of its
+    /// name there, which the parameters of an extension group's methods share. None for a parameter that no indexed
+    /// source declares: a library's, an export's forwarder's.
+    pub(super) fn param_declared(&self, p: SymId) -> Option<(FileId, Span)> {
+        self.index.as_ref().and_then(|ix| ix.locals.get(&p).copied())
     }
 
     /// The span of `name` at `at`: the name's own length where the text there spells it,

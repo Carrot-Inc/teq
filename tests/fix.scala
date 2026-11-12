@@ -653,6 +653,42 @@ object Verb:
     val ssy = build(work, "service-syntactic", "core/src/core/Core.scala" -> plain, "rules/Syn.scala" -> syn, ".scalafix.conf" -> "rules = [NoUnusedImports, \"file:rules/Syn.scala\"]\n")
     val rssy = fix(ssy, "core")
     expect("service/syntactic rule asks", rssy.status == 2 && rssy.errAll().contains("the rule Syn failed") && rssy.errAll().contains("so it was not typed to be asked, and a rule asked: nothing is answered"), s"exit ${rssy.status}: ${rssy.errAll()}")
+    // An extension group's parameter is each of its methods' own, as dotty has it: the parameter's place holds a
+    // definition a method, in the methods' order, and a use names its own method's, whichever method another file
+    // reaches first (`AUse` reaches `minus`) and with that file or without it.
+    val amounts = "package core\nobject Amounts:\n  opaque type Amount = Long\n  def of(n: Long): Amount = n\n  extension (a: Amount)\n    def minor: Long = a\n    def plus(b: Amount): Amount = a + b\n    def minus(b: Amount): Amount = a - b\n    def shown: String = a.toString\n"
+    val amountsUse = "package core\nobject AUse:\n  val d: Amounts.Amount = Amounts.of(3).minus(Amounts.of(1))\n"
+    val places = "package teq.fix.probe\nimport teq.fix.*\nfinal class Places extends SemanticRule(\"Places\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    if !text.contains(\"extension (a:\") then Patch.empty\n    else\n      def at(mark: String, shift: Int): String =\n        val i = text.indexOf(mark) + shift\n        Native.symbolsAt(doc.gen, i, i + 1).mkString(\",\")\n      Patch.lint(Diagnostic(\"\", \"place \" + at(\"extension (a:\", 11) + \" plus \" + at(\"= a + b\", 2) + \" shown \" + at(\"= a.toString\", 2), doc.tree.pos))\n"
+    val placesGiven = "[Places]: place core/Amounts.minor().(a),core/Amounts.plus().(a),core/Amounts.minus().(a),core/Amounts.shown().(a) plus core/Amounts.plus().(a) shown core/Amounts.shown().(a)"
+    val placesConf = ".scalafix.conf" -> "rules = [\"file:rules/Places.scala\"]\n"
+    val sext = build(work, "service-extension", "core/src/core/Amounts.scala" -> amounts, "core/src/core/AUse.scala" -> amountsUse, "rules/Places.scala" -> places, placesConf)
+    val rsext = fix(sext, "core")
+    expect("service/extension parameter", rsext.status == 1 && rsext.errAll().contains(placesGiven), s"exit ${rsext.status}: ${rsext.errAll()}")
+    val sextAlone = build(work, "service-extension-alone", "core/src/core/Amounts.scala" -> amounts, "rules/Places.scala" -> places, placesConf)
+    val rsextAlone = fix(sextAlone, "core")
+    expect("service/extension parameter, alone", rsextAlone.status == 1 && rsextAlone.errAll().contains(placesGiven), s"exit ${rsextAlone.status}: ${rsextAlone.errAll()}")
+    // A group inside a method: its parameter is a local, and locals of one name at one place have one number
+    // (dotty's `localIdx`), so the place and the uses in both methods give the same local, and the methods the next
+    // two numbers.
+    val tally = "package core\nobject Tally:\n  def run(n: Int): Int =\n    extension (a: Int)\n      def more: Int = a + 1\n      def less: Int = a - 1\n    n.more.less\n"
+    val localPlaces = "package teq.fix.probe\nimport teq.fix.*\nfinal class LocalPlaces extends SemanticRule(\"LocalPlaces\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    def at(mark: String, shift: Int, width: Int): String =\n      val i = text.indexOf(mark) + shift\n      Native.symbolsAt(doc.gen, i, i + width).mkString(\",\")\n    if !text.contains(\"extension (a:\") then Patch.empty\n    else Patch.lint(Diagnostic(\"\", \"place \" + at(\"extension (a:\", 11, 1) + \" more \" + at(\"= a + 1\", 2, 1) + \" less \" + at(\"= a - 1\", 2, 1) + \" method \" + at(\"less: Int\", 0, 4), doc.tree.pos))\n"
+    val sextLocal = build(work, "service-extension-local", "core/src/core/Tally.scala" -> tally, "rules/LocalPlaces.scala" -> localPlaces, ".scalafix.conf" -> "rules = [\"file:rules/LocalPlaces.scala\"]\n")
+    val rsextLocal = fix(sextLocal, "core")
+    expect("service/extension parameter, local group", rsextLocal.status == 1 && rsextLocal.errAll().contains("[LocalPlaces]: place local0 more local0 less local0 method local2"), s"exit ${rsextLocal.status}: ${rsextLocal.errAll()}")
+    // What is no group's parameter stays as it was. The parameters of two methods an export forwards are two symbols
+    // where named arguments name them, though the forwarders' parameters stand at one place and have one name; and an
+    // export's selector of an extension method holds the forwarder's definition alone, none of its parameter at the
+    // selector's first letter.
+    val exported = "package core\nobject Sums:\n  def twice(n: Int): Int = n + n\n  def thrice(n: Int): Int = n + n + n\nobject Totals:\n  export Sums.*\n  val total: Int = twice(n = 1) + thrice(n = 2)\n"
+    val twoSymbols = "package teq.fix.probe\nimport teq.fix.*\nfinal class TwoSymbols extends SemanticRule(\"TwoSymbols\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    if !text.contains(\"twice(n = 1) + thrice(n = 2)\") then Patch.empty\n    else\n      val i = text.indexOf(\"twice(n = 1)\") + 6\n      val j = text.indexOf(\"thrice(n = 2)\") + 7\n      val a = Native.symbolsAt(doc.gen, i, i + 1)\n      val b = Native.symbolsAt(doc.gen, j, j + 1)\n      Patch.lint(Diagnostic(\"\", \"named \" + a.length + \" and \" + b.length + (if a.length == 1 && b.length == 1 && a(0) != b(0) then \" of two symbols\" else \" of one symbol\"), doc.tree.pos))\n"
+    val sexported = build(work, "service-extension-exported", "core/src/core/Totals.scala" -> exported, "rules/TwoSymbols.scala" -> twoSymbols, ".scalafix.conf" -> "rules = [\"file:rules/TwoSymbols.scala\"]\n")
+    val rsexported = fix(sexported, "core")
+    expect("service/extension parameter, exported methods' parameters", rsexported.status == 1 && rsexported.errAll().contains("[TwoSymbols]: named 1 and 1 of two symbols"), s"exit ${rsexported.status}: ${rsexported.errAll()}")
+    val selectors = "package core\nobject Texts:\n  extension (s: String)\n    def loud: String = s.toUpperCase\n    def width: Int = s.length\nobject Shown:\n  export Texts.{loud, width}\n  val shown: String = \"a\".loud\n"
+    val atSelectors = "package teq.fix.probe\nimport teq.fix.*\nfinal class AtSelectors extends SemanticRule(\"AtSelectors\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val text = doc.input.text\n    if !text.contains(\"{loud, width}\") then Patch.empty\n    else\n      val i = text.indexOf(\"{loud\") + 1\n      val j = text.indexOf(\"width}\")\n      val n = Native.symbolsAt(doc.gen, i, i + 1).length + Native.symbolsAt(doc.gen, j, j + 1).length\n      val d = Native.definedAt(doc.gen, i, i + 1) || Native.definedAt(doc.gen, j, j + 1)\n      Patch.lint(Diagnostic(\"\", \"at the selectors' first letters \" + n + \" defined \" + d + \" at the group's place \" + Native.symbolsAt(doc.gen, text.indexOf(\"(s:\") + 1, text.indexOf(\"(s:\") + 2).mkString(\",\"), doc.tree.pos))\n"
+    val sselectors = build(work, "service-extension-selectors", "core/src/core/Shown.scala" -> selectors, "rules/AtSelectors.scala" -> atSelectors, ".scalafix.conf" -> "rules = [\"file:rules/AtSelectors.scala\"]\n")
+    val rsselectors = fix(sselectors, "core")
+    expect("service/extension parameter, an export's selectors", rsselectors.status == 1 && rsselectors.errAll().contains("[AtSelectors]: at the selectors' first letters 0 defined false at the group's place core/Texts.loud().(s),core/Texts.width().(s)"), s"exit ${rsselectors.status}: ${rsselectors.errAll()}")
     // What the arguments of an annotation in a type declare is a declaration of the document, as dotty has it: the
     // round's typing types those trees for it (`Worker::sem_records`), no retained form kept.
     val annotated = "package core\nclass Ann(x: Any) extends scala.annotation.StaticAnnotation\nclass Box[T]\nclass H { type T }\nobject Core:\n  def f(x: H): Box[x.T @Ann({ type Inner = x.T; 1 })] = new Box\n"
