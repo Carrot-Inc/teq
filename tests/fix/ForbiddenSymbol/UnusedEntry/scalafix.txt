@@ -1,0 +1,2 @@
+13:7:4: error: [ForbiddenSymbol] fix.UnusedEntry.used is forbidden according to the ForbiddenSymbol rule.
+14:14:4: error: [ForbiddenSymbol] fix.UnusedEntry.used is forbidden according to the ForbiddenSymbol rule.

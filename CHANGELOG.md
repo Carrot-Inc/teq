@@ -7,6 +7,10 @@ notes of its GitHub release, which carries the binaries (`teq-<version>-<classif
 
 ## Unreleased
 
+- `teq fix` runs three more rules, answered by the compiler's own typing: `OptionGetWarn`, `ForbiddenSymbol`
+  and `TypelevelHttp4sLiteralsSyntax`. `Option.get` is reported wherever the member is `Option`'s or `None`'s,
+  an overrider of a forbidden member where it is referenced, and a configured entry that names no symbol is
+  told once as a warning ([`teq fix`](https://github.com/Carrot-Inc/teq/blob/master/docs/FIX.md)).
 - `teq test` runs a test configuration's suites in the ordered groups sbt-teq's `teqTestGroups` names, each group
   with its own summary and the rest last, and `teq test --list` lists what a run with the same arguments would run
   ([the test verb](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md),

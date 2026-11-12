@@ -1,0 +1,9 @@
+ForbiddenSymbol/ExtensionImport/input.scala:7:26: error: [ForbiddenSymbol]: p.O.ext is forbidden according to the ForbiddenSymbol rule.
+    extension (x: Int) def ext: Int = x + 1 // assert: ForbiddenSymbol
+                           ^^^
+ForbiddenSymbol/ExtensionImport/input.scala:9:13: error: [ForbiddenSymbol]: p.O.ext is forbidden according to the ForbiddenSymbol rule.
+    import O.{ext as renamed} // assert: ForbiddenSymbol
+              ^^^
+ForbiddenSymbol/ExtensionImport/input.scala:10:18: error: [ForbiddenSymbol]: p.O.ext is forbidden according to the ForbiddenSymbol rule.
+    val result = 1.renamed // assert: ForbiddenSymbol
+                   ^^^^^^^

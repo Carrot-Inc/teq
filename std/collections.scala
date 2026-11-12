@@ -123,8 +123,12 @@ sealed abstract class Option[+A] extends IterableOnce[A], Product, java.io.Seria
   def toVector: Vector[A] = toList.toVector
   def toSet[B >: A]: Set[B] = Set.from(this)
 
-final case class Some[+A](value: A) extends Option[A]
-case object None extends Option[Nothing]
+// scala-library's two overrides of `Option.get`: the member a `get` on a `Some` or on `None` names, which tells the
+// `get` that cannot throw from the two that can (`teq fix`'s OptionGetWarn).
+final case class Some[+A](value: A) extends Option[A]:
+  override def get: A = value
+case object None extends Option[Nothing]:
+  override def get: Nothing = noSuchElement("None.get")
 
 object Option:
   def apply[A](value: A): Option[A] = if js.isNull(value) || js.isUndefined(value) then None else Some(value)

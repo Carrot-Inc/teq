@@ -14,6 +14,7 @@ mod pickle;
 
 pub use buf::write_nat;
 pub use pickle::{scala_name, std_shapes};
+pub(crate) use pickle::{std_library_name, std_shape_named, std_shape_owned, std_target_by, StdTarget};
 pub(crate) use pickle::widened_library_members;
 
 use crate::intern::FxMap;

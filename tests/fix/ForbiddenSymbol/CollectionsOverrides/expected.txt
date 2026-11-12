@@ -1,0 +1,102 @@
+ForbiddenSymbol/CollectionsOverrides/input.scala:18:7: error: [ForbiddenSymbol]: fix.Base.own is forbidden according to the ForbiddenSymbol rule.
+    def own: Int = 0 // assert: ForbiddenSymbol
+        ^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:19:7: error: [ForbiddenSymbol]: fix.Base.twice is forbidden according to the ForbiddenSymbol rule.
+    def twice: Int = 0 // assert: ForbiddenSymbol
+        ^^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:22:16: error: [ForbiddenSymbol]: fix.Middle.twice is forbidden according to the ForbiddenSymbol rule.
+    override def twice: Int = 1 // assert: ForbiddenSymbol
+                 ^^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:50:23: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def listLast = list.last // assert: ForbiddenSymbol
+                        ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:51:23: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def listInit = list.init // assert: ForbiddenSymbol
+                        ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:54:27: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def vectorInit = vector.init // assert: ForbiddenSymbol
+                            ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:55:27: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def vectorTail = vector.tail // assert: ForbiddenSymbol
+                            ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:56:27: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def vectorLast = vector.last // assert: ForbiddenSymbol
+                            ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:57:40: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def vectorAsSeq = (vector: Seq[Int]).last // assert: ForbiddenSymbol
+                                         ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:60:35: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def indexedSeqLast = indexedSeq.last // assert: ForbiddenSymbol
+                                    ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:61:35: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def indexedSeqInit = indexedSeq.init // assert: ForbiddenSymbol
+                                    ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:64:25: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def rangeInit = range.init // assert: ForbiddenSymbol
+                          ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:65:25: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def rangeTail = range.tail // assert: ForbiddenSymbol
+                          ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:66:25: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def rangeLast = range.last // assert: ForbiddenSymbol
+                          ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:67:38: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def rangeAsSeq = (range: Seq[Int]).init // assert: ForbiddenSymbol
+                                       ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:70:35: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def listBufferLast = listBuffer.last // assert: ForbiddenSymbol
+                                    ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:71:35: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def listBufferInit = listBuffer.init // assert: ForbiddenSymbol
+                                    ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:72:37: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def arrayBufferLast = arrayBuffer.last // assert: ForbiddenSymbol
+                                      ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:73:37: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def arrayBufferInit = arrayBuffer.init // assert: ForbiddenSymbol
+                                      ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:76:31: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def lazyListTail = lazyList.tail // assert: ForbiddenSymbol
+                                ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:77:31: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def lazyListLast = lazyList.last // assert: ForbiddenSymbol
+                                ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:78:31: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def lazyListInit = lazyList.init // assert: ForbiddenSymbol
+                                ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:84:10: error: [ForbiddenSymbol]: fix.Base.own is forbidden according to the ForbiddenSymbol rule.
+      base.own + // assert: ForbiddenSymbol
+           ^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:85:12: error: [ForbiddenSymbol]: fix.Base.twice is forbidden according to the ForbiddenSymbol rule.
+        base.twice + // assert: ForbiddenSymbol
+             ^^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:86:14: error: [ForbiddenSymbol]: fix.Base.own is forbidden according to the ForbiddenSymbol rule.
+        middle.own + // assert: ForbiddenSymbol
+               ^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:87:14: error: [ForbiddenSymbol]: fix.Middle.twice is forbidden according to the ForbiddenSymbol rule.
+        middle.twice + // assert: ForbiddenSymbol
+               ^^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:88:18: error: [ForbiddenSymbol]: fix.Base.own is forbidden according to the ForbiddenSymbol rule.
+        overriding.own + // assert: ForbiddenSymbol
+                   ^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:89:18: error: [ForbiddenSymbol]: fix.Middle.twice is forbidden according to the ForbiddenSymbol rule.
+        overriding.twice + // assert: ForbiddenSymbol
+                   ^^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:90:18: error: [ForbiddenSymbol]: fix.Base.own is forbidden according to the ForbiddenSymbol rule.
+        inheriting.own + // assert: ForbiddenSymbol
+                   ^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:91:18: error: [ForbiddenSymbol]: fix.Middle.twice is forbidden according to the ForbiddenSymbol rule.
+        inheriting.twice // assert: ForbiddenSymbol
+                   ^^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:94:13: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+      ownLast.last + // assert: ForbiddenSymbol
+              ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:95:15: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+        ownLast.init.size + // assert: ForbiddenSymbol
+                ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:96:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+        inheritedLast.last + // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsOverrides/input.scala:97:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+        inheritedLast.init.size // assert: ForbiddenSymbol
+                      ^^^^

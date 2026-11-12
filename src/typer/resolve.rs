@@ -8803,7 +8803,7 @@ impl<'a> Worker<'a> {
     /// a value matches a method of no type or value parameters (`MethodNotAMethodMatch`), and two
     /// methods match where they take the same parameters. A value and a method that takes parameters
     /// are two members of the name.
-    fn inherited_members_match(&mut self, c: ClassId, bases: &[(ClassId, TypeId)], a: SymId, b: SymId, b_ty: TypeId) -> bool {
+    pub(super) fn inherited_members_match(&mut self, c: ClassId, bases: &[(ClassId, TypeId)], a: SymId, b: SymId, b_ty: TypeId) -> bool {
         let value = |t: &Self, s: SymId| matches!(t.syms.sym(s).kind, SymKind::Val | SymKind::Var);
         let (va, vb) = (value(self, a), value(self, b));
         if (va || vb) && !self.same_target_name(a, b) {

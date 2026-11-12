@@ -1,0 +1,131 @@
+ForbiddenSymbol_CollectionsDirect.conf:11:3: warning: ForbiddenSymbol: scala.collection.IterableOnce.min names no symbol (scala.collection.IterableOnce has no member min): the entry forbids nothing
+ForbiddenSymbol_CollectionsDirect.conf:12:3: warning: ForbiddenSymbol: scala.collection.IterableOnce.minBy names no symbol (scala.collection.IterableOnce has no member minBy): the entry forbids nothing
+ForbiddenSymbol_CollectionsDirect.conf:13:3: warning: ForbiddenSymbol: scala.collection.IterableOnce.max names no symbol (scala.collection.IterableOnce has no member max): the entry forbids nothing
+ForbiddenSymbol_CollectionsDirect.conf:14:3: warning: ForbiddenSymbol: scala.collection.IterableOnce.maxBy names no symbol (scala.collection.IterableOnce has no member maxBy): the entry forbids nothing
+ForbiddenSymbol_CollectionsDirect.conf:15:3: warning: ForbiddenSymbol: scala.collection.IterableOnce.reduce names no symbol (scala.collection.IterableOnce has no member reduce): the entry forbids nothing
+ForbiddenSymbol/CollectionsDirect/input.scala:34:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def seqInit = seq.init // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:35:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def seqTail = seq.tail // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:36:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def seqLast = seq.last // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:38:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def setInit = set.init // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:39:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def setTail = set.tail // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:40:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def setLast = set.last // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:41:31: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def iterableInit = iterable.init // assert: ForbiddenSymbol
+                                ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:42:31: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def iterableTail = iterable.tail // assert: ForbiddenSymbol
+                                ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:43:31: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def iterableLast = iterable.last // assert: ForbiddenSymbol
+                                ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:44:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def mapInit = map.init // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:45:23: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def listInit = list.init // assert: ForbiddenSymbol
+                        ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:46:23: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def listTail = list.tail // assert: ForbiddenSymbol
+                        ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:50:25: error: [ForbiddenSymbol]: scala.collection.ArrayOps.init is forbidden according to the ForbiddenSymbol rule.
+    def arrayInit = array.init // assert: ForbiddenSymbol
+                          ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:51:25: error: [ForbiddenSymbol]: scala.collection.ArrayOps.head is forbidden according to the ForbiddenSymbol rule.
+    def arrayHead = array.head // assert: ForbiddenSymbol
+                          ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:54:21: error: [ForbiddenSymbol]: scala.collection.StringOps.init is forbidden according to the ForbiddenSymbol rule.
+    def strInit = str.init // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:55:21: error: [ForbiddenSymbol]: scala.collection.StringOps.last is forbidden according to the ForbiddenSymbol rule.
+    def strLast = str.last // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:60:24: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def applied = nested.tail(0) // assert: ForbiddenSymbol
+                         ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:61:28: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def appliedInit = nested.init(0) // assert: ForbiddenSymbol
+                             ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:62:29: error: [ForbiddenSymbol]: scala.collection.ArrayOps.head is forbidden according to the ForbiddenSymbol rule.
+    def appliedArray = arrays.head(0) // assert: ForbiddenSymbol
+                              ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:63:33: error: [ForbiddenSymbol]: scala.collection.ArrayOps.init is forbidden according to the ForbiddenSymbol rule.
+    def appliedArrayInit = arrays.init(0) // assert: ForbiddenSymbol
+                                  ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:64:25: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def appliedStr = strs.init(0) // assert: ForbiddenSymbol
+                          ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:65:31: error: [ForbiddenSymbol]: scala.collection.StringOps.init is forbidden according to the ForbiddenSymbol rule.
+    def appliedChar = strs.head.init(0) // assert: ForbiddenSymbol
+                                ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:66:26: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def appliedTwice = fns.tail(0)(1) // assert: ForbiddenSymbol
+                           ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:67:30: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def appliedByName = nested.tail.apply(0) // assert: ForbiddenSymbol
+                               ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:68:23: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def mapped = nested.init.map(_.last) // assert: ForbiddenSymbol
+                        ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:68:34: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def mapped = nested.init.map(_.last) // assert: ForbiddenSymbol
+                                   ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:69:26: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def foreached = nested.init.foreach(println) // assert: ForbiddenSymbol
+                           ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:70:35: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def iterated = for xs <- nested.init yield xs.last // assert: ForbiddenSymbol
+                                    ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:70:49: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def iterated = for xs <- nested.init yield xs.last // assert: ForbiddenSymbol
+                                                  ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:71:24: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def matched = nested.init match // assert: ForbiddenSymbol
+                         ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:72:24: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+      case xs +: _ => xs.last // assert: ForbiddenSymbol
+                         ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:74:30: error: [ForbiddenSymbol]: scala.collection.StringOps.init is forbidden according to the ForbiddenSymbol rule.
+    def mappedStr = strs.map(_.init).mkString // assert: ForbiddenSymbol
+                               ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:75:35: error: [ForbiddenSymbol]: scala.collection.StringOps.init is forbidden according to the ForbiddenSymbol rule.
+    def flatMapped = strs.flatMap(_.init) // assert: ForbiddenSymbol
+                                    ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:78:24: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def backquoted = seq.`last` // assert: ForbiddenSymbol
+                         ^^^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:79:22: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def operands = seq.init ++ seq.tail // assert: ForbiddenSymbol
+                       ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:79:34: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def operands = seq.init ++ seq.tail // assert: ForbiddenSymbol
+                                   ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:80:29: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def parenthesized = (seq).last // assert: ForbiddenSymbol
+                              ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:81:30: error: [ForbiddenSymbol]: scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol rule.
+    def interpolated = s"${seq.last} ${str.last}" // assert: ForbiddenSymbol
+                               ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:81:42: error: [ForbiddenSymbol]: scala.collection.StringOps.last is forbidden according to the ForbiddenSymbol rule.
+    def interpolated = s"${seq.last} ${str.last}" // assert: ForbiddenSymbol
+                                           ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:82:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def chained = seq.tail.tail.init // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:82:26: error: [ForbiddenSymbol]: scala.collection.IterableOps.tail is forbidden according to the ForbiddenSymbol rule.
+    def chained = seq.tail.tail.init // assert: ForbiddenSymbol
+                           ^^^^
+ForbiddenSymbol/CollectionsDirect/input.scala:82:31: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def chained = seq.tail.tail.init // assert: ForbiddenSymbol
+                                ^^^^

@@ -1,0 +1,36 @@
+ForbiddenSymbol/ReactAttributes/input.scala:19:21: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.HtmlAttrs.cls is forbidden according to the ForbiddenSymbol rule.
+    val cls = <.div(^.cls := "x") // assert: ForbiddenSymbol
+                      ^^^
+ForbiddenSymbol/ReactAttributes/input.scala:20:27: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.HtmlAttrs.className is forbidden according to the ForbiddenSymbol rule.
+    val className = <.div(^.className := "y") // assert: ForbiddenSymbol
+                            ^^^^^^^^^
+ForbiddenSymbol/ReactAttributes/input.scala:21:26: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.HtmlAttrs.classSet is forbidden according to the ForbiddenSymbol rule.
+    val classSet = <.div(^.classSet("a" -> true)) // assert: ForbiddenSymbol
+                           ^^^^^^^^
+ForbiddenSymbol/ReactAttributes/input.scala:22:27: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.HtmlAttrs.classSet1 is forbidden according to the ForbiddenSymbol rule.
+    val classSet1 = <.div(^.classSet1("a", "b" -> true)) // assert: ForbiddenSymbol
+                            ^^^^^^^^^
+ForbiddenSymbol/ReactAttributes/input.scala:23:27: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.HtmlAttrs.classSetM is forbidden according to the ForbiddenSymbol rule.
+    val classSetM = <.div(^.classSetM(Map("a" -> true))) // assert: ForbiddenSymbol
+                            ^^^^^^^^^
+ForbiddenSymbol/ReactAttributes/input.scala:24:28: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.HtmlAttrs.classSet1M is forbidden according to the ForbiddenSymbol rule.
+    val classSet1M = <.div(^.classSet1M("a", Map("b" -> true))) // assert: ForbiddenSymbol
+                             ^^^^^^^^^^
+ForbiddenSymbol/ReactAttributes/input.scala:25:49: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.ImplicitsForVdomNode.TraversableOnceExt.toVdomArray is forbidden according to the ForbiddenSymbol rule.
+    val array = <.ul(List(1, 2).map(i => <.li(i)).toVdomArray) // assert: ForbiddenSymbol
+                                                  ^^^^^^^^^^^
+ForbiddenSymbol/ReactAttributes/input.scala:26:28: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.ImplicitsForVdomNode.TraversableOnceExt.toVdomArray is forbidden according to the ForbiddenSymbol rule.
+    val arrayOf = List(1, 2).toVdomArray(i => <.li(i)) // assert: ForbiddenSymbol
+                             ^^^^^^^^^^^
+ForbiddenSymbol/ReactAttributes/input.scala:33:63: warning: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    val anchoredUnused = <.div(^.id := "unused") /* scalafix:ok ForbiddenSymbol */ // assert: UnusedScalafixSuppression
+                                                                ^^^^^^^^^^^^^^^
+ForbiddenSymbol/ReactAttributes/input.scala:37:19: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.HtmlAttrs.cls is forbidden according to the ForbiddenSymbol rule.
+    val use = <.div(klass := "z") // assert: ForbiddenSymbol
+                    ^^^^^
+ForbiddenSymbol/ReactAttributes/input.scala:41:13: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.HtmlAttrs.className is forbidden according to the ForbiddenSymbol rule.
+    import ^.{className as name} // assert: ForbiddenSymbol
+              ^^^^^^^^^
+ForbiddenSymbol/ReactAttributes/input.scala:42:19: error: [ForbiddenSymbol]: japgolly.scalajs.react.vdom.HtmlAttrs.className is forbidden according to the ForbiddenSymbol rule.
+    val use = <.div(name := "z") // assert: ForbiddenSymbol
+                    ^^^^

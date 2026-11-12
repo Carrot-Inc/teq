@@ -1,0 +1,6 @@
+ForbiddenSymbol/UnusedEntry/input.scala:13:7: error: [ForbiddenSymbol]: fix.UnusedEntry.used is forbidden according to the ForbiddenSymbol rule.
+    def used(x: Int): Int = x + 1 // assert: ForbiddenSymbol
+        ^^^^
+ForbiddenSymbol/UnusedEntry/input.scala:14:14: error: [ForbiddenSymbol]: fix.UnusedEntry.used is forbidden according to the ForbiddenSymbol rule.
+    def user = used(1) // assert: ForbiddenSymbol
+               ^^^^

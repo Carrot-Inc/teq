@@ -1,0 +1,3 @@
+7:26:3: error: [ForbiddenSymbol] p.O.ext is forbidden according to the ForbiddenSymbol rule.
+9:13:3: error: [ForbiddenSymbol] p.O.ext is forbidden according to the ForbiddenSymbol rule.
+10:18:7: error: [ForbiddenSymbol] p.O.ext is forbidden according to the ForbiddenSymbol rule.

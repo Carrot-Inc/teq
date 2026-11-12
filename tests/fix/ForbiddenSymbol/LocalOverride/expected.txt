@@ -1,0 +1,6 @@
+ForbiddenSymbol/LocalOverride/input.scala:7:7: error: [ForbiddenSymbol]: p.Base.last is forbidden according to the ForbiddenSymbol rule.
+    def last: Int = 1 // assert: ForbiddenSymbol
+        ^^^^
+ForbiddenSymbol/LocalOverride/input.scala:12:17: error: [ForbiddenSymbol]: p.Base.last is forbidden according to the ForbiddenSymbol rule.
+      new Local().last // assert: ForbiddenSymbol
+                  ^^^^

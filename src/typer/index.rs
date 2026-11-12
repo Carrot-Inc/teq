@@ -96,6 +96,10 @@ pub struct Index {
     /// The files where an outermost inline or macro expansion was made, by its call site's file, in the order met:
     /// where `teq fix`'s NoUnusedImports removes nothing (docs/FIX.md, "NoUnusedImports").
     pub expanded: Vec<FileId>,
+    /// Under the semantic typing (`Worker::semantic`, `teq fix`'s SemanticDB service): the packages named in the
+    /// paths of imports and of qualified names, each at its name's span, which no record's target holds
+    /// (`semanticdb::symbol`).
+    pub packages: Vec<(FileId, Span, PkgId)>,
     journal: Vec<(FileId, Record)>,
     /// Per program file its records, by span.
     files: Vec<Vec<Record>>,
@@ -169,6 +173,7 @@ impl Index {
     pub fn attach(&self) -> Index {
         Index {
             expanded: Vec::new(),
+            packages: Vec::new(),
             journal: Vec::new(),
             files: Vec::new(),
             nodes: Vec::new(),
@@ -216,6 +221,7 @@ impl Index {
     /// Takes over another worker's tables at the merge, where this one has no entry of its own;
     /// its records come with the work items (`merge_workers`).
     pub fn absorb(&mut self, mut o: Index) {
+        self.packages.append(&mut o.packages);
         self.expanded.append(&mut o.expanded);
         fn union<K: Eq + std::hash::Hash, V>(mine: &mut FxMap<K, V>, theirs: FxMap<K, V>) {
             for (k, v) in theirs {
@@ -727,6 +733,17 @@ impl<'a> Worker<'a> {
         // `Obj.m`: the object, which a static path resolves without typing it.
         if let Expr::Select(q, _) = ast.expr(head) {
             self.index_static_prefix(file, q, te);
+            if self.semantic {
+                let owner = match target {
+                    Target::Sym(s) => Some(self.syms.sym(s).owner),
+                    Target::Class(c) => Some(self.syms.class(c).owner),
+                    Target::Alias(a) => Some(self.syms.aliases[a.idx()].owner),
+                    _ => None,
+                };
+                if let Some(owner) = owner {
+                    self.index_owner_path(file, q, owner);
+                }
+            }
         }
     }
 
@@ -1405,6 +1422,65 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Under the semantic typing: the packages a qualified name spells before what it reaches, `java.math` of
+    /// `java.math.BigDecimal.ONE`, each segment matched with the owner it names from the reached definition
+    /// outwards, as dotty's tree has a `Select` or an `Ident` of each (`ExtractSemanticDB.traverse`, 407-422).
+    fn index_owner_path(&mut self, file: FileId, mut q: ExprId, mut owner: Owner) {
+        loop {
+            let ast = self.ast(file);
+            let (name, span, next) = match ast.expr(q) {
+                Expr::Ident(n) => (n, ast.expr_span(q), None),
+                Expr::Select(outer, n) => match ast.name_span(q) {
+                    Some(s) => (n, s, Some(outer)),
+                    None => return,
+                },
+                _ => return,
+            };
+            owner = match owner {
+                // A class of the path has its own record, where the name is the class's.
+                Owner::Class(c) if self.syms.class(c).name == name => self.syms.class(c).owner,
+                Owner::Package(p) if p != ROOT_PKG && self.syms.pkg(p).name == name => {
+                    self.index_package(file, span, p);
+                    match self.syms.pkg(p).parent {
+                        Some(parent) => Owner::Package(parent),
+                        None => return,
+                    }
+                }
+                _ => return,
+            };
+            match next {
+                Some(outer) => q = outer,
+                None => return,
+            }
+        }
+    }
+
+    /// Under the semantic typing: the package `p` named at `span`.
+    fn index_package(&mut self, file: FileId, span: Span, p: PkgId) {
+        if !self.semantic || span.end <= span.start || p == ROOT_PKG || !self.indexed(file) {
+            return;
+        }
+        if let Some(ix) = self.index.as_mut() {
+            ix.packages.push((file, span, p));
+        }
+    }
+
+    /// The spans of the records of `file`, in their order (`index_order`'s).
+    pub(super) fn record_spans_of(&self, file: FileId) -> Vec<Span> {
+        self.index.as_ref().and_then(|ix| ix.files.get(file.0 as usize)).map_or(Vec::new(), |records| records.iter().map(|r| r.span).collect())
+    }
+
+    /// The packages named in each file, by span (`Index::packages`).
+    pub(super) fn packages_by_file(&self) -> FxMap<FileId, Vec<(Span, PkgId)>> {
+        let mut out: FxMap<FileId, Vec<(Span, PkgId)>> = FxMap::default();
+        if let Some(ix) = self.index.as_ref() {
+            for &(f, span, p) in &ix.packages {
+                out.entry(f).or_default().push((span, p));
+            }
+        }
+        out
+    }
+
     /// A type name resolved to a class, an alias or a type parameter.
     #[cold]
     #[inline(never)]
@@ -1429,6 +1505,38 @@ impl<'a> Worker<'a> {
             _ => return,
         };
         self.index_record(file, span, target, Kind::Type);
+        // Under the semantic typing: the packages a qualified type name spells, `java.time` of `java.time.Instant`.
+        if self.semantic {
+            let mut owner = match target {
+                Target::Class(c) => self.syms.class(c).owner,
+                Target::Alias(a) => self.syms.aliases[a.idx()].owner,
+                _ => return,
+            };
+            let mut at = ty;
+            while let ast::TyExpr::Select(q, _) = self.ast(file).ty(at) {
+                let ast = self.ast(file);
+                let (name, span) = match ast.ty(q) {
+                    ast::TyExpr::Name(n) => (n, ast.ty_spans[q.idx()]),
+                    ast::TyExpr::Select(_, n) => match ast.ty_name_span(q) {
+                        Some(s) => (n, s),
+                        None => return,
+                    },
+                    _ => return,
+                };
+                owner = match owner {
+                    Owner::Class(c) if self.syms.class(c).name == name => self.syms.class(c).owner,
+                    Owner::Package(p) if p != ROOT_PKG && self.syms.pkg(p).name == name => {
+                        self.index_package(file, span, p);
+                        match self.syms.pkg(p).parent {
+                            Some(parent) => Owner::Package(parent),
+                            None => return,
+                        }
+                    }
+                    _ => return,
+                };
+                at = q;
+            }
+        }
     }
 
     #[cold]
@@ -1580,6 +1688,8 @@ impl<'a> Worker<'a> {
         let target = match (target, &imp.sel) {
             (super::ImportTarget::PkgAll(p), ast::ImportSel::Name(n, _)) => super::ImportTarget::PkgMember(p, *n),
             (super::ImportTarget::ClassAll(c), ast::ImportSel::Name(n, _)) => super::ImportTarget::ClassMember(c, *n),
+            // Under the semantic typing: a named member of a stable value's type (`import v.m`).
+            (super::ImportTarget::ValueAll(v), ast::ImportSel::Name(n, _)) if self.semantic => super::ImportTarget::ValueMember(v, *n),
             (t, _) => t,
         };
         let ast = self.ast(file);
@@ -1589,17 +1699,102 @@ impl<'a> Worker<'a> {
         if let (super::ImportTarget::ClassAll(c) | super::ImportTarget::ClassMember(c, _), Some(&last)) = (target, n.checked_sub(1).and_then(|i| names.get(i))) {
             self.index_record(file, last, Target::Class(c), Kind::Import);
         }
+        if self.semantic {
+            // The stable value a path ends in.
+            if let (super::ImportTarget::ValueAll(v) | super::ImportTarget::ValueMember(v, _), Some(&last)) = (target, n.checked_sub(1).and_then(|i| names.get(i))) {
+                let (value, _, _) = self.import_values[v.0 as usize];
+                if self.syms.sym(value).name == imp.path[n - 1] {
+                    self.index_record(file, last, Target::Sym(value), Kind::Import);
+                }
+            }
+            // The path's owners, innermost last: each segment the package or the class it names (dotty's tree of an
+            // import's qualifier, `ExtractSemanticDB.traverse` 423-437).
+            let mut owner = match target {
+                super::ImportTarget::PkgAll(p) | super::ImportTarget::PkgMember(p, _) | super::ImportTarget::PkgGivens(p) => Some(Owner::Package(p)),
+                super::ImportTarget::ClassAll(c) | super::ImportTarget::ClassMember(c, _) | super::ImportTarget::ClassGivens(c) => Some(self.syms.class(c).owner),
+                _ => None,
+            };
+            let first = if matches!(owner, Some(Owner::Package(_))) && !matches!(target, super::ImportTarget::ClassAll(_) | super::ImportTarget::ClassMember(..) | super::ImportTarget::ClassGivens(_)) { n } else { n.saturating_sub(1) };
+            for i in (0..first.min(names.len())).rev() {
+                owner = match owner {
+                    Some(Owner::Package(p)) if p != ROOT_PKG && self.syms.pkg(p).name == imp.path[i] => {
+                        self.index_package(file, names[i], p);
+                        self.syms.pkg(p).parent.map(Owner::Package)
+                    }
+                    Some(Owner::Class(c)) if self.syms.class(c).name == imp.path[i] => {
+                        self.index_record(file, names[i], Target::Class(c), Kind::Import);
+                        Some(self.syms.class(c).owner)
+                    }
+                    _ => None,
+                };
+            }
+        }
         let ast::ImportSel::Name(member, _) = imp.sel else { return };
         let found = match target {
             super::ImportTarget::PkgMember(p, _) => {
                 // The member's definition, entered by the name that asks for it where it is the
                 // std's (`demand_std`), as `qualType.member(name)` completes a library's class.
                 self.demand_std(p, member, crate::stdindex::TERM | crate::stdindex::TYPE);
-                self.syms.entry_named(self.interner, p, member).and_then(|e| e.class.map(Target::Class).or(e.term.map(Target::Sym)).or(e.alias.map(Target::Alias)))
+                let entry = self.syms.entry_named(self.interner, p, member).map(|e| (e.class, e.term, e.alias, e.extensions.first().copied()));
+                match entry {
+                    Some((class, term, alias, _)) if !self.semantic => class.map(Target::Class).or(term.map(Target::Sym)).or(alias.map(Target::Alias)),
+                    None if !self.semantic => None,
+                    // Under the semantic typing a selector is what dotty records at it (`sem_selector_class`): a
+                    // class that has a term of its name, a term, an extension method; a type alone nothing.
+                    Some((class, term, alias, extension)) if class.is_some() || term.is_some() || alias.is_some() || extension.is_some() => {
+                        class.and_then(|c| self.sem_selector_class(c)).or(term.or(extension).map(Target::Sym))
+                    }
+                    // A class or an object a jar or the JDK holds, which no name entered yet, and a package the
+                    // selector names.
+                    _ => {
+                        let loaded = self.quietly(|w| w.pkg_type(p, member)).and_then(|r| match r {
+                            TypeRef::Class(c) => Some(c),
+                            _ => None,
+                        });
+                        match loaded {
+                            Some(c) => self.sem_selector_class(c),
+                            None => match self.quietly(|w| w.pkg_term(p, member)) {
+                                Some(super::resolve::TermRef::Global(s)) => Some(Target::Sym(s)),
+                                _ => {
+                                    if let Some(sub) = self.syms.entry_named(self.interner, p, member).and_then(|e| e.pkg) {
+                                        for &span in names.iter().skip(n) {
+                                            self.index_package(file, span, sub);
+                                        }
+                                    }
+                                    None
+                                }
+                            },
+                        }
+                    }
+                }
             }
             super::ImportTarget::ClassMember(c, _) => {
                 let info = self.syms.class(c);
-                info.members.get(&member).map(|&s| Target::Sym(s)).or(info.nested.get(&member).map(|&k| Target::Class(k))).or(info.type_aliases.get(&member).map(|&a| Target::Alias(a)))
+                let (term, nested, alias) = (info.members.get(&member).copied(), info.nested.get(&member).copied(), info.type_aliases.get(&member).copied());
+                if !self.semantic {
+                    term.map(Target::Sym).or(nested.map(Target::Class)).or(alias.map(Target::Alias))
+                } else {
+                    // Under the semantic typing a selector is what dotty records at it (`sem_selector_class`): a
+                    // term the class declares, an extension method among them, or a class that has a term of its
+                    // name; a type alone nothing; else a member the class inherits (`import ^.cls`, an object's of
+                    // its trait).
+                    let extension = info.extensions.iter().copied().find(|&s| self.syms.sym(s).name == member);
+                    match (term.or(extension), nested) {
+                        (Some(s), _) => Some(Target::Sym(s)),
+                        (None, Some(k)) => self.sem_selector_class(k),
+                        (None, None) if alias.is_some() => None,
+                        (None, None) => {
+                            let t = self.types.mk(Type::Class(c, EMPTY_LIST));
+                            self.quietly(|w| w.find_member(t, member)).map(|(s, _)| Target::Sym(s))
+                        }
+                    }
+                }
+            }
+            // Under the semantic typing: a member of a stable value's type (`import v.m`).
+            super::ImportTarget::ValueMember(v, _) if self.semantic => {
+                let (value, _, _) = self.import_values[v.0 as usize];
+                let t = self.sig_arc(value).ret;
+                self.quietly(|w| w.find_member(t, member)).map(|(s, _)| Target::Sym(s))
             }
             _ => None,
         };
@@ -1615,6 +1810,31 @@ impl<'a> Worker<'a> {
         for &span in names.iter().skip(n) {
             self.index_record(file, span, found, Kind::Import);
         }
+    }
+
+    /// The class an import's selector names, where dotty records an occurrence at the selector
+    /// (`ExtractSemanticDB.traverse`, 423-437): the selector's name is a term's, so the occurrences are of
+    /// `tree.expr.tpe.member(imported)`'s alternatives and of each one's `companionClass`. A class stands there by
+    /// its companion object, a Java class by its static side, and a class without one by its constructor proxy,
+    /// which a trait and an abstract class have none of (`NamerOps.needsConstructorProxies`); a type alone (those
+    /// two without a companion, an opaque type, an alias) has no term of its name and is no occurrence. The
+    /// builtin layer's classes are scala-library's value classes and `Array`, which have companions there; a class
+    /// of `java` or `javax` is Java's also where the std stands in for it.
+    fn sem_selector_class(&self, c: ClassId) -> Option<Target> {
+        let info = self.syms.class(c);
+        let by_term = match info.kind {
+            ClassKind::Class => info.mods & crate::ast::mods::ABSTRACT == 0,
+            ClassKind::Object | ClassKind::Enum | ClassKind::EnumCase | ClassKind::Builtin => true,
+            _ => false,
+        };
+        let java = || {
+            let mut owner = info.owner;
+            while let Owner::Class(k) = owner {
+                owner = self.syms.class(k).owner;
+            }
+            matches!(owner, Owner::Package(p) if { let path = self.pkg_description(p); path == "java" || path == "javax" || path.starts_with("java.") || path.starts_with("javax.") })
+        };
+        (by_term || info.companion.is_some() || self.is_java_class(c) || java()).then_some(Target::Class(c))
     }
 
     /// `name = value` passed to the parameter `param`.
@@ -1814,7 +2034,7 @@ impl<'a> Worker<'a> {
 
     /// The tables of the files recorded into since the last query, ordered by span, the last
     /// record of a span winning.
-    fn index_order(&mut self) {
+    pub(super) fn index_order(&mut self) {
         let Some(ix) = self.index.as_mut() else { return };
         let mut files = std::mem::take(&mut ix.unordered);
         files.sort_unstable();
@@ -1988,6 +2208,47 @@ impl<'a> Worker<'a> {
             }
         }
         best
+    }
+
+    /// The declarations of every file, each at its name's span, by file: what `declaration_at` finds one of, whole,
+    /// for the SemanticDB answers of a typing's documents (`semanticdb::symbol`), which ask at every name.
+    pub(super) fn declarations_by_file(&self) -> FxMap<FileId, Vec<(Span, Target)>> {
+        let mut out: FxMap<FileId, Vec<(Span, Target)>> = FxMap::default();
+        for (i, info) in self.syms.syms.iter().enumerate() {
+            // A local's declaration is its `Def` record.
+            if info.owner == Owner::Local {
+                continue;
+            }
+            let s = SymId(i as u32);
+            if matches!(info.kind, SymKind::Overloaded(_)) || !self.program_source(info.file) || !self.fresh_sym(s) {
+                continue;
+            }
+            if let Some(span) = self.name_at(info.file, info.span.start, info.name) {
+                out.entry(info.file).or_default().push((span, self.normal_target(Target::Sym(s))));
+            }
+        }
+        for (i, info) in self.syms.classes.iter().enumerate() {
+            if info.def.is_none() || !self.program_source(info.file) || !self.fresh_class(ClassId(i as u32)) {
+                continue;
+            }
+            if let Some(span) = self.name_at(info.file, info.span.start, info.name) {
+                out.entry(info.file).or_default().push((span, Target::Class(ClassId(i as u32))));
+            }
+        }
+        for (i, info) in self.syms.aliases.iter().enumerate() {
+            if !self.program_source(info.file) || !self.fresh_alias(AliasId(i as u32)) {
+                continue;
+            }
+            if let Some((_, span)) = self.declaration(Target::Alias(AliasId(i as u32))) {
+                out.entry(info.file).or_default().push((span, Target::Alias(AliasId(i as u32))));
+            }
+        }
+        if let Some(ix) = self.index.as_ref() {
+            for (&p, &(f, span)) in &ix.tparams {
+                out.entry(f).or_default().push((span, Target::TParam(p)));
+            }
+        }
+        out
     }
 
     /// The record or declaration at `offset`: the innermost, a record before a declaration.

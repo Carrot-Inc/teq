@@ -3,6 +3,9 @@
 //! with scalac's (`TEQ_FIX_SEMANTICDB`, docs/FIX.md).
 
 pub mod document;
+mod entry;
+mod overridden;
+pub mod symbol;
 
 use std::path::{Component, Path, PathBuf};
 

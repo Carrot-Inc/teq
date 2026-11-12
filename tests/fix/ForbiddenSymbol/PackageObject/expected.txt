@@ -1,0 +1,12 @@
+ForbiddenSymbol/PackageObject/input.scala:7:7: error: [ForbiddenSymbol]: p.sub.package.f is forbidden according to the ForbiddenSymbol rule.
+    def f(x: Int): Int = x // assert: ForbiddenSymbol
+        ^
+ForbiddenSymbol/PackageObject/input.scala:9:15: error: [ForbiddenSymbol]: p.sub.package.f is forbidden according to the ForbiddenSymbol rule.
+    import sub.{f as renamed} // assert: ForbiddenSymbol
+                ^
+ForbiddenSymbol/PackageObject/input.scala:10:11: error: [ForbiddenSymbol]: p.sub.package.f is forbidden according to the ForbiddenSymbol rule.
+    val a = renamed(1) // assert: ForbiddenSymbol
+            ^^^^^^^
+ForbiddenSymbol/PackageObject/input.scala:11:15: error: [ForbiddenSymbol]: p.sub.package.f is forbidden according to the ForbiddenSymbol rule.
+    val b = sub.f(2) // assert: ForbiddenSymbol
+                ^

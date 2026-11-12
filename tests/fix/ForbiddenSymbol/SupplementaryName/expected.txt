@@ -1,0 +1,9 @@
+ForbiddenSymbol/SupplementaryName/input.scala:17:9: error: [ForbiddenSymbol]: fix.SupplementaryName.`𝔘box`.value is forbidden according to the ForbiddenSymbol rule.
+      def value: Int = 1 // assert: ForbiddenSymbol
+          ^^^^^
+ForbiddenSymbol/SupplementaryName/input.scala:19:18: error: [ForbiddenSymbol]: fix.SupplementaryName.`𝔘box`.value is forbidden according to the ForbiddenSymbol rule.
+    val read = box.value // assert: ForbiddenSymbol
+                   ^^^^^
+ForbiddenSymbol/SupplementaryName/input.scala:20:26: error: [ForbiddenSymbol]: scala.Option.get is forbidden according to the ForbiddenSymbol rule.
+    val option = Option(1).get // assert: ForbiddenSymbol
+                           ^^^

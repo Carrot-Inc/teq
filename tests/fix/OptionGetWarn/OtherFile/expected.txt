@@ -1,0 +1,24 @@
+OptionGetWarn/OtherFile/input.scala:14:11: warning: [OptionGetWarn]: Don't use Option.get
+      local.get // assert: OptionGetWarn
+            ^^^
+OptionGetWarn/OtherFile/input.scala:15:17: warning: [OptionGetWarn]: Don't use Option.get
+      A.otherFile.get // assert: OptionGetWarn
+                  ^^^
+OptionGetWarn/OtherFile/input.scala:16:20: warning: [OptionGetWarn]: Don't use Option.get
+      A.otherFileDef.get // assert: OptionGetWarn
+                     ^^^
+OptionGetWarn/OtherFile/input.scala:17:24: warning: [OptionGetWarn]: Don't use Option.get
+      otherFileInherited.get // assert: OptionGetWarn
+                         ^^^
+OptionGetWarn/OtherFile/input.scala:19:19: warning: [OptionGetWarn]: Don't use Option.get
+      nonParamAlias.get // assert: OptionGetWarn
+                    ^^^
+OptionGetWarn/OtherFile/input.scala:20:15: warning: [OptionGetWarn]: Don't use Option.get
+      opq.under.get // assert: OptionGetWarn
+                ^^^
+OptionGetWarn/OtherFile/input.scala:21:14: warning: [OptionGetWarn]: Don't use Option.get
+      exported.get // assert: OptionGetWarn
+               ^^^
+OptionGetWarn/OtherFile/input.scala:23:15: warning: [OptionGetWarn]: Don't use Option.get
+      fromOther.get // assert: OptionGetWarn
+                ^^^

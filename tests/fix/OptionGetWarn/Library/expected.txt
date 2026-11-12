@@ -1,0 +1,30 @@
+OptionGetWarn/Library/input.scala:9:19: warning: [OptionGetWarn]: Don't use Option.get
+      xs.headOption.get // assert: OptionGetWarn
+                    ^^^
+OptionGetWarn/Library/input.scala:10:14: warning: [OptionGetWarn]: Don't use Option.get
+      m.get(1).get // assert: OptionGetWarn
+               ^^^
+OptionGetWarn/Library/input.scala:11:25: warning: [OptionGetWarn]: Don't use Option.get
+      sys.env.get("HOME").get // assert: OptionGetWarn
+                          ^^^
+OptionGetWarn/Library/input.scala:12:32: warning: [OptionGetWarn]: Don't use Option.get
+      scala.util.Try(1).toOption.get // assert: OptionGetWarn
+                                 ^^^
+OptionGetWarn/Library/input.scala:13:20: warning: [OptionGetWarn]: Don't use Option.get
+      xs.find(_ > 0).get // assert: OptionGetWarn
+                     ^^^
+OptionGetWarn/Library/input.scala:14:15: warning: [OptionGetWarn]: Don't use Option.get
+      Option(1).get // assert: OptionGetWarn
+                ^^^
+OptionGetWarn/Library/input.scala:16:23: warning: [OptionGetWarn]: Don't use Option.get
+      Option.empty[Int].get // assert: OptionGetWarn
+                        ^^^
+OptionGetWarn/Library/input.scala:17:30: warning: [OptionGetWarn]: Don't use Option.get
+      xs.headOption.map(_ + 1).get // assert: OptionGetWarn
+                               ^^^
+OptionGetWarn/Library/input.scala:20:13: warning: [OptionGetWarn]: Don't use Option.get
+      fromStd.get // assert: OptionGetWarn
+              ^^^
+OptionGetWarn/Library/input.scala:22:7: warning: [OptionGetWarn]: Don't use Option.get
+      o.get // assert: OptionGetWarn
+        ^^^

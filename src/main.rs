@@ -454,11 +454,15 @@ pub(crate) const FIX_SOURCES: &[(&str, &str)] = &[
     ("<std>/fix/native.scala", include_str!("../std/fix/native.scala")),
     ("<std>/fix/tree.scala", include_str!("../std/fix/tree.scala")),
     ("<std>/fix/api.scala", include_str!("../std/fix/api.scala")),
+    ("<std>/fix/semantic.scala", include_str!("../std/fix/semantic.scala")),
     ("<std>/fix/rules/DisableSyntax.scala", include_str!("../std/fix/rules/DisableSyntax.scala")),
     ("<std>/fix/rules/CatsImplicitsImport.scala", include_str!("../std/fix/rules/CatsImplicitsImport.scala")),
     ("<std>/fix/rules/TypelevelAs.scala", include_str!("../std/fix/rules/TypelevelAs.scala")),
     ("<std>/fix/rules/EmptyCollectionsUnified.scala", include_str!("../std/fix/rules/EmptyCollectionsUnified.scala")),
     ("<std>/fix/rules/NoUnusedImports.scala", include_str!("../std/fix/rules/NoUnusedImports.scala")),
+    ("<std>/fix/rules/OptionGetWarn.scala", include_str!("../std/fix/rules/OptionGetWarn.scala")),
+    ("<std>/fix/rules/ForbiddenSymbol.scala", include_str!("../std/fix/rules/ForbiddenSymbol.scala")),
+    ("<std>/fix/rules/TypelevelHttp4sLiteralsSyntax.scala", include_str!("../std/fix/rules/TypelevelHttp4sLiteralsSyntax.scala")),
 ];
 
 pub(crate) const TIME_STD_SOURCES: &[(&str, &str)] = &[

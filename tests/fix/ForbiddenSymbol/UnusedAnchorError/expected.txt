@@ -1,0 +1,9 @@
+ForbiddenSymbol/UnusedAnchorError/input.scala:12:21: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    val reported = xs.init // assert: ForbiddenSymbol
+                      ^^^^
+ForbiddenSymbol/UnusedAnchorError/input.scala:15:39: error: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    val unused = xs.head /* scalafix:ok ForbiddenSymbol */ // assert: UnusedScalafixSuppression
+                                        ^^^^^^^^^^^^^^^
+ForbiddenSymbol/UnusedAnchorError/input.scala:16:28: error: [UnusedScalafixSuppression]: Unused Scalafix suppression, this can be removed
+    val unusedBare = xs.size /* scalafix:ok */ // assert: UnusedScalafixSuppression
+                             ^^^^^^^^^^^^^^^^^

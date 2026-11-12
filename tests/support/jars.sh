@@ -2,7 +2,7 @@
 # scala-library, scalajs-library (1.22.0, what the std's `scala.scalajs` stands for), cats-kernel, cats-core, cats-free, cats-kernel-sjs, cats-core-sjs (the application's
 # Scala.js builds), circe-numbers, circe-core, circe-generic (circe 0.14.16's `_3` jars), alleycats-core, kittens, shapeless3-deriving, zio-json, magnolia, zio, sourcecode,
 # scala-java-time, scala-java-time-tzdb, monocle-core, monocle-macro, refined, atto-core,
-# case-insensitive, sourcecode-0.4.4 (the application's version), magnolia123 (Magnolia 1.3.23,
+# case-insensitive, case-insensitive-jvm and http4s-core (0.23.36: tests/fix's TypelevelHttp4sLiteralsSyntax cases), sourcecode-0.4.4 (the application's version), magnolia123 (Magnolia 1.3.23,
 # tapir's), tapir-core, tapir-json-zio, tapir-client, tapir-sttp-client4, tapir-refined,
 # tapir-cats, sttp-client4-core, sttp-client4-zio, sttp-model, sttp-shared-core, sttp-shared-ws,
 # sttp-shared-zio, zio-streams, zio-test and zio-test-sbt, chimney 1.11.0 with chimney-macro-commons 2.2.0 and
@@ -1102,6 +1102,8 @@ jar_of() {
     scodec-core) echo "$M2/org/scodec/scodec-core_3/2.2.2/scodec-core_3-2.2.2.jar" ;;
     scodec-cats) echo "$M2/org/scodec/scodec-cats_3/1.2.0/scodec-cats_3-1.2.0.jar" ;;
     ip4s-core) echo "$M2/com/comcast/ip4s-core_3/3.8.0/ip4s-core_3-3.8.0.jar" ;;
+    http4s-core) echo "$M2/org/http4s/http4s-core_3/0.23.36/http4s-core_3-0.23.36.jar" ;;
+    case-insensitive-jvm) echo "$M2/org/typelevel/case-insensitive_3/1.5.0/case-insensitive_3-1.5.0.jar" ;;
     literally) echo "$M2/org/typelevel/literally_3/1.2.0/literally_3-1.2.0.jar" ;;
     natchez-core) echo "$M2/org/tpolecat/natchez-core_3/0.3.8/natchez-core_3-0.3.8.jar" ;;
     sourcepos) echo "$M2/org/tpolecat/sourcepos_3/1.1.0/sourcepos_3-1.1.0.jar" ;;

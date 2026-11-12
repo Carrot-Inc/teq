@@ -1,0 +1,12 @@
+19:21:3: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.HtmlAttrs.cls is forbidden according to the ForbiddenSymbol rule.
+20:27:9: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.HtmlAttrs.className is forbidden according to the ForbiddenSymbol rule.
+21:26:8: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.HtmlAttrs.classSet is forbidden according to the ForbiddenSymbol rule.
+22:27:9: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.HtmlAttrs.classSet1 is forbidden according to the ForbiddenSymbol rule.
+23:27:9: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.HtmlAttrs.classSetM is forbidden according to the ForbiddenSymbol rule.
+24:28:10: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.HtmlAttrs.classSet1M is forbidden according to the ForbiddenSymbol rule.
+25:49:11: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.ImplicitsForVdomNode.TraversableOnceExt.toVdomArray is forbidden according to the ForbiddenSymbol rule.
+26:28:11: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.ImplicitsForVdomNode.TraversableOnceExt.toVdomArray is forbidden according to the ForbiddenSymbol rule.
+33:63:15: warning: [UnusedScalafixSuppression] Unused Scalafix suppression, this can be removed
+37:19:5: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.HtmlAttrs.cls is forbidden according to the ForbiddenSymbol rule.
+41:13:9: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.HtmlAttrs.className is forbidden according to the ForbiddenSymbol rule.
+42:19:4: error: [ForbiddenSymbol] japgolly.scalajs.react.vdom.HtmlAttrs.className is forbidden according to the ForbiddenSymbol rule.

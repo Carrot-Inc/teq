@@ -1,0 +1,5 @@
+12:18:7: error: [ForbiddenSymbol] java.time.Instant is forbidden according to the ForbiddenSymbol rule.
+16:13:4: error: [ForbiddenSymbol] java.util is forbidden according to the ForbiddenSymbol rule.
+22:13:7: error: [ForbiddenSymbol] java.time.Instant is forbidden according to the ForbiddenSymbol rule.
+27:24:7: error: [ForbiddenSymbol] java.math.BigDecimal.valueOf is forbidden according to the ForbiddenSymbol rule.
+31:32:3: error: [ForbiddenSymbol] java.math.BigDecimal.ONE is forbidden according to the ForbiddenSymbol rule.

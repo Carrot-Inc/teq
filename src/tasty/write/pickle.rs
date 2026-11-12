@@ -30,6 +30,8 @@ mod shapes;
 pub(crate) use shapes::widened_library_members;
 mod synth;
 mod term;
+pub(crate) use shapes::{std_shape_named, std_shape_owned};
+pub(crate) use term::{std_target_by, StdTarget};
 
 pub const TOOLING: &str = concat!("teq ", env!("CARGO_PKG_VERSION"));
 
@@ -7084,7 +7086,7 @@ fn pkg_path_of(w: &Worker, p: PkgId) -> String {
 
 /// scala-library's name for a class the std defines under another package, the inverse of
 /// `STD_BINDINGS` with the library's canonical choice where several of its names bind to one.
-fn std_library_name(pkg: &str, name: &str) -> Option<String> {
+pub(crate) fn std_library_name(pkg: &str, name: &str) -> Option<String> {
     let preferred: &[(&str, &str, &str)] = &[
         // A class scala-library has under the std's own name keeps it, whatever other name binds
         // to it (`collection.SortedSet`): the name a source or a jar's pickle gave it.

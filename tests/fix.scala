@@ -1,14 +1,18 @@
 //> using file ../tools/script
 // `teq fix` (docs/FIX.md, docs/CLI.md): every case of tests/fix/<Rule>/<Case> (tests/fix/REFERENCES.md) run by
 // `teq compiler fix` over a copy of its input.scala, its header comment the configuration as scalafix's testkit reads
-// it (a `file:` entry made absolute from the case's directory), its `jars` the class path (tests/support/jars.sh):
+// it (a `file:` entry made absolute from the case's directory), its `jars` the class path (tests/support/jars.sh),
+// its `targets` (`js`, `jvm`) the targets it runs on, once each with the same files and `--target jvm` for the second
+// (without the file, once as it is; a failure names the target where there are several):
 // the file it leaves is the case's output.scala (its input where it has none), the lints it prints are its
 // expected.txt, and those lints are the fixture's own assertions (`// assert: <id>` on a line, `/* assert: <id>` with
-// a caret line and a message), no more and no fewer; the exit is 1 where an error remains, else 0; a second run over
+// a caret line and a message), no more and no fewer, and where the case has a scalafix.txt (tests/fix/capture.sh: what
+// scalafix itself reports of the input) or a scalac.txt (capture.sh --scalac: what scalac's symbols give the rule)
+// exactly its lints; the exit is 1 where an error remains, else 0; a second run over
 // what the first left changes nothing and prints the same; `--check` over the input changes nothing and exits 1
 // where there is an edit or a lint. A script's case is `input.sc` and `output.sc`. A case with a `refused.txt` is one the run refuses: exit 2, that text among what it
 // prints, every file as it was. A build's case, a directory with a teq.lock, is run by `teq fix` twice (below). Then the verb's own cases (`verb`), the rules' phase over several workers (`parallel`) and the jobs' typing over several workers (`typing`), below. `--record` writes each expected.txt from
-// a run whose lints match their assertions. Run from the repository's root:
+// a run whose lints match their assertions, the first target's, the others held to it. Run from the repository's root:
 // `./teq interp tests/fix.scala [-- --teq <binary>] [--record] [--only <Rule/Case prefix>]`.
 import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 import scala.jdk.CollectionConverters.*
@@ -34,7 +38,7 @@ import scala.jdk.CollectionConverters.*
       .flatMap(r => Files.list(r).iterator.asScala.toVector.filter(c => Files.exists(c.resolve("input.scala")) || Files.exists(c.resolve("input.sc"))).sorted)
       .filter(c => only.forall(o => root.relativize(c).toString.replace('\\', '/').startsWith(o)))
 
-  for c <- cases do
+  for c <- cases; target <- targetsOf(c) do
     val name = root.relativize(c).toString.replace('\\', '/')
     // A script's case is `input.sc` and `output.sc`.
     val (inputName, outputName) = if Files.exists(c.resolve("input.sc")) then ("input.sc", "output.sc") else ("input.scala", "output.scala")
@@ -52,7 +56,7 @@ import scala.jdk.CollectionConverters.*
       Files.createDirectories(dir)
       Files.writeString(dir.resolve(inputName), input)
       for e <- extras do Files.copy(e, dir.resolve(e.getFileName))
-      val r = command(teq, name, inputName, extras, confFile, classpath, check, work).run()
+      val r = command(teq, name, inputName, extras, confFile, classpath, target.flags, check, work).run()
       (r, read(dir.resolve(inputName)))
     // A case the run refuses: `refused.txt` holds what it prints of why.
     val refused = Option.when(Files.exists(c.resolve("refused.txt")))(read(c.resolve("refused.txt")).trim)
@@ -77,7 +81,8 @@ import scala.jdk.CollectionConverters.*
       val expectedStatus = if parsed.exists(_.severity == "error") then 1 else 0
       if r1.status != expectedStatus then problems += s"exit ${r1.status}, expected $expectedStatus"
       val expectedFile = c.resolve("expected.txt")
-      if record && problems.isEmpty then
+      // `--record` writes the first target's lints; the case's other targets are held to them.
+      if record && problems.isEmpty && target.first then
         if lints.nonEmpty then Files.writeString(expectedFile, lints) else Files.deleteIfExists(expectedFile)
       else
         val want = if Files.exists(expectedFile) then read(expectedFile) else ""
@@ -98,7 +103,7 @@ import scala.jdk.CollectionConverters.*
         if printed != want then problems += s"the structure differs from structure.txt's:\n${diff(want, printed)}"
       // A second run over what the first left changes nothing and prints what the first printed of it.
       val dir = work.resolve(name)
-      val r2 = command(teq, name, inputName, extras, confFile, classpath, false, work).run()
+      val r2 = command(teq, name, inputName, extras, confFile, classpath, target.flags, false, work).run()
       if read(dir.resolve(inputName)) != out1 then problems += "a second run changed the file again"
       if out1 == input && r2.errAll().replace(work.toString + "/", "") != lints then problems += "a second run printed other lints"
       // `--check` changes nothing, and prints round one's lints at the input's lines, which its assertions answer.
@@ -107,7 +112,18 @@ import scala.jdk.CollectionConverters.*
       val checkStatus = if out1 != input || lints.linesIterator.exists(_.matches(".*: (error|warning|info): \\[.*")) then 1 else 0
       if outc != input then problems += "--check changed the file"
       if rc.status != checkStatus then problems += s"--check exited ${rc.status}, expected $checkStatus"
-    if problems.isEmpty then pass += 1 else bad(name, problems.mkString("\n  "))
+      // A case with a `scalafix.txt`, what scalafix itself reports of its input (tests/fix/capture.sh): `--check`'s
+      // lints, which are at the input's lines as scalafix's are, are those, each with its column, width, severity, id
+      // and message. A case with a `scalac.txt`, what scalac's symbols give the rule there (capture.sh --scalac), the
+      // same.
+      for (file, whose) <- Vector("scalafix.txt" -> "scalafix's", "scalac.txt" -> "scalac's symbols'") do
+        val reference = c.resolve(file)
+        if Files.exists(reference) then
+          val printed = lintsOf(rc.errAll().replace(work.toString + "/", ""), name + "/" + inputName)
+            .sortBy(p => (p.line, p.col, p.width, p.severity, p.id, p.message))
+            .map(p => s"${p.line}:${p.col}:${p.width}: ${p.severity}: [${p.id}] ${p.message}\n").mkString
+          if printed != read(reference) then problems += s"the lints differ from $whose ($file):\n${diff(read(reference), printed)}"
+    if problems.isEmpty then pass += 1 else bad(name + target.suffix, problems.mkString("\n  "))
 
   // A build's case, a directory holding a teq.lock with the configurations and sources it names: `teq fix` in a copy of
   // it, twice. The first leaves the files `output/` holds (the others as they were) and prints `expected.txt`, exit 1
@@ -160,11 +176,11 @@ import scala.jdk.CollectionConverters.*
 
 def read(p: Path): String = new String(Files.readAllBytes(p), java.nio.charset.StandardCharsets.UTF_8)
 
-def command(teq: String, name: String, input: String, extras: Vector[Path], conf: Path, classpath: Option[String], check: Boolean, dir: Path): Sh.Cmd =
+def command(teq: String, name: String, input: String, extras: Vector[Path], conf: Path, classpath: Option[String], target: Vector[String], check: Boolean, dir: Path): Sh.Cmd =
   val files = (name + "/" + input) +: extras.map(e => name + "/" + e.getFileName)
   // A `// teq: <flags>` line of the input passes those flags (`--kind-projector`), as tests/run.sh's cases do.
   val flags = read(dir.resolve(name).resolve(input)).linesIterator.collectFirst { case l if l.startsWith("// teq: ") => l.stripPrefix("// teq: ").split(' ').toVector.filter(_.nonEmpty) }.getOrElse(Vector())
-  val base = Vector(teq, "compiler", "fix") ++ files ++ Vector("--config", conf.toString) ++ classpath.toVector.flatMap(cp => Vector("--classpath", cp)) ++ flags ++ (if check then Vector("--check") else Vector())
+  val base = Vector(teq, "compiler", "fix") ++ files ++ Vector("--config", conf.toString) ++ classpath.toVector.flatMap(cp => Vector("--classpath", cp)) ++ flags ++ target ++ (if check then Vector("--check") else Vector())
   Sh(base*).in(dir).timeout(300).check(false)
 
 /** The leading comment of a fixture, its configuration, with each `file:` entry made absolute from `dir`. */
@@ -188,6 +204,19 @@ def jars(c: Path): Option[String] =
     val keys = read(f).trim.split("\\s+").toVector.filter(_.nonEmpty)
     val paths = keys.map(k => Sh("bash", "-c", s". tests/support/jars.sh && jar_of $k").timeout(600).check(false).run().out.trim)
     Some(paths.mkString(java.io.File.pathSeparator))
+
+/** A run of a case: the flags of its target, whether it is the case's first, and what a failure adds to the case's
+  * name where the case has several. */
+final case class Target(flags: Vector[String], first: Boolean, suffix: String)
+
+/** The case's runs: one a word of its `targets` file (`js`, `jvm`), in the file's order; without the file, one. */
+def targetsOf(c: Path): Vector[Target] =
+  val f = c.resolve("targets")
+  if !Files.exists(f) then Vector(Target(Vector(), true, ""))
+  else
+    val words = read(f).trim.split("\\s+").toVector.filter(_.nonEmpty).distinct
+    if words.isEmpty || words.exists(w => w != "js" && w != "jvm") then Log.die(s"$f names the case's targets, `js` and `jvm`, not `${words.mkString(" ")}`")
+    words.zipWithIndex.map((w, i) => Target(if w == "jvm" then Vector("--target", "jvm") else Vector(), i == 0, if words.size > 1 then s" [$w]" else ""))
 
 final case class Printed(line: Int, col: Int, width: Int, severity: String, id: String, message: String)
 
@@ -592,10 +621,16 @@ object Verb:
     val none = build(work, "service-none", ".scalafix.conf" -> "rules = [DisableSyntax]\nDisableSyntax.noVars = true\n")
     val (rnone, noneRecord) = recorded(none, Seq())
     expect("service/none", rnone.status == 1 && served(noneRecord).isEmpty, s"exit ${rnone.status}: ${noneRecord.filter(_.startsWith("serve")).mkString("\n")}")
-    val asker = "package teq.fix.probe\nimport teq.fix.*\nfinal class Ask extends SemanticRule(\"Ask\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    Native.symbolsAt(doc.gen, 0, 7)\n    Patch.empty\n"
+    // A symbol is answered: the name of `object Core` is its definition, `core/Core.`. An information is not built
+    // and is refused, the asking rule's failure, never answered empty.
+    val asker = "package teq.fix.probe\nimport teq.fix.*\nfinal class Ask extends SemanticRule(\"Ask\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    val at = doc.input.text.indexOf(\"Core\")\n    Patch.lint(Diagnostic(\"\", \"symbols \" + Native.symbolsAt(doc.gen, at, at + 4).mkString(\",\") + \" defined \" + Native.definedAt(doc.gen, at, at + 4), doc.tree.pos))\n"
     val sa = build(work, "service-symbols", "core/src/core/Core.scala" -> plain, "rules/Ask.scala" -> asker, ".scalafix.conf" -> "rules = [\"file:rules/Ask.scala\"]\n")
     val rsa = fix(sa, "core")
-    expect("service/symbols refused", rsa.status == 2 && rsa.errAll().contains("the rule Ask failed") && rsa.errAll().contains("not extracted yet"), s"exit ${rsa.status}: ${rsa.errAll()}")
+    expect("service/symbols", rsa.status == 1 && rsa.errAll().contains("[Ask]: symbols core/Core. defined true"), s"exit ${rsa.status}: ${rsa.errAll()}")
+    val informer = "package teq.fix.probe\nimport teq.fix.*\nfinal class Inform extends SemanticRule(\"Inform\"):\n  override def fix(using doc: SemanticDocument): Patch =\n    Native.info(doc.gen, \"core/Core.\")\n    Patch.empty\n"
+    val si = build(work, "service-info", "core/src/core/Core.scala" -> plain, "rules/Inform.scala" -> informer, ".scalafix.conf" -> "rules = [\"file:rules/Inform.scala\"]\n")
+    val rsi = fix(si, "core")
+    expect("service/info refused", rsi.status == 2 && rsi.errAll().contains("the rule Inform failed") && rsi.errAll().contains("informations are not built"), s"exit ${rsi.status}: ${rsi.errAll()}")
     // The round's texts (the pass over c14fd75e1, Swap.scala): a file written between the document's dispatch and its
     // first question, its own or a dependency's the job does not edit, leaves the service's typing as the round read
     // the program: the answer's MD5 the round's text's, a dependency broken on the disk no failure.

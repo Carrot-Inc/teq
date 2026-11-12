@@ -1,0 +1,6 @@
+OptionGetWarn/OptionGetWarnTest/input.scala:7:34: warning: [OptionGetWarn]: Don't use Option.get
+    def f1[A](a: Option[A]): A = a.get // assert: OptionGetWarn
+                                   ^^^
+OptionGetWarn/OptionGetWarnTest/input.scala:10:6: warning: [OptionGetWarn]: Don't use Option.get
+    f3.get // assert: OptionGetWarn
+       ^^^

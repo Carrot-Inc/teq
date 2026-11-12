@@ -8,14 +8,14 @@ parser's leading-comment scan the planner ports.
 
 ## The repositories
 
-| Repository | Revision | Licence | Taken here | Taken by the next part (fix-semantic) |
-|---|---|---|---|---|
-| [scalacenter/scalafix](https://github.com/scalacenter/scalafix) | `41cf7983a19a0453be78d1fe9863d77470ca6dec` | BSD 3-Clause, `LICENSE.md` | `DisableSyntax` (`scalafix-rules/src/main/scala/scalafix/internal/rule/DisableSyntax.scala`, `DisableSyntaxConfig.scala`); the fixtures of `scalafix-tests/input/src/main/scala/test/disableSyntax`, `scala-3/test/disableSyntax` and `scala/test/escapeHatch`; the test rules `NoDummy` and `NoNull` (`scalafix-tests/integration/src/main/scala/scalafix/test`), ported as `support/`; the semantics the driver follows: `PatchInternals`, `ImportPatchOps` (an added import's place, ported in `src/fix/plan.rs`), `EscapeHatch`, `RuleDiagnostic`, `LintConfig`, `FilterMatcher` | |
-| [xuwei-k/scalafix-rules](https://github.com/xuwei-k/scalafix-rules) | `995edb7a922724bc680158bc1cca61d568e72c88` | MIT, `LICENSE.txt` | `CatsImplicitsImport` (`rules/src/main/scala/fix/CatsImplicitsImport.scala`) and its fixture | `OptionGetWarn` |
-| [ghostbuster91/scalafix-unified](https://github.com/ghostbuster91/scalafix-unified) | `6563e96c9f0b26175c226b758c752ce1123249ae` | Apache 2.0, as its `build.sbt` declares (`licenses := List("Apache-2.0" -> ...)`); the repository has no licence file | `EmptyCollectionsUnified` (`rules/src/main/scala/fix/EmptyCollectionsUnified.scala`) and its input and output fixtures | |
-| [typelevel/typelevel-scalafix](https://github.com/typelevel/typelevel-scalafix) | `f5bc61f93fd290cd83f27bf277bb740f2a6a808a` | Apache 2.0, `LICENSE` | `TypelevelAs` (`modules/cats/rules/src/main/scala/org/typelevel/fix/As.scala`) and its fixture | `TypelevelHttp4sLiteralsSyntax` |
-| [tanin47/scalafix-forbidden-symbol](https://github.com/tanin47/scalafix-forbidden-symbol) | `813a206a4218dc86b52718077fad5d82f2c3d4ed` | MIT, `LICENSE` | | `ForbiddenSymbol` |
-| [scalameta/scalameta](https://github.com/scalameta/scalameta) | `v4.17.4`, `51efeb6b0fc0c8e7c7232167fa99f7d2ee8403b1` (scalafix `41cf798`'s `scalametaV`) | BSD 3-Clause, `LICENSE.md` | the leading-comment scan `begComment` (`scalameta/parsers/shared/src/main/scala/scala/meta/internal/parsers/ScalametaParser.scala`) and `canEndStat` (`ScannerTokens.scala`), ported in `src/fix/plan.rs` for an added import's place | |
+| Repository | Revision | Licence | Taken here |
+|---|---|---|---|
+| [scalacenter/scalafix](https://github.com/scalacenter/scalafix) | `41cf7983a19a0453be78d1fe9863d77470ca6dec` | BSD 3-Clause, `LICENSE.md` | `DisableSyntax` (`scalafix-rules/src/main/scala/scalafix/internal/rule/DisableSyntax.scala`, `DisableSyntaxConfig.scala`); the fixtures of `scalafix-tests/input/src/main/scala/test/disableSyntax`, `scala-3/test/disableSyntax` and `scala/test/escapeHatch`; the test rules `NoDummy` and `NoNull` (`scalafix-tests/integration/src/main/scala/scalafix/test`), ported as `support/`; the semantics the driver follows: `PatchInternals`, `ImportPatchOps` (an added import's place, ported in `src/fix/plan.rs`), `EscapeHatch`, `RuleDiagnostic`, `LintConfig`, `FilterMatcher`; `scalafix.v1.Symbol` and `SymbolMatcher`, `SymbolOps.normalize` and `inferTrailingDot`, `TreePos` (`scalafix-core/src/main/scala/scalafix/v1`, `internal/util`, `internal/v1`), ported in `std/fix/semantic.scala` |
+| [xuwei-k/scalafix-rules](https://github.com/xuwei-k/scalafix-rules) | `995edb7a922724bc680158bc1cca61d568e72c88` | MIT, `LICENSE.txt` | `CatsImplicitsImport` (`rules/src/main/scala/fix/CatsImplicitsImport.scala`) and its fixture; `OptionGetWarn` (`rules/src/main/scala/fix/OptionGetWarn.scala`, the release 0.6.23's source) and its fixture |
+| [ghostbuster91/scalafix-unified](https://github.com/ghostbuster91/scalafix-unified) | `6563e96c9f0b26175c226b758c752ce1123249ae` | Apache 2.0, as its `build.sbt` declares (`licenses := List("Apache-2.0" -> ...)`); the repository has no licence file | `EmptyCollectionsUnified` (`rules/src/main/scala/fix/EmptyCollectionsUnified.scala`) and its input and output fixtures |
+| [typelevel/typelevel-scalafix](https://github.com/typelevel/typelevel-scalafix) | `f5bc61f93fd290cd83f27bf277bb740f2a6a808a` | Apache 2.0, `LICENSE` | `TypelevelAs` (`modules/cats/rules/src/main/scala/org/typelevel/fix/As.scala`) and its fixture; `TypelevelHttp4sLiteralsSyntax` (`modules/http4s/rules/src/main/scala/org/typelevel/fix/Http4sLiteralsSyntax.scala`, the release 0.5.0's source) and its four fixtures with their outputs |
+| [tanin47/scalafix-forbidden-symbol](https://github.com/tanin47/scalafix-forbidden-symbol) | `813a206a4218dc86b52718077fad5d82f2c3d4ed` | MIT, `LICENSE` | `ForbiddenSymbol` (`scalafix/rules/src/main/scala/fix/ScalafixForbiddenSymbol.scala`, the release 1.0.0's source) and its two fixtures |
+| [scalameta/scalameta](https://github.com/scalameta/scalameta) | `v4.17.4`, `51efeb6b0fc0c8e7c7232167fa99f7d2ee8403b1` (scalafix `41cf798`'s `scalametaV`) | BSD 3-Clause, `LICENSE.md` | the leading-comment scan `begComment` (`scalameta/parsers/shared/src/main/scala/scala/meta/internal/parsers/ScalametaParser.scala`) and `canEndStat` (`ScannerTokens.scala`), ported in `src/fix/plan.rs` for an added import's place; the symbol syntax (`semanticdb/semanticdb/shared/src/main/scala/scala/meta/internal/semanticdb/Scala.scala`: the descriptors, their parser, `Names.encode`), ported in `std/fix/semantic.scala` |
 
 ## The cases
 
@@ -27,6 +27,42 @@ comment names a lint of that id on its line, a `/* assert: <id>` comment with a 
 also its column, its width and its message. The suite checks `expected.txt` against them, so that the
 recorded lints are the reference's and no more; a case's exit is 1 where an error-severity lint remains, 0
 otherwise, and under `--check` 1 where there is a lint or an edit.
+
+A `targets` file beside `jars` names the targets a case runs on, `js` (the default: JavaScript, teq's std) and `jvm`
+(`--target jvm`: scala-library's jar). The suite runs the case once a target, and the input, `output.scala`,
+`expected.txt`, `scalafix.txt` and `scalac.txt` hold for each; without the file a case runs once, as it is written.
+The cases of the three rules that read symbols name theirs: the four http4s cases `jvm`,
+`ForbiddenSymbol/ReactAttributes` `js`, every other one both (teq's std declares its own collections and `Option`,
+the JVM target reads scala-library's).
+
+Where a case has a `scalafix.txt`, it is what scalafix itself reports of the input, a line a lint
+(`<line>:<col>:<width>: <severity>: [<id>] <message>`), and the suite holds the lints `--check` prints to it: an
+assertion comment of the first form names a line alone, the file also the column, the width and the message.
+`tests/fix/capture.sh <Rule>/<Case>` writes it, and `output.scala` where scalafix rewrites (`--check` compares):
+scalac 3.8.4's SemanticDB of the case against its `jars`, then scalafix-cli_2.13.18 0.14.7 with the published jars of
+the three semantic rules as its tool class path (xuwei-k scalafix-rules 0.6.23, scalafix-forbidden-symbol 1.0.0,
+typelevel-scalafix-http4s 0.5.0: each rule's source in them is the pinned revision's).
+
+Where a case has a `scalac.txt`, it is what the rule gives by scalac's own symbols, in `scalafix.txt`'s format, and
+the suite holds `--check`'s lints to it the same way. Two rules are scalafix's without the defects of scalafix's
+information (docs/FIX.md), so that scalafix reports fewer lints of such a case than the rule does: OptionGetWarn
+reports each selection `x.get` whose `get` is `scala.Option`'s own or `scala.None`'s, where scalafix's rule asks the
+receiver's information and is silent where its table has none (a member of another file or of a Scala 3 library, a
+function value applied, a block); ForbiddenSymbol reports, beside each name whose symbol is an entry, each reference
+to a member that is none and overrides one, a lint's message naming the entry
+(`<entry> is forbidden according to the ForbiddenSymbol rule.`, upstream's sentence), the first in
+`allOverriddenSymbols`' order where a member overrides several. `tests/fix/capture.sh --scalac <Rule>/<Case>` writes
+the file from the occurrences scalac 3.8.4's SemanticDB records in the input (`tests/semanticdb/semanticdb.py`
+decodes them): for OptionGetWarn the `get`s whose symbol is `scala/Option#get().` or `scala/None.get().`; for
+ForbiddenSymbol the names whose symbol, normalized as scalafix's `SymbolMatcher.normalized` (`SymbolOps.normalize`,
+`inferTrailingDot`), is an entry, at a definition too as under scalafix, and the references whose member overrides
+one by dotty's own `SymDenotations.allOverriddenSymbols`. SemanticDB records no overridden member of a library's, so
+`support/Overridden.scala`, a `Driver` of the parser, the typer and one phase that the script compiles against the
+same scala3-compiler, prints them of the case's sources, each at the span of its occurrence. `--check` compares a
+case's `scalac.txt` and runs no scalafix over it; `--scalac --check` over a case that has a `scalafix.txt` alone
+holds that file to the symbols, which is how a case is shown to be one where scalafix's lints are the rule's whole
+answer (`ForbiddenSymbol/CollectionsDirect`, and `OptionGetWarnTest`, `Example` and `ExampleSignificantIndentation`
+of the table). The oracle knows no suppression and no lint filter: a `scalac.txt` case has no anchor.
 
 | Case | Fixture (under the repository's root) | Adaptation |
 |---|---|---|
@@ -43,6 +79,9 @@ otherwise, and under `--check` 1 where there is a lint or an edit.
 | `CatsImplicitsImport/CatsImplicitsImportTest` | xuwei-k: `input/src/main/scala/fix/CatsImplicitsImportTest.scala` | cats 2.13.0 (`jars`) where the reference's build names its own cats |
 | `TypelevelAs/AsTests` | typelevel: `modules/cats/input/src/main/scala/fix/AsTests.scala` | likewise |
 | `EmptyCollectionsUnified/EmptyCollectionsUnified` | scalafix-unified: `input/src/main/scala/test/EmptyCollectionsUnified.scala` and `output/src/main/scala/test/EmptyCollectionsUnified.scala` | the `val k` whose pattern is `::(_, Nil)` removed from both (defect 4); `1 :: Nil` and `::(1, Nil)` rewritten to `List.empty` in the output, which the repository records under scalameta 4.4.32 (its build's), where an argument's parent is its application: under 4.17 it is a `Term.ArgClause`, so the rule's `::` cases match nothing, and scalafix 0.14.7 with the rule's 0.0.8 jar rewrites both |
+| `OptionGetWarn/OptionGetWarnTest` | xuwei-k: `input/src/main/scala/fix/OptionGetWarnTest.scala` | |
+| `ForbiddenSymbol/Example`, `ForbiddenSymbol/ExampleSignificantIndentation` | tanin47: `scalafix/input/src/main/scala/fix/Example.scala`, `scalafix/input/src/main/scala-3/fix/ExampleSignificantIndentation.scala` | no `output.scala`: the repository's output files are the inputs without their header and their assertion comments, the rule rewriting nothing |
+| `TypelevelHttp4sLiteralsSyntax/<name>` for `LiteralsSyntaxTests`, `LiteralsSyntaxWithExistingImplicitsImportTests`, `LiteralsSyntaxWithExistingSyntaxImportTests`, `LiteralsSyntaxWithSuppresionsTests` | typelevel: `modules/http4s/input/src/main/scala/fix/<name>.scala` and `modules/http4s/output/src/main/scala/fix/<name>.scala` | the files as they are, run on the JVM target alone (`targets`): the output's `uri` and `path` literals are macros of http4s's JVM jar, which the second round's typing expands; http4s-core 0.23.36 with the six jars its literals reach (`jars`) where the reference's build names 0.23.30 |
 
 ## teq's own cases
 
@@ -158,6 +197,60 @@ otherwise, and under `--check` 1 where there is a lint or an edit.
   1.4.6 reads it under metaconfig 0.18.6, whose results over the cases of src/fix/config.rs's tests were recorded by
   running both over the same files.
 
+- The cases of fix-rules-semantic-2 (the three rules that read symbols), each typed by scalac 3.8.4 as it stands and
+  run on the targets its `targets` names, its `// assert:` comments on the lines of its reference's lints.
+  Held to scalafix's own lints (`scalafix.txt`): `ForbiddenSymbol/ReactAttributes` (scalajs-react 4.0.0's six class
+  attributes of `HtmlAttrs` and `TraversableOnceExt.toVdomArray` as entries: a use of each, a renamed import's
+  selector and its use, an anchor on a line, within an expression, bare and over a renamed use, one that suppresses
+  nothing; JavaScript, its `jars` the five scalac 3.8.4 needs to type it); `ForbiddenSymbol/UnusedAnchorError`
+  (`lint.error.includes = ".*"`: a lint, the anchors that suppress it, an anchor and a bare one that suppress
+  nothing, each an `UnusedScalafixSuppression` of error severity; an asserted anchor is a block comment, as the
+  `Suppression` fixtures write it, the assertion being the line's comment); `ForbiddenSymbol/CollectionsDirect` (the
+  seven collection entries on receivers whose static type selects the entry's own declaration: a Seq, a Set, an
+  Iterable, a Map, a List's `init` and `tail`, an array's and a string's through their conversions, a member then
+  applied, mapped, iterated or matched, a backquoted name, an operator's operands, an interpolation; and
+  `IterableOnce`'s five entries, which name no member, beside uses of `min`, `max`, `minBy`, `maxBy` and `reduce`:
+  42 lints, scalac's symbols' too by `capture.sh --scalac --check`).
+  Held to scalac's symbols (`scalac.txt`): `ForbiddenSymbol/CollectionsOverrides` (the twelve selections of
+  `init`, `tail` and `last` whose member overrides `IterableOps`': a List's `last`, a Vector's and a Range's three,
+  an IndexedSeq's, a ListBuffer's and an ArrayBuffer's `last`, a LazyList's `tail` and `last`, each beside one that
+  is `IterableOps`' own; a class of the program's over `IndexedSeq` overriding `last` and one inheriting it; a trait
+  of the program's own whose two members are entries, with a trait overriding one, itself an entry, a class
+  overriding both and one inheriting: an entry's definition reported, an overrider's not, its use under the first
+  entry it overrides. 34 lints, 16 of them overriders'; the other 18 are what scalafix reports of it);
+  `OptionGetWarn/Shapes` (a `get` after each shape of receiver: a parameter of every kind, a member of every
+  declared and inferred type with an alias, an annotated and a union type among them, a method's result, an applied
+  function value, a given, an element, a placeholder, a lambda's and a generator's parameter, a local, a library
+  call, a case's binder, a block, a conditional; a backquoted `get`: 75 lints, `None.get`'s two among them; silent,
+  `Some`'s four `get`s, the program's own, a `Try`'s and a `Map`'s with its key);
+  `OptionGetWarn/OtherFile` (the receiver a member of another file of the program, `A.scala`: a val, a def, an
+  inherited val, an alias without parameters, an extension, an export's forwarder, a local inferred from one, beside
+  a member of the input's own: 8 lints) and `OptionGetWarn/Library` (the receiver a member of scala-library's or a
+  local inferred from one: 10 lints).
+  The four programs of the part's self-review, each a wrong answer of the head it read. Held to scalafix's own
+  lints: `ForbiddenSymbol/PackageEntry` (the upstream fixture's entry `java.util` beside a name of `scala.util`, a
+  package of the same last name, which overrides nothing: 1 lint); `ForbiddenSymbol/SupplementaryName` (an
+  identifier with a character outside the basic plane, which scalac's symbol has between backquotes, as a name
+  beside an entry whose last name it contains and as the owner of an entry's member: 3 lints, each on a line of
+  ASCII alone, since the compiler's columns after such a character count bytes where scalafix's count UTF-16
+  units); `ForbiddenSymbol/UnusedEntry` (two entries of scala-library's members that the program names nowhere,
+  which are no dead entries, beside one it uses: 2 lints and no warning of the run on either target). Held to
+  scalac's symbols: `ForbiddenSymbol/LocalNamedPackage` (an overrider under a package named `localdata`, whose
+  symbol `localdata/Sub#last().` is a global one though its text begins with `local`: 3 lints, 1 an overrider's).
+  The four programs of the part's code review, each as the review states it with its assertion comments added.
+  Held to scalafix's own lints: `ForbiddenSymbol/ExtensionImport` (an extension method imported under another
+  name: its definition, the import's selector and the use, 3 lints); `ForbiddenSymbol/PackageObject` (a member of
+  a `package object`, the entry `p.sub.package.f`: its definition, a renaming import's selector, the renamed use
+  and a qualified one, 4 lints); `ForbiddenSymbol/AliasImport` (a type alias imported under another name: its
+  definition and the renamed use, 2 lints, none at the selector, where scalac records no occurrence). Held to
+  scalac's symbols: `ForbiddenSymbol/LocalOverride` (a class local to a method overrides an entry: the entry's
+  definition and the use of the local member, a local symbol whose overridden members hold the entry, 2 lints).
+  teq's own in what the run says of dead entries: `ForbiddenSymbol/DeadEntry` (three entries that name no symbol,
+  `IterableOnce.min`, a member of a class there is not and a member its file's module `input$package` has not,
+  beside six that do and a use of each, among them a top-level definition by its file's module, `->` of
+  `Predef.ArrowAssoc`, a class nested in an object, and `max` of the package `scala.math`'s object: the 7 lints are
+  scalafix's (`scalafix.txt`), and `expected.txt` has what the run says of the three; no reference prints that).
+
 ## Fixtures not taken
 
 - `scala-2/test/disableSyntax/SpecificDisableSyntax.scala`: Scala 2's dialect.
@@ -166,7 +259,6 @@ otherwise, and under `--check` 1 where there is a lint or an edit.
 - `test/escapeHatch/AnchorExpression`, `AnchorMultipleRules`, `AnnotationMultipleRules`,
   `AnnotationPrefixedRules`, `AnnotationWildcard`, `Issue694`: they run scalafix's semantic `Disable` rule,
   which teq does not ship.
-- The fixtures of the next part's rules (OptionGetWarn, ForbiddenSymbol, TypelevelHttp4sLiteralsSyntax).
 
 ## The defects of teq the fixtures met
 

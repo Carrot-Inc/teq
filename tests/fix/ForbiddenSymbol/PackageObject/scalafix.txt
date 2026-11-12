@@ -1,0 +1,4 @@
+7:7:1: error: [ForbiddenSymbol] p.sub.package.f is forbidden according to the ForbiddenSymbol rule.
+9:15:1: error: [ForbiddenSymbol] p.sub.package.f is forbidden according to the ForbiddenSymbol rule.
+10:11:7: error: [ForbiddenSymbol] p.sub.package.f is forbidden according to the ForbiddenSymbol rule.
+11:15:1: error: [ForbiddenSymbol] p.sub.package.f is forbidden according to the ForbiddenSymbol rule.

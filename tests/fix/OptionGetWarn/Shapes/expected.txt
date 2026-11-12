@@ -1,0 +1,225 @@
+OptionGetWarn/Shapes/input.scala:19:20: warning: [OptionGetWarn]: Don't use Option.get
+      case A(o) => o.get // assert: OptionGetWarn
+                     ^^^
+OptionGetWarn/Shapes/input.scala:47:42: warning: [OptionGetWarn]: Don't use Option.get
+    def byName(o: => Option[Int]): Int = o.get // assert: OptionGetWarn
+                                           ^^^
+OptionGetWarn/Shapes/input.scala:48:38: warning: [OptionGetWarn]: Don't use Option.get
+    def param(o: Option[Int]): Int = o.get // assert: OptionGetWarn
+                                       ^^^
+OptionGetWarn/Shapes/input.scala:49:50: warning: [OptionGetWarn]: Don't use Option.get
+    def typeParam[T <: Option[Int]](t: T): Int = t.get // assert: OptionGetWarn
+                                                   ^^^
+OptionGetWarn/Shapes/input.scala:51:49: warning: [OptionGetWarn]: Don't use Option.get
+    def usingParam(using o: Option[Int]): Int = o.get // assert: OptionGetWarn
+                                                  ^^^
+OptionGetWarn/Shapes/input.scala:52:47: warning: [OptionGetWarn]: Don't use Option.get
+    extension (o: Option[Int]) def ext: Int = o.get // assert: OptionGetWarn
+                                                ^^^
+OptionGetWarn/Shapes/input.scala:56:14: warning: [OptionGetWarn]: Don't use Option.get
+      declared.get // assert: OptionGetWarn
+               ^^^
+OptionGetWarn/Shapes/input.scala:57:19: warning: [OptionGetWarn]: Don't use Option.get
+      this.declared.get // assert: OptionGetWarn
+                    ^^^
+OptionGetWarn/Shapes/input.scala:58:20: warning: [OptionGetWarn]: Don't use Option.get
+      other.declared.get // assert: OptionGetWarn
+                     ^^^
+OptionGetWarn/Shapes/input.scala:59:24: warning: [OptionGetWarn]: Don't use Option.get
+      self.self.declared.get // assert: OptionGetWarn
+                         ^^^
+OptionGetWarn/Shapes/input.scala:60:15: warning: [OptionGetWarn]: Don't use Option.get
+      inherited.get // assert: OptionGetWarn
+                ^^^
+OptionGetWarn/Shapes/input.scala:61:20: warning: [OptionGetWarn]: Don't use Option.get
+      inferredOption.get // assert: OptionGetWarn
+                     ^^^
+OptionGetWarn/Shapes/input.scala:63:18: warning: [OptionGetWarn]: Don't use Option.get
+      inferredNone.get // assert: OptionGetWarn
+                   ^^^
+OptionGetWarn/Shapes/input.scala:64:16: warning: [OptionGetWarn]: Don't use Option.get
+      inferredIf.get // assert: OptionGetWarn
+                 ^^^
+OptionGetWarn/Shapes/input.scala:65:11: warning: [OptionGetWarn]: Don't use Option.get
+      alias.get // assert: OptionGetWarn
+            ^^^
+OptionGetWarn/Shapes/input.scala:66:15: warning: [OptionGetWarn]: Don't use Option.get
+      annotated.get // assert: OptionGetWarn
+                ^^^
+OptionGetWarn/Shapes/input.scala:67:11: warning: [OptionGetWarn]: Don't use Option.get
+      union.get // assert: OptionGetWarn
+            ^^^
+OptionGetWarn/Shapes/input.scala:68:8: warning: [OptionGetWarn]: Don't use Option.get
+      lz.get // assert: OptionGetWarn
+         ^^^
+OptionGetWarn/Shapes/input.scala:69:7: warning: [OptionGetWarn]: Don't use Option.get
+      v.get // assert: OptionGetWarn
+        ^^^
+OptionGetWarn/Shapes/input.scala:70:8: warning: [OptionGetWarn]: Don't use Option.get
+      cp.get // assert: OptionGetWarn
+         ^^^
+OptionGetWarn/Shapes/input.scala:71:8: warning: [OptionGetWarn]: Don't use Option.get
+      cq.get // assert: OptionGetWarn
+         ^^^
+OptionGetWarn/Shapes/input.scala:72:8: warning: [OptionGetWarn]: Don't use Option.get
+      cv.get // assert: OptionGetWarn
+         ^^^
+OptionGetWarn/Shapes/input.scala:74:13: warning: [OptionGetWarn]: Don't use Option.get
+      nullary.get // assert: OptionGetWarn
+              ^^^
+OptionGetWarn/Shapes/input.scala:75:21: warning: [OptionGetWarn]: Don't use Option.get
+      nullaryInferred.get // assert: OptionGetWarn
+                      ^^^
+OptionGetWarn/Shapes/input.scala:76:13: warning: [OptionGetWarn]: Don't use Option.get
+      empty().get // assert: OptionGetWarn
+              ^^^
+OptionGetWarn/Shapes/input.scala:77:15: warning: [OptionGetWarn]: Don't use Option.get
+      poly[Int].get // assert: OptionGetWarn
+                ^^^
+OptionGetWarn/Shapes/input.scala:78:10: warning: [OptionGetWarn]: Don't use Option.get
+      poly.get // assert: OptionGetWarn
+           ^^^
+OptionGetWarn/Shapes/input.scala:79:17: warning: [OptionGetWarn]: Don't use Option.get
+      polyArgs(1).get // assert: OptionGetWarn
+                  ^^^
+OptionGetWarn/Shapes/input.scala:80:22: warning: [OptionGetWarn]: Don't use Option.get
+      polyArgs[Int](1).get // assert: OptionGetWarn
+                       ^^^
+OptionGetWarn/Shapes/input.scala:81:19: warning: [OptionGetWarn]: Don't use Option.get
+      curried(1)(2).get // assert: OptionGetWarn
+                    ^^^
+OptionGetWarn/Shapes/input.scala:82:11: warning: [OptionGetWarn]: Don't use Option.get
+      fn(1).get // assert: OptionGetWarn
+            ^^^
+OptionGetWarn/Shapes/input.scala:83:14: warning: [OptionGetWarn]: Don't use Option.get
+      fnVal(1).get // assert: OptionGetWarn
+               ^^^
+OptionGetWarn/Shapes/input.scala:84:17: warning: [OptionGetWarn]: Don't use Option.get
+      fn.apply(1).get // assert: OptionGetWarn
+                  ^^^
+OptionGetWarn/Shapes/input.scala:85:7: warning: [OptionGetWarn]: Don't use Option.get
+      g.get // assert: OptionGetWarn
+        ^^^
+OptionGetWarn/Shapes/input.scala:86:25: warning: [OptionGetWarn]: Don't use Option.get
+      summon[Option[Int]].get // assert: OptionGetWarn
+                          ^^^
+OptionGetWarn/Shapes/input.scala:88:16: warning: [OptionGetWarn]: Don't use Option.get
+      (declared).get // assert: OptionGetWarn
+                 ^^^
+OptionGetWarn/Shapes/input.scala:89:29: warning: [OptionGetWarn]: Don't use Option.get
+      (declared: Option[Int]).get // assert: OptionGetWarn
+                              ^^^
+OptionGetWarn/Shapes/input.scala:90:28: warning: [OptionGetWarn]: Don't use Option.get
+      (declared: @unchecked).get // assert: OptionGetWarn
+                             ^^^
+OptionGetWarn/Shapes/input.scala:91:9: warning: [OptionGetWarn]: Don't use Option.get
+      top.get // assert: OptionGetWarn
+          ^^^
+OptionGetWarn/Shapes/input.scala:92:12: warning: [OptionGetWarn]: Don't use Option.get
+      topDef.get // assert: OptionGetWarn
+             ^^^
+OptionGetWarn/Shapes/input.scala:93:13: warning: [OptionGetWarn]: Don't use Option.get
+      fix.top.get // assert: OptionGetWarn
+              ^^^
+OptionGetWarn/Shapes/input.scala:94:25: warning: [OptionGetWarn]: Don't use Option.get
+      Shapes.companionVal.get // assert: OptionGetWarn
+                          ^^^
+OptionGetWarn/Shapes/input.scala:95:43: warning: [OptionGetWarn]: Don't use Option.get
+      new Shapes(None, None, None).declared.get // assert: OptionGetWarn
+                                            ^^^
+OptionGetWarn/Shapes/input.scala:97:13: warning: [OptionGetWarn]: Don't use Option.get
+      xs.head.get // assert: OptionGetWarn
+              ^^^
+OptionGetWarn/Shapes/input.scala:98:11: warning: [OptionGetWarn]: Don't use Option.get
+      xs(0).get // assert: OptionGetWarn
+            ^^^
+OptionGetWarn/Shapes/input.scala:99:14: warning: [OptionGetWarn]: Don't use Option.get
+      xs.map(_.get) // assert: OptionGetWarn
+               ^^^
+OptionGetWarn/Shapes/input.scala:100:19: warning: [OptionGetWarn]: Don't use Option.get
+      xs.map(o => o.get) // assert: OptionGetWarn
+                    ^^^
+OptionGetWarn/Shapes/input.scala:101:26: warning: [OptionGetWarn]: Don't use Option.get
+      xs.map { case o => o.get } // assert: OptionGetWarn
+                           ^^^
+OptionGetWarn/Shapes/input.scala:102:40: warning: [OptionGetWarn]: Don't use Option.get
+      xs.foreach { (o: Option[Int]) => o.get } // assert: OptionGetWarn
+                                         ^^^
+OptionGetWarn/Shapes/input.scala:103:25: warning: [OptionGetWarn]: Don't use Option.get
+      for o <- xs yield o.get // assert: OptionGetWarn
+                          ^^^
+OptionGetWarn/Shapes/input.scala:104:22: warning: [OptionGetWarn]: Don't use Option.get
+      for o <- xs do o.get // assert: OptionGetWarn
+                       ^^^
+OptionGetWarn/Shapes/input.scala:107:11: warning: [OptionGetWarn]: Don't use Option.get
+      local.get // assert: OptionGetWarn
+            ^^^
+OptionGetWarn/Shapes/input.scala:109:19: warning: [OptionGetWarn]: Don't use Option.get
+      localInferred.get // assert: OptionGetWarn
+                    ^^^
+OptionGetWarn/Shapes/input.scala:111:7: warning: [OptionGetWarn]: Don't use Option.get
+      a.get // assert: OptionGetWarn
+        ^^^
+OptionGetWarn/Shapes/input.scala:113:11: warning: [OptionGetWarn]: Don't use Option.get
+      first.get // assert: OptionGetWarn
+            ^^^
+OptionGetWarn/Shapes/input.scala:115:14: warning: [OptionGetWarn]: Don't use Option.get
+      localDef.get // assert: OptionGetWarn
+               ^^^
+OptionGetWarn/Shapes/input.scala:117:15: warning: [OptionGetWarn]: Don't use Option.get
+      localLazy.get // assert: OptionGetWarn
+                ^^^
+OptionGetWarn/Shapes/input.scala:119:14: warning: [OptionGetWarn]: Don't use Option.get
+      localVar.get // assert: OptionGetWarn
+               ^^^
+OptionGetWarn/Shapes/input.scala:121:15: warning: [OptionGetWarn]: Don't use Option.get
+      Option(1).get // assert: OptionGetWarn
+                ^^^
+OptionGetWarn/Shapes/input.scala:123:10: warning: [OptionGetWarn]: Don't use Option.get
+      None.get // assert: OptionGetWarn
+           ^^^
+OptionGetWarn/Shapes/input.scala:124:21: warning: [OptionGetWarn]: Don't use Option.get
+      Option.apply(1).get // assert: OptionGetWarn
+                      ^^^
+OptionGetWarn/Shapes/input.scala:125:23: warning: [OptionGetWarn]: Don't use Option.get
+      Option.empty[Int].get // assert: OptionGetWarn
+                        ^^^
+OptionGetWarn/Shapes/input.scala:126:25: warning: [OptionGetWarn]: Don't use Option.get
+      declared.map(_ + 1).get // assert: OptionGetWarn
+                          ^^^
+OptionGetWarn/Shapes/input.scala:127:27: warning: [OptionGetWarn]: Don't use Option.get
+      declared.orElse(None).get // assert: OptionGetWarn
+                            ^^^
+OptionGetWarn/Shapes/input.scala:128:23: warning: [OptionGetWarn]: Don't use Option.get
+      locally(declared).get // assert: OptionGetWarn
+                        ^^^
+OptionGetWarn/Shapes/input.scala:132:19: warning: [OptionGetWarn]: Don't use Option.get
+        case o => o.get // assert: OptionGetWarn
+                    ^^^
+OptionGetWarn/Shapes/input.scala:134:32: warning: [OptionGetWarn]: Don't use Option.get
+        case o: Option[Int] => o.get // assert: OptionGetWarn
+                                 ^^^
+OptionGetWarn/Shapes/input.scala:135:18: warning: [OptionGetWarn]: Don't use Option.get
+      { declared }.get // assert: OptionGetWarn
+                   ^^^
+OptionGetWarn/Shapes/input.scala:136:43: warning: [OptionGetWarn]: Don't use Option.get
+      (if true then declared else declared).get // assert: OptionGetWarn
+                                            ^^^
+OptionGetWarn/Shapes/input.scala:138:14: warning: [OptionGetWarn]: Don't use Option.get
+      declared.get.toString // assert: OptionGetWarn
+               ^^^
+OptionGetWarn/Shapes/input.scala:139:14: warning: [OptionGetWarn]: Don't use Option.get
+      declared.`get` // assert: OptionGetWarn
+               ^^^^^
+OptionGetWarn/Shapes/input.scala:140:14: warning: [OptionGetWarn]: Don't use Option.get
+      declared.get: Int // assert: OptionGetWarn
+               ^^^
+OptionGetWarn/Shapes/input.scala:141:35: warning: [OptionGetWarn]: Don't use Option.get
+      val f: Option[Int] => Int = _.get // assert: OptionGetWarn
+                                    ^^^
+OptionGetWarn/Shapes/input.scala:142:35: warning: [OptionGetWarn]: Don't use Option.get
+      val h = (o: Option[Int]) => o.get // assert: OptionGetWarn
+                                    ^^^
+OptionGetWarn/Shapes/input.scala:145:10: warning: [OptionGetWarn]: Don't use Option.get
+      m(1).get // assert: OptionGetWarn
+           ^^^

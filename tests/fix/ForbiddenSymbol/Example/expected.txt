@@ -1,0 +1,15 @@
+ForbiddenSymbol/Example/input.scala:12:18: error: [ForbiddenSymbol]: java.time.Instant is forbidden according to the ForbiddenSymbol rule.
+  import java.time.Instant/* assert: ForbiddenSymbol
+                   ^^^^^^^
+ForbiddenSymbol/Example/input.scala:16:13: error: [ForbiddenSymbol]: java.util is forbidden according to the ForbiddenSymbol rule.
+  import java.util.Date/* assert: ForbiddenSymbol
+              ^^^^
+ForbiddenSymbol/Example/input.scala:22:13: error: [ForbiddenSymbol]: java.time.Instant is forbidden according to the ForbiddenSymbol rule.
+    val now = Instant.now()/* assert: ForbiddenSymbol
+              ^^^^^^^
+ForbiddenSymbol/Example/input.scala:27:24: error: [ForbiddenSymbol]: java.math.BigDecimal.valueOf is forbidden according to the ForbiddenSymbol rule.
+    java.math.BigDecimal.valueOf(123)/* assert: ForbiddenSymbol
+                         ^^^^^^^
+ForbiddenSymbol/Example/input.scala:31:32: error: [ForbiddenSymbol]: java.math.BigDecimal.ONE is forbidden according to the ForbiddenSymbol rule.
+    println(java.math.BigDecimal.ONE)/* assert: ForbiddenSymbol
+                                 ^^^

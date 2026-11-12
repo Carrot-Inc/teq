@@ -43,6 +43,13 @@ object Native:
   @js("$fix") def docSymbols(gen: Int): Array[Byte]
   /** The symbols of the document's occurrences at exactly `[start, end)`, in UTF-16 units, in occurrence order. */
   @js("$fix") def symbolsAt(gen: Int, start: Int, end: Int): Array[String]
+  /** Whether an occurrence at exactly `[start, end)` is its symbol's definition. */
+  @js("$fix") def definedAt(gen: Int, start: Int, end: Int): Boolean
+  /** The symbols of the members the member `symbol` overrides, in the order of its owner's base classes. */
+  @js("$fix") def overridden(gen: Int, symbol: String): Array[String]
+  /** Whether `normalized`, the entry `written` at `place` of the configuration, names a symbol of the document's
+    * program; the run tells an entry none of its programs has. */
+  @js("$fix") def entry(gen: Int, written: String, normalized: String, place: String): Boolean
   /** A symbol's `SymbolInformation` protobuf: the document's, else the global table's; null where none has it. */
   @js("$fix") def info(gen: Int, symbol: String): Array[Byte]
   @js("$fix") def addLeft(gen: Int, rule: Int, group: Int, token: Int, text: String): Unit

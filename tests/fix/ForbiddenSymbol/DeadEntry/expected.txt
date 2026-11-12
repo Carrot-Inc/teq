@@ -1,0 +1,24 @@
+ForbiddenSymbol_DeadEntry.conf:4:3: warning: ForbiddenSymbol: scala.collection.IterableOnce.min names no symbol (scala.collection.IterableOnce has no member min): the entry forbids nothing
+ForbiddenSymbol_DeadEntry.conf:8:3: warning: ForbiddenSymbol: scala.collection.NoSuchClass.m names no symbol (there is no scala.collection.NoSuchClass): the entry forbids nothing
+ForbiddenSymbol_DeadEntry.conf:10:3: warning: ForbiddenSymbol: fix.`input$package`.nothing names no symbol (fix.input$package has no member nothing): the entry forbids nothing
+ForbiddenSymbol/DeadEntry/input.scala:18:5: error: [ForbiddenSymbol]: fix.input$package.topLevel is forbidden according to the ForbiddenSymbol rule.
+  def topLevel(x: Int): Int = x + 1 // assert: ForbiddenSymbol
+      ^^^^^^^^
+ForbiddenSymbol/DeadEntry/input.scala:24:23: error: [ForbiddenSymbol]: scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+    def listInit = list.init // assert: ForbiddenSymbol
+                        ^^^^
+ForbiddenSymbol/DeadEntry/input.scala:25:25: error: [ForbiddenSymbol]: scala.collection.ArrayOps.init is forbidden according to the ForbiddenSymbol rule.
+    def arrayInit = array.init // assert: ForbiddenSymbol
+                          ^^^^
+ForbiddenSymbol/DeadEntry/input.scala:26:26: error: [ForbiddenSymbol]: scala.collection.StringOps.last is forbidden according to the ForbiddenSymbol rule.
+    def stringLast = "abc".last // assert: ForbiddenSymbol
+                           ^^^^
+ForbiddenSymbol/DeadEntry/input.scala:27:13: error: [ForbiddenSymbol]: fix.input$package.topLevel is forbidden according to the ForbiddenSymbol rule.
+    def top = topLevel(1) // assert: ForbiddenSymbol
+              ^^^^^^^^
+ForbiddenSymbol/DeadEntry/input.scala:29:17: error: [ForbiddenSymbol]: scala.Predef.ArrowAssoc.`->` is forbidden according to the ForbiddenSymbol rule.
+    def arrow = 1 -> 2 // assert: ForbiddenSymbol
+                  ^^
+ForbiddenSymbol/DeadEntry/input.scala:31:23: error: [ForbiddenSymbol]: scala.math.package.max is forbidden according to the ForbiddenSymbol rule.
+    def greatest = math.max(1, 2) // assert: ForbiddenSymbol
+                        ^^^

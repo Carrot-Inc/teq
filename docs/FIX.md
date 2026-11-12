@@ -89,12 +89,60 @@ final class NoPrintln(message: String) extends SyntacticRule("NoPrintln"):
   `SemanticDocument` adds the typer's answers: `unusedImports`, the importees the typer's unused-import analysis
   reports (`-Wunused:imports`'s), and `hasExpansions`, whether an inline or macro expansion was made in the file.
   `unusedImports` throws where the analysis is unavailable (the program did not type), so a run that cannot answer
-  fails with exit 2 rather than finding nothing. `symbol` and `info` (SemanticDB's symbols and signatures, ported
-  from dotty's `SemanticSymbolBuilder` and `TypeOps`) are being built: where a semantic rule is configured, the round's
-  typing thread serves the rules' SemanticDB questions after its typing until the round's last document is done; at
-  the round's first question it types the round's texts (the program's files as the round's typing read them, never
-  the disk again) by one worker keeping the forms dotty's types keep, and answers from that typing (src/fix/service.rs), a question it cannot answer the asking rule's failure; it answers the
-  document's header so far. `tpe`, `<:<` and `references` are not there.
+  fails with exit 2 rather than finding nothing.
+- `doc.symbol(tree)` and `tree.symbol` (scalafix's): the SemanticDB symbol of the name a tree stands for, the place
+  scalafix's `TreePos` reads it at (a name's own, a selection's name's, an application's function's, an import
+  selector's): the first symbol of the occurrences at exactly that range, `Symbol.None` where no name the typer
+  resolved stands there. The symbols are dotty's (`SemanticSymbolBuilder.symbolName`: `scala/Option#get().`,
+  `org/http4s/Uri.unsafeFromString().`, a package `java/util/`), computed in-process from what the typer resolved
+  each name to: where a semantic rule is configured, the round's typing thread serves the rules' questions after its
+  typing until the round's last document is done; at the round's first question it types the round's texts (the
+  program's files as the round's typing read them, never the disk again) by one worker keeping the forms dotty's
+  types keep, and answers from that typing (src/fix/service.rs, src/typer/semanticdb). A question it cannot answer
+  is the asking rule's failure, never an empty answer. `Symbol` has `value`, `isNone`, `isGlobal`, `isLocal`, `owner`,
+  `displayName` and `normalized` (scalafix's `SymbolOps.normalize`: the owners' names, each with a dot, no mark of
+  what each is and no overload index); `SymbolMatcher.exact(...)` and `SymbolMatcher.normalized(...)` are scalafix's,
+  as matchers of a symbol or of a tree and as extractors. What is answered is what the rules teq ships ask:
+    1. a name of a member, a class, an object, a type or a package, in an expression, a type, a pattern or an
+       import, at its definition too; the use of a renamed import is its member's, the renamed name itself none.
+       An import's selector is what dotty records at it (`ExtractSemanticDB.traverse`: the term members of the
+       selector's name and their companion classes): a val, a def, an extension method, an object, and a class
+       that has a term of its name (its companion, a Java class's static side, a concrete class's constructor
+       proxy); a selector that names a type alone (an alias, an opaque type, a trait or an abstract class without
+       a companion) is none. A member of a `package object p` is the object's (`p/package.m().`), a top-level
+       definition its file's module's (`p/File$package.m().`);
+    2. on a program the lean std typed, a class and a member of the std under scala-library's name where the std has
+       it under another (`scala/collection/immutable/List#`, a string's `init` `scala/collection/StringOps#init().`),
+       by the naming the TASTy writer selects by; which of scala-library's declarations a receiver selects the lean
+       std cannot say (its `List` declares `init`, scala-library's inherits `IterableOps`'), so a symbol there is
+       exact up to the class that declares it;
+    3. a local is `local<n>`, numbered in the order a document's questions meet it, not in dotty's; a parameter and
+       a type parameter are their owner's (`a/B#m().(x)`, `a/B#[T]`) where the owner is a definition of the document
+       or, for a parameter, a method of the class that owns it, else locals; a Java class's static side is written
+       as an object's (`java/util/Date.`, scalac's `java/util/Date#`), and a case class named as a constructor or an
+       extractor as the class (`scala/Some#`, scalac's companion `scala/Some.`): the normalized name is scalac's in
+       each case, as it is for a member of an object nested in a class (`a/C#O#m().`, scalac's `a/C#O.m().`) and an
+       implicit class at its definition (its conversion, `a/O.Rich().`, scalac's `a/O.Rich#`). Named otherwise
+       than scalac, the normalized name too: a top-level opaque type (a class of its package, `a/T#`, scalac's
+       `a/File$package.T#`), an assignment to a var (the getter, scalac's setter `x_=`), a secondary constructor's
+       parameter (a local), and on a program the lean std typed the type `String` (`scala/String#`);
+    4. an alias the library gives a class or an object under another name is answered as what it names: `List` of
+       `List(1)` is `scala/collection/immutable/List.`, where scalac's symbol is the alias, `scala/package.List.`,
+       and `Map` of `Map(1 -> 2)` likewise (`scala/Predef.Map.`). So a rule that forbids
+       `scala.collection.immutable.List` reports `List(1)`, where scalafix is silent: the plain answer. As a type
+       (`List[Int]`) the alias is scalac's symbol on a program typed against scala-library (`scala/package.List#`)
+       and the class itself on one the lean std typed, whose `List` is the class;
+    5. not answered (`Symbol.None`): an operator of a primitive (`1 + 2`), a member of `Any` selected on a value
+       (`x.toString`), the type operators `|` and `&`, an interpolator's prefix, a package clause's name, a
+       constructor (its zero-width occurrence, a `def this`), a package object's own name, a definition whose name
+       is written between backquotes (its references are answered), a type through a value (`t.Member`, the class
+       of `new v.C`, the qualifier `O` of a type `O.T`), a case class's `copy`, and a name whose record an inserted
+       `apply` takes (`div` of `<.div(...)`). A prefix operator (`!x`) is answered, where scalac records nothing.
+  teq's own beside them: `doc.defines(name)` (whether the occurrence at a name is its symbol's definition),
+  `doc.overriddenSymbols(symbol)` (the members a member overrides, dotty's `Symbol.allOverriddenSymbols` in its
+  order, a local class's member's as a global one's; none of a package) and `doc.names(written, normalized, place)` (whether a normalized symbol names a symbol of the program).
+  `info` (a symbol's `SymbolInformation`) is not there and fails the rule that asks, as `tpe`, `<:<` and
+  `references` are not there: no rule teq ships reads one.
 - `Tree`: every node of scalameta 4.17.4's parser's tree of the file (teq's port of `ScalametaParser`, src/fix/parse;
   a script's own text under the dialect with top-level terms, as scalafix's `dialectForFile`), named and laid out as
   scalameta's: `Source`, `Pkg`, `Import`,
@@ -302,6 +350,38 @@ tests/fix's cases), its file keeping the repository's notice.
   counts it used only beside one. In a file where an expansion was made (an inline method's or a macro's), scalac
   credits imports through the expansion that teq's analysis does not yet see (CheckUnused's `resolveUsage` over the
   expansion's trees): there each unused importee is the warning `NoUnusedImports.unverified` and stays.
+
+- `OptionGetWarn` (xuwei-k/scalafix-rules): a warning on every selection `x.get` whose `get` is `scala.Option`'s
+  own or `scala.None`'s, the two that can throw (`scala.Some`'s cannot and is silent); the setting `message`. This is
+  not scalafix's answer everywhere, by the owner's decision of 2026-11-11: upstream asks the receiver's symbol for its
+  information and reports where that names a value or a method whose type is `Option`, and scalafix has an
+  information only for a symbol its own document defines or a Java or Scala 2 class file declares, so it is silent
+  on a receiver another file, a Scala 3 library or scala-library itself defines (`xs.headOption.get`), on an
+  application of a function value and on a block or a placeholder. teq reads the symbol of the `get`; where scalafix
+  warns, teq does.
+- `ForbiddenSymbol` (tanin47/scalafix-forbidden-symbol): an error on every name whose symbol is one of
+  `ForbiddenSymbol.symbols` (each read as `SymbolMatcher.normalized` reads it, `scala.collection.IterableOps.last`),
+  as upstream's, and, by the same decision, on every reference of a member that overrides one (dotty's
+  `allOverriddenSymbols`): `xs.last` is reported for that entry where `xs` is a `List` or a `Vector`, whose classes
+  override it, where scalafix reports only the receivers whose type selects `IterableOps`' own declaration. An
+  overrider is reported where it is referenced, not where it is defined, a member of a local class among them. Every lint is upstream's sentence naming
+  the entry that forbids the use (`scala.collection.IterableOps.last is forbidden according to the ForbiddenSymbol
+  rule.`), which for a symbol that is the entry is upstream's text: a program the lean std typed cannot say which of
+  scala-library's declarations the receiver selects, and the entry is what the reader can act on. An entry that
+  names no symbol in any program of the run (`scala.collection.IterableOnce.min`: the method is `IterableOnceOps`')
+  forbids nothing, as under scalafix, and the run says so once, before the lints, at the entry's place in the
+  configuration: `<file>:<line>:<col>: warning: ForbiddenSymbol: <entry> names no symbol (<what is missing>): the
+  entry forbids nothing`. It is a warning of the run and no lint (no id, no anchor reads it, the exit is unchanged):
+  a run over one project must not fail on an entry of another platform's library. An entry through a file's module
+  of top-level definitions (``p.`File$package`.m``) or through a package's object (`p.package.m`) is looked up
+  among its package's definitions of every file: one that names a module or an object there is not, or a definition
+  of another file of the package, is not told, nor is one that names a member of a package's object without its
+  `package` (`scala.concurrent.duration.DurationInt.durationIn`).
+- `TypelevelHttp4sLiteralsSyntax` (typelevel-scalafix): `Uri.unsafeFromString("...")` and
+  `Uri.Path.unsafeFromString("...")` of a string literal rewritten `uri"..."` and `path"..."`, each atomically with
+  the import `org.http4s.syntax.literals._` where the file has none of the three imports that bring them, as
+  upstream's. The literals are macros of http4s's JVM jar, which the second round's typing expands: a JVM program's
+  rule.
 
 ## Debugging a rule
 

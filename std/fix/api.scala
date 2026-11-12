@@ -117,9 +117,26 @@ class SyntacticDocument(private[fix] val gen: Int):
   def tokens: Tokens = new Tokens(gen, 0, Native.tokenCount(gen))
   def path: String = Native.path(gen)
 
-/** A document as a semantic rule reads it: the typer's answers in-process. `symbol` and `info` are the next part's
-  * (docs/FIX.md); this one answers the unused imports. */
+/** A document as a semantic rule reads it: the typer's answers in-process (docs/FIX.md, "The rule API"). */
 final class SemanticDocument(gen: Int) extends SyntacticDocument(gen):
+  /** The symbol of a tree, scalafix's `InternalSemanticDoc.symbol`: the first of the symbols of the occurrences at
+    * exactly the place `TreePos` reads the tree at (a name's own, a selection's name's, an application's
+    * function's), none where no name the typer resolved stands there. */
+  def symbol(tree: Tree): Symbol =
+    val found = TreePos.symbolImpl[Array[String]](tree)(p => Native.symbolsAt(gen, p.start, p.end), _.isEmpty)
+    if found.isEmpty then Symbol.None else Symbol(found(0))
+  /** Whether an occurrence at the name is its symbol's definition (SemanticDB's `Role.DEFINITION`). teq's own: no
+    * part of scalafix's document, which gives a tree's symbol without the occurrence's role. */
+  def defines(name: Name): Boolean = Native.definedAt(gen, name.pos.start, name.pos.end)
+  /** The members the member `sym` overrides, dotty's `Symbol.allOverriddenSymbols` in its order (the base classes of
+    * its owner, each one's matching declaration); none for what is no member of a class, a local class's member
+    * asked as a global one's. `sym` is a symbol this document answered. teq's own: scalafix has them only in an information, which it has for few symbols. */
+  def overriddenSymbols(sym: Symbol): List[Symbol] =
+    if sym.isNone then Nil else Native.overridden(gen, sym.value).toList.map(Symbol(_))
+  /** Whether the normalized symbol `normalized` names a symbol of the document's program: a package, a class, an
+    * object or a member a class declares. It is asked for an entry of a rule's configuration, `written` at `place`
+    * there, which the run tells once where no program of the run has it. teq's own. */
+  def names(written: String, normalized: String, place: String): Boolean = Native.entry(gen, written, normalized, place)
   /** The importees the typer's unused-import analysis reports (`-Wunused:imports`'), or the exception that says
     * why it is unavailable: a run that cannot answer fails, never an empty answer. */
   def unusedImports: List[Importee] = Native.unusedImports(gen).toList.map(i => Tree.of(gen, i).asInstanceOf[Importee])
@@ -313,7 +330,8 @@ abstract class SemanticRule(name: String) extends Rule(name):
 object Driver:
   /** The rules teq ships. */
   def shipped(): Array[Rule] =
-    Array(new rules.DisableSyntax(), new rules.CatsImplicitsImport(), new rules.TypelevelAs(), new rules.EmptyCollectionsUnified(), new rules.NoUnusedImports())
+    Array(new rules.DisableSyntax(), new rules.CatsImplicitsImport(), new rules.TypelevelAs(), new rules.EmptyCollectionsUnified(), new rules.NoUnusedImports(),
+      new rules.OptionGetWarn(), new rules.ForbiddenSymbol(), new rules.TypelevelHttp4sLiteralsSyntax())
   def name(rule: Rule): String = rule.name
   def isSemantic(rule: Rule): Boolean = rule.isInstanceOf[SemanticRule]
   /** The rule configured, or the exception that says why it cannot be. */

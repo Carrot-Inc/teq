@@ -1,0 +1,6 @@
+ForbiddenSymbol/AliasImport/input.scala:7:8: error: [ForbiddenSymbol]: p.O.T is forbidden according to the ForbiddenSymbol rule.
+    type T = Int // assert: ForbiddenSymbol
+         ^
+ForbiddenSymbol/AliasImport/input.scala:10:15: error: [ForbiddenSymbol]: p.O.T is forbidden according to the ForbiddenSymbol rule.
+    val result: Renamed = 1 // assert: ForbiddenSymbol
+                ^^^^^^^

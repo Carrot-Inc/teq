@@ -1,0 +1,2 @@
+7:8:1: error: [ForbiddenSymbol] p.O.T is forbidden according to the ForbiddenSymbol rule.
+10:15:7: error: [ForbiddenSymbol] p.O.T is forbidden according to the ForbiddenSymbol rule.

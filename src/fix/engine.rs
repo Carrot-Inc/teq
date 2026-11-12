@@ -319,6 +319,8 @@ struct Outcome {
 /// plans merged as the jobs of one part's are, and what is refused refused before anything is written; the run's exit
 /// status (docs/CLI.md, "teq fix").
 pub fn run(setup: Setup, parts: Vec<Part>) -> i32 {
+    // A run tells its own entries alone (`print_dead_entries`).
+    ENTRIES.lock().unwrap_or_else(|e| e.into_inner()).clear();
     // `TEQ_FIX_INPUTS=<file>`: each job's inputs as the compiler resolves them (`program_paths`: the roots, the links
     // followed, the exclusions applied), a line `<job>\t<path>` each, written and nothing else done: the corpus a
     // measurement runs over, as bench/fix/run.sh takes its identity.
@@ -665,6 +667,7 @@ fn drive_rounds(setup: &Setup, driven: &mut [Driven<'_, '_, '_>]) -> i32 {
             shown.push((path.clone(), text.clone(), l));
         }
     }
+    print_dead_entries();
     print_lints(&shown);
     let errors = shown.iter().filter(|(_, _, l)| l.severity == Severity::Error).count();
     if setup.check {
@@ -1181,11 +1184,15 @@ fn serve(job: &Job, overrides: &HashMap<String, String>, display: &Option<(PathB
     let (mut pending, mut queries, mut attempts) = (Some(first), 0u32, Vec::new());
     let mut answering = |typer: &mut crate::typer::Typer<'_>, sources: &crate::source::Sources, written: &HashMap<String, String>| {
         let mut broken: Option<String> = None;
+        // Each document's table, made at its first question.
+        let mut tables: Tables = (None, HashMap::new());
+        // Whether each entry asked about names a symbol of the job, found once.
+        let mut resolved: HashMap<String, Result<(), String>> = HashMap::new();
         while let Some(q) = pending.take().or_else(|| questions.recv().ok()) {
             queries += 1;
             let answered = match &broken {
                 Some(e) => Err(e.clone()),
-                None => std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| answer(typer, sources, written, &docs, &q))).unwrap_or_else(|p| {
+                None => std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| answer(typer, sources, written, &docs, &mut tables, &mut resolved, &q))).unwrap_or_else(|p| {
                     let e = format!("the SemanticDB service failed: {}", panic_text(p.as_ref()));
                     broken = Some(e.clone());
                     Err(e)
@@ -1211,10 +1218,11 @@ fn serve(job: &Job, overrides: &HashMap<String, String>, display: &Option<(PathB
 }
 
 /// The service's answer to `q` from the round's semantic typing: the document `q.gen` of the round's, its text the
-/// typing's (a script's own, `written`). Before the port of ExtractSemanticDB (the order of work's step 7) the document
-/// is its header alone, and the symbols and informations are refused, never answered empty. `TEQ_FIX_PLANT=query-failure`,
-/// the fix suite's, fails every answer as an extraction's error would.
-fn answer(_typer: &mut crate::typer::Typer<'_>, sources: &crate::source::Sources, written: &HashMap<String, String>, docs: &[(u32, String)], q: &SemQuery) -> Result<SemAnswer, String> {
+/// typing's (a script's own, `written`). The symbols of a document are those of the names the typer resolved in it
+/// (`typer::semanticdb::symbol`); the document is its header alone and an information is refused, never answered
+/// empty: no rule teq ships asks either. `TEQ_FIX_PLANT=query-failure`, the fix suite's, fails every answer as an
+/// extraction's error would.
+fn answer(typer: &mut crate::typer::Typer<'_>, sources: &crate::source::Sources, written: &HashMap<String, String>, docs: &[(u32, String)], tables: &mut Tables, resolved: &mut HashMap<String, Result<(), String>>, q: &SemQuery) -> Result<SemAnswer, String> {
     if plant().as_deref() == Some("query-failure") {
         return Err("the extraction failed (TEQ_FIX_PLANT=query-failure)".to_string());
     }
@@ -1227,13 +1235,82 @@ fn answer(_typer: &mut crate::typer::Typer<'_>, sources: &crate::source::Sources
             let doc = crate::typer::semanticdb::document(Path::new(file), text, &root);
             Ok(SemAnswer::Doc(crate::typer::semanticdb::document::write_documents(&doc)))
         }
-        Ask::Symbols { start, end } => Err(format!("the symbols at [{}, {}) of {}: {}", start, end, file, NOT_PORTED)),
+        Ask::Occurrences => {
+            let gen = q.gen;
+            // The document's entries: the file's own and its package blocks', which share its path.
+            let entries: Vec<FileId> = sources.as_slice().iter().enumerate().filter(|(_, e)| e.path == f.path).map(|(i, _)| FileId(i as u32)).collect();
+            typer
+                .on_thread(|w| {
+                    let declared = tables.0.get_or_insert_with(|| crate::typer::semanticdb::symbol::Declared::of(w));
+                    let table = tables.1.entry(gen).or_insert_with(|| crate::typer::semanticdb::symbol::DocTable::of(w, declared, entries));
+                    w.sem_table(table)
+                })
+                .map(|found| SemAnswer::Occurrences(found.into_iter().map(|(span, at)| (span.start, span.end, at.into_iter().map(|o| (o.symbol, o.definition)).collect())).collect()))
+                .map_err(|e| format!("the symbols of {}: {}", file, e))
+        }
+        Ask::Overridden { symbol } => {
+            let gen = q.gen;
+            let entries: Vec<FileId> = sources.as_slice().iter().enumerate().filter(|(_, e)| e.path == f.path).map(|(i, _)| FileId(i as u32)).collect();
+            typer
+                .on_thread(|w| {
+                    let declared = tables.0.get_or_insert_with(|| crate::typer::semanticdb::symbol::Declared::of(w));
+                    let table = tables.1.entry(gen).or_insert_with(|| crate::typer::semanticdb::symbol::DocTable::of(w, declared, entries));
+                    w.sem_overridden_of(table, symbol)
+                })
+                .map(SemAnswer::Overridden)
+                .map_err(|e| format!("the members {} overrides, asked of {}: {}", symbol, file, e))
+        }
+        Ask::Entry { written, normalized, place } => {
+            let resolved = match resolved.get(normalized) {
+                Some(found) => found.clone(),
+                None => {
+                    let found = typer.on_thread(|w| w.sem_entry(normalized));
+                    resolved.insert(normalized.clone(), found.clone());
+                    found
+                }
+            };
+            let mut entries = ENTRIES.lock().unwrap_or_else(|e| e.into_inner());
+            let known = entries.entry((place.clone(), written.clone())).or_insert((false, String::new()));
+            match &resolved {
+                Ok(()) => known.0 = true,
+                Err(why) if known.1.is_empty() => known.1 = why.clone(),
+                Err(_) => {}
+            }
+            Ok(SemAnswer::Entry(resolved.is_ok()))
+        }
         Ask::Info { symbol } => Err(format!("the information of {}: {}", symbol, NOT_PORTED)),
     }
 }
 
-/// Why the service answers no symbol yet.
-const NOT_PORTED: &str = "SemanticDB's symbols are not extracted yet: the port of ExtractSemanticDB is the order of work's step 7 (tests/semanticdb/TABLE.md)";
+/// What the service keeps of its typing between questions: the declarations of its files, found at the first question,
+/// and each document's table, made at the document's first.
+type Tables = (Option<crate::typer::semanticdb::symbol::Declared>, HashMap<u32, crate::typer::semanticdb::symbol::DocTable>);
+
+/// The entries of ForbiddenSymbol's configuration the run's jobs were asked about, by their place and their text:
+/// whether a job resolved each, and what the first that did not found missing (`Ask::Entry`).
+static ENTRIES: std::sync::Mutex<std::collections::BTreeMap<(String, String), (bool, String)>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// The entries no job of the run resolved, each told once as a warning of the run at its place in the configuration,
+/// in the configuration's order: no lint (no id, no anchor reads it, the exit is unchanged), since a run over one
+/// project must not fail on an entry of another platform's library (docs/FIX.md, "The rules teq ships").
+fn print_dead_entries() {
+    let entries = std::mem::take(&mut *ENTRIES.lock().unwrap_or_else(|e| e.into_inner()));
+    let mut dead: Vec<(&(String, String), &String)> = entries.iter().filter(|(_, (resolved, _))| !resolved).map(|(k, (_, why))| (k, why)).collect();
+    // By file, then line and column as numbers.
+    let at = |place: &str| -> (String, u32, u32) {
+        let mut parts = place.rsplitn(3, ':');
+        let col = parts.next().and_then(|c| c.parse().ok()).unwrap_or(0);
+        let line = parts.next().and_then(|l| l.parse().ok()).unwrap_or(0);
+        (parts.next().unwrap_or("").to_string(), line, col)
+    };
+    dead.sort_by_key(|((place, written), _)| (at(place), written.clone()));
+    for ((place, written), why) in dead {
+        eprintln!("{}: warning: ForbiddenSymbol: {} names no symbol ({}): the entry forbids nothing", place, written, why);
+    }
+}
+
+/// Why the service answers no information.
+const NOT_PORTED: &str = "SemanticDB's informations are not built: no rule teq ships reads one (docs/FIX.md, \"The rule API\")";
 
 /// A panic's message.
 fn panic_text(p: &(dyn std::any::Any + Send)) -> String {

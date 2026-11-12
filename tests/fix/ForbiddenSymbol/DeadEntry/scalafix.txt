@@ -1,0 +1,7 @@
+18:5:8: error: [ForbiddenSymbol] fix.input$package.topLevel is forbidden according to the ForbiddenSymbol rule.
+24:23:4: error: [ForbiddenSymbol] scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+25:25:4: error: [ForbiddenSymbol] scala.collection.ArrayOps.init is forbidden according to the ForbiddenSymbol rule.
+26:26:4: error: [ForbiddenSymbol] scala.collection.StringOps.last is forbidden according to the ForbiddenSymbol rule.
+27:13:8: error: [ForbiddenSymbol] fix.input$package.topLevel is forbidden according to the ForbiddenSymbol rule.
+29:17:2: error: [ForbiddenSymbol] scala.Predef.ArrowAssoc.`->` is forbidden according to the ForbiddenSymbol rule.
+31:23:3: error: [ForbiddenSymbol] scala.math.package.max is forbidden according to the ForbiddenSymbol rule.

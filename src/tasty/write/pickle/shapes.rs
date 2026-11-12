@@ -14,6 +14,25 @@ fn allowlist() -> &'static FxMap<&'static str, ()> {
     SET.get_or_init(|| include_str!("../std_shapes.txt").lines().filter(|l| !l.is_empty()).map(|l| (l, ())).collect())
 }
 
+/// Whether scala-library has a member `name` on `owner` that the lean std can stand for, under any shape: a key of
+/// the allowlist. What `teq fix`'s SemanticDB names read (`typer::semanticdb::symbol`), as the writer does.
+pub(crate) fn std_shape_named(owner: &str, name: &str) -> bool {
+    let prefix = format!("{}\t{}\t", owner, name);
+    allowlist().keys().any(|l| l.starts_with(prefix.as_str()))
+}
+
+/// Whether scala-library has a member `name` on the class that `owners` name as a normalized SemanticDB symbol
+/// writes it, an object's class without its `$` (`scala.Predef$.ArrowAssoc` is `scala`, `Predef`, `ArrowAssoc`;
+/// `scala.math.package$` is `scala`, `math`, `package`): what an entry of `teq fix`'s ForbiddenSymbol is asked of
+/// (`typer::semanticdb::entry`).
+pub(crate) fn std_shape_owned(owners: &[String], name: &str) -> bool {
+    allowlist().keys().any(|l| {
+        let mut fields = l.split('\t');
+        let (owner, member) = (fields.next().unwrap_or(""), fields.next());
+        member == Some(name) && owner.split('.').map(|n| n.strip_suffix('$').unwrap_or(n)).eq(owners.iter().map(String::as_str))
+    })
+}
+
 /// The scala-library classes a member of a wider result (a `receiver` entry's) is looked up in,
 /// nearest first: the result's class and those of its ancestors the allowlist lists.
 const WIDER_ANCESTORS: &[(&str, &[&str])] = &[

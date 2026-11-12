@@ -1,0 +1,9 @@
+ForbiddenSymbol/LocalNamedPackage/input.scala:11:7: error: [ForbiddenSymbol]: localdata.Base.last is forbidden according to the ForbiddenSymbol rule.
+    def last: Int = 1 // assert: ForbiddenSymbol
+        ^^^^
+ForbiddenSymbol/LocalNamedPackage/input.scala:17:29: error: [ForbiddenSymbol]: localdata.Base.last is forbidden according to the ForbiddenSymbol rule.
+    val overrider = new Sub().last // assert: ForbiddenSymbol
+                              ^^^^
+ForbiddenSymbol/LocalNamedPackage/input.scala:18:24: error: [ForbiddenSymbol]: localdata.Base.last is forbidden according to the ForbiddenSymbol rule.
+    val own = new Base().last // assert: ForbiddenSymbol
+                         ^^^^

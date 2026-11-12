@@ -97,6 +97,51 @@ fn query(it: &mut Interp<'_, '_>, gen: i32, ask: impl FnOnce(&DocView) -> Result
     }
 }
 
+thread_local! {
+    /// The occurrences of the document the worker's rules read, by range in bytes, with who reads it (the job, the
+    /// round and the generation): asked of the round's service at the document's first question about a symbol, and
+    /// kept until another document's.
+    static OCCURRENCES: std::cell::RefCell<Option<((u32, u32, u32), std::collections::HashMap<(u32, u32), Vec<(String, bool)>>)>> = const { std::cell::RefCell::new(None) };
+}
+
+/// What `read` makes of the occurrences at exactly `[start, end)` of the document `gen`, in UTF-16 units: none where
+/// no name the typer resolved stands there. The document's occurrences are asked of the service once.
+fn occurrences_at(it: &mut Interp<'_, '_>, gen: i32, start: i32, end: i32, read: impl FnOnce(&[(String, bool)]) -> Value) -> R {
+    let asked = with_host(|h| {
+        let d = match &h.doc {
+            Some(d) if d.gen as i32 == gen => d,
+            Some(_) => return Err("a tree or token of another document than the one the rule reads".to_string()),
+            None => return Err("no document is read".to_string()),
+        };
+        let units = d.utf16.units(d.text.len() as u32) as i32;
+        if start < 0 || end < start || end > units {
+            return Err(format!("no range [{}, {}) of {}", start, end, d.path));
+        }
+        let a = h.asker.ok_or("no document is read")?;
+        Ok(((a.job, a.round, a.gen), (d.utf16.bytes(start as u32), d.utf16.bytes(end as u32))))
+    });
+    let (key, range) = match asked {
+        None => return it.throw_named("IllegalStateException", "teq.fix runs under teq fix alone"),
+        Some(Err(msg)) => return it.throw_named("IllegalStateException", &msg),
+        Some(Ok(found)) => found,
+    };
+    let held = OCCURRENCES.with(|o| o.borrow().as_ref().is_some_and(|(k, _)| *k == key));
+    if !held {
+        let table = query(it, gen, |_| Ok(Ask::Occurrences), |r| match r {
+            Answer::Occurrences(v) => {
+                OCCURRENCES.with(|o| *o.borrow_mut() = Some((key, v.into_iter().map(|(s, e, at)| ((s, e), at)).collect())));
+                Ok(Value::Null)
+            }
+            _ => Err(other("the document's occurrences")),
+        });
+        table?;
+    }
+    Ok(OCCURRENCES.with(|o| match o.borrow().as_ref().and_then(|(_, table)| table.get(&range)) {
+        Some(at) => read(at),
+        None => read(&[]),
+    }))
+}
+
 /// The refusal of an answer to another question than `what`'s.
 fn other(what: &str) -> String {
     format!("the SemanticDB service answered another question than {}'s", what)
@@ -315,23 +360,21 @@ pub(super) fn install(t: &mut Table) {
             _ => Err(other("docSymbols")),
         })
     });
-    reg!(t, "teq.fix.Native.symbolsAt", |it, a| {
-        let (start, end) = (int(a, 1), int(a, 2));
-        query(
-            it,
-            int(a, 0),
-            |d| {
-                let units = d.utf16.units(d.text.len() as u32) as i32;
-                if start < 0 || end < start || end > units {
-                    return Err(format!("no range [{}, {}) of {}", start, end, d.path));
-                }
-                Ok(Ask::Symbols { start: d.utf16.bytes(start as u32), end: d.utf16.bytes(end as u32) })
-            },
-            |r| match r {
-                Answer::Symbols(v) => Ok(strings(v)),
-                _ => Err(other("symbolsAt")),
-            },
-        )
+    reg!(t, "teq.fix.Native.symbolsAt", |it, a| occurrences_at(it, int(a, 0), int(a, 1), int(a, 2), |at| strings(at.iter().map(|(s, _)| s.clone()))));
+    reg!(t, "teq.fix.Native.definedAt", |it, a| occurrences_at(it, int(a, 0), int(a, 1), int(a, 2), |at| Value::Bool(at.iter().any(|(_, definition)| *definition))));
+    reg!(t, "teq.fix.Native.entry", |it, a| {
+        let (written, normalized, place) = (text(a, 1), text(a, 2), text(a, 3));
+        query(it, int(a, 0), |_| Ok(Ask::Entry { written, normalized, place }), |r| match r {
+            Answer::Entry(resolved) => Ok(Value::Bool(resolved)),
+            _ => Err(other("entry")),
+        })
+    });
+    reg!(t, "teq.fix.Native.overridden", |it, a| {
+        let symbol = text(a, 1);
+        query(it, int(a, 0), |_| Ok(Ask::Overridden { symbol }), |r| match r {
+            Answer::Overridden(v) => Ok(strings(v)),
+            _ => Err(other("overridden")),
+        })
     });
     reg!(t, "teq.fix.Native.info", |it, a| {
         let symbol = text(a, 1);

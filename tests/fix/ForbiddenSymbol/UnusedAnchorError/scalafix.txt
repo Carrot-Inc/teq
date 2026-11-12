@@ -1,0 +1,3 @@
+12:21:4: error: [ForbiddenSymbol] scala.collection.IterableOps.init is forbidden according to the ForbiddenSymbol rule.
+15:39:15: error: [UnusedScalafixSuppression] Unused Scalafix suppression, this can be removed
+16:28:17: error: [UnusedScalafixSuppression] Unused Scalafix suppression, this can be removed

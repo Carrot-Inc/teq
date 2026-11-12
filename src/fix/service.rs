@@ -16,8 +16,15 @@ pub struct SemQuery {
 }
 
 pub enum Ask {
-    /// The symbols of the occurrences at exactly `[start, end)`, bytes of the document's text, in occurrence order.
-    Symbols { start: u32, end: u32 },
+    /// The document's occurrences: every range a name the typer resolved stands at (bytes of the document's text),
+    /// with the symbols of the occurrences there in occurrence order. Asked once a document: a rule asks at every name.
+    Occurrences,
+    /// The symbols of the members the member `symbol` overrides, dotty's `allOverriddenSymbols` in its order
+    /// (`typer::semanticdb::overridden`): ForbiddenSymbol's question (docs/FIX.md, "The rules teq ships").
+    Overridden { symbol: String },
+    /// Whether the entry `written` of ForbiddenSymbol's configuration, at `place` there and `normalized` as the rule
+    /// reads it, names a symbol of the job (`typer::semanticdb::entry`): the run tells an entry no job resolves.
+    Entry { written: String, normalized: String, place: String },
     /// The information of `symbol`: the document's own, else the global table's (ruling 6).
     Info { symbol: String },
     /// The document, as a SemanticDB `TextDocuments` protobuf.
@@ -32,9 +39,10 @@ pub struct SemReply {
 }
 
 pub enum Answer {
-    /// Answered from the port of ExtractSemanticDB (the order of work's step 7), as `Info` is.
-    #[allow(dead_code)]
-    Symbols(Vec<String>),
+    /// Per range, each occurrence's symbol and whether the occurrence is the symbol's definition.
+    Occurrences(Vec<(u32, u32, Vec<(String, bool)>)>),
+    Overridden(Vec<String>),
+    Entry(bool),
     /// A `SymbolInformation` protobuf, or none where neither the document nor the global table has one.
     #[allow(dead_code)]
     Info(Option<Vec<u8>>),

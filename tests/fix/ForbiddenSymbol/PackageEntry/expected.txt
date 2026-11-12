@@ -1,0 +1,3 @@
+ForbiddenSymbol/PackageEntry/input.scala:12:23: error: [ForbiddenSymbol]: java.util is forbidden according to the ForbiddenSymbol rule.
+    val date = new java.util.Date() // assert: ForbiddenSymbol
+                        ^^^^

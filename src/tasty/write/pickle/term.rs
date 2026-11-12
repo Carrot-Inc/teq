@@ -18,7 +18,7 @@ pub(super) enum Qual {
 
 /// Where scala-library has a lean std definition.
 #[derive(Clone, Copy)]
-pub(super) enum StdTarget {
+pub(crate) enum StdTarget {
     /// A member of an object: `Predef.println`, `scala.math.package.min`.
     Object { pkg: &'static str, object: &'static str },
     /// A member of the receiver's own class: `s.length()` of `java.lang.String`.
@@ -2658,18 +2658,7 @@ impl<'w, 'a> P<'w, 'a> {
         let stem = super::super::file_stem(&src.path);
         let name = self.name(info.name);
         if !info.is_extension {
-            let object = match (stem.as_str(), name.as_str()) {
-                ("prelude", "println" | "print" | "???" | "identity" | "require" | "assert" | "implicitly" | "locally" | "valueOf") => ("scala", "Predef"),
-                ("prelude", "summon") => return Some(StdTarget::Summon),
-                ("evidence", "conforms") => return Some(StdTarget::Conforms),
-                ("math", _) => ("scala.math", "package"),
-                // `scala/compiletime/package.scala`'s top level, which an inline body calls.
-                ("compiletime", _) => ("scala.compiletime", "package$package"),
-                ("js", _) => ("scala.scalajs.js", "package"),
-                ("timers", _) => ("scala.scalajs.js.timers", "package"),
-                _ => return None,
-            };
-            return Some(StdTarget::Object { pkg: object.0, object: object.1 });
+            return std_target_by(&stem, &name, None);
         }
         let recv = self.w.sig_of(s).clauses.first().and_then(|c| c.params.first()).map(|p| p.ty)?;
         let recv = self.w.widen_lit(recv);
@@ -2678,22 +2667,7 @@ impl<'w, 'a> P<'w, 'a> {
             Type::Param(_) => "*".to_string(),
             _ => return None,
         };
-        Some(match (stem.as_str(), class.as_str(), name.as_str()) {
-            ("string", "String", _) => StdTarget::Receiver { pkg: "java.lang", class: "String", java: true },
-            ("strings", "String", _) => StdTarget::Wrapped { conv: "augmentString", targs: false, param: "java.lang.String", result: "java.lang.String", class: ("scala.collection", "StringOps") },
-            ("strings" | "collections", "Char", _) => StdTarget::Wrapped { conv: "charWrapper", targs: false, param: "scala.Char", result: "scala.Char", class: ("scala.runtime", "RichChar") },
-            ("collections", "Int", _) => StdTarget::Wrapped { conv: "intWrapper", targs: false, param: "scala.Int", result: "scala.Int", class: ("scala.runtime", "RichInt") },
-            ("collections", "Long", _) => StdTarget::Wrapped { conv: "longWrapper", targs: false, param: "scala.Long", result: "scala.Long", class: ("scala.runtime", "RichLong") },
-            ("collections", "Double", _) => StdTarget::Wrapped { conv: "doubleWrapper", targs: false, param: "scala.Double", result: "scala.Double", class: ("scala.runtime", "RichDouble") },
-            ("prelude", "*", "->") => StdTarget::Wrapped { conv: "ArrowAssoc", targs: true, param: "java.lang.Object", result: "java.lang.Object", class: ("scala.Predef", "ArrowAssoc") },
-            // `Predef`'s own extension, a method of the object taking the receiver first.
-            ("prelude", "*", "runtimeChecked") => StdTarget::Object { pkg: "scala", object: "Predef" },
-            ("collections" | "core", "Array", _) => StdTarget::Array,
-            ("core", "Function1", _) => StdTarget::Receiver { pkg: "scala", class: "Function1", java: false },
-            ("core", "Tuple2", _) => StdTarget::Receiver { pkg: "scala", class: "Tuple2", java: false },
-            ("collections", "Option", _) => StdTarget::Receiver { pkg: "scala", class: "Option", java: false },
-            _ => return None,
-        })
+        std_target_by(&stem, &name, Some(&class))
     }
 
     /// A call of a lean std definition as scala-library has it.
@@ -6868,4 +6842,38 @@ fn prim_name(op: PrimOp) -> &'static str {
     }
 }
 
-
+/// Where scala-library has a definition of the lean std's top level or one of its extensions: by the std's file
+/// (`stem`), the definition's name and, for an extension, its receiver's class (`*` a type parameter's). The table the
+/// writer selects by (`P::std_target`) and `teq fix`'s SemanticDB names read (`typer::semanticdb::symbol`).
+pub(crate) fn std_target_by(stem: &str, name: &str, receiver: Option<&str>) -> Option<StdTarget> {
+    let Some(class) = receiver else {
+        let object = match (stem, name) {
+            ("prelude", "println" | "print" | "???" | "identity" | "require" | "assert" | "implicitly" | "locally" | "valueOf") => ("scala", "Predef"),
+            ("prelude", "summon") => return Some(StdTarget::Summon),
+            ("evidence", "conforms") => return Some(StdTarget::Conforms),
+            ("math", _) => ("scala.math", "package"),
+            // `scala/compiletime/package.scala`'s top level, which an inline body calls.
+            ("compiletime", _) => ("scala.compiletime", "package$package"),
+            ("js", _) => ("scala.scalajs.js", "package"),
+            ("timers", _) => ("scala.scalajs.js.timers", "package"),
+            _ => return None,
+        };
+        return Some(StdTarget::Object { pkg: object.0, object: object.1 });
+    };
+    Some(match (stem, class, name) {
+        ("string", "String", _) => StdTarget::Receiver { pkg: "java.lang", class: "String", java: true },
+        ("strings", "String", _) => StdTarget::Wrapped { conv: "augmentString", targs: false, param: "java.lang.String", result: "java.lang.String", class: ("scala.collection", "StringOps") },
+        ("strings" | "collections", "Char", _) => StdTarget::Wrapped { conv: "charWrapper", targs: false, param: "scala.Char", result: "scala.Char", class: ("scala.runtime", "RichChar") },
+        ("collections", "Int", _) => StdTarget::Wrapped { conv: "intWrapper", targs: false, param: "scala.Int", result: "scala.Int", class: ("scala.runtime", "RichInt") },
+        ("collections", "Long", _) => StdTarget::Wrapped { conv: "longWrapper", targs: false, param: "scala.Long", result: "scala.Long", class: ("scala.runtime", "RichLong") },
+        ("collections", "Double", _) => StdTarget::Wrapped { conv: "doubleWrapper", targs: false, param: "scala.Double", result: "scala.Double", class: ("scala.runtime", "RichDouble") },
+        ("prelude", "*", "->") => StdTarget::Wrapped { conv: "ArrowAssoc", targs: true, param: "java.lang.Object", result: "java.lang.Object", class: ("scala.Predef", "ArrowAssoc") },
+        // `Predef`'s own extension, a method of the object taking the receiver first.
+        ("prelude", "*", "runtimeChecked") => StdTarget::Object { pkg: "scala", object: "Predef" },
+        ("collections" | "core", "Array", _) => StdTarget::Array,
+        ("core", "Function1", _) => StdTarget::Receiver { pkg: "scala", class: "Function1", java: false },
+        ("core", "Tuple2", _) => StdTarget::Receiver { pkg: "scala", class: "Tuple2", java: false },
+        ("collections", "Option", _) => StdTarget::Receiver { pkg: "scala", class: "Option", java: false },
+        _ => return None,
+    })
+}
